@@ -19,6 +19,10 @@
       "how": "needs-build",
       "why": "Exact AT32F421G8U7 descriptor added after the current released CLI. Its committed Artery SDK smoke (examples/at32f421g8u7/io-smoke.yaml) is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
     },
+    "ch32l103c8t6": {
+      "how": "needs-build",
+      "why": "New CH32L103 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
     "ch32v003f4p6": {
       "how": "committed",
       "firmware": "tests/fixtures/ch32v003f4p6-uart-hello.elf",

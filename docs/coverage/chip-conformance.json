@@ -899,6 +899,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "ch32l103c8t6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "ch32v005f6p6",
     "reg_match": 0
   },
