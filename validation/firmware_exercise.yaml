@@ -188,9 +188,33 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: ch32v003f4u6
+    arch: riscv32ec
+    headline: "QFN20 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: ch32v006k8u6
     arch: riscv32ec
     headline: "No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32E ELF that blinks PB0 on GPIOB, the port the CH32V003 lacks (negative control: PC0 stays idle), and a second RV32EC+Zmmul ELF that checks a MUL result and then prints an exact string on USART1 (PD5); a negative control moves the USART1 clock gate and requires silence. A DS0 test pins memory, clock and the 31 QFN32 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, OPA, I2C, SPI, DMA or USART2, and is not hosted model_verified or hardware confirmation."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32v003a4m6
+    arch: riscv32ec
+    headline: "SOP16 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32v003j4m6
+    arch: riscv32ec
+    headline: "SOP8 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string. SOP8 has no PC0 pad, so a separate committed fixture blinks PC4 (package pin 7); the test requires PC4 edges and a negative control requires zero PC0 edges. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation."
     functional: []
     advanced_unit_only: []
     advanced_dead: []
@@ -662,6 +686,15 @@ chips:
     advanced_dead: [PWR, FLASH_CTRL]
     shim: []
 
+  - id: stm32l432kc
+    arch: cortex-m4f
+    headline: "NUCLEO-L432KC. PR-gated raw-register smoke (examples/nucleo-l432kc/io-smoke.yaml): reset/stack, RCC, GPIOA/GPIOB, USART2 banner and PB3 LED edges. Stock stm32duino also runs the Arduino matrix row L0-L8 (INA219 over I2C1, MAX31855 over SPI1, ADC1_IN5 at a board-held 1650 mV, TIM2_CH2 PWM on PB3, bxCAN1 loopback), but that lane runs nightly and on main, not on PRs, so nothing is recorded as functional here. No physical silicon run exists."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim:
+      - {p: "SYSCFG", ev: "configs/chips/stm32l432kc.yaml (type: stub; configs/peripherals/stm32l476/syscfg.yaml)", note: "CLOSABLE: author-declared stub shared with the L476 — read 0, writes dropped, so EXTI source-select is not modelled."}
+
   - id: stm32f411ceu6
     arch: cortex-m4f
     headline: "WeAct Black Pill. Its tier-1 fixture (PR-gated `firmware_survival::test_stm32f411_tier1_survival`; nightly coverage-matrix cell examples/stm32f411ceu6-blackpill/io-smoke.yaml) drives clock/gpio/timer/i2c/spi (SPI1+SPI5)/adc/wdt/rtc over USART2, leaving dma unrecorded (the fixture never attempts it, and both stream controllers are zero stubs) and irq/pwm n/a (the fixture does not attempt either class). PWR is a real stm32f4-profile model no firmware drives; the descriptor's remaining stub windows are listed below."
@@ -844,6 +877,14 @@ chips:
   - id: atmega2560
     arch: avr
     headline: "No tier-1 target. Firmware that runs: the PR-gated `avr_mega2560_io` integration test boots the committed Arduino-core ELF (tests/fixtures/avr/arduino-mega-2560-io.elf, built for arduino:avr:mega from examples/arduino-mega-2560-io) and asserts the 12 LED pins on ports E/G/F/B/H, analogRead(A8)/(A9) through ADCSRB.MUX5, millis() against simulated time, USART0 Serial and an EICALL through a function pointer. The descriptor reuses the 328P rubric classes (`avr_gpio` ports A..L, `avr_adc` with 16 channels, the parking `spi`/`i2c` controllers and the `usart0` peer host), so nothing beyond the rubric is declared and the lists below are empty."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atmega32u4
+    arch: avr
+    headline: "No tier-1 target. The Arduino Leonardo matrix row (validation/arduino-matrix/boards/arduino-leonardo.yaml) builds the stock ArduinoCore-avr sketches and runs L0-L7 on the model (8 pass, 1 skip: no CAN); `Serial` is native USB CDC on the CPU's USB device model with a scripted host that enumerates it, and the CPU-owned SPI, TWI and ADC (ADCSRB.MUX5) serve the L3/L4/L5 sensor kits. That lane needs PlatformIO and runs on the nightly/main matrix, not on pull requests; cpu::avr::usb unit tests are the PR-gated evidence. Timer3, the high-speed Timer4, INTn/PCINT and EEPROM are not modelled. No beyond-rubric behavior or physical acceptance is claimed and the lists below are empty."
     functional: []
     advanced_unit_only: []
     advanced_dead: []

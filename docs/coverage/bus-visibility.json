@@ -33,6 +33,10 @@
   },
   {
     "buses": [],
+    "name": "atmega32u4"
+  },
+  {
+    "buses": [],
     "name": "atsamd21"
   },
   {
@@ -97,7 +101,19 @@
   },
   {
     "buses": [],
+    "name": "ch32v003a4m6"
+  },
+  {
+    "buses": [],
     "name": "ch32v003f4p6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v003f4u6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v003j4m6"
   },
   {
     "buses": [],
@@ -746,6 +762,14 @@
       "UART"
     ],
     "name": "stm32l073"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32l432kc"
   },
   {
     "buses": [

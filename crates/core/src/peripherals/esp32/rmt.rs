@@ -11,6 +11,8 @@
 //! whose `FUNCn_OUT_SEL` selects `RMT_SIG_OUTn`, raises `TX_THR` so the IDF
 //! ISR can refill, and latches `TX_END` when an END marker (duration 0) is
 //! seen. RX, carrier, and loop modes are out of scope.
+//! STATUS and APB address progress fields remain reset-zero placeholders;
+//! their read-only access does not claim full status-machine modeling.
 
 use crate::peripherals::esp32::gpio::{
     RMT_SIG_OUT0, RMT_SIG_OUT1, RMT_SIG_OUT2, RMT_SIG_OUT3, RMT_SIG_OUT4, RMT_SIG_OUT5,
@@ -49,7 +51,7 @@ const ENTRY_DUR_MASK: u32 = 0x7FFF;
 const INT_VALID_MASK: u32 = 0xFFFF_FFFF;
 
 /// SVD / `rmt_reg.h` reset values (esp32.svd). CONF0: DIV_CNT=2, IDLE_THRES=0x1000,
-/// MEM_SIZE=1. CONF1=0xF20. TX_LIM=128. DATE is the version register (RO).
+/// MEM_SIZE=1. CONF1=0xF20. TX_LIM=128. DATE is the 32-bit R/W version register.
 const CONF0_RESET: u32 = 0x3110_0002;
 const CONF1_RESET: u32 = 0x0000_0F20;
 const TX_LIM_RESET: u32 = 0x0000_0080;
@@ -114,6 +116,7 @@ pub struct Esp32Rmt {
     int_raw: u32,
     int_ena: u32,
     apb_conf: u32,
+    date: u32,
     playback: Option<TxPlayback>,
     /// Hold TX-done level IRQ so IDF can reach WaitBits (S3 pattern).
     irq_holdoff_cycles: u32,
@@ -143,6 +146,7 @@ impl Esp32Rmt {
             int_raw: 0,
             int_ena: 0,
             apb_conf: 0,
+            date: DATE_RESET,
             playback: None,
             irq_holdoff_cycles: 0,
             tx_start_count: 0,
@@ -333,7 +337,7 @@ impl Esp32Rmt {
             0xA8 => self.int_ena,
             0xAC => 0, // INT_CLR W1C
             0xF0 => self.apb_conf,
-            0xFC => DATE_RESET, // SVD RMT_DATE, RO
+            0xFC => self.date,
             _ => {
                 crate::census_reg!("esp32.rmt:Esp32Rmt", offset, "read");
                 0
@@ -369,19 +373,9 @@ impl Esp32Rmt {
             self.mem[i] = value;
             return;
         }
-        if (0x60..0x80).contains(&offset) && offset % 4 == 0 {
-            let ch = ((offset - 0x60) / 4) as usize;
-            if ch < CHANNELS {
-                self.status[ch] = value;
-                return;
-            }
-        }
-        if (0x80..0xA0).contains(&offset) && offset % 4 == 0 {
-            let ch = ((offset - 0x80) / 4) as usize;
-            if ch < CHANNELS {
-                self.apb_mem_addr[ch] = value;
-                return;
-            }
+        if (0x60..0xA0).contains(&offset) && offset % 4 == 0 {
+            // CHnSTATUS and CHnADDR are hardware-owned (RO).
+            return;
         }
         if (0xB0..0xD0).contains(&offset) && offset % 4 == 0 {
             let ch = ((offset - 0xB0) / 4) as usize;
@@ -398,10 +392,11 @@ impl Esp32Rmt {
             }
         }
         match offset {
-            0xA0 => self.int_raw &= !(value & INT_VALID_MASK),
+            0xA0 | 0xA4 => {} // INT_RAW and INT_ST are hardware-owned (RO).
             0xA8 => self.int_ena = value & INT_VALID_MASK,
             0xAC => self.int_raw &= !(value & INT_VALID_MASK),
             0xF0 => self.apb_conf = value,
+            0xFC => self.date = value,
             _ => {
                 crate::census_reg!("esp32.rmt:Esp32Rmt", offset, "write");
             }
@@ -677,7 +672,7 @@ mod tests {
     }
 
     #[test]
-    fn svd_resets_match_and_status_addr_date_are_answered() {
+    fn svd_resets_and_register_access_contracts_match() {
         let mut r = Esp32Rmt::new(47);
         for ch in 0..CHANNELS {
             let conf0 = 0x20 + (ch as u64) * 8;
@@ -691,20 +686,23 @@ mod tests {
             assert_eq!(r.read_word(addr), 0, "ADDR ch{ch} reset");
             assert_eq!(r.read_word(lim), TX_LIM_RESET, "TX_LIM ch{ch}");
 
-            // STATUS / ADDR are the eight-plus-eight SVD offsets the SystemStub
-            // previously round-tripped. Answer writes so the coverage ratchet
-            // does not see a silent drop of reset-0 registers.
-            r.write_word(status, 0xA5A5_0000 | ch as u32);
-            r.write_word(addr, 0xBEEF_0000 | ch as u32);
-            assert_eq!(r.read_word(status), 0xA5A5_0000 | ch as u32);
-            assert_eq!(r.read_word(addr), 0xBEEF_0000 | ch as u32);
-            r.write_word(status, 0);
-            r.write_word(addr, 0);
-            assert_eq!(r.read_word(status), 0);
-            assert_eq!(r.read_word(addr), 0);
+            // These hardware-owned words currently expose reset-zero
+            // placeholders. Reject write echo without claiming TX progress.
+            for offset in [status, addr] {
+                for value in [u32::MAX, 0xA5A5_0000 | ch as u32, 0] {
+                    r.write_word(offset, value);
+                    assert_eq!(r.read_word(offset), 0, "RO word at {offset:#x}");
+                }
+                for byte in 0..4 {
+                    r.write(offset + byte, 0xFF).unwrap();
+                    assert_eq!(r.read_word(offset), 0, "RO byte lane {byte} at {offset:#x}");
+                }
+            }
         }
         assert_eq!(r.read_word(0xFC), DATE_RESET);
-        r.write_word(0xFC, 0xFFFF_FFFF);
-        assert_eq!(r.read_word(0xFC), DATE_RESET, "DATE is RO");
+        for value in [u32::MAX, 0, 0x0123_4567] {
+            r.write_word(0xFC, value);
+            assert_eq!(r.read_word(0xFC), value, "DATE is 32-bit R/W");
+        }
     }
 }

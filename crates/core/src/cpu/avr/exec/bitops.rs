@@ -8,15 +8,18 @@
 // change). See that file's `step_inner` and `exec/mod.rs` for the shared
 // fetch/next-pc plumbing and the fixed original check order this respects.
 
-use crate::cpu::avr::Avr;
+use crate::cpu::avr::{Avr, AvrModel};
 use crate::{Bus, SimResult};
 
 /// Registers in the SBI/CBI range where a written 1 acts and a 0 does nothing:
 /// PINB/PINC/PIND (toggle PORTx), TIFR0..2, PCIFR and EIFR (clear a flag).
+/// AVRrc (ATtiny10): PINB 0x00, PCIFR 0x11 and EIFR 0x14 (register summary).
 #[inline]
-fn write_one_register(data_addr: u16, avrxt: bool) -> bool {
-    if avrxt {
+fn write_one_register(data_addr: u16, model: AvrModel) -> bool {
+    if model.uses_avrxt_data_map() {
         matches!(data_addr, 0x03 | 0x07)
+    } else if model.is_reduced_core() {
+        matches!(data_addr, 0x00 | 0x11 | 0x14)
     } else {
         matches!(data_addr, 0x23 | 0x26 | 0x29 | 0x35..=0x37 | 0x3B | 0x3C)
     }
@@ -39,7 +42,7 @@ impl Avr {
             // On the ATmega328P SBI/CBI "only operate on the specified bit":
             // on a write-one register (PINx toggles, interrupt flags clear)
             // a read-modify-write would hit every other bit that reads 1.
-            let v = if write_one_register(data_addr, self.model.uses_avrxt_data_map()) {
+            let v = if write_one_register(data_addr, self.model) {
                 1 << b
             } else {
                 self.data_read(data_addr, bus)? | (1 << b)
@@ -56,7 +59,7 @@ impl Avr {
             let b = (op & 0x07) as u8;
             let data_addr = self.io_data_address(a);
             // Writing 0 to a write-one register bit does nothing.
-            if !write_one_register(data_addr, self.model.uses_avrxt_data_map()) {
+            if !write_one_register(data_addr, self.model) {
                 let v = self.data_read(data_addr, bus)? & !(1 << b);
                 self.data_write(data_addr, v, bus)?;
             }

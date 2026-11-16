@@ -1,0 +1,8 @@
+# ST UM1956 Nucleo-32 board signals (NUCLEO-L432KC).
+# LD3 green LED on PB3 (Arduino D13); USART2 TX PA2 / RX PA15 to the ST-LINK
+# virtual COM port (stm32duino variant_NUCLEO_L432KC.h).
+name: "nucleo-l432kc"
+chip: "../chips/stm32l432kc.yaml"
+external_devices: []
+board_io:
+  - { id: "ld3_pb3", kind: "led", peripheral: "gpiob", pin: 3, signal: "output", active_high: true }

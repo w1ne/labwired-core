@@ -21,9 +21,10 @@
 
 static void logBegin() {
   Serial.begin(115200);
-#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
-  // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
-  // the host opens the port (DTR), on silicon and on the twin alike.
+#if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__)
+  // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
+  // CDC and drops writes until the host opens the port (DTR), on silicon and
+  // on the twin alike.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
