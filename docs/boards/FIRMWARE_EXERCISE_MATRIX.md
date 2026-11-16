@@ -145,6 +145,10 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 _No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
 
+### `ch32v005f6p6`
+
+_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32E ELF that blinks PC0 (TSSOP20 pin 10; negative control: PD0 stays idle), and a second RV32EC+Zmmul ELF that checks a MUL result and then prints an exact string on USART1 (PD5); a negative control moves the USART1 clock gate and requires silence. A DS0 test pins memory, clock and the 18 TSSOP20 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, OPA, I2C, SPI, DMA or USART2, and is not hosted model_verified or hardware confirmation._
+
 ### `ch32v203c8t6`
 
 _No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32IMAC ELF that blinks PC13 through GPIOC_CFGHR (negative control: PC0 stays idle), and a second ELF that checks MUL/DIVU/AMOADD.W results and then prints an exact string on USART1 (PA9); a negative control moves the USART1 clock gate and requires silence. A DS0 Table 2-1 test pins memory, clock and the 37 LQFP48 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, I2C, SPI, CAN or USB, and is not hosted model_verified or hardware confirmation._
@@ -152,6 +156,10 @@ _No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test r
 ### `ch32v003f4u6`
 
 _QFN20 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+
+### `ch32v006k8u6`
+
+_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32E ELF that blinks PB0 on GPIOB, the port the CH32V003 lacks (negative control: PC0 stays idle), and a second RV32EC+Zmmul ELF that checks a MUL result and then prints an exact string on USART1 (PD5); a negative control moves the USART1 clock gate and requires silence. A DS0 test pins memory, clock and the 31 QFN32 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, OPA, I2C, SPI, DMA or USART2, and is not hosted model_verified or hardware confirmation._
 
 ### `ch32v003a4m6`
 
@@ -261,6 +269,10 @@ _Board variant of the esp32s3 die: same configure_xtensa_esp32s3 wiring and the 
 - `efuse_stub` (crates/core/src/system/xtensa/esp32s3.rs:647 (esp_xtensa_common/system_stub.rs:454; configs/chips/esp32s3-zero.yaml:72)) — CLOSABLE: canned MAC + chip-rev only; no eFuse state, no burn path. The ROM boot and esp-hal accept the canned values.
 - `rtc_cntl_stub` (crates/core/src/system/xtensa/esp32s3.rs:640 (esp_xtensa_common/system_stub.rs:203; configs/chips/esp32s3-zero.yaml:66)) — CLOSABLE: register round-trip plus three canned behaviours — PLL_LOCK seeded, TIME_UPDATE snapshot handshake, APP_CPU un-stall. The RTC clock tree, SWD_CONF super-watchdog and sleep domains are not modelled.
 - `wifi_thunks` (esp32s3/wifi_thunks.rs:8 (CHEAT(THUNK-LIB))) — IRREDUCIBLE: the ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob with NO executable image — there is no firmware to run, so it can never be firmware-exercised. The lwIP/socket layer above is routed to a real SimNet. (Same shim as the esp32s3 entry.)
+
+### `esp32s3-devkitc-1-n16r8-adc`
+
+_Narrow DevKitC-1 v1.1 N16R8 board profile over the esp32s3 die, with no beyond-rubric content of its own: its register-level firmware starts one SENS ADC1 one-shot conversion on GPIO4 / ADC1_CH3 and asserts code 2047 for the centered 1650 mV input (the ADC rubric cell and the family shims stay as listed on the esp32s3 entry). The local analog model is deterministic; no noise, calibration or attenuation curve is modelled._
 
 ### `stm32f103`
 
@@ -607,6 +619,10 @@ _No tier-1 target. The PR-gated avr_atmega1281_firmware integration test boots t
 ### `atmega2561`
 
 _64-pin sibling of the ATmega2560, so no tier-1 target. The PR-gated `avr_atmega2561` test boots the committed 3-byte-PC image tests/fixtures/avr/atmega2561-io.elf and asserts `2561 OK` on the USART0 sink plus PB5 driven high; examples/atmega2561-io/io-smoke.yaml runs the same fixture through `labwired test` and is the board entry in configs/ci/boards.yml. The descriptor deliberately narrows the shared public core to this SKU: 54 GPIO on ports A..G (PG0..PG5 only), USART0 only and eight ADC inputs. EEPROM (4 KB on silicon), USART1 and Timer3 are on silicon but are not modelled/declared in this slice; ports H..L, ADC8..ADC15 and Timer4/5 are 100-pin ATmega2560 features absent from the 64-pin part; Table 2-1 lists twelve 16-bit-resolution PWM channels for the 2560 and six for the 2561. There is no beyond-rubric content and the lists below are empty._
+
+### `atmega4809`
+
+_No tier-1 target. The Arduino Nano Every matrix row (validation/arduino-matrix/boards/arduino-nano-every.yaml) builds the stock ArduinoCore-megaavr sketches and runs L0, L1, L2, L5 and L7 on the model, and examples/arduino-nano-every/io-smoke.yaml runs the same Nano Every firmware through `labwired test`; both need PlatformIO and run on the nightly/main matrix, not on pull requests. TWI0, SPI0 and the TCA0/TCB waveform outputs are not modelled, so the I2C, SPI and PWM matrix cells are skipped. No beyond-rubric behavior or physical acceptance is claimed and the lists below are empty._
 
 ### `atsamd21`
 

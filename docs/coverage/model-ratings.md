@@ -46,6 +46,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | esp32 | open | L1 | 32 | 955.5 | 1.4 | ≥1× (CI) | [doc](docs/boards/esp32.md) |
 | esp32s3 | open | L1 | 14 | 991.9 | 2.4 | ≥1× (CI) | [doc](docs/boards/esp32s3.md) |
 | esp32s3-zero | open | L1 | 17 | 991.9 | 2.4 | ≥1× (CI) | — |
+| esp32s3-devkitc-1-n16r8-adc | open | L0 | 3 | 991.9 | 2.4 | ≥1× (CI) | — |
 | esp32-devkitc-32e-gpio-smoke | open | L1 | 3 | 977.8 | 1.4 | ≥1× (CI) | — |
 | esp32-devkitc-32e-uart1 | open | L0 | 3 | 977.8 | 1.4 | ≥1× (CI) | — |
 | stm32f401cdu6 | open | L1 | 45 | 937.7 | 1.6 | ≥1× (CI) | — |
@@ -113,6 +114,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | atmega328pb | open | L1 | 8 | 1026.4 | 7.6 | ≥1× (CI) | — |
 | atmega2560 | open | L1 | 15 | — | — | ≥1× (CI) | — |
 | atmega2561 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega2561.md) |
+| atmega4809 | open | L0 | 19 | — | — | ≥1× (CI) | — |
 | atmega32u4 | open | L0 | 8 | 1020.0 | 7.7 | ≥1× (CI) | — |
 | mimxrt1062-teensy41 | open | L0 | 50 | — | — | ≥1× (CI) | — |
 | atmega1281 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega1281.md) |
@@ -135,6 +137,8 @@ same fields but never their source, chip YAML, binary or build paths.
 | pic24f16ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f16ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | ch32v003f4p6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
+| ch32v005f6p6 | open | L1 | 6 | — | — | ≥1× (CI) | — |
+| ch32v006k8u6 | open | L1 | 6 | — | — | ≥1× (CI) | — |
 | ch32v203c8t6 | open | L1 | 7 | — | — | ≥1× (CI) | — |
 | ch32v003f4u6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | ch32v003a4m6 | open | L1 | 5 | — | — | ≥1× (CI) | — |

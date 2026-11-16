@@ -33,6 +33,14 @@
       "how": "needs-build",
       "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
     },
+    "ch32v005f6p6": {
+      "how": "needs-build",
+      "why": "New CH32V005 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
+    "ch32v006k8u6": {
+      "how": "needs-build",
+      "why": "New CH32V006 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
     "ch32v203c8t6": {
       "how": "needs-build",
       "why": "New CH32V203 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
@@ -324,6 +332,10 @@
       "sha256": "b2d4fb48ec3585334760d03bf941bf8bc9a448e8d941b9017922643e0035fff5",
       "expect": "RP2350_SMOKE_OK"
     },
+    "esp32s3-devkitc-1-n16r8-adc": {
+      "how": "needs-build",
+      "why": "The ESP32-S3-DevKitC-1 N16R8 ADC1_CH3 profile is newer than the installed CLI this gate checks. The GPIO4 potentiometer smoke passes from source in examples/esp32-s3-devkitc-1-n16r8 (built by the onboarding smoke workflow); switch this row after a release carries the descriptor."
+    },
     "esp32s3-zero": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/esp32s3.elf",
@@ -446,6 +458,10 @@
       "script": "examples/arduino-nano-blinky/io-smoke.yaml",
       "expect": null,
       "note": "AVR runs through a system manifest, not `labwired run`. The script asserts the sketch's `nano-ok` banner on USART0 and that it then executes its whole step budget without faulting."
+    },
+    "atmega4809": {
+      "how": "needs-build",
+      "why": "The ATmega4809 (Arduino Nano Every) model and its AVRxt core are newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix arduino-nano-every row (L0/L1/L2/L5/L7) passes from source on stock ArduinoCore-megaavr; switch this row after a release carries the atmega4809 descriptor."
     },
     "atmega328pb": {
       "how": "needs-build",

@@ -45,6 +45,7 @@ This page covers the public models. For every chip we model — public and priva
 | esp32 | **L1** | ✓ | 32 | — | — | firmware_survival::test_esp32_tier1_survival |
 | esp32s3 | **L1** | ✓ | 14 | — | — | firmware_survival::test_esp32s3_tier1_survival |
 | esp32s3-zero | **L1** | ✓ | 17 | — | — | firmware_survival::test_esp32s3_zero_tier1_survival |
+| esp32s3-devkitc-1-n16r8-adc | **L0** | ✓ | 3 | — | — | — |
 | esp32-devkitc-32e-gpio-smoke | **L1** | ✓ | 3 | — | — | firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival |
 | esp32-devkitc-32e-uart1 | **L0** | ✓ | 3 | — | — | — |
 | stm32f401cdu6 | **L1** | ✓ | 45 | — | — | firmware_survival::test_stm32f401cdu6_demo_survival |
@@ -112,6 +113,7 @@ This page covers the public models. For every chip we model — public and priva
 | atmega328pb | **L1** | ✓ | 8 | — | — | avr_atmega328pb_usart1::atmega328pb_firmware_uses_usart1_and_drives_pb5 |
 | atmega2560 | **L1** | ✓ | 15 | — | — | avr_mega2560_io::each_led_lands_on_its_mega_port_pin |
 | atmega2561 | **L1** | ✓ | 11 | — | — | avr_atmega2561::atmega2561_boots_and_prints |
+| atmega4809 | **L0** | ✓ | 19 | — | — | — |
 | atmega32u4 | **L0** | ✓ | 8 | — | — | — |
 | mimxrt1062-teensy41 | **L0** | ✓ | 50 | — | — | — |
 | atmega1281 | **L1** | ✓ | 11 | — | — | avr_atmega1281_firmware::atmega1281_compiled_firmware_prints_and_drives_pb5 |
@@ -134,6 +136,8 @@ This page covers the public models. For every chip we model — public and priva
 | pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
 | pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
 | ch32v003f4p6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
+| ch32v005f6p6 | **L1** | ✓ | 6 | — | — | ch32v005_compiled_firmware::ch32v005_compiled_rv32e_firmware_toggles_pc0 |
+| ch32v006k8u6 | **L1** | ✓ | 6 | — | — | ch32v006_compiled_firmware::ch32v006_compiled_rv32e_firmware_toggles_pb0 |
 | ch32v203c8t6 | **L1** | ✓ | 7 | — | — | ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13 |
 | ch32v003f4u6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | ch32v003a4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
