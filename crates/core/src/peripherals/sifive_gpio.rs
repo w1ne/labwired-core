@@ -6,8 +6,18 @@
 //!
 //! This implements the software-controlled pad path used by HiFive1 Rev B
 //! firmware: INPUT_VAL, INPUT_EN, OUTPUT_EN, OUTPUT_VAL, PULLUP_EN and
-//! OUTPUT_XOR. The GPIO interrupt, IO-function mux and drive-strength
-//! registers are intentionally outside this profile.
+//! OUTPUT_XOR, and the four per-pin interrupt pairs (RISE/FALL/HIGH/LOW
+//! `_ie` / `_ip`). The IO-function mux and drive-strength registers are
+//! intentionally outside this profile.
+//!
+//! Interrupts follow the sifive-blocks GPIO RTL (FE310-G002 Manual v1p1
+//! Ch. 17): the `_ip` bits latch whatever `_ie` holds — RISE / FALL on an
+//! INPUT_VAL edge, HIGH / LOW while INPUT_VAL holds that level — and clear on
+//! a write of 1, re-latching at once if the level still holds. Pin `n`'s
+//! interrupt is `ip & ie` over the four pairs. It drives the PLIC source
+//! `irq + n` (the entry's `irq:` is pin 0's source; FE310 `[0-31] ->
+//! plic@[8-39]` in Renode `sifive-fe310.repl`), re-raised on every tick while
+//! it holds, so a source still asserted after its complete pends again.
 
 use crate::peripherals::gpio::GpioPortOffsets;
 use crate::pins::{External, InputChange, PadDriver, PinPort};
@@ -18,6 +28,14 @@ const INPUT_EN: u64 = 0x04;
 const OUTPUT_EN: u64 = 0x08;
 const OUTPUT_VAL: u64 = 0x0C;
 const PULLUP_EN: u64 = 0x10;
+const RISE_IE: u64 = 0x18;
+const RISE_IP: u64 = 0x1C;
+const FALL_IE: u64 = 0x20;
+const FALL_IP: u64 = 0x24;
+const HIGH_IE: u64 = 0x28;
+const HIGH_IP: u64 = 0x2C;
+const LOW_IE: u64 = 0x30;
+const LOW_IP: u64 = 0x34;
 const OUTPUT_XOR: u64 = 0x40;
 
 /// FE310 GPIO register bank with the per-pad input/output behavior needed by
@@ -31,11 +49,37 @@ pub struct SifiveGpio {
     output_xor: u32,
     external: u32,
     external_levels: u32,
+    /// `[rise, fall, high, low]` interrupt enables and pending latches.
+    ie: [u32; 4],
+    ip: [u32; 4],
+    /// INPUT_VAL at the last sample, for edge detection.
+    sampled: u32,
+    /// PLIC source of pin 0 (the entry's `irq:`); `None` leaves the pin
+    /// interrupts unwired.
+    irq_base: Option<u32>,
 }
 
 impl SifiveGpio {
     pub fn new() -> Self {
-        Self::default()
+        let mut gpio = Self::default();
+        gpio.sample();
+        gpio
+    }
+
+    /// Latch the interrupt-pending bits from the current INPUT_VAL. Called
+    /// after every state change that can move it.
+    fn sample(&mut self) {
+        let value = self.input_value();
+        self.ip[0] |= value & !self.sampled;
+        self.ip[1] |= !value & self.sampled;
+        self.ip[2] |= value;
+        self.ip[3] |= !value;
+        self.sampled = value;
+    }
+
+    /// Pins whose interrupt output is asserted.
+    fn irq_pins(&self) -> u32 {
+        (0..4).fold(0, |acc, i| acc | (self.ip[i] & self.ie[i]))
     }
 
     fn pin_mask(pin: u8) -> u32 {
@@ -77,9 +121,17 @@ impl SifiveGpio {
             OUTPUT_EN => self.output_en,
             OUTPUT_VAL => self.output_val,
             PULLUP_EN => self.pullup_en,
+            RISE_IE => self.ie[0],
+            RISE_IP => self.ip[0],
+            FALL_IE => self.ie[1],
+            FALL_IP => self.ip[1],
+            HIGH_IE => self.ie[2],
+            HIGH_IP => self.ip[2],
+            LOW_IE => self.ie[3],
+            LOW_IP => self.ip[3],
             OUTPUT_XOR => self.output_xor,
-            // This profile does not claim the FE310 interrupt or IO-function
-            // register blocks. Unimplemented/reserved words read as zero.
+            // This profile does not claim the FE310 IO-function or drive
+            // registers. Unimplemented/reserved words read as zero.
             _ => 0,
         }
     }
@@ -91,9 +143,18 @@ impl SifiveGpio {
             OUTPUT_EN => self.output_en = value,
             OUTPUT_VAL => self.output_val = value,
             PULLUP_EN => self.pullup_en = value,
+            RISE_IE => self.ie[0] = value,
+            RISE_IP => self.ip[0] &= !value,
+            FALL_IE => self.ie[1] = value,
+            FALL_IP => self.ip[1] &= !value,
+            HIGH_IE => self.ie[2] = value,
+            HIGH_IP => self.ip[2] &= !value,
+            LOW_IE => self.ie[3] = value,
+            LOW_IP => self.ip[3] &= !value,
             OUTPUT_XOR => self.output_xor = value,
             _ => {}
         }
+        self.sample();
     }
 
     fn read_input_pin(&self, pin: u8) -> Option<bool> {
@@ -105,7 +166,13 @@ impl SifiveGpio {
         let word_offset = offset & !3;
         let shift = ((offset & 3) * 8) as u32;
         let mask = 0xFFu32 << shift;
-        let old = self.read_register(word_offset);
+        // The `_ip` words are write-1-to-clear: a byte store clears only its
+        // own byte's bits.
+        let old = if matches!(word_offset, RISE_IP | FALL_IP | HIGH_IP | LOW_IP) {
+            0
+        } else {
+            self.read_register(word_offset)
+        };
         self.write_register(word_offset, (old & !mask) | (u32::from(value) << shift));
     }
 }
@@ -135,6 +202,29 @@ impl Peripheral for SifiveGpio {
         let value = self.read_register(offset & !3);
         let shift = ((offset & 3) * 8) as u32;
         Some(((value >> shift) & 0xFF) as u8)
+    }
+
+    fn tick(&mut self) -> crate::PeripheralTickResult {
+        let (Some(base), pins) = (self.irq_base, self.irq_pins()) else {
+            return crate::PeripheralTickResult::default();
+        };
+        if pins == 0 {
+            return crate::PeripheralTickResult::default();
+        }
+        let mut irqs = Vec::with_capacity(pins.count_ones() as usize);
+        let mut rest = pins;
+        while rest != 0 {
+            irqs.push(base + rest.trailing_zeros());
+            rest &= rest - 1;
+        }
+        crate::PeripheralTickResult {
+            explicit_irqs: Some(irqs),
+            ..Default::default()
+        }
+    }
+
+    fn attach_irq_line(&mut self, irq: Option<u32>) {
+        self.irq_base = irq;
     }
 
     fn read_gpio_input(&self, pin: u8) -> Option<bool> {
@@ -217,6 +307,7 @@ impl PinPort for SifiveGpio {
                 }
             }
         }
+        self.sample();
         was_enabled.then(|| InputChange {
             before,
             after: self.read_input_pin(pin).unwrap_or(before),
@@ -260,5 +351,64 @@ mod tests {
         assert_eq!(gpio.read_gpio_input(7), Some(true));
         assert!(!gpio.set_external(7, External::Level(false)).unwrap().after);
         assert_eq!(gpio.read_u32(0).unwrap(), 0);
+    }
+
+    #[test]
+    fn edge_and_level_latches_drive_plic_source_per_pin() {
+        let mut gpio = SifiveGpio::new();
+        gpio.attach_irq_line(Some(8));
+        // Input disabled: INPUT_VAL reads 0, so only LOW latches.
+        assert_eq!(gpio.read_u32(0x34).unwrap(), u32::MAX);
+        assert_eq!(gpio.read_u32(0x1C).unwrap(), 0);
+        gpio.write_u32(0x34, u32::MAX).unwrap();
+        assert_eq!(gpio.read_u32(0x34).unwrap(), u32::MAX, "LOW holds");
+
+        const PIN: u32 = 1 << 2;
+        gpio.write_u32(0x04, PIN).unwrap();
+        gpio.write_u32(0x08, PIN).unwrap();
+        gpio.write_u32(0x18, PIN).unwrap();
+        assert!(gpio.tick().explicit_irqs.is_none());
+
+        gpio.write_u32(0x0C, PIN).unwrap();
+        assert_eq!(gpio.read_u32(0x1C).unwrap(), PIN);
+        assert_eq!(gpio.read_u32(0x24).unwrap(), 0);
+        assert_eq!(gpio.read_u32(0x2C).unwrap() & PIN, PIN);
+        assert_eq!(gpio.tick().explicit_irqs, Some(vec![10]));
+
+        // RISE clears on a write of 1; HIGH re-latches while the pin is high.
+        gpio.write_u32(0x1C, PIN).unwrap();
+        gpio.write_u32(0x2C, PIN).unwrap();
+        assert_eq!(gpio.read_u32(0x1C).unwrap(), 0);
+        assert_eq!(gpio.read_u32(0x2C).unwrap() & PIN, PIN);
+        assert!(gpio.tick().explicit_irqs.is_none());
+
+        // FALL on the high-to-low edge, routed to the same source.
+        gpio.write_u32(0x20, PIN).unwrap();
+        gpio.write_u32(0x0C, 0).unwrap();
+        assert_eq!(gpio.read_u32(0x24).unwrap(), PIN);
+        assert_eq!(gpio.tick().explicit_irqs, Some(vec![10]));
+    }
+
+    #[test]
+    fn external_edge_on_pin_31_maps_to_source_39_and_byte_clear_is_w1c() {
+        let mut gpio = SifiveGpio::new();
+        gpio.attach_irq_line(Some(8));
+        const PIN: u32 = 1 << 31;
+        gpio.write_u32(0x04, PIN | 1).unwrap();
+        gpio.write_u32(0x18, PIN | 1).unwrap();
+        gpio.set_external(31, External::Level(true));
+        gpio.set_external(0, External::Level(true));
+        assert_eq!(gpio.read_u32(0x1C).unwrap(), PIN | 1);
+        assert_eq!(gpio.tick().explicit_irqs, Some(vec![8, 39]));
+        // A byte store to the top byte clears pin 31 only.
+        gpio.write(0x1F, 0x80).unwrap();
+        assert_eq!(gpio.read_u32(0x1C).unwrap(), 1);
+    }
+
+    #[test]
+    fn unwired_gpio_raises_nothing() {
+        let mut gpio = SifiveGpio::new();
+        gpio.write_u32(0x30, u32::MAX).unwrap();
+        assert!(gpio.tick().explicit_irqs.is_none());
     }
 }

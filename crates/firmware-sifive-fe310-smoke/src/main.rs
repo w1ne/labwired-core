@@ -15,8 +15,12 @@
 //! `mstatus.MIE` is clear. The PLIC probes raise uart0's TX-watermark
 //! interrupt (source 3) and check pending, enable, priority and threshold
 //! gating of MEIP, then take the external interrupt and claim/complete it.
-//! It does not exercise the mask-ROM boot flow, GPIO interrupts/IO functions,
-//! the uart0 RX watermark or uart1.
+//! The GPIO interrupt probes drive pads through the output loopback: a rising
+//! edge on pin 2 pends PLIC source 10 and is taken as a trap, a falling edge on
+//! pin 31 pends source 39 and is claimed by polling, and HIGH_IP re-latches
+//! while the level holds.
+//! It does not exercise the mask-ROM boot flow, GPIO IO functions, the uart0
+//! RX watermark or uart1.
 
 #![no_std]
 #![no_main]
@@ -62,7 +66,8 @@ core::arch::global_asm!(
     "sw t0, 0(t1)",
     "csrr t0, mcause",
     "bgez t0, 1f",
-    // External interrupt: claim, mask uart0's interrupt enables, complete.
+    // External interrupt: claim, mask uart0's interrupt enables, clear the
+    // GPIO RISE/FALL pending latches, complete.
     "li t1, 0x8000000b",
     "bne t0, t1, 3f",
     "li t1, 0x0C200004",
@@ -71,6 +76,10 @@ core::arch::global_asm!(
     "sw t0, 0(t1)",
     "li t1, 0x10013010",
     "sw zero, 0(t1)",
+    "li t1, 0x10012000",
+    "li t2, -1",
+    "sw t2, 0x1C(t1)",
+    "sw t2, 0x24(t1)",
     "li t1, 0x0C200004",
     "sw t0, 0(t1)",
     "mret",
@@ -613,6 +622,7 @@ fn plic_uart0_trap_probe() -> bool {
             mie = in(reg) 1u32 << 3,
             out("t0") _,
             out("t1") _,
+            out("t2") _,
             options(nostack),
         );
     }
@@ -649,6 +659,206 @@ fn plic_uart0_trap_probe() -> bool {
     pass
 }
 
+const GPIO_RISE_IE: *mut u32 = 0x1001_2018 as *mut u32;
+const GPIO_RISE_IP: *mut u32 = 0x1001_201C as *mut u32;
+const GPIO_FALL_IE: *mut u32 = 0x1001_2020 as *mut u32;
+const GPIO_FALL_IP: *mut u32 = 0x1001_2024 as *mut u32;
+const GPIO_HIGH_IP: *mut u32 = 0x1001_202C as *mut u32;
+const PLIC_GPIO2_PRIORITY: *mut u32 = 0x0C00_0028 as *mut u32;
+const PLIC_GPIO31_PRIORITY: *mut u32 = 0x0C00_009C as *mut u32;
+const PLIC_PENDING_HI: *const u32 = 0x0C00_1004 as *const u32;
+const PLIC_ENABLE_HI: *mut u32 = 0x0C00_2004 as *mut u32;
+/// FE310 GPIO pin `n` drives PLIC source 8 + n.
+const GPIO2: u32 = 1 << 2;
+const GPIO2_SOURCE: u32 = 10;
+const GPIO31: u32 = 1 << 31;
+const GPIO31_SOURCE: u32 = 39;
+
+/// Poll `reg` for at most `tries` reads until `reg & mask` is non-zero.
+fn wait_bit(reg: *const u32, mask: u32, tries: u32) -> bool {
+    for _ in 0..tries {
+        if unsafe { core::ptr::read_volatile(reg) } & mask != 0 {
+            return true;
+        }
+    }
+    false
+}
+
+/// With `mstatus.MIE` clear, a rising edge on output-looped pin 2 latches
+/// RISE_IP (not FALL_IP), pends PLIC source 10 while its enable is clear,
+/// and raises MEIP once enabled. HIGH_IP re-latches after a write of 1
+/// because the pin is still high.
+fn gpio_irq_rise_masked_probe() -> bool {
+    reset_trap_record();
+    let (early, rise, fall, pending, disabled_low, meip, high_relatch) = unsafe {
+        core::ptr::write_volatile(PLIC_THRESHOLD, 0);
+        core::ptr::write_volatile(PLIC_GPIO2_PRIORITY, 1);
+        core::ptr::write_volatile(GPIO_OUTPUT_VAL, 0);
+        core::ptr::write_volatile(GPIO_INPUT_EN, GPIO2 | GPIO31);
+        core::ptr::write_volatile(GPIO_OUTPUT_EN, GPIO2 | GPIO31);
+        core::ptr::write_volatile(GPIO_RISE_IP, u32::MAX);
+        core::ptr::write_volatile(GPIO_FALL_IP, u32::MAX);
+        core::ptr::write_volatile(GPIO_RISE_IE, GPIO2);
+        // No edge yet: the source stays idle.
+        let early = wait_bit(PLIC_PENDING, 1 << GPIO2_SOURCE, 200);
+        core::ptr::write_volatile(GPIO_OUTPUT_VAL, GPIO2);
+        let rise = core::ptr::read_volatile(GPIO_RISE_IP);
+        let fall = core::ptr::read_volatile(GPIO_FALL_IP);
+        let pending = wait_bit(PLIC_PENDING, 1 << GPIO2_SOURCE, 1000);
+        let disabled_low = read_mip() & MIP_MEIP == 0;
+        core::ptr::write_volatile(PLIC_ENABLE, 1 << GPIO2_SOURCE);
+        let meip = wait_meip(true, 1000);
+        core::ptr::write_volatile(GPIO_HIGH_IP, GPIO2);
+        let high_relatch = core::ptr::read_volatile(GPIO_HIGH_IP) & GPIO2 != 0;
+        (early, rise, fall, pending, disabled_low, meip, high_relatch)
+    };
+    let (count, _, _) = trap_record();
+    let pass = !early
+        && rise == GPIO2
+        && fall == 0
+        && pending
+        && disabled_low
+        && meip
+        && high_relatch
+        && count == 0;
+    flag("gpio irq rise early=", early);
+    puts(" rise_ip=");
+    put_hex32(rise);
+    puts(" fall_ip=");
+    put_hex32(fall);
+    flag(" pending=", pending);
+    flag(" disabled_low=", disabled_low);
+    flag(" meip=", meip);
+    flag(" high_relatch=", high_relatch);
+    puts(" traps=");
+    put_hex32(count);
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
+/// Take the pin-2 rising-edge interrupt as a machine external interrupt. The
+/// handler claims source 10, clears RISE_IP and completes; the source does
+/// not re-pend and MEIP is low.
+fn gpio_irq_rise_trap_probe() -> bool {
+    reset_trap_record();
+    unsafe {
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(TRAP_CLAIM), 0);
+        core::arch::asm!(
+            "la t0, trap_entry",
+            "csrw mtvec, t0",
+            "csrs mie, {meie}",
+            "csrs mstatus, {mie}",
+            "2: la t1, TRAP_COUNT",
+            "lw t0, 0(t1)",
+            "beqz t0, 2b",
+            "csrc mstatus, {mie}",
+            "csrc mie, {meie}",
+            meie = in(reg) MIP_MEIP,
+            mie = in(reg) 1u32 << 3,
+            out("t0") _,
+            out("t1") _,
+            out("t2") _,
+            options(nostack),
+        );
+    }
+    let (count, cause, _) = trap_record();
+    let claim = unsafe { core::ptr::read_volatile(core::ptr::addr_of!(TRAP_CLAIM)) };
+    let (rise, repended, reclaim) = unsafe {
+        let rise = core::ptr::read_volatile(GPIO_RISE_IP);
+        let repended = wait_bit(PLIC_PENDING, 1 << GPIO2_SOURCE, 200);
+        (rise, repended, core::ptr::read_volatile(PLIC_CLAIM))
+    };
+    let meip_low = read_mip() & MIP_MEIP == 0;
+    unsafe {
+        core::ptr::write_volatile(PLIC_ENABLE, 0);
+        core::ptr::write_volatile(GPIO_RISE_IE, 0);
+    }
+    let pass = count == 1
+        && cause == 0x8000_000B
+        && claim == GPIO2_SOURCE
+        && rise == 0
+        && !repended
+        && reclaim == 0
+        && meip_low;
+    puts("gpio irq rise mcause=");
+    put_hex32(cause);
+    puts(" count=");
+    put_hex32(count);
+    puts(" claim=");
+    put_hex32(claim);
+    puts(" rise_ip=");
+    put_hex32(rise);
+    flag(" repended=", repended);
+    puts(" reclaim=");
+    put_hex32(reclaim);
+    flag(" meip_low=", meip_low);
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
+/// Pin 31 drives source 39, in the PLIC's second pending/enable word. A
+/// rising edge with only FALL_IE set pends nothing; the falling edge pends
+/// source 39, which a polled claim returns. Clearing FALL_IP before the
+/// complete leaves MEIP low.
+fn gpio_irq_fall_polled_probe() -> bool {
+    reset_trap_record();
+    let (rise_quiet, fall, meip, claim, claimed_clear, meip_low, reclaim) = unsafe {
+        core::ptr::write_volatile(PLIC_GPIO31_PRIORITY, 2);
+        core::ptr::write_volatile(PLIC_ENABLE_HI, 1 << (GPIO31_SOURCE - 32));
+        core::ptr::write_volatile(GPIO_FALL_IE, GPIO31);
+        // Pin 31 rises; pin 2 (still looped back) falls. Drop that latch.
+        core::ptr::write_volatile(GPIO_OUTPUT_VAL, GPIO31);
+        core::ptr::write_volatile(GPIO_FALL_IP, u32::MAX);
+        let rise_quiet = !wait_bit(PLIC_PENDING_HI, 1 << (GPIO31_SOURCE - 32), 200);
+        core::ptr::write_volatile(GPIO_OUTPUT_VAL, 0);
+        let fall = core::ptr::read_volatile(GPIO_FALL_IP);
+        let meip = wait_meip(true, 1000);
+        let claim = core::ptr::read_volatile(PLIC_CLAIM);
+        let claimed_clear =
+            core::ptr::read_volatile(PLIC_PENDING_HI) & (1 << (GPIO31_SOURCE - 32)) == 0;
+        core::ptr::write_volatile(GPIO_FALL_IP, GPIO31);
+        core::ptr::write_volatile(PLIC_CLAIM, claim);
+        let meip_low = !wait_meip(true, 200);
+        let reclaim = core::ptr::read_volatile(PLIC_CLAIM);
+        core::ptr::write_volatile(PLIC_ENABLE_HI, 0);
+        core::ptr::write_volatile(GPIO_FALL_IE, 0);
+        core::ptr::write_volatile(GPIO_OUTPUT_EN, 0);
+        core::ptr::write_volatile(GPIO_INPUT_EN, 0);
+        (
+            rise_quiet,
+            fall,
+            meip,
+            claim,
+            claimed_clear,
+            meip_low,
+            reclaim,
+        )
+    };
+    let (count, _, _) = trap_record();
+    let pass = rise_quiet
+        && fall == GPIO31
+        && meip
+        && claim == GPIO31_SOURCE
+        && claimed_clear
+        && meip_low
+        && reclaim == 0
+        && count == 0;
+    flag("gpio irq fall rise_quiet=", rise_quiet);
+    puts(" fall_ip=");
+    put_hex32(fall);
+    flag(" meip=", meip);
+    puts(" claim=");
+    put_hex32(claim);
+    flag(" claimed_clear=", claimed_clear);
+    flag(" meip_low=", meip_low);
+    puts(" reclaim=");
+    put_hex32(reclaim);
+    puts(" traps=");
+    put_hex32(count);
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
 #[inline(never)]
 fn multiply(left: u32, right: u32) -> u32 {
     let result: u32;
@@ -681,6 +891,9 @@ fn main() -> ! {
     let _clint_masked_pass = clint_msip_masked_probe();
     let _plic_masked_pass = plic_uart0_masked_probe();
     let _plic_trap_pass = plic_uart0_trap_probe();
+    let _gpio_rise_masked_pass = gpio_irq_rise_masked_probe();
+    let _gpio_rise_trap_pass = gpio_irq_rise_trap_probe();
+    let _gpio_fall_pass = gpio_irq_fall_polled_probe();
 
     let gpio_pass = unsafe {
         core::ptr::write_volatile(GPIO_INPUT_EN, GREEN_LED);

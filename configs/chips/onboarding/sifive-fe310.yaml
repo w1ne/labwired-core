@@ -9,8 +9,9 @@
 # for this chip name (`Rv32Clint::for_chip`), so it is not a peripheral entry.
 # The PLIC at 0x0C000000 (52 sources, 3-bit priorities, one M-mode context)
 # is decoded the same way (`Rv32Clint::plic_for_chip`); a peripheral `irq:` is
-# its PLIC source ID (uart0 = 3, Renode `IRQ -> plic@3`).
-# UART1, GPIO interrupts, mask ROM and OTP are not claimed.
+# its PLIC source ID (uart0 = 3, Renode `IRQ -> plic@3`). The GPIO `irq:` is
+# pin 0's source: pin n drives source 8 + n (Renode `[0-31] -> plic@[8-39]`).
+# UART1, GPIO IO functions, mask ROM and OTP are not claimed.
 
 name: "sifive-fe310"
 arch: "riscv"
@@ -29,3 +30,4 @@ peripherals:
     type: "sifive_gpio"
     base_address: 0x10012000
     size: "4KB"
+    irq: 8

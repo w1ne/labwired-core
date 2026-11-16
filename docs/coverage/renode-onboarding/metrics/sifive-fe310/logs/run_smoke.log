@@ -1,7 +1,7 @@
-[2m2026-11-16T02:04:05.169994Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/sifive-fe310.yaml
-[2m2026-11-16T02:04:05.176449Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x20000000
+[2m2026-11-16T03:49:19.681916Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/sifive-fe310.yaml
+[2m2026-11-16T03:49:19.685858Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x20000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
-[2m2026-11-16T02:04:05.177495Z[0m [33m WARN[0m [2mlabwired_core::cpu::riscv[0m[2m:[0m ECALL/EBREAK encountered at 0x20000948
-[2m2026-11-16T02:04:05.177836Z[0m [33m WARN[0m [2mlabwired_core::cpu::riscv[0m[2m:[0m ECALL/EBREAK encountered at 0x2000119c
-[2m2026-11-16T02:04:05.178123Z[0m [33m WARN[0m [2mlabwired_core::cpu::riscv[0m[2m:[0m ECALL/EBREAK encountered at 0x200019f4
-PASS  4/4 checks · sifive-fe310-smoke · 400000 steps · 0.19s
+[2m2026-11-16T03:49:19.686975Z[0m [33m WARN[0m [2mlabwired_core::cpu::riscv[0m[2m:[0m ECALL/EBREAK encountered at 0x2000095c
+[2m2026-11-16T03:49:19.687300Z[0m [33m WARN[0m [2mlabwired_core::cpu::riscv[0m[2m:[0m ECALL/EBREAK encountered at 0x200011b0
+[2m2026-11-16T03:49:19.687608Z[0m [33m WARN[0m [2mlabwired_core::cpu::riscv[0m[2m:[0m ECALL/EBREAK encountered at 0x20001a08
+PASS  4/4 checks · sifive-fe310-smoke · 400000 steps · 0.16s
