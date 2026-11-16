@@ -34,7 +34,7 @@
 //! than reset, JEDEC/unique-ID reads unless the descriptor declares
 //! `jedec_id`/`unique_id`, and any opcode not listed above.
 //!
-//! The array is the bus flash at XIP_BASE: direct-mode reads, programs and
+//! The array is the chip's flash window (descriptor `flash`): direct-mode reads, programs and
 //! erases go through the same bytes the CPU fetches. The CPU's decoded-
 //! instruction cache is not told about those stores, so code that erases or
 //! reprograms flash it later executes from is outside this model.
@@ -76,9 +76,6 @@ const TX_DWIDTH: u32 = 1 << 18;
 const TX_NOPUSH: u32 = 1 << 20;
 
 const FIFO_DEPTH: usize = 4;
-
-/// The CS0 device's array as the CPU sees it (datasheet 2.2: XIP 0x10000000).
-const XIP_BASE: u64 = 0x1000_0000;
 
 /// M0/M1 TIMING, RFMT, RCMD, WFMT, WCMD reset values (qmi.h).
 const MX_RESET: [u32; 5] = [
@@ -167,6 +164,8 @@ pub struct Rp2350Qmi {
     tx: VecDeque<TxEntry>,
     rx: RefCell<VecDeque<u16>>,
     // Serial NOR device state.
+    /// Where the CPU sees the CS0 array (the chip's flash window).
+    flash_base: u64,
     flash_size: u32,
     phase: Phase,
     op: u8,
@@ -183,13 +182,16 @@ pub struct Rp2350Qmi {
 }
 
 impl Rp2350Qmi {
-    pub fn new(flash_size: u32) -> Self {
+    /// `flash_base`/`flash_size`: the CS0 array as the CPU sees it, from the
+    /// chip descriptor's `flash` window.
+    pub fn new(flash_base: u64, flash_size: u32) -> Self {
         Self {
             csr: CSR_RESET,
             mx: [MX_RESET; 2],
             atrans: std::array::from_fn(|n| atrans_reset(n as u64)),
             tx: VecDeque::with_capacity(FIFO_DEPTH),
             rx: RefCell::new(VecDeque::with_capacity(FIFO_DEPTH)),
+            flash_base,
             flash_size,
             phase: Phase::Idle,
             op: 0,
@@ -513,7 +515,7 @@ impl Rp2350Qmi {
                 Commit::Program { page_base, bytes } => {
                     for (i, b) in bytes.iter().enumerate() {
                         if let Some(b) = b {
-                            let at = XIP_BASE + u64::from(page_base) + i as u64;
+                            let at = self.flash_base + u64::from(page_base) + i as u64;
                             // NOR program only clears bits.
                             let old = bus.read_u8(at).unwrap_or(0xFF);
                             let _ = bus.write_u8(at, old & b);
@@ -523,7 +525,7 @@ impl Rp2350Qmi {
                 }
                 Commit::Erase { base, len } => {
                     for w in (0..u64::from(len)).step_by(4) {
-                        let _ = bus.write_u32(XIP_BASE + u64::from(base) + w, 0xFFFF_FFFF);
+                        let _ = bus.write_u32(self.flash_base + u64::from(base) + w, 0xFFFF_FFFF);
                     }
                     self.erases += 1;
                 }
@@ -631,7 +633,7 @@ impl Peripheral for Rp2350Qmi {
             for miso in &entry.miso[..entry.bytes as usize] {
                 let byte = match *miso {
                     Miso::Value(v) => v,
-                    Miso::Array(at) => bus.read_u8(XIP_BASE + u64::from(at)).unwrap_or(0xFF),
+                    Miso::Array(at) => bus.read_u8(self.flash_base + u64::from(at)).unwrap_or(0xFF),
                 };
                 value = (value << 8) | u16::from(byte);
             }

@@ -1328,8 +1328,9 @@ pub fn try_build(
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
         "rp2350_bootram" => Box::new(crate::peripherals::rp2350_bootram::Rp2350BootRam::new()),
-        // RP2350 QMI direct mode + the serial NOR on CS0. `flash_size`: the
-        // CS0 array in bytes (required). `jedec_id: [mfr, type, capacity]`
+        // RP2350 QMI direct mode + the serial NOR on CS0. `flash_base` /
+        // `flash_size`: the CS0 array as the CPU sees it (required; the
+        // chip's flash window). `jedec_id: [mfr, type, capacity]`
         // and `unique_id: [8 bytes]` answer 9Fh/4Bh; without them those
         // reads are refused rather than invented.
         "rp2350_xip_maintenance" => {
@@ -1358,7 +1359,15 @@ pub fn try_build(
                         anyhow::anyhow!("rp2350_qmi `{}`: {key} must be a byte list", p_cfg.id)
                     })
             };
+            let base = p_cfg
+                .config
+                .get("flash_base")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!("rp2350_qmi `{}`: config.flash_base is required", p_cfg.id)
+                })?;
             let mut qmi = crate::peripherals::rp2350_qmi::Rp2350Qmi::new(
+                base,
                 u32::try_from(size)
                     .map_err(|_| anyhow::anyhow!("rp2350_qmi: flash_size too large"))?,
             );

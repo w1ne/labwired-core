@@ -124,6 +124,7 @@ peripherals:
     base_address: 0x400D0000
     size: "4KB"
     config:
+      flash_base: 0x10000000
       flash_size: 2097152
   # SIO: GPIO32..47 in the GPIO_HI_* words.
   - id: "sio"

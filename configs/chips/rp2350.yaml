@@ -173,6 +173,7 @@ peripherals:
     base_address: 0x400D0000
     size: "4KB"
     config:
+      flash_base: 0x10000000
       flash_size: 4194304
   # XIP cache maintenance window (datasheet 4.4.1.2, XIP_MAINTENANCE_BASE):
   # pico-sdk xip_cache_clean_all / invalidate_all store here. The flash is
