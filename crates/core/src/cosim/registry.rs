@@ -29,6 +29,26 @@ pub fn build_cosim_adapter_with_base(
             let model = model.to_string_lossy();
             let (program, args) = external_process_command(&model);
             let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            if wants_shm(config)? {
+                let mut in_names: Vec<String> = config.inputs.keys().cloned().collect();
+                let mut out_names: Vec<String> = config.outputs.keys().cloned().collect();
+                in_names.sort();
+                out_names.sort();
+                let handshake_ms = config
+                    .config
+                    .get("shm_handshake_ms")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(1000)
+                    .clamp(10, 30_000);
+                return Ok(Box::new(ExternalProcessCosimAdapter::spawn_shm(
+                    &program,
+                    &arg_refs,
+                    Default::default(),
+                    &in_names,
+                    &out_names,
+                    std::time::Duration::from_millis(handshake_ms),
+                )?));
+            }
             Ok(Box::new(ExternalProcessCosimAdapter::spawn(
                 &program, &arg_refs,
             )?))
@@ -68,6 +88,24 @@ pub fn validate_analog_models(configs: &[CosimModelConfig], base_dir: &Path) -> 
         }
     }
     issues
+}
+
+/// `config.transport: shm` (or `protocol: shm`) offers the shared-memory
+/// transport; anything else, or nothing, is the JSONL pipe protocol.
+fn wants_shm(config: &CosimModelConfig) -> SimResult<bool> {
+    let value = config
+        .config
+        .get("transport")
+        .or_else(|| config.config.get("protocol"));
+    match value.map(Value::as_str) {
+        None => Ok(false),
+        Some(Some("jsonl")) => Ok(false),
+        Some(Some("shm")) => Ok(true),
+        _ => Err(SimulationError::Other(format!(
+            "co-sim model '{}': config.transport must be `jsonl` or `shm`",
+            config.id
+        ))),
+    }
 }
 
 fn resolve_model_path(model: &str, base_dir: &Path) -> PathBuf {
