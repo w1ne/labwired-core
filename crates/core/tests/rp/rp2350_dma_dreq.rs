@@ -132,3 +132,45 @@ fn a_dreq_aimed_at_the_wrong_peripheral_is_refused() {
     let err = b.read_u32(DMA + 0x0C).unwrap_err().to_string();
     assert!(err.contains("spi1") && err.contains("spi0"), "{err}");
 }
+
+/// DREQ_ADC (48): pico-sdk `adc_fifo_setup(true, true, 1, ...)` +
+/// `adc_run(true)` with a DMA channel draining ADC FIFO into RAM, the way
+/// Betaflight's RP2350 ADC driver reads its channels.
+#[test]
+fn adc_free_running_conversions_reach_ram_through_dreq_48() {
+    const ADC: u64 = 0x400A_0000;
+    const N: u32 = 16;
+    let mut b = bus(
+        "configs/chips/rp2350.yaml",
+        "configs/systems/rp2350-zero.yaml",
+    );
+    // FCS: EN | DREQ_EN | THRESH 1.
+    b.write_u32(ADC + 0x08, 1 | (1 << 3) | (1 << 24)).unwrap();
+    // Channel 0: ADC FIFO (16-bit) -> DST, DATA_SIZE half-word.
+    b.write_u32(DMA, (ADC + 0x0C) as u32).unwrap();
+    b.write_u32(DMA + 0x04, DST as u32).unwrap();
+    b.write_u32(DMA + 0x08, N).unwrap();
+    b.write_u32(DMA + 0x0C, ctrl(0, false, true, 48) | (1 << 2))
+        .unwrap();
+    // CS: EN | START_MANY, input 4 (temperature sensor) with TS_EN.
+    b.write_u32(ADC, 1 | (1 << 1) | (1 << 3) | (4 << 12))
+        .unwrap();
+    for _ in 0..200_000 {
+        let _ = b.tick_peripherals_fully();
+        if b.read_u32(DMA + 0x0C).unwrap() & (1 << 26) == 0 {
+            break;
+        }
+    }
+    assert_eq!(
+        b.read_u32(DMA + 0x0C).unwrap() & (1 << 26),
+        0,
+        "ADC channel done"
+    );
+    for i in 0..N as u64 {
+        let s = b.read_u16(DST + 2 * i).unwrap();
+        assert!(
+            s != 0 && s < 4096,
+            "sample {i} = {s}: not a 12-bit conversion"
+        );
+    }
+}

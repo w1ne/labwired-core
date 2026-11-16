@@ -511,6 +511,18 @@ impl Peripheral for Rp2040Adc {
         Ok(())
     }
 
+    /// DREQ_ADC: with `FCS.DREQ_EN`, asserted while the FIFO holds data and
+    /// its level has reached `FCS.THRESH` (RP2040 datasheet 4.9.2 FCS;
+    /// pico-sdk `adc_fifo_setup`: "DREQ (and IRQ) asserted when at least
+    /// this many samples present"). Only the FIFO register is an endpoint.
+    fn dma_rx_request(&self, offset: u64) -> Option<bool> {
+        if offset != FIFO {
+            return None;
+        }
+        let level = self.fifo.borrow().len() as u32;
+        Some(self.fcs & FCS_DREQ_EN != 0 && level > 0 && level >= self.thresh())
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.read_u32(offset & !0x3)?;
         Ok((word >> ((offset & 0x3) * 8)) as u8)

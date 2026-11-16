@@ -225,6 +225,7 @@ peripherals:
         25: { peripheral: "spi0", dir: "rx" }
         26: { peripheral: "spi1", dir: "tx" }
         27: { peripheral: "spi1", dir: "rx" }
+        48: { peripheral: "adc", dir: "rx" }
   - id: "pio0"
     type: "pio"
     base_address: 0x50200000
