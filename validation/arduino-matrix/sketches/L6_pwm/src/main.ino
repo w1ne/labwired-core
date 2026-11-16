@@ -64,7 +64,7 @@
 // which the twin does not model. Use D9 = PB5 = OC1A (Timer1, phase-correct
 // 8-bit, 16 MHz / 64 / 510 = 490 Hz), the same unit the Uno row drives.
 #    define LW_PWM_PIN 9
-#  elif defined(ARDUINO_RASPBERRY_PI_PICO_W)
+#  elif defined(ARDUINO_RASPBERRY_PI_PICO_W) || defined(ARDUINO_RASPBERRY_PI_PICO_2W)
      // LED_BUILTIN is 64, the CYW43439's WL_GPIO0: no PWM behind it, so
      // analogWrite would be a no-op. GP15 is PWM slice 7 B.
 #    define LW_PWM_PIN 15
