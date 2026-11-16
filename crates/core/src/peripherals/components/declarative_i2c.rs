@@ -1728,6 +1728,41 @@ impl GenericI2cDevice {
 }
 
 impl I2cDevice for GenericI2cDevice {
+    /// PCA9685-shaped parts (a `servo_angle` observable over the LEDn block):
+    /// `((OFF - ON) mod 4096)` counts of a `4096 * (PRE_SCALE + 1) / 25 MHz`
+    /// frame (datasheet Rev. 4 §7.3.1). `None` while MODE1.SLEEP is set, for a
+    /// channel never written, and for LEDn full-OFF. Full-ON drives the whole frame.
+    fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
+        if channel >= 16 || !self.observables.iter().any(|o| o.name == "servo_angle") {
+            return None;
+        }
+        let file = self.file.as_ref()?;
+        if file.first()? & 0x10 != 0 {
+            return None;
+        }
+        let frame_us = 4096.0 * (f64::from(*file.get(0xFE)?) + 1.0) / 25.0;
+        let base = 0x06usize + usize::from(channel) * 4;
+        let (on_l, on_h, off_l, off_h) = (
+            *file.get(base)?,
+            *file.get(base + 1)?,
+            *file.get(base + 2)?,
+            *file.get(base + 3)?,
+        );
+        if off_h & 0x10 != 0 {
+            return None;
+        }
+        if on_h & 0x10 != 0 {
+            return Some(frame_us);
+        }
+        let on = u32::from(on_l) | (u32::from(on_h & 0x0F) << 8);
+        let off = u32::from(off_l) | (u32::from(off_h & 0x0F) << 8);
+        if on == 0 && off == 0 {
+            return None;
+        }
+        let counts = (off + 4096 - on) % 4096;
+        Some(f64::from(counts) / 4096.0 * frame_us)
+    }
+
     fn artifacts(
         &self,
         id: &str,
