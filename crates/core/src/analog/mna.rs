@@ -2503,19 +2503,28 @@ impl Solver {
         }
 
         // A behavioural expression has no limiter in ngspice either: it takes
-        // the plain Newton point.
+        // the plain Newton point, unless it holds a `TABLE`, whose flat ends
+        // make plain Newton cycle (see `Expression::step_limit`).
         let sources = self
             .circuit
             .behavioural_voltages
             .iter()
             .chain(&self.circuit.behavioural_currents);
         for (point, source) in self.behavioural_point.iter_mut().zip(sources) {
+            let limit = source.expression.step_limit();
             for (value, control) in point.iter_mut().zip(&source.controls) {
-                *value = match *control {
+                let new = match *control {
                     BehaviouralControl::Voltage(p, n) => {
                         node_diff(&self.solution[..self.nodes], p, n)
                     }
                     BehaviouralControl::Branch(branch) => self.solution[self.nodes + branch],
+                };
+                *value = match limit {
+                    Some(limit) if (new - *value).abs() > limit => {
+                        self.limiter_clamped = true;
+                        *value + limit.copysign(new - *value)
+                    }
+                    _ => new,
                 };
             }
         }

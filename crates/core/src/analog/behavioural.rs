@@ -27,6 +27,17 @@
 //!   `nint(x)` rounds half to even. None of these steps has a derivative.
 //! * `abs sqrt exp ln log log10 sin cos tan asin acos atan sinh cosh tanh
 //!   asinh acosh atanh floor ceil min max`. `log` is the natural logarithm.
+//! * `pwl(x, x1, y1, x2, y2, ...)` interpolates linearly between at least two
+//!   points and extends the first and last segment past the ends. The points
+//!   are literal numbers with strictly ascending `x`, as ngspice requires.
+//!
+//! `E`/`G ... TABLE {x} = (x1, y1) ...` lowers to [`Expression::table`]:
+//! ngspice runs it as an XSPICE `pwl` with `input_domain=0.1` and
+//! `fraction=TRUE`, so the output holds the end values outside the table
+//! and each corner `x_i` is a parabola over `x_i ± d`, where `d` is a tenth
+//! of the shorter segment next to it (at an end, of the one inner segment).
+//! The parabola meets both segments with their slopes; at `x_i` it reads
+//! `y_i + d·(s_upper − s_lower)/4`. Checked against ngspice-42 `.op`.
 //!
 //! ngspice clamps a value that leaves the reals (`1/0` reads 1e32,
 //! `exp(800)` reads 1e99, `ln(0)` reads -1e99). Here a value that is not
@@ -175,6 +186,12 @@ enum Node {
     Binary(Binary, Box<Node>, Box<Node>),
     Ternary(Box<Node>, Box<Node>, Box<Node>),
     Call(Function, Vec<Node>),
+    /// `pwl(...)` (`smooth` false) or a lowered `TABLE` (`smooth` true).
+    Pwl {
+        input: Box<Node>,
+        points: Vec<(f64, f64)>,
+        smooth: bool,
+    },
 }
 
 /// A parsed behavioural expression.
@@ -245,6 +262,61 @@ impl Expression {
         })
     }
 
+    /// `E`/`G ... TABLE {input} = (x1, y1) ...`: the table looked up at
+    /// `input`, held flat past both ends, with rounded corners (see the
+    /// module notes).
+    pub fn table(input: &str, points: Vec<(f64, f64)>) -> Result<Self, String> {
+        check_points(&points)?;
+        let mut expression = Self::parse(input)?;
+        expression.root = Node::Pwl {
+            input: Box::new(expression.root),
+            points,
+            smooth: true,
+        };
+        Ok(expression)
+    }
+
+    /// The largest move a Newton iterate may make in each control, when the
+    /// expression holds a `TABLE`: a tenth of the narrowest table's span.
+    ///
+    /// A table is flat past both ends, so a full Newton step from a flat
+    /// stretch lands anywhere and the next one jumps back: Newton cycles.
+    /// Walking the input in bounded steps reaches the segment that holds the
+    /// answer. Only the path changes; a limited step is never accepted as
+    /// converged. `pwl()` extrapolates, so it takes the plain Newton step.
+    pub fn step_limit(&self) -> Option<f64> {
+        fn walk(node: &Node, limit: &mut Option<f64>) {
+            match node {
+                Node::Number(_) | Node::Control(_) | Node::Time => {}
+                Node::Neg(inner) | Node::Not(inner) => walk(inner, limit),
+                Node::Binary(_, a, b) => {
+                    walk(a, limit);
+                    walk(b, limit);
+                }
+                Node::Ternary(a, b, c) => {
+                    walk(a, limit);
+                    walk(b, limit);
+                    walk(c, limit);
+                }
+                Node::Call(_, args) => args.iter().for_each(|arg| walk(arg, limit)),
+                Node::Pwl {
+                    input,
+                    points,
+                    smooth,
+                } => {
+                    walk(input, limit);
+                    if *smooth {
+                        let span = points[points.len() - 1].0 - points[0].0;
+                        *limit = Some(limit.map_or(0.1 * span, |l: f64| l.min(0.1 * span)));
+                    }
+                }
+            }
+        }
+        let mut limit = None;
+        walk(&self.root, &mut limit);
+        limit
+    }
+
     /// The quantities the expression reads, in first-use order.
     pub fn controls(&self) -> &[ControlName] {
         &self.controls
@@ -281,6 +353,67 @@ impl Expression {
         }
         Ok((result.value, result.grad))
     }
+}
+
+/// At least two points, finite, with strictly ascending `x`.
+fn check_points(points: &[(f64, f64)]) -> Result<(), String> {
+    if points.len() < 2 {
+        return Err(format!(
+            "a table needs at least two points, got {}",
+            points.len()
+        ));
+    }
+    if points.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
+        return Err("a table point is not finite".into());
+    }
+    if let Some(pair) = points.windows(2).find(|pair| pair[1].0 <= pair[0].0) {
+        return Err(format!(
+            "table x values must be strictly ascending: {} then {}",
+            pair[0].0, pair[1].0
+        ));
+    }
+    Ok(())
+}
+
+/// The value and slope of a piecewise-linear table at `x`. Without `smooth`
+/// the end segments extend; with it the ends hold flat and each corner is
+/// rounded as in XSPICE `pwl` (see the module notes).
+fn piecewise(points: &[(f64, f64)], x: f64, smooth: bool) -> (f64, f64) {
+    let last = points.len() - 1;
+    let slope = |i: usize| (points[i + 1].1 - points[i].1) / (points[i + 1].0 - points[i].0);
+    if smooth {
+        for (i, &(xi, yi)) in points.iter().enumerate() {
+            let lower = if i == 0 { 0.0 } else { slope(i - 1) };
+            let upper = if i == last { 0.0 } else { slope(i) };
+            let width = match (i == 0, i == last) {
+                (true, _) => points[1].0 - xi,
+                (_, true) => xi - points[i - 1].0,
+                _ => (xi - points[i - 1].0).min(points[i + 1].0 - xi),
+            };
+            let d = 0.1 * width;
+            if (x - xi).abs() < d {
+                let t = x - (xi - d);
+                let bend = (upper - lower) / (4.0 * d);
+                return (
+                    yi - lower * d + lower * t + bend * t * t,
+                    lower + 2.0 * bend * t,
+                );
+            }
+        }
+        if x <= points[0].0 {
+            return (points[0].1, 0.0);
+        }
+        if x >= points[last].0 {
+            return (points[last].1, 0.0);
+        }
+    }
+    // The segment holding `x`; the first or last one past the ends.
+    let i = points[1..last]
+        .iter()
+        .position(|&(xi, _)| x < xi)
+        .unwrap_or(last - 1);
+    let s = slope(i);
+    (points[i].1 + s * (x - points[i].0), s)
 }
 
 fn truth(value: bool, width: usize) -> Dual {
@@ -321,6 +454,15 @@ fn eval(node: &Node, controls: &[f64], time: f64) -> Result<Dual, String> {
                 values.push(eval(arg, controls, time)?);
             }
             call(*function, values)?
+        }
+        Node::Pwl {
+            input,
+            points,
+            smooth,
+        } => {
+            let x = eval(input, controls, time)?;
+            let (value, slope) = piecewise(points, x.value, *smooth);
+            x.chain(value, slope)
         }
     })
 }
@@ -741,6 +883,40 @@ impl Parser {
         Node::Control(index)
     }
 
+    /// The rest of `pwl(x, x1, y1, ...)` after its `(`.
+    fn pwl(&mut self) -> Result<Node, String> {
+        let input = self.ternary()?;
+        let mut values = Vec::new();
+        while self.tokens.get(self.at) == Some(&Token::Comma) {
+            self.at += 1;
+            let negative = self.eat("-");
+            if !negative {
+                self.eat("+");
+            }
+            match self.tokens.get(self.at) {
+                Some(Token::Number(value)) => {
+                    values.push(if negative { -value } else { *value });
+                    self.at += 1;
+                }
+                _ => return Err("`pwl` points must be literal numbers".into()),
+            }
+        }
+        match self.tokens.get(self.at) {
+            Some(Token::Close) => self.at += 1,
+            _ => return Err("expected `)` or a literal point in `pwl`".into()),
+        }
+        if values.len() % 2 != 0 {
+            return Err("`pwl` takes x, y pairs after its input".into());
+        }
+        let points: Vec<(f64, f64)> = values.chunks(2).map(|pair| (pair[0], pair[1])).collect();
+        check_points(&points)?;
+        Ok(Node::Pwl {
+            input: Box::new(input),
+            points,
+            smooth: false,
+        })
+    }
+
     fn atom(&mut self) -> Result<Node, String> {
         let token = self.tokens.get(self.at).cloned();
         self.at += 1;
@@ -783,6 +959,9 @@ impl Parser {
             Some(Token::Name(name)) => {
                 if self.tokens.get(self.at) == Some(&Token::Open) {
                     self.at += 1;
+                    if name == "pwl" {
+                        return self.pwl();
+                    }
                     let Some((function, arity)) = Function::lookup(&name) else {
                         return Err(format!(
                             "function `{name}` is outside the behavioural subset"
@@ -886,6 +1065,7 @@ mod tests {
             "tanh(V(a,b)) + atan(V(b)) - sqrt(V(a))",
             "V(a) > V(b) ? ln(V(a)) : log10(V(b))",
             "min(V(a), V(b)) + max(V(a), 2*V(b)) + uramp(V(a) - 1)",
+            "pwl(V(a)*V(b), -1,2, 0.5,-1e-3, 3,4)",
         ];
         let point = [1.3, 0.7, 0.4];
         for text in cases {
@@ -908,6 +1088,40 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn table_is_smooth_and_flat_outside() {
+        let points = vec![(0.0, 0.0), (1.0, 1.0), (4.0, 2.0)];
+        let table = Expression::table("V(a)", points).unwrap();
+        let at = |x: f64| table.evaluate(&[x], 0.0).unwrap();
+        // Held at the end values, with no slope, past both ends.
+        assert_eq!(at(-3.0), (0.0, vec![0.0]));
+        assert_eq!(at(9.0), (2.0, vec![0.0]));
+        // Value and slope are continuous at each edge of every corner.
+        for (edge, slope_below, slope_above) in [
+            (-0.1, 0.0, 0.0),
+            (0.1, 1.0, 1.0),
+            (0.9, 1.0, 1.0),
+            (1.1, 1.0 / 3.0, 1.0 / 3.0),
+            (3.7, 1.0 / 3.0, 1.0 / 3.0),
+            (4.3, 0.0, 0.0),
+        ] {
+            let (below, d_below) = at(edge - 1e-12);
+            let (above, d_above) = at(edge + 1e-12);
+            assert!((below - above).abs() < 1e-9, "value jumps at {edge}");
+            assert!(
+                (d_below[0] - slope_below).abs() < 1e-6,
+                "slope below {edge}"
+            );
+            assert!(
+                (d_above[0] - slope_above).abs() < 1e-6,
+                "slope above {edge}"
+            );
+        }
+        // The corner at 1 reads y + d·(s_upper − s_lower)/4.
+        let (corner, _) = at(1.0);
+        assert!((corner - (1.0 + 0.1 * (1.0 / 3.0 - 1.0) / 4.0)).abs() < 1e-12);
     }
 
     #[test]

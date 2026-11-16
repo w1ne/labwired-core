@@ -53,6 +53,7 @@
 //! | Behavioural source | `B<name> n+ n- V=<expr>` or `B<name> n+ n- I=<expr>` |
 //! | Behavioural VCVS / VCCS | `E<name> n+ n- VALUE={<expr>}` / `G<name> n+ n- VALUE={<expr>}` |
 //! | Polynomial E / G / F / H | `E<name> n+ n- POLY(<n>) <n node pairs> <p0> <p1> ...`, `F<name> n+ n- POLY(<n>) <n elements> <p0> ...` |
+//! | Table E / G | `E<name> n+ n- TABLE {<expr>} = (x1, y1) (x2, y2) ...` |
 //! | Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
 //!
 //! A semiconductor's bare `off` flag is SPICE's: the operating point holds
@@ -85,8 +86,10 @@
 //!
 //! The four dependent sources are SPICE's linear ones, plus `E`/`G`
 //! `VALUE={<expr>}`, which is a behavioural source, and SPICE2's
-//! `POLY(n)` form of all four, which lowers to one (see below). `TABLE` and
-//! `LAPLACE` forms are refused by name. `E` and `H` each add a
+//! `POLY(n)` form of all four, which lowers to one (see below), and the
+//! `E`/`G` `TABLE {<expr>} = (x1, y1) ...` lookup, which also does (its
+//! corner rounding is in [`super::behavioural`]). `LAPLACE`, and `TABLE` on
+//! `F`/`H` (fatal in ngspice), are refused by name. `E` and `H` each add a
 //! branch current, numbered after every voltage source and inductor; `F` and
 //! `H` read the branch current of the element they name, which must be one that
 //! carries one (a `V`, `L`, `E` or `H`).
@@ -4112,7 +4115,7 @@ fn expand_call(
             || (matches!(letter, 'E' | 'G')
                 && tokens.get(3).is_some_and(|token| {
                     let key = token.split('=').next().unwrap_or("");
-                    key.eq_ignore_ascii_case("value")
+                    key.eq_ignore_ascii_case("value") || is_table_keyword(token)
                 }));
         if behavioural && tokens.len() > 3 {
             out.push(LogicalLine {
@@ -4971,6 +4974,25 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                     &poly_expression(&atoms, &coefficients),
                 )?;
             }
+            'E' | 'G' if tokens.len() > 3 && is_table_keyword(tokens[3]) => {
+                let (input, points) = parse_table(&ctx, &tokens[3..].join(" "))?;
+                let expression =
+                    Expression::table(&input, points).map_err(|message| ctx.parse_err(message))?;
+                let kind = if letter == 'E' {
+                    BehaviouralKind::Voltage
+                } else {
+                    BehaviouralKind::Current
+                };
+                push_expression(
+                    &mut circuit,
+                    &mut behavioural_lines,
+                    &ctx,
+                    head,
+                    [tokens[1], tokens[2]],
+                    kind,
+                    expression,
+                );
+            }
             'E' | 'G'
                 if tokens.len() > 3 && {
                     let key = tokens[3].split('=').next().unwrap_or("");
@@ -5244,6 +5266,20 @@ fn push_behavioural(
     // parenthesised term, as ngspice reads it.
     let body = body.trim().replace('{', "(").replace('}', ")");
     let expression = Expression::parse(&body).map_err(|message| ctx.parse_err(message))?;
+    push_expression(circuit, lines, ctx, name, terminals, kind, expression);
+    Ok(())
+}
+
+/// Add a behavioural source with an already parsed expression.
+fn push_expression(
+    circuit: &mut Circuit,
+    lines: &mut Vec<(BehaviouralKind, usize, String)>,
+    ctx: &LineCtx<'_>,
+    name: &str,
+    terminals: [&str; 2],
+    kind: BehaviouralKind,
+    expression: Expression,
+) {
     let source = BehaviouralSource {
         name: name.to_string(),
         p: circuit.intern(terminals[0]),
@@ -5257,7 +5293,41 @@ fn push_behavioural(
         BehaviouralKind::Current => circuit.behavioural_currents.push(source),
     }
     lines.push((kind, ctx.number, ctx.text.to_string()));
-    Ok(())
+}
+
+/// `TABLE` or `TABLE{...}`: the token that starts an `E`/`G` table.
+fn is_table_keyword(token: &str) -> bool {
+    token
+        .get(..5)
+        .is_some_and(|head| head.eq_ignore_ascii_case("table"))
+        && token[5..].chars().next().is_none_or(|c| c == '{')
+}
+
+/// Read `TABLE {<expr>} = (x1, y1) (x2, y2) ...`: the input expression and
+/// the points. The `=` is optional; a point's values may carry a scale
+/// suffix.
+fn parse_table(ctx: &LineCtx<'_>, text: &str) -> Result<(String, Vec<(f64, f64)>), AnalogError> {
+    let usage = "expected `TABLE {<expr>} = (x1, y1) (x2, y2) ...`";
+    let after = text[5..].trim_start();
+    let close = after
+        .strip_prefix('{')
+        .and_then(|inner| inner.find('}'))
+        .ok_or_else(|| ctx.parse_err(usage))?;
+    let input = after[1..=close].to_string();
+    let rest = after[close + 2..].trim_start();
+    let rest = rest.strip_prefix('=').unwrap_or(rest);
+    let mut values = Vec::new();
+    for raw in rest
+        .split(|c: char| c == '(' || c == ')' || c == ',' || c.is_whitespace())
+        .filter(|raw| !raw.is_empty())
+    {
+        values.push(ctx.value(raw, "TABLE point")?);
+    }
+    if values.len() % 2 != 0 {
+        return Err(ctx.parse_err("`TABLE` points come in (x, y) pairs"));
+    }
+    let points = values.chunks(2).map(|pair| (pair[0], pair[1])).collect();
+    Ok((input, points))
 }
 
 /// Bind every `V(...)` and `I(...)` a behavioural expression reads.

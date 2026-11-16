@@ -262,12 +262,12 @@ S1 a b sense+ sense- vt=3.75 vh=3.25 invert=1 ron=0.1 roff=1meg
         // `VALUE=` behavioural sources, SPICE2 `POLY(n)` sources, and an `X`
         // whose model is an OPAMP/COMP card. What is left is what still has no
         // in-core term: a call to a subcircuit the deck never defines, a model
-        // library needs a file loader, a MESFET and a TABLE controlled source
-        // need equations nobody has written here.
+        // library needs a file loader, a MESFET and a LAPLACE controlled
+        // source need equations nobody has written here.
         for line in [
             "X1 a b subckt",
             "Z1 d g s mesfet",
-            "E1 a b TABLE {V(c)} = (0,0) (1,1)",
+            "E1 a b LAPLACE V(c) 1",
             ".include models/bsim.lib",
             ".lib vendor.lib tt",
         ] {
