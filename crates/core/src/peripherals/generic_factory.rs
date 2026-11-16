@@ -168,6 +168,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // C5 UART0 uses the shared Espressif UART head at its own 240 MHz pacing
     // rate and interrupt source 47. It is intentionally window-limited by the
     // C5 chip descriptor; do not route it through the fuzzy STM32 UART arm.
+    "esp32c5_gpio",
+    // C5 I2C0 is selected by the C5-aware C3-family attach path.
+    "esp32c5_i2c",
     "esp32c5_uart",
     // C61 UART0 uses the shared Espressif FIFO/status head at its 160 MHz
     // core rate and interrupt source 40; the descriptor limits the window.

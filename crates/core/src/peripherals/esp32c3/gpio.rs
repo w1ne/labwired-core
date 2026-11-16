@@ -138,6 +138,22 @@ pub(crate) const C6_MATRIX: MatrixLayout = MatrixLayout {
     },
 };
 
+/// The ESP32-C5 I²C0 matrix subset. Other C5 matrix signals are deliberately
+/// omitted; this descriptor only claims GPIO output and the I²C0 route.
+pub(crate) const C5_MATRIX: MatrixLayout = MatrixLayout {
+    i2c_scl: 46,
+    i2c_sda: 47,
+    fspiclk: u32::MAX,
+    fspiq: u32::MAX,
+    fspid: u32::MAX,
+    fspics0: u32::MAX,
+    ledc_ls_out0: None,
+    in_sel: crate::peripherals::esp_gpio_net::InSelLayout {
+        pad_mask: 0x7F,
+        sel_bit: 1 << 8,
+    },
+};
+
 impl MatrixLayout {
     /// Output signal index → name, for `gpio_routing`.
     fn out_signal_name(&self, idx: u32) -> Option<&'static str> {
@@ -230,8 +246,11 @@ pub struct Esp32c3Gpio {
     /// `ETS_GPIO_INTR_SOURCE` of the chip this block sits on: 16 on the C3,
     /// 30 on the C6 (which reuses this model).
     intr_source: u32,
-    /// Matrix numbering of the chip this block sits on (C3 or C6).
+    /// Matrix numbering of the chip this block sits on (C3, C5 or C6).
     layout: MatrixLayout,
+    /// C5 moves GPIO_ENABLE and GPIO_IN and uses different matrix selector
+    /// windows; supported registers are normalized to this model's C3 map.
+    c5_register_map: bool,
     /// Peripheral input signals bound to wire lines (`FUNCn_IN_SEL_CFG`).
     in_routes: crate::peripherals::esp_gpio_net::MatrixInputs,
     /// Pads on a world `gpio_net` ([`PinPort::join_wire`]).
@@ -270,6 +289,7 @@ impl Esp32c3Gpio {
             irq_watch: Default::default(),
             intr_source: GPIO_INTR_SOURCE,
             layout: C3_MATRIX,
+            c5_register_map: false,
             in_routes: Default::default(),
             net_pads: 0,
             wire_edges: Vec::new(),
@@ -295,6 +315,38 @@ impl Esp32c3Gpio {
             layout: C6_MATRIX,
             ..Self::with_intr_source(30)
         }
+    }
+
+    /// ESP32-C5 direct GPIO0..25 plus its I²C0 matrix route. Unmodelled matrix
+    /// outputs and the remaining GPIO register tail stay outside this profile.
+    pub fn for_esp32c5() -> Self {
+        Self {
+            layout: C5_MATRIX,
+            c5_register_map: true,
+            ..Self::new()
+        }
+    }
+
+    fn normalize_register_offset(&self, offset: u64) -> u64 {
+        if !self.c5_register_map {
+            return offset;
+        }
+        let word = offset & !3;
+        let byte = offset & 3;
+        if (0x2D4..0x2D4 + (INPUT_SIGNAL_COUNT as u64) * 4).contains(&word) {
+            return FUNC_IN_SEL + (word - 0x2D4) + byte;
+        }
+        if (0xAD4..0xAD4 + (PIN_COUNT as u64) * 4).contains(&word) {
+            return FUNC_OUT_SEL + (word - 0xAD4) + byte;
+        }
+        let canonical = match word {
+            0x34 => ENABLE,
+            0x38 => ENABLE_W1TS,
+            0x3C => ENABLE_W1TC,
+            0x64 => IN,
+            _ => return offset,
+        };
+        canonical | byte
     }
 
     /// Wire the shared I²C0 line-level cell (the same `Arc` the C3 I²C bit
@@ -1027,6 +1079,7 @@ impl Peripheral for Esp32c3Gpio {
     /// every status/interrupt register stays [`SideEffecting`](MmioAccessClass::SideEffecting)
     /// so a display bit-bang or an INT_ST poll still disqualifies the skip.
     fn mmio_access_class(&self, offset: u64) -> MmioAccessClass {
+        let offset = self.normalize_register_offset(offset);
         match offset & !3 {
             IN | STRAP => MmioAccessClass::SideEffectFree,
             _ => MmioAccessClass::SideEffecting,
@@ -1038,6 +1091,7 @@ impl Peripheral for Esp32c3Gpio {
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
+        let offset = self.normalize_register_offset(offset);
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
         let word = self.read_word(word_off);
@@ -1045,12 +1099,14 @@ impl Peripheral for Esp32c3Gpio {
     }
 
     fn peek(&self, offset: u64) -> Option<u8> {
+        let offset = self.normalize_register_offset(offset);
         let word_off = offset & !3;
         let byte_off = (offset & 3) * 8;
         Some(((self.read_word(word_off) >> byte_off) & 0xFF) as u8)
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let offset = self.normalize_register_offset(offset);
         let word_off = offset & !3;
         let byte_off = offset & 3;
         self.mutate_pads(|g| {
@@ -1072,6 +1128,7 @@ impl Peripheral for Esp32c3Gpio {
     }
 
     fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        let offset = self.normalize_register_offset(offset);
         if offset & 1 == 0 {
             let word_off = offset & !3;
             let shift = (offset & 3) * 8;
@@ -1092,6 +1149,7 @@ impl Peripheral for Esp32c3Gpio {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        let offset = self.normalize_register_offset(offset);
         if offset & 3 == 0 {
             self.mutate_pads(|g| g.with_own_drive_edges(offset, |g| g.write_word(offset, value)));
             Ok(())
@@ -1105,7 +1163,7 @@ impl Peripheral for Esp32c3Gpio {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::json!({
-            "layout": "esp32c3",
+            "layout": if self.c5_register_map { "esp32c5_direct_gpio_i2c_matrix" } else { "esp32c3" },
             "odr": self.out,
             "idr": self.effective_input(),
             "enable": self.enable,

@@ -313,11 +313,16 @@ chips:
 
   - id: esp32c5
     arch: riscv32imac
-    headline: "No beyond-rubric C5 peripheral is exercised: the DevKitC-1-N8R8 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, IEEE 802.15.4 or the other C5 peripherals."
-    functional: []
+    headline: "The C5 DevKitC-1-N8R8 smoke reads a BME280 ID and raw temperature over the C5 I2C0 command-list engine, observes GPIO5 output edges, and reports a UART0 marker. The profile does not model ROM boot, flash/XIP, PSRAM, wireless, the RGB LED, PCR clock gating, or electrical IO_MUX enforcement."
+    functional:
+      - what: "BME280 ID and raw-temperature read over GPIO8/9-routed C5 I2C0"
+        fw: esp32c5-devkitc-1-bme280-smoke
+        ev: "examples/esp32c5-devkitc-1-bme280-smoke/evidence/logs/run_smoke.log"
+        gate: pr
     advanced_unit_only: []
     advanced_dead: []
-    shim: []
+    shim:
+      - {p: io_mux, ev: "configs/chips/esp32c5.yaml (declarative; configs/peripherals/esp32c6/io_mux.yaml)", note: "CLOSABLE: register words are stored, but pad electrical mux behavior is not enforced; the smoke's GPIO output and I2C route use the modeled GPIO/matrix subset directly."}
 
   - id: esp32c61
     arch: riscv32imac
