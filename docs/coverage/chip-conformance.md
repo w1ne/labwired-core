@@ -46,6 +46,7 @@ This page covers the public models. For every chip we model — public and priva
 | esp32 | **L1** | ✓ | 32 | — | — | firmware_survival::test_esp32_tier1_survival |
 | esp32s3 | **L1** | ✓ | 14 | — | — | firmware_survival::test_esp32s3_tier1_survival |
 | esp32s3-zero | **L1** | ✓ | 17 | — | — | firmware_survival::test_esp32s3_zero_tier1_survival |
+| esp32s3-devkitc-1-n16r8-adc | **L0** | ✓ | 3 | — | — | — |
 | esp32-devkitc-32e-gpio-smoke | **L1** | ✓ | 3 | — | — | firmware_survival::test_esp32_devkitc_32e_gpio_smoke_tier1_survival |
 | esp32-devkitc-32e-uart1 | **L0** | ✓ | 3 | — | — | — |
 | stm32f401cdu6 | **L1** | ✓ | 45 | — | — | firmware_survival::test_stm32f401cdu6_demo_survival |

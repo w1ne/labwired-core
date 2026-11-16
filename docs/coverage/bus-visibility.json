@@ -220,6 +220,10 @@
   },
   {
     "buses": [],
+    "name": "esp32s3-devkitc-1-n16r8-adc"
+  },
+  {
+    "buses": [],
     "name": "esp32s3-zero"
   },
   {

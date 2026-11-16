@@ -431,6 +431,11 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "esp32s3.yaml is an address-map stub; from_config has no S3 UART model",
     ),
     (
+        "esp32s3-devkitc-1-n16r8-adc",
+        BusKind::Uart,
+        "narrow N16R8 ADC profile of the S3 address-map stub; no UART bring-up for this family in the harness yet",
+    ),
+    (
         "esp32s3-zero",
         BusKind::I2c,
         "esp32s3-zero.yaml inherits the S3 address-map stub",

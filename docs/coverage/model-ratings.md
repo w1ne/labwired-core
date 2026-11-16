@@ -47,6 +47,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | esp32 | open | L1 | 32 | 955.5 | 1.4 | ≥1× (CI) | [doc](docs/boards/esp32.md) |
 | esp32s3 | open | L1 | 14 | 991.9 | 2.4 | ≥1× (CI) | [doc](docs/boards/esp32s3.md) |
 | esp32s3-zero | open | L1 | 17 | 991.9 | 2.4 | ≥1× (CI) | — |
+| esp32s3-devkitc-1-n16r8-adc | open | L0 | 3 | 991.9 | 2.4 | ≥1× (CI) | — |
 | esp32-devkitc-32e-gpio-smoke | open | L1 | 3 | 977.8 | 1.4 | ≥1× (CI) | — |
 | esp32-devkitc-32e-uart1 | open | L0 | 3 | 977.8 | 1.4 | ≥1× (CI) | — |
 | stm32f401cdu6 | open | L1 | 45 | 937.7 | 1.6 | ≥1× (CI) | — |
