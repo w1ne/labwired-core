@@ -117,6 +117,7 @@ pub mod rp2040;
 pub mod rp2040_clocks;
 pub mod rp2350_bootram;
 pub mod rp2350_qmi;
+pub mod rp2350_xip_maint;
 pub mod rs485;
 pub mod rsim;
 pub mod rtc;

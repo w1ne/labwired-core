@@ -322,3 +322,23 @@ fn uf2_image_boots_through_the_rom_and_runs() {
         String::from_utf8_lossy(&uart.lock().unwrap())
     );
 }
+
+/// pico-sdk `xip_cache_clean_all` (hardware_xip_cache): byte stores to the
+/// maintenance window at `0x1bffc001 + 8*i` (clean by set/way, RP2350-E11
+/// workaround). Betaflight's flash config save runs it. Pinning is refused.
+#[test]
+fn xip_cache_maintenance_stores_are_accepted_and_pinning_refused() {
+    let mut b = bus(
+        "configs/chips/rp2350.yaml",
+        "configs/systems/rp2350-zero.yaml",
+    );
+    for i in 0..2048u64 {
+        b.write_u8(0x1BFF_C001 + 8 * i, 0)
+            .expect("clean by set/way");
+    }
+    b.write_u8(0x1800_1002, 0).expect("invalidate by address");
+    match b.write_u8(0x1800_0007, 0) {
+        Err(SimulationError::NotImplemented(m)) => assert!(m.contains("pinning"), "{m}"),
+        other => panic!("pin must be refused, got {other:?}"),
+    }
+}

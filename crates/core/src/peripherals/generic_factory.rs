@@ -105,6 +105,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_usb",
     "rp2350_bootram",
     "rp2350_qmi",
+    "rp2350_xip_maintenance",
     // ESP32-C3 behavioral models (esp32 factory).
     // MUST be listed: without membership the fuzzy fallback would coerce the
     // BLE baseband window onto some unrelated register map instead of erroring.
@@ -1331,6 +1332,9 @@ pub fn try_build(
         // CS0 array in bytes (required). `jedec_id: [mfr, type, capacity]`
         // and `unique_id: [8 bytes]` answer 9Fh/4Bh; without them those
         // reads are refused rather than invented.
+        "rp2350_xip_maintenance" => {
+            Box::new(crate::peripherals::rp2350_xip_maint::Rp2350XipMaintenance::new())
+        }
         "rp2350_qmi" => {
             let size = p_cfg
                 .config
@@ -1340,21 +1344,19 @@ pub fn try_build(
                     anyhow::anyhow!("rp2350_qmi `{}`: config.flash_size is required", p_cfg.id)
                 })?;
             let bytes = |key: &str| -> anyhow::Result<Option<Vec<u8>>> {
-                match p_cfg.config.get(key) {
-                    None => Ok(None),
-                    Some(v) => v
-                        .as_sequence()
-                        .map(|s| {
-                            s.iter()
-                                .map(|b| b.as_u64().map(|b| b as u8))
-                                .collect::<Option<Vec<u8>>>()
-                        })
-                        .flatten()
-                        .map(Some)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!("rp2350_qmi `{}`: {key} must be a byte list", p_cfg.id)
-                        }),
-                }
+                let Some(v) = p_cfg.config.get(key) else {
+                    return Ok(None);
+                };
+                v.as_sequence()
+                    .and_then(|s| {
+                        s.iter()
+                            .map(|b| b.as_u64().map(|b| b as u8))
+                            .collect::<Option<Vec<u8>>>()
+                    })
+                    .map(Some)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("rp2350_qmi `{}`: {key} must be a byte list", p_cfg.id)
+                    })
             };
             let mut qmi = crate::peripherals::rp2350_qmi::Rp2350Qmi::new(
                 u32::try_from(size)
