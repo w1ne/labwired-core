@@ -51,11 +51,13 @@ pub const SRAM_START: u16 = 0x0100;
 /// explicitly configured GPIO windows and their interrupt controllers are not
 /// yet modelled.
 ///
-/// Timer0/1/2 output-compare pads use the mega pins (OC0A = PB7, OC0B = PG5,
-/// OC1A/OC1B = PB5/PB6, OC2A = PB4, OC2B = PH6; see `avr/oc_pins.rs`).
+/// Output-compare pads use the mega pins (OC0A = PB7, OC0B = PG5,
+/// OC1A/B/C = PB5/PB6/PB7, OC2A = PB4, OC2B = PH6, OC3x = PE3..5,
+/// OC4x = PH3..5, OC5x = PL3..5; see `avr/oc_pins.rs`). Timer1 gains its
+/// compare unit C and Timer3/4/5 run on the mega parts (`avr/timer345.rs`).
 /// Not modelled on the ATmega2560: INTn/PCINT (its pins differ from the
-/// 328P's; the registers are stored only), OC1C, Timer3/4/5 and USART1..3
-/// (registers stored only).
+/// 328P's; the registers are stored only) and USART1..3 (registers stored
+/// only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -478,7 +480,8 @@ pub fn mega2560_vector(vec328: u32) -> u32 {
         24 => 29,              // ANALOG COMP
         25 => 40,              // TWI
         26 => 58,              // SPM READY
-        v => v,
+        timer1::VEC_TIMER1_COMPC => 20,
+        v => v, // Timer3/4/5 raise their own vector numbers (32..36, 42..51)
     }
 }
 pub const AVR_DATA_VMA_BIAS: u64 = 0x0080_0000;
@@ -561,11 +564,13 @@ pub struct Avr {
     pub t2_down: bool,
     /// Timer1, the 16-bit counter (`avr/timer1.rs`).
     t1: timer1::Timer1,
-    /// Pads an output-compare unit owns, per port slot of `oc_pins::OcMap`
-    /// (B/D on the 328P, B/G/H on the mega), and the level it drives there,
-    /// as last pushed to the bus-side port model.
-    oc_mask: [u8; 3],
-    oc_level: [u8; 3],
+    /// Timer3/4/5 and the ICPn pad watch of the mega parts
+    /// (`avr/timer345.rs`).
+    t16: timer345::MegaTimers,
+    /// Pads the output-compare units own, per port slot of `oc_pins::OcMap`
+    /// (B/D on the 328P, B/G/H/E/L on the mega), and the level they drive
+    /// there, as last pushed to the bus-side port model.
+    oc: oc_pins::OcState,
     pub serial_tx: Vec<u8>,
     /// Optional live sink for MachineTrait UART capture.
     pub serial_sink: Option<Arc<Mutex<Vec<u8>>>>,
@@ -932,9 +937,9 @@ impl Avr {
             assr: 0,
             t2_prescale_acc: 0,
             t2_down: false,
-            t1: timer1::Timer1::default(),
-            oc_mask: [0; 3],
-            oc_level: [0; 3],
+            t1: timer1::Timer1::for_model(model),
+            t16: timer345::MegaTimers::default(),
+            oc: oc_pins::OcState::default(),
             serial_tx: Vec::new(),
             serial_sink: None,
             ucsr0a: UCSRA_UDRE,
@@ -1374,6 +1379,18 @@ impl Avr {
             0x00B3 => Ok(self.ocr2a),
             0x00B4 => Ok(self.ocr2b),
             0x00B6 => Ok(self.assr),
+            0x0036
+            | 0x0038..=0x003A
+            | 0x006F
+            | 0x0071..=0x0073
+            | 0x0080..=0x008D
+            | 0x0090..=0x009D
+            | 0x00A0..=0x00AD
+            | 0x0120..=0x012D
+                if self.is_mega() =>
+            {
+                Ok(self.timer16_read(addr))
+            }
             timer1::ADDR_TIFR1
             | timer1::ADDR_TIMSK1
             | timer1::ADDR_TCCR1A..=0x0082
@@ -1565,6 +1582,19 @@ impl Avr {
             }
             0x00B6 => {
                 self.assr = value & (ASSR_EXCLK | ASSR_AS2);
+                Ok(())
+            }
+            0x0036
+            | 0x0038..=0x003A
+            | 0x006F
+            | 0x0071..=0x0073
+            | 0x0080..=0x008D
+            | 0x0090..=0x009D
+            | 0x00A0..=0x00AD
+            | 0x0120..=0x012D
+                if self.is_mega() =>
+            {
+                self.timer16_write(addr, value, bus);
                 Ok(())
             }
             timer1::ADDR_TIFR1
@@ -2132,6 +2162,9 @@ impl Avr {
         if self.t2_prescaler() != 0 {
             self.tick_timer2(cpu_cycles);
         }
+        if self.t16.any_running() {
+            self.tick_timer345(cpu_cycles);
+        }
     }
 
     /// CPU cycles until the next Timer2 interrupt that can wake a sleeper.
@@ -2194,7 +2227,7 @@ impl Avr {
     /// pending. This is also what wakes a sleeping core.
     #[inline]
     fn wake_pending(&self) -> bool {
-        self.flag_i() && self.pending_irq & 0xFFFF_FFFE != 0
+        self.flag_i() && self.pending_irq & !1 != 0
     }
 
     pub fn portb(&self) -> u8 {
@@ -2475,8 +2508,14 @@ impl Avr {
         if !self.flag_i() || self.pending_irq == 0 {
             return Ok(false);
         }
-        let vec = self.pending_irq.trailing_zeros();
-        if vec == 0 || vec > 31 {
+        let vec = if self.is_mega() {
+            // Timer3/4/5 and COMPC sit above bit 31, and the internal bit
+            // order is not the 2560's priority order.
+            timer345::mega_highest_priority(self.pending_irq)
+        } else {
+            self.pending_irq.trailing_zeros()
+        };
+        if vec == 0 || vec > 63 || (vec > 31 && !self.is_mega()) {
             return Ok(false);
         }
         self.pending_irq &= !(1u64 << vec);
@@ -2495,6 +2534,9 @@ impl Avr {
             self.sync_timer2_irq();
         }
         self.timer1_vector_entered(vec);
+        if self.is_mega() {
+            self.timer345_vector_entered(vec);
+        }
         if vec == wdt::VEC_WDT && self.wdt.handles(wdt::ADDR_WDTCSR) {
             self.wdt_vector_entered();
         }
@@ -2745,7 +2787,11 @@ impl Cpu for Avr {
     /// watched pad moved since the last sample, or the USART receive interrupt
     /// is on.
     fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
-        if !self.sleeping || self.wake_pending() || self.ext_pins_moved(bus) {
+        if !self.sleeping
+            || self.wake_pending()
+            || self.ext_pins_moved(bus)
+            || self.mega_icp_moved(bus)
+        {
             return None;
         }
         // A byte arriving for RXCIE wakes the core, and its arrival time is the
@@ -2759,6 +2805,7 @@ impl Cpu for Avr {
                 self.timer0_wake_cycles(),
                 self.timer1_wake_cycles(),
                 self.timer2_wake_cycles(),
+                self.timer345_wake_cycles(),
                 self.usb.wake_cycles(self.cycles),
                 self.wdt.wake_cycles(self.cycles),
                 self.eeprom.ready_wake_cycles(self.cycles),
@@ -2826,9 +2873,9 @@ impl Cpu for Avr {
         self.assr = 0;
         self.t2_prescale_acc = 0;
         self.t2_down = false;
-        self.t1 = timer1::Timer1::default();
-        self.oc_mask = [0; 3];
-        self.oc_level = [0; 3];
+        self.t1 = timer1::Timer1::for_model(self.model);
+        self.t16 = timer345::MegaTimers::default();
+        self.oc = oc_pins::OcState::default();
         self.serial_tx.clear();
         self.ucsr0a = UCSRA_UDRE;
         self.ucsr0b = 0;
@@ -2935,6 +2982,10 @@ impl Cpu for Avr {
         if self.ext_watch != 0 {
             self.sample_ext_pins(bus);
         }
+        // ICPn of the mega 16-bit timers (`avr/timer345.rs`).
+        if self.t16.icp_watch != 0 {
+            self.sample_mega_icp(bus);
+        }
 
         if self.sleeping {
             if !self.wake_pending() {
@@ -3013,14 +3064,19 @@ impl Cpu for Avr {
         max_count: u32,
     ) -> SimResult<u32> {
         let push_tap = bus.logic_tap().filter(|tap| tap.push_armed());
-        let timer_stopped =
-            self.t0_prescaler() == 0 && self.t1.prescaler() == 0 && self.t2_prescaler() == 0;
+        let timer_stopped = self.t0_prescaler() == 0
+            && self.t1.prescaler() == 0
+            && self.t2_prescaler() == 0
+            && !self.t16.any_running();
         let irq_takeable = self.flag_i() && self.pending_irq != 0;
         // A sleeping core, or pads that must be sampled at every boundary for
         // INT/PCINT, keep the one-instruction path.
         // So does an attached USB device: its frames come on cycle deadlines.
-        let irq_takeable =
-            irq_takeable || self.sleeping || self.ext_watch != 0 || self.usb.active();
+        let irq_takeable = irq_takeable
+            || self.sleeping
+            || self.ext_watch != 0
+            || self.t16.icp_watch != 0
+            || self.usb.active();
         // The INC/RJMP spin touches no bus, so it can never push a pad edge:
         // it stays available under push capture, as long as the tap clock is
         // carried across the cycles it retires.
@@ -3147,6 +3203,8 @@ mod ext_int;
 mod oc_pins;
 #[path = "avr/timer1.rs"]
 mod timer1;
+#[path = "avr/timer345.rs"]
+mod timer345;
 /// ATmega32U4 USB device controller.
 mod usb;
 #[path = "avr/wdt.rs"]

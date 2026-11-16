@@ -6,10 +6,17 @@ registers_count: 32
 # AvrModel::Atmega2560: 256 KB flash and a 3-byte PC (EIND/EIJMP/EICALL,
 # RAMPZ/ELPM), 8 KB SRAM at 0x0200, ports A..L, a 16-channel ADC (ADCSRB.MUX5
 # selects ADC8..15 = A8..A15) and the 2560 vector table. Timer0 (millis/delay),
-# Timer1/Timer2 and USART0 (Serial) are the 328P models at the same addresses.
-# analogWrite reaches the Timer0/1/2 pads (OC0A PB7, OC0B PG5, OC1A/B PB5/PB6,
-# OC2A PB4, OC2B PH6; cpu/avr/oc_pins.rs).
-# Not modelled here: INTn/PCINT, OC1C, Timer3/4/5 (and their PWM pads), USART1..3.
+# Timer2 and USART0 (Serial) are the 328P models at the same addresses.
+# Timer1/3/4/5 are the 16-bit timers with compare units A/B/C: every WGM mode
+# (normal, CTC on OCRnA or ICRn, fast PWM, phase correct, phase and frequency
+# correct), compare A/B/C, overflow and input-capture interrupts at their 2560
+# vectors, ICFn at TOP when ICRn is TOP, ICP1/3/4/5 on PD4/PE7/PL0/PL1
+# (cpu/avr/timer345.rs).
+# analogWrite reaches every timer pad (OC0A PB7, OC0B PG5, OC1A/B/C
+# PB5/PB6/PB7, OC2A PB4, OC2B PH6, OC3A/B/C PE3/PE4/PE5, OC4A/B/C PH3/PH4/PH5,
+# OC5A/B/C PL3/PL4/PL5; cpu/avr/oc_pins.rs), with the OC0A/OC1C modulator on PB7.
+# Not modelled here: INTn/PCINT, USART1..3; on the 16-bit timers external clock
+# (Tn pins), toggle and non-PWM compare-output pads, double-buffered OCRnx.
 # Microchip DS2549 (ATmega640/1280/1281/2560/2561), 16 MHz on the Arduino Mega.
 cpu_hz: 16_000_000
 io_voltage_v: 5.0
