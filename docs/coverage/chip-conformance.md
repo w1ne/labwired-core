@@ -101,6 +101,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32h735 | **L1** | ✓ | 40 | — | — | firmware_survival::test_stm32h735_tier1_survival |
 | stm32c031c6 | **L0** | ✓ | 29 | — | — | — |
 | stm32l073 | **L2** | ✓ | 42 | 54/54 (100%) | 6 | firmware_survival::test_nucleo_l073rz_smoke_survival |
+| stm32l432kc | **L0** | ✓ | 42 | — | — | — |
 | stm32l476 | **L1** | ✓ | 58 | — | — | firmware_survival::test_nucleo_l476rg_demo_survival |
 | stm32wb55 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32wb55_zephyr_survival |
 | stm32wba52 | **L1** | ✓ | 21 | — | — | firmware_survival::test_stm32wba52_zephyr_survival |
@@ -132,6 +133,9 @@ This page covers the public models. For every chip we model — public and priva
 | pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
 | pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
 | ch32v003f4p6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
+| ch32v003f4u6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| ch32v003a4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| ch32v003j4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | esp32h2 | **L0** | ✓ | 3 | — | — | — |
 | esp32c5 | **L0** | ✓ | 1 | — | — | — |
 | esp32c61 | **L0** | ✓ | 1 | — | — | — |
