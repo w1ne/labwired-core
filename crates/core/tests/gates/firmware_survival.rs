@@ -3445,6 +3445,11 @@ const CORES_COVERED_ELSEWHERE: &[(&str, &str)] = &[
     ),
     ("cortex-r5f", "declared chip; no committed boot fixture yet"),
     ("rv32ec", "RV32EC profile covered by the CH32V003 suites"),
+    (
+        "rv32emc",
+        "RV32EmC (QingKe V2C) covered by the CH32V005/CH32V006 compiled-firmware \
+         suites (`vendor` test binary) and riscv_rv32e_tests",
+    ),
 ];
 
 /// The expectation comes from the chip descriptors that actually ship, not
