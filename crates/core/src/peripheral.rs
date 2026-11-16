@@ -90,6 +90,11 @@ pub const DMA_SIGNAL_CH3: u32 = 5;
 /// See [`DMA_SIGNAL_CH1`].
 pub const DMA_SIGNAL_CH4: u32 = 6;
 
+/// A converter's data-ready DMA request (ADC regular DR update). The bus
+/// names the request after the peripheral alone (`adc1`), the way reference
+/// manuals list it in their DMA request tables.
+pub const DMA_SIGNAL_DATA: u32 = 16;
+
 /// One source-data-unit -> destination-data-unit transform descriptor.
 /// Semantics follow RM0481 §15 and are pinned by the DMA_DataHandling
 /// HAL example's expected-result vectors (sim) and its on-board run.
@@ -1460,6 +1465,32 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// as on silicon does so here. Default: nothing — the register state is
     /// kept, and firmware that re-initialises the block is unaffected.
     fn on_node_reset(&mut self) {}
+
+    /// Drive an analog pad level, in millivolts, into this peripheral when it
+    /// samples that pad continuously (an analog comparator). Returns whether
+    /// it took it. ADC channels keep their own seam,
+    /// [`Self::set_adc_channel_input`]; the bus fans one pad write out to
+    /// both (`SystemBus::set_analog_pad_mv`).
+    fn set_analog_pad_input(&mut self, _pad: &str, _millivolts: u16) -> bool {
+        false
+    }
+
+    /// Whether this peripheral drives internal EXTI lines (a comparator
+    /// output). Cached by the bus at attach; only such peripherals are asked
+    /// for [`Self::take_exti_line_edges`] after a write or an input change.
+    fn drives_exti_lines(&self) -> bool {
+        false
+    }
+
+    /// Move the `(line, before, after)` output edges this peripheral produced
+    /// since the last call into `out`, for the EXTI to latch.
+    fn take_exti_line_edges(&mut self, _out: &mut Vec<(u8, bool, bool)>) {}
+
+    /// An edge on internal EXTI `line` (16 and up: comparator, PVD, ...),
+    /// which has no GPIO port mux. Returns true when it set a pending bit.
+    fn exti_internal_line_edge(&mut self, _line: u8, _before: bool, _after: bool) -> bool {
+        false
+    }
 
     /// Put this peripheral on a timed network link
     /// ([`crate::network::timed_uart`]). Only a USART with a timed mode

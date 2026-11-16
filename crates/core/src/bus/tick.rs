@@ -305,6 +305,11 @@ impl SystemBus {
         // controllers and multiplexers, from their live routing registers
         // (`Peripheral::dma_route_request`): F1 fixed channels, L4 CSELR, F4
         // SxCR.CHSEL, G0/G4/WB DMAMUX_CxCR.DMAREQ_ID.
+        // A data-ready request is named after the peripheral alone (`adc1`).
+        if request_id == crate::DMA_SIGNAL_DATA {
+            self.route_named_dma_request(source_name.to_string());
+            return;
+        }
         let line = match request_id {
             crate::DMA_SIGNAL_TX => "tx",
             crate::DMA_SIGNAL_RX => "rx",
@@ -314,7 +319,12 @@ impl SystemBus {
             crate::DMA_SIGNAL_CH4 => "ch4",
             _ => return,
         };
-        let request = format!("{source_name}_{line}");
+        self.route_named_dma_request(format!("{source_name}_{line}"));
+    }
+
+    /// Ask every DMA controller and multiplexer which channels the request
+    /// named `request` drives, and raise it there.
+    fn route_named_dma_request(&mut self, request: String) {
         // `(answering peripheral, target controller, channel)`.
         let mut targets: Vec<(usize, Option<usize>, u32)> = Vec::new();
         let mut routes = Vec::new();

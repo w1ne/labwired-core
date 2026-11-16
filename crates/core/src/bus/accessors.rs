@@ -126,6 +126,7 @@ impl SystemBus {
         self.refresh_bus_tick_index(idx);
         self.sync_timer_kernel_clocks(idx);
         self.sync_peripheral_reset_holds(idx);
+        self.deliver_exti_line_edges(idx);
         self.reconcile_irq_levels_after_write(idx);
     }
 
@@ -1369,6 +1370,7 @@ impl crate::Bus for SystemBus {
                 self.refresh_bus_tick_index(idx);
                 self.sync_timer_kernel_clocks(idx);
                 self.sync_peripheral_reset_holds(idx);
+                self.deliver_exti_line_edges(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
                 self.reconcile_irq_levels_after_write(idx);
@@ -1575,6 +1577,7 @@ impl crate::Bus for SystemBus {
                 self.refresh_bus_tick_index(idx);
                 self.sync_timer_kernel_clocks(idx);
                 self.sync_peripheral_reset_holds(idx);
+                self.deliver_exti_line_edges(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
                 self.reconcile_irq_levels_after_write(idx);
@@ -1886,6 +1889,7 @@ impl crate::Bus for SystemBus {
                     nvic.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
                 }
             }
+            self.unpark_level_events(exception_num - 16);
         }
     }
 
