@@ -546,6 +546,21 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Uart,
         "rp2350 die (Feather variant): from_config bus not yet edge-gated (no line cells)",
     ),
+    (
+        "rp2354b",
+        BusKind::I2c,
+        "rp2350 die (QFN80 package variant): from_config bus not yet edge-gated (no line cells)",
+    ),
+    (
+        "rp2354b",
+        BusKind::Spi,
+        "rp2350 die (QFN80 package variant): from_config bus not yet edge-gated (no line cells)",
+    ),
+    (
+        "rp2354b",
+        BusKind::Uart,
+        "rp2350 die (QFN80 package variant): from_config bus not yet edge-gated (no line cells)",
+    ),
     // AVR matrix twin: chip yaml uses generic type:i2c/spi (STM32-shaped
     // engines). Those models publish line_names for the logic analyzer but
     // never attach a PadLines cell on the AVR from_config path, so wire_lines()
