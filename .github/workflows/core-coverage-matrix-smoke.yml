@@ -579,6 +579,11 @@ jobs:
           - id: ch32v003a4m6-blink
             script: examples/ch32v003a4m6/io-smoke.yaml
             system: examples/ch32v003a4m6/system.yaml
+          # AT32F421G8U7: committed Artery SDK smoke (PLL, flash erase/program,
+          # DMA M2M copy, TMR6 IRQ toggling PA5) on the bare-chip descriptor.
+          - id: at32f421g8u7-sdk-smoke
+            script: examples/at32f421g8u7/io-smoke.yaml
+            system: examples/at32f421g8u7/system.yaml
 
     steps:
       - uses: actions/checkout@v4

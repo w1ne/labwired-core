@@ -6877,7 +6877,13 @@ impl crate::Peripheral for FlashStoreProbe {
     fn owns_flash_stores(&self) -> bool {
         true
     }
-    fn flash_cpu_store(&mut self, offset: u64, width: u8, value: u32) -> crate::FlashStoreOutcome {
+    fn flash_cpu_store(
+        &mut self,
+        offset: u64,
+        width: u8,
+        value: u32,
+        _existing: u32,
+    ) -> crate::FlashStoreOutcome {
         self.seen.lock().unwrap().push((offset, width, value));
         self.outcome
     }

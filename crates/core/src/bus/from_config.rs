@@ -1116,6 +1116,21 @@ impl SystemBus {
                         crate::peripherals::gpio::GpioPort::new_with_layout(layout)
                             .with_window_offset(window_offset)
                     };
+                    let port = if p_cfg
+                        .config
+                        .get("reset_registers")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        anyhow::ensure!(
+                            layout == GpioRegisterLayout::Stm32V2,
+                            "GPIO '{}': reset_registers currently requires the common V2 subset",
+                            p_cfg.id
+                        );
+                        port.with_v2_register_reset()
+                    } else {
+                        port
+                    };
                     // RA4/RA6 PORT: 16-bit PCNTRn aliases with the halves
                     // swapped (FSP R7FA6M5BH.h; see `RaPortGpio`).
                     let port = if p_cfg

@@ -1486,6 +1486,7 @@ impl SystemBus {
                 requires,
                 gclk_id,
                 gclk_idx,
+                reset_asserted: false,
             });
         }
         Ok(())
@@ -1652,6 +1653,7 @@ mod tests {
             }],
             gclk_id: None,
             gclk_idx: None,
+            reset_asserted: false,
         });
 
         // Gates are resolved before `configure_cortex_m` swaps the core-tied

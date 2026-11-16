@@ -1,0 +1,4 @@
+# Bare AT32F421G8U7, internal HICK/PLL clock; no invented external devices.
+name: at32f421g8u7
+chip: ../chips/at32f421g8u7.yaml
+external_devices: []

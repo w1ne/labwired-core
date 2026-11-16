@@ -896,3 +896,9 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real
 ### `xck26-rpu`
 
 _L1 + stock RTOS, SIM-DERIVED. First Cortex-R part: the Zynq UltraScale+ XCK26 RPU core 0 (Cortex-R5F, PMSAv7 16-region MPU, VFPv3-D16 on the pinned tlib engine) runs unmodified Zephyr v4.1.0 hello_world, synchronization (TTC0 match IRQs through the RPU GIC, WFI idle) and tests/kernel/common (12 suites, 61 pass / 2 skip / 0 fail of 63, userspace syscalls through the MPU) on the PS UART1 console (examples/kv260-r5, native CLI). Only the GIC, Cadence UART0/1 and TTC0 are installed (native_rpu_peripherals), so no advanced blocks exist to list._
+
+### `at32f421g8u7`
+
+_Bare AT32F421G8U7 (QFN28), reference-derived, no silicon capture. The committed Artery BSP 2.1.9 SDK smoke (examples/at32f421g8u7/io-smoke.yaml, PR-gated coverage-matrix cell, and the vendor::at32f421_contract Rust gate) switches CRM to the 120 MHz PLL, erases and programs the last flash sector, copies four words by DMA1 memory-to-memory and toggles PA5 from real TMR6 interrupts over USART2. The comparator/EXINT line-21 path, ADC ordinary scan with DMA handshake and the shared IWDG expiry reset are exercised only by register-level unit tests._
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `{'p': 'CMP', 'ev': 'crates/core/src/peripherals/at32f421.rs; crates/core/tests/vendor/at32f421_contract.rs', 'note': 'Mux/polarity/lock and EXINT line-21 rising/falling routing; no firmware drives it yet.'}`

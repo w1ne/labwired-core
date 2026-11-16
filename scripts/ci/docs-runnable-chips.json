@@ -15,6 +15,10 @@
   ],
   "firmware_release": "firmware-demos-v3",
   "chips": {
+    "at32f421g8u7": {
+      "how": "needs-build",
+      "why": "Exact AT32F421G8U7 descriptor added after the current released CLI. Its committed Artery SDK smoke (examples/at32f421g8u7/io-smoke.yaml) is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
     "ch32v003f4p6": {
       "how": "committed",
       "firmware": "tests/fixtures/ch32v003f4p6-uart-hello.elf",
