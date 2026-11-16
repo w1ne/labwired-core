@@ -172,6 +172,30 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: ch32v003f4u6
+    arch: riscv32ec
+    headline: "QFN20 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32v003a4m6
+    arch: riscv32ec
+    headline: "SOP16 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: ch32v003j4m6
+    arch: riscv32ec
+    headline: "SOP8 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string. SOP8 has no PC0 pad, so a separate committed fixture blinks PC4 (package pin 7); the test requires PC4 edges and a negative control requires zero PC0 edges. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: nrf5340
     arch: cortex-m33
     headline: "No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; the PR-gated nrf5340_clock_boot test attaches the declarative BMI270 model and reads CHIP_ID 0x24 with a repeated-START transaction. Nine peripheral blocks remain benign boot stubs."
@@ -829,6 +853,14 @@ chips:
   - id: atmega2560
     arch: avr
     headline: "No tier-1 target. Firmware that runs: the PR-gated `avr_mega2560_io` integration test boots the committed Arduino-core ELF (tests/fixtures/avr/arduino-mega-2560-io.elf, built for arduino:avr:mega from examples/arduino-mega-2560-io) and asserts the 12 LED pins on ports E/G/F/B/H, analogRead(A8)/(A9) through ADCSRB.MUX5, millis() against simulated time, USART0 Serial and an EICALL through a function pointer. The descriptor reuses the 328P rubric classes (`avr_gpio` ports A..L, `avr_adc` with 16 channels, the parking `spi`/`i2c` controllers and the `usart0` peer host), so nothing beyond the rubric is declared and the lists below are empty."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
+  - id: atmega32u4
+    arch: avr
+    headline: "No tier-1 target. The Arduino Leonardo matrix row (validation/arduino-matrix/boards/arduino-leonardo.yaml) builds the stock ArduinoCore-avr sketches and runs L0-L7 on the model (8 pass, 1 skip: no CAN); `Serial` is native USB CDC on the CPU's USB device model with a scripted host that enumerates it, and the CPU-owned SPI, TWI and ADC (ADCSRB.MUX5) serve the L3/L4/L5 sensor kits. That lane needs PlatformIO and runs on the nightly/main matrix, not on pull requests; cpu::avr::usb unit tests are the PR-gated evidence. Timer3, the high-speed Timer4, INTn/PCINT and EEPROM are not modelled. No beyond-rubric behavior or physical acceptance is claimed and the lists below are empty."
     functional: []
     advanced_unit_only: []
     advanced_dead: []
