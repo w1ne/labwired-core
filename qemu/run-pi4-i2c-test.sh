@@ -94,7 +94,7 @@ truncate -s "$p2" "$SD"
 # --- 4. QEMU and the LabWired bridge ----------------------------------------
 [[ -x "$QEMU" ]] || "$HERE/build.sh"
 "$QEMU" -device help | grep -q labwired-mmio-bridge || "$HERE/build.sh"
-(cd "$REPO" && cargo build --release -p qemu-bridge)
+(cd "$REPO" && CARGO_PROFILE_RELEASE_DEBUG=0 cargo build --release -p qemu-bridge)
 BRIDGE="$CARGO_TARGET_DIR/release/qemu-bridge"
 
 APPEND="console=ttyAMA1,115200 earlycon=pl011,mmio32,0xfe201000 \
@@ -127,7 +127,11 @@ run() {
         sleep 0.5; t=$((t + 1))
     done
     wait "$qpid" 2>/dev/null || true
-    [[ -n "$bpid" ]] && { kill "$bpid" 2>/dev/null || true; wait "$bpid" 2>/dev/null || true; }
+    if [[ -n "$bpid" ]]; then
+        sleep 1
+        kill "$bpid" 2>/dev/null || true
+        wait "$bpid" 2>/dev/null || true
+    fi
 }
 
 run positive bridge
