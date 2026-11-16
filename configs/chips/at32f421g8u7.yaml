@@ -1,0 +1,202 @@
+# AT32F421G8U7, QFN28 + exposed VSS pad.
+# Sources: ArteryTek/AT32F421_Firmware_Library @2fd0bfbc812d7e4984203039cba838345d3058f1
+# libraries/cmsis/cm4/device_support/at32f421.h; libraries/drivers/inc/*.h.
+# https://www.arterychip.com/en/product/AT32F421.jsp (G8: 64 KiB flash, 16 KiB SRAM).
+# Reference-derived register contracts. No physical AT32 differential capture.
+# See docs/boards/at32f421g8u7.md for measured scope and unsupported modes.
+name: "at32f421g8u7"
+arch: "arm"
+core: "cortex-m4"
+cpu_hz: 120_000_000
+io_voltage_v: 3.3
+# Datasheet Ver2.03 Table32 p44: actual VDD-dependent Schmitt limits.
+# VIL(max)=0.28*VDD+0.1 V; VIH(min)=0.31*VDD+0.8 V.
+gpio_input_thresholds: { vil: 0.28, vih: 0.31, vil_offset_v: 0.1, vih_offset_v: 0.8 }
+# Datasheet Ver2.03 (2024-09-06), Table13 p29, typical characterized values.
+# The existing supervisor models threshold hysteresis, not the 4.5ms typical
+# reset-release delay or process/temperature min/max variation.
+supply_monitor: { por_rising_v: 2.06, pdr_falling_v: 1.88 }
+# Datasheet Table35 p46. Requires the generic reset-input route support.
+# Absolute input thresholds; values are not ratios to the changing VDD rail.
+reset_input: { pin: NRST, active_low: true, vil_max_v: 0.72, vih_min_v: 2.0, min_assert_ns: 80000, invalid_pulse_ns: 40000, pull_up_ohms: 40000 }
+flash: { base: 0x08000000, size: "64KiB" }
+ram: { base: 0x20000000, size: "16KiB" }
+pins:
+  # Exact QFN28 package pads; no PC pins or PA11/PA12/PB2 are bonded.
+  PA0: { gpio: gpioa, bit: 0 }
+  PA1: { gpio: gpioa, bit: 1 }
+  PA2: { gpio: gpioa, bit: 2 }
+  PA3: { gpio: gpioa, bit: 3 }
+  PA4: { gpio: gpioa, bit: 4 }
+  PA5: { gpio: gpioa, bit: 5 }
+  PA6: { gpio: gpioa, bit: 6 }
+  PA7: { gpio: gpioa, bit: 7 }
+  PA8: { gpio: gpioa, bit: 8 }
+  PA9: { gpio: gpioa, bit: 9 }
+  PA10: { gpio: gpioa, bit: 10 }
+  PA13: { gpio: gpioa, bit: 13 }
+  PA14: { gpio: gpioa, bit: 14 }
+  PA15: { gpio: gpioa, bit: 15 }
+  PB0: { gpio: gpiob, bit: 0 }
+  PB1: { gpio: gpiob, bit: 1 }
+  PB3: { gpio: gpiob, bit: 3 }
+  PB4: { gpio: gpiob, bit: 4 }
+  PB5: { gpio: gpiob, bit: 5 }
+  PB6: { gpio: gpiob, bit: 6 }
+  PB7: { gpio: gpiob, bit: 7 }
+  PF0: { gpio: gpiof, bit: 0 }
+  PF1: { gpio: gpiof, bit: 1 }
+peripherals:
+  - id: rcc
+    type: rcc
+    base_address: 0x40021000
+    size: "1KiB"
+    config: { profile: at32f421 }
+  - id: flash
+    type: flash
+    base_address: 0x40022000
+    size: "1KiB"
+    config: { profile: at32f421 }
+  - id: systick
+    type: systick
+    base_address: 0xE000E010
+  # Audited common CFGR/OMODE/ODRVR/PULL/IDT/ODT/SCR/MUX/CLR register subset.
+  # AT32 HDRV at 0x3c and pin electrical characteristics are not modeled.
+  - id: gpioa
+    type: gpio
+    base_address: 0x48000000
+    size: "1KiB"
+    config: { profile: stm32v2, reset_registers: true }
+    clock: { reg: ahben, bit: 17 }
+  - id: gpiob
+    type: gpio
+    base_address: 0x48000400
+    size: "1KiB"
+    config: { profile: stm32v2, reset_registers: true }
+    clock: { reg: ahben, bit: 18 }
+  - id: gpioc
+    type: gpio
+    base_address: 0x48000800
+    size: "1KiB"
+    config: { profile: stm32v2, reset_registers: true }
+    clock: { reg: ahben, bit: 19 }
+  - id: gpiof
+    type: gpio
+    base_address: 0x48001400
+    size: "1KiB"
+    config: { profile: stm32v2, reset_registers: true }
+    clock: { reg: ahben, bit: 22 }
+  # Classic STS/DT/BAUDR/CTRL1..3 subset, audited against at32f421_usart.h.
+  - id: usart1
+    type: uart
+    base_address: 0x40013800
+    size: "1KiB"
+    irq: 27
+    config: { profile: stm32f1 }
+    clock: { reg: apb2en, bit: 14 }
+  # Classic STS/DT/BAUDR/CTRL1..3 subset, audited against at32f421_usart.h.
+  - id: usart2
+    type: uart
+    base_address: 0x40004400
+    size: "1KiB"
+    irq: 28
+    config: { profile: stm32f1 }
+    clock: { reg: apb1en, bit: 17 }
+  - id: tim1
+    type: timer
+    base_address: 0x40012c00
+    size: "1KiB"
+    irq: 13
+    config: { width: 16, input_capture: stm32f4, pad_map: at32f421, capture_compare_irq: 14, advanced: true }
+    clock: { reg: apb2en, bit: 11 }
+  - id: tim3
+    type: timer
+    base_address: 0x40000400
+    size: "1KiB"
+    irq: 16
+    config: { width: 16, input_capture: stm32f4, pad_map: at32f421 }
+    clock: { reg: apb1en, bit: 1 }
+  - id: tim6
+    type: timer
+    base_address: 0x40001000
+    size: "1KiB"
+    irq: 17
+    config: { width: 16, basic: true }
+    clock: { reg: apb1en, bit: 4 }
+  - id: tim14
+    type: timer
+    base_address: 0x40002000
+    size: "1KiB"
+    irq: 19
+    config: { width: 16, input_capture: stm32f4, pad_map: at32f421 }
+    clock: { reg: apb1en, bit: 8 }
+  - id: tim15
+    type: timer
+    base_address: 0x40014000
+    size: "1KiB"
+    irq: 20
+    config: { width: 16, input_capture: stm32f4, pad_map: at32f421, advanced: true }
+    clock: { reg: apb2en, bit: 16 }
+  - id: tim16
+    type: timer
+    base_address: 0x40014400
+    size: "1KiB"
+    irq: 21
+    config: { width: 16, input_capture: stm32f4, pad_map: at32f421, advanced: true }
+    clock: { reg: apb2en, bit: 17 }
+  - id: tim17
+    type: timer
+    base_address: 0x40014800
+    size: "1KiB"
+    irq: 22
+    config: { width: 16, input_capture: stm32f4, pad_map: at32f421, advanced: true }
+    clock: { reg: apb2en, bit: 18 }
+  - id: dma1
+    type: dma
+    base_address: 0x40020000
+    size: "1KiB"
+    # Five-channel F1/G0-style DMA1 (RM_AT32F421 V2.05 §9, Table 9-4): the
+    # G0 profile's channel IRQ groups 9 / 10 (ch2-3) / 11 (ch4-5) match the
+    # Artery IRQn map. Fixed requests: Table 9-3 with SCFG remap bits at 0.
+    config:
+      profile: stm32g0
+      channels: 5
+      requests: { usart1_tx: 2, usart1_rx: 3, usart2_tx: 4, usart2_rx: 5 }
+    clock: { reg: ahben, bit: 0 }
+  - id: adc1
+    type: adc
+    base_address: 0x40012400
+    size: "1KiB"
+    irq: 12
+    # STS/CTRL1/CTRL2/SPTx/.../OSQx/ODT are the STM32F1 ADC map bit for bit
+    # (RM_AT32F421 V2.05 §18.5: ODT at 0x4C, CTRL2 OCSWTRG bit 22, OCTESEL
+    # 19:17, ADCAL bit 2). Only the shared F1 ADC behaviour is modelled.
+    config: { profile: stm32f1 }
+    clock: { reg: apb2en, bit: 9 }
+  - id: exti
+    type: exti
+    base_address: 0x40010400
+    size: "1KiB"
+    # IMR/EMR/RTSR/FTSR/SWIER/PR as the STM32 F1/L0 register file; GPIO line
+    # groups on IRQ 5 (0-1), 6 (2-3), 7 (4-15) as the L0 vectors. Lines 0..17,
+    # 19 and 21 exist (BSP at32f421_exint.h EXINT_LINE_*).
+    config: { profile: stm32l0, line_mask: 0x2bffff }
+  # STM32 IWDG-compatible CMD/DIV/RLD/STS map (BSP at32f421_wdt.h; no window
+  # register, so the window stays out of the 16-byte span); nominal
+  # 40 kHz LICK (DS V2.03). Expiry resets the machine.
+  - id: wdt
+    type: iwdg
+    base_address: 0x40003000
+    size: "16B"
+    config: { reset_on_expiry: { lsi_hz: 40000 } }
+analog_pins:
+  PA0: { peripheral: adc1, channel: 0 }
+  PA1: { peripheral: adc1, channel: 1 }
+  PA2: { peripheral: adc1, channel: 2 }
+  PA3: { peripheral: adc1, channel: 3 }
+  PA4: { peripheral: adc1, channel: 4 }
+  PA5: { peripheral: adc1, channel: 5 }
+  PA6: { peripheral: adc1, channel: 6 }
+  PA7: { peripheral: adc1, channel: 7 }
+  PB0: { peripheral: adc1, channel: 8 }
+  PB1: { peripheral: adc1, channel: 9 }

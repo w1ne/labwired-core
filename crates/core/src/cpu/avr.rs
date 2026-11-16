@@ -55,9 +55,10 @@ pub const SRAM_START: u16 = 0x0100;
 /// OC1A/B/C = PB5/PB6/PB7, OC2A = PB4, OC2B = PH6, OC3x = PE3..5,
 /// OC4x = PH3..5, OC5x = PL3..5; see `avr/oc_pins.rs`). Timer1 gains its
 /// compare unit C and Timer3/4/5 run on the mega parts (`avr/timer345.rs`).
-/// Not modelled on the ATmega2560: INTn/PCINT (its pins differ from the
-/// 328P's; the registers are stored only) and USART1..3 (registers stored
-/// only).
+/// INT0..7 and PCINT0..23 on the mega pins (`avr/mega_ext_int.rs`), the
+/// timed, auto-triggered ADC (`avr/mega_adc.rs`) and the timed SPI block
+/// (`avr/mega_spi.rs`) are the mega's own. Not modelled on the ATmega2560:
+/// USART1..3 (registers stored only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -481,6 +482,8 @@ pub fn mega2560_vector(vec328: u32) -> u32 {
         25 => 40,              // TWI
         26 => 58,              // SPM READY
         timer1::VEC_TIMER1_COMPC => 20,
+        // INT2..INT7 (`avr/mega_ext_int.rs`) -> 4..9
+        58..=63 => vec328 - mega_ext_int::NATIVE_BASE,
         v => v, // Timer3/4/5 raise their own vector numbers (32..36, 42..51)
     }
 }
@@ -543,6 +546,9 @@ pub struct Avr {
     pub ocr0a: u8,
     pub ocr0b: u8,
     pub t0_prescale_acc: u32,
+    /// A CPU write to TCNT0 blocks any compare match in the next timer clock
+    /// (DS40002061 §15.6.2); set by the write, consumed by that clock.
+    pub t0_match_blocked: bool,
     /// Timer2, the counter Arduino `tone()` runs in CTC mode.
     ///
     /// Normal, CTC and phase-correct (WGM 1, TOP = 0xFF, up and down) count
@@ -644,6 +650,11 @@ pub struct Avr {
     /// Data EEPROM and `EECR`/`EEDR`/`EEAR` (`avr/eeprom.rs`). Empty on the
     /// parts whose EEPROM is not modelled.
     eeprom: eeprom::Eeprom,
+    /// ATmega2560 family: INT0..7 / PCINT0..23 (`avr/mega_ext_int.rs`), the
+    /// timed ADC (`avr/mega_adc.rs`) and the timed SPI (`avr/mega_spi.rs`).
+    mx: mega_ext_int::MegaExt,
+    madc: mega_adc::MegaAdc,
+    mspi: mega_spi::MegaSpi,
 }
 
 impl std::fmt::Debug for Avr {
@@ -706,6 +717,16 @@ pub const UCSRA_UDRE: u8 = 1 << 5;
 pub const UCSRA_TXC: u8 = 1 << 6;
 pub const TIMSK_TOIE0: u8 = 1 << 0;
 pub const TIFR_TOV0: u8 = 1 << 0;
+/// `TIMER0_COMPA_vect` (`__vector_14`, byte 0x38 on the 328P; vector 22 on
+/// the 2560 through `mega2560_vector`).
+pub const VEC_TIMER0_COMPA: u32 = 15;
+/// `TIMER0_COMPB_vect` (`__vector_15`, byte 0x3C on the 328P).
+pub const VEC_TIMER0_COMPB: u32 = 16;
+pub const TIMSK_OCIE0A: u8 = 1 << 1;
+pub const TIMSK_OCIE0B: u8 = 1 << 2;
+pub const TIFR_OCF0A: u8 = 1 << 1;
+pub const TIFR_OCF0B: u8 = 1 << 2;
+const T0_IRQ_MASK: u64 = (1 << VEC_TIMER0_COMPA) | (1 << VEC_TIMER0_COMPB) | (1 << VEC_TIMER0_OVF);
 /// `TIMER2_COMPA_vect` (`__vector_7` at byte 0x1C). Datasheet vector 8.
 pub const VEC_TIMER2_COMPA: u32 = 8;
 /// `TIMER2_COMPB_vect` (`__vector_8` at byte 0x20).
@@ -927,6 +948,7 @@ impl Avr {
             ocr0a: 0,
             ocr0b: 0,
             t0_prescale_acc: 0,
+            t0_match_blocked: false,
             tcnt2: 0,
             tccr2a: 0,
             tccr2b: 0,
@@ -981,6 +1003,9 @@ impl Avr {
             usb: usb::UsbDevice::default(),
             wdt: wdt::Wdt::new(model.has_wdtcsr()),
             eeprom: eeprom::Eeprom::new(model.eeprom_size()),
+            mx: mega_ext_int::MegaExt::default(),
+            madc: mega_adc::MegaAdc::default(),
+            mspi: mega_spi::MegaSpi::default(),
         }
     }
 
@@ -1049,6 +1074,21 @@ impl Avr {
         } else {
             0x20 + u16::from(io_addr)
         }
+    }
+
+    /// Writing a one to PINxn toggles PORTxn whatever DDRxn says (ATmega328P
+    /// DS40002061 §14.2.2, ATmega2560 DS2549 §13.2.2). The toggle lands in
+    /// this core's PORTx latch, which PORTx and the driven bits of PINx read
+    /// back, and the bus-side port follows the new latch.
+    fn write_pin_toggle(&mut self, pin_addr: u16, mask: u8, bus: &mut dyn Bus) {
+        let port_addr = pin_addr + 2;
+        let slot = usize::from(port_addr - 0x20);
+        let latch = self.io[slot] ^ mask;
+        self.io[slot] = latch;
+        let pad = self.port_pad_value(port_addr, latch);
+        // Best-effort, like every port mirror write.
+        let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(port_addr), pad);
+        self.soft_spi_after_port(bus, port_addr, pad);
     }
 
     /// `PINx` of a port this model has.
@@ -1440,6 +1480,9 @@ impl Avr {
                     Ok(0)
                 }
             }
+            a if self.is_mega() && mega_spi::handles(a) => Ok(self.mega_spi_read(a)),
+            a if self.is_mega() && mega_adc::handles(a) => Ok(self.mega_adc_read(a)),
+            a if self.is_mega() && mega_ext_int::handles(a) => Ok(self.mega_ext_read(a)),
             // SPI: SPCR/SPSR/SPDR (ATmega328P data space)
             0x004C => Ok(self.spcr),
             0x004D => Ok(self.spsr),
@@ -1511,11 +1554,20 @@ impl Avr {
                 Ok(())
             }
             0x005F => {
+                // A write that sets I, like SEI, lets the next instruction
+                // run before a pending interrupt (DS2549 section 7.8).
+                // avr-gcc's `out SPH ; out SREG ; out SPL` relies on it: an
+                // interrupt between the two SP halves would push onto a
+                // half-updated stack pointer.
+                if self.sreg & 0x80 == 0 && value & 0x80 != 0 {
+                    self.irq_shadow = true;
+                }
                 self.sreg = value;
                 Ok(())
             }
             0x0035 => {
-                self.tifr0 &= !value;
+                self.tifr0 &= !(value & (TIFR_OCF0B | TIFR_OCF0A | TIFR_TOV0));
+                self.sync_timer0_irq();
                 Ok(())
             }
             0x0037 => {
@@ -1536,6 +1588,7 @@ impl Avr {
             }
             0x0046 => {
                 self.tcnt0 = value;
+                self.t0_match_blocked = true;
                 Ok(())
             }
             0x0047 => {
@@ -1547,7 +1600,8 @@ impl Avr {
                 Ok(())
             }
             0x006E => {
-                self.timsk0 = value;
+                self.timsk0 = value & (TIMSK_OCIE0B | TIMSK_OCIE0A | TIMSK_TOIE0);
+                self.sync_timer0_irq();
                 Ok(())
             }
             0x0070 => {
@@ -1696,6 +1750,12 @@ impl Avr {
                 }
                 Ok(())
             }
+            a if self.is_mega() && mega_spi::handles(a) => self.mega_spi_write(a, value, bus),
+            a if self.is_mega() && mega_adc::handles(a) => self.mega_adc_write(a, value, bus),
+            a if self.is_mega() && mega_ext_int::handles(a) => {
+                self.mega_ext_write(a, value, bus);
+                Ok(())
+            }
             0x004C => {
                 self.spcr = value;
                 Ok(())
@@ -1707,47 +1767,7 @@ impl Avr {
             }
             0x004E => {
                 // SPI data: master clocks one byte through attached slaves.
-                self.sync_spi_cs(bus);
-                // Sample D/C for every device that declares a `dc_source`
-                // (same semantics as SystemBus::maybe_latch_dc) — generic for
-                // any SPI panel with a DC line, not device-specific.
-                let mosi = value;
-                let mut miso = 0u8;
-                {
-                    let sources: Vec<(usize, u64, u8)> = self
-                        .spi_devices
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(i, d)| d.dc_source().map(|(a, b)| (i, a, b)))
-                        .collect();
-                    for (i, addr, bit) in sources {
-                        let level = bus
-                            .read_u32(addr)
-                            .map(|v| (v >> bit) & 1 != 0)
-                            .unwrap_or(false);
-                        self.spi_devices[i].set_dc_level(level);
-                    }
-                }
-                // Clock selected devices and continuous shift registers.
-                // An inactive LOAD may clock DOUT, but it does not select
-                // that chain as the source of the controller's MISO byte.
-                for dev in &mut self.spi_devices {
-                    if !dev.is_selected() && !dev.clocks_when_deselected() {
-                        continue;
-                    }
-                    let resp = dev.transfer(mosi);
-                    if dev.is_selected() && resp != 0 {
-                        miso = resp;
-                    }
-                }
-                // Kits left on the parking SPI controller (not taken): latch
-                // D/C and clock them so inspect / display_artifact still see
-                // the panel. Bus::clock_parking_spi — no SystemBus downcast.
-                let bus_miso = bus.clock_parking_spi(mosi);
-                if bus_miso != 0 {
-                    miso = bus_miso;
-                }
-                self.spdr = miso;
+                self.spdr = self.spi_exchange(bus, value);
                 self.spsr |= 1 << 7; // SPIF
                 Ok(())
             }
@@ -1839,6 +1859,10 @@ impl Avr {
             }
             a if self.eeprom.handles(a) => {
                 self.cycles += self.eeprom.write(a, value, self.cycles);
+                Ok(())
+            }
+            a if self.is_pin_reg(a) => {
+                self.write_pin_toggle(a, value, bus);
                 Ok(())
             }
             0x0020..=0x00FF => {
@@ -1954,9 +1978,7 @@ impl Avr {
     /// REFS selects the reference: 11 is the internal 1.1 V, anything else is
     /// taken as 5 V AVcc (AREF is not a modelled pin).
     ///
-    /// ATmega2560: MUX5 (ADCSRB bit 3) with ADMUX MUX4:0 makes a 6-bit code;
-    /// 0x00..0x07 are ADC0..7, 0x20..0x27 are ADC8..15 (Arduino A8..A15),
-    /// 0x1E is the 1.1 V bandgap. Differential/gain codes read 0.
+    /// The ATmega2560 family has its own converter (`avr/mega_adc.rs`).
     fn adc_convert(&self, bus: &dyn Bus) -> SimResult<u16> {
         let channel: Option<u8> = if self.is_32u4() {
             // DS7766 Table 24-4: MUX5 is ADCSRB bit 5. 0x00..0x07 are
@@ -1967,14 +1989,6 @@ impl Avr {
             match (self.admux & 0x1F) | if mux5 { 0x20 } else { 0 } {
                 m @ 0x00..=0x07 => Some(m),
                 m @ 0x20..=0x25 => Some(m - 0x18),
-                0x1E => None,
-                _ => Some(0xFF),
-            }
-        } else if self.is_mega() {
-            let mux5 = self.io[(0x7B - 0x20) as usize] & (1 << 3) != 0;
-            match (self.admux & 0x1F) | if mux5 { 0x20 } else { 0 } {
-                m @ 0x00..=0x07 => Some(m),
-                m @ 0x20..=0x27 => Some(m - 0x18),
                 0x1E => None,
                 _ => Some(0xFF),
             }
@@ -2017,6 +2031,12 @@ impl Avr {
         }
     }
 
+    /// Advance Timer0 by CPU clocks. The counter runs BOTTOM..0xFF (normal
+    /// and fast PWM with TOP = 0xFF; the TOP = OCR0A and phase-correct modes
+    /// are not modelled and count the same way). TOV0 is set as the count
+    /// wraps to BOTTOM; OCF0x on the timer clock after TCNT0 equalled OCR0x,
+    /// i.e. as the count leaves the compare value (DS40002061 §15.6, Figures
+    /// 15-9/15-10), unless a TCNT0 write blocked that clock.
     pub fn tick_timer0(&mut self, cpu_cycles: u32) {
         let div = self.t0_prescaler();
         if div == 0 || cpu_cycles == 0 {
@@ -2025,19 +2045,50 @@ impl Avr {
         // Closed form of "one TCNT0 increment per `div` clocks": an idle
         // fast-forward hands this millions of cycles at once.
         let acc = u64::from(self.t0_prescale_acc) + u64::from(cpu_cycles);
-        let ticks = acc / u64::from(div);
+        let mut ticks = acc / u64::from(div);
         self.t0_prescale_acc = (acc % u64::from(div)) as u32;
         if ticks == 0 {
             return;
         }
-        let count = u64::from(self.tcnt0) + ticks;
-        self.tcnt0 = (count & 0xFF) as u8;
-        if count > 0xFF {
-            self.tifr0 |= TIFR_TOV0;
-            if self.timsk0 & TIMSK_TOIE0 != 0 {
-                self.pending_irq |= 1u64 << VEC_TIMER0_OVF;
+        if std::mem::take(&mut self.t0_match_blocked) {
+            // The first clock after a TCNT0 write: no compare match.
+            let wrapped = self.tcnt0 == 0xFF;
+            self.tcnt0 = self.tcnt0.wrapping_add(1);
+            if wrapped {
+                self.tifr0 |= TIFR_TOV0;
             }
+            ticks -= 1;
         }
+        let phase = u64::from(self.tcnt0);
+        let leaves = |ocr: u8| t2_hits(phase, ticks, 256, (u64::from(ocr) + 1) & 0xFF);
+        if leaves(self.ocr0a) {
+            self.tifr0 |= TIFR_OCF0A;
+        }
+        if leaves(self.ocr0b) {
+            self.tifr0 |= TIFR_OCF0B;
+        }
+        if t2_hits(phase, ticks, 256, 0) {
+            self.tifr0 |= TIFR_TOV0;
+        }
+        self.tcnt0 = ((phase + ticks) & 0xFF) as u8;
+        self.sync_timer0_irq();
+    }
+
+    /// Timer0 requests stay pending while a flag and its enable are both set,
+    /// including an enable written over an already set flag.
+    fn sync_timer0_irq(&mut self) {
+        let on = self.tifr0 & self.timsk0;
+        let mut want = 0u64;
+        if on & TIFR_OCF0A != 0 {
+            want |= 1 << VEC_TIMER0_COMPA;
+        }
+        if on & TIFR_OCF0B != 0 {
+            want |= 1 << VEC_TIMER0_COMPB;
+        }
+        if on & TIFR_TOV0 != 0 {
+            want |= 1 << VEC_TIMER0_OVF;
+        }
+        self.pending_irq = (self.pending_irq & !T0_IRQ_MASK) | want;
     }
 
     /// clk_I/O prescaler for Timer2. `AS2` freezes it: the asynchronous TOSC1
@@ -2212,15 +2263,30 @@ impl Avr {
         None
     }
 
+    /// CPU cycles until the next Timer0 flag whose interrupt is enabled.
     fn timer0_wake_cycles(&self) -> Option<u64> {
         let div = u64::from(self.t0_prescaler());
-        if self.io_clock_running() && div != 0 && self.timsk0 & TIMSK_TOIE0 != 0 && self.flag_i() {
-            let ticks = 256 - u64::from(self.tcnt0);
-            let cycles = ticks * div - u64::from(self.t0_prescale_acc).min(div - 1);
-            Some(cycles.max(1))
-        } else {
-            None
+        if !self.io_clock_running() || div == 0 || !self.flag_i() {
+            return None;
         }
+        let tcnt = u64::from(self.tcnt0);
+        // Timer clocks until the count lands on `target` (a full period if
+        // it is there now). A blocked first clock can only make it later.
+        let dist = |target: u64| match (target + 256 - tcnt) % 256 {
+            0 => 256,
+            d => d,
+        };
+        let ticks = [
+            (TIMSK_TOIE0, 0),
+            (TIMSK_OCIE0A, (u64::from(self.ocr0a) + 1) & 0xFF),
+            (TIMSK_OCIE0B, (u64::from(self.ocr0b) + 1) & 0xFF),
+        ]
+        .into_iter()
+        .filter(|(bit, _)| self.timsk0 & bit != 0)
+        .map(|(_, target)| dist(target))
+        .min()?;
+        let cycles = ticks * div - u64::from(self.t0_prescale_acc).min(div - 1);
+        Some(cycles.max(1))
     }
 
     /// An interrupt the core would take now: global enable set and a vector
@@ -2508,9 +2574,18 @@ impl Avr {
         if !self.flag_i() || self.pending_irq == 0 {
             return Ok(false);
         }
+        // ATmega2560 INT2..INT7: native vector numbers (`avr/mega_ext_int.rs`).
+        if self.pending_irq & mega_ext_int::HIGH_MASK != 0 && self.is_mega() {
+            if let Some(slot) = self.mega_take_native_irq() {
+                self.set_flag_i(false);
+                self.push_pc(bus)?;
+                self.pc = (slot - 1) * 4;
+                return Ok(true);
+            }
+        }
         let vec = if self.is_mega() {
-            // Timer3/4/5 and COMPC sit above bit 31, and the internal bit
-            // order is not the 2560's priority order.
+            // Timer3/4/5 and COMPC sit outside the 328P numbering, and the
+            // internal bit order is not the 2560's priority order.
             timer345::mega_highest_priority(self.pending_irq)
         } else {
             self.pending_irq.trailing_zeros()
@@ -2523,6 +2598,13 @@ impl Avr {
         // Hardware clears the matching timer flag on vector entry.
         if vec == VEC_TIMER0_OVF {
             self.tifr0 &= !TIFR_TOV0;
+            self.sync_timer0_irq();
+        } else if vec == VEC_TIMER0_COMPA {
+            self.tifr0 &= !TIFR_OCF0A;
+            self.sync_timer0_irq();
+        } else if vec == VEC_TIMER0_COMPB {
+            self.tifr0 &= !TIFR_OCF0B;
+            self.sync_timer0_irq();
         } else if vec == VEC_TIMER2_COMPA {
             self.tifr2 &= !TIFR2_OCF2A;
             self.sync_timer2_irq();
@@ -2542,6 +2624,13 @@ impl Avr {
         }
         // ... and the INTn / PCIFn flag of an external or pin-change vector.
         self.ext_vector_entered(vec);
+        if self.is_mega() {
+            match vec {
+                mega_adc::VEC_ADC => self.mega_adc_vector_entered(),
+                mega_spi::VEC_SPI_STC => self.mega_spi_vector_entered(),
+                _ => {}
+            }
+        }
         self.push_pc(bus)?;
         let slot = if self.is_mega() {
             mega2560_vector(vec)
@@ -2809,6 +2898,8 @@ impl Cpu for Avr {
                 self.usb.wake_cycles(self.cycles),
                 self.wdt.wake_cycles(self.cycles),
                 self.eeprom.ready_wake_cycles(self.cycles),
+                self.mega_adc_wake_cycles(),
+                self.mega_spi_wake_cycles(),
             ]
             .into_iter()
             .flatten()
@@ -2862,7 +2953,10 @@ impl Cpu for Avr {
         self.tccr0b = 0;
         self.timsk0 = 0;
         self.tifr0 = 0;
+        self.ocr0a = 0;
+        self.ocr0b = 0;
         self.t0_prescale_acc = 0;
+        self.t0_match_blocked = false;
         self.tcnt2 = 0;
         self.tccr2a = 0;
         self.tccr2b = 0;
@@ -2892,6 +2986,11 @@ impl Cpu for Avr {
         self.twi_phase = TwiPhase::Idle;
         self.twi_slave = None;
         self.ext_reset();
+        self.mx = mega_ext_int::MegaExt::default();
+        if self.is_mega() {
+            self.mega_adc_reset();
+            self.mega_spi_reset();
+        }
         self.wdt_after_reset();
         self.eeprom.reset();
         self.irq_shadow = false;
@@ -2986,6 +3085,16 @@ impl Cpu for Avr {
         if self.t16.icp_watch != 0 {
             self.sample_mega_icp(bus);
         }
+        // ATmega2560 family: ADC conversions, triggers and SPI transfers due
+        // at this boundary.
+        if self.is_mega() {
+            if self.madc.active(self.adcsra) {
+                self.mega_adc_poll(bus)?;
+            }
+            if self.mega_spi_active() {
+                self.mega_spi_poll(bus);
+            }
+        }
 
         if self.sleeping {
             if !self.wake_pending() {
@@ -3077,6 +3186,9 @@ impl Cpu for Avr {
             || self.ext_watch != 0
             || self.t16.icp_watch != 0
             || self.usb.active();
+        // So do an ATmega2560 ADC conversion or SPI transfer in flight.
+        let irq_takeable = irq_takeable
+            || (self.is_mega() && (self.madc.active(self.adcsra) || self.mega_spi_active()));
         // The INC/RJMP spin touches no bus, so it can never push a pad edge:
         // it stays available under push capture, as long as the tap clock is
         // carried across the cycles it retires.
@@ -3199,6 +3311,12 @@ mod eeprom;
 mod exec;
 #[path = "avr/ext_int.rs"]
 mod ext_int;
+#[path = "avr/mega_adc.rs"]
+mod mega_adc;
+#[path = "avr/mega_ext_int.rs"]
+mod mega_ext_int;
+#[path = "avr/mega_spi.rs"]
+mod mega_spi;
 #[path = "avr/oc_pins.rs"]
 mod oc_pins;
 #[path = "avr/timer1.rs"]
@@ -3839,6 +3957,173 @@ mod tests {
         cpu.timsk0 = TIMSK_TOIE0;
         cpu.tick_timer0(16384);
         assert!(cpu.pending_irq & (1 << VEC_TIMER0_OVF) != 0);
+    }
+    /// Setting SREG.I with OUT or STS has the same one-instruction latency as
+    /// SEI: the instruction after the write runs before a pending interrupt
+    /// (DS2549 section 7.8; avr-gcc's frame setup and teardown rely on it).
+    #[test]
+    fn sreg_write_that_sets_i_runs_one_more_instruction_first() {
+        // OUT 0x3F,r0 ; NOP ; NOP and STS 0x005F,r0 ; NOP ; NOP
+        for (name, prog, after) in [
+            ("OUT", &[0xBE0F, 0x0000, 0x0000][..], 0x202u32),
+            ("STS", &[0x9200, 0x005F, 0x0000, 0x0000][..], 0x204),
+        ] {
+            let mut cpu = Avr::for_chip_name("atmega328p");
+            let mut bus = MockBus::new();
+            cpu.timsk0 = TIMSK_TOIE0;
+            cpu.tifr0 = TIFR_TOV0;
+            cpu.pending_irq |= 1 << VEC_TIMER0_OVF;
+            cpu.r[0] = 0x80;
+            cpu.load_words(0x200, prog);
+            cpu.pc = 0x200;
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(cpu.pc, after, "{name} SREG retired");
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(cpu.pc, after + 2, "{name}: the next instruction runs first");
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(cpu.pc, (VEC_TIMER0_OVF - 1) * 4, "{name}: then the vector");
+        }
+    }
+
+    /// avr-gcc's epilogue `out SPH,r29 ; out SREG,r0 ; out SPL,r28` with an
+    /// interrupt pending: the ISR must push below the complete new SP, never
+    /// at new SPH : old SPL (here 0x21F0, inside the caller's live frames).
+    #[test]
+    fn gcc_sp_update_is_not_interrupted_between_sph_and_spl() {
+        let mut cpu = Avr::for_chip_name("atmega2560");
+        let mut bus = MockBus::new();
+        cpu.sp = 0x20F0;
+        cpu.r[29] = 0x21;
+        cpu.r[28] = 0x05;
+        cpu.r[0] = 0x80; // the SREG saved before CLI, I set
+        cpu.timsk0 = TIMSK_TOIE0;
+        cpu.tifr0 = TIFR_TOV0;
+        cpu.pending_irq |= 1 << VEC_TIMER0_OVF;
+        // OUT SPH,r29 ; OUT SREG,r0 ; OUT SPL,r28 ; NOP
+        cpu.load_words(0x200, &[0xBFDE, 0xBE0F, 0xBFCD, 0x0000]);
+        cpu.pc = 0x200;
+        for _ in 0..4 {
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+        }
+        assert_eq!(cpu.pc, 0x5C, "TIMER0_OVF entered after OUT SPL");
+        assert_eq!(cpu.sp, 0x2105 - 3, "3-byte return address below SP 0x2105");
+        let at = |a: u16| cpu.sram[usize::from(a) - 0x200];
+        assert_eq!(
+            (at(0x21EE), at(0x21EF), at(0x21F0)),
+            (0, 0, 0),
+            "nothing pushed at SPH:old SPL"
+        );
+    }
+
+    // Timer0 output compare units A and B (ATmega328P DS40002061 §15.6-15.7,
+    // ATmega2560 DS2549 §16.6-16.7): TCNT0 == OCR0x raises OCF0x on the next
+    // timer clock, OCIE0x in TIMSK0 requests TIMER0_COMPA/COMPB (328P vectors
+    // 15/16, 2560 vectors 22/23) while the flag is set, entering the vector or
+    // writing a one clears it, and a TCNT0 write blocks the match in the next
+    // timer clock. Bits: TIFR0/TIMSK0 OCF0A/OCIE0A = 1, OCF0B/OCIE0B = 2.
+    #[test]
+    fn timer0_compare_a_sets_ocf0a_on_the_clock_after_the_match() {
+        let mut cpu = Avr::new();
+        cpu.tccr0a = 0x03; // fast PWM, TOP = 0xFF (Arduino init())
+        cpu.tccr0b = 0x03; // clk/64
+        cpu.ocr0a = 128;
+        cpu.timsk0 = 1 << 1;
+        cpu.tick_timer0(128 * 64);
+        assert_eq!(cpu.tcnt0, 128);
+        assert_eq!(cpu.tifr0 & (1 << 1), 0, "match, flag on the next clock");
+        assert_eq!(cpu.pending_irq & (1 << 15), 0);
+        cpu.tick_timer0(64);
+        assert_eq!(cpu.tcnt0, 129);
+        assert_ne!(cpu.tifr0 & (1 << 1), 0, "OCF0A");
+        assert_ne!(cpu.pending_irq & (1 << 15), 0, "TIMER0_COMPA requested");
+        // One full 256-clock period later it matches again, in one closed-form
+        // chunk as an idle fast-forward hands it.
+        cpu.tifr0 = 0;
+        cpu.pending_irq = 0;
+        cpu.tick_timer0(255 * 64);
+        assert_eq!(cpu.tifr0 & (1 << 1), 0);
+        cpu.tick_timer0(64);
+        assert_ne!(cpu.tifr0 & (1 << 1), 0);
+    }
+
+    #[test]
+    fn timer0_compare_b_request_follows_flag_and_enable() {
+        let mut cpu = Avr::new();
+        let mut bus = MockBus::new();
+        cpu.tccr0a = 0x03;
+        cpu.tccr0b = 0x03;
+        cpu.ocr0b = 10;
+        cpu.tick_timer0(11 * 64);
+        assert_ne!(cpu.tifr0 & (1 << 2), 0, "OCF0B sets without its enable");
+        assert_eq!(cpu.pending_irq & (1 << 16), 0);
+        cpu.data_write(0x6E, 1 << 2, &mut bus).unwrap();
+        assert_ne!(
+            cpu.pending_irq & (1 << 16),
+            0,
+            "OCIE0B set over a pending flag requests the vector"
+        );
+        cpu.data_write(0x35, 1 << 2, &mut bus).unwrap();
+        assert_eq!(cpu.tifr0 & (1 << 2), 0, "write one to clear");
+        assert_eq!(cpu.pending_irq & (1 << 16), 0, "and the request goes");
+    }
+
+    #[test]
+    fn timer0_tcnt0_write_blocks_the_next_compare_match() {
+        let mut cpu = Avr::new();
+        let mut bus = MockBus::new();
+        cpu.tccr0b = 0x03;
+        cpu.ocr0a = 50;
+        cpu.data_write(0x46, 50, &mut bus).unwrap();
+        cpu.tick_timer0(64);
+        assert_eq!(cpu.tcnt0, 51);
+        assert_eq!(cpu.tifr0 & (1 << 1), 0, "blocked by the TCNT0 write");
+        cpu.tick_timer0(256 * 64);
+        assert_ne!(cpu.tifr0 & (1 << 1), 0, "the next pass matches");
+    }
+
+    #[test]
+    fn timer0_compa_enters_its_vector_and_clears_ocf0a() {
+        // 328P: TIMER0_COMPA_vect is vector 15 (byte 0x38); 2560: vector 22
+        // (byte 0x54).
+        for (chip, at) in [("atmega328p", 0x38u32), ("atmega2560", 0x54)] {
+            let mut cpu = Avr::for_chip_name(chip);
+            let mut bus = MockBus::new();
+            cpu.sreg = 0x80;
+            cpu.tccr0b = 0x03;
+            cpu.timsk0 = 1 << 1;
+            cpu.tick_timer0(64);
+            cpu.load_words(0x200, &[0x0000]);
+            cpu.pc = 0x200;
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(cpu.pc, at, "{chip}");
+            assert_eq!(cpu.tifr0 & (1 << 1), 0, "{chip}: OCF0A cleared on entry");
+        }
+    }
+
+    /// A sleeping core with only OCIE0A set wakes at the compare match, not at
+    /// the overflow, when the idle budget skips the clocks in one chunk.
+    #[test]
+    fn timer0_compare_match_bounds_the_sleep_budget() {
+        let mut cpu = Avr::new();
+        let bus = MockBus::new();
+        cpu.tccr0a = 0x03;
+        cpu.tccr0b = 0x03;
+        cpu.ocr0a = 20;
+        cpu.tcnt0 = 3;
+        cpu.timsk0 = 1 << 1;
+        cpu.sreg = 0x80;
+        cpu.sleeping = true;
+        let budget = cpu.idle_fast_forward_budget(&bus).expect("asleep");
+        assert_eq!(
+            budget,
+            (21 - 3) * 64,
+            "wakes on the clock after TCNT0 == 20"
+        );
     }
 
     /// The closed form has to agree with one timer clock at a time, including
@@ -4887,6 +5172,9 @@ mod tests {
                 .unwrap();
             cpu.data_write(0x7C, 0x40 | mux, bus).unwrap();
             cpu.data_write(0x7A, 0xC0, bus).unwrap();
+            // ADPS = 0 (/2): the first conversion is 25 ADC clocks, 50 cycles.
+            cpu.cycles += 64;
+            cpu.mega_adc_poll(bus).unwrap();
             u16::from(cpu.adch) << 8 | u16::from(cpu.adcl)
         };
         assert_eq!(convert(&mut cpu, &mut bus, false, 0), 204, "A0 = ADC0");
@@ -4982,6 +5270,92 @@ mod tests {
             vec![(true, 0xAA), (false, 0x55), (true, 0xFF)],
             "SPDR must sample D/C per byte, in order"
         );
+    }
+
+    /// A bus with the real port models of `chip`, to watch the pads.
+    fn chip_bus(chip: &str) -> crate::bus::SystemBus {
+        use labwired_config::{ChipDescriptor, SystemManifest};
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip_path = root.join(format!("configs/chips/{chip}.yaml"));
+        let desc = ChipDescriptor::from_file(&chip_path).expect("chip");
+        let manifest = SystemManifest::from_yaml(&format!(
+            "name: pin-toggle\nchip: {}\nexternal_devices: []\n",
+            chip_path.display()
+        ))
+        .expect("manifest");
+        crate::bus::SystemBus::from_config(&desc, &manifest).expect("bus")
+    }
+
+    /// Writing a one to PINxn toggles PORTxn (ATmega328P DS40002061 §14.2.2,
+    /// ATmega2560 DS2549 §13.2.2), and the toggled latch is what PORTx reads
+    /// back. Firmware that sets an extended-I/O pin (ports H..L, out of SBI
+    /// reach) by reading PORTx and writing the differing bit to PINx relies
+    /// on both: here PL1 is set, set again, cleared and cleared again.
+    #[test]
+    fn pinx_write_toggles_the_portx_latch_firmware_reads_back() {
+        let mut bus = chip_bus("atmega2560");
+        let mut cpu = Avr::for_chip_name("atmega2560");
+        const PINL: u16 = 0x109;
+        const DDRL: u16 = 0x10A;
+        const PORTL: u16 = 0x10B;
+        cpu.data_write(DDRL, 0x0A, &mut bus).unwrap(); // PL1, PL3 outputs
+        let set = |cpu: &mut Avr, bus: &mut crate::bus::SystemBus, high: bool| {
+            let mut bits = cpu.data_read(PORTL, bus).unwrap();
+            if high {
+                bits = !bits;
+            }
+            cpu.data_write(PINL, bits & 0x02, bus).unwrap();
+        };
+        for (high, want) in [(true, 0x02), (true, 0x02), (false, 0x00), (false, 0x00)] {
+            set(&mut cpu, &mut bus, high);
+            assert_eq!(
+                cpu.data_read(PORTL, &bus).unwrap(),
+                want,
+                "PORTL after {high}"
+            );
+            assert_eq!(
+                bus.read_gpio_output_by_label("PL1"),
+                Some(want != 0),
+                "PL1 pad after {high}"
+            );
+            assert_eq!(cpu.data_read(PINL, &bus).unwrap() & 0x02, want, "PINL");
+        }
+        // A toggle of PL3 leaves PL1 where it was.
+        set(&mut cpu, &mut bus, true);
+        cpu.data_write(PINL, 0x08, &mut bus).unwrap();
+        assert_eq!(cpu.data_read(PORTL, &bus).unwrap(), 0x0A);
+        assert_eq!(bus.read_gpio_output_by_label("PL3"), Some(true));
+    }
+
+    /// The same toggle through OUT on the 328P (`PINB = _BV(5)`, the
+    /// digitalToggle idiom): PORTB reads back the toggled latch.
+    #[test]
+    fn out_to_pinb_toggles_portb_on_the_328p() {
+        let mut bus = chip_bus("atmega328p");
+        let mut cpu = Avr::for_chip_name("atmega328p");
+        cpu.data_write(0x24, 0x20, &mut bus).unwrap();
+        cpu.data_write(0x23, 0x20, &mut bus).unwrap();
+        assert_eq!(cpu.data_read(0x25, &bus).unwrap(), 0x20);
+        assert_eq!(bus.read_gpio_output_by_label("PB5"), Some(true));
+        cpu.data_write(0x23, 0x20, &mut bus).unwrap();
+        assert_eq!(cpu.data_read(0x25, &bus).unwrap(), 0x00);
+        assert_eq!(bus.read_gpio_output_by_label("PB5"), Some(false));
+    }
+
+    /// SBI on a mega PINx toggles only the addressed bit, on every port in
+    /// SBI reach (PINA..PING), and SBI on TIFR3..5 clears only that flag.
+    #[test]
+    fn sbi_on_mega_pinx_toggles_one_bit() {
+        let mut bus = chip_bus("atmega2560");
+        let mut cpu = Avr::for_chip_name("atmega2560");
+        cpu.data_write(0x21, 0xFF, &mut bus).unwrap(); // DDRA
+        cpu.data_write(0x22, 0x03, &mut bus).unwrap(); // PORTA = 0x03
+                                                       // SBI 0x00 (PINA), 2
+        cpu.load_words(0x200, &[0x9A00 | 2]);
+        cpu.pc = 0x200;
+        cpu.step(&mut bus, &[], &SimulationConfig::default())
+            .unwrap();
+        assert_eq!(cpu.data_read(0x22, &bus).unwrap(), 0x07, "only PA2 toggled");
     }
 
     /// End to end: SPDR writes from the CPU clock a parking (not taken)

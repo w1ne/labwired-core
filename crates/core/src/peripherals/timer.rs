@@ -185,6 +185,11 @@ pub struct Timer {
     /// `config: { input_capture: stm32f4 }` sets it.
     #[serde(skip)]
     ccer_np: bool,
+    /// Separate capture/compare vector, when the chip splits the timer's
+    /// interrupt (AT32F421 TMR1: OVF/TRG/HALL on IRQ13, channels on IRQ14).
+    /// `None` keeps the single shared line every other timer has.
+    #[serde(skip)]
+    capture_compare_irq: Option<u32>,
     /// The V2 alternate-function table the bus routes this timer's channel
     /// OUTPUTS through, when it is not the F4 one (chip yaml `config: {
     /// pad_map: stm32g0 | stm32g4 | stm32l0 | stm32l4 | stm32wb | stm32wba |
@@ -395,6 +400,7 @@ impl Timer {
             clock: None,
             kernel_div: 1,
             ccer_np: false,
+            capture_compare_irq: None,
             pad_map: None,
             ic_psc_count: [0; 4],
             ti_level: [false; 4],
@@ -409,6 +415,13 @@ impl Timer {
     /// [`Self::basic`].
     pub fn ccer_np(mut self, np: bool) -> Self {
         self.ccer_np = np;
+        self
+    }
+
+    /// Route CC1..CC4 flags to their own vector instead of the timer's line.
+    /// Builder form, like [`Self::ccer_np`].
+    pub fn capture_compare_irq(mut self, irq: Option<u32>) -> Self {
+        self.capture_compare_irq = irq;
         self
     }
 
@@ -786,6 +799,23 @@ impl Timer {
     #[inline]
     fn irq_level_held(&self) -> bool {
         (self.sr.get() & self.dier & 0x1F) != 0
+    }
+
+    /// The timer's own line: UIF only when CC flags have a separate vector.
+    #[inline]
+    fn own_irq_held(&self) -> bool {
+        if self.capture_compare_irq.is_some() {
+            self.sr.get() & self.dier & 1 != 0
+        } else {
+            self.irq_level_held()
+        }
+    }
+
+    /// The separate capture/compare vector, while an enabled CCxIF is held.
+    #[inline]
+    fn capture_compare_irq_held(&self) -> Option<u32> {
+        self.capture_compare_irq
+            .filter(|_| self.sr.get() & self.dier & 0x1e != 0)
     }
 
     /// The counter-freeze predicate. The same conjunction as
@@ -1727,7 +1757,11 @@ impl crate::Peripheral for Timer {
 
     fn tick(&mut self) -> crate::PeripheralTickResult {
         let freeze_before = self.freeze_revision.get();
-        let result = self.tick_counter();
+        let mut result = self.tick_counter();
+        if self.capture_compare_irq.is_some() {
+            result.irq = self.own_irq_held();
+            result.explicit_irqs = self.capture_compare_irq_held().map(|irq| vec![irq]);
+        }
         if !self.scheduler_mode() {
             self.wave.walk_ticks += 1;
             if !self.wave.wired {
@@ -1868,7 +1902,8 @@ impl crate::Peripheral for Timer {
             // `pend_irq_for_event` choke the legacy walk uses. Re-pends merge
             // in ISPR exactly as the walk's per-tick pends do.
             crate::sched::EventResult {
-                raise_own_irq: true,
+                raise_own_irq: self.own_irq_held(),
+                explicit_irqs: self.capture_compare_irq_held().into_iter().collect(),
                 reschedule_delay: Some(1),
                 ..Default::default()
             }
@@ -1932,7 +1967,13 @@ impl crate::Peripheral for Timer {
     /// post-MMIO-write reconcile reads the flag the write just cleared.
     fn irq_line_level(&self) -> Option<bool> {
         self.sync_from_clock();
-        Some(self.irq_level_held())
+        Some(self.own_irq_held())
+    }
+
+    fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
+        if let Some(irq) = self.capture_compare_irq {
+            report(irq, self.sr.get() & self.dier & 0x1e != 0);
+        }
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {

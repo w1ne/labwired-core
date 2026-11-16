@@ -15,8 +15,17 @@ registers_count: 32
 # analogWrite reaches every timer pad (OC0A PB7, OC0B PG5, OC1A/B/C
 # PB5/PB6/PB7, OC2A PB4, OC2B PH6, OC3A/B/C PE3/PE4/PE5, OC4A/B/C PH3/PH4/PH5,
 # OC5A/B/C PL3/PL4/PL5; cpu/avr/oc_pins.rs), with the OC0A/OC1C modulator on PB7.
-# Not modelled here: INTn/PCINT, USART1..3; on the 16-bit timers external clock
-# (Tn pins), toggle and non-PWM compare-output pads, double-buffered OCRnx.
+# INT0..7 (PD0..3, PE4..7; EICRA/EICRB, EIMSK, EIFR) and PCINT0..23 (PB0..7,
+# PE0, PJ0..6, PK0..7; PCICR/PCIFR/PCMSK0..2) on vectors 2..12
+# (cpu/avr/mega_ext_int.rs). The ADC converts in ADPS-timed 13/25 ADC clocks,
+# single, free running or auto-triggered (ADATE/ADTS), with ADIF/ADIE on
+# vector 30, REFS AVCC/1.1 V/2.56 V and ADLAR (cpu/avr/mega_adc.rs). SPI
+# (SS/SCK/MOSI/MISO = PB0/PB1/PB2/PB3) times SPIF by SPR/SPI2X, honours DORD,
+# WCOL and the SS mode fault, interrupts on vector 25 and clocks the attached
+# SPI device models (cpu/avr/mega_spi.rs).
+# Not modelled here: USART1..3, the analog comparator, SPI slave transfers
+# from an external master; on the 16-bit timers external clock (Tn pins),
+# toggle and non-PWM compare-output pads, double-buffered OCRnx.
 # Microchip DS2549 (ATmega640/1280/1281/2560/2561), 16 MHz on the Arduino Mega.
 cpu_hz: 16_000_000
 io_voltage_v: 5.0

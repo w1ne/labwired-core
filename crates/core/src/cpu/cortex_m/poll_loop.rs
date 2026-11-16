@@ -40,6 +40,7 @@
 //! the interrupt lands on the same instruction as it would without the skip.
 
 use super::{AccessWidth, CortexM};
+use crate::decoder::arm::Instruction;
 use crate::{Bus, DmaRequest, SimResult, SimulationConfig, SimulationError};
 
 /// Longest iteration, in instructions, the probe follows.
@@ -173,14 +174,32 @@ impl ArchState {
 /// and every write, is refused.
 struct ProbeBus<'a> {
     inner: &'a dyn Bus,
+    /// When set, every served load address is appended (diagnosis only).
+    loads: Option<&'a std::cell::RefCell<Vec<u64>>>,
 }
+
+/// The diagnosis probe also serves loads below this address through the bus
+/// (the boot alias of flash is not a plain slice on every chip): on Cortex-M
+/// it is always the code region, never a device, and it is how a loop
+/// reading through a NULL pointer is recognised.
+const NULL_PAGE: u64 = 0x400;
 
 impl ProbeBus<'_> {
     fn plain_read(&self, addr: u64, size: usize) -> SimResult<u32> {
-        let (start, end, slice) = self
-            .inner
-            .plain_memory_slice(addr)
-            .ok_or(SimulationError::MemoryViolation(addr))?;
+        let Some((start, end, slice)) = self.inner.plain_memory_slice(addr) else {
+            return match self.loads {
+                Some(loads) if addr + size as u64 <= NULL_PAGE => {
+                    let v = match size {
+                        1 => u32::from(self.inner.read_u8(addr)?),
+                        2 => u32::from(self.inner.read_u16(addr)?),
+                        _ => self.inner.read_u32(addr)?,
+                    };
+                    loads.borrow_mut().push(addr);
+                    Ok(v)
+                }
+                _ => Err(SimulationError::MemoryViolation(addr)),
+            };
+        };
         if addr < start || addr + size as u64 > end {
             return Err(SimulationError::MemoryViolation(addr));
         }
@@ -188,6 +207,9 @@ impl ProbeBus<'_> {
         let bytes = slice
             .get(off..off + size)
             .ok_or(SimulationError::MemoryViolation(addr))?;
+        if let Some(loads) = self.loads {
+            loads.borrow_mut().push(addr);
+        }
         Ok(bytes
             .iter()
             .enumerate()
@@ -352,11 +374,75 @@ impl CortexM {
         )
     }
 
+    /// The skip's proof: [`Self::probe_iteration`], refused outright while an
+    /// exception is pending.
+    fn probe_fixed_point(&mut self, bus: &dyn Bus, head: u32) -> Option<u64> {
+        if self.any_exception_pending() {
+            return None;
+        }
+        self.probe_iteration(bus, head, None, true)
+    }
+
+    /// See [`crate::Cpu::stalled_loop_loads`]. The same proof as the skip,
+    /// run from the current PC, except that a pending interrupt does not
+    /// refuse it: the run is over, and the question is only what the loop
+    /// the core is parked in reads.
+    pub(super) fn stalled_loads(&mut self, bus: &dyn Bus) -> Option<Vec<u64>> {
+        let loads = std::cell::RefCell::new(Vec::new());
+        let head = self.pc;
+        self.probe_iteration(bus, head, Some(&loads), false)?;
+        Some(loads.into_inner())
+    }
+
+    /// True when the probe from `head` must refuse without running it: the
+    /// already-decoded code from `head` is straight-line register arithmetic
+    /// and plain loads that ends in a store, and the probe bus refuses every
+    /// store. The probe could only stop earlier by refusing too (a refused
+    /// load or fetch), never come back to `head`, and with every instruction
+    /// on the way already decoded it would not touch the decode cache. Most
+    /// refused heads are function entries (`push {.., lr}`), so this skips
+    /// the state save/restore for them.
+    fn probe_reaches_store_unconditionally(&self, head: u32) -> bool {
+        if self.trace_insn {
+            return false;
+        }
+        let mut pc = head;
+        for _ in 0..16 {
+            let Some(entry) = self.decode_cache[((pc >> 1) & 0x0fff) as usize].as_ref() else {
+                return false;
+            };
+            if entry.tag != pc || entry.pc_increment != 2 {
+                return false;
+            }
+            match entry.instruction {
+                Instruction::Push { registers, m } => return registers != 0 || m,
+                Instruction::StrImm { .. }
+                | Instruction::StrReg { .. }
+                | Instruction::StrSp { .. }
+                | Instruction::StrbImm { .. }
+                | Instruction::StrbReg { .. }
+                | Instruction::StrhImm { .. }
+                | Instruction::StrhReg { .. } => return true,
+                Instruction::Branch { .. } | Instruction::BranchCond { .. } => return false,
+                op if Self::t16_block_op_supported(op) => {}
+                _ => return false,
+            }
+            pc = pc.wrapping_add(2);
+        }
+        false
+    }
+
     /// Run one iteration from `head` on a read-only view of plain memory and
     /// return its length when it comes back to `head` in the state it left.
-    fn probe_fixed_point(&mut self, bus: &dyn Bus, head: u32) -> Option<u64> {
-        if self.any_exception_pending()
-            || self.sleeping
+    /// `strict` also refuses when an exception becomes pending on the way.
+    fn probe_iteration(
+        &mut self,
+        bus: &dyn Bus,
+        head: u32,
+        loads: Option<&std::cell::RefCell<Vec<u64>>>,
+        strict: bool,
+    ) -> Option<u64> {
+        if self.sleeping
             || self.waiting_for_event
             || self.it_state != 0
             || self.fault_entry.is_some()
@@ -369,8 +455,11 @@ impl CortexM {
         {
             return None;
         }
+        if loads.is_none() && self.probe_reaches_store_unconditionally(head) {
+            return None;
+        }
         let before = ArchState::capture(self);
-        let mut probe = ProbeBus { inner: bus };
+        let mut probe = ProbeBus { inner: bus, loads };
         let config = bus.config().clone();
         let mut period = None;
         for n in 1..=MAX_PERIOD {
@@ -378,7 +467,7 @@ impl CortexM {
             // the probe, never escalate into a fault (which would write the
             // SCB fault registers the bus shares).
             if self.step_execute(&mut probe, &[], &config).is_err()
-                || self.any_exception_pending()
+                || (strict && self.any_exception_pending())
                 || self.active_exception != before.active_exception
                 || self.fault_entry.is_some()
                 || self.lockup.is_some()
@@ -405,5 +494,64 @@ impl CortexM {
         self.pending_undef_instruction = false;
         self.pending_div0 = false;
         period.filter(|_| same)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bus::SystemBus;
+    use crate::cpu::cortex_m::DecodeCacheEntry;
+    use crate::decoder::arm::decode_thumb_16;
+    use crate::Cpu;
+
+    fn cpu_with(code: &[u16]) -> (CortexM, SystemBus) {
+        let mut cpu = CortexM::new();
+        let mut bus = SystemBus::new();
+        cpu.pc = 0x100;
+        cpu.sp = 0x2000_0400;
+        cpu.r1 = 0x2000_0100;
+        for (i, &op) in code.iter().enumerate() {
+            let pc = 0x100 + i as u32 * 2;
+            assert!(bus.flash.write_u16(u64::from(pc), op));
+            cpu.insert_decoded_entry(DecodeCacheEntry {
+                tag: pc,
+                instruction: decode_thumb_16(op),
+                opcode: u32::from(op),
+                pc_increment: 2,
+                cycles: 1,
+            });
+        }
+        (cpu, bus)
+    }
+
+    #[test]
+    fn store_first_heads_refuse_statically_and_match_a_full_probe() {
+        for (code, statically) in [
+            (&[0xb510u16][..], true),               // push {r4, lr}
+            (&[0x3001, 0x6008][..], true),          // adds r0,#1; str r0,[r1]
+            (&[0x6808, 0x1c40, 0x9000][..], true),  // ldr; adds; str r0,[sp]
+            (&[0x3001, 0xe7fd][..], false),         // adds; b head (a real loop)
+            (&[0x3001, 0xd0fd, 0x6008][..], false), // conditional branch first
+            (&[0x3001][..], false),                 // runs into undecoded code
+            (&[0xbf30, 0x6008][..], false),         // WFI is not arithmetic
+            (&[0xb400][..], false),                 // push {} (empty list)
+        ] {
+            let (mut cpu, bus) = cpu_with(code);
+            assert_eq!(
+                cpu.probe_reaches_store_unconditionally(0x100),
+                statically,
+                "{code:x?}"
+            );
+            if statically {
+                // The full probe (diagnosis mode skips the shortcut) refuses too
+                // and leaves the core as it found it.
+                let before = serde_json::to_value(cpu.snapshot()).unwrap();
+                let loads = std::cell::RefCell::new(Vec::new());
+                assert_eq!(cpu.probe_iteration(&bus, 0x100, Some(&loads), true), None);
+                assert_eq!(cpu.probe_iteration(&bus, 0x100, None, true), None);
+                assert_eq!(serde_json::to_value(cpu.snapshot()).unwrap(), before);
+            }
+        }
     }
 }

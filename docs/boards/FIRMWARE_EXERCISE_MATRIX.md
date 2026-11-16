@@ -141,6 +141,10 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `UDS bootloader/ECU (0x10/0x27/0x34/0x36/0x37/0x85/0x28 — example firmware, not gated)`
 
+### `ch32l103c8t6`
+
+_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32IMAC ELF that blinks PC13 through GPIOC_CFGHR (negative control: PC0 stays idle), and a second ELF that checks MUL/DIVU/AMOADD.W results and then prints an exact string on USART1 (PA9); a negative control moves the USART1 clock gate and requires silence. A datasheet product-table test pins memory, clock and the 37 LQFP48 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, LPTIM, ADC, I2C, SPI, CAN FD, USB, USB PD or low-power modes, and is not hosted model_verified or hardware confirmation._
+
 ### `ch32v003f4p6`
 
 _No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
@@ -756,10 +760,12 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 
 ### `ra4m1`
 
-_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the bare-metal Uno R4 Minima smoke, PR-gated as firmware_survival::test_ra4m1_uno_r4_smoke_survival (case firmware_survival.rs:1346-1358) and rebuilt by the nightly coverage-matrix cell examples/arduino-uno-r4-minima/uart-smoke.yaml (core-coverage-matrix-smoke.yml:89-95); it waits on the ra_sysc HOCO/OSCSF handshake, drives P111 through PORT1 PCNTR1/PCNTR3 and prints OK over SCI2 TDR, and board_config_gates.rs builds the descriptor. Beyond the rubric the descriptor declares exactly one block — the out-of-scope USB CDC serial._
+_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the bare-metal Uno R4 Minima smoke, PR-gated as firmware_survival::test_ra4m1_uno_r4_smoke_survival (case firmware_survival.rs:1346-1358) and rebuilt by the nightly coverage-matrix cell examples/arduino-uno-r4-minima/uart-smoke.yaml (core-coverage-matrix-smoke.yml:89-95); it waits on the ra_sysc HOCO/OSCSF handshake, drives P111 through PORT1 PCNTR1/PCNTR3 and prints OK over SCI2 TDR, and board_config_gates.rs builds the descriptor. Since 2026-11-07 stock ArduinoCore-renesas sketches also run on it through the UNO R4 WiFi row of the Arduino matrix (validation/arduino-matrix/boards.yaml `uno-r4-wifi`, nightly core-arduino-matrix-smoke.yml, not PR-gated): Serial on SCI9 through the ICU event link, millis()/micros() on AGT0, Wire on IIC1 (INA219 exact), SPI on RSPI SPI0 (MAX31855), analogRead on ADC0 at 14 bits, analogWrite on GPT2 GTIOC2B (P102 pad edges), and CAN0 in internal loopback on ra_can (L8_can, register-level; validation/arduino-matrix/evidence/uno-r4-wifi/L8_can with a stubbed-CAN0 negative control). The CPU-visible stubs it adds are listed below._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `usbfs` (configs/chips/ra4m1.yaml:63-66 (type stub; crates/core/src/peripherals/stub.rs)) — CLOSABLE: zero window at 0x40090000 — the R7FA4M1AB USB FS device (the board's USB CDC console) is not modelled; the PR-gated smoke drives SCI2 on the D0/D1 header only, and no gated firmware opens the window (docs/boards/arduino-uno-r4-minima.md:25).
+- `usbfs` (configs/chips/ra4m1.yaml usbfs (type stub; crates/core/src/peripherals/stub.rs)) — CLOSABLE: zero window at 0x40090000 — the R7FA4M1AB USB FS device (the Minima's USB CDC console) is not modelled; the PR-gated smoke drives SCI2 on the D0/D1 header only, and the UNO R4 WiFi matrix row prints on SCI9 (docs/boards/arduino-uno-r4-minima.md:25).
+- `mpu_spmon` (configs/chips/ra4m1.yaml mpu_spmon (type stub)) — CLOSABLE: FSP SystemInit arms the stack pointer monitor; its bounds are dropped and no NMI is raised.
+- `adc1_reserved` (configs/chips/ra4m1.yaml adc1_reserved (type stub)) — Silicon-shaped: reserved space ArduinoCore-renesas analogReference() opens as a second ADC unit on every boot.
 
 ### `rp2350`
 
@@ -900,3 +906,9 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real
 ### `xck26-rpu`
 
 _L1 + stock RTOS, SIM-DERIVED. First Cortex-R part: the Zynq UltraScale+ XCK26 RPU core 0 (Cortex-R5F, PMSAv7 16-region MPU, VFPv3-D16 on the pinned tlib engine) runs unmodified Zephyr v4.1.0 hello_world, synchronization (TTC0 match IRQs through the RPU GIC, WFI idle) and tests/kernel/common (12 suites, 61 pass / 2 skip / 0 fail of 63, userspace syscalls through the MPU) on the PS UART1 console (examples/kv260-r5, native CLI). Only the GIC, Cadence UART0/1 and TTC0 are installed (native_rpu_peripherals), so no advanced blocks exist to list._
+
+### `at32f421g8u7`
+
+_Bare AT32F421G8U7 (QFN28), reference-derived, no silicon capture. The committed Artery BSP 2.1.9 SDK smoke (examples/at32f421g8u7/io-smoke.yaml, PR-gated coverage-matrix cell, and the vendor::at32f421_contract Rust gate) switches CRM to the 120 MHz PLL, erases and programs the last flash sector, copies four words by DMA1 memory-to-memory and toggles PA5 from real TMR6 interrupts over USART2. The comparator/EXINT line-21 path, ADC ordinary scan with DMA handshake and the shared IWDG expiry reset are exercised only by register-level unit tests._
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `{'p': 'CMP', 'ev': 'crates/core/src/peripherals/at32f421.rs; crates/core/tests/vendor/at32f421_contract.rs', 'note': 'Mux/polarity/lock and EXINT line-21 rising/falling routing; no firmware drives it yet.'}`

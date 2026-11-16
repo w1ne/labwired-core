@@ -68,8 +68,9 @@ pub const VEC_TIMER1_COMPB: u32 = 13;
 pub const VEC_TIMER1_OVF: u32 = 14;
 /// `TIMER1_COMPC_vect` on the ATmega2560 (DS2549 Table 14-1 vector 20,
 /// `__vector_19`). The 328P numbering this core keeps internally has no slot
-/// for it, so it gets a free pending bit that `mega2560_vector` maps to 20.
-pub const VEC_TIMER1_COMPC: u32 = 63;
+/// for it, so it gets a pending bit no mega vector uses (27; bits 32..57 hold
+/// the slot-numbered vectors, 58..63 INT2..7) that `mega2560_vector` maps to 20.
+pub const VEC_TIMER1_COMPC: u32 = 27;
 const T1_IRQ_MASK: u64 = (1 << VEC_TIMER1_CAPT)
     | (1 << VEC_TIMER1_COMPA)
     | (1 << VEC_TIMER1_COMPB)

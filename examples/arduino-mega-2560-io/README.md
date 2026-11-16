@@ -24,6 +24,14 @@ D46/D45/D44 (OC5A/B/C) and OC1C on D13 through the PB7 modulator, see
 row (`validation/arduino-matrix`, board `atmega2560`) passes L0–L7, evidence in
 [`evidence/arduino-matrix/`](evidence/arduino-matrix/).
 
-Not modelled on the Mega: `attachInterrupt` (INTn/PCINT), USART1..3
-(`Serial1`..`Serial3`), and on the 16-bit timers external clocking from the
-Tn pins, toggle and non-PWM compare-output pads and double-buffered `OCRnx`.
+`attachInterrupt` on INT0..INT5 (D21 D20 D19 D18 D2 D3) and pin-change
+interrupts on PCINT0..23 (D10..D13, D50..D53, D0, D14, D15, A8..A15) enter
+their 2560 vectors; `analogRead` takes the datasheet conversion time (13 ADC
+clocks at 125 kHz, the first 25), and the ADC also runs free running or
+auto-triggered with its interrupt; the hardware SPI on D50..D53 clocks
+attached SPI devices (an SD card, a display) with SCK-timed SPIF. See
+`cargo test -p labwired-core --test avr avr_mega2560_irq_adc_spi::`.
+
+Not modelled on the Mega: USART1..3 (`Serial1`..`Serial3`), and on the
+16-bit timers external clocking from the Tn pins, toggle and non-PWM
+compare-output pads and double-buffered `OCRnx`.
