@@ -50,6 +50,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | esp32-devkitc-32e-uart1 | open | L0 | 3 | 977.8 | 1.4 | ≥1× (CI) | — |
 | stm32f401cdu6 | open | L1 | 45 | 937.7 | 1.6 | ≥1× (CI) | — |
 | stm32f411ceu6 | open | L1 | 46 | 937.6 | 1.6 | ≥1× (CI) | — |
+| stm32f411re | open | L0 | 46 | 937.4 | 1.7 | ≥1× (CI) | [doc](docs/boards/stm32f411re.md) |
 | stm32f446re | open | L0 | 34 | 935.5 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32f446re.md) |
 | nrf51822 | open | L1 | 22 | 1335.6 | 2.0 | ≥1× (CI) | — |
 | nrf52832 | open | L1 | 17 | 1330.2 | 2.0 | ≥1× (CI) | [doc](docs/boards/nrf52832.md) |
@@ -134,6 +135,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | pic24f16ka101 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | pic24f16ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | ch32v003f4p6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
+| ch32v203c8t6 | open | L1 | 7 | — | — | ≥1× (CI) | — |
 | ch32v003f4u6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | ch32v003a4m6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | ch32v003j4m6 | open | L1 | 5 | — | — | ≥1× (CI) | — |

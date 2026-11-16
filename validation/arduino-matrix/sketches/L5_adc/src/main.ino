@@ -95,6 +95,14 @@ static bool samples_ok(int v0, int v1) {
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).
   return v0 == 0 && v1 == 0;
 
+#elif defined(ARDUINO_NUCLEO_F411RE)
+  // NUCLEO-F411RE: the matrix system holds A0 = PA0 = ADC1_IN0 at 1650 mV.
+  // floor(1650 * 4095 / 3300) = 2047 at 12 bits; analogRead's default
+  // 10 bits is 2047 >> 2 = 511. Exact; "2 3" is the model's incrementing
+  // fallback, i.e. the board level never reached the selected channel.
+  // Keyed on the board, not STM32F411xE: the Black Pill row holds no level.
+  return v0 == 511 && v1 == 511;
+
 #else
   // Deterministic twin: equal samples (fixed source / idle 0), OR the
   // classic STM32 F1 unseeded path that increments DR each conversion.

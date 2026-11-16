@@ -117,6 +117,10 @@
   },
   {
     "buses": [],
+    "name": "ch32v203c8t6"
+  },
+  {
+    "buses": [],
     "name": "dspic33fj32mc202"
   },
   {
@@ -666,6 +670,14 @@
       "UART"
     ],
     "name": "stm32f411ceu6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f411re"
   },
   {
     "buses": [

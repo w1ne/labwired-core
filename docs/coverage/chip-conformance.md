@@ -49,6 +49,7 @@ This page covers the public models. For every chip we model — public and priva
 | esp32-devkitc-32e-uart1 | **L0** | ✓ | 3 | — | — | — |
 | stm32f401cdu6 | **L1** | ✓ | 45 | — | — | firmware_survival::test_stm32f401cdu6_demo_survival |
 | stm32f411ceu6 | **L1** | ✓ | 46 | — | — | firmware_survival::test_stm32f411_tier1_survival |
+| stm32f411re | **L0** | ✓ | 46 | — | — | — |
 | stm32f446re | **L0** | ✓ | 34 | — | — | — |
 | nrf51822 | **L1** | ✓ | 22 | — | — | firmware_survival::test_nrf51822_microbit_v1_smoke_survival |
 | nrf52832 | **L1** | ✓ | 17 | — | — | firmware_survival::test_nrf52832_demo_survival |
@@ -133,6 +134,7 @@ This page covers the public models. For every chip we model — public and priva
 | pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
 | pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
 | ch32v003f4p6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
+| ch32v203c8t6 | **L1** | ✓ | 7 | — | — | ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13 |
 | ch32v003f4u6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | ch32v003a4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | ch32v003j4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
