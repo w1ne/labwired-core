@@ -1815,6 +1815,35 @@ impl crate::Peripheral for Timer {
         }
     }
 
+    /// Peripheral reset (RCC/CRM APBxRST) or node reset: every register goes
+    /// back to its reset value (RM0008 §15.4, RM_AT32F421 §14: all zero but
+    /// ARR, which resets to its all-ones width). What the bus wired to the
+    /// instance stays: its width and layout, the cycle clock, the kernel
+    /// clock divider and the output wire, which is re-driven from the reset
+    /// registers (every channel released). An in-flight event chain dies on
+    /// its stale token.
+    fn on_node_reset(&mut self) {
+        let now = self.clock.as_ref().map(|c| c.now());
+        let mut fresh = Self::new_with_layout(self.width, self.advanced)
+            .basic(self.basic)
+            .ccer_np(self.ccer_np)
+            .capture_compare_irq(self.capture_compare_irq)
+            .pad_map(self.pad_map);
+        fresh.clock = self.clock.take();
+        fresh.kernel_div = self.kernel_div;
+        fresh.anchor.set(now.unwrap_or(0));
+        fresh.arm_seq = self.arm_seq.wrapping_add(1) & !WAVE_TOKEN_BIT;
+        fresh.phase_revision = self.phase_revision.wrapping_add(1);
+        fresh
+            .freeze_revision
+            .set(self.freeze_revision.get().wrapping_add(1));
+        fresh.wave = std::mem::take(&mut self.wave);
+        *self = fresh;
+        if self.wave.wired {
+            self.redrive_outputs(self.wave_now());
+        }
+    }
+
     fn timer_input_stage(&self) -> Option<TimerInputStage> {
         if self.basic {
             None
@@ -2156,6 +2185,49 @@ mod tests {
         let mut tim = Timer::new_with_layout(16, true);
         tim.write(0x30, 0x05).unwrap();
         assert_eq!(tim.read(0x30).unwrap(), 0x05);
+    }
+
+    /// A peripheral reset (RCC/CRM APBxRST) returns every register to its
+    /// reset value, ARR to all-ones; the instance keeps its layout.
+    #[test]
+    fn node_reset_returns_registers_to_reset_and_keeps_the_layout() {
+        let mut t = Timer::new_with_layout(16, true).ccer_np(true);
+        t.write_u32(0x28, 7).unwrap(); // PSC
+        t.write_u32(0x2C, 99).unwrap(); // ARR
+        t.write_u32(0x34, 40).unwrap(); // CCR1
+        t.write_u32(0x18, 0x68).unwrap(); // CCMR1: OC1M=PWM1, OC1PE
+        t.write_u32(0x20, 1).unwrap(); // CCER: CC1E
+        t.write_u32(0x44, 1 << 15).unwrap(); // BDTR: MOE
+        t.write_u32(0x0C, 1).unwrap(); // DIER: UIE
+        t.write_u32(0x00, 1).unwrap(); // CR1: CEN
+        for _ in 0..50 {
+            t.tick();
+        }
+        assert_ne!(t.read_u32(0x24).unwrap(), 0, "counting before the reset");
+        t.on_node_reset();
+        for (off, want) in [
+            (0x00, 0),
+            (0x0C, 0),
+            (0x10, 0),
+            (0x18, 0),
+            (0x20, 0),
+            (0x24, 0),
+            (0x28, 0),
+            (0x2C, 0xFFFF),
+            (0x34, 0),
+            (0x44, 0),
+        ] {
+            assert_eq!(t.read_u32(off).unwrap(), want, "register {off:#x}");
+        }
+        assert!(!t.output_snapshot().counter_enabled);
+        for _ in 0..10 {
+            t.tick();
+        }
+        assert_eq!(t.read_u32(0x24).unwrap(), 0, "a reset timer is stopped");
+        // Still the advanced layout with the F4 capture stage.
+        t.write_u32(0x44, 1 << 15).unwrap();
+        assert_eq!(t.read_u32(0x44).unwrap(), 1 << 15);
+        assert!(t.has_f4_input_capture());
     }
 
     #[test]
