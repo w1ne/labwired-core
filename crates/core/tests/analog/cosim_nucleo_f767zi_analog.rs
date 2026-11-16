@@ -9,7 +9,9 @@ use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cosim::{CosimSession, CosimSignalValue, RoutingError};
-use labwired_core::Bus;
+use labwired_core::cpu::CortexM;
+use labwired_core::system::cortex_m::configure_cortex_m;
+use labwired_core::{Bus, DebugControl, Machine};
 use std::path::Path;
 
 const RCC_BASE: u64 = 0x4002_3800;
@@ -53,13 +55,31 @@ fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     }
 }
 
+/// Wrap the board bus in the production `Machine`, parked on a branch-to-self
+/// guest. With `event-scheduler` enabled (cargo unifies it onto this crate in
+/// the workspace build) an ADC conversion completes through a scheduled event
+/// that only the Machine boundary drains; a bare `tick_peripherals_fully` never
+/// delivers it, so the conversion would not finish in that build.
+fn board_machine(mut bus: SystemBus) -> Machine<CortexM> {
+    let spin_pc = 0x0800_0040;
+    bus.write_u16(spin_pc, 0xe7fe).expect("write b ."); // b .
+    let (mut cpu, _) = configure_cortex_m(&mut bus);
+    cpu.pc = spin_pc as u32;
+    cpu.sp = 0x2000_5000;
+    let mut machine = Machine::new(cpu, bus);
+    machine.config.peripheral_tick_interval = 1;
+    machine.bus.config.peripheral_tick_interval = 1;
+    machine
+}
+
 /// Perform the selected one-shot through the same F4 register interface firmware uses.
-fn stm32f4_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
+fn stm32f4_adc_convert(machine: &mut Machine<CortexM>, channel: u8) -> u32 {
     const ADC1EN: u32 = 1 << 8;
     const ADON: u32 = 1;
     const SWSTART: u32 = 1 << 30;
     const EOC: u32 = 1 << 1;
 
+    let bus = &mut machine.bus;
     let apb2enr = bus.read_u32(RCC_BASE + 0x44).expect("read RCC APB2ENR");
     bus.write_u32(RCC_BASE + 0x44, apb2enr | ADC1EN)
         .expect("enable ADC1 clock");
@@ -70,8 +90,9 @@ fn stm32f4_adc_convert(bus: &mut SystemBus, channel: u8) -> u32 {
     bus.write_u32(ADC1_BASE + 0x08, ADON | SWSTART)
         .expect("software-start ADC1 conversion");
     for _ in 0..15 {
-        bus.tick_peripherals_fully();
+        machine.run(Some(1)).expect("advance the guest one cycle");
     }
+    let bus = &mut machine.bus;
     let status = bus.read_u32(ADC1_BASE).expect("read ADC1 SR");
     assert_ne!(status & EOC, 0, "ADC1 conversion completes with EOC set");
     bus.read_u32(ADC1_BASE + 0x4c)
@@ -114,8 +135,9 @@ fn nucleo_f767zi_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
     let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
     assert_eq!(chip.analog_pins["PA0"].channel, 0);
     assert_eq!(chip.analog_pins["PA1"].channel, 1);
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
-    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+    let bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut machine = board_machine(bus);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
         .expect("build analog co-simulation")
         .expect("fixture carries both analog devices");
     assert_eq!(
@@ -132,7 +154,7 @@ fn nucleo_f767zi_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
             .expect("set generic NTC temperature");
         cycles += session.cycles_until_boundary(cycles);
         let (steps, errors) = session
-            .advance_to(cycles, &mut bus)
+            .advance_to(cycles, &mut machine.bus)
             .expect("solve and route both analog netlists");
         assert_eq!(steps.len(), 2, "both netlists cross the 1 us boundary");
         assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
@@ -152,7 +174,7 @@ fn nucleo_f767zi_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
         let mut ntc_count = 0;
         for (channel, volts) in [(0, ntc_v), (1, diode_v)] {
             let expected_count = expected_adc_count(volts);
-            let actual_count = stm32f4_adc_convert(&mut bus, channel);
+            let actual_count = stm32f4_adc_convert(&mut machine, channel);
             assert_eq!(
                 actual_count,
                 u32::from(expected_count),
@@ -163,7 +185,7 @@ fn nucleo_f767zi_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
             }
         }
         assert_eq!(
-            stm32f4_adc_convert(&mut bus, 2),
+            stm32f4_adc_convert(&mut machine, 2),
             (u32::from(expected_adc_count(diode_v)) + 1) & 0xfff,
             "the undriven neighboring channel uses its fallback, not a routed input"
         );
@@ -249,8 +271,9 @@ fn nucleo_f767zi_zener_breakdown_reaches_pa5_adc1_alongside_unrelated_devices() 
         assert_eq!(chip.analog_pins[pad].channel, channel);
     }
 
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
-    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+    let bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut machine = board_machine(bus);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
         .expect("build analog co-simulation")
         .expect("fixture carries an NTC, forward diode, and reverse-breakdown diode");
     assert_eq!(
@@ -269,7 +292,7 @@ fn nucleo_f767zi_zener_breakdown_reaches_pa5_adc1_alongside_unrelated_devices() 
             .expect("drive the generic zener load line");
         cycles += session.cycles_until_boundary(cycles);
         let (steps, errors) = session
-            .advance_to(cycles, &mut bus)
+            .advance_to(cycles, &mut machine.bus)
             .expect("solve and route all three analog netlists");
         assert_eq!(steps.len(), 3, "all devices solve at the 1 us boundary");
         assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
@@ -288,7 +311,7 @@ fn nucleo_f767zi_zener_breakdown_reaches_pa5_adc1_alongside_unrelated_devices() 
         for (channel, volts) in [(0, 1.65), (1, diode_load_line_voltage()), (5, zener_v)] {
             let expected_count = expected_adc_count(volts);
             assert_eq!(
-                stm32f4_adc_convert(&mut bus, channel),
+                stm32f4_adc_convert(&mut machine, channel),
                 u32::from(expected_count),
                 "firmware-visible ADC1 channel {channel} conversion must report its analog voltage"
             );
@@ -357,8 +380,9 @@ fn nucleo_f767zi_mosfet_load_line_reaches_pa3_adc1_alongside_unrelated_devices()
         assert_eq!(chip.analog_pins[pad].channel, channel);
     }
 
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
-    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+    let bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut machine = board_machine(bus);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
         .expect("build analog co-simulation")
         .expect("fixture carries three unrelated analog devices");
     assert_eq!(
@@ -380,7 +404,7 @@ fn nucleo_f767zi_mosfet_load_line_reaches_pa3_adc1_alongside_unrelated_devices()
             .expect("set generic MOSFET gate voltage");
         cycles += session.cycles_until_boundary(cycles);
         let (steps, errors) = session
-            .advance_to(cycles, &mut bus)
+            .advance_to(cycles, &mut machine.bus)
             .expect("solve and route NTC, diode, and MOSFET netlists");
         assert_eq!(
             steps.len(),
@@ -398,7 +422,7 @@ fn nucleo_f767zi_mosfet_load_line_reaches_pa3_adc1_alongside_unrelated_devices()
         for (channel, volts) in [(3, drain_v), (0, NTC_V), (1, diode_v)] {
             let expected_count = expected_adc_count(volts);
             assert_eq!(
-                stm32f4_adc_convert(&mut bus, channel),
+                stm32f4_adc_convert(&mut machine, channel),
                 u32::from(expected_count),
                 "firmware-visible ADC1 channel {channel} conversion follows its analog device"
             );
@@ -497,8 +521,9 @@ fn nucleo_f767zi_bjt_load_line_reaches_pa2_adc1_alongside_ntc_and_diode() {
         assert_eq!(chip.analog_pins[pad].channel, channel);
     }
 
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
-    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+    let bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut machine = board_machine(bus);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
         .expect("build analog co-simulation")
         .expect("fixture carries NTC, diode, and BJT devices");
     assert_eq!(
@@ -520,7 +545,7 @@ fn nucleo_f767zi_bjt_load_line_reaches_pa2_adc1_alongside_ntc_and_diode() {
             .expect("set Gummel–Poon base drive");
         cycles += session.cycles_until_boundary(cycles);
         let (steps, errors) = session
-            .advance_to(cycles, &mut bus)
+            .advance_to(cycles, &mut machine.bus)
             .expect("solve and route all three analog netlists");
         assert_eq!(steps.len(), 3, "all devices solve at the 1 us boundary");
         assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
@@ -533,7 +558,7 @@ fn nucleo_f767zi_bjt_load_line_reaches_pa2_adc1_alongside_ntc_and_diode() {
         );
         let bjt_count = expected_adc_count(collector_v);
         assert_eq!(
-            stm32f4_adc_convert(&mut bus, 2),
+            stm32f4_adc_convert(&mut machine, 2),
             u32::from(bjt_count),
             "firmware-visible ADC1 channel 2 conversion must report the BJT load line"
         );
@@ -541,7 +566,7 @@ fn nucleo_f767zi_bjt_load_line_reaches_pa2_adc1_alongside_ntc_and_diode() {
         for (channel, volts) in [(0, expected_ntc_v), (1, expected_diode_v)] {
             let count = expected_adc_count(volts);
             assert_eq!(
-                stm32f4_adc_convert(&mut bus, channel),
+                stm32f4_adc_convert(&mut machine, channel),
                 u32::from(count),
                 "firmware-visible ADC1 channel {channel} conversion remains stable"
             );
@@ -620,8 +645,9 @@ fn nucleo_f767zi_jfet_load_line_reaches_pa4_adc1_alongside_unrelated_devices() {
         assert_eq!(chip.analog_pins[pad].channel, channel);
     }
 
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
-    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+    let bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut machine = board_machine(bus);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &machine.bus)
         .expect("build analog co-simulation")
         .expect("fixture carries NTC, diode, NMOS, and JFET devices");
     assert_eq!(
@@ -648,7 +674,7 @@ fn nucleo_f767zi_jfet_load_line_reaches_pa4_adc1_alongside_unrelated_devices() {
             .expect("set generic JFET gate voltage");
         cycles += session.cycles_until_boundary(cycles);
         let (steps, errors) = session
-            .advance_to(cycles, &mut bus)
+            .advance_to(cycles, &mut machine.bus)
             .expect("solve and route NTC, diode, NMOS, and JFET netlists");
         assert_eq!(steps.len(), 4, "all devices solve at the 1 us boundary");
         assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
@@ -662,7 +688,7 @@ fn nucleo_f767zi_jfet_load_line_reaches_pa4_adc1_alongside_unrelated_devices() {
         for (channel, volts) in [(4, drain_v), (0, NTC_V), (1, diode_v), (3, mosfet_v)] {
             let expected_count = expected_adc_count(volts);
             assert_eq!(
-                stm32f4_adc_convert(&mut bus, channel),
+                stm32f4_adc_convert(&mut machine, channel),
                 u32::from(expected_count),
                 "firmware-visible ADC1 channel {channel} conversion follows its analog device"
             );

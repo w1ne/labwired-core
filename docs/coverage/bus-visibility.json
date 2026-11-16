@@ -33,6 +33,10 @@
   },
   {
     "buses": [],
+    "name": "atmega32u4"
+  },
+  {
+    "buses": [],
     "name": "atmega4809"
   },
   {
@@ -101,7 +105,19 @@
   },
   {
     "buses": [],
+    "name": "ch32v003a4m6"
+  },
+  {
+    "buses": [],
     "name": "ch32v003f4p6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v003f4u6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v003j4m6"
   },
   {
     "buses": [],
@@ -197,6 +213,10 @@
   {
     "buses": [],
     "name": "litex-vexriscv"
+  },
+  {
+    "buses": [],
+    "name": "mimxrt1062-teensy41"
   },
   {
     "buses": [],
@@ -357,6 +377,14 @@
   {
     "buses": [],
     "name": "same70q21b"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32c031c6"
   },
   {
     "buses": [
@@ -726,6 +754,14 @@
       "UART"
     ],
     "name": "stm32l073"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32l432kc"
   },
   {
     "buses": [

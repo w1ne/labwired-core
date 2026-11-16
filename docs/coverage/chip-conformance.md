@@ -99,7 +99,9 @@ This page covers the public models. For every chip we model — public and priva
 | stm32u545 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32u545_blinky_survival |
 | stm32u5a5zj | **L1** | ✓ | 45 | — | — | stm32u5_exec_oracle::u5a5_hash_saes_and_pka_execute_register_level_operations |
 | stm32h735 | **L1** | ✓ | 40 | — | — | firmware_survival::test_stm32h735_tier1_survival |
+| stm32c031c6 | **L0** | ✓ | 29 | — | — | — |
 | stm32l073 | **L2** | ✓ | 42 | 54/54 (100%) | 6 | firmware_survival::test_nucleo_l073rz_smoke_survival |
+| stm32l432kc | **L0** | ✓ | 42 | — | — | — |
 | stm32l476 | **L1** | ✓ | 58 | — | — | firmware_survival::test_nucleo_l476rg_demo_survival |
 | stm32wb55 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32wb55_zephyr_survival |
 | stm32wba52 | **L1** | ✓ | 21 | — | — | firmware_survival::test_stm32wba52_zephyr_survival |
@@ -110,6 +112,8 @@ This page covers the public models. For every chip we model — public and priva
 | atmega2560 | **L1** | ✓ | 15 | — | — | avr_mega2560_io::each_led_lands_on_its_mega_port_pin |
 | atmega2561 | **L1** | ✓ | 11 | — | — | avr_atmega2561::atmega2561_boots_and_prints |
 | atmega4809 | **L0** | ✓ | 19 | — | — | — |
+| atmega32u4 | **L0** | ✓ | 8 | — | — | — |
+| mimxrt1062-teensy41 | **L0** | ✓ | 50 | — | — | — |
 | atmega1281 | **L1** | ✓ | 11 | — | — | avr_atmega1281_firmware::atmega1281_compiled_firmware_prints_and_drives_pb5 |
 | atsamd21 | **L1** | ✓ | 7 | — | — | firmware_survival::test_atsamd21_nano33_smoke_survival |
 | atsamd51 | **L1** | ✓ | 27 | — | — | firmware_survival::test_atsamd51_metro_m4_smoke_survival |
@@ -130,6 +134,9 @@ This page covers the public models. For every chip we model — public and priva
 | pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
 | pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
 | ch32v003f4p6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
+| ch32v003f4u6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| ch32v003a4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| ch32v003j4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | esp32h2 | **L0** | ✓ | 3 | — | — | — |
 | esp32c5 | **L0** | ✓ | 1 | — | — | — |
 | esp32c61 | **L0** | ✓ | 1 | — | — | — |

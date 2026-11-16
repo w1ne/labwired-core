@@ -11,27 +11,16 @@ name: Core Arduino Matrix Smoke
 # about a run they can neither see nor stop. Pushes and manual dispatch are
 # untouched — a fork still gets this workflow on its own changes.
 on:
-  # Slow fleet: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
+  # CI cut O11: nightly + manual only. Push-to-main ran this on every merge
+  # touching crates/core or configs; nothing blocks on it, and the nightly run
+  # names the offending range. Not on PRs.
   schedule:
     - cron: "20 2 * * *"
-  push:
-    branches:
-      - main
-    paths:
-      - "validation/arduino-matrix/**"
-      - "validation/registry_dir.py"
-      - "scripts/ci/arduino_matrix_plan.py"
-      - "validation/matrix_lib/**"
-      - "configs/chips/**"
-      - "configs/systems/**"
-      - "crates/core/**"
-      - "crates/cli/**"
-      - ".github/workflows/core-arduino-matrix-smoke.yml"
   workflow_dispatch:
 
 concurrency:
   group: core-arduino-matrix-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Board list = one file per board under validation/arduino-matrix/boards/.
@@ -137,26 +126,48 @@ jobs:
             # stays on the 7.0.1 build it was green on.
             esp32c6)     platform=espressif32@8.0.0 ;;
             esp32*)      platform=espressif32@7.0.1 ;;
-            atmega328p|atmega2560) platform=atmelavr@5.3.0 ;;
+            # The Leonardo row was measured on the same pin (ArduinoCore-avr 5.4.0).
+            atmega328p|atmega2560|arduino-leonardo) platform=atmelavr@5.3.0 ;;
             # The Nano Every row was measured on atmelmegaavr 1.10.0
             # (ArduinoCore-megaavr 1.8.8).
             arduino-nano-every) platform=atmelmegaavr@1.10.0 ;;
             # The Zero row was measured on atmelsam 9.0.0 (ArduinoCore-samd).
             arduino-zero) platform=atmelsam@9.0.0 ;;
+            # The Teensy 4.1 row was measured on teensy 6.0.0 (Teensyduino 1.62).
+            teensy41)    platform=teensy@6.0.0 ;;
             *)
               echo "::error::no PlatformIO platform mapped for board '${{ matrix.board }}'"
               exit 1
               ;;
           esac
           echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          # Cache budget (10 GB per repo, shared with every Rust cache): the
+          # two single-board platforms below are 2.4 GB and 1.6 GB on their
+          # own (measured 2026-11-15) and are the reason the cargo caches
+          # PRs restore kept being evicted. They are not cached; they
+          # download on each run. Every other platform is <= 1.0 GB.
+          case "$platform" in
+            espressif32@8.0.0|https://*) echo "cache_pio=false" >> "$GITHUB_OUTPUT" ;;
+            *)                           echo "cache_pio=true"  >> "$GITHUB_OUTPUT" ;;
+          esac
+          # One key per platform per month: stable between board-file edits
+          # (the old key hashed boards/*.yaml, so every edit minted a new
+          # multi-GB entry), refreshed monthly so a floating platform does not
+          # go stale forever.
+          echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
           echo "board ${{ matrix.board }} -> platform $platform"
 
-      - name: Cache PlatformIO packages
-        uses: actions/cache@v4
+      # Restore everywhere; save only from a non-PR run (below). The previous
+      # single `actions/cache` step saved only when the whole job succeeded,
+      # and this lane fails on every push, so it never saved at all.
+      - name: Restore PlatformIO packages
+        id: pio-cache
+        if: steps.pio.outputs.cache_pio == 'true'
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.platformio
-          key: pio-${{ steps.pio.outputs.platform }}-${{ hashFiles('validation/arduino-matrix/boards/*.yaml') }}
+          key: pio-${{ steps.pio.outputs.platform }}-${{ steps.pio.outputs.month }}
           restore-keys: |
             pio-${{ steps.pio.outputs.platform }}-
 
@@ -178,6 +189,14 @@ jobs:
             --boards "${{ matrix.board }}" \
             --sketches L0_serial_boot,L1_serial_loop,L2_blink_serial,L3_i2c_sensor,L4_spi_sensor,L5_adc,L6_pwm,L7_timer,L8_can \
             --out "$OUT"
+
+      - name: Save PlatformIO packages
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.pio.outputs.cache_pio == 'true' && steps.pio-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.platformio
+          key: ${{ steps.pio-cache.outputs.cache-primary-key }}
 
       - name: Upload board artifacts
         if: always()

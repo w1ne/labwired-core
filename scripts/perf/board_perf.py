@@ -334,6 +334,21 @@ FIXTURES = {
 # their own chip config and get their own baseline. A generic CPU-only smoke
 # fixture must not stand in for an unimplemented board platform.
 WAIVED: dict[str, str] = {
+    "ch32v003a4m6": (
+        "Package variant of the ch32v003f4p6 die (RV32EC); same waiver: CI "
+        "has no RV32E-specific perf-spin fixture or compiler. No throughput "
+        "claim is made for this part yet."
+    ),
+    "ch32v003f4u6": (
+        "Package variant of the ch32v003f4p6 die (RV32EC); same waiver: CI "
+        "has no RV32E-specific perf-spin fixture or compiler. No throughput "
+        "claim is made for this part yet."
+    ),
+    "ch32v003j4m6": (
+        "Package variant of the ch32v003f4p6 die (RV32EC); same waiver: CI "
+        "has no RV32E-specific perf-spin fixture or compiler. No throughput "
+        "claim is made for this part yet."
+    ),
     "ch32v003f4p6": (
         "The CH32V003 model uses RV32EC, but CI has no RV32E-specific perf-spin "
         "fixture or compiler. Reusing the RV32IMC fixture could execute "
@@ -365,6 +380,14 @@ WAIVED: dict[str, str] = {
         "-mmcu=atmega328p for RAM at 0x100 and the ATmega4809 has its flash "
         "mapped at 0x8000 and SRAM at 0x2800, so no representative spin build "
         "of it exists yet. No separate throughput claim is made."
+    ),
+    "mimxrt1062-teensy41": (
+        "Boots from the 8 MB FlexSPI NOR at 0x60000000 behind an FCB and an "
+        "Image Vector Table, with the simulator entering the IVT's entry "
+        "address. The imxrt perf-spin fixture is a RAM image linked at "
+        "0x20000000 (the imxrt1064 map), so it does not exercise this "
+        "chip's boot path, and no NOR-linked spin is built. No separate "
+        "throughput claim is made for the Teensy 4.1 profile."
     ),
     "atmega2561": (
         "Runs on the same AVR interpreter as atmega328p (AvrModel::Atmega2560: "
