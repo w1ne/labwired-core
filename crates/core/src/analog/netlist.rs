@@ -6,10 +6,13 @@
 //!
 //! The subset is deliberately small, because everything in it has to stay
 //! deterministic in the browser with no dependencies. Unsupported elements
-//! and circuit constructs such as model libraries (`.include`, `.lib`), and AC/DC
-//! sweeps are not approximated or silently dropped: they are a hard error that
-//! names the line and points at the ngspice adapter, which supports a much
-//! larger SPICE subset.
+//! and circuit constructs such as AC/DC sweeps are not approximated or
+//! silently dropped: they are a hard error that names the line and points at
+//! the ngspice adapter, which supports a much larger SPICE subset.
+//!
+//! Model libraries (`.include <file>`, `.lib <file> <section>`) are read by
+//! [`parse_netlist_with_files`], which the co-simulation adapter uses with
+//! the manifest's directory; [`parse_netlist`] has no files and refuses them.
 //!
 //! A line starting with `+` continues the previous line, with comment lines
 //! between them skipped, so a vendor model card split over many lines reads
@@ -293,6 +296,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::path::{Path, PathBuf};
 
 /// A node reference: `None` is ground, `Some(i)` indexes [`Circuit::node_name`].
 pub type NodeRef = Option<usize>;
@@ -3279,6 +3283,204 @@ fn logical_lines(text: &str) -> Result<Vec<LogicalLine>, AnalogError> {
     Ok(lines)
 }
 
+/// How deep `.include` and `.lib` calls may nest before the deck is refused.
+const MAX_INCLUDE_DEPTH: usize = 16;
+
+/// The file argument of a `.include` or `.lib` line, quotes removed.
+fn unquote(raw: &str) -> &str {
+    for quote in ['"', '\''] {
+        if let Some(inner) = raw.strip_prefix(quote).and_then(|r| r.strip_suffix(quote)) {
+            return inner;
+        }
+    }
+    raw
+}
+
+/// Splices `.include <file>` and `.lib <file> <section>` into the deck.
+struct IncludeExpander<'r> {
+    read: &'r mut dyn FnMut(&Path) -> Result<String, String>,
+    /// Files being expanded, outermost first, for the cycle check.
+    stack: Vec<PathBuf>,
+}
+
+impl IncludeExpander<'_> {
+    /// Expand every call in `lines`, which were read from a file in `dir`.
+    ///
+    /// `top` is the line of the outermost call when `lines` came from an
+    /// included file: every line spliced in carries it, so an error inside a
+    /// library points at the deck line that pulled the library in, and the
+    /// message names the file and its own line.
+    fn expand(
+        &mut self,
+        lines: Vec<LogicalLine>,
+        dir: &Path,
+        top: Option<usize>,
+    ) -> Result<Vec<LogicalLine>, AnalogError> {
+        let mut out = Vec::with_capacity(lines.len());
+        let mut in_control = false;
+        for line in lines {
+            let number = top.unwrap_or(line.number);
+            let directive = directive_of(&line.text);
+            if in_control {
+                in_control = directive.as_deref() != Some("endc");
+                out.push(LogicalLine { number, ..line });
+                continue;
+            }
+            let tokens: Vec<&str> = line.text.split_whitespace().collect();
+            let ctx = LineCtx {
+                number,
+                text: &line.text,
+            };
+            match directive.as_deref() {
+                Some("control") => in_control = true,
+                Some("include") => {
+                    let [_, file] = tokens[..] else {
+                        return Err(ctx.parse_err("expected `.include <file>`"));
+                    };
+                    let (path, text) = self.load(&ctx, dir, file)?;
+                    let spliced = self.file_lines(&ctx, &path, &text, None)?;
+                    out.extend(spliced);
+                    self.stack.pop();
+                    continue;
+                }
+                // `.lib <file> <section>` calls a section. A one-token `.lib`
+                // opens a section definition, which only a library file read
+                // through a call may hold; elsewhere it stays unsupported.
+                Some("lib") if tokens.len() == 3 => {
+                    let (path, text) = self.load(&ctx, dir, tokens[1])?;
+                    let spliced = self.file_lines(&ctx, &path, &text, Some(tokens[2]))?;
+                    out.extend(spliced);
+                    self.stack.pop();
+                    continue;
+                }
+                Some("end") if top.is_some() => {
+                    // ngspice drops a `.end` inside an included file and keeps
+                    // reading the lines after it.
+                    continue;
+                }
+                _ => {}
+            }
+            out.push(LogicalLine { number, ..line });
+        }
+        Ok(out)
+    }
+
+    /// Resolve `file` against `dir`, refuse a cycle, read it and push it on
+    /// the stack. The caller pops it once its lines are spliced.
+    fn load(
+        &mut self,
+        ctx: &LineCtx<'_>,
+        dir: &Path,
+        file: &str,
+    ) -> Result<(PathBuf, String), AnalogError> {
+        let file = unquote(file);
+        let path = dir.join(file);
+        if self.stack.contains(&path) {
+            return Err(ctx.parse_err(format!(
+                "`{}` includes itself through {}",
+                path.display(),
+                self.stack
+                    .iter()
+                    .map(|p| format!("`{}`", p.display()))
+                    .collect::<Vec<_>>()
+                    .join(" -> ")
+            )));
+        }
+        if self.stack.len() >= MAX_INCLUDE_DEPTH {
+            return Err(ctx.parse_err(format!(
+                "`.include`/`.lib` calls nest deeper than {MAX_INCLUDE_DEPTH} files"
+            )));
+        }
+        let text = (self.read)(&path)
+            .map_err(|err| ctx.parse_err(format!("cannot read `{}`: {err}", path.display())))?;
+        self.stack.push(path.clone());
+        Ok((path, text))
+    }
+
+    /// The expanded lines of a file read for the call on `ctx`: all of it for
+    /// `.include`, one section's body for `.lib`.
+    fn file_lines(
+        &mut self,
+        ctx: &LineCtx<'_>,
+        path: &Path,
+        text: &str,
+        section: Option<&str>,
+    ) -> Result<Vec<LogicalLine>, AnalogError> {
+        let in_file = |err: AnalogError| match err {
+            AnalogError::Parse {
+                line,
+                text,
+                message,
+            } => ctx.parse_err(format!("{}:{line}: `{text}`: {message}", path.display())),
+            other => other,
+        };
+        let lines = logical_lines(text).map_err(in_file)?;
+        let lines = match section {
+            None => lines,
+            Some(section) => self.section(ctx, path, lines, section)?,
+        };
+        let dir = path.parent().unwrap_or(Path::new(""));
+        self.expand(lines, dir, Some(ctx.number))
+    }
+
+    /// The body of `.lib <section>` … `.endl` in a library file.
+    fn section(
+        &self,
+        ctx: &LineCtx<'_>,
+        path: &Path,
+        lines: Vec<LogicalLine>,
+        wanted: &str,
+    ) -> Result<Vec<LogicalLine>, AnalogError> {
+        let mut body = None;
+        let mut open: Option<(String, Vec<LogicalLine>)> = None;
+        for line in lines {
+            let tokens: Vec<&str> = line.text.split_whitespace().collect();
+            match directive_of(&line.text).as_deref() {
+                Some("lib") if tokens.len() == 2 => {
+                    if let Some((name, _)) = &open {
+                        return Err(ctx.parse_err(format!(
+                            "{}:{}: section `{}` opens inside section `{name}`",
+                            path.display(),
+                            line.number,
+                            tokens[1]
+                        )));
+                    }
+                    open = Some((tokens[1].to_string(), Vec::new()));
+                }
+                Some("endl") => {
+                    let Some((name, lines)) = open.take() else {
+                        return Err(ctx.parse_err(format!(
+                            "{}:{}: `.endl` closes no section",
+                            path.display(),
+                            line.number
+                        )));
+                    };
+                    if name.eq_ignore_ascii_case(wanted) && body.is_none() {
+                        body = Some(lines);
+                    }
+                }
+                _ => {
+                    if let Some((_, lines)) = &mut open {
+                        lines.push(line);
+                    }
+                }
+            }
+        }
+        if let Some((name, _)) = open {
+            return Err(ctx.parse_err(format!(
+                "{}: section `{name}` has no `.endl`",
+                path.display()
+            )));
+        }
+        body.ok_or_else(|| {
+            ctx.parse_err(format!(
+                "library `{}` has no section `{wanted}`",
+                path.display()
+            ))
+        })
+    }
+}
+
 /// A `.subckt` definition: its ports and its body, `.model` cards excluded.
 struct SubcircuitDef {
     /// Name as written.
@@ -3923,7 +4125,42 @@ fn circuit_temperatures(lines: &[LogicalLine]) -> Result<CircuitTemperatures, An
 }
 
 /// Parse a netlist into a [`Circuit`].
+///
+/// `.include` and `.lib` are refused here, because there is no file to read
+/// them from; [`parse_netlist_with_files`] reads them.
 pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
+    parse_lines(logical_lines(text)?)
+}
+
+/// Parse a netlist whose `.include <file>` and `.lib <file> <section>` lines
+/// are read through `read`.
+///
+/// A relative path resolves against the directory of the file that names it,
+/// and against `base_dir` for the deck itself, as ngspice does. `.include`
+/// splices the whole file; `.lib` splices the body of its `.lib <section>`
+/// … `.endl` block (the name is not case-sensitive), and a missing section is
+/// an error. Calls nest, a `.end` inside an included file is dropped as
+/// ngspice drops it, and a file that includes itself is refused. Every line
+/// spliced in carries the line number of the deck's own call; an error inside
+/// a library names the file and its line in the message.
+///
+/// `read` gets the resolved path. The co-simulation adapter passes
+/// `std::fs::read_to_string`; a caller with no file system can serve the
+/// files from memory.
+pub fn parse_netlist_with_files(
+    text: &str,
+    base_dir: &Path,
+    read: &mut dyn FnMut(&Path) -> Result<String, String>,
+) -> Result<Circuit, AnalogError> {
+    let mut expander = IncludeExpander {
+        read,
+        stack: Vec::new(),
+    };
+    let lines = expander.expand(logical_lines(text)?, base_dir, None)?;
+    parse_lines(lines)
+}
+
+fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
     let mut circuit = Circuit::default();
     let mut ended = false;
     let mut models: BTreeMap<String, ModelCard> = BTreeMap::new();
@@ -3936,7 +4173,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     // Every `.model` name in the deck, wherever it is written. A `Q` line's
     // fourth token is the substrate node unless it names a model, which is
     // how ngspice's `inp2q.c` tells `Q c b e s mod` from `Q c b e mod`.
-    let lines = expand_subcircuits(logical_lines(text)?)?;
+    let lines = expand_subcircuits(lines)?;
     let temperatures = circuit_temperatures(&lines)?;
     let circuit_temperature = temperatures.temperature;
     let declared_models: Vec<String> = lines
