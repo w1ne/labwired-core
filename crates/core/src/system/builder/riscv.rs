@@ -143,7 +143,11 @@ fn build_program_image(
     let boxed: Box<dyn Cpu> = if crate::cpu::riscv64::is_rv64_chip(chip) {
         Box::new(crate::cpu::RiscV64::for_chip(chip))
     } else {
-        Box::new(crate::system::riscv::configure_riscv(&mut bus))
+        let mut cpu = crate::system::riscv::configure_riscv(&mut bus);
+        if crate::boot::esp32c2_rom::is_esp32c2(chip) {
+            crate::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
+        }
+        Box::new(cpu)
     };
     let mut machine = Machine::new(boxed, bus);
 
@@ -157,9 +161,11 @@ fn build_program_image(
     if esp32c6_rom::is_esp32c6(chip) {
         esp32c6_rom::seed_rom_data(&mut machine.bus);
     }
-    // C2 fast-boot: replay the ROM's own `_rom_store_table` unpack.
+    // C2 fast-boot: replay the ROM's own `_rom_store_table` unpack and arm
+    // interrupt routing through the matrix.
     if crate::boot::esp32c2_rom::is_esp32c2(chip) {
         crate::boot::esp32c2_rom::seed_rom_data(&mut machine.bus);
+        crate::boot::esp32c2_rom::arm_interrupt_matrix(&mut machine.bus);
     }
 
     // C6: stay below ROM-reserved HP SRAM (see esp32c6_rom::APP_SRAM_END).

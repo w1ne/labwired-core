@@ -568,7 +568,10 @@ fn build_riscv_node(
             }
             // C6 Arduino Preferences/NVS substrate (SPI_MEM + partitions @ 0x8000).
             crate::boot::esp32c6_rom::maybe_install_arduino_flash(&mut bus, chip);
-            let cpu = crate::system::riscv::configure_riscv(&mut bus);
+            let mut cpu = crate::system::riscv::configure_riscv(&mut bus);
+            if crate::boot::esp32c2_rom::is_esp32c2(chip) {
+                crate::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
+            }
             let mut machine = Machine::new(cpu, bus);
             machine
                 .load_firmware(&image)
@@ -579,6 +582,7 @@ fn build_riscv_node(
             }
             if crate::boot::esp32c2_rom::is_esp32c2(chip) {
                 crate::boot::esp32c2_rom::seed_rom_data(&mut machine.bus);
+                crate::boot::esp32c2_rom::arm_interrupt_matrix(&mut machine.bus);
             }
             // Fast boot skips the ROM/2nd-stage bootloader that would normally
             // set the stack pointer, so seed it at the top of app SRAM (16-byte

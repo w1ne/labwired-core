@@ -241,6 +241,19 @@ impl SystemBus {
             .peek_u32_raw(offset)
     }
 
+    /// Store `value` into a declarative peripheral's backing word at `offset`
+    /// for a hardware-side status latch (see `GenericPeripheral::poke_u32_raw`).
+    /// No-op when `idx` is not a declarative peripheral.
+    pub(crate) fn poke_cached_declarative_u32(&self, idx: usize, offset: u64, value: u32) {
+        if let Some(generic) = self.peripherals.get(idx).and_then(|p| {
+            p.dev.as_any().and_then(|a| {
+                a.downcast_ref::<crate::peripherals::declarative::GenericPeripheral>()
+            })
+        }) {
+            generic.poke_u32_raw(offset, value);
+        }
+    }
+
     /// Phase 2B.1 (issue #192): pend an NVIC IRQ on behalf of an event
     /// handler. Mirrors the per-tick `pend_nvic` path but collects
     /// non-NVIC fallthroughs into the supplied vector for the caller to
@@ -1254,12 +1267,44 @@ impl SystemBus {
             }
         }
         let mut pending = cache.from_cpu_pending;
+        let mut status = [0u32; 2];
         while pending != 0 {
             let slot = pending.trailing_zeros();
             route_source(from_cpu_source_base + slot);
+            let src = (from_cpu_source_base + slot) as usize;
+            if let Some(word) = status.get_mut(src / 32) {
+                *word |= 1 << (src % 32);
+            }
             pending &= !(1 << slot);
         }
         self.irq_fabric.esp32c3.irq_lines = mask;
+
+        // INTR_STATUS_REG_0/1 (single-bank layout only): the raw level of
+        // every asserted source, routed or not. esp-hal reads it in the
+        // CPU-line handler to pick the source handler, and
+        // `SoftwareInterrupt::raise` polls it until the doorbell is visible.
+        if self.irq_fabric.esp32c3.intpri_idx.is_some() {
+            return;
+        }
+        let (Some(int_idx), Some(ctrl)) = (
+            self.irq_fabric.esp32c3.interrupt_core0_idx,
+            self.irq_fabric.esp32c3.intc.as_ref().map(|c| c.ctrl),
+        ) else {
+            return;
+        };
+        let fabric = &self.irq_fabric.esp32c3;
+        // Both parts number their sources below 64, so word 0 of each bitmap
+        // covers INTR_STATUS_REG_0 and _1.
+        let levels = fabric.walk_sources[0] | fabric.sched_sources[0] | pms_sources[0];
+        for (i, word) in status.iter_mut().enumerate() {
+            *word |= (levels >> (32 * i)) as u32;
+        }
+        if status != self.irq_fabric.esp32c3.intr_status {
+            self.irq_fabric.esp32c3.intr_status = status;
+            for (i, word) in status.iter().enumerate() {
+                self.poke_cached_declarative_u32(int_idx, ctrl.status0 + 4 * i as u64, *word);
+            }
+        }
     }
 
     /// Re-derive the C3 matrix sources asserted by SCHEDULER-driven peripherals

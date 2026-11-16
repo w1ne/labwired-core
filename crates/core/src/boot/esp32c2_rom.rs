@@ -71,6 +71,33 @@ pub fn seed_rom_data(bus: &mut SystemBus) -> usize {
     copied
 }
 
+/// Route interrupts through the C2 `INTERRUPT_CORE0` matrix: asserted
+/// peripheral sources and the SYSTEM `FROM_CPU_INTR_n` doorbells reach the
+/// CPU lines, and `INTR_STATUS_REG_0/1` mirror the source levels. The C3
+/// arms the same fabric on its ROM-boot path; the C2 has only this fast boot,
+/// so it arms it here. The control offsets come from the chip's
+/// `interrupt_core0.yaml` (see `bus::MatrixCtrlOffsets`).
+pub fn arm_interrupt_matrix(bus: &mut SystemBus) {
+    bus.irq_fabric.esp32c3.routing = true;
+    bus.refresh_peripheral_index();
+}
+
+/// `mstatus.MIE`.
+const MSTATUS_MIE: u32 = 1 << 3;
+
+/// Give the app the CPU state the C2 ROM and 2nd-stage bootloader hand over.
+///
+/// * `mstatus.MIE` set. The ROM enables interrupts through `ets_intr_unlock`
+///   (`csrrsi mstatus, 8` at 0x4005_B0AE in `esp32c2_rev200_rom.elf`), and
+///   esp-hal 1.2 never sets MIE from zero: its critical sections only restore
+///   the previous state. With MIE clear no `#[handler]` ever runs.
+/// * `mtimecmp` parked. The C2, like the C3, has no CLINT timer; line 7 is a
+///   matrix line, so the model's default `mtimecmp = 0` must not pend MTIP.
+pub fn prepare_fast_boot_cpu(cpu: &mut crate::cpu::RiscV) {
+    cpu.mstatus |= MSTATUS_MIE;
+    cpu.mtimecmp = u64::MAX;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

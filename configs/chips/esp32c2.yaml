@@ -21,9 +21,11 @@
 # is replayed at fast boot (crates/core/src/boot/esp32c2_rom.rs); the ROM
 # boot itself is not run. SYSTEM, RTC_CNTL, EFUSE, interrupt matrix, cache
 # and MSPI blocks are declarative register files from the C2 SVD (store and
-# read back, no behaviour). Not modelled: IO_MUX pad routing (C2 pad offsets
-# differ from C3 above GPIO18: U0RXD/U0TXD are GPIO19/GPIO20 at
-# +0x50/+0x54), interrupt delivery through the matrix, clock trees, I2C,
+# read back, no behaviour). The interrupt matrix routes: the bus reads the
+# CPU_INT_* control offsets from interrupt_core0.yaml by register ID and
+# mirrors source levels into INTR_STATUS_REG_0/1. Not modelled: IO_MUX pad
+# routing (C2 pad offsets differ from C3 above GPIO18: U0RXD/U0TXD are
+# GPIO19/GPIO20 at +0x50/+0x54), edge-type CPU lines, clock trees, I2C,
 # SPI, LEDC, ADC, GDMA, crypto, Wi-Fi and Bluetooth LE.
 name: "esp32c2"
 arch: "riscv"
@@ -97,6 +99,7 @@ peripherals:
   # GPIO18..20 (14 GPIO), and GPIO11..17 are the in-package flash pins.
   - id: "gpio"
     type: "esp32c3_gpio"
+    irq: 13 # ETS_GPIO_INTR_SOURCE (C2; GPIO_INTERRUPT_PRO_MAP at +0x34)
     base_address: 0x60004000
     size: "4KB"
     config:
@@ -106,6 +109,7 @@ peripherals:
   # DR_REG_TIMERGROUP1_BASE).
   - id: "systimer"
     type: "esp32c3_systimer"
+    irq: 26 # ETS_SYSTIMER_TARGET0_EDGE_INTR_SOURCE (C2; TARGET1/2 = 27/28)
     base_address: 0x60023000
     config:
       path: "../peripherals/esp32c3/systimer.yaml"

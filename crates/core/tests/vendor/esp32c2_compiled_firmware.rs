@@ -200,3 +200,127 @@ fn esp32c2_esp_hal_without_rom_data_unpack_jumps_through_a_null_table() {
     assert_eq!(error, "MemoryViolation(4294967294)");
     assert_eq!(run.uart, "");
 }
+
+#[test]
+fn esp32c2_matrix_control_offsets_come_from_the_register_descriptor() {
+    // The C2 bank has 43 MAPs (0x00..0xA8), so its controls sit lower than
+    // the C3's. The C2 mask ROM's own `_interrupt_handler` reads
+    // CPU_INT_THRESH at 0x600C_2148 and CPU_INT_PRI_n at 0x600C_20C8 + 4n.
+    use labwired_config::PeripheralDescriptor;
+    use labwired_core::bus::MatrixCtrlOffsets;
+    let bank = |chip: &str| {
+        PeripheralDescriptor::from_file(
+            root().join(format!("configs/peripherals/{chip}/interrupt_core0.yaml")),
+        )
+        .expect("interrupt_core0 descriptor")
+    };
+    let c2 = MatrixCtrlOffsets::from_descriptor(&bank("esp32c2"));
+    assert_eq!(
+        c2,
+        MatrixCtrlOffsets {
+            enable: 0xB8,
+            pri0: 0xC8,
+            thresh: 0x148,
+            status0: 0xAC,
+            from_cpu_source: 36,
+        }
+    );
+    // The C3 descriptor yields the offsets the bus used before this change.
+    assert_eq!(
+        MatrixCtrlOffsets::from_descriptor(&bank("esp32c3")),
+        MatrixCtrlOffsets::default()
+    );
+}
+
+#[test]
+fn esp32c2_from_cpu_doorbell_reaches_its_cpu_line_and_intr_status() {
+    // Register level: map FROM_CPU_INTR0 (source 36) to CPU line 5 at
+    // priority 1, ring the SYSTEM doorbell, and read the routed line and the
+    // INTR_STATUS_REG_1 mirror (source 36 = word 1, bit 4).
+    const MATRIX: u64 = 0x600C_2000;
+    const DOORBELL0: u64 = 0x600C_0028;
+    let chip = descriptor();
+    let mut bus =
+        SystemBus::from_config(&chip, &SystemManifest::default()).expect("ESP32-C2 peripherals");
+    labwired_core::boot::esp32c2_rom::arm_interrupt_matrix(&mut bus);
+    bus.write_u32(MATRIX + 36 * 4, 5).unwrap();
+    bus.write_u32(MATRIX + 0xC8 + 5 * 4, 1).unwrap();
+    bus.write_u32(MATRIX + 0x148, 1).unwrap();
+    bus.write_u32(MATRIX + 0xB8, 1 << 5).unwrap();
+    assert_eq!(bus.irq_fabric.esp32c3.irq_lines, 0);
+    assert_eq!(bus.read_u32(MATRIX + 0xB0).unwrap(), 0);
+
+    bus.write_u32(DOORBELL0, 1).unwrap();
+    assert_eq!(bus.irq_fabric.esp32c3.irq_lines, 1 << 5);
+    assert_eq!(bus.read_u32(MATRIX + 0xB0).unwrap(), 1 << 4);
+
+    // Threshold above the line's priority masks the line, not the status.
+    bus.write_u32(MATRIX + 0x148, 2).unwrap();
+    assert_eq!(bus.irq_fabric.esp32c3.irq_lines, 0);
+    assert_eq!(bus.read_u32(MATRIX + 0xB0).unwrap(), 1 << 4);
+
+    bus.write_u32(DOORBELL0, 0).unwrap();
+    assert_eq!(bus.read_u32(MATRIX + 0xB0).unwrap(), 0);
+}
+
+const ESP_HAL_IRQ_FIXTURE: &str = "tests/fixtures/esp32c2-esp-hal-irq.elf";
+
+/// Runs the esp-hal interrupt fixture (examples/esp32c2/esp-hal-irq) with the
+/// C2 fast-boot CPU state and ROM unpack, with or without the interrupt matrix
+/// armed. Returns the UART0 text once the app prints its verdict or `steps`
+/// run out.
+fn run_esp_hal_irq(arm_matrix: bool, steps: usize) -> String {
+    let chip = descriptor();
+    let mut bus =
+        SystemBus::from_config(&chip, &SystemManifest::default()).expect("ESP32-C2 peripherals");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    let image =
+        labwired_loader::load_elf(&root().join(ESP_HAL_IRQ_FIXTURE)).expect("esp-hal irq ELF");
+    let mut cpu = configure_riscv(&mut bus);
+    labwired_core::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load esp-hal irq ELF");
+    labwired_core::boot::esp32c2_rom::seed_rom_data(&mut machine.bus);
+    if arm_matrix {
+        labwired_core::boot::esp32c2_rom::arm_interrupt_matrix(&mut machine.bus);
+    }
+    let uart = || String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    for chunk in 0..steps / 10_000 {
+        for _ in 0..10_000 {
+            machine
+                .step()
+                .unwrap_or_else(|e| panic!("step {chunk}: {e:?}; UART {:?}", uart()));
+        }
+        let text = uart();
+        if text.contains("LW-C2 irq PASS") || text.contains("LW-C2 irq FAIL") {
+            return text;
+        }
+    }
+    uart()
+}
+
+#[test]
+fn esp32c2_esp_hal_software_interrupt_and_systimer_alarm_handlers_run() {
+    // Three FROM_CPU raises run the handler three times; a 1 ms periodic
+    // SYSTIMER alarm fires 4..6 times during a 5 ms delay (5 measured).
+    let uart = run_esp_hal_irq(true, 4_000_000);
+    assert!(uart.contains("LW-C2 swi hits 3\n"), "{uart:?}");
+    let alarms: u32 = uart
+        .lines()
+        .find_map(|l| l.strip_prefix("LW-C2 alarm hits "))
+        .expect("alarm count line")
+        .parse()
+        .expect("alarm count");
+    assert!((4..=6).contains(&alarms), "{alarms} alarm handler runs");
+    assert!(uart.contains("LW-C2 irq PASS"), "{uart:?}");
+}
+
+#[test]
+fn esp32c2_esp_hal_raise_without_matrix_routing_never_returns() {
+    // Negative control: with the matrix not armed nothing mirrors the
+    // doorbell into INTR_STATUS, so `SoftwareInterrupt::raise` spins on its
+    // pending check and the app never gets past the boot line.
+    let uart = run_esp_hal_irq(false, 2_000_000);
+    assert_eq!(uart, "LW-C2 irq boot\n");
+}

@@ -66,7 +66,7 @@ pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
 pub(crate) use ina219_circuit::CircuitIna219Lookup;
 pub use interrupt_fabric::{
     Esp32c3Fabric, Esp32c3IntcCache, Esp32s3Fabric, Esp32s3IrqAudit, Esp32s3IrqDivergence,
-    InterruptFabric,
+    InterruptFabric, MatrixCtrlOffsets,
 };
 pub use memory_policy::{CpuWritePolicy, MemoryPolicyReport, RegionPolicyStats, RegionViolation};
 pub(crate) use motors::CircuitMotorLookup;

@@ -1974,7 +1974,7 @@ pub(crate) fn run_test(
     let rom_boot_path =
         args.rom_boot || args.capture_app_entry.is_some() || args.resume_snapshot.is_some();
     if !rom_boot_path {
-        let is_c3 = system_path.as_ref().and_then(|sys_path| {
+        let fast_boot_chip = system_path.as_ref().and_then(|sys_path| {
             labwired_config::SystemManifest::from_file(sys_path)
                 .ok()
                 .and_then(|m| {
@@ -1987,16 +1987,24 @@ pub(crate) fn run_test(
                         &crate::plugin_chip_yaml(plugins),
                     )
                     .ok()
-                    .map(|c| c.name == "esp32c3")
+                    .map(|c| c.name)
                 })
         });
-        if is_c3 == Some(true) {
+        if fast_boot_chip.as_deref() == Some("esp32c3") {
             // SPIMEM / ANA I2C / cache / SYSTIMER / SAR / RMT / MMU+XIP /
             // irq routing — see esp32_boot_state::install_esp32c3_fast_boot.
             super::esp32_boot_state::install_esp32c3_fast_boot(
                 &mut bus,
                 std::path::Path::new(&firmware_path),
             );
+        }
+        // ESP32-C2: interrupt routing through the matrix, as the shared
+        // builder's fast boot arms it (`boot::esp32c2_rom`).
+        if fast_boot_chip
+            .as_deref()
+            .is_some_and(|name| name.eq_ignore_ascii_case("esp32c2"))
+        {
+            labwired_core::boot::esp32c2_rom::arm_interrupt_matrix(&mut bus);
         }
         // ESP32-C6: SPI_MEM + partition seed + ROM .data pointers (CLI RISC-V
         // path does not go through builder/riscv.rs).
@@ -2876,6 +2884,13 @@ pub(crate) fn run_test(
                 // yield via FROM_CPU — same disable as rom-boot.
                 if bus.irq_fabric.esp32c3.routing {
                     cpu.mtimecmp = u64::MAX;
+                }
+                if resolved_system
+                    .as_ref()
+                    .and_then(|s| s.chip_with_plugins(&crate::plugin_chip_yaml(plugins)).ok())
+                    .is_some_and(|chip| labwired_core::boot::esp32c2_rom::is_esp32c2(&chip))
+                {
+                    labwired_core::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
                 }
                 setup_and_run!(cpu)
             }

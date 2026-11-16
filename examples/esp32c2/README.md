@@ -28,14 +28,35 @@ RISCV_CC=/path/to/riscv32-esp-elf-gcc examples/esp32c2/build.sh
 
 This writes `tests/fixtures/esp32c2-smoke.elf`.
 
+## esp-hal examples
+
+Two esp-hal 1.2 applications run on the same descriptor, on the vendored mask
+ROM (the fast boot replays the ROM `.data` unpack):
+
+| Example | Smoke | What it shows |
+| :--- | :--- | :--- |
+| `esp-hal/` | `esp-hal-smoke.yaml` | `esp_hal::init`, UART0 console, GPIO8 output, `Delay` on SYSTIMER |
+| `esp-hal-irq/` | `esp-hal-irq-smoke.yaml` | `#[handler]` for a FROM_CPU software interrupt and a 1 ms SYSTIMER alarm |
+
+```sh
+labwired test --script examples/esp32c2/esp-hal-irq-smoke.yaml
+```
+
+Run the CLI from the repository root: the default ROM path resolves from
+the working directory. Build notes are next to each fixture in
+`tests/fixtures/`.
+
 ## Scope
 
 The descriptor reuses the ESP32-C3 UART, GPIO, SYSTIMER and TIMG engines.
 Their esp-idf v5.3 register headers (`uart_reg.h`, `gpio_reg.h`,
-`systimer_reg.h`, `timer_group_reg.h`) are offset-identical between C2 and C3.
-Not modelled: mask ROM contents and ROM boot (so stock ESP-IDF or
-Arduino images do not run), IO_MUX, the interrupt matrix, SYSTEM/RTC
-clocking, I2C, SPI, LEDC, ADC, GDMA, crypto, Wi-Fi and Bluetooth LE.
+`systimer_reg.h`, `timer_group_reg.h`) are offset-identical between C2 and C3;
+the C2 interrupt source numbers are set with `irq:` in the descriptor. The
+interrupt matrix routes sources to CPU lines with the C2 control offsets,
+read from `configs/peripherals/esp32c2/interrupt_core0.yaml`.
+Not modelled: ROM boot of a flash image (so stock ESP-IDF or Arduino images
+do not run), IO_MUX, edge-type CPU lines, SYSTEM/RTC clocking, I2C, SPI,
+LEDC, ADC, GDMA, crypto, Wi-Fi and Bluetooth LE.
 
 PR-gated test: `cargo test -p labwired-core --test vendor esp32c2_compiled_firmware::`.
 This is local simulator evidence. It is not hosted `model_verified` and not
