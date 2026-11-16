@@ -746,8 +746,12 @@ The in-core engine supports the linear elements, switches, and diode, BJT,
 level-1 JFET and level-1 MOSFET models listed above. Its semiconductor models
 have the limitations
 described in [Semiconductor models](#semiconductor-models), including omitted
-device charge terms and temperature effects. Subcircuits, `.include` / `.lib`
-device libraries, other MOSFET or JFET levels, other JFET `B` values, and AC/DC sweeps are not supported by
+device charge terms and temperature effects. `+` continuation lines and
+`.subckt` definitions built from those primitives are supported: each call is
+flattened with ngspice's names (`R.X1.R1`, node `X1.mid`), and a `.model`
+inside a body is local to it. Parameterised subcircuits (`params:`), nested
+`.subckt` definitions, `.include` / `.lib` device libraries, other MOSFET or
+JFET levels, other JFET `B` values, and AC/DC sweeps are not supported by
 the in-core engine. Unsupported netlist constructs fail validation with guidance
 to use the native ngspice adapter.
 

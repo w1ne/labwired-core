@@ -260,7 +260,7 @@ S1 a b sense+ sense- vt=3.75 vh=3.25 invert=1 ron=0.1 roff=1meg
         // `D`, `Q`, `M` and `J` used to be on this list and are now in the subset,
         // and so are the four LINEAR controlled sources and an `X` whose model
         // is an OPAMP/COMP card. What is left is what still has no in-core
-        // term: a subcircuit needs a flattener, a model library needs a file
+        // term: a call to a subcircuit the deck never defines, a model library needs a file
         // loader, a MESFET and a POLY/VALUE controlled source need equations
         // nobody has written here.
         for line in [
@@ -1308,7 +1308,8 @@ C1 out 0 100n $ dollar comment
 
         // A directive that is NOT on the skip list is still a hard error, so a
         // typo cannot silently drop an element line.
-        let err = parse_netlist("R1 a 0 1k\n.subckt thing a b\n").expect_err("unknown directive");
+        let err = parse_netlist("R1 a 0 1k\n.measure tran t1 when v(a)=1\n")
+            .expect_err("unknown directive");
         assert!(matches!(err, AnalogError::Unsupported { .. }), "{err}");
     }
 }

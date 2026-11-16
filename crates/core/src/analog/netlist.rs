@@ -11,6 +11,13 @@
 //! names the line and points at the ngspice adapter, which supports a much
 //! larger SPICE subset.
 //!
+//! A line starting with `+` continues the previous line, with comment lines
+//! between them skipped, so a vendor model card split over many lines reads
+//! as one card. A `.subckt <name> <port> ...` … `.ends` definition built from
+//! the elements below is flattened at each `X` call that names it, with
+//! ngspice's names (`R.X1.R1`, node `X1.mid`). Subcircuit parameters and
+//! nested definitions are refused.
+//!
 //! ## Elements
 //!
 //! | Element | Line |
@@ -58,11 +65,12 @@
 //! convention: positive `k` gives aiding voltage for currents entering both
 //! first-listed terminals. Coupling lines may precede their inductors.
 //!
-//! `X` is SPICE's subcircuit call, and the in-core engine has no subcircuits.
-//! It accepts an `X` line only when its model names an `OPAMP` or `COMP` card
+//! `X` is SPICE's subcircuit call. An `X` line that names a `.subckt` in the
+//! deck is flattened into that body. Otherwise it is accepted only when its
+//! model names an `OPAMP` or `COMP` card
 //! (built in, or declared with `.model`); the pin order is the one vendor
 //! op-amp and comparator models use (`IN+ IN- VCC VEE OUT`). Any other `X` line
-//! is a real subcircuit call and is refused with the pointer to ngspice. The
+//! calls a subcircuit the deck does not define and is refused with the pointer to ngspice. The
 //! element is lowered, at parse time, into the primitives above; see
 //! [`OpAmpModel`] and [`ComparatorModel`] for exactly what it becomes.
 //!
@@ -253,6 +261,8 @@
 //! Plus `*` comments, `;`/`$` trailing comments, `.end`, `.ic V(node)=<v>` and
 //! `.options`/`.print`/`.tran`/`.save`/`.control`…`.endc`, which are accepted
 //! and ignored so that one deck can be handed to both this engine and ngspice.
+//! `+` continuation lines and `.subckt`…`.ends` blocks are rewritten before
+//! any of this, as described at the top.
 //!
 //! Note on the first line: a classic SPICE deck treats line 1 as a title and
 //! ignores it. This parser does not, because silently dropping an element line
@@ -3199,6 +3209,437 @@ struct PendingMutualInductor {
     coupling: f64,
 }
 
+/// One logical netlist line: comments stripped, `+` continuations joined.
+struct LogicalLine {
+    /// 1-based source line the logical line starts on.
+    number: usize,
+    text: String,
+}
+
+/// Join SPICE `+` continuation lines onto the line they continue.
+///
+/// Comment and blank lines between a line and its continuations are skipped,
+/// as ngspice does, so a vendor model card with commented-out parameters
+/// still reads as one card. A logical line keeps the number of its first
+/// physical line, so errors point at where the card starts.
+fn logical_lines(text: &str) -> Result<Vec<LogicalLine>, AnalogError> {
+    let mut lines: Vec<LogicalLine> = Vec::new();
+    for (offset, raw_line) in text.lines().enumerate() {
+        let number = offset + 1;
+        let trimmed = raw_line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('*') {
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix('+') {
+            let Some(previous) = lines.last_mut() else {
+                return Err(AnalogError::Parse {
+                    line: number,
+                    text: trimmed.to_string(),
+                    message: "continuation line `+` has no line to continue".into(),
+                });
+            };
+            let rest = strip_comment(rest);
+            if !rest.is_empty() {
+                previous.text.push(' ');
+                previous.text.push_str(rest);
+            }
+            continue;
+        }
+        let line = strip_comment(trimmed);
+        if !line.is_empty() {
+            lines.push(LogicalLine {
+                number,
+                text: line.to_string(),
+            });
+        }
+    }
+    Ok(lines)
+}
+
+/// A `.subckt` definition: its ports and its body, `.model` cards excluded.
+struct SubcircuitDef {
+    /// Name as written.
+    name: String,
+    /// Port names as written, in call order.
+    ports: Vec<String>,
+    /// Element lines between `.subckt` and `.ends`.
+    body: Vec<LogicalLine>,
+    /// Lower-cased names of the `.model` cards declared inside the body.
+    local_models: Vec<String>,
+    /// Lower-cased names of the elements declared in the body.
+    local_elements: Vec<String>,
+}
+
+/// Lower-cased directive name of a line, if it is a directive.
+fn directive_of(text: &str) -> Option<String> {
+    text.split_whitespace()
+        .next()
+        .and_then(|head| head.strip_prefix('.'))
+        .map(str::to_ascii_lowercase)
+}
+
+/// Positional tokens of an `X` line: the element name excluded, everything
+/// before the first `key=value` token.
+fn positional_call_tokens<'a>(tokens: &[&'a str]) -> Vec<&'a str> {
+    tokens[1..]
+        .iter()
+        .copied()
+        .take_while(|token| !token.contains('='))
+        .collect()
+}
+
+/// Flatten every `.subckt` call into the primitives the engine solves.
+///
+/// The naming follows ngspice's flattener, so a probe or a routed input can
+/// name the same thing in both engines: inside call `X1`, element `R1`
+/// becomes `R.X1.R1` and internal node `mid` becomes `X1.mid`; a nested call
+/// `X2` inside `X1` gives `R.X1.X2.R1` and `X1.X2.mid`. Ports bind to the
+/// caller's nodes, and ground (`0`, `gnd`) stays global. A `.model` card
+/// written inside a body is local to that subcircuit: it is renamed to
+/// `<subckt>.<model>` and references in the body follow it. `F`/`H` control
+/// names and `K` inductor names that name an element of the same body follow
+/// the element's new name.
+///
+/// What is NOT flattened is refused by name rather than approximated:
+/// subcircuit parameters (`params:` or `key=value` on the `.subckt` or call
+/// line), nested `.subckt` definitions, and any directive in a body other
+/// than `.model`.
+fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, AnalogError> {
+    let err = |line: &LogicalLine, message: String| AnalogError::Parse {
+        line: line.number,
+        text: line.text.clone(),
+        message,
+    };
+    let unsupported = |line: &LogicalLine| AnalogError::Unsupported {
+        line: line.number,
+        text: line.text.clone(),
+    };
+
+    // Pass 1: lift the definitions out; keep everything else in order.
+    let mut defs: BTreeMap<String, SubcircuitDef> = BTreeMap::new();
+    let mut top: Vec<LogicalLine> = Vec::new();
+    let mut lines = lines.into_iter();
+    let mut in_control = false;
+    while let Some(line) = lines.next() {
+        let directive = directive_of(&line.text);
+        if in_control {
+            in_control = directive.as_deref() != Some("endc");
+            top.push(line);
+            continue;
+        }
+        match directive.as_deref() {
+            Some("control") => {
+                in_control = true;
+                top.push(line);
+            }
+            Some("ends") => {
+                return Err(err(&line, "`.ends` without a `.subckt`".into()));
+            }
+            Some("subckt") => {
+                let tokens: Vec<&str> = line.text.split_whitespace().collect();
+                if tokens.len() < 2 {
+                    return Err(err(&line, "expected `.subckt <name> <port> ...`".into()));
+                }
+                if tokens[2..]
+                    .iter()
+                    .any(|t| t.contains('=') || t.eq_ignore_ascii_case("params:"))
+                {
+                    // Parameterised subcircuits need ngspice's numparam
+                    // expression evaluator; substituting defaults would
+                    // silently ignore the caller's values.
+                    return Err(unsupported(&line));
+                }
+                let name = tokens[1].to_string();
+                let key = name.to_ascii_lowercase();
+                if defs.contains_key(&key) {
+                    return Err(err(&line, format!("`.subckt {name}` is declared twice")));
+                }
+                let ports: Vec<String> = tokens[2..].iter().map(|t| t.to_string()).collect();
+                for (index, port) in ports.iter().enumerate() {
+                    if ports[..index].iter().any(|p| p.eq_ignore_ascii_case(port)) {
+                        return Err(err(&line, format!("port `{port}` is listed twice")));
+                    }
+                    if is_ground(&port.to_ascii_lowercase()) {
+                        return Err(err(&line, format!("port `{port}` is ground")));
+                    }
+                }
+                let mut body = Vec::new();
+                let mut local_models = Vec::new();
+                let mut local_elements = Vec::new();
+                let mut closed = false;
+                for inner in lines.by_ref() {
+                    match directive_of(&inner.text).as_deref() {
+                        Some("ends") => {
+                            closed = true;
+                            break;
+                        }
+                        Some("model") => {
+                            let mut parts = inner.text.split_whitespace().skip(1);
+                            let Some(model) = parts.next() else {
+                                return Err(err(&inner, "expected `.model <name> <type>`".into()));
+                            };
+                            local_models.push(model.to_ascii_lowercase());
+                            // Hoisted once per definition, under the local
+                            // name, whether or not anything calls it.
+                            let rest: Vec<&str> = parts.collect();
+                            top.push(LogicalLine {
+                                number: inner.number,
+                                text: format!(".model {name}.{model} {}", rest.join(" ")),
+                            });
+                        }
+                        Some("end") => {
+                            return Err(err(&inner, format!("`.end` inside `.subckt {name}`")));
+                        }
+                        Some(_) => return Err(unsupported(&inner)),
+                        None => {
+                            let head = inner.text.split_whitespace().next().unwrap_or("");
+                            local_elements.push(head.to_ascii_lowercase());
+                            body.push(inner);
+                        }
+                    }
+                }
+                if !closed {
+                    return Err(err(&line, format!("`.subckt {name}` has no `.ends`")));
+                }
+                defs.insert(
+                    key,
+                    SubcircuitDef {
+                        name,
+                        ports,
+                        body,
+                        local_models,
+                        local_elements,
+                    },
+                );
+            }
+            _ => top.push(line),
+        }
+    }
+    if defs.is_empty() {
+        return Ok(top);
+    }
+
+    // Every top-level card name, for the `Q` substrate-or-model question.
+    let global_models: Vec<String> = top
+        .iter()
+        .filter(|line| directive_of(&line.text).as_deref() == Some("model"))
+        .filter_map(|line| line.text.split_whitespace().nth(1))
+        .map(str::to_ascii_lowercase)
+        .collect();
+
+    // Pass 2: replace every top-level call with its flattened body.
+    let mut out = Vec::with_capacity(top.len());
+    let mut in_control = false;
+    for line in top {
+        let directive = directive_of(&line.text);
+        if in_control || directive.as_deref() == Some("control") {
+            in_control = directive.as_deref() != Some("endc");
+            out.push(line);
+            continue;
+        }
+        let tokens: Vec<&str> = line.text.split_whitespace().collect();
+        let is_call = tokens[0].len() > 1
+            && tokens[0].starts_with(['X', 'x'])
+            && positional_call_tokens(&tokens)
+                .last()
+                .is_some_and(|name| defs.contains_key(&name.to_ascii_lowercase()));
+        if !is_call {
+            out.push(line);
+            continue;
+        }
+        let actuals: Vec<String> = positional_call_tokens(&tokens)
+            .iter()
+            .map(|t| t.to_string())
+            .collect();
+        let mut stack = Vec::new();
+        expand_call(
+            &defs,
+            &global_models,
+            &line,
+            tokens[0],
+            &actuals,
+            &mut stack,
+            &mut out,
+        )?;
+    }
+    Ok(out)
+}
+
+/// The element letter of a name, as written.
+fn first_char(name: &str) -> &str {
+    name.char_indices()
+        .nth(1)
+        .map_or(name, |(at, _)| &name[..at])
+}
+
+/// Emit the flattened body of one call. `path` is the instance path (`X1`,
+/// `X1.X2`); `actuals` are the call's node tokens followed by the subcircuit
+/// name.
+fn expand_call(
+    defs: &BTreeMap<String, SubcircuitDef>,
+    global_models: &[String],
+    call: &LogicalLine,
+    path: &str,
+    actuals: &[String],
+    stack: &mut Vec<String>,
+    out: &mut Vec<LogicalLine>,
+) -> Result<(), AnalogError> {
+    let err = |message: String| AnalogError::Parse {
+        line: call.number,
+        text: call.text.clone(),
+        message,
+    };
+    if call
+        .text
+        .split_whitespace()
+        .skip(1)
+        .any(|t| t.contains('='))
+    {
+        // Instance parameters on a subcircuit call are numparam.
+        return Err(AnalogError::Unsupported {
+            line: call.number,
+            text: call.text.clone(),
+        });
+    }
+    let (subckt, nodes) = actuals.split_last().expect("a call names its subcircuit");
+    let key = subckt.to_ascii_lowercase();
+    let def = &defs[&key];
+    if stack.contains(&key) {
+        return Err(err(format!("subcircuit `{}` calls itself", def.name)));
+    }
+    if nodes.len() != def.ports.len() {
+        return Err(err(format!(
+            "`{}` connects {} nodes but `.subckt {}` has {} ports",
+            call.text.split_whitespace().next().unwrap_or(""),
+            nodes.len(),
+            def.name,
+            def.ports.len()
+        )));
+    }
+    stack.push(key);
+
+    let node = |token: &str| -> String {
+        let lower = token.to_ascii_lowercase();
+        if is_ground(&lower) {
+            return token.to_string();
+        }
+        match def.ports.iter().position(|p| p.eq_ignore_ascii_case(token)) {
+            Some(index) => nodes[index].clone(),
+            None => format!("{path}.{token}"),
+        }
+    };
+    let element = |token: &str| -> String {
+        if def.local_elements.contains(&token.to_ascii_lowercase()) {
+            format!("{}.{path}.{token}", first_char(token))
+        } else {
+            token.to_string()
+        }
+    };
+    let model = |token: &str| -> String {
+        if def.local_models.contains(&token.to_ascii_lowercase()) {
+            format!("{}.{token}", def.name)
+        } else {
+            token.to_string()
+        }
+    };
+    let names_model = |token: &str| {
+        let lower = token.to_ascii_lowercase();
+        def.local_models.contains(&lower)
+            || global_models.contains(&lower)
+            || builtin_model(token).is_some()
+    };
+
+    for line in &def.body {
+        let tokens: Vec<&str> = line.text.split_whitespace().collect();
+        let head = tokens[0];
+        let letter = head
+            .chars()
+            .next()
+            .map(|c| c.to_ascii_uppercase())
+            .unwrap_or(' ');
+
+        if letter == 'X' {
+            let positional = positional_call_tokens(&tokens);
+            if let Some(callee) = positional
+                .last()
+                .filter(|name| defs.contains_key(&name.to_ascii_lowercase()))
+            {
+                let mut inner: Vec<String> = positional[..positional.len() - 1]
+                    .iter()
+                    .map(|t| node(t))
+                    .collect();
+                inner.push(callee.to_string());
+                let inner_call = LogicalLine {
+                    number: line.number,
+                    text: line.text.clone(),
+                };
+                expand_call(
+                    defs,
+                    global_models,
+                    &inner_call,
+                    &format!("{path}.{head}"),
+                    &inner,
+                    stack,
+                    out,
+                )?;
+                continue;
+            }
+        }
+
+        // Which tokens after the name are nodes, element references and the
+        // model, per letter; everything else is copied as written.
+        let mut renamed: Vec<String> = Vec::with_capacity(tokens.len());
+        renamed.push(format!("{}.{path}.{head}", first_char(head)));
+        let rest = &tokens[1..];
+        let voltage_switch = rest.iter().any(|t| {
+            t.split_once('=')
+                .is_some_and(|(key, _)| key.eq_ignore_ascii_case("vt"))
+        });
+        let (node_count, element_refs, model_at): (usize, &[usize], Option<usize>) = match letter {
+            'R' | 'C' | 'L' | 'V' | 'I' => (2, &[], None),
+            'S' if voltage_switch => (4, &[], None),
+            'S' => (2, &[], None),
+            'E' | 'G' => (4, &[], None),
+            'F' | 'H' => (2, &[2], None),
+            'K' => (0, &[0, 1], None),
+            'D' => (2, &[], Some(2)),
+            'J' => (3, &[], Some(3)),
+            'M' => (4, &[], Some(4)),
+            'Q' => {
+                let count = if tokens.len() > 5 && !names_model(tokens[4]) {
+                    4
+                } else {
+                    3
+                };
+                (count, &[], Some(count))
+            }
+            'X' => {
+                let positional = positional_call_tokens(&tokens).len();
+                let count = positional.saturating_sub(1);
+                (count, &[], positional.checked_sub(1))
+            }
+            _ => (0, &[], None),
+        };
+        for (index, token) in rest.iter().enumerate() {
+            renamed.push(if index < node_count {
+                node(token)
+            } else if element_refs.contains(&index) {
+                element(token)
+            } else if model_at == Some(index) {
+                model(token)
+            } else {
+                token.to_string()
+            });
+        }
+        out.push(LogicalLine {
+            number: line.number,
+            text: renamed.join(" "),
+        });
+    }
+    stack.pop();
+    Ok(())
+}
+
 /// Parse a netlist into a [`Circuit`].
 pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     let mut circuit = Circuit::default();
@@ -3213,10 +3654,11 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     // Every `.model` name in the deck, wherever it is written. A `Q` line's
     // fourth token is the substrate node unless it names a model, which is
     // how ngspice's `inp2q.c` tells `Q c b e s mod` from `Q c b e mod`.
-    let declared_models: Vec<String> = text
-        .lines()
+    let lines = expand_subcircuits(logical_lines(text)?)?;
+    let declared_models: Vec<String> = lines
+        .iter()
         .filter_map(|line| {
-            let mut tokens = strip_comment(line.trim()).split_whitespace();
+            let mut tokens = line.text.split_whitespace();
             let head = tokens.next()?;
             head.eq_ignore_ascii_case(".model")
                 .then(|| tokens.next())
@@ -3228,16 +3670,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
         declared_models.contains(&token.to_ascii_lowercase()) || builtin_model(token).is_some()
     };
 
-    for (offset, raw_line) in text.lines().enumerate() {
-        let number = offset + 1;
-        let trimmed = raw_line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('*') {
-            continue;
-        }
-        let line = strip_comment(trimmed);
-        if line.is_empty() {
-            continue;
-        }
+    for logical in &lines {
+        let number = logical.number;
+        let line = logical.text.as_str();
         let ctx = LineCtx { number, text: line };
         // A `.control` block is ngspice's scripting language, not a circuit.
         // Skipping it wholesale is what lets one deck drive both engines: the
