@@ -227,6 +227,7 @@ impl SystemBus {
         if change.is_some() {
             self.collect_scheduled_events(idx);
         }
+        self.observe_gpio_edges_if_live();
         self.deliver_wire_input_edges(idx);
         change
     }
@@ -413,6 +414,11 @@ impl SystemBus {
         // A select pad of an analog mux may have moved: re-route before the
         // next instruction can start a conversion.
         self.route_analog_muxes_on_write(idx);
+        // A write into a GPIO port can move its input word (OUT/DIR/PIN_CNF):
+        // raise the edge for the pad now, not at the next tick.
+        if self.gpio_edge_observers && self.is_edge_watched_gpio_port(idx) {
+            self.observe_gpio_edges_if_live();
+        }
         // A store to a GPIO input register (a device driving a pad through
         // `drive_idr_bit`) is an external edge like `set_gpio_input`.
         if self.timer_capture_wired {

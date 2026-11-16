@@ -168,8 +168,12 @@ const F1_RSTCAL_CYCLES: u32 = 2;
 /// silicon-accurate duration.
 const F1_CAL_CYCLES: u32 = 14;
 
-/// Scheduler / walk event tokens for the F1 side-band (conversion uses 0).
-const F1_EVT_CONVERT: u32 = 0;
+/// Scheduler / walk event tokens for the F1 side-band. A conversion wake is
+/// `F1_EVT_CONVERT | generation`: the generation changes whenever a write
+/// starts or cancels a conversion, so a wake armed for a superseded conversion
+/// fires stale and does nothing.
+const F1_EVT_CONVERT: u32 = 0x8000_0000;
+const F1_EVT_GEN_MASK: u32 = 0x00FF_FFFF;
 const F1_EVT_RSTCAL: u32 = 1;
 const F1_EVT_CAL: u32 = 2;
 
@@ -437,6 +441,17 @@ pub struct Adc {
     /// Scheduler mode: `true` while the conversion-countdown event is live.
     #[serde(skip)]
     chain_live: bool,
+    /// Scheduler mode: generation of the live conversion wake (see
+    /// [`F1_EVT_CONVERT`]).
+    #[serde(skip)]
+    conv_gen: u32,
+    /// Scheduler mode: the conversion wake is asleep until the completion
+    /// cycle. `(cycle, remaining)` = the bus cycle of the last executed
+    /// countdown tick and the value `cycles_remaining` had then; the ticks
+    /// since only decremented it, so [`Adc::projected_cycles_remaining`]
+    /// derives the live value.
+    #[serde(skip)]
+    conv_sleep: Option<(u64, u32)>,
     /// F1 RSTCAL countdown remaining (model cycles). `None` = idle.
     #[serde(skip)]
     f1_rstcal_remaining: Option<u32>,
@@ -534,6 +549,8 @@ impl Adc {
             dma_pending: false,
             clock: None,
             chain_live: false,
+            conv_gen: 0,
+            conv_sleep: None,
             f1_rstcal_remaining: None,
             f1_cal_remaining: None,
             f1_rstcal_live: false,
@@ -662,7 +679,9 @@ impl Adc {
                 // ADC_STS.OCCE).
                 if self.seq_index + 1 < self.f1_sequence_len() {
                     self.seq_index += 1;
-                    self.start_conversion();
+                    // In-chain continuation, like CONT: the running wake
+                    // carries on (no new generation).
+                    self.begin_conversion();
                     return irq;
                 }
                 self.seq_index = 0;
@@ -674,7 +693,9 @@ impl Adc {
                 }
                 // Continuous mode (CONT + ADON).
                 if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
-                    self.start_conversion();
+                    // The chain that is running this restarts itself: same
+                    // wake, same generation.
+                    self.begin_conversion();
                 }
             }
         }
@@ -724,7 +745,33 @@ impl Adc {
         }
     }
 
+    /// A write starts a conversion: any conversion wake already armed (asleep
+    /// until the old completion, or awake) is superseded, and
+    /// `take_scheduled_events` arms a fresh one for the new countdown.
     fn start_conversion(&mut self) {
+        self.conv_gen = self.conv_gen.wrapping_add(1) & F1_EVT_GEN_MASK;
+        self.conv_sleep = None;
+        self.chain_live = false;
+        self.begin_conversion();
+    }
+
+    fn conv_token(&self) -> u32 {
+        F1_EVT_CONVERT | (self.conv_gen & F1_EVT_GEN_MASK)
+    }
+
+    /// `cycles_remaining` as the countdown stands at the published bus cycle:
+    /// an asleep chain skipped ticks that only decremented it.
+    fn projected_cycles_remaining(&self) -> u32 {
+        match (&self.conv_sleep, &self.clock) {
+            (Some((anchor, remaining)), Some(clock)) => {
+                let elapsed = clock.now().saturating_sub(*anchor);
+                remaining.saturating_sub(elapsed.min(u64::from(u32::MAX)) as u32)
+            }
+            _ => self.cycles_remaining,
+        }
+    }
+
+    fn begin_conversion(&mut self) {
         self.converting = true;
         self.cycles_remaining = self.conversion_time;
         self.sampled_input = self.sample_f1_input();
@@ -1229,6 +1276,8 @@ impl Adc {
         self.converting = false;
         self.cycles_remaining = 0;
         self.chain_live = false;
+        self.conv_gen = self.conv_gen.wrapping_add(1) & F1_EVT_GEN_MASK;
+        self.conv_sleep = None;
         self.f1_rstcal_remaining = None;
         self.f1_cal_remaining = None;
         self.f1_rstcal_live = false;
@@ -1566,7 +1615,7 @@ impl Peripheral for Adc {
         let mut out = Vec::new();
         if self.converting && !self.chain_live {
             self.chain_live = true;
-            out.push((0u64, F1_EVT_CONVERT));
+            out.push((0u64, self.conv_token()));
         }
         if self.f1_rstcal_remaining.is_some() && !self.f1_rstcal_live {
             self.f1_rstcal_live = true;
@@ -1582,7 +1631,7 @@ impl Peripheral for Adc {
     fn on_event(
         &mut self,
         event_token: u32,
-        _sched: &mut crate::sched::EventScheduler,
+        sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
         if !self.scheduler_mode() {
@@ -1607,13 +1656,33 @@ impl Peripheral for Adc {
                     ..Default::default()
                 }
             }
-            _ => {
-                // Conversion countdown (token 0) — same engine as the walk.
+            token if token == self.conv_token() => {
+                // Conversion countdown — same engine as the walk. The ticks
+                // since the last event only decremented `cycles_remaining`
+                // (the chain sleeps through them, see below); replay them, then
+                // run this cycle's tick.
+                if let Some((anchor, _)) = self.conv_sleep.take() {
+                    let skipped = sched.now().saturating_sub(anchor).saturating_sub(1);
+                    let skipped = skipped.min(u64::from(u32::MAX)) as u32;
+                    self.cycles_remaining = self.cycles_remaining.saturating_sub(skipped);
+                }
                 let irq = self.advance_conversion();
                 self.chain_live = self.converting;
+                // While `cycles_remaining` ticks down nothing observable
+                // changes: SR/DR/EOC and the IRQ move only on the completion
+                // tick, which is `cycles_remaining + 1` cycles away. Sleep
+                // until then; a write that restarts or cancels the conversion
+                // bumps the generation so this wake goes stale.
+                let reschedule_delay = self.converting.then(|| {
+                    let remaining = self.cycles_remaining;
+                    if remaining > 0 {
+                        self.conv_sleep = Some((sched.now(), remaining));
+                    }
+                    u64::from(remaining) + 1
+                });
                 crate::sched::EventResult {
                     raise_own_irq: irq,
-                    reschedule_delay: self.converting.then_some(1),
+                    reschedule_delay,
                     dma_signals: if std::mem::take(&mut self.dma_pending) {
                         vec![crate::DMA_SIGNAL_DATA]
                     } else {
@@ -1622,6 +1691,9 @@ impl Peripheral for Adc {
                     ..Default::default()
                 }
             }
+            // A conversion wake of a superseded generation: the write that
+            // restarted or cancelled the conversion armed its own.
+            _ => crate::sched::EventResult::default(),
         }
     }
 
@@ -1633,7 +1705,14 @@ impl Peripheral for Adc {
     }
 
     fn snapshot(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+        let mut value = serde_json::to_value(self).unwrap_or(serde_json::Value::Null);
+        // An asleep conversion wake has not decremented the countdown yet.
+        if self.conv_sleep.is_some() {
+            if let Some(slot) = value.get_mut("cycles_remaining") {
+                *slot = serde_json::Value::from(self.projected_cycles_remaining());
+            }
+        }
+        value
     }
 }
 
@@ -2446,8 +2525,9 @@ mod scheduler_diff {
     /// path; assert the register snapshot AND the EOC-IRQ pend cycles are
     /// identical every cycle. The conversion countdown, DR latch, EOC flag and
     /// continuous-mode restart must all line up cycle-for-cycle.
-    fn assert_walk_identical(script: &[(u64, Op)], cycles: u64) {
+    fn assert_walk_identical(script: &[(u64, Op)], cycles: u64) -> usize {
         let mut walk = build(false);
+        let mut delivered = 0usize;
         let mut sched = build(true);
         let clock = sched.clock.clone().unwrap();
 
@@ -2477,6 +2557,7 @@ mod scheduler_diff {
             let mut esched = crate::sched::EventScheduler::new();
             esched.advance_to(c);
             for (_, token) in due {
+                delivered += 1;
                 let res = sched.on_event(token, &mut esched, bus);
                 if res.raise_own_irq {
                     sched_pends.push(c);
@@ -2493,6 +2574,7 @@ mod scheduler_diff {
             );
         }
         assert_eq!(walk_pends, sched_pends, "EOC-IRQ pend cycles diverged");
+        delivered
     }
 
     #[test]
@@ -2525,6 +2607,44 @@ mod scheduler_diff {
         ];
         // 2 + 15 + 15 + 15 ≈ 47 cycles covers three back-to-back conversions.
         assert_walk_identical(&script, 50);
+    }
+
+    /// Continuous mode used to tick the countdown every cycle; it now wakes
+    /// once per completion. Snapshot (including the live countdown) and EOC
+    /// pend cycles stay identical to the per-cycle walk for many conversions.
+    #[test]
+    fn f1_continuous_conversion_wakes_once_per_completion() {
+        let script = [
+            (1u64, Op::Write(0x04, 1 << 5)),
+            (1, Op::Write(0x34, 3)),
+            (1, Op::Write(0x08, 1 | (1 << 1))),
+            (1, Op::Write(0x0A, 0x0E)),
+            (2, Op::Write(0x0A, 0x4E)),
+        ];
+        let cycles = 2 + 15 * 40;
+        let delivered = assert_walk_identical(&script, cycles);
+        // One arming wake plus one wake per completion, not one per cycle.
+        assert!(delivered <= 2 + 40, "delivered {delivered} events");
+    }
+
+    /// A restart (SWSTART again) and a cancel (ADON cleared) while the wake is
+    /// asleep supersede it: the stale wake must not complete the old countdown.
+    #[test]
+    fn f1_restart_and_cancel_supersede_a_sleeping_wake() {
+        let script = [
+            (1u64, Op::Write(0x04, 1 << 5)),
+            (1, Op::Write(0x34, 3)),
+            (1, Op::Write(0x08, 1 | (1 << 1))), // ADON | CONT
+            (1, Op::Write(0x0A, 0x0E)),
+            (2, Op::Write(0x0A, 0x4E)),          // SWSTART
+            (9, Op::Write(0x0A, 0x0E)),          // SWSTART low
+            (10, Op::Write(0x0A, 0x4E)),         // SWSTART again mid-conversion: restart
+            (31, Op::Write(0x08, 0)),            // ADON cleared mid-conversion: cancel
+            (40, Op::Write(0x08, 1 | (1 << 1))), // ADON again
+            (41, Op::Write(0x0A, 0x0E)),
+            (42, Op::Write(0x0A, 0x4E)),
+        ];
+        assert_walk_identical(&script, 90);
     }
 
     // ── STM32H7 ADC (RM0468) ────────────────────────────────────────────────
