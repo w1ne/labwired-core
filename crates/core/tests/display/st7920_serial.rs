@@ -94,11 +94,10 @@ fn device(bus: &mut SystemBus) -> &mut Box<dyn SpiDevice> {
     let idx = bus
         .find_peripheral_index_by_name("spi1")
         .expect("spi1 registered");
-    let any = bus.peripherals[idx].dev.as_any_mut().expect("downcastable");
-    let spi = any
-        .downcast_mut::<labwired_core::peripherals::spi::Spi>()
-        .expect("generic Spi controller");
-    spi.attached_devices
+    bus.peripherals[idx]
+        .dev
+        .spi_attached_devices_mut()
+        .expect("spi1 hosts SPI devices")
         .first_mut()
         .expect("the ST7920 is attached")
 }

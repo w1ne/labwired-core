@@ -1827,7 +1827,7 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -55.0,
-          "max": 150.0,
+          "max": 300.0,
           "default": 25.0
         }
       ]
@@ -3482,6 +3482,16 @@
           "name": "model",
           "ty": "str",
           "doc": "Calibration: sg90 | mg996r | mg995 | mg90s | standard. Defaults from type alias when omitted."
+        },
+        {
+          "name": "source_address",
+          "ty": "int",
+          "doc": "I2C address of a PWM controller (PCA9685) whose output drives this servo. With source_channel, replaces the GPIO/LEDC drive path."
+        },
+        {
+          "name": "source_channel",
+          "ty": "int",
+          "doc": "Output channel (0..15) of the PWM controller at source_address."
         },
         {
           "name": "ledc_channel",
