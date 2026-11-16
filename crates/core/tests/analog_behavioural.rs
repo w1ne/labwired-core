@@ -216,9 +216,9 @@ Rleak c 0 1g
         refused("B1 a 0 V=temper\n", "not a behavioural quantity");
         refused("B1 a 0 V=foo(V(a))\n", "function `foo`");
         refused("R1 a 0 1\nB1 a 0 V=1\nB1 a 0 V=2\n", "declared twice");
-        // LAPLACE stays outside the subset; POLY is in `analog_poly.rs`
-        // and TABLE in `analog_table.rs`.
-        refused("V1 a 0 1\nE1 b 0 LAPLACE V(a) 1\n", "");
+        // PSpice FREQ stays outside the subset; POLY is in `analog_poly.rs`,
+        // TABLE in `analog_table.rs` and LAPLACE in `analog_laplace.rs`.
+        refused("V1 a 0 1\nE1 b 0 FREQ V(a) 1\n", "");
     }
 
     #[test]

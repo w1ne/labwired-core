@@ -1003,6 +1003,229 @@ impl Parser {
     }
 }
 
+/// A rational function of `s`: numerator and denominator coefficients,
+/// lowest power first, each with a non-zero last entry (or a single zero).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Transfer {
+    /// `b0 + b1·s + ...`.
+    pub numerator: Vec<f64>,
+    /// `a0 + a1·s + ...`.
+    pub denominator: Vec<f64>,
+}
+
+impl Transfer {
+    /// Parse the `H(s)` of a `LAPLACE` source: numbers, `s`, `pi`, `+ - * /`,
+    /// parentheses and `^`/`**` to an integer power, with the precedence of
+    /// [`Expression::parse`]. Anything else (`exp(-s*T)`, `sqrt(s)`, a node
+    /// voltage) is not a rational function and is refused.
+    pub fn parse(text: &str) -> Result<Self, String> {
+        let tokens = lex(text)?;
+        let mut parser = TransferParser { tokens, at: 0 };
+        let transfer = parser.sum()?;
+        if let Some(token) = parser.tokens.get(parser.at) {
+            return Err(format!(
+                "unexpected {} in a LAPLACE transfer",
+                describe(token)
+            ));
+        }
+        let numerator = trim(transfer.numerator);
+        let denominator = trim(transfer.denominator);
+        if denominator == [0.0] {
+            return Err("the LAPLACE transfer divides by zero".into());
+        }
+        Ok(Self {
+            numerator,
+            denominator,
+        })
+    }
+
+    fn constant(value: f64) -> Self {
+        Self {
+            numerator: vec![value],
+            denominator: vec![1.0],
+        }
+    }
+
+    fn add(self, other: Self, sign: f64) -> Self {
+        let other_numerator: Vec<f64> = other.numerator.iter().map(|c| sign * c).collect();
+        // A shared denominator (`1/(1+s) + 2/(1+s)`) stays as it is, so a
+        // sum adds no pole-zero pair that would only cancel.
+        if self.denominator == other.denominator {
+            return Self {
+                numerator: poly_add(&self.numerator, &other_numerator),
+                denominator: self.denominator,
+            };
+        }
+        Self {
+            numerator: poly_add(
+                &poly_mul(&self.numerator, &other.denominator),
+                &poly_mul(&other_numerator, &self.denominator),
+            ),
+            denominator: poly_mul(&self.denominator, &other.denominator),
+        }
+    }
+
+    fn mul(self, other: &Self) -> Self {
+        Self {
+            numerator: poly_mul(&self.numerator, &other.numerator),
+            denominator: poly_mul(&self.denominator, &other.denominator),
+        }
+    }
+
+    fn reciprocal(self) -> Result<Self, String> {
+        if trim(self.numerator.clone()) == [0.0] {
+            return Err("the LAPLACE transfer divides by zero".into());
+        }
+        Ok(Self {
+            numerator: self.denominator,
+            denominator: self.numerator,
+        })
+    }
+}
+
+fn poly_add(a: &[f64], b: &[f64]) -> Vec<f64> {
+    (0..a.len().max(b.len()))
+        .map(|k| a.get(k).unwrap_or(&0.0) + b.get(k).unwrap_or(&0.0))
+        .collect()
+}
+
+fn poly_mul(a: &[f64], b: &[f64]) -> Vec<f64> {
+    let mut out = vec![0.0; a.len() + b.len() - 1];
+    for (i, x) in a.iter().enumerate() {
+        for (j, y) in b.iter().enumerate() {
+            out[i + j] += x * y;
+        }
+    }
+    out
+}
+
+/// Drop zero leading coefficients, keeping at least one entry.
+fn trim(mut poly: Vec<f64>) -> Vec<f64> {
+    while poly.len() > 1 && poly.last() == Some(&0.0) {
+        poly.pop();
+    }
+    poly
+}
+
+/// Recursive descent over the [`lex`] tokens for [`Transfer::parse`].
+struct TransferParser {
+    tokens: Vec<Token>,
+    at: usize,
+}
+
+impl TransferParser {
+    fn peek(&self) -> Option<&Token> {
+        self.tokens.get(self.at)
+    }
+
+    fn is_op(&self, op: &str) -> bool {
+        matches!(self.peek(), Some(Token::Op(found)) if *found == op)
+    }
+
+    fn sum(&mut self) -> Result<Transfer, String> {
+        let mut left = self.product()?;
+        loop {
+            let sign = if self.is_op("+") {
+                1.0
+            } else if self.is_op("-") {
+                -1.0
+            } else {
+                return Ok(left);
+            };
+            self.at += 1;
+            let right = self.product()?;
+            left = left.add(right, sign);
+        }
+    }
+
+    fn product(&mut self) -> Result<Transfer, String> {
+        let mut left = self.unary()?;
+        loop {
+            if self.is_op("*") {
+                self.at += 1;
+                left = left.mul(&self.unary()?);
+            } else if self.is_op("/") {
+                self.at += 1;
+                left = left.mul(&self.unary()?.reciprocal()?);
+            } else {
+                return Ok(left);
+            }
+        }
+    }
+
+    fn unary(&mut self) -> Result<Transfer, String> {
+        if self.is_op("-") {
+            self.at += 1;
+            return Ok(Transfer::constant(-1.0).mul(&self.unary()?));
+        }
+        if self.is_op("+") {
+            self.at += 1;
+            return self.unary();
+        }
+        self.power()
+    }
+
+    fn power(&mut self) -> Result<Transfer, String> {
+        let mut base = self.atom()?;
+        while self.is_op("^") || self.is_op("**") {
+            self.at += 1;
+            let negative = self.is_op("-");
+            if negative {
+                self.at += 1;
+            }
+            let exponent = match self.tokens.get(self.at) {
+                Some(Token::Number(value)) if value.fract() == 0.0 && *value <= 64.0 => {
+                    *value as u32
+                }
+                _ => return Err("a LAPLACE transfer raises only to a literal integer power".into()),
+            };
+            self.at += 1;
+            let mut raised = Transfer::constant(1.0);
+            for _ in 0..exponent {
+                raised = raised.mul(&base);
+            }
+            base = if negative {
+                raised.reciprocal()?
+            } else {
+                raised
+            };
+        }
+        Ok(base)
+    }
+
+    fn atom(&mut self) -> Result<Transfer, String> {
+        let token = self.tokens.get(self.at).cloned();
+        self.at += 1;
+        match token {
+            Some(Token::Number(value)) => Ok(Transfer::constant(value)),
+            Some(Token::Open) => {
+                let inner = self.sum()?;
+                match self.tokens.get(self.at) {
+                    Some(Token::Close) => {
+                        self.at += 1;
+                        Ok(inner)
+                    }
+                    _ => Err("`(` without `)` in a LAPLACE transfer".into()),
+                }
+            }
+            Some(Token::Name(name)) if name == "s" => Ok(Transfer {
+                numerator: vec![0.0, 1.0],
+                denominator: vec![1.0],
+            }),
+            Some(Token::Name(name)) if name == "pi" => Ok(Transfer::constant(std::f64::consts::PI)),
+            Some(Token::Name(name)) => Err(format!(
+                "`{name}` is not rational in `s`; a LAPLACE transfer holds numbers, `s` \
+                 and `{{...}}` parameters only"
+            )),
+            Some(other) => Err(format!(
+                "unexpected {} in a LAPLACE transfer",
+                describe(&other)
+            )),
+            None => Err("the LAPLACE transfer ends early".into()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

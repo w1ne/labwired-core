@@ -337,8 +337,9 @@ pub(super) fn format_value(value: f64) -> String {
 
 /// Replace every `{expr}` in `text` with its value.
 ///
-/// A brace group right after `value=`, `table` or `laplace=` is left alone:
-/// that is a behavioural source, which the element parser refuses by name.
+/// A brace group right after `value=` or `table`, or after a `laplace`
+/// keyword, is a behavioural expression: only its parameter names are
+/// replaced (see [`substitute_names`]).
 pub(super) fn substitute(text: &str, scope: &Scope) -> Result<String, EvalError> {
     if !text.contains(['{', '}']) {
         return Ok(text.to_string());
@@ -622,8 +623,9 @@ pub(super) fn expand_braced_calls(text: &str, functions: &Functions) -> Result<S
     Ok(out)
 }
 
-/// True when the text before a `{` ends in `value=`, `table` or `laplace=`,
-/// or in `v=`/`i=` on a `B` line: the group is a behavioural expression.
+/// True when the text before a `{` ends in `value=` or `table`, follows a
+/// `laplace` keyword, or ends in `v=`/`i=` on a `B` line: the group is a
+/// behavioural expression.
 fn is_behavioural(before: &str) -> bool {
     let before = before.trim_end().trim_end_matches('=').trim_end();
     let keyword = before
@@ -632,7 +634,13 @@ fn is_behavioural(before: &str) -> bool {
         .unwrap_or("")
         .to_ascii_lowercase();
     let b_line = before.trim_start().starts_with(['b', 'B']);
+    // Both groups of `LAPLACE {<expr>} = {<H(s)>}` are expressions: the
+    // transfer keeps its `s`.
+    let laplace = before
+        .split_whitespace()
+        .any(|word| word.to_ascii_lowercase().starts_with("laplace"));
     matches!(keyword.as_str(), "value" | "table" | "laplace")
+        || laplace
         || (b_line && matches!(keyword.as_str(), "v" | "i"))
 }
 

@@ -54,6 +54,7 @@
 //! | Behavioural VCVS / VCCS | `E<name> n+ n- VALUE={<expr>}` / `G<name> n+ n- VALUE={<expr>}` |
 //! | Polynomial E / G / F / H | `E<name> n+ n- POLY(<n>) <n node pairs> <p0> <p1> ...`, `F<name> n+ n- POLY(<n>) <n elements> <p0> ...` |
 //! | Table E / G | `E<name> n+ n- TABLE {<expr>} = (x1, y1) (x2, y2) ...` |
+//! | Laplace E / G | `E<name> n+ n- LAPLACE {<expr>} = {<H(s)>}` or `E<name> n+ n- nc+ nc- LAPLACE=<H(s)>` |
 //! | Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
 //!
 //! A semiconductor's bare `off` flag is SPICE's: the operating point holds
@@ -88,8 +89,9 @@
 //! `VALUE={<expr>}`, which is a behavioural source, and SPICE2's
 //! `POLY(n)` form of all four, which lowers to one (see below), and the
 //! `E`/`G` `TABLE {<expr>} = (x1, y1) ...` lookup, which also does (its
-//! corner rounding is in [`super::behavioural`]). `LAPLACE`, and `TABLE` on
-//! `F`/`H` (fatal in ngspice), are refused by name. `E` and `H` each add a
+//! corner rounding is in [`super::behavioural`]), and the `E`/`G` `LAPLACE`
+//! transfer function (below). `TABLE` on `F`/`H` (fatal in ngspice) is
+//! refused by name. `E` and `H` each add a
 //! branch current, numbered after every voltage source and inductor; `F` and
 //! `H` read the branch current of the element they name, which must be one that
 //! carries one (a `V`, `L`, `E` or `H`).
@@ -102,6 +104,23 @@
 //! use `.param` and subcircuit parameters; a `.subckt` body may hold
 //! behavioural sources, whose `V(...)` and `I(...)` names are flattened like
 //! every other node and element name.
+//!
+//! `E|G<name> n+ n- LAPLACE {<expr>} = {<H(s)>}` (PSpice) and
+//! `E|G<name> n+ n- nc+ nc- LAPLACE=<H(s)>` (LTspice, input `V(nc+, nc-)`)
+//! apply a rational transfer function to the input. `H(s)` holds numbers,
+//! `s`, `pi`, `{...}` parameters, `+ - * /`, parentheses and integer powers
+//! ([`Transfer::parse`]). It lowers to elements the solver already has, in
+//! controllable canonical form after the frequency scaling `s = w0·p` (`w0`
+//! the geometric mean of the pole magnitudes): one internal node
+//! `<name>#s<k>` and one `1/w0` F capacitor to ground per pole, linear `G`
+//! sources for the companion matrix, a behavioural current that feeds the
+//! input into the last state, and a behavioural `E`/`G` output
+//! `Σ c_k·V(<name>#s<k>) + d·input`. The operating point is therefore
+//! `H(0)·input` and the transient is the exact state-space response under the
+//! chosen integration rule. Refused: a numerator of higher order than the
+//! denominator (it differentiates), a pole at `s = 0` (no operating point),
+//! and anything not rational in `s` (`exp(-s*T)` delays, node voltages).
+//! ngspice-42 has no `LAPLACE` keyword; its XSPICE `s_xfer` is the reference.
 //!
 //! `E|G<name> n+ n- POLY(n) nc1+ nc1- ... ncn+ ncn- p0 p1 ...` and
 //! `F|H<name> n+ n- POLY(n) <elem1> ... <elemn> p0 p1 ...` are SPICE2
@@ -322,7 +341,9 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use super::behavioural::{BehaviouralKind, BehaviouralSource, Control, ControlName, Expression};
+use super::behavioural::{
+    BehaviouralKind, BehaviouralSource, Control, ControlName, Expression, Transfer,
+};
 use std::path::{Path, PathBuf};
 
 /// A node reference: `None` is ground, `Some(i)` indexes [`Circuit::node_name`].
@@ -4111,6 +4132,24 @@ fn expand_call(
             .map(|c| c.to_ascii_uppercase())
             .unwrap_or(' ');
 
+        if matches!(letter, 'E' | 'G') && tokens.len() > 3 {
+            if let Some((input, transfer)) = laplace_form(&tokens[3..]) {
+                // The LTspice form's control nodes become the PSpice form's
+                // `V(nc+, nc-)`, so one probe rename covers both.
+                out.push(LogicalLine {
+                    number: line.number,
+                    text: format!(
+                        "{}.{path}.{head} {} {} LAPLACE {{{}}} = {{{transfer}}}",
+                        first_char(head),
+                        node(tokens[1]),
+                        node(tokens[2]),
+                        rename_probes(&input, &node, &element)
+                    ),
+                });
+                continue;
+            }
+        }
+
         let behavioural = letter == 'B'
             || (matches!(letter, 'E' | 'G')
                 && tokens.get(3).is_some_and(|token| {
@@ -4974,6 +5013,26 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                     &poly_expression(&atoms, &coefficients),
                 )?;
             }
+            'E' | 'G' if laplace_form(&tokens[3..]).is_some() => {
+                let (input, transfer) =
+                    laplace_form(&tokens[3..]).expect("guard matched a LAPLACE form");
+                let (input, transfer) = parse_laplace(&ctx, &input, &transfer)?;
+                let kind = if letter == 'E' {
+                    BehaviouralKind::Voltage
+                } else {
+                    BehaviouralKind::Current
+                };
+                push_laplace(
+                    &mut circuit,
+                    &mut behavioural_lines,
+                    &ctx,
+                    head,
+                    [tokens[1], tokens[2]],
+                    kind,
+                    &input,
+                    &transfer,
+                )?;
+            }
             'E' | 'G' if tokens.len() > 3 && is_table_keyword(tokens[3]) => {
                 let (input, points) = parse_table(&ctx, &tokens[3..].join(" "))?;
                 let expression =
@@ -5025,6 +5084,16 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                     "G<name> n+ n- nc+ nc- <gm>"
                 };
                 let rest = &tokens[1..];
+                if rest.iter().any(|token| {
+                    token
+                        .get(..7)
+                        .is_some_and(|head| head.eq_ignore_ascii_case("laplace"))
+                }) {
+                    return Err(ctx.parse_err(format!(
+                        "expected `{letter}<name> n+ n- LAPLACE {{<expr>}} = {{<H(s)>}}` or \
+                         `{letter}<name> n+ n- nc+ nc- LAPLACE=<H(s)>`"
+                    )));
+                }
                 refuse_behavioural_source(&ctx, rest)?;
                 if rest.len() != 5 {
                     return Err(ctx.parse_err(format!("expected `{shape}`")));
@@ -5295,6 +5364,167 @@ fn push_expression(
     lines.push((kind, ctx.number, ctx.text.to_string()));
 }
 
+/// The input and transfer text of an `E`/`G` `LAPLACE` source, from the
+/// tokens after its two output nodes: PSpice's `LAPLACE {<expr>} = {<H(s)>}`
+/// or LTspice's `nc+ nc- LAPLACE=<H(s)>`, whose input is `V(nc+, nc-)`.
+/// `None` when the tokens are some other form.
+fn laplace_form(tokens: &[&str]) -> Option<(String, String)> {
+    let starts_laplace = |token: &str| {
+        token
+            .get(..7)
+            .is_some_and(|head| head.eq_ignore_ascii_case("laplace"))
+    };
+    let first = tokens.first()?;
+    if starts_laplace(first) && !first[7..].trim_start().starts_with('=') {
+        // `LAPLACE {in} = {H}`: two brace groups, the `=` optional.
+        let text = tokens.join(" ");
+        let after = text[7..].trim_start();
+        let close = after.strip_prefix('{')?.find('}')? + 1;
+        let input = after[1..close].to_string();
+        let rest = after[close + 1..].trim_start();
+        let rest = rest.strip_prefix('=').unwrap_or(rest).trim();
+        return Some((input, rest.to_string()));
+    }
+    let third = tokens.get(2)?;
+    if starts_laplace(third) {
+        let text = tokens[2..].join(" ");
+        let rest = text[7..].trim_start().strip_prefix('=')?;
+        return Some((
+            format!("V({}, {})", tokens[0], tokens[1]),
+            rest.trim().to_string(),
+        ));
+    }
+    None
+}
+
+/// Strip the braces a `LAPLACE` input and transfer may carry and read the
+/// transfer as a rational function of `s`.
+fn parse_laplace(
+    ctx: &LineCtx<'_>,
+    input: &str,
+    transfer: &str,
+) -> Result<(String, Transfer), AnalogError> {
+    let unbrace = |text: &str| text.trim().replace('{', "(").replace('}', ")");
+    let transfer = Transfer::parse(&unbrace(transfer)).map_err(|message| ctx.parse_err(message))?;
+    Ok((unbrace(input), transfer))
+}
+
+/// Lower `E`/`G ... LAPLACE` to a state-space network of elements the solver
+/// already has (see the module notes): one node and one capacitor per pole,
+/// linear `G` sources for the companion matrix, and two behavioural sources
+/// for the input and the output.
+#[allow(clippy::too_many_arguments)]
+fn push_laplace(
+    circuit: &mut Circuit,
+    lines: &mut Vec<(BehaviouralKind, usize, String)>,
+    ctx: &LineCtx<'_>,
+    name: &str,
+    terminals: [&str; 2],
+    kind: BehaviouralKind,
+    input: &str,
+    transfer: &Transfer,
+) -> Result<(), AnalogError> {
+    let numerator = &transfer.numerator;
+    let denominator = &transfer.denominator;
+    let order = denominator.len() - 1;
+    if numerator.len() > denominator.len() {
+        return Err(ctx.parse_err(
+            "the LAPLACE transfer is improper (numerator order above denominator order): \
+             it would differentiate its input",
+        ));
+    }
+    if denominator[0] == 0.0 {
+        return Err(ctx.parse_err(
+            "the LAPLACE transfer has a pole at s = 0 (an integrator): it has no DC \
+             operating point",
+        ));
+    }
+    // Frequency scaling `s = w0·p`, with `w0` the geometric mean of the pole
+    // magnitudes, keeps the companion coefficients near 1 for a 1 ms filter
+    // and a 1 GHz one alike; each state capacitor is then 1/w0 farads.
+    let w0 = if order == 0 {
+        1.0
+    } else {
+        (denominator[0].abs() / denominator[order].abs()).powf(1.0 / order as f64)
+    };
+    let lead = denominator[order] * w0.powi(order as i32);
+    let a: Vec<f64> = (0..order)
+        .map(|k| denominator[k] * w0.powi(k as i32) / lead)
+        .collect();
+    let b: Vec<f64> = (0..=order)
+        .map(|k| numerator.get(k).unwrap_or(&0.0) * w0.powi(k as i32) / lead)
+        .collect();
+    // Controllable canonical form: x_k' = x_(k+1), x_n' = u − Σ a_k·x_(k+1),
+    // y = Σ (b_k − b_n·a_k)·x_(k+1) + b_n·u.
+    let states: Vec<String> = (1..=order).map(|k| format!("{name}#s{k}")).collect();
+    let ground = circuit.intern("0");
+    for (index, state) in states.iter().enumerate() {
+        let node = circuit.intern(state);
+        circuit.capacitors.push(Capacitor {
+            name: format!("{name}#c{}", index + 1),
+            a: node,
+            b: ground,
+            farads: 1.0 / w0,
+            ic: None,
+        });
+        if index + 1 < order {
+            let next = circuit.intern(&states[index + 1]);
+            circuit.vccs.push(Vccs {
+                name: format!("{name}#g{}", index + 1),
+                p: ground,
+                n: node,
+                cp: next,
+                cn: ground,
+                gm: 1.0,
+            });
+        }
+    }
+    if let Some(last) = states.last() {
+        let last_node = circuit.intern(last);
+        for (k, coefficient) in a.iter().enumerate() {
+            if *coefficient != 0.0 {
+                let control = circuit.intern(&states[k]);
+                circuit.vccs.push(Vccs {
+                    name: format!("{name}#a{k}"),
+                    p: ground,
+                    n: last_node,
+                    cp: control,
+                    cn: ground,
+                    gm: -coefficient,
+                });
+            }
+        }
+        push_behavioural(
+            circuit,
+            lines,
+            ctx,
+            &format!("{name}#u"),
+            ["0", last],
+            BehaviouralKind::Current,
+            input,
+        )?;
+    }
+    let direct = b[order];
+    let mut terms: Vec<String> = states
+        .iter()
+        .zip(&a)
+        .zip(&b)
+        .filter_map(|((state, a_k), b_k)| {
+            let c = b_k - direct * a_k;
+            (c != 0.0).then(|| format!("({c:e})*V({state})"))
+        })
+        .collect();
+    if direct != 0.0 {
+        terms.push(format!("({direct:e})*({input})"));
+    }
+    let output = if terms.is_empty() {
+        "0".to_string()
+    } else {
+        terms.join(" + ")
+    };
+    push_behavioural(circuit, lines, ctx, name, terminals, kind, &output)
+}
+
 /// `TABLE` or `TABLE{...}`: the token that starts an `E`/`G` table.
 fn is_table_keyword(token: &str) -> bool {
     token
@@ -5529,7 +5759,8 @@ fn refuse_behavioural_source(ctx: &LineCtx<'_>, rest: &[&str]) -> Result<(), Ana
         upper.starts_with("POLY")
             || upper.starts_with("VALUE")
             || upper.starts_with("TABLE")
-            || upper.starts_with("LAPLACE")
+            || upper.starts_with("FREQ")
+            || upper.starts_with("CHEBYSHEV")
             || upper.contains('{')
     });
     if behavioural {
