@@ -33,6 +33,14 @@
       "how": "needs-build",
       "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
     },
+    "ch32v005f6p6": {
+      "how": "needs-build",
+      "why": "New CH32V005 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
+    "ch32v006k8u6": {
+      "how": "needs-build",
+      "why": "New CH32V006 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
     "ch32v203c8t6": {
       "how": "needs-build",
       "why": "New CH32V203 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."

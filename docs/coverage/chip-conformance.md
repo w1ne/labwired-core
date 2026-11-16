@@ -134,6 +134,8 @@ This page covers the public models. For every chip we model — public and priva
 | pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
 | pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
 | ch32v003f4p6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
+| ch32v005f6p6 | **L1** | ✓ | 6 | — | — | ch32v005_compiled_firmware::ch32v005_compiled_rv32e_firmware_toggles_pc0 |
+| ch32v006k8u6 | **L1** | ✓ | 6 | — | — | ch32v006_compiled_firmware::ch32v006_compiled_rv32e_firmware_toggles_pb0 |
 | ch32v203c8t6 | **L1** | ✓ | 7 | — | — | ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13 |
 | ch32v003f4u6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | ch32v003a4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
