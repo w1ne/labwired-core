@@ -487,7 +487,8 @@ fn comparator_output_edges_raise_exint21_on_the_selected_polarity() {
     b.write_u32(0x40021018, 1).unwrap(); // CRM APB2EN SCFGCMPEN.
     b.write_u32(0x40010400, 1 << 21).unwrap(); // EXINT_INTEN line 21.
     b.write_u32(0x40010408, 1 << 21).unwrap(); // POLCFG1: rising.
-                                               // AM32 COMP_PA0: CMPEN, CMPINVSEL=110 (PA0), CMPNINVSEL=00 (PA5).
+
+    // AM32 COMP_PA0: CMPEN, CMPINVSEL=110 (PA0), CMPNINVSEL=00 (PA5).
     b.write_u32(0x4001001c, 0b110_0001).unwrap();
     assert!(b.set_analog_pad_mv("PA0", 1500));
     assert!(b.set_analog_pad_mv("PA5", 1000));
