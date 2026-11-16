@@ -173,14 +173,32 @@ impl ArchState {
 /// and every write, is refused.
 struct ProbeBus<'a> {
     inner: &'a dyn Bus,
+    /// When set, every served load address is appended (diagnosis only).
+    loads: Option<&'a std::cell::RefCell<Vec<u64>>>,
 }
+
+/// The diagnosis probe also serves loads below this address through the bus
+/// (the boot alias of flash is not a plain slice on every chip): on Cortex-M
+/// it is always the code region, never a device, and it is how a loop
+/// reading through a NULL pointer is recognised.
+const NULL_PAGE: u64 = 0x400;
 
 impl ProbeBus<'_> {
     fn plain_read(&self, addr: u64, size: usize) -> SimResult<u32> {
-        let (start, end, slice) = self
-            .inner
-            .plain_memory_slice(addr)
-            .ok_or(SimulationError::MemoryViolation(addr))?;
+        let Some((start, end, slice)) = self.inner.plain_memory_slice(addr) else {
+            return match self.loads {
+                Some(loads) if addr + size as u64 <= NULL_PAGE => {
+                    let v = match size {
+                        1 => u32::from(self.inner.read_u8(addr)?),
+                        2 => u32::from(self.inner.read_u16(addr)?),
+                        _ => self.inner.read_u32(addr)?,
+                    };
+                    loads.borrow_mut().push(addr);
+                    Ok(v)
+                }
+                _ => Err(SimulationError::MemoryViolation(addr)),
+            };
+        };
         if addr < start || addr + size as u64 > end {
             return Err(SimulationError::MemoryViolation(addr));
         }
@@ -188,6 +206,9 @@ impl ProbeBus<'_> {
         let bytes = slice
             .get(off..off + size)
             .ok_or(SimulationError::MemoryViolation(addr))?;
+        if let Some(loads) = self.loads {
+            loads.borrow_mut().push(addr);
+        }
         Ok(bytes
             .iter()
             .enumerate()
@@ -352,11 +373,37 @@ impl CortexM {
         )
     }
 
+    /// The skip's proof: [`Self::probe_iteration`], refused outright while an
+    /// exception is pending.
+    fn probe_fixed_point(&mut self, bus: &dyn Bus, head: u32) -> Option<u64> {
+        if self.any_exception_pending() {
+            return None;
+        }
+        self.probe_iteration(bus, head, None, true)
+    }
+
+    /// See [`crate::Cpu::stalled_loop_loads`]. The same proof as the skip,
+    /// run from the current PC, except that a pending interrupt does not
+    /// refuse it: the run is over, and the question is only what the loop
+    /// the core is parked in reads.
+    pub(super) fn stalled_loads(&mut self, bus: &dyn Bus) -> Option<Vec<u64>> {
+        let loads = std::cell::RefCell::new(Vec::new());
+        let head = self.pc;
+        self.probe_iteration(bus, head, Some(&loads), false)?;
+        Some(loads.into_inner())
+    }
+
     /// Run one iteration from `head` on a read-only view of plain memory and
     /// return its length when it comes back to `head` in the state it left.
-    fn probe_fixed_point(&mut self, bus: &dyn Bus, head: u32) -> Option<u64> {
-        if self.any_exception_pending()
-            || self.sleeping
+    /// `strict` also refuses when an exception becomes pending on the way.
+    fn probe_iteration(
+        &mut self,
+        bus: &dyn Bus,
+        head: u32,
+        loads: Option<&std::cell::RefCell<Vec<u64>>>,
+        strict: bool,
+    ) -> Option<u64> {
+        if self.sleeping
             || self.waiting_for_event
             || self.it_state != 0
             || self.fault_entry.is_some()
@@ -370,7 +417,7 @@ impl CortexM {
             return None;
         }
         let before = ArchState::capture(self);
-        let mut probe = ProbeBus { inner: bus };
+        let mut probe = ProbeBus { inner: bus, loads };
         let config = bus.config().clone();
         let mut period = None;
         for n in 1..=MAX_PERIOD {
@@ -378,7 +425,7 @@ impl CortexM {
             // the probe, never escalate into a fault (which would write the
             // SCB fault registers the bus shares).
             if self.step_execute(&mut probe, &[], &config).is_err()
-                || self.any_exception_pending()
+                || (strict && self.any_exception_pending())
                 || self.active_exception != before.active_exception
                 || self.fault_entry.is_some()
                 || self.lockup.is_some()

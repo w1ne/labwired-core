@@ -105,6 +105,10 @@
   },
   {
     "buses": [],
+    "name": "ch32l103c8t6"
+  },
+  {
+    "buses": [],
     "name": "ch32v003a4m6"
   },
   {
@@ -130,6 +134,10 @@
   {
     "buses": [],
     "name": "ch32v203c8t6"
+  },
+  {
+    "buses": [],
+    "name": "ch32x035c8t6"
   },
   {
     "buses": [],
