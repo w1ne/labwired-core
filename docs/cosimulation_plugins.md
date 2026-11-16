@@ -4,6 +4,13 @@ LabWired owns deterministic firmware execution, board topology, traces, and
 fault orchestration. Physical plant models can be declared as co-simulation
 models and stepped through an adapter.
 
+**Browser circuit workflow:** The [online circuit simulator](https://labwired.com/circuit-simulator/)
+explains how supported MCU firmware interacts with R/L/C networks, independent
+sources, and switches. The browser analog adapter does not currently simulate
+nonlinear diodes/transistors, import SPICE device libraries, or perform AC/DC
+sweeps. For vendor SPICE models, use the native ngspice adapter described below.
+A passing model test does not certify the physical board.
+
 The first supported manifest shape is:
 
 ```yaml
