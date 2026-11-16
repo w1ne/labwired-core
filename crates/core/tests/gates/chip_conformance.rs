@@ -1200,6 +1200,16 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
         ),
     },
+    // CH32L103C8T6 (QingKe V4C, RV32IMAC). SIM-DERIVED: no silicon capture,
+    // so no reset_oracle. The gate boots a committed ELF that blinks PC13.
+    ChipConf {
+        name: "ch32l103c8t6",
+        yaml: "configs/chips/ch32l103c8t6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32l103_compiled_firmware::ch32l103_compiled_rv32imac_firmware_toggles_pc13",
+        ),
+    },
     // CH32V005F6P6 (QingKe V2C, RV32EmC). SIM-DERIVED: no silicon capture,
     // so no reset_oracle. The gate boots a committed ELF that blinks PC0.
     ChipConf {
@@ -1259,6 +1269,18 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some(
             "ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin",
+        ),
+    },
+    // AT32F421G8U7 (Artery). SIM-DERIVED from RM_AT32F421 V2.05 and the
+    // Artery BSP 2.1.9 headers: no silicon capture, so no reset_oracle. The
+    // gate runs the committed BSP smoke (PLL, flash program/erase, DMA copy,
+    // TMR6 IRQ on PA5) through the machine.
+    ChipConf {
+        name: "at32f421g8u7",
+        yaml: "configs/chips/at32f421g8u7.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "at32f421_contract::vendor_sdk_smoke_runs_flash_dma_and_timer_irq_paths",
         ),
     },
     ChipConf {

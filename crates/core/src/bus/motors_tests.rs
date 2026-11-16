@@ -591,6 +591,41 @@ fn step_dir_folded_into_motor_snapshots() {
     assert!((step.position_rad.to_degrees() - 90.0).abs() < 1e-9);
 }
 
+#[test]
+fn unipolar_stepper_folded_into_motor_snapshots() {
+    use crate::peripherals::components::unipolar_stepper::UnipolarStepper;
+    use std::sync::Arc;
+
+    let mut bus = SystemBus::new();
+    let motor = Arc::new(UnipolarStepper::new_28byj48("m1", [23, 25, 26, 27]));
+    bus.observe_device(motor.clone());
+
+    // No coil change yet → idle at 0 deg.
+    let snaps = bus.motor_snapshots();
+    let m1 = snaps.iter().find(|s| s.id == "m1").expect("m1 snapshot");
+    assert_eq!(m1.kind, STEPPER_SNAPSHOT_KIND);
+    assert_eq!(m1.control_state, "idle");
+    assert_eq!(m1.position_rad, 0.0);
+
+    // Forward half-step sequence: A, AB, B, BC, C → 4 half-steps.
+    motor.on_gpio_edge(23, true, 0);
+    motor.on_gpio_edge(25, true, 1);
+    motor.on_gpio_edge(23, false, 2);
+    motor.on_gpio_edge(26, true, 3);
+    motor.on_gpio_edge(25, false, 4);
+    let snaps = bus.motor_snapshots();
+    let m1 = snaps.iter().find(|s| s.id == "m1").unwrap();
+    assert_eq!(m1.control_state, "step");
+    assert!((m1.position_rad.to_degrees() - 4.0 * 360.0 / 2048.0).abs() < 1e-9);
+
+    // Edges on pins outside IN1..IN4 do not move the shaft.
+    motor.on_gpio_edge(16, true, 5);
+    motor.on_gpio_edge(17, true, 6);
+    let snaps = bus.motor_snapshots();
+    let m1 = snaps.iter().find(|s| s.id == "m1").unwrap();
+    assert!((m1.position_rad.to_degrees() - 4.0 * 360.0 / 2048.0).abs() < 1e-9);
+}
+
 fn low_inertia_bldc_bus() -> SystemBus {
     low_inertia_bldc_bus_with_rcc(false)
 }
