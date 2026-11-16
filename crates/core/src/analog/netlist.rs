@@ -144,8 +144,9 @@
 //! element is lowered, at parse time, into the primitives above; see
 //! [`OpAmpModel`] and [`ComparatorModel`] for exactly what it becomes.
 //!
-//! `<source>` is `[dc] <value>`, `SIN(vo va freq [td [theta]])` or
-//! `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, spelled as in SPICE. A source that
+//! `<source>` is `[dc] <value>`, `SIN(vo va freq [td [theta]])`,
+//! `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, or
+//! `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]`, spelled as in SPICE. A source that
 //! carries a function is driven by the clock, so it cannot also be a routed
 //! input — [`super::adapter`] rejects a manifest that wires one.
 //!
@@ -625,7 +626,7 @@ pub struct MutualInductor {
 /// The operating point is solved at `t = 0` with [`Waveform::at`] evaluated
 /// there, which is what SPICE's `.tran` does when it is not given `uic`, so a
 /// deck starts from the same state in both engines.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Waveform {
     /// A constant. This is the only kind a routed input may drive.
     Dc(f64),
@@ -661,6 +662,18 @@ pub enum Waveform {
         /// Period, seconds.
         period: f64,
     },
+    /// `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]` — piecewise-linear
+    /// interpolation, optionally repeating the suffix that starts at a time
+    /// point in the sequence.
+    Pwl {
+        /// Ordered `(time, value)` pairs. Values before the first point and
+        /// after the last point hold the nearest endpoint.
+        points: Vec<(f64, f64)>,
+        /// Time-point suffix to repeat, if any.
+        repeat_time: Option<f64>,
+        /// Delay applied to the entire time sequence.
+        delay: f64,
+    },
 }
 
 impl Waveform {
@@ -669,8 +682,8 @@ impl Waveform {
     /// Deterministic: `sin`, `exp` and `floor` come from `libm` rather than
     /// from the platform's libm, for the reason [`super::device`] gives.
     pub fn at(&self, t: f64) -> f64 {
-        match *self {
-            Self::Dc(value) => value,
+        match self {
+            Self::Dc(value) => *value,
             Self::Sin {
                 offset,
                 amplitude,
@@ -678,19 +691,19 @@ impl Waveform {
                 delay,
                 theta,
             } => {
-                if t <= delay {
-                    offset
+                if t <= *delay {
+                    *offset
                 } else {
-                    let elapsed = t - delay;
-                    let envelope = if theta == 0.0 {
+                    let elapsed = t - *delay;
+                    let envelope = if *theta == 0.0 {
                         1.0
                     } else {
-                        libm::exp(-elapsed * theta)
+                        libm::exp(-elapsed * *theta)
                     };
-                    offset
-                        + amplitude
+                    *offset
+                        + *amplitude
                             * envelope
-                            * libm::sin(2.0 * core::f64::consts::PI * frequency * elapsed)
+                            * libm::sin(2.0 * core::f64::consts::PI * *frequency * elapsed)
                 }
             }
             Self::Pulse {
@@ -702,22 +715,57 @@ impl Waveform {
                 width,
                 period,
             } => {
-                if t < delay {
-                    return v1;
+                if t < *delay {
+                    return *v1;
                 }
-                let mut phase = t - delay;
-                if period > 0.0 && phase >= period {
-                    phase -= libm::floor(phase / period) * period;
+                let mut phase = t - *delay;
+                if *period > 0.0 && phase >= *period {
+                    phase -= libm::floor(phase / *period) * *period;
                 }
-                if rise > 0.0 && phase < rise {
-                    v1 + (v2 - v1) * (phase / rise)
-                } else if phase < rise + width {
-                    v2
-                } else if fall > 0.0 && phase < rise + width + fall {
-                    v2 + (v1 - v2) * ((phase - rise - width) / fall)
+                if *rise > 0.0 && phase < *rise {
+                    *v1 + (*v2 - *v1) * (phase / *rise)
+                } else if phase < *rise + *width {
+                    *v2
+                } else if *fall > 0.0 && phase < *rise + *width + *fall {
+                    *v2 + (*v1 - *v2) * ((phase - *rise - *width) / *fall)
                 } else {
-                    v1
+                    *v1
                 }
+            }
+            Self::Pwl {
+                points,
+                repeat_time,
+                delay,
+            } => {
+                let Some(first) = points.first().copied() else {
+                    return 0.0;
+                };
+                let Some(last) = points.last().copied() else {
+                    return 0.0;
+                };
+                if t < *delay {
+                    return first.1;
+                }
+                let mut elapsed = t - *delay;
+                if let Some(repeat_time) = repeat_time {
+                    let period = last.0 - *repeat_time;
+                    if elapsed >= *repeat_time && period > 0.0 {
+                        let after_repeat = elapsed - *repeat_time;
+                        let cycles = libm::floor(after_repeat / period);
+                        elapsed = *repeat_time + (after_repeat - cycles * period);
+                    }
+                }
+                if elapsed <= first.0 {
+                    return first.1;
+                }
+                if elapsed >= last.0 {
+                    return last.1;
+                }
+                let right = points.partition_point(|(time, _)| *time < elapsed);
+                let (left_time, left_value) = points[right - 1];
+                let (right_time, right_value) = points[right];
+                left_value
+                    + (right_value - left_value) * (elapsed - left_time) / (right_time - left_time)
             }
         }
     }
@@ -6931,8 +6979,8 @@ fn bind_models(
     Ok(())
 }
 
-/// Parse the value part of a `V`/`I` line: `[dc] <value>`, `SIN(...)` or
-/// `PULSE(...)`.
+/// Parse the value part of a `V`/`I` line: `[dc] <value>`, `SIN(...)`,
+/// `PULSE(...)`, or `PWL(...)`.
 ///
 /// SPICE allows the argument list to be written with or without commas and
 /// with the parenthesis detached from the keyword (`SIN (0 5 1k)`), so the
@@ -6941,6 +6989,79 @@ fn bind_models(
 fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Waveform, AnalogError> {
     let joined = tokens.join(" ");
     let upper = joined.trim().to_ascii_uppercase();
+
+    if upper.starts_with("PWL") {
+        let raw = joined.trim();
+        let rest = raw[3..].trim_start();
+        if rest.starts_with('(') {
+            let close = rest
+                .find(')')
+                .ok_or_else(|| ctx.parse_err("`PWL(` is missing its closing `)`"))?;
+            let body = &rest[1..close];
+            let options = &rest[close + 1..];
+            let values = body
+                .split([',', ' ', '\t'])
+                .filter(|token| !token.is_empty())
+                .map(|token| ctx.value(token, "PWL time or value"))
+                .collect::<Result<Vec<_>, _>>()?;
+            if values.len() < 4 || values.len() % 2 != 0 {
+                return Err(ctx.parse_err(
+                    "expected `PWL(t1 v1 t2 v2 [tn vn ...])` with at least two points",
+                ));
+            }
+            let points: Vec<(f64, f64)> = values
+                .chunks_exact(2)
+                .map(|pair| (pair[0], pair[1]))
+                .collect();
+            if points.windows(2).any(|pair| pair[0].0 >= pair[1].0) {
+                return Err(ctx.parse_err("PWL time points must be strictly increasing"));
+            }
+
+            let mut repeat_time = None;
+            let mut delay = 0.0;
+            let mut has_delay = false;
+            for option in options
+                .split([',', ' ', '\t'])
+                .filter(|token| !token.is_empty())
+            {
+                let Some((key, raw_value)) = option.split_once('=') else {
+                    return Err(ctx.parse_err("PWL options use `r=repeat_time` or `td=delay`"));
+                };
+                let value = ctx.value(raw_value, "PWL option")?;
+                match key.to_ascii_lowercase().as_str() {
+                    "r" if repeat_time.is_none() => repeat_time = Some(value),
+                    "r" => return Err(ctx.parse_err("PWL repeat option `r=` is repeated")),
+                    "td" if !has_delay => {
+                        delay = value;
+                        has_delay = true;
+                    }
+                    "td" => return Err(ctx.parse_err("PWL delay option `td=` is repeated")),
+                    other => {
+                        return Err(ctx.parse_err(format!(
+                            "unsupported PWL option `{other}`; use `r=` or `td=`"
+                        )))
+                    }
+                }
+            }
+            if delay < 0.0 {
+                return Err(ctx.parse_err("PWL delay must not be negative"));
+            }
+            if let Some(repeat_time) = repeat_time {
+                if !points.iter().any(|(time, _)| *time == repeat_time)
+                    || repeat_time >= points.last().expect("at least two points").0
+                {
+                    return Err(
+                        ctx.parse_err("PWL `r=` must name a time point before the final point")
+                    );
+                }
+            }
+            return Ok(Waveform::Pwl {
+                points,
+                repeat_time,
+                delay,
+            });
+        }
+    }
 
     for keyword in ["SIN", "PULSE"] {
         let Some(rest) = upper.strip_prefix(keyword) else {
@@ -7007,7 +7128,9 @@ fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Wavef
         _ => {
             return Err(ctx.parse_err(format!(
                 "expected `{shape}`, where `<source>` is `[dc] <value>`, \
-                 `SIN(vo va freq [td [theta]])` or `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`"
+                 `SIN(vo va freq [td [theta]])`, \
+                 `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, or \
+                 `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]`"
             )))
         }
     };

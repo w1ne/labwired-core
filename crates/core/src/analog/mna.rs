@@ -1723,18 +1723,20 @@ impl Solver {
             return;
         }
         for index in 0..self.circuit.voltage_sources.len() {
-            let wave = self.circuit.voltage_sources[index].wave;
-            if wave.is_constant() {
+            let source = &self.circuit.voltage_sources[index].wave;
+            if source.is_constant() {
                 continue;
             }
-            self.set_voltage_source(index, wave.at(time));
+            let value = source.at(time);
+            self.set_voltage_source(index, value);
         }
         for index in 0..self.circuit.current_sources.len() {
-            let wave = self.circuit.current_sources[index].wave;
-            if wave.is_constant() {
+            let source = &self.circuit.current_sources[index].wave;
+            if source.is_constant() {
                 continue;
             }
-            self.set_current_source(index, wave.at(time));
+            let value = source.at(time);
+            self.set_current_source(index, value);
         }
     }
 

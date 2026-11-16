@@ -1243,7 +1243,7 @@ C1 out 0 100n $ dollar comment
         let quarter = circuit.voltage_sources[0].wave.at(250e-6);
         assert!((quarter - 6.0).abs() < 1e-9, "got {quarter}");
 
-        let pulse = circuit.voltage_sources[1].wave;
+        let pulse = &circuit.voltage_sources[1].wave;
         assert_eq!(circuit.voltage_sources[1].dc, 0.0, "PULSE starts at v1");
         assert_eq!(pulse.at(0.0), 0.0);
         assert_eq!(pulse.at(1e-6), 0.0, "the delay ends at the first edge");
@@ -1264,6 +1264,57 @@ C1 out 0 100n $ dollar comment
         assert_eq!(circuit.voltage_sources[3].wave, Waveform::Dc(7.0));
         assert!(circuit.has_waveforms());
         assert!(!parse_netlist("V1 a 0 dc 5\n").unwrap().has_waveforms());
+    }
+
+    #[test]
+    fn pwl_sources_interpolate_hold_delay_and_repeat_the_requested_suffix() {
+        let circuit = parse_netlist(
+            "Vlinear a 0 PWL(0 0, 1u 2, 2u 0)\n\
+             Vrepeat b 0 PWL(0 0 1u 1 2u 0) r=1u\n\
+             Vdelay c 0 PWL(0 2 1u 4) td=0.5u\n",
+        )
+        .expect("PWL source syntax parses");
+
+        let assert_near = |actual: f64, expected: f64| {
+            assert!(
+                (actual - expected).abs() < 1e-12,
+                "expected {expected}, got {actual}"
+            );
+        };
+        let linear = &circuit.voltage_sources[0].wave;
+        assert_eq!(linear.at(0.0), 0.0);
+        assert_near(linear.at(0.5e-6), 1.0);
+        assert_eq!(linear.at(1.0e-6), 2.0);
+        assert_near(linear.at(1.5e-6), 1.0);
+        assert_eq!(linear.at(3.0e-6), 0.0, "the final value is held");
+
+        let repeated = &circuit.voltage_sources[1].wave;
+        assert_near(repeated.at(0.5e-6), 0.5);
+        assert_near(repeated.at(1.5e-6), 0.5);
+        assert_near(repeated.at(2.0e-6), 1.0);
+        assert_near(repeated.at(2.5e-6), 0.5);
+
+        let delayed = &circuit.voltage_sources[2].wave;
+        assert_eq!(delayed.at(0.0), 2.0);
+        assert_eq!(delayed.at(0.5e-6), 2.0);
+        assert_near(delayed.at(1.0e-6), 3.0);
+        assert_eq!(delayed.at(1.5e-6), 4.0);
+    }
+
+    #[test]
+    fn malformed_pwl_points_and_repeat_times_are_rejected() {
+        for (deck, expected) in [
+            ("V1 a 0 PWL(0 0 1u)\n", "at least two points"),
+            ("V1 a 0 PWL(0 0 1u 1 1u 2)\n", "strictly increasing"),
+            (
+                "V1 a 0 PWL(0 0 1u 1 2u 0) r=0.5u\n",
+                "must name a time point",
+            ),
+            ("V1 a 0 PWL(0 0 1u 1) td=-1u\n", "must not be negative"),
+        ] {
+            let error = parse_netlist(deck).expect_err("malformed PWL is refused");
+            assert!(error.to_string().contains(expected), "{error}");
+        }
     }
 
     /// A pulse whose edges and top do not fit inside its period is a typo that
