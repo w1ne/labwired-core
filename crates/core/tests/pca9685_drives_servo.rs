@@ -45,7 +45,11 @@ fn off_count_becomes_pulse_width_from_prescale() {
     let mut d = pca();
     init_50hz(&mut d);
     // OFF = 307 counts, ON = 0, on channel 3 (LED3 registers start at 0x06 + 4*3).
-    write_reg(&mut d, 0x06 + 4 * 3, &[0, 0, (307 & 0xFF) as u8, (307 >> 8) as u8]);
+    write_reg(
+        &mut d,
+        0x06 + 4 * 3,
+        &[0, 0, (307 & 0xFF) as u8, (307 >> 8) as u8],
+    );
     let us = d.pwm_channel_pulse_us(3).expect("channel 3 was written");
     // period = 4096 * (121 + 1) / 25 MHz = 19988 us; 307 / 4096 of it.
     assert!((us - 1498.0).abs() < 1.0, "pulse {us}");
@@ -56,7 +60,11 @@ fn off_count_becomes_pulse_width_from_prescale() {
 fn on_count_is_subtracted_and_full_off_is_silent() {
     let mut d = pca();
     init_50hz(&mut d);
-    write_reg(&mut d, 0x06, &[100, 0, (407 & 0xFF) as u8, (407 >> 8) as u8]);
+    write_reg(
+        &mut d,
+        0x06,
+        &[100, 0, (407 & 0xFF) as u8, (407 >> 8) as u8],
+    );
     let us = d.pwm_channel_pulse_us(0).unwrap();
     assert!((us - 307.0 / 4096.0 * 19988.0).abs() < 1.0, "pulse {us}");
     // OFF_H bit 4 = full off: the output is held low, whatever the count says.
@@ -74,7 +82,11 @@ fn a_sourced_servo_follows_the_controller_pulse_through_its_calibration() {
     let cal = ServoCal::mg995();
     let expected = cal.min_angle
         + (cal.max_angle - cal.min_angle) * (1498.0 - cal.min_us) / (cal.max_us - cal.min_us);
-    assert!((servo.angle_degrees() - expected).abs() < 0.5, "angle {}", servo.angle_degrees());
+    assert!(
+        (servo.angle_degrees() - expected).abs() < 0.5,
+        "angle {}",
+        servo.angle_degrees()
+    );
     assert!((servo.pulse_us() - 1498.0).abs() < 1e-3);
 }
 
