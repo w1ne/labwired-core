@@ -11,6 +11,3 @@ led_min_edges: 2
 pwm_watch: "gpioa:0"
 pwm_min_edges: 20
 family: stm32
-sketches_skip: [L8_can]
-sketches_skip_reason:
-  L8_can: "No FDCAN in chip yaml for matrix L8"
