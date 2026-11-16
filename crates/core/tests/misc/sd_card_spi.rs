@@ -164,11 +164,12 @@ struct Host<'a> {
 impl<'a> Host<'a> {
     fn on(bus: &'a mut SystemBus) -> Self {
         let idx = bus.find_peripheral_index_by_name("spi1").expect("spi1");
-        let any = bus.peripherals[idx].dev.as_any_mut().expect("downcastable");
-        let spi = any
-            .downcast_mut::<labwired_core::peripherals::spi::Spi>()
-            .expect("generic Spi");
-        let dev = spi.attached_devices.first_mut().expect("card attached");
+        let dev = bus.peripherals[idx]
+            .dev
+            .spi_attached_devices_mut()
+            .expect("spi1 hosts SPI devices")
+            .first_mut()
+            .expect("card attached");
         dev.cs_select();
         Host { dev }
     }
