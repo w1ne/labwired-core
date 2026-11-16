@@ -34,7 +34,6 @@ const NOT_TRANSCRIBED: &[&str] = &[
     "nrf52833",
     "nrf52840",
     "nrf54l15",
-    "nrf54lm20a",
     "s32k388",
     "sam4s16c",
     "stm32f746",
@@ -54,6 +53,12 @@ const NOT_TRANSCRIBED: &[&str] = &[
 /// non-round ratios, so a transcription slip shows as a voltage, not a ratio:
 /// (chip, VIL max volts, VIH min volts, source).
 const DATASHEET_VOLTS: &[(&str, f64, f64, &str)] = &[
+    (
+        "nrf54lm20a",
+        0.54,
+        1.26,
+        "nRF54LM20A datasheet v1.0 11.7.1, 0.3/0.7 x VDD, nRF54LM20 DK default VDD = 1.8 V",
+    ),
     (
         "ra4m1",
         1.0,

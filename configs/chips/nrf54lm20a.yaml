@@ -55,6 +55,18 @@ core: "cortex-m33"
 # number in the model.
 cpu_hz: 128_000_000
 
+# GPIO pad supply and input thresholds (ratios of io_voltage_v).
+# nRF54LM20A/nRF54LM20B Datasheet v1.0 (4539_001), 11.7.1 GPIO Electrical
+# Specification: VIH min 0.7 x VDD, VIL max 0.3 x VDD, one row for every port
+# (no separate P3 row). Section 12 gives VDD 1.7-3.6 V with no nominal, so the
+# rail is the nRF54LM20 DK's: nRF54LM20 DK HW User Guide v0.7.0 (4541_018),
+# 2.2: the nPM1300 supplies VDD:nRF "with a default voltage of 1.8 V".
+# https://files.seeedstudio.com/wiki/XIAO_nRF54LM20A/getting_start/RES/nRF54LM20A_nRF54LM20B_Datasheet_v1.0.pdf
+io_voltage_v: 1.8
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
 # RRAM, not flash. 2036 KB — an odd size, and it is correct: see
 # nrf54lm20_a_b.dtsi, `cpuapp_rram: reg = <0x0 DT_SIZE_K(2036)>`.
 flash:
