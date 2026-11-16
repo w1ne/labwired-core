@@ -49,12 +49,18 @@ fn run(record: bool) -> (CosimSignals, usize) {
     let mut reports = 0;
     signals.insert("x.a".into(), CosimSignalValue::F64(1.5));
     signals.insert("x.b".into(), CosimSignalValue::F64(2.0));
-    reports += runner.step_until_with_signals(20, &mut signals).unwrap().len();
+    reports += runner
+        .step_until_with_signals(20, &mut signals)
+        .unwrap()
+        .len();
     assert_eq!(signals["p.sum"], CosimSignalValue::F64(3.5));
     assert_eq!(signals["p.seen"], CosimSignalValue::I64(2));
     // `x.b` vanishes: the model must stop seeing it, not replay the old value.
     signals.remove("x.b");
-    reports += runner.step_until_with_signals(40, &mut signals).unwrap().len();
+    reports += runner
+        .step_until_with_signals(40, &mut signals)
+        .unwrap()
+        .len();
     assert_eq!(signals["p.sum"], CosimSignalValue::F64(1.5));
     assert_eq!(signals["p.seen"], CosimSignalValue::I64(1));
     assert_eq!(signals["q.seen"], CosimSignalValue::I64(1));

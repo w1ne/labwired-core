@@ -1,6 +1,6 @@
-use crate::cosim::{CosimAdapter, CosimStep, CosimStepResult};
 #[cfg(unix)]
 use crate::cosim::shm::{self, ShmRegion};
+use crate::cosim::{CosimAdapter, CosimStep, CosimStepResult};
 #[cfg(unix)]
 use crate::cosim::{CosimSignalValue, CosimSignals};
 use crate::{SimResult, SimulationError};
@@ -161,7 +161,9 @@ impl ExternalProcessCosimAdapter {
                         return if line == shm::HELLO_LINE.as_bytes() {
                             Ok(true)
                         } else {
-                            Err(error("unexpected output from co-sim process before first step"))
+                            Err(error(
+                                "unexpected output from co-sim process before first step",
+                            ))
                         };
                     }
                     line.push(byte[0]);

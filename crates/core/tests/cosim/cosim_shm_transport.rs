@@ -134,5 +134,8 @@ fn shm_rejects_text_and_undeclared_inputs_and_dead_child() {
     assert!(dying
         .step_into(1, 1, &CosimSignals::new(), &mut outputs)
         .is_err());
-    assert!(start.elapsed() < Duration::from_secs(1), "dead child not noticed promptly");
+    assert!(
+        start.elapsed() < Duration::from_secs(1),
+        "dead child not noticed promptly"
+    );
 }

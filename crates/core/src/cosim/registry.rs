@@ -233,11 +233,7 @@ impl CosimRunnerModel {
 
     /// Write the adapter's routed outputs into the store. When `record` is
     /// set, also return them keyed by store path.
-    fn scatter_outputs(
-        &self,
-        signals: &mut CosimSignals,
-        record: bool,
-    ) -> Option<CosimSignals> {
+    fn scatter_outputs(&self, signals: &mut CosimSignals, record: bool) -> Option<CosimSignals> {
         let mut routed = record.then(CosimSignals::new);
         for (model_signal, target_path) in &self.out_routes {
             let Some(value) = self.outputs_buf.get(model_signal.as_str()) else {

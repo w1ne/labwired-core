@@ -91,8 +91,8 @@ mod host {
     use super::*;
     use std::os::unix::fs::OpenOptionsExt;
     use std::path::{Path, PathBuf};
-    use std::sync::atomic::{fence, AtomicU32, Ordering};
     use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::{fence, AtomicU32, Ordering};
     use std::time::{Duration, Instant};
 
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
