@@ -538,11 +538,13 @@ impl SystemBus {
             if req.controller_idx >= self.peripherals.len() {
                 return true; // stale index → don't gate
             }
-            match self.peripherals[req.controller_idx]
-                .dev
-                .read_u32(req.reg_offset)
-            {
-                Ok(reg) => (reg >> req.bit) & 1 != 0,
+            let controller = &self.peripherals[req.controller_idx].dev;
+            match controller.read_u32(req.reg_offset) {
+                // A held peripheral reset blocks access like a stopped clock.
+                Ok(reg) => {
+                    (reg >> req.bit) & 1 != 0
+                        && !controller.clock_gate_reset_asserted(req.reg_offset, req.bit)
+                }
                 Err(_) => true, // unreadable controller register → fail open
             }
         });

@@ -144,6 +144,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | ch32v203c8t6 | open | L1 | 7 | — | — | ≥1× (CI) | — |
 | ch32v003f4u6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | ch32v003a4m6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
+| at32f421g8u7 | open | L1 | 20 | 982.3 | 1.5 | ≥1× (CI) | [doc](docs/boards/at32f421g8u7.md) |
 | ch32v003j4m6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | esp32h2 | open | L0 | 3 | — | 2.4 | ≥1× (CI) | — |
 | esp32c5 | open | L0 | 1 | — | 2.2 | ≥1× (CI) | — |

@@ -30,6 +30,21 @@ pub struct Iwdg {
     /// snapshot so the JSON format is unchanged.
     #[serde(skip, default)]
     write_access: bool,
+    /// Opt-in expiry (chip yaml `reset_on_expiry: { lsi_hz: N }`): the
+    /// counter runs from KR=0xCCCC and an elapsed timeout requests a machine
+    /// reset. `None` keeps the historical latch-only model.
+    #[serde(skip, default)]
+    expiry: Option<IwdgExpiry>,
+}
+
+/// Runtime of an expiring IWDG. Times are in CPU cycles of the shared clock.
+#[derive(Debug, Default)]
+struct IwdgExpiry {
+    lsi_hz: u64,
+    cpu_hz: u64,
+    running: bool,
+    deadline: u64,
+    clock: Option<crate::CycleClock>,
 }
 
 impl Iwdg {
@@ -41,7 +56,37 @@ impl Iwdg {
             sr: 0,
             winr: 0x0000_0FFF,
             write_access: false,
+            expiry: None,
         }
+    }
+
+    /// Count down from the low-speed clock and reset the machine on expiry.
+    /// `lsi_hz` is the nominal LSI/LICK frequency the descriptor declares;
+    /// RC oscillator tolerance is not modelled.
+    pub fn with_reset_on_expiry(mut self, lsi_hz: u64) -> Self {
+        self.expiry = Some(IwdgExpiry {
+            lsi_hz: lsi_hz.max(1),
+            cpu_hz: 1,
+            ..Default::default()
+        });
+        self
+    }
+
+    /// Reload the down-counter: timeout = (RLR + 1) * (4 << PR) / LSI.
+    fn reload_counter(&mut self) {
+        let (pr, rlr) = (self.pr.min(6), self.rlr);
+        if let Some(e) = self.expiry.as_mut() {
+            let lsi_ticks = u64::from(rlr + 1) * (4u64 << pr);
+            let cycles = (lsi_ticks * e.cpu_hz).div_ceil(e.lsi_hz).max(1);
+            let now = e.clock.as_ref().map_or(0, |c| c.now());
+            e.deadline = now.saturating_add(cycles);
+        }
+    }
+
+    fn expired(&self) -> bool {
+        self.expiry
+            .as_ref()
+            .is_some_and(|e| e.running && e.clock.as_ref().map_or(0, |c| c.now()) >= e.deadline)
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -66,6 +111,18 @@ impl Iwdg {
             0x00 => {
                 self.kr = value & 0xFFFF;
                 self.write_access = (value & 0xFFFF) == 0x5555;
+                match value & 0xFFFF {
+                    0xCCCC => {
+                        if let Some(e) = self.expiry.as_mut() {
+                            e.running = true;
+                        }
+                        self.reload_counter();
+                    }
+                    0xAAAA if self.expiry.as_ref().is_some_and(|e| e.running) => {
+                        self.reload_counter()
+                    }
+                    _ => {}
+                }
             }
             // PR/RLR are write-protected — a write without the 0x5555 unlock is
             // dropped (silicon-verified on the bench F103). Note: real silicon
@@ -112,6 +169,50 @@ impl crate::Peripheral for Iwdg {
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
     }
+
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        if let Some(e) = self.expiry.as_mut() {
+            e.cpu_hz = hz.max(1);
+        }
+    }
+    fn attach_cycle_clock(&mut self, clock: crate::CycleClock) {
+        if let Some(e) = self.expiry.as_mut() {
+            e.clock = Some(clock);
+        }
+    }
+    fn reset_request_capable(&self) -> bool {
+        self.expiry.is_some()
+    }
+    fn take_reset_request(&mut self) -> bool {
+        let expired = self.expired();
+        if expired {
+            if let Some(e) = self.expiry.as_mut() {
+                e.running = false;
+            }
+        }
+        expired
+    }
+    fn latched_reset_cause(&self) -> Option<crate::PeripheralResetCause> {
+        self.expired()
+            .then_some(crate::PeripheralResetCause::Watchdog)
+    }
+    /// An expiring IWDG returns to its stopped power-on state on any reset
+    /// (a running IWDG cannot otherwise be stopped by software).
+    fn on_system_reset(&mut self) {
+        if let Some(mut e) = self.expiry.take() {
+            e.running = false;
+            *self = Self {
+                expiry: Some(e),
+                ..Self::new()
+            };
+        }
+    }
+    fn on_node_reset(&mut self) {
+        self.on_system_reset();
+    }
+    fn on_supply_reset(&mut self, _cause: crate::power::SupplyResetCause) {
+        self.on_system_reset();
+    }
 }
 
 #[cfg(test)]
@@ -145,5 +246,41 @@ mod tests {
             0x5,
             "re-protected after non-unlock KR"
         );
+    }
+
+    #[test]
+    fn latch_only_iwdg_never_requests_a_reset() {
+        let mut w = Iwdg::new();
+        assert!(!w.reset_request_capable());
+        w.write_u32(0x00, 0xCCCC).unwrap();
+        assert!(!w.take_reset_request());
+    }
+
+    #[test]
+    fn expiring_iwdg_resets_after_the_programmed_timeout_unless_reloaded() {
+        let clock = crate::CycleClock::default();
+        let mut w = Iwdg::new().with_reset_on_expiry(40_000);
+        w.attach_cpu_hz(120_000_000);
+        w.attach_cycle_clock(clock.clone());
+        assert!(w.reset_request_capable());
+        w.write_u32(0x00, 0x5555).unwrap();
+        w.write_u32(0x04, 0).unwrap(); // /4
+        w.write_u32(0x08, 9).unwrap(); // 10 counts: 40 LSI ticks = 1 ms.
+        w.write_u32(0x00, 0xCCCC).unwrap();
+        clock.publish(119_999);
+        assert!(!w.take_reset_request(), "1 ms is 120000 cycles");
+        w.write_u32(0x00, 0xAAAA).unwrap(); // Reload restarts the window.
+        clock.publish(239_998);
+        assert!(!w.take_reset_request());
+        clock.publish(239_999);
+        assert_eq!(
+            w.latched_reset_cause(),
+            Some(crate::PeripheralResetCause::Watchdog)
+        );
+        assert!(w.take_reset_request());
+        assert!(!w.take_reset_request(), "one request per expiry");
+        w.on_system_reset();
+        assert_eq!(w.read_u32(0x08).unwrap(), 0xFFF);
+        assert!(w.reset_request_capable(), "expiry mode survives reset");
     }
 }
