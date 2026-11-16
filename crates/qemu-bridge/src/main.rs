@@ -163,8 +163,8 @@ fn cmd_dt_report(a: &Args) -> Result<(), String> {
         return Ok(());
     }
     println!(
-        "{:<54} {:<34} {:>12} {:>10} {:<16} {:<10} {}",
-        "PATH", "COMPATIBLE", "CPU-ADDR", "SIZE", "IRQ", "CLASS", "LABEL/MODEL"
+        "{:<54} {:<34} {:>12} {:>10} {:<16} {:<10} LABEL/MODEL",
+        "PATH", "COMPATIBLE", "CPU-ADDR", "SIZE", "IRQ", "CLASS"
     );
     for n in &board.nodes {
         let model = match n.class {

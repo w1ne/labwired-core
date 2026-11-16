@@ -4,6 +4,35 @@ QEMU's `labwired-mmio-bridge` device (`patches/0001-labwired-mmio-bridge.patch`)
 connects as a client to a unix stream socket. The LabWired side
 (`crates/qemu-bridge`) listens on it and owns the peripheral model.
 
+## Instances and sockets
+
+One QEMU device per modeled peripheral, one socket per device. There is no
+instance id in the protocol: the socket is the instance. `qemu-bridge plan
+--dtb FILE --socket-dir DIR` prints one `-device labwired-mmio-bridge,...`
+per modeled DT node, with `socket=DIR/<label>.sock` (label = the node's
+/aliases name, e.g. `i2c1`). `qemu-bridge serve --dtb FILE --socket-dir DIR`
+listens on the same paths, serves each socket on its own thread, and writes
+one transcript per instance (`--transcript-dir`). Each instance keeps its own
+model time; QEMU serializes all accesses under the BQL, so per-instance
+transcripts are deterministic under `-icount`.
+
+## Shared interrupt inputs
+
+Several devices may name the same GIC input: every BSC on BCM2711 uses
+SPI 117. The QEMU side drives that input with the OR of the levels of all
+bridge devices on it (device property `irq-or`, default `on`).
+`irq-or=off` (`plan --no-irq-or`) makes each device write the input with its
+own level, last writer wins; that exists only as a negative control.
+
+QEMU's own BCM2838 model also drives SPI 117: its three built-in BSCs
+(BSC0/1/2 at 0xfe205000/0xfe804000/0xfe805000) feed an or-irq gate and a
+split-irq into the same GIC input. The OR above does not include that gate.
+It stays quiet because those built-in models only change their output when
+their registers are accessed: BSC1 is shadowed by the bridge window, and
+BSC0/BSC2 are disabled in the Pi 4 DT, so the guest never touches them. A DT
+that enables a QEMU built-in BSC next to a bridged one would have two
+writers on SPI 117 again.
+
 ## Time
 
 QEMU is the only clock. Every request carries `t_ns`, the
@@ -77,6 +106,6 @@ right virtual time. Under `-icount` the timer fires exactly at the deadline.
 
 ## Not in this version
 
-- One MMIO window and one IRQ line per socket.
+- One MMIO window and one IRQ line per socket (and per device).
 - No DMA.
 - No snapshot/migration of the model state.
