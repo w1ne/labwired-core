@@ -1162,10 +1162,31 @@ impl Solver {
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
             let sign = mosfet.operating_model.polarity.sign();
-            let voltages = [
-                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d),
-                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s),
-            ];
+            let node_v = &self.node_v;
+            // Terminal volts the charges start from: the intrinsic nodes, or
+            // under uic the instance `ic=` (mos1load.c MODEINITJCT reads
+            // `type·icVDS` etc.; MOS1getic fills an omitted one from the
+            // external nodes). Under uic ngspice does NOT replace an all-zero
+            // ic with vgs = VTO, vbs = −1: that needs MODETRAN, MODEDCOP or
+            // no MODEUIC, and the uic start runs in MODETRANOP | MODEUIC.
+            let [vgs, vds, vbs, vgd, vgb, vbd] = if uic {
+                let ic = mosfet.ic;
+                let vds = ic[0].unwrap_or_else(|| node_diff(node_v, mosfet.d, mosfet.s));
+                let vgs = ic[1].unwrap_or_else(|| node_diff(node_v, mosfet.g, mosfet.s));
+                let vbs = ic[2].unwrap_or_else(|| node_diff(node_v, mosfet.bulk, mosfet.s));
+                [vgs, vds, vbs, vgs - vds, vgs - vbs, vbs - vds]
+            } else {
+                let (g, d, s, b) = (mosfet.g, mosfet.junction_d, mosfet.junction_s, mosfet.bulk);
+                [
+                    node_diff(node_v, g, s),
+                    node_diff(node_v, d, s),
+                    node_diff(node_v, b, s),
+                    node_diff(node_v, g, d),
+                    node_diff(node_v, g, b),
+                    node_diff(node_v, b, d),
+                ]
+            };
+            let voltages = [sign * vbd, sign * vbs];
             self.mos_bulk_q[index] = core::array::from_fn(|junction| {
                 mosfet
                     .bulk_junction_charge(voltages[junction], junction == 0)
@@ -1173,23 +1194,18 @@ impl Solver {
             });
             self.mos_bulk_i[index] = [0.0; 2];
 
-            let voltages = [
-                node_diff(&self.node_v, mosfet.g, mosfet.junction_s),
-                node_diff(&self.node_v, mosfet.g, mosfet.junction_d),
-                node_diff(&self.node_v, mosfet.g, mosfet.bulk),
-            ];
+            let voltages = [vgs, vgd, vgb];
             let capacitances = mosfet.overlap_capacitances();
             self.mos_overlap_q[index] =
                 core::array::from_fn(|junction| capacitances[junction] * voltages[junction]);
             self.mos_overlap_i[index] = [0.0; 3];
 
-            let sign = mosfet.operating_model.polarity.sign();
             let channel_caps = mos_channel_capacitance_halves(
                 mosfet,
-                sign * voltages[0],
-                sign * node_diff(&self.node_v, mosfet.junction_d, mosfet.junction_s),
-                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d),
-                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s),
+                sign * vgs,
+                sign * vds,
+                sign * vbd,
+                sign * vbs,
             );
             self.mos_channel_v[index] = voltages;
             self.mos_channel_q[index] =
@@ -1198,12 +1214,14 @@ impl Solver {
             self.mos_channel_cap_half[index] = channel_caps;
 
             if mosfet.operating_model.channel_charge_model == MosChannelChargeModel::WardDutton {
-                let vgs = sign * node_diff(&self.node_v, mosfet.g, mosfet.junction_s);
-                let vds = sign * node_diff(&self.node_v, mosfet.junction_d, mosfet.junction_s);
-                let vbd = sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d);
-                let vbs = sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s);
-                self.mos_conserving_q[index] =
-                    device::mos_ward_dutton_channel_charge(mosfet, vgs, vds, vbd, vbs).q;
+                self.mos_conserving_q[index] = device::mos_ward_dutton_channel_charge(
+                    mosfet,
+                    sign * vgs,
+                    sign * vds,
+                    sign * vbd,
+                    sign * vbs,
+                )
+                .q;
                 self.mos_conserving_i[index] = [0.0; 4];
             }
         }

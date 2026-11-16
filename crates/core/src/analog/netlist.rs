@@ -39,8 +39,9 @@
 //! nothing where the operating point is unique. Instance `ic=` on a diode
 //! (`ic=<vd>`), BJT (`ic=<vbe>,<vce>`) or JFET (`ic=<vds>,<vgs>`) is SPICE's:
 //! under `uic` the junction charge history starts from those voltages, as in
-//! ngspice's `MODEINITTRAN`, and without `uic` it is ignored. MOSFET `ic=` is
-//! refused (see the error text).
+//! ngspice's `MODEINITTRAN`, and without `uic` it is ignored. MOSFET
+//! `ic=<vds>[,<vgs>[,<vbs>]]` seeds the bulk-junction, overlap and Meyer
+//! charges the same way; a value left out comes from the terminal nodes.
 //!
 //! `.tran ... uic` skips the operating point, as SPICE does: every node starts
 //! at 0 V unless `.ic` sets it, a capacitor starts at its `ic=` (else the
@@ -2622,6 +2623,13 @@ pub struct Mosfet {
     /// bulk junctions at 0 V and holds them there until the rest of the
     /// circuit has converged (ngspice's `MODEINITFIX`). See [`Diode::off`].
     pub off: bool,
+    /// SPICE instance `ic=<vds>[,<vgs>[,<vbs>]]`, terminal volts as written
+    /// (an NMOS sign convention for both types, as ngspice's `MOS1icVDS`,
+    /// `MOS1icVGS` and `MOS1icVBS`). Under `.tran ... uic` the bulk-junction,
+    /// overlap and Meyer charges start from these voltages; a value left out
+    /// is taken from the terminal nodes at the uic start (`.ic` or 0 V), as
+    /// ngspice's `MOS1getic` does. Ignored without `uic`.
+    pub ic: [Option<f64>; 3],
     /// Drain.
     pub d: NodeRef,
     /// Gate.
@@ -3579,27 +3587,29 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             area = Some(ctx.value(value, "area")?)
                         }
                         "pj" if letter == 'D' => perimeter = Some(ctx.value(value, "pj")?),
-                        "ic" if letter != 'M' => {
+                        "ic" => {
                             ic = value
                                 .split(',')
                                 .map(|raw| ctx.value(raw, "ic"))
                                 .collect::<Result<Vec<_>, _>>()?;
-                            let expected = if letter == 'D' { 1 } else { 2 };
-                            if ic.len() != expected {
+                            // ngspice's MOS1 takes one to three values,
+                            // filled from vds; the others take two or one.
+                            let accepted = match letter {
+                                'D' => 1..=1,
+                                'M' => 1..=3,
+                                _ => 2..=2,
+                            };
+                            if !accepted.contains(&ic.len()) {
                                 return Err(ctx.parse_err(match letter {
                                     'D' => "diode ic= takes one junction voltage: `ic=<vd>`",
                                     'Q' => "BJT ic= takes two voltages: `ic=<vbe>,<vce>`",
+                                    'M' => {
+                                        "MOSFET ic= takes one to three voltages: \
+                                         `ic=<vds>[,<vgs>[,<vbs>]]`"
+                                    }
                                     _ => "JFET ic= takes two voltages: `ic=<vds>,<vgs>`",
                                 }));
                             }
-                        }
-                        "ic" => {
-                            return Err(ctx.parse_err(
-                                "MOSFET instance ic= is not supported: ngspice's level-1 \
-                                 MODEINITTRAN replaces an all-zero ic with vgs=VTO, vbs=-1 \
-                                 and seeds Meyer charge from it; seed the terminals with \
-                                 `.ic V(node)=` instead",
-                            ))
                         }
                         other => {
                             return Err(ctx.parse_err(format!(
@@ -4947,6 +4957,7 @@ fn bind_models(
                     name: device.name,
                     multiplier: device.multiplier,
                     off: device.off,
+                    ic: core::array::from_fn(|index| device.ic.get(index).copied()),
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
@@ -6196,6 +6207,7 @@ fn lower_comparator(
                 name,
                 multiplier: 1.0,
                 off: false,
+                ic: [None; 3],
                 d: out,
                 g: q,
                 s: vee,
