@@ -181,7 +181,7 @@ run() {
     fi
     local t_start=$SECONDS
     "$QEMU" -M raspi4b "${clk[@]}" -kernel "$WORK/kernel8.img" -dtb "$dtb" \
-        -initrd "$INITRD" -append "$APPEND lwtest=$guest" \
+        -initrd "$INITRD" -append "$APPEND lwtest=$guest lwcount=${DUAL_COUNT:-200}" \
         -display none -monitor none -serial stdio \
         -no-reboot "${extra[@]}" </dev/null >>"$log" 2>&1 &
     local qpid=$! t=0
@@ -227,8 +227,8 @@ for r in $RUNS; do cat "$LOGS/$r.log"; done >"$LOGS/all-runs.log"
 fail=0
 pass() { echo "PASS $1"; }
 failc() { echo "FAIL $1"; fail=1; }
-check() { if grep -q "$2" "$LOGS/$1.log"; then pass "$1: $3"; else failc "$1: $3"; fi; }
-nocheck() { if grep -q "$2" "$LOGS/$1.log"; then failc "$1: $3"; else pass "$1: $3"; fi; }
+# Guest console lines end in CR LF; match on the lines without the CR.
+check() { if grep "$2" <(tr -d '\r' <"$LOGS/$1.log") >/dev/null; then pass "$1: $3"; else failc "$1: $3"; fi; }
 has() { [[ " $RUNS " == *" $1 "* ]]; }
 T1=i2c1.transcript
 
@@ -258,12 +258,26 @@ if has dual; then
     check dual '^LW-CONCURRENT bus1 0x76: ok=200 bad=0' "concurrent loop bus 1: 200/200"
     check dual '^LW-CONCURRENT bus3 0x77: ok=200 bad=0' "concurrent loop bus 3: 200/200"
 fi
+if has dual; then
+    python3 -I "$HERE/irq-replay.py" "$LOGS/dual.transcripts" or | sed 's/^/  dual: /'
+    if python3 -I "$HERE/irq-replay.py" "$LOGS/dual.transcripts" or | grep -qE '^overlap: [1-9]'; then
+        pass "dual: transfers on bus 1 and bus 3 overlap in virtual time"
+    else failc "dual: transfers on bus 1 and bus 3 overlap in virtual time"; fi
+fi
+# Negative control for the shared-IRQ OR. With irq-or=off each bridge writes
+# the GIC input with its own level (last writer wins). Replaying the real
+# transcripts with that rule shows the input at 0 while a bridge holds its
+# level at 1. The guest still completes: Linux requests SPI 117 IRQF_SHARED,
+# so every interrupt runs both BSC handlers, and each polls its own S
+# register; a hidden level is picked up at the other bus's next interrupt.
 if has dual-noor; then
     check dual-noor '^LW-HOST: plan: .*irq-or=off$' "plan with irq-or=off"
-    if grep -qE '^LW-CONCURRENT bus[13] 0x7[67]: ok=[0-9]+ bad=[1-9]' "$LOGS/dual-noor.log"; then
-        pass "dual-noor: without the OR, concurrent transfers fail ($(grep -h '^LW-CONCURRENT' "$LOGS/dual-noor.log" | tr '\n' ';'))"
+    replay="$(python3 -I "$HERE/irq-replay.py" "$LOGS/dual-noor.transcripts" last)"
+    sed 's/^/  dual-noor: /' <<<"$replay"
+    if grep -qE '^hidden \(last\): [1-9][0-9]* episodes' <<<"$replay"; then
+        pass "dual-noor: without the OR the GIC input hides a pending bridge level ($(grep '^hidden' <<<"$replay"))"
     else
-        failc "dual-noor: without the OR, concurrent transfers fail"
+        failc "dual-noor: without the OR the GIC input hides a pending bridge level"
     fi
 fi
 if has disabled; then
