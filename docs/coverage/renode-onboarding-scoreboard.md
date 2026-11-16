@@ -14,8 +14,8 @@
 - pass_depth_unknown: `0/226`
 - pass_claimed_peripherals_total: `1562`
 - pass_claimed_peripherals_median: `4`
-- median_elapsed_ms: `1524`
-- median_elapsed_seconds: `1.524`
+- median_elapsed_ms: `1489`
+- median_elapsed_seconds: `1.489`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -126,10 +126,10 @@
 | `mimxrt1064_evk` | `pass` | `True` | `yes` | `yes` | `308185` | `308.185` | `True` | `observable` | `4` | `uart_contains`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `mimxrt700_evk` | `pass` | `True` | `yes` | `yes` | `453346` | `453.346` | `True` | `observable` | `2` | `uart_contains`, `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `mimxrt798s` | `pass` | `True` | `yes` | `yes` | `310523` | `310.523` | `True` | `observable` | `2` | `uart_contains`, `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `miv` | `pass` | `True` | `yes` | `yes` | `1308` | `1.308` | `True` | `observable` | `5` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
-| `miv-board` | `pass` | `True` | `yes` | `yes` | `863` | `0.863` | `True` | `observable` | `5` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
-| `miv-board-additional-uarts` | `pass` | `True` | `yes` | `yes` | `1443` | `1.443` | `True` | `observable` | `7` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
-| `miv_rv32` | `pass` | `True` | `yes` | `yes` | `6500` | `6.5` | `True` | `observable` | `5` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
+| `miv` | `pass` | `True` | `yes` | `yes` | `902` | `0.902` | `True` | `observable` | `5` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
+| `miv-board` | `pass` | `True` | `yes` | `yes` | `965` | `0.965` | `True` | `observable` | `5` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
+| `miv-board-additional-uarts` | `pass` | `True` | `yes` | `yes` | `1463` | `1.463` | `True` | `observable` | `7` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
+| `miv_rv32` | `pass` | `True` | `yes` | `yes` | `896` | `0.896` | `True` | `observable` | `5` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `mpc5567` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `5` | n/a | 3: `fec:fastethernetcontroller`, `emios:emios`, `fmpllSynsr:pythonperipheral` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no PowerPC e200z6 CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `mpfs-icicle-kit` | `pass` | `True` | `yes` | `yes` | `91079` | `91.079` | `True` | `observable` | `8` | `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `msp430f2619` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `4` | n/a | 4: `boot:arraymemory`, `ram_extended:arraymemory`, `code:arraymemory`, `info_mem:arraymemory` | `not_configured` | Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub. | MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage. |
@@ -179,7 +179,7 @@
 | `sam4s8b` | `pass` | `True` | `yes` | `yes` | `10582` | `10.582` | `True` | `observable` | `12` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sam4s_xplained` | `pass` | `True` | `yes` | `yes` | `4845` | `4.845` | `True` | `observable` | `13` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sam_e70` | `pass` | `True` | `yes` | `yes` | `123872` | `123.872` | `True` | `observable` | `19` | `uart_ordered`, `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `sifive-fe310` | `pass` | `True` | `yes` | `yes` | `7352` | `7.352` | `True` | `observable` | `2` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
+| `sifive-fe310` | `pass` | `True` | `yes` | `yes` | `1077` | `1.077` | `True` | `observable` | `2` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `sifive-fu540` | `pass` | `True` | `yes` | `yes` | `211078` | `211.078` | `True` | `observable` | `1` | `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sifive-fu740` | `pass` | `True` | `yes` | `yes` | `1456` | `1.456` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `simavr-at90usb162` | `pass` | `True` | `yes` | `yes` | `220040` | `220.04` | `True` | `observable` | `1` | `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |

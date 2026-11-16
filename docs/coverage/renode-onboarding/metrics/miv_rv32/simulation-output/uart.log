@@ -8,5 +8,6 @@ clint msip masked pending=1 released=1 traps=00000000 ok
 plic timer0 prio_fixed=1 threshold_fixed=1 raw=1 pending=1 disabled_low=1 meip=1 traps=00000000 ok
 plic timer0 mcause=8000000b count=00000001 claim=0000001e timer_cleared=1 pending_clear=1 reclaim=00000000 meip_low=1 ok
 plic timer1 raw=1 meip=1 claim=0000001f claimed_low=1 reclaim=00000000 traps=00000000 ok
+plic timer1 level claim=0000001f repend=1 claim2=0000001f low_no_repend=1 reclaim=00000000 ok
 gpio outputs out=00000001 irq=00000001 plic_pending=00000000 ok
 plic gpio_in in=00000008 irq=00000008 pending=1 disabled_low=1 meip=1 claim=0000001d latch_cleared=1 meip_low=1 reclaim=00000000 traps=00000000 ok

@@ -4,7 +4,7 @@
     "type": "risc_v",
     "registers": [
       0,
-      1610632772,
+      1610634900,
       2214592432,
       2147485696,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 1610634128,
+    "pc": 1610636256,
     "mstatus": 6272,
     "mie": 0,
     "mip": 0,
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "0c9fc089734f83f5d991d42c68d70e833463118c2346cb7de4717c1ce897ecf3",
+  "firmware_hash": "99686253dd2ce6181f4e43ea9a18a274178ff909f0e4b192443dadd9436ec3f1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-miv-rv32-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/miv-board-additional-uarts.yaml",

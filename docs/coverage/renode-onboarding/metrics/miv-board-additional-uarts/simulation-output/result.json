@@ -46,6 +46,7 @@
           "plic timer0 prio_fixed=1 threshold_fixed=1 raw=1 pending=1 disabled_low=1 meip=1 traps=00000000 ok",
           "plic timer0 mcause=8000000b count=00000001 claim=0000001e timer_cleared=1 pending_clear=1 reclaim=00000000 meip_low=1 ok",
           "plic timer1 raw=1 meip=1 claim=0000001f claimed_low=1 reclaim=00000000 traps=00000000 ok",
+          "plic timer1 level claim=0000001f repend=1 claim2=0000001f low_no_repend=1 reclaim=00000000 ok",
           "gpio outputs out=00000001 irq=00000001 plic_pending=00000000 ok",
           "plic gpio_in in=00000008 irq=00000008 pending=1 disabled_low=1 meip=1 claim=0000001d latch_cleared=1 meip_low=1 reclaim=00000000 traps=00000000 ok"
         ]
@@ -75,7 +76,7 @@
     "type": "risc_v",
     "registers": [
       0,
-      1610632772,
+      1610634900,
       2214592432,
       2147485696,
       0,
@@ -107,7 +108,7 @@
       0,
       0
     ],
-    "pc": 1610634128,
+    "pc": 1610636256,
     "mstatus": 6272,
     "mie": 0,
     "mip": 0,
@@ -143,7 +144,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "0c9fc089734f83f5d991d42c68d70e833463118c2346cb7de4717c1ce897ecf3",
+  "firmware_hash": "99686253dd2ce6181f4e43ea9a18a274178ff909f0e4b192443dadd9436ec3f1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-miv-rv32-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/miv-board-additional-uarts.yaml",
@@ -275,42 +276,48 @@
         "end_cycle": 10000
       },
       {
+        "text": "plic timer1 level claim=0000001f repend=1 claim2=0000001f low_no_repend=1 reclaim=00000000 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
         "text": "gpio outputs out=00000001 irq=00000001 plic_pending=00000000 ok",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       },
       {
         "text": "plic gpio_in in=00000008 irq=00000008 pending=1 disabled_low=1 meip=1 claim=0000001d latch_cleared=1 meip_low=1 reclaim=00000000 traps=00000000 ok",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       },
       {
         "text": "MIV ADDITIONAL UART 1",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       },
       {
         "text": "MIV ADDITIONAL UART 2",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 21560,
+    "text_bytes": 23688,
     "data_bytes": 0,
     "bss_bytes": 67108864,
-    "flash_used_bytes": 21560,
+    "flash_used_bytes": 23688,
     "ram_static_bytes": 67108864,
     "flash_total_bytes": 262144,
     "ram_total_bytes": 67108864,
-    "flash_used_pct": 8.22,
+    "flash_used_pct": 9.04,
     "ram_static_pct": 100.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -328,13 +335,18 @@
     "steps_executed": 100000,
     "memory_reads": 426,
     "memory_writes": 63,
-    "peripheral_accesses": 1807,
+    "peripheral_accesses": 2009,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1610634128,
-        "count": 390,
+        "pc": 1610636256,
+        "count": 351,
         "symbol": "main"
+      },
+      {
+        "pc": 1610628840,
+        "count": 39,
+        "symbol": "firmware_miv_rv32_smoke::wait_meip"
       }
     ]
   }

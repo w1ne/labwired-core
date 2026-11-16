@@ -12,7 +12,8 @@
 //! while `mstatus.MIE` is clear. The PLIC probes check the fixed priority 1
 //! (`prioritiesEnabled: false` in Renode's miv.repl), CoreTimer0 latching
 //! source 30 with its enable clear, the MEI trap with claim/complete, and a
-//! polled claim of CoreTimer1's source 31. The GPIO probes check that
+//! polled claim of CoreTimer1's source 31, and a complete that re-pends
+//! source 31 only while the timer interrupt is still raised. The GPIO probes check that
 //! gpioOutputs drives its output register with no PLIC source, and that a
 //! looped-back rising edge on gpioInputs pin 3 pends PLIC source 29 and is
 //! claimed by polling. The smoke does not claim DDR initialization or a
@@ -506,6 +507,47 @@ fn plic_timer1_poll_probe() -> bool {
     pass
 }
 
+/// With `mstatus.MIE` clear, claim CoreTimer1's source 31 and complete it
+/// while the timer's interrupt is still raised: the source re-pends before
+/// the next instruction. After the timer interrupt is cleared, a second
+/// complete leaves it neither pending nor claimable.
+fn plic_timer1_level_repend_probe() -> bool {
+    let (first, repend, second, low_pending, settled, reclaim) = unsafe {
+        start_one_shot(TIMER1_BASE);
+        let _ = wait_timer_raw(TIMER1_BASE, 1000);
+        core::ptr::write_volatile(PLIC_ENABLE, 1 << TIMER1_SOURCE);
+        let _ = wait_meip(true, 1000);
+        let first = core::ptr::read_volatile(PLIC_CLAIM);
+        core::ptr::write_volatile(PLIC_CLAIM, first);
+        let repend = core::ptr::read_volatile(PLIC_PENDING) & (1 << TIMER1_SOURCE) != 0;
+        let second = core::ptr::read_volatile(PLIC_CLAIM);
+        core::ptr::write_volatile(timer_reg(TIMER1_BASE, 0x08), 0);
+        core::ptr::write_volatile(timer_reg(TIMER1_BASE, 0x10), 1);
+        core::ptr::write_volatile(PLIC_CLAIM, second);
+        let low_pending = core::ptr::read_volatile(PLIC_PENDING) & (1 << TIMER1_SOURCE) != 0;
+        let settled = !wait_meip(true, 1000);
+        let reclaim = core::ptr::read_volatile(PLIC_CLAIM);
+        core::ptr::write_volatile(PLIC_ENABLE, 0);
+        (first, repend, second, low_pending, settled, reclaim)
+    };
+    let pass = first == TIMER1_SOURCE
+        && repend
+        && second == TIMER1_SOURCE
+        && !low_pending
+        && settled
+        && reclaim == 0;
+    puts("plic timer1 level claim=");
+    put_hex32(first);
+    flag(" repend=", repend);
+    puts(" claim2=");
+    put_hex32(second);
+    flag(" low_no_repend=", !low_pending && settled);
+    puts(" reclaim=");
+    put_hex32(reclaim);
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
 const GPIO_IN_BASE: usize = 0x7000_2000;
 const GPIO_OUT_BASE: usize = 0x7000_5000;
 const GPIO_IN_SOURCE: u32 = 29;
@@ -653,6 +695,7 @@ fn main() -> ! {
     let _plic_masked_pass = plic_timer0_masked_probe();
     let _plic_trap_pass = plic_timer0_trap_probe();
     let _plic_poll_pass = plic_timer1_poll_probe();
+    let _plic_level_pass = plic_timer1_level_repend_probe();
     let _gpio_out_pass = gpio_outputs_probe();
     let _gpio_in_pass = gpio_inputs_plic_probe();
 

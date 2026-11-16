@@ -10,6 +10,7 @@ clint msip mcause=80000003 count=00000001 mepc_next=1 cleared=1 ok
 clint msip masked pending=1 released=1 traps=00000000 ok
 plic uart0 ip=00000001 pending=1 disabled_low=1 meip=1 threshold_masks=1 unmasked=1 prio_warl=1 traps=00000000 ok
 plic uart0 mcause=8000000b count=00000001 claim=00000003 ie_cleared=1 pending_clear=1 reclaim=00000000 meip_low=1 ok
+plic uart0 level claim=00000003 repend=1 claim2=00000003 low_no_repend=1 reclaim=00000000 ok
 gpio irq rise early=0 rise_ip=00000004 fall_ip=00000000 pending=1 disabled_low=1 meip=1 high_relatch=1 traps=00000000 ok
 gpio irq rise mcause=8000000b count=00000001 claim=0000000a rise_ip=00000000 repended=0 reclaim=00000000 meip_low=1 ok
 gpio irq fall rise_quiet=1 fall_ip=80000000 meip=1 claim=00000027 claimed_clear=1 meip_low=1 reclaim=00000000 traps=00000000 ok

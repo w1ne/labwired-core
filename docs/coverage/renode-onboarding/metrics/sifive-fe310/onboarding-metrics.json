@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/sifive-fe310-smoke.yaml",
   "system": "configs/systems/onboarding/sifive-fe310.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-16T03:49:12Z",
-  "finished_at_utc": "2026-11-16T03:49:19Z",
-  "elapsed_seconds": 8,
-  "elapsed_ms": 7352,
+  "started_at_utc": "2026-11-16T05:04:56Z",
+  "finished_at_utc": "2026-11-16T05:04:57Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1077,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 4.474,
-    "build_firmware": 2.174,
-    "run_smoke": 0.651
+    "build_cli": 0.35,
+    "build_firmware": 0.237,
+    "run_smoke": 0.447
   },
   "stages_ms": {
-    "build_cli": 4474,
-    "build_firmware": 2174,
-    "run_smoke": 651
+    "build_cli": 350,
+    "build_firmware": 237,
+    "run_smoke": 447
   }
 }

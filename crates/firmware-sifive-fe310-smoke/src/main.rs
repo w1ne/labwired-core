@@ -14,7 +14,8 @@
 //! interrupt taken after the `msip` store, and MSIP held pending while
 //! `mstatus.MIE` is clear. The PLIC probes raise uart0's TX-watermark
 //! interrupt (source 3) and check pending, enable, priority and threshold
-//! gating of MEIP, then take the external interrupt and claim/complete it.
+//! gating of MEIP, then take the external interrupt and claim/complete it,
+//! and check that a complete re-pends the source only while its line is high.
 //! The GPIO interrupt probes drive pads through the output loopback: a rising
 //! edge on pin 2 pends PLIC source 10 and is taken as a trap, a falling edge on
 //! pin 31 pends source 39 and is claimed by polling, and HIGH_IP re-latches
@@ -659,6 +660,45 @@ fn plic_uart0_trap_probe() -> bool {
     pass
 }
 
+/// Claim and complete uart0's level TX-watermark source by polling, with
+/// `mstatus.MIE` clear. A complete while the line is still high re-pends
+/// source 3 before the next instruction; a complete after uart0 `ie` drops
+/// the line leaves it neither pending nor claimable.
+fn plic_uart0_level_repend_probe() -> bool {
+    let (first, repend, second, low_pending, settled, reclaim) = unsafe {
+        core::ptr::write_volatile(PLIC_ENABLE, 1 << UART0_SOURCE);
+        core::ptr::write_volatile(UART0_IE, 1);
+        let _ = wait_bit(PLIC_PENDING, 1 << UART0_SOURCE, 1000);
+        let first = core::ptr::read_volatile(PLIC_CLAIM);
+        core::ptr::write_volatile(PLIC_CLAIM, first);
+        let repend = core::ptr::read_volatile(PLIC_PENDING) & (1 << UART0_SOURCE) != 0;
+        let second = core::ptr::read_volatile(PLIC_CLAIM);
+        core::ptr::write_volatile(UART0_IE, 0);
+        core::ptr::write_volatile(PLIC_CLAIM, second);
+        let low_pending = core::ptr::read_volatile(PLIC_PENDING) & (1 << UART0_SOURCE) != 0;
+        let settled = !wait_bit(PLIC_PENDING, 1 << UART0_SOURCE, 1000);
+        let reclaim = core::ptr::read_volatile(PLIC_CLAIM);
+        core::ptr::write_volatile(PLIC_ENABLE, 0);
+        (first, repend, second, low_pending, settled, reclaim)
+    };
+    let pass = first == UART0_SOURCE
+        && repend
+        && second == UART0_SOURCE
+        && !low_pending
+        && settled
+        && reclaim == 0;
+    puts("plic uart0 level claim=");
+    put_hex32(first);
+    flag(" repend=", repend);
+    puts(" claim2=");
+    put_hex32(second);
+    flag(" low_no_repend=", !low_pending && settled);
+    puts(" reclaim=");
+    put_hex32(reclaim);
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
 const GPIO_RISE_IE: *mut u32 = 0x1001_2018 as *mut u32;
 const GPIO_RISE_IP: *mut u32 = 0x1001_201C as *mut u32;
 const GPIO_FALL_IE: *mut u32 = 0x1001_2020 as *mut u32;
@@ -891,6 +931,7 @@ fn main() -> ! {
     let _clint_masked_pass = clint_msip_masked_probe();
     let _plic_masked_pass = plic_uart0_masked_probe();
     let _plic_trap_pass = plic_uart0_trap_probe();
+    let _plic_level_pass = plic_uart0_level_repend_probe();
     let _gpio_rise_masked_pass = gpio_irq_rise_masked_probe();
     let _gpio_rise_trap_pass = gpio_irq_rise_trap_probe();
     let _gpio_fall_pass = gpio_irq_fall_polled_probe();
