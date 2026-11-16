@@ -170,3 +170,15 @@ peripherals:
   base_address: 0x400B7000
   size: 8B
   irq: 5
+# Timer and Watchdog. Base and NVIC line from Renode nuvoton_npcx9.repl
+# (Timers.NPCX_TWD at 0x400D8000, -> nvic@31); register map, 32768 Hz clock,
+# locks and the 87h/61h/63h / 5Ch service bytes from Renode NPCX_TWD.cs.
+# T0 counts TWDT0..0 at 32768 Hz / 2^MDIV and pulses the IRQ at each terminal
+# count; the watchdog starts on the first WDCNT write, counts T0 periods (or
+# prescaled ticks with WDCT0I) / 2^WDIV and resets the system at 0. The window
+# is 4 KiB (Renode Size 0x1000). Not modelled: TESDIS / WDLTD, MIWU wake-up.
+- id: twd
+  type: npcx_twd
+  base_address: 0x400D8000
+  size: 4KB
+  irq: 31

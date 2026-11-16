@@ -46,6 +46,21 @@
 //     on NVIC 5, each one TTC increment apart, and the handler clears PTO and
 //     moves PT on. ITIM64 at 1 MHz times the gaps: 1000 ms each.
 //
+// Then the TWD at 0x400D8000 on NVIC 31 (Renode Timers.NPCX_TWD): TWCFG
+// +0x00, TWCP +0x02, TWDT0 +0x04 (16-bit), T0CSR +0x06, WDCNT +0x08, WDSDM
+// +0x0A, TWMWD +0x0E; T0 runs at 32768 Hz / 2^MDIV.
+// 17. Reset values: TWCFG 0, TWDT0 0xFFFF, WDCNT 0x0F, watchdog stopped.
+//     MDIV 3 and TWDT0 4095 give a 1 s T0 period: three IRQs on NVIC 31, the
+//     gaps timed with ITIM64 at 1000 ms each; T0CSR.TC reads 1 once. LTWDT0
+//     makes TWDT0 read 0 and drop writes; 87h/61h/63h with the watchdog
+//     stopped clears the lock. With a 32-tick T0 period, WDSDME and WDCNT 10,
+//     a 5Ch touch every 5 periods keeps the core alive for 30 periods, and
+//     the count reads 7 three periods after a touch. 87h/61h/63h stops the
+//     watchdog (WD_RUN 0): 15 periods pass. WDCNT 10 again with no touch:
+//     the handler prints one '.' per T0 IRQ; the watchdog resets the chip on
+//     the 10th period, so the UART shows exactly nine dots, then the second
+//     boot reports WDRST_STS set, WD_RUN clear, W1C and TWDT0 back to 0xFFFF.
+//
 // Bare-register, no HAL.
 
 #![no_std]
@@ -143,6 +158,26 @@ const NVIC_ICER: usize = 0xE000_E180;
 const NVIC_ISPR: usize = 0xE000_E200;
 const NVIC_ICPR: usize = 0xE000_E280;
 
+const TWD: usize = 0x400D_8000;
+const TWD_LINE: u32 = 31;
+const TWCFG: usize = 0x00;
+const TWCP: usize = 0x02;
+const TWDT0: usize = 0x04;
+const T0CSR: usize = 0x06;
+const WDCNT: usize = 0x08;
+const WDSDM: usize = 0x0A;
+const TWMWD: usize = 0x0E;
+const TWCFG_LTWDT0: u8 = 1 << 2;
+const TWCFG_WDSDME: u8 = 1 << 5;
+const T0CSR_TC: u8 = 1 << 1;
+const T0CSR_WDRST_STS: u8 = 1 << 4;
+const T0CSR_WD_RUN: u8 = 1 << 5;
+static TWD_IRQS: AtomicU32 = AtomicU32::new(0);
+/// ITIM64 ITCNT at the first three TWD IRQs.
+static TWD_US: [AtomicU32; 3] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
+/// Nonzero: the TWD handler prints a '.' per IRQ.
+static TWD_DOTS: AtomicU32 = AtomicU32::new(0);
+
 static ITIM1_IRQS: AtomicU32 = AtomicU32::new(0);
 /// Bit n set: TIMERS[n] took its IRQ.
 static SEEN: AtomicU32 = AtomicU32::new(0);
@@ -153,6 +188,14 @@ fn rd8(base: usize, offset: usize) -> u8 {
 
 fn wr8(base: usize, offset: usize, value: u8) {
     unsafe { write_volatile((base + offset) as *mut u8, value) }
+}
+
+fn rd16(base: usize, offset: usize) -> u16 {
+    unsafe { read_volatile((base + offset) as *const u16) }
+}
+
+fn wr16(base: usize, offset: usize, value: u16) {
+    unsafe { write_volatile((base + offset) as *mut u16, value) }
 }
 
 fn rd32(base: usize, offset: usize) -> u32 {
@@ -246,6 +289,16 @@ unsafe fn DefaultHandler(irqn: i16) {
             WTC_WIE | WTC_PTO | (ttc.wrapping_add(1) & PT_MASK),
         );
     }
+    // TWD T0 terminal count.
+    if irqn as u32 == TWD_LINE {
+        let n = TWD_IRQS.fetch_add(1, Ordering::SeqCst) as usize;
+        if n < 3 {
+            TWD_US[n].store(rd32(ITIM64, ITCNT), Ordering::SeqCst);
+        }
+        if TWD_DOTS.load(Ordering::SeqCst) != 0 {
+            putc(b'.');
+        }
+    }
     // UART2..4 RX: read URBUF, as uart_npcx_fifo_read does.
     for (n, &(base, line)) in UART_LINES[1..].iter().enumerate() {
         if irqn as u32 == line {
@@ -257,6 +310,27 @@ unsafe fn DefaultHandler(irqn: i16) {
 
 #[entry]
 fn main() -> ! {
+    // Second boot, after the watchdog reset at the end of check 17.
+    let csr = rd8(TWD, T0CSR);
+    if csr & T0CSR_WDRST_STS != 0 {
+        let stopped = (csr & T0CSR_WD_RUN == 0) as u32;
+        wr8(TWD, T0CSR, T0CSR_WDRST_STS);
+        let clr = (rd8(TWD, T0CSR) & T0CSR_WDRST_STS == 0) as u32;
+        let t0 = (rd16(TWD, TWDT0) == 0xFFFF) as u32;
+        puts(b"|twd reboot wdrst=1");
+        put_kv(b"stopped", stopped);
+        put_kv(b"clr", clr);
+        put_kv(b"t0", t0);
+        puts(if stopped == 1 && clr == 1 && t0 == 1 {
+            b" ok\r\n"
+        } else {
+            b" FAIL\r\n"
+        });
+        loop {
+            unsafe { core::arch::asm!("wfi") };
+        }
+    }
+
     puts(b"NPCX9 UART1 smoke\r\n");
 
     // 1. Registers hold while disabled.
@@ -559,7 +633,101 @@ fn main() -> ! {
         ttc_rw == 1 && pt_rw == 1 && mtc_irqs == 3 && steps == 1 && ms1 == 1000 && ms2 == 1000;
     puts(if mtc_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
-    // Idle: no IRQ is enabled, so the run fast-forwards to max_steps.
+    // 17. TWD.
+    let regs = (rd8(TWD, TWCFG) == 0
+        && rd16(TWD, TWDT0) == 0xFFFF
+        && rd8(TWD, WDCNT) == 0x0F
+        && rd8(TWD, T0CSR) & (T0CSR_WD_RUN | T0CSR_WDRST_STS) == 0) as u32;
+    // 1 s T0 period, timed with ITIM64 at 1 MHz.
+    wr8(TWD, TWCP, 3);
+    wr16(TWD, TWDT0, 4095);
+    let t0rw = (rd8(TWD, TWCP) == 3 && rd16(TWD, TWDT0) == 4095) as u32;
+    wr8(ITIM64, ITCTS, 0);
+    wr8(ITIM64, ITPRE, PRE_1MHZ);
+    wr32(ITIM64, ITCNT, 0xFFFF_FFFF);
+    wr32(ITIM64, ITCNT64H, 0);
+    wr8(ITIM64, ITCTS, ITEN);
+    nvic_set(NVIC_ICPR, TWD_LINE);
+    nvic_set(NVIC_ISER, TWD_LINE);
+    let mut guard = 0u32;
+    while TWD_IRQS.load(Ordering::SeqCst) < 3 && guard < 10 {
+        unsafe { core::arch::asm!("wfi") };
+        guard += 1;
+    }
+    nvic_set(NVIC_ICER, TWD_LINE);
+    wr8(ITIM64, ITCTS, 0);
+    let t0irq = TWD_IRQS.load(Ordering::SeqCst);
+    let us = |n: usize| TWD_US[n].load(Ordering::SeqCst);
+    let tms1 = (us(0).wrapping_sub(us(1)) + 500) / 1000;
+    let tms2 = (us(1).wrapping_sub(us(2)) + 500) / 1000;
+    let tc = (rd8(TWD, T0CSR) & T0CSR_TC != 0 && rd8(TWD, T0CSR) & T0CSR_TC == 0) as u32;
+    // Lock, then unlock with the watchdog stopped.
+    wr8(TWD, TWCFG, TWCFG_LTWDT0);
+    wr16(TWD, TWDT0, 7);
+    let lock = (rd16(TWD, TWDT0) == 0 && rd8(TWD, TWCFG) == TWCFG_LTWDT0) as u32;
+    for b in [0x87, 0x61, 0x63] {
+        wr8(TWD, WDSDM, b);
+    }
+    let unlock = (rd8(TWD, TWCFG) == 0 && rd16(TWD, TWDT0) == 4095) as u32;
+    // 32-tick T0 period (~0.98 ms); the watchdog counts T0 periods.
+    wr8(TWD, TWCP, 0);
+    wr16(TWD, TWDT0, 31);
+    wr8(TWD, TWCFG, TWCFG_WDSDME);
+    wr8(TWD, WDCNT, 10);
+    let run = (rd8(TWD, T0CSR) & T0CSR_WD_RUN != 0) as u32;
+    let wait = |periods: u32| {
+        let target = TWD_IRQS.load(Ordering::SeqCst) + periods;
+        while TWD_IRQS.load(Ordering::SeqCst) < target {
+            unsafe { core::arch::asm!("wfi") };
+        }
+    };
+    nvic_set(NVIC_ICPR, TWD_LINE);
+    nvic_set(NVIC_ISER, TWD_LINE);
+    for _ in 0..6 {
+        wait(5);
+        wr8(TWD, WDSDM, 0x5C);
+    }
+    let touch = (rd8(TWD, T0CSR) & T0CSR_WD_RUN != 0) as u32;
+    wait(3);
+    let dec = (rd8(TWD, TWMWD) == 7) as u32;
+    // Stop: the sequence with the watchdog running.
+    for b in [0x87, 0x61, 0x63] {
+        wr8(TWD, WDSDM, b);
+    }
+    let stopped = rd8(TWD, T0CSR) & T0CSR_WD_RUN == 0;
+    wait(15);
+    let stop = stopped as u32;
+    puts(b"twd");
+    put_kv(b"regs", regs);
+    put_kv(b"t0", t0rw);
+    put_kv(b"irq", t0irq);
+    put_kv(b"ms1", tms1);
+    put_kv(b"ms2", tms2);
+    put_kv(b"tc", tc);
+    put_kv(b"lock", lock);
+    put_kv(b"unlock", unlock);
+    put_kv(b"run", run);
+    put_kv(b"touch", touch);
+    put_kv(b"dec", dec);
+    put_kv(b"stop", stop);
+    let twd_ok = regs == 1
+        && t0rw == 1
+        && t0irq == 3
+        && tms1 == 1000
+        && tms2 == 1000
+        && tc == 1
+        && lock == 1
+        && unlock == 1
+        && run == 1
+        && touch == 1
+        && dec == 1
+        && stop == 1;
+    puts(if twd_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
+    // Expiry: no touch; the watchdog resets the chip on the 10th period.
+    puts(b"twd expire ");
+    TWD_DOTS.store(1, Ordering::SeqCst);
+    wr8(TWD, WDCNT, 10);
     loop {
         unsafe { core::arch::asm!("wfi") };
     }

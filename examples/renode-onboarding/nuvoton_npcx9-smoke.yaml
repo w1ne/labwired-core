@@ -1,10 +1,13 @@
-# Cortex-M4F UART1..4, ITIM32_1..6 / ITIM64, GPIO0..F and MTC smoke on the imported system.
+# Cortex-M4F UART1..4, ITIM32_1..6 / ITIM64, GPIO0..F, MTC and TWD smoke on the imported system.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke"
   system: "../../configs/systems/onboarding/nuvoton_npcx9.yaml"
+# The TWD T0 timer runs from reset and wakes the idle core every 2 s, so the
+# run ends on max_cycles (idle time does not count toward max_steps).
 limits:
-  max_steps: 400000
+  max_steps: 2000000
+  max_cycles: 100000000
 # Two bytes per UART2..4: the first is polled (own port only), the second
 # arrives through the FIFO-mode RX interrupt.
 uart_injections:
@@ -21,7 +24,10 @@ assertions:
   - uart_contains: "uarts tbe=3 rx=3 isolated=1 ok"
   - uart_contains: "uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok"
   - uart_contains: "mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok"
+  - uart_contains: "twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok"
+  # Exactly nine T0 IRQs, then the watchdog reset and the second boot.
+  - uart_contains: "twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok"
   - uart_contains: "cr_uart2 tx"
   - uart_contains: "cr_uart3 tx"
   - uart_contains: "cr_uart4 tx"
-  - expected_stop_reason: max_steps
+  - expected_stop_reason: max_cycles

@@ -4,9 +4,10 @@
 
 The imported NPCX9M6F EVB system uses the same chip surface as
 [`nuvoton_npcx9`](nuvoton_npcx9.md) (UART1..4, GPIO0..GPIOF,
-ITIM32_1..6, ITIM64, MTC). It booted `firmware-nuvoton-npcx9-smoke` (SHA-256
-`85e272a65f6bcc187b74b65d78714b7a432538c3a21ad70253e81ecd2b9b46a4`) for
-**400,000 instructions** and passed **10/10 smoke assertions**, with the same
+ITIM32_1..6, ITIM64, MTC, TWD). It booted `firmware-nuvoton-npcx9-smoke`
+(SHA-256 `197d3e2fa7f96128e5f97081458f741a4d18daa1ccef287099a213934edcb582`),
+rebooted once through the TWD watchdog, ran to **100,000,000 cycles**
+(564,751 instructions) and passed **12/12 smoke assertions**, with the same
 UART capture (UART1..4 share one capture stream):
 
 ```text
@@ -19,6 +20,8 @@ cr_uart4 tx
 uarts tbe=3 rx=3 isolated=1 ok
 uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok
 mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok
+twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok
+twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok
 ```
 
 Evidence:

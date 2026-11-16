@@ -2,9 +2,10 @@
 
 ## Current measurement (2026-11-16)
 
-The imported NPCX9 system booted `firmware-nuvoton-npcx9-smoke` for
-**400,000 instructions** and passed **10/10 smoke assertions**. Firmware
-SHA-256 `85e272a65f6bcc187b74b65d78714b7a432538c3a21ad70253e81ecd2b9b46a4`.
+The imported NPCX9 system booted `firmware-nuvoton-npcx9-smoke`, rebooted
+once through the TWD watchdog, and ran to **100,000,000 cycles**
+(564,751 instructions). It passed **12/12 smoke assertions**. Firmware
+SHA-256 `197d3e2fa7f96128e5f97081458f741a4d18daa1ccef287099a213934edcb582`.
 UART capture (UART1..4 share one capture stream):
 
 ```text
@@ -17,6 +18,8 @@ cr_uart4 tx
 uarts tbe=3 rx=3 isolated=1 ok
 uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok
 mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok
+twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok
+twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok
 ```
 
 The result, UART capture, JUnit assertions, snapshot and build/run logs are
@@ -59,8 +62,21 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
     25-bit PT with WIE clear. With WIE set and PT = TTC + 1 the core idles in
     WFI; three IRQs arrive, each one TTC increment after the last, and the
     handler clears PTO and moves PT on. ITIM64 at 1 MHz measures both gaps
-    as 1000 ms (Renode's 1 Hz tick). The run reaches the 45 M cycles through
-    WFI idle fast-forward; it executes 400,000 instructions.
+    as 1000 ms (Renode's 1 Hz tick). The core waits in WFI idle
+    fast-forward.
+17. TWD at 0x400D8000 on NVIC 31: reset values (TWCFG 0, TWDT0 0xFFFF,
+    WDCNT 0x0F, watchdog stopped). MDIV 3 and TWDT0 4095 give a 1 s T0
+    period: three IRQs, ITIM64 times both gaps at 1000 ms, and T0CSR.TC
+    reads 1 once. LTWDT0 makes TWDT0 read 0 and drop a write; 87h/61h/63h
+    with the watchdog stopped clears the lock. With a 32-tick T0 period,
+    WDSDME and WDCNT 10, a 5Ch touch every 5 periods keeps the core running
+    for 30 periods, and TWMWD reads 7 three periods after a touch.
+    87h/61h/63h stops the watchdog (WD_RUN 0) and 15 periods pass. WDCNT 10
+    again with no touch: the handler prints one `.` per T0 IRQ, and the
+    watchdog resets the chip on the 10th period, so the capture shows exactly
+    nine dots. The second boot reads WDRST_STS 1 and WD_RUN 0, clears
+    WDRST_STS (W1C) and reads TWDT0 back at 0xFFFF. T0 keeps waking the idle
+    core every 2 s, so the run ends on `max_cycles`, not `max_steps`.
 
 ## Claimed peripherals
 
@@ -71,12 +87,13 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
 | `itim32_1`..`itim32_6` | `npcx_itim32` | Down-counter, prescaler, APB2/LFCLK, TO_STS level IRQ on NVIC 28, 27, 17, 43, 44, 45. |
 | `itim64` | `npcx_itim64` | 64-bit down-counter, IRQ on NVIC 58. |
 | `mtc` | `npcx_mtc` | TTC 1 Hz count (read/write, survives system reset), WTC PT / PTO (W1C) / WIE; level IRQ WIE && PTO on NVIC 5. |
+| `twd` | `npcx_twd` | T0 at 32768 Hz / 2^MDIV, TWDT0 period, TC (read clears), pulse IRQ per terminal count on NVIC 31; watchdog WDCNT / TWMWD / WDCP, WDCT0I clock select, 87h/61h/63h stop and unlock, 5Ch touch (WDSDME), bad service byte reset, lock bits, system reset with WDRST_STS. |
 
 GPIO ids are `port0`..`portf`, not Zephyr's `gpio0`..`gpiof`: a `gpio0` or
 `gpio1` id switches on the bus's Nordic GPIOTE pass.
 
 Sources: Renode `platforms/cpus/nuvoton_npcx9.repl`, `NPCX_GPIO.cs`,
-`NPCX_ITIM.cs`, `NPCX_MTC.cs` and `NPCX_UART.cs`; Zephyr `drivers/serial/uart_npcx.c`; Zephyr `soc/nuvoton/npcx/common/reg/reg_def.h`
+`NPCX_ITIM.cs`, `NPCX_MTC.cs`, `NPCX_TWD.cs` and `NPCX_UART.cs`; Zephyr `drivers/serial/uart_npcx.c`; Zephyr `soc/nuvoton/npcx/common/reg/reg_def.h`
 (`gpio_reg`, `itim32_reg`, `itim64_reg`), `drivers/gpio/gpio_npcx.c` and
 `dts/arm/nuvoton/npcx/npcx.dtsi` / `npcx9.dtsi`.
 
@@ -98,8 +115,20 @@ Not modelled:
   clock trees.
 - MTC: deep-sleep wake-up (WIE only gates the NVIC line), LFCG clock
   selection (the tick is fixed at 1 Hz).
+- TWD: T0CSR TESDIS and WDLTD (Renode tags them), LTWCFG gating TWCFG
+  (Renode stores the bit only), T0 wake-up through MIWU, 32-bit accesses
+  beyond the 16-bit register at the address.
 
-Not declared (no model in this engine): TWD, MDMA, SPIP,
+Differences from Renode `NPCX_TWD`, each toward the documented register
+behaviour: TWCP and WDCP read back the written field (Renode returns the
+divider 2^n); the watchdog decrements once per 2^WDIV input ticks (Renode's
+helper takes 2^WDIV + 1); the TWDT0 reset preset is 0xFFFF (Renode
+initialises its limit to 0xFFFF1, which the 16-bit field cannot hold);
+WDRST_STS survives the watchdog reset it records (Renode clears it in the
+machine reset); a completed 87h/61h/63h sequence returns to idle, so a second
+sequence is accepted (Renode resets on the next 87h).
+
+Not declared (no model in this engine): MDMA, SPIP,
 HFCG, LFCG, FIU, SMBus, and the other Renode NPCX blocks.
 
 ## Negative controls
@@ -123,6 +152,9 @@ HFCG, LFCG, FIU, SMBus, and the other Renode NPCX blocks.
 - [`attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-mtc/`](../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-mtc/):
   same CLI and firmware (SHA-256 `85e272a6…`), previous descriptor without
   the `mtc` entry; BusFault at 0x400B7000 (TTC), FAIL 9/10.
+- [`attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-twd/`](../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-twd/):
+  same CLI and firmware (SHA-256 `197d3e2f…`), previous descriptor without
+  the `twd` entry; BusFault at 0x400D8006 (T0CSR read at entry), FAIL 0/12.
 
 The profile's `verified` field remains false. This result is limited to the
 local model behaviour; it is not datasheet validation or hardware

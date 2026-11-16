@@ -6,8 +6,8 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 400000,
-    "stop_reason": "max_steps"
+    "instructions": 564751,
+    "stop_reason": "max_cycles"
   },
   "smoke_passed": true,
   "crate": "firmware-nuvoton-npcx9-smoke",
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/nuvoton_npcx9m6fb_evb-smoke.yaml",
   "system": "configs/systems/onboarding/nuvoton_npcx9m6fb_evb.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-16T09:47:44Z",
-  "finished_at_utc": "2026-11-16T09:47:50Z",
-  "elapsed_seconds": 7,
-  "elapsed_ms": 6332,
+  "started_at_utc": "2026-11-16T11:22:42Z",
+  "finished_at_utc": "2026-11-16T11:22:44Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1605,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 3.018,
-    "build_firmware": 0.515,
-    "run_smoke": 2.751
+    "build_cli": 0.723,
+    "build_firmware": 0.378,
+    "run_smoke": 0.434
   },
   "stages_ms": {
-    "build_cli": 3018,
-    "build_firmware": 515,
-    "run_smoke": 2751
+    "build_cli": 723,
+    "build_firmware": 378,
+    "run_smoke": 434
   }
 }

@@ -7,3 +7,5 @@ cr_uart4 tx
 uarts tbe=3 rx=3 isolated=1 ok
 uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok
 mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok
+twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok
+twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok
