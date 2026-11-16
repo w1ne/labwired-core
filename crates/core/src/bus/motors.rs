@@ -1793,6 +1793,39 @@ impl SystemBus {
                 faults: Vec::new(),
             });
         }
+        // IN1..IN4 unipolar steppers (28BYJ-48 behind a ULN2003) are also
+        // GPIO-observer twins. Fold them the same way so a motors oracle sees
+        // their shaft angle instead of reporting the motor as missing.
+        for m in
+            self.observed_of::<crate::peripherals::components::unipolar_stepper::UnipolarStepper>()
+        {
+            if m.id().is_empty() {
+                continue;
+            }
+            out.push(MotorSnapshot {
+                id: m.id().to_string(),
+                kind: STEPPER_SNAPSHOT_KIND,
+                position_rad: m.angle_degrees_f64().to_radians(),
+                // Speed/torque/bus are not modelled for unipolar steppers.
+                speed_rpm: 0.0,
+                speed_rpm_peak_abs: 0.0,
+                speed_rpm_max: 0.0,
+                speed_rpm_min: 0.0,
+                torque_nm: 0.0,
+                current_a: None,
+                phase_currents_a: None,
+                bus_voltage_v: Some(0.0),
+                commutation_sector: None,
+                // No enable input: "step" after the first half-step change.
+                control_state: if m.is_commanded() {
+                    "step".to_owned()
+                } else {
+                    "idle".to_owned()
+                },
+                coupling: None,
+                faults: Vec::new(),
+            });
+        }
         out
     }
 

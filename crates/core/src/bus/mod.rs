@@ -859,7 +859,7 @@ pub struct SystemBus {
     /// pass. Lets `tick_peripherals_fully` decide in O(1) whether the walk-free
     /// per-cycle tick has any work at all (see `per_cycle_tick_is_trivial`)
     /// instead of scanning peripherals by name every cycle.
-    nordic_gpio_service: bool,
+    gpio_edge_observers: bool,
     /// Set by `wire_stm32_timer_capture_pads` when at least one GPIO pad can
     /// feed a timer input, so the post-write hook drains timer-input edges
     /// only on buses that have any. One predictable false branch elsewhere.
