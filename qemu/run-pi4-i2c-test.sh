@@ -109,7 +109,7 @@ run() {
         local flag=()
         [[ "$mode" == no-device ]] && flag=(--no-device)
         rm -f "$sock"
-        "$BRIDGE" --socket "$sock" "${flag[@]}" 2>"$LOGS/$name.bridge.log" &
+        "$BRIDGE" --socket "$sock" "${flag[@]}" ${BRIDGE_EXTRA:-} 2>"$LOGS/$name.bridge.log" &
         bpid=$!
         for _ in $(seq 100); do [[ -S "$sock" ]] && break; sleep 0.1; done
         extra=(-device "labwired-mmio-bridge,addr=$BSC1_ADDR,size=$BSC1_SIZE,socket=$sock,irq=$BSC1_SPI")

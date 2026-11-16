@@ -15,6 +15,10 @@ echo "LW-I2C-NODES: $(ls /dev/i2c-* 2>/dev/null | tr '\n' ' ')"
 for a in /sys/bus/i2c/devices/i2c-*; do
     [ -e "$a/name" ] && echo "LW-ADAPTER $(basename $a): $(cat $a/name)"
 done
+mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null
+if [ -r /sys/kernel/debug/clk/clk_summary ]; then
+    grep -E '^ *clock |vpu|i2c' /sys/kernel/debug/clk/clk_summary | sed 's/^/LW-CLK: /'
+fi
 echo "LW-CMD: i2cdetect -y 1"
 busybox i2cdetect -y 1 > /tmp/detect.txt 2>&1 || true
 cat /tmp/detect.txt
