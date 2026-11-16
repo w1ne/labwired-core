@@ -2579,8 +2579,9 @@ pub struct Bjt {
     /// Emitter.
     pub e: NodeRef,
     /// Substrate: the optional fourth terminal, ground when omitted (as in
-    /// ngspice). Its junction, when the model has one, is the internal diode
-    /// `<name>#substrate` in [`Circuit::diodes`].
+    /// ngspice). Its junction is always the internal diode
+    /// `<name>#substrate` in [`Circuit::diodes`]; with `ISS = CJS = 0` it
+    /// carries only GMIN.
     pub s: NodeRef,
     /// Collector junction node: the intrinsic collector. Without `RCO` it
     /// equals `c` when `RC = 0`, else the internal node `<name>#collector`.
@@ -4618,79 +4619,80 @@ fn bind_models(
                 // plus `CJS`/`VJS`/`MJS` depletion charge with no `FC`. That
                 // is exactly a diode with `FC = 0`, so it is lowered onto the
                 // diode path rather than given a second copy of the
-                // junction solver. A three-terminal BJT with no substrate
-                // parameters skips it; ngspice would add only GMIN to ground.
-                if device.nodes.len() > 3 || model.cjs > 0.0 || model.iss > 0.0 {
-                    if !(model.cjs.is_finite()
-                        && model.cjs >= 0.0
-                        && model.vjs.is_finite()
-                        && model.vjs > 0.0
-                        && model.mjs.is_finite()
-                        && model.mjs >= 0.0
-                        && model.iss.is_finite()
-                        && model.iss >= 0.0
-                        && model.ns.is_finite()
-                        && model.ns > 0.0
-                        && operating_model.cjs.is_finite()
-                        && operating_model.cjs >= 0.0
-                        && operating_model.vjs.is_finite()
-                        && operating_model.vjs > 0.0
-                        && operating_model.ns.is_finite()
-                        && operating_model.ns > 0.0
-                        && operating_model.iss.is_finite())
-                    {
-                        return Err(ctx.parse_err(
-                            "a BJT substrate junction needs CJS >= 0, VJS > 0, MJS >= 0, ISS >= 0 and NS > 0, all finite at the instance temperature"
-                                .to_string(),
-                        ));
-                    }
-                    let internal_name = format!("{}#substrate", device.name);
-                    let contact = if model.substrate_is_vertical() {
-                        junction_c
-                    } else {
-                        junction_b
-                    };
-                    let polarity = if model.substrate_is_vertical() {
-                        model.polarity.sign()
-                    } else {
-                        -model.polarity.sign()
-                    };
-                    let (anode, cathode) = if polarity > 0.0 {
-                        (substrate, contact)
-                    } else {
-                        (contact, substrate)
-                    };
-                    // The card is already at the instance temperature, so its
-                    // own `TNOM` is set there with `EG = XTI = 0`: the diode
-                    // laws then leave `IS` untouched and only pick up `Vt(T)`.
-                    let junction = DiodeModel {
-                        is: operating_model.iss,
-                        n: operating_model.ns,
-                        cjo: operating_model.cjs,
-                        vj: operating_model.vjs,
-                        m: operating_model.mjs.min(0.999),
-                        fc: 0.0,
-                        eg: 0.0,
-                        xti: 0.0,
-                        tnom_celsius: device.temperature_celsius.unwrap_or(27.0),
-                        ..DiodeModel::default()
-                    };
-                    circuit.diodes.push(Diode {
-                        name: internal_name,
-                        multiplier: device.multiplier,
-                        off: device.off,
-                        ic: None,
-                        anode,
-                        cathode,
-                        junction_anode: anode,
-                        model_name: device.model_name.clone(),
-                        model: junction,
-                        operating_model: junction,
-                        series_resistance_ohms: 0.0,
-                        temperature_celsius: device.temperature_celsius,
-                        breakdown: None,
-                    });
+                // junction solver. A three-terminal BJT gets it too, with the
+                // substrate at ground: ngspice ties the substrate node to
+                // ground there, so with `ISS = CJS = 0` the junction is
+                // GMIN alone, a 1 pS leak from the collector (vertical) or
+                // base (lateral) that a high-impedance node can see.
+                if !(model.cjs.is_finite()
+                    && model.cjs >= 0.0
+                    && model.vjs.is_finite()
+                    && model.vjs > 0.0
+                    && model.mjs.is_finite()
+                    && model.mjs >= 0.0
+                    && model.iss.is_finite()
+                    && model.iss >= 0.0
+                    && model.ns.is_finite()
+                    && model.ns > 0.0
+                    && operating_model.cjs.is_finite()
+                    && operating_model.cjs >= 0.0
+                    && operating_model.vjs.is_finite()
+                    && operating_model.vjs > 0.0
+                    && operating_model.ns.is_finite()
+                    && operating_model.ns > 0.0
+                    && operating_model.iss.is_finite())
+                {
+                    return Err(ctx.parse_err(
+                        "a BJT substrate junction needs CJS >= 0, VJS > 0, MJS >= 0, ISS >= 0 and NS > 0, all finite at the instance temperature"
+                            .to_string(),
+                    ));
                 }
+                let internal_name = format!("{}#substrate", device.name);
+                let contact = if model.substrate_is_vertical() {
+                    junction_c
+                } else {
+                    junction_b
+                };
+                let polarity = if model.substrate_is_vertical() {
+                    model.polarity.sign()
+                } else {
+                    -model.polarity.sign()
+                };
+                let (anode, cathode) = if polarity > 0.0 {
+                    (substrate, contact)
+                } else {
+                    (contact, substrate)
+                };
+                // The card is already at the instance temperature, so its
+                // own `TNOM` is set there with `EG = XTI = 0`: the diode
+                // laws then leave `IS` untouched and only pick up `Vt(T)`.
+                let junction = DiodeModel {
+                    is: operating_model.iss,
+                    n: operating_model.ns,
+                    cjo: operating_model.cjs,
+                    vj: operating_model.vjs,
+                    m: operating_model.mjs.min(0.999),
+                    fc: 0.0,
+                    eg: 0.0,
+                    xti: 0.0,
+                    tnom_celsius: device.temperature_celsius.unwrap_or(27.0),
+                    ..DiodeModel::default()
+                };
+                circuit.diodes.push(Diode {
+                    name: internal_name,
+                    multiplier: device.multiplier,
+                    off: device.off,
+                    ic: None,
+                    anode,
+                    cathode,
+                    junction_anode: anode,
+                    model_name: device.model_name.clone(),
+                    model: junction,
+                    operating_model: junction,
+                    series_resistance_ohms: 0.0,
+                    temperature_celsius: device.temperature_celsius,
+                    breakdown: None,
+                });
                 circuit.bjts.push(Bjt {
                     name: device.name,
                     multiplier: device.multiplier,

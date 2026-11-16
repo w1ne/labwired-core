@@ -3442,6 +3442,14 @@ mod analog {
                     sign * (vbc - vbe),
                 );
                 let solver = build(&netlist);
+                // A lateral PNP's substrate GMIN runs from its base, at
+                // `sign·vbc`, to ground. The NPN's runs from its collector,
+                // which sits at 0 V.
+                let ib = if polarity == Polarity::P {
+                    ib + device::GMIN * vbc
+                } else {
+                    ib
+                };
                 let actual_ic = sign * source_current(&solver, "Vc");
                 let actual_ib = sign * source_current(&solver, "Vb");
                 let actual_ie = sign * source_current(&solver, "Ve");
@@ -8213,9 +8221,9 @@ mod analog {
             "vertical PNP: reverse substrate current {vertical_collector}"
         );
 
-        // A model name is never read as the substrate node, and a deck with
-        // no substrate parameters is bit-identical with or without a fourth
-        // node tied to ground.
+        // A model name is never read as the substrate node, and a deck is
+        // bit-identical with or without a fourth node tied to ground: as in
+        // ngspice, the omitted substrate is ground and still carries GMIN.
         let amplifier = |q: &str| {
             let mut solver = Solver::new(
                 parse_netlist(&format!(
@@ -8236,10 +8244,10 @@ mod analog {
         };
         let three_terminal = amplifier("Q1 c b 0 QA");
         assert_eq!(three_terminal, amplifier("Q1 c b 0 QA 1"));
-        assert_ne!(
+        assert_eq!(
             three_terminal,
             amplifier("Q1 c b 0 0 QA"),
-            "an explicit substrate adds ngspice's GMIN across the junction"
+            "an omitted substrate is ground, as an explicit one"
         );
         assert_ne!(
             amplifier("Q1 c b 0 0 QA"),
@@ -8504,6 +8512,45 @@ mod analog {
         assert_eq!(bulk.id, -1e-9 - device::GMIN * 0.2);
     }
 
+    /// A three-terminal BJT still has ngspice's substrate junction, with the
+    /// substrate at ground: GMIN from ground to the collector of a vertical
+    /// device (NPN default, or `SUBS=1`) and to the base of a lateral one
+    /// (PNP default). Each node below is fed through 1 TΩ, so the 1 pS leaks
+    /// set its voltage. The collector-base and base-emitter junctions add
+    /// one GMIN each to the nodes they touch: the NPN collector and the
+    /// vertical PNP base see two (10 V / 3), the lateral PNP base three
+    /// (10 V / 4). Without the substrate leak they would read 5 V and
+    /// 3.33 V. References are ngspice-45 `.op`, `gmin=1e-12`.
+    #[test]
+    fn three_terminal_bjt_substrate_carries_ngspice_gmin_to_ground() {
+        let solver = build(
+            "V1 vc 0 10\n\
+             R1 vc c 1e12\n\
+             Q1 c 0 0 QN\n\
+             R2 vc b 1e12\n\
+             Q2 0 b 0 QP\n\
+             R3 vc bv 1e12\n\
+             Q3 0 bv 0 QPV\n\
+             R4 vc c4 1e12\n\
+             Q4 c4 0 0 0 QN\n\
+             .model QN NPN(IS=1e-16)\n\
+             .model QP PNP(IS=1e-16)\n\
+             .model QPV PNP(IS=1e-16 SUBS=1)\n",
+        );
+        for (node, reference) in [
+            ("c", 3.333_267),
+            ("b", 2.499_975),
+            ("bv", 3.333_300),
+            ("c4", 3.333_267),
+        ] {
+            let got = solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+            assert!(
+                (got - reference).abs() < 1e-5,
+                "v({node}): ngspice-45 {reference} V, got {got} V"
+            );
+        }
+    }
+
     /// The four BJT junction currents (`IS` forward and reverse, `ISE`,
     /// `ISC`) follow ngspice-42 `bjtload.c` in reverse bias: below `−3·N·Vt`,
     /// with each junction's own `N`, the cubic `−I·(1 + (3·N·Vt/(e·V))³)`
@@ -8519,8 +8566,7 @@ mod analog {
         // (Vbe = Vbc, ngspice i(Vb), i(Vc), i(Vbp), i(Vcp)). The PNP sees the
         // mirrored bias. ngspice also ties GMIN from the substrate node
         // (ground) to a vertical NPN's collector and a lateral PNP's base;
-        // the engine has no substrate junction on a three-node BJT, so that
-        // `GMIN·V` is taken out of the reference.
+        // the engine does the same, so the references are used as printed.
         let ngspice: [(f64, [f64; 4]); 8] = [
             (
                 -5.0,
@@ -8619,10 +8665,6 @@ mod analog {
         for (voltage, expected) in ngspice {
             let solver = deck(voltage, 0.0);
             for (source, reference) in sources.iter().zip(expected) {
-                let reference = match *source {
-                    "Vbp" => reference - device::GMIN * voltage,
-                    _ => reference,
-                };
                 // ngspice reports the current into the source's + terminal,
                 // the engine the current out of it.
                 let got = -source_current(&solver, source);
@@ -8652,7 +8694,7 @@ mod analog {
             (0.5, 0.0, -6.348_465_784_84e-3, -3.729_987_810_78e-3),
         ] {
             let solver = deck(vb, vc);
-            for (source, reference) in [("Vb", base), ("Vc", collector + device::GMIN * vc)] {
+            for (source, reference) in [("Vb", base), ("Vc", collector)] {
                 let got = -source_current(&solver, source);
                 assert!(
                     relative(got, reference) < 2e-5,
@@ -9136,7 +9178,8 @@ mod analog {
     /// The `XCJC` share of `CJC` on the external base is controlled by
     /// v(b) − v(c') in circuit coordinates for both polarities: a PNP stage
     /// with every source mirrored must trace the NPN stage with every node
-    /// voltage negated.
+    /// voltage negated. `SUBS=1` makes both vertical, so the substrate GMIN
+    /// sits on the collector of each.
     #[test]
     fn bjt_xcjc_external_base_charge_is_polarity_symmetric() {
         let stage = |polarity: &str, sign: f64| {
@@ -9144,7 +9187,7 @@ mod analog {
                 parse_netlist(&format!(
                     "V1 vcc 0 {}\nVIN in 0 PULSE({} {} 0 10n 10n 1u 2u)\nRS in b 10k\n\
                      RL vcc c 2k\nQ1 c b 0 QA\n\
-                     .model QA {polarity}(IS=1e-15 BF=100 RB=200 CJC=20p XCJC=0.3)\n",
+                     .model QA {polarity}(IS=1e-15 BF=100 RB=200 CJC=20p XCJC=0.3 SUBS=1)\n",
                     5.0 * sign,
                     0.6 * sign,
                     0.9 * sign
