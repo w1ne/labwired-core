@@ -5248,7 +5248,7 @@ mod tests {
         const DDRL: u16 = 0x10A;
         const PORTL: u16 = 0x10B;
         cpu.data_write(DDRL, 0x0A, &mut bus).unwrap(); // PL1, PL3 outputs
-        let mut set = |cpu: &mut Avr, bus: &mut crate::bus::SystemBus, high: bool| {
+        let set = |cpu: &mut Avr, bus: &mut crate::bus::SystemBus, high: bool| {
             let mut bits = cpu.data_read(PORTL, bus).unwrap();
             if high {
                 bits = !bits;
