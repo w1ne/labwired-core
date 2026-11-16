@@ -57,7 +57,6 @@ e = [struct.unpack("<II", d[446 + 16 * i + 8:446 + 16 * i + 16]) for i in range(
 print(e[0][0], e[1][0], e[1][1])
 PY
 )
-PARTUUID_DISK="$(python3 -I -c 'import sys;d=open(sys.argv[1],"rb").read(512);print("%08x"%int.from_bytes(d[440:444],"little"))' "$IMG")"
 
 # --- 2. kernel + DTB from the boot partition --------------------------------
 mcopy -o -i "$IMG@@$((P1_START * 512))" ::kernel8.img ::bcm2711-rpi-4-b.dtb "$WORK/"
@@ -70,26 +69,42 @@ fdtput -t s "$DTB" "$I2C1" status okay
 # drop it so the port is a plain tty usable as /dev/console.
 fdtput -r "$DTB" /soc/serial@7e201000/bluetooth 2>/dev/null || true
 
-# --- 3. root fs: add the test script as init --------------------------------
+# --- 3. initramfs from the image's own busybox and i2c modules -------------
+# No SD card: block I/O completes at host-timed points (and QEMU's SD model
+# picks a random RCA), which breaks determinism under -icount.
 ROOTFS="$WORK/rootfs.ext4"
-dd if="$IMG" of="$ROOTFS" bs=512 skip="$P2_START" count="$P2_SECTORS" 2>/dev/null
-"$DEBUGFS" -w "$ROOTFS" >/dev/null 2>&1 <<EOF
-rm /labwired-i2c-test.sh
-write $HERE/guest/labwired-i2c-test.sh /labwired-i2c-test.sh
-sif /labwired-i2c-test.sh mode 0100755
-sif /labwired-i2c-test.sh uid 0
-sif /labwired-i2c-test.sh gid 0
-EOF
-"$DEBUGFS" -R "stat /labwired-i2c-test.sh" "$ROOTFS" 2>/dev/null | grep -q "Mode:  0755" \
-    || { echo "failed to install guest script" >&2; exit 1; }
-
-SD="$WORK/sd.img"
-cp "$IMG" "$SD"
-dd if="$ROOTFS" of="$SD" bs=512 seek="$P2_START" conv=notrunc 2>/dev/null
-# QEMU's SD model needs a power-of-two card size.
-size=$(stat -f %z "$SD" 2>/dev/null || stat -c %s "$SD")
-p2=1; while (( p2 < size )); do p2=$((p2 * 2)); done
-truncate -s "$p2" "$SD"
+if [[ ! -f "$ROOTFS" || "$ROOTFS" -ot "$IMG" ]]; then
+    dd if="$IMG" of="$ROOTFS.part" bs=1048576 \
+        skip=$((P2_START / 2048)) count=$((P2_SECTORS / 2048)) 2>/dev/null
+    mv "$ROOTFS.part" "$ROOTFS"
+fi
+KVER="$("$DEBUGFS" -R "ls /usr/lib/modules" "$ROOTFS" 2>/dev/null \
+    | tr -s ' ' '\n' | grep -E '^[0-9].*-v8$' | head -1)"
+[[ -n "$KVER" ]] || { echo "no -v8 kernel modules in image" >&2; exit 1; }
+IRD="$WORK/initramfs-src"
+rm -rf "$IRD" && mkdir -p "$IRD"
+dump() { "$DEBUGFS" -R "dump $1 $IRD/$2" "$ROOTFS" 2>/dev/null; [[ -s "$IRD/$2" ]] || { echo "dump $1 failed" >&2; exit 1; }; }
+LIBDIR=/usr/lib/aarch64-linux-gnu
+dump /usr/bin/busybox busybox
+dump $LIBDIR/ld-linux-aarch64.so.1 ld.so
+dump $LIBDIR/libc.so.6 libc.so.6
+dump $LIBDIR/libresolv.so.2 libresolv.so.2
+MODDIR=/usr/lib/modules/$KVER/kernel/drivers/i2c
+dump $MODDIR/busses/i2c-bcm2835.ko.xz i2c-bcm2835.ko.xz
+dump $MODDIR/i2c-dev.ko.xz i2c-dev.ko.xz
+xz -d "$IRD"/*.ko.xz
+INITRD="$WORK/initramfs.cpio"
+python3 -I "$HERE/mkinitramfs.py" "$INITRD" \
+    dir:bin dir:dev dir:lib dir:lib/aarch64-linux-gnu dir:lib/modules \
+    dir:proc dir:sys dir:tmp chr:dev/console=5,1:600 \
+    file:init="$HERE/guest/init":755 \
+    file:bin/busybox="$IRD/busybox":755 link:bin/sh=busybox \
+    file:lib/ld-linux-aarch64.so.1="$IRD/ld.so":755 \
+    file:lib/aarch64-linux-gnu/libc.so.6="$IRD/libc.so.6":755 \
+    file:lib/aarch64-linux-gnu/libresolv.so.2="$IRD/libresolv.so.2":644 \
+    file:lib/modules/i2c-bcm2835.ko="$IRD/i2c-bcm2835.ko" \
+    file:lib/modules/i2c-dev.ko="$IRD/i2c-dev.ko"
+echo "initramfs: $INITRD ($KVER, sha256 $(shasum -a 256 "$INITRD" | cut -c1-16))"
 
 # --- 4. QEMU and the LabWired bridge ----------------------------------------
 [[ -x "$QEMU" ]] || "$HERE/build.sh"
@@ -97,26 +112,35 @@ truncate -s "$p2" "$SD"
 (cd "$REPO" && CARGO_PROFILE_RELEASE_DEBUG=0 cargo build --release -p qemu-bridge)
 BRIDGE="$CARGO_TARGET_DIR/release/qemu-bridge"
 
-APPEND="console=ttyAMA1,115200 earlycon=pl011,mmio32,0xfe201000 \
-root=PARTUUID=$PARTUUID_DISK-02 rootfstype=ext4 rootwait ro \
-init=/labwired-i2c-test.sh"
+APPEND="console=ttyAMA1,115200 earlycon=pl011,mmio32,0xfe201000 rdinit=/init"
+BOOT_ARGS=(-kernel "$WORK/kernel8.img" -dtb "$DTB" -initrd "$INITRD" -append "$APPEND")
 
+# Deterministic guest clock: 2^ICOUNT_SHIFT ns of virtual time per guest
+# instruction, no sleeping on idle (virtual time jumps to the next timer), no
+# pacing against the host clock.
+ICOUNT_SHIFT="${ICOUNT_SHIFT:-0}"
+ICOUNT=(-icount "shift=$ICOUNT_SHIFT,sleep=off,align=off")
+
+# run NAME MODE CLOCK   MODE: bridge|no-device|no-bridge  CLOCK: icount|host
 run() {
-    local name="$1" mode="$2" log="$LOGS/$1.log" sock="$WORK/$1.sock" bpid="" extra=()
+    local name="$1" mode="$2" clock="$3" log="$LOGS/$1.log" sock="$WORK/$1.sock"
+    local bpid="" extra=() clk=()
     : >"$log"
-    echo "=== run $name ($mode) ===" | tee -a "$log"
+    [[ "$clock" == icount ]] && clk=("${ICOUNT[@]}")
+    echo "=== run $name ($mode, clock=$clock ${clk[*]}) ===" | tee -a "$log"
     if [[ "$mode" != no-bridge ]]; then
         local flag=()
         [[ "$mode" == no-device ]] && flag=(--no-device)
         rm -f "$sock"
-        "$BRIDGE" --socket "$sock" "${flag[@]}" ${BRIDGE_EXTRA:-} 2>"$LOGS/$name.bridge.log" &
+        "$BRIDGE" --socket "$sock" --transcript "$LOGS/$name.transcript" \
+            "${flag[@]}" ${BRIDGE_EXTRA:-} 2>"$LOGS/$name.bridge.log" &
         bpid=$!
         for _ in $(seq 100); do [[ -S "$sock" ]] && break; sleep 0.1; done
         extra=(-device "labwired-mmio-bridge,addr=$BSC1_ADDR,size=$BSC1_SIZE,socket=$sock,irq=$BSC1_SPI")
     fi
-    "$QEMU" -M raspi4b -kernel "$WORK/kernel8.img" -dtb "$DTB" \
-        -drive "file=$SD,if=sd,format=raw,snapshot=on" \
-        -append "$APPEND" -display none -monitor none -serial stdio \
+    local t_start=$SECONDS
+    "$QEMU" -M raspi4b "${clk[@]}" "${BOOT_ARGS[@]}" \
+        -display none -monitor none -serial stdio \
         -no-reboot "${extra[@]}" </dev/null >>"$log" 2>&1 &
     local qpid=$! t=0
     while kill -0 "$qpid" 2>/dev/null; do
@@ -128,6 +152,7 @@ run() {
         sleep 0.5; t=$((t + 1))
     done
     wait "$qpid" 2>/dev/null || true
+    echo "LW-HOST: wall ${SECONDS_DIFF:-$((SECONDS - t_start))}s to LW-END ($name, clock=$clock)" | tee -a "$log"
     if [[ -n "$bpid" ]]; then
         sleep 1
         kill "$bpid" 2>/dev/null || true
@@ -135,22 +160,12 @@ run() {
     fi
 }
 
-run positive bridge
-run no-device no-device
-run no-bridge no-bridge
-
-cat "$LOGS/positive.log" "$LOGS/no-device.log" "$LOGS/no-bridge.log" >"$LOGS/all-runs.log"
-
-# --- 5. verdict from the guest console --------------------------------------
-fail=0
-check() { if grep -q "$2" "$LOGS/$1.log"; then echo "ok   $1: $3"; else echo "FAIL $1: $3"; fail=1; fi; }
-check positive '^LW-DETECT-0x76: present' "i2cdetect shows 0x76"
-check positive '^LW-I2CGET: rc=0 out=0x60' "i2cget 0xd0 = 0x60"
-check no-device '^LW-DETECT-0x76: absent' "i2cdetect shows no 0x76"
-check no-device '^LW-END' "guest finished"
-check no-bridge '^LW-DETECT-0x76: absent' "i2cdetect shows no 0x76"
-check no-bridge '^LW-END' "guest finished"
-grep -h "QEMU disconnected after" "$LOGS"/*.bridge.log 2>/dev/null || true
-echo "logs: $LOGS (all-runs.log = every guest console)"
-if (( fail )); then echo "RESULT: FAIL"; exit 1; fi
-echo "RESULT: PASS"
+RUNS="${RUNS:-positive positive-2 no-device no-bridge host-1 host-2}"
+for r in $RUNS; do
+    case "$r" in
+        positive|positive-2) run "$r" bridge icount ;;
+        no-device) run "$r" no-device icount ;;
+        no-bridge) run "$r" no-bridge icount ;;
+        host-1|host-2) run "$r" bridge host ;;
+    esac
+done

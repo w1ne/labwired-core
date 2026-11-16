@@ -1,26 +1,29 @@
 #!/bin/sh
-# Runs as PID 1 (init=) inside the Raspberry Pi OS guest. Probes I2C bus 1,
-# prints LW-* marker lines for the host, then reboots (QEMU -no-reboot exits).
-export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+# PID 1 of the test initramfs (rdinit=/init). Everything it runs is from the
+# Raspberry Pi OS image (busybox, i2c modules); no block device is touched,
+# so the run is deterministic under -icount. Prints LW-* markers for the
+# host, then reboots (QEMU -no-reboot exits).
+/bin/busybox --install -s /bin
+export PATH=/bin
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev 2>/dev/null
-mount -t tmpfs tmpfs /tmp
+mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null
 echo "LW-BEGIN kernel $(uname -r)"
-modprobe i2c-bcm2835 && echo "LW-MODPROBE i2c-bcm2835 ok"
-modprobe i2c-dev && echo "LW-MODPROBE i2c-dev ok"
-# give udev-less devtmpfs a moment to create the node
+insmod /lib/modules/i2c-bcm2835.ko && echo "LW-MODPROBE i2c-bcm2835 ok"
+insmod /lib/modules/i2c-dev.ko && echo "LW-MODPROBE i2c-dev ok"
 n=0; while [ ! -e /dev/i2c-1 ] && [ $n -lt 50 ]; do sleep 0.1; n=$((n+1)); done
 echo "LW-I2C-NODES: $(ls /dev/i2c-* 2>/dev/null | tr '\n' ' ')"
 for a in /sys/bus/i2c/devices/i2c-*; do
     [ -e "$a/name" ] && echo "LW-ADAPTER $(basename $a): $(cat $a/name)"
 done
-mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null
 if [ -r /sys/kernel/debug/clk/clk_summary ]; then
     grep -E '^ *clock |vpu|i2c' /sys/kernel/debug/clk/clk_summary | sed 's/^/LW-CLK: /'
 fi
+f=/proc/device-tree/soc/i2c@7e804000/clock-frequency
+[ -r "$f" ] && echo "LW-DT-I2C1-CLOCK-FREQUENCY: $(hexdump -e '4/1 "%02x"' "$f")"
 echo "LW-CMD: i2cdetect -y 1"
-busybox i2cdetect -y 1 > /tmp/detect.txt 2>&1 || true
+i2cdetect -y 1 > /tmp/detect.txt 2>&1 || true
 cat /tmp/detect.txt
 if grep -q '^70:.* 76' /tmp/detect.txt; then
     echo "LW-DETECT-0x76: present"
@@ -28,10 +31,9 @@ else
     echo "LW-DETECT-0x76: absent"
 fi
 echo "LW-CMD: i2cget -y 1 0x76 0xd0"
-v=$(busybox i2cget -y 1 0x76 0xd0 2>&1); rc=$?
+v=$(i2cget -y 1 0x76 0xd0 2>&1); rc=$?
 echo "LW-I2CGET: rc=$rc out=$v"
-dmesg | grep -i 'i2c' | sed 's/^/LW-DMESG: /'
+echo "LW-UPTIME: $(cat /proc/uptime)"
 echo "LW-END"
-sync
 echo b > /proc/sysrq-trigger
 sleep 5

@@ -1,9 +1,9 @@
 diff --git a/hw/misc/labwired-mmio-bridge.c b/hw/misc/labwired-mmio-bridge.c
 new file mode 100644
-index 0000000..ab50809
+index 0000000..af2af21
 --- /dev/null
 +++ b/hw/misc/labwired-mmio-bridge.c
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,274 @@
 +/*
 + * LabWired MMIO bridge
 + *
@@ -11,9 +11,16 @@ index 0000000..ab50809
 + * over a unix socket, and drives one GIC SPI line from that process.
 + * The window overlaps (and so overrides) whatever the machine maps there.
 + *
-+ * Wire protocol: see qemu/PROTOCOL.md in the LabWired core repository.
-+ * Every message is 24 bytes, little-endian:
-+ *   u32 type; u32 size; u64 offset; u64 value;
++ * Wire protocol v2: see qemu/PROTOCOL.md in the LabWired core repository.
++ * QEMU initiates every exchange. Each request carries the current
++ * QEMU_CLOCK_VIRTUAL time; each reply carries the IRQ level and the
++ * model's next deadline, at which QEMU sends a SYNC. Run QEMU with
++ * -icount for a deterministic virtual clock.
++ *
++ *   request (32 bytes, LE): u32 type; u32 size; u64 t_ns; u64 offset;
++ *                           u64 value;
++ *   reply   (24 bytes, LE): u64 value; u32 irq_level; u32 reserved;
++ *                           u64 next_deadline_ns (UINT64_MAX = none)
 + *
 + * SPDX-License-Identifier: GPL-2.0-or-later
 + */
@@ -21,10 +28,9 @@ index 0000000..ab50809
 +#include "qemu/osdep.h"
 +#include "qemu/bswap.h"
 +#include "qemu/error-report.h"
-+#include "qemu/log.h"
-+#include "qemu/main-loop.h"
 +#include "qemu/module.h"
 +#include "qemu/sockets.h"
++#include "qemu/timer.h"
 +#include "qapi/error.h"
 +#include "qom/object.h"
 +#include "system/address-spaces.h"
@@ -40,30 +46,32 @@ index 0000000..ab50809
 +/* Higher than any priority the board code uses for its peripheral windows. */
 +#define LW_BRIDGE_PRIORITY 1000
 +
++#define LW_PROTOCOL_VERSION 2
++
 +enum {
++    LW_MSG_HELLO = 0,
 +    LW_MSG_READ = 1,
 +    LW_MSG_WRITE = 2,
-+    LW_MSG_REPLY = 3,
-+    LW_MSG_ACK = 4,
-+    LW_MSG_IRQ = 5,
++    LW_MSG_SYNC = 3,
 +};
 +
-+#define LW_MSG_LEN 24
++#define LW_REQ_LEN 32
++#define LW_REPLY_LEN 24
++#define LW_NO_DEADLINE UINT64_MAX
 +
-+typedef struct LwMsg {
-+    uint32_t type;
-+    uint32_t size;
-+    uint64_t offset;
++typedef struct LwReply {
 +    uint64_t value;
-+} LwMsg;
++    uint32_t irq_level;
++    uint64_t next_deadline_ns;
++} LwReply;
 +
 +struct LabwiredMmioBridge {
 +    DeviceState parent_obj;
 +
 +    MemoryRegion iomem;
 +    qemu_irq irq_line;
++    QEMUTimer *deadline_timer;
 +    int fd;
-+    bool irq_level;
 +
 +    uint64_t addr;
 +    uint64_t size;
@@ -71,20 +79,11 @@ index 0000000..ab50809
 +    uint32_t irq;
 +};
 +
-+static void lw_encode(const LwMsg *m, uint8_t *buf)
++static void lw_fatal(LabwiredMmioBridge *s, const char *what)
 +{
-+    stl_le_p(buf + 0, m->type);
-+    stl_le_p(buf + 4, m->size);
-+    stq_le_p(buf + 8, m->offset);
-+    stq_le_p(buf + 16, m->value);
-+}
-+
-+static void lw_decode(const uint8_t *buf, LwMsg *m)
-+{
-+    m->type = ldl_le_p(buf + 0);
-+    m->size = ldl_le_p(buf + 4);
-+    m->offset = ldq_le_p(buf + 8);
-+    m->value = ldq_le_p(buf + 16);
++    error_report("labwired-mmio-bridge: %s (socket %s): %s", what,
++                 s->socket_path, strerror(errno));
++    exit(1);
 +}
 +
 +static bool lw_read_full(int fd, uint8_t *buf, size_t len)
@@ -104,101 +103,61 @@ index 0000000..ab50809
 +    return true;
 +}
 +
-+static void lw_fatal(LabwiredMmioBridge *s, const char *what)
-+{
-+    error_report("labwired-mmio-bridge: %s (socket %s): %s", what,
-+                 s->socket_path, strerror(errno));
-+    exit(1);
-+}
-+
-+static void lw_set_irq(LabwiredMmioBridge *s, uint64_t level)
-+{
-+    s->irq_level = level != 0;
-+    qemu_set_irq(s->irq_line, s->irq_level);
-+}
-+
 +/*
-+ * Send a request and wait for its reply. IRQ messages that arrive while we
-+ * wait are applied in order. Called with the BQL held (MMIO dispatch).
++ * One request/reply exchange at the current virtual time. Applies the IRQ
++ * level and re-arms the deadline timer from the reply. Called with the BQL
++ * held (MMIO dispatch, timer callback, realize).
 + */
-+static uint64_t lw_transact(LabwiredMmioBridge *s, const LwMsg *req,
-+                            uint32_t want)
++static uint64_t lw_transact(LabwiredMmioBridge *s, uint32_t type,
++                            unsigned size, hwaddr offset, uint64_t value)
 +{
-+    uint8_t buf[LW_MSG_LEN];
-+    LwMsg rsp;
++    uint8_t buf[LW_REQ_LEN];
++    LwReply r;
++    int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
 +
-+    lw_encode(req, buf);
-+    if (qemu_send_full(s->fd, buf, LW_MSG_LEN) != LW_MSG_LEN) {
++    stl_le_p(buf + 0, type);
++    stl_le_p(buf + 4, size);
++    stq_le_p(buf + 8, now);
++    stq_le_p(buf + 16, offset);
++    stq_le_p(buf + 24, value);
++    if (qemu_send_full(s->fd, buf, LW_REQ_LEN) != LW_REQ_LEN) {
 +        lw_fatal(s, "send failed");
 +    }
-+    for (;;) {
-+        if (!lw_read_full(s->fd, buf, LW_MSG_LEN)) {
-+            lw_fatal(s, "peer closed while waiting for reply");
-+        }
-+        lw_decode(buf, &rsp);
-+        if (rsp.type == LW_MSG_IRQ) {
-+            lw_set_irq(s, rsp.value);
-+            continue;
-+        }
-+        if (rsp.type != want) {
-+            error_report("labwired-mmio-bridge: unexpected message type %u "
-+                         "(want %u)", rsp.type, want);
-+            exit(1);
-+        }
-+        return rsp.value;
++    if (!lw_read_full(s->fd, buf, LW_REPLY_LEN)) {
++        lw_fatal(s, "peer closed while waiting for reply");
 +    }
++    r.value = ldq_le_p(buf + 0);
++    r.irq_level = ldl_le_p(buf + 8);
++    r.next_deadline_ns = ldq_le_p(buf + 16);
++
++    if (type != LW_MSG_HELLO) {
++        qemu_set_irq(s->irq_line, r.irq_level != 0);
++        if (r.next_deadline_ns == LW_NO_DEADLINE) {
++            timer_del(s->deadline_timer);
++        } else {
++            timer_mod(s->deadline_timer,
++                      MIN(r.next_deadline_ns, (uint64_t)INT64_MAX));
++        }
++    }
++    return r.value;
 +}
 +
-+/*
-+ * Main-loop handler for IRQ messages that arrive while no access is in
-+ * flight. Runs with the BQL held, so it never interleaves with lw_transact.
-+ * Only consumes complete messages; a partial one stays queued.
-+ */
-+static void lw_fd_read(void *opaque)
++static void lw_deadline_cb(void *opaque)
 +{
 +    LabwiredMmioBridge *s = opaque;
-+    uint8_t buf[LW_MSG_LEN];
-+    LwMsg m;
 +
-+    for (;;) {
-+        ssize_t n = recv(s->fd, buf, LW_MSG_LEN, MSG_PEEK | MSG_DONTWAIT);
-+        if (n == 0) {
-+            errno = ECONNRESET;
-+            lw_fatal(s, "peer closed");
-+        }
-+        if (n < LW_MSG_LEN) {
-+            return;
-+        }
-+        if (!lw_read_full(s->fd, buf, LW_MSG_LEN)) {
-+            lw_fatal(s, "read failed");
-+        }
-+        lw_decode(buf, &m);
-+        if (m.type != LW_MSG_IRQ) {
-+            error_report("labwired-mmio-bridge: unsolicited message type %u",
-+                         m.type);
-+            continue;
-+        }
-+        lw_set_irq(s, m.value);
-+    }
++    lw_transact(s, LW_MSG_SYNC, 0, 0, 0);
 +}
 +
 +static uint64_t lw_mmio_read(void *opaque, hwaddr offset, unsigned size)
 +{
-+    LabwiredMmioBridge *s = opaque;
-+    LwMsg req = { .type = LW_MSG_READ, .size = size, .offset = offset };
-+
-+    return lw_transact(s, &req, LW_MSG_REPLY);
++    return lw_transact(opaque, LW_MSG_READ, size, offset, 0);
 +}
 +
 +static void lw_mmio_write(void *opaque, hwaddr offset, uint64_t value,
 +                          unsigned size)
 +{
-+    LabwiredMmioBridge *s = opaque;
-+    LwMsg req = {
-+        .type = LW_MSG_WRITE, .size = size, .offset = offset, .value = value,
-+    };
-+
-+    lw_transact(s, &req, LW_MSG_ACK);
++    lw_transact(opaque, LW_MSG_WRITE, size, offset, value);
 +}
 +
 +static const MemoryRegionOps lw_mmio_ops = {
@@ -215,6 +174,7 @@ index 0000000..ab50809
 +    bool ambiguous = false;
 +    g_autofree char *irq_name = NULL;
 +    Object *gic, *line;
++    uint64_t version;
 +
 +    if (!s->socket_path) {
 +        error_setg(errp, "labwired-mmio-bridge: 'socket' is required");
@@ -249,20 +209,32 @@ index 0000000..ab50809
 +    if (s->fd < 0) {
 +        return;
 +    }
++    s->deadline_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, lw_deadline_cb, s);
++
++    version = lw_transact(s, LW_MSG_HELLO, 0, 0, LW_PROTOCOL_VERSION);
++    if (version != LW_PROTOCOL_VERSION) {
++        error_setg(errp, "labwired-mmio-bridge: peer speaks protocol v%"
++                   PRIu64 ", need v%d", version, LW_PROTOCOL_VERSION);
++        close(s->fd);
++        s->fd = -1;
++        return;
++    }
 +
 +    memory_region_init_io(&s->iomem, OBJECT(dev), &lw_mmio_ops, s,
 +                          TYPE_LABWIRED_MMIO_BRIDGE, s->size);
 +    memory_region_add_subregion_overlap(get_system_memory(), s->addr,
 +                                        &s->iomem, LW_BRIDGE_PRIORITY);
-+    qemu_set_fd_handler(s->fd, lw_fd_read, NULL, s);
 +}
 +
 +static void lw_bridge_unrealize(DeviceState *dev)
 +{
 +    LabwiredMmioBridge *s = LABWIRED_MMIO_BRIDGE(dev);
 +
++    if (s->deadline_timer) {
++        timer_free(s->deadline_timer);
++        s->deadline_timer = NULL;
++    }
 +    if (s->fd >= 0) {
-+        qemu_set_fd_handler(s->fd, NULL, NULL, NULL);
 +        memory_region_del_subregion(get_system_memory(), &s->iomem);
 +        close(s->fd);
 +        s->fd = -1;
