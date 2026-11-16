@@ -443,14 +443,6 @@ fn wdt_expiry_resets_the_machine_and_records_the_watchdog_cause() {
     );
 }
 
-/// Timer input capture with CCxDE requests a DMA transfer per capture
-/// (RM_AT32F421 §14 TMRx_IDEN C1DEN; DMA Table 9-3: TMR3_CH1 on channel 4),
-/// the way AM32 receives DShot: TMR3 captures both edges on PB4 and DMA moves
-/// each C1DT into a buffer until the count runs out.
-#[test]
-fn tmr3_capture_requests_dma_channel4_per_edge() {
-}
-
 /// ADC sequence mode with DMA, as AM32's ADC_Init sets it up (RM_AT32F421
 /// §18.4.3.1 SQEN, §18.4.4.2 OCDMAEN; DMA Table 9-3: ADC on channel 1): one
 /// software trigger converts the whole ordinary sequence, each ODT update
@@ -461,9 +453,6 @@ fn adc_sequence_mode_moves_every_conversion_through_dma_channel1() {
     let mut b = bus();
     let spin = 0x2000_0100u64;
     b.write_u16(spin, 0xe7fe).unwrap(); // b .
-
-}
-
     let adc = b.find_peripheral_index_by_name("adc1").unwrap();
     {
         let a = b.peripherals[adc]
@@ -481,51 +470,6 @@ fn adc_sequence_mode_moves_every_conversion_through_dma_channel1() {
     m.cpu.set_pc(spin as u32);
     m.cpu.set_sp(0x2000_3ff0);
     let w = |m: &mut Machine<_>, a: u64, v: u32| m.bus.write_u32(a, v).unwrap();
-    w(&mut m, 0x40021014, (1 << 0) | (1 << 18) | (1 << 2)); // AHBEN: DMA1, GPIOB, SRAM
-    w(&mut m, 0x4002101c, 1 << 1); // APB1EN: TMR3
-    w(&mut m, 0x48000400, 2 << 8); // PB4 multiplexed
-    w(&mut m, 0x48000420, 1 << 16); // PB4 MUX1 = TMR3_CH1
-    w(&mut m, 0x40000418, 0x01); // CM1: C1C = TI1
-    w(&mut m, 0x40000420, 0x0b); // CCTRL: C1EN, both edges
-    w(&mut m, 0x4000042c, 0xffff); // PR
-    w(&mut m, 0x4000040c, 1 << 9); // IDEN: C1DEN
-    w(&mut m, 0x40000400, 1); // CTRL1: TMREN
-    w(&mut m, 0x4002004c, 0x40000434); // DMA ch4 PADDR = TMR3 C1DT
-    w(&mut m, 0x40020050, 0x2000_1000); // MADDR
-    w(&mut m, 0x40020048, 3); // DTCNT
-    w(&mut m, 0x40020044, 0x981); // CTRL: PWIDTH 16, MWIDTH 32, MINCM, CHEN
-    let gpiob = m.bus.find_peripheral_index_by_name("gpiob").unwrap();
-    let mut level = false;
-    for _ in 0..3 {
-        m.advance(AdvanceRequest::run(Some(200))).unwrap();
-        level = !level;
-        assert!(m.bus.set_peripheral_gpio_input(gpiob, 4, level));
-    }
-    m.advance(AdvanceRequest::run(Some(200))).unwrap();
-    assert_eq!(
-        m.bus.read_u32(0x40020048).unwrap(),
-        0,
-        "three captures moved"
-    );
-    assert_ne!(
-        m.bus.read_u32(0x40020000).unwrap() & (1 << 13),
-        0,
-        "channel 4 full-transfer flag"
-    );
-    let caps: Vec<u32> = (0..3)
-        .map(|i| m.bus.read_u32(0x2000_1000 + 4 * i).unwrap())
-        .collect();
-    assert!(
-        caps[0] < caps[1] && caps[1] < caps[2],
-        "captured counter values advance edge to edge: {caps:?}"
-    );
-    assert_eq!(
-        m.bus.read_u32(0x40000410).unwrap() & (1 << 1),
-        0,
-        "the DMA read of C1DT cleared C1IF"
-    );
-}
-
     w(&mut m, 0x40021014, (1 << 0) | (1 << 2)); // AHBEN: DMA1, SRAM
     w(&mut m, 0x40021018, 1 << 9); // APB2EN: ADC1
     w(&mut m, 0x40020010, 0x4001_244c); // DMA ch1 PADDR = ADC1 ODT
@@ -662,4 +606,64 @@ fn comparator_output_edges_raise_exint21_on_the_selected_polarity() {
     // Switching the inverting input to PA2 (0 mV) is itself a rising edge.
     b.write_u32(0x4001001c, 0b111_0001).unwrap();
     assert_ne!(b.read_u32(0x40010414).unwrap() & (1 << 21), 0);
+}
+
+/// Timer input capture with CCxDE requests a DMA transfer per capture
+/// (RM_AT32F421 §14 TMRx_IDEN C1DEN; DMA Table 9-3: TMR3_CH1 on channel 4),
+/// the way AM32 receives DShot: TMR3 captures both edges on PB4 and DMA moves
+/// each C1DT into a buffer until the count runs out.
+#[test]
+fn tmr3_capture_requests_dma_channel4_per_edge() {
+    use labwired_core::{AdvanceRequest, Cpu, Machine};
+    let mut b = bus();
+    let spin = 0x2000_0100u64;
+    b.write_u16(spin, 0xe7fe).unwrap(); // b .
+    let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut b);
+    let mut m = Machine::new(cpu, b);
+    m.cpu.set_pc(spin as u32);
+    m.cpu.set_sp(0x2000_3ff0);
+    let w = |m: &mut Machine<_>, a: u64, v: u32| m.bus.write_u32(a, v).unwrap();
+    w(&mut m, 0x40021014, (1 << 0) | (1 << 18) | (1 << 2)); // AHBEN: DMA1, GPIOB, SRAM
+    w(&mut m, 0x4002101c, 1 << 1); // APB1EN: TMR3
+    w(&mut m, 0x48000400, 2 << 8); // PB4 multiplexed
+    w(&mut m, 0x48000420, 1 << 16); // PB4 MUX1 = TMR3_CH1
+    w(&mut m, 0x40000418, 0x01); // CM1: C1C = TI1
+    w(&mut m, 0x40000420, 0x0b); // CCTRL: C1EN, both edges
+    w(&mut m, 0x4000042c, 0xffff); // PR
+    w(&mut m, 0x4000040c, 1 << 9); // IDEN: C1DEN
+    w(&mut m, 0x40000400, 1); // CTRL1: TMREN
+    w(&mut m, 0x4002004c, 0x40000434); // DMA ch4 PADDR = TMR3 C1DT
+    w(&mut m, 0x40020050, 0x2000_1000); // MADDR
+    w(&mut m, 0x40020048, 3); // DTCNT
+    w(&mut m, 0x40020044, 0x981); // CTRL: PWIDTH 16, MWIDTH 32, MINCM, CHEN
+    let gpiob = m.bus.find_peripheral_index_by_name("gpiob").unwrap();
+    let mut level = false;
+    for _ in 0..3 {
+        m.advance(AdvanceRequest::run(Some(200))).unwrap();
+        level = !level;
+        assert!(m.bus.set_peripheral_gpio_input(gpiob, 4, level));
+    }
+    m.advance(AdvanceRequest::run(Some(200))).unwrap();
+    assert_eq!(
+        m.bus.read_u32(0x40020048).unwrap(),
+        0,
+        "three captures moved"
+    );
+    assert_ne!(
+        m.bus.read_u32(0x40020000).unwrap() & (1 << 13),
+        0,
+        "channel 4 full-transfer flag"
+    );
+    let caps: Vec<u32> = (0..3)
+        .map(|i| m.bus.read_u32(0x2000_1000 + 4 * i).unwrap())
+        .collect();
+    assert!(
+        caps[0] < caps[1] && caps[1] < caps[2],
+        "captured counter values advance edge to edge: {caps:?}"
+    );
+    assert_eq!(
+        m.bus.read_u32(0x40000410).unwrap() & (1 << 1),
+        0,
+        "the DMA read of C1DT cleared C1IF"
+    );
 }
