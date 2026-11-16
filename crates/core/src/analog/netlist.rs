@@ -58,9 +58,15 @@
 //! and of every `beta`/`tc1`/`tc2` resistor that has no `temp=` of its own, so
 //! each takes the temperature laws below exactly as an explicit `temp=` would.
 //! Only one value is accepted: ngspice reruns the analysis once per listed
-//! temperature. `.options tnom=` is still ignored; model `TNOM` stays 27 °C
-//! unless the card sets it. Without `.temp`, an instance without `temp=` keeps
-//! the historical fixed 300 K thermal voltage and nominal parameters.
+//! temperature. `.options temp=` is the same value spelled as an option; giving
+//! both is refused. `.options tnom=<°C>` is ngspice's `CKTnomTemp`: the `TNOM`
+//! of every `D`, `NPN`/`PNP`, `NMOS`/`PMOS` and `NJF`/`PJF` card that does not
+//! set its own, and the `tnom` of every `tc1`/`tc2` resistor without one. A
+//! deck with `tnom` but no `.temp` runs at ngspice's default 27 °C. Built-in
+//! parts keep `TNOM` 27 °C, where their parameters were fitted, and an NTC
+//! `beta` keeps its 25 °C datasheet nominal. Without `.temp` or `tnom`, an
+//! instance without `temp=` keeps the historical fixed 300 K thermal voltage
+//! and nominal parameters.
 //!
 //! The four dependent sources are SPICE's linear ones and nothing more: `POLY`,
 //! `VALUE={...}` and `TABLE` forms are refused by name. `E` and `H` each add a
@@ -90,7 +96,7 @@
 //! A resistor can use either an NTC `beta` law or the instance coefficients
 //! `tc1`/`tc2`, not both. The polynomial form is
 //! `R = Rnom · (1 + TC1·ΔT + TC2·ΔT²)`; `tnom` and `temp` default to 27 °C for
-//! that form. The temperature is imposed externally; self-heating is not
+//! that form, or to `.options tnom=` and `.temp`. The temperature is imposed externally; self-heating is not
 //! modelled.
 //!
 //! ## Models
@@ -3648,12 +3654,43 @@ fn expand_call(
     Ok(())
 }
 
-/// The deck's `.temp`, in Celsius, read before any element so that a `.temp`
-/// written after the devices still applies to them. ngspice runs the whole
-/// analysis once per listed value; this engine runs once, so more than one
-/// value is refused rather than silently keeping one of them.
-fn circuit_temperature(lines: &[LogicalLine]) -> Result<Option<f64>, AnalogError> {
-    let mut found: Option<f64> = None;
+/// The deck's circuit temperatures, in Celsius, read before any element so
+/// that a card written after the devices still applies to them.
+#[derive(Clone, Copy, Default)]
+struct CircuitTemperatures {
+    /// ngspice's `CKTtemp`: `.temp` or `.options temp=`. Defaults to 27 °C
+    /// when only `tnom` is given, which is ngspice's own default.
+    temperature: Option<f64>,
+    /// ngspice's `CKTnomTemp`: `.options tnom=`, the `TNOM` of every model
+    /// card and `tc1`/`tc2` resistor that does not set its own.
+    nominal: Option<f64>,
+}
+
+impl CircuitTemperatures {
+    /// The `TNOM` a model card or `tc1`/`tc2` resistor starts from.
+    fn nominal_celsius(&self) -> f64 {
+        self.nominal.unwrap_or(27.0)
+    }
+}
+
+/// `key=value` pairs of an `.options` card, with SPICE's optional spaces
+/// around `=` (`tnom = 50`) folded away. Flags without a value are skipped.
+fn option_pairs(tokens: &[&str]) -> Vec<(String, String)> {
+    let folded = tokens.join(" ").replace(" =", "=").replace("= ", "=");
+    folded
+        .split_whitespace()
+        .filter_map(|item| item.split_once('='))
+        .filter(|(key, value)| !key.is_empty() && !value.is_empty())
+        .map(|(key, value)| (key.to_ascii_lowercase(), value.to_string()))
+        .collect()
+}
+
+/// The deck's `.temp`, `.options temp=` and `.options tnom=`. ngspice runs the
+/// whole analysis once per `.temp` value; this engine runs once, so more than
+/// one value, or a temperature given twice, is refused rather than silently
+/// keeping one of them.
+fn circuit_temperatures(lines: &[LogicalLine]) -> Result<CircuitTemperatures, AnalogError> {
+    let mut found = CircuitTemperatures::default();
     let mut in_control = false;
     for logical in lines {
         let ctx = LineCtx {
@@ -3670,25 +3707,49 @@ fn circuit_temperature(lines: &[LogicalLine]) -> Result<Option<f64>, AnalogError
             in_control = true;
             continue;
         }
-        if !head.eq_ignore_ascii_case(".temp") {
-            continue;
-        }
         let values: Vec<&str> = tokens.collect();
-        if values.is_empty() {
-            return Err(ctx.parse_err("expected `.temp <°C>`"));
+        let above_zero = |celsius: f64, what: &str| {
+            if celsius.is_finite() && celsius > -273.15 {
+                Ok(celsius)
+            } else {
+                Err(ctx.parse_err(format!(
+                    "{what} must be finite and above absolute zero (-273.15 °C)"
+                )))
+            }
+        };
+        if head.eq_ignore_ascii_case(".temp") {
+            if values.is_empty() {
+                return Err(ctx.parse_err("expected `.temp <°C>`"));
+            }
+            if values.len() > 1 || found.temperature.is_some() {
+                return Err(ctx.parse_err(
+                    "only one `.temp` value is supported; ngspice would rerun the analysis per value",
+                ));
+            }
+            let celsius = ctx.value(values[0], "temperature")?;
+            found.temperature = Some(above_zero(celsius, "`.temp`")?);
+        } else if head.eq_ignore_ascii_case(".options") || head.eq_ignore_ascii_case(".option") {
+            for (key, raw) in option_pairs(&values) {
+                let slot = match key.as_str() {
+                    "temp" => &mut found.temperature,
+                    "tnom" => &mut found.nominal,
+                    _ => continue,
+                };
+                if slot.is_some() {
+                    return Err(ctx.parse_err(format!(
+                        "the circuit `{key}` is given twice; only one value is supported"
+                    )));
+                }
+                let celsius = ctx.value(&raw, &key)?;
+                *slot = Some(above_zero(celsius, &format!("`.options {key}`"))?);
+            }
         }
-        if values.len() > 1 || found.is_some() {
-            return Err(ctx.parse_err(
-                "only one `.temp` value is supported; ngspice would rerun the analysis per value",
-            ));
-        }
-        let celsius = ctx.value(values[0], "temperature")?;
-        if !celsius.is_finite() || celsius <= -273.15 {
-            return Err(
-                ctx.parse_err("`.temp` must be finite and above absolute zero (-273.15 °C)")
-            );
-        }
-        found = Some(celsius);
+    }
+    if found.nominal.is_some() && found.temperature.is_none() {
+        // ngspice's `CKTtemp` default. Without it the instances would keep
+        // the fixed 300 K and nominal parameters, and the `tnom` would say
+        // nothing.
+        found.temperature = Some(27.0);
     }
     Ok(found)
 }
@@ -3708,7 +3769,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     // fourth token is the substrate node unless it names a model, which is
     // how ngspice's `inp2q.c` tells `Q c b e s mod` from `Q c b e mod`.
     let lines = expand_subcircuits(logical_lines(text)?)?;
-    let circuit_temperature = circuit_temperature(&lines)?;
+    let temperatures = circuit_temperatures(&lines)?;
+    let circuit_temperature = temperatures.temperature;
     let declared_models: Vec<String> = lines
         .iter()
         .filter_map(|line| {
@@ -3754,7 +3816,12 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 "tran" => {
                     circuit.uic |= tokens[1..].iter().any(|t| t.eq_ignore_ascii_case("uic"));
                 }
-                "model" => parse_model(&mut models, &ctx, &tokens[1..])?,
+                "model" => parse_model(
+                    &mut models,
+                    &ctx,
+                    &tokens[1..],
+                    temperatures.nominal_celsius(),
+                )?,
                 "control" => in_control = true,
                 // Analysis and housekeeping cards. This engine's run length,
                 // step and outputs come from the manifest, so these say
@@ -3763,7 +3830,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 // spelling the subset in SPICE.
                 "options" | "option" | "op" | "print" | "plot" | "save" | "probe" | "width"
                 | "nodeset" | "title" | "endc" => {}
-                // Read up front by `circuit_temperature`.
+                // Read up front by `circuit_temperatures`, like the
+                // `temp`/`tnom` of `.options`.
                 "temp" => {}
                 _ => return Err(ctx.unsupported()),
             }
@@ -3878,7 +3946,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let temperature_coefficients = if has_temperature_coefficients {
                     let tc1 = tc1.unwrap_or(0.0);
                     let tc2 = tc2.unwrap_or(0.0);
-                    let nominal_temperature_celsius = nominal_temperature_celsius.unwrap_or(27.0);
+                    let nominal_temperature_celsius = nominal_temperature_celsius
+                        .unwrap_or_else(|| temperatures.nominal_celsius());
                     let temperature_celsius =
                         temperature_celsius.or(circuit_temperature).unwrap_or(27.0);
                     if !tc1.is_finite() || !tc2.is_finite() {
@@ -5680,6 +5749,7 @@ fn parse_model(
     models: &mut BTreeMap<String, ModelCard>,
     ctx: &LineCtx<'_>,
     tokens: &[&str],
+    default_tnom_celsius: f64,
 ) -> Result<(), AnalogError> {
     if tokens.len() < 2 {
         return Err(ctx.parse_err("expected `.model <name> <type>(<param>=<value> ...)`"));
@@ -5730,6 +5800,14 @@ fn parse_model(
             )))
         }
     };
+    // `.options tnom=` is the card's `TNOM` until the card sets its own.
+    match &mut card {
+        ModelCard::Diode(model) => model.tnom_celsius = default_tnom_celsius,
+        ModelCard::Bjt(model) => model.tnom_celsius = default_tnom_celsius,
+        ModelCard::Mos(model) => model.tnom_celsius = default_tnom_celsius,
+        ModelCard::Jfet(model) => model.tnom_celsius = default_tnom_celsius,
+        _ => {}
+    }
 
     for item in body.split([',', ' ', '\t']).filter(|part| !part.is_empty()) {
         let (param, raw) = item
