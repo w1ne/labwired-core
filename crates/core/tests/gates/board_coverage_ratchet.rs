@@ -615,8 +615,8 @@ fn every_shipped_descriptor_is_ratcheted() {
         "atsamd21j16a",
         "atsamd21j17a",
         "atsamd21j18a",
-        "esp32",         // classic Xtensa, separate e2e lane, not a catalog board
-        "esp32s3-zero",  // board variant of esp32s3 (covered by esp32s3)
+        "esp32",        // classic Xtensa, separate e2e lane, not a catalog board
+        "esp32s3-zero", // board variant of esp32s3 (covered by esp32s3)
         "esp32s3-devkitc-1-n16r8-adc", // narrow N16R8 ADC profile of esp32s3
         "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)
         // Exact STM32 order-code geometries for the F103/F401/F407 engines.
