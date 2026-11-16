@@ -3676,6 +3676,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "qemu-bridge"
+version = "0.26.0"
+dependencies = [
+ "labwired-core",
+]
+
+[[package]]
 name = "quectel-bg770a-lab"
 version = "0.1.0"
 dependencies = [
