@@ -315,15 +315,15 @@ fn blank_cfg_test_modules(s: &str) -> String {
 }
 
 /// One parsed `impl Peripheral for T` block.
-struct PeripheralImpl {
-    file: String,
-    ty: String,
+pub(crate) struct PeripheralImpl {
+    pub(crate) file: String,
+    pub(crate) ty: String,
     /// Method name → single-line-normalised body.
-    methods: Vec<(String, String)>,
+    pub(crate) methods: Vec<(String, String)>,
 }
 
 impl PeripheralImpl {
-    fn body(&self, name: &str) -> Option<&str> {
+    pub(crate) fn body(&self, name: &str) -> Option<&str> {
         self.methods
             .iter()
             .find(|(n, _)| n == name)
@@ -350,7 +350,7 @@ fn normalise(body: &str) -> String {
 }
 
 /// Find every `impl Peripheral for T { .. }` in production source.
-fn parse_peripheral_impls() -> Vec<PeripheralImpl> {
+pub(crate) fn parse_peripheral_impls() -> Vec<PeripheralImpl> {
     let files: Vec<PathBuf> = super::src_roots::core_src_files_under("")
         .into_iter()
         .map(|f| f.path)

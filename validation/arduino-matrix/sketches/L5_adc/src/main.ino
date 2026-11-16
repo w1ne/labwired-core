@@ -30,9 +30,10 @@
 
 static void logBegin() {
   Serial.begin(115200);
-#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
-  // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
-  // the host opens the port (DTR), on silicon and on the twin alike.
+#if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__)
+  // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
+  // CDC and drops writes until the host opens the port (DTR), on silicon and
+  // on the twin alike.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
@@ -60,12 +61,25 @@ static bool samples_ok(int v0, int v1) {
   // avr.rs ADC mid-scale 512 (10-bit). Exact.
   return v0 == 512 && v1 == 512;
 
+#elif defined(ARDUINO_TEENSY41)
+  // imxrt_adc: the matrix system holds A0 (AD_B1_02 = ADC1_IN7) at 1650 mV.
+  // Teensyduino's analog_init runs ADC1 at 10 bits against 3.3 V, so the code
+  // is 512. Exact; a 0 here means no conversion or the wrong channel.
+  return v0 == 512 && v1 == 512;
 #elif defined(ARDUINO_SAMD_ZERO)
   // samd21_adc: the matrix system drives AIN0 at 1650 mV. AR_DEFAULT is GAIN
   // DIV2 against INTVCC1 (VDDANA / 2), so full scale is 3.3 V and the 10-bit
   // code is 512. Exact; a 0 here means no conversion, or the pad was never
   // handed to the ADC.
   return v0 == 512 && v1 == 512;
+
+#elif defined(STM32L432xx)
+  // NUCLEO-L432KC: the matrix system holds A0 = PA0 = ADC1_IN5 at 1650 mV.
+  // floor(1650 * 4095 / 3300) = 2047 at 12 bits; analogRead's default
+  // 10 bits is 2047 >> 2 = 511. Exact; 0 means no conversion, and 930 is
+  // the model's fixed internal source, i.e. the board level never reached
+  // the selected channel.
+  return v0 == 511 && v1 == 511;
 
 #elif defined(ARDUINO_ARCH_RP2040)
   // rp2040/adc.rs: unseeded GPIO inputs convert 0 (no fabricated mid-scale).

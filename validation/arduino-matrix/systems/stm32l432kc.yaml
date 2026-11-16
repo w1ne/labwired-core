@@ -1,0 +1,30 @@
+# Arduino matrix system — NUCLEO-L432KC (stock STM32duino NUCLEO_L432KC).
+# INA219 on Wire for L3, MAX31855 on SPI for L4; L0–L2 ignore them.
+name: "arduino-matrix-stm32l432kc"
+chip: "../../../configs/chips/stm32l432kc.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on the default Wire bus, I2C1
+  # (D4 = PB7 SDA, D5 = PB6 SCL on the Nucleo-32 Arduino Nano header).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on the default SPI, SPI1
+  # (D13 = PB3 SCK, D12 = PB4 MISO, D11 = PB5 MOSI).
+  # Single-device bus: CS soft-ignored by SpiDevice v1 broadcast.
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+# Matrix L5_adc: A0 = PA0 = ADC1_IN5 held at 1650 mV (half of the 3.3 V
+# reference), so analogRead(A0) has one exact answer instead of the
+# model's fixed internal source. Merged into the chip's adc1 by id.
+peripherals:
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x50040000
+    config:
+      input_mv: { 5: 1650 }
+board_io: []
