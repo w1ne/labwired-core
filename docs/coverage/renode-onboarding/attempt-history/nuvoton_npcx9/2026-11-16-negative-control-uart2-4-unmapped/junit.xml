@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="9" failures="4" errors="0" time="0.264995">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="bb0011248b792c6fa60b1b51fdd9ccf16167ce9c47b1c16219193c785a8d7ab8"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.264995">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NPCX9 UART1 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfcl…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: uarts tbe=3 rx=3 drained=3 isolated=1 ok" time="0.000000">
+    <failure message="assertion failed">assertion 4: uart_contains: uarts tbe=3 rx=3 drained=3 isolated=1 ok
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=400000
+stop_reason_details.observed.steps_executed=400000
+steps_executed=400000
+cycles=400000
+instructions=400000
+limits:
+  - max_steps=400000
+firmware_hash=bb0011248b792c6fa60b1b51fdd9ccf16167ce9c47b1c16219193c785a8d7ab8
+firmware=<repo>/target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke
+system=<tmp>/systems/nuvoton_npcx9.yaml
+script=ex/a2.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;NPCX9 UART1 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uarts tbe=3 rx=3 drained=3 isolated=1 ok&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart2 tx&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart3 tx&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart4 tx&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: cr_uart2 tx" time="0.000000">
+    <failure message="assertion failed">assertion 5: uart_contains: cr_uart2 tx
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=400000
+stop_reason_details.observed.steps_executed=400000
+steps_executed=400000
+cycles=400000
+instructions=400000
+limits:
+  - max_steps=400000
+firmware_hash=bb0011248b792c6fa60b1b51fdd9ccf16167ce9c47b1c16219193c785a8d7ab8
+firmware=<repo>/target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke
+system=<tmp>/systems/nuvoton_npcx9.yaml
+script=ex/a2.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;NPCX9 UART1 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uarts tbe=3 rx=3 drained=3 isolated=1 ok&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart2 tx&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart3 tx&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart4 tx&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: uart_contains: cr_uart3 tx" time="0.000000">
+    <failure message="assertion failed">assertion 6: uart_contains: cr_uart3 tx
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=400000
+stop_reason_details.observed.steps_executed=400000
+steps_executed=400000
+cycles=400000
+instructions=400000
+limits:
+  - max_steps=400000
+firmware_hash=bb0011248b792c6fa60b1b51fdd9ccf16167ce9c47b1c16219193c785a8d7ab8
+firmware=<repo>/target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke
+system=<tmp>/systems/nuvoton_npcx9.yaml
+script=ex/a2.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;NPCX9 UART1 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uarts tbe=3 rx=3 drained=3 isolated=1 ok&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart2 tx&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart3 tx&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart4 tx&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: uart_contains: cr_uart4 tx" time="0.000000">
+    <failure message="assertion failed">assertion 7: uart_contains: cr_uart4 tx
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=400000
+stop_reason_details.observed.steps_executed=400000
+steps_executed=400000
+cycles=400000
+instructions=400000
+limits:
+  - max_steps=400000
+firmware_hash=bb0011248b792c6fa60b1b51fdd9ccf16167ce9c47b1c16219193c785a8d7ab8
+firmware=<repo>/target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke
+system=<tmp>/systems/nuvoton_npcx9.yaml
+script=ex/a2.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;NPCX9 UART1 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;uarts tbe=3 rx=3 drained=3 isolated=1 ok&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart2 tx&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart3 tx&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;cr_uart4 tx&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

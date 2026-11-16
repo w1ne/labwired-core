@@ -26,6 +26,12 @@
 //     and 0 when PDOUT drives it low.
 // 12. A set PLOCK_CTL bit keeps its PDOUT bit.
 //
+// Then UART2..4 at 0x400E2000 / 0x400E4000 / 0x400E6000 (Renode
+// UART.NPCX_UART). The smoke script injects 'b', 'c', 'd' into cr_uart2..4.
+// 13. Each port reads TBE set; RBF is set only on its own port (UART1 stays
+//     empty), URBUF returns its own byte and the read clears RBF.
+// 14. Each port transmits its own "cr_uartN tx" line through its UTBUF.
+//
 // Bare-register, no HAL.
 
 #![no_std]
@@ -43,6 +49,15 @@ const UART1_BASE: usize = 0x400E_0000;
 const UTBUF: *mut u8 = UART1_BASE as *mut u8;
 const UICTRL: *const u8 = (UART1_BASE + 0x04) as *const u8;
 const TBE: u8 = 1 << 0;
+const RBF: u8 = 1 << 1;
+const URBUF: usize = 0x02;
+const UICTRL_OFF: usize = 0x04;
+// (base, injected byte, name): UART2..4.
+const UARTS: [(usize, u8, &[u8]); 3] = [
+    (0x400E_2000, b'b', b"cr_uart2"),
+    (0x400E_4000, b'c', b"cr_uart3"),
+    (0x400E_6000, b'd', b"cr_uart4"),
+];
 
 const ITPRE: usize = 0x01;
 const ITCTS: usize = 0x04;
@@ -148,6 +163,13 @@ fn put_kv(key: &[u8], value: u32) {
         }
     }
     puts(&buf[i..]);
+}
+
+fn uart_puts(base: usize, s: &[u8]) {
+    for byte in s {
+        while rd8(base, UICTRL_OFF) & TBE == 0 {}
+        wr8(base, 0x00, *byte);
+    }
 }
 
 fn spin(n: u32) {
@@ -355,6 +377,32 @@ fn main() -> ! {
     put_kv(b"lock", lock);
     let gpio_ok = ports == 16 && latch == 1 && drive == 1 && pull == 1 && od == 1 && lock == 1;
     puts(if gpio_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
+    // 13. Per-port TBE / RBF / URBUF.
+    let mut tbe = 0;
+    let mut rx = 0;
+    let mut drained = 0;
+    for &(base, byte, _) in UARTS.iter() {
+        let ctrl = rd8(base, UICTRL_OFF);
+        tbe += (ctrl & TBE != 0) as u32;
+        if ctrl & RBF != 0 && rd8(base, URBUF) == byte {
+            rx += 1;
+        }
+        drained += (rd8(base, UICTRL_OFF) & RBF == 0) as u32;
+    }
+    let isolated = (unsafe { read_volatile(UICTRL) } & RBF == 0) as u32;
+    // 14. Per-port transmit.
+    for &(base, _, name) in UARTS.iter() {
+        uart_puts(base, name);
+        uart_puts(base, b" tx\r\n");
+    }
+    puts(b"uarts");
+    put_kv(b"tbe", tbe);
+    put_kv(b"rx", rx);
+    put_kv(b"drained", drained);
+    put_kv(b"isolated", isolated);
+    let uart_ok = tbe == 3 && rx == 3 && drained == 3 && isolated == 1;
+    puts(if uart_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
     loop {
         core::hint::spin_loop();

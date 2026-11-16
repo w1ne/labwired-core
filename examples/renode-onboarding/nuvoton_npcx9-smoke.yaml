@@ -1,12 +1,24 @@
-# Cortex-M4F UART1, ITIM32_1..6 / ITIM64 and GPIO0..F smoke on the imported system.
-schema_version: "1.0"
+# Cortex-M4F UART1..4, ITIM32_1..6 / ITIM64 and GPIO0..F smoke on the imported system.
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke"
   system: "../../configs/systems/onboarding/nuvoton_npcx9.yaml"
 limits:
   max_steps: 400000
+# One byte per UART2..4: the firmware checks each lands on its own port only.
+uart_injections:
+  - uart: "cr_uart2"
+    bytes: "b"
+  - uart: "cr_uart3"
+    bytes: "c"
+  - uart: "cr_uart4"
+    bytes: "d"
 assertions:
   - uart_contains: "NPCX9 UART1 smoke"
   - uart_contains: "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok"
   - uart_contains: "gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok"
+  - uart_contains: "uarts tbe=3 rx=3 drained=3 isolated=1 ok"
+  - uart_contains: "cr_uart2 tx"
+  - uart_contains: "cr_uart3 tx"
+  - uart_contains: "cr_uart4 tx"
   - expected_stop_reason: max_steps

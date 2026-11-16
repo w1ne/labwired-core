@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/nuvoton_npcx9-smoke.yaml",
   "system": "configs/systems/onboarding/nuvoton_npcx9.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-16T07:23:10Z",
-  "finished_at_utc": "2026-11-16T07:24:56Z",
-  "elapsed_seconds": 107,
-  "elapsed_ms": 106435,
+  "started_at_utc": "2026-11-16T07:46:34Z",
+  "finished_at_utc": "2026-11-16T07:46:36Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1415,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 102.813,
-    "build_firmware": 0.435,
-    "run_smoke": 3.137
+    "build_cli": 0.411,
+    "build_firmware": 0.286,
+    "run_smoke": 0.673
   },
   "stages_ms": {
-    "build_cli": 102813,
-    "build_firmware": 435,
-    "run_smoke": 3137
+    "build_cli": 411,
+    "build_firmware": 286,
+    "run_smoke": 673
   }
 }
