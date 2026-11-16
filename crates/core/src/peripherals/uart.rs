@@ -879,6 +879,8 @@ const FT9001_FSR: u64 = 0x11;
 const FT9001_FCR2: u64 = 0x13;
 const FT9001_CR2_TE: u8 = 1 << 3;
 const FT9001_FCR2_RXFCLR: u8 = 1 << 0;
+const FT9001_FCR2_RXFIE: u8 = 1 << 5;
+const FT9001_FCR2_TXFIE: u8 = 1 << 7;
 /// Stored control registers and the bits that read back: BDL, BDH, CR2
 /// (RE|TE), CR1 (PT|PE|M), BRDF, FCR (RX/TX levels, TFEN, RFEN), FCR2
 /// (every enable except the write-only RXFCLR and reserved bit 6).
@@ -1832,6 +1834,7 @@ impl Uart {
             && self.irq_wired
             && self.sifive_irq_asserted();
         let pl011_irq_armed = self.irq_wired && self.pl011_irq_asserted();
+        let ft9001_irq_armed = self.irq_wired && self.ft9001_irq_asserted();
         // RXNEIE is a level enable with no local producer: the byte arrives
         // asynchronously (an injected peer, a cross-chip link). Keep a wakeup
         // armed while it is set so a byte landing in `rx_buf` is observed and
@@ -1846,7 +1849,8 @@ impl Uart {
                 || dmar_armed
                 || sam_irq_armed
                 || sifive_irq_armed
-                || pl011_irq_armed);
+                || pl011_irq_armed
+                || ft9001_irq_armed);
         // A buffered narration is real work: the wire is mid-burst, and the
         // flush that ends it needs a wakeup to happen on. Without this a
         // scheduler-driven bus would leave the last print unpublished.
@@ -1894,7 +1898,13 @@ impl Uart {
             };
         let sifive_irq =
             matches!(self.layout, UartRegisterLayout::Sifive) && self.sifive_irq_asserted();
-        txeie_set || tcie_set || rxneie_set || rxftie_set || sifive_irq || self.pl011_irq_asserted()
+        txeie_set
+            || tcie_set
+            || rxneie_set
+            || rxftie_set
+            || sifive_irq
+            || self.pl011_irq_asserted()
+            || self.ft9001_irq_asserted()
     }
 
     /// Phase 2B.3b: one tick-equivalent of work, shared verbatim by the legacy
@@ -2109,6 +2119,19 @@ impl Uart {
 
     fn pl011_irq_asserted(&self) -> bool {
         matches!(self.layout, UartRegisterLayout::Pl011) && self.pl011_ris() & self.pl011_imsc != 0
+    }
+
+    /// FT9001 IRQ as Renode `FT9001_USART.UpdateInterrupts` computes it:
+    /// FCR2.TXFIE alone (the TX queue is always empty), or FCR2.RXFIE with a
+    /// byte in the RX FIFO. RXFTOIE and RXORIE have no source here.
+    fn ft9001_irq_asserted(&self) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Ft9001) {
+            return false;
+        }
+        let fcr2 = self.ft9001_regs[FT9001_FCR2 as usize];
+        fcr2 & FT9001_FCR2_TXFIE != 0
+            || (fcr2 & FT9001_FCR2_RXFIE != 0
+                && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false))
     }
 
     /// PL011's interrupt/control word registers. Unmodelled IFLS, DMA, and
@@ -3204,8 +3227,8 @@ impl crate::Peripheral for Uart {
         self.irq_wired = irq.is_some();
     }
 
-    /// Timed UARTs, PL011, STM32v2 USARTs, SAM USARTs and SiFive UARTs report
-    /// their interrupt as a level. Other layouts keep their existing pulse
+    /// Timed UARTs, PL011, STM32v2 USARTs, SAM USARTs, SiFive UARTs and FT9001
+    /// USARTs report their interrupt as a level. Other layouts keep their existing pulse
     /// semantics.
     fn irq_line_level(&self) -> Option<bool> {
         self.timed_level()
@@ -3222,10 +3245,17 @@ impl crate::Peripheral for Uart {
                 matches!(self.layout, UartRegisterLayout::Sifive)
                     .then(|| self.sifive_irq_asserted())
             })
+            .or_else(|| {
+                matches!(self.layout, UartRegisterLayout::Ft9001)
+                    .then(|| self.ft9001_irq_asserted())
+            })
     }
 
     fn reads_can_deassert_irq(&self) -> bool {
-        matches!(self.layout, UartRegisterLayout::Pl011)
+        matches!(
+            self.layout,
+            UartRegisterLayout::Pl011 | UartRegisterLayout::Ft9001
+        )
     }
 
     fn on_node_reset(&mut self) {
@@ -3235,6 +3265,9 @@ impl crate::Peripheral for Uart {
         }
         if matches!(self.layout, UartRegisterLayout::Sam) {
             self.sam_imr = 0;
+        }
+        if matches!(self.layout, UartRegisterLayout::Ft9001) {
+            self.ft9001_regs = [0; 0x14];
         }
         if matches!(self.layout, UartRegisterLayout::Sifive) {
             self.sifive_txctrl = 0;
@@ -4217,6 +4250,32 @@ mod tests {
         uart.write(0x13, 0x01).unwrap();
         assert_eq!(uart.read(0x11).unwrap(), 0x45, "RXFCLR emptied the FIFO");
         assert_eq!(uart.read(0x06).unwrap(), 0, "empty DRL reads 0");
+    }
+
+    #[test]
+    fn ft9001_usart_irq_is_txfie_or_rxfie_with_data() {
+        // Renode `FT9001_USART.UpdateInterrupts`: IRQ = TXFIE || (RXFIE &&
+        // RX FIFO non-empty), as a level; reading DRL can drop it.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Ft9001);
+        assert_eq!(uart.irq_line_level(), Some(false));
+        assert!(uart.reads_can_deassert_irq());
+
+        uart.write(0x13, 0x80).unwrap(); // TXFIE
+        assert_eq!(uart.irq_line_level(), Some(true), "TXFIE alone asserts");
+        uart.write(0x13, 0x00).unwrap();
+        assert_eq!(uart.irq_line_level(), Some(false));
+
+        uart.write(0x13, 0x20).unwrap(); // RXFIE, FIFO empty
+        assert_eq!(uart.irq_line_level(), Some(false), "RXFIE needs a byte");
+        uart.rx_buffer().lock().unwrap().extend([b'Q']);
+        assert_eq!(uart.irq_line_level(), Some(true), "RXFIE + byte asserts");
+        assert_eq!(uart.read(0x06).unwrap(), b'Q');
+        assert_eq!(uart.irq_line_level(), Some(false), "DRL read drains it");
+
+        uart.write(0x13, 0x80).unwrap();
+        uart.on_node_reset();
+        assert_eq!(uart.read(0x13).unwrap(), 0, "reset clears FCR2");
+        assert_eq!(uart.irq_line_level(), Some(false));
     }
 
     #[test]

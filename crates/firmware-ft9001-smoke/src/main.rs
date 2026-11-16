@@ -19,6 +19,10 @@
 //! tracks the RX FIFO, RXFCLR empties it, a later byte is received, and
 //! clearing TE drops TX again.
 //!
+//! USART2 IRQ (Renode `IRQ -> nvic0@33`, `UpdateInterrupts`): FCR2.TXFIE
+//! (bit 7) alone pends NVIC 33; FCR2.RXFIE (bit 5) pends it only with a byte
+//! in the RX FIFO ("Q", injected later), and the handler's DRL read drops it.
+//!
 //! CPM (0x4000_4000), reset (0x4000_2000) and TRNG (0x4003_B000) follow the
 //! FocalTech HAL (`cpm_reg.h`/`cpm_drv.c`, `reset_reg.h`, `trng_reg.h`/
 //! `trng_drv.c`) and Zephyr `hwinfo_ft.c` (RSR bit 3 POR, bit 5 software).
@@ -30,7 +34,8 @@
 #![no_main]
 
 use core::ptr::{read_volatile, write_volatile};
-use cortex_m_rt::entry;
+use core::sync::atomic::{AtomicU32, Ordering};
+use cortex_m_rt::{entry, exception};
 use panic_halt as _;
 
 const USART2: u32 = 0x4001_4000;
@@ -67,6 +72,18 @@ const TRNG_DATA: u32 = TRNG + 0x04;
 const TRNG_EN: u32 = 1 << 8;
 const TRNG_CLR_IT: u32 = 1 << 10;
 const TRNG_IT: u32 = 1 << 11;
+
+const NVIC_ISER1: u32 = 0xE000_E104;
+const NVIC_ICER1: u32 = 0xE000_E184;
+const NVIC_ISPR1: u32 = 0xE000_E204;
+const NVIC_ICPR1: u32 = 0xE000_E284;
+const USART2_IRQ: i16 = 33;
+const USART2_BIT: u32 = 1 << (USART2_IRQ - 32);
+const FCR2_RXFIE: u8 = 1 << 5;
+const FCR2_TXFIE: u8 = 1 << 7;
+
+static USART2_HITS: AtomicU32 = AtomicU32::new(0);
+static USART2_BYTE: AtomicU32 = AtomicU32::new(0);
 
 const CR2_RE: u8 = 1 << 2;
 const CR2_TE: u8 = 1 << 3;
@@ -125,6 +142,48 @@ fn field(name: &str, v: u8) {
     puts(name);
     putc(b'=');
     hex8(v);
+}
+
+#[exception]
+unsafe fn DefaultHandler(irqn: i16) {
+    if irqn == USART2_IRQ {
+        USART2_HITS.fetch_add(1, Ordering::Relaxed);
+        USART2_BYTE.store(u32::from(rd(DRL)), Ordering::Relaxed);
+    }
+}
+
+fn usart2_pending() -> u8 {
+    u8::from(rd32(NVIC_ISPR1) & USART2_BIT != 0)
+}
+
+/// NVIC 33 from FCR2.TXFIE, then from FCR2.RXFIE with the late "Q" byte.
+fn irq_checks() {
+    wr32(NVIC_ICPR1, USART2_BIT);
+    field("irq33 idle pend", usart2_pending());
+    wr(FCR2, FCR2_TXFIE);
+    field(" txfie pend", usart2_pending());
+    wr(FCR2, 0);
+    wr32(NVIC_ICPR1, USART2_BIT);
+    field(" off pend", usart2_pending());
+    wr(FCR2, FCR2_RXFIE);
+    field(" rxfie empty pend", usart2_pending());
+    puts("\r\n");
+
+    while rd(FSR) & FSR_RFTS == 0 {}
+    field("irq33 rx pend", usart2_pending());
+    wr32(NVIC_ISER1, USART2_BIT);
+    let mut spins = 0u32;
+    while USART2_HITS.load(Ordering::Relaxed) == 0 && spins < 10_000 {
+        spins += 1;
+    }
+    wr32(NVIC_ICER1, USART2_BIT);
+    wr(FCR2, 0);
+    field(" hits", USART2_HITS.load(Ordering::Relaxed) as u8);
+    puts(" byte=");
+    putc(USART2_BYTE.load(Ordering::Relaxed) as u8);
+    field(" after pend", usart2_pending());
+    field(" fsr", rd(FSR));
+    puts("\r\n");
 }
 
 /// HAL `CPM_OSC320M_Init`-style switch: enable OSC320M, wait STABLE, select
@@ -245,6 +304,7 @@ fn main() -> ! {
     wr(CR2, CR2_TE | CR2_RE);
     puts("|te=on\r\n");
 
+    irq_checks();
     cpm_checks();
     trng_checks();
 

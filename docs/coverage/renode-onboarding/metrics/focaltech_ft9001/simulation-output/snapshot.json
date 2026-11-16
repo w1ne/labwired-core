@@ -9,18 +9,18 @@
       50,
       1073823761,
       1073758236,
-      268447438,
+      268451514,
       537100264,
       1073750016,
       32,
       0,
       0,
-      268447438,
+      268451514,
       537100264,
       119,
-      268438766
+      268438820
     ],
-    "pc": 268438766,
+    "pc": 268438820,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "13c25e4c056e23bc585b816dd78ad52be75fce9275c48ff60c7ef33f71473dcf",
+  "firmware_hash": "c4265b7e3d23e4b43b6e0bbefc9b33fee5dfa5f8c3b2cd39ac1f44a8197c2bfa",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-ft9001-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/focaltech_ft9001.yaml",

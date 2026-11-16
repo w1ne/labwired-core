@@ -5,7 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 
 # Imported FocalTech FT9001 target, bounded to the Cortex-M4F, memories and
-# USART2 polled-register path. No board devices are claimed.
+# USART2 register path with its NVIC 33 IRQ. No board devices are claimed.
 
 name: focaltech_ft9001
 chip: ../../chips/onboarding/focaltech_ft9001.yaml

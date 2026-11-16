@@ -5,6 +5,8 @@ rx fsr=64 drl=A fsr=64
 rxfclr fsr=45 drl=00 fcr2=00
 late drl=Z fsr=45
 te=off|te=on
+irq33 idle pend=00 txfie pend=01 off pend=00 rxfie empty pend=00
+irq33 rx pend=01 hits=01 byte=Q after pend=00 fsr=45
 cpm ocsr=0000ff00 csw=00000201 src0=osc8m ocsr=0000ff08 csw=00000201 cder=00000001
 trng ctrl=00ff093b w=e124b63a w=8b9a74ab w=64e1b3ac distinct=1
 rsr=08 por=1 softrst
