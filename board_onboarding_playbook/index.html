@@ -5194,6 +5194,11 @@
 <h1 id="board-onboarding-playbook">Board onboarding playbook</h1>
 <p>Add a <strong>new MCU or board</strong> to LabWired: chip YAML, system YAML, smoke firmware, and proof.</p>
 <p>For <strong>sensors, SPI chips, and actuators</strong>, start with <a href="../howto/onboard-part/">Onboard a part</a> instead.</p>
+<p>For an existing KiCad design, the <a href="https://labwired.com/kicad-pcb-simulation/">PCB import and circuit simulation guide</a>
+explains which source artifacts can be imported and where component behavior
+models remain missing. Import or catalog mapping alone is not a whole-board
+simulation result; check the pin/net mapping and run observable positive and
+negative controls before claiming verification.</p>
 <hr />
 <h2 id="gold-reference">Gold reference</h2>
 <p><strong>NUCLEO-L476RG</strong> is the end-to-end example. Read these with this playbook:</p>
