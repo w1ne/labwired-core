@@ -900,6 +900,8 @@ const NPCX_UFTSTS: u64 = 0x20;
 const NPCX_UFRSTS: u64 = 0x22;
 const NPCX_UFTCTL: u64 = 0x24;
 const NPCX_UFRCTL: u64 = 0x26;
+const NPCX_UMDSL: u64 = 0x0A;
+const NPCX_UMDSL_ERD: u8 = 1 << 5;
 const NPCX_UFTCTL_TEMPTY_EN: u8 = 1 << 6;
 const NPCX_UFTCTL_NXMIP_EN: u8 = 1 << 7;
 const NPCX_UFRCTL_RFULL_LVL_EN: u8 = 1 << 5;
@@ -1226,6 +1228,8 @@ pub struct Uart {
     ft9001_regs: [u8; 0x14],
     /// NPCX layout: UFTCTL and UFRCTL as firmware wrote them.
     npcx_fifo_ctl: [u8; 2],
+    /// NPCX UMDSL bits, including ERD (enable receive DMA).
+    npcx_mode: u8,
     /// SCIFA layout: 16-bit registers as firmware wrote them, indexed by
     /// offset / 2 (see [`SCIFA_MASK`]).
     scifa_regs: [u16; SCIFA_REGS],
@@ -1332,6 +1336,7 @@ impl Uart {
             last_tx_on_bus: false,
             ft9001_regs: [0; 0x14],
             npcx_fifo_ctl: [0, NPCX_UFRCTL_RESET],
+            npcx_mode: 0,
             scifa_regs: SCIFA_RESET,
         }
     }
@@ -1606,6 +1611,7 @@ impl Uart {
         }
         let count = || self.rx_buf.lock().map(|g| g.len()).unwrap_or(0);
         match offset {
+            NPCX_UMDSL => Some(self.npcx_mode),
             NPCX_UFTSTS => Some(0x80 | 0x40 | NPCX_FIFO_DEPTH as u8),
             NPCX_UFRSTS => {
                 let count = count();
@@ -1636,6 +1642,7 @@ impl Uart {
             return false;
         }
         match offset {
+            NPCX_UMDSL => self.npcx_mode = value & 0x30,
             NPCX_UFTCTL => self.npcx_fifo_ctl[0] = value,
             NPCX_UFRCTL => self.npcx_fifo_ctl[1] = value,
             NPCX_UFTSTS | NPCX_UFRSTS => {}
@@ -1887,6 +1894,9 @@ impl Uart {
         let rxneie_armed =
             self.layout.rxneie_mask() != 0 && (self.cr1 & self.layout.rxneie_mask()) != 0;
         let dmar_armed = self.layout.dmar_mask() != 0 && (self.cr3 & self.layout.dmar_mask()) != 0;
+        let npcx_dma_armed = matches!(self.layout, UartRegisterLayout::Npcx)
+            && self.npcx_mode & NPCX_UMDSL_ERD != 0
+            && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false);
         let rxftie_armed = matches!(self.layout, UartRegisterLayout::Stm32V2)
             && self.cr1 & (1 << 29) != 0
             && self.cr3 & (1 << 28) != 0;
@@ -1935,6 +1945,7 @@ impl Uart {
             || sci_b_rx_armed
             || !self.attached_streams.is_empty()
             || self.dma_tx_pending
+            || npcx_dma_armed
             || !self.wire_chars.is_empty()
     }
 
@@ -2141,6 +2152,14 @@ impl Uart {
         // receiver and CR3.DMAR is set. The DMA reads RDR, which pops it.
         if self.layout.dmar_mask() != 0
             && (self.cr3 & self.layout.dmar_mask()) != 0
+            && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false)
+        {
+            dma_signals.push(crate::DMA_SIGNAL_RX);
+        }
+        // Renode NPCX_UART drives DMAReceive when UMDSL.ERD is set and a
+        // character is available. NPCX MDMA consumes one byte per request.
+        if matches!(self.layout, UartRegisterLayout::Npcx)
+            && self.npcx_mode & NPCX_UMDSL_ERD != 0
             && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false)
         {
             dma_signals.push(crate::DMA_SIGNAL_RX);
@@ -3368,6 +3387,7 @@ impl crate::Peripheral for Uart {
         }
         if matches!(self.layout, UartRegisterLayout::Npcx) {
             self.npcx_fifo_ctl = [0, NPCX_UFRCTL_RESET];
+            self.npcx_mode = 0;
         }
         if matches!(self.layout, UartRegisterLayout::Sifive) {
             self.sifive_txctrl = 0;

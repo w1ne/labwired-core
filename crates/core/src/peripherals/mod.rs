@@ -99,6 +99,7 @@ pub mod noise;
 pub mod npcx_cdcg;
 pub mod npcx_gpio;
 pub mod npcx_itim;
+pub mod npcx_mdma;
 pub mod npcx_mtc;
 pub mod npcx_spip;
 pub mod npcx_twd;

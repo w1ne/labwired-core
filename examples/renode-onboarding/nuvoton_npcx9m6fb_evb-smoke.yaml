@@ -1,4 +1,4 @@
-# Cortex-M4F UART1..4, ITIM32_1..6 / ITIM64, GPIO0..F, MTC, TWD, HFCG/LFCG, memory-window and SPIP smoke on the imported EVB system.
+# Cortex-M4F UART1..4, MDMA UART RX, ITIM32_1..6 / ITIM64, GPIO0..F, MTC, TWD, HFCG/LFCG, memory-window and SPIP smoke on the imported EVB system.
 # The NPCX9 boot-ROM handoff and board LED wiring are outside this profile.
 schema_version: "1.2"
 inputs:
@@ -12,6 +12,8 @@ limits:
 # Two bytes per UART2..4: the first is polled (own port only), the second
 # arrives through the FIFO-mode RX interrupt.
 uart_injections:
+  - uart: "cr_uart1"
+    bytes: "m"
   - uart: "cr_uart2"
     bytes: "bB"
   - uart: "cr_uart3"
@@ -20,6 +22,7 @@ uart_injections:
     bytes: "dD"
 assertions:
   - uart_contains: "NPCX9 UART1 smoke"
+  - uart_contains: "mdma src=1 data=1 dst=1 count=1 tc=1 fifo=1 ok"
   - uart_contains: "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok"
   - uart_contains: "gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok"
   - uart_contains: "uarts tbe=3 rx=3 isolated=1 ok"

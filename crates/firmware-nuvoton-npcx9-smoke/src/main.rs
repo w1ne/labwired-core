@@ -26,68 +26,36 @@
 //     and 0 when PDOUT drives it low.
 // 12. A set PLOCK_CTL bit keeps its PDOUT bit.
 //
+// Then NPCX MDMA1 at 0x40011100 copies UART1 URBUF into code RAM when UMDSL.ERD
+// is set. The smoke script injects "m" into UART1, then the existing UART2..4
+// checks use "bB", "cC", "dD" from cr_uart2..4.
+//
 // Then UART2..4 at 0x400E2000 / 0x400E4000 / 0x400E6000 (Renode
 // UART.NPCX_UART). The smoke script injects "bB", "cC", "dD" into cr_uart2..4.
-// 13. Each port reads TBE set; RBF is set only on its own port (UART1 stays
-//     empty) and URBUF returns its own first byte.
-// 14. Each port transmits its own "cr_uartN tx" line through its UTBUF.
-// 15. FIFO-mode interrupts (Renode NPCX_UART.UpdateInterrupts, Zephyr
-//     uart_npcx.c), UART1..4 on NVIC 33 / 32 / 38 / 39 (repl, npcx9.dtsi):
-//     UFTSTS reads NXMIP | TFIFO_EMPTY | TEMPTY_LVL 16; with the NVIC line
-//     disabled, UFTCTL.TEMPTY_EN pends it and clearing TEMPTY_EN lets ICPR
-//     release it. On UART2..4, UFRSTS shows the second byte; UFRCTL.RNEMPTY_EN
-//     takes the IRQ, the handler reads that byte from URBUF, the read drops
-//     the level (no re-pend) and RBF clears.
+// 14. Each port reads TBE set; RBF is set only on its own port and URBUF
+//     returns its own first byte. UART1 is empty after the MDMA check.
+// 15. Each port transmits its own "cr_uartN tx" line through its UTBUF.
+// 16. FIFO-mode interrupts, UART1..4 on NVIC 33 / 32 / 38 / 39: UFTSTS reads
+//     NXMIP | TFIFO_EMPTY | TEMPTY_LVL 16; TEMPTY_EN pends the line and
+//     clearing it releases ICPR. UART2..4's RNEMPTY_EN handler reads the
+//     second byte, drops the IRQ level and clears RBF.
 //
-// Then the MTC at 0x400B7000 on NVIC 5 (Renode Timers.NPCX_MTC): TTC +0x00,
-// WTC +0x04 with PT bits 0..24, PTO bit 30 (W1C), WIE bit 31.
-// 16. TTC takes a written value; WTC holds a 25-bit PT with WIE clear and no
-//     PTO. With WIE and PT = TTC + 1, the core idles in WFI; three IRQs arrive
-//     on NVIC 5, each one TTC increment apart, and the handler clears PTO and
-//     moves PT on. ITIM64 at 1 MHz times the gaps: 1000 ms each.
+// Then MTC at 0x400B7000 on NVIC 5. 17. TTC advances once a second; with WIE
+// and PT = TTC + 1, three IRQs arrive one TTC increment apart and the handler
+// clears PTO and moves PT on. ITIM64 times both gaps at 1000 ms.
 //
-// Then the TWD at 0x400D8000 on NVIC 31 (Renode Timers.NPCX_TWD): TWCFG
-// +0x00, TWCP +0x02, TWDT0 +0x04 (16-bit), T0CSR +0x06, WDCNT +0x08, WDSDM
-// +0x0A, TWMWD +0x0E; T0 runs at 32768 Hz / 2^MDIV.
-// 17. Reset values: TWCFG 0, TWDT0 0xFFFF, WDCNT 0x0F, watchdog stopped.
-//     MDIV 3 and TWDT0 4095 give a 1 s T0 period: three IRQs on NVIC 31, the
-//     gaps timed with ITIM64 at 1000 ms each; T0CSR.TC reads 1 once. LTWDT0
-//     makes TWDT0 read 0 and drop writes; 87h/61h/63h with the watchdog
-//     stopped clears the lock. With a 32-tick T0 period, WDSDME and WDCNT 10,
-//     a 5Ch touch every 5 periods keeps the core alive for 30 periods, and
-//     the count reads 7 three periods after a touch. 87h/61h/63h stops the
-//     watchdog (WD_RUN 0): 15 periods pass. WDCNT 10 again with no touch:
-//     the handler prints one '.' per T0 IRQ; the watchdog resets the chip on
-//     the 10th period, so the UART shows exactly nine dots, then the second
-//     boot reports WDRST_STS set, WD_RUN clear, W1C and TWDT0 back to 0xFFFF.
+// Then TWD at 0x400D8000 on NVIC 31. 18. The smoke checks reset values,
+// one-second T0 interrupts, lock/unlock, watchdog touch/countdown/stop, then
+// watchdog reset on the tenth period. The second boot checks reset status.
 //
-// Then the clock generators (Renode Miscellaneous.NPCX_HFCG at 0x400B5000 and
-// NPCX_LFCG at 0x400B5100; Zephyr reg_def.h cdcg_reg). Check 18 runs before
-// the watchdog expiry above.
-// 18. Zephyr clock_control_npcx.c order: HFCGN / HFCGML / HFCGMH, LOAD, then
-//     the CLK_CHNG poll ends; the values read back and LOAD reads 0. HFCGP /
-//     HFCBCD / HFCBCD1..3 read back with reserved bits clear. LOCK drops a
-//     later HFCGML write. LFCG: HFRDI keeps 12 bits, LFCGCTL2.XT_OSC_SL_EN
-//     reads back, LFLOC drops a later LFCGCTL2 write.
+// HFCG/LFCG at 0x400B5000/0x400B5100: 19. check register writes, status bits
+// and locks before the watchdog expires.
 //
-// Then the plain memory windows of Renode nuvoton_npcx9.repl. Check 19 runs
-// before the watchdog expiry; its BBRAM part ends on the second boot.
-// 19. code_ram at 0x10058000 and its view at 0x20058000 share bytes (both
-//     ends); data_ram's view at 0x100C0000 shares bytes with 0x200C0000;
-//     image_type (1 byte at 0x4000C009) and PM1..4 (+0x00 and +0xFF) read
-//     back. A signature in battery-backed RAM (0x400AF000, last word at
-//     +0x7C) reads back on the second boot, after the watchdog reset.
+// Plain memory windows: 20. code/data RAM aliases, image type, PM1..4 and
+// battery-backed RAM signature (checked again on the second boot).
 //
-// Then the SPI Peripheral Interface (Renode SPI.NPCX_SPIP at 0x400D2000; IRQ
-// on NVIC 57 from Zephyr npcx.dtsi, which Renode leaves unconnected). No SPI
-// device is attached, so MISO reads 0. Check 20 runs before the watchdog
-// expiry.
-// 20. Reset: CTL1 and STAT read 0; a DATA write with SPIEN clear does not set
-//     RBF. With SPIEN: a DATA write sets RBF (BSY stays 0), the read returns
-//     0 and clears RBF, in 8-bit and 16-bit (MOD) mode. SCM / SCIDL / SCDV
-//     read back. EIR with RBF gives one IRQ (the handler reads DATA); EIW
-//     with RBF clear gives one IRQ (the handler clears EIW, as the Zephyr ISR).
-//
+// SPIP at 0x400D2000: 21. check 8/16-bit transfers, status, EIR/EIW and NVIC 57.
+// No SPI device is attached, so MISO reads 0.
 // Bare-register, no HAL.
 
 #![no_std]
@@ -104,6 +72,8 @@ use panic_halt as _;
 const UART1_BASE: usize = 0x400E_0000;
 const UTBUF: *mut u8 = UART1_BASE as *mut u8;
 const UICTRL: *const u8 = (UART1_BASE + 0x04) as *const u8;
+const UMDSL: usize = 0x0A;
+const UMDSL_ERD: u8 = 1 << 5;
 const TBE: u8 = 1 << 0;
 const RBF: u8 = 1 << 1;
 const URBUF: usize = 0x02;
@@ -249,6 +219,17 @@ const STAT_BSY: u8 = 1 << 0;
 const STAT_RBF: u8 = 1 << 1;
 static SPIP_RD_IRQS: AtomicU32 = AtomicU32::new(0);
 static SPIP_WR_IRQS: AtomicU32 = AtomicU32::new(0);
+
+const MDMA1: usize = 0x4001_1100;
+const MDMA_CTRL: usize = 0x00;
+const MDMA_SOURCE: usize = 0x04;
+const MDMA_DESTINATION: usize = 0x08;
+const MDMA_TRANSFER_COUNT: usize = 0x0C;
+const MDMA_CURRENT_DESTINATION: usize = 0x14;
+const MDMA_CURRENT_COUNT: usize = 0x18;
+const MDMAEN: u32 = 1;
+const MDMA_TC: u32 = 1 << 18;
+const MDMA_RX_DESTINATION: usize = 0x1005_F000;
 
 static ITIM1_IRQS: AtomicU32 = AtomicU32::new(0);
 /// Bit n set: TIMERS[n] took its IRQ.
@@ -410,7 +391,7 @@ fn main() -> ! {
         } else {
             b" FAIL\r\n"
         });
-        // 19, second boot: the BBRAM signature survived the reset.
+        // 20, second boot: the BBRAM signature survived the reset.
         let kept = (rd32(BBRAM, 0) == BBRAM_SIG && rd32(BBRAM, BBRAM_LAST) == !BBRAM_SIG) as u32;
         puts(b"bbram");
         put_kv(b"kept", kept);
@@ -605,7 +586,41 @@ fn main() -> ! {
     let gpio_ok = ports == 16 && latch == 1 && drive == 1 && pull == 1 && od == 1 && lock == 1;
     puts(if gpio_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
-    // 13. Per-port TBE / RBF / URBUF.
+    // 13. NPCX MDMA1 UART1 RX: the smoke script injected one byte into UART1.
+    // UMDSL.ERD requests context 0, which copies fixed URBUF to memory.
+    let mdma_source = (rd32(MDMA1, MDMA_SOURCE) == (UART1_BASE + URBUF) as u32) as u32;
+    wr32(MDMA1, MDMA_DESTINATION, MDMA_RX_DESTINATION as u32);
+    wr32(MDMA1, MDMA_TRANSFER_COUNT, 1);
+    wr8(UART1_BASE, UMDSL, UMDSL_ERD);
+    wr32(MDMA1, MDMA_CTRL, MDMAEN);
+    let mut mdma_guard = 0u32;
+    while rd32(MDMA1, MDMA_CTRL) & MDMA_TC == 0 && mdma_guard < 100_000 {
+        mdma_guard += 1;
+        core::hint::spin_loop();
+    }
+    let mdma_data = (rd8(MDMA_RX_DESTINATION, 0) == b'm') as u32;
+    let mdma_dest = (rd32(MDMA1, MDMA_CURRENT_DESTINATION) == MDMA_RX_DESTINATION as u32) as u32;
+    let mdma_count =
+        (rd32(MDMA1, MDMA_TRANSFER_COUNT) == 0 && rd32(MDMA1, MDMA_CURRENT_COUNT) == 0) as u32;
+    let mdma_tc = (rd32(MDMA1, MDMA_CTRL) & MDMA_TC != 0) as u32;
+    let mdma_fifo = (rd8(UART1_BASE, UICTRL_OFF) & RBF == 0) as u32;
+    wr8(UART1_BASE, UMDSL, 0);
+    puts(b"mdma");
+    put_kv(b"src", mdma_source);
+    put_kv(b"data", mdma_data);
+    put_kv(b"dst", mdma_dest);
+    put_kv(b"count", mdma_count);
+    put_kv(b"tc", mdma_tc);
+    put_kv(b"fifo", mdma_fifo);
+    let mdma_ok = mdma_source == 1
+        && mdma_data == 1
+        && mdma_dest == 1
+        && mdma_count == 1
+        && mdma_tc == 1
+        && mdma_fifo == 1;
+    puts(if mdma_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
+    // 14. Per-port TBE / RBF / URBUF.
     let mut tbe = 0;
     let mut rx = 0;
     for &(base, byte, _) in UARTS.iter() {
@@ -616,7 +631,7 @@ fn main() -> ! {
         }
     }
     let isolated = (unsafe { read_volatile(UICTRL) } & RBF == 0) as u32;
-    // 14. Per-port transmit.
+    // 15. Per-port transmit.
     for &(base, _, name) in UARTS.iter() {
         uart_puts(base, name);
         uart_puts(base, b" tx\r\n");
@@ -628,7 +643,7 @@ fn main() -> ! {
     let uart_ok = tbe == 3 && rx == 3 && isolated == 1;
     puts(if uart_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
-    // 15. FIFO-mode TX / RX interrupts.
+    // 16. FIFO-mode TX / RX interrupts.
     let mut fts = 0;
     let mut txp = 0;
     let mut txrel = 0;
@@ -678,7 +693,7 @@ fn main() -> ! {
         fts == 4 && txp == 4 && txrel == 4 && frs == 3 && rxirq == 3 && hits == 3 && drained == 3;
     puts(if irq_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
-    // 16. MTC.
+    // 17. MTC.
     wr32(MTC, TTC, 0x1000_0000);
     let ttc_rw = (rd32(MTC, TTC).wrapping_sub(0x1000_0000) <= 1) as u32;
     wr32(MTC, WTC, 0xFFFF_FFFF & !(WTC_WIE | WTC_PTO));
@@ -722,7 +737,7 @@ fn main() -> ! {
         ttc_rw == 1 && pt_rw == 1 && mtc_irqs == 3 && steps == 1 && ms1 == 1000 && ms2 == 1000;
     puts(if mtc_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
-    // 17. TWD.
+    // 18. TWD.
     let regs = (rd8(TWD, TWCFG) == 0
         && rd16(TWD, TWDT0) == 0xFFFF
         && rd8(TWD, WDCNT) == 0x0F
@@ -813,7 +828,7 @@ fn main() -> ! {
         && stop == 1;
     puts(if twd_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
-    // 18. HFCG / LFCG.
+    // 19. HFCG / LFCG.
     wr8(HFCG, HFCGN, 0x02);
     wr8(HFCG, HFCGML, 0xBA);
     wr8(HFCG, HFCGMH, 0x0A);
@@ -856,7 +871,7 @@ fn main() -> ! {
     let cdcg_ok = load == 1 && div == 1 && hlock == 1 && lf == 1 && llock == 1;
     puts(if cdcg_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
-    // 19. Memory windows.
+    // 20. Memory windows.
     wr32(CODE_RAM, 0, 0x1357_9BDF);
     wr32(CODE_RAM_ALIAS, CODE_RAM_LAST, 0x2468_ACE0);
     let code = (rd32(CODE_RAM_ALIAS, 0) == 0x1357_9BDF
@@ -887,7 +902,7 @@ fn main() -> ! {
     let mem_ok = code == 1 && data == 1 && image == 1 && pm == 4 && bb == 1;
     puts(if mem_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
-    // 20. SPIP.
+    // 21. SPIP.
     let reset = (rd16(SPIP, SPIP_CTL1) == 0 && rd8(SPIP, SPIP_STAT) == 0) as u32;
     wr16(SPIP, SPIP_DATA, 0xA5);
     let off = (rd8(SPIP, SPIP_STAT) & STAT_RBF == 0) as u32;

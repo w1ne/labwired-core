@@ -1301,9 +1301,10 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/max32652-evkit-smoke.yaml
             system: configs/systems/onboarding/max32652-evkit.yaml
-          # The NPCX9 imports retain only their mapped ROM execution window,
-          # data RAM and model-backed UART1. Boot-ROM handoff, clocks, GPIO,
-          # timers, SMBus and other generated peripherals are not claimed.
+          # The NPCX9 imports retain the firmware loader's ROM execution
+          # window, RAM aliases, model-backed UART/GPIO/timers, SPIP and the
+          # UART-receive MDMA subset. Boot-ROM handoff, MDMA TX/IRQ combining,
+          # internal flash, SMBus and other generated peripherals are not claimed.
           - id: nuvoton_npcx9
             crate: firmware-nuvoton-npcx9-smoke
             target: thumbv7em-none-eabi

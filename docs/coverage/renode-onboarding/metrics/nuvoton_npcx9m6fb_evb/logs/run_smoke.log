@@ -1,9 +1,10 @@
-[2m2026-11-16T21:12:02.426563Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/nuvoton_npcx9m6fb_evb.yaml
-[2m2026-11-16T21:12:02.435225Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
+2026-11-17T00:06:19.275127Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nuvoton_npcx9m6fb_evb.yaml
+2026-11-17T00:06:19.278425Z  INFO labwired_loader: ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-[2m2026-11-16T21:12:02.443590Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'cr_uart2'
-[2m2026-11-16T21:12:02.443604Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'cr_uart3'
-[2m2026-11-16T21:12:02.443608Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'cr_uart4'
-labwired-cli test: idle_ff skipped 99973522 of 100000000 device cycles (26478 interpreted)
-PASS  16/16 checks · nuvoton_npcx9m6fb_evb-smoke · 567218 steps · 0.02s
+2026-11-17T00:06:19.280980Z  INFO labwired_cli::execute: uart_injection: 1 byte(s) delivered to 'cr_uart1'
+2026-11-17T00:06:19.280986Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart2'
+2026-11-17T00:06:19.280988Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart3'
+2026-11-17T00:06:19.280991Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart4'
+labwired-cli test: idle_ff skipped 99972941 of 100000000 device cycles (27059 interpreted)
+PASS  17/17 checks · nuvoton_npcx9m6fb_evb-smoke · 567799 steps · 0.01s

@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 567218,
+  "steps_executed": 567799,
   "cycles": 100000000,
-  "instructions": 567218,
+  "instructions": 567799,
   "stop_reason": "max_cycles",
   "stop_reason_details": {
     "triggered_stop_condition": "max_cycles",
@@ -31,6 +31,12 @@
     {
       "assertion": {
         "uart_contains": "NPCX9 UART1 smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "mdma src=1 data=1 dst=1 count=1 tc=1 fifo=1 ok"
       },
       "passed": true
     },
@@ -129,23 +135,23 @@
     "type": "arm",
     "registers": [
       10,
-      1074659332,
+      537753476,
       49,
       2147483648,
+      1074659332,
       1329935617,
       1329935617,
-      0,
       537753584,
+      65535,
       65535,
       1,
       1,
-      1,
-      22204,
+      23940,
       537753496,
       1074659332,
-      8028
+      7098
     ],
-    "pc": 8028,
+    "pc": 7098,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -158,7 +164,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "31a428efb777bf6e8140594cdef81c6514316afcc82a3bd0f221bad4eb4d8314",
+  "firmware_hash": "5d5dfc4d1dca1ed49cce34b1d738a2fb1f5fbf4e3fc3810919d6697c184506d3",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nuvoton_npcx9m6fb_evb.yaml",
@@ -391,6 +397,41 @@
         "artifacts": []
       },
       {
+        "name": "mdma1",
+        "kind": "native",
+        "base": 1073811712,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mdma2",
+        "kind": "native",
+        "base": 1073811968,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mdma3",
+        "kind": "native",
+        "base": 1073812224,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mdma4",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mdma5",
+        "kind": "native",
+        "base": 1073812736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "scb",
         "kind": "native",
         "base": 3758157056,
@@ -453,6 +494,12 @@
       },
       {
         "text": "gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "mdma src=1 data=1 dst=1 count=1 tc=1 fifo=1 ok",
         "cycle_lo": 10000,
         "cycle": 20000,
         "end_cycle": 20000
@@ -534,14 +581,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 22764,
+    "text_bytes": 24516,
     "data_bytes": 0,
     "bss_bytes": 80,
-    "flash_used_bytes": 22764,
+    "flash_used_bytes": 24516,
     "ram_static_bytes": 80,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 96256,
-    "flash_used_pct": 34.74,
+    "flash_used_pct": 37.41,
     "ram_static_pct": 0.08,
     "notes": [
       "section_sum_not_bin_image",
@@ -565,31 +612,36 @@
   },
   "metrics": {
     "cycles": 100000000,
-    "instructions": 567218,
-    "steps_executed": 567218,
-    "memory_reads": 9115,
-    "memory_writes": 1465,
-    "peripheral_accesses": 2198,
+    "instructions": 567799,
+    "steps_executed": 567799,
+    "memory_reads": 9307,
+    "memory_writes": 1512,
+    "peripheral_accesses": 2295,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 7254,
+        "pc": 7862,
         "count": 39,
-        "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
-      },
-      {
-        "pc": 14212,
-        "count": 36,
         "symbol": "core::sync::atomic::atomic_load"
       },
       {
-        "pc": 8028,
-        "count": 24,
+        "pc": 15290,
+        "count": 39,
+        "symbol": "core::sync::atomic::atomic_load"
+      },
+      {
+        "pc": 7098,
+        "count": 23,
         "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 15244,
-        "count": 4,
+        "pc": 16458,
+        "count": 3,
+        "symbol": "core::sync::atomic::atomic_load"
+      },
+      {
+        "pc": 16738,
+        "count": 1,
         "symbol": "core::sync::atomic::atomic_load"
       }
     ]

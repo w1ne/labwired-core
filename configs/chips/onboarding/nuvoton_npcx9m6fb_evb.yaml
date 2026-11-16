@@ -70,8 +70,9 @@ peripherals:
 # Polled UTBUF / URBUF / UICTRL TBE+RBF, and the FIFO-mode UFTSTS / UFRSTS /
 # UFTCTL / UFRCTL that Zephyr's interrupt-driven uart_npcx.c uses. The IRQ is a
 # level: UFTCTL TEMPTY_EN or NXMIP_EN, or UFRCTL RNEMPTY_EN / RFULL_LVL_EN with
-# RX data, as in Renode. Not modelled: UICTRL ETI/ERI/EEI (non-FIFO-mode
-# interrupts), USTAT errors, MDMA receive, baud timing.
+# RX data, as in Renode. UMDSL.ERD also drives the modeled NPCX MDMA RX request.
+# Not modelled: UICTRL ETI/ERI/EEI (non-FIFO-mode interrupts), USTAT errors,
+# MDMA transmit, baud timing.
 - id: cr_uart1
   type: npcx_uart
   bus: sysbus
@@ -256,3 +257,47 @@ peripherals:
   base_address: 0x400D2000
   size: 4KB
   irq: 57
+# NPCX MDMA windows from Renode nuvoton_npcx9.repl (0x40011100..0x40011500,
+# 0x100 bytes each). Context 0 copies UART URBUF to memory on MDMAEN / ERD
+# requests. Context 1, MDMA5 I3C routing and the shared UART/MDMA IRQ combiner
+# are not implemented. The fixed URBUF source and destination address are
+# explicit per instance so both MMIO addresses live in this descriptor.
+- id: mdma1
+  type: npcx_mdma
+  base_address: 0x40011100
+  size: 256B
+  config:
+    source_address: 0x400E0002
+    destination_address: 0x10000000
+    rx_request: cr_uart1_rx
+- id: mdma2
+  type: npcx_mdma
+  base_address: 0x40011200
+  size: 256B
+  config:
+    source_address: 0x400E2002
+    destination_address: 0x10000000
+    rx_request: cr_uart2_rx
+- id: mdma3
+  type: npcx_mdma
+  base_address: 0x40011300
+  size: 256B
+  config:
+    source_address: 0x400E4002
+    destination_address: 0x10000000
+    rx_request: cr_uart3_rx
+- id: mdma4
+  type: npcx_mdma
+  base_address: 0x40011400
+  size: 256B
+  config:
+    source_address: 0x400E6002
+    destination_address: 0x10000000
+    rx_request: cr_uart4_rx
+- id: mdma5
+  type: npcx_mdma
+  base_address: 0x40011500
+  size: 256B
+  config:
+    source_address: 0x400E00C0
+    destination_address: 0x400E00B0

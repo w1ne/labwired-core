@@ -242,6 +242,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // optional `apb2_hz` / `lfclk_hz`.
     "npcx_itim32",
     "npcx_itim64",
+    // NPCX MDMA context 0: routed UART RX into memory; context 1 and shared
+    // UART/MDMA IRQ combining are outside this narrowed profile.
+    "npcx_mdma",
     // Nuvoton NPCX MTC (`build_npcx_mtc`): IRQ from the yaml, optional
     // `tick_hz`.
     "npcx_mtc",
@@ -923,6 +926,60 @@ fn build_npcx_cdcg(
     Ok(Box::new(NpcxCdcg::new(block)))
 }
 
+// NPCX MDMA UART receive channel. The Renode MDMA IRQ is combined with the
+// owning UART's IRQ; until the bus can express a shared level input, this
+// profile intentionally does not accept `irq:`.
+#[cold]
+#[inline(never)]
+fn build_npcx_mdma(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::npcx_mdma::NpcxMdma;
+    if let Some(k) = p_cfg.config.keys().find(|k| {
+        !matches!(
+            k.as_str(),
+            "source_address" | "destination_address" | "rx_request"
+        )
+    }) {
+        anyhow::bail!(
+            "npcx_mdma admits only source_address, destination_address and rx_request, not `{k}`"
+        );
+    }
+    if p_cfg.irq.is_some() {
+        anyhow::bail!(
+            "npcx_mdma '{}' has no shared UART/MDMA IRQ combiner",
+            p_cfg.id
+        );
+    }
+    let address = |key: &str, default: Option<u32>| -> anyhow::Result<u32> {
+        match p_cfg.config.get(key) {
+            None => {
+                default.ok_or_else(|| anyhow::anyhow!("npcx_mdma '{}' needs `{key}`", p_cfg.id))
+            }
+            Some(value) => value
+                .as_u64()
+                .filter(|address| *address <= u64::from(u32::MAX))
+                .map(|address| address as u32)
+                .ok_or_else(|| anyhow::anyhow!("npcx_mdma `{key}` must be a 32-bit address")),
+        }
+    };
+    let rx_request = match p_cfg.config.get("rx_request") {
+        None => None,
+        Some(value) => Some(
+            value
+                .as_str()
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| {
+                    anyhow::anyhow!("npcx_mdma `rx_request` must be a non-empty request name")
+                })?
+                .to_string(),
+        ),
+    };
+    Ok(Box::new(NpcxMdma::new(
+        address("source_address", None)?,
+        address("destination_address", None)?,
+        rx_request,
+    )))
+}
+
 // SAM D21 RTC: base from the chip yaml, fixed IRQ; `gclk_hz` declares GCLK_RTC.
 #[cold]
 #[inline(never)]
@@ -1304,6 +1361,7 @@ pub fn try_build(
         }
         "efm32s1_rtcc" => build_efm32_rtcc(p_cfg)?,
         "npcx_itim32" | "npcx_itim64" => build_npcx_itim(canonical_type, p_cfg)?,
+        "npcx_mdma" => build_npcx_mdma(p_cfg)?,
         "npcx_mtc" => build_npcx_mtc(p_cfg)?,
         "npcx_twd" => build_npcx_twd(p_cfg)?,
         "npcx_hfcg" | "npcx_lfcg" => build_npcx_cdcg(canonical_type, p_cfg)?,
