@@ -316,6 +316,10 @@
       "sha256": "b2d4fb48ec3585334760d03bf941bf8bc9a448e8d941b9017922643e0035fff5",
       "expect": "RP2350_SMOKE_OK"
     },
+    "esp32s3-devkitc-1-n16r8-adc": {
+      "how": "needs-build",
+      "why": "The ESP32-S3-DevKitC-1 N16R8 ADC1_CH3 profile is newer than the installed CLI this gate checks. The GPIO4 potentiometer smoke passes from source in examples/esp32-s3-devkitc-1-n16r8 (built by the onboarding smoke workflow); switch this row after a release carries the descriptor."
+    },
     "esp32s3-zero": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/esp32s3.elf",

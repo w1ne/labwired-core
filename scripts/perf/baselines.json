@@ -117,6 +117,10 @@
     "batch": 2.4,
     "step": 991.9
   },
+  "esp32s3-devkitc-1-n16r8-adc": {
+    "batch": 2.4,
+    "step": 991.9
+  },
   "esp32s3-zero": {
     "batch": 2.4,
     "step": 991.9
