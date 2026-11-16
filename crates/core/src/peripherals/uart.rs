@@ -902,6 +902,10 @@ pub struct Uart {
     /// U5 USART-only register/status features (TXFE and AUTOCR).
     #[serde(default)]
     u5_features: bool,
+    /// `pad_map: wch_x035`: route TX through the CH32X035 default pads
+    /// instead of the STM32F1 ones. Read once while the bus wires pads.
+    #[serde(skip)]
+    pad_map_wch_x035: bool,
     /// U5 AUTOCR (offset 0x30; reset 0x8000_0000), storage.
     #[serde(default)]
     autocr: u32,
@@ -1153,6 +1157,7 @@ impl Uart {
             full_featured: false,
             presc: 0,
             u5_features: false,
+            pad_map_wch_x035: false,
             autocr: 0x8000_0000,
             stm32_lpuart: false,
             dma_tx_pending: false,
@@ -1284,6 +1289,17 @@ impl Uart {
     pub(crate) fn with_avr_host_sink(mut self, yes: bool) -> Self {
         self.avr_host_sink = yes;
         self
+    }
+
+    /// Select the datasheet pad table that routes TX (`pad_map: wch_x035`).
+    /// Without it, the GPIO register layout picks the table.
+    pub fn set_pad_map(mut self, pad_map: &str) -> anyhow::Result<Self> {
+        match pad_map.to_ascii_lowercase().as_str() {
+            "wch_x035" => self.pad_map_wch_x035 = true,
+            "none" => {}
+            other => anyhow::bail!("unsupported UART pad_map '{other}'; supported: wch_x035, none"),
+        }
+        Ok(self)
     }
 
     /// Install a YAML-parameterised register map for [`UartRegisterLayout::Custom`].
@@ -2533,6 +2549,10 @@ impl UartStreamHost for Uart {
 }
 
 impl crate::Peripheral for Uart {
+    fn uart_pad_map_wch_x035(&self) -> bool {
+        self.pad_map_wch_x035
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         UART_LINES
     }
