@@ -894,6 +894,22 @@ const FT9001_CTRL: [(u64, u8); 7] = [
     (FT9001_FCR2, 0xBE),
 ];
 
+/// Nuvoton NPCX FIFO-mode registers (Renode `NPCX_UART`, Zephyr
+/// `struct uart_reg`): UFTSTS, UFRSTS, UFTCTL, UFRCTL.
+const NPCX_UFTSTS: u64 = 0x20;
+const NPCX_UFRSTS: u64 = 0x22;
+const NPCX_UFTCTL: u64 = 0x24;
+const NPCX_UFRCTL: u64 = 0x26;
+const NPCX_UFTCTL_TEMPTY_EN: u8 = 1 << 6;
+const NPCX_UFTCTL_NXMIP_EN: u8 = 1 << 7;
+const NPCX_UFRCTL_RFULL_LVL_EN: u8 = 1 << 5;
+const NPCX_UFRCTL_RNEMPTY_EN: u8 = 1 << 6;
+const NPCX_UFRCTL_RFULL_LVL_SEL: u8 = 0x1F;
+/// UFRCTL reset value: RFULL_LVL_SEL = 1 (Renode `Reset()`).
+const NPCX_UFRCTL_RESET: u8 = 0x01;
+/// The 16-byte TX and RX FIFOs.
+const NPCX_FIFO_DEPTH: usize = 16;
+
 /// Renesas SCIFA 16-bit registers (Renode `RenesasRZG_SCIFA`, RZ/G2L
 /// R01UH0914 "Serial Communication Interface with FIFO").
 const SCIFA_BRR: u64 = 0x02;
@@ -1208,6 +1224,8 @@ pub struct Uart {
     /// FT9001 layout: control registers as firmware wrote them, indexed by
     /// offset (see [`FT9001_CTRL`]).
     ft9001_regs: [u8; 0x14],
+    /// NPCX layout: UFTCTL and UFRCTL as firmware wrote them.
+    npcx_fifo_ctl: [u8; 2],
     /// SCIFA layout: 16-bit registers as firmware wrote them, indexed by
     /// offset / 2 (see [`SCIFA_MASK`]).
     scifa_regs: [u16; SCIFA_REGS],
@@ -1313,6 +1331,7 @@ impl Uart {
             sci_scr: 0,
             last_tx_on_bus: false,
             ft9001_regs: [0; 0x14],
+            npcx_fifo_ctl: [0, NPCX_UFRCTL_RESET],
             scifa_regs: SCIFA_RESET,
         }
     }
@@ -1576,6 +1595,55 @@ impl Uart {
         Some(self.ft9001_regs[offset as usize] & mask)
     }
 
+    /// NPCX FIFO-mode register at `offset`. The TX FIFO is always empty (a
+    /// written byte leaves at once): UFTSTS reads NXMIP | TFIFO_EMPTY_STS and
+    /// TEMPTY_LVL = 16. UFRSTS reports the RX queue: RFIFO_NEMPTY_STS,
+    /// RFULL_LVL_STS (count >= RFULL_LVL_SEL) and RFULL_LVL capped at 16.
+    /// TEMPTY_LVL_STS and ERR read 0, as in Renode.
+    fn npcx_fifo_byte(&self, offset: u64) -> Option<u8> {
+        if !matches!(self.layout, UartRegisterLayout::Npcx) {
+            return None;
+        }
+        let count = || self.rx_buf.lock().map(|g| g.len()).unwrap_or(0);
+        match offset {
+            NPCX_UFTSTS => Some(0x80 | 0x40 | NPCX_FIFO_DEPTH as u8),
+            NPCX_UFRSTS => {
+                let count = count();
+                let mut v = count.min(NPCX_FIFO_DEPTH) as u8;
+                if count != 0 {
+                    v |= 1 << 6;
+                }
+                if self.npcx_rx_full_level(count) {
+                    v |= 1 << 5;
+                }
+                Some(v)
+            }
+            NPCX_UFTCTL => Some(self.npcx_fifo_ctl[0]),
+            NPCX_UFRCTL => Some(self.npcx_fifo_ctl[1]),
+            _ => None,
+        }
+    }
+
+    /// NPCX UFRSTS.RFULL_LVL_STS: the RX count has reached RFULL_LVL_SEL.
+    fn npcx_rx_full_level(&self, count: usize) -> bool {
+        count >= usize::from(self.npcx_fifo_ctl[1] & NPCX_UFRCTL_RFULL_LVL_SEL)
+    }
+
+    /// NPCX UFTCTL / UFRCTL write. Returns false for other offsets and
+    /// layouts. UFTSTS and UFRSTS are read-only.
+    fn npcx_fifo_write(&mut self, offset: u64, value: u8) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Npcx) {
+            return false;
+        }
+        match offset {
+            NPCX_UFTCTL => self.npcx_fifo_ctl[0] = value,
+            NPCX_UFRCTL => self.npcx_fifo_ctl[1] = value,
+            NPCX_UFTSTS | NPCX_UFRSTS => {}
+            _ => return false,
+        }
+        true
+    }
+
     /// SCIFA register byte at `offset`, other than FSR/FRDR (shared path).
     /// FDR.R (bits 4:0) is the RX queue length capped at the 16-byte FIFO;
     /// FDR.T reads 0 because a written byte leaves at once.
@@ -1835,6 +1903,7 @@ impl Uart {
             && self.sifive_irq_asserted();
         let pl011_irq_armed = self.irq_wired && self.pl011_irq_asserted();
         let ft9001_irq_armed = self.irq_wired && self.ft9001_irq_asserted();
+        let npcx_irq_armed = self.irq_wired && self.npcx_irq_asserted();
         // RXNEIE is a level enable with no local producer: the byte arrives
         // asynchronously (an injected peer, a cross-chip link). Keep a wakeup
         // armed while it is set so a byte landing in `rx_buf` is observed and
@@ -1850,7 +1919,8 @@ impl Uart {
                 || sam_irq_armed
                 || sifive_irq_armed
                 || pl011_irq_armed
-                || ft9001_irq_armed);
+                || ft9001_irq_armed
+                || npcx_irq_armed);
         // A buffered narration is real work: the wire is mid-burst, and the
         // flush that ends it needs a wakeup to happen on. Without this a
         // scheduler-driven bus would leave the last print unpublished.
@@ -1905,6 +1975,7 @@ impl Uart {
             || sifive_irq
             || self.pl011_irq_asserted()
             || self.ft9001_irq_asserted()
+            || self.npcx_irq_asserted()
     }
 
     /// Phase 2B.3b: one tick-equivalent of work, shared verbatim by the legacy
@@ -2132,6 +2203,23 @@ impl Uart {
         fcr2 & FT9001_FCR2_TXFIE != 0
             || (fcr2 & FT9001_FCR2_RXFIE != 0
                 && self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false))
+    }
+
+    /// NPCX IRQ as Renode `NPCX_UART.UpdateInterrupts` computes it: UFTCTL
+    /// TEMPTY_EN or NXMIP_EN alone (the TX FIFO is always empty and idle), or
+    /// UFRCTL RNEMPTY_EN with a byte queued, or RFULL_LVL_EN with the count at
+    /// RFULL_LVL_SEL. UICTRL ETI/ERI (non-FIFO mode) are not modelled.
+    fn npcx_irq_asserted(&self) -> bool {
+        if !matches!(self.layout, UartRegisterLayout::Npcx) {
+            return false;
+        }
+        let [uftctl, ufrctl] = self.npcx_fifo_ctl;
+        if uftctl & (NPCX_UFTCTL_TEMPTY_EN | NPCX_UFTCTL_NXMIP_EN) != 0 {
+            return true;
+        }
+        let count = self.rx_buf.lock().map(|g| g.len()).unwrap_or(0);
+        (ufrctl & NPCX_UFRCTL_RNEMPTY_EN != 0 && count != 0)
+            || (ufrctl & NPCX_UFRCTL_RFULL_LVL_EN != 0 && self.npcx_rx_full_level(count))
     }
 
     /// PL011's interrupt/control word registers. Unmodelled IFLS, DMA, and
@@ -2963,6 +3051,9 @@ impl crate::Peripheral for Uart {
         if let Some(b) = self.ft9001_ctrl_byte(offset) {
             return Ok(b);
         }
+        if let Some(b) = self.npcx_fifo_byte(offset) {
+            return Ok(b);
+        }
         if let Some(b) = self.scifa_byte(offset) {
             return Ok(b);
         }
@@ -3089,7 +3180,10 @@ impl crate::Peripheral for Uart {
             }
             return Ok(());
         }
-        if self.ft9001_write(offset, value) || self.scifa_write(offset, value) {
+        if self.ft9001_write(offset, value)
+            || self.scifa_write(offset, value)
+            || self.npcx_fifo_write(offset, value)
+        {
             return Ok(());
         }
         if self.lcr_dlab_write(offset, value) {
@@ -3227,9 +3321,9 @@ impl crate::Peripheral for Uart {
         self.irq_wired = irq.is_some();
     }
 
-    /// Timed UARTs, PL011, STM32v2 USARTs, SAM USARTs, SiFive UARTs and FT9001
-    /// USARTs report their interrupt as a level. Other layouts keep their existing pulse
-    /// semantics.
+    /// Timed UARTs, PL011, STM32v2 USARTs, SAM USARTs, SiFive UARTs, FT9001
+    /// USARTs and NPCX UARTs report their interrupt as a level. Other layouts
+    /// keep their existing pulse semantics.
     fn irq_line_level(&self) -> Option<bool> {
         self.timed_level()
             .or_else(|| {
@@ -3249,12 +3343,15 @@ impl crate::Peripheral for Uart {
                 matches!(self.layout, UartRegisterLayout::Ft9001)
                     .then(|| self.ft9001_irq_asserted())
             })
+            .or_else(|| {
+                matches!(self.layout, UartRegisterLayout::Npcx).then(|| self.npcx_irq_asserted())
+            })
     }
 
     fn reads_can_deassert_irq(&self) -> bool {
         matches!(
             self.layout,
-            UartRegisterLayout::Pl011 | UartRegisterLayout::Ft9001
+            UartRegisterLayout::Pl011 | UartRegisterLayout::Ft9001 | UartRegisterLayout::Npcx
         )
     }
 
@@ -3268,6 +3365,9 @@ impl crate::Peripheral for Uart {
         }
         if matches!(self.layout, UartRegisterLayout::Ft9001) {
             self.ft9001_regs = [0; 0x14];
+        }
+        if matches!(self.layout, UartRegisterLayout::Npcx) {
+            self.npcx_fifo_ctl = [0, NPCX_UFRCTL_RESET];
         }
         if matches!(self.layout, UartRegisterLayout::Sifive) {
             self.sifive_txctrl = 0;
@@ -4276,6 +4376,55 @@ mod tests {
         uart.on_node_reset();
         assert_eq!(uart.read(0x13).unwrap(), 0, "reset clears FCR2");
         assert_eq!(uart.irq_line_level(), Some(false));
+    }
+
+    #[test]
+    fn npcx_uart_fifo_registers_and_level_irq() {
+        // Renode `NPCX_UART`: UFTSTS/UFRSTS status, UFTCTL/UFRCTL enables,
+        // IRQ = TEMPTY_EN || NXMIP_EN || (RNEMPTY_EN && RX) ||
+        // (RFULL_LVL_EN && count >= RFULL_LVL_SEL), as a level.
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Npcx);
+        assert_eq!(uart.irq_line_level(), Some(false));
+        assert!(uart.reads_can_deassert_irq());
+        assert_eq!(uart.read(0x20).unwrap(), 0xD0, "NXMIP | TFIFO_EMPTY | 16");
+        assert_eq!(uart.read(0x22).unwrap(), 0x00, "RX empty");
+        assert_eq!(uart.read(0x26).unwrap(), 0x01, "RFULL_LVL_SEL resets to 1");
+
+        uart.write(0x24, 0x40).unwrap(); // TEMPTY_EN
+        assert_eq!(uart.read(0x24).unwrap(), 0x40);
+        assert_eq!(uart.irq_line_level(), Some(true), "TEMPTY_EN alone");
+        uart.write(0x24, 0x80).unwrap(); // NXMIP_EN
+        assert_eq!(uart.irq_line_level(), Some(true), "NXMIP_EN alone");
+        uart.write(0x24, 0x00).unwrap();
+        assert_eq!(uart.irq_line_level(), Some(false));
+
+        uart.write(0x26, 0x41).unwrap(); // RNEMPTY_EN, SEL 1
+        assert_eq!(
+            uart.irq_line_level(),
+            Some(false),
+            "RNEMPTY_EN needs a byte"
+        );
+        uart.rx_buffer().lock().unwrap().extend([b'x', b'y']);
+        assert_eq!(uart.read(0x22).unwrap(), 0x62, "NEMPTY | FULL_LVL | 2");
+        assert_eq!(uart.irq_line_level(), Some(true));
+        assert_eq!(uart.read(0x02).unwrap(), b'x');
+        assert_eq!(uart.irq_line_level(), Some(true), "one byte left");
+        assert_eq!(uart.read(0x02).unwrap(), b'y');
+        assert_eq!(uart.irq_line_level(), Some(false), "URBUF read drains it");
+
+        uart.write(0x26, 0x23).unwrap(); // RFULL_LVL_EN, SEL 3
+        uart.rx_buffer().lock().unwrap().extend([1, 2]);
+        assert_eq!(uart.read(0x22).unwrap(), 0x42, "below the level");
+        assert_eq!(uart.irq_line_level(), Some(false));
+        uart.rx_buffer().lock().unwrap().extend([3]);
+        assert_eq!(uart.irq_line_level(), Some(true), "count reached SEL");
+
+        uart.write(0x24, 0xC0).unwrap();
+        uart.on_node_reset();
+        assert_eq!(uart.read(0x24).unwrap(), 0);
+        assert_eq!(uart.read(0x26).unwrap(), 0x01);
+        // UICTRL polled status is unchanged.
+        assert_eq!(uart.read(0x04).unwrap() & 0x03, 0x03, "TBE | RBF");
     }
 
     #[test]

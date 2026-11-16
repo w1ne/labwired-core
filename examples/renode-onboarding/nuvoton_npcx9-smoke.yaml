@@ -5,19 +5,21 @@ inputs:
   system: "../../configs/systems/onboarding/nuvoton_npcx9.yaml"
 limits:
   max_steps: 400000
-# One byte per UART2..4: the firmware checks each lands on its own port only.
+# Two bytes per UART2..4: the first is polled (own port only), the second
+# arrives through the FIFO-mode RX interrupt.
 uart_injections:
   - uart: "cr_uart2"
-    bytes: "b"
+    bytes: "bB"
   - uart: "cr_uart3"
-    bytes: "c"
+    bytes: "cC"
   - uart: "cr_uart4"
-    bytes: "d"
+    bytes: "dD"
 assertions:
   - uart_contains: "NPCX9 UART1 smoke"
   - uart_contains: "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok"
   - uart_contains: "gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok"
-  - uart_contains: "uarts tbe=3 rx=3 drained=3 isolated=1 ok"
+  - uart_contains: "uarts tbe=3 rx=3 isolated=1 ok"
+  - uart_contains: "uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok"
   - uart_contains: "cr_uart2 tx"
   - uart_contains: "cr_uart3 tx"
   - uart_contains: "cr_uart4 tx"

@@ -20,26 +20,33 @@ ram:
   base: 0x200C0000
   size: 96256B
 peripherals:
+# UART1..4. Bases and NVIC lines from Renode nuvoton_npcx9.repl
+# (UART.NPCX_UART, IRQ -> nvicIrq33 / 32 / 38 / 39) and Zephyr npcx9.dtsi.
+# Polled UTBUF / URBUF / UICTRL TBE+RBF, and the FIFO-mode UFTSTS / UFRSTS /
+# UFTCTL / UFRCTL that Zephyr's interrupt-driven uart_npcx.c uses. The IRQ is a
+# level: UFTCTL TEMPTY_EN or NXMIP_EN, or UFRCTL RNEMPTY_EN / RFULL_LVL_EN with
+# RX data, as in Renode. Not modelled: UICTRL ETI/ERI/EEI (non-FIFO-mode
+# interrupts), USTAT errors, MDMA receive, baud timing.
 - id: cr_uart1
   type: npcx_uart
   bus: sysbus
   base_address: 0x400E0000
-# UART2..4. Bases from Renode nuvoton_npcx9.repl (UART.NPCX_UART at
-# 0x400E2000, 0x400E4000, 0x400E6000). Polled UTBUF / URBUF / UICTRL only, as
-# cr_uart1. No IRQ: the generic model has no UICTRL ETI/ERI enables, so NVIC
-# 32 / 38 / 39 are not wired. Not modelled: MDMA receive, FIFO mode.
+  irq: 33
 - id: cr_uart2
   type: npcx_uart
   base_address: 0x400E2000
   size: 4KB
+  irq: 32
 - id: cr_uart3
   type: npcx_uart
   base_address: 0x400E4000
   size: 4KB
+  irq: 38
 - id: cr_uart4
   type: npcx_uart
   base_address: 0x400E6000
   size: 4KB
+  irq: 39
 # GPIO ports. Bases from Renode nuvoton_npcx9.repl (GPIOPort.NPCX_GPIO,
 # 0x40081000 + n * 0x2000 for GPIO0..GPIOF) and Zephyr npcx.dtsi gpio0..gpiof.
 # Ids are port0..portf: a `gpio0`/`gpio1` id would switch on the bus's Nordic

@@ -4,4 +4,5 @@ gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok
 cr_uart2 tx
 cr_uart3 tx
 cr_uart4 tx
-uarts tbe=3 rx=3 drained=3 isolated=1 ok
+uarts tbe=3 rx=3 isolated=1 ok
+uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok

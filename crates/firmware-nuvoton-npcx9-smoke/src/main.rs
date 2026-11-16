@@ -27,10 +27,17 @@
 // 12. A set PLOCK_CTL bit keeps its PDOUT bit.
 //
 // Then UART2..4 at 0x400E2000 / 0x400E4000 / 0x400E6000 (Renode
-// UART.NPCX_UART). The smoke script injects 'b', 'c', 'd' into cr_uart2..4.
+// UART.NPCX_UART). The smoke script injects "bB", "cC", "dD" into cr_uart2..4.
 // 13. Each port reads TBE set; RBF is set only on its own port (UART1 stays
-//     empty), URBUF returns its own byte and the read clears RBF.
+//     empty) and URBUF returns its own first byte.
 // 14. Each port transmits its own "cr_uartN tx" line through its UTBUF.
+// 15. FIFO-mode interrupts (Renode NPCX_UART.UpdateInterrupts, Zephyr
+//     uart_npcx.c), UART1..4 on NVIC 33 / 32 / 38 / 39 (repl, npcx9.dtsi):
+//     UFTSTS reads NXMIP | TFIFO_EMPTY | TEMPTY_LVL 16; with the NVIC line
+//     disabled, UFTCTL.TEMPTY_EN pends it and clearing TEMPTY_EN lets ICPR
+//     release it. On UART2..4, UFRSTS shows the second byte; UFRCTL.RNEMPTY_EN
+//     takes the IRQ, the handler reads that byte from URBUF, the read drops
+//     the level (no re-pend) and RBF clears.
 //
 // Bare-register, no HAL.
 
@@ -58,6 +65,23 @@ const UARTS: [(usize, u8, &[u8]); 3] = [
     (0x400E_4000, b'c', b"cr_uart3"),
     (0x400E_6000, b'd', b"cr_uart4"),
 ];
+// FIFO-mode registers (Zephyr reg_def.h uart_reg).
+const UFTSTS: usize = 0x20;
+const UFRSTS: usize = 0x22;
+const UFTCTL: usize = 0x24;
+const UFRCTL: usize = 0x26;
+const UFTCTL_TEMPTY_EN: u8 = 1 << 6;
+const UFRCTL_RNEMPTY_EN: u8 = 1 << 6;
+// UART1..4 NVIC lines.
+const UART_LINES: [(usize, u32); 4] = [
+    (UART1_BASE, 33),
+    (0x400E_2000, 32),
+    (0x400E_4000, 38),
+    (0x400E_6000, 39),
+];
+/// Byte the RX IRQ handler read from UART2..4 (index 0..2).
+static UART_RX: [AtomicU32; 3] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
+static UART_IRQS: AtomicU32 = AtomicU32::new(0);
 
 const ITPRE: usize = 0x01;
 const ITCTS: usize = 0x04;
@@ -187,6 +211,13 @@ unsafe fn DefaultHandler(irqn: i16) {
                 ITIM1_IRQS.fetch_add(1, Ordering::SeqCst);
             }
             SEEN.fetch_or(1 << n, Ordering::SeqCst);
+        }
+    }
+    // UART2..4 RX: read URBUF, as uart_npcx_fifo_read does.
+    for (n, &(base, line)) in UART_LINES[1..].iter().enumerate() {
+        if irqn as u32 == line {
+            UART_RX[n].store(u32::from(rd8(base, URBUF)), Ordering::SeqCst);
+            UART_IRQS.fetch_add(1, Ordering::SeqCst);
         }
     }
 }
@@ -381,14 +412,12 @@ fn main() -> ! {
     // 13. Per-port TBE / RBF / URBUF.
     let mut tbe = 0;
     let mut rx = 0;
-    let mut drained = 0;
     for &(base, byte, _) in UARTS.iter() {
         let ctrl = rd8(base, UICTRL_OFF);
         tbe += (ctrl & TBE != 0) as u32;
         if ctrl & RBF != 0 && rd8(base, URBUF) == byte {
             rx += 1;
         }
-        drained += (rd8(base, UICTRL_OFF) & RBF == 0) as u32;
     }
     let isolated = (unsafe { read_volatile(UICTRL) } & RBF == 0) as u32;
     // 14. Per-port transmit.
@@ -399,10 +428,59 @@ fn main() -> ! {
     puts(b"uarts");
     put_kv(b"tbe", tbe);
     put_kv(b"rx", rx);
-    put_kv(b"drained", drained);
     put_kv(b"isolated", isolated);
-    let uart_ok = tbe == 3 && rx == 3 && drained == 3 && isolated == 1;
+    let uart_ok = tbe == 3 && rx == 3 && isolated == 1;
     puts(if uart_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
+    // 15. FIFO-mode TX / RX interrupts.
+    let mut fts = 0;
+    let mut txp = 0;
+    let mut txrel = 0;
+    for &(base, line) in UART_LINES.iter() {
+        fts += (rd8(base, UFTSTS) == 0xD0) as u32;
+        nvic_set(NVIC_ICER, line);
+        nvic_set(NVIC_ICPR, line);
+        wr8(base, UFTCTL, rd8(base, UFTCTL) | UFTCTL_TEMPTY_EN);
+        spin(20);
+        txp += nvic_pending(line) as u32;
+        wr8(base, UFTCTL, rd8(base, UFTCTL) & !UFTCTL_TEMPTY_EN);
+        spin(20);
+        nvic_set(NVIC_ICPR, line);
+        spin(20);
+        txrel += (!nvic_pending(line)) as u32;
+    }
+    let mut frs = 0;
+    let mut rxirq = 0;
+    let mut drained = 0;
+    for (n, (&(base, line), &(_, byte, _))) in UART_LINES[1..].iter().zip(UARTS.iter()).enumerate()
+    {
+        // One byte left, RFULL_LVL_SEL = 1: NEMPTY | FULL_LVL | count 1.
+        frs += (rd8(base, UFRSTS) == 0x61) as u32;
+        nvic_set(NVIC_ICPR, line);
+        nvic_set(NVIC_ISER, line);
+        wr8(base, UFRCTL, rd8(base, UFRCTL) | UFRCTL_RNEMPTY_EN);
+        let mut guard = 0;
+        while UART_RX[n].load(Ordering::SeqCst) == 0 && guard < 10_000 {
+            guard += 1;
+        }
+        spin(50);
+        nvic_set(NVIC_ICER, line);
+        wr8(base, UFRCTL, rd8(base, UFRCTL) & !UFRCTL_RNEMPTY_EN);
+        rxirq += (UART_RX[n].load(Ordering::SeqCst) == u32::from(byte.to_ascii_uppercase())) as u32;
+        drained += (rd8(base, UICTRL_OFF) & RBF == 0 && rd8(base, UFRSTS) & 0x40 == 0) as u32;
+    }
+    let hits = UART_IRQS.load(Ordering::SeqCst);
+    puts(b"uart irq");
+    put_kv(b"fts", fts);
+    put_kv(b"txp", txp);
+    put_kv(b"txrel", txrel);
+    put_kv(b"frs", frs);
+    put_kv(b"rx", rxirq);
+    put_kv(b"hits", hits);
+    put_kv(b"drained", drained);
+    let irq_ok =
+        fts == 4 && txp == 4 && txrel == 4 && frs == 3 && rxirq == 3 && hits == 3 && drained == 3;
+    puts(if irq_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
     loop {
         core::hint::spin_loop();
