@@ -337,8 +337,11 @@ qmi_cs_release:
     str   r1, [r3]
     bx    lr
 
-/* r0 = byte out -> r0 = byte in */
+/* r0 = byte out -> r0 = byte in. Only the byte reaches DIRECT_TX: the
+ * register's upper bits are IWIDTH/DWIDTH/OE/NOPUSH, so an unmasked
+ * address word would change the transfer format. */
 qmi_xfer:
+    uxtb  r0, r0
     str   r0, [r3, #4]
 1:  ldr   r1, [r3]
     tst   r1, #0x10000          /* RXEMPTY */

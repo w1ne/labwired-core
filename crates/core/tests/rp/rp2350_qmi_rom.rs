@@ -153,6 +153,19 @@ fn rom_flash_apis_erase_and_program_through_the_qmi() {
     call(&mut m, program, [0x1000, 0x2001_0000, 1, 0]);
     call(&mut m, enter_xip, [0; 4]);
     assert_eq!(m.bus.read_u8(XIP + 0x1000).unwrap(), data[0] & 0x0F);
+    // An offset above 64 KiB (Betaflight's config sector on a 2 MiB part
+    // sits at 0x1EC000): every address byte must go out as a plain
+    // single-SPI byte.
+    for i in 0..4096u64 {
+        m.bus.flash.data[0x1E_C000 + i as usize] = 0;
+    }
+    call(&mut m, exit_xip, [0; 4]);
+    call(&mut m, erase, [0x1E_C000, 4096, 1 << 16, 0xd8]);
+    call(&mut m, program, [0x1E_C000, 0x2001_0000, 300, 0]);
+    call(&mut m, enter_xip, [0; 4]);
+    assert_eq!(m.bus.read_u8(XIP + 0x1E_C000).unwrap(), 0x0F);
+    assert_eq!(m.bus.read_u8(XIP + 0x1E_C001).unwrap(), data[1]);
+    assert_eq!(m.bus.read_u8(XIP + 0x1E_D000 - 1).unwrap(), 0xFF);
     // flash_enter_cmd_xip leaves direct mode off and M0 on 03h serial reads.
     assert_eq!(m.bus.read_u32(QMI).unwrap() & 1, 0, "DIRECT_CSR.EN");
     assert_eq!(m.bus.read_u32(QMI + 0x14).unwrap(), 0xa003, "M0_RCMD");

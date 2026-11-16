@@ -60,7 +60,7 @@ fn word(b: &[u8], at: usize) -> u32 {
 /// a UF2 carries none, so the core resets the way the chip does (vector table
 /// or boot ROM).
 pub fn load_uf2_bytes(bytes: &[u8]) -> Result<ProgramImage> {
-    if bytes.is_empty() || bytes.len() % BLOCK != 0 {
+    if bytes.is_empty() || !bytes.len().is_multiple_of(BLOCK) {
         bail!(
             "UF2: {} bytes is not a whole number of 512-byte blocks",
             bytes.len()
