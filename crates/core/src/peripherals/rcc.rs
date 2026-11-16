@@ -606,11 +606,13 @@ impl RccModel for At32F421Crm {
         }
         // A reset bit is honoured only for a block whose model returns to its
         // reset state ([`crate::Peripheral::on_node_reset`]): GPIOA/B/C/F in
-        // AHBRST (RM_AT32F421 V2.05 CRM_AHBRST). Every other peripheral reset
-        // refuses rather than leaving the block's registers untouched.
+        // AHBRST, TMR1/TMR15/TMR16/TMR17 in APB2RST (bits 11, 16, 17, 18) and
+        // TMR3/TMR6/TMR14 in APB1RST (bits 1, 4, 8) (RM_AT32F421 V2.05
+        // CRM_AHBRST/APB2RST/APB1RST). Every other peripheral reset refuses
+        // rather than leaving the block's registers untouched.
         let unsupported = match (offset, write?) {
-            (0x0c, v) => v,
-            (0x10, v) => v,
+            (0x0c, v) => v & !0x0007_0800,
+            (0x10, v) => v & !0x0000_0112,
             (0x28, v) => v & !0x004e_0000,
             _ => 0,
         };

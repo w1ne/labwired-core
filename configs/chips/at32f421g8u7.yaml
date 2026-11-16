@@ -161,7 +161,7 @@ peripherals:
     config:
       profile: stm32g0
       channels: 5
-      requests: { usart1_tx: 2, usart1_rx: 3, usart2_tx: 4, usart2_rx: 5 }
+      requests: { adc1: 1, usart1_tx: 2, usart1_rx: 3, usart2_tx: 4, usart2_rx: 5 }
     clock: { reg: ahben, bit: 0 }
   - id: adc1
     type: adc
@@ -180,7 +180,33 @@ peripherals:
     # IMR/EMR/RTSR/FTSR/SWIER/PR as the STM32 F1/L0 register file; GPIO line
     # groups on IRQ 5 (0-1), 6 (2-3), 7 (4-15) as the L0 vectors. Lines 0..17,
     # 19 and 21 exist (BSP at32f421_exint.h EXINT_LINE_*).
-    config: { profile: stm32l0, line_mask: 0x2bffff }
+    # EXINT21 is the comparator output (RM §19.3) on the shared ADC1_CMP
+    # vector 12.
+    config: { profile: stm32l0, line_mask: 0x2bffff, line_irqs: { 21: 12 } }
+  # SCFG_CFG1 and EXINTC1..4 (RM_AT32F421 V2.05 §7.2, STM32F0 SYSCFG offsets).
+  # SCFG and CMP share the 1 KiB window, the APB2EN.SCFGCMPEN clock and the
+  # APB2RST.SCFGCMPRST reset (which stays refused: §19.4 resets CMP from
+  # system reset only).
+  - id: scfg
+    type: syscfg
+    base_address: 0x40010000
+    size: "28B"
+    config: { profile: at32f421 }
+    clock: { reg: apb2en, bit: 0 }
+  # CMP_CTRLSTS/G_FILTER_EN/HIGH_PULSE/LOW_PULSE (RM §19.6, BSP at32f421_cmp.h).
+  # plus = CMPNINVSEL 00..11, minus = CMPINVSEL 000..111. VREFINT typical
+  # 1.2 V (RM §19.6.1 BRGEN). The output is EXINT line 21.
+  - id: cmp
+    type: analog_comparator
+    base_address: 0x4001001C
+    size: "20B"
+    config:
+      profile: at32f421
+      exti_line: 21
+      vrefint_mv: 1200
+      plus: [PA5, PA1, PA0, VSSA]
+      minus: [VREFINT_1_4, VREFINT_1_2, VREFINT_3_4, VREFINT, PA4, PA5, PA0, PA2]
+    clock: { reg: apb2en, bit: 0 }
   # STM32 IWDG-compatible CMD/DIV/RLD/STS map (BSP at32f421_wdt.h; no window
   # register, so the window stays out of the 16-byte span); nominal
   # 40 kHz LICK (DS V2.03). Expiry resets the machine.
