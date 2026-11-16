@@ -54,6 +54,14 @@
 //! at 0 V unless `.ic` sets it, a capacitor starts at its `ic=` (else the
 //! voltage across its nodes), and an inductor at its `ic=` (else 0 A).
 //!
+//! `.temp <°C>` is the default `TEMP` of every `D`, `Q`, `J` and `M` instance
+//! and of every `beta`/`tc1`/`tc2` resistor that has no `temp=` of its own, so
+//! each takes the temperature laws below exactly as an explicit `temp=` would.
+//! Only one value is accepted: ngspice reruns the analysis once per listed
+//! temperature. `.options tnom=` is still ignored; model `TNOM` stays 27 °C
+//! unless the card sets it. Without `.temp`, an instance without `temp=` keeps
+//! the historical fixed 300 K thermal voltage and nominal parameters.
+//!
 //! The four dependent sources are SPICE's linear ones and nothing more: `POLY`,
 //! `VALUE={...}` and `TABLE` forms are refused by name. `E` and `H` each add a
 //! branch current, numbered after every voltage source and inductor; `F` and
@@ -3640,6 +3648,51 @@ fn expand_call(
     Ok(())
 }
 
+/// The deck's `.temp`, in Celsius, read before any element so that a `.temp`
+/// written after the devices still applies to them. ngspice runs the whole
+/// analysis once per listed value; this engine runs once, so more than one
+/// value is refused rather than silently keeping one of them.
+fn circuit_temperature(lines: &[LogicalLine]) -> Result<Option<f64>, AnalogError> {
+    let mut found: Option<f64> = None;
+    let mut in_control = false;
+    for logical in lines {
+        let ctx = LineCtx {
+            number: logical.number,
+            text: &logical.text,
+        };
+        let mut tokens = logical.text.split_whitespace();
+        let Some(head) = tokens.next() else { continue };
+        if in_control {
+            in_control = !head.eq_ignore_ascii_case(".endc");
+            continue;
+        }
+        if head.eq_ignore_ascii_case(".control") {
+            in_control = true;
+            continue;
+        }
+        if !head.eq_ignore_ascii_case(".temp") {
+            continue;
+        }
+        let values: Vec<&str> = tokens.collect();
+        if values.is_empty() {
+            return Err(ctx.parse_err("expected `.temp <°C>`"));
+        }
+        if values.len() > 1 || found.is_some() {
+            return Err(ctx.parse_err(
+                "only one `.temp` value is supported; ngspice would rerun the analysis per value",
+            ));
+        }
+        let celsius = ctx.value(values[0], "temperature")?;
+        if !celsius.is_finite() || celsius <= -273.15 {
+            return Err(
+                ctx.parse_err("`.temp` must be finite and above absolute zero (-273.15 °C)")
+            );
+        }
+        found = Some(celsius);
+    }
+    Ok(found)
+}
+
 /// Parse a netlist into a [`Circuit`].
 pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     let mut circuit = Circuit::default();
@@ -3655,6 +3708,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     // fourth token is the substrate node unless it names a model, which is
     // how ngspice's `inp2q.c` tells `Q c b e s mod` from `Q c b e mod`.
     let lines = expand_subcircuits(logical_lines(text)?)?;
+    let circuit_temperature = circuit_temperature(&lines)?;
     let declared_models: Vec<String> = lines
         .iter()
         .filter_map(|line| {
@@ -3708,7 +3762,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 // cannot be shared with ngspice, which is the whole point of
                 // spelling the subset in SPICE.
                 "options" | "option" | "op" | "print" | "plot" | "save" | "probe" | "width"
-                | "temp" | "nodeset" | "title" | "endc" => {}
+                | "nodeset" | "title" | "endc" => {}
+                // Read up front by `circuit_temperature`.
+                "temp" => {}
                 _ => return Err(ctx.unsupported()),
             }
             continue;
@@ -3802,7 +3858,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         return Err(ctx.parse_err("an NTC resistor needs `beta > 0` and `r25 > 0`"));
                     }
                     let nominal_temperature_celsius = nominal_temperature_celsius.unwrap_or(25.0);
-                    let temperature_celsius = temperature_celsius.unwrap_or(25.0);
+                    let temperature_celsius =
+                        temperature_celsius.or(circuit_temperature).unwrap_or(25.0);
                     if nominal_temperature_celsius <= -273.15 || temperature_celsius <= -273.15 {
                         return Err(ctx.parse_err("NTC temperatures must be above absolute zero"));
                     }
@@ -3822,7 +3879,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     let tc1 = tc1.unwrap_or(0.0);
                     let tc2 = tc2.unwrap_or(0.0);
                     let nominal_temperature_celsius = nominal_temperature_celsius.unwrap_or(27.0);
-                    let temperature_celsius = temperature_celsius.unwrap_or(27.0);
+                    let temperature_celsius =
+                        temperature_celsius.or(circuit_temperature).unwrap_or(27.0);
                     if !tc1.is_finite() || !tc2.is_finite() {
                         return Err(ctx.parse_err("resistor `tc1` and `tc2` must be finite"));
                     }
@@ -4106,7 +4164,9 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     as_,
                     pd,
                     ps,
-                    temperature_celsius,
+                    // An instance `temp=` wins over the deck's `.temp`, as
+                    // in ngspice.
+                    temperature_celsius: temperature_celsius.or(circuit_temperature),
                     multiplier: multiplier.unwrap_or(1.0),
                     area: area.unwrap_or(1.0),
                     perimeter,

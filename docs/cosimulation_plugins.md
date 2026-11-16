@@ -445,10 +445,13 @@ parameters have no temperature dependence. Signal- or load-dependent supply
 current is not modeled. The hand-calculated macro tests are in
 `crates/core/tests/analog_macros.rs`.
 
-`.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`,
-`.temp`, `.nodeset`, `.title` and a whole `.control` … `.endc` block are
-accepted and ignored, so one deck can be handed to this engine and to ngspice
-unchanged. This engine takes its run length, step and outputs from the
+`.temp <°C>` sets the default `TEMP` of every `D`, `Q`, `J` and `M`
+instance and of every `beta`/`tc1`/`tc2` resistor without its own `temp=`.
+Only one value is accepted, because ngspice reruns the analysis for each
+listed value. `.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`,
+`.probe`, `.width`, `.nodeset`, `.title` and a whole `.control` … `.endc`
+block are accepted and ignored (`.tran` reads only `uic`), so one deck can be
+handed to this engine and to ngspice unchanged. This engine takes its run length, step and outputs from the
 manifest. Any other directive is still a hard error naming the ngspice adapter,
 so a typo cannot quietly drop an element line.
 
