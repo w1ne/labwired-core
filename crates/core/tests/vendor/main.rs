@@ -20,6 +20,7 @@ mod common;
 
 mod cc2538_rom;
 mod cc2538_sleep_timer_irq;
+mod ch32l103_compiled_firmware;
 mod ch32v003_compiled_firmware;
 mod ch32v005_compiled_firmware;
 mod ch32v006_compiled_firmware;
