@@ -104,6 +104,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_xip_ssi",
     "rp2040_usb",
     "rp2350_bootram",
+    "rp2350_qmi",
     // ESP32-C3 behavioral models (esp32 factory).
     // MUST be listed: without membership the fuzzy fallback would coerce the
     // BLE baseband window onto some unrelated register map instead of erroring.
@@ -1326,6 +1327,53 @@ pub fn try_build(
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
         "rp2350_bootram" => Box::new(crate::peripherals::rp2350_bootram::Rp2350BootRam::new()),
+        // RP2350 QMI direct mode + the serial NOR on CS0. `flash_size`: the
+        // CS0 array in bytes (required). `jedec_id: [mfr, type, capacity]`
+        // and `unique_id: [8 bytes]` answer 9Fh/4Bh; without them those
+        // reads are refused rather than invented.
+        "rp2350_qmi" => {
+            let size = p_cfg
+                .config
+                .get("flash_size")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!("rp2350_qmi `{}`: config.flash_size is required", p_cfg.id)
+                })?;
+            let bytes = |key: &str| -> anyhow::Result<Option<Vec<u8>>> {
+                match p_cfg.config.get(key) {
+                    None => Ok(None),
+                    Some(v) => v
+                        .as_sequence()
+                        .map(|s| {
+                            s.iter()
+                                .map(|b| b.as_u64().map(|b| b as u8))
+                                .collect::<Option<Vec<u8>>>()
+                        })
+                        .flatten()
+                        .map(Some)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("rp2350_qmi `{}`: {key} must be a byte list", p_cfg.id)
+                        }),
+                }
+            };
+            let mut qmi = crate::peripherals::rp2350_qmi::Rp2350Qmi::new(
+                u32::try_from(size)
+                    .map_err(|_| anyhow::anyhow!("rp2350_qmi: flash_size too large"))?,
+            );
+            if let Some(id) = bytes("jedec_id")? {
+                let id: [u8; 3] = id
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("rp2350_qmi: jedec_id needs 3 bytes"))?;
+                qmi = qmi.with_jedec_id(id);
+            }
+            if let Some(id) = bytes("unique_id")? {
+                let id: [u8; 8] = id
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("rp2350_qmi: unique_id needs 8 bytes"))?;
+                qmi = qmi.with_unique_id(id);
+            }
+            Box::new(qmi)
+        }
         "rp2040_usb" => Box::new(
             crate::peripherals::rp2040::usb::Rp2040Usb::new().with_irq(p_cfg.irq.unwrap_or(5)),
         ),

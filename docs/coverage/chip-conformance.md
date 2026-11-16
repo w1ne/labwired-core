@@ -85,7 +85,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f401ve | **L0** | ✓ | 24 | — | — | — |
 | stm32f405 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32f405_tier1_survival |
 | stm32f767 | **L1** | ✓ | 36 | — | — | firmware_survival::test_stm32f767_tier1_survival |
-| rp2350 | **L1** | ✓ | 27 | — | — | firmware_survival::test_rp2350_demo_survival |
+| rp2350 | **L1** | ✓ | 28 | — | — | firmware_survival::test_rp2350_demo_survival |
 | stm32f407 | **L1** | ✓ | 34 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32f407ie | **L0** | ✓ | 34 | — | — | — |
 | stm32f407ig | **L0** | ✓ | 34 | — | — | — |
@@ -153,7 +153,7 @@ This page covers the public models. For every chip we model — public and priva
 | esp32s2 | **L0** | ✓ | 1 | — | — | — |
 | rp2040-feather | **L0** | ✓ | 24 | — | — | — |
 | rp2350-feather | **L0** | ✓ | 27 | — | — | — |
-| rp2354b | **L1** | ✓ | 27 | — | — | rp2354b_contract::smoke_firmware_prints_and_toggles_gpio47 |
+| rp2354b | **L1** | ✓ | 28 | — | — | rp2354b_contract::smoke_firmware_prints_and_toggles_gpio47 |
 | stm32h723zg | **L0** | ✓ | 7 | — | — | — |
 | esp32c6fh4 | **L0** | ✓ | 69 | — | — | — |
 

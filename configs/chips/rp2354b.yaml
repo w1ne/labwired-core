@@ -12,7 +12,8 @@
 #     NUM_ADC_CHANNELS 9, ADC_BASE_PIN 40). GPIO32..47 are the SIO GPIO_HI_*
 #     words; ADC inputs 0..7 are GPIO40..47, the temperature sensor input 8.
 #   * SYSINFO.PACKAGE_SEL reads 0 (QFN80).
-#   * Flash: the 2 MiB in-package device on QSPI CS0.
+#   * Flash: the 2 MiB in-package device on QSPI CS0 (QMI flash_size).
+#   * Boot: reset runs the boot ROM's image handoff (`boots_core`).
 # Scope limits: those of rp2350.yaml, plus the RP2350 PIO extensions
 # (GPIOBASE, so PIO cannot reach GPIO32..47); see docs/boards/rp2354b.md.
 # Labels GPIO32..47 resolve through the pad interface; a device bound by
@@ -25,6 +26,17 @@ flash:
   # 2 MiB stacked in the package (datasheet Table 1), spelled in KB because
   # `parse_size` reads MB as 10^6.
   size: "2048KB"
+
+# Boot through the ROM, as silicon does (datasheet 5.2): reset enters the
+# clean-room ROM, which sets up 03h XIP, installs the XIP setup function in
+# boot RAM, finds the image's IMAGE_DEF block and hands off to its vector
+# table. An image without an IMAGE_DEF halts in the ROM.
+memory_regions:
+  - name: "bootrom"
+    base: 0x00000000
+    size: "32KB"
+    image_env: "LABWIRED_RP2350_BOOTROM"
+    boots_core: true
 
 # QFN80 (datasheet Chapter 1, Table 1; 80 pins plus the exposed ground pad).
 package: "QFN80"
@@ -106,6 +118,13 @@ peripherals:
     config:
       debug_schema: "../peripherals/rp2350/adc.yaml"
       profile: "rp2350b"
+  # QMI: the in-package 2 MiB device on CS0.
+  - id: "qmi"
+    type: "rp2350_qmi"
+    base_address: 0x400D0000
+    size: "4KB"
+    config:
+      flash_size: 2097152
   # SIO: GPIO32..47 in the GPIO_HI_* words.
   - id: "sio"
     type: "rp2040_sio"

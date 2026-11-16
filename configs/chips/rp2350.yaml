@@ -5,7 +5,7 @@
 # RP2040's. Reuses the RP2040 behavioural models (PL011 UART, DW I2C/SPI, PIO,
 # SIO, DMA, ADC, PWM, watchdog, clock/reset with the rp2350 profile).
 # Not declared (documented in docs/boards/rp2350.md): POWERMAN/TICKS/TRNG/
-# SHA-256/OTP/HSTX/USB enumeration/XIP QMI programming, TrustZone, Hazard3
+# SHA-256/OTP/HSTX/USB enumeration, QMI quad/QPI modes, TrustZone, Hazard3
 # RISC-V cores, second M33 core.
 name: "rp2350"
 arch: "arm"
@@ -163,6 +163,17 @@ peripherals:
     size: "4KB"
     config:
       profile: "rp2350"
+  # QMI (datasheet 12.14): direct serial mode driving the CS0 serial NOR,
+  # whose array is the flash at 0x10000000. The boot-ROM flash APIs
+  # (flash_range_erase/program, flash_exit_xip, flash_enter_cmd_xip) and
+  # pico-sdk hardware_flash program and erase through it. Single-SPI only;
+  # quad/QPI, AUTO_CSn, CS1 and address translation are refused.
+  - id: "qmi"
+    type: "rp2350_qmi"
+    base_address: 0x400D0000
+    size: "4KB"
+    config:
+      flash_size: 4194304
   # XIP_CTRL (flash cache control) — declarative storage, as on RP2040.
   - id: "xip_ctrl"
     type: "declarative"

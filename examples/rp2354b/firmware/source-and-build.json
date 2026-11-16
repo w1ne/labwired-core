@@ -50,8 +50,8 @@
     }
   ],
   "compiler": "arm-none-eabi-gcc (15:13.2.rel1-2) 13.2.1 20231009",
-  "elf_sha256": "5557cf668cbf2ada5dcaf7027684bb12d7ce25a07510a747f3729343a1207204",
-  "text_bytes": 472,
+  "elf_sha256": "5985bf1782ab32bd960a9c3e6dc24c564c75eaf5eca0c7e75992897a03cae056",
+  "text_bytes": 492,
   "data_bytes": 0,
   "bss_bytes": 0,
   "fixture_scope": "UART0 + GPIO47 smoke for configs/chips/rp2354b.yaml; asserted by examples/rp2354b/io-smoke.yaml and crates/core/tests/rp/rp2354b_contract.rs.",

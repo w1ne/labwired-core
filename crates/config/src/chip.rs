@@ -110,6 +110,12 @@ pub struct NamedMemoryRange {
     /// is the first question any persistence routine asks.
     #[serde(default)]
     pub erased: bool,
+    /// Reset fetches the initial SP/PC from this region's base: the core
+    /// boots through this ROM (whose code hands off to the image), instead of
+    /// the simulator jumping straight to the image's own vector table. Only
+    /// honoured when the region actually holds an image.
+    #[serde(default)]
+    pub boots_core: bool,
     /// Make this range a MIRROR of the window starting at `alias_of`: it holds
     /// no bytes of its own, and an access at `base + off` (`off < size`) is the
     /// access at `alias_of + off` — same backing, same peripheral, same side

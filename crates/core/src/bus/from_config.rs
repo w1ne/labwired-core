@@ -312,6 +312,7 @@ impl SystemBus {
 
         let mut extra_mem = Vec::with_capacity(chip.memory_regions.len());
         let mut mem_aliases = Vec::new();
+        let mut boot_rom_base = None;
         for region in &chip.memory_regions {
             let size = region.size;
             // A mirror holds no bytes; the accessors translate into its target.
@@ -414,6 +415,9 @@ impl SystemBus {
                 );
                 continue;
             }
+            if region.boots_core && loaded_image {
+                boot_rom_base = Some(region.base);
+            }
             extra_mem.push(mem);
         }
 
@@ -442,6 +446,7 @@ impl SystemBus {
             riscv_profile: crate::cpu::RiscVCoreProfile::for_chip(chip),
             bit_band_enabled: Self::chip_has_bit_band(chip),
             reset_vector_offset: chip.reset_vector_offset,
+            boot_rom_base,
             flash_boot_alias: chip.flash_boot_alias,
             atomic_register_aliases: chip.atomic_register_aliases,
             rp2350_dcp: chip
