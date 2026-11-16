@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 564751,
+    "instructions": 565313,
     "stop_reason": "max_cycles"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/nuvoton_npcx9m6fb_evb-smoke.yaml",
   "system": "configs/systems/onboarding/nuvoton_npcx9m6fb_evb.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-16T11:22:42Z",
-  "finished_at_utc": "2026-11-16T11:22:44Z",
+  "started_at_utc": "2026-11-16T14:40:09Z",
+  "finished_at_utc": "2026-11-16T14:40:10Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1605,
+  "elapsed_ms": 1491,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.723,
-    "build_firmware": 0.378,
-    "run_smoke": 0.434
+    "build_cli": 0.864,
+    "build_firmware": 0.258,
+    "run_smoke": 0.326
   },
   "stages_ms": {
-    "build_cli": 723,
-    "build_firmware": 378,
-    "run_smoke": 434
+    "build_cli": 864,
+    "build_firmware": 258,
+    "run_smoke": 326
   }
 }

@@ -248,6 +248,10 @@ pub const MODEL_TYPES: &[&str] = &[
     // Nuvoton NPCX TWD (`build_npcx_twd`): IRQ from the yaml, optional
     // `lfclk_hz`.
     "npcx_twd",
+    // Nuvoton NPCX HFCG / LFCG clock-generator register blocks
+    // (`build_npcx_cdcg`): no IRQ, no options.
+    "npcx_hfcg",
+    "npcx_lfcg",
     // Nuvoton NPCX GPIO port (byte registers PDOUT..PLOCK_CTL). MUST be
     // listed: the fuzzy `contains("gpio")` fallback would map it onto the
     // STM32 GPIO register layout.
@@ -894,6 +898,28 @@ fn build_npcx_twd(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral
     Ok(Box::new(NpcxTwd::new(hz)))
 }
 
+// Nuvoton NPCX HFCG / LFCG: register files only; no IRQ and no options.
+#[cold]
+#[inline(never)]
+fn build_npcx_cdcg(
+    canonical_type: &str,
+    p_cfg: &PeripheralConfig,
+) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::npcx_cdcg::{CdcgBlock, NpcxCdcg};
+    if let Some(k) = p_cfg.config.keys().next() {
+        anyhow::bail!("{canonical_type} admits no options, not `{k}`");
+    }
+    if p_cfg.irq.is_some() {
+        anyhow::bail!("{canonical_type} '{}' has no IRQ line", p_cfg.id);
+    }
+    let block = if canonical_type == "npcx_hfcg" {
+        CdcgBlock::Hfcg
+    } else {
+        CdcgBlock::Lfcg
+    };
+    Ok(Box::new(NpcxCdcg::new(block)))
+}
+
 // SAM D21 RTC: base from the chip yaml, fixed IRQ; `gclk_hz` declares GCLK_RTC.
 #[cold]
 #[inline(never)]
@@ -1277,6 +1303,7 @@ pub fn try_build(
         "npcx_itim32" | "npcx_itim64" => build_npcx_itim(canonical_type, p_cfg)?,
         "npcx_mtc" => build_npcx_mtc(p_cfg)?,
         "npcx_twd" => build_npcx_twd(p_cfg)?,
+        "npcx_hfcg" | "npcx_lfcg" => build_npcx_cdcg(canonical_type, p_cfg)?,
         "npcx_gpio" => Box::new(crate::peripherals::npcx_gpio::NpcxGpio::new()),
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};

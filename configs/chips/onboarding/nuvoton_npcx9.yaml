@@ -8,7 +8,8 @@ name: nuvoton_npcx9
 arch: arm
 core: cortex-m4f
 # CORE_CLK 15 MHz: Zephyr dts/arm/nuvoton/npcx/npcx9.dtsi pcc (OFMCLK 90 MHz,
-# core-prescaler 6). The CDCG is not modelled, so firmware cannot change it.
+# core-prescaler 6). The HFCG registers below hold values but do not drive the
+# clock, so firmware cannot change it.
 cpu_hz: 15000000
 flash:
   # LabWired's firmware loader uses the NPCX9 ROM mapped at zero as its
@@ -122,8 +123,8 @@ peripherals:
 # (0x400B0000, IRQ 28) and ITIM64 (0x400BE000). Register layout: Zephyr
 # reg_def.h itim32_reg / itim64_reg. The APB2 tick clock is the 15 MHz CORE_CLK
 # (Zephyr apb2-prescaler 6; Renode's model defaults to 10 MHz). Windows are
-# 4 KiB (Renode Size 0x1000) and do not reach HFCG 0x400B5000 (unmapped) or
-# the MTC at 0x400B7000 (below). Not modelled: PWDWN_CTL gates, deep-sleep wake-up.
+# 4 KiB (Renode Size 0x1000) and do not reach the HFCG / LFCG at 0x400B5000 or
+# the MTC at 0x400B7000 (both below). Not modelled: PWDWN_CTL gates, deep-sleep wake-up.
 - id: itim32_1
   type: npcx_itim32
   base_address: 0x400B0000
@@ -159,6 +160,22 @@ peripherals:
   base_address: 0x400BE000
   size: 4KB
   irq: 58
+# Clock generator register blocks. Bases from Renode nuvoton_npcx9.repl
+# (Miscellaneous.NPCX_HFCG at 0x400B5000, NPCX_LFCG at 0x400B5100, Size 0x100
+# each); offsets and field widths from Renode NPCX_HFCG.cs / NPCX_LFCG.cs and
+# Zephyr reg_def.h cdcg_reg. Values read back (Renode's tags read 0); HFCGCTRL
+# LOAD and CLK_CHNG read 0, so Zephyr's M/N load poll ends at once; LOCK and
+# LFLOC drop later writes to their block. Not modelled: the clock tree. CORE_CLK
+# stays at cpu_hz above and the timers keep their rates whatever M, N, FPRED
+# or the APB dividers say.
+- id: hfcg
+  type: npcx_hfcg
+  base_address: 0x400B5000
+  size: 256B
+- id: lfcg
+  type: npcx_lfcg
+  base_address: 0x400B5100
+  size: 256B
 # Miniature Timer Counter. Base and NVIC line from Renode nuvoton_npcx9.repl
 # (Timers.NPCX_MTC at 0x400B7000, -> nvic@5); register map, 1 Hz tick and
 # 25-bit predefined time from Renode NPCX_MTC.cs. TTC (+0x00) counts once per

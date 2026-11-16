@@ -4,8 +4,8 @@
 
 The imported NPCX9 system booted `firmware-nuvoton-npcx9-smoke`, rebooted
 once through the TWD watchdog, and ran to **100,000,000 cycles**
-(564,751 instructions). It passed **12/12 smoke assertions**. Firmware
-SHA-256 `197d3e2fa7f96128e5f97081458f741a4d18daa1ccef287099a213934edcb582`.
+(565,313 instructions). It passed **13/13 smoke assertions**. Firmware
+SHA-256 `54805aef9850fbdc3a52b2a7c94951ae8f706d6a34b236a1b4632e857dc05f3b`.
 UART capture (UART1..4 share one capture stream):
 
 ```text
@@ -19,6 +19,7 @@ uarts tbe=3 rx=3 isolated=1 ok
 uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok
 mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok
 twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok
+cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok
 twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok
 ```
 
@@ -77,6 +78,14 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
     nine dots. The second boot reads WDRST_STS 1 and WD_RUN 0, clears
     WDRST_STS (W1C) and reads TWDT0 back at 0xFFFF. T0 keeps waking the idle
     core every 2 s, so the run ends on `max_cycles`, not `max_steps`.
+18. HFCG at 0x400B5000 and LFCG at 0x400B5100 (runs before the watchdog
+    expiry of check 17): HFCGN / HFCGML / HFCGMH, then LOAD, in Zephyr
+    `clock_control_npcx.c` order; the CLK_CHNG poll ends at once, LOAD reads
+    0 and M / N read back. HFCGP, HFCBCD and HFCBCD1..3 read back with the
+    reserved bits clear (0x5F -> 0x53, 0xFF -> 0x32). LOCK drops a later
+    HFCGML write. LFCG HFRDI keeps 12 bits (0xFFFF -> 0x0FFF),
+    LFCGCTL2.XT_OSC_SL_EN reads back, and LFLOC drops a later LFCGCTL2
+    write.
 
 ## Claimed peripherals
 
@@ -88,13 +97,15 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
 | `itim64` | `npcx_itim64` | 64-bit down-counter, IRQ on NVIC 58. |
 | `mtc` | `npcx_mtc` | TTC 1 Hz count (read/write, survives system reset), WTC PT / PTO (W1C) / WIE; level IRQ WIE && PTO on NVIC 5. |
 | `twd` | `npcx_twd` | T0 at 32768 Hz / 2^MDIV, TWDT0 period, TC (read clears), pulse IRQ per terminal count on NVIC 31; watchdog WDCNT / TWMWD / WDCP, WDCT0I clock select, 87h/61h/63h stop and unlock, 5Ch touch (WDSDME), bad service byte reset, lock bits, system reset with WDRST_STS. |
+| `hfcg` | `npcx_hfcg` | HFCGCTRL LOAD (reads 0, latches M / N), CLK_CHNG (reads 0), LOCK (set-only, drops HFCG writes); HFCGML / HFCGMH / HFCGN / HFCGP / HFCBCD / HFCBCD1..3 / HFCGPIDL read back with reserved bits clear. Register file only. |
+| `lfcg` | `npcx_lfcg` | LFCGCTL LREFEN, UDCP (reads 0), LFLOC (set-only, drops LFCG writes); HFRDI (12 bits), HFRDF, FRCDIV, DIVCOR1/2, LFCGCTL2 read back. Register file only. |
 
 GPIO ids are `port0`..`portf`, not Zephyr's `gpio0`..`gpiof`: a `gpio0` or
 `gpio1` id switches on the bus's Nordic GPIOTE pass.
 
 Sources: Renode `platforms/cpus/nuvoton_npcx9.repl`, `NPCX_GPIO.cs`,
-`NPCX_ITIM.cs`, `NPCX_MTC.cs`, `NPCX_TWD.cs` and `NPCX_UART.cs`; Zephyr `drivers/serial/uart_npcx.c`; Zephyr `soc/nuvoton/npcx/common/reg/reg_def.h`
-(`gpio_reg`, `itim32_reg`, `itim64_reg`), `drivers/gpio/gpio_npcx.c` and
+`NPCX_HFCG.cs`, `NPCX_ITIM.cs`, `NPCX_LFCG.cs`, `NPCX_MTC.cs`, `NPCX_TWD.cs` and `NPCX_UART.cs`; Zephyr `drivers/serial/uart_npcx.c`, `drivers/clock_control/clock_control_npcx.c`; Zephyr `soc/nuvoton/npcx/common/reg/reg_def.h`
+(`cdcg_reg`, `gpio_reg`, `itim32_reg`, `itim64_reg`), `drivers/gpio/gpio_npcx.c` and
 `dts/arm/nuvoton/npcx/npcx.dtsi` / `npcx9.dtsi`.
 
 Differences from Renode `NPCX_GPIO`: Renode drops a PDOUT write to an input
@@ -118,6 +129,15 @@ Not modelled:
 - TWD: T0CSR TESDIS and WDLTD (Renode tags them), LTWCFG gating TWCFG
   (Renode stores the bit only), T0 wake-up through MIWU, 32-bit accesses
   beyond the 16-bit register at the address.
+- HFCG / LFCG: the clock tree. CORE_CLK stays at the descriptor's 15 MHz
+  `cpu_hz`, and the timers keep their rates, whatever M, N, FPRED or the APB
+  dividers say. CLK_CHNG shows no settling delay. LFLER and XTCLK_VAL read 0.
+  Reset values are 0 (Renode reads 0; datasheet values are not in the
+  sources); a reset clearing LOCK / LFLOC is an assumption.
+
+Difference from Renode `NPCX_HFCG` / `NPCX_LFCG`: Renode defines every field
+as a tag (reads 0, drops writes). This model keeps the written values, so
+Zephyr's "M / N already match" test before the reload sees what it wrote.
 
 Differences from Renode `NPCX_TWD`, each toward the documented register
 behaviour: TWCP and WDCP read back the written field (Renode returns the
@@ -128,8 +148,8 @@ WDRST_STS survives the watchdog reset it records (Renode clears it in the
 machine reset); a completed 87h/61h/63h sequence returns to idle, so a second
 sequence is accepted (Renode resets on the next 87h).
 
-Not declared (no model in this engine): MDMA, SPIP,
-HFCG, LFCG, FIU, SMBus, and the other Renode NPCX blocks.
+Not declared (no model in this engine): MDMA, SPIP, FIU, SMBus, and the
+other Renode NPCX blocks.
 
 ## Negative controls
 
@@ -155,6 +175,10 @@ HFCG, LFCG, FIU, SMBus, and the other Renode NPCX blocks.
 - [`attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-twd/`](../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-twd/):
   same CLI and firmware (SHA-256 `197d3e2f…`), previous descriptor without
   the `twd` entry; BusFault at 0x400D8006 (T0CSR read at entry), FAIL 0/12.
+- [`attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-cdcg/`](../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-cdcg/):
+  same CLI and firmware (SHA-256 `54805aef…`), previous descriptor without
+  the `hfcg` / `lfcg` entries; BusFault at 0x400B5006 (HFCGN write), FAIL
+  10/13.
 
 The profile's `verified` field remains false. This result is limited to the
 local model behaviour; it is not datasheet validation or hardware

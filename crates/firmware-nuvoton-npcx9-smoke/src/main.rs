@@ -61,6 +61,15 @@
 //     the 10th period, so the UART shows exactly nine dots, then the second
 //     boot reports WDRST_STS set, WD_RUN clear, W1C and TWDT0 back to 0xFFFF.
 //
+// Then the clock generators (Renode Miscellaneous.NPCX_HFCG at 0x400B5000 and
+// NPCX_LFCG at 0x400B5100; Zephyr reg_def.h cdcg_reg). Check 18 runs before
+// the watchdog expiry above.
+// 18. Zephyr clock_control_npcx.c order: HFCGN / HFCGML / HFCGMH, LOAD, then
+//     the CLK_CHNG poll ends; the values read back and LOAD reads 0. HFCGP /
+//     HFCBCD / HFCBCD1..3 read back with reserved bits clear. LOCK drops a
+//     later HFCGML write. LFCG: HFRDI keeps 12 bits, LFCGCTL2.XT_OSC_SL_EN
+//     reads back, LFLOC drops a later LFCGCTL2 write.
+//
 // Bare-register, no HAL.
 
 #![no_std]
@@ -177,6 +186,26 @@ static TWD_IRQS: AtomicU32 = AtomicU32::new(0);
 static TWD_US: [AtomicU32; 3] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
 /// Nonzero: the TWD handler prints a '.' per IRQ.
 static TWD_DOTS: AtomicU32 = AtomicU32::new(0);
+
+const HFCG: usize = 0x400B_5000;
+const LFCG: usize = 0x400B_5100;
+const HFCGCTRL: usize = 0x00;
+const HFCGML: usize = 0x02;
+const HFCGMH: usize = 0x04;
+const HFCGN: usize = 0x06;
+const HFCGP: usize = 0x08;
+const HFCBCD: usize = 0x10;
+const HFCBCD1: usize = 0x12;
+const HFCBCD2: usize = 0x14;
+const HFCBCD3: usize = 0x1D;
+const HFCGCTRL_LOAD: u8 = 1 << 0;
+const HFCGCTRL_LOCK: u8 = 1 << 2;
+const HFCGCTRL_CLK_CHNG: u8 = 1 << 7;
+const LFCGCTL: usize = 0x00;
+const HFRDI: usize = 0x02;
+const LFCGCTL2: usize = 0x14;
+const LFCGCTL_LFLOC: u8 = 1 << 5;
+const LFCGCTL2_XT_OSC_SL_EN: u8 = 1 << 6;
 
 static ITIM1_IRQS: AtomicU32 = AtomicU32::new(0);
 /// Bit n set: TIMERS[n] took its IRQ.
@@ -723,6 +752,49 @@ fn main() -> ! {
         && dec == 1
         && stop == 1;
     puts(if twd_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
+    // 18. HFCG / LFCG.
+    wr8(HFCG, HFCGN, 0x02);
+    wr8(HFCG, HFCGML, 0xBA);
+    wr8(HFCG, HFCGMH, 0x0A);
+    wr8(HFCG, HFCGCTRL, rd8(HFCG, HFCGCTRL) | HFCGCTRL_LOAD);
+    let mut guard = 0u32;
+    while rd8(HFCG, HFCGCTRL) & HFCGCTRL_CLK_CHNG != 0 && guard < 1000 {
+        guard += 1;
+    }
+    let load = (guard < 1000
+        && rd8(HFCG, HFCGCTRL) & HFCGCTRL_LOAD == 0
+        && rd8(HFCG, HFCGN) == 0x02
+        && rd8(HFCG, HFCGML) == 0xBA
+        && rd8(HFCG, HFCGMH) == 0x0A) as u32;
+    // HFCGP 0x5F: bits 2..3 reserved. HFCBCD 0xFF: only bits 1, 4..5.
+    wr8(HFCG, HFCGP, 0x5F);
+    wr8(HFCG, HFCBCD, 0xFF);
+    wr8(HFCG, HFCBCD1, 0x11);
+    wr8(HFCG, HFCBCD2, 0x22);
+    wr8(HFCG, HFCBCD3, 0x01);
+    let div = (rd8(HFCG, HFCGP) == 0x53
+        && rd8(HFCG, HFCBCD) == 0x32
+        && rd8(HFCG, HFCBCD1) == 0x11
+        && rd8(HFCG, HFCBCD2) == 0x22
+        && rd8(HFCG, HFCBCD3) == 0x01) as u32;
+    wr8(HFCG, HFCGCTRL, HFCGCTRL_LOCK);
+    wr8(HFCG, HFCGML, 0x55);
+    let hlock = (rd8(HFCG, HFCGML) == 0xBA && rd8(HFCG, HFCGCTRL) == HFCGCTRL_LOCK) as u32;
+    wr16(LFCG, HFRDI, 0xFFFF);
+    wr8(LFCG, LFCGCTL2, LFCGCTL2_XT_OSC_SL_EN);
+    let lf = (rd16(LFCG, HFRDI) == 0x0FFF && rd8(LFCG, LFCGCTL2) == LFCGCTL2_XT_OSC_SL_EN) as u32;
+    wr8(LFCG, LFCGCTL, LFCGCTL_LFLOC);
+    wr8(LFCG, LFCGCTL2, 0);
+    let llock = (rd8(LFCG, LFCGCTL2) == LFCGCTL2_XT_OSC_SL_EN) as u32;
+    puts(b"cdcg");
+    put_kv(b"load", load);
+    put_kv(b"div", div);
+    put_kv(b"hlock", hlock);
+    put_kv(b"lf", lf);
+    put_kv(b"llock", llock);
+    let cdcg_ok = load == 1 && div == 1 && hlock == 1 && lf == 1 && llock == 1;
+    puts(if cdcg_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
     // Expiry: no touch; the watchdog resets the chip on the 10th period.
     puts(b"twd expire ");
