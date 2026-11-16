@@ -90,6 +90,31 @@ impl SystemBus {
         self.for_each_bus_resident_device(f);
     }
 
+    /// Pulse width (µs) the I2C PWM controller at `address` drives on `channel`,
+    /// or `None` when no such controller exists or the channel is silent.
+    pub fn pwm_channel_pulse_us(&self, address: u8, channel: u8) -> Option<f64> {
+        let mut found = None;
+        self.for_each_attached_device(&mut |_, d| {
+            if found.is_none() && d.transport == "i2c" && d.address == Some(address) {
+                found = d.evidence.and_then(|e| e.pwm_channel_pulse_us(channel));
+            }
+        });
+        found
+    }
+
+    /// Bring every servo wired to a PWM-controller output up to date with the
+    /// pulse the firmware last wrote there. Cheap; call before reading servo
+    /// state. A silent channel leaves the servo where it was.
+    pub fn sync_pwm_sourced_servos(&self) {
+        for servo in self.observed_of::<crate::peripherals::components::servo::Servo>() {
+            if let Some((address, channel)) = servo.source() {
+                if let Some(us) = self.pwm_channel_pulse_us(address, channel) {
+                    servo.apply_pulse_us(us);
+                }
+            }
+        }
+    }
+
     /// The `external_devices:` connection recorded for `id`, when the manifest
     /// declared one. This is the author's own text, not an inference.
     fn declared_connection(&self, id: &str) -> Option<&str> {
