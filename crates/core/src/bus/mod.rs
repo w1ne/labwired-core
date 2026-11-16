@@ -73,6 +73,60 @@ pub(crate) use motors::CircuitMotorLookup;
 pub use motors::{MotorCoupling, MotorSnapshot, STEPPER_SNAPSHOT_KIND};
 
 impl SystemBus {
+    /// Park a level-hold event chain (`EventResult::level_hold`) of
+    /// peripheral `idx` while every line in `lines` stands in the NVIC:
+    /// enabled, pending and level-marked. Returns false (the caller re-arms
+    /// as before) when any line does not, or when there is no NVIC.
+    pub(crate) fn park_level_event(&mut self, idx: usize, token: u32, lines: &[u32]) -> bool {
+        let Some(nvic) = &self.nvic else {
+            return false;
+        };
+        if lines.is_empty() {
+            return false;
+        }
+        let standing = lines.iter().all(|&irq| {
+            let word = (irq / 32) as usize;
+            let bit = 1u32 << (irq % 32);
+            word < 8
+                && nvic.iser[word].load(std::sync::atomic::Ordering::SeqCst)
+                    & nvic.ispr[word].load(std::sync::atomic::Ordering::SeqCst)
+                    & nvic.level_pended[word].load(std::sync::atomic::Ordering::SeqCst)
+                    & bit
+                    != 0
+        });
+        if !standing {
+            return false;
+        }
+        self.parked_level_events.retain(|&(p, _, _)| p != idx);
+        for &irq in lines {
+            self.parked_level_events.push((idx, token, irq));
+        }
+        true
+    }
+
+    /// Exception entry consumed the pend of NVIC line `irq`: re-arm every
+    /// chain parked on it for the next cycle, where its per-cycle re-pend
+    /// would have landed.
+    fn unpark_level_events(&mut self, irq: u32) {
+        if self.parked_level_events.is_empty() {
+            return;
+        }
+        let mut woken = Vec::new();
+        self.parked_level_events.retain(|&(idx, token, line)| {
+            if line == irq {
+                woken.push((idx, token));
+                false
+            } else {
+                true
+            }
+        });
+        for (idx, token) in woken {
+            self.parked_level_events.retain(|&(p, _, _)| p != idx);
+            let deadline = self.current_cycle + 1;
+            self.pending_schedule.push((idx, deadline, token));
+        }
+    }
+
     /// Cycles until the earliest event an MMIO write armed in the running CPU
     /// batch (still in `pending_schedule`, not yet on the scheduler heap), or
     /// `None` when nothing is pending. A batch loop ends at `Some(0)` and
@@ -948,6 +1002,10 @@ pub struct SystemBus {
     pub external_device_decls: Vec<ExternalDeviceDecl>,
     /// Semihosting byte stream. Not UART, RTT, or ITM: `bkpt #0xAB` is the only writer.
     semihost: SemihostState,
+    /// Level-hold event chains parked while their NVIC pend stands:
+    /// `(peripheral, event token, NVIC line)`. See
+    /// [`Self::park_level_event`].
+    pub(crate) parked_level_events: Vec<(usize, u32, u32)>,
 }
 
 /// One `write_semihosting_input` is capped so a stuck UI cannot grow the

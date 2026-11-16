@@ -1886,6 +1886,7 @@ impl crate::Bus for SystemBus {
                     nvic.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
                 }
             }
+            self.unpark_level_events(exception_num - 16);
         }
     }
 
