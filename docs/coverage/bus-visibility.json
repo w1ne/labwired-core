@@ -151,6 +151,10 @@
     "name": "esp32-devkitc-32e-uart1"
   },
   {
+    "buses": [],
+    "name": "esp32c2"
+  },
+  {
     "buses": [
       "I2C",
       "SPI",

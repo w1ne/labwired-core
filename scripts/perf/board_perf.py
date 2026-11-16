@@ -355,6 +355,11 @@ WAIVED: dict[str, str] = {
         "registers x16–x31 that this core does not implement. No throughput "
         "claim is made for this part yet."
     ),
+    "esp32c2": (
+        "ESP32-C2 (ESP8684H4X) bare-ELF slice (flash 0x42000000, RAM "
+        "0x3FCA0000). No perf-spin fixture is linked for this memory map, so "
+        "no throughput claim is made for this part (examples/esp32c2)."
+    ),
     "esp32p4": (
         "ESP32-P4X-C5-Function-EV fast-boot profile: a bare-ELF UART0 smoke on "
         "the HP core only (flash 0x40000000, RAM 0x4FF40000). No perf-spin "

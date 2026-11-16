@@ -211,6 +211,10 @@ _Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its decl
 - `io_mux` (configs/chips/esp32c6.yaml:491 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.
 - `hp_sys` (configs/chips/esp32c6.yaml:516 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)) — CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled.
 
+### `esp32c2`
+
+_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32IMC ELF (examples/esp32c2) that checks a MUL/DIVU result and a write/readback of the last DRAM word (0x3FCDFFFC), prints an exact string on UART0 and toggles GPIO10 (negative control: GPIO9 stays idle); a second test requires 0x3FCE0000 to be unmapped. UART0/1, GPIO, SYSTIMER and TIMG0 reuse the C3 engines, whose esp-idf v5.3 register headers are offset-identical on the C2. Not modelled: mask ROM contents and ROM boot, IO_MUX, the interrupt matrix, SYSTEM/RTC clocking, I2C, SPI, LEDC, ADC, GDMA, crypto, Wi-Fi and Bluetooth LE. This local simulator evidence is not hosted model_verified or hardware confirmation._
+
 ### `esp32h2`
 
 _No beyond-rubric H2 peripheral is exercised: the board smoke covers only the UART0 FIFO/console path. This narrow profile does not model mask ROM, the USB bridge, IO_MUX, WS2812/RMT, button/strap behavior, Bluetooth LE, IEEE 802.15.4, Thread, Zigbee, or the other H2 peripherals._

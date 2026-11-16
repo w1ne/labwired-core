@@ -1,0 +1,21 @@
+{
+  "id": "esp32c2",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/vendor/esp32c2_compiled_firmware.rs",
+    "test": "esp32c2_compiled_rv32imc_firmware_prints_on_uart0_and_toggles_gpio10",
+    "signal": "the committed RV32IMC fixture ELF (examples/esp32c2/main.c) checks a MUL/DIVU result and a write/readback of the last DRAM word, then writes 'Hello from ESP32-C2\\r\\n' to the UART0 TX FIFO (0x60000000); the test asserts the console sink receives exactly that string. Polled TX only: the interrupt matrix is not modelled",
+    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test vendor esp32c2_compiled_firmware::"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No SPI controller is declared on configs/chips/esp32c2.yaml.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No I2C controller is declared on configs/chips/esp32c2.yaml.",
+    "lane": "none"
+  }
+}

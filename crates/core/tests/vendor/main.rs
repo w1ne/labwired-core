@@ -32,6 +32,7 @@ mod efr32mg26_instances;
 mod efr32mg26_pwm_pad;
 mod efr32mg26_timer_compare_level;
 mod ek_rx261_zephyr;
+mod esp32c2_compiled_firmware;
 mod kw41z_clock_boot;
 mod modulshop_49213;
 mod ra6m5_adc12_icu;

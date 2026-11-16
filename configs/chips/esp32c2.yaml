@@ -1,0 +1,107 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# ESP32-C2 die, as the ESP8684H4X SoC (4 MB in-package flash, chip revision
+# v2.x, QFN24 4x4). Espressif product selector (products.espressif.com,
+# read 2026-11-16): ESP8684H4X "Mass Production", 120 MHz, 272 KB SRAM,
+# 576 KB ROM, 4 MB flash, 14 GPIO. Espressif lists the ESP8684 as the
+# replacement for the NRND ESP8266EX / ESP8285.
+#
+# Memory map and peripheral bases: esp-idf v5.3
+# components/soc/esp32c2/include/soc/{soc.h,reg_base.h}.
+#
+# Scope: a bare-ELF slice. It reuses the ESP32-C3 peripheral engines only
+# where the esp-idf v5.3 register headers are offset-identical between C2
+# and C3 (uart_reg.h, gpio_reg.h, systimer_reg.h, timer_group_reg.h). Not
+# modelled: the mask ROM contents and ROM boot, IO_MUX (C2 pad offsets
+# differ from C3 above GPIO18: U0RXD/U0TXD are GPIO19/GPIO20 at +0x50/+0x54),
+# the interrupt matrix, SYSTEM/RTC_CNTL clocking, I2C, SPI, LEDC, ADC, GDMA,
+# crypto, Wi-Fi and Bluetooth LE.
+name: "esp32c2"
+arch: "riscv"
+# RV32IMC, the same Espressif core as the C3.
+registers_count: 50
+# 120 MHz maximum CPU clock (product selector "Freq. (MHz)" = 120).
+cpu_hz: 120_000_000
+
+flash:
+  # IROM cache window: soc.h SOC_IROM_LOW/HIGH = 0x42000000/0x42400000, 4 MiB.
+  # The H4X carries 4 MiB of in-package flash, so the window and the part
+  # agree. Spelled in KB because `parse_size` reads MB as 10^6.
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  # DRAM view of internal SRAM: soc.h SOC_DRAM_LOW/HIGH =
+  # 0x3FCA0000/0x3FCE0000, 256 KiB. The other 16 KiB of the 272 KB SRAM is
+  # the fixed ICache (soc.h ICACHE_SIZE = 0x4000).
+  base: 0x3FCA0000
+  size: "256KB"
+memory_regions:
+  # IRAM view: soc.h SOC_IRAM_LOW/HIGH = 0x4037C000/0x403C0000 (272 KiB,
+  # the first 16 KiB being the ICache). Modelled as its own window, as for the
+  # C3; the D/I aliasing of the same SRAM is not modelled.
+  - name: "iram"
+    base: 0x4037C000
+    size: "272KB"
+  # DROM cache window: soc.h SOC_DROM_LOW/HIGH = 0x3C000000/0x3C400000.
+  - name: "drom"
+    base: 0x3C000000
+    size: "4096KB"
+  # Mask ROM: soc.h SOC_IROM_MASK_LOW/HIGH = 0x40000000/0x40090000 (576 KiB,
+  # matches the selector's "ROM (KB)" = 576). The dump is Espressif's
+  # copyrighted mask ROM, so it is loaded from LABWIRED_ESP32C2_ROM and stays
+  # zero if unset. A bare-ELF image does not call it.
+  - name: "rom"
+    base: 0x40000000
+    size: "576KB"
+    image_env: "LABWIRED_ESP32C2_ROM"
+  # ROM data: soc.h SOC_DROM_MASK_LOW/HIGH = 0x3FF00000/0x3FF50000 (320 KiB).
+  - name: "rom_data"
+    base: 0x3FF00000
+    size: "320KB"
+    image_env: "LABWIRED_ESP32C2_ROM_DATA"
+peripherals:
+  # Espressif UART IP. esp-idf v5.3 esp32c2 and esp32c3 uart_reg.h declare
+  # the same 33 registers at the same offsets. Interrupt sources from
+  # esp32c2 interrupts.h: ETS_UART0_INTR_SOURCE = 17, ETS_UART1 = 18.
+  - id: "uart0"
+    type: "esp32c3_uart"
+    irq: 17 # ETS_UART0_INTR_SOURCE (C2)
+    base_address: 0x60000000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32c3/uart0.yaml"
+  - id: "uart1"
+    type: "esp32c3_uart"
+    irq: 18 # ETS_UART1_INTR_SOURCE (C2)
+    base_address: 0x60010000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32c3/uart1.yaml"
+  # GPIO: the C2 gpio_reg.h is the C3 register set less the GPIO21 pin and
+  # GPIO_FUNC21 output-select registers (same offsets for every register both
+  # declare). The C3 model carries 22 pads; the ESP8684 bonds GPIO0..10 and
+  # GPIO18..20 (14 GPIO), and GPIO11..17 are the in-package flash pins.
+  - id: "gpio"
+    type: "esp32c3_gpio"
+    base_address: 0x60004000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/gpio.yaml"
+  # SYSTIMER and TIMG0: systimer_reg.h and timer_group_reg.h are identical
+  # between C2 and C3. The C2 has one timer group (reg_base.h has no
+  # DR_REG_TIMERGROUP1_BASE).
+  - id: "systimer"
+    type: "esp32c3_systimer"
+    base_address: 0x60023000
+    config:
+      path: "../peripherals/esp32c3/systimer.yaml"
+      debug_schema: "../peripherals/esp32c3/systimer.yaml"
+  - id: "timg0"
+    type: "esp32_timg"
+    base_address: 0x6001F000
+    config:
+      debug_schema: "../peripherals/esp32c3/timg0.yaml"
