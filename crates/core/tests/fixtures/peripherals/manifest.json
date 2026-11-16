@@ -577,6 +577,28 @@
       "inputs": []
     },
     {
+      "device_type": "st7920",
+      "label": "ST7920 128x64 LCD",
+      "summary": "Sitronix ST7920 128x64 monochrome graphic LCD (LCD12864) in serial mode.",
+      "detail": "Serial interface framing (sync byte with RW/RS, split nibbles, CS active high), basic and extended instruction sets, DDRAM text with half-width characters and four CGRAM glyphs, GDRAM graphics with the 128x64 fold, display on/off, clear, home and entry mode. The framebuffer artifact combines text and graphics. Half-width glyphs use a public-domain 8x13 font, not the Sitronix ROM bitmaps; full-width CGROM characters are reported as unknown pixels. Cursor, blink, display shift, scroll and ICON RAM are not modelled.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS (RS pin in serial mode) GPIO, e.g. \"PA4\". Empty means CS tied high."
+        },
+        {
+          "name": "cs_active_high",
+          "ty": "bool",
+          "doc": "CS polarity. Defaults to true (the ST7920 is selected while CS is high)."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
       "device_type": "mcp2515",
       "label": "MCP2515 CAN",
       "summary": "Functional SPI classical CAN controller for standard 11-bit data frames.",
@@ -1805,7 +1827,7 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -55.0,
-          "max": 150.0,
+          "max": 300.0,
           "default": 25.0
         }
       ]
@@ -3460,6 +3482,16 @@
           "name": "model",
           "ty": "str",
           "doc": "Calibration: sg90 | mg996r | mg995 | mg90s | standard. Defaults from type alias when omitted."
+        },
+        {
+          "name": "source_address",
+          "ty": "int",
+          "doc": "I2C address of a PWM controller (PCA9685) whose output drives this servo. With source_channel, replaces the GPIO/LEDC drive path."
+        },
+        {
+          "name": "source_channel",
+          "ty": "int",
+          "doc": "Output channel (0..15) of the PWM controller at source_address."
         },
         {
           "name": "ledc_channel",

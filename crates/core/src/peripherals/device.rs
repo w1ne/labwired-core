@@ -350,6 +350,19 @@ pub trait SpiDevice: Send {
         false
     }
 
+    /// Level of the CS pin that selects this device. Most SPI slaves select
+    /// on CS low (the default); a few, such as the ST7920 in serial mode,
+    /// select on CS high. Buses that derive selection from a GPIO level ask
+    /// [`cs_selected_at`](Self::cs_selected_at) instead of assuming low.
+    fn cs_active_high(&self) -> bool {
+        false
+    }
+
+    /// Whether a CS pin driven to `high` selects this device.
+    fn cs_selected_at(&self, high: bool) -> bool {
+        high == self.cs_active_high()
+    }
+
     /// What this device can show of itself — its own inspect evidence.
     ///
     /// The ONE place a a SPI device's artifacts are decided is the model

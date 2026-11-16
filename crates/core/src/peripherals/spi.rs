@@ -1737,7 +1737,7 @@ pub struct Spi {
     /// families exactly as they were.
     #[serde(skip)]
     route_gate: Option<crate::peripherals::efr32::usart_route::RouteGate>,
-    /// Last sampled active-low GPIO CS level for each attached device.
+    /// Last sampled GPIO chip-select state for each attached device.
     #[serde(skip)]
     selected_devices: Vec<bool>,
 
@@ -4740,7 +4740,9 @@ impl Spi {
             if pin.is_empty() {
                 continue;
             }
-            let selected = bus.read_gpio_output_by_label(pin) == Some(false);
+            let selected = bus
+                .read_gpio_output_by_label(pin)
+                .is_some_and(|high| device.cs_selected_at(high));
             match (self.selected_devices[index], selected) {
                 (false, true) => device.cs_select(),
                 (true, false) => device.cs_release(),

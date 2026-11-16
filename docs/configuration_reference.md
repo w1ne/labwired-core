@@ -497,6 +497,7 @@ canonical `type:`; the table below is rendered from that file by
 | `ssd1680_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9" B/W/R module. Not interchangeable with the UC8151D part |
 | `st7735` | SPI | 1.8in 128x160 RGB565 TFT on a Sitronix ST7735R, 4-wire SPI |
 | `st7789-170x320` | SPI | 1.9in 170x320 IPS TFT on a Sitronix ST7789V, 4-wire SPI |
+| `st7920` | SPI | Sitronix ST7920 128x64 monochrome graphic LCD (LCD12864) in serial mode |
 | `sx1262` | SPI | Semtech SX1262 LoRa transceiver, SPI command interface (status, standby/RX/TX, registers, IRQ) — no RF air link |
 | `sx1276` | SPI | Semtech SX1276 LoRa transceiver, SPI register model of the LoRa page (no RF air link) |
 | `uc8151d_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part -- pick by the driver class your firmware instantiates, not by how the panel looks |
