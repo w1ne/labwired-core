@@ -84,6 +84,14 @@ pub trait I2cDevice: Send {
     fn start(&mut self) {}
     fn stop(&mut self) {}
 
+    /// Width in microseconds of the pulse this device currently drives on PWM
+    /// output `channel`, or `None` when the channel is not producing a pulse
+    /// (never written, full-off, sleeping) or the device has no PWM outputs.
+    /// A servo declared with `source_address` / `source_channel` reads this.
+    fn pwm_channel_pulse_us(&self, _channel: u8) -> Option<f64> {
+        None
+    }
+
     /// Nanoseconds this device holds SCL low after acknowledging each byte it
     /// receives and before each byte it sends (clock stretching). Default: none.
     /// Only controllers that model bus timing add it to the transfer.

@@ -533,6 +533,12 @@ pub trait DeviceEvidence {
     fn evidence_logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
         Vec::new()
     }
+
+    /// Pulse width this device drives on PWM output `channel` (see
+    /// [`crate::peripherals::i2c::I2cDevice::pwm_channel_pulse_us`]). Default: none.
+    fn pwm_channel_pulse_us(&self, _channel: u8) -> Option<f64> {
+        None
+    }
 }
 
 /// Adapter letting an `&dyn I2cDevice` be carried as evidence. Lives on the
@@ -546,6 +552,9 @@ impl DeviceEvidence for I2cEvidence<'_> {
     }
     fn evidence_logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
         self.0.logs()
+    }
+    fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
+        self.0.pwm_channel_pulse_us(channel)
     }
 }
 
