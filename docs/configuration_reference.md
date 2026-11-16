@@ -512,6 +512,7 @@ canonical `type:`; the table below is rendered from that file by
 | `a4988` | GPIO | A4988/DRV8825/TMC2209-class STEP/DIR twin (step count + angle) |
 | `bldc-motor` | GPIO | Configurable deterministic three-phase BLDC motor plant |
 | `bldc_hall_driver` | GPIO | PWM/DIR/ENABLE in; 6-step Hall pattern out. Duty→RPM not modelled |
+| `cyw43439` | GPIO | Infineon CYW43439 on the RP2040/RP2350 PIO gSPI bus: firmware download, SDPCM ioctls and the WL_GPIO0 LED |
 | `dc-motor` | GPIO | Configurable deterministic brushed DC motor plant |
 | `dfplayer_mini` | GPIO | MP3 player module: serial commands in, BUSY low while playing |
 | `dht11` | GPIO | One-wire temperature + humidity sensor |

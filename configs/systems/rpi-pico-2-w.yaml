@@ -1,12 +1,20 @@
 # LabWired - Raspberry Pi Pico 2 W
 #
-# RP2350 + CYW43439. Wi-Fi/BT unmodelled. Onboard LED is WL_GPIO0 (wireless
-# GPIO, also unmodelled) — no board_io LED stand-in. Same 40-pin Pico header
-# as Pico / Pico W; GP23/24/25/29 reserved for wireless.
+# RP2350 + Infineon CYW43439 on the PIO gSPI bus (WL_ON GP23, DIO/host-wake
+# GP24, CS GP25, CLK GP29 — pico-sdk boards/pico2_w.h, same pads as the
+# Pico W). The onboard LED is the chip's WL_GPIO0, so `LED_BUILTIN` is a full
+# chip bring-up (firmware download + `gpioout` iovar); watch it as `cyw43:0`.
+# Same 40-pin Pico header as Pico / Pico W.
+#
+# The CYW43439 model answers the host interface of a running firmware; it
+# does not execute the firmware: no radio, scan, join, data or Bluetooth.
 #
 # Sources: Raspberry Pi Pico 2 W datasheet RP-008304; pico-sdk
 # boards/pico2_w.h (CYW43_PIN_WL_GPIO0 / PICO_DEFAULT_WS2812_PIN unset).
 name: "rpi-pico-2-w"
 chip: "../chips/rp2350.yaml"
-external_devices: []
+external_devices:
+  - id: "cyw43"
+    type: "cyw43439"
+    connection: "pio"
 board_io: []

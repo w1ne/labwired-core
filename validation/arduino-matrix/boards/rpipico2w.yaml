@@ -1,0 +1,22 @@
+id: rpipico2w
+chip: rp2350
+system: systems/rpipico2w.yaml
+# Raspberry Pi Pico 2 W on Earle Philhower's arduino-pico core, same pinned
+# platform as the rp2350 and rpipicow rows.
+pio: { platform: "https://github.com/maxgerhardt/platform-raspberrypi.git#5d4561a05e3b212660ac6fdd3fbfb328d1988aa1", board: rpipico2w, framework: arduino }
+max_steps: 80000000
+budget_reason: "CYW43439 bring-up (224 KiB firmware download over PIO gSPI, then ioctls) before setup(): first LED_BUILTIN edge at cycle 61.23M (408 ms at 150 MHz); ~1.3x headroom"
+# max_steps above the CLI's 50M guard needs a wall-clock bound.
+wall_time_ms: 240000
+# LED_BUILTIN is the CYW43439's WL_GPIO0 (pin 64): every digitalWrite is a
+# gSPI `gpioout` iovar after a full chip bring-up. GP25 is the chip's CS.
+led_watch: "cyw43:0"
+led_min_edges: 2
+# L6: LED_BUILTIN has no PWM, so the sketch drives GP15 (PWM slice 7 B).
+pwm_watch: "sio:15"
+pwm_min_edges: 20
+family: rp2040
+notes: "arduino-pico core; Serial = USB CDC; LED = CYW43439 WL_GPIO0 over PIO gSPI"
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "RP2350 has no CAN controller"

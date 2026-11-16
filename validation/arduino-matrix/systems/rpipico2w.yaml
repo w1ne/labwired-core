@@ -1,0 +1,20 @@
+# Arduino matrix system — Raspberry Pi Pico 2 W: the CYW43439 on the PIO
+# gSPI bus (its WL_GPIO0 is LED_BUILTIN) plus the INA219 (L3, Wire on i2c0)
+# and MAX31855 (L4, SPI0) kits the rp2350 row uses.
+name: "arduino-matrix-rpipico2w"
+chip: "../../../configs/chips/rp2350.yaml"
+external_devices:
+  - id: "cyw43"
+    type: "cyw43439"
+    connection: "pio"
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x40
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi0"
+    config:
+      cs_pin: "GP17"
+board_io: []

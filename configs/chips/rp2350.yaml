@@ -181,6 +181,9 @@ peripherals:
     base_address: 0x50000000
     size: "4KB"
     config:
+      # RP2350 map: 16 channels, 4 IRQ lines (NVIC 10..13), control block
+      # at 0x450, CTRL TREQ_SEL [22:17] / BUSY [26], TRANS_COUNT.MODE.
+      profile: "rp2350"
       debug_schema: "../peripherals/rp2350/dma.yaml"
   - id: "pio0"
     type: "pio"

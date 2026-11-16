@@ -214,6 +214,7 @@ peripherals:
     base_address: 0x50000000
     size: "4KB"
     config:
+      profile: "rp2350"
       debug_schema: "../peripherals/rp2350/dma.yaml"
   - id: "pio0"
     type: "pio"

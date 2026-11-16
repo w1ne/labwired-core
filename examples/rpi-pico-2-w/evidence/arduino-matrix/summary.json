@@ -1,0 +1,55 @@
+{
+  "board": "rpi-pico-2-w",
+  "generated_at": "2026-11-16T10:54:37+0000",
+  "platform": "maxgerhardt/platform-raspberrypi@5d4561a0 (arduino-pico, board rpipico2w)",
+  "rows": [
+    {
+      "sketch": "L0_serial_boot",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 94817
+    },
+    {
+      "sketch": "L1_serial_loop",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 99178
+    },
+    {
+      "sketch": "L2_blink_serial",
+      "status": "pass",
+      "logic_edge_count": 2,
+      "steps": 61537643
+    },
+    {
+      "sketch": "L3_i2c_sensor",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 103641
+    },
+    {
+      "sketch": "L4_spi_sensor",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 101919
+    },
+    {
+      "sketch": "L5_adc",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 98337
+    },
+    {
+      "sketch": "L6_pwm",
+      "status": "pass",
+      "logic_edge_count": 147,
+      "steps": 138029
+    },
+    {
+      "sketch": "L7_timer",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 112364
+    }
+  ]
+}

@@ -1280,7 +1280,14 @@ pub fn try_build(
             };
             Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new().with_layout(layout))
         }
-        "rp2040_dma" => Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new()),
+        "rp2040_dma" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                Some("rp2350") => crate::peripherals::rp2040::dma::DmaLayout::Rp2350,
+                // Absent/anything else: the RP2040 map.
+                _ => crate::peripherals::rp2040::dma::DmaLayout::Rp2040,
+            };
+            Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new().with_layout(layout))
+        }
         "rp2040_io_bank0" => {
             let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 Some("rp2350") => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2350,
