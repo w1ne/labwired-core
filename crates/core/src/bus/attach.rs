@@ -4402,7 +4402,8 @@ impl SystemBus {
         miso
     }
 
-    /// Sync parking-SPI chip-selects from live GPIO levels (active-low).
+    /// Sync parking-SPI chip-selects from live GPIO levels, honouring each
+    /// device's CS polarity (active-low unless it declares otherwise).
     ///
     /// Soft-SPI and bit-banged CS on AVR never touch a controller's NSS, so the
     /// parking kits only see CS through this walk, after every PORT mirror
@@ -4441,7 +4442,7 @@ impl SystemBus {
             if let Some(devs) = self.peripherals[idx].dev.spi_attached_devices_mut() {
                 for (device, level) in devs.iter_mut().zip(levels) {
                     let Some(high) = level else { continue };
-                    let selected = !high; // active-low CS
+                    let selected = device.cs_selected_at(high);
                     match (device.is_selected(), selected) {
                         (false, true) => device.cs_select(),
                         (true, false) => {

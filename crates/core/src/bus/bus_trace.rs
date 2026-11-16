@@ -565,6 +565,9 @@ impl SpiDevice for TracingSpiDevice {
     fn clocks_when_deselected(&self) -> bool {
         self.inner.clocks_when_deselected()
     }
+    fn cs_active_high(&self) -> bool {
+        self.inner.cs_active_high()
+    }
     fn dc_pin(&self) -> Option<&str> {
         self.inner.dc_pin()
     }
