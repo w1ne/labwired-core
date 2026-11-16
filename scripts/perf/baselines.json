@@ -117,6 +117,10 @@
     "batch": 2.4,
     "step": 991.9
   },
+  "esp32s3-devkitc-1-n16r8-adc": {
+    "batch": 2.4,
+    "step": 991.9
+  },
   "esp32s3-zero": {
     "batch": 2.4,
     "step": 991.9
@@ -357,6 +361,10 @@
     "batch": 1.6,
     "step": 937.6
   },
+  "stm32f411re": {
+    "batch": 1.7,
+    "step": 937.4
+  },
   "stm32f446re": {
     "batch": 1.5,
     "step": 935.5
@@ -400,6 +408,10 @@
   "stm32l073": {
     "batch": 1.6,
     "step": 939.5
+  },
+  "stm32l432kc": {
+    "batch": 1.6,
+    "step": 937.1
   },
   "stm32l476": {
     "batch": 1.6,

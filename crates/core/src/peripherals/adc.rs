@@ -35,6 +35,17 @@ fn l4_resolution_bits(cfgr: u32) -> u32 {
     }
 }
 
+/// F2/F4 `ADC_CR1.RES` (bits [25:24]) → conversion bit-width, RM0383 §11.12.2:
+/// 0b00=12, 01=10, 10=8, 11=6. The F1 has no RES field (always 12 bits).
+fn f4_resolution_bits(cr1: u32) -> u32 {
+    match (cr1 >> 24) & 0x3 {
+        0 => 12,
+        1 => 10,
+        2 => 8,
+        _ => 6,
+    }
+}
+
 /// Converted code for the fixed internal source at the given bit-width.
 fn l4_adc_code(bits: u32) -> u32 {
     STM32_ADC_REF12 >> (12 - bits)
@@ -419,7 +430,9 @@ pub struct Adc {
     /// captured in `firmware_survival`'s `nucleo_l476rg_adc` case, shows the
     /// bit STAYING SET when the firmware enables only `AHB2ENR.ADCEN` and
     /// never touches `CCIPR`. The H5 firmware modelled here does configure the
-    /// clock, so its calibration finishes.
+    /// clock, so its calibration finishes. On the L4 layout, `ADC_CCR.CKMODE`
+    /// != 00 (the synchronous HCLK clock) also completes calibration; that
+    /// is read from the register, not from this flag.
     ///
     /// This is a stand-in for the kernel clock the RCC model does not yet
     /// expose to the ADC. When it does, this flag should die and both layouts
@@ -603,7 +616,11 @@ impl Adc {
                 // A channel with no external or modeled internal source keeps
                 // the old incrementing fallback for visual feedback.
                 if let Some(sample) = self.sampled_input.take() {
-                    self.dr = Self::code_for_mv(sample.millivolts, sample.reference_millivolts);
+                    let count12 = Self::code_for_mv(sample.millivolts, sample.reference_millivolts);
+                    self.dr = match &self.regs {
+                        AdcRegs::Stm32F4(_) => scaled_input_code(count12, f4_resolution_bits(cr1)),
+                        _ => count12,
+                    };
                 } else {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
@@ -1076,12 +1093,40 @@ impl Adc {
                 // the hang that moved stm32h563 onto the `stm32h7` profile,
                 // whose 3-bit CFGR.RES[4:2] then read the fixture's 2-bit
                 // RES[4:3] write as 16-bit and turned `TIER1 adc` red.
+                //   * ADC_CCR.CKMODE != 00 selects the synchronous HCLK/1,
+                //     /2 or /4 clock, which needs no CCIPR.ADCSEL source, so
+                //     calibration runs. Stock STM32duino on the L4 sets
+                //     CKMODE = 11 before ADCAL; the L476 capture above never
+                //     writes CCR (CKMODE stays 00).
+                //
+                // The command bits ADCAL, JADSTP, ADSTP, JADSTART, ADSTART,
+                // ADDIS and ADEN are "rs" (ST: software can read and set
+                // them, writing 0 has no effect; hardware clears them). The
+                // HAL relies on it: LL_ADC_REG_StartConversion does
+                // MODIFY_REG(CR, ADC_CR_BITS_PROPERTY_RS, ADSTART), which
+                // writes ADEN = 0. Storing that write raw disabled the ADC,
+                // so no conversion started and analogRead() returned 0.
+                const RS: u32 = (1 << 31) | 0x3F;
                 let calibrating = value & (1 << 31) != 0;
-                r.cr = if calibration_completes {
-                    value & !(1 << 31)
-                } else {
-                    value
-                };
+                let sync_clock = (r.common_ccr >> 16) & 0b11 != 0;
+                let mut cr = (value & !RS) | ((r.cr | value) & RS);
+                if calibration_completes || sync_clock {
+                    cr &= !(1 << 31);
+                }
+                // ADSTP / JADSTP: the stop completes at once (no conversion
+                // is in flight in this model) and clears its start bit.
+                if cr & (1 << 4) != 0 {
+                    cr &= !((1 << 4) | (1 << 2));
+                }
+                if cr & (1 << 5) != 0 {
+                    cr &= !((1 << 5) | (1 << 3));
+                }
+                // ADDIS: the disable completes at once and clears ADEN.
+                // ISR.ADRDY stays set until software clears it.
+                if cr & (1 << 1) != 0 {
+                    cr &= !((1 << 1) | 0x1);
+                }
+                r.cr = cr;
                 // ADEN with the voltage regulator up (ADVREGEN set, DEEPPWD
                 // clear) raises ISR.ADRDY. Silicon-verified on STM32H563
                 // ADC1 (2026-06-11): DEEPPWD=0 -> ADVREGEN=1 -> ADEN=1 reads
@@ -1345,14 +1390,17 @@ impl Peripheral for Adc {
                 let reg = offset & !3;
                 let dr = self.dr;
                 let calibration_completes = self.calibration_completes;
-                let mut full = 0;
+                let mut cr = 0;
                 if let AdcRegs::Stm32L4(r) = &mut self.regs {
-                    full = (Self::read_reg_l4(r, dr, reg) & !mask) | val_shifted;
+                    let full = (Self::read_reg_l4(r, dr, reg) & !mask) | val_shifted;
                     Self::write_reg_l4(r, reg, full, calibration_completes);
+                    cr = r.cr;
                 }
                 // A write touching CR may have set ADSTART — try to convert.
+                // Use the stored CR: its rs bits keep ADEN through a write
+                // that carries ADEN = 0.
                 if reg == 0x08 {
-                    self.maybe_start_l4_conversion(full);
+                    self.maybe_start_l4_conversion(cr);
                 }
             }
             AdcRegs::Stm32H7(_) => {
@@ -1848,6 +1896,58 @@ mod tests {
         );
     }
 
+    /// The synchronous clock is a kernel clock too. `ADC_CCR.CKMODE` = 01/10/11
+    /// clocks the converter from HCLK/1, /2 or /4 with no `CCIPR.ADCSEL`
+    /// source, so calibration runs and ADCAL clears. Stock STM32duino on the
+    /// L4 (NUCLEO-L432KC, NUCLEO-L476RG) writes CKMODE = 11 before ADCAL;
+    /// before this, its `analogRead()` timed out and returned 0.
+    #[test]
+    fn test_adc_l4_adcal_clears_on_the_synchronous_clock() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.write_u32(0x308, 0b11 << 16).unwrap(); // CCR.CKMODE = HCLK/4
+        adc.write_u32(0x08, 0).unwrap(); // leave deep power-down
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+        adc.write_u32(0x08, (1 << 28) | (1 << 31)).unwrap(); // ADCAL
+        assert_eq!(
+            adc.read_u32(0x08).unwrap(),
+            1 << 28,
+            "ADCAL must clear when CKMODE selects the synchronous clock"
+        );
+
+        // CKMODE back to 00 (asynchronous, CCIPR-sourced) latches it again.
+        adc.write_u32(0x308, 0).unwrap();
+        adc.write_u32(0x08, (1 << 28) | (1 << 31)).unwrap();
+        assert_eq!(adc.read_u32(0x08).unwrap(), 0x9000_0000);
+    }
+
+    /// The CR command bits are "rs": writing 0 leaves them alone. The L4 HAL
+    /// starts a conversion with MODIFY_REG(CR, ADC_CR_BITS_PROPERTY_RS,
+    /// ADSTART), a write that carries ADEN = 0; on silicon the ADC stays
+    /// enabled and converts. ADSTP and ADDIS complete and clear their bits.
+    #[test]
+    fn test_adc_l4_cr_command_bits_are_read_set() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32L4);
+        adc.set_channel_input(5, 1650);
+        adc.write_u32(0x08, 0).unwrap(); // leave deep power-down
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // ADEN
+        assert_eq!(adc.read_u32(0x00).unwrap() & 0x1, 0x1, "ADRDY");
+        adc.write_u32(0x30, 5 << 6).unwrap(); // SQ1 = IN5, L = 0
+
+        // The HAL's start: every rs bit written 0 except ADSTART.
+        adc.write_u32(0x08, (1 << 28) | (1 << 2)).unwrap();
+        assert_eq!(adc.read_u32(0x08).unwrap() & 0x1, 0x1, "ADEN must survive");
+        assert_eq!(adc.read_u32(0x00).unwrap() & (1 << 2), 1 << 2, "EOC");
+        // 1650 mV of 3300 mV at 12 bits (CFGR.RES = 00).
+        assert_eq!(adc.read_u32(0x40).unwrap(), 2047);
+
+        // ADSTP clears ADSTART; ADDIS clears ADEN.
+        adc.write_u32(0x08, (1 << 28) | (1 << 4)).unwrap();
+        assert_eq!(adc.read_u32(0x08).unwrap() & ((1 << 4) | (1 << 2)), 0);
+        adc.write_u32(0x08, (1 << 28) | (1 << 1)).unwrap();
+        assert_eq!(adc.read_u32(0x08).unwrap(), 1 << 28, "ADDIS clears ADEN");
+    }
+
     /// The H7 clears ADCAL too, and nothing asserted it. Found by accident:
     /// a mis-aimed negative control deleted the H7's `& !(1 << 31)` and the
     /// whole ADC suite stayed green. Same defect as the L4 had, one layout
@@ -2179,6 +2279,37 @@ mod tests {
         adc.write_u32(0x08, 0).unwrap(); // ADON off
         assert!(adc.f1_cal_remaining.is_none());
         assert_eq!(adc.read_u32(0x08).unwrap() & F1_CR2_CAL, 0);
+    }
+
+    /// F4 `CR1.RES[25:24]` narrows a held input the way the SAR truncates:
+    /// 1650 mV of 3.3 V is 2047 at 12 bits, 511 at 10, 127 at 8, 31 at 6.
+    /// STM32duino programs 10 bits in hardware and does not re-map.
+    #[test]
+    fn f4_cr1_res_narrows_held_input() {
+        for (res, want) in [(0u32, 2047u32), (1, 511), (2, 127), (3, 31)] {
+            let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+            adc.set_channel_input(0, 1650);
+            adc.write_u32(0x04, res << 24).unwrap();
+            adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_SWSTART).unwrap();
+            for _ in 0..15 {
+                adc.tick();
+            }
+            assert_eq!(adc.dr, want, "CR1.RES={res}");
+        }
+    }
+
+    /// The F1 layout has no RES field: CR1 bit 24 is DUALMOD there and must
+    /// not narrow the 12-bit result.
+    #[test]
+    fn f1_cr1_bit24_does_not_narrow() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F1);
+        adc.set_channel_input(0, 1650);
+        adc.write_u32(0x04, 1 << 24).unwrap();
+        f1_software_start(&mut adc);
+        for _ in 0..15 {
+            adc.tick();
+        }
+        assert_eq!(adc.dr, 2047);
     }
 
     /// F4 layout still starts on bit 30 (board bindings share the legacy block).
