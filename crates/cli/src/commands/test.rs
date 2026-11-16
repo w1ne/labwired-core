@@ -1638,10 +1638,10 @@ pub(crate) fn run_test(
                             break;
                         }
                     }
-                    super::esp32_boot_state::install_xtensa_freertos_workarounds(
-                        &mut bus,
-                        &firmware_bytes,
-                    );
+                    // No `install_xtensa_freertos_workarounds` here: its
+                    // `xthal_window_spill_nw` thunk spills only the shadow
+                    // stack. Both cores run faithful windows (below), so the
+                    // firmware's own spill routine is the correct one.
                     // Real APP_CPU: start_cpu0 waits on s_system_inited[0]&[1];
                     // APP sets [1] in do_system_init_fn after s_resume_cores.
                     // ets_set_appcpu_boot_addr still raises s_cpu_up/s_cpu_inited
@@ -1650,6 +1650,15 @@ pub(crate) fn run_test(
                     let mut app_cpu = XtensaLx7::new_app_cpu();
                     // DRAM below PRO stack (fast_boot ~0x3FCD_FFF0); 16B aligned.
                     app_cpu.set_sp(0x3FCD_8000);
+                    // Real window overflow/underflow on both cores, as the
+                    // rom-boot and flash-boot paths run. The shadow-window
+                    // mode keyed saved registers by FreeRTOS TCB; an
+                    // interrupt-exit task switch on core 1 (TinyUSB event on
+                    // the Arduino Nano ESP32) then ran `esp_event_loop_run`
+                    // on the idle task's window chain and it asserted in
+                    // `xQueueSemaphoreTake` with a NULL queue.
+                    labwired_core::boot::esp32s3::prime_faithful_windows(&mut pro_cpu);
+                    labwired_core::boot::esp32s3::prime_faithful_windows(&mut app_cpu);
                     let mut machine =
                         labwired_core::Machine::new(pro_cpu, bus).with_secondary_cpu(app_cpu);
                     crate::log_ts::set_hz(machine.bus.cpu_hz);

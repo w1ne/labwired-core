@@ -86,6 +86,26 @@ pub struct CosimStepResult {
 pub trait CosimAdapter: Send {
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult>;
 
+    /// [`Self::step`] over borrowed buffers: the runner's hot path. `outputs`
+    /// holds the adapter's previous answer and must be left holding exactly
+    /// this step's. The default clones `inputs` into a [`CosimStep`]; an
+    /// adapter that wants a step without allocation overrides it.
+    fn step_into(
+        &mut self,
+        time_ns: u64,
+        dt_ns: u64,
+        inputs: &CosimSignals,
+        outputs: &mut CosimSignals,
+    ) -> SimResult<()> {
+        let result = self.step(CosimStep {
+            time_ns,
+            dt_ns,
+            inputs: inputs.clone(),
+        })?;
+        *outputs = result.outputs;
+        Ok(())
+    }
+
     /// Adopt the runner's shared analog-sample ring, naming this model's
     /// channels `<channel_prefix><name>`.
     ///
