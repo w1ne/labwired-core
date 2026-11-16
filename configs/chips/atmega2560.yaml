@@ -20,7 +20,16 @@ registers_count: 32
 # EEPM erase+write / erase only / write only, EERIE -> EE_READY slot 31) with
 # the 3.4 / 1.8 ms programming times; the array survives reset and can be
 # carried into the next run (Avr::eeprom / Avr::load_eeprom).
-# Not modelled here: INTn/PCINT, OC1C, Timer3/4/5 (and their PWM pads).
+# INT0..7 (PD0..3, PE4..7; EICRA/EICRB, EIMSK, EIFR) and PCINT0..23 (PB0..7,
+# PE0, PJ0..6, PK0..7; PCICR/PCIFR/PCMSK0..2) on vectors 2..12
+# (cpu/avr/mega_ext_int.rs). The ADC converts in ADPS-timed 13/25 ADC clocks,
+# single, free running or auto-triggered (ADATE/ADTS), with ADIF/ADIE on
+# vector 30, REFS AVCC/1.1 V/2.56 V and ADLAR (cpu/avr/mega_adc.rs). SPI
+# (SS/SCK/MOSI/MISO = PB0/PB1/PB2/PB3) times SPIF by SPR/SPI2X, honours DORD,
+# WCOL and the SS mode fault, interrupts on vector 25 and clocks the attached
+# SPI device models (cpu/avr/mega_spi.rs).
+# Not modelled here: OC1C, Timer3/4/5 (and their PWM pads), the analog
+# comparator, SPI slave transfers from an external master.
 # Microchip DS2549 (ATmega640/1280/1281/2560/2561), 16 MHz on the Arduino Mega.
 cpu_hz: 16_000_000
 io_voltage_v: 5.0

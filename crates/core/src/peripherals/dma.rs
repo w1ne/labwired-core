@@ -191,6 +191,11 @@ pub struct Dma1 {
     #[serde(skip)]
     g0_pending: Option<usize>,
     observations: [DmaObservation; 7],
+    /// Implemented channels when the part has fewer than seven (chip yaml
+    /// `config: { channels: 5 }`). `None` is the full seven-channel block.
+    /// Register blocks of absent channels refuse access instead of storing.
+    #[serde(skip)]
+    channel_limit: Option<usize>,
 }
 
 impl Dma1 {
@@ -207,6 +212,30 @@ impl Dma1 {
         }
     }
 
+    /// Declare a controller with only `count` (1..=7) channels, e.g. the
+    /// five-channel DMA1 of STM32F030/F070 (RM0360 §10.3) and AT32F421.
+    pub fn with_channel_count(mut self, count: usize) -> Self {
+        assert!((1..=7).contains(&count), "DMA channel count {count}");
+        self.channel_limit = (count < 7).then_some(count);
+        self
+    }
+
+    /// Number of implemented channels.
+    fn channel_count(&self) -> usize {
+        self.channel_limit.unwrap_or(7)
+    }
+
+    /// Offsets past the last implemented channel's register block
+    /// (CCRx at 0x08 + 20 * (x - 1)) do not exist on a reduced controller.
+    fn check_offset(&self, offset: u64) -> SimResult<()> {
+        match self.channel_limit {
+            Some(n) if offset >= 0x08 + 20 * n as u64 => Err(crate::SimulationError::Other(
+                format!("DMA: no register at {offset:#x} on a {n}-channel controller"),
+            )),
+            _ => Ok(()),
+        }
+    }
+
     /// Observed successful MMIO/memory copies, indexed by channel 1..7.
     pub fn transfer_observation(&self) -> serde_json::Value {
         serde_json::json!({"profile": if self.g0_channel_irqs.is_some() {"stm32g0"} else {"legacy"}, "channels": self.observations})
@@ -217,7 +246,7 @@ impl Dma1 {
             return Vec::new();
         };
         let mut levels: Vec<(u32, bool)> = Vec::new();
-        for (i, irq) in irqs.iter().copied().enumerate() {
+        for (i, irq) in irqs.iter().copied().take(self.channel_count()).enumerate() {
             let flags = (self.isr >> (4 * i)) & 0xe;
             let level = flags & self.channels[i].ccr & 0xe != 0;
             if let Some((_, current)) = levels.iter_mut().find(|(line, _)| *line == irq) {
@@ -250,7 +279,7 @@ impl Dma1 {
     /// the channels with work, the lowest channel number between equals.
     fn arbiter_winner(&self) -> Option<usize> {
         let mut best: Option<usize> = None;
-        for (i, ch) in self.channels.iter().enumerate() {
+        for (i, ch) in self.channels.iter().take(self.channel_count()).enumerate() {
             if !(ch.active && ch.cndtr > 0) {
                 continue;
             }
@@ -449,12 +478,13 @@ impl Dma1 {
         // "programmable data width"): the bus reads the source and writes
         // the destination with accesses of those widths, so a half-word item
         // to an SPI DR is ONE 16-bit access.
-        let (src, dst, src_w, dst_w) = if mem2mem == 1 {
-            // STM32 mem-to-mem mode (RM0351 §11.4.7): MEM2MEM=1 requires
-            // DIR=1, and the data flows CMAR -> CPAR. CMAR is "memory side"
-            // (source), CPAR is "peripheral side" (destination).
-            (chan.cmar_ptr, chan.cpar_ptr, msize, psize)
-        } else if dir_bit == 1 {
+        // MEM2MEM only removes the request handshake; DIR still names the
+        // source. RM0008 DMA_CCRx.DIR ("0: Read from peripheral, 1: Read
+        // from memory") has no memory-to-memory exception, STM32 HAL
+        // `DMA_MEMORY_TO_MEMORY` sets MEM2MEM with DIR=0 and the source in
+        // CPAR, and Artery BSP 2.1.9 at32f421_dma.h `DMA_DIR_MEMORY_TO_MEMORY`
+        // (0x4000, DTD=0) states "peripheral_base_addr as source".
+        let (src, dst, src_w, dst_w) = if dir_bit == 1 {
             // Memory -> peripheral: read from CMAR, write to CPAR.
             (chan.cmar_ptr, chan.cpar_ptr, msize, psize)
         } else {
@@ -535,11 +565,13 @@ impl Peripheral for Dma1 {
     /// with EN in byte 0 and (say) MEM2MEM in byte 1 would enable the
     /// channel before its mode bits are written.
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.check_offset(offset)?;
         self.write_reg(offset & !3, value);
         Ok(())
     }
 
     fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        self.check_offset(offset)?;
         let reg = offset & !3;
         let shift = (offset & 2) * 8;
         let v = (self.read_reg(reg) & !(0xFFFF << shift)) | (u32::from(value) << shift);
@@ -548,6 +580,7 @@ impl Peripheral for Dma1 {
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
+        self.check_offset(offset)?;
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.read_reg(reg_offset);
@@ -555,6 +588,7 @@ impl Peripheral for Dma1 {
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        self.check_offset(offset)?;
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
 
@@ -569,7 +603,7 @@ impl Peripheral for Dma1 {
 
     fn dma_route_request(&self, request: &str, out: &mut Vec<DmaRoute>) {
         for (name, channel, sel) in &self.routes {
-            if name != request || !(1..=7).contains(channel) {
+            if name != request || !(1..=self.channel_count() as u32).contains(channel) {
                 continue;
             }
             let idx = (*channel - 1) as usize;
@@ -588,7 +622,7 @@ impl Peripheral for Dma1 {
     fn dma_request(&mut self, request_id: u32) {
         // request_id usually corresponds to the channel (1-7) or a mapping
         let chan_idx = (request_id.saturating_sub(1)) as usize;
-        if chan_idx < 7 {
+        if chan_idx < self.channel_count() {
             let chan = &mut self.channels[chan_idx];
             if (chan.ccr & 1) != 0 {
                 // Channel is enabled: latch the request for the arbiter. In
@@ -755,6 +789,14 @@ impl Peripheral for Dma1 {
         self.g0_channel_irqs.is_some()
     }
 
+    fn on_supply_reset(&mut self, _cause: crate::power::SupplyResetCause) {
+        self.on_node_reset();
+    }
+
+    fn on_system_reset(&mut self) {
+        self.on_node_reset();
+    }
+
     fn on_node_reset(&mut self) {
         if self.g0_channel_irqs.is_some() {
             self.isr = 0;
@@ -831,6 +873,49 @@ mod tests {
         dma.dma_request(1);
         let r = dma.tick().dma_requests.unwrap()[0];
         assert_eq!((r.src_addr, r.addr), (0x4001_300E, 0x2000_0001));
+    }
+
+    /// Memory-to-memory keeps DIR: DIR=0 reads CPAR and writes CMAR (the
+    /// HAL / Artery BSP encoding), DIR=1 reads CMAR and writes CPAR.
+    #[test]
+    fn memory_to_memory_copies_in_the_direction_dir_names() {
+        for (dir, src, dst) in [
+            (0, 0x0800_0100, 0x2000_0000),
+            (1 << 4, 0x2000_0000, 0x0800_0100),
+        ] {
+            let mut dma = Dma1::new();
+            dma.write_reg(0x0C, 1); // CNDTR1
+            dma.write_reg(0x10, 0x0800_0100); // CPAR1
+            dma.write_reg(0x14, 0x2000_0000); // CMAR1
+            dma.write_reg(0x08, 1 | (1 << 14) | dir | (2 << 8) | (2 << 10));
+            let r = dma.tick().dma_requests.unwrap()[0];
+            assert_eq!((r.src_addr, r.addr), (src, dst), "DIR bit {dir:#x}");
+        }
+    }
+
+    /// A reduced controller (`channels: 5`) has no channel 6/7 register
+    /// block, routes no request there and still runs channel 5.
+    #[test]
+    fn a_five_channel_controller_refuses_absent_channels() {
+        let mut dma = Dma1::new_stm32g0()
+            .with_channel_count(5)
+            .with_request_route("spi1_tx", 6, None);
+        assert!(dma.write_u32(0x08 + 5 * 20, 1).is_err(), "no CCR6");
+        assert!(dma.read_u32(0x08 + 6 * 20 + 4).is_err(), "no CNDTR7");
+        assert!(dma.write_u32(0xA8, 1).is_err(), "no CSELR");
+        assert!(routes(&dma, "spi1_tx").is_empty());
+        let ccr5 = 0x08 + 4 * 20;
+        dma.write_u32(ccr5 + 4, 1).unwrap();
+        dma.write_u32(ccr5 + 8, 0x2000_0000).unwrap();
+        dma.write_u32(ccr5 + 12, 0x2000_0010).unwrap();
+        dma.write_u32(ccr5, 1 | (1 << 14) | (1 << 1)).unwrap();
+        let r = dma.tick().dma_requests.unwrap()[0];
+        assert_eq!((r.src_addr, r.addr), (0x2000_0000, 0x2000_0010));
+        assert!(dma.dma_transfer_complete(&r));
+        // RM0444 / Artery IRQn: channels 4..5 share vector 11.
+        assert_eq!(dma.tick().explicit_irqs, Some(vec![11]));
+        // The full controller keeps its seventh channel.
+        assert!(Dma1::new().write_u32(0x08 + 6 * 20, 0).is_ok());
     }
 
     #[test]

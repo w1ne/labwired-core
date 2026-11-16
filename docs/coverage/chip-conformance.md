@@ -111,7 +111,7 @@ This page covers the public models. For every chip we model — public and priva
 | efr32mg26 | **L2** | ✓ | 34 | 243/243 (100%) | 1 | efr32_deck_behavior::the_deck_firmware_drives_every_part |
 | atmega328p | **L1** | ✓ | 7 | — | — | avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks |
 | atmega328pb | **L1** | ✓ | 8 | — | — | avr_atmega328pb_usart1::atmega328pb_firmware_uses_usart1_and_drives_pb5 |
-| atmega2560 | **L1** | ✓ | 15 | — | — | avr_mega2560_io::each_led_lands_on_its_mega_port_pin |
+| atmega2560 | **L1** | ✓ | 18 | — | — | avr_mega2560_io::each_led_lands_on_its_mega_port_pin |
 | atmega2561 | **L1** | ✓ | 11 | — | — | avr_atmega2561::atmega2561_boots_and_prints |
 | atmega4809 | **L0** | ✓ | 19 | — | — | — |
 | atmega32u4 | **L0** | ✓ | 8 | — | — | — |
@@ -120,7 +120,7 @@ This page covers the public models. For every chip we model — public and priva
 | atsamd21 | **L1** | ✓ | 7 | — | — | firmware_survival::test_atsamd21_nano33_smoke_survival |
 | atsamd51 | **L1** | ✓ | 27 | — | — | firmware_survival::test_atsamd51_metro_m4_smoke_survival |
 | atsamd51-pybadge | **L0** | ✓ | 28 | — | — | — |
-| ra4m1 | **L1** | ✓ | 7 | — | — | firmware_survival::test_ra4m1_uno_r4_smoke_survival |
+| ra4m1 | **L1** | ✓ | 34 | — | — | firmware_survival::test_ra4m1_uno_r4_smoke_survival |
 | imxrt1064 | **L1** | ✓ | 6 | — | — | firmware_survival::test_imxrt1064_teensy41_smoke_survival |
 | stm32f746 | **L1** | ✓ | 17 | — | — | firmware_survival::test_stm32f746_discovery_smoke_survival |
 | stm32g071 | **L1** | ✓ | 41 | — | — | firmware_survival::test_nucleo_g071rb_smoke_survival |
@@ -136,12 +136,14 @@ This page covers the public models. For every chip we model — public and priva
 | pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
 | pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
 | ch32v003f4p6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
+| ch32l103c8t6 | **L1** | ✓ | 7 | — | — | ch32l103_compiled_firmware::ch32l103_compiled_rv32imac_firmware_toggles_pc13 |
 | ch32v005f6p6 | **L1** | ✓ | 6 | — | — | ch32v005_compiled_firmware::ch32v005_compiled_rv32e_firmware_toggles_pc0 |
 | ch32x035c8t6 | **L1** | ✓ | 5 | — | — | ch32x035_compiled_firmware::ch32x035_compiled_rv32imac_firmware_toggles_pb12 |
 | ch32v006k8u6 | **L1** | ✓ | 6 | — | — | ch32v006_compiled_firmware::ch32v006_compiled_rv32e_firmware_toggles_pb0 |
 | ch32v203c8t6 | **L1** | ✓ | 7 | — | — | ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13 |
 | ch32v003f4u6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | ch32v003a4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| at32f421g8u7 | **L1** | ✓ | 20 | — | — | at32f421_contract::vendor_sdk_smoke_runs_flash_dma_and_timer_irq_paths |
 | ch32v003j4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | esp32h2 | **L0** | ✓ | 3 | — | — | — |
 | esp32c5 | **L0** | ✓ | 1 | — | — | — |

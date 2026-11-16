@@ -152,8 +152,12 @@ fn millis_tracks_simulated_time() {
             "ms={ms} lags sim {sim_ms} ms ({wire_ms} ms on the wire)"
         );
         if let Some((pms, pcycles)) = prev {
+            // `ms` is read after three analogRead() calls, about 0.3 ms of
+            // ADC conversion time (13 ADC clocks at 125 kHz each, the first
+            // after ADEN 25; DS2549 Table 26-1), so it can land on either
+            // side of a millis() tick.
             assert!(
-                (100..=102).contains(&(ms - pms)),
+                (99..=102).contains(&(ms - pms)),
                 "100 ms cadence: {pms} -> {ms}"
             );
             let dt = (cycles - pcycles) * 1000 / CPU_HZ;

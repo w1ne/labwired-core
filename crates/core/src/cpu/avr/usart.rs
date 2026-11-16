@@ -63,6 +63,10 @@ const BASES: [u16; 4] = [0xC0, 0xC8, 0xD0, 0x130];
 /// USART0 keeps the 328P numbering (19..21) that `mega2560_vector` maps to
 /// slots 26..28; USART1..3 use their Table 14-1 slot, which passes through.
 const VEC_RX: [u32; 4] = [19, 37, 52, 55];
+/// Pending bits of the USART1..3 vectors, the ones with no 328P number.
+#[cfg(test)]
+pub(super) const MEGA_ONLY_MASK: u64 =
+    (0b111 << VEC_RX[1]) | (0b111 << VEC_RX[2]) | (0b111 << VEC_RX[3]);
 
 const OFF_UCSRA: u16 = 0;
 const OFF_UCSRB: u16 = 1;

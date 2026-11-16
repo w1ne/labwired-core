@@ -924,6 +924,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // executing-fidelity differential of its own. The slice models RCC,
         // GPIO A/C/D, and polled USART1 TX only (no PFIC, ADC, I2C, SPI, or
         // timers). Promote when the catalog board and a differential exist.
+        // CH32L103C8T6: RV32IMAC descriptor with F1-layout RCC, GPIO A..D and
+        // polled USART1/USART2 TX (no PFIC, timers, ADC, I2C, SPI, CAN FD or
+        // USB). Booted by committed ELFs. No catalog board, no silicon oracle,
+        // no differential.
+        "ch32l103c8t6",
         "ch32v003f4p6",
         // CH32V005F6P6: RV32EmC descriptor with the CH32V003 RCC/GPIO layout
         // and polled USART1 TX (no PFIC, timers, ADC, OPA, I2C, SPI or DMA).
@@ -987,6 +992,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // GPIO15 LED smoke runs in core-onboarding-smoke. No catalog board,
         // no silicon oracle, no differential. Promote when all three exist.
         "esp32c6fh4",
+        // AT32F421G8U7 bare chip (Artery, Cortex-M4). CRM and FLASH have
+        // their own profiles; DMA, EXINT, ADC, USART, GPIO, timers and WDT
+        // reuse the STM32 models. The committed Artery BSP smoke runs in the
+        // coverage matrix and vendor::at32f421_contract. No catalog board,
+        // no silicon oracle, no differential. Promote when all three exist.
+        "at32f421g8u7",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

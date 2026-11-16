@@ -133,6 +133,9 @@ jobs:
             arduino-nano-every) platform=atmelmegaavr@1.10.0 ;;
             # The Zero row was measured on atmelsam 9.0.0 (ArduinoCore-samd).
             arduino-zero) platform=atmelsam@9.0.0 ;;
+            # The UNO R4 WiFi row was measured on renesas-ra 1.9.0
+            # (ArduinoCore-renesas 1.6.0).
+            uno-r4-*)    platform=renesas-ra@1.9.0 ;;
             # The Teensy 4.1 row was measured on teensy 6.0.0 (Teensyduino 1.62).
             teensy41)    platform=teensy@6.0.0 ;;
             *)
