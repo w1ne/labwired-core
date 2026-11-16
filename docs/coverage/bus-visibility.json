@@ -37,6 +37,10 @@
   },
   {
     "buses": [],
+    "name": "atmega4809"
+  },
+  {
+    "buses": [],
     "name": "atsamd21"
   },
   {
@@ -114,6 +118,14 @@
   {
     "buses": [],
     "name": "ch32v003j4m6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v005f6p6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v006k8u6"
   },
   {
     "buses": [],
@@ -674,6 +686,14 @@
       "UART"
     ],
     "name": "stm32f411ceu6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f411re"
   },
   {
     "buses": [
