@@ -21,6 +21,10 @@
 // adds A0 to pins below it), but name it: A0 = PA02 = AIN0, the input the
 // matrix board drives.
 #    define LW_ADC_PIN A0
+#  elif defined(ARDUINO_NANO_ESP32)
+// Same trap on the Nano ESP32: A0 (GPIO1 = ADC1_CH0) is a `static constexpr`.
+// With the pin remap, analogRead(0) would read D0 = GPIO44, which has no ADC.
+#    define LW_ADC_PIN A0
 #  elif defined(ARDUINO_XIAO_ESP32S3)
 // Same trap: the XIAO ESP32S3 variant's A0 (GPIO1 = ADC1_CH0) is a
 // `static const uint8_t`. analogRead(0) would read GPIO0, which has no ADC.
@@ -34,10 +38,14 @@
 
 static void logBegin() {
   Serial.begin(115200);
-#if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__)
+#if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__) || \
+    ((defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)) && \
+     defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE)
   // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
   // CDC and drops writes until the host opens the port (DTR), on silicon and
   // on the twin alike.
+  // ESP32-S2/S3 with ARDUINO_USB_MODE=0 (Arduino Nano ESP32): Serial is
+  // TinyUSB CDC on USB-OTG, which drops writes until DTR the same way.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
@@ -77,7 +85,7 @@ static bool samples_ok(int v0, int v1) {
   // handed to the ADC.
   return v0 == 512 && v1 == 512;
 
-#elif defined(ARDUINO_XIAO_ESP32S3)
+#elif defined(ARDUINO_XIAO_ESP32S3) || defined(ARDUINO_NANO_ESP32)
   // esp32s3 SENS oneshot: the matrix system holds A0 (GPIO1 = ADC1_CH0) at
   // 1650 mV with a centred potentiometer. Arduino-ESP32 returns the raw
   // 12-bit code, 2047. Exact; the idle unseeded channel reads 0.

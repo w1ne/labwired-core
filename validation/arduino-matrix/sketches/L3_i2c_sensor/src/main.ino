@@ -22,10 +22,14 @@
 
 static void logBegin() {
   Serial.begin(115200);
-#if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__)
+#if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__) || \
+    ((defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)) && \
+     defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE)
   // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
   // CDC and drops writes until the host opens the port (DTR), on silicon and
   // on the twin alike.
+  // ESP32-S2/S3 with ARDUINO_USB_MODE=0 (Arduino Nano ESP32): Serial is
+  // TinyUSB CDC on USB-OTG, which drops writes until DTR the same way.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
@@ -45,6 +49,10 @@ static void logLine(const char *s) {
 static void wireBegin() {
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(ARDUINO_ESP32C3_DEV) || defined(ARDUINO_ESP32C3_SUPER_MINI)
   Wire.begin(4, 5);
+#elif defined(ARDUINO_NANO_ESP32)
+  // Arduino Nano ESP32: SDA = A4 = GPIO11, SCL = A5 = GPIO12. The core's pin
+  // remap translates the Arduino numbers, so take the variant defaults.
+  Wire.begin();
 #elif defined(ARDUINO_XIAO_ESP32S3)
   // Seeed XIAO ESP32S3: the variant's SDA = D4 = GPIO5, SCL = D5 = GPIO6.
   Wire.begin(SDA, SCL);
