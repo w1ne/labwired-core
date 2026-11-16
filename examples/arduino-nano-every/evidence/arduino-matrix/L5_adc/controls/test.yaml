@@ -1,0 +1,9 @@
+schema_version: '1.0'
+inputs:
+  firmware: validation/arduino-matrix/out/arduino-nano-every/L5_adc/firmware.elf
+  system: examples/arduino-nano-every/evidence/arduino-matrix/L5_adc/controls/arduino-nano-every-a0-1250mv.yaml
+limits:
+  max_steps: 500000
+  max_uart_bytes: 65536
+assertions:
+- uart_contains: LW_L5_OK

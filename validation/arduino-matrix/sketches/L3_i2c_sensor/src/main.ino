@@ -45,6 +45,9 @@ static void logLine(const char *s) {
 static void wireBegin() {
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(ARDUINO_ESP32C3_DEV) || defined(ARDUINO_ESP32C3_SUPER_MINI)
   Wire.begin(4, 5);
+#elif defined(ARDUINO_XIAO_ESP32S3)
+  // Seeed XIAO ESP32S3: the variant's SDA = D4 = GPIO5, SCL = D5 = GPIO6.
+  Wire.begin(SDA, SCL);
 #elif defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
   Wire.begin(8, 9);
 #elif defined(CONFIG_IDF_TARGET_ESP32C6)
@@ -92,11 +95,12 @@ void setup() {
   }
 
   // Tier-1: exact multi-byte register reads when master-receive works.
-#if defined(STM32F446xx) || (!defined(STM32F4xx) && !defined(STM32F407xx) && !defined(ARDUINO_DISCO_F407VG))
+#if defined(STM32F446xx) || defined(STM32F411xE) || (!defined(STM32F4xx) && !defined(STM32F407xx) && !defined(ARDUINO_DISCO_F407VG))
   // F407 classic I2C master-receive can hang the Wire stack under sim; skip
   // the read attempt there and keep ACK-only survival for that board. The
   // NUCLEO-F446RE reads both registers exactly (measured 2026-11-09), so it
-  // takes the exact tier.
+  // takes the exact tier. So do NUCLEO-F411RE and the F411 Black Pill
+  // (measured 2026-11-15).
   uint16_t cfg = 0;
   uint16_t bus = 0;
   if (ina219_read_u16(INA219_REG_CONFIG, &cfg) && ina219_read_u16(INA219_REG_BUS, &bus)) {

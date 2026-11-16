@@ -23,6 +23,7 @@ mod avr_atmega1281;
 mod avr_atmega1281_firmware;
 mod avr_atmega2561;
 mod avr_atmega328pb_usart1;
+mod avr_attiny10;
 mod avr_capture_temp;
 mod avr_cpu_held_i2c_inspect;
 mod avr_logic_capture_differential;

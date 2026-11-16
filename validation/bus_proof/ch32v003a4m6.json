@@ -1,0 +1,21 @@
+{
+  "id": "ch32v003a4m6",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/vendor/ch32v003_compiled_firmware.rs",
+    "test": "ch32v003_package_variants_print_on_usart1_pd5",
+    "signal": "the committed RV32EC fixture ELF (examples/ch32v003f4p6/uart_hello.c) runs unchanged on the SOP16 ch32v003a4m6 descriptor (same die as ch32v003f4p6; PD5 USART1 TX is bonded on this package), clocks USART1 from APB2PCENR bit 14, polls STATR.TXE and writes 'Hello from CH32V003\\r\\n' through DATAR (0x40013804); the test asserts the console sink receives exactly that string and mcause stays 0. Polled TX only: no PFIC, so USART1_IRQn is not wired",
+    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test vendor ch32v003_compiled_firmware::"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "SPI1 (0x40013000) is not modelled; it is not in the ch32v003a4m6 descriptor's peripherals list.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "I2C1 (0x40005400) is not modelled; it is not in the ch32v003a4m6 descriptor's peripherals list.",
+    "lane": "none"
+  }
+}

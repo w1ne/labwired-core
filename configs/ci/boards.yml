@@ -106,6 +106,18 @@ boards:
     kind: sim-validate
     path: examples/nucleo-f446re
     gate: true
+  # STM32F411RE: committed real-register Cortex-M4 smoke ELF, USART2
+  # banner and PA5 (LD2) edges. No extra toolchain; gate the exact descriptor.
+  - id: nucleo-f411re
+    kind: sim-validate
+    path: examples/nucleo-f411re
+    gate: true
+  # STM32L432KC: committed real-register Cortex-M4 smoke ELF, USART2
+  # banner and PB3 (LD3) edges. No extra toolchain; gate the exact descriptor.
+  - id: nucleo-l432kc
+    kind: sim-validate
+    path: examples/nucleo-l432kc
+    gate: true
   # Two Nordic nRF54L application-core siblings in one cheap PR-gated
   # simulation lane; committed exact ELFs (no Nordic SDK/toolchain dependency).
   - id: nrf54l05-l10-smoke
