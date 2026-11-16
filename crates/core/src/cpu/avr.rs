@@ -1172,7 +1172,7 @@ impl Avr {
             let Some(high) = bus.read_gpio_output_by_label(device.cs_pin()) else {
                 continue;
             };
-            match (device.is_selected(), !high) {
+            match (device.is_selected(), device.cs_selected_at(high)) {
                 (false, true) => device.cs_select(),
                 (true, false) => {
                     device.cs_release();
@@ -5014,6 +5014,72 @@ mod tests {
             vec![(true, 0xAA), (false, 0x55), (true, 0xFF)],
             "SPDR must sample D/C per byte, in order"
         );
+    }
+
+    /// A CPU-held SPI slave whose chip select is active HIGH (an ST7920 in
+    /// serial mode) is selected by its CS pin driven high, not low: the
+    /// GPIO-synced CS path asks the device for its polarity.
+    #[test]
+    fn cpu_held_spi_device_honours_active_high_cs() {
+        use crate::bus::SystemBus;
+        use labwired_config::{ChipDescriptor, SystemManifest};
+        struct HighCs {
+            selected: bool,
+            got: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+        }
+        impl SpiDevice for HighCs {
+            fn cs_pin(&self) -> &str {
+                "PB2"
+            }
+            fn cs_active_high(&self) -> bool {
+                true
+            }
+            fn cs_select(&mut self) {
+                self.selected = true;
+            }
+            fn cs_release(&mut self) {
+                self.selected = false;
+            }
+            fn is_selected(&self) -> bool {
+                self.selected
+            }
+            fn transfer(&mut self, mosi: u8) -> u8 {
+                self.got.lock().unwrap().push(mosi);
+                0
+            }
+        }
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip_path = root.join("configs/chips/atmega328p.yaml");
+        let chip = ChipDescriptor::from_file(&chip_path).expect("atmega328p");
+        let manifest = SystemManifest {
+            cosim_models: Vec::new(),
+            motor_models: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "cs-high".to_string(),
+            chip: chip_path.to_string_lossy().to_string(),
+            cpu_hz: Some(16_000_000),
+            external_devices: vec![],
+            board_io: vec![],
+            debug_uart: None,
+            wifi_ap: None,
+            peripherals: vec![],
+            parts: Default::default(),
+            memory_overrides: Default::default(),
+        };
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+        let got = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut cpu = Avr::for_chip_name("atmega328p");
+        cpu.push_spi_device(Box::new(HighCs {
+            selected: false,
+            got: got.clone(),
+        }));
+        cpu.data_write(0x24, 1 << 2, &mut bus).unwrap(); // DDRB.2 output
+        cpu.data_write(0x25, 0, &mut bus).unwrap(); // CS low: inactive
+        cpu.data_write(0x4E, 0x11, &mut bus).unwrap();
+        cpu.data_write(0x25, 1 << 2, &mut bus).unwrap(); // CS high: selected
+        cpu.data_write(0x4E, 0x22, &mut bus).unwrap();
+        assert_eq!(*got.lock().unwrap(), vec![0x22]);
     }
 
     /// End to end: SPDR writes from the CPU clock a parking (not taken)
