@@ -726,7 +726,11 @@ mod tests {
         d.write(TICK, 4 | TICK_ENABLE);
         d.write(LOAD, 100);
         d.write(CTRL, CTRL_PAUSE_MASK | CTRL_ENABLE); // armed at cycle 0
-        assert_eq!(d.events.len(), 1, "exactly one wake for the whole countdown");
+        assert_eq!(
+            d.events.len(),
+            1,
+            "exactly one wake for the whole countdown"
+        );
         // Fires on cycles 1, 5, 9, ... each taking 2: the 50th firing is cycle 197.
         d.run_to(1);
         assert_eq!(d.time(), 98);

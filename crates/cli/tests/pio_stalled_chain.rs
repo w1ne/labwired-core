@@ -81,6 +81,9 @@ fn a_stalled_pio_chain_reports_the_same_run() {
         slept_uart[16..24].iter().any(|b| *b != slept_uart[16]),
         "the divided trials never shifted: {slept_uart:02x?}"
     );
-    assert_eq!(slept_uart, reference_uart, "sleeping changed the UART bytes");
+    assert_eq!(
+        slept_uart, reference_uart,
+        "sleeping changed the UART bytes"
+    );
     assert_eq!(slept, reference, "sleeping changed the run");
 }

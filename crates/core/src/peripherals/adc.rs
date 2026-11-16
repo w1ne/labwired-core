@@ -2546,10 +2546,10 @@ mod scheduler_diff {
             (1, Op::Write(0x34, 3)),
             (1, Op::Write(0x08, 1 | (1 << 1))), // ADON | CONT
             (1, Op::Write(0x0A, 0x0E)),
-            (2, Op::Write(0x0A, 0x4E)), // SWSTART
-            (9, Op::Write(0x0A, 0x0E)), // SWSTART low
-            (10, Op::Write(0x0A, 0x4E)), // SWSTART again mid-conversion: restart
-            (31, Op::Write(0x08, 0)),   // ADON cleared mid-conversion: cancel
+            (2, Op::Write(0x0A, 0x4E)),          // SWSTART
+            (9, Op::Write(0x0A, 0x0E)),          // SWSTART low
+            (10, Op::Write(0x0A, 0x4E)),         // SWSTART again mid-conversion: restart
+            (31, Op::Write(0x08, 0)),            // ADON cleared mid-conversion: cancel
             (40, Op::Write(0x08, 1 | (1 << 1))), // ADON again
             (41, Op::Write(0x0A, 0x0E)),
             (42, Op::Write(0x0A, 0x4E)),

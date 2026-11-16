@@ -371,41 +371,17 @@ impl Rp2040Rtc {
         }
         let target_date = Calendar::from_words(self.irq_setup_0, self.irq_setup_1);
         let checks = [
-            (
-                self.irq_setup_0 & DAY_ENA != 0,
-                target_date.day,
-                now.day,
-            ),
+            (self.irq_setup_0 & DAY_ENA != 0, target_date.day, now.day),
             (
                 self.irq_setup_0 & MONTH_ENA != 0,
                 target_date.month,
                 now.month,
             ),
-            (
-                self.irq_setup_0 & YEAR_ENA != 0,
-                target_date.year,
-                now.year,
-            ),
-            (
-                self.irq_setup_1 & SEC_ENA != 0,
-                target_date.sec,
-                now.sec,
-            ),
-            (
-                self.irq_setup_1 & MIN_ENA != 0,
-                target_date.min,
-                now.min,
-            ),
-            (
-                self.irq_setup_1 & HOUR_ENA != 0,
-                target_date.hour,
-                now.hour,
-            ),
-            (
-                self.irq_setup_1 & DOTW_ENA != 0,
-                target_date.dotw,
-                now.dotw,
-            ),
+            (self.irq_setup_0 & YEAR_ENA != 0, target_date.year, now.year),
+            (self.irq_setup_1 & SEC_ENA != 0, target_date.sec, now.sec),
+            (self.irq_setup_1 & MIN_ENA != 0, target_date.min, now.min),
+            (self.irq_setup_1 & HOUR_ENA != 0, target_date.hour, now.hour),
+            (self.irq_setup_1 & DOTW_ENA != 0, target_date.dotw, now.dotw),
         ];
         checks
             .iter()
@@ -832,7 +808,11 @@ mod tests {
                 stepped.clkdiv_m1 = m1;
                 stepped.div_count = phase;
                 for n in 0..=(m1 as u64 * 4 + 12) {
-                    assert_eq!(base.advanced(n), stepped.live(), "m1={m1} phase={phase} n={n}");
+                    assert_eq!(
+                        base.advanced(n),
+                        stepped.live(),
+                        "m1={m1} phase={phase} n={n}"
+                    );
                     stepped.step_one();
                 }
             }

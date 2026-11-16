@@ -1193,7 +1193,16 @@ mod tests {
             pio.flevel_value(),
             pio.sm
                 .iter()
-                .map(|s| (s.pc, s.x, s.y, s.osr, s.osr_count, s.isr, s.isr_count, s.delay_cycles))
+                .map(|s| (
+                    s.pc,
+                    s.x,
+                    s.y,
+                    s.osr,
+                    s.osr_count,
+                    s.isr,
+                    s.isr_count,
+                    s.delay_cycles
+                ))
                 .collect::<Vec<_>>(),
         )
     }
@@ -1216,7 +1225,11 @@ mod tests {
             ev.now = c - 1;
             walk.tick();
             ev.step();
-            assert_eq!(observable(&walk), observable(&ev.pio), "diverged at cycle {c}");
+            assert_eq!(
+                observable(&walk),
+                observable(&ev.pio),
+                "diverged at cycle {c}"
+            );
         }
         ev.pio.sync_to(cycles);
         for i in 0..4 {

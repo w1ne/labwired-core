@@ -406,7 +406,12 @@ fn idle_bus_with_iicie_stops_the_chain_and_a_write_rearms_it() {
     for _ in 0..3 {
         h.step();
     }
-    assert_eq!(h.pends.len(), 3, "held level pends every cycle: {:?}", h.pends);
+    assert_eq!(
+        h.pends.len(),
+        3,
+        "held level pends every cycle: {:?}",
+        h.pends
+    );
     h.write(0x03, KI_S_IICIF);
     h.step();
     h.step();
