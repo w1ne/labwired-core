@@ -690,6 +690,33 @@ pub fn inject_rom_regions(bus: &mut crate::bus::SystemBus, images: &RomImages) -
     irom_present
 }
 
+/// `g_uart_print`: the ROM's "print to UART" flag (DRAM, beside
+/// `g_usb_print` @ 0x3FCD_FFD0).
+pub const G_UART_PRINT: u32 = 0x3FCD_FFD1;
+
+/// Set the ROM console flag the C3 boot ROM sets before it runs the app.
+///
+/// ROM `uart_tx_one_char` (0x4000_0068 -> 0x4004_C3EC) returns without a
+/// write while `g_uart_print` is zero. The ROM's print init (0x4004_C39C)
+/// sets it to 1 when the GPIO8 strap selects UART download printing, or
+/// when the eFuse print control allows it, which is the default. It is not
+/// in the ROM's `.data` image, so the replay of [`c3_rom_data_init_writes`]
+/// leaves it zero and every esp-println `uart` byte is dropped.
+///
+/// `g_usb_print` stays zero. On silicon the same init also sets it with the
+/// default eFuses, but a fast boot captures UART0 and USB-Serial-JTAG into
+/// one console, so a second ROM channel would print every byte twice.
+///
+/// Call it after the `.data` replay, which covers this word.
+pub fn seed_rom_console(bus: &mut crate::bus::SystemBus) {
+    // A host boot write, like the `.data` replay: not a CPU store.
+    bus.with_debug_watch_bypass(|bus| {
+        bus.with_memory_policy_bypass(|bus| {
+            let _ = bus.write_u8(u64::from(G_UART_PRINT), 1);
+        })
+    });
+}
+
 /// Make a C3 bus ready for a bare-ELF **fast boot** with the real mask ROM
 /// behind it: the one sequence the single-chip engine (`system::builder`) and a
 /// world node (`system::node`) both run, so the two cannot drift.
@@ -698,7 +725,8 @@ pub fn inject_rom_regions(bus: &mut crate::bus::SystemBus, images: &RomImages) -
 ///  2. the ROM's reset-time `.data` copy is replayed
 ///     ([`c3_rom_data_init_writes`]) — fast boot skips the ROM's own
 ///     `unpackloop`, and without the copy every ROM function table esp-hal
-///     dispatches through reads zero;
+///     dispatches through reads zero, and the ROM console flag is set
+///     ([`seed_rom_console`]);
 ///  3. the analog I²C master / ANA_CONFIG block (0x6000_E000) is added — with
 ///     the real ROM present, esp-hal's PLL bring-up runs the genuine
 ///     `rom_i2c_*Reg` helpers against it, and it is not in the chip YAML;
@@ -724,6 +752,7 @@ pub fn install_fast_boot_rom(bus: &mut crate::bus::SystemBus, images: &RomImages
             }
         })
     });
+    seed_rom_console(bus);
     bus.add_peripheral(
         "rtc_i2c_ana",
         0x6000_E000,
@@ -768,6 +797,36 @@ pub fn rom_images_from_blobs_or_provisioned(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn c3_bus() -> crate::bus::SystemBus {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip =
+            labwired_config::ChipDescriptor::from_file(root.join("configs/chips/esp32c3.yaml"))
+                .expect("load esp32c3.yaml");
+        crate::bus::SystemBus::from_config(&chip, &labwired_config::SystemManifest::default())
+            .expect("C3 bus")
+    }
+
+    /// The `.data` replay alone leaves `g_uart_print` zero (the ROM sets it
+    /// at run time, not from its copy table); the fast boot sets it.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn fast_boot_sets_the_rom_uart_print_flag_the_data_replay_does_not() {
+        let images = provision_rom_images().expect("vendored C3 ROM");
+        let mut bus = c3_bus();
+        for (dst, bytes) in c3_rom_data_init_writes(&images.irom) {
+            for (i, b) in bytes.iter().enumerate() {
+                let _ = bus.write_u8(dst as u64 + i as u64, *b);
+            }
+        }
+        assert_eq!(bus.read_u8(u64::from(G_UART_PRINT)).unwrap(), 0);
+
+        let mut bus = c3_bus();
+        assert!(install_fast_boot_rom(&mut bus, &images));
+        assert_eq!(bus.read_u8(u64::from(G_UART_PRINT)).unwrap(), 1);
+        // The USB print flag beside it stays clear: one ROM console only.
+        assert_eq!(bus.read_u8(u64::from(G_UART_PRINT - 1)).unwrap(), 0);
+    }
 
     /// The vendored images must be exactly what the extractor produces from
     /// the toolchain's ROM ELF — including the `.data` copy sources whose

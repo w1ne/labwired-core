@@ -2362,6 +2362,15 @@ pub(crate) fn run_test(
                                 }
                                 machine.cpu.set_sp(sp_top & !0xF);
                             }
+                            // ROM `g_uart_print`, which the ROM's own print
+                            // init sets and the `.data` replay above leaves
+                            // zero: without it ROM `uart_tx_one_char` (the
+                            // esp-println `uart` path) drops every byte.
+                            if chip.name == "esp32c3" {
+                                labwired_core::boot::esp32c3_rom::seed_rom_console(
+                                    &mut machine.bus,
+                                );
+                            }
                             // Arduino-ESP32 `system_early_init` validates the
                             // ESP app image magic (0xE9) at the DROM-mapped
                             // flash header (`0x3C03_0000` on this C3 link).

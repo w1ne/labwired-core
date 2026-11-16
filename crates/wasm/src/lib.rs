@@ -1000,6 +1000,11 @@ impl WasmSimulator {
                         let _ = bus.write_u8(dst as u64 + i as u64, *b);
                     }
                 }
+                // The ROM's `g_uart_print`, set by its print init and not
+                // by the copy above: esp-println's `uart` path prints
+                // through ROM `uart_tx_one_char`, which drops every byte
+                // while it is zero.
+                labwired_core::boot::esp32c3_rom::seed_rom_console(&mut bus);
                 // With the real ROM present, esp-hal's clock bring-up runs the
                 // genuine `rom_i2c_*Reg` helpers, which drive the analog I²C
                 // master / ANA_CONFIG block (0x6000_E000) for the PLL. That
