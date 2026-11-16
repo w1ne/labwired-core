@@ -179,7 +179,6 @@ impl SystemBus {
         cfg!(feature = "event-scheduler")
             && self.legacy_walk_disabled
             && self.bus_tick_indices.is_empty()
-            && !self.nordic_gpio_service
             && self
                 .irq_fabric
                 .per_cycle_aggregation_free(self.legacy_walk_disabled)

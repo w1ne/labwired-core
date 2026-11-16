@@ -91,9 +91,10 @@
 //!
 //! ## Source IDs (IDF `soc/esp32s3/include/soc/interrupts.h`)
 //!
-//! `ETS_PWM0_INTR_SOURCE = 38`, `ETS_PWM1_INTR_SOURCE = 39`. A single matrix
+//! `ETS_PWM0_INTR_SOURCE = 31`, `ETS_PWM1_INTR_SOURCE = 32` (38 is
+//! `ETS_USB_INTR_SOURCE`, 39 `ETS_RTC_CORE_INTR_SOURCE`). A single matrix
 //! source per unit; firmware reads `INT_ST` to learn which timer/operator
-//! fired. `new(base_source_id)` takes that id (38 or 39).
+//! fired. `new(base_source_id)` takes that id (31 or 32).
 
 use crate::peripherals::McpwmDutyObserver;
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
@@ -105,10 +106,10 @@ pub const MCPWM0_BASE: u32 = 0x6001_E000;
 pub const MCPWM1_BASE: u32 = 0x6002_C000;
 pub const MCPWM_SIZE: u64 = 0x1000;
 
-/// `ETS_PWM0_INTR_SOURCE = 38`.
-pub const MCPWM0_INTR_SOURCE: u32 = 38;
-/// `ETS_PWM1_INTR_SOURCE = 39`.
-pub const MCPWM1_INTR_SOURCE: u32 = 39;
+/// `ETS_PWM0_INTR_SOURCE = 31`.
+pub const MCPWM0_INTR_SOURCE: u32 = 31;
+/// `ETS_PWM1_INTR_SOURCE = 32`.
+pub const MCPWM1_INTR_SOURCE: u32 = 32;
 
 /// APB clock feeding the MCPWM prescaler (80 MHz).
 const APB_CLOCK_HZ: u64 = 80_000_000;
@@ -388,7 +389,7 @@ pub struct Esp32s3Mcpwm {
 
 impl Esp32s3Mcpwm {
     /// Construct one MCPWM unit bound to interrupt-matrix `base_source_id`
-    /// (`MCPWM0_INTR_SOURCE` = 38 for MCPWM0, `MCPWM1_INTR_SOURCE` = 39 for
+    /// (`MCPWM0_INTR_SOURCE` = 31 for MCPWM0, `MCPWM1_INTR_SOURCE` = 32 for
     /// MCPWM1). The CPU clock defaults to 240 MHz for the APB→sim-tick scaling;
     /// use `new_with_clock` to override.
     pub fn new(base_source_id: u32) -> Self {
@@ -914,13 +915,13 @@ mod tests {
     }
 
     #[test]
-    fn source_ids_are_38_and_39() {
-        assert_eq!(MCPWM0_INTR_SOURCE, 38);
-        assert_eq!(MCPWM1_INTR_SOURCE, 39);
+    fn source_ids_are_31_and_32() {
+        assert_eq!(MCPWM0_INTR_SOURCE, 31);
+        assert_eq!(MCPWM1_INTR_SOURCE, 32);
         let u0 = Esp32s3Mcpwm::new(MCPWM0_INTR_SOURCE);
         let u1 = Esp32s3Mcpwm::new(MCPWM1_INTR_SOURCE);
-        assert_eq!(u0.intr_source_id, 38);
-        assert_eq!(u1.intr_source_id, 39);
+        assert_eq!(u0.intr_source_id, 31);
+        assert_eq!(u1.intr_source_id, 32);
     }
 
     #[test]
@@ -1159,11 +1160,11 @@ mod tests {
     }
 
     #[test]
-    fn unit1_uses_source_39() {
+    fn unit1_uses_source_32() {
         let mut p = Esp32s3Mcpwm::new_with_clock(MCPWM1_INTR_SOURCE, 80_000_000);
         p.write_u32(REG_INT_RAW, int_tez_bit(0)).unwrap();
         p.write_u32(REG_INT_ENA, int_tez_bit(0)).unwrap();
-        assert_eq!(p.tick().explicit_irqs, Some(vec![39]));
+        assert_eq!(p.tick().explicit_irqs, Some(vec![32]));
     }
 
     #[test]
