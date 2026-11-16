@@ -15,6 +15,7 @@
 #                determinism check can fail)
 #   dual         i2c1 + i2c3 both enabled, BME280@0x76 on i2c1, BME280@0x77 on
 #                i2c3, concurrent i2cget loops on both buses (shared SPI 117)
+#   dual-2       same again                -> both transcripts byte-identical
 #   dual-noor    same with the bridge IRQ OR off (irq-or=off): negative control
 #   disabled     i2c1 disabled in the DTB  -> loader makes no bridge, no 0x76
 # Plus a timing check of the i2cget transfer against the SCL formula.
@@ -130,7 +131,14 @@ for d in "$DTB_ONE" "$DTB_TWO" "$DTB_OFF"; do
 done
 "$BRIDGE" dt-report --dtb "$DTB_ONE" --json >"$LOGS/dt-report-$(basename "$DTB_ONE" .dtb).json"
 
-APPEND="console=ttyAMA1,115200 earlycon=pl011,mmio32,0xfe201000 rdinit=/init"
+# The guest runs on one of the four raspi4b CPUs (maxcpus=1). With four,
+# dual-bus runs under -icount were not byte-reproducible (1 in 4 diverged by
+# ~100 ns of guest time at ~2.19 s): QEMU's round-robin TCG interleaves vCPUs
+# at points that the host thread scheduling can move. One guest CPU still
+# runs both bus loops concurrently (they sleep on the bus). GUEST_MAXCPUS=4
+# (or empty) restores all four.
+GUEST_MAXCPUS="${GUEST_MAXCPUS-1}"
+APPEND="console=ttyAMA1,115200 earlycon=pl011,mmio32,0xfe201000 rdinit=/init${GUEST_MAXCPUS:+ maxcpus=$GUEST_MAXCPUS}"
 
 # Deterministic guest clock: 2^ICOUNT_SHIFT ns of virtual time per guest
 # instruction, no sleeping on idle (virtual time jumps to the next timer), no
@@ -204,14 +212,14 @@ run() {
 
 ONE_BME=(--attach i2c1:bme280@0x76)
 TWO_BME=(--attach i2c1:bme280@0x76 --attach i2c3:bme280@0x77)
-RUNS="${RUNS:-positive positive-2 no-device no-bridge host-1 host-2 dual dual-noor disabled}"
+RUNS="${RUNS:-positive positive-2 no-device no-bridge host-1 host-2 dual dual-2 dual-noor disabled}"
 for r in $RUNS; do
     case "$r" in
         positive|positive-2) run "$r" "$DTB_ONE" icount single "${ONE_BME[@]}" ;;
         no-device) run "$r" "$DTB_ONE" icount single ;;
         no-bridge) run "$r" "$DTB_ONE" icount single --no-bridge ;;
         host-1|host-2) run "$r" "$DTB_ONE" host single "${ONE_BME[@]}" ;;
-        dual) run "$r" "$DTB_TWO" icount dual "${TWO_BME[@]}" ;;
+        dual|dual-2) run "$r" "$DTB_TWO" icount dual "${TWO_BME[@]}" ;;
         dual-noor) run "$r" "$DTB_TWO" icount dual "${TWO_BME[@]}" --no-irq-or ;;
         disabled)
             # The loader must refuse to wire a part to a disabled node.
@@ -328,13 +336,23 @@ if has positive && has positive-2; then
         pass "determinism: icount transcripts byte-identical ($(wc -l <"$LOGS/positive.transcripts/$T1" | tr -d ' ') lines)"
     else failc "determinism: icount transcripts byte-identical"; fi
 fi
+if has dual && has dual-2; then
+    for t in "$LOGS"/dual.transcripts/*.transcript; do
+        b="$(basename "$t")"
+        if cmp "$t" "$LOGS/dual-2.transcripts/$b"; then
+            pass "determinism: dual-bus $b byte-identical ($(wc -l <"$t" | tr -d ' ') lines)"
+        else failc "determinism: dual-bus $b byte-identical"; fi
+    done
+fi
 if has host-1 && has host-2; then
     if cmp "$LOGS/host-1.transcripts/$T1" "$LOGS/host-2.transcripts/$T1"; then
         failc "negative control: transcripts without -icount differ"
     else pass "negative control: transcripts without -icount differ"; fi
 fi
 
-grep -h "modeled .* of .* enabled device nodes" "$LOGS"/dt-report-*.txt | sed 's/^/  dt-report: /' || true
+for f in "$LOGS"/dt-report-*.txt; do
+    echo "  $(basename "$f" .txt): $(tail -1 "$f")"
+done
 for r in $RUNS; do
     echo "  $r: $(grep -h '^LW-HOST: wall' "$LOGS/$r.log" | cut -d' ' -f3-5) guest uptime at end" \
         "$(grep -h '^LW-UPTIME' "$LOGS/$r.log" | cut -d' ' -f2)s"

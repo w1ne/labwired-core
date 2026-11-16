@@ -36,15 +36,15 @@ addrs() {
 }
 
 # loop BUS ADDR N: N combined transfers (write reg 0xd0, repeated start,
-# read 48 bytes: ~4.6 ms of bus time each, so the two buses overlap). A
-# transfer is good when it returns chip-id 0x60 first and the same 48 bytes
+# read 128 bytes: ~11.8 ms of bus time each, so the two buses overlap). A
+# transfer is good when it returns chip-id 0x60 first and the same 128 bytes
 # as the first read.
 loop() {
-    ref=$(i2ctransfer -y $1 w1@$2 0xd0 r48 2>&1)
+    ref=$(i2ctransfer -y $1 w1@$2 0xd0 r128 2>&1)
     echo "LW-REF bus$1 $2: $ref"
     ok=0; bad=0; i=0
     while [ $i -lt $3 ]; do
-        v=$(i2ctransfer -y $1 w1@$2 0xd0 r48 2>&1)
+        v=$(i2ctransfer -y $1 w1@$2 0xd0 r128 2>&1)
         if [ "$v" = "$ref" ] && [ "${v%% *}" = 0x60 ]; then ok=$((ok+1)); else
             bad=$((bad+1)); [ $bad -le 3 ] && echo "LW-CONC-ERR bus$1 $2 #$i: $v"
         fi
