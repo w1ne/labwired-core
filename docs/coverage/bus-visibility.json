@@ -121,6 +121,14 @@
   },
   {
     "buses": [],
+    "name": "ch32v005f6p6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v006k8u6"
+  },
+  {
+    "buses": [],
     "name": "ch32v203c8t6"
   },
   {
@@ -674,6 +682,14 @@
       "UART"
     ],
     "name": "stm32f411ceu6"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32f411re"
   },
   {
     "buses": [

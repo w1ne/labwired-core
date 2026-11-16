@@ -55,6 +55,10 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
 * **ch32v003j4m6**
   * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
+* **ch32v005f6p6**
+  * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v005_compiled_firmware
+* **ch32v006k8u6**
+  * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v006_compiled_firmware
 * **ch32v203c8t6**
   * UART: no UART bring-up for the WCH V20x family in this harness yet; USART1 bytes are proven by ch32v203_compiled_firmware
 * **efr32mg26**
@@ -173,6 +177,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | ch32v003f4p6 | — | — | — |
 | ch32v003f4u6 | — | — | — |
 | ch32v003j4m6 | — | — | — |
+| ch32v005f6p6 | — | — | — |
+| ch32v006k8u6 | — | — | — |
 | ch32v203c8t6 | — | — | — |
 | dspic33fj32mc202 | — | — | — |
 | dspic33fj32mc204 | — | — | — |
@@ -265,6 +271,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32f407ze | ✓ | ✓ | ✓ |
 | stm32f407zg | ✓ | ✓ | ✓ |
 | stm32f411ceu6 | ✓ | ✓ | ✓ |
+| stm32f411re | ✓ | ✓ | ✓ |
 | stm32f446re | ✓ | ✓ | ✓ |
 | stm32f746 | — | — | ✓ |
 | stm32f767 | ✓ | ✓ | ✓ |
