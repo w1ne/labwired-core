@@ -112,7 +112,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | efr32mg26 | open | L2 | 34 | 1513.7 | 2.2 | ≥1× (CI) | [doc](docs/boards/efr32mg26.md) |
 | atmega328p | open | L1 | 7 | 1044.8 | 7.6 | ≥1× (CI) | — |
 | atmega328pb | open | L1 | 8 | 1026.4 | 7.6 | ≥1× (CI) | — |
-| atmega2560 | open | L1 | 15 | — | — | ≥1× (CI) | — |
+| atmega2560 | open | L1 | 18 | — | — | ≥1× (CI) | — |
 | atmega2561 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega2561.md) |
 | atmega4809 | open | L0 | 19 | — | — | ≥1× (CI) | — |
 | atmega32u4 | open | L0 | 8 | 1020.0 | 7.7 | ≥1× (CI) | — |

@@ -141,10 +141,16 @@ fn millis_tracks_simulated_time() {
         let (line, cycles) = rig.next_k_line();
         let ms = field(&line, "ms=");
         // millis() never runs ahead of the simulated clock, and lags it by at
-        // most a couple of Timer0 overflows (1.024 ms each) plus print time.
+        // most a couple of Timer0 overflows (1.024 ms each) plus the time the
+        // line takes on the wire: the host has it once its last stop bit is
+        // out, 10 bits per character at 9600 baud (the "\r\n" included).
         let sim_ms = cycles * 1000 / CPU_HZ;
+        let wire_ms = (line.len() as u64 + 2) * 10 * 1000 / 9600;
         assert!(ms <= sim_ms + 1, "ms={ms} ahead of sim {sim_ms} ms");
-        assert!(sim_ms - ms <= 30, "ms={ms} lags sim {sim_ms} ms");
+        assert!(
+            sim_ms - ms <= wire_ms + 5,
+            "ms={ms} lags sim {sim_ms} ms ({wire_ms} ms on the wire)"
+        );
         if let Some((pms, pcycles)) = prev {
             // `ms` is read after three analogRead() calls, about 0.3 ms of
             // ADC conversion time (13 ADC clocks at 125 kHz each, the first
