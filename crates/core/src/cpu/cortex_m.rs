@@ -273,6 +273,10 @@ pub struct CortexM {
     /// Loop-head detection and the last proven fixed-point poll loop
     /// (`poll_loop.rs`).
     poll: poll_loop::PollDetector,
+    /// `(head, device accesses)` the last time the batch loop met a poll-loop
+    /// anchor at `head`, for the four most recent heads (a loop with calls
+    /// in it has several). See [`Self::anchor_may_skip`].
+    anchor_device_marks: [(u32, u64); 4],
     // Shape-only rejection memo, one slot per decode-cache slot. Each half
     // holds `pc | 1` of a PC whose decoded neighbourhood was rejected:
     // `.0` by generic block discovery, `.1` by every fixed-pattern runner
@@ -399,6 +403,7 @@ impl Default for CortexM {
             decode_cache: Box::new([None; 4096]),
             decode_generation: 1,
             poll: poll_loop::PollDetector::default(),
+            anchor_device_marks: [(u32::MAX, 0); 4],
             t16_discovery_misses: Box::new([(0, 0); 4096]),
             t16_pattern_admitted: false,
             t16_fast_block: None,
@@ -2911,6 +2916,37 @@ impl CortexM {
     }
 }
 
+impl CortexM {
+    /// Whether ending the batch at the poll-loop anchor just reached can pay
+    /// off. The anchor exists so the machine can prove the loop a fixed point
+    /// and skip it ([`Cpu::poll_loop_skip_budget`]); that proof refuses any
+    /// iteration that touches a device. When the core's previous arrival at
+    /// this same head is known and a device access happened since, the
+    /// iteration just run touched a device: the batch runs on instead of
+    /// handing the machine a window boundary and a proof that would fail. The
+    /// anchor stays set and is refused at the next batch start, like any
+    /// anchor the machine did not take, so the detector still backs off.
+    ///
+    /// Only the cost of a refused proof is saved. No clause that guards
+    /// observable behaviour depends on this break: a skip the machine does
+    /// take is exact by construction, and every deadline still ends the
+    /// window through the plan.
+    #[inline]
+    fn anchor_may_skip(&mut self, bus: &SystemBus) -> bool {
+        let accesses = bus.access_counts().2;
+        let pc = self.pc;
+        let marks = &mut self.anchor_device_marks;
+        if let Some(slot) = marks.iter_mut().find(|(head, _)| *head == pc) {
+            let quiet = slot.1 == accesses;
+            slot.1 = accesses;
+            return quiet;
+        }
+        marks.rotate_left(1);
+        marks[3] = (pc, accesses);
+        true
+    }
+}
+
 impl Cpu for CortexM {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
@@ -3413,11 +3449,13 @@ impl Cpu for CortexM {
                 }
                 // Taken branches no longer break the batch — the run loop bounds
                 // it to the next peripheral tick, so bouncing back through
-                // `Machine::run` at every branch was pure overhead. Only WFI
-                // sleep leaves the batch, so the machine can fast-forward the
-                // idle window.
+                // `Machine::run` at every branch was pure overhead. WFI sleep
+                // leaves the batch, so the machine can fast-forward the idle
+                // window, and so does a poll-loop anchor, so the machine can
+                // try to prove and skip the loop.
                 if config.idle_fast_forward_enabled
-                    && (self.idle_fast_forward_budget(sysbus).is_some() || self.poll_anchor_ready())
+                    && (self.idle_fast_forward_budget(sysbus).is_some()
+                        || (self.poll_anchor_ready() && self.anchor_may_skip(sysbus)))
                 {
                     break;
                 }

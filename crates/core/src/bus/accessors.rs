@@ -693,7 +693,7 @@ impl crate::Bus for SystemBus {
                 }
                 let p = &self.peripherals[idx];
                 let off = mmio_addr - p.base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = p.dev.read(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -710,7 +710,7 @@ impl crate::Bus for SystemBus {
                 }
                 let p = &self.peripherals[idx];
                 let off = mmio_addr - p.base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = p.dev.read(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1028,7 +1028,7 @@ impl crate::Bus for SystemBus {
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u16(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1041,7 +1041,7 @@ impl crate::Bus for SystemBus {
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u16(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1159,7 +1159,7 @@ impl crate::Bus for SystemBus {
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u32(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1172,7 +1172,7 @@ impl crate::Bus for SystemBus {
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u32(off);
                 self.reconcile_level_after_read(idx);
                 return r;
