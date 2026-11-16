@@ -13,5 +13,9 @@ pub fn configure_riscv(bus: &mut SystemBus) -> RiscV {
     // profile, an ESP32 part keeps the C3's vendor CSR set, and a descriptor
     // without a `core:` keeps the historical C3 default. Every caller — CLI,
     // browser, debugger, tests — shares this one resolution.
-    RiscV::new_for(bus.riscv_profile)
+    let mut cpu = RiscV::new_for(bus.riscv_profile);
+    if let Some(clint) = bus.riscv_clint {
+        cpu.attach_clint(clint);
+    }
+    cpu
 }

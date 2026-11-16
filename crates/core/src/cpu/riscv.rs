@@ -68,6 +68,77 @@ impl RiscVCoreProfile {
     }
 }
 
+const CLINT_SIZE: u32 = 0x1_0000;
+const CLINT_MTIMECMP: u32 = 0x4000;
+const CLINT_MTIME: u32 = 0xBFF8;
+
+/// Memory-mapped core-local interruptor of a single-hart RV32 chip, in the
+/// SiFive `clint0` layout that RISC-V `riscv,machine-timer` drivers use:
+/// `msip` at +0x0, `mtimecmp` at +0x4000, `mtime` at +0xBFF8. `msip` drives
+/// `mip.MSIP`, `mtime >= mtimecmp` drives `mip.MTIP`. The window is decoded by
+/// the core, as on the RV64 core, so it never reaches the bus.
+///
+/// `mtime` counts the chip's timer reference, not CPU clocks: it is derived
+/// from the core's retired-cycle count as `cycles * mtime_hz / cpu_hz`, so a
+/// reference that does not divide the CPU clock (FE310: 32 768 Hz from
+/// 62 MHz) keeps its exact long-run rate. A firmware write to `mtime` moves
+/// `mtime_offset`.
+///
+/// Not modelled: AMO and LR/SC accesses to the window (they reach the bus),
+/// other harts' registers (read zero, writes dropped), and `msip` /
+/// `mtime_offset` in CPU snapshots (`mtimecmp` is saved).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rv32Clint {
+    pub base: u32,
+    pub mtime_hz: u64,
+    pub cpu_hz: u64,
+    pub msip: bool,
+    pub mtime_offset: u64,
+}
+
+impl Rv32Clint {
+    pub fn new(base: u32, mtime_hz: u64, cpu_hz: u64) -> Self {
+        Self {
+            base,
+            mtime_hz: mtime_hz.max(1),
+            cpu_hz: cpu_hz.max(1),
+            msip: false,
+            mtime_offset: 0,
+        }
+    }
+
+    /// The CLINT a chip descriptor's core complex carries, if any.
+    ///
+    /// Keyed by chip name, as [`crate::cpu::riscv64::Rv64Params`] is: the
+    /// block belongs to the core complex, not to a board.
+    pub fn for_chip(chip: &labwired_config::ChipDescriptor) -> Option<Self> {
+        let name = chip.name.to_ascii_lowercase();
+        if name == "sifive-fe310" && chip.cpu_hz != 0 {
+            // FE310-G002: CLINT at 0x0200_0000 (Zephyr `riscv32-fe310.dtsi`
+            // `clint@2000000`, Renode `sifive-fe310.repl`). `mtime` runs from
+            // the 32 768 Hz lfclk (Zephyr `soc/sifive/sifive_freedom/fe300`
+            // Kconfig.defconfig). Renode clocks it at 62 MHz instead.
+            return Some(Self::new(0x0200_0000, 32_768, chip.cpu_hz));
+        }
+        None
+    }
+
+    fn mtime(&self, cycles: u64) -> u64 {
+        let ticks = u128::from(cycles) * u128::from(self.mtime_hz) / u128::from(self.cpu_hz);
+        (ticks as u64).wrapping_add(self.mtime_offset)
+    }
+
+    /// First retired-cycle count at which `mtime >= cmp`.
+    fn first_cycle_at(&self, cmp: u64) -> u64 {
+        let Some(ticks) = cmp.checked_sub(self.mtime_offset) else {
+            return 0;
+        };
+        let cycles =
+            (u128::from(ticks) * u128::from(self.cpu_hz)).div_ceil(u128::from(self.mtime_hz));
+        u64::try_from(cycles).unwrap_or(u64::MAX)
+    }
+}
+
 /// Architectural integer-register operands used by an instruction. The
 /// implicit stack-pointer operands in the compressed formats are x2, which is
 /// legal in RV32E; compressed prime-register formats are already decoded to
@@ -170,9 +241,13 @@ pub struct RiscV {
     pub mcause: u32,
     pub mtval: u32,
 
-    // CLINT-like internal state (minimal)
+    // CLINT-like internal state (minimal). `mtime` is the retired-cycle
+    // count; with a memory-mapped [`Rv32Clint`] `mtimecmp` compares against
+    // the CLINT's own `mtime` instead.
     pub mtime: u64,
     pub mtimecmp: u64,
+    /// Memory-mapped CLINT of a chip that declares one ([`Rv32Clint::for_chip`]).
+    pub clint: Option<Rv32Clint>,
 
     /// Active LR/SC reservation address. `None` means no outstanding
     /// reservation; the next SC.W to any address will fail. On a single
@@ -263,6 +338,7 @@ impl RiscV {
             mtval: 0,
             mtime: 0,
             mtimecmp: 0,
+            clint: None,
             reservation: None,
             triggers: trigger::TriggerModule::default(),
             waiting_for_interrupt: false,
@@ -462,12 +538,134 @@ impl RiscV {
         Self::new_for(RiscVCoreProfile::Esp32C3)
     }
 
+    /// Map a CLINT at `clint.base`. `mtimecmp` resets to all-ones, which keeps
+    /// MTIP low until firmware arms it, as SiFive-derived drivers assume.
+    pub fn attach_clint(&mut self, clint: Rv32Clint) {
+        self.clint = Some(clint);
+        self.mtimecmp = u64::MAX;
+        self.refresh_timer_lines();
+    }
+
     fn update_mtime_after_elapsed_cycles(&mut self, cycles: u64) {
         self.mtime = self.mtime.wrapping_add(cycles);
-        if self.mtime >= self.mtimecmp {
+        self.refresh_timer_lines();
+    }
+
+    fn refresh_timer_lines(&mut self) {
+        let mtip = match &self.clint {
+            None => self.mtime >= self.mtimecmp,
+            Some(c) => {
+                if c.msip {
+                    self.mip |= 1 << 3; // MSIP
+                } else {
+                    self.mip &= !(1 << 3);
+                }
+                c.mtime(self.mtime) >= self.mtimecmp
+            }
+        };
+        if mtip {
             self.mip |= 1 << 7; // MTIP
         } else {
             self.mip &= !(1 << 7);
+        }
+    }
+
+    /// Retired cycles until MTIP rises: `None` when it is already pending,
+    /// `Some(u64::MAX)` when `mtimecmp` is disarmed.
+    fn cycles_until_mtip(&self) -> Option<u64> {
+        if self.mtimecmp == u64::MAX {
+            return Some(u64::MAX);
+        }
+        let target = match &self.clint {
+            None => self.mtimecmp,
+            Some(c) => c.first_cycle_at(self.mtimecmp),
+        };
+        target.checked_sub(self.mtime).filter(|n| *n != 0)
+    }
+
+    #[inline]
+    fn clint_offset(&self, addr: u32) -> Option<u32> {
+        let c = self.clint.as_ref()?;
+        let off = addr.wrapping_sub(c.base);
+        (off < CLINT_SIZE).then_some(off)
+    }
+
+    /// The 64-bit CLINT register containing `off` and its offset.
+    fn clint_reg(&self, off: u32) -> Option<(u32, u64)> {
+        let c = self.clint.as_ref()?;
+        if off < 4 {
+            Some((0, u64::from(c.msip)))
+        } else if (CLINT_MTIMECMP..CLINT_MTIMECMP + 8).contains(&off) {
+            Some((CLINT_MTIMECMP, self.mtimecmp))
+        } else if (CLINT_MTIME..CLINT_MTIME + 8).contains(&off) {
+            Some((CLINT_MTIME, c.mtime(self.mtime)))
+        } else {
+            None
+        }
+    }
+
+    fn clint_read(&self, off: u32, size: u32) -> u32 {
+        let Some((reg_off, value)) = self.clint_reg(off) else {
+            return 0;
+        };
+        let v = (value >> ((off - reg_off) * 8)) as u32;
+        if size >= 4 {
+            v
+        } else {
+            v & ((1u32 << (size * 8)) - 1)
+        }
+    }
+
+    fn clint_write(&mut self, off: u32, size: u32, value: u32) {
+        let Some((reg_off, old)) = self.clint_reg(off) else {
+            return;
+        };
+        let shift = (off - reg_off) * 8;
+        let mask = if size >= 4 {
+            u64::from(u32::MAX) << shift
+        } else {
+            u64::from((1u32 << (size * 8)) - 1) << shift
+        };
+        let new = (old & !mask) | ((u64::from(value) << shift) & mask);
+        let cycles = self.mtime;
+        let Some(c) = self.clint.as_mut() else {
+            return;
+        };
+        match reg_off {
+            0 => c.msip = new & 1 != 0,
+            CLINT_MTIMECMP => self.mtimecmp = new,
+            _ => {
+                let base = c.mtime(cycles).wrapping_sub(c.mtime_offset);
+                c.mtime_offset = new.wrapping_sub(base);
+            }
+        }
+        self.refresh_timer_lines();
+    }
+
+    /// Data load of `size` bytes, decoding the CLINT window before the bus.
+    #[inline]
+    fn load(&self, bus: &mut dyn Bus, addr: u32, size: u32) -> SimResult<u32> {
+        if let Some(off) = self.clint_offset(addr) {
+            return Ok(self.clint_read(off, size));
+        }
+        Ok(match size {
+            1 => u32::from(bus.read_u8(u64::from(addr))?),
+            2 => u32::from(bus.read_u16(u64::from(addr))?),
+            _ => bus.read_u32(u64::from(addr))?,
+        })
+    }
+
+    /// Data store of `size` bytes, decoding the CLINT window before the bus.
+    #[inline]
+    fn store(&mut self, bus: &mut dyn Bus, addr: u32, size: u32, value: u32) -> SimResult<()> {
+        if let Some(off) = self.clint_offset(addr) {
+            self.clint_write(off, size, value);
+            return Ok(());
+        }
+        match size {
+            1 => bus.write_u8(u64::from(addr), value as u8),
+            2 => bus.write_u16(u64::from(addr), value as u16),
+            _ => bus.write_u32(u64::from(addr), value),
         }
     }
 
@@ -538,6 +736,9 @@ impl RiscV {
         const LOOP_INSNS: u32 = 4;
         if budget < LOOP_INSNS
             // An armed trigger must see every access and fetch individually.
+            // CLINT accesses are decoded by the core, not by the bus reads
+            // and writes these windows replay.
+            || self.clint.is_some()
             || self.triggers.armed()
             || self.waiting_for_interrupt
             || (self.mstatus & (1 << 3)) != 0
@@ -664,6 +865,9 @@ impl RiscV {
     fn try_store_spin_window(&mut self, bus: &mut dyn Bus, budget: u32) -> u32 {
         if budget < 6
             // An armed trigger must see every access and fetch individually.
+            // CLINT accesses are decoded by the core, not by the bus reads
+            // and writes these windows replay.
+            || self.clint.is_some()
             || self.triggers.armed()
             || self.waiting_for_interrupt
             || (self.mstatus & (1 << 3)) != 0
@@ -1011,7 +1215,9 @@ impl RiscV {
     /// this checks the two rails that do NOT clamp the batch: per-instruction
     /// observers and push-mode logic taps.
     fn jit_gate_allows(&self, bus: &dyn Bus, observers: &[Arc<dyn SimulationObserver>]) -> bool {
-        if !observers.is_empty() {
+        // Compiled blocks access memory through the bus; they would miss the
+        // core-decoded CLINT window.
+        if !observers.is_empty() || self.clint.is_some() {
             return false;
         }
         if bus.logic_tap().is_some_and(|t| t.push_armed()) {
@@ -1073,9 +1279,7 @@ impl RiscV {
         }
         // Internal timer edge inside the block's mtime span.
         let timer_unmasked = (self.mie & (1 << 7)) != 0;
-        timer_unmasked
-            && self.mtime < self.mtimecmp
-            && self.mtimecmp <= self.mtime.wrapping_add(n as u64)
+        timer_unmasked && self.cycles_until_mtip().is_some_and(|c| c <= u64::from(n))
     }
 
     /// Drive one batch through the JIT engine, returning the true retired
@@ -1358,47 +1562,47 @@ impl Cpu for RiscV {
             }
             Instruction::Lb { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u8(addr as u64)? as i8;
+                let val = self.load(bus, addr, 1)? as u8 as i8;
                 self.write_reg(rd, val as i32 as u32);
             }
             Instruction::Lh { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u16(addr as u64)? as i16;
+                let val = self.load(bus, addr, 2)? as u16 as i16;
                 self.write_reg(rd, val as i32 as u32);
             }
             Instruction::Lw { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u32(addr as u64)?;
+                let val = self.load(bus, addr, 4)?;
                 self.write_reg(rd, val);
             }
             Instruction::Lbu { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u8(addr as u64)?;
-                self.write_reg(rd, val as u32);
+                let val = self.load(bus, addr, 1)?;
+                self.write_reg(rd, val);
             }
             Instruction::Lhu { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
-                let val = bus.read_u16(addr as u64)?;
-                self.write_reg(rd, val as u32);
+                let val = self.load(bus, addr, 2)?;
+                self.write_reg(rd, val);
             }
             Instruction::Sb { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2) as u8;
-                bus.write_u8(addr as u64, val)?;
+                self.store(bus, addr, 1, u32::from(val))?;
                 self.invalidate_fetch_if_store_overlaps(addr, 1);
                 self.reservation = None;
             }
             Instruction::Sh { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2) as u16;
-                bus.write_u16(addr as u64, val)?;
+                self.store(bus, addr, 2, u32::from(val))?;
                 self.invalidate_fetch_if_store_overlaps(addr, 2);
                 self.reservation = None;
             }
             Instruction::Sw { rs1, rs2, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm as u32);
                 let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
+                self.store(bus, addr, 4, val)?;
                 self.invalidate_fetch_if_store_overlaps(addr, 4);
                 self.reservation = None;
             }
@@ -1690,27 +1894,27 @@ impl Cpu for RiscV {
             }
             Instruction::CLw { rd, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm);
-                let val = bus.read_u32(addr as u64)?;
+                let val = self.load(bus, addr, 4)?;
                 self.write_reg(rd, val);
             }
             Instruction::CSw { rs2, rs1, imm } => {
                 let addr = self.read_reg(rs1).wrapping_add(imm);
                 let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
+                self.store(bus, addr, 4, val)?;
                 self.invalidate_fetch_if_store_overlaps(addr, 4);
                 self.reservation = None;
             }
             Instruction::CLwsp { rd, imm } => {
                 let sp = self.read_reg(2);
                 let addr = sp.wrapping_add(imm);
-                let val = bus.read_u32(addr as u64)?;
+                let val = self.load(bus, addr, 4)?;
                 self.write_reg(rd, val);
             }
             Instruction::CSwsp { rs2, imm } => {
                 let sp = self.read_reg(2);
                 let addr = sp.wrapping_add(imm);
                 let val = self.read_reg(rs2);
-                bus.write_u32(addr as u64, val)?;
+                self.store(bus, addr, 4, val)?;
                 self.invalidate_fetch_if_store_overlaps(addr, 4);
                 self.reservation = None;
             }
@@ -2097,13 +2301,11 @@ impl Cpu for RiscV {
         if ((self.mip & self.mie) | bus.external_irq_lines()) != 0 {
             return None;
         }
-        if self.mtimecmp == u64::MAX {
-            return Some(u64::MAX);
+        match self.cycles_until_mtip()? {
+            u64::MAX => Some(u64::MAX),
+            0 | 1 => None,
+            n => Some(n - 1),
         }
-        if self.mtime + 1 >= self.mtimecmp {
-            return None;
-        }
-        Some(self.mtimecmp - self.mtime - 1)
     }
 
     fn fast_forward_idle_cycles(&mut self, cycles: u64) {

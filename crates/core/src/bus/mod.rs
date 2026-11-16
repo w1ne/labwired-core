@@ -457,6 +457,11 @@ pub struct SystemBus {
     /// browser, debugger, tests — therefore gets the chip's own profile
     /// instead of a hardcoded one.
     pub riscv_profile: crate::cpu::RiscVCoreProfile,
+    /// Memory-mapped CLINT of the chip's RV32 core complex, resolved at
+    /// config-build ([`crate::cpu::riscv::Rv32Clint::for_chip`]) and attached
+    /// by [`crate::system::riscv::configure_riscv`]. `None` keeps the core's
+    /// internal, unmapped timer.
+    pub riscv_clint: Option<crate::cpu::riscv::Rv32Clint>,
     /// Stable allocation-unique identity for native instruction translators
     /// that execute directly against this bus without an ARMv7 fabric.
     pub(crate) native_code_identity: u64,

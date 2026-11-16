@@ -4,13 +4,13 @@
     "type": "risc_v",
     "registers": [
       0,
-      536881604,
+      536887392,
       2147499968,
       2147485696,
       0,
       268513280,
       61,
-      2147483648,
+      0,
       524288,
       268513280,
       268513280,
@@ -23,10 +23,10 @@
       1,
       268513280,
       268513280,
-      6272,
-      0,
-      536875308,
-      536875308,
+      536883612,
+      268513280,
+      1,
+      268513280,
       0,
       0,
       0,
@@ -36,17 +36,17 @@
       0,
       0
     ],
-    "pc": 536881624,
+    "pc": 536887412,
     "mstatus": 6272,
     "mie": 0,
-    "mip": 128,
+    "mip": 0,
     "mtvec": 536871668,
     "mscratch": 0,
-    "mepc": 536877448,
-    "mcause": 11,
+    "mepc": 536883612,
+    "mcause": 2147483651,
     "mtval": 0,
-    "mtime": 99994,
-    "mtimecmp": 0,
+    "mtime": 399992,
+    "mtimecmp": 18446744073709551615,
     "triggers": {
       "tselect": 0,
       "tdata1": [
@@ -72,23 +72,23 @@
       "tcontrol": 0
     }
   },
-  "steps_executed": 100000,
-  "cycles": 399976,
-  "instructions": 100000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 100000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 100000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "ca4821a63632a53506d1f847e851944b787631541d10d4486dcd03c159dd0ede",
+  "firmware_hash": "b88ae8f40908179eef521a8d98f72e1b216a19d316c60e6c476b975cbdadc570",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-sifive-fe310-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sifive-fe310.yaml",

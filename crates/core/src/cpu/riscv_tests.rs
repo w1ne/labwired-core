@@ -1870,3 +1870,107 @@ fn riscv_profile_is_selected_from_the_chip_descriptor() {
         "an undeclared core keeps the historical default"
     );
 }
+
+const FE310_CLINT: u32 = 0x0200_0000;
+const FE310_CPU_HZ: u64 = 62_000_000;
+
+fn fe310_clint_cpu() -> RiscV {
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32);
+    cpu.attach_clint(Rv32Clint::new(FE310_CLINT, 32_768, FE310_CPU_HZ));
+    cpu
+}
+
+#[test]
+fn rv32_clint_attach_disarms_mtimecmp() {
+    let cpu = fe310_clint_cpu();
+    assert_eq!(cpu.mtimecmp, u64::MAX);
+    assert_eq!(cpu.mip & (1 << 7), 0, "MTIP stays low until armed");
+    assert_eq!(cpu.clint_read(0x4000, 4), u32::MAX);
+    assert_eq!(cpu.clint_read(0x4004, 4), u32::MAX);
+}
+
+#[test]
+fn rv32_clint_mtime_counts_the_reference_clock() {
+    let mut cpu = fe310_clint_cpu();
+    cpu.update_mtime_after_elapsed_cycles(FE310_CPU_HZ);
+    assert_eq!(cpu.clint_read(0xBFF8, 4), 32_768, "one second of lfclk");
+    assert_eq!(cpu.clint_read(0xBFFC, 4), 0);
+    assert_eq!(cpu.clint_read(0xBFF9, 1), 0x80, "byte lane of mtime");
+    // The `cycle` CSR keeps counting CPU clocks.
+    assert_eq!(cpu.read_csr(0xC00), Some(FE310_CPU_HZ as u32));
+}
+
+#[test]
+fn rv32_clint_mtimecmp_raises_mtip_at_the_exact_cycle() {
+    let mut bus = SystemBus::new();
+    let mut cpu = fe310_clint_cpu();
+    cpu.store(&mut bus, FE310_CLINT + 0x4004, 4, 0).unwrap();
+    cpu.store(&mut bus, FE310_CLINT + 0x4000, 4, 10).unwrap();
+    assert_eq!(cpu.mtimecmp, 10);
+    // mtime reaches 10 at ceil(10 * 62e6 / 32768) = 18921 CPU clocks.
+    assert_eq!(cpu.cycles_until_mtip(), Some(18_921));
+    cpu.update_mtime_after_elapsed_cycles(18_920);
+    assert_eq!(cpu.mip & (1 << 7), 0);
+    assert_eq!(cpu.load(&mut bus, FE310_CLINT + 0xBFF8, 4).unwrap(), 9);
+    cpu.update_mtime_after_elapsed_cycles(1);
+    assert_ne!(cpu.mip & (1 << 7), 0, "MTIP at mtime == mtimecmp");
+    assert_eq!(cpu.cycles_until_mtip(), None);
+    // Re-arming in the future drops MTIP at the store.
+    cpu.store(&mut bus, FE310_CLINT + 0x4000, 4, 20).unwrap();
+    assert_eq!(cpu.mip & (1 << 7), 0);
+}
+
+#[test]
+fn rv32_clint_mtime_write_moves_the_count() {
+    let mut bus = SystemBus::new();
+    let mut cpu = fe310_clint_cpu();
+    cpu.update_mtime_after_elapsed_cycles(FE310_CPU_HZ);
+    cpu.store(&mut bus, FE310_CLINT + 0xBFFC, 4, 1).unwrap();
+    cpu.store(&mut bus, FE310_CLINT + 0xBFF8, 2, 0x0005)
+        .unwrap();
+    assert_eq!(
+        cpu.load(&mut bus, FE310_CLINT + 0xBFF8, 4).unwrap(),
+        0x0000_0005
+    );
+    assert_eq!(cpu.load(&mut bus, FE310_CLINT + 0xBFFC, 4).unwrap(), 1);
+    cpu.update_mtime_after_elapsed_cycles(FE310_CPU_HZ);
+    assert_eq!(cpu.load(&mut bus, FE310_CLINT + 0xBFF8, 4).unwrap(), 0x8005);
+}
+
+#[test]
+fn rv32_clint_msip_store_takes_the_software_interrupt() {
+    let mut bus = SystemBus::new();
+    // sw x5, 0(x6)
+    bus.flash.data = 0x0053_2023u32.to_le_bytes().to_vec();
+    let mut cpu = fe310_clint_cpu();
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    cpu.mstatus = 1 << 3;
+    cpu.mie = 1 << 3;
+    cpu.write_reg(5, 1);
+    cpu.write_reg(6, FE310_CLINT);
+    let mut machine = Machine::new(cpu, bus);
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.mcause, 0x8000_0003);
+    assert_eq!(machine.cpu.mepc, 4);
+    assert_eq!(machine.cpu.pc, 0x100);
+    assert_eq!(machine.cpu.clint_read(0, 4), 1);
+    let mut bus = SystemBus::new();
+    machine.cpu.store(&mut bus, FE310_CLINT, 4, 0).unwrap();
+    assert_eq!(machine.cpu.mip & (1 << 3), 0, "MSIP clears with msip");
+}
+
+#[test]
+fn rv32_clint_is_resolved_for_fe310_only() {
+    let mut chip: labwired_config::ChipDescriptor = serde_yaml::from_str(
+        "name: sifive-fe310\narch: riscv\ncore: rv32imac\ncpu_hz: 62000000\nflash: { base: 0x20000000, size: 4MiB }\nram: { base: 0x80000000, size: 16KiB }\nperipherals: []\n",
+    )
+    .unwrap();
+    let clint = Rv32Clint::for_chip(&chip).expect("FE310 has a CLINT");
+    assert_eq!(
+        (clint.base, clint.mtime_hz, clint.cpu_hz),
+        (FE310_CLINT, 32_768, FE310_CPU_HZ)
+    );
+    chip.name = "litex_vexriscv".into();
+    assert_eq!(Rv32Clint::for_chip(&chip), None);
+}
