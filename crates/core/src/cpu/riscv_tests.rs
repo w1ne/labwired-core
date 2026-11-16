@@ -2018,6 +2018,38 @@ fn rv32_plic_is_resolved_for_fe310_only() {
 }
 
 #[test]
+fn rv32_miv_clint_and_fixed_priority_plic() {
+    let chip: labwired_config::ChipDescriptor = serde_yaml::from_str(
+        "name: miv_rv32\narch: riscv\ncore: rv32imaf_zicsr_zifencei\ncpu_hz: 66000000\nflash: { base: 0x60000000, size: 256KiB }\nram: { base: 0x80000000, size: 64MiB }\nperipherals: []\n",
+    )
+    .unwrap();
+    let clint = Rv32Clint::for_chip(&chip).expect("Mi-V has a CLINT");
+    assert_eq!(
+        (clint.base, clint.mtime_hz, clint.cpu_hz),
+        (0x4400_0000, 66_000_000, 66_000_000)
+    );
+    let params = Rv32Clint::plic_for_chip(&chip).expect("Mi-V has a PLIC");
+    assert_eq!(
+        (params.base, params.num_sources, params.priority_bits),
+        (0x4000_0000, 32, 0)
+    );
+
+    // No priority write is needed: every source is fixed at priority 1.
+    let mut cpu = fe310_clint_cpu();
+    cpu.attach_plic(params);
+    let mut bus = SystemBus::new();
+    cpu.set_exception_pending(30);
+    assert_eq!(cpu.mip & (1 << 11), 0, "disabled source does not notify");
+    cpu.store(&mut bus, 0x4000_2000, 4, 1 << 30).unwrap();
+    assert_ne!(cpu.mip & (1 << 11), 0, "enabled source notifies");
+    cpu.store(&mut bus, 0x4000_0000 + 4 * 30, 4, 0).unwrap();
+    assert_eq!(cpu.load(&mut bus, 0x4000_0000 + 4 * 30, 4).unwrap(), 1);
+    assert_ne!(cpu.mip & (1 << 11), 0, "priority write is ignored");
+    assert_eq!(cpu.load(&mut bus, 0x4020_0004, 4).unwrap(), 30);
+    assert_eq!(cpu.mip & (1 << 11), 0, "claim drops MEIP");
+}
+
+#[test]
 fn rv32_plic_gates_meip_on_enable_and_priority() {
     let mut cpu = fe310_plic_cpu();
     let mut bus = SystemBus::new();

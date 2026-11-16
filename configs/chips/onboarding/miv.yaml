@@ -1,7 +1,10 @@
 # Bounded profile for the imported Mi-V fragment platform. Renode's
 # platforms/cpus/miv.repl supplies an RV32IMAF CPU, 256 KiB flash, and 64 MiB
-# DDR. This smoke claims only those memory windows and the existing CoreUART;
-# GPIO and timer peripherals from the generated import are omitted.
+# DDR. The smoke claims those memory windows, CoreUART, CLINT, PLIC and the
+# two CoreTimers.
+# The core decodes the miv.repl CLINT (0x44000000, mtime at the 66 MHz CPU
+# clock) and PLIC (0x40000000, sources 1..31, no priority levels) by chip
+# name; CoreTimer0/1 drive PLIC sources 30/31. GPIO is omitted.
 # Source: https://github.com/renode/renode/blob/master/platforms/cpus/miv.repl
 
 name: "miv"
@@ -17,3 +20,13 @@ peripherals:
     type: "miv_coreuart"
     base_address: 0x70001000
     size: "24B"
+  - id: "timer0"
+    type: "miv_coretimer"
+    base_address: 0x70003000
+    size: "28B"
+    irq: 30
+  - id: "timer1"
+    type: "miv_coretimer"
+    base_address: 0x70004000
+    size: "28B"
+    irq: 31

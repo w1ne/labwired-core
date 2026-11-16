@@ -2,9 +2,11 @@
 #
 # The memory map and CPU ISA follow Renode's platforms/cpus/miv.repl:
 # 256 KiB flash at 0x60000000, 64 MiB DDR at 0x80000000, and an
-# rv32imaf_zicsr_zifencei CPU. This measured profile claims only the flash,
-# DDR, CPU and CoreUART path exercised by the smoke; GPIO, timers, CLINT and
-# PLIC are omitted from this run profile.
+# rv32imaf_zicsr_zifencei CPU. This measured profile claims the flash, DDR,
+# CPU, CoreUART, CLINT, PLIC and CoreTimer paths exercised by the smoke.
+# The core decodes the miv.repl CLINT (0x44000000, mtime at the 66 MHz CPU
+# clock) and PLIC (0x40000000, sources 1..31, no priority levels) by chip
+# name; CoreTimer0/1 drive PLIC sources 30/31. GPIO is omitted.
 
 name: "miv_rv32"
 arch: "riscv"
@@ -19,3 +21,13 @@ peripherals:
     type: "miv_coreuart"
     base_address: 0x70001000
     size: "24B"
+  - id: "timer0"
+    type: "miv_coretimer"
+    base_address: 0x70003000
+    size: "28B"
+    irq: 30
+  - id: "timer1"
+    type: "miv_coretimer"
+    base_address: 0x70004000
+    size: "28B"
+    irq: 31

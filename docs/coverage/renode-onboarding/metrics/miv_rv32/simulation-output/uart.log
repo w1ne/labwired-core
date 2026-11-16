@@ -1,3 +1,10 @@
 MIV RV32 SMOKE
 cpu=rv32im uart=coreuart
 mul=00000143
+clint mtimecmp=ffffffffffffffff cpu_clock_rate=1 mtip_low=1 ok
+clint mtip mcause=80000007 count=00000001 armed_low=1 wfi_wake=1 disarmed=1 ok
+clint msip mcause=80000003 count=00000001 mepc_next=1 cleared=1 ok
+clint msip masked pending=1 released=1 traps=00000000 ok
+plic timer0 prio_fixed=1 threshold_fixed=1 raw=1 pending=1 disabled_low=1 meip=1 traps=00000000 ok
+plic timer0 mcause=8000000b count=00000001 claim=0000001e timer_cleared=1 pending_clear=1 reclaim=00000000 meip_low=1 ok
+plic timer1 raw=1 meip=1 claim=0000001f claimed_low=1 reclaim=00000000 traps=00000000 ok

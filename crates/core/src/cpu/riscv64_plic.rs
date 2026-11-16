@@ -29,6 +29,11 @@
 //! IRQ number, which is the PLIC source ID); de-assertion is not seen, so a
 //! level source that drops before the claim stays pending.
 //!
+//! A PLIC with `priority_bits == 0` has no priority levels (Renode
+//! `prioritiesEnabled: false`, as on Microchip Mi-V): every source is
+//! hard-wired to priority 1, and the priority and threshold registers read
+//! 1 and 0 and ignore writes.
+//!
 //! Not modelled: the other harts' contexts as interrupt targets, S-mode
 //! `SEIP`, and PolarFire's per-pin GPIO direct sources (13-50).
 
@@ -39,7 +44,8 @@ pub struct PlicParams {
     /// Source IDs are 1..`num_sources`; ID 0 means "no interrupt".
     pub num_sources: u32,
     pub num_contexts: u32,
-    /// Width of the priority and threshold fields.
+    /// Width of the priority and threshold fields. 0 means no priority
+    /// levels: every source is fixed at priority 1.
     pub priority_bits: u32,
     /// The context whose notification drives this hart's `MEIP`.
     pub context: u32,
@@ -92,7 +98,7 @@ impl Plic {
             num_sources: p.num_sources,
             priority_mask: (1 << p.priority_bits) - 1,
             context: p.context,
-            priority: vec![0; p.num_sources as usize],
+            priority: vec![Self::reset_priority(p.priority_bits); p.num_sources as usize],
             pending: vec![0; words],
             in_service: vec![0; words],
             enable: vec![vec![0; words]; p.num_contexts as usize],
@@ -100,9 +106,16 @@ impl Plic {
         }
     }
 
+    /// Source priority at reset: 0 (never interrupts) where priorities are
+    /// programmable, the hard-wired 1 where they are not.
+    fn reset_priority(priority_bits: u32) -> u32 {
+        u32::from(priority_bits == 0)
+    }
+
     /// Back to the reset state, keeping the geometry.
     pub fn reset(&mut self) {
-        self.priority.fill(0);
+        let prio = u32::from(self.priority_mask == 0);
+        self.priority.fill(prio);
         self.pending.fill(0);
         self.in_service.fill(0);
         self.enable.iter_mut().for_each(|e| e.fill(0));
@@ -225,7 +238,8 @@ impl Plic {
         let off = off & !3;
         if off < PENDING {
             let id = (off / 4) as u32;
-            if self.valid(id) {
+            // A fixed-priority PLIC (mask 0) ignores the write.
+            if self.valid(id) && self.priority_mask != 0 {
                 self.priority[id as usize] = value & self.priority_mask;
             }
             return;
@@ -364,5 +378,34 @@ mod tests {
         p.write_u32(CONTEXT + 2 * CONTEXT_STRIDE + 4, 51);
         p.raise(51);
         assert_eq!(p.read_u32(PENDING + 4), 1 << (51 - 32));
+    }
+
+    #[test]
+    fn fixed_priority_plic_interrupts_without_priority_writes() {
+        // Mi-V geometry: sources 1..31, no priority levels, one context.
+        let mut p = Plic::new(PlicParams {
+            base: 0x4000_0000,
+            num_sources: 32,
+            num_contexts: 1,
+            priority_bits: 0,
+            context: 0,
+        });
+        const CLAIM0: u64 = CONTEXT + 4;
+        assert_eq!(p.read_u32(4 * 30), 1);
+        assert_eq!(p.read_u32(0), 0);
+        p.write_u32(4 * 30, 0);
+        assert_eq!(p.read_u32(4 * 30), 1);
+        p.write_u32(CONTEXT, 1);
+        assert_eq!(p.read_u32(CONTEXT), 0);
+        p.raise(30);
+        assert!(!p.meip());
+        enable(&mut p, 0, 30);
+        assert!(p.meip());
+        assert_eq!(p.read_u32(CLAIM0), 30);
+        assert!(!p.meip());
+        p.write_u32(CLAIM0, 30);
+        p.reset();
+        assert_eq!(p.read_u32(4 * 31), 1);
+        assert_eq!(p.read_u32(4 * 32), 0); // past the last source
     }
 }

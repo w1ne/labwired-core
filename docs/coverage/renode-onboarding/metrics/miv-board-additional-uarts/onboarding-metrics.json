@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/miv-board-additional-uarts-smoke.yaml",
   "system": "configs/systems/onboarding/miv-board-additional-uarts.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T14:48:55Z",
-  "finished_at_utc": "2026-11-05T14:48:56Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1018,
+  "started_at_utc": "2026-11-16T03:02:56Z",
+  "finished_at_utc": "2026-11-16T03:02:58Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2069,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.281,
-    "build_firmware": 0.439,
-    "run_smoke": 0.288
+    "build_cli": 0.377,
+    "build_firmware": 0.876,
+    "run_smoke": 0.769
   },
   "stages_ms": {
-    "build_cli": 281,
-    "build_firmware": 439,
-    "run_smoke": 288
+    "build_cli": 377,
+    "build_firmware": 876,
+    "run_smoke": 769
   }
 }

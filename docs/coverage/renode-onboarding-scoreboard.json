@@ -11,10 +11,10 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1546,
-    "pass_claimed_peripherals_median": 3,
-    "median_elapsed_ms": 1499,
-    "median_elapsed_seconds": 1.499,
+    "pass_claimed_peripherals_total": 1554,
+    "pass_claimed_peripherals_median": 4,
+    "median_elapsed_ms": 1698,
+    "median_elapsed_seconds": 1.698,
     "threshold_seconds": 3600,
     "threshold_met": 226,
     "descriptors_present": 245,
@@ -4791,28 +4791,28 @@
       "script": "examples/renode-onboarding/miv-smoke.yaml",
       "system": "configs/systems/onboarding/miv.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:48:57Z",
-      "finished_at_utc": "2026-11-05T14:48:58Z",
-      "elapsed_seconds": 1,
-      "elapsed_ms": 804,
+      "started_at_utc": "2026-11-16T03:02:45Z",
+      "finished_at_utc": "2026-11-16T03:02:46Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1944,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.304,
-        "build_firmware": 0.182,
-        "run_smoke": 0.307
+        "build_cli": 0.529,
+        "build_firmware": 0.367,
+        "run_smoke": 1.004
       },
       "stages_ms": {
-        "build_cli": 304,
-        "build_firmware": 182,
-        "run_smoke": 307
+        "build_cli": 529,
+        "build_firmware": 367,
+        "run_smoke": 1004
       },
       "_artifact_path": "miv",
       "zero_answering_windows": [],
-      "claimed_peripherals": 1,
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -4837,28 +4837,28 @@
       "script": "examples/renode-onboarding/miv-board-smoke.yaml",
       "system": "configs/systems/onboarding/miv-board.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:48:56Z",
-      "finished_at_utc": "2026-11-05T14:48:57Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1083,
+      "started_at_utc": "2026-11-16T03:02:50Z",
+      "finished_at_utc": "2026-11-16T03:02:54Z",
+      "elapsed_seconds": 5,
+      "elapsed_ms": 4357,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.297,
-        "build_firmware": 0.464,
-        "run_smoke": 0.312
+        "build_cli": 1.711,
+        "build_firmware": 0.879,
+        "run_smoke": 1.665
       },
       "stages_ms": {
-        "build_cli": 297,
-        "build_firmware": 464,
-        "run_smoke": 312
+        "build_cli": 1711,
+        "build_firmware": 879,
+        "run_smoke": 1665
       },
       "_artifact_path": "miv-board",
       "zero_answering_windows": [],
-      "claimed_peripherals": 1,
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",
@@ -4883,30 +4883,31 @@
       "script": "examples/renode-onboarding/miv-board-additional-uarts-smoke.yaml",
       "system": "configs/systems/onboarding/miv-board-additional-uarts.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:48:55Z",
-      "finished_at_utc": "2026-11-05T14:48:56Z",
-      "elapsed_seconds": 2,
-      "elapsed_ms": 1018,
+      "started_at_utc": "2026-11-16T03:02:56Z",
+      "finished_at_utc": "2026-11-16T03:02:58Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2069,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.281,
-        "build_firmware": 0.439,
-        "run_smoke": 0.288
+        "build_cli": 0.377,
+        "build_firmware": 0.876,
+        "run_smoke": 0.769
       },
       "stages_ms": {
-        "build_cli": 281,
-        "build_firmware": 439,
-        "run_smoke": 288
+        "build_cli": 377,
+        "build_firmware": 876,
+        "run_smoke": 769
       },
       "_artifact_path": "miv-board-additional-uarts",
       "zero_answering_windows": [],
-      "claimed_peripherals": 3,
+      "claimed_peripherals": 5,
       "smoke_assertion_kinds": [
         "uart_contains",
+        "uart_ordered",
         "expected_stop_reason"
       ],
       "smoke_depth": "observable"
@@ -4928,28 +4929,28 @@
       "script": "examples/renode-onboarding/miv_rv32-smoke.yaml",
       "system": "configs/systems/onboarding/miv_rv32.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:48:58Z",
-      "finished_at_utc": "2026-11-05T14:48:59Z",
-      "elapsed_seconds": 1,
-      "elapsed_ms": 758,
+      "started_at_utc": "2026-11-16T03:02:41Z",
+      "finished_at_utc": "2026-11-16T03:02:42Z",
+      "elapsed_seconds": 2,
+      "elapsed_ms": 1712,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.3,
-        "build_firmware": 0.166,
-        "run_smoke": 0.281
+        "build_cli": 0.744,
+        "build_firmware": 0.32,
+        "run_smoke": 0.588
       },
       "stages_ms": {
-        "build_cli": 300,
-        "build_firmware": 166,
-        "run_smoke": 281
+        "build_cli": 744,
+        "build_firmware": 320,
+        "run_smoke": 588
       },
       "_artifact_path": "miv_rv32",
       "zero_answering_windows": [],
-      "claimed_peripherals": 1,
+      "claimed_peripherals": 3,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",

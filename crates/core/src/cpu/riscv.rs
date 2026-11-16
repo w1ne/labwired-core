@@ -73,6 +73,15 @@ const CLINT_SIZE: u32 = 0x1_0000;
 const CLINT_MTIMECMP: u32 = 0x4000;
 const CLINT_MTIME: u32 = 0xBFF8;
 
+/// Imported Renode systems built on `platforms/cpus/miv.repl` (Microchip
+/// Mi-V RV32), which share its CLINT and PLIC.
+fn is_miv(name: &str) -> bool {
+    matches!(
+        name,
+        "miv" | "miv_rv32" | "miv-board" | "miv-board-additional-uarts"
+    )
+}
+
 /// Memory-mapped core-local interruptor of a single-hart RV32 chip, in the
 /// SiFive `clint0` layout that RISC-V `riscv,machine-timer` drivers use:
 /// `msip` at +0x0, `mtimecmp` at +0x4000, `mtime` at +0xBFF8. `msip` drives
@@ -121,6 +130,12 @@ impl Rv32Clint {
             // Kconfig.defconfig). Renode clocks it at 62 MHz instead.
             return Some(Self::new(0x0200_0000, 32_768, chip.cpu_hz));
         }
+        if is_miv(&name) && chip.cpu_hz != 0 {
+            // Mi-V: CoreLevelInterruptor at 0x4400_0000, clocked at the
+            // 66 MHz CPU clock (Renode `platforms/cpus/miv.repl`
+            // `clint ... frequency: 66000000`, `[0, 1] -> cpu@[3, 7]`).
+            return Some(Self::new(0x4400_0000, chip.cpu_hz, chip.cpu_hz));
+        }
         None
     }
 
@@ -141,6 +156,20 @@ impl Rv32Clint {
                 num_sources: 53, // Plic stores the one-past-last ID.
                 num_contexts: 1,
                 priority_bits: 3,
+                context: 0,
+            });
+        }
+        if is_miv(&name) {
+            // Mi-V: PLIC at 0x4000_0000 with sources 1..31, no priority
+            // levels and one context (Renode `platforms/cpus/miv.repl`
+            // `numberOfSources: 31`, `numberOfContexts: 1`,
+            // `prioritiesEnabled: false`, `0 -> cpu@11`; timer0 and timer1
+            // drive sources 30 and 31).
+            return Some(PlicParams {
+                base: 0x4000_0000,
+                num_sources: 32, // Plic stores the one-past-last ID.
+                num_contexts: 1,
+                priority_bits: 0,
                 context: 0,
             });
         }

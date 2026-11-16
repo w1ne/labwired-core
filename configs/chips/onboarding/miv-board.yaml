@@ -1,7 +1,9 @@
 # Bounded imported Mi-V board profile based on Renode's platforms/cpus/miv.repl.
-# The smoke exercises the RV32IMAF CPU, documented flash/DDR windows, and
-# model-backed CoreUART. GPIOs, timers, CLINT, and PLIC are omitted because
-# this run does not exercise them.
+# The smoke exercises the RV32IMAF CPU, documented flash/DDR windows,
+# model-backed CoreUART, CLINT, PLIC and CoreTimers.
+# The core decodes the miv.repl CLINT (0x44000000, mtime at the 66 MHz CPU
+# clock) and PLIC (0x40000000, sources 1..31, no priority levels) by chip
+# name; CoreTimer0/1 drive PLIC sources 30/31. GPIO is omitted.
 # Renode map reference: https://github.com/renode/renode-docs/blob/master/source/basic/machines.md#loading-platforms
 
 name: "miv-board"
@@ -17,3 +19,13 @@ peripherals:
     type: "miv_coreuart"
     base_address: 0x70001000
     size: "24B"
+  - id: "timer0"
+    type: "miv_coretimer"
+    base_address: 0x70003000
+    size: "28B"
+    irq: 30
+  - id: "timer1"
+    type: "miv_coretimer"
+    base_address: 0x70004000
+    size: "28B"
+    irq: 31
