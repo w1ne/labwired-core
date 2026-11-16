@@ -86,6 +86,30 @@ pub struct DecodeCacheEntry {
     pub cycles: u32,
 }
 
+/// Field of each register number `read_reg`/`write_reg` accept (R0-R12,
+/// SP, LR, PC, then xPSR as 16). Indexing beats the 17-way branch the
+/// match compiled to: these run several times per interpreted instruction
+/// with an operand-dependent register number.
+const REG_FIELD_OFFSETS: [usize; 17] = [
+    std::mem::offset_of!(CortexM, r0),
+    std::mem::offset_of!(CortexM, r1),
+    std::mem::offset_of!(CortexM, r2),
+    std::mem::offset_of!(CortexM, r3),
+    std::mem::offset_of!(CortexM, r4),
+    std::mem::offset_of!(CortexM, r5),
+    std::mem::offset_of!(CortexM, r6),
+    std::mem::offset_of!(CortexM, r7),
+    std::mem::offset_of!(CortexM, r8),
+    std::mem::offset_of!(CortexM, r9),
+    std::mem::offset_of!(CortexM, r10),
+    std::mem::offset_of!(CortexM, r11),
+    std::mem::offset_of!(CortexM, r12),
+    std::mem::offset_of!(CortexM, sp),
+    std::mem::offset_of!(CortexM, lr),
+    std::mem::offset_of!(CortexM, pc),
+    std::mem::offset_of!(CortexM, xpsr),
+];
+
 const T16_FAST_BLOCK_MAX: usize = 16;
 /// Decode-cache slots on either side of a PC whose contents can change that
 /// PC's block discovery: the backward search starts at most
@@ -2191,27 +2215,15 @@ impl CortexM {
         }
     }
 
+    #[inline(always)]
     fn read_reg(&self, n: u8) -> u32 {
-        match n {
-            0 => self.r0,
-            1 => self.r1,
-            2 => self.r2,
-            3 => self.r3,
-            4 => self.r4,
-            5 => self.r5,
-            6 => self.r6,
-            7 => self.r7,
-            8 => self.r8,
-            9 => self.r9,
-            10 => self.r10,
-            11 => self.r11,
-            12 => self.r12,
-            13 => self.sp,
-            14 => self.lr,
-            15 => self.pc,
-            16 => self.xpsr,
-            _ => 0,
-        }
+        let Some(&offset) = REG_FIELD_OFFSETS.get(usize::from(n)) else {
+            return 0;
+        };
+        // SAFETY: `offset` is `offset_of!` of one of the `u32` fields named in
+        // `REG_FIELD_OFFSETS`, so the pointer is in bounds of `*self`, aligned
+        // for `u32` and derived from a reference to the whole struct.
+        unsafe { std::ptr::from_ref(self).cast::<u8>().add(offset).cast::<u32>().read() }
     }
 
     /// A register operand of a 16-bit high-register `ADD`/`MOV`: PC reads as
@@ -2226,26 +2238,18 @@ impl CortexM {
         }
     }
 
+    #[inline(always)]
     fn write_reg(&mut self, n: u8, val: u32) {
-        match n {
-            0 => self.r0 = val,
-            1 => self.r1 = val,
-            2 => self.r2 = val,
-            3 => self.r3 = val,
-            4 => self.r4 = val,
-            5 => self.r5 = val,
-            6 => self.r6 = val,
-            7 => self.r7 = val,
-            8 => self.r8 = val,
-            9 => self.r9 = val,
-            10 => self.r10 = val,
-            11 => self.r11 = val,
-            12 => self.r12 = val,
-            13 => self.sp = val,
-            14 => self.lr = val,
-            15 => self.pc = val,
-            16 => self.xpsr = val,
-            _ => {}
+        let Some(&offset) = REG_FIELD_OFFSETS.get(usize::from(n)) else {
+            return;
+        };
+        // SAFETY: as in `read_reg`; the pointer comes from `&mut self`.
+        unsafe {
+            std::ptr::from_mut(self)
+                .cast::<u8>()
+                .add(offset)
+                .cast::<u32>()
+                .write(val)
         }
     }
 
