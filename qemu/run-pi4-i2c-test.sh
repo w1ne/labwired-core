@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
-# Boots the real Raspberry Pi OS arm64 kernel in QEMU raspi4b with I2C1 (BSC1)
-# served by the LabWired BSC model over a unix socket, and checks from the
-# guest console that a LabWired BME280 answers at 0x76.
+# Boots the real Raspberry Pi OS arm64 kernel in QEMU raspi4b. Every BSC
+# (I2C controller) the device tree enables is served by the LabWired BSC model
+# over the bridge; addresses and IRQs come from the DTB through
+# `qemu-bridge plan`, nothing is hardcoded here. Checks run from the guest
+# console and the bridge transcripts.
 #
 # Runs (guest = kernel8.img + an initramfs built from the image's busybox and
 # i2c modules; -icount unless noted):
-#   positive     bridge + BME280          -> 0x76 present, i2cget 0xd0 = 0x60
-#   positive-2   same again               -> transcript byte-identical (cmp)
-#   no-device    bridge, no I2C target    -> 0x76 absent
-#   no-bridge    QEMU's own BSC model     -> 0x76 absent
-#   host-1/2     positive without -icount -> transcripts differ (proves the
+#   positive     i2c1 + BME280@0x76        -> 0x76 present, i2cget 0xd0 = 0x60
+#   positive-2   same again                -> transcript byte-identical (cmp)
+#   no-device    i2c1, no I2C target       -> 0x76 absent
+#   no-bridge    QEMU's own BSC model      -> 0x76 absent
+#   host-1/2     positive without -icount  -> transcripts differ (proves the
 #                determinism check can fail)
+#   dual         i2c1 + i2c3 both enabled, BME280@0x76 on i2c1, BME280@0x77 on
+#                i2c3, concurrent i2cget loops on both buses (shared SPI 117)
+#   dual-noor    same with the bridge IRQ OR off (irq-or=off): negative control
+#   disabled     i2c1 disabled in the DTB  -> loader makes no bridge, no 0x76
 # Plus a timing check of the i2cget transfer against the SCL formula.
 #
 # Needs: qemu/build.sh done (or it runs it), cargo, dtc, mtools, e2fsprogs,
@@ -26,13 +32,6 @@ LOGS="${LOGS:-$ROOT/logs}"
 QEMU="$ROOT/build/qemu-system-aarch64"
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-600}"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/Volumes/LabWired/cargo-target/qemu-bridge-spike}"
-
-# BSC1 on BCM2711, from bcm2711-rpi-4-b.dtb:
-#   /soc/i2c@7e804000 reg = <0x7e804000 0x1000>, /soc ranges map
-#   0x7e000000 -> 0xfe000000, interrupts = <GIC_SPI 0x75 LEVEL_HIGH>.
-BSC1_ADDR=0xfe804000
-BSC1_SIZE=0x1000
-BSC1_SPI=117
 
 for t in dtc fdtput fdtget mcopy; do
     command -v "$t" >/dev/null || { echo "missing $t (brew install dtc mtools)" >&2; exit 1; }
@@ -64,16 +63,23 @@ print(e[0][0], e[1][0], e[1][1])
 PY
 )
 
-# --- 2. kernel + DTB from the boot partition --------------------------------
+# --- 2. kernel + DTB variants from the boot partition -----------------------
 mcopy -o -i "$IMG@@$((P1_START * 512))" ::kernel8.img ::bcm2711-rpi-4-b.dtb "$WORK/"
-DTB="$WORK/bcm2711-rpi-4-b-lw.dtb"
-cp "$WORK/bcm2711-rpi-4-b.dtb" "$DTB"
-I2C1="$(fdtget "$DTB" /aliases i2c1)"
-echo "i2c1 node: $I2C1 reg=$(fdtget -t x "$DTB" "$I2C1" reg) interrupts=$(fdtget -t x "$DTB" "$I2C1" interrupts)"
-fdtput -t s "$DTB" "$I2C1" status okay
-# The PL011 (serial1 alias -> ttyAMA1) carries a Bluetooth serdev child;
-# drop it so the port is a plain tty usable as /dev/console.
-fdtput -r "$DTB" /soc/serial@7e201000/bluetooth 2>/dev/null || true
+# dtb_variant OUT STATUS_I2C1 STATUS_I2C3 (nodes found through /aliases)
+dtb_variant() {
+    cp "$WORK/bcm2711-rpi-4-b.dtb" "$1"
+    fdtput -t s "$1" "$(fdtget "$1" /aliases i2c1)" status "$2"
+    fdtput -t s "$1" "$(fdtget "$1" /aliases i2c3)" status "$3"
+    # The PL011 (serial1 alias -> ttyAMA1) carries a Bluetooth serdev child;
+    # drop it so the port is a plain tty usable as /dev/console.
+    fdtput -r "$1" /soc/serial@7e201000/bluetooth 2>/dev/null || true
+}
+DTB_ONE="$WORK/bcm2711-rpi-4-b-lw.dtb"        # i2c1 on
+DTB_TWO="$WORK/bcm2711-rpi-4-b-lw-dual.dtb"   # i2c1 + i2c3 on
+DTB_OFF="$WORK/bcm2711-rpi-4-b-lw-off.dtb"    # i2c1 explicitly disabled
+dtb_variant "$DTB_ONE" okay disabled
+dtb_variant "$DTB_TWO" okay okay
+dtb_variant "$DTB_OFF" disabled disabled
 
 # --- 3. initramfs from the image's own busybox and i2c modules -------------
 # No SD card: block I/O completes at host-timed points (and QEMU's SD model
@@ -115,37 +121,67 @@ echo "initramfs: $INITRD ($KVER, sha256 $(shasum -a 256 "$INITRD" | cut -c1-16))
 # --- 4. QEMU and the LabWired bridge ----------------------------------------
 [[ -x "$QEMU" ]] || "$HERE/build.sh"
 "$QEMU" -device help | grep -q labwired-mmio-bridge || "$HERE/build.sh"
+"$QEMU" -device labwired-mmio-bridge,help | grep -q irq-or || "$HERE/build.sh"
 (cd "$REPO" && CARGO_PROFILE_RELEASE_DEBUG=0 cargo build --release -p qemu-bridge)
 BRIDGE="$CARGO_TARGET_DIR/release/qemu-bridge"
 
+for d in "$DTB_ONE" "$DTB_TWO" "$DTB_OFF"; do
+    "$BRIDGE" dt-report --dtb "$d" >"$LOGS/dt-report-$(basename "$d" .dtb).txt"
+done
+"$BRIDGE" dt-report --dtb "$DTB_ONE" --json >"$LOGS/dt-report-$(basename "$DTB_ONE" .dtb).json"
+
 APPEND="console=ttyAMA1,115200 earlycon=pl011,mmio32,0xfe201000 rdinit=/init"
-BOOT_ARGS=(-kernel "$WORK/kernel8.img" -dtb "$DTB" -initrd "$INITRD" -append "$APPEND")
 
 # Deterministic guest clock: 2^ICOUNT_SHIFT ns of virtual time per guest
 # instruction, no sleeping on idle (virtual time jumps to the next timer), no
 # pacing against the host clock.
 ICOUNT_SHIFT="${ICOUNT_SHIFT:-0}"
 ICOUNT=(-icount "shift=$ICOUNT_SHIFT,sleep=off,align=off")
+SOCKS="$WORK/sock"
 
-# run NAME MODE CLOCK   MODE: bridge|no-device|no-bridge  CLOCK: icount|host
+# run NAME DTB CLOCK GUEST [bridge-options...]
+#   CLOCK: icount|host   GUEST: single|dual (kernel arg lwtest=)
+#   bridge-options: --attach SPEC, --no-irq-or, or --no-bridge
 run() {
-    local name="$1" mode="$2" clock="$3" log="$LOGS/$1.log" sock="$WORK/$1.sock"
-    local bpid="" extra=() clk=()
+    local name="$1" dtb="$2" clock="$3" guest="$4"; shift 4
+    local log="$LOGS/$name.log" sockdir="$SOCKS/$name" tdir="$LOGS/$name.transcripts"
+    local bpid="" extra=() clk=() attach=() planflags=() nobridge=0
+    while (( $# )); do
+        case "$1" in
+            --attach) attach+=(--attach "$2"); shift 2 ;;
+            --no-irq-or) planflags+=(--no-irq-or); shift ;;
+            --no-bridge) nobridge=1; shift ;;
+            *) echo "run: bad option $1" >&2; exit 2 ;;
+        esac
+    done
     : >"$log"
+    rm -rf "$sockdir" "$tdir"; mkdir -p "$sockdir" "$tdir"
     [[ "$clock" == icount ]] && clk=("${ICOUNT[@]}")
-    echo "=== run $name ($mode, clock=$clock ${clk[*]}) ===" | tee -a "$log"
-    if [[ "$mode" != no-bridge ]]; then
-        local flag=()
-        [[ "$mode" == no-device ]] && flag=(--no-device)
-        rm -f "$sock"
-        "$BRIDGE" --socket "$sock" --transcript "$LOGS/$name.transcript" \
-            "${flag[@]}" ${BRIDGE_EXTRA:-} 2>"$LOGS/$name.bridge.log" &
+    echo "=== run $name (dtb=$(basename "$dtb"), clock=$clock ${clk[*]}, guest=$guest) ===" | tee -a "$log"
+    local socks=()
+    if (( ! nobridge )); then
+        local line
+        while read -r line; do
+            [[ -z "$line" ]] && continue
+            echo "LW-HOST: plan: $line" | tee -a "$log"
+            extra+=(-device "${line#-device }")
+            socks+=("$(sed -E 's/.*socket=([^,]*).*/\1/' <<<"$line")")
+        done < <("$BRIDGE" plan --dtb "$dtb" --socket-dir "$sockdir" "${planflags[@]}")
+    fi
+    if (( ${#socks[@]} )); then
+        "$BRIDGE" serve --dtb "$dtb" --socket-dir "$sockdir" --transcript-dir "$tdir" \
+            "${attach[@]}" ${BRIDGE_EXTRA:-} 2>"$LOGS/$name.bridge.log" &
         bpid=$!
-        for _ in $(seq 100); do [[ -S "$sock" ]] && break; sleep 0.1; done
-        extra=(-device "labwired-mmio-bridge,addr=$BSC1_ADDR,size=$BSC1_SIZE,socket=$sock,irq=$BSC1_SPI")
+        local s
+        for s in "${socks[@]}"; do
+            for _ in $(seq 100); do [[ -S "$s" ]] && break; sleep 0.1; done
+        done
+    else
+        echo "LW-HOST: no bridge devices for this run" | tee -a "$log"
     fi
     local t_start=$SECONDS
-    "$QEMU" -M raspi4b "${clk[@]}" "${BOOT_ARGS[@]}" \
+    "$QEMU" -M raspi4b "${clk[@]}" -kernel "$WORK/kernel8.img" -dtb "$dtb" \
+        -initrd "$INITRD" -append "$APPEND lwtest=$guest" \
         -display none -monitor none -serial stdio \
         -no-reboot "${extra[@]}" </dev/null >>"$log" 2>&1 &
     local qpid=$! t=0
@@ -158,7 +194,7 @@ run() {
         sleep 0.5; t=$((t + 1))
     done
     wait "$qpid" 2>/dev/null || true
-    echo "LW-HOST: wall ${SECONDS_DIFF:-$((SECONDS - t_start))}s to LW-END ($name, clock=$clock)" | tee -a "$log"
+    echo "LW-HOST: wall $((SECONDS - t_start))s to LW-END ($name, clock=$clock)" | tee -a "$log"
     if [[ -n "$bpid" ]]; then
         sleep 1
         kill "$bpid" 2>/dev/null || true
@@ -166,13 +202,22 @@ run() {
     fi
 }
 
-RUNS="${RUNS:-positive positive-2 no-device no-bridge host-1 host-2}"
+ONE_BME=(--attach i2c1:bme280@0x76)
+TWO_BME=(--attach i2c1:bme280@0x76 --attach i2c3:bme280@0x77)
+RUNS="${RUNS:-positive positive-2 no-device no-bridge host-1 host-2 dual dual-noor disabled}"
 for r in $RUNS; do
     case "$r" in
-        positive|positive-2) run "$r" bridge icount ;;
-        no-device) run "$r" no-device icount ;;
-        no-bridge) run "$r" no-bridge icount ;;
-        host-1|host-2) run "$r" bridge host ;;
+        positive|positive-2) run "$r" "$DTB_ONE" icount single "${ONE_BME[@]}" ;;
+        no-device) run "$r" "$DTB_ONE" icount single ;;
+        no-bridge) run "$r" "$DTB_ONE" icount single --no-bridge ;;
+        host-1|host-2) run "$r" "$DTB_ONE" host single "${ONE_BME[@]}" ;;
+        dual) run "$r" "$DTB_TWO" icount dual "${TWO_BME[@]}" ;;
+        dual-noor) run "$r" "$DTB_TWO" icount dual "${TWO_BME[@]}" --no-irq-or ;;
+        disabled)
+            # The loader must refuse to wire a part to a disabled node.
+            "$BRIDGE" serve --dtb "$DTB_OFF" --socket-dir "$SOCKS" "${ONE_BME[@]}" \
+                >"$LOGS/disabled.serve.txt" 2>&1 || true
+            run "$r" "$DTB_OFF" icount single ;;
     esac
 done
 
@@ -183,12 +228,16 @@ fail=0
 pass() { echo "PASS $1"; }
 failc() { echo "FAIL $1"; fail=1; }
 check() { if grep -q "$2" "$LOGS/$1.log"; then pass "$1: $3"; else failc "$1: $3"; fi; }
+nocheck() { if grep -q "$2" "$LOGS/$1.log"; then failc "$1: $3"; else pass "$1: $3"; fi; }
 has() { [[ " $RUNS " == *" $1 "* ]]; }
+T1=i2c1.transcript
 
 for r in positive positive-2; do
     has $r || continue
     check $r '^LW-DETECT-0x76: present' "i2cdetect shows 0x76"
     check $r '^LW-I2CGET: rc=0 out=0x60' "i2cget 0xd0 = 0x60"
+    check $r '^LW-HOST: plan: -device labwired-mmio-bridge,addr=0xfe804000,size=0x1000,.*,irq=117$' \
+        "bridge address/IRQ from the DTB plan"
 done
 for r in host-1 host-2; do
     has $r || continue
@@ -199,13 +248,41 @@ for r in no-device no-bridge; do
     check $r '^LW-DETECT-0x76: absent' "i2cdetect shows no 0x76"
     check $r '^LW-END' "guest finished"
 done
+if has dual; then
+    check dual '^LW-HOST: plan: .*addr=0xfe804000,.*irq=117$' "plan bridges i2c1 at 0xfe804000"
+    check dual '^LW-HOST: plan: .*addr=0xfe205600,size=0x200,.*irq=117$' "plan bridges i2c3 at 0xfe205600"
+    check dual '^LW-BUS1-ADDRS: 76 $' "i2cdetect bus 1 shows only 0x76"
+    check dual '^LW-BUS3-ADDRS: 77 $' "i2cdetect bus 3 shows only 0x77"
+    check dual '^LW-I2CGET bus1 0x76: rc=0 out=0x60' "i2cget bus 1 0x76 chip-id 0x60"
+    check dual '^LW-I2CGET bus3 0x77: rc=0 out=0x60' "i2cget bus 3 0x77 chip-id 0x60"
+    check dual '^LW-CONCURRENT bus1 0x76: ok=200 bad=0' "concurrent loop bus 1: 200/200"
+    check dual '^LW-CONCURRENT bus3 0x77: ok=200 bad=0' "concurrent loop bus 3: 200/200"
+fi
+if has dual-noor; then
+    check dual-noor '^LW-HOST: plan: .*irq-or=off$' "plan with irq-or=off"
+    if grep -qE '^LW-CONCURRENT bus[13] 0x7[67]: ok=[0-9]+ bad=[1-9]' "$LOGS/dual-noor.log"; then
+        pass "dual-noor: without the OR, concurrent transfers fail ($(grep -h '^LW-CONCURRENT' "$LOGS/dual-noor.log" | tr '\n' ';'))"
+    else
+        failc "dual-noor: without the OR, concurrent transfers fail"
+    fi
+fi
+if has disabled; then
+    if grep -q '^/soc/i2c@7e804000 .* disabled ' "$LOGS/dt-report-$(basename "$DTB_OFF" .dtb).txt"; then
+        pass "disabled: dt-report classes i2c1 as disabled"
+    else failc "disabled: dt-report classes i2c1 as disabled"; fi
+    check disabled '^LW-HOST: no bridge devices for this run' "plan makes no bridge"
+    if grep -q 'i2c1 is disabled in the DTB' "$LOGS/disabled.serve.txt"; then
+        pass "disabled: serve refuses --attach i2c1"
+    else failc "disabled: serve refuses --attach i2c1"; fi
+    check disabled '^LW-DETECT-0x76: absent' "guest shows no bus-1 device at 0x76"
+fi
 
 # Timing: START of the i2cget transfer -> DONE (IRQ) in the transcript must
 # equal START + addr + reg + Sr + addr + data + STOP = 39 SCL periods, with
 # SCL period = DIV / core clock (DIV as the guest wrote it, core clock as the
 # guest's clk_summary reports it).
 if has positive; then
-    if python3 -I - "$LOGS/positive.transcript" "$LOGS/positive.log" <<'PY'
+    if python3 -I - "$LOGS/positive.transcripts/$T1" "$LOGS/positive.log" <<'PY'
 import re, sys
 tr = [l.split() for l in open(sys.argv[1])]
 log = open(sys.argv[2], errors="replace").read()
@@ -233,21 +310,22 @@ PY
 fi
 
 if has positive && has positive-2; then
-    if cmp "$LOGS/positive.transcript" "$LOGS/positive-2.transcript"; then
-        pass "determinism: icount transcripts byte-identical ($(wc -l <"$LOGS/positive.transcript" | tr -d ' ') lines)"
+    if cmp "$LOGS/positive.transcripts/$T1" "$LOGS/positive-2.transcripts/$T1"; then
+        pass "determinism: icount transcripts byte-identical ($(wc -l <"$LOGS/positive.transcripts/$T1" | tr -d ' ') lines)"
     else failc "determinism: icount transcripts byte-identical"; fi
 fi
 if has host-1 && has host-2; then
-    if cmp "$LOGS/host-1.transcript" "$LOGS/host-2.transcript"; then
+    if cmp "$LOGS/host-1.transcripts/$T1" "$LOGS/host-2.transcripts/$T1"; then
         failc "negative control: transcripts without -icount differ"
     else pass "negative control: transcripts without -icount differ"; fi
 fi
 
+grep -h "modeled .* of .* enabled device nodes" "$LOGS"/dt-report-*.txt | sed 's/^/  dt-report: /' || true
 for r in $RUNS; do
     echo "  $r: $(grep -h '^LW-HOST: wall' "$LOGS/$r.log" | cut -d' ' -f3-5) guest uptime at end" \
         "$(grep -h '^LW-UPTIME' "$LOGS/$r.log" | cut -d' ' -f2)s"
     [[ -f "$LOGS/$r.bridge.log" ]] && grep -h "QEMU disconnected after" "$LOGS/$r.bridge.log" | sed 's/^/      /'
 done
-echo "logs: $LOGS (all-runs.log = every guest console, *.transcript = bridge)"
+echo "logs: $LOGS (all-runs.log = every guest console, <run>.transcripts/ = bridge)"
 if (( fail )); then echo "RESULT: FAIL"; exit 1; fi
 echo "RESULT: PASS"
