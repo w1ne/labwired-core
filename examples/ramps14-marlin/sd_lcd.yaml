@@ -21,3 +21,10 @@ assertions:
   - uart_contains: "start"
   - uart_contains: "SD card ok"
   - uart_regex: "Begin file list\\r?\\nTEST\\.GCO 50\\r?\\nEnd file list"
+  # The ST7920 GDRAM holds Marlin's status screen (about 13 % of the 128x64
+  # pixels inked). `lit` is not asserted: Marlin's RRD init leaves the basic
+  # display-on bit D at 0 and only sets G=1 in the extended set.
+  - display_region:
+      id: "lcd"
+      min_ink: 0.05
+      max_ink: 0.6
