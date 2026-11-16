@@ -23,4 +23,5 @@ mod rp2040_xip_ssi_alias;
 mod rp2350_clkrst_profile;
 mod rp2350_dcp_canned;
 mod rp2350_dma_dreq;
+mod rp2350_pio_gpiobase;
 mod rp2354b_contract;

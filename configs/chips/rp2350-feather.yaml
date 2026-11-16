@@ -226,20 +226,38 @@ peripherals:
         26: { peripheral: "spi1", dir: "tx" }
         27: { peripheral: "spi1", dir: "rx" }
         48: { peripheral: "adc", dir: "rx" }
+        # DREQ_PIOx_TXn = 8x + n: PIO TX FIFOs (RX FIFOs are not endpoints).
+        0: { peripheral: "pio0", dir: "tx" }
+        1: { peripheral: "pio0", dir: "tx" }
+        2: { peripheral: "pio0", dir: "tx" }
+        3: { peripheral: "pio0", dir: "tx" }
+        8: { peripheral: "pio1", dir: "tx" }
+        9: { peripheral: "pio1", dir: "tx" }
+        10: { peripheral: "pio1", dir: "tx" }
+        11: { peripheral: "pio1", dir: "tx" }
+        16: { peripheral: "pio2", dir: "tx" }
+        17: { peripheral: "pio2", dir: "tx" }
+        18: { peripheral: "pio2", dir: "tx" }
+        19: { peripheral: "pio2", dir: "tx" }
   - id: "pio0"
     type: "pio"
     base_address: 0x50200000
     size: "4KB"
     config:
+      profile: "rp2350"
       debug_schema: "../peripherals/rp2350/pio0.yaml"
   - id: "pio1"
     type: "pio"
     base_address: 0x50300000
     size: "4KB"
+    config:
+      profile: "rp2350"
   - id: "pio2"
     type: "pio"
     base_address: 0x50400000
     size: "4KB"
+    config:
+      profile: "rp2350"
   # BOOT RAM endpoint (datasheet 4.3): 1 KB boot RAM, WRITE_ONCE0/1 and the
   # BOOTLOCK0..7 try-locks at +0x800. pico-sdk pre-main resets the boot locks
   # and spins claiming BOOTLOCK7 (runtime_init_bootrom_locking_enable);

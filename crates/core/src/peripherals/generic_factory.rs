@@ -1595,7 +1595,16 @@ pub fn try_build(
             Box::new(adc)
         }
         "pio" => {
-            let mut pio = crate::peripherals::pio::Pio::new();
+            use crate::peripherals::pio::PioLayout;
+            // `config.profile`: rp2350 (GPIOBASE) or rp2350b (GPIOBASE and
+            // 48 GPIO lines); absent = RP2040.
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                None => PioLayout::Rp2040,
+                Some("rp2350") => PioLayout::Rp2350,
+                Some("rp2350b") => PioLayout::Rp2350b,
+                Some(other) => anyhow::bail!("pio `{}`: unsupported profile `{other}`", p_cfg.id),
+            };
+            let mut pio = crate::peripherals::pio::Pio::new().with_layout(layout);
             if let Some(program) = p_cfg.config.get("program").and_then(|v| v.as_str()) {
                 pio.load_program_asm(program)?;
             }

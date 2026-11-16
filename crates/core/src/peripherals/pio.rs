@@ -31,13 +31,42 @@ const EXECCTRL_SIDE_EN: u32 = 1 << 30;
 
 /// One wire line per GPIO the block can drive: line `n` is the PIO's output
 /// to GPIOn (datasheet §3.5.6 — every state machine's pin mapping lands on
-/// the same 32 outputs, and IO_BANK0 FUNCSEL picks which pads listen).
-pub const LINE_NAMES: [&str; 32] = [
+/// the same 32 outputs, and IO_BANK0 FUNCSEL picks which pads listen). A
+/// block on a 48-GPIO RP2350B carries 48 lines: its 32 outputs land on
+/// GPIO(n + GPIOBASE).
+pub const LINE_NAMES: [&str; 48] = [
     "PIO_GP0", "PIO_GP1", "PIO_GP2", "PIO_GP3", "PIO_GP4", "PIO_GP5", "PIO_GP6", "PIO_GP7",
     "PIO_GP8", "PIO_GP9", "PIO_GP10", "PIO_GP11", "PIO_GP12", "PIO_GP13", "PIO_GP14", "PIO_GP15",
     "PIO_GP16", "PIO_GP17", "PIO_GP18", "PIO_GP19", "PIO_GP20", "PIO_GP21", "PIO_GP22", "PIO_GP23",
     "PIO_GP24", "PIO_GP25", "PIO_GP26", "PIO_GP27", "PIO_GP28", "PIO_GP29", "PIO_GP30", "PIO_GP31",
+    "PIO_GP32", "PIO_GP33", "PIO_GP34", "PIO_GP35", "PIO_GP36", "PIO_GP37", "PIO_GP38", "PIO_GP39",
+    "PIO_GP40", "PIO_GP41", "PIO_GP42", "PIO_GP43", "PIO_GP44", "PIO_GP45", "PIO_GP46", "PIO_GP47",
 ];
+
+/// RP2350 `GPIOBASE` (datasheet Release 8, PIO register list, offset 0x168):
+/// "Only the values 0 and 16 are supported (only bit 4 is writable)".
+const GPIOBASE: u64 = 0x168;
+const GPIOBASE_WRITABLE: u32 = 1 << 4;
+
+/// Which register map / pad reach the block has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PioLayout {
+    /// RP2040: 32 GPIOs, no GPIOBASE.
+    Rp2040,
+    /// RP2350 (QFN60): GPIOBASE register, 32 GPIO lines.
+    Rp2350,
+    /// RP2350B (QFN80): GPIOBASE register, 48 GPIO lines.
+    Rp2350b,
+}
+
+impl PioLayout {
+    fn gpio_lines(self) -> usize {
+        match self {
+            PioLayout::Rp2350b => 48,
+            _ => 32,
+        }
+    }
+}
 
 /// Write `count` bits of `data` into `word` starting at pin `base`, wrapping
 /// past GPIO31 back to GPIO0 (datasheet §3.5.6).
@@ -116,6 +145,9 @@ pub struct Pio {
     wired: bool,
     /// True while a delay-1 SM step event is live (event-scheduler).
     chain_live: bool,
+    layout: PioLayout,
+    /// GPIOBASE: PIO pin n drives GPIO (n + gpio_base). 0 or 16.
+    gpio_base: u32,
     /// Bus cycle clock, handed over at `add_peripheral`/`push_peripheral` time.
     /// Its presence is the model's proof that it is attached to a bus whose
     /// owning `Machine` actually drains the event scheduler — see
@@ -158,8 +190,15 @@ impl Pio {
             lines: None,
             wired: false,
             chain_live: false,
+            layout: PioLayout::Rp2040,
+            gpio_base: 0,
             clock: None,
         }
+    }
+
+    pub fn with_layout(mut self, layout: PioLayout) -> Self {
+        self.layout = layout;
+        self
     }
 
     // Scheduler mode: the `event-scheduler` feature is on AND the bus handed
@@ -605,8 +644,9 @@ impl Pio {
         let lines = self
             .lines
             .get_or_insert_with(|| {
-                let lines = PadLines::new(&LINE_NAMES, &[false; 32]);
-                for line in 0..32 {
+                let n = self.layout.gpio_lines();
+                let lines = PadLines::new(&LINE_NAMES[..n], &vec![false; n]);
+                for line in 0..n {
                     lines.set_mode(line, LineDrive::Input);
                 }
                 Arc::new(lines)
@@ -625,13 +665,22 @@ impl Pio {
         let Some(lines) = self.lines.as_deref().filter(|_| self.wired) else {
             return;
         };
-        for line in 0..32 {
-            let mode = if self.pin_dir & (1 << line) != 0 {
-                LineDrive::PushPull
+        // Line = GPIO number; PIO pin = GPIO - GPIOBASE. GPIOs outside the
+        // block's 32-pin window are released.
+        let base = self.gpio_base as usize;
+        for line in 0..self.layout.gpio_lines() {
+            let pin = line.wrapping_sub(base);
+            let (mode, level) = if pin < 32 {
+                let mode = if self.pin_dir & (1 << pin) != 0 {
+                    LineDrive::PushPull
+                } else {
+                    LineDrive::Input
+                };
+                (mode, self.pin_out & (1 << pin) != 0)
             } else {
-                LineDrive::Input
+                (LineDrive::Input, false)
             };
-            lines.drive_line(line, mode, self.pin_out & (1 << line) != 0);
+            lines.drive_line(line, mode, level);
         }
     }
 
@@ -686,6 +735,7 @@ impl Pio {
             }
             0x030 => self.irq as u32,
             0x038 => self.input_sync_bypass,
+            GPIOBASE if self.layout != PioLayout::Rp2040 => self.gpio_base,
             0x03c => self.pin_out,
             0x040 => self.pin_dir,
             // DBG_CFGINFO: IMEM_SIZE 32, SM_COUNT 4, FIFO_DEPTH 4.
@@ -756,6 +806,10 @@ impl Pio {
             0x030 => self.irq &= !(value as u8), // W1C
             0x034 => self.irq |= value as u8,    // IRQ_FORCE
             0x038 => self.input_sync_bypass = value,
+            GPIOBASE if self.layout != PioLayout::Rp2040 => {
+                self.gpio_base = value & GPIOBASE_WRITABLE;
+                self.publish();
+            }
             0x048..=0x0c4 => {
                 let idx = ((offset - 0x048) / 4) as usize;
                 if idx < 32 {
@@ -787,6 +841,16 @@ impl Pio {
 }
 
 impl Peripheral for Pio {
+    /// DREQ_PIOx_TXn: asserted while TX FIFO n has room (datasheet 11.5.2).
+    /// Only TXF0..3 are DMA endpoints here; the RX FIFOs are not.
+    fn dma_tx_request(&self, offset: u64) -> Option<bool> {
+        if !(0x010..=0x01c).contains(&offset) || offset & 3 != 0 {
+            return None;
+        }
+        let n = ((offset - 0x010) / 4) as usize;
+        Some(self.tx_fifo[n].len() < self.tx_depth(n))
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
