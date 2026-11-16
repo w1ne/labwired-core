@@ -272,6 +272,14 @@ peripherals:
     size: "4B"
     config:
       path: "../peripherals/rp2350/actlr.yaml"
+  # CoreDebug (Armv8-M D1.2: DHCSR/DCRSR/DCRDR/DEMCR). Part of the M33 and
+  # reachable from software without a debugger: CMSIS/Betaflight set
+  # DEMCR.TRCENA before enabling the DWT cycle counter. Without a probe,
+  # software DHCSR writes are ignored (C_DEBUGEN is debugger-only).
+  - id: "scs_debug"
+    type: "cortex_m_coredebug"
+    base_address: 0xE000EDF0
+    size: "16B"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010

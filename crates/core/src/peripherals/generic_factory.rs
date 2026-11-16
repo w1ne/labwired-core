@@ -104,6 +104,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_xip_ssi",
     "rp2040_usb",
     "rp2350_bootram",
+    "cortex_m_coredebug",
     // ESP32-C3 behavioral models (esp32 factory).
     // MUST be listed: without membership the fuzzy fallback would coerce the
     // BLE baseband window onto some unrelated register map instead of erroring.
@@ -1312,6 +1313,11 @@ pub fn try_build(
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
         "rp2350_bootram" => Box::new(crate::peripherals::rp2350_bootram::Rp2350BootRam::new()),
+        // Cortex-M CoreDebug (DHCSR/DCRSR/DCRDR/DEMCR at 0xE000EDF0) as
+        // software sees it with no debugger attached. Attaching an SWD probe
+        // (`attach_swd_dp`) replaces this window, by name `scs_debug`, with
+        // the probe-connected block.
+        "cortex_m_coredebug" => Box::new(crate::peripherals::scs_debug::ScsDebug::without_probe()),
         "rp2040_usb" => Box::new(
             crate::peripherals::rp2040::usb::Rp2040Usb::new().with_irq(p_cfg.irq.unwrap_or(5)),
         ),

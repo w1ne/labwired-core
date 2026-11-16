@@ -209,11 +209,26 @@ impl DebugHaltState {
 #[derive(Debug)]
 pub struct ScsDebug {
     pub state: Arc<DebugHaltState>,
+    /// False for the window a chip declares without a debugger attached:
+    /// DHCSR.C_DEBUGEN is set only from the debug port (Armv7-M C1.6.2,
+    /// Armv8-M D1.2.4), and C_HALT/C_STEP/C_MASKINTS act only while it is
+    /// set, so software DHCSR writes are ignored.
+    probe: bool,
 }
 
 impl ScsDebug {
     pub fn new(state: Arc<DebugHaltState>) -> Self {
-        Self { state }
+        Self { state, probe: true }
+    }
+
+    /// CoreDebug as software sees it with no debugger: DEMCR stores (TRCENA
+    /// and the vector-catch bits, which take effect only under halting
+    /// debug), DHCSR reads S_REGRDY and ignores writes.
+    pub fn without_probe() -> Self {
+        Self {
+            state: DebugHaltState::new(),
+            probe: false,
+        }
     }
 
     fn read_word(&self, aligned: u64) -> u32 {
@@ -255,7 +270,7 @@ impl crate::Peripheral for ScsDebug {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         match offset & !3 {
-            DHCSR => self.state.write_dhcsr(value),
+            DHCSR if self.probe => self.state.write_dhcsr(value),
             DEMCR => self.state.write_demcr(value),
             _ => {}
         }

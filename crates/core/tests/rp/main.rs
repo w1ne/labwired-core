@@ -21,4 +21,5 @@ mod common;
 mod rp2040_errata_watchdog_e1;
 mod rp2040_xip_ssi_alias;
 mod rp2350_clkrst_profile;
+mod rp2350_coredebug;
 mod rp2350_dcp_canned;
