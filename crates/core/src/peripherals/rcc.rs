@@ -220,7 +220,20 @@ pub struct F1Rcc {
     ahbrstr: u32,  // 0x28
     bdcr: u32,     // 0x20 — RTC/LSE backup domain control
     csr: u32,      // 0x24 — LSION bit0 → LSIRDY bit1
+    // Per-density ENR writable masks (which peripherals the die has).
+    // Configuration, not register state: kept out of the snapshot.
+    #[serde(skip)]
+    ahb_mask: u32,
+    #[serde(skip)]
+    apb2_mask: u32,
+    #[serde(skip)]
+    apb1_mask: u32,
 }
+
+/// Medium-density F103 ENR writable masks, silicon-confirmed on the bench
+/// F103C8 via the address sweep (and equal to the union of the
+/// `RCC_*ENR_*EN` bits in ST's CMSIS `stm32f103xb.h`).
+pub const F1_MD_ENR_MASKS: (u32, u32, u32) = (0x0000_0055, 0x0000_5E7D, 0x1AE6_4807);
 
 impl F1Rcc {
     fn new() -> Self {
@@ -235,6 +248,9 @@ impl F1Rcc {
             // RCC_AHBENR after ORing CRCEN returned 0x54 = 0x14 | (1<<6)
             // (stm32f1_exec_oracle::crc32_two_words). RM0008 §7.3.6.
             ahbenr: 0x0000_0014,
+            ahb_mask: F1_MD_ENR_MASKS.0,
+            apb2_mask: F1_MD_ENR_MASKS.1,
+            apb1_mask: F1_MD_ENR_MASKS.2,
             ..Default::default()
         }
     }
@@ -261,11 +277,13 @@ impl RccModel for F1Rcc {
         }
     }
     fn write_reg(&mut self, offset: u64, value: u32) {
-        // ENR / CIR writable masks silicon-confirmed on the bench F103 via the
-        // address sweep. F103 is the only F1 chip, so these are exact (no other
-        // density shares F1Rcc). The clear/flag bits of CIR (write-only 23:16,
-        // read-only flags 7:0) carry no persistent state — only the interrupt-
-        // enable bits 12:8 (0x1F00) read back.
+        // CIR writable mask silicon-confirmed on the bench F103 via the
+        // address sweep. The ENR masks default to the same sweep's
+        // medium-density values ([`F1_MD_ENR_MASKS`]); a high-density part
+        // widens them from its chip yaml (see `Rcc::set_f1_enr_masks`). The
+        // clear/flag bits of CIR (write-only 23:16, read-only flags 7:0) carry
+        // no persistent state — only the interrupt-enable bits 12:8 (0x1F00)
+        // read back.
         match offset {
             0x00 => self.cr = classic_cr_ready(value),
             // SW→SWS only follows once the requested source is ready in CR:
@@ -281,9 +299,9 @@ impl RccModel for F1Rcc {
             0x08 => self.cir = value & 0x0000_1F00,
             0x0C => self.apb2rstr = value,
             0x10 => self.apb1rstr = value,
-            0x14 => self.ahbenr = value & 0x0000_0055, // DMA1/SRAM/FLITF/CRC
-            0x18 => self.apb2enr = value & 0x0000_5E7D,
-            0x1C => self.apb1enr = value & 0x1AE6_4807,
+            0x14 => self.ahbenr = value & self.ahb_mask,
+            0x18 => self.apb2enr = value & self.apb2_mask,
+            0x1C => self.apb1enr = value & self.apb1_mask,
             // BDCR: LSEON (bit0) → LSERDY (bit1); the rest is RTC/backup storage.
             0x20 => {
                 self.bdcr = if value & 1 != 0 {
@@ -3188,6 +3206,23 @@ impl Rcc {
         }
     }
 
+    /// Set the F1 clock-enable (ENR) writable masks — the per-density set of
+    /// implemented peripherals. No-op for non-F1 layouts. `None` keeps the
+    /// medium-density default ([`F1_MD_ENR_MASKS`]).
+    pub fn set_f1_enr_masks(&mut self, ahb: Option<u32>, apb1: Option<u32>, apb2: Option<u32>) {
+        if let Self::Stm32F1(r) = self {
+            if let Some(m) = ahb {
+                r.ahb_mask = m;
+            }
+            if let Some(m) = apb1 {
+                r.apb1_mask = m;
+            }
+            if let Some(m) = apb2 {
+                r.apb2_mask = m;
+            }
+        }
+    }
+
     /// Set the F4 clock-enable (ENR) writable masks — the per-part delta (which
     /// peripherals the device has). No-op for non-F4 layouts. `0xFFFF_FFFF`
     /// leaves a register unmasked.
@@ -3390,6 +3425,33 @@ mod tests {
         assert_eq!(rcc.read(0x14).unwrap(), 0x11);
         assert_eq!(rcc.read(0x18).unwrap(), 0x04);
         assert_eq!(rcc.read(0x1C).unwrap(), 0x01);
+    }
+
+    #[test]
+    fn test_rcc_f1_enr_masks_are_per_density() {
+        // High-density enables: AHBENR DMA2EN (bit1), APB2ENR TIM8EN (bit13),
+        // APB1ENR UART4EN (bit19) / DACEN (bit29). Bits from stm32f103xe.h.
+        let hd = (1u32 << 1, (1u32 << 13), (1u32 << 19) | (1u32 << 29));
+        let mut md = Rcc::new_with_layout(RccRegisterLayout::Stm32F1);
+        md.write_u32(0x14, hd.0).unwrap();
+        md.write_u32(0x18, hd.1).unwrap();
+        md.write_u32(0x1C, hd.2).unwrap();
+        assert_eq!(md.read_u32(0x14).unwrap(), 0, "medium density has no DMA2");
+        assert_eq!(md.read_u32(0x18).unwrap(), 0, "medium density has no TIM8");
+        assert_eq!(
+            md.read_u32(0x1C).unwrap(),
+            0,
+            "medium density has no UART4/DAC"
+        );
+
+        let mut rc = Rcc::new_with_layout(RccRegisterLayout::Stm32F1);
+        rc.set_f1_enr_masks(Some(0x0000_0557), Some(0x3AFE_C83F), Some(0x0000_FFFD));
+        rc.write_u32(0x14, hd.0).unwrap();
+        rc.write_u32(0x18, hd.1).unwrap();
+        rc.write_u32(0x1C, hd.2).unwrap();
+        assert_eq!(rc.read_u32(0x14).unwrap(), hd.0);
+        assert_eq!(rc.read_u32(0x18).unwrap(), hd.1);
+        assert_eq!(rc.read_u32(0x1C).unwrap(), hd.2);
     }
 
     /// Every family Zephyr drives auto-acks an LSI enable→ready pair, at the
