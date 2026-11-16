@@ -475,6 +475,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32f411_tier1_survival"),
     },
     ChipConf {
+        // NUCLEO-F411RE: the raw-register smoke (examples/nucleo-f411re) runs
+        // in the PR board lane and the stock stm32duino row in the Arduino
+        // matrix, but no PR-run Rust survival gate or reset oracle exists for
+        // this exact part.
+        name: "stm32f411re",
+        yaml: "configs/chips/stm32f411re.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         // F446 firmware smoke runs in the board lane, but no PR-run Rust
         // survival gate or physical reset oracle exists for this exact part.
         name: "stm32f446re",

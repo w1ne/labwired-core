@@ -266,6 +266,10 @@
       "expect": "STM32F446RE_OK",
       "note": "Small real-register RCC/GPIOA/USART2 boot and LED test; this simulator evidence is not physical silicon validation. Stock STM32duino requires the newer source model for the PWR over-drive and PLLI2S ready handshake."
     },
+    "stm32f411re": {
+      "how": "needs-build",
+      "why": "Exact STM32F411RET6 (NUCLEO-F411RE) descriptor added after the current released CLI. Its raw-register smoke (examples/nucleo-f411re) and stock stm32duino Arduino matrix row are validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
     "stm32f411ceu6": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/stm32f411.elf",

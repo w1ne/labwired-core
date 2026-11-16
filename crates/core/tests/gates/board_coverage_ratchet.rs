@@ -801,6 +801,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // and has no silicon oracle or executing-fidelity differential of its
         // own. Same bar as stm32f411ceu6 above.
         "stm32f446re",
+        // NUCLEO-F411RE (STM32F411RET6, LQFP64). Same die and register set as
+        // stm32f411ceu6; runs a PR-gated raw-register smoke and the stock
+        // stm32duino Arduino matrix row, but it is not a bundled-configs.ts
+        // catalog board and has no silicon oracle or executing-fidelity
+        // differential. Same bar as stm32f411ceu6 above.
+        "stm32f411re",
         // NUCLEO-L432KC (STM32L432KC, RM0394 L43x). Runs the stock stm32duino
         // Arduino matrix row (L0-L8) and a PR-gated raw-register smoke on the
         // shared STM32L4 models, but it is not a bundled-configs.ts catalog

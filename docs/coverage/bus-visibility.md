@@ -270,6 +270,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32f407ze | ✓ | ✓ | ✓ |
 | stm32f407zg | ✓ | ✓ | ✓ |
 | stm32f411ceu6 | ✓ | ✓ | ✓ |
+| stm32f411re | ✓ | ✓ | ✓ |
 | stm32f446re | ✓ | ✓ | ✓ |
 | stm32f746 | — | — | ✓ |
 | stm32f767 | ✓ | ✓ | ✓ |
