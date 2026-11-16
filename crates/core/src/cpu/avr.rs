@@ -1080,6 +1080,21 @@ impl Avr {
         }
     }
 
+    /// Writing a one to PINxn toggles PORTxn whatever DDRxn says (ATmega328P
+    /// DS40002061 §14.2.2, ATmega2560 DS2549 §13.2.2). The toggle lands in
+    /// this core's PORTx latch, which PORTx and the driven bits of PINx read
+    /// back, and the bus-side port follows the new latch.
+    fn write_pin_toggle(&mut self, pin_addr: u16, mask: u8, bus: &mut dyn Bus) {
+        let port_addr = pin_addr + 2;
+        let slot = usize::from(port_addr - 0x20);
+        let latch = self.io[slot] ^ mask;
+        self.io[slot] = latch;
+        let pad = self.port_pad_value(port_addr, latch);
+        // Best-effort, like every port mirror write.
+        let _mirror = bus.write_u8(AVR_IO_MIRROR_BASE + u64::from(port_addr), pad);
+        self.soft_spi_after_port(bus, port_addr, pad);
+    }
+
     /// `PINx` of a port this model has.
     #[inline]
     fn is_pin_reg(&self, addr: u16) -> bool {
@@ -1842,6 +1857,10 @@ impl Avr {
             }
             a if self.eeprom.handles(a) => {
                 self.cycles += self.eeprom.write(a, value, self.cycles);
+                Ok(())
+            }
+            a if self.is_pin_reg(a) => {
+                self.write_pin_toggle(a, value, bus);
                 Ok(())
             }
             0x0020..=0x00FF => {
@@ -5200,6 +5219,92 @@ mod tests {
             vec![(true, 0xAA), (false, 0x55), (true, 0xFF)],
             "SPDR must sample D/C per byte, in order"
         );
+    }
+
+    /// A bus with the real port models of `chip`, to watch the pads.
+    fn chip_bus(chip: &str) -> crate::bus::SystemBus {
+        use labwired_config::{ChipDescriptor, SystemManifest};
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip_path = root.join(format!("configs/chips/{chip}.yaml"));
+        let desc = ChipDescriptor::from_file(&chip_path).expect("chip");
+        let manifest = SystemManifest::from_yaml(&format!(
+            "name: pin-toggle\nchip: {}\nexternal_devices: []\n",
+            chip_path.display()
+        ))
+        .expect("manifest");
+        crate::bus::SystemBus::from_config(&desc, &manifest).expect("bus")
+    }
+
+    /// Writing a one to PINxn toggles PORTxn (ATmega328P DS40002061 §14.2.2,
+    /// ATmega2560 DS2549 §13.2.2), and the toggled latch is what PORTx reads
+    /// back. Firmware that sets an extended-I/O pin (ports H..L, out of SBI
+    /// reach) by reading PORTx and writing the differing bit to PINx relies
+    /// on both: here PL1 is set, set again, cleared and cleared again.
+    #[test]
+    fn pinx_write_toggles_the_portx_latch_firmware_reads_back() {
+        let mut bus = chip_bus("atmega2560");
+        let mut cpu = Avr::for_chip_name("atmega2560");
+        const PINL: u16 = 0x109;
+        const DDRL: u16 = 0x10A;
+        const PORTL: u16 = 0x10B;
+        cpu.data_write(DDRL, 0x0A, &mut bus).unwrap(); // PL1, PL3 outputs
+        let mut set = |cpu: &mut Avr, bus: &mut crate::bus::SystemBus, high: bool| {
+            let mut bits = cpu.data_read(PORTL, bus).unwrap();
+            if high {
+                bits = !bits;
+            }
+            cpu.data_write(PINL, bits & 0x02, bus).unwrap();
+        };
+        for (high, want) in [(true, 0x02), (true, 0x02), (false, 0x00), (false, 0x00)] {
+            set(&mut cpu, &mut bus, high);
+            assert_eq!(
+                cpu.data_read(PORTL, &bus).unwrap(),
+                want,
+                "PORTL after {high}"
+            );
+            assert_eq!(
+                bus.read_gpio_output_by_label("PL1"),
+                Some(want != 0),
+                "PL1 pad after {high}"
+            );
+            assert_eq!(cpu.data_read(PINL, &bus).unwrap() & 0x02, want, "PINL");
+        }
+        // A toggle of PL3 leaves PL1 where it was.
+        set(&mut cpu, &mut bus, true);
+        cpu.data_write(PINL, 0x08, &mut bus).unwrap();
+        assert_eq!(cpu.data_read(PORTL, &bus).unwrap(), 0x0A);
+        assert_eq!(bus.read_gpio_output_by_label("PL3"), Some(true));
+    }
+
+    /// The same toggle through OUT on the 328P (`PINB = _BV(5)`, the
+    /// digitalToggle idiom): PORTB reads back the toggled latch.
+    #[test]
+    fn out_to_pinb_toggles_portb_on_the_328p() {
+        let mut bus = chip_bus("atmega328p");
+        let mut cpu = Avr::for_chip_name("atmega328p");
+        cpu.data_write(0x24, 0x20, &mut bus).unwrap();
+        cpu.data_write(0x23, 0x20, &mut bus).unwrap();
+        assert_eq!(cpu.data_read(0x25, &bus).unwrap(), 0x20);
+        assert_eq!(bus.read_gpio_output_by_label("PB5"), Some(true));
+        cpu.data_write(0x23, 0x20, &mut bus).unwrap();
+        assert_eq!(cpu.data_read(0x25, &bus).unwrap(), 0x00);
+        assert_eq!(bus.read_gpio_output_by_label("PB5"), Some(false));
+    }
+
+    /// SBI on a mega PINx toggles only the addressed bit, on every port in
+    /// SBI reach (PINA..PING), and SBI on TIFR3..5 clears only that flag.
+    #[test]
+    fn sbi_on_mega_pinx_toggles_one_bit() {
+        let mut bus = chip_bus("atmega2560");
+        let mut cpu = Avr::for_chip_name("atmega2560");
+        cpu.data_write(0x21, 0xFF, &mut bus).unwrap(); // DDRA
+        cpu.data_write(0x22, 0x03, &mut bus).unwrap(); // PORTA = 0x03
+                                                       // SBI 0x00 (PINA), 2
+        cpu.load_words(0x200, &[0x9A00 | 2]);
+        cpu.pc = 0x200;
+        cpu.step(&mut bus, &[], &SimulationConfig::default())
+            .unwrap();
+        assert_eq!(cpu.data_read(0x22, &bus).unwrap(), 0x07, "only PA2 toggled");
     }
 
     /// A CPU-held SPI slave whose chip select is active HIGH (an ST7920 in

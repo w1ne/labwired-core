@@ -26,6 +26,25 @@ fn write_one_register(data_addr: u16, model: AvrModel) -> bool {
 }
 
 impl Avr {
+    /// [`write_one_register`] plus every PINx of this part in SBI reach (the
+    /// mega's PINA/PINE/PINF/PING, the 32U4's PINE/PINF) and the extra timer
+    /// flag registers: TIFR3..5 on the ATmega1281/2560 (DS2549 register
+    /// summary 0x18..0x1A), TIFR3/TIFR4 on the ATmega32U4.
+    #[inline]
+    fn sbi_write_one(&self, data_addr: u16) -> bool {
+        write_one_register(data_addr, self.model)
+            || (!self.model.uses_avrxt_data_map()
+                && !self.model.is_reduced_core()
+                && (self.is_pin_reg(data_addr)
+                    || match self.model {
+                        AvrModel::Atmega1281 | AvrModel::Atmega2560 => {
+                            (0x38..=0x3A).contains(&data_addr)
+                        }
+                        AvrModel::Atmega32u4 => matches!(data_addr, 0x38 | 0x39),
+                        _ => false,
+                    }))
+    }
+
     /// SBI, CBI.
     #[inline(always)]
     pub(in crate::cpu::avr) fn exec_bitops_a(
@@ -42,7 +61,7 @@ impl Avr {
             // On the ATmega328P SBI/CBI "only operate on the specified bit":
             // on a write-one register (PINx toggles, interrupt flags clear)
             // a read-modify-write would hit every other bit that reads 1.
-            let v = if write_one_register(data_addr, self.model) {
+            let v = if self.sbi_write_one(data_addr) {
                 1 << b
             } else {
                 self.data_read(data_addr, bus)? | (1 << b)
@@ -59,7 +78,7 @@ impl Avr {
             let b = (op & 0x07) as u8;
             let data_addr = self.io_data_address(a);
             // Writing 0 to a write-one register bit does nothing.
-            if !write_one_register(data_addr, self.model) {
+            if !self.sbi_write_one(data_addr) {
                 let v = self.data_read(data_addr, bus)? & !(1 << b);
                 self.data_write(data_addr, v, bus)?;
             }
