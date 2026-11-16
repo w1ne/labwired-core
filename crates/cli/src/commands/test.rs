@@ -1518,7 +1518,22 @@ pub(crate) fn run_test(
                             }
                             // App magic 0xE9: identity used off 0x30000; factory
                             // MMU maps VA 0x3C03_0000 → phys page 4 (0x40000).
-                            for off in [0x30000usize, 0x40000, 0x10000] {
+                            // `system_early_init` reads it at the DROM page of
+                            // `.flash.appdesc`, which moves with the text size:
+                            // 0x3C04_0000 once the text passes 192 KiB (the
+                            // XIAO ESP32S3 Wire sketch), so seed that page too,
+                            // at its identity and factory (+0x10000) offsets.
+                            // fast_boot below places `.flash.appdesc` 0x20 past
+                            // the page base, so it never overwrites the magic.
+                            let appdesc = esp_appdesc_page_offset(
+                                std::path::Path::new(&firmware_path),
+                                0x3C00_0000,
+                            );
+                            let appdesc_offs = appdesc.into_iter().flat_map(|p| [p, 0x10000 + p]);
+                            for off in [0x30000usize, 0x40000, 0x10000]
+                                .into_iter()
+                                .chain(appdesc_offs)
+                            {
                                 if d.len() > off {
                                     d[off] = 0xE9;
                                 }

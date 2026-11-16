@@ -1,0 +1,21 @@
+id: stm32f411re
+chip: stm32f411re
+system: systems/stm32f411re.yaml
+# Pinned like CI (core-arduino-matrix-smoke maps stm32* to 19.7.1):
+# ststm32 20.0.0 makes SPI.begin() a no-op and L4 spins on a null SPI.
+pio: { platform: ststm32@19.7.1, board: nucleo_f411re, framework: arduino }
+max_steps: 10000000
+budget_reason: "NUCLEO-F411RE 100 MHz, measured 2026-11-15 (see examples/nucleo-f411re/evidence/arduino-matrix/README.md)"
+# LD2 = PA5 (UM1724 §6.4).
+led_watch: "gpioa:5"
+led_min_edges: 2
+# L6 falls through to LED_BUILTIN: PA5 is TIM2_CH1 on AF1 (stm32duino
+# PinMap_TIM, bus/attach.rs STM32F4_TIMER_PADS). F411 has no DAC, so stock
+# analogWrite takes the timer path, unlike the F446 (PA5 = DAC_OUT2).
+pwm_watch: "gpioa:5"
+pwm_min_edges: 20
+family: stm32
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "STM32F411 has no CAN peripheral"
+notes: "Stock stm32duino NUCLEO_F411RE (HSE bypass 8 MHz from ST-LINK MCO, PLL 100 MHz)"

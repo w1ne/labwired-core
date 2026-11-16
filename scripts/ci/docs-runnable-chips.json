@@ -33,6 +33,18 @@
       "how": "needs-build",
       "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
     },
+    "ch32v005f6p6": {
+      "how": "needs-build",
+      "why": "New CH32V005 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
+    "ch32v006k8u6": {
+      "how": "needs-build",
+      "why": "New CH32V006 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
+    "ch32v203c8t6": {
+      "how": "needs-build",
+      "why": "New CH32V203 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
     "dspic33fj32mc204": {
       "how": "committed",
       "firmware": "examples/dspic33fj32mc204/firmware/dspic33fj32mc204-uart-smoke.elf",
@@ -258,6 +270,10 @@
       "expect": "STM32F446RE_OK",
       "note": "Small real-register RCC/GPIOA/USART2 boot and LED test; this simulator evidence is not physical silicon validation. Stock STM32duino requires the newer source model for the PWR over-drive and PLLI2S ready handshake."
     },
+    "stm32f411re": {
+      "how": "needs-build",
+      "why": "Exact STM32F411RET6 (NUCLEO-F411RE) descriptor added after the current released CLI. Its raw-register smoke (examples/nucleo-f411re) and stock stm32duino Arduino matrix row are validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
     "stm32f411ceu6": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/stm32f411.elf",
@@ -442,6 +458,10 @@
       "script": "examples/arduino-nano-blinky/io-smoke.yaml",
       "expect": null,
       "note": "AVR runs through a system manifest, not `labwired run`. The script asserts the sketch's `nano-ok` banner on USART0 and that it then executes its whole step budget without faulting."
+    },
+    "atmega4809": {
+      "how": "needs-build",
+      "why": "The ATmega4809 (Arduino Nano Every) model and its AVRxt core are newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix arduino-nano-every row (L0/L1/L2/L5/L7) passes from source on stock ArduinoCore-megaavr; switch this row after a release carries the atmega4809 descriptor."
     },
     "atmega328pb": {
       "how": "needs-build",

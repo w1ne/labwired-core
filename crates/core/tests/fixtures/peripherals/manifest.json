@@ -818,7 +818,7 @@
       "device_type": "bmp280",
       "label": "BMP280 Pressure",
       "summary": "Bosch BMP280 I²C pressure + temperature sensor (no humidity).",
-      "detail": "Bosch BMP280 at 0x76 (0x77 with SDO high). Register map compatible with the common Arduino BMP280 libraries: CHIP_ID 0x58 at 0xD0, the Bosch reference calibration block at 0x88, CTRL_MEAS / CONFIG storage, and the 0xB6 soft reset. ⚠️ The raw ADC words are CONSTANTS (0x80000 each), so the part reports the same ~25 °C / ~100 kPa reading for ever and has no stimulus channels — the same as the hand-written model it replaces. The exact integer inversion used by bme280.yaml could support stimulus-driven measurements in a separate behavior change; this parity port retains the constant outputs. Oversampling, the IIR filter, the measurement modes and the conversion time are not modelled.",
+      "detail": "Bosch BMP280 at 0x76 (0x77 with SDO high). Register map compatible with the common Arduino BMP280 libraries: CHIP_ID 0x58 at 0xD0, the Bosch reference calibration block at 0x88, CTRL_MEAS / CONFIG storage, and the 0xB6 soft reset. The raw pressure and temperature words are the exact inverse of Bosch's integer compensation at the pressure (hPa) and temperature (°C) stimulus, so firmware running the standard compensation reads the stimulus back. Defaults to 25 °C / 1013.25 hPa. Oversampling, the IIR filter, the measurement modes and the conversion time are not modelled.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -829,7 +829,24 @@
         }
       ],
       "labs": [],
-      "inputs": []
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 85.0,
+          "default": 25.0
+        },
+        {
+          "key": "pressure",
+          "label": "Pressure",
+          "unit": "hPa",
+          "min": 300.0,
+          "max": 1100.0,
+          "default": 1013.25
+        }
+      ]
     },
     {
       "device_type": "pcf8574",

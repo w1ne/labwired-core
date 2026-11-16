@@ -486,6 +486,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32f411_tier1_survival"),
     },
     ChipConf {
+        // NUCLEO-F411RE: the raw-register smoke (examples/nucleo-f411re) runs
+        // in the PR board lane and the stock stm32duino row in the Arduino
+        // matrix, but no PR-run Rust survival gate or reset oracle exists for
+        // this exact part.
+        name: "stm32f411re",
+        yaml: "configs/chips/stm32f411re.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         // F446 firmware smoke runs in the board lane, but no PR-run Rust
         // survival gate or physical reset oracle exists for this exact part.
         name: "stm32f446re",
@@ -993,6 +1003,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some("avr_atmega2561::atmega2561_boots_and_prints"),
     },
+    // ATmega4809 (megaAVR 0-series, Arduino Nano Every). SIM-DERIVED from the
+    // Microchip ATDF: no silicon capture. Its Arduino matrix row and
+    // examples/arduino-nano-every/io-smoke.yaml run through PlatformIO and the
+    // CLI, not as a Rust test, so no behavior_gate resolves.
+    ChipConf {
+        name: "atmega4809",
+        yaml: "configs/chips/atmega4809.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     // ATmega32U4 (Arduino Leonardo / Micro). SIM-DERIVED from DS7766: no
     // silicon capture. The USB device model is unit-tested in
     // cpu::avr::usb::tests and its Arduino matrix row runs through PlatformIO
@@ -1179,6 +1199,36 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some(
             "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
+        ),
+    },
+    // CH32V005F6P6 (QingKe V2C, RV32EmC). SIM-DERIVED: no silicon capture,
+    // so no reset_oracle. The gate boots a committed ELF that blinks PC0.
+    ChipConf {
+        name: "ch32v005f6p6",
+        yaml: "configs/chips/ch32v005f6p6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v005_compiled_firmware::ch32v005_compiled_rv32e_firmware_toggles_pc0",
+        ),
+    },
+    // CH32V006K8U6 (QingKe V2C, RV32EmC). SIM-DERIVED: no silicon capture,
+    // so no reset_oracle. The gate boots a committed ELF that blinks PB0.
+    ChipConf {
+        name: "ch32v006k8u6",
+        yaml: "configs/chips/ch32v006k8u6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v006_compiled_firmware::ch32v006_compiled_rv32e_firmware_toggles_pb0",
+        ),
+    },
+    // CH32V203C8T6 (QingKe V4B, RV32IMAC). SIM-DERIVED: no silicon capture,
+    // so no reset_oracle. The gate boots a committed ELF that blinks PC13.
+    ChipConf {
+        name: "ch32v203c8t6",
+        yaml: "configs/chips/ch32v203c8t6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13",
         ),
     },
     // CH32V003 package variants (QFN20 F4U6, SOP16 A4M6, SOP8 J4M6). Same
