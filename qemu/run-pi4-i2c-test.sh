@@ -108,6 +108,7 @@ run() {
     if [[ "$mode" != no-bridge ]]; then
         local flag=()
         [[ "$mode" == no-device ]] && flag=(--no-device)
+        rm -f "$sock"
         "$BRIDGE" --socket "$sock" "${flag[@]}" 2>"$LOGS/$name.bridge.log" &
         bpid=$!
         for _ in $(seq 100); do [[ -S "$sock" ]] && break; sleep 0.1; done
@@ -138,6 +139,8 @@ run positive bridge
 run no-device no-device
 run no-bridge no-bridge
 
+cat "$LOGS/positive.log" "$LOGS/no-device.log" "$LOGS/no-bridge.log" >"$LOGS/all-runs.log"
+
 # --- 5. verdict from the guest console --------------------------------------
 fail=0
 check() { if grep -q "$2" "$LOGS/$1.log"; then echo "ok   $1: $3"; else echo "FAIL $1: $3"; fail=1; fi; }
@@ -148,6 +151,6 @@ check no-device '^LW-END' "guest finished"
 check no-bridge '^LW-DETECT-0x76: absent' "i2cdetect shows no 0x76"
 check no-bridge '^LW-END' "guest finished"
 grep -h "QEMU disconnected after" "$LOGS"/*.bridge.log 2>/dev/null || true
-echo "logs: $LOGS"
+echo "logs: $LOGS (all-runs.log = every guest console)"
 if (( fail )); then echo "RESULT: FAIL"; exit 1; fi
 echo "RESULT: PASS"

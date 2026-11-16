@@ -86,6 +86,7 @@ fn parse_args() -> Result<Args, String> {
 struct Bridge {
     bsc: Bcm2835Bsc,
     irq: bool,
+    irq_raises: u64,
     trace: bool,
 }
 
@@ -96,18 +97,32 @@ impl Bridge {
         let reply = match req.kind {
             MSG_READ => {
                 let v = (self.bsc.read_reg(reg) as u64) >> shift;
-                let v = if req.size >= 4 { v } else { v & ((1u64 << (req.size * 8)) - 1) };
+                let v = if req.size >= 4 {
+                    v
+                } else {
+                    v & ((1u64 << (req.size * 8)) - 1)
+                };
                 if self.trace {
                     eprintln!("[qemu-bridge] R {:#04x} -> {:#010x}", req.offset, v);
                 }
-                Msg { kind: MSG_REPLY, size: req.size, offset: req.offset, value: v }
+                Msg {
+                    kind: MSG_REPLY,
+                    size: req.size,
+                    offset: req.offset,
+                    value: v,
+                }
             }
             MSG_WRITE => {
                 if self.trace {
                     eprintln!("[qemu-bridge] W {:#04x} <- {:#010x}", req.offset, req.value);
                 }
                 self.bsc.write_reg(reg, (req.value << shift) as u32);
-                Msg { kind: MSG_ACK, size: req.size, offset: req.offset, value: 0 }
+                Msg {
+                    kind: MSG_ACK,
+                    size: req.size,
+                    offset: req.offset,
+                    value: 0,
+                }
             }
             k => return Err(format!("unexpected message type {k}")),
         };
@@ -115,10 +130,16 @@ impl Bridge {
         let irq = self.bsc.irq_pending();
         if irq != self.irq {
             self.irq = irq;
+            self.irq_raises += irq as u64;
             if self.trace {
                 eprintln!("[qemu-bridge] IRQ {}", irq as u8);
             }
-            out.push(Msg { kind: MSG_IRQ, size: 0, offset: 0, value: irq as u64 });
+            out.push(Msg {
+                kind: MSG_IRQ,
+                size: 0,
+                offset: 0,
+                value: irq as u64,
+            });
         }
         out.push(reply);
         Ok(out)
@@ -132,14 +153,19 @@ fn serve(mut stream: UnixStream, bridge: &mut Bridge) -> Result<(), String> {
         match stream.read_exact(&mut buf) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                eprintln!("[qemu-bridge] QEMU disconnected after {accesses} accesses");
+                eprintln!(
+                    "[qemu-bridge] QEMU disconnected after {accesses} accesses, {} IRQ raises",
+                    bridge.irq_raises
+                );
                 return Ok(());
             }
             Err(e) => return Err(format!("read: {e}")),
         }
         accesses += 1;
         for m in bridge.handle(Msg::decode(&buf))? {
-            stream.write_all(&m.encode()).map_err(|e| format!("write: {e}"))?;
+            stream
+                .write_all(&m.encode())
+                .map_err(|e| format!("write: {e}"))?;
         }
     }
 }
@@ -176,7 +202,12 @@ fn main() -> ExitCode {
         }
     };
     eprintln!("[qemu-bridge] QEMU connected");
-    let mut bridge = Bridge { bsc, irq: false, trace: args.trace };
+    let mut bridge = Bridge {
+        bsc,
+        irq: false,
+        irq_raises: 0,
+        trace: args.trace,
+    };
     let res = serve(stream, &mut bridge);
     let _ = std::fs::remove_file(&args.socket);
     match res {
@@ -197,24 +228,45 @@ mod tests {
         if with_device {
             bsc.attach_slave(Box::new(Bme280::new(0x76)));
         }
-        Bridge { bsc, irq: false, trace: false }
+        Bridge {
+            bsc,
+            irq: false,
+            irq_raises: 0,
+            trace: false,
+        }
     }
 
     fn w(b: &mut Bridge, off: u64, v: u64) -> Vec<Msg> {
-        b.handle(Msg { kind: MSG_WRITE, size: 4, offset: off, value: v }).unwrap()
+        b.handle(Msg {
+            kind: MSG_WRITE,
+            size: 4,
+            offset: off,
+            value: v,
+        })
+        .unwrap()
     }
 
     fn r(b: &mut Bridge, off: u64) -> u64 {
-        b.handle(Msg { kind: MSG_READ, size: 4, offset: off, value: 0 })
-            .unwrap()
-            .last()
-            .unwrap()
-            .value
+        b.handle(Msg {
+            kind: MSG_READ,
+            size: 4,
+            offset: off,
+            value: 0,
+        })
+        .unwrap()
+        .last()
+        .unwrap()
+        .value
     }
 
     #[test]
     fn msg_roundtrip() {
-        let m = Msg { kind: MSG_WRITE, size: 4, offset: 0x10, value: 0xd0 };
+        let m = Msg {
+            kind: MSG_WRITE,
+            size: 4,
+            offset: 0x10,
+            value: 0xd0,
+        };
         assert_eq!(Msg::decode(&m.encode()), m);
     }
 
@@ -224,7 +276,15 @@ mod tests {
         w(&mut b, 0x0c, 0x76);
         w(&mut b, 0x08, 0);
         let out = w(&mut b, 0x00, 0x8000 | 0x80 | 0x200 | 0x100);
-        assert_eq!(out[0], Msg { kind: MSG_IRQ, size: 0, offset: 0, value: 1 });
+        assert_eq!(
+            out[0],
+            Msg {
+                kind: MSG_IRQ,
+                size: 0,
+                offset: 0,
+                value: 1
+            }
+        );
         assert_eq!(out[1].kind, MSG_ACK);
         assert_eq!(r(&mut b, 0x04) & 0x102, 0x002, "DONE, no ERR");
         w(&mut b, 0x00, 0x30);
