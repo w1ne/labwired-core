@@ -650,9 +650,14 @@ mod tests {
         cpu.set_pc(0x100);
         run(&mut cpu, &mut bus, 1);
         assert_eq!(
-            bus.mem[&(AVR_IO_MIRROR_BASE + u64::from(PB))],
-            1 << 5,
-            "the PINB write carries bit 5 only"
+            read(&cpu, &bus, PB + 2),
+            0x01,
+            "PORTB: PB5 toggled, PB0 kept"
+        );
+        assert_eq!(
+            bus.mem[&(AVR_IO_MIRROR_BASE + u64::from(PB + 2))],
+            0x01,
+            "the bus-side PORTB follows the toggled latch"
         );
     }
 

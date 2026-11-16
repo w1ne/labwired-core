@@ -948,6 +948,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "at32f421g8u7",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "ch32v003j4m6",
     "reg_match": 0
   },

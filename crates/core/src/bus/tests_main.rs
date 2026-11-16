@@ -135,6 +135,82 @@ fn gpio_edge_snapshot_skips_generic_gpio_without_edge_observers() {
 }
 
 #[test]
+fn gpio_edges_are_raised_at_the_write_and_do_not_block_the_fast_path() {
+    use std::sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc, Mutex,
+    };
+
+    #[derive(Debug)]
+    struct Port(Arc<AtomicU32>);
+    impl crate::Peripheral for Port {
+        fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, value: u8) -> crate::SimResult<()> {
+            self.0.store(u32::from(value), Ordering::SeqCst);
+            Ok(())
+        }
+        fn read_gpio_input_word(&self) -> u32 {
+            self.0.load(Ordering::SeqCst)
+        }
+    }
+
+    #[derive(Debug)]
+    struct Sink(Arc<Mutex<Vec<(u8, u8, u8)>>>);
+    impl crate::Peripheral for Sink {
+        fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+            Ok(())
+        }
+        fn observes_gpio_edges(&self) -> bool {
+            true
+        }
+        fn observe_gpio_change(&mut self, changes: &[(u8, u8, u8)]) -> bool {
+            self.0.lock().unwrap().extend_from_slice(changes);
+            false
+        }
+    }
+
+    let levels = Arc::new(AtomicU32::new(0));
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let mut bus = SystemBus::empty();
+    bus.add_peripheral("gpio0", 0x5000_0000, 0x1000, None, Box::new(Port(levels)));
+    bus.add_peripheral("sink", 0x1000, 0x100, None, Box::new(Sink(seen.clone())));
+    bus.legacy_walk_disabled = true;
+    // Only meaningful where the scheduler can delete the walk.
+    assert_eq!(
+        bus.per_cycle_tick_is_trivial(),
+        cfg!(feature = "event-scheduler"),
+        "an edge observer must not pin the per-cycle tick"
+    );
+
+    // First tick adopts the baseline; nothing has moved.
+    bus.tick_peripherals_fully();
+    assert!(seen.lock().unwrap().is_empty());
+
+    // A pulse inside one window: both transitions are seen, in order, with no
+    // tick in between.
+    bus.write_u8(0x5000_0000, 1).unwrap();
+    bus.write_u8(0x5000_0000, 0).unwrap();
+    assert_eq!(*seen.lock().unwrap(), vec![(0, 0, 1), (0, 0, 0)]);
+
+    // A write to an unrelated peripheral raises nothing.
+    bus.write_u8(0x1000, 7).unwrap();
+    assert_eq!(seen.lock().unwrap().len(), 2);
+
+    // A level change that bypassed the write choke is still caught by the
+    // next tick, exactly once.
+    bus.write_u8(0x5000_0000, 4).unwrap();
+    bus.tick_peripherals_fully();
+    bus.tick_peripherals_fully();
+    assert_eq!(seen.lock().unwrap().len(), 3);
+    assert_eq!(seen.lock().unwrap()[2], (0, 2, 1));
+}
+
+#[test]
 fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     let mut bus = SystemBus::new();
     // Systimer model owns ESP register map; bus only sees MmioAccessClass.
@@ -3959,7 +4035,7 @@ fn test_flash_boot_alias_read_and_write() {
         pms_write_bypass: false,
         esp32c3_pms_armed: false,
         flash_models_ops: false,
-        nordic_gpio_service: false,
+        gpio_edge_observers: false,
         timer_capture_wired: false,
         wire_inputs_live: false,
         resident_scheduling_disabled: false,
@@ -4100,7 +4176,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         pms_write_bypass: false,
         esp32c3_pms_armed: false,
         flash_models_ops: false,
-        nordic_gpio_service: false,
+        gpio_edge_observers: false,
         timer_capture_wired: false,
         wire_inputs_live: false,
         resident_scheduling_disabled: false,
@@ -4394,7 +4470,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         pms_write_bypass: false,
         esp32c3_pms_armed: false,
         flash_models_ops: false,
-        nordic_gpio_service: false,
+        gpio_edge_observers: false,
         timer_capture_wired: false,
         wire_inputs_live: false,
         resident_scheduling_disabled: false,
@@ -4684,7 +4760,7 @@ fn test_peripheral_range_index_lookup() {
         pms_write_bypass: false,
         esp32c3_pms_armed: false,
         flash_models_ops: false,
-        nordic_gpio_service: false,
+        gpio_edge_observers: false,
         timer_capture_wired: false,
         wire_inputs_live: false,
         resident_scheduling_disabled: false,
@@ -4830,7 +4906,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         pms_write_bypass: false,
         esp32c3_pms_armed: false,
         flash_models_ops: false,
-        nordic_gpio_service: false,
+        gpio_edge_observers: false,
         timer_capture_wired: false,
         wire_inputs_live: false,
         resident_scheduling_disabled: false,
@@ -6877,7 +6953,13 @@ impl crate::Peripheral for FlashStoreProbe {
     fn owns_flash_stores(&self) -> bool {
         true
     }
-    fn flash_cpu_store(&mut self, offset: u64, width: u8, value: u32) -> crate::FlashStoreOutcome {
+    fn flash_cpu_store(
+        &mut self,
+        offset: u64,
+        width: u8,
+        value: u32,
+        _existing: u32,
+    ) -> crate::FlashStoreOutcome {
         self.seen.lock().unwrap().push((offset, width, value));
         self.outcome
     }

@@ -364,10 +364,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_mclk",
     // Renesas RA SYSTEM (HOCO / OSCSF).
     "ra_sysc",
-    // Renesas RA8 / RA6 SYSTEM, full R_SYSTEM register file (adds the
+    // Renesas RA8 / RA6 / RA4 SYSTEM, full R_SYSTEM register file (adds the
     // xxxCKCR handshake).
     "ra8_sysc",
     "ra6_sysc",
+    "ra4_sysc",
     // Renesas RX SYSTEM (oscillator stable flags, clock-switch handshakes).
     "rx_sysc",
     // Renesas RX FLASH control registers (0xAA-keyed word writes).
@@ -390,12 +391,14 @@ pub const MODEL_TYPES: &[&str] = &[
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
     // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT, the
-    // 12-bit ADC and DAC, the IIC (RIIC) master and the GPT (saw-wave PWM).
+    // 12-bit ADC and DAC, the IIC (RIIC) master, the CAN module (normal
+    // mailbox mode) and the GPT (saw-wave PWM).
     "ra_icu",
     "ra_agt",
     "ra_adc12",
     "ra_dac12",
     "ra_iic",
+    "ra_can",
     "ra_gpt",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
@@ -905,6 +908,7 @@ pub fn try_build(
                 // `input_capture: stm32f4`).
                 let pad_map = match p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
                     None => None,
+                    Some("at32f421") => Some("at32f421"),
                     Some("stm32g0") => Some("stm32g0"),
                     Some("stm32c0") => Some("stm32c0"),
                     Some("stm32g4") => Some("stm32g4"),
@@ -916,15 +920,33 @@ pub fn try_build(
                     Some("stm32h5") => Some("stm32h5"),
                     Some(other) => {
                         return Err(anyhow::anyhow!(
-                            "timer '{}': unknown pad_map '{other}' (supported: stm32g0, stm32c0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
+                            "timer '{}': unknown pad_map '{other}' (supported: at32f421, stm32g0, stm32c0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
                             p_cfg.id
                         ))
                     }
                 };
+                // `capture_compare_irq: N` — a separate CC vector (AT32F421
+                // TMR1: overflow/trigger/hall IRQ13, channel IRQ14).
+                let capture_compare_irq = p_cfg
+                    .config
+                    .get("capture_compare_irq")
+                    .map(|value| {
+                        value
+                            .as_u64()
+                            .and_then(|v| u32::try_from(v).ok())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "timer '{}': capture_compare_irq must be a u32",
+                                    p_cfg.id
+                                )
+                            })
+                    })
+                    .transpose()?;
                 Box::new(
                     crate::peripherals::timer::Timer::new_with_layout(width, advanced)
                         .basic(basic)
                         .ccer_np(ccer_np)
+                        .capture_compare_irq(capture_compare_irq)
                         .pad_map(pad_map),
                 )
             }
@@ -1318,9 +1340,13 @@ pub fn try_build(
                 // Absent/anything else: the RP2040 converter.
                 _ => crate::peripherals::rp2040::adc::AdcLayout::Rp2040,
             };
-            Box::new(crate::peripherals::rp2040::adc::Rp2040Adc::with_layout(
-                layout,
-            ))
+            // The descriptor `irq:` is ADC_IRQ_FIFO (22 on the RP2040, 35 on
+            // the RP2350); without one, the layout's own line.
+            let adc = crate::peripherals::rp2040::adc::Rp2040Adc::with_layout(layout);
+            Box::new(match p_cfg.irq {
+                Some(irq) => adc.with_irq(irq),
+                None => adc,
+            })
         }
         "rp2040_rtc" => Box::new(crate::peripherals::rp2040::rtc::Rp2040Rtc::new()),
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
@@ -1344,7 +1370,27 @@ pub fn try_build(
         "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
         "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
         "rtc_v3" => Box::new(crate::peripherals::rtc_v3::RtcV3::new()),
-        "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),
+        "iwdg" => {
+            let iwdg = crate::peripherals::iwdg::Iwdg::new();
+            // `reset_on_expiry: { lsi_hz: N }` opts in to a counting IWDG
+            // that resets the machine; absent keeps the latch-only model.
+            match p_cfg.config.get("reset_on_expiry") {
+                None => Box::new(iwdg),
+                Some(v) => {
+                    let lsi_hz = v
+                        .get("lsi_hz")
+                        .and_then(|hz| hz.as_u64())
+                        .filter(|hz| *hz > 0)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "iwdg '{}': reset_on_expiry needs a positive lsi_hz",
+                                p_cfg.id
+                            )
+                        })?;
+                    Box::new(iwdg.with_reset_on_expiry(lsi_hz))
+                }
+            }
+        }
         "wwdg" => Box::new(crate::peripherals::wwdg::Wwdg::new()),
         "dac" => Box::new(crate::peripherals::dac::Dac::new()),
         "lptim" => Box::new(crate::peripherals::lptim::Lptim::new()),
@@ -1373,6 +1419,17 @@ pub fn try_build(
             } else {
                 (1u32 << lines) - 1
             };
+            // `line_mask: 0x2bffff` names the implemented lines exactly when
+            // they are not contiguous (AT32F421: 0..17, 19, 21).
+            let line_mask = match p_cfg.config.get("line_mask") {
+                None => line_mask,
+                Some(v) => v
+                    .as_u64()
+                    .and_then(|m| u32::try_from(m).ok())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("exti `{}`: line_mask must be a u32", p_cfg.id)
+                    })?,
+            };
             Box::new(crate::peripherals::exti::Exti::new_with_layout_lines(
                 layout, line_mask,
             ))
@@ -1390,6 +1447,15 @@ pub fn try_build(
                     anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
                 }
             };
+            // `channels: N` declares a controller with fewer than seven
+            // channels (STM32F030 / AT32F421 DMA1 have five).
+            if let Some(n) = p_cfg.config.get("channels") {
+                let n = n
+                    .as_u64()
+                    .filter(|n| (1..=7).contains(n))
+                    .ok_or_else(|| anyhow::anyhow!("dma `{}`: channels must be 1..=7", p_cfg.id))?;
+                dma = dma.with_channel_count(n as usize);
+            }
             for (request, v) in dma_request_table(p_cfg) {
                 let pair = v.as_sequence().map(|s| {
                     s.iter()
@@ -1640,6 +1706,7 @@ pub fn try_build(
         "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
         "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra8()),
         "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
+        "ra4_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra4()),
         "rx_sysc" => Box::new(crate::peripherals::rx_sysc::RxSysc::new()),
         // `irq`: the EVIC vector; `timer_type`: "a" (Timer1) or "b";
         // `clock_hz`: SYSCLK; `pbclk_hz`: the timer's PBCLK3; `sosc_hz`.
@@ -1823,7 +1890,8 @@ pub fn try_build(
             ))
         }
         // `clock_hz`: the rate the bus cycles run at; `elc_event`: the unit's
-        // scan-end event; `vref_mv`: the reference; `input_mv: { <ch>: <mV> }`:
+        // scan-end event; `vref_mv`: the reference; `adc14`: a 14-bit ADC14
+        // unit (ADPRC = 3 is 14-bit); `input_mv: { <ch>: <mV> }`:
         // board-level static channel levels.
         // `clock_hz`: the rate the bus cycles run at; `pclkb_hz`: PCLKB, the
         // RIIC's clock; `elc_event`: the channel's RXI event (TXI/TEI/ERI
@@ -1837,9 +1905,20 @@ pub fn try_build(
                 get("elc_event").map_or(iic::DEFAULT_ELC_EVENT, |v| v as u32),
             ))
         }
+        // Normal mailbox mode; interrupts are refused, so there is no `irq`.
+        "ra_can" => {
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("ra_can '{}' models no interrupt (drop `irq`)", p_cfg.id);
+            }
+            if let Some(k) = p_cfg.config.keys().next() {
+                anyhow::bail!("ra_can '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            Box::new(crate::peripherals::ra_can::RaCan::new())
+        }
         // `channels`: GPT channel count; `clock_hz`: the rate the bus cycles
         // run at; `pclkd_hz`: PCLKD, the count clock before GTCR.TPCS;
-        // `elc_event`: GPT0's capture/compare A event (nine per channel);
+        // `elc_event`: GPT0's capture/compare A event; `events_per_channel`:
+        // the ELC event stride (default nine; eight on the RA4M1);
         // `wide_channels`: mask of the 32-bit channels; `gtioc_pads`:
         // `{ GTIOCnA: Pmnn, ... }`, the pads that carry each GTIOC line.
         "ra_gpt" => {
@@ -1868,6 +1947,9 @@ pub fn try_build(
                     get("elc_event").map_or(gpt::DEFAULT_ELC_EVENT, |v| v as u32),
                     get("wide_channels").map_or(0xFF, |v| v as u32),
                 )
+                .with_events_per_channel(
+                    get("events_per_channel").map_or(gpt::DEFAULT_EVENTS_PER_CHANNEL, |v| v as u32),
+                )
                 .with_output_pads(pads),
             )
         }
@@ -1878,6 +1960,13 @@ pub fn try_build(
                 get("clock_hz").unwrap_or(adc::DEFAULT_CLOCK_HZ),
                 get("elc_event").map_or(adc::DEFAULT_ELC_EVENT, |v| v as u32),
                 get("vref_mv").map_or(adc::DEFAULT_VREF_MV, |v| v as u16),
+            )
+            .with_adc14(
+                p_cfg
+                    .config
+                    .get("adc14")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
             );
             if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
                 for (k, v) in map {

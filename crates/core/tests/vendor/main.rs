@@ -18,6 +18,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod at32f421_contract;
 mod cc2538_rom;
 mod cc2538_sleep_timer_irq;
 mod ch32l103_compiled_firmware;
