@@ -775,6 +775,11 @@ enum WriteBinding {
         connection: String,
         channel: u8,
     },
+    /// A pad level by label: its `analog_pins:` ADC channel and every
+    /// comparator sampling the pad (`SystemBus::set_analog_pad_mv`).
+    AnalogPad {
+        pad: String,
+    },
     /// The chip's VDD, fed to its supply supervisor.
     SupplyVdd,
     /// Collected and published once as an atomic device-rail batch.
@@ -1120,9 +1125,8 @@ impl SignalRouter {
                         pad: pad.clone(),
                     })?;
                 check_adc_channel(bus, path, &connection, channel)?;
-                Ok(WriteBinding::AdcChannel {
-                    connection,
-                    channel,
+                Ok(WriteBinding::AnalogPad {
+                    pad: pad.to_ascii_uppercase(),
                 })
             }
             SignalPath::AdcChannel {
@@ -1463,6 +1467,23 @@ impl SignalRouter {
                         errors.push(RoutingError::AdcUnavailable {
                             path: path.clone(),
                             channel: *channel,
+                        });
+                    }
+                }
+                WriteBinding::AnalogPad { pad } => {
+                    let Some(volts) = signal_as_f64(value) else {
+                        errors.push(RoutingError::TypeMismatch {
+                            path: path.clone(),
+                            value: value.clone(),
+                        });
+                        continue;
+                    };
+                    let millivolts = volts_to_millivolts(volts);
+                    if !bus.set_analog_pad_mv(pad, millivolts) {
+                        let channel = bus.analog_pin_map.get(pad).map_or(0, |(_, c)| *c);
+                        errors.push(RoutingError::AdcUnavailable {
+                            path: path.clone(),
+                            channel,
                         });
                     }
                 }
