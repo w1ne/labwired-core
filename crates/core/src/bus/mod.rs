@@ -225,6 +225,10 @@ pub struct ResolvedClockGate {
     /// Bus index of the GCLK peripheral, resolved at config-build when
     /// [`Self::gclk_id`] is `Some`. `None` when no GCLK channel is required.
     pub gclk_idx: Option<usize>,
+    /// Last observed reset hold from the controller
+    /// ([`crate::Peripheral::clock_gate_reset_asserted`]), so an assertion
+    /// is applied once, on its edge.
+    pub reset_asserted: bool,
 }
 
 /// The `peripheral_tick_interval` recommended for a fully scheduler-driven
