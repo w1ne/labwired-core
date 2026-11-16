@@ -406,6 +406,15 @@ pub trait Cpu: Send {
         None
     }
 
+    /// End-of-run diagnosis only. When the core sits in a loop that is a
+    /// fixed point on plain memory (one iteration from the current PC comes
+    /// back to it with the architectural state unchanged, loading only RAM or
+    /// flash), the addresses that iteration loads, in order. `None` when it is
+    /// not such a loop, or the core cannot tell. Changes no state.
+    fn stalled_loop_loads(&mut self, _bus: &dyn Bus) -> Option<Vec<u64>> {
+        None
+    }
+
     /// Skip `cycles` of the loop the last [`Self::poll_loop_skip_budget`]
     /// proved (a multiple of its period, at most its cycles). `false`, having
     /// changed nothing, when there is no such plan.
@@ -674,6 +683,9 @@ impl Cpu for Box<dyn Cpu> {
     }
     fn poll_loop_skip_budget(&mut self, bus: &dyn Bus, limit: u64) -> Option<(u64, u64)> {
         (**self).poll_loop_skip_budget(bus, limit)
+    }
+    fn stalled_loop_loads(&mut self, bus: &dyn Bus) -> Option<Vec<u64>> {
+        (**self).stalled_loop_loads(bus)
     }
     fn fast_forward_poll_loop(&mut self, cycles: u64) -> bool {
         (**self).fast_forward_poll_loop(cycles)

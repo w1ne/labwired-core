@@ -343,6 +343,11 @@ WAIVED: dict[str, str] = {
         "perf-spin fixture or compiler. No throughput claim is made for this "
         "part yet."
     ),
+    "ch32x035c8t6": (
+        "The CH32X035 model runs RV32IMAC with WCH/F1-layout peripherals; CI "
+        "has no perf-spin fixture built for this memory map. No throughput "
+        "claim is made for this part yet."
+    ),
     "ch32v006k8u6": (
         "The CH32V006 model uses RV32EmC, but CI has no RV32E-specific "
         "perf-spin fixture or compiler. No throughput claim is made for this "

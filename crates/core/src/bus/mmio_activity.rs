@@ -72,6 +72,37 @@ impl SystemBus {
         (n > 0).then(|| (p.name.clone(), u64::from(off), n, cycle))
     }
 
+    /// Extend (or restart) the back-to-back register streak that
+    /// [`Self::mmio_poll_streak`] reports.
+    #[inline]
+    fn note_poll_streak(&self, peri_idx: usize, offset: u64, count: u32) {
+        let (i, o, n, _) = self.poll_streak.get();
+        let (idx, off) = (peri_idx as u32, offset as u32);
+        let n = if i == idx && o == off { n } else { 0 };
+        self.poll_streak.set((
+            idx,
+            off,
+            n.saturating_add(u64::from(count)),
+            self.current_cycle,
+        ));
+    }
+
+    /// A CPU read of a clock-gated peripheral: it returns 0 and never reaches
+    /// the model, but a firmware waiting on a status bit of an unclocked block
+    /// is the commonest wait that never ends, so the read still counts toward
+    /// the poll streak. Nothing else is bookkept: the block saw no access.
+    #[cold]
+    pub(crate) fn note_gated_read(&self, peri_idx: usize, offset: u64) {
+        self.note_poll_streak(peri_idx, offset, 1);
+    }
+
+    /// Whether the named peripheral is clocked right now (`None` when no
+    /// peripheral has that name). For end-of-run diagnosis.
+    pub fn peripheral_clocked(&self, name: &str) -> Option<bool> {
+        let idx = self.peripherals.iter().position(|p| p.name == name)?;
+        Some(self.is_peripheral_clocked(idx))
+    }
+
     /// Snapshot and zero the run-lifetime access counters.
     #[inline]
     pub fn take_access_counts(&self) -> (u64, u64, u64) {
@@ -301,15 +332,7 @@ impl SystemBus {
         }
         let class = p.dev.mmio_access_class(offset);
         if !matches!(class, crate::MmioAccessClass::FreerunningTimerPoll) {
-            let (i, o, n, _) = self.poll_streak.get();
-            let (idx, off) = (peri_idx as u32, offset as u32);
-            let n = if i == idx && o == off { n } else { 0 };
-            self.poll_streak.set((
-                idx,
-                off,
-                n.saturating_add(u64::from(count)),
-                self.current_cycle,
-            ));
+            self.note_poll_streak(peri_idx, offset, count);
         }
         match class {
             crate::MmioAccessClass::FreerunningTimerPoll => {

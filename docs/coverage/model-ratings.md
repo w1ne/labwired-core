@@ -138,6 +138,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | pic24f16ka102 | open | L1 | 3 | — | — | ≥1× (CI) | — |
 | ch32v003f4p6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | ch32v005f6p6 | open | L1 | 6 | — | — | ≥1× (CI) | — |
+| ch32x035c8t6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | ch32v006k8u6 | open | L1 | 6 | — | — | ≥1× (CI) | — |
 | ch32v203c8t6 | open | L1 | 7 | — | — | ≥1× (CI) | — |
 | ch32v003f4u6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
