@@ -16,10 +16,14 @@ use std::io::{self, Write};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
-/// Phase 2B.3b (issue #192): the UART uses a single self-perpetuating event
-/// token — it has only one kind of wakeup ("do one tick of work"), so the
-/// value is arbitrary and never disambiguated in `on_event`.
+/// Phase 2B.3b (issue #192): the UART's self-perpetuating wake. It has one
+/// kind of wakeup ("do one tick of work"); the low bits carry the chain's
+/// generation (see `wake_gen`), so the first chain is token 0.
 const UART_WAKE_TOKEN: u32 = 0;
+/// Generation bits of a wake token. A chain is superseded by bumping the
+/// generation; its in-flight event then fires stale and is dropped. Kept far
+/// below the SCI_B edge tokens (`0x5C1B_xxxx`).
+const UART_WAKE_GEN_MASK: u32 = 0xFFFF;
 
 /// The pad lines a UART drives, in the order a lab probes them.
 pub(crate) const UART_LINES: &[&str] = &["TX", "RX"];
@@ -898,6 +902,10 @@ pub struct Uart {
     /// U5 USART-only register/status features (TXFE and AUTOCR).
     #[serde(default)]
     u5_features: bool,
+    /// `pad_map: wch_x035`: route TX through the CH32X035 default pads
+    /// instead of the STM32F1 ones. Read once while the bus wires pads.
+    #[serde(skip)]
+    pad_map_wch_x035: bool,
     /// U5 AUTOCR (offset 0x30; reset 0x8000_0000), storage.
     #[serde(default)]
     autocr: u32,
@@ -937,6 +945,20 @@ pub struct Uart {
     /// under the `event-scheduler` feature (flag-off drives via `tick()`).
     #[serde(skip)]
     scheduled: bool,
+    /// Generation of the in-flight wake chain; the chain's token is
+    /// `UART_WAKE_TOKEN | wake_gen`. Bumped when an idle RX watch (a slow
+    /// chain) must give way to an immediate wake.
+    #[serde(skip)]
+    wake_gen: u32,
+    /// The in-flight chain is an idle RX watch: an RX interrupt or DMA request
+    /// is armed but the receive queue is empty, so the wake only looks for a
+    /// byte pushed through the raw shared handle. It runs once per character
+    /// time instead of once per cycle (see `rx_watch_cadence`).
+    #[serde(skip)]
+    rx_watch: bool,
+    /// The in-flight chain re-arms every cycle (see `fast_needed`).
+    #[serde(skip)]
+    chain_fast: bool,
     /// Whether this UART was registered with an IRQ line (`PeripheralEntry::irq`).
     /// Set at the bus attach choke points via `attach_irq_line`.
     ///
@@ -1132,6 +1154,7 @@ impl Uart {
             full_featured: false,
             presc: 0,
             u5_features: false,
+            pad_map_wch_x035: false,
             autocr: 0x8000_0000,
             stm32_lpuart: false,
             dma_tx_pending: false,
@@ -1143,6 +1166,9 @@ impl Uart {
             trace_name: String::new(),
             elapsed_us: 0,
             scheduled: false,
+            wake_gen: 0,
+            rx_watch: false,
+            chain_fast: false,
             // Conservative until the bus says otherwise (see `attach_irq_line`).
             irq_wired: true,
             legacy_walk_forced: false,
@@ -1252,6 +1278,17 @@ impl Uart {
     pub fn set_u5_features(mut self, yes: bool) -> Self {
         self.u5_features = yes;
         self
+    }
+
+    /// Select the datasheet pad table that routes TX (`pad_map: wch_x035`).
+    /// Without it, the GPIO register layout picks the table.
+    pub fn set_pad_map(mut self, pad_map: &str) -> anyhow::Result<Self> {
+        match pad_map.to_ascii_lowercase().as_str() {
+            "wch_x035" => self.pad_map_wch_x035 = true,
+            "none" => {}
+            other => anyhow::bail!("unsupported UART pad_map '{other}'; supported: wch_x035, none"),
+        }
+        Ok(self)
     }
 
     /// Install a YAML-parameterised register map for [`UartRegisterLayout::Custom`].
@@ -1568,8 +1605,17 @@ impl Uart {
         // the NVIC line is pended — the RX counterpart of the TXEIE/TCIE arm
         // below. Without it firmware waiting in HAL_UART_Receive_IT never sees
         // the character (60North hal-uart/hal-uart-dma).
+        //
+        // With the receive queue EMPTY there is nothing for those enables to
+        // answer yet, so they are not work: `rx_watch_needed` keeps a slow
+        // watch for bytes pushed through the raw RX handle instead, and every
+        // producer that re-harvests (`deliver_uart_rx_named`, attached
+        // streams) wakes the UART immediately. Holding a per-cycle wake here
+        // pinned every STM32duino sketch (Serial.begin() sets RXNEIE) to a
+        // one-instruction CPU window for the whole run.
+        let rx_armed = rxneie_armed || rxftie_armed || dmar_armed;
         let level_irq_observable =
-            self.irq_wired && (txeie_set || tcie_set || rxneie_armed || rxftie_armed || dmar_armed);
+            self.irq_wired && (txeie_set || tcie_set || (rx_armed && self.rx_byte_waiting()));
         // A buffered narration is real work: the wire is mid-burst, and the
         // flush that ends it needs a wakeup to happen on. Without this a
         // scheduler-driven bus would leave the last print unpublished.
@@ -1584,6 +1630,64 @@ impl Uart {
             || !self.attached_streams.is_empty()
             || self.dma_tx_pending
             || !self.wire_chars.is_empty()
+    }
+
+    fn rx_byte_waiting(&self) -> bool {
+        self.rx_buf.lock().map(|g| !g.is_empty()).unwrap_or(false)
+    }
+
+    /// Whether the next cycle can change what the machine sees: a level IRQ
+    /// that can be asserted now (TXEIE/TCIE, or an RX enable with a byte
+    /// waiting) or a DMA TX request. Only then does the wake chain run every
+    /// cycle; other work (a narration draining, an attached stream) runs at
+    /// the bus tick interval. The status flags themselves are computed on
+    /// read, so the cadence never changes a value the firmware reads; a state
+    /// that turns IRQ-relevant does so by an MMIO write or a received byte,
+    /// and `take_scheduled_events` then supersedes the slower chain.
+    fn fast_needed(&self) -> bool {
+        let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
+        let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
+        let rxneie_armed =
+            self.layout.rxneie_mask() != 0 && (self.cr1 & self.layout.rxneie_mask()) != 0;
+        let dmar_armed = self.layout.dmar_mask() != 0 && (self.cr3 & self.layout.dmar_mask()) != 0;
+        let rxftie_armed = matches!(self.layout, UartRegisterLayout::Stm32V2)
+            && self.cr1 & (1 << 29) != 0
+            && self.cr3 & (1 << 28) != 0;
+        let rx_armed = rxneie_armed || rxftie_armed || dmar_armed;
+        (self.irq_wired && (txeie_set || tcie_set || (rx_armed && self.rx_byte_waiting())))
+            || self.dma_tx_pending
+    }
+
+    /// An RX interrupt / DMA request is armed with an empty receive queue and
+    /// nothing else to do: the only thing a wake could find is a byte pushed
+    /// through the raw shared RX handle (interactive serial, a cross-chip
+    /// link). See `rx_watch_cadence`.
+    fn rx_watch_needed(&self) -> bool {
+        if self.timed.is_some() || !self.irq_wired || self.rx_byte_waiting() {
+            return false;
+        }
+        let rxneie_armed =
+            self.layout.rxneie_mask() != 0 && (self.cr1 & self.layout.rxneie_mask()) != 0;
+        let dmar_armed = self.layout.dmar_mask() != 0 && (self.cr3 & self.layout.dmar_mask()) != 0;
+        let rxftie_armed = matches!(self.layout, UartRegisterLayout::Stm32V2)
+            && self.cr1 & (1 << 29) != 0
+            && self.cr3 & (1 << 28) != 0;
+        rxneie_armed || rxftie_armed || dmar_armed
+    }
+
+    /// Cycles between idle RX watches: one 10-bit character time at the
+    /// programmed baud, the soonest a receiver can complete a byte. The
+    /// divisor counts peripheral clocks, and a peripheral bus never runs
+    /// faster than the core, so this never exceeds the real character time in
+    /// core cycles. With no divisor programmed, the per-cycle cadence.
+    fn rx_watch_cadence(&self) -> u64 {
+        self.bit_time_cycles()
+            .map_or(1, |bit| bit.saturating_mul(10))
+            .max(1)
+    }
+
+    fn wake_token(&self) -> u32 {
+        UART_WAKE_TOKEN | (self.wake_gen & UART_WAKE_GEN_MASK)
     }
 
     /// Phase 2B.3b: one tick-equivalent of work, shared verbatim by the legacy
@@ -2016,6 +2120,13 @@ impl Uart {
             //
             // The F1 USART has no OVER8 bit at all (its CR1 ends at bit 13), so
             // the test is inert there rather than wrong.
+            // STM32 LPUART: baud = 256 × f_ck / BRR with a 20-bit BRR
+            // (RM0351 §41.4.4), so one bit is BRR / 256 clocks. Read as a
+            // USART divisor it is 256× too long, and every narrated character
+            // held the wire (and this model's wake chain) 256× too long.
+            UartRegisterLayout::Stm32V2 if self.stm32_lpuart => {
+                u64::from(self.brr & 0xF_FFFF) / 256
+            }
             UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2 => {
                 let brr = u64::from(self.brr & 0xFFFF);
                 if matches!(self.layout, UartRegisterLayout::Stm32V2) && self.cr1 & (1 << 15) != 0 {
@@ -2427,6 +2538,10 @@ impl UartStreamHost for Uart {
 }
 
 impl crate::Peripheral for Uart {
+    fn uart_pad_map_wch_x035(&self) -> bool {
+        self.pad_map_wch_x035
+    }
+
     fn line_names(&self) -> &'static [&'static str] {
         UART_LINES
     }
@@ -2793,9 +2908,26 @@ impl crate::Peripheral for Uart {
                 wakes.extend(irq.take_edge_wake(now));
             }
         }
-        if self.has_active_work() && !self.scheduled {
+        if self.has_active_work() {
+            if self.scheduled && (self.rx_watch || (!self.chain_fast && self.fast_needed())) {
+                // Work that must be seen on the next cycle arrived under a
+                // slower chain (an idle watch, or a narration draining at the
+                // tick interval): supersede it, so the IRQ is raised exactly
+                // when the per-cycle chain always raised it.
+                self.wake_gen = self.wake_gen.wrapping_add(1) & UART_WAKE_GEN_MASK;
+                self.scheduled = false;
+            }
+            if !self.scheduled {
+                self.scheduled = true;
+                self.rx_watch = false;
+                self.chain_fast = true;
+                wakes.push((0, self.wake_token()));
+            }
+        } else if !self.scheduled && self.rx_watch_needed() {
             self.scheduled = true;
-            wakes.push((0, UART_WAKE_TOKEN));
+            self.rx_watch = true;
+            self.chain_fast = false;
+            wakes.push((self.rx_watch_cadence() - 1, self.wake_token()));
         }
         wakes
     }
@@ -2838,6 +2970,11 @@ impl crate::Peripheral for Uart {
                 reschedule_delay: next.map(|t| t - now),
                 ..Default::default()
             };
+        }
+        if event_token != self.wake_token() {
+            // A chain superseded by `take_scheduled_events`; its successor is
+            // already in flight.
+            return crate::sched::EventResult::default();
         }
         // Service cadence. An attached RX stream used to hold this UART at
         // `reschedule_delay: 1` for the whole run, which pinned
@@ -2887,32 +3024,28 @@ impl crate::Peripheral for Uart {
         };
 
         let (irq, dma_signals) = self.advance_ticks(ticks);
-        let keep_going = self.has_active_work();
+        let working = self.has_active_work();
+        let watching = !working && self.rx_watch_needed();
+        let keep_going = working || watching;
         self.scheduled = keep_going;
-        // Level-triggered IRQ and DMA-TX work keep their exact per-cycle
-        // cadence: those are edge/level answers the machine consumes per
-        // wakeup, not something `advance_ticks` accumulates.
-        let txeie_set = (self.cr1 & self.txeie_mask()) != 0 && self.txeie_mask() != 0;
-        let tcie_set = (self.cr1 & self.tcie_mask()) != 0 && self.tcie_mask() != 0;
-        let rxneie_armed =
-            self.layout.rxneie_mask() != 0 && (self.cr1 & self.layout.rxneie_mask()) != 0;
-        let dmar_armed = self.layout.dmar_mask() != 0 && (self.cr3 & self.layout.dmar_mask()) != 0;
-        let rxftie_armed = matches!(self.layout, UartRegisterLayout::Stm32V2)
-            && self.cr1 & (1 << 29) != 0
-            && self.cr3 & (1 << 28) != 0;
-        let irq_paced =
-            self.irq_wired && (txeie_set || tcie_set || rxneie_armed || rxftie_armed || dmar_armed);
-        let delay = if irq_paced || self.dma_tx_pending {
+        self.rx_watch = watching;
+        // An assertable level IRQ or a DMA-TX request keeps the per-cycle
+        // cadence (see `fast_needed`); a narration or stream drains at the
+        // tick interval, and a pure idle RX watch at one character time.
+        let delay = if watching {
+            self.rx_watch_cadence()
+        } else if self.fast_needed() {
             1
         } else {
-            interval.max(1)
+            u64::from(interval.max(1))
         };
+        self.chain_fast = delay == 1;
         let explicit_irqs = self.sci_b_service();
         crate::sched::EventResult {
             raise_own_irq: irq,
             dma_signals,
             explicit_irqs,
-            reschedule_delay: keep_going.then_some(u64::from(delay)),
+            reschedule_delay: keep_going.then_some(delay),
             ..Default::default()
         }
     }
@@ -3691,6 +3824,76 @@ mod tests {
         let r = uart.on_event(super::UART_WAKE_TOKEN, &mut sched, &mut bus);
         assert!(r.raise_own_irq, "event path must request the own-IRQ pend");
         assert_eq!(r.reschedule_delay, Some(1), "re-arm while interrupt is set");
+    }
+
+    /// STM32duino's `Serial.begin()` leaves RXNEIE set for the whole run. With
+    /// an empty receive queue that enable has nothing to answer, so the UART
+    /// keeps only a watch at one character time, not a wake every cycle (which
+    /// held every such sketch to one-instruction CPU windows). A byte that
+    /// arrives supersedes the watch with an immediate wake, so its interrupt
+    /// timing is unchanged; the superseded watch fires stale and does nothing.
+    #[test]
+    fn idle_rxneie_watches_at_character_time_and_wakes_at_once_for_a_byte() {
+        use crate::bus::SystemBus;
+        use crate::sched::EventScheduler;
+
+        let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
+        uart.write_u32(0x08, 625).unwrap(); // BRR: 72 MHz / 115200
+        uart.write_u32(0x0C, (1 << 13) | (1 << 5) | (1 << 2))
+            .unwrap(); // UE|RXNEIE|RE
+        let char_cycles = 625 * 10;
+
+        // The bus fires a wake at now + 1 + delay: one character time out.
+        assert_eq!(
+            uart.take_scheduled_events(),
+            vec![(char_cycles - 1, super::UART_WAKE_TOKEN)]
+        );
+        assert!(uart.take_scheduled_events().is_empty(), "already armed");
+
+        let mut sched = EventScheduler::new();
+        let mut bus = SystemBus::empty();
+        // Nothing arrived: no IRQ, and the watch re-arms at the same cadence.
+        let r = uart.on_event(super::UART_WAKE_TOKEN, &mut sched, &mut bus);
+        assert!(!r.raise_own_irq);
+        assert_eq!(r.reschedule_delay, Some(char_cycles));
+
+        // A byte delivered through the re-harvesting path wakes next cycle.
+        uart.rx_buffer().lock().unwrap().push_back(b'A');
+        let wake = uart.take_scheduled_events();
+        assert_eq!(wake.len(), 1);
+        assert_eq!(wake[0].0, 0, "the received byte is serviced at once");
+        let fresh = wake[0].1;
+        assert_ne!(fresh, super::UART_WAKE_TOKEN, "a new chain generation");
+
+        // The superseded watch is inert; the new chain raises RXNE's IRQ and
+        // keeps the per-cycle cadence while the byte waits.
+        let stale = uart.on_event(super::UART_WAKE_TOKEN, &mut sched, &mut bus);
+        assert!(!stale.raise_own_irq);
+        assert_eq!(stale.reschedule_delay, None);
+        let r = uart.on_event(fresh, &mut sched, &mut bus);
+        assert!(r.raise_own_irq);
+        assert_eq!(r.reschedule_delay, Some(1));
+
+        // Once the firmware reads DR the queue is empty: back to the watch.
+        assert_eq!(uart.read(0x04).unwrap(), b'A');
+        let r = uart.on_event(fresh, &mut sched, &mut bus);
+        assert!(!r.raise_own_irq);
+        assert_eq!(r.reschedule_delay, Some(char_cycles));
+    }
+
+    /// An STM32 LPUART divisor is 256 × f_ck / baud in a 20-bit BRR, so one
+    /// bit lasts BRR / 256 clocks. Reading it as a USART divisor made every
+    /// character 256× too long on the narrated wire (and on the wake chain).
+    #[test]
+    fn stm32_lpuart_bit_time_uses_the_256x_divisor() {
+        let mut lpuart = Uart::new_with_layout(UartRegisterLayout::Stm32V2).set_stm32_lpuart(true);
+        // 32 MHz, 115200 baud: BRR = 256 * 32e6 / 115200 = 71111 (> 16 bits).
+        lpuart.write_u32(0x0C, 71_111).unwrap();
+        assert_eq!(lpuart.bit_time_cycles(), Some(277));
+
+        let mut usart = Uart::new_with_layout(UartRegisterLayout::Stm32V2);
+        usart.write_u32(0x0C, 278).unwrap(); // 32 MHz / 115200
+        assert_eq!(usart.bit_time_cycles(), Some(278));
     }
 
     #[test]

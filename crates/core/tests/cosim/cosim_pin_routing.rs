@@ -1293,11 +1293,11 @@ fn arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end() {
     let mut session = build_session(&bus, &manifest.cosim_models);
     let mut cpu = Avr::for_chip_name("atmega2560");
     // LDI/STS: ADCSRB.MUX5=1; ADMUX selects AVcc with MUX4:0=0 (ADC8);
-    // ADCSRA enables the ADC and starts a conversion.
+    // ADCSRA enables the ADC and starts a conversion; RJMP . while it runs.
     cpu.load_words(
         0,
         &[
-            0xE008, 0x9300, 0x007B, 0xE400, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A,
+            0xE008, 0x9300, 0x007B, 0xE400, 0x9300, 0x007C, 0xEC10, 0x9310, 0x007A, 0xCFFF,
         ],
     );
     let mut machine = Machine::new(cpu, bus);
@@ -1332,6 +1332,17 @@ fn arduino_mega_2560_ntc_netlist_reaches_adc8_through_mux5_end_to_end() {
                 .cpu
                 .step(&mut machine.bus, &[], &config)
                 .expect("execute the Mega ADC8 register sequence");
+        }
+        // The conversion takes 25 ADC clocks the first time and 13 after
+        // (DS2549 Table 26-1); ADPS = 0 divides by 2. Run it out.
+        for _ in 0..100 {
+            if machine.cpu.adcsra & (1 << 6) == 0 {
+                break;
+            }
+            machine
+                .cpu
+                .step(&mut machine.bus, &[], &config)
+                .expect("run the conversion out");
         }
         let adc_count = u16::from(machine.cpu.adch) << 8 | u16::from(machine.cpu.adcl);
         let routed_mv = (expected_volts * 1000.0 + 0.5).floor() as u32;
