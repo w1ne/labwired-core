@@ -267,9 +267,11 @@ const ESP_HAL_IRQ_FIXTURE: &str = "tests/fixtures/esp32c2-esp-hal-irq.elf";
 const ESP_HAL_GPIO_IRQ_FIXTURE: &str = "tests/fixtures/esp32c2-esp-hal-gpio-irq.elf";
 
 /// Runs an esp-hal interrupt fixture (examples/esp32c2/esp-hal-irq,
-/// esp-hal-gpio-irq or esp-hal-embassy) with the C2 fast-boot CPU state and
-/// ROM unpack, with or without the interrupt matrix armed. Returns the UART0
-/// text once the app prints its `PASS`/`FAIL` verdict or `steps` run out.
+/// esp-hal-gpio-irq, esp-hal-embassy or esp-hal-gpio-async) with the C2
+/// fast-boot CPU state and ROM unpack, with or without the interrupt matrix
+/// armed. Returns the UART0 text once the app prints its `PASS`/`FAIL`
+/// verdict or `steps` run out. `Machine::step` never idle-fast-forwards, so
+/// the timings the apps print are the per-instruction ones.
 fn run_esp_hal_irq(fixture: &str, arm_matrix: bool, steps: usize) -> String {
     let chip = descriptor();
     let mut bus =
@@ -375,4 +377,38 @@ fn esp32c2_embassy_without_matrix_routing_never_reaches_the_ticks() {
     // completes and main never prints its tick count.
     let uart = run_esp_hal_irq(ESP_HAL_EMBASSY_FIXTURE, false, 2_000_000);
     assert_eq!(uart, "LW-C2 embassy boot\n");
+}
+
+const ESP_HAL_GPIO_ASYNC_FIXTURE: &str = "tests/fixtures/esp32c2-esp-hal-gpio-async.elf";
+
+#[test]
+fn esp32c2_embassy_gpio_wait_for_rising_edge_wakes_on_the_pulse() {
+    // GPIO2 is split into Input and Output drivers. A task raises the pad
+    // 1 ms after each request; main's `wait_for_rising_edge` is woken by the
+    // esp-hal default GPIO handler (source 13). Each wait ends 1 ms plus the
+    // wake-up latency after the request (1024..1026 us measured). With no
+    // pulse requested, a 2 ms `with_timeout` wait expires.
+    let uart = run_esp_hal_irq(ESP_HAL_GPIO_ASYNC_FIXTURE, true, 6_000_000);
+    let waits: Vec<u64> = uart
+        .lines()
+        .filter_map(|l| l.strip_prefix("LW-C2 edge wait_us "))
+        .map(|v| v.parse().expect("microseconds"))
+        .collect();
+    assert_eq!(waits.len(), 3, "{uart:?}");
+    for wait in waits {
+        assert!((1_000..1_100).contains(&wait), "wait {wait} us: {uart:?}");
+    }
+    assert!(
+        uart.contains("LW-C2 idle wait timed out true\n"),
+        "{uart:?}"
+    );
+    assert!(uart.contains("LW-C2 gpio-async PASS"), "{uart:?}");
+}
+
+#[test]
+fn esp32c2_embassy_gpio_wait_without_matrix_routing_never_completes() {
+    // Negative control: with the matrix not armed neither the Embassy time
+    // driver nor the GPIO source reaches a CPU line, so no edge wait ends.
+    let uart = run_esp_hal_irq(ESP_HAL_GPIO_ASYNC_FIXTURE, false, 2_000_000);
+    assert_eq!(uart, "LW-C2 gpio-async boot\n");
 }
