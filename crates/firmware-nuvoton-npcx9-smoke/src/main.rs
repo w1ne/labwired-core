@@ -78,6 +78,16 @@
 //     back. A signature in battery-backed RAM (0x400AF000, last word at
 //     +0x7C) reads back on the second boot, after the watchdog reset.
 //
+// Then the SPI Peripheral Interface (Renode SPI.NPCX_SPIP at 0x400D2000; IRQ
+// on NVIC 57 from Zephyr npcx.dtsi, which Renode leaves unconnected). No SPI
+// device is attached, so MISO reads 0. Check 20 runs before the watchdog
+// expiry.
+// 20. Reset: CTL1 and STAT read 0; a DATA write with SPIEN clear does not set
+//     RBF. With SPIEN: a DATA write sets RBF (BSY stays 0), the read returns
+//     0 and clears RBF, in 8-bit and 16-bit (MOD) mode. SCM / SCIDL / SCDV
+//     read back. EIR with RBF gives one IRQ (the handler reads DATA); EIW
+//     with RBF clear gives one IRQ (the handler clears EIW, as the Zephyr ISR).
+//
 // Bare-register, no HAL.
 
 #![no_std]
@@ -226,6 +236,20 @@ const LFCGCTL2: usize = 0x14;
 const LFCGCTL_LFLOC: u8 = 1 << 5;
 const LFCGCTL2_XT_OSC_SL_EN: u8 = 1 << 6;
 
+const SPIP: usize = 0x400D_2000;
+const SPIP_LINE: u32 = 57;
+const SPIP_DATA: usize = 0x00;
+const SPIP_CTL1: usize = 0x02;
+const SPIP_STAT: usize = 0x04;
+const CTL1_SPIEN: u16 = 1 << 0;
+const CTL1_MOD: u16 = 1 << 2;
+const CTL1_EIR: u16 = 1 << 5;
+const CTL1_EIW: u16 = 1 << 6;
+const STAT_BSY: u8 = 1 << 0;
+const STAT_RBF: u8 = 1 << 1;
+static SPIP_RD_IRQS: AtomicU32 = AtomicU32::new(0);
+static SPIP_WR_IRQS: AtomicU32 = AtomicU32::new(0);
+
 static ITIM1_IRQS: AtomicU32 = AtomicU32::new(0);
 /// Bit n set: TIMERS[n] took its IRQ.
 static SEEN: AtomicU32 = AtomicU32::new(0);
@@ -345,6 +369,18 @@ unsafe fn DefaultHandler(irqn: i16) {
         }
         if TWD_DOTS.load(Ordering::SeqCst) != 0 {
             putc(b'.');
+        }
+    }
+    // SPIP, as the Zephyr ISR: RBF clear -> write ready, drop EIW; RBF set
+    // -> read DATA, drop EIR.
+    if irqn as u32 == SPIP_LINE {
+        if rd8(SPIP, SPIP_STAT) & STAT_RBF == 0 {
+            wr16(SPIP, SPIP_CTL1, rd16(SPIP, SPIP_CTL1) & !CTL1_EIW);
+            SPIP_WR_IRQS.fetch_add(1, Ordering::SeqCst);
+        } else {
+            let _ = rd16(SPIP, SPIP_DATA);
+            wr16(SPIP, SPIP_CTL1, rd16(SPIP, SPIP_CTL1) & !CTL1_EIR);
+            SPIP_RD_IRQS.fetch_add(1, Ordering::SeqCst);
         }
     }
     // UART2..4 RX: read URBUF, as uart_npcx_fifo_read does.
@@ -850,6 +886,64 @@ fn main() -> ! {
     put_kv(b"bb", bb);
     let mem_ok = code == 1 && data == 1 && image == 1 && pm == 4 && bb == 1;
     puts(if mem_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
+    // 20. SPIP.
+    let reset = (rd16(SPIP, SPIP_CTL1) == 0 && rd8(SPIP, SPIP_STAT) == 0) as u32;
+    wr16(SPIP, SPIP_DATA, 0xA5);
+    let off = (rd8(SPIP, SPIP_STAT) & STAT_RBF == 0) as u32;
+    wr16(SPIP, SPIP_CTL1, CTL1_SPIEN);
+    wr16(SPIP, SPIP_DATA, 0xA5);
+    let s8 = rd8(SPIP, SPIP_STAT);
+    let d8 = rd16(SPIP, SPIP_DATA);
+    let xfer8 = (s8 & STAT_RBF != 0
+        && s8 & STAT_BSY == 0
+        && d8 == 0
+        && rd8(SPIP, SPIP_STAT) & STAT_RBF == 0) as u32;
+    wr16(SPIP, SPIP_CTL1, CTL1_SPIEN | CTL1_MOD);
+    wr16(SPIP, SPIP_DATA, 0x1234);
+    let s16 = rd8(SPIP, SPIP_STAT);
+    let d16 = rd16(SPIP, SPIP_DATA);
+    let xfer16 = (s16 & STAT_RBF != 0 && d16 == 0 && rd8(SPIP, SPIP_STAT) & STAT_RBF == 0) as u32;
+    // SCDV 0x0E, SCIDL, SCM.
+    let cfg_val = (0x0E << 9) | (1 << 8) | (1 << 7) | CTL1_SPIEN;
+    wr16(SPIP, SPIP_CTL1, cfg_val);
+    let cfg = (rd16(SPIP, SPIP_CTL1) == cfg_val) as u32;
+    nvic_set(NVIC_ICPR, SPIP_LINE);
+    nvic_set(NVIC_ISER, SPIP_LINE);
+    wr16(SPIP, SPIP_CTL1, rd16(SPIP, SPIP_CTL1) | CTL1_EIR);
+    let quiet = (SPIP_RD_IRQS.load(Ordering::SeqCst) == 0) as u32;
+    wr16(SPIP, SPIP_DATA, 0x5A);
+    spin(100);
+    let rd_irq = SPIP_RD_IRQS.load(Ordering::SeqCst);
+    let rd_clear =
+        (rd8(SPIP, SPIP_STAT) & STAT_RBF == 0 && rd16(SPIP, SPIP_CTL1) & CTL1_EIR == 0) as u32;
+    wr16(SPIP, SPIP_CTL1, rd16(SPIP, SPIP_CTL1) | CTL1_EIW);
+    spin(100);
+    let wr_irq = SPIP_WR_IRQS.load(Ordering::SeqCst);
+    let wr_clear = (rd16(SPIP, SPIP_CTL1) & CTL1_EIW == 0 && !nvic_pending(SPIP_LINE)) as u32;
+    nvic_set(NVIC_ICER, SPIP_LINE);
+    puts(b"spip");
+    put_kv(b"reset", reset);
+    put_kv(b"off", off);
+    put_kv(b"x8", xfer8);
+    put_kv(b"x16", xfer16);
+    put_kv(b"cfg", cfg);
+    put_kv(b"quiet", quiet);
+    put_kv(b"rirq", rd_irq);
+    put_kv(b"rclr", rd_clear);
+    put_kv(b"wirq", wr_irq);
+    put_kv(b"wclr", wr_clear);
+    let spip_ok = reset == 1
+        && off == 1
+        && xfer8 == 1
+        && xfer16 == 1
+        && cfg == 1
+        && quiet == 1
+        && rd_irq == 1
+        && rd_clear == 1
+        && wr_irq == 1
+        && wr_clear == 1;
+    puts(if spip_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
     // Expiry: no touch; the watchdog resets the chip on the 10th period.
     puts(b"twd expire ");

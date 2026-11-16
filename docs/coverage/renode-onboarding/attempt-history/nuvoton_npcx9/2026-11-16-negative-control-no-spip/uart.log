@@ -1,0 +1,12 @@
+NPCX9 UART1 smoke
+itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok
+gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok
+cr_uart2 tx
+cr_uart3 tx
+cr_uart4 tx
+uarts tbe=3 rx=3 isolated=1 ok
+uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok
+mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok
+twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok
+cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok
+mem code=1 data=1 image=1 pm=4 bb=1 ok

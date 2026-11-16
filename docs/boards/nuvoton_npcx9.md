@@ -4,8 +4,8 @@
 
 The imported NPCX9 system booted `firmware-nuvoton-npcx9-smoke`, rebooted
 once through the TWD watchdog, and ran to **100,000,000 cycles**
-(566,001 instructions). It passed **15/15 smoke assertions**. Firmware
-SHA-256 `4e7b49d914b058a184c73b0417631dc14cb8f0e3348031b50137a470dd1d80b6`.
+(567,218 instructions). It passed **16/16 smoke assertions**. Firmware
+SHA-256 `31a428efb777bf6e8140594cdef81c6514316afcc82a3bd0f221bad4eb4d8314`.
 UART capture (UART1..4 share one capture stream):
 
 ```text
@@ -21,6 +21,7 @@ mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok
 twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok
 cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok
 mem code=1 data=1 image=1 pm=4 bb=1 ok
+spip reset=1 off=1 x8=1 x16=1 cfg=1 quiet=1 rirq=1 rclr=1 wirq=1 wclr=1 ok
 twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok
 bbram kept=1 ok
 ```
@@ -96,6 +97,14 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
     back. A signature in battery-backed RAM (0x400AF000 and +0x7C) reads
     back at once, and again on the second boot after the watchdog reset
     (`bbram kept=1`).
+20. SPIP (runs before the watchdog expiry of check 17; no SPI device is
+    attached, so MISO reads 0): CTL1 and STAT read 0 at reset; a DATA write
+    with SPIEN clear does not set RBF. With SPIEN a DATA write sets RBF (BSY
+    reads 0), and the DATA read returns 0 and clears RBF, in 8-bit and 16-bit
+    (MOD) mode. SCM / SCIDL / SCDV read back. With NVIC 57 enabled, EIR plus
+    a transfer gives exactly one IRQ (the handler reads DATA and clears
+    EIR); EIW with RBF clear gives exactly one IRQ (the handler clears EIW,
+    as the Zephyr ISR does), and the line is not pending afterwards.
 
 ## Claimed peripherals
 
@@ -108,6 +117,7 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
 | `mtc` | `npcx_mtc` | TTC 1 Hz count (read/write, survives system reset), WTC PT / PTO (W1C) / WIE; level IRQ WIE && PTO on NVIC 5. |
 | `twd` | `npcx_twd` | T0 at 32768 Hz / 2^MDIV, TWDT0 period, TC (read clears), pulse IRQ per terminal count on NVIC 31; watchdog WDCNT / TWMWD / WDCP, WDCT0I clock select, 87h/61h/63h stop and unlock, 5Ch touch (WDSDME), bad service byte reset, lock bits, system reset with WDRST_STS. |
 | `hfcg` | `npcx_hfcg` | HFCGCTRL LOAD (reads 0, latches M / N), CLK_CHNG (reads 0), LOCK (set-only, drops HFCG writes); HFCGML / HFCGMH / HFCGN / HFCGP / HFCBCD / HFCBCD1..3 / HFCGPIDL read back with reserved bits clear. Register file only. |
+| `spip` | `npcx_spip` | SPIP_DATA transfer through attached devices (8-bit, or 16-bit low byte first with MOD), RBF (DATA read clears), BSY reads 0, CTL1 SPIEN / MOD / EIR / EIW / SCM / SCIDL / SCDV read back; level IRQ on NVIC 57 from EIR && RBF or EIW && !RBF (the EIW term is an assumption from the Zephyr ISR). No chip select, no timing. |
 | `lfcg` | `npcx_lfcg` | LFCGCTL LREFEN, UDCP (reads 0), LFLOC (set-only, drops LFCG writes); HFRDI (12 bits), HFRDF, FRCDIV, DIVCOR1/2, LFCGCTL2 read back. Register file only. |
 
 ## Memory windows
@@ -174,7 +184,12 @@ WDRST_STS survives the watchdog reset it records (Renode clears it in the
 machine reset); a completed 87h/61h/63h sequence returns to idle, so a second
 sequence is accepted (Renode resets on the next 87h).
 
-Not declared (no model in this engine): MDMA, SPIP, FIU and internal
+SPIP differences from Renode `NPCX_SPIP`: the IRQ is wired to NVIC 57
+(Zephyr `npcx.dtsi` `spip0`; Renode leaves it unconnected), and EIW raises
+it while RBF is clear (Renode ignores EIW). With no attached device MISO
+reads 0 (Renode needs a registered device).
+
+Not declared (no model in this engine): MDMA, FIU and internal
 flash, SMBus, the DEV_CTL4 / SWRST_CTL4 Python peripherals, and the other
 Renode NPCX blocks.
 
@@ -209,6 +224,9 @@ Renode NPCX blocks.
 - [`attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-memory-windows/`](../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-memory-windows/):
   same CLI and firmware (SHA-256 `4e7b49d9…`), previous descriptor without
   `memory_regions`; BusFault at 0x10058000 (code_ram write), FAIL 11/15.
+- [`attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-spip/`](../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-spip/):
+  same CLI and firmware (SHA-256 `31a428ef…`), previous descriptor without
+  `spip`; BusFault at 0x400D2002 (SPIP CTL1 read), FAIL 12/16.
 
 The profile's `verified` field remains false. This result is limited to the
 local model behaviour; it is not datasheet validation or hardware

@@ -243,3 +243,16 @@ peripherals:
   base_address: 0x400D8000
   size: 4KB
   irq: 31
+# SPI Peripheral Interface. Base from Renode nuvoton_npcx9.repl
+# (SPI.NPCX_SPIP at 0x400D2000, Size 0x1000); NVIC 57 from Zephyr npcx.dtsi
+# spip0 (Renode leaves the IRQ unconnected). Register map and transfer from
+# Renode NPCX_SPIP.cs: DATA +0x00, CTL1 +0x02, STAT +0x04 (BSY reads 0, RBF).
+# The IRQ is a level: EIR && RBF (Renode) or EIW && !RBF (assumption from the
+# Zephyr ISR). Devices attach through `external_devices:`; chip select is a
+# GPIO and is not seen by this block. Not modelled: transfer timing, SPI
+# modes, the clock divider.
+- id: spip
+  type: npcx_spip
+  base_address: 0x400D2000
+  size: 4KB
+  irq: 57

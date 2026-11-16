@@ -252,6 +252,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // (`build_npcx_cdcg`): no IRQ, no options.
     "npcx_hfcg",
     "npcx_lfcg",
+    // Nuvoton NPCX SPIP (SPI master, Renode `NPCX_SPIP`); devices attach
+    // through `external_devices:`.
+    "npcx_spip",
     // Nuvoton NPCX GPIO port (byte registers PDOUT..PLOCK_CTL). MUST be
     // listed: the fuzzy `contains("gpio")` fallback would map it onto the
     // STM32 GPIO register layout.
@@ -1305,6 +1308,7 @@ pub fn try_build(
         "npcx_twd" => build_npcx_twd(p_cfg)?,
         "npcx_hfcg" | "npcx_lfcg" => build_npcx_cdcg(canonical_type, p_cfg)?,
         "npcx_gpio" => Box::new(crate::peripherals::npcx_gpio::NpcxGpio::new()),
+        "npcx_spip" => Box::new(crate::peripherals::npcx_spip::NpcxSpip::new()),
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());

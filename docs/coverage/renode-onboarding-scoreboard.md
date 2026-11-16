@@ -12,7 +12,7 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1614`
+- pass_claimed_peripherals_total: `1616`
 - pass_claimed_peripherals_median: `4`
 - median_elapsed_ms: `1567`
 - median_elapsed_seconds: `1.567`
@@ -144,8 +144,8 @@
 | `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `1219` | `1.219` | `True` | `observable` | `52` | `uart_regex`, `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `269012` | `269.012` | `True` | `observable` | `5` | `uart_regex`, `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_wba52cg` | `pass` | `True` | `yes` | `yes` | `2299` | `2.299` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `nuvoton_npcx9` | `pass` | `True` | `yes` | `yes` | `424269` | `424.269` | `True` | `observable` | `31` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `nuvoton_npcx9m6fb_evb` | `pass` | `True` | `yes` | `yes` | `7902` | `7.902` | `True` | `observable` | `31` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `nuvoton_npcx9` | `pass` | `True` | `yes` | `yes` | `349172` | `349.172` | `True` | `observable` | `32` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `nuvoton_npcx9m6fb_evb` | `pass` | `True` | `yes` | `yes` | `5986` | `5.986` | `True` | `observable` | `32` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `nxp-frdm-imx8mplus` | `pass` | `True` | `yes` | `yes` | `533` | `0.533` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `nxp-k6xf` | `pass` | `True` | `yes` | `yes` | `825` | `0.825` | `True` | `observable` | `7` | `uart_contains`, `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `nxp-mimx8ml` | `pass` | `True` | `yes` | `yes` | `7206` | `7.206` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |

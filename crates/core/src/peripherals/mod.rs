@@ -100,6 +100,7 @@ pub mod npcx_cdcg;
 pub mod npcx_gpio;
 pub mod npcx_itim;
 pub mod npcx_mtc;
+pub mod npcx_spip;
 pub mod npcx_twd;
 pub mod nrf52;
 pub mod nrf54l;
