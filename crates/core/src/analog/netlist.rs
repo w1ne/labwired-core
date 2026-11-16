@@ -3791,6 +3791,105 @@ fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, Analo
     Ok(out)
 }
 
+/// Expand every `.func` call, then drop the `.func` lines.
+///
+/// This is ngspice's front end (`inpcom.c`): a call is replaced by the body
+/// text with its arguments bound, before numparam evaluates anything, so a
+/// body may use any `.param` in scope at the line that makes the call. A
+/// `.func` at the top level is global wherever it is written; one inside a
+/// `.subckt` body is local to that body and shadows a global one of the same
+/// name. Calls are expanded inside `{...}`, and anywhere on a `.param`,
+/// `.subckt` or `X` line, where a value may be written bare.
+fn expand_functions(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, AnalogError> {
+    use super::numparam::{expand_braced_calls, expand_calls, parse_function, Functions};
+    let err = |line: &LogicalLine, message: String| AnalogError::Parse {
+        line: line.number,
+        text: line.text.clone(),
+        message,
+    };
+    if !lines
+        .iter()
+        .any(|line| directive_of(&line.text).as_deref() == Some("func"))
+    {
+        return Ok(lines);
+    }
+
+    // Pass 1: the global table, and one local table per `.subckt` body,
+    // keyed by the index of its `.subckt` line.
+    let mut global = Functions::new();
+    let mut local: BTreeMap<usize, Functions> = BTreeMap::new();
+    let mut owner: Vec<Option<usize>> = Vec::with_capacity(lines.len());
+    let mut current = None;
+    let mut in_control = false;
+    for (index, line) in lines.iter().enumerate() {
+        let directive = directive_of(&line.text);
+        if in_control {
+            in_control = directive.as_deref() != Some("endc");
+            owner.push(None);
+            continue;
+        }
+        match directive.as_deref() {
+            Some("control") => in_control = true,
+            Some("subckt") => current = Some(index),
+            Some("ends") => current = None,
+            Some("func") => {
+                let text = line
+                    .text
+                    .split_once(char::is_whitespace)
+                    .map_or("", |p| p.1);
+                let (name, function) = parse_function(text).map_err(|m| err(line, m))?;
+                let table = match current {
+                    Some(at) => local.entry(at).or_default(),
+                    None => &mut global,
+                };
+                if table.insert(name.clone(), function).is_some() {
+                    return Err(err(line, format!("`.func {name}` is defined twice")));
+                }
+            }
+            _ => {}
+        }
+        owner.push(current);
+    }
+
+    // Pass 2: expand, in the scope of the line.
+    let mut out = Vec::with_capacity(lines.len());
+    let mut in_control = false;
+    for (line, owner) in lines.into_iter().zip(owner) {
+        let directive = directive_of(&line.text);
+        if in_control || directive.as_deref() == Some("control") {
+            in_control = directive.as_deref() != Some("endc");
+            out.push(line);
+            continue;
+        }
+        if directive.as_deref() == Some("func") {
+            continue;
+        }
+        let scoped;
+        let functions = match owner.and_then(|at| local.get(&at)) {
+            Some(table) => {
+                let mut merged = global.clone();
+                merged.extend(table.iter().map(|(k, v)| (k.clone(), v.clone())));
+                scoped = merged;
+                &scoped
+            }
+            None => &global,
+        };
+        let bare = matches!(directive.as_deref(), Some("param" | "subckt"))
+            || (directive.is_none() && line.text.starts_with(['X', 'x']));
+        let text = if bare {
+            expand_calls(&line.text, functions)
+        } else {
+            expand_braced_calls(&line.text, functions)
+        }
+        .map_err(|e| err(&line, e.message()))?;
+        out.push(LogicalLine {
+            number: line.number,
+            text,
+        });
+    }
+    Ok(out)
+}
+
 /// Resolve `fixed` and the written `params` on top of `base`, pointing an
 /// error at the line of the parameter it names.
 fn resolve_params(
@@ -4173,6 +4272,7 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
     // Every `.model` name in the deck, wherever it is written. A `Q` line's
     // fourth token is the substrate node unless it names a model, which is
     // how ngspice's `inp2q.c` tells `Q c b e s mod` from `Q c b e mod`.
+    let lines = expand_functions(lines)?;
     let lines = expand_subcircuits(lines)?;
     let temperatures = circuit_temperatures(&lines)?;
     let circuit_temperature = temperatures.temperature;

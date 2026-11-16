@@ -357,13 +357,7 @@ pub(super) fn substitute(text: &str, scope: &Scope) -> Result<String, EvalError>
             return Err(EvalError::Invalid("nested `{` in an expression".into()));
         }
         out.push_str(&rest[..open]);
-        let before = out.trim_end().trim_end_matches('=').trim_end();
-        let keyword = before
-            .rsplit(|c: char| c.is_whitespace())
-            .next()
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        if matches!(keyword.as_str(), "value" | "table" | "laplace") {
+        if is_behavioural(&out) {
             out.push_str(&rest[open..=close]);
         } else {
             out.push_str(&format_value(evaluate(inner, scope)?));
@@ -372,6 +366,264 @@ pub(super) fn substitute(text: &str, scope: &Scope) -> Result<String, EvalError>
     }
     out.push_str(rest);
     Ok(out)
+}
+
+/// A `.func` definition: argument names (lower-cased) and its body text.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Function {
+    pub(super) args: Vec<String>,
+    pub(super) body: String,
+}
+
+/// `.func` definitions in scope, keyed by lower-cased name.
+pub(super) type Functions = BTreeMap<String, Function>;
+
+/// Names a `.func` may not take: the built-in functions, and the source
+/// keywords a line writes as `NAME(`.
+const RESERVED: &[&str] = &[
+    "sqrt", "exp", "ln", "log", "log10", "abs", "floor", "ceil", "sin", "cos", "tan", "atan",
+    "min", "max", "pow", "pulse", "pwl", "sffm", "am", "dc", "ac",
+];
+
+fn is_name(text: &str) -> bool {
+    text.chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Read the text after `.func`: `name(a, b) {body}`, `name(a,b) = {body}`
+/// or `name(a) body`, as ngspice accepts.
+pub(super) fn parse_function(text: &str) -> Result<(String, Function), String> {
+    let usage = "expected `.func <name>(<arg>, ...) {<expression>}`";
+    let (name, rest) = text.split_once('(').ok_or(usage)?;
+    let name = name.trim().to_ascii_lowercase();
+    if !is_name(&name) {
+        return Err(usage.into());
+    }
+    if RESERVED.contains(&name.as_str()) {
+        return Err(format!("`.func {name}` would shadow a built-in name"));
+    }
+    let (args, body) = rest.split_once(')').ok_or(usage)?;
+    let args: Vec<String> = if args.trim().is_empty() {
+        Vec::new()
+    } else {
+        args.split(',')
+            .map(|arg| arg.trim().to_ascii_lowercase())
+            .collect()
+    };
+    for (index, arg) in args.iter().enumerate() {
+        if !is_name(arg) {
+            return Err(format!("`.func {name}`: argument `{arg}` is not a name"));
+        }
+        if args[..index].contains(arg) {
+            return Err(format!("`.func {name}`: argument `{arg}` is listed twice"));
+        }
+    }
+    let body = body.trim();
+    let body = body.strip_prefix('=').unwrap_or(body).trim();
+    let body = body
+        .strip_prefix('{')
+        .and_then(|inner| inner.strip_suffix('}'))
+        .unwrap_or(body)
+        .trim();
+    if body.is_empty() || body.contains(['{', '}']) {
+        return Err(usage.into());
+    }
+    Ok((
+        name,
+        Function {
+            args,
+            body: body.to_string(),
+        },
+    ))
+}
+
+/// Replace every call of a `.func` in the expression `text` by its body,
+/// arguments bound by name, as ngspice's front end does: `f(a+1)` with
+/// `.func f(x) {x*x}` becomes `((a+1)*(a+1))`. The parentheses keep the
+/// written precedence; names the body leaves free (a `.param`) are resolved
+/// later, in the scope of the line that made the call.
+pub(super) fn expand_calls(text: &str, functions: &Functions) -> Result<String, EvalError> {
+    expand_within(text, functions, &mut Vec::new())
+}
+
+/// `stack` holds the functions being expanded, for the cycle check.
+fn expand_within(
+    text: &str,
+    functions: &Functions,
+    stack: &mut Vec<String>,
+) -> Result<String, EvalError> {
+    if functions.is_empty() {
+        return Ok(text.to_string());
+    }
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        // A digit run carries its suffix (`2meg`), which is not a name.
+        if byte.is_ascii_digit() || byte == b'.' {
+            let start = index;
+            while index < bytes.len()
+                && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'.')
+            {
+                index += 1;
+            }
+            out.push_str(&text[start..index]);
+            continue;
+        }
+        if !(byte.is_ascii_alphabetic() || byte == b'_') {
+            out.push(byte as char);
+            index += 1;
+            continue;
+        }
+        let start = index;
+        while index < bytes.len() && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_')
+        {
+            index += 1;
+        }
+        let name = &text[start..index];
+        let mut open = index;
+        while open < bytes.len() && (bytes[open] == b' ' || bytes[open] == b'\t') {
+            open += 1;
+        }
+        let function = functions.get(&name.to_ascii_lowercase());
+        let Some(function) = function.filter(|_| bytes.get(open) == Some(&b'(')) else {
+            out.push_str(name);
+            continue;
+        };
+        // Split the arguments on top-level commas.
+        let mut args = Vec::new();
+        let mut level = 0usize;
+        let mut from = open + 1;
+        let mut close = None;
+        for (at, &b) in bytes.iter().enumerate().skip(open + 1) {
+            match b {
+                b'(' => level += 1,
+                b')' if level == 0 => {
+                    args.push(&text[from..at]);
+                    close = Some(at);
+                    break;
+                }
+                b')' => level -= 1,
+                b',' if level == 0 => {
+                    args.push(&text[from..at]);
+                    from = at + 1;
+                }
+                _ => {}
+            }
+        }
+        let close = close.ok_or_else(|| EvalError::Invalid("expected `)`".into()))?;
+        if args.len() == 1 && args[0].trim().is_empty() {
+            args.clear();
+        }
+        let lower = name.to_ascii_lowercase();
+        if stack.contains(&lower) {
+            return Err(EvalError::Invalid(format!("`.func {lower}` calls itself")));
+        }
+        if args.len() != function.args.len() {
+            return Err(EvalError::Invalid(format!(
+                "`{lower}` takes {} argument{}, got {}",
+                function.args.len(),
+                if function.args.len() == 1 { "" } else { "s" },
+                args.len()
+            )));
+        }
+        let mut bound = Vec::with_capacity(args.len());
+        for arg in &args {
+            bound.push(format!(
+                "({})",
+                expand_within(arg.trim(), functions, stack)?
+            ));
+        }
+        let body = bind(&function.body, &function.args, &bound);
+        out.push('(');
+        stack.push(lower);
+        let expanded = expand_within(&body, functions, stack)?;
+        stack.pop();
+        // No spaces, so a bare `name=f(x)` value stays one token.
+        out.extend(expanded.chars().filter(|c| !c.is_whitespace()));
+        out.push(')');
+        index = close + 1;
+    }
+    Ok(out)
+}
+
+/// Replace each whole-word, case-insensitive use of `names[i]` in `body`
+/// with `values[i]`.
+fn bind(body: &str, names: &[String], values: &[String]) -> String {
+    let bytes = body.as_bytes();
+    let mut out = String::with_capacity(body.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte.is_ascii_digit() || byte == b'.' {
+            let start = index;
+            while index < bytes.len()
+                && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'.')
+            {
+                index += 1;
+            }
+            out.push_str(&body[start..index]);
+        } else if byte.is_ascii_alphabetic() || byte == b'_' {
+            let start = index;
+            while index < bytes.len()
+                && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_')
+            {
+                index += 1;
+            }
+            let word = &body[start..index];
+            match names.iter().position(|n| n.eq_ignore_ascii_case(word)) {
+                Some(at) => out.push_str(&values[at]),
+                None => out.push_str(word),
+            }
+        } else {
+            out.push(byte as char);
+            index += 1;
+        }
+    }
+    out
+}
+
+/// Expand `.func` calls inside every `{...}` group of a netlist line. A
+/// group after `value=`, `table` or `laplace=` is a behavioural source and
+/// is left for the element parser to refuse.
+pub(super) fn expand_braced_calls(text: &str, functions: &Functions) -> Result<String, EvalError> {
+    if functions.is_empty() || !text.contains('{') {
+        return Ok(text.to_string());
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(open) = rest.find('{') {
+        let Some(close) = rest[open..].find('}').map(|at| open + at) else {
+            // `substitute` reports the unbalanced brace with its own words.
+            out.push_str(rest);
+            return Ok(out);
+        };
+        out.push_str(&rest[..open]);
+        if is_behavioural(&out) {
+            out.push_str(&rest[open..=close]);
+        } else {
+            out.push('{');
+            out.push_str(&expand_calls(&rest[open + 1..close], functions)?);
+            out.push('}');
+        }
+        rest = &rest[close + 1..];
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
+/// True when the text before a `{` ends in `value=`, `table` or `laplace=`.
+fn is_behavioural(before: &str) -> bool {
+    let before = before.trim_end().trim_end_matches('=').trim_end();
+    let keyword = before
+        .rsplit(|c: char| c.is_whitespace())
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    matches!(keyword.as_str(), "value" | "table" | "laplace")
 }
 
 /// Split `a=1 b = {x * 2} c=3k` into `(name, value)` pairs. Spaces around
@@ -559,6 +811,34 @@ mod tests {
         assert!(err.contains("depends back"), "{err}");
         let err = resolve(&Scope::new(), pending(&[("a", "{c}")])).unwrap_err();
         assert!(err.contains("`c` is not defined"), "{err}");
+    }
+
+    fn functions(defs: &[&str]) -> Functions {
+        defs.iter().map(|d| parse_function(d).unwrap()).collect()
+    }
+
+    #[test]
+    fn function_calls_keep_the_written_precedence() {
+        let table = functions(&["sq(x) {x*x}", "neg(x) = -x", "two() {2}"]);
+        let eval = |text: &str| evaluate(&expand_calls(text, &table).unwrap(), &Scope::new());
+        // Unparenthesised binding would give 1+1*1+1 = 3 and -2^2 = -4.
+        assert_eq!(eval("sq(1+1)").unwrap(), 4.0);
+        assert_eq!(eval("SQ (neg(2))").unwrap(), 4.0);
+        assert_eq!(eval("2^sq(two())").unwrap(), 16.0);
+        // A name that is not called, and a suffix, are left alone.
+        assert_eq!(expand_calls("sq + 2sq", &table).unwrap(), "sq + 2sq");
+    }
+
+    #[test]
+    fn function_definitions_parse_like_ngspice() {
+        let (name, f) = parse_function("Par(A, b) = { a*b/(a+b) }").unwrap();
+        assert_eq!(name, "par");
+        assert_eq!(f.args, vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(f.body, "a*b/(a+b)");
+        assert!(parse_function("pwl(x) {x}")
+            .unwrap_err()
+            .contains("built-in"));
+        assert!(parse_function("f(x) {}").is_err());
     }
 
     #[test]
