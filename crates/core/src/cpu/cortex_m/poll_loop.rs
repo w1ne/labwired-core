@@ -496,3 +496,62 @@ impl CortexM {
         period.filter(|_| same)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bus::SystemBus;
+    use crate::cpu::cortex_m::DecodeCacheEntry;
+    use crate::decoder::arm::decode_thumb_16;
+    use crate::Cpu;
+
+    fn cpu_with(code: &[u16]) -> (CortexM, SystemBus) {
+        let mut cpu = CortexM::new();
+        let mut bus = SystemBus::new();
+        cpu.pc = 0x100;
+        cpu.sp = 0x2000_0400;
+        cpu.r1 = 0x2000_0100;
+        for (i, &op) in code.iter().enumerate() {
+            let pc = 0x100 + i as u32 * 2;
+            assert!(bus.flash.write_u16(u64::from(pc), op));
+            cpu.insert_decoded_entry(DecodeCacheEntry {
+                tag: pc,
+                instruction: decode_thumb_16(op),
+                opcode: u32::from(op),
+                pc_increment: 2,
+                cycles: 1,
+            });
+        }
+        (cpu, bus)
+    }
+
+    #[test]
+    fn store_first_heads_refuse_statically_and_match_a_full_probe() {
+        for (code, statically) in [
+            (&[0xb510u16][..], true),             // push {r4, lr}
+            (&[0x3001, 0x6008][..], true),        // adds r0,#1; str r0,[r1]
+            (&[0x6808, 0x1c40, 0x9000][..], true), // ldr; adds; str r0,[sp]
+            (&[0x3001, 0xe7fd][..], false),       // adds; b head (a real loop)
+            (&[0x3001, 0xd0fd, 0x6008][..], false), // conditional branch first
+            (&[0x3001][..], false),               // runs into undecoded code
+            (&[0xbf30, 0x6008][..], false),       // WFI is not arithmetic
+            (&[0xb400][..], false),               // push {} (empty list)
+        ] {
+            let (mut cpu, bus) = cpu_with(code);
+            assert_eq!(
+                cpu.probe_reaches_store_unconditionally(0x100),
+                statically,
+                "{code:x?}"
+            );
+            if statically {
+                // The full probe (diagnosis mode skips the shortcut) refuses too
+                // and leaves the core as it found it.
+                let before = serde_json::to_value(cpu.snapshot()).unwrap();
+                let loads = std::cell::RefCell::new(Vec::new());
+                assert_eq!(cpu.probe_iteration(&bus, 0x100, Some(&loads), true), None);
+                assert_eq!(cpu.probe_iteration(&bus, 0x100, None, true), None);
+                assert_eq!(serde_json::to_value(cpu.snapshot()).unwrap(), before);
+            }
+        }
+    }
+}
