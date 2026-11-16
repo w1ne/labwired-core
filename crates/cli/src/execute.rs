@@ -1335,7 +1335,10 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         exceptions: exception_count,
         pc_samples,
         stalled_poll: (stop_reason == StopReason::MaxSteps)
-            .then(|| stalled_poll(&ctx.machine.bus))
+            .then(|| stalled_poll(ctx.machine))
+            .flatten(),
+        stalled_null_read: (stop_reason == StopReason::MaxSteps)
+            .then(|| stalled_null_read(ctx.machine))
             .flatten(),
     };
 
@@ -1862,16 +1865,90 @@ const STALL_MIN_ACCESSES: u64 = 4096;
 /// The register the firmware was polling when the step budget ran out, if the
 /// run ended in such a poll: the streak is long and its latest access falls in
 /// the last 1% of the run.
-fn stalled_poll(bus: &labwired_core::bus::SystemBus) -> Option<artifacts::StalledPoll> {
+fn stalled_poll<C: labwired_core::Cpu>(
+    machine: &labwired_core::Machine<C>,
+) -> Option<artifacts::StalledPoll> {
+    let bus = &machine.bus;
     let (peripheral, offset, accesses, last_cycle) = bus.mmio_poll_streak()?;
     // The streak is stamped with the bus's own cycle counter, so "now" must
     // come from the same counter.
     let end_cycle = bus.current_cycle;
     let recent = end_cycle.saturating_sub(last_cycle) <= (end_cycle / 100).max(100_000);
-    (accesses >= STALL_MIN_ACCESSES && recent).then_some(artifacts::StalledPoll {
+    if accesses < STALL_MIN_ACCESSES || !recent {
+        return None;
+    }
+    let clock_gated = bus.peripheral_clocked(&peripheral) == Some(false);
+    // Name the register from the model (or its debug schema): "spi1 register
+    // 0x08" sends the reader to the reference manual, "SR with TXE=0" does not.
+    let opts = labwired_core::inspect::InspectOpts::default();
+    let view = machine
+        .inspect(Some(&peripheral), &opts)
+        .peripherals
+        .into_iter()
+        .find(|p| p.name == peripheral)
+        .and_then(|p| p.registers.into_iter().find(|r| r.offset == offset));
+    let register = view.as_ref().map(|r| r.name.clone());
+    let value = view.as_ref().and_then(|r| r.value);
+    let detail = view.as_ref().map(|r| {
+        let reg = format!("{peripheral} {} (0x{offset:02x})", r.name);
+        // One-bit flags only: those are what a wait loop tests.
+        let flags = r
+            .fields
+            .iter()
+            .filter(|f| f.bits[0] == f.bits[1])
+            .map(|f| format!("{}={}", f.name, f.value))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let seen = if clock_gated {
+            format!(
+                "{reg} reads 0x00000000 because {peripheral} is clock-gated (its RCC enable \
+                 bit is clear), so no status flag in it can ever set"
+            )
+        } else {
+            match r.value {
+                Some(v) => format!("{reg} reads 0x{v:08x}"),
+                None => reg,
+            }
+        };
+        if flags.is_empty() || clock_gated {
+            seen
+        } else {
+            format!("{seen}: {flags}")
+        }
+    });
+    Some(artifacts::StalledPoll {
         peripheral,
         offset,
         accesses,
+        register,
+        value,
+        clock_gated,
+        detail,
+    })
+}
+
+/// Loads below this address in a stalled loop are reads through a NULL
+/// pointer: a peripheral register block is at most a few hundred bytes, and
+/// no firmware polls its own vector table.
+const NULL_PAGE: u64 = 0x400;
+
+/// The NULL-pointer read the core is parked on, if the run ended in a loop
+/// that is a fixed point and loads from the first [`NULL_PAGE`] bytes.
+fn stalled_null_read<C: labwired_core::Cpu>(
+    machine: &mut labwired_core::Machine<C>,
+) -> Option<artifacts::StalledNullRead> {
+    let loads = machine.cpu.stalled_loop_loads(&machine.bus)?;
+    let address = loads.into_iter().find(|&a| a < NULL_PAGE)?;
+    let pc = machine.cpu.get_pc();
+    Some(artifacts::StalledNullRead {
+        pc: format!("0x{pc:08x}"),
+        address: format!("0x{address:08x}"),
+        detail: format!(
+            "the firmware is parked in a loop at PC 0x{pc:08x} that reads 0x{address:08x}, \
+             i.e. NULL + 0x{address:02x}: a driver handle whose peripheral pointer was never \
+             set (its init returned early or never ran), so the status bit it waits on can \
+             never change"
+        ),
     })
 }
 

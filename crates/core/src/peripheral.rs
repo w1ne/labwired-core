@@ -456,6 +456,12 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// UART capability: `pad_map: wch_x035` routes TX through the CH32X035
+    /// default pads instead of the STM32F1 ones. Other UARTs return false.
+    fn uart_pad_map_wch_x035(&self) -> bool {
+        false
+    }
+
     /// Clock-controller capability: resolve a symbolic clock-enable register
     /// name from a peripheral's `clock:` declaration (`"apb1enr"`, `"clken2"`,
     /// …) to its byte offset inside THIS peripheral.

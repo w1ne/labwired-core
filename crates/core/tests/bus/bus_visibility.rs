@@ -158,6 +158,15 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
          harness yet; bytes are proven by ch32v005_compiled_firmware",
     ),
+    // CH32X035C8T6: no UART bring-up for the WCH X035 family in this harness.
+    // USART1 bytes are proven by
+    // ch32x035_compiled_firmware::ch32x035_compiled_rv32imac_firmware_prints_on_usart1.
+    (
+        "ch32x035c8t6",
+        BusKind::Uart,
+        "no UART bring-up for the WCH X035 family in this harness yet; USART1 \
+         bytes are proven by ch32x035_compiled_firmware",
+    ),
     // CH32V006K8U6: same pad-gated USART1 (TX=PD5) as the CH32V003. USART1
     // bytes are proven by
     // ch32v006_compiled_firmware::ch32v006_compiled_rv32ec_zmmul_firmware_prints_on_usart1.
