@@ -62,7 +62,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "4c5c4d6ce24ef1771da5469492211e5ad97612cef51cc343af5942749d6512b1",
+  "firmware_hash": "f973dc857cb26fa698413c998fbd4e4fca97c093e16887f4ad4d1fc3fb9801d9",
   "config": {
     "firmware": "out/uno-r4-wifi/L8_can/firmware.elf",
     "system": "validation/arduino-matrix/systems/uno-r4-wifi.yaml",
