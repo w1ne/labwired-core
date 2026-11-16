@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BMP280 is drivable**: `pressure` (hPa) and `temperature` (°C) SimInput channels. The raw ADC words are the exact inverse of Bosch's integer compensation at the part's calibration block (same derived-program path as BME280), so firmware running the standard Bosch math reads the stimulus back. Defaults 25 °C / 1013.25 hPa (was the constant raw word 0x80000).
+
 ## [0.26.0] - 2026-11-15
 
 ### Release highlights

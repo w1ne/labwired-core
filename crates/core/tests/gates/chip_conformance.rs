@@ -475,6 +475,16 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32f411_tier1_survival"),
     },
     ChipConf {
+        // NUCLEO-F411RE: the raw-register smoke (examples/nucleo-f411re) runs
+        // in the PR board lane and the stock stm32duino row in the Arduino
+        // matrix, but no PR-run Rust survival gate or reset oracle exists for
+        // this exact part.
+        name: "stm32f411re",
+        yaml: "configs/chips/stm32f411re.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         // F446 firmware smoke runs in the board lane, but no PR-run Rust
         // survival gate or physical reset oracle exists for this exact part.
         name: "stm32f446re",
@@ -1168,6 +1178,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some(
             "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
+        ),
+    },
+    // CH32V203C8T6 (QingKe V4B, RV32IMAC). SIM-DERIVED: no silicon capture,
+    // so no reset_oracle. The gate boots a committed ELF that blinks PC13.
+    ChipConf {
+        name: "ch32v203c8t6",
+        yaml: "configs/chips/ch32v203c8t6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13",
         ),
     },
     // CH32V003 package variants (QFN20 F4U6, SOP16 A4M6, SOP8 J4M6). Same
