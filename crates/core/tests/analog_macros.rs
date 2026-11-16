@@ -122,11 +122,7 @@ mod analog {
             "{error}"
         );
 
-        for line in [
-            "E1 a 0 POLY(1) b 0 0 1",
-            "G1 a 0 VALUE={V(b)*2}",
-            "H1 a 0 TABLE {x}",
-        ] {
+        for line in ["E1 a 0 POLY(1) b 0 0 1", "H1 a 0 TABLE {x}"] {
             let error = parse_netlist(&format!("{line}\n")).unwrap_err();
             assert!(
                 matches!(error, AnalogError::Unsupported { .. }),

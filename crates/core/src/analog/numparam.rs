@@ -358,7 +358,9 @@ pub(super) fn substitute(text: &str, scope: &Scope) -> Result<String, EvalError>
         }
         out.push_str(&rest[..open]);
         if is_behavioural(&out) {
-            out.push_str(&rest[open..=close]);
+            out.push('{');
+            out.push_str(&substitute_names(inner, scope));
+            out.push('}');
         } else {
             out.push_str(&format_value(evaluate(inner, scope)?));
         }
@@ -586,11 +588,20 @@ fn bind(body: &str, names: &[String], values: &[String]) -> String {
     out
 }
 
-/// Expand `.func` calls inside every `{...}` group of a netlist line. A
-/// group after `value=`, `table` or `laplace=` is a behavioural source and
-/// is left for the element parser to refuse.
+/// Expand `.func` calls inside every `{...}` group of a netlist line, and in
+/// the whole expression after `v=`/`i=` on a `B` line, braced or not. A
+/// behavioural group keeps its braces and any `V(...)`/`I(...)` in it.
 pub(super) fn expand_braced_calls(text: &str, functions: &Functions) -> Result<String, EvalError> {
-    if functions.is_empty() || !text.contains('{') {
+    if functions.is_empty() {
+        return Ok(text.to_string());
+    }
+    if text.trim_start().starts_with(['b', 'B']) {
+        if let Some(at) = text.find('=') {
+            let (head, expression) = text.split_at(at + 1);
+            return Ok(format!("{head}{}", expand_calls(expression, functions)?));
+        }
+    }
+    if !text.contains('{') {
         return Ok(text.to_string());
     }
     let mut out = String::with_capacity(text.len());
@@ -602,20 +613,17 @@ pub(super) fn expand_braced_calls(text: &str, functions: &Functions) -> Result<S
             return Ok(out);
         };
         out.push_str(&rest[..open]);
-        if is_behavioural(&out) {
-            out.push_str(&rest[open..=close]);
-        } else {
-            out.push('{');
-            out.push_str(&expand_calls(&rest[open + 1..close], functions)?);
-            out.push('}');
-        }
+        out.push('{');
+        out.push_str(&expand_calls(&rest[open + 1..close], functions)?);
+        out.push('}');
         rest = &rest[close + 1..];
     }
     out.push_str(rest);
     Ok(out)
 }
 
-/// True when the text before a `{` ends in `value=`, `table` or `laplace=`.
+/// True when the text before a `{` ends in `value=`, `table` or `laplace=`,
+/// or in `v=`/`i=` on a `B` line: the group is a behavioural expression.
 fn is_behavioural(before: &str) -> bool {
     let before = before.trim_end().trim_end_matches('=').trim_end();
     let keyword = before
@@ -623,7 +631,56 @@ fn is_behavioural(before: &str) -> bool {
         .next()
         .unwrap_or("")
         .to_ascii_lowercase();
+    let b_line = before.trim_start().starts_with(['b', 'B']);
     matches!(keyword.as_str(), "value" | "table" | "laplace")
+        || (b_line && matches!(keyword.as_str(), "v" | "i"))
+}
+
+/// Replace each parameter name in a behavioural expression with its value,
+/// leaving everything the solver reads at run time alone: function names,
+/// `V(...)`/`I(...)` with their node and element names, `time`, and a scale
+/// suffix such as the `k` of `2k`.
+pub(super) fn substitute_names(text: &str, scope: &Scope) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    // Text before `index` not yet copied starts here; copying whole slices
+    // keeps any non-ASCII character intact.
+    let mut copied = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        let starts_name = (byte.is_ascii_alphabetic() || byte == b'_')
+            && !(index > 0
+                && (bytes[index - 1].is_ascii_alphanumeric() || bytes[index - 1] == b'.'));
+        if !starts_name {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        while index < bytes.len() && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_')
+        {
+            index += 1;
+        }
+        let name = &text[start..index];
+        let mut after = index;
+        while after < bytes.len() && (bytes[after] == b' ' || bytes[after] == b'\t') {
+            after += 1;
+        }
+        let call = bytes.get(after) == Some(&b'(');
+        let lower = name.to_ascii_lowercase();
+        if call && (lower == "v" || lower == "i") {
+            // Node and element names inside the probe are not parameters.
+            index = text[after..]
+                .find(')')
+                .map_or(text.len(), |at| after + at + 1);
+        } else if let (false, Some(value)) = (call, scope.get(&lower)) {
+            out.push_str(&text[copied..start]);
+            out.push_str(&format_value(*value));
+            copied = index;
+        }
+    }
+    out.push_str(&text[copied..]);
+    out
 }
 
 /// Split `a=1 b = {x * 2} c=3k` into `(name, value)` pairs. Spaces around
@@ -781,15 +838,26 @@ mod tests {
     }
 
     #[test]
-    fn substitution_leaves_behavioural_sources_alone() {
-        let scope = Scope::from([("g".to_string(), 2.0)]);
+    fn substitution_keeps_behavioural_expressions_for_the_solver() {
+        let scope = Scope::from([("g".to_string(), 2.0), ("b".to_string(), 7.0)]);
         assert_eq!(
             substitute("E1 a 0 b 0 {g*5}", &scope).unwrap(),
             "E1 a 0 b 0 1e1"
         );
+        // Parameter names become numbers; node names inside `v(...)`, the
+        // `g` suffix of `1g` and function names stay as written.
         assert_eq!(
-            substitute("E1 a 0 VALUE={v(b)*g}", &scope).unwrap(),
-            "E1 a 0 VALUE={v(b)*g}"
+            substitute("E1 a 0 VALUE={v(b)*g + 1g*exp(b)}", &scope).unwrap(),
+            "E1 a 0 VALUE={v(b)*2e0 + 1g*exp(7e0)}"
+        );
+        assert_eq!(
+            substitute("B1 a 0 V={i(vb) * g + time}", &scope).unwrap(),
+            "B1 a 0 V={i(vb) * 2e0 + time}"
+        );
+        // `v=` outside a `B` line is an ordinary value.
+        assert_eq!(
+            substitute("X1 a b sub v={g}", &scope).unwrap(),
+            "X1 a b sub v=2e0"
         );
         assert_eq!(
             substitute("H1 a 0 TABLE {x}", &scope).unwrap(),

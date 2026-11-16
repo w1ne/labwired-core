@@ -29,6 +29,8 @@
 //! to the floating-point operation order.
 //!
 //! * [`netlist`] — the accepted SPICE subset and its errors.
+//! * [`behavioural`] — `B` sources and `E`/`G` `VALUE=` expressions, with
+//!   exact derivatives for Newton.
 //! * [`device`] — the device equations, their limiters and their constants.
 //! * [`mna`] — modified nodal analysis with companion models, Newton
 //!   iteration, backward Euler or trapezoidal, dense LU.
@@ -36,6 +38,7 @@
 //! * [`trace`] — the bounded sample ring the oscilloscope reads.
 
 pub mod adapter;
+pub mod behavioural;
 pub mod device;
 pub mod mna;
 pub mod netlist;
@@ -43,6 +46,7 @@ mod numparam;
 pub mod trace;
 
 pub use adapter::{AnalogConfig, AnalogCosimAdapter, Probe};
+pub use behavioural::{BehaviouralKind, BehaviouralSource, Expression};
 pub use mna::{Integration, Solver, MAX_STEP_CUTS, MAX_UNKNOWNS};
 pub use netlist::{
     parse_netlist, parse_netlist_with_files, parse_spice_value, AnalogError, Bjt, BjtModel,

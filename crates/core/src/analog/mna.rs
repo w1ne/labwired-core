@@ -53,6 +53,7 @@
 //! lookup at build time, no threads and no wall clock. The same netlist and the
 //! same input sequence produce bit-identical voltages on every host.
 
+use super::behavioural::Control as BehaviouralControl;
 use super::device;
 use super::netlist::{
     AnalogError, BjtModel, Circuit, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
@@ -584,6 +585,15 @@ pub struct Solver {
     output_limit_point: Vec<f64>,
     /// Input-referred error for each slew-limited op-amp gain stage.
     slew_limit_point: Vec<f64>,
+    /// The quantities each behavioural source reads, at its linearisation
+    /// point: voltage-form sources first, then current-form, each in
+    /// [`super::Expression::controls`] order.
+    behavioural_point: Vec<Vec<f64>>,
+    /// Simulated time the behavioural expressions are evaluated at: the end
+    /// of the step being solved, 0 at the operating point.
+    behavioural_time: f64,
+    /// The first expression that left its domain during the last stamp.
+    behavioural_error: Option<AnalogError>,
     /// The linearisation points at the start of the step in progress, for a
     /// retry with a cut step; see [`Solver::advance`].
     saved_diode_vj: Vec<f64>,
@@ -600,6 +610,7 @@ pub struct Solver {
     saved_sink_point: Vec<[f64; 3]>,
     saved_output_limit_point: Vec<f64>,
     saved_slew_limit_point: Vec<f64>,
+    saved_behavioural_point: Vec<Vec<f64>>,
     /// Conductance from every node to ground, siemens; nonzero only inside
     /// [`Solver::gmin_stepping`].
     node_shunt: f64,
@@ -678,6 +689,12 @@ impl Solver {
         let sinks = circuit.power_sinks.len();
         let output_limits = circuit.output_current_limits.len();
         let slew_limits = circuit.slew_limited_vccs.len();
+        let behavioural_point: Vec<Vec<f64>> = circuit
+            .behavioural_voltages
+            .iter()
+            .chain(&circuit.behavioural_currents)
+            .map(|source| vec![0.0; source.controls.len()])
+            .collect();
 
         let mut solver = Self {
             circuit,
@@ -730,6 +747,10 @@ impl Solver {
             sink_point: vec![[0.0; 3]; sinks],
             output_limit_point: vec![0.0; output_limits],
             slew_limit_point: vec![0.0; slew_limits],
+            saved_behavioural_point: behavioural_point.clone(),
+            behavioural_point,
+            behavioural_time: 0.0,
+            behavioural_error: None,
             saved_diode_vj: vec![0.0; diodes],
             saved_bjt_vbe: vec![0.0; bjts],
             saved_bjt_vbc: vec![0.0; bjts],
@@ -1328,6 +1349,8 @@ impl Solver {
             .copy_from_slice(&self.output_limit_point);
         self.saved_slew_limit_point
             .copy_from_slice(&self.slew_limit_point);
+        self.saved_behavioural_point
+            .clone_from(&self.behavioural_point);
     }
 
     fn restore_linearisation(&mut self) {
@@ -1347,6 +1370,8 @@ impl Solver {
             .copy_from_slice(&self.saved_output_limit_point);
         self.slew_limit_point
             .copy_from_slice(&self.saved_slew_limit_point);
+        self.behavioural_point
+            .clone_from(&self.saved_behavioural_point);
     }
 
     /// One step of exactly `h`, no retry.
@@ -2180,9 +2205,13 @@ impl Solver {
         // previous step left in the buffer.
         self.previous[..dim].fill(f64::NAN);
         self.limiter_clamped = true;
+        self.behavioural_time = time;
 
         for _ in 1..=MAX_NEWTON_ITERATIONS {
             self.build(stamp);
+            if let Some(error) = self.behavioural_error.take() {
+                return Err(error);
+            }
             self.factorize()?;
             self.solve();
             if self.newton_converged() {
@@ -2471,6 +2500,24 @@ impl Solver {
             self.slew_limit_point[index] = node_diff(nodes, source.input_plus, source.input_minus)
                 + source.cm_gain * common_mode
                 + source.vos;
+        }
+
+        // A behavioural expression has no limiter in ngspice either: it takes
+        // the plain Newton point.
+        let sources = self
+            .circuit
+            .behavioural_voltages
+            .iter()
+            .chain(&self.circuit.behavioural_currents);
+        for (point, source) in self.behavioural_point.iter_mut().zip(sources) {
+            for (value, control) in point.iter_mut().zip(&source.controls) {
+                *value = match *control {
+                    BehaviouralControl::Voltage(p, n) => {
+                        node_diff(&self.solution[..self.nodes], p, n)
+                    }
+                    BehaviouralControl::Branch(branch) => self.solution[self.nodes + branch],
+                };
+            }
         }
     }
 
@@ -3303,6 +3350,76 @@ impl Solver {
             ];
             stamp_linearised(matrix, rhs, dim, 1.0, source.p, current, &control);
             stamp_linearised(matrix, rhs, dim, 1.0, source.n, -current, &negate(&control));
+        }
+
+        // Behavioural sources: f(u) ≈ f0 + Σ gₖ·(uₖ − uₖ0), where each uₖ is a
+        // node-voltage difference or a branch current. A voltage form owns a
+        // branch row `v(n+) − v(n−) − Σ gₖ·uₖ = f0 − Σ gₖ·uₖ0` whose current
+        // flows n+ → n− through the source, like an `E`; a current form
+        // draws f out of n+ and returns it at n−, like a `G`.
+        let circuit = &self.circuit;
+        let behavioural_base = self.nodes
+            + circuit.voltage_sources.len()
+            + circuit.inductors.len()
+            + circuit.vcvs.len()
+            + circuit.ccvs.len();
+        let voltages = circuit.behavioural_voltages.len();
+        let sources = circuit
+            .behavioural_voltages
+            .iter()
+            .chain(&circuit.behavioural_currents);
+        for (index, source) in sources.enumerate() {
+            let point = &self.behavioural_point[index];
+            let (value, slopes) = match source.expression.evaluate(point, self.behavioural_time) {
+                Ok(result) => result,
+                Err(message) => {
+                    if self.behavioural_error.is_none() {
+                        self.behavioural_error = Some(AnalogError::Evaluation {
+                            element: source.name.clone(),
+                            time: self.behavioural_time,
+                            message,
+                        });
+                    }
+                    continue;
+                }
+            };
+            let equivalent = value
+                - slopes
+                    .iter()
+                    .zip(point)
+                    .map(|(slope, at)| slope * at)
+                    .sum::<f64>();
+            // Each slope enters a row as `scale·g` on the columns of its
+            // control.
+            let nodes = self.nodes;
+            let stamp_row = |matrix: &mut [f64], row: usize, scale: f64| {
+                for (slope, control) in slopes.iter().zip(&source.controls) {
+                    match *control {
+                        BehaviouralControl::Voltage(p, n) => {
+                            add(matrix, dim, Some(row), p, scale * slope);
+                            add(matrix, dim, Some(row), n, -scale * slope);
+                        }
+                        BehaviouralControl::Branch(branch) => {
+                            add(matrix, dim, Some(row), Some(nodes + branch), scale * slope);
+                        }
+                    }
+                }
+            };
+            if index < voltages {
+                let row = behavioural_base + index;
+                add(matrix, dim, Some(row), source.p, 1.0);
+                add(matrix, dim, Some(row), source.n, -1.0);
+                add(matrix, dim, source.p, Some(row), 1.0);
+                add(matrix, dim, source.n, Some(row), -1.0);
+                stamp_row(matrix, row, -1.0);
+                rhs[row] += equivalent;
+            } else {
+                for (terminal, sign) in [(source.p, 1.0), (source.n, -1.0)] {
+                    let Some(row) = terminal else { continue };
+                    stamp_row(matrix, row, sign);
+                    rhs[row] -= sign * equivalent;
+                }
+            }
         }
     }
 }

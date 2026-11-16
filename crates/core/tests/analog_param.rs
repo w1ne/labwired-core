@@ -221,9 +221,11 @@ X1 n1 OUTER k=5
                 "{text}: {err}"
             );
         }
-        // A behavioural source keeps its own refusal: its braces are not
-        // numparam.
-        let err = parse_netlist("E1 a 0 VALUE={v(b)*2}\nR1 b 0 1\n").expect_err("value=");
-        assert!(matches!(err, AnalogError::Unsupported { .. }), "{err}");
+        // A behavioural expression takes parameter values but keeps its
+        // `v(...)` for the solver, so `v(b)` is not a parameter named `b`.
+        let deck = ".param g=2 b=7\nE1 a 0 VALUE={v(b)*g}\nV1 b 0 1.5\nR1 a 0 1\n";
+        let solver = Solver::new(parse_netlist(deck).unwrap(), Integration::BackwardEuler).unwrap();
+        let a = solver.circuit().node("a").unwrap();
+        assert_eq!(solver.node_voltage(a), 3.0);
     }
 }

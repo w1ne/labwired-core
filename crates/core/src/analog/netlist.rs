@@ -50,6 +50,8 @@
 //! | VCCS | `G<name> n+ n- nc+ nc- <transconductance>` |
 //! | CCCS | `F<name> n+ n- <vsource> <gain>` |
 //! | CCVS | `H<name> n+ n- <vsource> <transresistance>` |
+//! | Behavioural source | `B<name> n+ n- V=<expr>` or `B<name> n+ n- I=<expr>` |
+//! | Behavioural VCVS / VCCS | `E<name> n+ n- VALUE={<expr>}` / `G<name> n+ n- VALUE={<expr>}` |
 //! | Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
 //!
 //! A semiconductor's bare `off` flag is SPICE's: the operating point holds
@@ -80,11 +82,21 @@
 //! instance without `temp=` keeps the historical fixed 300 K thermal voltage
 //! and nominal parameters.
 //!
-//! The four dependent sources are SPICE's linear ones and nothing more: `POLY`,
-//! `VALUE={...}` and `TABLE` forms are refused by name. `E` and `H` each add a
+//! The four dependent sources are SPICE's linear ones, plus `E`/`G`
+//! `VALUE={<expr>}`, which is a behavioural source: `POLY`, `TABLE` and
+//! `LAPLACE` forms are refused by name. `E` and `H` each add a
 //! branch current, numbered after every voltage source and inductor; `F` and
 //! `H` read the branch current of the element they name, which must be one that
 //! carries one (a `V`, `L`, `E` or `H`).
+//!
+//! A behavioural source (`B`, or `E`/`G` with `VALUE=`) sets a voltage or a
+//! current to an expression of `V(node)`, `V(node1, node2)`, `I(<element>)`
+//! and `time`; the grammar and functions are ngspice's, listed in
+//! [`super::behavioural`]. A voltage form adds a branch current after every
+//! `H`, so `I(B1)` and `I(E1)` read it. `{...}` groups in the expression may
+//! use `.param` and subcircuit parameters; a `.subckt` body may hold
+//! behavioural sources, whose `V(...)` and `I(...)` names are flattened like
+//! every other node and element name.
 //!
 //! A `K` element couples two inductors with signed mutual inductance
 //! `M = k·sqrt(L1·L2)`. Each inductor's terminal order defines its dot
@@ -296,6 +308,8 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+
+use super::behavioural::{BehaviouralKind, BehaviouralSource, Control, ControlName, Expression};
 use std::path::{Path, PathBuf};
 
 /// A node reference: `None` is ground, `Some(i)` indexes [`Circuit::node_name`].
@@ -355,6 +369,16 @@ pub enum AnalogError {
         unknown: String,
         /// How much that unknown still moved on the last iteration.
         delta: f64,
+    },
+    /// A behavioural source's expression left its domain (`sqrt` of a
+    /// negative number, a division by zero) at the point being solved.
+    Evaluation {
+        /// The behavioural element.
+        element: String,
+        /// Simulated time of the step, in seconds; 0 at the operating point.
+        time: f64,
+        /// What went wrong.
+        message: String,
     },
     /// The manifest `config` block is not a usable analog configuration.
     Config(String),
@@ -423,6 +447,14 @@ impl fmt::Display for AnalogError {
                      with `tools/cosim/labwired_ngspice.py`"
                 )
             }
+            Self::Evaluation {
+                element,
+                time,
+                message,
+            } => write!(
+                f,
+                "behavioural source `{element}` at t = {time:e} s: {message}"
+            ),
             Self::Config(message) => write!(f, "{message}"),
         }
     }
@@ -2937,6 +2969,12 @@ pub struct Circuit {
     pub cccs: Vec<Cccs>,
     /// Current-controlled voltage sources (`H`), in netlist order.
     pub ccvs: Vec<Ccvs>,
+    /// Behavioural voltage sources (`B ... V=`, `E ... VALUE=`), in netlist
+    /// order. Each adds a branch current.
+    pub behavioural_voltages: Vec<BehaviouralSource>,
+    /// Behavioural current sources (`B ... I=`, `G ... VALUE=`), in netlist
+    /// order.
+    pub behavioural_currents: Vec<BehaviouralSource>,
     /// Power-balance sinks, one per lowered `BUCK`.
     pub power_sinks: Vec<PowerSink>,
     /// Op-amp output stages with an explicit `IOLIM`.
@@ -2974,15 +3012,21 @@ impl Circuit {
     }
 
     /// Number of branch currents (the `M`): one per voltage source, then one
-    /// per inductor, then one per `E`, then one per `H`, in that order.
+    /// per inductor, then one per `E`, then one per `H`, then one per
+    /// behavioural voltage source, in that order.
     ///
     /// The dependent sources come last so that adding one to a netlist never
     /// renumbers a voltage source's or inductor's branch.
     pub fn branch_count(&self) -> usize {
-        self.voltage_sources.len() + self.inductors.len() + self.vcvs.len() + self.ccvs.len()
+        self.voltage_sources.len()
+            + self.inductors.len()
+            + self.vcvs.len()
+            + self.ccvs.len()
+            + self.behavioural_voltages.len()
     }
 
-    /// Branch-current index of the named voltage source, inductor, `E` or `H`.
+    /// Branch-current index of the named voltage source, inductor, `E`, `H`
+    /// or behavioural voltage source.
     pub fn branch_index(&self, name: &str) -> Option<usize> {
         let key = name.trim().to_ascii_lowercase();
         self.voltage_sources
@@ -2991,6 +3035,7 @@ impl Circuit {
             .chain(self.inductors.iter().map(|e| &e.name))
             .chain(self.vcvs.iter().map(|e| &e.name))
             .chain(self.ccvs.iter().map(|e| &e.name))
+            .chain(self.behavioural_voltages.iter().map(|e| &e.name))
             .position(|candidate| candidate.to_ascii_lowercase() == key)
     }
 
@@ -3008,7 +3053,11 @@ impl Circuit {
         if index < self.vcvs.len() {
             return &self.vcvs[index].name;
         }
-        &self.ccvs[index - self.vcvs.len()].name
+        index -= self.vcvs.len();
+        if index < self.ccvs.len() {
+            return &self.ccvs[index].name;
+        }
+        &self.behavioural_voltages[index - self.ccvs.len()].name
     }
 
     /// `N + M`: the dimension of the MNA system.
@@ -3047,6 +3096,8 @@ impl Circuit {
             || self.vccs.iter().any(|e| matches(&e.name))
             || self.cccs.iter().any(|e| matches(&e.name))
             || self.ccvs.iter().any(|e| matches(&e.name))
+            || self.behavioural_voltages.iter().any(|e| matches(&e.name))
+            || self.behavioural_currents.iter().any(|e| matches(&e.name))
             || self.power_sinks.iter().any(|e| matches(&e.name))
             || self.output_current_limits.iter().any(|e| matches(&e.name))
             || self.slew_limited_vccs.iter().any(|e| matches(&e.name))
@@ -3067,6 +3118,8 @@ impl Circuit {
             || !self.power_sinks.is_empty()
             || !self.output_current_limits.is_empty()
             || !self.slew_limited_vccs.is_empty()
+            || !self.behavioural_voltages.is_empty()
+            || !self.behavioural_currents.is_empty()
     }
 
     /// Whether any semiconductor carries SPICE's `off` flag.
@@ -3082,6 +3135,11 @@ impl Circuit {
     pub fn has_waveforms(&self) -> bool {
         self.voltage_sources.iter().any(|s| !s.wave.is_constant())
             || self.current_sources.iter().any(|s| !s.wave.is_constant())
+            || self
+                .behavioural_voltages
+                .iter()
+                .chain(&self.behavioural_currents)
+                .any(|s| s.expression.uses_time())
     }
 }
 
@@ -4040,6 +4098,26 @@ fn expand_call(
             .map(|c| c.to_ascii_uppercase())
             .unwrap_or(' ');
 
+        let behavioural = letter == 'B'
+            || (matches!(letter, 'E' | 'G')
+                && tokens.get(3).is_some_and(|token| {
+                    let key = token.split('=').next().unwrap_or("");
+                    key.eq_ignore_ascii_case("value")
+                }));
+        if behavioural && tokens.len() > 3 {
+            out.push(LogicalLine {
+                number: line.number,
+                text: format!(
+                    "{}.{path}.{head} {} {} {}",
+                    first_char(head),
+                    node(tokens[1]),
+                    node(tokens[2]),
+                    rename_probes(&tokens[3..].join(" "), &node, &element)
+                ),
+            });
+            continue;
+        }
+
         if letter == 'X' {
             let positional = positional_call_tokens(&tokens);
             if let Some(callee) = positional
@@ -4121,6 +4199,56 @@ fn expand_call(
     }
     stack.pop();
     Ok(())
+}
+
+/// Rename the nodes inside every `V(...)` and the element inside every
+/// `I(...)` of a behavioural expression placed by a subcircuit call.
+fn rename_probes(
+    text: &str,
+    node: &dyn Fn(&str) -> String,
+    element: &dyn Fn(&str) -> String,
+) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    // Text before `index` not yet copied starts here; copying whole slices
+    // keeps any non-ASCII character intact.
+    let mut copied = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index].to_ascii_lowercase();
+        let standalone = index == 0
+            || !(bytes[index - 1].is_ascii_alphanumeric()
+                || bytes[index - 1] == b'_'
+                || bytes[index - 1] == b'.');
+        let after_name = bytes
+            .get(index + 1)
+            .is_none_or(|next| !(next.is_ascii_alphanumeric() || *next == b'_'));
+        if standalone && after_name && (byte == b'v' || byte == b'i') {
+            let mut open = index + 1;
+            while open < bytes.len() && (bytes[open] == b' ' || bytes[open] == b'\t') {
+                open += 1;
+            }
+            if bytes.get(open) == Some(&b'(') {
+                if let Some(close) = text[open..].find(')').map(|at| open + at) {
+                    let rename: &dyn Fn(&str) -> String = if byte == b'v' { node } else { element };
+                    let names: Vec<String> = text[open + 1..close]
+                        .split(',')
+                        .map(|name| rename(name.trim()))
+                        .collect();
+                    out.push_str(&text[copied..=index]);
+                    out.push('(');
+                    out.push_str(&names.join(", "));
+                    out.push(')');
+                    index = close + 1;
+                    copied = index;
+                    continue;
+                }
+            }
+        }
+        index += 1;
+    }
+    out.push_str(&text[copied..]);
+    out
 }
 
 /// The deck's circuit temperatures, in Celsius, read before any element so
@@ -4269,6 +4397,9 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
     // Line of every `F`/`H`, in the order they were pushed, for the error when
     // the element they name carries no branch current.
     let mut controls: Vec<(char, usize, String)> = Vec::new();
+    // Line of every behavioural source, in the order pushed per kind, for the
+    // error when its expression names a node or element that does not exist.
+    let mut behavioural_lines: Vec<(BehaviouralKind, usize, String)> = Vec::new();
     // Every `.model` name in the deck, wherever it is written. A `Q` line's
     // fourth token is the substrate node unless it names a model, which is
     // how ngspice's `inp2q.c` tells `Q c b e s mod` from `Q c b e mod`.
@@ -4365,6 +4496,7 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                 | 'F'
                 | 'H'
                 | 'X'
+                | 'B'
         ) {
             return Err(ctx.unsupported());
         }
@@ -4748,6 +4880,60 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                     ic,
                 });
             }
+            'B' => {
+                let rest = &tokens[1..];
+                if rest.len() < 3 {
+                    return Err(ctx.parse_err("expected `B<name> n+ n- V=<expr>` or `I=<expr>`"));
+                }
+                let text = rest[2..].join(" ");
+                let (kind, body) = match text.split_once('=') {
+                    Some((key, body)) if key.trim().eq_ignore_ascii_case("v") => {
+                        (BehaviouralKind::Voltage, body)
+                    }
+                    Some((key, body)) if key.trim().eq_ignore_ascii_case("i") => {
+                        (BehaviouralKind::Current, body)
+                    }
+                    _ => {
+                        return Err(
+                            ctx.parse_err("expected `V=<expr>` or `I=<expr>` after the two nodes")
+                        )
+                    }
+                };
+                push_behavioural(
+                    &mut circuit,
+                    &mut behavioural_lines,
+                    &ctx,
+                    head,
+                    [rest[0], rest[1]],
+                    kind,
+                    body,
+                )?;
+            }
+            'E' | 'G'
+                if tokens.len() > 3 && {
+                    let key = tokens[3].split('=').next().unwrap_or("");
+                    key.eq_ignore_ascii_case("value")
+                } =>
+            {
+                let text = tokens[3..].join(" ");
+                let body = text.split_once('=').map(|(_, body)| body).ok_or_else(|| {
+                    ctx.parse_err(format!("expected `{letter}<name> n+ n- VALUE={{<expr>}}`"))
+                })?;
+                let kind = if letter == 'E' {
+                    BehaviouralKind::Voltage
+                } else {
+                    BehaviouralKind::Current
+                };
+                push_behavioural(
+                    &mut circuit,
+                    &mut behavioural_lines,
+                    &ctx,
+                    head,
+                    [tokens[1], tokens[2]],
+                    kind,
+                    body,
+                )?;
+            }
             'E' | 'G' => {
                 let shape = if letter == 'E' {
                     "E<name> n+ n- nc+ nc- <gain>"
@@ -4978,7 +5164,96 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
     bind_mutual_inductors(&mut circuit, pending_mutuals)?;
     bind_models(&mut circuit, &models, pending)?;
     bind_controls(&mut circuit, &controls)?;
+    bind_behavioural(&mut circuit, &behavioural_lines)?;
     Ok(circuit)
+}
+
+/// Parse one behavioural expression and add its source to the circuit.
+fn push_behavioural(
+    circuit: &mut Circuit,
+    lines: &mut Vec<(BehaviouralKind, usize, String)>,
+    ctx: &LineCtx<'_>,
+    name: &str,
+    terminals: [&str; 2],
+    kind: BehaviouralKind,
+    body: &str,
+) -> Result<(), AnalogError> {
+    // A brace group inside the expression (`I={k}*V(a)` after numparam) is a
+    // parenthesised term, as ngspice reads it.
+    let body = body.trim().replace('{', "(").replace('}', ")");
+    let expression = Expression::parse(&body).map_err(|message| ctx.parse_err(message))?;
+    let source = BehaviouralSource {
+        name: name.to_string(),
+        p: circuit.intern(terminals[0]),
+        n: circuit.intern(terminals[1]),
+        kind,
+        expression,
+        controls: Vec::new(),
+    };
+    match kind {
+        BehaviouralKind::Voltage => circuit.behavioural_voltages.push(source),
+        BehaviouralKind::Current => circuit.behavioural_currents.push(source),
+    }
+    lines.push((kind, ctx.number, ctx.text.to_string()));
+    Ok(())
+}
+
+/// Bind every `V(...)` and `I(...)` a behavioural expression reads.
+///
+/// Done after [`bind_controls`], once every node exists and the branch
+/// numbering is final.
+fn bind_behavioural(
+    circuit: &mut Circuit,
+    lines: &[(BehaviouralKind, usize, String)],
+) -> Result<(), AnalogError> {
+    for kind in [BehaviouralKind::Voltage, BehaviouralKind::Current] {
+        let count = match kind {
+            BehaviouralKind::Voltage => circuit.behavioural_voltages.len(),
+            BehaviouralKind::Current => circuit.behavioural_currents.len(),
+        };
+        let mut lines = lines.iter().filter(|(k, _, _)| *k == kind);
+        for index in 0..count {
+            let (_, number, text) = lines.next().expect("one line per behavioural source");
+            let ctx = LineCtx {
+                number: *number,
+                text,
+            };
+            let source = match kind {
+                BehaviouralKind::Voltage => &circuit.behavioural_voltages[index],
+                BehaviouralKind::Current => &circuit.behavioural_currents[index],
+            };
+            let node = |name: &str| {
+                circuit
+                    .node(name)
+                    .ok_or_else(|| ctx.parse_err(format!("node `{name}` is not in this netlist")))
+            };
+            let mut bound = Vec::with_capacity(source.expression.controls().len());
+            for control in source.expression.controls() {
+                bound.push(match control {
+                    ControlName::Voltage(p, n) => Control::Voltage(
+                        node(p)?,
+                        match n {
+                            Some(n) => node(n)?,
+                            None => None,
+                        },
+                    ),
+                    ControlName::Current(element) => {
+                        Control::Branch(circuit.branch_index(element).ok_or_else(|| {
+                            ctx.parse_err(format!(
+                                "`{element}` carries no branch current; I(...) must name a \
+                                 V, L, E, H or voltage-form B element"
+                            ))
+                        })?)
+                    }
+                });
+            }
+            match kind {
+                BehaviouralKind::Voltage => circuit.behavioural_voltages[index].controls = bound,
+                BehaviouralKind::Current => circuit.behavioural_currents[index].controls = bound,
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Refuse the nonlinear dependent-source forms by name, so they read as

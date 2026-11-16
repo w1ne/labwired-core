@@ -206,10 +206,16 @@ X1 a LOAD r=half(r)
                 "{text}: {err}"
             );
         }
-        // A behavioural source keeps its own refusal: its braces are not
-        // expanded.
-        let err = parse_netlist(".func f(x) {x}\nE1 a 0 VALUE={f(v(b))}\nR1 b 0 1\n")
-            .expect_err("value=");
-        assert!(matches!(err, AnalogError::Unsupported { .. }), "{err}");
+        // A behavioural source's expression expands calls too, braced
+        // (`VALUE={...}`) or not (`B ... V=`), and keeps its `v(...)`.
+        for deck in [
+            ".func f(x) {2*x}\nE1 a 0 VALUE={f(v(b))}\nV1 b 0 1.5\nR1 a 0 1\n",
+            ".func f(x) {2*x}\nB1 a 0 V=f(v(b))\nV1 b 0 1.5\nR1 a 0 1\n",
+        ] {
+            let circuit = parse_netlist(deck).unwrap_or_else(|e| panic!("{deck}: {e}"));
+            let solver = Solver::new(circuit, Integration::BackwardEuler).unwrap();
+            let a = solver.circuit().node("a").unwrap();
+            assert_eq!(solver.node_voltage(a), 3.0, "{deck}");
+        }
     }
 }
