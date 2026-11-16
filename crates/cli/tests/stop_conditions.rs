@@ -425,3 +425,36 @@ assertions:
     assert_eq!(result["stop_reason"], "no_progress");
     assert_eq!(result["status"], "pass");
 }
+
+/// An assertions-pass early stop must not end the run while a scheduled input
+/// is still pending. The fixture prints "OK" long before cycle 300_000; before
+/// this guard the run stopped there, the injection never fired, and a proof
+/// that depends on that input could never pass. Callers worked around it by
+/// disabling the early stop whenever an input was scheduled, so every such
+/// proof ran to its wall-time cap.
+#[test]
+fn test_stop_when_assertions_pass_waits_for_scheduled_inputs() {
+    let script = r#"
+schema_version: "1.2"
+inputs:
+  firmware: "__FIRMWARE__"
+  system: "__SYSTEM__"
+limits:
+  max_steps: 5000000
+  stop_when_assertions_pass: true
+uart_injections:
+  - uart: "uart1"
+    bytes: "x"
+    trigger: !after_cycles { cycles: 300000 }
+assertions:
+  - uart_contains: "OK"
+"#;
+    let result = run_test("assertions_wait_for_inputs", script);
+    assert_eq!(result["status"], "pass", "{result:#}");
+    assert_eq!(result["stop_reason"], "assertions_passed", "{result:#}");
+    let cycles = result["cycles"].as_u64().expect("cycles in result.json");
+    assert!(
+        cycles >= 300_000,
+        "stopped at cycle {cycles}, before the scheduled injection at 300000: {result:#}"
+    );
+}

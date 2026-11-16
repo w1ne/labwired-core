@@ -39,6 +39,9 @@
 //! * Only HP PCR is modelled. The LP clock registers (`LP_*`, elsewhere in
 //!   the C6 map) are out of scope.
 
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
 /// PCR register table: `(offset, name, SVD reset value)`.
@@ -136,6 +139,9 @@ pub const PCR_REGISTERS: &[(u32, &str, u32)] = &[
 pub struct Esp32c6Pcr {
     /// Word-aligned register backing store, seeded with the SVD reset values.
     regs: crate::FastMap<u64, u32>,
+    /// Live mirrors handed out by `clock_select_cell` (offset, cell), refreshed
+    /// on every write so a consumer reads the source select firmware set.
+    mirrors: Vec<(u64, Arc<AtomicU32>)>,
 }
 
 impl Default for Esp32c6Pcr {
@@ -152,7 +158,19 @@ impl Esp32c6Pcr {
                 regs.insert(u64::from(offset), reset);
             }
         }
-        Self { regs }
+        Self {
+            regs,
+            mirrors: Vec::new(),
+        }
+    }
+
+    fn sync_mirror(&self, word_off: u64) {
+        let v = self.word(word_off);
+        for (off, cell) in &self.mirrors {
+            if *off == word_off {
+                cell.store(v, Ordering::Relaxed);
+            }
+        }
     }
 
     /// SVD register name at `offset`, if the PCR map has one.
@@ -189,6 +207,7 @@ impl Peripheral for Esp32c6Pcr {
         let entry = self.regs.entry(word_off).or_insert(0);
         *entry &= !(0xFFu32 << byte_off);
         *entry |= (u32::from(value)) << byte_off;
+        self.sync_mirror(word_off);
         Ok(())
     }
 
@@ -198,6 +217,7 @@ impl Peripheral for Esp32c6Pcr {
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         self.regs.insert(offset & !3, value);
+        self.sync_mirror(offset & !3);
         Ok(())
     }
 
@@ -212,6 +232,18 @@ impl Peripheral for Esp32c6Pcr {
     /// closed mid-run silences the peripheral immediately.
     fn clock_gate_reg_offset(&self, name: &str) -> Option<u64> {
         Self::gate_reg_offset(name)
+    }
+
+    /// A live mirror of a named PCR register: the C6 LEDC takes its source
+    /// clock from `LEDC_SCLK_CONF.LEDC_SCLK_SEL` here, not from its own window.
+    fn clock_select_cell(&mut self, name: &str) -> Option<Arc<AtomicU32>> {
+        let off = Self::gate_reg_offset(name)?;
+        if let Some((_, cell)) = self.mirrors.iter().find(|(o, _)| *o == off) {
+            return Some(Arc::clone(cell));
+        }
+        let cell = Arc::new(AtomicU32::new(self.word(off)));
+        self.mirrors.push((off, Arc::clone(&cell)));
+        Some(cell)
     }
 
     fn tick(&mut self) -> PeripheralTickResult {

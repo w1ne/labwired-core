@@ -126,6 +126,9 @@ peripherals:
     size: "1KB"
     irq: 28
     config:
+      # Channel outputs reach the pads through the WB AF table
+      # (bus/attach.rs STM32WB_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32wb"
       debug_schema: "../peripherals/stm32wb55/tim2.yaml"
       width: 32
     clock: { reg: "apb1enr", bit: 0 }
@@ -137,6 +140,9 @@ peripherals:
     size: "1KB"
     irq: 24
     config:
+      # Channel outputs reach the pads through the WB AF table
+      # (bus/attach.rs STM32WB_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32wb"
       debug_schema: "../peripherals/stm32wb55/tim1.yaml"
       advanced: true
     clock: { reg: "apb2enr", bit: 11 }

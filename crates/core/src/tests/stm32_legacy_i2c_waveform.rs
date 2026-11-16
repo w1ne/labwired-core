@@ -102,7 +102,7 @@ mod stm32_legacy_i2c_waveform_tests {
             .join(rel)
     }
 
-    /// The same minimal manifest `crates/core/tests/bus_visibility.rs` and
+    /// The same minimal manifest `crates/core/tests/bus/bus_visibility.rs` and
     /// `chip_conformance.rs` use, so this gate measures the construction path
     /// those boards measure.
     fn dummy_manifest(path: &str) -> SystemManifest {

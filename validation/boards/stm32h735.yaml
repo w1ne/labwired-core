@@ -1,0 +1,92 @@
+id: stm32h735
+doc: docs/boards/stm32h735.md
+chip: configs/chips/stm32h735.yaml
+tier: sim-validated
+note: "STM32H735VG — the FIRST fully-modelled Cortex-M7 chip in LabWired. H7-family (RM0468: GPIO @ 0x5802_0000, RCC @ 0x5802_4400, flash interface @ 0x5200_2000, DBGMCU @ 0x5C00_1000), 1 MiB flash, DTCM/AXI SRAM. Introduces a new H7 RCC register layout (rcc.rs Stm32H7 — enable block 0xD4..0xF4, BDCR 0x70, CSR 0x74, oscillator/PLL ready gating + source-ready-gated SYSCLK switch) and reuses the shared H7/H5 peripheral IP (gpio stm32v2, uart stm32v2, spi stm32h5, i2c h5, timer). The tier-1 fixture (tests/fixtures/tier1/stm32h735.elf) drives raw-register self-tests and reports clock/gpio/timer/pwm/i2c/spi/wdt/irq PASS + a working UART over USART3. SIM-DERIVED: every reset value/behaviour is reference-manual-derived — there is NO H735 bench part and NO silicon diff. H7 DMA/ADC/RTC/FDCAN and PWR/FLASH VOSRDY/bank-2 fidelity are not modelled (documented in the chip yaml)."
+offline_tests:
+  - "tier1 fixture (clock/gpio/timer/pwm/i2c/spi/wdt/irq PASS + uart via TIER1 done)"
+  - "io-smoke (examples/stm32h735-smoke: asserts the TIER1 transcript over UART)"
+  - "chip_conformance (estate OK — no peripheral window faults)"
+# 2026-07-28: three model corrections toward silicon, all found by running
+# real Arduino-core firmware on the sim (not by a fixture):
+#   gpio.rs  - IDR now reports the PIN level, so a push-pull output reads
+#              back the level it drives, instead of a private latch.
+#   i2c.rs   - optional ERROR-line NVIC vector, plus correct SR1 rc_w0 and
+#              read-only SR2 write semantics (a raw SR1 assignment had let
+#              a HAL flag-clear SET every other flag).
+#   spi.rs   - full-duplex frames now always complete the receive (RXNE/RXP
+#              + data register) instead of gating on an attached slave.
+# None of these paths are pinned by this board's frozen capture, which
+# covers reset values and register sweeps rather than output-pin readback
+# or full-duplex RX events: labwired-hw-oracle (27/27) and chip_conformance
+# pass unchanged. No live re-capture this session; re-capturing IDR readback
+# and SPI RX behaviour is tracked.
+# 2026-08-10 RP2040 probe re-binding (shared bus files). accessors.rs now
+# brackets an IO_BANK0 GPIOn_CTRL write with the SIO tap snapshot/report
+# pair so a probe armed before firmware muxes a pad follows the new source.
+# For THIS board the bracket is inert: begin_rp2040_io_bank0_write() type-
+# checks the peripheral against Rp2040IoBank0 and returns None otherwise, so
+# no register read/write path, reset value or layout is touched. The source
+# digest moved because a shared file's commit date moved; the model did not.
+# No live re-capture is evidenced here.
+# 2026-08-09: rides the nRF52 SPIM PSEL fix. peripherals/spi.rs is on this
+# board's watch list so its digest moved, but every edit is inside
+# `Nrf52SpiRegs` — an nRF-only struct this board's Stm32* layouts do not
+# use. Recorded explicitly because `--write-ack-digests` re-stamps EVERY
+# ack, which would otherwise have widened this one to cover a change
+# nobody had written down.
+# 2026-08-13 (#962): the chip descriptor now declares the clock its core
+# runs at (`ChipDescriptor::cpu_hz`), which moved every configs/chips/*.yaml
+# and this board's digest with them. NOTHING THIS CAPTURE PINS MOVED: the
+# field is declarative and no peripheral model reads it, and a new test
+# (cpu_hz_single_source) asserts the descriptor agrees with the peripheral
+# constants rather than replacing them. What consumes the clock is the
+# external-device attach path (DHT22, HC-SR04, rotary encoder, WS2812), and
+# no silicon capture covers any of those. The digest is re-stamped here so
+# this ack names content a human actually read; no live re-capture owed for
+# this change, and any already owed above still is.
+drift_ack: 2026-09-14
+# 2026-08-22: the Thumb-2 decoder gained SMLABB/BT/TB/TT and SMULBB/BT/TB/TT
+# (ARMv7-M A7.7.166/171). They were UNDECODED, which in this core means a
+# silent no-op — `digitalWrite` on EFR32MG26 computes its port base with
+# SMLABB and was writing to a garbage address, so blink did not blink.
+# Purely additive: one new `else if` in decoder/arm.rs and one new match arm
+# in cortex_m.rs; `git diff` removes no existing line, so every encoding that
+# decoded before decodes identically now.
+# ⚠ MEASURED, NOT ASSUMED, because a newly-decoded instruction genuinely does
+# change behaviour for firmware that executes it — this is the one drift note
+# in this file where "additive" is not by itself an argument. All 96 committed
+# ELF fixtures were disassembled: exactly ONE contains the family, the
+# `smulbb r0, r1, r0` divide-by-3 in
+# crates/wasm/tests/fixtures/firmware-l476-bldc-six-step.elf, and its committed
+# golden trace (crates/wasm/tests/fixtures/motor-parity-native.json) still
+# matches. No other pinned firmware on any board reaches the encoding, so
+# nothing a silicon capture asserts moved. No live re-capture is evidenced here.
+drift_ack_digest: 5ae888384d697ee6e8e441261e6b4c048ff8e0ce4d17d2d62444fa6221ac3f7c
+models:
+  - crates/core/src/peripherals/esp_ledc_wave.rs
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - configs/chips/stm32h735.yaml
+  - crates/core/src/peripherals/rcc.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/uart.rs
+  - crates/core/src/peripherals/spi.rs
+  - crates/core/src/peripherals/i2c.rs
+  - crates/core/src/peripherals/timer.rs
+  - crates/core/src/peripherals/timer_output.rs
+  # 2026-09-22, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/adc.rs
+  - crates/core/src/peripherals/crc.rs
+  - crates/core/src/peripherals/dbgmcu.rs
+  - crates/core/src/peripherals/fdcan.rs
+  - crates/core/src/peripherals/flash.rs
+  - crates/core/src/peripherals/iwdg.rs
+  - crates/core/src/peripherals/pwr.rs
+  - crates/core/src/peripherals/rng.rs
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs
+  - crates/core/src/peripherals/wwdg.rs

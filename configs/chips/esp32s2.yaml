@@ -1,0 +1,41 @@
+# Espressif ESP32-S2-SOLO-2 module used on ESP32-S2-DevKitC-1-N8R2.
+#
+# This is a deliberately narrow fast-boot profile: one LX7 CPU, the S2's
+# internal DRAM/IRAM alias and an ESP32-S2 UART0 TX FIFO. The mask ROM, flash
+# cache/MMU, GPIO matrix, Wi-Fi, USB OTG, PSRAM and the remaining S2 peripherals
+# are not modelled by this descriptor.
+#
+# Address map and UART/GPIO register bases follow Espressif's ESP-IDF S2 SoC
+# headers: components/soc/esp32s2/include/soc/{soc.h,reg_base.h}.
+name: "esp32s2"
+arch: "xtensa-lx7"
+cpu_hz: 240_000_000
+
+# 8 MiB flash on the selected N8R2 module. This maps its instruction-cache
+# window for direct ELF fast boot; SPI flash commands and cache/MMU are not
+# included in this profile.
+flash:
+  base: 0x40080000
+  size: "8192KB"
+ram:
+  base: 0x3FFB0000
+  size: "320KB"
+
+# S2 IRAM and DRAM are executable/data aliases of the same 320 KiB SRAM.
+memory_regions:
+  - name: "iram"
+    base: 0x40020000
+    size: "320KB"
+    alias_of: 0x3FFB0000
+
+peripherals:
+  # ESP32-S2 UART0 TX FIFO is UART_FIFO (offset 0) at DR_REG_UART_BASE.
+  # The narrow smoke writes the FIFO directly; it does not claim baud-rate,
+  # RX, interrupt, IO_MUX or GPIO-matrix behavior.
+  - id: "uart0"
+    type: "uart"
+    base_address: 0x3F400000
+    size: "256B"
+    config:
+      profile: "custom"
+      tx_offset: 0

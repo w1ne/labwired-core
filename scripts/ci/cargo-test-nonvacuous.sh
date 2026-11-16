@@ -69,11 +69,14 @@
 # the identical arguments and exits with ITS status. The second cargo call is a
 # cache hit, so the wrapper costs the `--list` calls and nothing else.
 #
-# WHAT IT DOES NOT COVER. A harness NAME FILTER (`-- some_test`) narrows the
-# run further and is not modelled here: the counts below are what the target
-# would execute unfiltered. No lane in this repo filters by name, and a filter
-# that matches nothing is loud (`0 filtered out` is `0 passed` with a visible
-# cause) rather than silent, which is the class this script exists for.
+# NAME FILTERS. Several former per-file test targets are now modules of one
+# grouped binary (`crates/core/tests/<group>/main.rs`), so a lane that used to
+# say `--test avr_pwm` now says `--test avr -- avr_pwm::`. The filters (the
+# positional harness arguments) are passed to both `--list` calls below, so the
+# counts are what the filtered run will execute, and a filter that selects
+# nothing in a target is reported as "contains ZERO tests" instead of ticking.
+# Because every filter reaches every selected binary, give each grouped binary
+# its own invocation (one `cargo test` per group).
 #
 # Which files are ALLOWED to be all-ignored, and which lane runs them with
 # `-- --ignored`, is a separate question answered by name in `NIGHTLY_ONLY` in
@@ -103,6 +106,23 @@ for arg in "$@"; do
     else
         harness_args+=("$arg")
     fi
+done
+
+# Positional harness arguments are name filters; flags (and the values of the
+# flags that take one) are not. Passed unchanged to the two `--list` calls.
+filters=()
+skip_next=0
+for arg in ${harness_args[@]+"${harness_args[@]}"}; do
+    if [ "$skip_next" -eq 1 ]; then
+        skip_next=0
+        continue
+    fi
+    case "$arg" in
+        --test-threads|--skip|--format|--color|--logfile|--report-time|--shuffle-seed|-Z)
+            skip_next=1 ;;
+        -*) ;;
+        *) filters+=("$arg") ;;
+    esac
 done
 
 artifacts="$(mktemp)"
@@ -209,8 +229,8 @@ declared_total=0
 ignored_total=0
 executed_total=0
 for exe in "${executables[@]}"; do
-    declared="$("$exe" --list --format terse 2>/dev/null | grep -c ': test$' || true)"
-    ignored="$("$exe" --list --ignored --format terse 2>/dev/null | grep -c ': test$' || true)"
+    declared="$("$exe" --list --format terse ${filters[@]+"${filters[@]}"} 2>/dev/null | grep -c ': test$' || true)"
+    ignored="$("$exe" --list --ignored --format terse ${filters[@]+"${filters[@]}"} 2>/dev/null | grep -c ': test$' || true)"
 
     case "$run_mode" in
         ignored)         executed="$ignored" ;;

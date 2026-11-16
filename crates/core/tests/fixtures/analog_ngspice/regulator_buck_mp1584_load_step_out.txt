@@ -1,4 +1,4 @@
-# ngspice-47 reference for `regulator_buck_mp1584_load_step_out` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `regulator_buck_mp1584_load_step_out` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(out) at every 2e-5 s, t = 0 excluded
 # deck 7d5ae9dfe2dc0b6d
 2.80067626013808316e-3

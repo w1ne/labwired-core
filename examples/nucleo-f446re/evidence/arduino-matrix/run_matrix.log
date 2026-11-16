@@ -1,0 +1,36 @@
+labwired: target/release/labwired
+boards:   stm32f446re
+sketches: L0_serial_boot, L1_serial_loop, L2_blink_serial, L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L7_timer, L8_can
+out:      <matrix-out>
+
+==> stm32f446re × L0_serial_boot
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32f446re × L1_serial_loop
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32f446re × L2_blink_serial
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32f446re × L3_i2c_sensor
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32f446re × L4_spi_sensor
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32f446re × L5_adc
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32f446re × L6_pwm
+    compile: ok (firmware.elf)
+    run: pass
+==> stm32f446re × L7_timer
+    compile: cache hit (firmware.elf)
+    run: pass
+==> stm32f446re × L8_can
+    compile: ok (firmware.elf)
+    run: pass
+
+Done in 19s — 9 pass / 0 skip / 0 fail (cells 9; gate treats skip as non-fail)
+Scoreboard: <matrix-out>/scoreboard.md
+Docs scoreboard unchanged (partial run; not full 25×9)

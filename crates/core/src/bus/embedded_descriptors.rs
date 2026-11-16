@@ -36,6 +36,26 @@ macro_rules! packed {
 
 /// Every embedded descriptor, sorted by key so `lookup` can binary-search it.
 static DESCRIPTORS: &[(&str, &[u8])] = &[
+    ("atmega4809/bod.yaml", packed!("atmega4809/bod.yaml")),
+    (
+        "atmega4809/clkctrl.yaml",
+        packed!("atmega4809/clkctrl.yaml"),
+    ),
+    (
+        "atmega4809/portmux.yaml",
+        packed!("atmega4809/portmux.yaml"),
+    ),
+    (
+        "atmega4809/rstctrl.yaml",
+        packed!("atmega4809/rstctrl.yaml"),
+    ),
+    ("atmega4809/sigrow.yaml", packed!("atmega4809/sigrow.yaml")),
+    (
+        "atmega4809/slpctrl.yaml",
+        packed!("atmega4809/slpctrl.yaml"),
+    ),
+    ("atmega4809/vref.yaml", packed!("atmega4809/vref.yaml")),
+    ("atsamd21g18a/dac.yaml", packed!("atsamd21g18a/dac.yaml")),
     ("atsamd21g18a/gclk.yaml", packed!("atsamd21g18a/gclk.yaml")),
     (
         "atsamd21g18a/nvmctrl.yaml",
@@ -46,6 +66,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
         "atsamd21g18a/sysctrl.yaml",
         packed!("atsamd21g18a/sysctrl.yaml"),
     ),
+    ("atsamd21g18a/usb.yaml", packed!("atsamd21g18a/usb.yaml")),
     ("atsamd21g18a/wdt.yaml", packed!("atsamd21g18a/wdt.yaml")),
     ("esp32/apb_ctrl.yaml", packed!("esp32/apb_ctrl.yaml")),
     ("esp32/dport.yaml", packed!("esp32/dport.yaml")),
@@ -380,6 +401,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("rp2040/clocks.yaml", packed!("rp2040/clocks.yaml")),
     ("rp2040/dma.yaml", packed!("rp2040/dma.yaml")),
     ("rp2040/i2c0.yaml", packed!("rp2040/i2c0.yaml")),
+    ("rp2040/i2c1.yaml", packed!("rp2040/i2c1.yaml")),
     ("rp2040/io_bank0.yaml", packed!("rp2040/io_bank0.yaml")),
     ("rp2040/pio0.yaml", packed!("rp2040/pio0.yaml")),
     ("rp2040/pio1.yaml", packed!("rp2040/pio1.yaml")),

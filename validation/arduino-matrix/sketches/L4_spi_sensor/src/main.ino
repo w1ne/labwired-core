@@ -8,7 +8,11 @@
 #include <SPI.h>
 
 #ifndef LW_SPI_CS
-#  if defined(ARDUINO_ARCH_ESP32)
+#  if defined(ARDUINO_XIAO_ESP32S3)
+// Seeed XIAO ESP32S3: the variant's SS = D7 = GPIO44. Serial is USB CDC,
+// so the U0RXD pad is free.
+#    define LW_SPI_CS SS
+#  elif defined(ARDUINO_ARCH_ESP32)
 #    define LW_SPI_CS 5
 #  elif defined(ARDUINO_ARCH_RP2040)
 #    define LW_SPI_CS 17
@@ -21,9 +25,10 @@
 
 static void logBegin() {
   Serial.begin(115200);
-#if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)
-  // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
-  // the host opens the port (DTR), on silicon and on the twin alike.
+#if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__)
+  // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
+  // CDC and drops writes until the host opens the port (DTR), on silicon and
+  // on the twin alike.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)

@@ -2,7 +2,7 @@
 
 Two ESP32-C3 applications on esp-hal 1.1 (`esp-hal 1.1.1`, `esp-println
 0.17`, `esp-backtrace 0.19`, the lock file of `examples/esp32c3-hello-world`),
-used by `crates/core/tests/world_gpio_net_buses.rs` to run esp-hal's own
+used by `crates/core/tests/world/world_gpio_net_buses.rs` to run esp-hal's own
 blocking SPI and I2C master drivers against an STM32G071 over gpio nets:
 
 | Binary | Committed ELF | Environment |

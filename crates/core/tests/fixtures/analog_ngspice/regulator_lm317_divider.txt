@@ -1,4 +1,4 @@
-# ngspice-47 reference for `regulator_lm317_divider` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `regulator_lm317_divider` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(out) at every 2e-5 s, t = 0 excluded
 # deck 9b07d42ec33fe5f1
 -1.47994638703413343e-2

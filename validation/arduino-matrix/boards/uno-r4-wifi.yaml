@@ -1,0 +1,18 @@
+id: uno-r4-wifi
+chip: ra4m1
+system: systems/uno-r4-wifi.yaml
+pio: { platform: renesas-ra, board: uno_r4_wifi, framework: arduino }
+max_steps: 5000000
+budget_reason: "L0~0.11M L1-L5/L7 <0.3M; L6 ~1.55M with the P102 pad watch (490 Hz GPT2 PWM)"
+# LED_BUILTIN = D13 = P102 on the WiFi board (variants/UNOWIFIR4
+# variant.cpp); P111 is the Minima's.
+led_watch: "port1:2"
+led_min_edges: 2
+# analogWrite(D13) = GPT2 GTIOC2B on P102: 490 Hz, 128/255 duty.
+pwm_watch: "port1:2"
+pwm_min_edges: 4
+family: ra
+notes: "Stock ArduinoCore-renesas; Serial = SCI9; Wire = IIC1 (INA219 exact tier); SPI = RSPI SPI0 (MAX31855)"
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "RA4M1 CAN0 is not modelled; the L8 sketch has no renesas CAN path"

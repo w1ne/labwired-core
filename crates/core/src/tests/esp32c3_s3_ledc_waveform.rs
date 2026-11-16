@@ -283,14 +283,123 @@ mod esp32c3_s3_ledc_waveform_tests {
         }
     }
 
-    /// The C6 reuses the C3 LEDC and GPIO models, but its matrix numbers 45/46
-    /// as I²C — LEDC must not claim them there.
+    /// The C6 reuses the C3 LEDC and GPIO models, but numbers the LEDC outputs
+    /// 0..5 (its 45/46 are I²C): the production bus binds them there.
     #[test]
-    fn the_c6_does_not_bind_c3_ledc_signal_numbers() {
+    fn the_production_c6_builder_binds_the_ledc_outputs() {
         let bound = from_config_bound("esp32c6.yaml");
+        for want in ["LEDC_LS_CH0", "LEDC_LS_CH5", "I2CEXT0_SCL"] {
+            assert!(
+                bound.contains(&want),
+                "C6 from_config must bind {want}: {bound:?}"
+            );
+        }
+    }
+
+    // ESP32-C6 deltas (`soc/esp32c6/register/soc/ledc_reg.h`, `pcr_reg.h`):
+    // TIMERx_CONF has CLK_DIV at [22:5], and the source clock is selected in
+    // PCR.LEDC_SCLK_CONF (SEL [21:20], EN bit 22), not in LEDC_CONF.
+    const C6_PCR_BASE: u64 = 0x6009_6000;
+    const C6_PCR_LEDC_SCLK_CONF: u64 = 0x38;
+    const C6_SCLK_EN: u32 = 1 << 22;
+    const C6_SCLK_SEL_XTAL: u32 = 3 << 20;
+    /// 40 MHz XTAL / (5 kHz * 2^10) = 7.8125 → Q8 2000.
+    const C6_XTAL_DIV_Q8: u32 = 2000;
+
+    fn c6_machine(clock_select: bool) -> Machine<CortexM> {
+        use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
+        use crate::peripherals::esp32c3::ledc::Esp32c3Ledc;
+        use crate::peripherals::esp32c6::pcr::Esp32c6Pcr;
+        let mut bus = crate::bus::SystemBus::new();
+        bus.cpu_hz = 160_000_000;
+        bus.add_peripheral(
+            "gpio",
+            GPIO_BASE,
+            0x1000,
+            None,
+            Box::new(Esp32c3Gpio::for_esp32c6()),
+        );
+        bus.add_peripheral(
+            "ledc",
+            LEDC_BASE,
+            0x400,
+            None,
+            Box::new(Esp32c3Ledc::new_esp32c6(45)),
+        );
+        bus.add_peripheral(
+            "pcr",
+            C6_PCR_BASE,
+            0x1000,
+            None,
+            Box::new(Esp32c6Pcr::new()),
+        );
+        bus.wire_esp32c3_ledc_pads();
+        if clock_select {
+            let cfg = labwired_config::PeripheralConfig {
+                id: "ledc".to_string(),
+                r#type: "esp32c6_ledc".to_string(),
+                base_address: LEDC_BASE,
+                size: None,
+                irq: None,
+                irq_controller: None,
+                clock: None,
+                config: [(
+                    "clock_select".to_string(),
+                    serde_yaml::from_str("{ controller: pcr, reg: LEDC_SCLK_CONF }").unwrap(),
+                )]
+                .into_iter()
+                .collect(),
+            };
+            bus.resolve_clock_selects(&[cfg])
+                .expect("clock_select resolves");
+        }
+        finish(bus)
+    }
+
+    /// `ledc_timer_config` on the C6: XTAL picked in the PCR, then timer 0 at
+    /// 5 kHz / 10 bit in the C6 field positions, then the channel.
+    fn c6_start_channel(m: &mut Machine<CortexM>, ch: u64, duty: u32) {
+        m.bus
+            .write_u32(
+                C6_PCR_BASE + C6_PCR_LEDC_SCLK_CONF,
+                C6_SCLK_EN | C6_SCLK_SEL_XTAL,
+            )
+            .unwrap();
+        m.bus
+            .write_u32(LEDC_BASE + TIMER0_CONF, DUTY_RES | (C6_XTAL_DIV_Q8 << 5))
+            .unwrap();
+        let base = LEDC_BASE + ch * CH_STRIDE;
+        m.bus.write_u32(base + CH_CONF0, SIG_OUT_EN).unwrap();
+        m.bus.write_u32(base + CH_DUTY, duty << 4).unwrap();
+        m.bus.write_u32(base + CH_CONF1, DUTY_START).unwrap();
+    }
+
+    #[test]
+    fn c6_ledc_duty_and_frequency_follow_the_pcr_clock_select() {
+        assert!((40e6 * 256.0 / f64::from(C6_XTAL_DIV_Q8) / 1024.0 - PWM_HZ).abs() < 1e-6);
+        let mut m = c6_machine(true);
+        // C6 `LEDC_LS_SIG_OUT2_IDX` = 2.
+        route(&mut m, 2, 2);
+        c6_start_channel(&mut m, 2, 256);
+        measure(&mut m, 2, 160_000_000, 256, "C6");
+    }
+
+    /// Without the PCR mirror the C6 LEDC has no source clock (LEDC_CONF is
+    /// not where the C6 selects it), so the routed pad stays flat.
+    #[test]
+    fn c6_ledc_without_the_pcr_clock_select_stays_flat() {
+        let mut m = c6_machine(false);
+        route(&mut m, 2, 0);
+        c6_start_channel(&mut m, 0, 512);
+        let gpio = m.bus.find_peripheral_index_by_name("gpio").unwrap();
+        m.logic_watch(&[Some(LogicSource::pad(gpio, 2))]);
+        for _ in 0..80_000 {
+            m.step().unwrap();
+        }
         assert!(
-            !bound.iter().any(|f| f.starts_with("LEDC_")),
-            "C6 from_config must not bind LEDC outputs: {bound:?}"
+            m.logic_read_edges(0).edges.len() <= 1,
+            "no source clock, no PWM: {:?}",
+            m.logic_read_edges(0).edges
         );
     }
 }

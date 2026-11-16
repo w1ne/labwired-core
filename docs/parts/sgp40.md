@@ -14,7 +14,7 @@ Sensirion SGP40 MOx VOC sensor (raw SRAW_VOC for the host-side VOC Index).
 | Address | 0x59 (fixed) |
 | Source | [`configs/devices/sgp40.yaml`](../../configs/devices/sgp40.yaml) (declarative, no Rust model) |
 | Datasheet | Sensirion *Datasheet SGP40* (v1.x), I2C command overview |
-| Tier | smoke-proven (register-level tests: `crates/core/tests/everyday_sensor_set.rs`) |
+| Tier | smoke-proven (register-level tests: `crates/core/tests/misc/everyday_sensor_set.rs`) |
 
 ## Pins / attachment
 
@@ -48,7 +48,7 @@ Host inputs: `voc_sraw` (ticks).
        connection: "i2c0"   # the bus id your chip system uses
    ```
 2. Agent: `labwired_list` → `labwired_describe id=sgp40` → wire → `labwired_validate` → `labwired_run` / `labwired_verify`.
-3. Register-level smoke: `cargo test -p labwired-core --test everyday_sensor_set` — 0x260F → 28000 ticks with valid CRC; 0x280E → 0xD400. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF.
+3. Register-level smoke: `cargo test -p labwired-core --test misc everyday_sensor_set::` — 0x260F → 28000 ticks with valid CRC; 0x280E → 0xD400. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF.
 
 ## Limitations
 

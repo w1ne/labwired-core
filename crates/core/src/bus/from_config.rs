@@ -63,6 +63,10 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
     let rel = match env {
         "LABWIRED_ESP32C3_ROM" => "roms/esp32c3/esp32c3_rom.bin",
         "LABWIRED_ESP32C3_ROM_DATA" => "roms/esp32c3/esp32c3_drom.bin",
+        // Flattened esp32c6_rev0_rom.elf (roms/esp32c6/README.md). Stock
+        // Arduino-ESP32 3.x calls ROM routines from its first instructions
+        // (`esp_rom_get_reset_reason` at step 21), so a zero window wedges.
+        "LABWIRED_ESP32C6_ROM" => "roms/esp32c6/esp32c6_rom.bin",
         // Same image as `embedded_region_image`; kept so an operator can
         // still point the env var at a replacement file. Bare-metal ELFs
         // that need the Cortex-M flash boot alias at 0 (PIO onboarding) set
@@ -194,6 +198,7 @@ impl SystemBus {
     pub fn attach_chip_io_levels(&mut self, chip: &ChipDescriptor) {
         self.io_voltage_v = chip.io_voltage_v;
         self.gpio_input_thresholds = chip.gpio_input_thresholds;
+        self.reset_input = crate::reset_input::ResetInputState::new(chip.reset_input.clone());
     }
 
     pub fn from_config(chip: &ChipDescriptor, manifest: &SystemManifest) -> anyhow::Result<Self> {
@@ -265,6 +270,7 @@ impl SystemBus {
         }
 
         self.resolve_clock_gates(&attached)?;
+        self.resolve_clock_selects(&attached)?;
         self.refresh_peripheral_index();
         Ok(())
     }
@@ -476,6 +482,7 @@ impl SystemBus {
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
             freerunning_timer_poll_mmio: Cell::new(0),
+            timer_poll_carry: Cell::new(0),
             side_effecting_mmio: Cell::new(0),
             batch_stop: Default::default(),
             memory_reads: Cell::new(0),
@@ -489,8 +496,10 @@ impl SystemBus {
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
+            device_open_drain_nets: Default::default(),
             observed: Vec::new(),
             motors: Vec::new(),
+            live_numeric: None,
             ina219_senses: Vec::new(),
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
@@ -521,6 +530,7 @@ impl SystemBus {
             analog_pin_map: std::collections::HashMap::new(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: crate::reset_input::ResetInputState::default(),
             supply: crate::power::SupplySupervisor::default(),
             supply_domains: Default::default(),
         };
@@ -613,6 +623,10 @@ impl SystemBus {
                 .or_else(|| crate::peripherals::esp32s3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c6::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32c5::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32c61::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32h2::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32p4::try_build(&canonical_type, p_cfg))
                 // ESP32-classic was missing from this chain. Its factory has
                 // always existed with all 14 `esp32_*` types, but only the
                 // Xtensa builder called it, so a plain `from_config` bus --
@@ -1417,7 +1431,7 @@ impl SystemBus {
         // are deliberately unbound — nothing drives them.
         bus.wire_esp32c3_spi_pads();
         bus.wire_esp32c3_uart_pads();
-        // …and the C3's six LEDC outputs (signals 45..50; none on the C6).
+        // …and the C3's six LEDC outputs (signals 45..50; 0..5 on the C6).
         bus.wire_esp32c3_ledc_pads();
         // Same for the S3's I²C0, whose pads reach GPIO through the S3 output
         // matrix rather than an AF nibble.
@@ -1470,6 +1484,8 @@ impl SystemBus {
         bus.wire_stm32_timer_output_pads();
         // SAMD51 TC waveform outputs onto their PMUX-E pads (samd51_tc only).
         bus.wire_samd51_tc_output_pads();
+        // SAMD21 TCC WO[x] onto their PMUX-E/F pads (samd21_tcc only).
+        bus.wire_samd21_tcc_output_pads();
         // RA GPT GTIOCnA/B onto the pads the chip YAML names (PSEL 00011).
         bus.wire_ra_gpt_output_pads();
         // Board wires from an analog output (a DAC pin) to an ADC input.
@@ -1489,6 +1505,7 @@ impl SystemBus {
         // peripheral (incl. the RCC, needed to map reg-name → offset) is on the
         // bus. Peripherals without a `clock:` field stay ungated.
         bus.resolve_clock_gates(&merged_peripherals)?;
+        bus.resolve_clock_selects(&merged_peripherals)?;
         bus.install_motor_models(manifest)?;
         // Walk-deletion decision (only consulted under the `event-scheduler`
         // feature; the legacy build always walks, so this is inert there).
@@ -1655,7 +1672,22 @@ impl SystemBus {
                 return true;
             }
         }
-        false
+        // STM32 has one GPIO peripheral per port. STEP/DIR observers watch
+        // the actual output latch transitions (including atomic BSRR writes).
+        let mut installed = false;
+        for port in b'A'..=b'P' {
+            let name = format!("gpio{}", (port as char).to_ascii_lowercase());
+            let Some(idx) = bus.find_peripheral_index_by_name(&name) else {
+                continue;
+            };
+            let clock = bus.cycle_clock.clone();
+            installed |= bus.peripherals[idx].dev.register_stm32_gpio_observer(
+                port - b'A',
+                observer.clone(),
+                clock,
+            );
+        }
+        installed
     }
 
     #[allow(dead_code)] // residual GPIO helpers kept for CAN/tester arms that may re-use them

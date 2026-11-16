@@ -204,6 +204,16 @@ impl I2cDevice for Tca9548a {
         })
     }
 
+    /// Selected downstream devices share SCL: the longest hold wins.
+    fn clock_stretch_ns(&self) -> u64 {
+        self.selected
+            .downstream
+            .iter()
+            .map(|&(ch, i)| self.channels[ch][i].clock_stretch_ns())
+            .max()
+            .unwrap_or(0)
+    }
+
     /// Latch what this transaction is for.
     ///
     /// Note that the switch's own address and a downstream device are NOT

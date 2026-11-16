@@ -36,9 +36,14 @@
 //!
 //! ONE source of truth
 //! ===================
-//! `validation/bus_proof_matrix.json` is it. This file does NOT keep a second
-//! copy of the verdicts (that is how a ratchet allowlist drifts from the thing
-//! it ratchets); it keeps the RULES the JSON must satisfy.
+//! `validation/bus_proof/` is it: one `<chip>.json` per chip plus `_index.json`
+//! (so a chip PR adds or edits one file and never conflicts with another chip's
+//! PR). This file does NOT keep a second copy of the verdicts (that is how a
+//! ratchet allowlist drifts from the thing it ratchets); it keeps the RULES the
+//! JSON must satisfy. The storage layout (file name == `id`, no strays, no
+//! unknown keys, canonical key order) is checked by
+//! `python3 validation/registry_dir.py --check`; `load_dir` below enforces the
+//! parts a verdict depends on (file name == `id`, no strays) as well.
 //!
 //! The two arms
 //! ============
@@ -55,7 +60,9 @@
 //!        name the observable (`signal`) and the lane that runs it. You cannot
 //!        make a cell green by typing `"proven"`.
 //! 2. RATCHET (`bus_proof_matrix_never_regresses`) — compares every cell to the
-//!    same file at `git merge-base HEAD origin/main`. `proven` may not become
+//!    same directory at `git merge-base HEAD origin/main` (or, when the merge
+//!    base predates the split, to the old single file
+//!    `validation/bus_proof_matrix.json` there). `proven` may not become
 //!    `shallow` or `none`; `shallow` may not become `none`. The baseline comes
 //!    from OUTSIDE the change, so an author cannot move it by editing the JSON
 //!    in the same commit. Under CI this is fatal if the baseline cannot be
@@ -81,8 +88,15 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-/// `validation/bus_proof_matrix.json`, relative to the workspace root.
-pub const MATRIX_PATH: &str = "validation/bus_proof_matrix.json";
+/// The matrix directory (`_index.json` + `<chip>.json`), relative to the
+/// workspace root.
+pub const MATRIX_PATH: &str = "validation/bus_proof";
+
+/// The single file the matrix lived in before it was split per chip. Only read
+/// as a ratchet baseline from a merge base that predates the split.
+const LEGACY_MATRIX_PATH: &str = "validation/bus_proof_matrix.json";
+
+const INDEX_FILE: &str = "_index.json";
 
 /// The three buses every row must answer for.
 const BUSES: [&str; 3] = ["uart", "spi", "i2c"];
@@ -149,6 +163,10 @@ pub struct Cell {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Row {
+    /// The chip id. Present in the per-chip files (and must equal the file
+    /// stem); absent in the legacy single file, where the map key is the id.
+    #[serde(default)]
+    pub id: String,
     /// True when some board in the superproject's `packages/board-config`
     /// `BOARDS` declares `chip: "<this>"`. Informational: the gate derives its
     /// chip set from `configs/chips/`, which is a superset.
@@ -164,8 +182,46 @@ pub struct Matrix {
 }
 
 impl Matrix {
-    fn parse(text: &str) -> Result<Self, String> {
-        serde_json::from_str(text).map_err(|e| format!("parse {MATRIX_PATH}: {e}"))
+    /// The old single-file layout: `{"chips": {"<chip>": {..}}, ..}`.
+    fn parse_legacy(text: &str) -> Result<Self, String> {
+        serde_json::from_str(text).map_err(|e| format!("parse {LEGACY_MATRIX_PATH}: {e}"))
+    }
+
+    /// The per-chip layout, given `(file name, text)` pairs in any order.
+    /// Same refusals as `validation/registry_dir.py`: a stray file, an `id`
+    /// that is not the file stem, a missing index. Duplicate ids cannot happen
+    /// (one file per name) but a repeated name is still checked.
+    fn from_files(files: &[(String, String)]) -> Result<Self, String> {
+        let mut chips = BTreeMap::new();
+        let mut index_seen = false;
+        for (name, text) in files {
+            if name == INDEX_FILE {
+                serde_json::from_str::<serde_json::Value>(text)
+                    .map_err(|e| format!("parse {MATRIX_PATH}/{name}: {e}"))?;
+                index_seen = true;
+                continue;
+            }
+            let Some(stem) = name.strip_suffix(".json") else {
+                return Err(format!(
+                    "{MATRIX_PATH}/{name}: stray file; only {INDEX_FILE} and <chip>.json are allowed"
+                ));
+            };
+            let row: Row = serde_json::from_str(text)
+                .map_err(|e| format!("parse {MATRIX_PATH}/{name}: {e}"))?;
+            if row.id != stem {
+                return Err(format!(
+                    "{MATRIX_PATH}/{name}: file name must match its id (id is {:?})",
+                    row.id
+                ));
+            }
+            if chips.insert(stem.to_owned(), row).is_some() {
+                return Err(format!("{MATRIX_PATH}/{name}: duplicate chip {stem:?}"));
+            }
+        }
+        if !index_seen {
+            return Err(format!("{MATRIX_PATH}/{INDEX_FILE}: missing"));
+        }
+        Ok(Matrix { chips })
     }
 
     fn cells(&self) -> BTreeMap<(String, String), State> {
@@ -180,10 +236,16 @@ impl Matrix {
 }
 
 fn load_committed() -> Matrix {
-    let path = workspace_root().join(MATRIX_PATH);
-    let text =
-        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-    Matrix::parse(&text).unwrap_or_else(|e| panic!("{e}"))
+    let dir = workspace_root().join(MATRIX_PATH);
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display())) {
+        let path = entry.expect("dir entry").path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        files.push((name, text));
+    }
+    Matrix::from_files(&files).unwrap_or_else(|e| panic!("{e}"))
 }
 
 /// Every chip descriptor we ship, derived — never hand-listed. Same rule as
@@ -224,15 +286,15 @@ fn bus_proof_matrix_is_complete_and_not_fabricated() {
     let missing: Vec<&String> = shipped.difference(&rows).collect();
     if !missing.is_empty() {
         failures.push(format!(
-            "these chips ship (configs/chips/<id>.yaml) but have NO row in {MATRIX_PATH}: \
-             {missing:?}.\n  Add a row. A chip whose UART/SPI/I²C evidence nobody has \
+            "these chips ship (configs/chips/<id>.yaml) but have NO row in {MATRIX_PATH}/: \
+             {missing:?}.\n  Add {MATRIX_PATH}/<chip>.json. A chip whose UART/SPI/I²C evidence nobody has \
              written down is a chip nobody has checked — `none` is a legal, honest answer."
         ));
     }
     let extra: Vec<&String> = rows.difference(&shipped).collect();
     if !extra.is_empty() {
         failures.push(format!(
-            "{MATRIX_PATH} has rows for chips that no longer ship: {extra:?}. Delete them."
+            "{MATRIX_PATH}/ has rows for chips that no longer ship: {extra:?}. Delete those files."
         ));
     }
 
@@ -409,6 +471,31 @@ fn git_show(rev: &str, path: &str) -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// The matrix as committed at `rev`: the per-chip directory when the commit has
+/// one, else the old single file (a merge base that predates the split), else
+/// `None` — the matrix does not exist there at all.
+fn baseline_matrix(rev: &str) -> Result<Option<Matrix>, String> {
+    let listing = git_out(
+        &workspace_root(),
+        &["ls-tree", "--name-only", rev, &format!("{MATRIX_PATH}/")],
+    )
+    .unwrap_or_default();
+    if !listing.is_empty() {
+        let mut files = Vec::new();
+        for path in listing.lines() {
+            let text =
+                git_show(rev, path).ok_or_else(|| format!("`git show {rev}:{path}` failed"))?;
+            let name = path.rsplit('/').next().unwrap_or(path).to_owned();
+            files.push((name, text));
+        }
+        return Matrix::from_files(&files).map(Some);
+    }
+    match git_show(rev, LEGACY_MATRIX_PATH) {
+        Some(text) => Matrix::parse_legacy(&text).map(Some),
+        None => Ok(None),
+    }
+}
+
 fn merge_base_with_trunk() -> Option<String> {
     let out = std::process::Command::new("git")
         .args(["merge-base", "HEAD", "origin/main"])
@@ -583,19 +670,20 @@ fn bus_proof_matrix_never_regresses() {
         return;
     };
 
-    let Some(text) = git_show(&base_rev, MATRIX_PATH) else {
-        // The very first commit that adds the file has no baseline, by
-        // construction. Every later one does — and this skip is trustworthy
-        // ONLY because history_is_unusable() ran above: without it, "absent at
-        // the merge base" and "absent because the merge base is fiction" are
-        // the same observation, and this line returns green for both.
-        eprintln!("SKIP(baseline): {MATRIX_PATH} does not exist at {base_rev} (new file).");
-        return;
-    };
-
-    let baseline = Matrix::parse(&text)
-        .unwrap_or_else(|e| panic!("bus-proof ratchet: baseline at {base_rev} is unparsable: {e}"))
-        .cells();
+    let baseline = match baseline_matrix(&base_rev) {
+        Ok(Some(m)) => m,
+        Err(e) => panic!("bus-proof ratchet: baseline at {base_rev} is unreadable: {e}"),
+        Ok(None) => {
+            // The very first commit that adds the file has no baseline, by
+            // construction. Every later one does — and this skip is trustworthy
+            // ONLY because history_is_unusable() ran above: without it, "absent at
+            // the merge base" and "absent because the merge base is fiction" are
+            // the same observation, and this line returns green for both.
+            eprintln!("SKIP(baseline): {MATRIX_PATH} does not exist at {base_rev} (new file).");
+            return;
+        }
+    }
+    .cells();
 
     eprintln!(
         "bus-proof baseline: {base_rev} ({} cells) vs live ({} cells)",
@@ -657,6 +745,43 @@ fn cell_ordering_detects_a_downgrade() {
     let mut deleted = base.clone();
     deleted.remove(&cell("esp32", "uart"));
     assert_eq!(downgrades(&base, &deleted).len(), 1);
+}
+
+/// The per-chip loader must refuse what `registry_dir.py --check` refuses, and
+/// must agree cell-for-cell with the old single-file layout (the ratchet compares
+/// one against the other across the split).
+#[test]
+fn per_chip_layout_is_refused_when_malformed_and_matches_legacy() {
+    let cell = r#"{"state": "none", "gap": "g"}"#;
+    let row = |id: &str| {
+        format!(
+            r#"{{"id": "{id}", "in_boards": false, "uart": {cell}, "spi": {cell}, "i2c": {cell}}}"#
+        )
+    };
+    let f = |name: &str, text: String| (name.to_owned(), text);
+    let index = || f("_index.json", "{}".to_owned());
+
+    let good = [index(), f("a.json", row("a")), f("b.json", row("b"))];
+    let dir = Matrix::from_files(&good).expect("well-formed layout loads");
+
+    let legacy = format!(
+        r#"{{"chips": {{"a": {0}, "b": {0}}}}}"#,
+        format!(r#"{{"in_boards": false, "uart": {cell}, "spi": {cell}, "i2c": {cell}}}"#)
+    );
+    let legacy = Matrix::parse_legacy(&legacy).expect("legacy parses");
+    assert_eq!(dir.cells(), legacy.cells(), "layouts disagree");
+    assert!(downgrades(&legacy.cells(), &dir.cells()).is_empty());
+
+    let refused = |files: Vec<(String, String)>, needle: &str| {
+        let err = Matrix::from_files(&files)
+            .err()
+            .unwrap_or_else(|| panic!("a layout with `{needle}` was accepted"));
+        assert!(err.contains(needle), "{err}");
+    };
+    refused(vec![f("a.json", row("a"))], "_index.json");
+    refused(vec![index(), f("a.json", row("b"))], "must match its id");
+    refused(vec![index(), f("a.txt", row("a"))], "stray file");
+    refused(vec![index(), f("a.json", "{".into())], "parse");
 }
 
 /// The ratchet's git plumbing must work BEFORE it has anything to compare.

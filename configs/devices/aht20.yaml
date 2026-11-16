@@ -59,11 +59,18 @@
 #     1..6 — a measurement that is simultaneously not finished and available.
 #     No driver reads past byte 0 while BUSY is set.
 #
+# After soft reset (0xBA, §5.5, ≤20 ms) and init (0xBE 0x08 0x00, §5.3), a
+# bare status read returns 0x08 (CAL set, BUSY clear) — the idle status the
+# AHT20 manual describes for a calibrated part. The engine requires every
+# answering command to include the six bytes the CRC covers, so those frames
+# also carry the current measurement and its checksum, the same honesty as
+# dht20.yaml's 0x71. Adafruit_AHTX0::begin() reads only the status byte.
+# 0xE1 is the AHT10 calibrate opcode that Adafruit_AHTX0 still sends; AHT20
+# silicon uses 0xBE. Both leave the part calibrated and idle.
+#
 # ⚠️ NOT MODELLED, named rather than faked: the init command's calibration
-# bookkeeping (0xBE is accepted and changes nothing — the model did the same,
-# and CAL reads set unconditionally), and the 0x71 status-read opcode (the
-# model had no arm for it either; every driver in the corpus polls with a bare
-# read after the trigger).
+# register bookkeeping, and the 0x71 status-read opcode (every driver in the
+# corpus, including Adafruit_AHTX0, polls with a bare read after the trigger).
 type: aht20
 
 behavior:
@@ -78,10 +85,39 @@ behavior:
     # The status byte with BUSY|CAL, answered while the 80 ms measurement runs.
     not_ready_byte: 0x88
     commands:
-      # Soft reset (§5.5). Accepted; the twin has no state to clear.
-      - { name: soft_reset, code: 0xBA }
-      # Init / calibrate (§5.3). Accepted; CAL reads set unconditionally.
-      - { name: init, code: 0xBE }
+      # Soft reset (§5.5). Takes not more than 20 ms; then status is idle CAL.
+      - name: soft_reset
+        code: 0xBA
+        delay_us: 20000
+        response:
+          - { const: 0x08, width: 1 }
+          - width: 5
+            endian: be
+            fields:
+              - { source: humidity,    shift: 20, width_bits: 20, encode: { scale: 10485.76 } }
+              - { source: temperature, shift: 0,  width_bits: 20, encode: { scale: 5242.88, offset: 262144.0 } }
+      # Init / calibrate (§5.3). AHT20 opcode; status is idle CAL at once.
+      - name: init
+        code: 0xBE
+        response:
+          - { const: 0x08, width: 1 }
+          - width: 5
+            endian: be
+            fields:
+              - { source: humidity,    shift: 20, width_bits: 20, encode: { scale: 10485.76 } }
+              - { source: temperature, shift: 0,  width_bits: 20, encode: { scale: 5242.88, offset: 262144.0 } }
+      # AHT10 calibrate opcode. Adafruit_AHTX0::begin() writes 0xE1 0x08 0x00
+      # ("may not succeed on newer AHT20s") and then requires CAL. Same idle
+      # status as 0xBE: a calibrated AHT20 already has CAL set.
+      - name: init_aht10_opcode
+        code: 0xE1
+        response:
+          - { const: 0x08, width: 1 }
+          - width: 5
+            endian: be
+            fields:
+              - { source: humidity,    shift: 20, width_bits: 20, encode: { scale: 10485.76 } }
+              - { source: temperature, shift: 0,  width_bits: 20, encode: { scale: 5242.88, offset: 262144.0 } }
       - name: trigger_measurement
         code: 0xAC
         # §5.4: "wait 80 ms for the measurement to complete".

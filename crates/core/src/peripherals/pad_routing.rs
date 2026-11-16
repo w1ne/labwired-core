@@ -67,6 +67,53 @@ struct Route {
     when_driving: bool,
 }
 
+/// The one rule for which route owns a pad, shared by [`PadRoutes`] and
+/// [`PinRoute::select`] so a listener and a pad read can never disagree.
+/// `view` answers, per route: `(on this pad, selector, conditional, drives)`.
+/// A conditional route wins while its line drives the pad; otherwise the
+/// first ordinary route matching the pad's current selector does.
+#[inline]
+fn select_route<T>(
+    routes: &[T],
+    current: u32,
+    view: impl Fn(&T) -> (bool, Option<u32>, bool, bool),
+) -> Option<&T> {
+    let conditional = routes.iter().find(|r| {
+        let (on_pin, selector, when_driving, drives) = view(r);
+        on_pin && when_driving && selector.is_none_or(|want| want == current) && drives
+    });
+    if conditional.is_some() {
+        return conditional;
+    }
+    routes.iter().find(|r| {
+        let (on_pin, selector, when_driving, _) = view(r);
+        on_pin && !when_driving && selector.is_none_or(|want| want == current)
+    })
+}
+
+/// An owned copy of one [`PadRoutes`] binding, for a consumer that must decide
+/// off the CPU walk (from the wire's own transition) whether the pad currently
+/// selects this wire.
+#[derive(Debug, Clone)]
+pub struct PinRoute {
+    pub cell: Arc<PadLines>,
+    pub line: usize,
+    selector: Option<u32>,
+    when_driving: bool,
+}
+
+impl PinRoute {
+    /// Index of the route that owns the pad when it selects `current`
+    /// (`None`: the pad is plain GPIO), by the same rule as a pad read.
+    pub fn select(routes: &[PinRoute], current: Option<u32>) -> Option<usize> {
+        let current = current?;
+        let hit = select_route(routes, current, |r| {
+            (true, r.selector, r.when_driving, r.cell.drives(r.line))
+        })?;
+        routes.iter().position(|r| std::ptr::eq(r, hit))
+    }
+}
+
 /// Every pad-to-peripheral-wire binding on one GPIO port.
 ///
 /// Empty on a port with no peripheral routed to it, where every operation
@@ -195,18 +242,35 @@ impl PadRoutes {
             return None;
         }
         let current = selector_of(pin)?;
-        let conditional = self.routes.iter().find(|r| {
-            r.pin == pin
-                && r.when_driving
-                && r.selector.is_none_or(|want| want == current)
-                && self.cells[r.cell].drives(r.line)
-        });
-        if conditional.is_some() {
-            return conditional;
-        }
-        self.routes.iter().find(|r| {
-            r.pin == pin && !r.when_driving && r.selector.is_none_or(|want| want == current)
+        select_route(&self.routes, current, |r| {
+            (
+                r.pin == pin,
+                r.selector,
+                r.when_driving,
+                self.cells[r.cell].drives(r.line),
+            )
         })
+    }
+
+    /// Every route `pin` can ever take, as owned handles a listener can keep
+    /// (see [`PinRoute`]). Allocating; call when routing is (re)built, not per
+    /// edge.
+    pub fn pin_routes(&self, pin: u8) -> Vec<PinRoute> {
+        self.routes
+            .iter()
+            .filter(|r| r.pin == pin)
+            .map(|r| PinRoute {
+                cell: self.cells[r.cell].clone(),
+                line: r.line,
+                selector: r.selector,
+                when_driving: r.when_driving,
+            })
+            .collect()
+    }
+
+    /// How many routes are bound; a change means routing was (re)built.
+    pub fn route_count(&self) -> usize {
+        self.routes.len()
     }
 
     /// The live wire level for `pin`, or `None` when no peripheral drives it
@@ -273,14 +337,13 @@ impl PadRoutes {
             // A conditional route can take the pad over WITHOUT a write to
             // this port (a timer enabling its channel output), and only a
             // port write re-syncs taps. So its line reports to the watch
-            // channel whenever the pad is handed to a peripheral at all; it
-            // publishes nothing while it does not drive.
-            if selector_of(pin).is_some() {
-                for r in self
-                    .routes
-                    .iter()
-                    .filter(|r| r.when_driving && r.pin == pin)
-                {
+            // channel whenever the pad selects it (any AF on an F1 port, whose
+            // routes carry no selector; the route's own AF nibble on a V2
+            // port); it publishes nothing while it does not drive.
+            if let Some(current) = selector_of(pin) {
+                for r in self.routes.iter().filter(|r| {
+                    r.when_driving && r.pin == pin && r.selector.is_none_or(|want| want == current)
+                }) {
                     if let Some(slot) = per_cell[r.cell].get_mut(r.line) {
                         if !slot.contains(&channel) {
                             slot.push(channel);

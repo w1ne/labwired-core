@@ -98,7 +98,7 @@ pub trait Peripheral: std::fmt::Debug + Send {
 
 ## 4. Validate against silicon (capture → model → oracle → validate)
 
-The L476 path (`crates/core/tests/firmware_survival.rs`) is the canonical
+The L476 path (`crates/core/tests/gates/firmware_survival.rs`) is the canonical
 "done right" example. Scaffolding lives in `scripts/hw-oracle/` and `crates/hw-oracle`.
 
 1. **Capture.** Flash a probe firmware that exercises *only* the target peripheral,

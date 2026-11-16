@@ -22,7 +22,7 @@ that a shrinking fleet can satisfy.
 
 Usage:
     matrix_verdict.py --results-dir validation/arduino-matrix/out-ci \
-                      --fleet validation/arduino-matrix/boards.yaml
+                      --fleet validation/arduino-matrix/boards
 """
 
 from __future__ import annotations
@@ -32,7 +32,8 @@ import json
 import sys
 from pathlib import Path
 
-import yaml
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "validation"))
+import registry_dir  # noqa: E402  (shared one-file-per-board loader)
 
 # Statuses that are not a failure of the board under test. Everything else --
 # sim_error, toolchain_missing, elf_missing, a build stage name -- is a failure.
@@ -46,7 +47,7 @@ def load_fleet(path: Path) -> tuple[dict[str, set[str]], list[str]]:
     own lane in the monorepo, not by this workflow, and counting them here would
     make the expected-cell floor unsatisfiable.
     """
-    cfg = yaml.safe_load(path.read_text()) or {}
+    cfg = registry_dir.load_yaml_registry(path, "boards")
     sketch_ids = [s["id"] for s in cfg.get("sketches") or []]
     skips: dict[str, set[str]] = {}
     for board in cfg.get("boards") or []:
@@ -99,16 +100,16 @@ def grade(rows: list[dict], skips: dict[str, set[str]], sketch_ids: list[str]) -
         if status not in OK_STATUSES:
             errors.append(f"{cell[0]}/{cell[1]}: {status}")
 
-    # 2. A skip must be WAIVED in boards.yaml. An undeclared skip is a hole --
+    # 2. A skip must be WAIVED in the board file. An undeclared skip is a hole --
     #    a cell nobody decided to stop testing.
     for cell, status in ordered:
         if status == "skipped" and cell[1] not in skips.get(cell[0], set()):
             errors.append(
                 f"{cell[0]}/{cell[1]}: skipped but not in that board's sketches_skip -- "
-                "waive it in boards.yaml with a reason, or fix the cell"
+                "waive it in that board's file under boards/ with a reason, or fix the cell"
             )
 
-    # 3. The fleet must be whole, against a count derived from boards.yaml.
+    # 3. The fleet must be whole, against a count derived from boards/
     if len(seen) < expected:
         missing = sorted(f"{b}/{s}" for b in board_ids for s in sketch_ids if (b, s) not in seen)
         errors.append(
@@ -140,7 +141,11 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     results_dir = Path(args.results_dir)
-    skips, sketch_ids = load_fleet(Path(args.fleet))
+    try:
+        skips, sketch_ids = load_fleet(Path(args.fleet))
+    except registry_dir.RegistryError as exc:
+        print(f"::error::{exc}", file=sys.stderr)
+        return 1
     rows, files = read_rows(results_dir)
 
     if files == 0:

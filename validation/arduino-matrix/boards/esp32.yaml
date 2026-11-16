@@ -1,0 +1,15 @@
+id: esp32
+chip: esp32
+system: systems/esp32.yaml
+pio: { platform: espressif32, board: esp32dev, framework: arduino }
+max_steps: 50000000
+budget_reason: "FreeRTOS dual-core boot ~3.2M L0; L3 Wire needs more headroom"
+# L2 LED_BUILTIN often GPIO2 digitalWrite — watch classic gpio peripheral
+led_watch: "gpio:2"
+led_min_edges: 2
+# L6: analogWrite(2, 128) on LED_BUILTIN = GPIO2 (LEDC); count real pad edges.
+pwm_watch: "gpio:2"
+pwm_min_edges: 20
+family: esp32
+notes: "Arduino-ESP32 FreeRTOS — real models only (no thunks); L8 TWAI self-RX"
+# L8_can: classic TWAI @ 0x3FF6B000 self-reception (esp32_twai model)

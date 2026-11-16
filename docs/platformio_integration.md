@@ -6,9 +6,11 @@ on physical hardware — no board, no debug probe, no upload. This is the same
 PlatformIO documents for Renode and QEMU, pointed at LabWired.
 
 A complete, runnable example lives in
-[`platformio/nrf52840-unity/`](../platformio/nrf52840-unity/).
+[`platformio/nrf52840-unity/`](https://github.com/w1ne/labwired-core/tree/main/platformio/nrf52840-unity).
 
 ## How it works
+
+Run `pio test --without-uploading -e nrf52840_dk`. The `--without-uploading` flag avoids J-Link or other on-target programming, as documented for external simulators.
 
 PlatformIO's `pio test` builds a Unity test firmware, then — when
 `test_testing_command` is set — runs that command instead of uploading, and

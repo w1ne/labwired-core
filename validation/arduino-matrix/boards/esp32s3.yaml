@@ -1,0 +1,16 @@
+id: esp32s3
+chip: esp32s3
+system: systems/esp32s3.yaml
+pio: { platform: espressif32, board: esp32-s3-devkitc-1, framework: arduino }
+max_steps: 50000000
+budget_reason: "Dual-core S3 boot ~1.1M; L3 Wire headroom"
+# RGB LED_BUILTIN → RMT TX (min_rmt_tx). Programmatic bank id is rmt_s3,
+# not rmt — use the TX_START count oracle, not --watch-gpio.
+min_rmt_tx: 1
+# L6: analogWrite(2, 128) on plain GPIO2 (the RGB LED_BUILTIN is RMT, not
+# LEDC); the watch counts real LEDC pad edges.
+pwm_watch: "gpio:2"
+pwm_min_edges: 20
+family: esp32
+notes: "Arduino-ESP32-S3 — SPI L4, SAR ADC L5, TWAI L8 via programmatic bank"
+# L5: sar_adc_s3 @ 0x60040000 (esp32s3_sar_adc); L8: twai @ 0x6002B000

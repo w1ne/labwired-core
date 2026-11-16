@@ -1,4 +1,4 @@
-# ngspice-47 reference for `regulator_buck_mp1584_load_step_vin` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `regulator_buck_mp1584_load_step_vin` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(vin) at every 2e-5 s, t = 0 excluded
 # deck 9bc7b2093d43e739
 8.82690941106036436e-2
