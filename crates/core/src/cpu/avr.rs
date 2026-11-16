@@ -639,6 +639,9 @@ pub struct Avr {
     /// Data EEPROM and `EECR`/`EEDR`/`EEAR` (`avr/eeprom.rs`). Empty on the
     /// parts whose EEPROM is not modelled.
     eeprom: eeprom::Eeprom,
+    /// ATmega2560/1281 USART0..3 (`avr/usart.rs`). Behind a lock because a
+    /// `UDRn` read pops the receive FIFO from the `&self` read path.
+    musart: std::sync::Mutex<usart::MegaUsarts>,
 }
 
 impl std::fmt::Debug for Avr {
@@ -976,6 +979,7 @@ impl Avr {
             usb: usb::UsbDevice::default(),
             wdt: wdt::Wdt::new(model.has_wdtcsr()),
             eeprom: eeprom::Eeprom::new(model.eeprom_size()),
+            musart: std::sync::Mutex::new(usart::MegaUsarts::new(model)),
         }
     }
 
@@ -1321,6 +1325,7 @@ impl Avr {
             a if self.is_32u4_own_reg(a) => {
                 Ok(self.usb_read(a).unwrap_or(self.io[usize::from(a - 0x20)]))
             }
+            a if self.is_mega_usart_reg(a) => self.mega_usart_read(a, bus),
             a if self.is_low_sram(a) => Ok(self.sram[(a - self.sram_start) as usize]),
             // PINB/PINC/PIND — the registers on this part whose value the
             // OUTSIDE WORLD moves, so they are the ones the IO shadow cannot
@@ -1472,6 +1477,7 @@ impl Avr {
                 self.r[addr as usize] = value;
                 Ok(())
             }
+            a if self.is_mega_usart_reg(a) => self.mega_usart_write(a, value, bus),
             a if self.is_32u4_own_reg(a) => {
                 if (0xC0..=0xC7).contains(&a) {
                     self.io[usize::from(a - 0x20)] = value;
@@ -2194,7 +2200,8 @@ impl Avr {
     /// pending. This is also what wakes a sleeping core.
     #[inline]
     fn wake_pending(&self) -> bool {
-        self.flag_i() && self.pending_irq & 0xFFFF_FFFE != 0
+        let vectors = if self.is_mega() { !1 } else { 0xFFFF_FFFE };
+        self.flag_i() && self.pending_irq & vectors != 0
     }
 
     pub fn portb(&self) -> u8 {
@@ -2476,7 +2483,10 @@ impl Avr {
             return Ok(false);
         }
         let vec = self.pending_irq.trailing_zeros();
-        if vec == 0 || vec > 31 {
+        // The mega's table runs to slot 57 (USART3 TX); its USART1..3 vectors
+        // are pending at their slot numbers.
+        let last = if self.is_mega() { 63 } else { 31 };
+        if vec == 0 || vec > last {
             return Ok(false);
         }
         self.pending_irq &= !(1u64 << vec);
@@ -2500,6 +2510,7 @@ impl Avr {
         }
         // ... and the INTn / PCIFn flag of an external or pin-change vector.
         self.ext_vector_entered(vec);
+        self.mega_usart_vector_entered(vec);
         self.push_pc(bus)?;
         let slot = if self.is_mega() {
             mega2560_vector(vec)
@@ -2754,6 +2765,9 @@ impl Cpu for Avr {
         if self.ucsr0b & UCSRB_RXCIE != 0 && Self::usart_on_bus(bus) {
             return None;
         }
+        if self.mega_usart_keeps_awake() {
+            return None;
+        }
         Some(
             [
                 self.timer0_wake_cycles(),
@@ -2847,6 +2861,7 @@ impl Cpu for Avr {
         self.ext_reset();
         self.wdt_after_reset();
         self.eeprom.reset();
+        self.mega_usart_reset();
         self.irq_shadow = false;
         // A reset drops the pull-up: the host sees a disconnect.
         self.usb = usb::UsbDevice::default();
@@ -2930,6 +2945,9 @@ impl Cpu for Avr {
         if self.eeprom.irq_watched() || self.pending_irq & (1u64 << eeprom::VEC_EE_READY) != 0 {
             self.sync_eeprom_irq();
         }
+
+        // ATmega2560/1281 USARTs: frames that end by now, host input, levels.
+        self.mega_usart_service(bus)?;
 
         // INT0/INT1 and PCINT: sample the pads at this boundary.
         if self.ext_watch != 0 {
@@ -3147,6 +3165,8 @@ mod ext_int;
 mod oc_pins;
 #[path = "avr/timer1.rs"]
 mod timer1;
+#[path = "avr/usart.rs"]
+mod usart;
 /// ATmega32U4 USB device controller.
 mod usb;
 #[path = "avr/wdt.rs"]

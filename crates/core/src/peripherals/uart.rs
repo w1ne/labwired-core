@@ -1075,6 +1075,9 @@ pub struct Uart {
     /// AVR layout: UBRR0 and whether firmware wrote it.
     avr_ubrr: u16,
     avr_baud_set: bool,
+    /// AVR layout: the CPU does not write this USART to its console (the
+    /// mega's USART1..3), so the window keeps a host TX sink.
+    avr_host_sink: bool,
     /// SCI_B layout: CCR0-CCR4, CESR, ICR, FCR, (reserved), MCR, DCR,
     /// XCR0-XCR2 at 0x08 + 4*i, as firmware last wrote them. CESR is not
     /// stored; it reads CCR0.TE/RE back as TIST/RIST.
@@ -1187,6 +1190,7 @@ impl Uart {
             avr_ucsra: 0,
             avr_ubrr: 0,
             avr_baud_set: false,
+            avr_host_sink: false,
             sci_b_regs: SCI_B_RESET,
             sci_b_irq: None,
             sci_irq_vectors: false,
@@ -1272,6 +1276,13 @@ impl Uart {
 
     pub fn set_u5_features(mut self, yes: bool) -> Self {
         self.u5_features = yes;
+        self
+    }
+
+    /// AVR layout: keep a host TX sink (`config.cpu_console: false`), for a
+    /// USART whose transmitted frames the CPU does not copy to its console.
+    pub(crate) fn with_avr_host_sink(mut self, yes: bool) -> Self {
+        self.avr_host_sink = yes;
         self
     }
 
@@ -1598,8 +1609,8 @@ impl Uart {
         // pinned every STM32duino sketch (Serial.begin() sets RXNEIE) to a
         // one-instruction CPU window for the whole run.
         let rx_armed = rxneie_armed || rxftie_armed || dmar_armed;
-        let level_irq_observable = self.irq_wired
-            && (txeie_set || tcie_set || (rx_armed && self.rx_byte_waiting()));
+        let level_irq_observable =
+            self.irq_wired && (txeie_set || tcie_set || (rx_armed && self.rx_byte_waiting()));
         // A buffered narration is real work: the wire is mid-burst, and the
         // flush that ends it needs a wakeup to happen on. Without this a
         // scheduler-driven bus would leave the last print unpublished.
@@ -1665,7 +1676,9 @@ impl Uart {
     /// faster than the core, so this never exceeds the real character time in
     /// core cycles. With no divisor programmed, the per-cycle cadence.
     fn rx_watch_cadence(&self) -> u64 {
-        self.bit_time_cycles().map_or(1, |bit| bit.saturating_mul(10)).max(1)
+        self.bit_time_cycles()
+            .map_or(1, |bit| bit.saturating_mul(10))
+            .max(1)
     }
 
     fn wake_token(&self) -> u32 {
@@ -2106,7 +2119,9 @@ impl Uart {
             // (RM0351 §41.4.4), so one bit is BRR / 256 clocks. Read as a
             // USART divisor it is 256× too long, and every narrated character
             // held the wire (and this model's wake chain) 256× too long.
-            UartRegisterLayout::Stm32V2 if self.stm32_lpuart => u64::from(self.brr & 0xF_FFFF) / 256,
+            UartRegisterLayout::Stm32V2 if self.stm32_lpuart => {
+                u64::from(self.brr & 0xF_FFFF) / 256
+            }
             UartRegisterLayout::Stm32F1 | UartRegisterLayout::Stm32V2 => {
                 let brr = u64::from(self.brr & 0xFFFF);
                 if matches!(self.layout, UartRegisterLayout::Stm32V2) && self.cr1 & (1 << 15) != 0 {
@@ -2439,7 +2454,7 @@ impl Uart {
 
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>, echo_stdout: bool) {
         // The AVR core writes its own console; this model only hosts the peers.
-        if matches!(self.layout, UartRegisterLayout::Avr) {
+        if matches!(self.layout, UartRegisterLayout::Avr) && !self.avr_host_sink {
             self.sink = None;
             self.echo_stdout = false;
             return;
@@ -3815,7 +3830,8 @@ mod tests {
 
         let mut uart = Uart::new_with_layout(UartRegisterLayout::Stm32F1);
         uart.write_u32(0x08, 625).unwrap(); // BRR: 72 MHz / 115200
-        uart.write_u32(0x0C, (1 << 13) | (1 << 5) | (1 << 2)).unwrap(); // UE|RXNEIE|RE
+        uart.write_u32(0x0C, (1 << 13) | (1 << 5) | (1 << 2))
+            .unwrap(); // UE|RXNEIE|RE
         let char_cycles = 625 * 10;
 
         // The bus fires a wake at now + 1 + delay: one character time out.
@@ -4086,4 +4102,3 @@ mod wakeup_observability_tests {
         );
     }
 }
-

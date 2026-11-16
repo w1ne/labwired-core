@@ -5,11 +5,22 @@ registers_count: 32
 # ATmega2560 (Arduino Mega 2560): the ATmega328P core model (cpu/avr.rs) with
 # AvrModel::Atmega2560: 256 KB flash and a 3-byte PC (EIND/EIJMP/EICALL,
 # RAMPZ/ELPM), 8 KB SRAM at 0x0200, ports A..L, a 16-channel ADC (ADCSRB.MUX5
-# selects ADC8..15 = A8..A15) and the 2560 vector table. Timer0 (millis/delay),
-# Timer1/Timer2 and USART0 (Serial) are the 328P models at the same addresses.
+# selects ADC8..15 = A8..A15) and the 2560 vector table. Timer0 (millis/delay)
+# and Timer1/Timer2 are the 328P models at the same addresses.
 # analogWrite reaches the Timer0/1/2 pads (OC0A PB7, OC0B PG5, OC1A/B PB5/PB6,
 # OC2A PB4, OC2B PH6; cpu/avr/oc_pins.rs).
-# Not modelled here: INTn/PCINT, OC1C, Timer3/4/5 (and their PWM pads), USART1..3.
+# USART0..3 (Serial..Serial3, cpu/avr/usart.rs): UCSRnA/B/C, UBRRn with U2X,
+# the UDRn transmit buffer and shift register timed at the programmed baud,
+# the two-character receive FIFO with FE/DOR/UPE/RXB8, and the RX complete,
+# UDRE and TX complete interrupts (Table 14-1 slots 26..28, 37..39, 52..54,
+# 55..57). Host input and TX capture go through the usart0..usart3 windows
+# below; USART0 also feeds the CPU console. Synchronous/MSPIM modes and MPCM
+# address filtering are not modelled.
+# EEPROM (cpu/avr/eeprom.rs): 4 KB, EEARH/L, EEDR, EECR (EERE, EEPE, EEMPE,
+# EEPM erase+write / erase only / write only, EERIE -> EE_READY slot 31) with
+# the 3.4 / 1.8 ms programming times; the array survives reset and can be
+# carried into the next run (Avr::eeprom / Avr::load_eeprom).
+# Not modelled here: INTn/PCINT, OC1C, Timer3/4/5 (and their PWM pads).
 # Microchip DS2549 (ATmega640/1280/1281/2560/2561), 16 MHz on the Arduino Mega.
 cpu_hz: 16_000_000
 io_voltage_v: 5.0
@@ -71,6 +82,23 @@ peripherals:
     size: "8"
     config:
       profile: "avr"
+  # USART1/USART2 hosts (Serial1/Serial2): UCSR1A 0xC8..UDR1 0xCE and
+  # UCSR2A 0xD0..UDR2 0xD6. cpu_console: false -- the CPU does not copy these
+  # to its console, so the window carries the host TX capture.
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x000100C8
+    size: "8"
+    config:
+      profile: "avr"
+      cpu_console: false
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x000100D0
+    size: "8"
+    config:
+      profile: "avr"
+      cpu_console: false
   - id: "porth"
     type: "avr_gpio"
     base_address: 0x00010100
@@ -87,6 +115,14 @@ peripherals:
     type: "avr_gpio"
     base_address: 0x00010109
     size: "3"
+  # USART3 host (Serial3): UCSR3A 0x130..UDR3 0x136 in extended I/O.
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x00010130
+    size: "8"
+    config:
+      profile: "avr"
+      cpu_console: false
   # ADC input side: millivolts on ADC0..ADC15, two bytes per channel. Moved past
   # the port mirrors (the 328P window at 0x1_0030 would overlap PINF..PING).
   - id: "adc"
