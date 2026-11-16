@@ -421,6 +421,10 @@ impl RaCan {
             MSSR => self.mssr(),
             AFSR | 0x857 => return None,
             0x859..=0x85B => 0,
+            // R_CAN0_Type opens with 512 reserved bytes before MB[0]. Loads
+            // there answer zero so a read of the peripheral base does not
+            // fault; stores stay refused below.
+            0..MB => 0,
             MB..=0x42F | BCR..=0x847 | EIER | EIFR | ECSR | CSSR | MSMR | TCR => self.regs[o],
             _ => return None,
         })
@@ -742,6 +746,9 @@ mod tests {
         assert!(c.write_u16(AFSR as u64, 0x1234).is_err());
         assert!(c.write(MCTL as u64, 0xC0).is_err());
         assert!(c.read(0x85C).is_err());
+        // The reserved head before MB[0] reads zero but takes no store.
+        assert_eq!(r32(&c, 0), 0);
+        assert!(c.write(0x1FF, 1).is_err());
         // Listen-only: a transmission request is refused.
         bring_up(&mut c, 0, 0x03);
         load_tx(&mut c, 0, 0, &[]);
