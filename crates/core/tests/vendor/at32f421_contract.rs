@@ -170,36 +170,19 @@ fn flash_unlock_program_erase_geometry_and_failure_paths() {
     assert_eq!(f.read_u32(0x10).unwrap() & 0x80, 0);
 }
 
-/// DMA1 through the descriptor: five channels (no CCR6, no CSELR), and a
-/// BSP-encoded memory-to-memory copy (DTD=0) reads PADDR and writes MADDR.
+/// DMA1 through the descriptor: five channels, so no CCR6 and no CSELR.
+/// The memory-to-memory direction (DTD=0 reads PADDR) is exercised by the
+/// BSP smoke below and by the shared `dma` unit tests.
 #[test]
-fn dma_has_five_channels_and_reads_paddr_in_memory_to_memory() {
+fn dma_has_five_channels() {
     let mut b = bus();
     b.write_u32(0x40021014, 1).unwrap(); // AHBEN DMA1.
     assert!(b.write_u32(0x40020000 + 0x6c, 1).is_err(), "no channel 6");
     assert!(b.write_u32(0x40020000 + 0xa8, 1).is_err(), "no CSELR");
-    let dma = b.find_peripheral_index_by_name("dma1").unwrap();
-    let ch5 = 0x40020000 + 0x58;
-    b.write_u32(ch5 + 4, 1).unwrap();
-    b.write_u32(ch5 + 8, 0x20000000).unwrap();
-    b.write_u32(ch5 + 12, 0x20000010).unwrap();
-    b.write_u32(ch5, (1 << 14) | 3).unwrap();
-    let item = b.peripherals[dma]
-        .dev
-        .tick()
-        .dma_requests
-        .unwrap()
-        .remove(0);
-    assert_eq!(
-        (item.src_addr, item.addr),
-        (0x20000000, 0x20000010),
-        "BSP DMA_DIR_MEMORY_TO_MEMORY: PADDR is the source"
-    );
+    b.write_u32(0x40020000 + 0x58 + 4, 3).unwrap();
+    assert_eq!(b.read_u32(0x40020000 + 0x58 + 4).unwrap(), 3, "CDTCNT5");
 }
 
-/// EXINT through the descriptor: GPIO line groups on the Artery vectors
-/// (EXINT1_0 = 5, EXINT3_2 = 6, EXINT15_4 = 7) and absent lines 18/20 do not
-/// latch.
 #[test]
 fn exint_gpio_groups_use_vendor_vectors_and_only_existing_lines() {
     let mut b = bus();
