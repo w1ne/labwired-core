@@ -12,10 +12,10 @@
 - pass_observable_assertions: `226/226`
 - pass_stop_reason_only: `0/226`
 - pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1568`
+- pass_claimed_peripherals_total: `1600`
 - pass_claimed_peripherals_median: `4`
-- median_elapsed_ms: `1524`
-- median_elapsed_seconds: `1.524`
+- median_elapsed_ms: `1567`
+- median_elapsed_seconds: `1.567`
 - threshold_seconds: `3600`
 - threshold_met: `226/226`
 
@@ -144,8 +144,8 @@
 | `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `1219` | `1.219` | `True` | `observable` | `52` | `uart_regex`, `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `269012` | `269.012` | `True` | `observable` | `5` | `uart_regex`, `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_wba52cg` | `pass` | `True` | `yes` | `yes` | `2299` | `2.299` | `True` | `observable` | `4` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
-| `nuvoton_npcx9` | `pass` | `True` | `yes` | `yes` | `204164` | `204.164` | `True` | `observable` | `8` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `nuvoton_npcx9m6fb_evb` | `pass` | `True` | `yes` | `yes` | `1352` | `1.352` | `True` | `observable` | `8` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `nuvoton_npcx9` | `pass` | `True` | `yes` | `yes` | `106435` | `106.435` | `True` | `observable` | `24` | `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `nuvoton_npcx9m6fb_evb` | `pass` | `True` | `yes` | `yes` | `3503` | `3.503` | `True` | `observable` | `24` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `nxp-frdm-imx8mplus` | `pass` | `True` | `yes` | `yes` | `533` | `0.533` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `nxp-k6xf` | `pass` | `True` | `yes` | `yes` | `825` | `0.825` | `True` | `observable` | `7` | `uart_contains`, `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `nxp-mimx8ml` | `pass` | `True` | `yes` | `yes` | `7206` | `7.206` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |

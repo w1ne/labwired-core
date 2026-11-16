@@ -421,8 +421,9 @@ impl SystemBus {
     ///   2. A type whose silicon layout the *name* pins down routes to it:
     ///      `*nrf*` → Nordic; `stm32f4`/`*h5*`/`*v2*` → modern STM32;
     ///      `imxrt_gpio`/`imxrt` → i.MX RT GPIO; `stm32_gpioport`/`stm32f1`/
-    ///      `stm32f2` and the legacy placeholder ports (`efmgpioport`/
-    ///      `npcx_gpio`, historically run on the F1 map) → classic STM32F1.
+    ///      `stm32f2` and the legacy placeholder port `efmgpioport`
+    ///      (historically run on the F1 map) → classic STM32F1. `npcx_gpio`
+    ///      has its own model (`peripherals::npcx_gpio`) in the generic factory.
     ///   3. The bare vendor-neutral `"gpio"` type (or any other gpio-ish type we
     ///      do not model) with NO `profile` ERRORS. It is never silently mapped
     ///      onto STM32F1 by omission.
@@ -454,7 +455,7 @@ impl SystemBus {
             GpioRegisterLayout::Stm32F1
         } else if raw == "imxrt_gpio" || raw == "imxrt" {
             GpioRegisterLayout::Imxrt
-        } else if raw == "efmgpioport" || raw == "npcx_gpio" {
+        } else if raw == "efmgpioport" {
             // Not yet modelled with a dedicated register map; historically ran
             // on the STM32F1 layout. Kept explicit (by type) so the choice is
             // visible rather than an omission-driven silent default.

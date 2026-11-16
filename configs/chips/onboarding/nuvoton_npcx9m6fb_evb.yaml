@@ -24,6 +24,75 @@ peripherals:
   type: npcx_uart
   bus: sysbus
   base_address: 0x400E0000
+# GPIO ports. Bases from Renode nuvoton_npcx9.repl (GPIOPort.NPCX_GPIO,
+# 0x40081000 + n * 0x2000 for GPIO0..GPIOF) and Zephyr npcx.dtsi gpio0..gpiof.
+# Ids are port0..portf: a `gpio0`/`gpio1` id would switch on the bus's Nordic
+# GPIOTE pass. Windows are 4 KiB (Renode Size 0x1000). No IRQ: NPCX pin
+# interrupts go through the MIWU, which is not modelled.
+- id: port0
+  type: npcx_gpio
+  base_address: 0x40081000
+  size: 4KB
+- id: port1
+  type: npcx_gpio
+  base_address: 0x40083000
+  size: 4KB
+- id: port2
+  type: npcx_gpio
+  base_address: 0x40085000
+  size: 4KB
+- id: port3
+  type: npcx_gpio
+  base_address: 0x40087000
+  size: 4KB
+- id: port4
+  type: npcx_gpio
+  base_address: 0x40089000
+  size: 4KB
+- id: port5
+  type: npcx_gpio
+  base_address: 0x4008B000
+  size: 4KB
+- id: port6
+  type: npcx_gpio
+  base_address: 0x4008D000
+  size: 4KB
+- id: port7
+  type: npcx_gpio
+  base_address: 0x4008F000
+  size: 4KB
+- id: port8
+  type: npcx_gpio
+  base_address: 0x40091000
+  size: 4KB
+- id: port9
+  type: npcx_gpio
+  base_address: 0x40093000
+  size: 4KB
+- id: porta
+  type: npcx_gpio
+  base_address: 0x40095000
+  size: 4KB
+- id: portb
+  type: npcx_gpio
+  base_address: 0x40097000
+  size: 4KB
+- id: portc
+  type: npcx_gpio
+  base_address: 0x40099000
+  size: 4KB
+- id: portd
+  type: npcx_gpio
+  base_address: 0x4009B000
+  size: 4KB
+- id: porte
+  type: npcx_gpio
+  base_address: 0x4009D000
+  size: 4KB
+- id: portf
+  type: npcx_gpio
+  base_address: 0x4009F000
+  size: 4KB
 # Internal timers. Bases and NVIC lines from Renode nuvoton_npcx9.repl
 # (NPCX_ITIM): ITIM32_1..6 at 0x400B0000 + n * 0x2000 on NVIC 28, 27, 17, 43,
 # 44, 45; ITIM64 at 0x400BE000 on NVIC 58. Zephyr npcx9.dtsi confirms ITIM32_1

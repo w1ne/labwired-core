@@ -242,6 +242,10 @@ pub const MODEL_TYPES: &[&str] = &[
     // optional `apb2_hz` / `lfclk_hz`.
     "npcx_itim32",
     "npcx_itim64",
+    // Nuvoton NPCX GPIO port (byte registers PDOUT..PLOCK_CTL). MUST be
+    // listed: the fuzzy `contains("gpio")` fallback would map it onto the
+    // STM32 GPIO register layout.
+    "npcx_gpio",
     // Reserve the full name: never fuzzy-coerce an unqualified SAM DMAC to STM32.
     "sam_dmac",
     // ⚠️ Load-bearing. Without this entry the fuzzy `contains("spi")` heuristic
@@ -1222,6 +1226,7 @@ pub fn try_build(
         }
         "efm32s1_rtcc" => build_efm32_rtcc(p_cfg)?,
         "npcx_itim32" | "npcx_itim64" => build_npcx_itim(canonical_type, p_cfg)?,
+        "npcx_gpio" => Box::new(crate::peripherals::npcx_gpio::NpcxGpio::new()),
         "samd51_sercom_usart" => {
             use crate::peripherals::sam::sercom_usart::{SamSercomUsart, UsartPads};
             let key = |k: &str| p_cfg.config.get(k).and_then(|v| v.as_u64());

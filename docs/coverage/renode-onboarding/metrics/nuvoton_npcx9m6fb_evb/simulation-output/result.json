@@ -42,6 +42,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -51,23 +57,23 @@
     "type": "arm",
     "registers": [
       10,
-      1,
+      537753484,
       49,
       2147483648,
       1,
-      6,
-      46,
+      1,
+      16,
       537753584,
       1,
       1,
       1074659332,
-      1,
-      5713,
+      129,
+      6740,
       537753504,
       1074659332,
-      4524
+      5598
     ],
-    "pc": 4524,
+    "pc": 5598,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -80,7 +86,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "744f6d40fbddf5b1fef36065f21acb04b352667c52e4fd82b72047ccd3d03138",
+  "firmware_hash": "8aa1e304bc3dcc40c715b0e70760f7b451747efa747eaa077b95ab64d708adea",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nuvoton_npcx9m6fb_evb.yaml",
@@ -92,6 +98,118 @@
         "name": "cr_uart1",
         "kind": "native",
         "base": 1074659328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port0",
+        "kind": "native",
+        "base": 1074270208,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port1",
+        "kind": "native",
+        "base": 1074278400,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port2",
+        "kind": "native",
+        "base": 1074286592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port3",
+        "kind": "native",
+        "base": 1074294784,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port4",
+        "kind": "native",
+        "base": 1074302976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port5",
+        "kind": "native",
+        "base": 1074311168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port6",
+        "kind": "native",
+        "base": 1074319360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port7",
+        "kind": "native",
+        "base": 1074327552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port8",
+        "kind": "native",
+        "base": 1074335744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port9",
+        "kind": "native",
+        "base": 1074343936,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porta",
+        "kind": "native",
+        "base": 1074352128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 1074360320,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 1074368512,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 1074376704,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porte",
+        "kind": "native",
+        "base": 1074384896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 1074393088,
         "registers": [],
         "artifacts": []
       },
@@ -197,20 +315,26 @@
         "cycle_lo": 10000,
         "cycle": 20000,
         "end_cycle": 20000
+      },
+      {
+        "text": "gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 5780,
+    "text_bytes": 6896,
     "data_bytes": 0,
     "bss_bytes": 8,
-    "flash_used_bytes": 5780,
+    "flash_used_bytes": 6896,
     "ram_static_bytes": 8,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 96256,
-    "flash_used_pct": 8.82,
+    "flash_used_pct": 10.52,
     "ram_static_pct": 0.01,
     "notes": [
       "section_sum_not_bin_image",
@@ -236,13 +360,13 @@
     "cycles": 400000,
     "instructions": 400000,
     "steps_executed": 400000,
-    "memory_reads": 3234,
-    "memory_writes": 230,
-    "peripheral_accesses": 449,
+    "memory_reads": 3599,
+    "memory_writes": 286,
+    "peripheral_accesses": 865,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 4524,
+        "pc": 5598,
         "count": 1523,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       },

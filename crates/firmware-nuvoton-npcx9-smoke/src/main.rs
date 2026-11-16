@@ -15,6 +15,17 @@
 // 6. ITIM64 holds a 64-bit load and borrows across the word boundary.
 // 7. CKSEL selects the 32768 Hz LFCLK: the count moves ~460x slower.
 //
+// Then the GPIO ports: GPIO0..GPIOF at 0x40081000 + n * 0x2000 (Renode
+// GPIOPort.NPCX_GPIO), byte registers from Zephyr reg_def.h gpio_reg.
+// 8. Each of the 16 ports holds PDIR / PTYPE / PPULL / PPUD / PENVDD /
+//    PLOCK_CTL values.
+// 9. PDOUT written before PDIR (the gpio_npcx.c order) holds while the pin is
+//    an input and reaches PDIN once PDIR makes it an output.
+// 10. Pull-up / pull-down inputs read 1 / 0 on PDIN.
+// 11. An open-drain output with pull-up reads 1 when PDOUT releases the pad
+//     and 0 when PDOUT drives it low.
+// 12. A set PLOCK_CTL bit keeps its PDOUT bit.
+//
 // Bare-register, no HAL.
 
 #![no_std]
@@ -57,6 +68,17 @@ const TIMERS: [(usize, u32); 7] = [
 const ITIM32_1: usize = TIMERS[0].0;
 const ITIM32_2: usize = TIMERS[1].0;
 const ITIM64: usize = TIMERS[6].0;
+
+const GPIO0: usize = 0x4008_1000;
+const GPIO_STRIDE: usize = 0x2000;
+const PDOUT: usize = 0x00;
+const PDIN: usize = 0x01;
+const PDIR: usize = 0x02;
+const PPULL: usize = 0x03;
+const PPUD: usize = 0x04;
+const PENVDD: usize = 0x05;
+const PTYPE: usize = 0x06;
+const PLOCK_CTL: usize = 0x07;
 
 const NVIC_ISER: usize = 0xE000_E100;
 const NVIC_ICER: usize = 0xE000_E180;
@@ -278,6 +300,61 @@ fn main() -> ! {
         && borrow == 1
         && lfclk == 1;
     puts(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
+    // 8. All 16 ports exist and hold their configuration.
+    let mut ports = 0u32;
+    for n in 0..16 {
+        let base = GPIO0 + n * GPIO_STRIDE;
+        let tag = 0xA0 | n as u8;
+        let cfg = [PDIR, PPULL, PPUD, PENVDD, PTYPE, PLOCK_CTL];
+        for (k, &reg) in cfg.iter().enumerate() {
+            wr8(base, reg, tag ^ k as u8);
+        }
+        if cfg
+            .iter()
+            .enumerate()
+            .all(|(k, &reg)| rd8(base, reg) == tag ^ k as u8)
+        {
+            ports += 1;
+        }
+        for &reg in cfg.iter().rev() {
+            wr8(base, reg, 0);
+        }
+    }
+
+    // 9-12 on GPIO5.
+    let g = GPIO0 + 5 * GPIO_STRIDE;
+    wr8(g, PDOUT, 0x05);
+    let latch = (rd8(g, PDOUT) == 0x05 && rd8(g, PDIN) & 0x0F == 0) as u32;
+    wr8(g, PDIR, 0x0F);
+    let drive = (rd8(g, PDIN) & 0x0F == 0x05) as u32;
+    wr8(g, PDIR, 0);
+    wr8(g, PDOUT, 0);
+    wr8(g, PPULL, 0x30);
+    wr8(g, PPUD, 0x20);
+    let pull = (rd8(g, PDIN) & 0x30 == 0x10) as u32;
+    wr8(g, PPULL, 0x40);
+    wr8(g, PPUD, 0);
+    wr8(g, PTYPE, 0x40);
+    wr8(g, PDOUT, 0x40);
+    wr8(g, PDIR, 0x40);
+    let od_high = rd8(g, PDIN) & 0x40 != 0;
+    wr8(g, PDOUT, 0);
+    let od_low = rd8(g, PDIN) & 0x40 == 0;
+    let od = (od_high && od_low) as u32;
+    wr8(g, PDOUT, 0x80);
+    wr8(g, PLOCK_CTL, 0x80);
+    wr8(g, PDOUT, 0x01);
+    let lock = (rd8(g, PDOUT) == 0x81) as u32;
+    puts(b"gpio");
+    put_kv(b"ports", ports);
+    put_kv(b"latch", latch);
+    put_kv(b"drive", drive);
+    put_kv(b"pull", pull);
+    put_kv(b"od", od);
+    put_kv(b"lock", lock);
+    let gpio_ok = ports == 16 && latch == 1 && drive == 1 && pull == 1 && od == 1 && lock == 1;
+    puts(if gpio_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
     loop {
         core::hint::spin_loop();

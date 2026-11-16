@@ -96,6 +96,7 @@ pub mod miv;
 pub mod mpfs_i2c;
 pub mod mpfs_spi;
 pub mod noise;
+pub mod npcx_gpio;
 pub mod npcx_itim;
 pub mod nrf52;
 pub mod nrf54l;

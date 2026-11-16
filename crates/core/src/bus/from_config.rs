@@ -1063,8 +1063,7 @@ impl SystemBus {
                     }
                     Box::new(uart)
                 }
-                "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "npcx_gpio"
-                | "imxrt_gpio" => {
+                "gpio" | "stm32_gpioport" | "stm32f4_gpio" | "efmgpioport" | "imxrt_gpio" => {
                     // Deterministic, type-driven layout resolution. The bare
                     // vendor-neutral `gpio` type MUST name a profile; it is never
                     // silently defaulted onto STM32F1 (which would move the ODR
