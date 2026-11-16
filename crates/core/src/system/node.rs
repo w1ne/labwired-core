@@ -559,18 +559,19 @@ fn build_riscv_node(
             // that calls into the ROM jumps through a zeroed function table.
             // No ROM resolvable (the browser with no blobs) leaves the windows
             // zero, exactly as the single-chip engine does then.
-            if is_esp32c3(chip) {
-                if let Some(images) =
-                    crate::boot::esp32c3_rom::rom_images_from_blobs_or_provisioned(blobs)
-                {
-                    crate::boot::esp32c3_rom::install_fast_boot_rom(&mut bus, &images);
-                }
-            }
+            let faithful_c3_rom = is_esp32c3(chip)
+                && crate::boot::esp32c3_rom::rom_images_from_blobs_or_provisioned(blobs)
+                    .is_some_and(|images| {
+                        crate::boot::esp32c3_rom::install_fast_boot_rom(&mut bus, &images)
+                    });
             // C6 Arduino Preferences/NVS substrate (SPI_MEM + partitions @ 0x8000).
             crate::boot::esp32c6_rom::maybe_install_arduino_flash(&mut bus, chip);
             let mut cpu = crate::system::riscv::configure_riscv(&mut bus);
             if crate::boot::esp32c2_rom::is_esp32c2(chip) {
                 crate::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
+            }
+            if faithful_c3_rom {
+                crate::boot::esp32c3_rom::prepare_fast_boot_cpu(&mut cpu);
             }
             let mut machine = Machine::new(cpu, bus);
             machine

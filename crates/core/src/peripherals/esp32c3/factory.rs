@@ -74,6 +74,20 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
             if let Some(hz) = p_cfg.config.get("uart_sclk_hz").and_then(|v| v.as_u64()) {
                 uart = uart.with_uart_sclk_hz(hz);
             }
+            // `uart_sclk_sel_hz: [r0, r1, r2, r3]`: the source behind each
+            // `CLK_CONF.SCLK_SEL` value, so a firmware-chosen clock (esp-hal
+            // 1.2 picks XTAL on the C3) paces the line.
+            if let Some(list) = p_cfg
+                .config
+                .get("uart_sclk_sel_hz")
+                .and_then(|v| v.as_sequence())
+            {
+                let mut hz = [0u64; 4];
+                for (slot, v) in hz.iter_mut().zip(list) {
+                    *slot = v.as_u64().unwrap_or(0);
+                }
+                uart = uart.with_sclk_sel_hz(hz);
+            }
             Box::new(uart)
         }
         _ => return None,

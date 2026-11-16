@@ -1029,6 +1029,10 @@ impl WasmSimulator {
                 // rather than rely on that. (Cheap: one pass over the roster,
                 // once per simulator construction.)
                 bus.recompute_walk_deletable();
+                // Interrupts route through the matrix, as on the native
+                // fast boot (`install_fast_boot_rom`).
+                bus.irq_fabric.esp32c3.routing = true;
+                bus.refresh_peripheral_index();
                 true
             } else {
                 false
@@ -1100,7 +1104,10 @@ impl WasmSimulator {
         }
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
-        let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+        let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+        if faithful_c3_rom {
+            labwired_core::boot::esp32c3_rom::prepare_fast_boot_cpu(&mut cpu);
+        }
         let boxed: Box<dyn Cpu> = Box::new(cpu);
         let mut machine = Machine::new(boxed, bus);
 

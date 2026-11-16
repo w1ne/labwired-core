@@ -717,6 +717,24 @@ pub fn seed_rom_console(bus: &mut crate::bus::SystemBus) {
     });
 }
 
+/// `mstatus.MIE`.
+const MSTATUS_MIE: u32 = 1 << 3;
+
+/// Give the app the CPU state the C3 ROM and 2nd-stage bootloader hand over
+/// on a fast boot (the C2 twin is `esp32c2_rom::prepare_fast_boot_cpu`).
+///
+/// * `mstatus.MIE` set. The ROM enables interrupts through `ets_intr_unlock`
+///   (jump table 0x4000_05FC -> 0x4004_7A42, `csrrsi a5, mstatus, 8` at
+///   0x4004_7A52), and esp-hal 1.2 never sets MIE from zero: its critical
+///   sections only restore the previous state. With MIE clear no esp-hal
+///   `#[handler]` runs and no Embassy task wakes.
+/// * `mtimecmp` parked. The C3 has no CLINT timer; line 7 is a matrix line,
+///   so the model's default `mtimecmp = 0` must not pend MTIP.
+pub fn prepare_fast_boot_cpu(cpu: &mut crate::cpu::RiscV) {
+    cpu.mstatus |= MSTATUS_MIE;
+    cpu.mtimecmp = u64::MAX;
+}
+
 /// Make a C3 bus ready for a bare-ELF **fast boot** with the real mask ROM
 /// behind it: the one sequence the single-chip engine (`system::builder`) and a
 /// world node (`system::node`) both run, so the two cannot drift.
@@ -732,7 +750,10 @@ pub fn seed_rom_console(bus: &mut crate::bus::SystemBus) {
 ///     `rom_i2c_*Reg` helpers against it, and it is not in the chip YAML;
 ///  4. the behavioural USB-Serial-JTAG console replaces the YAML's register
 ///     stub at 0x6004_3000 — esp-println's `jtag-serial` prints there, and
-///     the stub never drains a byte.
+///     the stub never drains a byte;
+///  5. interrupts route through the `INTERRUPT_CORE0` matrix, as the CLI's
+///     C3 fast boot already arms them. The caller also runs
+///     [`prepare_fast_boot_cpu`] on the CPU.
 ///
 /// Returns `false` (and changes nothing beyond the windows) when the IROM image
 /// is empty, i.e. there is no ROM to boot against.
@@ -770,6 +791,7 @@ pub fn install_fast_boot_rom(bus: &mut crate::bus::SystemBus, images: &RomImages
         None,
         Box::new(crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new_esp32c3()),
     );
+    bus.irq_fabric.esp32c3.routing = true;
     bus.refresh_peripheral_index();
     // Peripherals added after bus assembly change the input to
     // `derive_walk_deletable`; re-derive rather than rely on these models

@@ -35,6 +35,7 @@ mod esp32_onboarding_exec_oracle;
 mod esp32_syscon_overlap;
 mod esp32_ws2812_rmt;
 mod esp32c3_bt_active_walk_pinners;
+mod esp32c3_esp_hal_interrupts;
 mod esp32c3_pms_violation;
 mod esp32c3_rmt_irq_delivery;
 mod esp32c3_rtc_slow_calibration;

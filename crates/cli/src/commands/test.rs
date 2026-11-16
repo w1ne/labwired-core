@@ -2896,12 +2896,19 @@ pub(crate) fn run_test(
                 if bus.irq_fabric.esp32c3.routing {
                     cpu.mtimecmp = u64::MAX;
                 }
-                if resolved_system
+                let chip_name = resolved_system
                     .as_ref()
                     .and_then(|s| s.chip_with_plugins(&crate::plugin_chip_yaml(plugins)).ok())
-                    .is_some_and(|chip| labwired_core::boot::esp32c2_rom::is_esp32c2(&chip))
-                {
-                    labwired_core::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
+                    .map(|chip| chip.name);
+                match chip_name.as_deref() {
+                    Some(name) if name.eq_ignore_ascii_case("esp32c2") => {
+                        labwired_core::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
+                    }
+                    // Same chip test as the C3 fast-boot install above.
+                    Some("esp32c3") if bus.irq_fabric.esp32c3.routing => {
+                        labwired_core::boot::esp32c3_rom::prepare_fast_boot_cpu(&mut cpu);
+                    }
+                    _ => {}
                 }
                 setup_and_run!(cpu)
             }

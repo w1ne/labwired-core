@@ -361,6 +361,13 @@ pub struct EspUart {
     /// UART source clock. Most existing constructors use 80 MHz; ESP32-P4
     /// uses a 90 MHz APB clock.
     uart_sclk_hz: u64,
+    /// Source frequency per `CLK_CONF.SCLK_SEL` value (bits [21:20]), for a
+    /// SoC whose UART selects its function clock there (C3: 1 = APB 80 MHz,
+    /// 2 = RC_FAST, 3 = XTAL 40 MHz). `None` keeps the fixed `uart_sclk_hz`.
+    sclk_sel_hz: Option<[u64; 4]>,
+    /// Set by the first firmware write to `CLK_CONF`. Until then the pacing
+    /// keeps `uart_sclk_hz`, the clock a fast boot assumes the ROM set up.
+    clk_conf_programmed: bool,
     /// ESP32-C6 UART register tail: `UART_FSM_STATUS` lives at 0x70 (C3 had
     /// `POSPULSE` there). ROM `uart_tx_wait_idle` polls `ST_UTX_OUT` in bits
     /// [7:4] and spins forever if the C3 POSPULSE reset (0xFFF) is returned.
@@ -444,6 +451,8 @@ impl EspUart {
             scheduled: false,
             cpu_clock_hz,
             uart_sclk_hz: UART_SCLK_HZ,
+            sclk_sel_hz: None,
+            clk_conf_programmed: false,
             c6_reg_map: false,
             rx_source: Arc::new(Mutex::new(VecDeque::new())),
             rx_source_exposed: Cell::new(false),
@@ -729,7 +738,22 @@ impl EspUart {
         } else {
             clkdiv
         };
-        (10 * clkdiv * self.cpu_clock_hz / self.uart_sclk_hz.max(1)).max(1)
+        (10 * clkdiv * self.cpu_clock_hz / self.function_clock_hz().max(1)).max(1)
+    }
+
+    /// The UART function clock: `uart_sclk_hz`, or, once firmware has
+    /// programmed `CLK_CONF` on a part with `sclk_sel_hz`, the selected
+    /// source divided by `SCLK_DIV_NUM + 1` (the DIV_A/DIV_B fraction is
+    /// ignored, as the CLKDIV fraction is).
+    fn function_clock_hz(&self) -> u64 {
+        let Some(table) = self.sclk_sel_hz.filter(|_| self.clk_conf_programmed) else {
+            return self.uart_sclk_hz;
+        };
+        let conf = self.reg(OFF_CLK_CONF);
+        match table[((conf >> 20) & 0x3) as usize] {
+            0 => self.uart_sclk_hz,
+            hz => hz / (u64::from((conf >> 12) & 0xFF) + 1),
+        }
     }
 
     /// INT_RAW = latched edge bits OR the live level conditions.
@@ -767,6 +791,13 @@ impl EspUart {
     /// the shared model's 80 MHz default.
     pub fn with_uart_sclk_hz(mut self, uart_sclk_hz: u64) -> Self {
         self.uart_sclk_hz = uart_sclk_hz.max(1);
+        self
+    }
+
+    /// Pace from `CLK_CONF.SCLK_SEL` once firmware programs it: `hz[sel]` is
+    /// the source behind each selector value, 0 for a reserved one.
+    pub fn with_sclk_sel_hz(mut self, hz: [u64; 4]) -> Self {
+        self.sclk_sel_hz = Some(hz);
         self
     }
 
@@ -928,6 +959,9 @@ impl EspUart {
                 masked &= !ID_REG_UPDATE;
             }
             self.regs.set(off, masked);
+            if off == OFF_CLK_CONF {
+                self.clk_conf_programmed = true;
+            }
             if off == OFF_CONF0 {
                 self.apply_conf0(masked);
             }
@@ -1422,6 +1456,26 @@ mod tests {
         let u = EspUart::new(false, 27);
         // RESET_CLKDIV=0x2B6=694; 10*694*240/80=20820 ticks/byte.
         assert_eq!(u.cycles_per_byte(), 20820); // 115200: 10*694*240/80
+    }
+
+    #[test]
+    fn clk_conf_sclk_sel_paces_once_firmware_programs_it() {
+        // C3: 160 MHz core; SCLK_SEL 1 = APB 80 MHz, 3 = XTAL 40 MHz.
+        let mut u = EspUart::new_with_cpu_clock(false, 22, 160_000_000)
+            .with_sclk_sel_hz([0, 80_000_000, 17_500_000, 40_000_000]);
+        u.write_u32(OFF_CLKDIV, 347).unwrap(); // 40 MHz / 115200
+                                               // Reset CLK_CONF selects XTAL, but nothing has programmed it yet:
+                                               // the fixed 80 MHz source still paces.
+        assert_eq!(u.cycles_per_byte(), 10 * 347 * 2);
+        // esp-hal 1.2: SCLK_SEL = XTAL, DIV_NUM = 0.
+        u.write_u32(OFF_CLK_CONF, (3 << 20) | (1 << 22)).unwrap();
+        assert_eq!(u.cycles_per_byte(), 10 * 347 * 4);
+        // APB with DIV_NUM = 1 is 40 MHz too.
+        u.write_u32(OFF_CLK_CONF, (1 << 20) | (1 << 12)).unwrap();
+        assert_eq!(u.cycles_per_byte(), 10 * 347 * 4);
+        // A reserved selector falls back to the fixed source.
+        u.write_u32(OFF_CLK_CONF, 0).unwrap();
+        assert_eq!(u.cycles_per_byte(), 10 * 347 * 2);
     }
 
     #[test]

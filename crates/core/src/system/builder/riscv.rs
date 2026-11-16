@@ -147,6 +147,9 @@ fn build_program_image(
         if crate::boot::esp32c2_rom::is_esp32c2(chip) {
             crate::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
         }
+        if faithful_c3_rom {
+            crate::boot::esp32c3_rom::prepare_fast_boot_cpu(&mut cpu);
+        }
         Box::new(cpu)
     };
     let mut machine = Machine::new(boxed, bus);
