@@ -1,0 +1,14 @@
+[package]
+name = "qemu-bridge"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+publish = false
+description = "Serves a LabWired peripheral model to QEMU's labwired-mmio-bridge device over a unix socket"
+
+[dependencies]
+labwired-core = { path = "../core" }
+
+[[bin]]
+name = "qemu-bridge"
+path = "src/main.rs"

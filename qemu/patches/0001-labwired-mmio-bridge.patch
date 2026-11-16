@@ -1,0 +1,306 @@
+diff --git a/hw/misc/labwired-mmio-bridge.c b/hw/misc/labwired-mmio-bridge.c
+new file mode 100644
+index 0000000..5e3fa96
+--- /dev/null
++++ b/hw/misc/labwired-mmio-bridge.c
+@@ -0,0 +1,289 @@
++/*
++ * LabWired MMIO bridge
++ *
++ * Forwards every guest access to an MMIO window to an external process
++ * over a unix socket, and drives one GIC SPI line from that process.
++ * The window overlaps (and so overrides) whatever the machine maps there.
++ *
++ * Wire protocol: see qemu/PROTOCOL.md in the LabWired core repository.
++ * Every message is 24 bytes, little-endian:
++ *   u32 type; u32 size; u64 offset; u64 value;
++ *
++ * SPDX-License-Identifier: GPL-2.0-or-later
++ */
++
++#include "qemu/osdep.h"
++#include "qemu/bswap.h"
++#include "qemu/error-report.h"
++#include "qemu/log.h"
++#include "qemu/main-loop.h"
++#include "qemu/module.h"
++#include "qemu/sockets.h"
++#include "qapi/error.h"
++#include "qom/object.h"
++#include "system/address-spaces.h"
++#include "system/memory.h"
++#include "hw/core/irq.h"
++#include "hw/core/qdev.h"
++#include "hw/core/qdev-properties.h"
++#include "hw/intc/arm_gic.h"
++
++#define TYPE_LABWIRED_MMIO_BRIDGE "labwired-mmio-bridge"
++OBJECT_DECLARE_SIMPLE_TYPE(LabwiredMmioBridge, LABWIRED_MMIO_BRIDGE)
++
++/* Higher than any priority the board code uses for its peripheral windows. */
++#define LW_BRIDGE_PRIORITY 1000
++
++enum {
++    LW_MSG_READ = 1,
++    LW_MSG_WRITE = 2,
++    LW_MSG_REPLY = 3,
++    LW_MSG_ACK = 4,
++    LW_MSG_IRQ = 5,
++};
++
++#define LW_MSG_LEN 24
++
++typedef struct LwMsg {
++    uint32_t type;
++    uint32_t size;
++    uint64_t offset;
++    uint64_t value;
++} LwMsg;
++
++struct LabwiredMmioBridge {
++    DeviceState parent_obj;
++
++    MemoryRegion iomem;
++    qemu_irq irq_line;
++    int fd;
++    bool irq_level;
++
++    uint64_t addr;
++    uint64_t size;
++    char *socket_path;
++    uint32_t irq;
++};
++
++static void lw_encode(const LwMsg *m, uint8_t *buf)
++{
++    stl_le_p(buf + 0, m->type);
++    stl_le_p(buf + 4, m->size);
++    stq_le_p(buf + 8, m->offset);
++    stq_le_p(buf + 16, m->value);
++}
++
++static void lw_decode(const uint8_t *buf, LwMsg *m)
++{
++    m->type = ldl_le_p(buf + 0);
++    m->size = ldl_le_p(buf + 4);
++    m->offset = ldq_le_p(buf + 8);
++    m->value = ldq_le_p(buf + 16);
++}
++
++static bool lw_read_full(int fd, uint8_t *buf, size_t len)
++{
++    size_t got = 0;
++
++    while (got < len) {
++        ssize_t n = recv(fd, buf + got, len - got, 0);
++        if (n < 0 && errno == EINTR) {
++            continue;
++        }
++        if (n <= 0) {
++            return false;
++        }
++        got += n;
++    }
++    return true;
++}
++
++static void lw_fatal(LabwiredMmioBridge *s, const char *what)
++{
++    error_report("labwired-mmio-bridge: %s (socket %s): %s", what,
++                 s->socket_path, strerror(errno));
++    exit(1);
++}
++
++static void lw_set_irq(LabwiredMmioBridge *s, uint64_t level)
++{
++    s->irq_level = level != 0;
++    qemu_set_irq(s->irq_line, s->irq_level);
++}
++
++/*
++ * Send a request and wait for its reply. IRQ messages that arrive while we
++ * wait are applied in order. Called with the BQL held (MMIO dispatch).
++ */
++static uint64_t lw_transact(LabwiredMmioBridge *s, const LwMsg *req,
++                            uint32_t want)
++{
++    uint8_t buf[LW_MSG_LEN];
++    LwMsg rsp;
++
++    lw_encode(req, buf);
++    if (qemu_send_full(s->fd, buf, LW_MSG_LEN) != LW_MSG_LEN) {
++        lw_fatal(s, "send failed");
++    }
++    for (;;) {
++        if (!lw_read_full(s->fd, buf, LW_MSG_LEN)) {
++            lw_fatal(s, "peer closed while waiting for reply");
++        }
++        lw_decode(buf, &rsp);
++        if (rsp.type == LW_MSG_IRQ) {
++            lw_set_irq(s, rsp.value);
++            continue;
++        }
++        if (rsp.type != want) {
++            error_report("labwired-mmio-bridge: unexpected message type %u "
++                         "(want %u)", rsp.type, want);
++            exit(1);
++        }
++        return rsp.value;
++    }
++}
++
++/*
++ * Main-loop handler for IRQ messages that arrive while no access is in
++ * flight. Runs with the BQL held, so it never interleaves with lw_transact.
++ * Only consumes complete messages; a partial one stays queued.
++ */
++static void lw_fd_read(void *opaque)
++{
++    LabwiredMmioBridge *s = opaque;
++    uint8_t buf[LW_MSG_LEN];
++    LwMsg m;
++
++    for (;;) {
++        ssize_t n = recv(s->fd, buf, LW_MSG_LEN, MSG_PEEK | MSG_DONTWAIT);
++        if (n == 0) {
++            errno = ECONNRESET;
++            lw_fatal(s, "peer closed");
++        }
++        if (n < LW_MSG_LEN) {
++            return;
++        }
++        if (!lw_read_full(s->fd, buf, LW_MSG_LEN)) {
++            lw_fatal(s, "read failed");
++        }
++        lw_decode(buf, &m);
++        if (m.type != LW_MSG_IRQ) {
++            error_report("labwired-mmio-bridge: unsolicited message type %u",
++                         m.type);
++            continue;
++        }
++        lw_set_irq(s, m.value);
++    }
++}
++
++static uint64_t lw_mmio_read(void *opaque, hwaddr offset, unsigned size)
++{
++    LabwiredMmioBridge *s = opaque;
++    LwMsg req = { .type = LW_MSG_READ, .size = size, .offset = offset };
++
++    return lw_transact(s, &req, LW_MSG_REPLY);
++}
++
++static void lw_mmio_write(void *opaque, hwaddr offset, uint64_t value,
++                          unsigned size)
++{
++    LabwiredMmioBridge *s = opaque;
++    LwMsg req = {
++        .type = LW_MSG_WRITE, .size = size, .offset = offset, .value = value,
++    };
++
++    lw_transact(s, &req, LW_MSG_ACK);
++}
++
++static const MemoryRegionOps lw_mmio_ops = {
++    .read = lw_mmio_read,
++    .write = lw_mmio_write,
++    .endianness = DEVICE_LITTLE_ENDIAN,
++    .valid = { .min_access_size = 1, .max_access_size = 8 },
++    .impl = { .min_access_size = 1, .max_access_size = 8 },
++};
++
++static void lw_bridge_realize(DeviceState *dev, Error **errp)
++{
++    LabwiredMmioBridge *s = LABWIRED_MMIO_BRIDGE(dev);
++    bool ambiguous = false;
++    Object *gic;
++
++    if (!s->socket_path) {
++        error_setg(errp, "labwired-mmio-bridge: 'socket' is required");
++        return;
++    }
++    if (!s->size) {
++        error_setg(errp, "labwired-mmio-bridge: 'size' must be non-zero");
++        return;
++    }
++
++    gic = object_resolve_path_type("", TYPE_ARM_GIC, &ambiguous);
++    if (!gic || ambiguous) {
++        error_setg(errp, "labwired-mmio-bridge: need exactly one %s "
++                   "interrupt controller", TYPE_ARM_GIC);
++        return;
++    }
++    s->irq_line = qdev_get_gpio_in(DEVICE(gic), s->irq);
++
++    s->fd = unix_connect(s->socket_path, errp);
++    if (s->fd < 0) {
++        return;
++    }
++
++    memory_region_init_io(&s->iomem, OBJECT(dev), &lw_mmio_ops, s,
++                          TYPE_LABWIRED_MMIO_BRIDGE, s->size);
++    memory_region_add_subregion_overlap(get_system_memory(), s->addr,
++                                        &s->iomem, LW_BRIDGE_PRIORITY);
++    qemu_set_fd_handler(s->fd, lw_fd_read, NULL, s);
++}
++
++static void lw_bridge_unrealize(DeviceState *dev)
++{
++    LabwiredMmioBridge *s = LABWIRED_MMIO_BRIDGE(dev);
++
++    if (s->fd >= 0) {
++        qemu_set_fd_handler(s->fd, NULL, NULL, NULL);
++        memory_region_del_subregion(get_system_memory(), &s->iomem);
++        close(s->fd);
++        s->fd = -1;
++    }
++}
++
++static void lw_bridge_init(Object *obj)
++{
++    LABWIRED_MMIO_BRIDGE(obj)->fd = -1;
++}
++
++static const Property lw_bridge_props[] = {
++    DEFINE_PROP_UINT64("addr", LabwiredMmioBridge, addr, 0),
++    DEFINE_PROP_UINT64("size", LabwiredMmioBridge, size, 0x1000),
++    DEFINE_PROP_STRING("socket", LabwiredMmioBridge, socket_path),
++    DEFINE_PROP_UINT32("irq", LabwiredMmioBridge, irq, 0),
++};
++
++static void lw_bridge_class_init(ObjectClass *klass, const void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(klass);
++
++    dc->realize = lw_bridge_realize;
++    dc->unrealize = lw_bridge_unrealize;
++    dc->desc = "LabWired MMIO bridge (unix socket peripheral model)";
++    device_class_set_props(dc, lw_bridge_props);
++    set_bit(DEVICE_CATEGORY_MISC, dc->categories);
++}
++
++static const TypeInfo lw_bridge_info = {
++    .name = TYPE_LABWIRED_MMIO_BRIDGE,
++    .parent = TYPE_DEVICE,
++    .instance_size = sizeof(LabwiredMmioBridge),
++    .instance_init = lw_bridge_init,
++    .class_init = lw_bridge_class_init,
++};
++
++static void lw_bridge_register_types(void)
++{
++    type_register_static(&lw_bridge_info);
++}
++
++type_init(lw_bridge_register_types)
+diff --git a/hw/misc/meson.build b/hw/misc/meson.build
+index 23265f6..a37961e 100644
+--- a/hw/misc/meson.build
++++ b/hw/misc/meson.build
+@@ -168,3 +168,6 @@ system_ss.add(when: 'CONFIG_SBSA_REF', if_true: files('sbsa_ec.c'))
+ 
+ # HPPA devices
+ system_ss.add(when: 'CONFIG_LASI', if_true: files('lasi.c'))
++
++# LabWired MMIO bridge (out-of-tree spike)
++system_ss.add(files('labwired-mmio-bridge.c'))
