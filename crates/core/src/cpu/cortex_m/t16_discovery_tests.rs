@@ -253,6 +253,65 @@ fn opcode_dispatch_matches_original_paths_at_rotated_entries_and_budgets() {
 }
 
 #[test]
+fn memoized_dispatch_matches_original_paths_on_repeated_entries() {
+    // The same CPU re-enters the dispatcher, so shape rejections memoized
+    // by one call are consulted by the next. Every call must still match
+    // the frozen order, including after a decode lands in the window.
+    for ops in [
+        &[0xe7fe][..],
+        &[0x3801, 0xd1fd],
+        &[0x3001, 0x6008, 0x680a, 0xe7fb],
+        &[0x9000, 0x4669, 0x1c40, 0xe7fb],
+        &[0x2001, 0x3001, 0xe7fc],
+        &[0x6808, 0xe7fd],
+        &[0xbf30, 0xe7fd],
+        &[0x6808, 0xbf30, 0x3001, 0x6008],
+    ] {
+        for phase in 0..ops.len() {
+            for mmio in [false, true] {
+                let (mut actual, mut actual_bus) = dispatch_fixture(ops, phase, mmio);
+                let (mut original, mut original_bus) = dispatch_fixture(ops, phase, mmio);
+                for (round, budget) in [0, 9, 9, 3, 64, 9].into_iter().enumerate() {
+                    if round == 4 {
+                        // A fresh decode inside the window must re-open it.
+                        for cpu in [&mut actual, &mut original] {
+                            cache(cpu, 0x100 + ops.len() as u32 * 2, 0xbf00);
+                        }
+                    }
+                    let retired = actual.run_t16_cached_fast_paths(&mut actual_bus, budget);
+                    let expected = original_fast_paths(&mut original, &mut original_bus, budget);
+                    let at = format!("ops={ops:x?} phase={phase} mmio={mmio} round={round}");
+                    assert_eq!(retired, expected, "{at}");
+                    assert_eq!(
+                        serde_json::to_value(actual.snapshot()).unwrap(),
+                        serde_json::to_value(original.snapshot()).unwrap(),
+                        "{at}"
+                    );
+                    assert_eq!(actual_bus.ram.data, original_bus.ram.data, "{at}");
+                    assert_eq!(actual_bus.access_counts(), original_bus.access_counts(), "{at}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn pattern_rejection_memo_is_cleared_by_a_decode_in_reach() {
+    // ADDS r0,#1 alone cannot form any fixed pattern; once the rest of the
+    // RAM loop is decoded behind it the RAM runner must take it again.
+    let (mut cpu, mut bus) = dispatch_fixture(&[0x3001], 0, false);
+    assert_eq!(cpu.run_t16_cached_fast_paths(&mut bus, 16), 0);
+    assert!(cpu.t16_patterns_rejected(0x100));
+    for (i, op) in [0x6008u16, 0x680a, 0xe7fb].into_iter().enumerate() {
+        let pc = 0x102 + i as u32 * 2;
+        cache(&mut cpu, pc, op);
+        assert!(bus.flash.write_u16(u64::from(pc), op));
+    }
+    assert!(!cpu.t16_patterns_rejected(0x100));
+    assert_eq!(cpu.run_t16_cached_fast_paths(&mut bus, 16), 16);
+}
+
+#[test]
 fn dispatch_declines_cold_collided_and_wide_entries_without_side_effects() {
     for kind in 0..3 {
         let (mut cpu, mut bus) = dispatch_fixture(&[0xe7fe], 0, false);
