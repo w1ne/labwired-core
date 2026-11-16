@@ -4860,6 +4860,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#optional-shared-memory-transport" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional shared-memory transport
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -4920,6 +4939,17 @@ transport is implemented. No bounded Windows behavior is claimed.</p>
 <p>Tests: <code>cargo test -p labwired-core --test cosim -- cosim_external_process_bounds:: cosim_contract:: cosim_canonical_basket::</code>. The canonical basket test
 uses the generated native manifest and the existing Python power wrapper,
 not a Linux guest or new private battery/sensor implementation.</p>
+<h2 id="optional-shared-memory-transport">Optional shared-memory transport</h2>
+<p><code>config: {transport: shm}</code> on an <code>external_process</code> model offers a shared-memory
+transport instead of JSONL pipes. The host maps a file in <code>/dev/shm</code>, passes its
+path in <code>LABWIRED_COSIM_SHM</code> and waits up to <code>shm_handshake_ms</code> (default 1000)
+for the child to print <code>{"labwired_shm":1}</code> on stdout. A child that does, uses
+the mapping for every step (spin, then futex); a child that stays silent is a
+plain JSONL model and keeps working. Signals are bool, integer and float only
+(text needs JSONL); names and layout are fixed at handshake. Linux clients:
+<code>tools/cosim/labwired_shm.h</code> (C) and <code>tools/cosim/labwired_shm.py</code> (Python),
+with <code>echo_shm.c</code>/<code>echo_shm.py</code>. Layout: <code>crates/core/src/cosim/shm.rs</code>.
+The JSONL protocol is unchanged.</p>
 
 
 
