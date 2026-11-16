@@ -1,9 +1,9 @@
 #[cfg(unix)]
 use crate::cosim::shm::{self, ShmRegion};
-use crate::cosim::{CosimAdapter, CosimStep, CosimStepResult};
 #[cfg(unix)]
 use crate::cosim::CosimSignalValue;
 use crate::cosim::CosimSignals;
+use crate::cosim::{CosimAdapter, CosimStep, CosimStepResult};
 use crate::{SimResult, SimulationError};
 #[cfg(unix)]
 use serde_json::{Map, Value};
