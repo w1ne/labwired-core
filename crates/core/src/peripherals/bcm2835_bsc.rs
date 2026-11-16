@@ -32,9 +32,10 @@
 //! Event times are computed from the period count since the last restart
 //! and rounded up to whole nanoseconds, so long transfers do not drift.
 //!
-//! A START written while a transfer is active is latched and runs as a
+//! A START written while a transfer is active is latched. It runs as a
 //! repeated START when the current transfer has moved its last byte (the
-//! Linux driver does this for write-then-read).
+//! Linux driver does this for write-then-read), or as a new START after STOP
+//! if it arrived only during STOP (a slow CPU).
 //!
 //! Not modelled: clock stretching by the target (S.CLKT never sets), NACK
 //! on data bytes, FEDL/REDL (DEL) sub-period delays, 10-bit addressing.
@@ -85,13 +86,13 @@ pub const PERIODS_BYTE: u64 = 9;
 pub const PERIODS_STOP: u64 = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Step {
+enum BusEvent {
     /// End of the address byte: ACK/NACK known.
-    AddressDone,
+    Address,
     /// End of a data byte.
-    ByteDone,
+    Byte,
     /// End of STOP: DONE.
-    StopDone,
+    Stop,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -127,7 +128,7 @@ pub struct Bcm2835Bsc {
     /// Bus timing reference: event times are `ref_ns + periods * T`.
     ref_ns: u64,
     periods: u64,
-    event: Option<(u64, Step)>,
+    event: Option<(u64, BusEvent)>,
     tx: VecDeque<u8>,
     rx: VecDeque<u8>,
     targets: Vec<Box<dyn I2cDevice>>,
@@ -332,7 +333,7 @@ impl Bcm2835Bsc {
         }
     }
 
-    fn schedule(&mut self, periods: u64, step: Step) {
+    fn schedule(&mut self, periods: u64, step: BusEvent) {
         self.periods += periods;
         let t = self.ref_ns + self.periods_ns(self.periods);
         self.event = Some((t, step));
@@ -355,12 +356,12 @@ impl Bcm2835Bsc {
             in_flight: None,
             target: None,
         });
-        self.schedule(start_periods + PERIODS_BYTE, Step::AddressDone);
+        self.schedule(start_periods + PERIODS_BYTE, BusEvent::Address);
     }
 
-    fn on_step(&mut self, step: Step) {
+    fn on_step(&mut self, step: BusEvent) {
         match step {
-            Step::AddressDone => {
+            BusEvent::Address => {
                 let addr = self.xfer.as_ref().expect("address without transfer").addr;
                 match self.targets.iter().position(|t| t.address() == addr) {
                     Some(i) => {
@@ -374,11 +375,11 @@ impl Bcm2835Bsc {
                         self.sticky |= S_ERR;
                         self.pending_start = None;
                         self.tx.clear();
-                        self.schedule(PERIODS_STOP, Step::StopDone);
+                        self.schedule(PERIODS_STOP, BusEvent::Stop);
                     }
                 }
             }
-            Step::ByteDone => {
+            BusEvent::Byte => {
                 let x = self.xfer.as_mut().expect("byte without transfer");
                 let i = x.target.expect("byte without target");
                 if x.read {
@@ -392,11 +393,15 @@ impl Bcm2835Bsc {
                 x.remaining -= 1;
                 self.next_byte();
             }
-            Step::StopDone => {
+            BusEvent::Stop => {
                 if let Some(i) = self.xfer.take().and_then(|x| x.target) {
                     self.targets[i].stop();
                 }
                 self.sticky |= S_DONE;
+                // A START that arrived during STOP runs once the bus is free.
+                if let Some(start) = self.pending_start.take() {
+                    self.begin(start);
+                }
             }
         }
     }
@@ -408,17 +413,17 @@ impl Bcm2835Bsc {
         if x.remaining == 0 {
             match self.pending_start.take() {
                 Some(start) => self.open(start, PERIODS_START),
-                None => self.schedule(PERIODS_STOP, Step::StopDone),
+                None => self.schedule(PERIODS_STOP, BusEvent::Stop),
             }
             return;
         }
         if x.read {
             if self.rx.len() < FIFO_DEPTH {
-                self.schedule(PERIODS_BYTE, Step::ByteDone);
+                self.schedule(PERIODS_BYTE, BusEvent::Byte);
             }
         } else if let Some(b) = self.tx.pop_front() {
             x.in_flight = Some(b);
-            self.schedule(PERIODS_BYTE, Step::ByteDone);
+            self.schedule(PERIODS_BYTE, BusEvent::Byte);
         }
         // else: bus held until the CPU services the FIFO.
     }
@@ -569,6 +574,25 @@ mod tests {
         );
         assert!(bsc.irq_pending());
         assert_eq!(bsc.read_reg(done, REG_FIFO), 0x60, "BME280 chip-id");
+    }
+
+    /// A slow CPU latches the read only after the write's last byte, while
+    /// STOP is on the bus: the read must still run, as a new START.
+    #[test]
+    fn bsc_start_during_stop_runs_after_stop() {
+        let mut bsc = bsc(true);
+        start(&mut bsc, T0, 0x76, 1, false, false);
+        bsc.write_reg(T0 + 3_000, REG_FIFO, 0xd0);
+        // write done at T0 + 19T; STOP until T0 + 20T.
+        let late = T0 + 19 * T + 4_000;
+        start(&mut bsc, late, 0x76, 1, true, true);
+        let stop_end = T0 + 20 * T;
+        let st = s(&mut bsc, stop_end);
+        assert_eq!(st & (S_TA | S_DONE), S_TA, "read started, DONE consumed");
+        // START + addr + data + STOP from the end of the previous STOP.
+        let done = stop_end + 20 * T;
+        assert_eq!(s(&mut bsc, done) & (S_TA | S_DONE | S_RXD), S_DONE | S_RXD);
+        assert_eq!(bsc.read_reg(done, REG_FIFO), 0x60);
     }
 
     #[test]

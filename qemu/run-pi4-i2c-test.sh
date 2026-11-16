@@ -3,12 +3,18 @@
 # served by the LabWired BSC model over a unix socket, and checks from the
 # guest console that a LabWired BME280 answers at 0x76.
 #
-# Three runs:
-#   positive   bridge + BME280        -> 0x76 present, i2cget 0xd0 = 0x60
-#   no-device  bridge, no I2C target  -> 0x76 absent
-#   no-bridge  QEMU's own BSC model   -> 0x76 absent
+# Runs (guest = kernel8.img + an initramfs built from the image's busybox and
+# i2c modules; -icount unless noted):
+#   positive     bridge + BME280          -> 0x76 present, i2cget 0xd0 = 0x60
+#   positive-2   same again               -> transcript byte-identical (cmp)
+#   no-device    bridge, no I2C target    -> 0x76 absent
+#   no-bridge    QEMU's own BSC model     -> 0x76 absent
+#   host-1/2     positive without -icount -> transcripts differ (proves the
+#                determinism check can fail)
+# Plus a timing check of the i2cget transfer against the SCL formula.
 #
-# Needs: qemu/build.sh done (or it runs it), cargo, dtc, mtools, e2fsprogs.
+# Needs: qemu/build.sh done (or it runs it), cargo, dtc, mtools, e2fsprogs,
+# python3, xz.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -169,3 +175,79 @@ for r in $RUNS; do
         host-1|host-2) run "$r" bridge host ;;
     esac
 done
+
+for r in $RUNS; do cat "$LOGS/$r.log"; done >"$LOGS/all-runs.log"
+
+# --- 5. verdict from the guest consoles and bridge transcripts --------------
+fail=0
+pass() { echo "PASS $1"; }
+failc() { echo "FAIL $1"; fail=1; }
+check() { if grep -q "$2" "$LOGS/$1.log"; then pass "$1: $3"; else failc "$1: $3"; fi; }
+has() { [[ " $RUNS " == *" $1 "* ]]; }
+
+for r in positive positive-2; do
+    has $r || continue
+    check $r '^LW-DETECT-0x76: present' "i2cdetect shows 0x76"
+    check $r '^LW-I2CGET: rc=0 out=0x60' "i2cget 0xd0 = 0x60"
+done
+for r in host-1 host-2; do
+    has $r || continue
+    check $r '^LW-I2CGET: rc=0 out=0x60' "i2cget 0xd0 = 0x60 (no -icount)"
+done
+for r in no-device no-bridge; do
+    has $r || continue
+    check $r '^LW-DETECT-0x76: absent' "i2cdetect shows no 0x76"
+    check $r '^LW-END' "guest finished"
+done
+
+# Timing: START of the i2cget transfer -> DONE (IRQ) in the transcript must
+# equal START + addr + reg + Sr + addr + data + STOP = 39 SCL periods, with
+# SCL period = DIV / core clock (DIV as the guest wrote it, core clock as the
+# guest's clk_summary reports it).
+if has positive; then
+    if python3 -I - "$LOGS/positive.transcript" "$LOGS/positive.log" <<'PY'
+import re, sys
+tr = [l.split() for l in open(sys.argv[1])]
+log = open(sys.argv[2], errors="replace").read()
+clk = int(re.search(r"^LW-CLK: +vpu +\S+ +\S+ +\S+ +(\d+)", log, re.M).group(1))
+div = [int(l[3], 16) for l in tr if l[1] == "WRITE" and l[2] == "0x14"][-1]
+# i2cget write msg: A=0x76, DLEN=1, C = I2CEN|ST|INTT
+i = max(k for k in range(2, len(tr))
+        if tr[k][1:4] == ["WRITE", "0x00", "0x00008280"]
+        and tr[k - 2][1:4] == ["WRITE", "0x0c", "0x00000076"]
+        and tr[k - 1][1:4] == ["WRITE", "0x08", "0x00000001"])
+t_start = int(tr[i][0])
+j = next(k for k in range(i + 1, len(tr)) if tr[k][1] == "SYNC" and tr[k][4] == "1")
+t_done = int(tr[j][0])
+periods = 1 + 9 + 9 + 1 + 9 + 9 + 1
+expect = -(-periods * div * 10**9 // clk)
+print(f"  core clock (guest clk_summary vpu) = {clk} Hz, DIV written = {div}")
+print(f"  SCL period = {div} / {clk} Hz = {div * 10**9 / clk:g} ns, bus = {clk / div:g} Hz")
+print(f"  i2cget START write t={t_start}, DONE/IRQ SYNC t={t_done}")
+print(f"  measured {t_done - t_start} ns, formula {periods} periods x "
+      f"{div * 10**9 / clk:g} ns = {expect} ns")
+sys.exit(0 if t_done - t_start == expect else 1)
+PY
+    then pass "timing: i2cget START->DONE equals the formula"
+    else failc "timing: i2cget START->DONE equals the formula"; fi
+fi
+
+if has positive && has positive-2; then
+    if cmp "$LOGS/positive.transcript" "$LOGS/positive-2.transcript"; then
+        pass "determinism: icount transcripts byte-identical ($(wc -l <"$LOGS/positive.transcript" | tr -d ' ') lines)"
+    else failc "determinism: icount transcripts byte-identical"; fi
+fi
+if has host-1 && has host-2; then
+    if cmp "$LOGS/host-1.transcript" "$LOGS/host-2.transcript"; then
+        failc "negative control: transcripts without -icount differ"
+    else pass "negative control: transcripts without -icount differ"; fi
+fi
+
+for r in $RUNS; do
+    echo "  $r: $(grep -h '^LW-HOST: wall' "$LOGS/$r.log" | cut -d' ' -f3-5) guest uptime at end" \
+        "$(grep -h '^LW-UPTIME' "$LOGS/$r.log" | cut -d' ' -f2)s"
+    [[ -f "$LOGS/$r.bridge.log" ]] && grep -h "QEMU disconnected after" "$LOGS/$r.bridge.log" | sed 's/^/      /'
+done
+echo "logs: $LOGS (all-runs.log = every guest console, *.transcript = bridge)"
+if (( fail )); then echo "RESULT: FAIL"; exit 1; fi
+echo "RESULT: PASS"
