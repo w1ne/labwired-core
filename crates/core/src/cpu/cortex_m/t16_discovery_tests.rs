@@ -253,6 +253,69 @@ fn opcode_dispatch_matches_original_paths_at_rotated_entries_and_budgets() {
 }
 
 #[test]
+fn memoized_dispatch_matches_original_paths_on_repeated_entries() {
+    // The same CPU re-enters the dispatcher, so shape rejections memoized
+    // by one call are consulted by the next. Every call must still match
+    // the frozen order, including after a decode lands in the window.
+    for ops in [
+        &[0xe7fe][..],
+        &[0x3801, 0xd1fd],
+        &[0x3001, 0x6008, 0x680a, 0xe7fb],
+        &[0x9000, 0x4669, 0x1c40, 0xe7fb],
+        &[0x2001, 0x3001, 0xe7fc],
+        &[0x6808, 0xe7fd],
+        &[0xbf30, 0xe7fd],
+        &[0x6808, 0xbf30, 0x3001, 0x6008],
+    ] {
+        for phase in 0..ops.len() {
+            for mmio in [false, true] {
+                let (mut actual, mut actual_bus) = dispatch_fixture(ops, phase, mmio);
+                let (mut original, mut original_bus) = dispatch_fixture(ops, phase, mmio);
+                for (round, budget) in [0, 9, 9, 3, 64, 9].into_iter().enumerate() {
+                    if round == 4 {
+                        // A fresh decode inside the window must re-open it.
+                        for cpu in [&mut actual, &mut original] {
+                            cache(cpu, 0x100 + ops.len() as u32 * 2, 0xbf00);
+                        }
+                    }
+                    let retired = actual.run_t16_cached_fast_paths(&mut actual_bus, budget);
+                    let expected = original_fast_paths(&mut original, &mut original_bus, budget);
+                    let at = format!("ops={ops:x?} phase={phase} mmio={mmio} round={round}");
+                    assert_eq!(retired, expected, "{at}");
+                    assert_eq!(
+                        serde_json::to_value(actual.snapshot()).unwrap(),
+                        serde_json::to_value(original.snapshot()).unwrap(),
+                        "{at}"
+                    );
+                    assert_eq!(actual_bus.ram.data, original_bus.ram.data, "{at}");
+                    assert_eq!(
+                        actual_bus.access_counts(),
+                        original_bus.access_counts(),
+                        "{at}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn pattern_rejection_memo_is_cleared_by_a_decode_in_reach() {
+    // ADDS r0,#1 alone cannot form any fixed pattern; once the rest of the
+    // RAM loop is decoded behind it the RAM runner must take it again.
+    let (mut cpu, mut bus) = dispatch_fixture(&[0x3001], 0, false);
+    assert_eq!(cpu.run_t16_cached_fast_paths(&mut bus, 16), 0);
+    assert!(cpu.t16_patterns_rejected(0x100));
+    for (i, op) in [0x6008u16, 0x680a, 0xe7fb].into_iter().enumerate() {
+        let pc = 0x102 + i as u32 * 2;
+        cache(&mut cpu, pc, op);
+        assert!(bus.flash.write_u16(u64::from(pc), op));
+    }
+    assert!(!cpu.t16_patterns_rejected(0x100));
+    assert_eq!(cpu.run_t16_cached_fast_paths(&mut bus, 16), 16);
+}
+
+#[test]
 fn dispatch_declines_cold_collided_and_wide_entries_without_side_effects() {
     for kind in 0..3 {
         let (mut cpu, mut bus) = dispatch_fixture(&[0xe7fe], 0, false);
@@ -436,7 +499,7 @@ fn admitted_load_falls_back_for_mmio_without_side_effects_then_accepts_ram() {
     let before = (cpu.pc, cpu.r0, bus.access_counts());
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 2), 0);
     assert_eq!((cpu.pc, cpu.r0, bus.access_counts()), before);
-    assert_ne!(cpu.t16_discovery_misses[0], (cpu.pc, cpu.decode_generation));
+    assert!(!cpu.t16_discovery_memoized(cpu.pc));
     cpu.r1 = 0x20000100;
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 2), 2);
 }
@@ -465,7 +528,7 @@ fn forward_and_wrong_target_terminal_branches_reject_without_retiring() {
         let before = (cpu.pc, cpu.r0, cpu.xpsr, bus.access_counts());
         assert_eq!(cpu.run_t16_fast_block(&mut bus, 64), 0);
         assert_eq!((cpu.pc, cpu.r0, cpu.xpsr, bus.access_counts()), before);
-        assert_eq!(cpu.t16_discovery_misses[0], (cpu.pc, cpu.decode_generation));
+        assert!(cpu.t16_discovery_memoized(cpu.pc));
         assert_eq!(cpu.run_t16_fast_block(&mut bus, 64), 0);
         assert_eq!((cpu.pc, cpu.r0, cpu.xpsr, bus.access_counts()), before);
         cache(&mut cpu, 0x102, 0xd1fd);
@@ -541,7 +604,7 @@ fn discovery_memo_is_stable_until_real_decoder_warms_the_window() {
     assert!(bus.flash.write_u16(0x102, 0xd1fd));
     let generation = cpu.decode_generation;
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 9), 0);
-    assert_eq!(cpu.t16_discovery_misses[0], (0x100, generation));
+    assert!(cpu.t16_discovery_memoized(0x100));
     let before = (cpu.pc, cpu.r0, cpu.xpsr, bus.access_counts());
     for _ in 0..4 {
         assert_eq!(cpu.run_t16_fast_block(&mut bus, 9), 0);
@@ -569,17 +632,18 @@ fn fast_fetch_insertion_and_decode_tag_collision_invalidate_discovery_misses() {
 }
 
 #[test]
-fn memo_slot_aliases_require_exact_pc_and_generation() {
+fn memo_slot_aliases_require_exact_pc() {
     let mut cpu = CortexM::new();
     let mut bus = SystemBus::new();
     cpu.pc = 0x100;
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 1), 0);
-    cpu.pc = 0x180; // same bounded memo slot, not same PC
+    cpu.pc = 0x2100; // same decode/memo slot, not same PC
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 1), 0);
-    assert_eq!(cpu.t16_discovery_misses[0], (0x180, cpu.decode_generation));
+    assert!(cpu.t16_discovery_memoized(0x2100));
+    assert!(!cpu.t16_discovery_memoized(0x100));
     cpu.pc = 0x100;
     assert_eq!(cpu.run_t16_fast_block(&mut bus, 1), 0);
-    assert_eq!(cpu.t16_discovery_misses[0], (0x100, cpu.decode_generation));
+    assert!(cpu.t16_discovery_memoized(0x100));
 }
 
 #[test]
@@ -620,16 +684,25 @@ fn invalidate_reset_and_snapshot_restore_drop_positive_and_negative_state() {
 }
 
 #[test]
-fn generation_wrap_clears_old_misses_before_reusing_generation_one() {
-    let mut cpu = CortexM::new();
-    cpu.t16_discovery_misses.fill((0x100, 1));
-    cpu.decode_generation = u64::MAX;
-    cache(&mut cpu, 0x100, 0xbf00);
-    assert_eq!(cpu.decode_generation, 1);
-    assert!(cpu
-        .t16_discovery_misses
-        .iter()
-        .all(|entry| *entry == (0, 0)));
+fn insert_clears_only_misses_whose_discovery_window_reaches_it() {
+    let reach = T16_DISCOVERY_REACH as u32 * 2;
+    // Outside the window on either side (including a far decode-slot alias
+    // of an in-window PC's neighbour), the miss survives.
+    for (pc, cleared) in [
+        (0x100 - reach - 2, false),
+        (0x100 - reach, true),
+        (0x100, true),
+        (0x100 + reach, true),
+        (0x100 + reach + 2, false),
+        (0x400, false),
+        (0x2100 + reach, true), // aliases slot of 0x100 + reach
+    ] {
+        let mut cpu = CortexM::new();
+        cpu.pc = 0x100;
+        cpu.memoize_t16_discovery_miss();
+        cache(&mut cpu, pc, 0xbf00);
+        assert_eq!(!cpu.t16_discovery_memoized(0x100), cleared, "{pc:#x}");
+    }
 }
 
 #[test]
