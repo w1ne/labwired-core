@@ -4,378 +4,356 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! Serves one BCM2835 BSC (I²C controller) model to QEMU's
-//! `labwired-mmio-bridge` device. A BME280 sits on the bus at 0x76 unless
-//! `--no-device` is given. Wire protocol v2: `qemu/PROTOCOL.md`.
+//! LabWired side of QEMU's `labwired-mmio-bridge`.
+//!
+//! The board comes from its device tree: every enabled node whose
+//! `compatible` is in the model registry becomes one model instance at its
+//! DT address, served on its own unix socket (`<socket-dir>/<label>.sock`).
+//!
+//! ```text
+//! qemu-bridge dt-report --dtb FILE [--json]
+//! qemu-bridge plan      --dtb FILE --socket-dir DIR [--no-irq-or]
+//! qemu-bridge serve     --dtb FILE --socket-dir DIR [--attach LABEL:PART@ADDR]...
+//!                       [--transcript-dir DIR] [--trace] [--core-clk-hz HZ]
+//! ```
+//!
+//! Wire protocol v2: `qemu/PROTOCOL.md`.
+
+mod dt;
+mod fdt;
+mod proto;
 
 use std::fs::File;
-use std::io::{BufWriter, Read, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::PathBuf;
+use std::io::BufWriter;
+use std::os::unix::net::UnixListener;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use labwired_core::peripherals::bcm2835_bsc::{Bcm2835Bsc, DEFAULT_CORE_CLK_HZ};
 use labwired_core::peripherals::components::bme280::Bme280;
-use labwired_core::peripherals::device::I2cSlaveHost;
+use labwired_core::peripherals::device::{I2cDevice, I2cSlaveHost};
 
-pub const PROTOCOL_VERSION: u64 = 2;
-const REQ_LEN: usize = 32;
-const REPLY_LEN: usize = 24;
-const MSG_HELLO: u32 = 0;
-const MSG_READ: u32 = 1;
-const MSG_WRITE: u32 = 2;
-const MSG_SYNC: u32 = 3;
-pub const NO_DEADLINE: u64 = u64::MAX;
+use dt::{Board, Class, DtNode, ModelKind};
+use proto::{Bridge, PROTOCOL_VERSION};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Request {
-    kind: u32,
-    size: u32,
-    t_ns: u64,
-    offset: u64,
-    value: u64,
-}
+const USAGE: &str = "usage:
+  qemu-bridge dt-report --dtb FILE [--json]
+  qemu-bridge plan      --dtb FILE --socket-dir DIR [--no-irq-or]
+  qemu-bridge serve     --dtb FILE --socket-dir DIR [--attach LABEL:PART@ADDR]...
+                        [--transcript-dir DIR] [--trace] [--core-clk-hz HZ (default 350000000)]
+  parts: bme280";
 
-impl Request {
-    #[cfg(test)]
-    fn encode(&self) -> [u8; REQ_LEN] {
-        let mut b = [0u8; REQ_LEN];
-        b[0..4].copy_from_slice(&self.kind.to_le_bytes());
-        b[4..8].copy_from_slice(&self.size.to_le_bytes());
-        b[8..16].copy_from_slice(&self.t_ns.to_le_bytes());
-        b[16..24].copy_from_slice(&self.offset.to_le_bytes());
-        b[24..32].copy_from_slice(&self.value.to_le_bytes());
-        b
-    }
-
-    fn decode(b: &[u8; REQ_LEN]) -> Self {
-        let u32_at = |i: usize| u32::from_le_bytes(b[i..i + 4].try_into().unwrap());
-        let u64_at = |i: usize| u64::from_le_bytes(b[i..i + 8].try_into().unwrap());
-        Self {
-            kind: u32_at(0),
-            size: u32_at(4),
-            t_ns: u64_at(8),
-            offset: u64_at(16),
-            value: u64_at(24),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Reply {
-    value: u64,
-    irq_level: u32,
-    next_deadline_ns: u64,
-}
-
-impl Reply {
-    fn encode(&self) -> [u8; REPLY_LEN] {
-        let mut b = [0u8; REPLY_LEN];
-        b[0..8].copy_from_slice(&self.value.to_le_bytes());
-        b[8..12].copy_from_slice(&self.irq_level.to_le_bytes());
-        // 12..16 reserved, zero
-        b[16..24].copy_from_slice(&self.next_deadline_ns.to_le_bytes());
-        b
-    }
-}
-
+#[derive(Default)]
 struct Args {
-    socket: PathBuf,
-    no_device: bool,
+    dtb: Option<PathBuf>,
+    socket_dir: Option<PathBuf>,
+    transcript_dir: Option<PathBuf>,
+    attach: Vec<String>,
+    json: bool,
+    no_irq_or: bool,
     trace: bool,
-    transcript: Option<PathBuf>,
-    core_clk_hz: u64,
+    core_clk_hz: Option<u64>,
 }
 
-const USAGE: &str = "usage: qemu-bridge --socket PATH [--no-device] [--trace] \
-[--transcript FILE] [--core-clk-hz HZ (default 350000000)]";
-
-fn parse_args() -> Result<Args, String> {
-    let mut socket = None;
-    let mut no_device = false;
-    let mut trace = false;
-    let mut transcript = None;
-    let mut core_clk_hz = DEFAULT_CORE_CLK_HZ;
-    let mut it = std::env::args().skip(1);
-    while let Some(a) = it.next() {
-        match a.as_str() {
-            "--socket" => socket = it.next().map(PathBuf::from),
-            "--no-device" => no_device = true,
-            "--trace" => trace = true,
-            "--transcript" => transcript = it.next().map(PathBuf::from),
+fn parse_args(args: &[String]) -> Result<Args, String> {
+    let mut a = Args::default();
+    let mut it = args.iter();
+    while let Some(arg) = it.next() {
+        let mut val = || it.next().cloned().ok_or(format!("{arg} needs a value"));
+        match arg.as_str() {
+            "--dtb" => a.dtb = Some(val()?.into()),
+            "--socket-dir" => a.socket_dir = Some(val()?.into()),
+            "--transcript-dir" => a.transcript_dir = Some(val()?.into()),
+            "--attach" => a.attach.push(val()?),
+            "--json" => a.json = true,
+            "--no-irq-or" => a.no_irq_or = true,
+            "--trace" => a.trace = true,
             "--core-clk-hz" => {
-                core_clk_hz = it
-                    .next()
-                    .and_then(|v| v.parse().ok())
-                    .filter(|&v: &u64| v > 0)
-                    .ok_or("--core-clk-hz needs a positive integer")?
+                a.core_clk_hz = Some(
+                    val()?
+                        .parse()
+                        .ok()
+                        .filter(|&v: &u64| v > 0)
+                        .ok_or("--core-clk-hz needs a positive integer")?,
+                )
             }
-            "-h" | "--help" => return Err(USAGE.into()),
-            other => return Err(format!("unknown argument: {other}\n{USAGE}")),
+            other => return Err(format!("unknown argument: {other}")),
         }
     }
-    Ok(Args {
-        socket: socket.ok_or(USAGE)?,
-        no_device,
-        trace,
-        transcript,
-        core_clk_hz,
+    Ok(a)
+}
+
+fn load_board(a: &Args) -> Result<Board, String> {
+    let path = a.dtb.as_ref().ok_or("--dtb FILE is required")?;
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Board::load(&bytes).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+fn hex(v: Option<u64>) -> String {
+    v.map(|v| format!("{v:#x}")).unwrap_or_else(|| "-".into())
+}
+
+fn irq_text(n: &DtNode) -> String {
+    if n.irqs.is_empty() {
+        "-".into()
+    } else {
+        n.irqs
+            .iter()
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+}
+
+fn json_str(s: &str) -> String {
+    let mut o = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' => o.push_str("\\\""),
+            '\\' => o.push_str("\\\\"),
+            c if (c as u32) < 0x20 => o.push_str(&format!("\\u{:04x}", c as u32)),
+            c => o.push(c),
+        }
+    }
+    o.push('"');
+    o
+}
+
+fn summary(board: &Board) -> String {
+    let (m, total) = board.coverage();
+    let pct = if total == 0 {
+        0.0
+    } else {
+        100.0 * m as f64 / total as f64
+    };
+    format!("modeled {m} of {total} enabled device nodes ({pct:.1}%)")
+}
+
+fn cmd_dt_report(a: &Args) -> Result<(), String> {
+    let board = load_board(a)?;
+    if a.json {
+        let rows: Vec<String> = board
+            .nodes
+            .iter()
+            .map(|n| {
+                let model = match n.class {
+                    Class::Modeled(k) => json_str(k.name()),
+                    _ => "null".into(),
+                };
+                format!(
+                    "{{\"path\":{},\"label\":{},\"compatible\":[{}],\"cpu_addr\":{},\"size\":{},\"irqs\":[{}],\"enabled\":{},\"class\":{},\"model\":{}}}",
+                    json_str(&n.path),
+                    json_str(&n.label),
+                    n.compatible.iter().map(|c| json_str(c)).collect::<Vec<_>>().join(","),
+                    n.cpu_addr.map(|v| v.to_string()).unwrap_or("null".into()),
+                    n.size.map(|v| v.to_string()).unwrap_or("null".into()),
+                    n.irqs.iter().map(|i| json_str(&i.to_string())).collect::<Vec<_>>().join(","),
+                    n.enabled,
+                    json_str(n.class.name()),
+                    model
+                )
+            })
+            .collect();
+        let (m, total) = board.coverage();
+        println!(
+            "{{\"nodes\":[\n{}\n],\"modeled\":{m},\"enabled_device_nodes\":{total},\"summary\":{}}}",
+            rows.join(",\n"),
+            json_str(&summary(&board))
+        );
+        return Ok(());
+    }
+    println!(
+        "{:<54} {:<34} {:>12} {:>10} {:<16} {:<10} {}",
+        "PATH", "COMPATIBLE", "CPU-ADDR", "SIZE", "IRQ", "CLASS", "LABEL/MODEL"
+    );
+    for n in &board.nodes {
+        let model = match n.class {
+            Class::Modeled(k) => format!("{} -> {}", n.label, k.name()),
+            _ => n.label.clone(),
+        };
+        let extra = if n.reg_entries > 1 {
+            format!(" (+{} reg)", n.reg_entries - 1)
+        } else {
+            String::new()
+        };
+        println!(
+            "{:<54} {:<34} {:>12} {:>10} {:<16} {:<10} {}{}",
+            n.path,
+            n.compatible.first().map(String::as_str).unwrap_or("-"),
+            hex(n.cpu_addr),
+            hex(n.size),
+            irq_text(n),
+            n.class.name(),
+            model,
+            extra
+        );
+    }
+    println!("{}", summary(&board));
+    Ok(())
+}
+
+fn socket_path(dir: &Path, label: &str) -> PathBuf {
+    dir.join(format!("{label}.sock"))
+}
+
+fn cmd_plan(a: &Args) -> Result<(), String> {
+    let board = load_board(a)?;
+    let dir = a
+        .socket_dir
+        .as_ref()
+        .ok_or("--socket-dir DIR is required")?;
+    for n in board.modeled() {
+        let spi = n
+            .spi()
+            .ok_or_else(|| format!("{} ({}): no GIC SPI interrupt", n.label, n.path))?;
+        let mut dev = format!(
+            "labwired-mmio-bridge,addr={:#x},size={:#x},socket={},irq={spi}",
+            n.cpu_addr.unwrap(),
+            n.size.unwrap_or(0x1000),
+            socket_path(dir, &n.label).display()
+        );
+        if a.no_irq_or {
+            dev.push_str(",irq-or=off");
+        }
+        println!("-device {dev}");
+    }
+    Ok(())
+}
+
+struct Attach {
+    label: String,
+    part: Box<dyn I2cDevice>,
+    desc: String,
+}
+
+fn parse_attach(spec: &str) -> Result<Attach, String> {
+    let err = || format!("--attach {spec}: expected LABEL:PART@ADDR, e.g. i2c1:bme280@0x76");
+    let (label, rest) = spec.split_once(':').ok_or_else(err)?;
+    let (part, addr) = rest.split_once('@').ok_or_else(err)?;
+    let addr = addr.trim_start_matches("0x");
+    let addr = u8::from_str_radix(addr, 16).map_err(|_| err())?;
+    let part: Box<dyn I2cDevice> = match part {
+        "bme280" => Box::new(Bme280::new(addr)),
+        p => {
+            return Err(format!(
+                "--attach {spec}: unknown part {p:?} (known: bme280)"
+            ))
+        }
+    };
+    Ok(Attach {
+        label: label.into(),
+        part,
+        desc: rest.into(),
     })
 }
 
-/// One BSC behind the bridge. Sub-word accesses act on the containing
-/// 32-bit register.
-struct Bridge {
-    bsc: Bcm2835Bsc,
-    irq: bool,
-    irq_raises: u64,
-    trace: bool,
-    transcript: Option<Box<dyn Write>>,
-}
-
-impl Bridge {
-    fn new(bsc: Bcm2835Bsc) -> Self {
-        Self {
-            bsc,
-            irq: false,
-            irq_raises: 0,
-            trace: false,
-            transcript: None,
-        }
-    }
-
-    fn handle(&mut self, req: Request) -> Result<Reply, String> {
-        if req.kind != MSG_HELLO && req.t_ns < self.bsc.now_ns() {
-            return Err(format!(
-                "time went backwards: {} < {}",
-                req.t_ns,
-                self.bsc.now_ns()
-            ));
-        }
-        let reg = req.offset & !3;
-        let shift = (req.offset & 3) * 8;
-        let (kind, value) = match req.kind {
-            MSG_HELLO => {
-                if req.value != PROTOCOL_VERSION {
-                    return Err(format!(
-                        "QEMU speaks protocol v{}, this bridge v{PROTOCOL_VERSION}",
-                        req.value
-                    ));
-                }
-                ("HELLO", PROTOCOL_VERSION)
-            }
-            MSG_READ => {
-                let v = (self.bsc.read_reg(req.t_ns, reg) as u64) >> shift;
-                let v = if req.size >= 4 {
-                    v
-                } else {
-                    v & ((1u64 << (req.size * 8)) - 1)
-                };
-                ("READ", v)
-            }
-            MSG_WRITE => {
-                self.bsc
-                    .write_reg(req.t_ns, reg, (req.value << shift) as u32);
-                ("WRITE", req.value)
-            }
-            MSG_SYNC => {
-                self.bsc.advance_to(req.t_ns);
-                ("SYNC", 0)
-            }
-            k => return Err(format!("unexpected message type {k}")),
+fn cmd_serve(a: &Args) -> Result<(), String> {
+    let board = load_board(a)?;
+    let dir = a
+        .socket_dir
+        .as_ref()
+        .ok_or("--socket-dir DIR is required")?;
+    let clk = a.core_clk_hz.unwrap_or(DEFAULT_CORE_CLK_HZ);
+    let mut instances: Vec<(String, Bridge)> = Vec::new();
+    for n in board.modeled() {
+        let bridge = match n.class {
+            Class::Modeled(ModelKind::Bcm2835Bsc) => Bridge::new(Bcm2835Bsc::new(clk)),
+            _ => unreachable!(),
         };
-        let irq = self.bsc.irq_pending();
-        if irq && !self.irq {
-            self.irq_raises += 1;
-        }
-        self.irq = irq;
-        let deadline = self.bsc.next_deadline().unwrap_or(NO_DEADLINE);
-        let reply = Reply {
-            value: if req.kind == MSG_WRITE { 0 } else { value },
-            irq_level: irq as u32,
-            next_deadline_ns: deadline,
-        };
-        let dl = if deadline == NO_DEADLINE {
-            "none".to_string()
-        } else {
-            deadline.to_string()
-        };
-        let line = format!(
-            "{} {} {:#04x} {:#010x} {} {}",
-            req.t_ns, kind, req.offset, value, irq as u8, dl
-        );
-        if self.trace {
-            eprintln!("[qemu-bridge] {line}");
-        }
-        if let Some(w) = self.transcript.as_mut() {
-            writeln!(w, "{line}").map_err(|e| format!("transcript: {e}"))?;
-        }
-        Ok(reply)
+        instances.push((n.label.clone(), bridge));
     }
-}
-
-fn serve(mut stream: UnixStream, bridge: &mut Bridge) -> Result<u64, String> {
-    let mut buf = [0u8; REQ_LEN];
-    let mut messages: u64 = 0;
-    loop {
-        match stream.read_exact(&mut buf) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(messages),
-            Err(e) => return Err(format!("read: {e}")),
-        }
-        messages += 1;
-        let reply = bridge.handle(Request::decode(&buf))?;
-        stream
-            .write_all(&reply.encode())
-            .map_err(|e| format!("write: {e}"))?;
+    for spec in &a.attach {
+        let at = parse_attach(spec)?;
+        let Some((_, bridge)) = instances.iter_mut().find(|(l, _)| *l == at.label) else {
+            let why = match board.by_label(&at.label) {
+                Some(n) => format!("{} is {} in the DTB", at.label, n.class.name()),
+                None => format!("no node labelled {} in the DTB", at.label),
+            };
+            return Err(format!("--attach {spec}: {why}"));
+        };
+        bridge.bsc.attach_slave(at.part);
+        eprintln!("[qemu-bridge] {}: attached {}", at.label, at.desc);
     }
-}
-
-fn main() -> ExitCode {
-    let args = match parse_args() {
-        Ok(a) => a,
-        Err(e) => {
-            eprintln!("{e}");
-            return ExitCode::from(2);
-        }
-    };
-    let mut bsc = Bcm2835Bsc::new(args.core_clk_hz);
-    if args.no_device {
-        eprintln!("[qemu-bridge] BSC with no I2C target attached (--no-device)");
-    } else {
-        bsc.attach_slave(Box::new(Bme280::new(0x76)));
-        eprintln!("[qemu-bridge] BSC with LabWired BME280 at 0x76");
+    if instances.is_empty() {
+        return Err("the DTB has no enabled node the registry can model".into());
     }
     eprintln!(
-        "[qemu-bridge] protocol v{PROTOCOL_VERSION}, core clock {} Hz",
-        args.core_clk_hz
+        "[qemu-bridge] protocol v{PROTOCOL_VERSION}, core clock {clk} Hz, {}",
+        summary(&board)
     );
-    let mut bridge = Bridge::new(bsc);
-    bridge.trace = args.trace;
-    if let Some(p) = &args.transcript {
-        match File::create(p) {
-            Ok(f) => bridge.transcript = Some(Box::new(BufWriter::new(f))),
-            Err(e) => {
-                eprintln!("transcript {}: {e}", p.display());
-                return ExitCode::FAILURE;
+    let mut handles = Vec::new();
+    for (label, mut bridge) in instances {
+        let n = board.by_label(&label).unwrap();
+        bridge.label = label.clone();
+        bridge.trace = a.trace;
+        if let Some(td) = &a.transcript_dir {
+            let p = td.join(format!("{label}.transcript"));
+            let f = File::create(&p).map_err(|e| format!("{}: {e}", p.display()))?;
+            bridge.transcript = Some(Box::new(BufWriter::new(f)));
+        }
+        let sock = socket_path(dir, &label);
+        let _ = std::fs::remove_file(&sock);
+        let listener =
+            UnixListener::bind(&sock).map_err(|e| format!("bind {}: {e}", sock.display()))?;
+        eprintln!(
+            "[qemu-bridge] {label}: {} at {:#x} SPI {:?} on {}",
+            n.path,
+            n.cpu_addr.unwrap(),
+            n.spi(),
+            sock.display()
+        );
+        handles.push(std::thread::spawn(move || -> Result<(), String> {
+            let (stream, _) = listener.accept().map_err(|e| format!("{label}: accept: {e}"))?;
+            let res = proto::serve(stream, &mut bridge);
+            if let Some(w) = bridge.transcript.as_mut() {
+                let _ = w.flush();
             }
-        }
-    }
-    let _ = std::fs::remove_file(&args.socket);
-    let listener = match UnixListener::bind(&args.socket) {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("bind {}: {e}", args.socket.display());
-            return ExitCode::FAILURE;
-        }
-    };
-    eprintln!("[qemu-bridge] listening on {}", args.socket.display());
-    let (stream, _) = match listener.accept() {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("accept: {e}");
-            return ExitCode::FAILURE;
-        }
-    };
-    eprintln!("[qemu-bridge] QEMU connected");
-    let res = serve(stream, &mut bridge);
-    if let Some(w) = bridge.transcript.as_mut() {
-        let _ = w.flush();
-    }
-    let _ = std::fs::remove_file(&args.socket);
-    match res {
-        Ok(n) => {
+            let _ = std::fs::remove_file(&sock);
+            let msgs = res.map_err(|e| format!("{label}: {e}"))?;
             eprintln!(
-                "[qemu-bridge] QEMU disconnected after {n} messages, {} IRQ raises, model time {} ns",
+                "[qemu-bridge] {label}: QEMU disconnected after {msgs} messages, {} IRQ raises, model time {} ns",
                 bridge.irq_raises,
                 bridge.bsc.now_ns()
             );
-            ExitCode::SUCCESS
-        }
-        Err(e) => {
+            Ok(())
+        }));
+    }
+    let mut first_err = None;
+    for h in handles {
+        if let Err(e) = h
+            .join()
+            .unwrap_or_else(|_| Err("instance thread panicked".into()))
+        {
             eprintln!("[qemu-bridge] {e}");
-            ExitCode::FAILURE
+            first_err.get_or_insert(e);
         }
     }
+    first_err.map_or(Ok(()), Err)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+use std::io::Write as _;
 
-    const T: u64 = 10_000;
-
-    fn bridge(with_device: bool) -> Bridge {
-        let mut bsc = Bcm2835Bsc::new(DEFAULT_CORE_CLK_HZ);
-        if with_device {
-            bsc.attach_slave(Box::new(Bme280::new(0x76)));
+fn main() -> ExitCode {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let (cmd, rest) = match argv.split_first() {
+        Some((c, r)) if !c.starts_with('-') => (c.as_str(), r),
+        _ => ("serve", argv.as_slice()),
+    };
+    if matches!(cmd, "help" | "-h" | "--help") {
+        println!("{USAGE}");
+        return ExitCode::SUCCESS;
+    }
+    let res = parse_args(rest).and_then(|a| match cmd {
+        "dt-report" => cmd_dt_report(&a),
+        "plan" => cmd_plan(&a),
+        "serve" => cmd_serve(&a),
+        other => Err(format!("unknown command {other}\n{USAGE}")),
+    });
+    match res {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("qemu-bridge: {e}");
+            ExitCode::FAILURE
         }
-        let mut b = Bridge::new(bsc);
-        w(&mut b, 0, 0x14, 3500);
-        b
-    }
-
-    fn req(kind: u32, t_ns: u64, offset: u64, value: u64) -> Request {
-        Request {
-            kind,
-            size: 4,
-            t_ns,
-            offset,
-            value,
-        }
-    }
-
-    fn w(b: &mut Bridge, t: u64, off: u64, v: u64) -> Reply {
-        b.handle(req(MSG_WRITE, t, off, v)).unwrap()
-    }
-
-    #[test]
-    fn request_roundtrip() {
-        let r = req(MSG_WRITE, 123, 0x10, 0xd0);
-        assert_eq!(Request::decode(&r.encode()), r);
-    }
-
-    #[test]
-    fn hello_checks_version() {
-        let mut b = bridge(true);
-        assert_eq!(b.handle(req(MSG_HELLO, 0, 0, 2)).unwrap().value, 2);
-        assert!(b.handle(req(MSG_HELLO, 0, 0, 1)).is_err());
-    }
-
-    #[test]
-    fn quick_write_irq_via_sync_at_deadline() {
-        let mut b = bridge(true);
-        let t0 = 5_000_000;
-        w(&mut b, t0, 0x0c, 0x76);
-        w(&mut b, t0, 0x08, 0);
-        let r = w(&mut b, t0, 0x00, 0x8000 | 0x80 | 0x200 | 0x100);
-        assert_eq!(r.irq_level, 0);
-        assert_eq!(r.next_deadline_ns, t0 + 10 * T);
-        let r = b.handle(req(MSG_SYNC, t0 + 10 * T, 0, 0)).unwrap();
-        assert_eq!((r.irq_level, r.next_deadline_ns), (0, t0 + 11 * T));
-        let r = b.handle(req(MSG_SYNC, t0 + 11 * T, 0, 0)).unwrap();
-        assert_eq!((r.irq_level, r.next_deadline_ns), (1, NO_DEADLINE));
-        assert_eq!(
-            b.handle(req(MSG_READ, t0 + 12 * T, 0x04, 0)).unwrap().value & 0x102,
-            0x002
-        );
-    }
-
-    #[test]
-    fn no_device_nacks() {
-        let mut b = bridge(false);
-        w(&mut b, 0, 0x0c, 0x76);
-        w(&mut b, 0, 0x08, 0);
-        w(&mut b, 0, 0x00, 0x8000 | 0x80 | 0x200 | 0x100);
-        let r = b.handle(req(MSG_READ, 11 * T, 0x04, 0)).unwrap();
-        assert_eq!(r.value & 0x102, 0x102, "DONE + ERR");
-        assert_eq!(r.irq_level, 1);
-    }
-
-    #[test]
-    fn time_must_not_go_backwards() {
-        let mut b = bridge(true);
-        b.handle(req(MSG_SYNC, 100, 0, 0)).unwrap();
-        assert!(b.handle(req(MSG_SYNC, 99, 0, 0)).is_err());
     }
 }
