@@ -5902,6 +5902,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#atmega4809" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        atmega4809
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#atsamd21" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -7251,6 +7262,8 @@
 <p><em>No tier-1 target. The PR-gated avr_atmega1281_firmware integration test boots the AVR-GCC image built from examples/atmega1281-io/src/main.c and asserts 1281 OK on USART0 plus PB5 high; examples/atmega1281-io/io-smoke.yaml runs the same ELF through labwired test. The exact descriptor exposes 54 GPIO pads on ports A..G and eight ADC inputs. EEPROM, USART1, Timer3 and PWM are present on silicon but not modeled or declared. No beyond-rubric behavior or physical acceptance is claimed.</em></p>
 <h3 id="atmega2561"><code>atmega2561</code></h3>
 <p><em>64-pin sibling of the ATmega2560, so no tier-1 target. The PR-gated <code>avr_atmega2561</code> test boots the committed 3-byte-PC image tests/fixtures/avr/atmega2561-io.elf and asserts <code>2561 OK</code> on the USART0 sink plus PB5 driven high; examples/atmega2561-io/io-smoke.yaml runs the same fixture through <code>labwired test</code> and is the board entry in configs/ci/boards.yml. The descriptor deliberately narrows the shared public core to this SKU: 54 GPIO on ports A..G (PG0..PG5 only), USART0 only and eight ADC inputs. EEPROM (4 KB on silicon), USART1 and Timer3 are on silicon but are not modelled/declared in this slice; ports H..L, ADC8..ADC15 and Timer4/5 are 100-pin ATmega2560 features absent from the 64-pin part; Table 2-1 lists twelve 16-bit-resolution PWM channels for the 2560 and six for the 2561. There is no beyond-rubric content and the lists below are empty.</em></p>
+<h3 id="atmega4809"><code>atmega4809</code></h3>
+<p><em>No tier-1 target. The Arduino Nano Every matrix row (validation/arduino-matrix/boards/arduino-nano-every.yaml) builds the stock ArduinoCore-megaavr sketches and runs L0, L1, L2, L5 and L7 on the model, and examples/arduino-nano-every/io-smoke.yaml runs the same Nano Every firmware through <code>labwired test</code>; both need PlatformIO and run on the nightly/main matrix, not on pull requests. TWI0, SPI0 and the TCA0/TCB waveform outputs are not modelled, so the I2C, SPI and PWM matrix cells are skipped. No beyond-rubric behavior or physical acceptance is claimed and the lists below are empty.</em></p>
 <h3 id="atsamd21"><code>atsamd21</code></h3>
 <p><em>No tier-1 target. The firmware that runs is the PR-gated <code>firmware_survival::test_atsamd21_nano33_smoke_survival</code> (step core-ci.yml:779; case firmware_survival.rs:1323): the committed Nano 33 IoT smoke ELF (tests/fixtures/atsamd21-nano33-smoke.elf, built from crates/firmware-atsamd21-demo) writes PM.APBCMASK + GCLK SERCOM5_CORE and prints <code>OK</code> on Serial1 (crates/firmware-atsamd21-demo/src/main.rs:35-41). The same demo is built and run by strict_onboarding (nightly core-full, through examples/nano-33-iot/io-smoke.yaml) and the nightly coverage-matrix cell <code>nano-33-iot</code> (core-coverage-matrix-smoke.yml:75-81, examples/nano-33-iot/uart-smoke.yaml). Beyond the rubric the descriptor declares one block, the USB window, as a zero stub that no firmware opens.</em></p>
 <p><strong>Shims</strong> (hardcoded stubs or engine-less declarative register files — not real fidelity):
