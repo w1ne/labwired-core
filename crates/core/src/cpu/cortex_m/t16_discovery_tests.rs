@@ -288,7 +288,11 @@ fn memoized_dispatch_matches_original_paths_on_repeated_entries() {
                         "{at}"
                     );
                     assert_eq!(actual_bus.ram.data, original_bus.ram.data, "{at}");
-                    assert_eq!(actual_bus.access_counts(), original_bus.access_counts(), "{at}");
+                    assert_eq!(
+                        actual_bus.access_counts(),
+                        original_bus.access_counts(),
+                        "{at}"
+                    );
                 }
             }
         }

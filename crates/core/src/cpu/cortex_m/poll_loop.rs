@@ -528,14 +528,14 @@ mod tests {
     #[test]
     fn store_first_heads_refuse_statically_and_match_a_full_probe() {
         for (code, statically) in [
-            (&[0xb510u16][..], true),             // push {r4, lr}
-            (&[0x3001, 0x6008][..], true),        // adds r0,#1; str r0,[r1]
-            (&[0x6808, 0x1c40, 0x9000][..], true), // ldr; adds; str r0,[sp]
-            (&[0x3001, 0xe7fd][..], false),       // adds; b head (a real loop)
+            (&[0xb510u16][..], true),               // push {r4, lr}
+            (&[0x3001, 0x6008][..], true),          // adds r0,#1; str r0,[r1]
+            (&[0x6808, 0x1c40, 0x9000][..], true),  // ldr; adds; str r0,[sp]
+            (&[0x3001, 0xe7fd][..], false),         // adds; b head (a real loop)
             (&[0x3001, 0xd0fd, 0x6008][..], false), // conditional branch first
-            (&[0x3001][..], false),               // runs into undecoded code
-            (&[0xbf30, 0x6008][..], false),       // WFI is not arithmetic
-            (&[0xb400][..], false),               // push {} (empty list)
+            (&[0x3001][..], false),                 // runs into undecoded code
+            (&[0xbf30, 0x6008][..], false),         // WFI is not arithmetic
+            (&[0xb400][..], false),                 // push {} (empty list)
         ] {
             let (mut cpu, bus) = cpu_with(code);
             assert_eq!(

@@ -2223,7 +2223,13 @@ impl CortexM {
         // SAFETY: `offset` is `offset_of!` of one of the `u32` fields named in
         // `REG_FIELD_OFFSETS`, so the pointer is in bounds of `*self`, aligned
         // for `u32` and derived from a reference to the whole struct.
-        unsafe { std::ptr::from_ref(self).cast::<u8>().add(offset).cast::<u32>().read() }
+        unsafe {
+            std::ptr::from_ref(self)
+                .cast::<u8>()
+                .add(offset)
+                .cast::<u32>()
+                .read()
+        }
     }
 
     /// A register operand of a 16-bit high-register `ADD`/`MOV`: PC reads as
