@@ -469,3 +469,64 @@ fn crm_timer_reset_returns_the_timer_registers_to_reset() {
         assert_eq!(b.read_u32(base + 0x2c).unwrap(), 1234);
     }
 }
+
+/// SCFG/CMP window (RM_AT32F421 V2.05 §7.2, §19.6): SCFG_EXINTCx answer at
+/// the F0 SYSCFG offsets, CMP_CTRLSTS at 0x4001_001C resets to 0x80 and keeps
+/// its fields, and what the model does not cover refuses.
+#[test]
+fn scfg_and_comparator_registers_answer_from_the_shared_window() {
+    let mut b = bus();
+    b.write_u32(0x40021018, 1).unwrap(); // CRM APB2EN SCFGCMPEN.
+    b.write_u32(0x40010014, 1 << 12).unwrap(); // EXINTC4: EXINT15 <- port B.
+    assert_eq!(b.read_u32(0x40010014).unwrap(), 1 << 12);
+    assert_eq!(b.read_u32(0x4001001c).unwrap(), 0x80, "CMP_CTRLSTS reset");
+    // AM32's cmp_enable(): read-modify-write of CMPEN.
+    let v = b.read_u32(0x4001001c).unwrap();
+    b.write_u32(0x4001001c, v | 1).unwrap();
+    assert_eq!(b.read_u32(0x4001001c).unwrap() & 0xff, 0x81);
+    assert!(
+        b.write_u32(0x4001001c, 1 | (1 << 16)).is_err(),
+        "hysteresis"
+    );
+    assert!(b.write_u32(0x40010000, 1 << 8).is_err(), "ADC DMA remap");
+    assert!(
+        b.read_u32(0x40010020).is_err(),
+        "hole between CTRLSTS and G_FILTER_EN"
+    );
+}
+
+/// The comparator compares driven pad levels and its output edge reaches
+/// EXINT line 21, which raises the shared ADC1_CMP vector (IRQ 12) on the
+/// polarity EXINT_POLCFG1/2 select.
+#[test]
+fn comparator_output_edges_raise_exint21_on_the_selected_polarity() {
+    let mut b = bus();
+    b.write_u32(0x40021018, 1).unwrap(); // CRM APB2EN SCFGCMPEN.
+    b.write_u32(0x40010400, 1 << 21).unwrap(); // EXINT_INTEN line 21.
+    b.write_u32(0x40010408, 1 << 21).unwrap(); // POLCFG1: rising.
+                                               // AM32 COMP_PA0: CMPEN, CMPINVSEL=110 (PA0), CMPNINVSEL=00 (PA5).
+    b.write_u32(0x4001001c, 0b110_0001).unwrap();
+    assert!(b.set_analog_pad_mv("PA0", 1500));
+    assert!(b.set_analog_pad_mv("PA5", 1000));
+    assert_eq!(b.read_u32(0x40010414).unwrap() & (1 << 21), 0);
+    assert!(b.set_analog_pad_mv("PA5", 1600));
+    assert_ne!(b.read_u32(0x4001001c).unwrap() & (1 << 30), 0, "CMPVALUE");
+    assert_ne!(
+        b.read_u32(0x40010414).unwrap() & (1 << 21),
+        0,
+        "EXINT21 pending"
+    );
+    let exti = b.find_peripheral_index_by_name("exti").unwrap();
+    let irqs = b.peripherals[exti]
+        .dev
+        .tick()
+        .explicit_irqs
+        .unwrap_or_default();
+    assert_eq!(irqs, vec![12], "ADC1_CMP vector");
+    b.write_u32(0x40010414, 1 << 21).unwrap(); // Clear INTSTS.
+    assert!(b.set_analog_pad_mv("PA5", 900)); // Falling: not selected.
+    assert_eq!(b.read_u32(0x40010414).unwrap() & (1 << 21), 0);
+    // Switching the inverting input to PA2 (0 mV) is itself a rising edge.
+    b.write_u32(0x4001001c, 0b111_0001).unwrap();
+    assert_ne!(b.read_u32(0x40010414).unwrap() & (1 << 21), 0);
+}
