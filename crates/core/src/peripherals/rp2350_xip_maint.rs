@@ -14,7 +14,8 @@
 //! no cache data, tag RAM or dirty line, so cleaning and invalidating have
 //! nothing to change and are accepted as the no-ops they are on a coherent
 //! backing. Pinning (op 7, cache-as-SRAM) and the reserved ops 4..6 are
-//! refused, as are reads (the window is write-only).
+//! refused. The datasheet defines the window by its writes; a read performs
+//! no maintenance and returns 0 here (the read data is not specified).
 
 use crate::{Peripheral, SimResult, SimulationError};
 
@@ -57,16 +58,12 @@ impl Peripheral for Rp2350XipMaintenance {
         false
     }
 
-    fn read(&self, offset: u64) -> SimResult<u8> {
-        Err(refuse(format!(
-            "read at {offset:#x}: the window is write-only"
-        )))
+    fn read(&self, _offset: u64) -> SimResult<u8> {
+        Ok(0)
     }
 
-    fn read_u32(&self, offset: u64) -> SimResult<u32> {
-        Err(refuse(format!(
-            "read at {offset:#x}: the window is write-only"
-        )))
+    fn read_u32(&self, _offset: u64) -> SimResult<u32> {
+        Ok(0)
     }
 
     fn write(&mut self, offset: u64, _value: u8) -> SimResult<()> {
@@ -82,7 +79,7 @@ impl Peripheral for Rp2350XipMaintenance {
     }
 
     fn peek(&self, _offset: u64) -> Option<u8> {
-        None
+        Some(0)
     }
 
     fn snapshot(&self) -> serde_json::Value {
@@ -115,6 +112,7 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("reserved"));
-        assert!(m.read_u32(0).is_err());
+        assert_eq!(m.read_u32(0).unwrap(), 0, "a read performs no operation");
+        assert_eq!(m.ops, [1, 1, 1, 0]);
     }
 }
