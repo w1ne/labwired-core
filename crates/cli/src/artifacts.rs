@@ -322,6 +322,25 @@ pub(crate) struct ExecutionMetrics {
     /// polling at the end. Omitted unless the run ended in such a poll.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stalled_poll: Option<StalledPoll>,
+    /// A run that hit its step budget parked in a loop that loads a word
+    /// from the first bytes of the address space, i.e. through a NULL
+    /// pointer. Omitted otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stalled_null_read: Option<StalledNullRead>,
+}
+
+/// A step-budget run that ended in a loop reading through a NULL pointer: the
+/// shape of `while (!(hspi->Instance->SR & SPI_SR_TXE));` with a driver handle
+/// whose `Instance` was never set. The loop reads the vector table, not a
+/// peripheral, so no status bit it waits on can ever change.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct StalledNullRead {
+    /// PC the core was parked at.
+    pub pc: String,
+    /// The address the loop loads, e.g. `0x00000008` (NULL + 0x08).
+    pub address: String,
+    /// One sentence for a reader.
+    pub detail: String,
 }
 
 /// A step-budget run that ended inside a wait loop on one peripheral register:
@@ -335,6 +354,22 @@ pub(crate) struct StalledPoll {
     pub offset: u64,
     /// Consecutive accesses to that register.
     pub accesses: u64,
+    /// Register name, when the peripheral model or its debug schema names
+    /// the offset (e.g. `SR`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub register: Option<String>,
+    /// The register value the model holds at the end of the run, when it
+    /// answers a side-effect-free peek.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<u32>,
+    /// `true` when the peripheral is clock-gated at the end of the run: every
+    /// read returned 0 without reaching the model.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clock_gated: bool,
+    /// One sentence naming the register and the state of its one-bit flags,
+    /// e.g. `spi1 SR (0x08) reads 0x00000000: RXNE=0 TXE=0 ...`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 /// One hot PC from statistical sampling during the test loop.
