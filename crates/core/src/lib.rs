@@ -1554,6 +1554,11 @@ impl<C: Cpu> Machine<C> {
         let Some((_, cycles)) = sec.poll_loop_skip_budget(&self.bus, limit) else {
             return false;
         };
+        // The primary runs beside a deferral and could read a store's
+        // intermediate value.
+        if sec.poll_loop_plan_stores() {
+            return false;
+        }
         // The step that raises CCOMPARE0 (the `edge`-th from now) runs live.
         let len = edge.map_or(cycles, |edge| cycles.min(edge.saturating_sub(1)));
         if len < 2 {
@@ -1704,6 +1709,19 @@ impl<C: Cpu> Machine<C> {
                 }
                 _ => None,
             };
+            // A loop that stores is a fixed point only on its own: a second
+            // core running beside it could read an intermediate value.
+            let primary_stores = primary_spin.is_some() && self.cpu.poll_loop_plan_stores();
+            let secondary_stores = secondary_spin.is_some()
+                && self
+                    .cpu_secondary
+                    .as_ref()
+                    .is_some_and(|sec| sec.poll_loop_plan_stores());
+            if (primary_stores && (secondary_spin.is_some() || deferred_end.is_some()))
+                || (secondary_stores && primary_spin.is_some())
+            {
+                return 0;
+            }
             let spinning =
                 primary_spin.is_some() || secondary_spin.is_some() || deferred_end.is_some();
             let mut budget = match (wfi_budget, primary_spin) {

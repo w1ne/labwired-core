@@ -3484,6 +3484,10 @@ impl Cpu for CortexM {
         self.poll_fast_forward(cycles)
     }
 
+    fn poll_loop_plan_stores(&self) -> bool {
+        self.poll_plan_stores()
+    }
+
     fn stalled_loop_loads(&mut self, bus: &dyn Bus) -> Option<Vec<u64>> {
         self.stalled_loads(bus)
     }

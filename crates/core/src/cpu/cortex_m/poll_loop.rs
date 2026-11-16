@@ -25,14 +25,30 @@
 //! read-only view of plain memory ([`ProbeBus`]). It is refused when:
 //! - an exception is pending or active state changes, or the core is asleep,
 //!   in an IT block, or has a fault or lockup latched;
-//! - any access is not a read of plain RAM/flash (stores and MMIO are
-//!   refused: a store would change memory, and a device read can change or
+//! - any load is not a read of plain RAM/flash (a device read can change or
 //!   have side effects);
+//! - any store is not a bare write to plain RAM nothing watches
+//!   ([`Bus::plain_ram_store_unobserved`]): MMIO, flash, a debug watch, a
+//!   memory observer, a memory policy or an armed batch stop;
 //! - it does not come back to the head within [`MAX_PERIOD`] instructions;
-//! - the architectural state it comes back with differs from the start.
+//! - the architectural state it comes back with differs from the start, or
+//!   a byte it stored differs from what memory held before it.
+//!
+//! Stores go to an overlay the probe's own loads read through, never to
+//! memory. RTOS idle loops (mbed's `rtos_idle_loop` -> `default_idle_hook`)
+//! call functions and enter and leave a critical section on every iteration:
+//! they push the same return addresses to the same stack slots and set a
+//! nesting counter to 1 and back to 0. Each iteration rewrites exactly the
+//! bytes memory already holds, so it is a fixed point of registers and
+//! memory together. A loop whose stores leave memory different (an idle
+//! counter, any affine or other progression) is refused.
 //!
 //! Then the iteration is a fixed point: nothing it reads changes until
-//! something outside the core writes memory or raises an interrupt. The
+//! something outside the core writes memory or raises an interrupt. Its
+//! intermediate stores are seen by nobody: every other memory reader (a
+//! peripheral event, DMA, the other core) runs only at the window's ends,
+//! where memory holds what it held at the start; the machine refuses the
+//! skip while another core runs beside a loop that stores. The
 //! machine's skip is bounded by the next CPU-interrupt, scheduler, motor and
 //! resident-edge deadline, and refused while a legacy per-cycle peripheral
 //! walk runs, so nothing does within the skip. The machine skips a whole
@@ -40,7 +56,6 @@
 //! the interrupt lands on the same instruction as it would without the skip.
 
 use super::{AccessWidth, CortexM};
-use crate::decoder::arm::Instruction;
 use crate::{Bus, DmaRequest, SimResult, SimulationConfig, SimulationError};
 
 /// Longest iteration, in instructions, the probe follows.
@@ -69,8 +84,9 @@ pub(crate) struct PollDetector {
     /// it got)`. A loop often has two heads (its own back-edge and a call's
     /// return), so one slot per head.
     refused: [(u32, u32, u32); 4],
-    /// The last proven loop, as `(head, period)`.
-    plan: Option<(u32, u64)>,
+    /// The last proven loop, as `(head, period, stores)`; `stores` is true
+    /// when an iteration writes memory (with the values it already holds).
+    plan: Option<(u32, u64, bool)>,
 }
 
 /// Everything an iteration could change in the core, compared before and
@@ -169,14 +185,21 @@ impl ArchState {
     }
 }
 
-/// A read-only view of plain memory: reads are served from the slices
-/// [`Bus::plain_memory_slice`] exposes (RAM and flash); every other access,
-/// and every write, is refused.
+/// A side-effect-free view of plain memory: reads are served from the
+/// slices [`Bus::plain_memory_slice`] exposes (RAM and flash), through the
+/// overlay of bytes stored so far; stores to unobserved plain RAM go to that
+/// overlay when allowed. Every other access is refused.
 struct ProbeBus<'a> {
     inner: &'a dyn Bus,
     /// When set, every served load address is appended (diagnosis only).
     loads: Option<&'a std::cell::RefCell<Vec<u64>>>,
+    /// Bytes stored so far, in store order, as `(address, byte)`. `None`:
+    /// every store is refused.
+    stores: Option<Vec<(u64, u8)>>,
 }
+
+/// Most bytes one probed iteration may store.
+const MAX_STORED_BYTES: usize = 256;
 
 /// The diagnosis probe also serves loads below this address through the bus
 /// (the boot alias of flash is not a plain slice on every chip): on Cortex-M
@@ -210,10 +233,64 @@ impl ProbeBus<'_> {
         if let Some(loads) = self.loads {
             loads.borrow_mut().push(addr);
         }
-        Ok(bytes
+        let mut v = bytes
             .iter()
             .enumerate()
-            .fold(0u32, |v, (i, b)| v | (u32::from(*b) << (8 * i))))
+            .fold(0u32, |v, (i, b)| v | (u32::from(*b) << (8 * i)));
+        // Later stores win: apply them in order.
+        for &(a, b) in self.stores.iter().flatten() {
+            if a >= addr && a < addr + size as u64 {
+                let shift = 8 * (a - addr) as u32;
+                v = (v & !(0xff << shift)) | (u32::from(b) << shift);
+            }
+        }
+        Ok(v)
+    }
+
+    fn store(&mut self, addr: u64, size: usize, value: u32) -> SimResult<()> {
+        let refuse = Err(SimulationError::MemoryViolation(addr));
+        let Some(stores) = self.stores.as_ref() else {
+            return refuse;
+        };
+        if stores.len() + size > MAX_STORED_BYTES
+            || !self.inner.plain_ram_store_unobserved(addr, size as u64)
+        {
+            return refuse;
+        }
+        // The overlay is read back through the plain slice: it must cover
+        // the stored bytes.
+        match self.inner.plain_memory_slice(addr) {
+            Some((start, end, _)) if addr >= start && addr + size as u64 <= end => {}
+            _ => return refuse,
+        }
+        let stores = self.stores.as_mut().expect("checked above");
+        for i in 0..size {
+            stores.push((addr + i as u64, (value >> (8 * i)) as u8));
+        }
+        Ok(())
+    }
+
+    /// True when every byte stored ends holding what memory holds: the
+    /// iteration left memory as it found it.
+    fn stores_rewrite_memory(&self) -> bool {
+        let Some(stores) = self.stores.as_ref() else {
+            return true;
+        };
+        stores.iter().enumerate().all(|(i, &(addr, _))| {
+            // Only the last store to a byte decides what it ends holding.
+            if stores[i + 1..].iter().any(|&(a, _)| a == addr) {
+                return true;
+            }
+            let last = stores[i].1;
+            self.inner
+                .plain_memory_slice(addr)
+                .and_then(|(start, _, slice)| slice.get((addr - start) as usize).copied())
+                == Some(last)
+        })
+    }
+
+    fn stored_any(&self) -> bool {
+        self.stores.as_ref().is_some_and(|s| !s.is_empty())
     }
 }
 
@@ -227,14 +304,14 @@ impl Bus for ProbeBus<'_> {
     fn read_u32(&self, addr: u64) -> SimResult<u32> {
         self.plain_read(addr, 4)
     }
-    fn write_u8(&mut self, addr: u64, _value: u8) -> SimResult<()> {
-        Err(SimulationError::MemoryViolation(addr))
+    fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
+        self.store(addr, 1, u32::from(value))
     }
-    fn write_u16(&mut self, addr: u64, _value: u16) -> SimResult<()> {
-        Err(SimulationError::MemoryViolation(addr))
+    fn write_u16(&mut self, addr: u64, value: u16) -> SimResult<()> {
+        self.store(addr, 2, u32::from(value))
     }
-    fn write_u32(&mut self, addr: u64, _value: u32) -> SimResult<()> {
-        Err(SimulationError::MemoryViolation(addr))
+    fn write_u32(&mut self, addr: u64, value: u32) -> SimResult<()> {
+        self.store(addr, 4, value)
     }
     fn write_u64(&mut self, addr: u64, _value: u64) -> SimResult<()> {
         Err(SimulationError::MemoryViolation(addr))
@@ -314,7 +391,7 @@ impl CortexM {
             self.refuse(head, false);
             return None;
         }
-        let period = match self.probe_fixed_point(bus, head) {
+        let (period, stores) = match self.probe_fixed_point(bus, head) {
             Some(p) => p,
             None => {
                 self.refuse(head, true);
@@ -330,7 +407,7 @@ impl CortexM {
         if let Some(slot) = self.poll.refused.iter_mut().find(|(h, _, _)| *h == head) {
             *slot = (0, 0, 0);
         }
-        self.poll.plan = Some((head, period));
+        self.poll.plan = Some((head, period, stores));
         Some((period, cycles))
     }
 
@@ -370,13 +447,19 @@ impl CortexM {
     pub(super) fn poll_fast_forward(&mut self, cycles: u64) -> bool {
         matches!(
             self.poll.plan.take(),
-            Some((head, period)) if head == self.pc && cycles % period == 0
+            Some((head, period, _)) if head == self.pc && cycles % period == 0
         )
     }
 
-    /// The skip's proof: [`Self::probe_iteration`], refused outright while an
-    /// exception is pending.
-    fn probe_fixed_point(&mut self, bus: &dyn Bus, head: u32) -> Option<u64> {
+    /// See [`crate::Cpu::poll_loop_plan_stores`].
+    pub(super) fn poll_plan_stores(&self) -> bool {
+        self.poll.plan.is_some_and(|(_, _, stores)| stores)
+    }
+
+    /// The skip's proof: [`Self::probe_iteration`] with stores allowed,
+    /// refused outright while an exception is pending. Returns the period and
+    /// whether an iteration stores.
+    fn probe_fixed_point(&mut self, bus: &dyn Bus, head: u32) -> Option<(u64, bool)> {
         if self.any_exception_pending() {
             return None;
         }
@@ -390,58 +473,26 @@ impl CortexM {
     pub(super) fn stalled_loads(&mut self, bus: &dyn Bus) -> Option<Vec<u64>> {
         let loads = std::cell::RefCell::new(Vec::new());
         let head = self.pc;
-        self.probe_iteration(bus, head, Some(&loads), false)?;
+        // Diagnosis keeps its read-only proof: a stall report names the
+        // words a loop waits on, and a loop that stores is not waiting.
+        let (_, stored) = self.probe_iteration(bus, head, Some(&loads), false)?;
+        debug_assert!(!stored);
         Some(loads.into_inner())
     }
 
-    /// True when the probe from `head` must refuse without running it: the
-    /// already-decoded code from `head` is straight-line register arithmetic
-    /// and plain loads that ends in a store, and the probe bus refuses every
-    /// store. The probe could only stop earlier by refusing too (a refused
-    /// load or fetch), never come back to `head`, and with every instruction
-    /// on the way already decoded it would not touch the decode cache. Most
-    /// refused heads are function entries (`push {.., lr}`), so this skips
-    /// the state save/restore for them.
-    fn probe_reaches_store_unconditionally(&self, head: u32) -> bool {
-        if self.trace_insn {
-            return false;
-        }
-        let mut pc = head;
-        for _ in 0..16 {
-            let Some(entry) = self.decode_cache[((pc >> 1) & 0x0fff) as usize].as_ref() else {
-                return false;
-            };
-            if entry.tag != pc || entry.pc_increment != 2 {
-                return false;
-            }
-            match entry.instruction {
-                Instruction::Push { registers, m } => return registers != 0 || m,
-                Instruction::StrImm { .. }
-                | Instruction::StrReg { .. }
-                | Instruction::StrSp { .. }
-                | Instruction::StrbImm { .. }
-                | Instruction::StrbReg { .. }
-                | Instruction::StrhImm { .. }
-                | Instruction::StrhReg { .. } => return true,
-                Instruction::Branch { .. } | Instruction::BranchCond { .. } => return false,
-                op if Self::t16_block_op_supported(op) => {}
-                _ => return false,
-            }
-            pc = pc.wrapping_add(2);
-        }
-        false
-    }
-
-    /// Run one iteration from `head` on a read-only view of plain memory and
-    /// return its length when it comes back to `head` in the state it left.
-    /// `strict` also refuses when an exception becomes pending on the way.
+    /// Run one iteration from `head` on a side-effect-free view of plain
+    /// memory and return its length, and whether it stored, when it comes
+    /// back to `head` with the core and memory in the state it left them.
+    /// Stores are allowed (into an overlay) unless `loads` is set
+    /// (diagnosis). `strict` also refuses when an exception becomes pending
+    /// on the way.
     fn probe_iteration(
         &mut self,
         bus: &dyn Bus,
         head: u32,
         loads: Option<&std::cell::RefCell<Vec<u64>>>,
         strict: bool,
-    ) -> Option<u64> {
+    ) -> Option<(u64, bool)> {
         if self.sleeping
             || self.waiting_for_event
             || self.it_state != 0
@@ -455,18 +506,19 @@ impl CortexM {
         {
             return None;
         }
-        if loads.is_none() && self.probe_reaches_store_unconditionally(head) {
-            return None;
-        }
         let before = ArchState::capture(self);
-        let mut probe = ProbeBus { inner: bus, loads };
-        let config = bus.config().clone();
+        let mut probe = ProbeBus {
+            inner: bus,
+            loads,
+            stores: loads.is_none().then(Vec::new),
+        };
+        let config = bus.config();
         let mut period = None;
         for n in 1..=MAX_PERIOD {
             // `step_execute`, not `step_internal`: a refused access must end
             // the probe, never escalate into a fault (which would write the
             // SCB fault registers the bus shares).
-            if self.step_execute(&mut probe, &[], &config).is_err()
+            if self.step_execute(&mut probe, &[], config).is_err()
                 || (strict && self.any_exception_pending())
                 || self.active_exception != before.active_exception
                 || self.fault_entry.is_some()
@@ -483,7 +535,9 @@ impl CortexM {
                 break;
             }
         }
-        let same = ArchState::capture(self) == before;
+        let same =
+            period.is_some() && ArchState::capture(self) == before && probe.stores_rewrite_memory();
+        let stored = probe.stored_any();
         before.restore(self);
         // A refused probe may have latched a fault or a pending flag on the
         // way out; none of that happened, so clear it.
@@ -493,7 +547,7 @@ impl CortexM {
         self.pending_mem_manage = None;
         self.pending_undef_instruction = false;
         self.pending_div0 = false;
-        period.filter(|_| same)
+        period.filter(|_| same).map(|p| (p, stored))
     }
 }
 
@@ -503,7 +557,7 @@ mod tests {
     use crate::bus::SystemBus;
     use crate::cpu::cortex_m::DecodeCacheEntry;
     use crate::decoder::arm::decode_thumb_16;
-    use crate::Cpu;
+    use crate::{Cpu, SimulationConfig};
 
     fn cpu_with(code: &[u16]) -> (CortexM, SystemBus) {
         let mut cpu = CortexM::new();
@@ -525,33 +579,173 @@ mod tests {
         (cpu, bus)
     }
 
-    #[test]
-    fn store_first_heads_refuse_statically_and_match_a_full_probe() {
-        for (code, statically) in [
-            (&[0xb510u16][..], true),               // push {r4, lr}
-            (&[0x3001, 0x6008][..], true),          // adds r0,#1; str r0,[r1]
-            (&[0x6808, 0x1c40, 0x9000][..], true),  // ldr; adds; str r0,[sp]
-            (&[0x3001, 0xe7fd][..], false),         // adds; b head (a real loop)
-            (&[0x3001, 0xd0fd, 0x6008][..], false), // conditional branch first
-            (&[0x3001][..], false),                 // runs into undecoded code
-            (&[0xbf30, 0x6008][..], false),         // WFI is not arithmetic
-            (&[0xb400][..], false),                 // push {} (empty list)
-        ] {
-            let (mut cpu, bus) = cpu_with(code);
-            assert_eq!(
-                cpu.probe_reaches_store_unconditionally(0x100),
-                statically,
-                "{code:x?}"
-            );
-            if statically {
-                // The full probe (diagnosis mode skips the shortcut) refuses too
-                // and leaves the core as it found it.
-                let before = serde_json::to_value(cpu.snapshot()).unwrap();
-                let loads = std::cell::RefCell::new(Vec::new());
-                assert_eq!(cpu.probe_iteration(&bus, 0x100, Some(&loads), true), None);
-                assert_eq!(cpu.probe_iteration(&bus, 0x100, None, true), None);
-                assert_eq!(serde_json::to_value(cpu.snapshot()).unwrap(), before);
-            }
+    /// Thumb `b` from the `k`-th halfword back to the head at 0x100.
+    fn b_head(k: u16) -> u16 {
+        0xe000 | ((0u16.wrapping_sub(k + 2)) & 0x7ff)
+    }
+
+    const RAM: u32 = 0x2000_0100;
+    const MMIO: u32 = 0x4000_C000;
+
+    fn snapshot(cpu: &CortexM) -> serde_json::Value {
+        serde_json::to_value(cpu.snapshot()).unwrap()
+    }
+
+    fn ram_word(bus: &SystemBus, addr: u32) -> u32 {
+        bus.ram.read_u32(u64::from(addr)).unwrap()
+    }
+
+    /// Probe in skip mode; asserts the probe changed neither core nor memory.
+    fn probe(cpu: &mut CortexM, bus: &SystemBus) -> Option<(u64, bool)> {
+        let core = snapshot(cpu);
+        let mem = bus.ram.data.clone();
+        let got = cpu.probe_iteration(bus, 0x100, None, true);
+        assert_eq!(snapshot(cpu), core, "the probe must restore the core");
+        assert!(bus.ram.data == mem, "the probe must never write memory");
+        got
+    }
+
+    /// Run one real iteration (`n` instructions) on the bus.
+    fn run(cpu: &mut CortexM, bus: &mut SystemBus, n: u64) {
+        let config = SimulationConfig::default();
+        for _ in 0..n {
+            cpu.step(bus, &[], &config).unwrap();
         }
+        assert_eq!(cpu.pc, 0x100);
+    }
+
+    #[test]
+    fn accepts_a_read_only_poll_loop() {
+        // ldr r0,[r1]; b head
+        let (mut cpu, bus) = cpu_with(&[0x6808, b_head(1)]);
+        assert_eq!(probe(&mut cpu, &bus), Some((2, false)));
+    }
+
+    #[test]
+    fn accepts_a_loop_whose_stores_rewrite_memory() {
+        // The mbed idle loop's shape: enter a critical section (nesting
+        // counter 0 -> 1, PRIMASK set), leave it (1 -> 0, PRIMASK clear).
+        // cpsid i; ldr r0,[r1]; adds r0,#1; str r0,[r1];
+        // subs r0,#1; str r0,[r1]; cpsie i; b head
+        let code = [
+            0xb672,
+            0x6808,
+            0x3001,
+            0x6008,
+            0x3801,
+            0x6008,
+            0xb662,
+            b_head(7),
+        ];
+        let (mut cpu, mut bus) = cpu_with(&code);
+        // `subs` leaves Z and C set: the first iteration changes xPSR.
+        assert_eq!(probe(&mut cpu, &bus), None);
+        run(&mut cpu, &mut bus, 8);
+        assert_eq!(probe(&mut cpu, &bus), Some((8, true)));
+        // N real iterations leave the core where it started.
+        let before = snapshot(&cpu);
+        run(&mut cpu, &mut bus, 8 * 3);
+        assert_eq!(snapshot(&cpu), before);
+        assert_eq!(ram_word(&bus, RAM), 0);
+    }
+
+    #[test]
+    fn accepts_a_call_loop_once_its_stack_slots_hold_what_it_pushes() {
+        // push {r4, lr}; pop {r4, pc} with lr = head: the stack slots below
+        // SP get r4 and lr. The first iteration changes them (refused); from
+        // the second on, every push rewrites what is there.
+        let (mut cpu, mut bus) = cpu_with(&[0xb510, 0xbd10]);
+        cpu.lr = 0x101;
+        cpu.r4 = 0x1234_5678;
+        assert_eq!(probe(&mut cpu, &bus), None);
+        run(&mut cpu, &mut bus, 2);
+        assert_eq!(ram_word(&bus, 0x2000_03f8), 0x1234_5678);
+        assert_eq!(probe(&mut cpu, &bus), Some((2, true)));
+    }
+
+    #[test]
+    fn refuses_mmio_reads() {
+        // ldr r0,[r2]; b head, r2 in a peripheral window
+        let (mut cpu, bus) = cpu_with(&[0x6810, b_head(1)]);
+        cpu.r2 = MMIO;
+        assert_eq!(probe(&mut cpu, &bus), None);
+    }
+
+    #[test]
+    fn refuses_observable_stores() {
+        // str r0,[r2]; b head: to a peripheral, to flash, and to RAM that
+        // memory already holds but a debug watch or an observer sees.
+        for (addr, watch, observe) in [
+            (MMIO, false, false),
+            (0x200, false, false),
+            (RAM, true, false),
+            (RAM, false, true),
+            (RAM, false, false),
+        ] {
+            let (mut cpu, mut bus) = cpu_with(&[0x6010, b_head(1)]);
+            cpu.r2 = addr;
+            if watch {
+                assert!(bus.add_debug_watch(u64::from(RAM), 4, false, true));
+            }
+            if observe {
+                bus.add_observer(std::sync::Arc::new(
+                    crate::metrics::PerformanceMetrics::new(),
+                ));
+            }
+            let plain = addr == RAM && !watch && !observe;
+            let want = plain.then_some((2, true));
+            assert_eq!(probe(&mut cpu, &bus), want, "{addr:#x} {watch} {observe}");
+        }
+    }
+
+    #[test]
+    fn refuses_a_store_the_batch_stop_watches() {
+        let (mut cpu, bus) = cpu_with(&[0x6008, b_head(1)]);
+        bus.batch_stop.arm(&[(u64::from(RAM), u64::from(RAM) + 4)]);
+        assert_eq!(probe(&mut cpu, &bus), None);
+    }
+
+    #[test]
+    fn refuses_counters() {
+        // adds r0,#1; b head: a register counter.
+        let (mut cpu, bus) = cpu_with(&[0x3001, b_head(1)]);
+        assert_eq!(probe(&mut cpu, &bus), None);
+        // ldr r0,[r1]; adds r0,#1; str r0,[r1]; movs r0,#0; b head: an idle
+        // counter in memory, registers back where they were.
+        let (mut cpu, bus) = cpu_with(&[0x6808, 0x3001, 0x6008, 0x2000, b_head(4)]);
+        assert_eq!(probe(&mut cpu, &bus), None);
+        // A store that toggles a flag: each iteration flips it.
+        // ldr r0,[r1]; movs r2,#1; eors r0,r2; str r0,[r1]; movs r0,#0;
+        // movs r2,#0; b head
+        let (mut cpu, bus) = cpu_with(&[0x6808, 0x2201, 0x4050, 0x6008, 0x2000, 0x2200, b_head(6)]);
+        assert_eq!(probe(&mut cpu, &bus), None);
+    }
+
+    #[test]
+    fn diagnosis_still_refuses_stores() {
+        let (mut cpu, mut bus) = cpu_with(&[0x6008, b_head(1)]);
+        assert_eq!(probe(&mut cpu, &bus), Some((2, true)));
+        assert_eq!(cpu.stalled_loads(&mut bus), None);
+    }
+
+    #[test]
+    fn skip_plan_records_stores_and_fast_forward_applies_it() {
+        let code = [
+            0xb672,
+            0x6808,
+            0x3001,
+            0x6008,
+            0x3801,
+            0x6008,
+            0xb662,
+            b_head(7),
+        ];
+        let (mut cpu, mut bus) = cpu_with(&code);
+        run(&mut cpu, &mut bus, 8);
+        cpu.poll.anchor = Some(0x100);
+        assert_eq!(cpu.poll_skip_budget(&bus, 1000), Some((8, 1000 / 8 * 8)));
+        assert!(cpu.poll_plan_stores());
+        assert!(cpu.poll_fast_forward(800));
+        assert!(!cpu.poll_plan_stores());
     }
 }
