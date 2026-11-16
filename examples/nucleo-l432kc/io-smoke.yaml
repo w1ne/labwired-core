@@ -1,0 +1,11 @@
+# Native L432KC Thumb/Cortex-M4 ELF exercises RCC, GPIOA/GPIOB and USART2.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/board-smoke/stm32l432kc.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 150000
+assertions:
+  - uart_contains: "STM32L432KC_OK"
+  - gpio_edges: { pin: "gpiob:3", min_edges: 4 }
+  - expected_stop_reason: max_steps
