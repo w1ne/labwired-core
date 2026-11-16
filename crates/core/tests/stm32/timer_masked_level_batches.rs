@@ -84,11 +84,15 @@ fn masked_machine_with_held_update() -> Machine<CortexM> {
     m
 }
 
-/// The parked chain is a scheduler concept; the walk lane re-pends per tick.
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn a_masked_held_level_does_not_pin_the_quantum_to_one_instruction() {
     let mut m = masked_machine_with_held_update();
+    // The parked chain is a scheduler concept: a walk-driven timer (feature
+    // off) re-pends on every walk tick by design and is not what this pins.
+    let tim2 = m.bus.find_peripheral_index_by_name("tim2").unwrap();
+    if !m.bus.peripherals[tim2].dev.uses_scheduler() {
+        return;
+    }
     let report = m.advance(AdvanceRequest::run(Some(100_000))).unwrap();
     assert_eq!(report.fuel_consumed, 100_000);
     let width = report.fuel_consumed as f64 / report.cpu_batches.max(1) as f64;
