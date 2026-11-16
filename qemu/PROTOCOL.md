@@ -1,46 +1,82 @@
-# LabWired MMIO bridge protocol
+# LabWired MMIO bridge protocol, version 2
 
 QEMU's `labwired-mmio-bridge` device (`patches/0001-labwired-mmio-bridge.patch`)
 connects as a client to a unix stream socket. The LabWired side
 (`crates/qemu-bridge`) listens on it and owns the peripheral model.
 
-## Message
+## Time
 
-Every message is 24 bytes, little-endian, no padding:
+QEMU is the only clock. Every request carries `t_ns`, the
+`QEMU_CLOCK_VIRTUAL` time at which QEMU sends it. Before LabWired handles a
+request it advances its model to `t_ns`; it never runs ahead of the time it
+was given. `t_ns` never decreases; LabWired closes the connection if it does.
 
-| bytes | field    | meaning                                    |
-|-------|----------|--------------------------------------------|
-| 0..4  | `type`   | message type (table below)                 |
-| 4..8  | `size`   | access size in bytes (1, 2, 4, 8)          |
-| 8..16 | `offset` | byte offset inside the bridged MMIO window |
-| 16..24| `value`  | data (write value, read result, IRQ level) |
+Run QEMU with `-icount shift=N,sleep=off,align=off`. The virtual clock is
+then a function of the guest instruction count, and a run is repeatable to
+the nanosecond. Without `-icount` the protocol still works, but virtual time
+follows the host clock and two runs differ.
 
-| type | name  | direction      | fields used                  |
-|------|-------|----------------|------------------------------|
-| 1    | READ  | QEMU → LabWired| size, offset                 |
-| 2    | WRITE | QEMU → LabWired| size, offset, value          |
-| 3    | REPLY | LabWired → QEMU| value (read result)          |
-| 4    | ACK   | LabWired → QEMU| none                         |
-| 5    | IRQ   | LabWired → QEMU| value: 0 = low, else high    |
+## Exchanges
 
-## Rules
+QEMU starts every exchange. Each request gets exactly one reply. LabWired
+never sends anything unsolicited.
 
-- One access in flight. A guest load sends READ and blocks the vCPU until
-  REPLY arrives; a guest store sends WRITE and blocks until ACK.
-- IRQ messages may arrive at any time: before the REPLY/ACK of an access
-  (the QEMU side applies them in order while it waits), or between accesses
-  (a main-loop fd handler applies them). IRQ is a level, not an edge.
-- The LabWired side sends IRQ only when the level changes. In this spike the
-  BSC model changes its level only as a result of an access, so IRQ always
-  precedes the REPLY/ACK of that access.
-- QEMU applies IRQ by driving GIC SPI input `irq` (device property) of the
-  single `arm_gic` in the machine.
-- If the socket closes, QEMU exits with an error.
+Request, QEMU → LabWired, 32 bytes, little-endian:
+
+| bytes  | field    | meaning                                          |
+|--------|----------|--------------------------------------------------|
+| 0..4   | `type`   | 0 HELLO, 1 READ, 2 WRITE, 3 SYNC                 |
+| 4..8   | `size`   | access size in bytes (1, 2, 4, 8); 0 otherwise   |
+| 8..16  | `t_ns`   | QEMU_CLOCK_VIRTUAL time, ns                      |
+| 16..24 | `offset` | byte offset in the bridged MMIO window           |
+| 24..32 | `value`  | WRITE: data. HELLO: protocol version (2)         |
+
+Reply, LabWired → QEMU, 24 bytes, little-endian:
+
+| bytes  | field              | meaning                                       |
+|--------|--------------------|-----------------------------------------------|
+| 0..8   | `value`            | READ: register value. HELLO: version. Else 0  |
+| 8..12  | `irq_level`        | level of the interrupt line after the request |
+| 12..16 | reserved           | 0                                             |
+| 16..24 | `next_deadline_ns` | next model state change; `u64::MAX` = none    |
+
+| type  | when QEMU sends it                              |
+|-------|-------------------------------------------------|
+| HELLO | once, when the device realizes. Version check. |
+| READ  | guest load in the window. The vCPU waits.       |
+| WRITE | guest store in the window. The vCPU waits.      |
+| SYNC  | the deadline timer fired                        |
+
+After every reply except HELLO, QEMU:
+
+1. drives the GIC SPI input `irq` (device property) to `irq_level`;
+2. arms its single `QEMU_CLOCK_VIRTUAL` timer at `next_deadline_ns`, or
+   deletes it if the value is `u64::MAX`.
+
+When the timer fires, QEMU sends SYNC at the current virtual time and
+applies its reply. This is how a model event that no guest access observes
+(for example DONE at the end of an I²C transfer) raises the interrupt at the
+right virtual time. Under `-icount` the timer fires exactly at the deadline.
+
+## Transcript
+
+`qemu-bridge --transcript FILE` writes one line per request:
+
+```
+<t_ns> <HELLO|READ|WRITE|SYNC> <offset> <value> <irq_level> <next_deadline_ns|none>
+```
+
+`value` is the read result for READ and the written data for WRITE.
+
+## Changes from version 1
+
+- Every request carries `t_ns`; SYNC is new.
+- Replies carry `irq_level` and `next_deadline_ns`.
+- The asynchronous IRQ message and the main-loop fd handler are gone.
+- HELLO checks the version.
 
 ## Not in this version
 
-- TODO: time sync. The model has no notion of guest time. Every transfer
-  completes inside the access that starts it; DIV/DEL/CLKT are stored only.
-  A real co-simulation needs a clock message (QEMU virtual time → model) and
-  model-scheduled events (model → QEMU timer).
-- No DMA, no multiple windows per socket, no versioning/handshake.
+- One MMIO window and one IRQ line per socket.
+- No DMA.
+- No snapshot/migration of the model state.
