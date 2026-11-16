@@ -51,14 +51,15 @@ pub(super) const ADDR_EICRB: u16 = 0x6A;
 pub(super) const ADDR_PCMSK0: u16 = 0x6B;
 pub(super) const ADDR_PCMSK2: u16 = 0x6D;
 
-/// Native vector numbers of INT2..INT7 sit at `pending_irq` bit
-/// `NATIVE_BASE + vector`.
-pub(super) const NATIVE_BASE: u32 = 32;
+/// Native vector numbers of INT2..INT7 (4..9) sit at `pending_irq` bit
+/// `NATIVE_BASE + vector` (58..63). Bits 32..57 carry the vectors that only
+/// exist on the mega (Timer3/4/5, USART1..3) at their own slot numbers.
+pub(super) const NATIVE_BASE: u32 = 54;
 /// Native vector number of INT0 (Table 14-1); INTn is `VEC_NATIVE_INT0 + n`.
 const VEC_NATIVE_INT0: u32 = 2;
 /// `pending_irq` bits this module owns.
 const LOW_MASK: u64 = 0b111_1100; // INT0, INT1, PCINT0..2 (328P numbering)
-const HIGH_MASK: u64 = 0x3F << (NATIVE_BASE + VEC_NATIVE_INT0 + 2); // INT2..7
+pub(super) const HIGH_MASK: u64 = 0x3F << (NATIVE_BASE + VEC_NATIVE_INT0 + 2); // INT2..7
 
 /// Watched ports, in `MegaExt::last` order.
 const PINB: u16 = 0x23;
@@ -248,7 +249,7 @@ impl Avr {
     /// INT1 (vectors 2 and 3) come before them. Returns the native vector
     /// number, with its pending bit and `INTFn` cleared.
     pub(super) fn mega_take_native_irq(&mut self) -> Option<u32> {
-        let high = self.pending_irq >> NATIVE_BASE;
+        let high = (self.pending_irq & HIGH_MASK) >> NATIVE_BASE;
         if high == 0 || self.pending_irq & (0b11 << VEC_INT0) != 0 {
             return None;
         }
