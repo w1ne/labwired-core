@@ -1,4 +1,4 @@
-[2m2026-11-16T03:02:58.867998Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/miv-board-additional-uarts.yaml
-[2m2026-11-16T03:02:58.869314Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x60000000
+[2m2026-11-16T04:28:22.864528Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/miv-board-additional-uarts.yaml
+[2m2026-11-16T04:28:22.865981Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x60000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
-PASS  5/5 checks · miv-board-additional-uarts-smoke · 100000 steps · 0.05s
+PASS  5/5 checks · miv-board-additional-uarts-smoke · 100000 steps · 0.03s

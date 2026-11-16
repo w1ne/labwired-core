@@ -45,7 +45,9 @@
           "clint msip masked pending=1 released=1 traps=00000000 ok",
           "plic timer0 prio_fixed=1 threshold_fixed=1 raw=1 pending=1 disabled_low=1 meip=1 traps=00000000 ok",
           "plic timer0 mcause=8000000b count=00000001 claim=0000001e timer_cleared=1 pending_clear=1 reclaim=00000000 meip_low=1 ok",
-          "plic timer1 raw=1 meip=1 claim=0000001f claimed_low=1 reclaim=00000000 traps=00000000 ok"
+          "plic timer1 raw=1 meip=1 claim=0000001f claimed_low=1 reclaim=00000000 traps=00000000 ok",
+          "gpio outputs out=00000001 irq=00000001 plic_pending=00000000 ok",
+          "plic gpio_in in=00000008 irq=00000008 pending=1 disabled_low=1 meip=1 claim=0000001d latch_cleared=1 meip_low=1 reclaim=00000000 traps=00000000 ok"
         ]
       },
       "passed": true
@@ -61,27 +63,27 @@
     "type": "risc_v",
     "registers": [
       0,
-      1610628408,
-      2214592448,
+      1610632772,
+      2214592432,
       2147485696,
       0,
       1,
       2147483652,
       1,
-      31,
-      0,
+      8,
+      8,
       1879052288,
       10,
       1,
       1879052288,
       5,
-      2147483648,
+      79,
       2048,
       8,
+      29,
       0,
-      5,
+      0,
       1879052288,
-      0,
       1075838976,
       0,
       0,
@@ -93,13 +95,13 @@
       0,
       0
     ],
-    "pc": 1610628672,
+    "pc": 1610633064,
     "mstatus": 6272,
     "mie": 0,
     "mip": 0,
     "mtvec": 1610613492,
     "mscratch": 0,
-    "mepc": 1610624236,
+    "mepc": 1610624244,
     "mcause": 2147483659,
     "mtval": 0,
     "mtime": 99997,
@@ -129,7 +131,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "651d7a4cc5e138b38dd396fe302ec87507f639b43bf03f2c1a22a6b75858d454",
+  "firmware_hash": "2cad6ba463382c66e73d01743539682e2bce9eb45a1d4f1c5799617db57f6ec3",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-miv-rv32-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/miv_rv32.yaml",
@@ -141,6 +143,20 @@
         "name": "uart",
         "kind": "native",
         "base": 1879052288,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio_in",
+        "kind": "native",
+        "base": 1879056384,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio_out",
+        "kind": "native",
+        "base": 1879068672,
         "registers": [],
         "artifacts": []
       },
@@ -231,20 +247,32 @@
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
+      },
+      {
+        "text": "gpio outputs out=00000001 irq=00000001 plic_pending=00000000 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "plic gpio_in in=00000008 irq=00000008 pending=1 disabled_low=1 meip=1 claim=0000001d latch_cleared=1 meip_low=1 reclaim=00000000 traps=00000000 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 16104,
+    "text_bytes": 20496,
     "data_bytes": 0,
     "bss_bytes": 67108864,
-    "flash_used_bytes": 16104,
+    "flash_used_bytes": 20496,
     "ram_static_bytes": 67108864,
     "flash_total_bytes": 262144,
     "ram_total_bytes": 67108864,
-    "flash_used_pct": 6.14,
+    "flash_used_pct": 7.82,
     "ram_static_pct": 100.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -260,13 +288,13 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 420,
-    "memory_writes": 53,
-    "peripheral_accesses": 1283,
+    "memory_reads": 426,
+    "memory_writes": 63,
+    "peripheral_accesses": 1719,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1610628672,
+        "pc": 1610633064,
         "count": 390,
         "symbol": "main"
       }

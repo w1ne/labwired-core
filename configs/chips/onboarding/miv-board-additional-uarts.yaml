@@ -1,9 +1,10 @@
 # Bounded profile based on Renode's miv.repl plus miv-board-additional-uarts.repl.
 # The smoke exercises the RV32 Mi-V CPU, memory, three model-backed CoreUART
-# instances, CLINT, PLIC and CoreTimers.
+# instances, CLINT, PLIC, CoreTimers and the two CoreGPIO blocks.
 # The core decodes the miv.repl CLINT (0x44000000, mtime at the 66 MHz CPU
 # clock) and PLIC (0x40000000, sources 1..31, no priority levels) by chip
-# name; CoreTimer0/1 drive PLIC sources 30/31. GPIO is omitted.
+# name; CoreTimer0/1 drive PLIC sources 30/31, gpioInputs drives source 29;
+# gpioOutputs has no interrupt source (miv.repl).
 # Renode maps: https://github.com/renode/renode/blob/master/platforms/cpus/miv.repl
 # Additional UARTs: https://github.com/renode/renode/blob/master/platforms/boards/miv-board-additional-uarts.repl
 name: miv-board-additional-uarts
@@ -27,6 +28,15 @@ peripherals:
     type: miv_coreuart
     base_address: 0x70009000
     size: 24B
+  - id: gpio_in
+    type: miv_coregpio
+    base_address: 0x70002000
+    size: 164B
+    irq: 29
+  - id: gpio_out
+    type: miv_coregpio
+    base_address: 0x70005000
+    size: 164B
   - id: timer0
     type: miv_coretimer
     base_address: 0x70003000

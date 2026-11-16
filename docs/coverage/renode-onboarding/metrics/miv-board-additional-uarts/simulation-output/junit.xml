@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.053404">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.032685">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="e3a32cb9877206d2d8bd44170a21f2ad2d27af54e3976161872b51fa6ca3b5a3"/>
+    <property name="firmware_hash" value="0c9fc089734f83f5d991d42c68d70e833463118c2346cb7de4717c1ce897ecf3"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.053404">
+  <testcase classname="labwired" name="run" time="0.032685">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: MIV RV32 SMOKE" time="0.000000">
   </testcase>

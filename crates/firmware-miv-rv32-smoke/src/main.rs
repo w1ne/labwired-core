@@ -12,8 +12,11 @@
 //! while `mstatus.MIE` is clear. The PLIC probes check the fixed priority 1
 //! (`prioritiesEnabled: false` in Renode's miv.repl), CoreTimer0 latching
 //! source 30 with its enable clear, the MEI trap with claim/complete, and a
-//! polled claim of CoreTimer1's source 31. The smoke does not claim GPIO, DDR
-//! initialization, or a boot-ROM path.
+//! polled claim of CoreTimer1's source 31. The GPIO probes check that
+//! gpioOutputs drives its output register with no PLIC source, and that a
+//! looped-back rising edge on gpioInputs pin 3 pends PLIC source 29 and is
+//! claimed by polling. The smoke does not claim DDR initialization or a
+//! boot-ROM path.
 
 #![no_std]
 #![no_main]
@@ -503,6 +506,123 @@ fn plic_timer1_poll_probe() -> bool {
     pass
 }
 
+const GPIO_IN_BASE: usize = 0x7000_2000;
+const GPIO_OUT_BASE: usize = 0x7000_5000;
+const GPIO_IN_SOURCE: u32 = 29;
+const GPIO_IRQ: usize = 0x80;
+const GPIO_INPUT: usize = 0x90;
+const GPIO_OUTPUT: usize = 0xA0;
+/// CoreGPIO CONFIG_X: OUTREG | INREG | OUTBUFF | INTENABLE, INTTYPE rising.
+const GPIO_CFG_LOOPBACK_RISE: u32 = 0b0100_1111;
+
+fn gpio_reg(base: usize, offset: usize) -> *mut u32 {
+    (base + offset) as *mut u32
+}
+
+/// gpioOutputs (0x70005000) drives its output register and has no PLIC
+/// source: a pin with a level-high interrupt enabled pends nothing.
+fn gpio_outputs_probe() -> bool {
+    reset_trap_record();
+    let (driven, status, pending) = unsafe {
+        core::ptr::write_volatile(PLIC_ENABLE, 0);
+        core::ptr::write_volatile(gpio_reg(GPIO_OUT_BASE, 0), 0b0000_1111);
+        core::ptr::write_volatile(gpio_reg(GPIO_OUT_BASE, GPIO_OUTPUT), 1);
+        let driven = core::ptr::read_volatile(gpio_reg(GPIO_OUT_BASE, GPIO_OUTPUT));
+        let status = core::ptr::read_volatile(gpio_reg(GPIO_OUT_BASE, GPIO_IRQ));
+        let mut pending = 0;
+        for _ in 0..200 {
+            pending |= core::ptr::read_volatile(PLIC_PENDING);
+        }
+        core::ptr::write_volatile(gpio_reg(GPIO_OUT_BASE, 0), 0);
+        (driven, status, pending)
+    };
+    let (count, _, _) = trap_record();
+    let pass = driven == 1 && status == 1 && pending == 0 && count == 0;
+    puts("gpio outputs out=");
+    put_hex32(driven);
+    puts(" irq=");
+    put_hex32(status);
+    puts(" plic_pending=");
+    put_hex32(pending);
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
+/// gpioInputs (0x70002000) drives PLIC source 29. Pin 3 is looped back
+/// (output buffer on) with a rising-edge interrupt: driving it high latches
+/// its IRQ bit, pends source 29 with its enable clear and raises MEIP once
+/// enabled. A polled claim returns 29; clearing the latch before the
+/// complete leaves nothing to re-pend.
+fn gpio_inputs_plic_probe() -> bool {
+    reset_trap_record();
+    let (input, status, pending, disabled_low, meip, claim, cleared, meip_low, reclaim) = unsafe {
+        core::ptr::write_volatile(PLIC_ENABLE, 0);
+        core::ptr::write_volatile(gpio_reg(GPIO_IN_BASE, GPIO_OUTPUT), 0);
+        core::ptr::write_volatile(gpio_reg(GPIO_IN_BASE, 3 * 4), GPIO_CFG_LOOPBACK_RISE);
+        core::ptr::write_volatile(gpio_reg(GPIO_IN_BASE, GPIO_IRQ), u32::MAX);
+        core::ptr::write_volatile(gpio_reg(GPIO_IN_BASE, GPIO_OUTPUT), 1 << 3);
+        let input = core::ptr::read_volatile(gpio_reg(GPIO_IN_BASE, GPIO_INPUT));
+        let status = core::ptr::read_volatile(gpio_reg(GPIO_IN_BASE, GPIO_IRQ));
+        let mut pending = false;
+        for _ in 0..1000 {
+            if core::ptr::read_volatile(PLIC_PENDING) & (1 << GPIO_IN_SOURCE) != 0 {
+                pending = true;
+                break;
+            }
+        }
+        let disabled_low = read_mip() & MIP_MEIP == 0;
+        core::ptr::write_volatile(PLIC_ENABLE, 1 << GPIO_IN_SOURCE);
+        let meip = wait_meip(true, 1000);
+        let claim = core::ptr::read_volatile(PLIC_CLAIM);
+        core::ptr::write_volatile(gpio_reg(GPIO_IN_BASE, GPIO_IRQ), 1 << 3);
+        let cleared = core::ptr::read_volatile(gpio_reg(GPIO_IN_BASE, GPIO_IRQ)) == 0;
+        core::ptr::write_volatile(PLIC_CLAIM, claim);
+        let meip_low = wait_meip(false, 1000);
+        let reclaim = core::ptr::read_volatile(PLIC_CLAIM);
+        core::ptr::write_volatile(PLIC_ENABLE, 0);
+        core::ptr::write_volatile(gpio_reg(GPIO_IN_BASE, 3 * 4), 0);
+        (
+            input,
+            status,
+            pending,
+            disabled_low,
+            meip,
+            claim,
+            cleared,
+            meip_low,
+            reclaim,
+        )
+    };
+    let (count, _, _) = trap_record();
+    let pass = input & (1 << 3) != 0
+        && status == 1 << 3
+        && pending
+        && disabled_low
+        && meip
+        && claim == GPIO_IN_SOURCE
+        && cleared
+        && meip_low
+        && reclaim == 0
+        && count == 0;
+    puts("plic gpio_in in=");
+    put_hex32(input);
+    puts(" irq=");
+    put_hex32(status);
+    flag(" pending=", pending);
+    flag(" disabled_low=", disabled_low);
+    flag(" meip=", meip);
+    puts(" claim=");
+    put_hex32(claim);
+    flag(" latch_cleared=", cleared);
+    flag(" meip_low=", meip_low);
+    puts(" reclaim=");
+    put_hex32(reclaim);
+    puts(" traps=");
+    put_hex32(count);
+    puts(if pass { " ok\n" } else { " FAIL\n" });
+    pass
+}
+
 #[inline(never)]
 fn multiply(left: u32, right: u32) -> u32 {
     let result: u32;
@@ -533,6 +653,8 @@ fn main() -> ! {
     let _plic_masked_pass = plic_timer0_masked_probe();
     let _plic_trap_pass = plic_timer0_trap_probe();
     let _plic_poll_pass = plic_timer1_poll_probe();
+    let _gpio_out_pass = gpio_outputs_probe();
+    let _gpio_in_pass = gpio_inputs_plic_probe();
 
     #[cfg(feature = "additional-uarts")]
     {
