@@ -15,6 +15,10 @@
   ],
   "firmware_release": "firmware-demos-v3",
   "chips": {
+    "ch32l103c8t6": {
+      "how": "needs-build",
+      "why": "New CH32L103 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
     "ch32v003f4p6": {
       "how": "committed",
       "firmware": "tests/fixtures/ch32v003f4p6-uart-hello.elf",
@@ -36,6 +40,10 @@
     "ch32v005f6p6": {
       "how": "needs-build",
       "why": "New CH32V005 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
+    "ch32x035c8t6": {
+      "how": "needs-build",
+      "why": "New CH32X035 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
     },
     "ch32v006k8u6": {
       "how": "needs-build",

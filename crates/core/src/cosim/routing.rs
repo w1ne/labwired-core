@@ -1316,20 +1316,20 @@ impl SignalRouter {
                     } else {
                         0.0
                     };
-                    signals.insert(path.clone(), CosimSignalValue::F64(volts));
+                    put_signal(signals, path, CosimSignalValue::F64(volts));
                 }
                 continue;
             }
             if let ReadBinding::MotorPhaseBackEmf { motor, phase } = *binding {
                 if let Some(volts) = bus.circuit_bldc_phase_back_emf_v(motor, phase) {
-                    signals.insert(path.clone(), CosimSignalValue::F64(volts));
+                    put_signal(signals, path, CosimSignalValue::F64(volts));
                 }
                 continue;
             }
             if let ReadBinding::MotorBackEmf { motor } = *binding {
                 // Absent, not 0 V, if the motor cannot answer.
                 if let Some(volts) = bus.circuit_motor_back_emf_v(motor) {
-                    signals.insert(path.clone(), CosimSignalValue::F64(volts));
+                    put_signal(signals, path, CosimSignalValue::F64(volts));
                 }
                 continue;
             }
@@ -1364,7 +1364,7 @@ impl SignalRouter {
                 | ReadBinding::PadVolts { .. } => None,
             };
             if let Some(level) = level {
-                signals.insert(path.clone(), CosimSignalValue::Bool(level));
+                put_signal(signals, path, CosimSignalValue::Bool(level));
             }
         }
     }
@@ -1581,6 +1581,16 @@ impl SignalRouter {
         }
         bus.flush_ina219_circuit(time_ns);
         errors
+    }
+}
+
+/// Store `value` under `path`, allocating the key only the first time.
+fn put_signal(signals: &mut CosimSignals, path: &str, value: CosimSignalValue) {
+    match signals.get_mut(path) {
+        Some(slot) => *slot = value,
+        None => {
+            signals.insert(path.to_string(), value);
+        }
     }
 }
 
@@ -2120,6 +2130,14 @@ impl CosimSession {
     /// The lockstep granularity, in nanoseconds (the finest model `step_ns`).
     pub fn step_ns(&self) -> u64 {
         self.step_ns
+    }
+
+    /// Whether [`CosimAdvance::routed`] is filled in. On by default; a caller
+    /// that never reads it (the CLI run loop without debug logging) turns it
+    /// off to take the per-step report off the hot path. The signal store and
+    /// every routed pin are unaffected.
+    pub fn set_record_routed(&mut self, record: bool) {
+        self.runner.set_record_routed(record);
     }
 
     /// The signal store, for inspection after a step.

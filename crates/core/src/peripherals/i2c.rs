@@ -1632,6 +1632,23 @@ impl KinetisI2c {
     fn irq_level(&self) -> bool {
         (self.s.get() & KI_S_IICIF) != 0 && (self.c1 & KI_C1_IICIE) != 0
     }
+    /// Whether the level-check chain still has anything to observe.
+    ///
+    /// With IICIE clear nothing can pend. With IICIE set the level is
+    /// `IICIF & IICIE`, and IICIF changes only by (a) an MMIO write, which
+    /// re-arms a stopped chain through `take_scheduled_events`, or (b) a `&self`
+    /// read of `D` that completes a byte, which cannot arm anything. (b) is
+    /// possible only while `is_reading` or `rx_dummy_pending` is set, so the
+    /// chain keeps polling every cycle then. With IICIF latched it pends the
+    /// own IRQ every cycle until firmware clears it. Otherwise (IICIE set on
+    /// an idle bus: no read transfer, IICIF clear) every cycle's poll is a
+    /// no-op and the chain stops until the next write.
+    #[inline]
+    fn needs_level_poll(&self) -> bool {
+        (self.c1 & KI_C1_IICIE) != 0
+            && (self.irq_level() || self.is_reading || self.rx_dummy_pending.get())
+    }
+
     /// Mark a byte transfer complete: TCF + IICIF latch; RXAK mirrors the slave ack.
     fn byte_complete(&self, acked: bool) {
         let mut s = self.s.get() | KI_S_TCF | KI_S_IICIF;
@@ -2842,11 +2859,11 @@ impl crate::Peripheral for I2c {
                 // at delay 1 while IICIE stays set so a byte completion latched by
                 // a `&self` read is caught the next cycle; stop when firmware
                 // disables IICIE.
-                let iicie = (i.c1 & KI_C1_IICIE) != 0;
-                i.chain_live = iicie;
+                let keep = i.needs_level_poll();
+                i.chain_live = keep;
                 crate::sched::EventResult {
                     raise_own_irq: i.irq_level(),
-                    reschedule_delay: iicie.then_some(1),
+                    reschedule_delay: keep.then_some(1),
                     ..Default::default()
                 }
             }
