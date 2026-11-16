@@ -39,6 +39,7 @@ pub mod adapter;
 pub mod device;
 pub mod mna;
 pub mod netlist;
+mod numparam;
 pub mod trace;
 
 pub use adapter::{AnalogConfig, AnalogCosimAdapter, Probe};

@@ -230,12 +230,9 @@ D1 k 0 DMOD
     #[test]
     fn subckt_constructs_outside_the_flattener_are_refused() {
         let unsupported = [
-            // numparam: defaults would silently ignore the caller's value.
-            ".subckt R2 a b params: r=1k\nR1 a b 1k\n.ends\nX1 n 0 R2\nV1 n 0 1\n",
-            ".subckt R2 a b\nR1 a b 1k\n.ends\nX1 n 0 R2 r=2k\nV1 n 0 1\n",
             // Nested definitions and other directives inside a body.
             ".subckt A a b\n.subckt B c d\nR1 c d 1\n.ends\n.ends\n",
-            ".subckt A a b\n.param r=1\nR1 a b 1\n.ends\n",
+            ".subckt A a b\n.ic v(a)=1\nR1 a b 1\n.ends\n",
         ];
         for text in unsupported {
             let err = parse_netlist(text).expect_err(text);

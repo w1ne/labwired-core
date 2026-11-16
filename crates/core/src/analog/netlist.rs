@@ -6,7 +6,7 @@
 //!
 //! The subset is deliberately small, because everything in it has to stay
 //! deterministic in the browser with no dependencies. Unsupported elements
-//! and circuit constructs such as subcircuits, model libraries, and AC/DC
+//! and circuit constructs such as model libraries (`.include`, `.lib`), and AC/DC
 //! sweeps are not approximated or silently dropped: they are a hard error that
 //! names the line and points at the ngspice adapter, which supports a much
 //! larger SPICE subset.
@@ -15,8 +15,17 @@
 //! between them skipped, so a vendor model card split over many lines reads
 //! as one card. A `.subckt <name> <port> ...` … `.ends` definition built from
 //! the elements below is flattened at each `X` call that names it, with
-//! ngspice's names (`R.X1.R1`, node `X1.mid`). Subcircuit parameters and
-//! nested definitions are refused.
+//! ngspice's names (`R.X1.R1`, node `X1.mid`). Nested definitions are
+//! refused.
+//!
+//! `.param <name>=<value> ...` and `{expression}` values follow ngspice's
+//! numparam: global `.param` lines resolve in dependency order, a `.subckt`
+//! line may declare `params:` defaults that a call overrides with
+//! `<name>=<value>`, a body may hold its own `.param` lines, and a body sees
+//! the parameters of the call that placed it. Every `{...}` is replaced by
+//! its number before the line is parsed; the expression subset is listed in
+//! `numparam.rs`. A `.model` inside a body that uses that body's parameters
+//! is refused, because ngspice gives each instance its own card.
 //!
 //! ## Elements
 //!
@@ -3282,6 +3291,38 @@ struct SubcircuitDef {
     local_models: Vec<String>,
     /// Lower-cased names of the elements declared in the body.
     local_elements: Vec<String>,
+    /// `params:` defaults on the `.subckt` line, as written.
+    params: Vec<(String, String)>,
+    /// `.param` lines inside the body, as written, with their line.
+    local_params: Vec<(String, String, usize)>,
+}
+
+/// Positional tokens of a `.subckt` or `X` line after `skip` tokens: up to
+/// `params:` or the first `name=value` (including `name = value`).
+fn positional_count(tokens: &[&str], skip: usize) -> usize {
+    let mut count = 0;
+    for (index, token) in tokens.iter().enumerate().skip(skip) {
+        if token.contains('=')
+            || token.eq_ignore_ascii_case("params:")
+            || tokens
+                .get(index + 1)
+                .is_some_and(|next| next.starts_with('='))
+        {
+            break;
+        }
+        count += 1;
+    }
+    count
+}
+
+/// The `name=value` text after the positional tokens, `params:` dropped.
+fn parameter_text(tokens: &[&str], from: usize) -> String {
+    let rest = tokens.get(from..).unwrap_or(&[]);
+    let rest = match rest.first() {
+        Some(first) if first.eq_ignore_ascii_case("params:") => &rest[1..],
+        _ => rest,
+    };
+    rest.join(" ")
 }
 
 /// Lower-cased directive name of a line, if it is a directive.
@@ -3293,13 +3334,9 @@ fn directive_of(text: &str) -> Option<String> {
 }
 
 /// Positional tokens of an `X` line: the element name excluded, everything
-/// before the first `key=value` token.
+/// before `params:` or the first `key=value` token.
 fn positional_call_tokens<'a>(tokens: &[&'a str]) -> Vec<&'a str> {
-    tokens[1..]
-        .iter()
-        .copied()
-        .take_while(|token| !token.contains('='))
-        .collect()
+    tokens[1..1 + positional_count(tokens, 1)].to_vec()
 }
 
 /// Flatten every `.subckt` call into the primitives the engine solves.
@@ -3314,10 +3351,19 @@ fn positional_call_tokens<'a>(tokens: &[&'a str]) -> Vec<&'a str> {
 /// names and `K` inductor names that name an element of the same body follow
 /// the element's new name.
 ///
-/// What is NOT flattened is refused by name rather than approximated:
-/// subcircuit parameters (`params:` or `key=value` on the `.subckt` or call
-/// line), nested `.subckt` definitions, and any directive in a body other
-/// than `.model`.
+/// Parameters follow ngspice's numparam (see [`super::numparam`]). Top-level
+/// `.param` lines form the global scope, resolved in dependency order. A call
+/// evaluates its `name=value` overrides in the caller's scope; the
+/// `.subckt` line's `params:` defaults and the body's `.param` lines are then
+/// evaluated on top of the caller's scope, which is ngspice's dynamic
+/// scoping: a nested subcircuit sees the parameters of the call that placed
+/// it. Every `{expr}` is replaced by its number before the line is parsed,
+/// so the solver never sees a parameter.
+///
+/// What is NOT flattened is refused by name rather than approximated: a
+/// `.model` inside a body that uses that subcircuit's parameters (ngspice
+/// makes one card per instance), nested `.subckt` definitions, and any
+/// directive in a body other than `.model` and `.param`.
 fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, AnalogError> {
     let err = |line: &LogicalLine, message: String| AnalogError::Parse {
         line: line.number,
@@ -3329,9 +3375,13 @@ fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, Analo
         text: line.text.clone(),
     };
 
-    // Pass 1: lift the definitions out; keep everything else in order.
+    // Pass 1: lift the definitions and the global `.param` lines out; keep
+    // everything else in order.
     let mut defs: BTreeMap<String, SubcircuitDef> = BTreeMap::new();
     let mut top: Vec<LogicalLine> = Vec::new();
+    let mut global_params: Vec<(String, String, usize)> = Vec::new();
+    // Index in `top` of each hoisted local `.model`, with its subcircuit.
+    let mut hoisted: Vec<(usize, String)> = Vec::new();
     let mut lines = lines.into_iter();
     let mut in_control = false;
     while let Some(line) = lines.next() {
@@ -3349,26 +3399,39 @@ fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, Analo
             Some("ends") => {
                 return Err(err(&line, "`.ends` without a `.subckt`".into()));
             }
+            Some("param") => {
+                let text = line
+                    .text
+                    .split_once(char::is_whitespace)
+                    .map_or("", |p| p.1);
+                let pairs = super::numparam::assignments(text).map_err(|m| err(&line, m))?;
+                if pairs.is_empty() {
+                    return Err(err(&line, "expected `.param <name>=<value> ...`".into()));
+                }
+                global_params.extend(pairs.into_iter().map(|(n, v)| (n, v, line.number)));
+            }
             Some("subckt") => {
                 let tokens: Vec<&str> = line.text.split_whitespace().collect();
                 if tokens.len() < 2 {
                     return Err(err(&line, "expected `.subckt <name> <port> ...`".into()));
                 }
-                if tokens[2..]
-                    .iter()
-                    .any(|t| t.contains('=') || t.eq_ignore_ascii_case("params:"))
-                {
-                    // Parameterised subcircuits need ngspice's numparam
-                    // expression evaluator; substituting defaults would
-                    // silently ignore the caller's values.
-                    return Err(unsupported(&line));
+                let port_count = positional_count(&tokens, 2);
+                let params = super::numparam::assignments(&parameter_text(&tokens, 2 + port_count))
+                    .map_err(|m| err(&line, m))?;
+                for (index, (param, _)) in params.iter().enumerate() {
+                    if params[..index].iter().any(|(other, _)| other == param) {
+                        return Err(err(&line, format!("parameter `{param}` is listed twice")));
+                    }
                 }
                 let name = tokens[1].to_string();
                 let key = name.to_ascii_lowercase();
                 if defs.contains_key(&key) {
                     return Err(err(&line, format!("`.subckt {name}` is declared twice")));
                 }
-                let ports: Vec<String> = tokens[2..].iter().map(|t| t.to_string()).collect();
+                let ports: Vec<String> = tokens[2..2 + port_count]
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect();
                 for (index, port) in ports.iter().enumerate() {
                     if ports[..index].iter().any(|p| p.eq_ignore_ascii_case(port)) {
                         return Err(err(&line, format!("port `{port}` is listed twice")));
@@ -3380,6 +3443,7 @@ fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, Analo
                 let mut body = Vec::new();
                 let mut local_models = Vec::new();
                 let mut local_elements = Vec::new();
+                let mut local_params = Vec::new();
                 let mut closed = false;
                 for inner in lines.by_ref() {
                     match directive_of(&inner.text).as_deref() {
@@ -3396,10 +3460,27 @@ fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, Analo
                             // Hoisted once per definition, under the local
                             // name, whether or not anything calls it.
                             let rest: Vec<&str> = parts.collect();
+                            hoisted.push((top.len(), key.clone()));
                             top.push(LogicalLine {
                                 number: inner.number,
                                 text: format!(".model {name}.{model} {}", rest.join(" ")),
                             });
+                        }
+                        Some("param") => {
+                            let text = inner
+                                .text
+                                .split_once(char::is_whitespace)
+                                .map_or("", |p| p.1);
+                            let pairs =
+                                super::numparam::assignments(text).map_err(|m| err(&inner, m))?;
+                            if pairs.is_empty() {
+                                return Err(err(
+                                    &inner,
+                                    "expected `.param <name>=<value> ...`".into(),
+                                ));
+                            }
+                            local_params
+                                .extend(pairs.into_iter().map(|(n, v)| (n, v, inner.number)));
                         }
                         Some("end") => {
                             return Err(err(&inner, format!("`.end` inside `.subckt {name}`")));
@@ -3423,14 +3504,36 @@ fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, Analo
                         body,
                         local_models,
                         local_elements,
+                        params,
+                        local_params,
                     },
                 );
             }
             _ => top.push(line),
         }
     }
-    if defs.is_empty() {
-        return Ok(top);
+
+    let global = resolve_params(&super::numparam::Scope::new(), Vec::new(), &global_params)?;
+    // A local card is hoisted once, so it can only use global parameters.
+    for (index, subckt) in &hoisted {
+        let line = &top[*index];
+        let def = &defs[subckt];
+        if let Err(super::numparam::EvalError::Unknown(name)) =
+            super::numparam::substitute(&line.text, &global)
+        {
+            if def.params.iter().any(|(param, _)| *param == name)
+                || def.local_params.iter().any(|(param, _, _)| *param == name)
+            {
+                return Err(err(
+                    line,
+                    format!(
+                        "this `.model` in `.subckt {}` uses its parameter `{name}`; \
+                         per-instance model cards are outside the flattener",
+                        def.name
+                    ),
+                ));
+            }
+        }
     }
 
     // Every top-level card name, for the `Q` substrate-or-model question.
@@ -3441,7 +3544,8 @@ fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, Analo
         .map(str::to_ascii_lowercase)
         .collect();
 
-    // Pass 2: replace every top-level call with its flattened body.
+    // Pass 2: replace every `{expr}` with its value and every top-level call
+    // with its flattened body.
     let mut out = Vec::with_capacity(top.len());
     let mut in_control = false;
     for line in top {
@@ -3451,6 +3555,11 @@ fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, Analo
             out.push(line);
             continue;
         }
+        let line = LogicalLine {
+            text: super::numparam::substitute(&line.text, &global)
+                .map_err(|e| err(&line, e.message()))?,
+            number: line.number,
+        };
         let tokens: Vec<&str> = line.text.split_whitespace().collect();
         let is_call = tokens[0].len() > 1
             && tokens[0].starts_with(['X', 'x'])
@@ -3469,6 +3578,7 @@ fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, Analo
         expand_call(
             &defs,
             &global_models,
+            &global,
             &line,
             tokens[0],
             &actuals,
@@ -3477,6 +3587,37 @@ fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, Analo
         )?;
     }
     Ok(out)
+}
+
+/// Resolve `fixed` and the written `params` on top of `base`, pointing an
+/// error at the line of the parameter it names.
+fn resolve_params(
+    base: &super::numparam::Scope,
+    fixed: Vec<(String, f64)>,
+    params: &[(String, String, usize)],
+) -> Result<super::numparam::Scope, AnalogError> {
+    use super::numparam::Pending;
+    let mut pending: Vec<(String, Pending)> = fixed
+        .into_iter()
+        .map(|(name, value)| (name, Pending::Fixed(value)))
+        .collect();
+    pending.extend(
+        params
+            .iter()
+            .map(|(name, value, _)| (name.clone(), Pending::Expression(value.clone()))),
+    );
+    super::numparam::resolve(base, pending).map_err(|message| {
+        let line = params
+            .iter()
+            .find(|(name, _, _)| message.contains(&format!("`{name}`")))
+            .or(params.first())
+            .map_or(0, |(_, _, line)| *line);
+        AnalogError::Parse {
+            line,
+            text: String::new(),
+            message,
+        }
+    })
 }
 
 /// The element letter of a name, as written.
@@ -3489,9 +3630,11 @@ fn first_char(name: &str) -> &str {
 /// Emit the flattened body of one call. `path` is the instance path (`X1`,
 /// `X1.X2`); `actuals` are the call's node tokens followed by the subcircuit
 /// name.
+#[allow(clippy::too_many_arguments)]
 fn expand_call(
     defs: &BTreeMap<String, SubcircuitDef>,
     global_models: &[String],
+    caller_scope: &super::numparam::Scope,
     call: &LogicalLine,
     path: &str,
     actuals: &[String],
@@ -3503,24 +3646,42 @@ fn expand_call(
         text: call.text.clone(),
         message,
     };
-    if call
-        .text
-        .split_whitespace()
-        .skip(1)
-        .any(|t| t.contains('='))
-    {
-        // Instance parameters on a subcircuit call are numparam.
-        return Err(AnalogError::Unsupported {
-            line: call.number,
-            text: call.text.clone(),
-        });
-    }
     let (subckt, nodes) = actuals.split_last().expect("a call names its subcircuit");
     let key = subckt.to_ascii_lowercase();
     let def = &defs[&key];
     if stack.contains(&key) {
         return Err(err(format!("subcircuit `{}` calls itself", def.name)));
     }
+
+    // The call's overrides, in the caller's scope; then the defaults it does
+    // not override and the body's `.param` lines, on top of the caller's
+    // scope.
+    let call_tokens: Vec<&str> = call.text.split_whitespace().collect();
+    let overrides = super::numparam::assignments(&parameter_text(
+        &call_tokens,
+        1 + positional_count(&call_tokens, 1),
+    ))
+    .map_err(err)?;
+    let mut fixed = Vec::new();
+    for (name, value) in &overrides {
+        if !def.params.iter().any(|(param, _)| param == name) {
+            return Err(err(format!(
+                "`.subckt {}` has no parameter `{name}`",
+                def.name
+            )));
+        }
+        let value = super::numparam::evaluate_value(value, caller_scope)
+            .map_err(|e| err(format!("`{name}`: {}", e.message())))?;
+        fixed.push((name.clone(), value));
+    }
+    let defaults: Vec<(String, String, usize)> = def
+        .params
+        .iter()
+        .filter(|(name, _)| !fixed.iter().any(|(given, _)| given == name))
+        .map(|(name, value)| (name.clone(), value.clone(), call.number))
+        .collect();
+    let params = resolve_params(caller_scope, fixed, &defaults)?;
+    let scope = resolve_params(&params, Vec::new(), &def.local_params)?;
     if nodes.len() != def.ports.len() {
         return Err(err(format!(
             "`{}` connects {} nodes but `.subckt {}` has {} ports",
@@ -3564,7 +3725,13 @@ fn expand_call(
     };
 
     for line in &def.body {
-        let tokens: Vec<&str> = line.text.split_whitespace().collect();
+        let text =
+            super::numparam::substitute(&line.text, &scope).map_err(|e| AnalogError::Parse {
+                line: line.number,
+                text: line.text.clone(),
+                message: e.message(),
+            })?;
+        let tokens: Vec<&str> = text.split_whitespace().collect();
         let head = tokens[0];
         let letter = head
             .chars()
@@ -3585,11 +3752,12 @@ fn expand_call(
                 inner.push(callee.to_string());
                 let inner_call = LogicalLine {
                     number: line.number,
-                    text: line.text.clone(),
+                    text: text.clone(),
                 };
                 expand_call(
                     defs,
                     global_models,
+                    &scope,
                     &inner_call,
                     &format!("{path}.{head}"),
                     &inner,
