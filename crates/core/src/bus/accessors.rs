@@ -1776,6 +1776,11 @@ impl crate::Bus for SystemBus {
             .map(|ready| self.is_peripheral_clocked(idx) && ready)
     }
 
+    fn peripheral_id_at(&self, addr: u64) -> Option<&str> {
+        self.find_peripheral_index(addr)
+            .map(|idx| self.peripherals[idx].name.as_str())
+    }
+
     fn dma_triggers_at(&self, addr: u64) -> Option<(u32, u32)> {
         let idx = self.dma_tx_endpoint_index(addr)?;
         self.peripherals[idx].dev.dma_triggers()

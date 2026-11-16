@@ -104,6 +104,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_xip_ssi",
     "rp2040_usb",
     "rp2350_bootram",
+    "rp2350_dma",
     // ESP32-C3 behavioral models (esp32 factory).
     // MUST be listed: without membership the fuzzy fallback would coerce the
     // BLE baseband window onto some unrelated register map instead of erroring.
@@ -1326,6 +1327,45 @@ pub fn try_build(
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
         "rp2350_bootram" => Box::new(crate::peripherals::rp2350_bootram::Rp2350BootRam::new()),
+        // RP2350 DMA. `irq:` is DMA_IRQ_0 (the other three follow it);
+        // `config.dreq: { <n>: { peripheral: <id>, dir: tx|rx } }` declares
+        // the system DREQs this chip's models can pace (datasheet 12.6.4.1).
+        "rp2350_dma" => {
+            use crate::peripherals::rp2350_dma::{Dreq, DreqDir, Rp2350Dma};
+            let irq0 = p_cfg.irq.ok_or_else(|| {
+                anyhow::anyhow!("rp2350_dma `{}`: irq (DMA_IRQ_0) is required", p_cfg.id)
+            })?;
+            let mut dreqs = std::collections::BTreeMap::new();
+            if let Some(map) = p_cfg.config.get("dreq") {
+                let map = map.as_mapping().ok_or_else(|| {
+                    anyhow::anyhow!("rp2350_dma `{}`: dreq must be a mapping", p_cfg.id)
+                })?;
+                for (k, v) in map {
+                    let n = k.as_u64().filter(|n| *n < 63).ok_or_else(|| {
+                        anyhow::anyhow!("rp2350_dma: dreq key {k:?} is not a DREQ number")
+                    })?;
+                    let peripheral =
+                        v.get("peripheral")
+                            .and_then(|p| p.as_str())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("rp2350_dma: dreq {n} needs `peripheral`")
+                            })?;
+                    let dir = match v.get("dir").and_then(|d| d.as_str()) {
+                        Some("tx") => DreqDir::Tx,
+                        Some("rx") => DreqDir::Rx,
+                        other => anyhow::bail!("rp2350_dma: dreq {n} dir {other:?} is not tx|rx"),
+                    };
+                    dreqs.insert(
+                        n as u32,
+                        Dreq {
+                            peripheral: peripheral.to_string(),
+                            dir,
+                        },
+                    );
+                }
+            }
+            Box::new(Rp2350Dma::new(irq0, dreqs))
+        }
         "rp2040_usb" => Box::new(
             crate::peripherals::rp2040::usb::Rp2040Usb::new().with_irq(p_cfg.irq.unwrap_or(5)),
         ),

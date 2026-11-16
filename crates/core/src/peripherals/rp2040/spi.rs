@@ -49,6 +49,11 @@ const SSPCR1: u64 = 0x004;
 const SSPDR: u64 = 0x008;
 const SSPSR: u64 = 0x00c;
 const SSPCPSR: u64 = 0x010;
+/// SSPDMACR (PL022 TRM 3.3.10; pico-sdk `SPI_SSPDMACR_OFFSET` 0x24):
+/// RXDMAE [0], TXDMAE [1]. Gates the SPI's DMA requests (DREQ_SPIx_RX/TX).
+const SSPDMACR: u64 = 0x024;
+const DMACR_RXDMAE: u32 = 1 << 0;
+const DMACR_TXDMAE: u32 = 1 << 1;
 
 // SSPCR0 fields (SVD bitRanges: SCR [15:8], SPH [7:7], SPO [6:6], FRF [5:4],
 // DSS [3:0]). Writable mask is the SVD's SPI_SSPCR0_BITS == 0xFFFF.
@@ -109,6 +114,7 @@ pub struct Rp2040Spi {
     cr0: u32,
     cr1: u32,
     cpsr: u32,
+    dmacr: u32,
     rx_fifo: RefCell<VecDeque<u16>>,
     /// SPI slaves (MAX31855, displays, …) attached via system external_devices.
     pub attached_devices: Vec<Box<dyn SpiDevice>>,
@@ -168,6 +174,7 @@ impl Rp2040Spi {
             cr0: 0,
             cr1: 0,
             cpsr: 0,
+            dmacr: 0,
             rx_fifo: RefCell::new(VecDeque::new()),
             attached_devices: Vec::new(),
             lines: None,
@@ -554,6 +561,7 @@ impl Peripheral for Rp2040Spi {
             SSPSR if self.net_mode() => self.net_status(),
             SSPSR => self.status(),
             SSPCPSR => self.cpsr,
+            SSPDMACR => self.dmacr,
             _ => {
                 crate::census_reg!("rp2040.spi:Rp2040Spi", offset, "read");
                 0
@@ -570,6 +578,7 @@ impl Peripheral for Rp2040Spi {
             SSPCR0 => self.cr0 = value & CR0_MASK,
             SSPCR1 => self.cr1 = value,
             SSPCPSR => self.cpsr = value & CPSR_MASK,
+            SSPDMACR => self.dmacr = value & (DMACR_RXDMAE | DMACR_TXDMAE),
             // Full duplex: every enabled write clocks a word into the RX FIFO.
             // Loopback wires MOSI straight to MISO, so the RX word is the TX
             // word; without loopback (no attached slave in the chip model) it is
@@ -607,6 +616,33 @@ impl Peripheral for Rp2040Spi {
             }
         }
         Ok(())
+    }
+
+    /// DREQ_SPIx_TX (PL022 TRM 2.4.7): asserted while TXDMAE is set and the
+    /// TX FIFO has room. Only the data register is a DMA endpoint.
+    fn dma_tx_request(&self, offset: u64) -> Option<bool> {
+        if offset != SSPDR {
+            return None;
+        }
+        let sr = if self.net_mode() {
+            self.net_status()
+        } else {
+            self.status()
+        };
+        Some(self.enabled() && self.dmacr & DMACR_TXDMAE != 0 && sr & SR_TNF != 0)
+    }
+
+    /// DREQ_SPIx_RX: asserted while RXDMAE is set and the RX FIFO holds data.
+    fn dma_rx_request(&self, offset: u64) -> Option<bool> {
+        if offset != SSPDR {
+            return None;
+        }
+        let sr = if self.net_mode() {
+            self.net_status()
+        } else {
+            self.status()
+        };
+        Some(self.dmacr & DMACR_RXDMAE != 0 && sr & SR_RNE != 0)
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {

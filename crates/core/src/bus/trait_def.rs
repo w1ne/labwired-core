@@ -131,6 +131,13 @@ pub trait Bus {
         None
     }
 
+    /// Descriptor id of the peripheral whose window holds `addr` (a DMA
+    /// controller checking that a DREQ's endpoint belongs to the peripheral
+    /// that raises it). Default `None`: the bus does not say.
+    fn peripheral_id_at(&self, _addr: u64) -> Option<&str> {
+        None
+    }
+
     /// The DMAC trigger sources (TX, RX) declared by the peripheral at `addr`.
     fn dma_triggers_at(&self, _addr: u64) -> Option<(u32, u32)> {
         None

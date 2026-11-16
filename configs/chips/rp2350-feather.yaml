@@ -209,12 +209,22 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2350/watchdog.yaml"
+  # DMA (datasheet 12.6): 16 channels, the RP2350 CTRL layout, DMA_IRQ_0..3
+  # = NVIC 10..13 (intctrl.h). `dreq` lists the system DREQs (dreq.h) whose
+  # peripheral models report FIFO readiness; any other paced channel is
+  # refused instead of running unpaced.
   - id: "dma"
-    type: "rp2040_dma"
+    type: "rp2350_dma"
     base_address: 0x50000000
     size: "4KB"
+    irq: 10
     config:
       debug_schema: "../peripherals/rp2350/dma.yaml"
+      dreq:
+        24: { peripheral: "spi0", dir: "tx" }
+        25: { peripheral: "spi0", dir: "rx" }
+        26: { peripheral: "spi1", dir: "tx" }
+        27: { peripheral: "spi1", dir: "rx" }
   - id: "pio0"
     type: "pio"
     base_address: 0x50200000
