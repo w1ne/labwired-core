@@ -541,6 +541,9 @@ pub struct Avr {
     pub ocr0a: u8,
     pub ocr0b: u8,
     pub t0_prescale_acc: u32,
+    /// A CPU write to TCNT0 blocks any compare match in the next timer clock
+    /// (DS40002061 §15.6.2); set by the write, consumed by that clock.
+    pub t0_match_blocked: bool,
     /// Timer2, the counter Arduino `tone()` runs in CTC mode.
     ///
     /// Normal, CTC and phase-correct (WGM 1, TOP = 0xFF, up and down) count
@@ -707,6 +710,16 @@ pub const UCSRA_UDRE: u8 = 1 << 5;
 pub const UCSRA_TXC: u8 = 1 << 6;
 pub const TIMSK_TOIE0: u8 = 1 << 0;
 pub const TIFR_TOV0: u8 = 1 << 0;
+/// `TIMER0_COMPA_vect` (`__vector_14`, byte 0x38 on the 328P; vector 22 on
+/// the 2560 through `mega2560_vector`).
+pub const VEC_TIMER0_COMPA: u32 = 15;
+/// `TIMER0_COMPB_vect` (`__vector_15`, byte 0x3C on the 328P).
+pub const VEC_TIMER0_COMPB: u32 = 16;
+pub const TIMSK_OCIE0A: u8 = 1 << 1;
+pub const TIMSK_OCIE0B: u8 = 1 << 2;
+pub const TIFR_OCF0A: u8 = 1 << 1;
+pub const TIFR_OCF0B: u8 = 1 << 2;
+const T0_IRQ_MASK: u64 = (1 << VEC_TIMER0_COMPA) | (1 << VEC_TIMER0_COMPB) | (1 << VEC_TIMER0_OVF);
 /// `TIMER2_COMPA_vect` (`__vector_7` at byte 0x1C). Datasheet vector 8.
 pub const VEC_TIMER2_COMPA: u32 = 8;
 /// `TIMER2_COMPB_vect` (`__vector_8` at byte 0x20).
@@ -928,6 +941,7 @@ impl Avr {
             ocr0a: 0,
             ocr0b: 0,
             t0_prescale_acc: 0,
+            t0_match_blocked: false,
             tcnt2: 0,
             tccr2a: 0,
             tccr2b: 0,
@@ -1510,7 +1524,8 @@ impl Avr {
                 Ok(())
             }
             0x0035 => {
-                self.tifr0 &= !value;
+                self.tifr0 &= !(value & (TIFR_OCF0B | TIFR_OCF0A | TIFR_TOV0));
+                self.sync_timer0_irq();
                 Ok(())
             }
             0x0037 => {
@@ -1531,6 +1546,7 @@ impl Avr {
             }
             0x0046 => {
                 self.tcnt0 = value;
+                self.t0_match_blocked = true;
                 Ok(())
             }
             0x0047 => {
@@ -1542,7 +1558,8 @@ impl Avr {
                 Ok(())
             }
             0x006E => {
-                self.timsk0 = value;
+                self.timsk0 = value & (TIMSK_OCIE0B | TIMSK_OCIE0A | TIMSK_TOIE0);
+                self.sync_timer0_irq();
                 Ok(())
             }
             0x0070 => {
@@ -1955,6 +1972,12 @@ impl Avr {
         }
     }
 
+    /// Advance Timer0 by CPU clocks. The counter runs BOTTOM..0xFF (normal
+    /// and fast PWM with TOP = 0xFF; the TOP = OCR0A and phase-correct modes
+    /// are not modelled and count the same way). TOV0 is set as the count
+    /// wraps to BOTTOM; OCF0x on the timer clock after TCNT0 equalled OCR0x,
+    /// i.e. as the count leaves the compare value (DS40002061 §15.6, Figures
+    /// 15-9/15-10), unless a TCNT0 write blocked that clock.
     pub fn tick_timer0(&mut self, cpu_cycles: u32) {
         let div = self.t0_prescaler();
         if div == 0 || cpu_cycles == 0 {
@@ -1963,19 +1986,50 @@ impl Avr {
         // Closed form of "one TCNT0 increment per `div` clocks": an idle
         // fast-forward hands this millions of cycles at once.
         let acc = u64::from(self.t0_prescale_acc) + u64::from(cpu_cycles);
-        let ticks = acc / u64::from(div);
+        let mut ticks = acc / u64::from(div);
         self.t0_prescale_acc = (acc % u64::from(div)) as u32;
         if ticks == 0 {
             return;
         }
-        let count = u64::from(self.tcnt0) + ticks;
-        self.tcnt0 = (count & 0xFF) as u8;
-        if count > 0xFF {
-            self.tifr0 |= TIFR_TOV0;
-            if self.timsk0 & TIMSK_TOIE0 != 0 {
-                self.pending_irq |= 1u64 << VEC_TIMER0_OVF;
+        if std::mem::take(&mut self.t0_match_blocked) {
+            // The first clock after a TCNT0 write: no compare match.
+            let wrapped = self.tcnt0 == 0xFF;
+            self.tcnt0 = self.tcnt0.wrapping_add(1);
+            if wrapped {
+                self.tifr0 |= TIFR_TOV0;
             }
+            ticks -= 1;
         }
+        let phase = u64::from(self.tcnt0);
+        let leaves = |ocr: u8| t2_hits(phase, ticks, 256, (u64::from(ocr) + 1) & 0xFF);
+        if leaves(self.ocr0a) {
+            self.tifr0 |= TIFR_OCF0A;
+        }
+        if leaves(self.ocr0b) {
+            self.tifr0 |= TIFR_OCF0B;
+        }
+        if t2_hits(phase, ticks, 256, 0) {
+            self.tifr0 |= TIFR_TOV0;
+        }
+        self.tcnt0 = ((phase + ticks) & 0xFF) as u8;
+        self.sync_timer0_irq();
+    }
+
+    /// Timer0 requests stay pending while a flag and its enable are both set,
+    /// including an enable written over an already set flag.
+    fn sync_timer0_irq(&mut self) {
+        let on = self.tifr0 & self.timsk0;
+        let mut want = 0u64;
+        if on & TIFR_OCF0A != 0 {
+            want |= 1 << VEC_TIMER0_COMPA;
+        }
+        if on & TIFR_OCF0B != 0 {
+            want |= 1 << VEC_TIMER0_COMPB;
+        }
+        if on & TIFR_TOV0 != 0 {
+            want |= 1 << VEC_TIMER0_OVF;
+        }
+        self.pending_irq = (self.pending_irq & !T0_IRQ_MASK) | want;
     }
 
     /// clk_I/O prescaler for Timer2. `AS2` freezes it: the asynchronous TOSC1
@@ -2147,15 +2201,30 @@ impl Avr {
         None
     }
 
+    /// CPU cycles until the next Timer0 flag whose interrupt is enabled.
     fn timer0_wake_cycles(&self) -> Option<u64> {
         let div = u64::from(self.t0_prescaler());
-        if self.io_clock_running() && div != 0 && self.timsk0 & TIMSK_TOIE0 != 0 && self.flag_i() {
-            let ticks = 256 - u64::from(self.tcnt0);
-            let cycles = ticks * div - u64::from(self.t0_prescale_acc).min(div - 1);
-            Some(cycles.max(1))
-        } else {
-            None
+        if !self.io_clock_running() || div == 0 || !self.flag_i() {
+            return None;
         }
+        let tcnt = u64::from(self.tcnt0);
+        // Timer clocks until the count lands on `target` (a full period if
+        // it is there now). A blocked first clock can only make it later.
+        let dist = |target: u64| match (target + 256 - tcnt) % 256 {
+            0 => 256,
+            d => d,
+        };
+        let ticks = [
+            (TIMSK_TOIE0, 0),
+            (TIMSK_OCIE0A, (u64::from(self.ocr0a) + 1) & 0xFF),
+            (TIMSK_OCIE0B, (u64::from(self.ocr0b) + 1) & 0xFF),
+        ]
+        .into_iter()
+        .filter(|(bit, _)| self.timsk0 & bit != 0)
+        .map(|(_, target)| dist(target))
+        .min()?;
+        let cycles = ticks * div - u64::from(self.t0_prescale_acc).min(div - 1);
+        Some(cycles.max(1))
     }
 
     /// An interrupt the core would take now: global enable set and a vector
@@ -2463,6 +2532,13 @@ impl Avr {
         // Hardware clears the matching timer flag on vector entry.
         if vec == VEC_TIMER0_OVF {
             self.tifr0 &= !TIFR_TOV0;
+            self.sync_timer0_irq();
+        } else if vec == VEC_TIMER0_COMPA {
+            self.tifr0 &= !TIFR_OCF0A;
+            self.sync_timer0_irq();
+        } else if vec == VEC_TIMER0_COMPB {
+            self.tifr0 &= !TIFR_OCF0B;
+            self.sync_timer0_irq();
         } else if vec == VEC_TIMER2_COMPA {
             self.tifr2 &= !TIFR2_OCF2A;
             self.sync_timer2_irq();
@@ -2803,7 +2879,10 @@ impl Cpu for Avr {
         self.tccr0b = 0;
         self.timsk0 = 0;
         self.tifr0 = 0;
+        self.ocr0a = 0;
+        self.ocr0b = 0;
         self.t0_prescale_acc = 0;
+        self.t0_match_blocked = false;
         self.tcnt2 = 0;
         self.tccr2a = 0;
         self.tccr2b = 0;
@@ -3793,6 +3872,113 @@ mod tests {
         cpu.timsk0 = TIMSK_TOIE0;
         cpu.tick_timer0(16384);
         assert!(cpu.pending_irq & (1 << VEC_TIMER0_OVF) != 0);
+    }
+
+    // Timer0 output compare units A and B (ATmega328P DS40002061 §15.6-15.7,
+    // ATmega2560 DS2549 §16.6-16.7): TCNT0 == OCR0x raises OCF0x on the next
+    // timer clock, OCIE0x in TIMSK0 requests TIMER0_COMPA/COMPB (328P vectors
+    // 15/16, 2560 vectors 22/23) while the flag is set, entering the vector or
+    // writing a one clears it, and a TCNT0 write blocks the match in the next
+    // timer clock. Bits: TIFR0/TIMSK0 OCF0A/OCIE0A = 1, OCF0B/OCIE0B = 2.
+    #[test]
+    fn timer0_compare_a_sets_ocf0a_on_the_clock_after_the_match() {
+        let mut cpu = Avr::new();
+        cpu.tccr0a = 0x03; // fast PWM, TOP = 0xFF (Arduino init())
+        cpu.tccr0b = 0x03; // clk/64
+        cpu.ocr0a = 128;
+        cpu.timsk0 = 1 << 1;
+        cpu.tick_timer0(128 * 64);
+        assert_eq!(cpu.tcnt0, 128);
+        assert_eq!(cpu.tifr0 & (1 << 1), 0, "match, flag on the next clock");
+        assert_eq!(cpu.pending_irq & (1 << 15), 0);
+        cpu.tick_timer0(64);
+        assert_eq!(cpu.tcnt0, 129);
+        assert_ne!(cpu.tifr0 & (1 << 1), 0, "OCF0A");
+        assert_ne!(cpu.pending_irq & (1 << 15), 0, "TIMER0_COMPA requested");
+        // One full 256-clock period later it matches again, in one closed-form
+        // chunk as an idle fast-forward hands it.
+        cpu.tifr0 = 0;
+        cpu.pending_irq = 0;
+        cpu.tick_timer0(255 * 64);
+        assert_eq!(cpu.tifr0 & (1 << 1), 0);
+        cpu.tick_timer0(64);
+        assert_ne!(cpu.tifr0 & (1 << 1), 0);
+    }
+
+    #[test]
+    fn timer0_compare_b_request_follows_flag_and_enable() {
+        let mut cpu = Avr::new();
+        let mut bus = MockBus::new();
+        cpu.tccr0a = 0x03;
+        cpu.tccr0b = 0x03;
+        cpu.ocr0b = 10;
+        cpu.tick_timer0(11 * 64);
+        assert_ne!(cpu.tifr0 & (1 << 2), 0, "OCF0B sets without its enable");
+        assert_eq!(cpu.pending_irq & (1 << 16), 0);
+        cpu.data_write(0x6E, 1 << 2, &mut bus).unwrap();
+        assert_ne!(
+            cpu.pending_irq & (1 << 16),
+            0,
+            "OCIE0B set over a pending flag requests the vector"
+        );
+        cpu.data_write(0x35, 1 << 2, &mut bus).unwrap();
+        assert_eq!(cpu.tifr0 & (1 << 2), 0, "write one to clear");
+        assert_eq!(cpu.pending_irq & (1 << 16), 0, "and the request goes");
+    }
+
+    #[test]
+    fn timer0_tcnt0_write_blocks_the_next_compare_match() {
+        let mut cpu = Avr::new();
+        let mut bus = MockBus::new();
+        cpu.tccr0b = 0x03;
+        cpu.ocr0a = 50;
+        cpu.data_write(0x46, 50, &mut bus).unwrap();
+        cpu.tick_timer0(64);
+        assert_eq!(cpu.tcnt0, 51);
+        assert_eq!(cpu.tifr0 & (1 << 1), 0, "blocked by the TCNT0 write");
+        cpu.tick_timer0(256 * 64);
+        assert_ne!(cpu.tifr0 & (1 << 1), 0, "the next pass matches");
+    }
+
+    #[test]
+    fn timer0_compa_enters_its_vector_and_clears_ocf0a() {
+        // 328P: TIMER0_COMPA_vect is vector 15 (byte 0x38); 2560: vector 22
+        // (byte 0x54).
+        for (chip, at) in [("atmega328p", 0x38u32), ("atmega2560", 0x54)] {
+            let mut cpu = Avr::for_chip_name(chip);
+            let mut bus = MockBus::new();
+            cpu.sreg = 0x80;
+            cpu.tccr0b = 0x03;
+            cpu.timsk0 = 1 << 1;
+            cpu.tick_timer0(64);
+            cpu.load_words(0x200, &[0x0000]);
+            cpu.pc = 0x200;
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(cpu.pc, at, "{chip}");
+            assert_eq!(cpu.tifr0 & (1 << 1), 0, "{chip}: OCF0A cleared on entry");
+        }
+    }
+
+    /// A sleeping core with only OCIE0A set wakes at the compare match, not at
+    /// the overflow, when the idle budget skips the clocks in one chunk.
+    #[test]
+    fn timer0_compare_match_bounds_the_sleep_budget() {
+        let mut cpu = Avr::new();
+        let bus = MockBus::new();
+        cpu.tccr0a = 0x03;
+        cpu.tccr0b = 0x03;
+        cpu.ocr0a = 20;
+        cpu.tcnt0 = 3;
+        cpu.timsk0 = 1 << 1;
+        cpu.sreg = 0x80;
+        cpu.sleeping = true;
+        let budget = cpu.idle_fast_forward_budget(&bus).expect("asleep");
+        assert_eq!(
+            budget,
+            (21 - 3) * 64,
+            "wakes on the clock after TCNT0 == 20"
+        );
     }
 
     /// The closed form has to agree with one timer clock at a time, including
