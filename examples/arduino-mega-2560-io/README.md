@@ -20,6 +20,13 @@ with arduino-cli, `arduino:avr` 1.8.x, board `arduino:avr:mega`, from
 row (`validation/arduino-matrix`, board `atmega2560`) passes L0–L7, evidence in
 [`evidence/arduino-matrix/`](evidence/arduino-matrix/).
 
-Not modelled on the Mega: `attachInterrupt` (INTn/PCINT), PWM on the
-Timer3/4/5 pins (D2 D3 D5 D6 D7 D8 D44 D45 D46: those pads follow `PORTx`),
+`attachInterrupt` on INT0..INT5 (D21 D20 D19 D18 D2 D3) and pin-change
+interrupts on PCINT0..23 (D10..D13, D50..D53, D0, D14, D15, A8..A15) enter
+their 2560 vectors; `analogRead` takes the datasheet conversion time (13 ADC
+clocks at 125 kHz, the first 25), and the ADC also runs free running or
+auto-triggered with its interrupt; the hardware SPI on D50..D53 clocks
+attached SPI devices (an SD card, a display) with SCK-timed SPIF. See
+`cargo test -p labwired-core --test avr avr_mega2560_irq_adc_spi::`.
+
+Not modelled on the Mega: PWM on the Timer3/4/5 pins (D2 D3 D5 D6 D7 D8 D44 D45 D46: those pads follow `PORTx`),
 OC1C, and USART1..3 (`Serial1`..`Serial3`).
