@@ -515,7 +515,7 @@ impl SystemBus {
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
             flash_models_ops: false,
-            nordic_gpio_service: false,
+            gpio_edge_observers: false,
             timer_capture_wired: false,
             wire_inputs_live: false,
             resident_scheduling_disabled: false,
@@ -876,6 +876,10 @@ impl SystemBus {
                         uart = uart.set_sci_events(event as u32, sci_clock, sci_baud);
                     } else if let Some(vector) = get("rxi_vector") {
                         uart = uart.set_sci_vectors(vector as u32, sci_clock, sci_baud);
+                    }
+                    // Which datasheet pad table routes TX (`pad_map: wch_x035`).
+                    if let Some(pad_map) = p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
+                        uart = uart.set_pad_map(pad_map)?;
                     }
                     if matches!(layout, crate::peripherals::uart::UartRegisterLayout::Custom) {
                         // Vendor-neutral YAML map. `tx_offset` is required;
