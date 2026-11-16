@@ -3483,6 +3483,11 @@ impl Cpu for CortexM {
     }
 
     fn idle_fast_forward_budget(&self, _bus: &dyn Bus) -> Option<u64> {
+        // Asked after every interpreted instruction of a batch; a core that
+        // is neither in WFE nor WFI answers before the debug-state loads.
+        if !self.waiting_for_event && !self.sleeping {
+            return None;
+        }
         if self.debug_batch_break() {
             return None;
         }
