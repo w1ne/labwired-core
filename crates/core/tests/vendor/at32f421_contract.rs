@@ -453,18 +453,10 @@ fn adc_sequence_mode_moves_every_conversion_through_dma_channel1() {
     let mut b = bus();
     let spin = 0x2000_0100u64;
     b.write_u16(spin, 0xe7fe).unwrap(); // b .
-    let adc = b.find_peripheral_index_by_name("adc1").unwrap();
-    {
-        let a = b.peripherals[adc]
-            .dev
-            .as_any_mut()
-            .unwrap()
-            .downcast_mut::<labwired_core::peripherals::adc::Adc>()
-            .unwrap();
-        a.set_channel_input(1, 1650); // PA1
-        a.set_channel_input(3, 3000); // PA3
-        a.set_channel_input(5, 600); // PA5
-    }
+                                        // Pad levels through the bus: each pad's `analog_pins:` ADC channel.
+    assert!(b.set_analog_pad_mv("PA1", 1650)); // IN1
+    assert!(b.set_analog_pad_mv("PA3", 3000)); // IN3
+    assert!(b.set_analog_pad_mv("PA5", 600)); // IN5
     let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut b);
     let mut m = Machine::new(cpu, b);
     m.cpu.set_pc(spin as u32);
@@ -508,13 +500,7 @@ fn adc_sequence_mode_moves_every_conversion_through_dma_channel1() {
         "OCCE at group end"
     );
     // A second trigger converts the sequence again from OSN1.
-    m.bus.peripherals[adc]
-        .dev
-        .as_any_mut()
-        .unwrap()
-        .downcast_mut::<labwired_core::peripherals::adc::Adc>()
-        .unwrap()
-        .set_channel_input(1, 3300);
+    assert!(m.bus.set_analog_pad_mv("PA1", 3300));
     w(&mut m, 0x40012408, ctrl2 | (1 << 22));
     m.advance(AdvanceRequest::run(Some(500))).unwrap();
     assert_eq!(m.bus.read_u16(0x2000_1000).unwrap(), 4095);
