@@ -1,0 +1,60 @@
+{
+  "board": "rpi-pico-w",
+  "generated_at": "2026-11-16T07:51:30+0000",
+  "platform": "maxgerhardt/platform-raspberrypi@5d4561a0 (arduino-pico, board rpipicow)",
+  "rows": [
+    {
+      "sketch": "L0_serial_boot",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 143013
+    },
+    {
+      "sketch": "L1_serial_loop",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 148367
+    },
+    {
+      "sketch": "L2_blink_serial",
+      "status": "pass",
+      "logic_edge_count": 2,
+      "steps": 55127215
+    },
+    {
+      "sketch": "L3_i2c_sensor",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 153956
+    },
+    {
+      "sketch": "L4_spi_sensor",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 158541
+    },
+    {
+      "sketch": "L5_adc",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 147393
+    },
+    {
+      "sketch": "L6_pwm",
+      "status": "pass",
+      "logic_edge_count": 76,
+      "steps": 195167
+    },
+    {
+      "sketch": "L7_timer",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 161733
+    },
+    {
+      "sketch": "L8_can",
+      "status": "skipped",
+      "reason": "RP2040 has no CAN controller"
+    }
+  ]
+}

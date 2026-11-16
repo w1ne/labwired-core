@@ -48,6 +48,8 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     // BT201 (Jieli KT1025A) dual-mode Bluetooth module: hand-written, because
     // the part has link state and a transparent data path, not a table.
     &components::bt201::BT201_KIT,
+    // CYW43439 (Pico W radio): gSPI on the RP2040/RP2350 PIO, bit level.
+    &components::cyw43439::CYW43439_KIT,
     &components::declarative_display::SSD1306_KIT,
     &components::declarative_display::SSD1306_128X32_KIT,
     &components::declarative_display::SH1107_KIT,

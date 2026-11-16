@@ -23,6 +23,25 @@ impl SystemBus {
     }
 
     fn dma_tx_endpoint_index(&self, addr: u64) -> Option<usize> {
+        self.dma_endpoint_index(addr, |p, off| p.dma_tx_request(off))
+    }
+
+    /// RX twin of [`Self::dma_tx_endpoint_index`]: a peripheral whose RX
+    /// data register is its own address (an RP2040 PIO `RXFn`, distinct from
+    /// `TXFn`) is an endpoint by answering `dma_rx_request` there. A shared
+    /// TX/RX data register (a SERCOM `DATA`) still qualifies through its TX
+    /// answer.
+    fn dma_rx_endpoint_index(&self, addr: u64) -> Option<usize> {
+        self.dma_endpoint_index(addr, |p, off| {
+            p.dma_rx_request(off).or_else(|| p.dma_tx_request(off))
+        })
+    }
+
+    fn dma_endpoint_index(
+        &self,
+        addr: u64,
+        answers: impl Fn(&dyn crate::Peripheral, u64) -> Option<bool>,
+    ) -> Option<usize> {
         // DMA endpoint admission must not bypass normal storage precedence.
         if self.resolve_ns_alias(addr) != addr
             || self.ram.read_u8(addr).is_some()
@@ -39,7 +58,7 @@ impl SystemBus {
         if p.dev.scheduler_wake_owner().is_some() {
             return None; // Owner-alias windows are not separate TX endpoints.
         }
-        p.dev.dma_tx_request(addr - p.base)?;
+        answers(p.dev.as_ref(), addr - p.base)?;
         Some(idx)
     }
 
@@ -1762,7 +1781,7 @@ impl crate::Bus for SystemBus {
     }
 
     fn dma_rx_request(&self, addr: u64) -> Option<bool> {
-        let idx = self.dma_tx_endpoint_index(addr)?;
+        let idx = self.dma_rx_endpoint_index(addr)?;
         let p = &self.peripherals[idx];
         p.dev
             .dma_rx_request(addr - p.base)

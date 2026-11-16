@@ -1,0 +1,18 @@
+# LabWired - Raspberry Pi Pico W
+#
+# RP2040 + Infineon CYW43439 on the PIO gSPI bus (WL_ON GP23, DIO/host-wake
+# GP24, CS GP25, CLK GP29 — pico-sdk boards/pico_w.h). The onboard LED is the
+# chip's WL_GPIO0, so `LED_BUILTIN` is a full chip bring-up (firmware
+# download + `gpioout` iovar); watch it as `cyw43:0`.
+#
+# The CYW43439 model answers the host interface of a running firmware; it
+# does not execute the firmware: no radio, scan, join, data or Bluetooth.
+#
+# Sources: Raspberry Pi Pico W datasheet RP-008306; pico-sdk boards/pico_w.h.
+name: "rpi-pico-w"
+chip: "../chips/rp2040.yaml"
+external_devices:
+  - id: "cyw43"
+    type: "cyw43439"
+    connection: "pio"
+board_io: []
