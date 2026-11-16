@@ -36,9 +36,11 @@
 //! A semiconductor's bare `off` flag is SPICE's: the operating point holds
 //! that device cut off until the rest of the circuit converges, then releases
 //! it. It picks one state of a latch or other bistable circuit and changes
-//! nothing where the operating point is unique. Instance `ic=` on a
-//! semiconductor is refused: SPICE applies it only under `uic`, and this
-//! engine's `uic` seeds capacitors, inductors and `.ic` nodes only.
+//! nothing where the operating point is unique. Instance `ic=` on a diode
+//! (`ic=<vd>`), BJT (`ic=<vbe>,<vce>`) or JFET (`ic=<vds>,<vgs>`) is SPICE's:
+//! under `uic` the junction charge history starts from those voltages, as in
+//! ngspice's `MODEINITTRAN`, and without `uic` it is ignored. MOSFET `ic=` is
+//! refused (see the error text).
 //!
 //! `.tran ... uic` skips the operating point, as SPICE does: every node starts
 //! at 0 V unless `.ic` sets it, a capacitor starts at its `ic=` (else the
@@ -2395,6 +2397,10 @@ pub struct Diode {
     /// circuit with more than one operating point and changes nothing in a
     /// circuit with one. Ignored after the operating point.
     pub off: bool,
+    /// SPICE instance `ic=<vd>`: the junction voltage the charge history
+    /// starts from under `.tran ... uic` (ngspice's `DIOinitCond`). Ignored
+    /// without `uic`, as in SPICE.
+    pub ic: Option<f64>,
     /// Anode, the terminal the netlist names first.
     pub anode: NodeRef,
     /// Cathode.
@@ -2560,6 +2566,11 @@ pub struct Bjt {
     /// and holds them there until the rest of the circuit has converged
     /// (ngspice's `MODEINITFIX`). See [`Diode::off`].
     pub off: bool,
+    /// SPICE instance `ic=<vbe>,<vce>`, terminal volts as written (an NPN
+    /// sign convention for both types, as ngspice's `BJTicVBE`/`BJTicVCE`).
+    /// Under `.tran ... uic` the junction charges start from `vbe` and
+    /// `vbc = vbe - vce`. Ignored without `uic`.
+    pub ic: Option<[f64; 2]>,
     /// Collector.
     pub c: NodeRef,
     /// Base.
@@ -2755,6 +2766,11 @@ pub struct Jfet {
     /// 0 V and holds them there until the rest of the circuit has converged
     /// (ngspice's `MODEINITFIX`). See [`Diode::off`].
     pub off: bool,
+    /// SPICE instance `ic=<vds>,<vgs>`, terminal volts as written (an NJF
+    /// sign convention for both types, as ngspice's `JFETicVDS`/`JFETicVGS`).
+    /// Under `.tran ... uic` the gate charges start from `vgs` and
+    /// `vgd = vgs - vds`. Ignored without `uic`.
+    pub ic: Option<[f64; 2]>,
     /// Drain.
     pub d: NodeRef,
     /// Gate.
@@ -3160,6 +3176,8 @@ struct PendingDevice {
     perimeter: Option<f64>,
     /// SPICE `off`: start the operating point with this device cut off.
     off: bool,
+    /// SPICE instance `ic=`, comma-separated volts; empty when not given.
+    ic: Vec<f64>,
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -3492,16 +3510,16 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
             }
             'D' | 'Q' | 'M' | 'J' => {
                 let (terminals, shape) = match letter {
-                    'D' => (2, "D<name> n+ n- <model> [<area>] [area=<factor>] [pj=<perimeter>] [m=<count>] [temp=<°C>] [off]"),
+                    'D' => (2, "D<name> n+ n- <model> [<area>] [area=<factor>] [pj=<perimeter>] [m=<count>] [temp=<°C>] [off] [ic=<vd>]"),
                     'Q' => (
                         if tokens.len() > 5 && !names_model(tokens[4]) { 4 } else { 3 },
-                        "Q<name> nc nb ne [ns] <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>] [off]",
+                        "Q<name> nc nb ne [ns] <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>] [off] [ic=<vbe>,<vce>]",
                     ),
                     'M' => (
                         4,
                         "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>] [off]",
                     ),
-                    _ => (3, "J<name> nd ng ns <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>] [off]"),
+                    _ => (3, "J<name> nd ng ns <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>] [off] [ic=<vds>,<vgs>]"),
                 };
                 let rest = &tokens[1..];
                 if rest.len() < terminals + 1 {
@@ -3519,6 +3537,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let mut multiplier = None;
                 let mut area = None;
                 let mut perimeter = None;
+                let mut ic = Vec::new();
                 // SPICE's bare `off` flag may stand anywhere among the
                 // options; it is the only option without a value.
                 let mut off = false;
@@ -3560,6 +3579,28 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             area = Some(ctx.value(value, "area")?)
                         }
                         "pj" if letter == 'D' => perimeter = Some(ctx.value(value, "pj")?),
+                        "ic" if letter != 'M' => {
+                            ic = value
+                                .split(',')
+                                .map(|raw| ctx.value(raw, "ic"))
+                                .collect::<Result<Vec<_>, _>>()?;
+                            let expected = if letter == 'D' { 1 } else { 2 };
+                            if ic.len() != expected {
+                                return Err(ctx.parse_err(match letter {
+                                    'D' => "diode ic= takes one junction voltage: `ic=<vd>`",
+                                    'Q' => "BJT ic= takes two voltages: `ic=<vbe>,<vce>`",
+                                    _ => "JFET ic= takes two voltages: `ic=<vds>,<vgs>`",
+                                }));
+                            }
+                        }
+                        "ic" => {
+                            return Err(ctx.parse_err(
+                                "MOSFET instance ic= is not supported: ngspice's level-1 \
+                                 MODEINITTRAN replaces an all-zero ic with vgs=VTO, vbs=-1 \
+                                 and seeds Meyer charge from it; seed the terminals with \
+                                 `.ic V(node)=` instead",
+                            ))
+                        }
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -3624,6 +3665,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     area: area.unwrap_or(1.0),
                     perimeter,
                     off,
+                    ic,
                 });
             }
             'E' | 'G' => {
@@ -3734,6 +3776,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     area: 1.0,
                     perimeter: None,
                     off: false,
+                    ic: Vec::new(),
                 });
             }
             'S' => {
@@ -4227,6 +4270,7 @@ fn bind_models(
                     name: device.name,
                     multiplier: device.multiplier,
                     off: device.off,
+                    ic: device.ic.first().copied(),
                     anode: device.nodes[0],
                     cathode: device.nodes[1],
                     junction_anode,
@@ -4625,6 +4669,7 @@ fn bind_models(
                         name: internal_name,
                         multiplier: device.multiplier,
                         off: device.off,
+                        ic: None,
                         anode,
                         cathode,
                         junction_anode: anode,
@@ -4640,6 +4685,7 @@ fn bind_models(
                     name: device.name,
                     multiplier: device.multiplier,
                     off: device.off,
+                    ic: (device.ic.len() == 2).then(|| [device.ic[0], device.ic[1]]),
                     c: device.nodes[0],
                     b: device.nodes[1],
                     e: device.nodes[2],
@@ -5014,6 +5060,7 @@ fn bind_models(
                     name: device.name,
                     multiplier: device.multiplier,
                     off: device.off,
+                    ic: (device.ic.len() == 2).then(|| [device.ic[0], device.ic[1]]),
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
@@ -5764,6 +5811,7 @@ impl Lowering<'_> {
             name,
             multiplier: 1.0,
             off: false,
+            ic: None,
             anode,
             cathode,
             junction_anode: anode,
@@ -6318,6 +6366,7 @@ fn lower_regulator(
         name,
         multiplier: 1.0,
         off: false,
+        ic: None,
         anode: a,
         cathode: l1,
         junction_anode: a,

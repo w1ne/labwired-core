@@ -1076,7 +1076,13 @@ impl Solver {
     /// `.ic` is used for what it is for (seeding a reactive element), and the
     /// override order — node `.ic` first, then per-element `ic=` — is stated
     /// here so a netlist that sets both is not ambiguous.
+    ///
+    /// Under `uic` a semiconductor instance `ic=` replaces the node voltages
+    /// its charge history is evaluated at, as ngspice's `MODEINITTRAN` with
+    /// `MODEUIC` does: the stored charge is `q(ic)`, so the first step draws
+    /// `(q(v) - q(ic)) / h` through the junction.
     fn apply_initial_conditions(&mut self) {
+        let uic = self.circuit.uic;
         for (node, value) in &self.circuit.node_ic {
             self.node_v[*node] = *value;
         }
@@ -1101,7 +1107,10 @@ impl Solver {
             let diode = &self.circuit.diodes[index];
             let charge_model = diode.operating_model;
             if diode_charge_active(charge_model) {
-                self.diode_vj[index] = node_diff(&self.node_v, diode.junction_anode, diode.cathode);
+                self.diode_vj[index] = match diode.ic {
+                    Some(vd) if uic => vd,
+                    _ => node_diff(&self.node_v, diode.junction_anode, diode.cathode),
+                };
                 let op = diode_model_op(
                     self.diode_vj[index],
                     diode.model,
@@ -1119,10 +1128,20 @@ impl Solver {
         for index in 0..self.circuit.bjts.len() {
             let bjt = &self.circuit.bjts[index];
             let sign = bjt.model.polarity.sign();
-            let vbe = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_e);
-            let vbc = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_c);
-            let vbc_external = sign * node_diff(&self.node_v, bjt.b, bjt.junction_c);
-            let vbcx = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_cx);
+            let (vbe, vbc, vbc_external, vbcx) = match bjt.ic {
+                // bjtload.c: vbe = type·icVBE, vbc = vbx = vbe − type·icVCE.
+                Some([ic_vbe, ic_vce]) if uic => {
+                    let vbe = sign * ic_vbe;
+                    let vbc = vbe - sign * ic_vce;
+                    (vbe, vbc, vbc, vbc)
+                }
+                _ => (
+                    sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_e),
+                    sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_c),
+                    sign * node_diff(&self.node_v, bjt.b, bjt.junction_c),
+                    sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_cx),
+                ),
+            };
             self.bjt_q[index] = bjt_charge_op(
                 vbe,
                 vbc,
@@ -1192,8 +1211,14 @@ impl Solver {
             let jfet = &self.circuit.jfets[index];
             let sign = jfet.model.polarity.sign();
             let model = jfet.operating_model;
-            let vgs = sign * node_diff(&self.node_v, jfet.g, jfet.junction_s);
-            let vgd = sign * node_diff(&self.node_v, jfet.g, jfet.junction_d);
+            let (vgs, vgd) = match jfet.ic {
+                // jfetload.c: vgs = type·icVGS, vgd = vgs − type·icVDS.
+                Some([ic_vds, ic_vgs]) if uic => (sign * ic_vgs, sign * (ic_vgs - ic_vds)),
+                _ => (
+                    sign * node_diff(&self.node_v, jfet.g, jfet.junction_s),
+                    sign * node_diff(&self.node_v, jfet.g, jfet.junction_d),
+                ),
+            };
             self.jfet_q[index] = [
                 device::junction_depletion_charge(vgs, model.cgs, model.pb, 0.5, model.fc).0,
                 device::junction_depletion_charge(vgd, model.cgd, model.pb, 0.5, model.fc).0,

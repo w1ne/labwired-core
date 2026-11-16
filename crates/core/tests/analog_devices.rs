@@ -9280,8 +9280,7 @@ mod analog {
             "`off` on a diode with one operating point must not move it"
         );
 
-        // The flag stands anywhere among the options; `ic=` needs `uic`,
-        // which the engine does not have, so it is refused by name.
+        // The flag stands anywhere among the options.
         let placed = build(
             "V1 a 0 dc 5\nR1 a c 1k\nRb a b 100k\nQ1 c b 0 QN off 2 temp=27\n\
              J1 a b 0 JN off\n.model QN NPN(IS=1e-15 BF=100)\n.model JN NJF(VTO=-2 BETA=1m)\n",
@@ -9292,10 +9291,12 @@ mod analog {
             2e-15,
             "area must survive `off`"
         );
-        let error = parse_netlist("V1 a 0 1\nD1 a 0 DX ic=0.7\n.model DX D(IS=1e-14)\n")
-            .expect_err("a semiconductor ic= must be refused")
-            .to_string();
-        assert!(error.contains("`ic`"), "unexpected error {error}");
+        // Instance `ic=` sits beside `off`; it only acts under `uic` (see the
+        // `tran_uic_*` tests), so here it is stored and nothing else.
+        let seeded = parse_netlist("V1 a 0 1\nD1 a 0 DX off ic=0.7\n.model DX D(IS=1e-14)\n")
+            .expect("diode ic= parses");
+        assert_eq!(seeded.diodes[0].ic, Some(0.7));
+        assert!(seeded.diodes[0].off);
     }
 
     /// `PTF` delays the forward transport current by Weil's second-order

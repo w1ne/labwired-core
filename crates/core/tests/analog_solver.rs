@@ -231,6 +231,105 @@ mod analog {
     }
 
     #[test]
+    fn tran_uic_diode_ic_discharges_its_junction_charge_in_closed_form() {
+        // A reverse-biased abrupt junction (M = 0.5) seeded at `ic=-3` and
+        // discharged through R. With C(v) = CJO/√(1 + v/VJ) for reverse volts
+        // v, R·C(v)·dv/dt = −v integrates to
+        //   t(v) = R·CJO·[ln((s−1)/(s+1))] from v to V0,  s = √(1 + v/VJ).
+        // The node starts at 0 V under `uic`; only the seeded charge can lift
+        // it. (ngspice 45 parses diode `ic=` but `show d1 : ic` reads 0 and the
+        // node stays at 0 V, so the closed form is the reference here.)
+        let (r, cjo, vj, v0) = (10e3, 100e-12, 0.7, 3.0);
+        let body = "R1 a 0 10k\nD1 0 a DMOD ic=-3\n\
+                    .model DMOD D(IS=1e-14 CJO=100p VJ=0.7 M=0.5)\n";
+        let deck = format!("* d ic\n{body}.tran 1n 3u uic\n.end\n");
+        let at = [0.2e-6, 0.5e-6, 1e-6];
+        let got = uic_samples(&deck, "a", &at, 0.5e-9);
+        let log_ratio = |v: f64| {
+            let s = (1.0 + v / vj).sqrt();
+            ((s - 1.0) / (s + 1.0)).ln()
+        };
+        for (index, &t) in at.iter().enumerate() {
+            assert!(
+                got[index] > 0.05 && got[index] < v0,
+                "seeded junction must hold the node up at {t} s: {} V",
+                got[index]
+            );
+            let elapsed = r * cjo * (log_ratio(v0) - log_ratio(got[index]));
+            assert!(
+                (elapsed - t).abs() / t < 0.01,
+                "diode ic= discharge reached {} V at {t} s; closed form puts that at {elapsed} s",
+                got[index]
+            );
+        }
+
+        // SPICE ignores instance `ic=` without `uic`: the operating point
+        // holds the node at 0 V and nothing discharges.
+        let no_uic = uic_samples(&format!("* d\n{body}.tran 1n 3u\n.end\n"), "a", &at, 0.5e-9);
+        assert!(no_uic.iter().all(|v| v.abs() < 1e-9), "{no_uic:?}");
+        // And a wrong arity is refused rather than silently truncated.
+        assert!(parse_netlist("R1 a 0 1k\nD1 0 a DMOD ic=1,2\n.model DMOD D(IS=1e-14)\n").is_err());
+    }
+
+    #[test]
+    fn tran_uic_bjt_ic_seeds_both_junction_charges_like_ngspice() {
+        // `ic=<vbe>,<vce>` = −2, 5: vbc = −7. Both depletion charges discharge
+        // through the base and collector resistors, coupled through CJC.
+        // Values are ngspice 45 `.tran 1n 3u uic` on this deck.
+        let deck = "* q ic\nRb b 0 10k\nRc c 0 20k\nQ1 c b 0 QMOD ic=-2,5\n\
+                    .model QMOD NPN(IS=1e-15 BF=100 CJE=20p VJE=0.75 MJE=0.33 \
+                    CJC=10p VJC=0.75 MJC=0.33)\n.tran 1n 3u uic\n.end\n";
+        let at = [0.1e-6, 0.3e-6];
+        let base = uic_samples(deck, "b", &at, 0.5e-9);
+        let collector = uic_samples(deck, "c", &[0.1e-6, 0.3e-6, 1e-6], 0.5e-9);
+        let expect = [
+            (base[0], -1.740669),
+            (base[1], -0.8756738),
+            (collector[0], 2.077584),
+            (collector[1], 0.8144268),
+            (collector[2], 0.1038266),
+        ];
+        for (got, ngspice) in expect {
+            assert!(
+                (got - ngspice).abs() < 5e-3,
+                "BJT ic=: {got} V vs ngspice {ngspice} V"
+            );
+        }
+    }
+
+    #[test]
+    fn tran_uic_jfet_ic_seeds_both_gate_charges_like_ngspice() {
+        // `ic=<vds>,<vgs>` = 4, −3: vgd = −7, channel pinched off (VTO = −2).
+        // As the gate discharges the channel turns on and drains `d`.
+        // Values are ngspice 45 `.tran 1n 3u uic` on this deck.
+        let deck = "* j ic\nRg g 0 10k\nRd d 0 20k\nJ1 d g 0 JMOD ic=4,-3\n\
+                    .model JMOD NJF(VTO=-2 BETA=1e-4 CGS=20p CGD=10p PB=0.8)\n\
+                    .tran 1n 3u uic\n.end\n";
+        let gate = uic_samples(deck, "g", &[0.1e-6, 0.3e-6], 0.5e-9);
+        let drain = uic_samples(deck, "d", &[0.1e-6, 0.3e-6, 1e-6], 0.5e-9);
+        let expect = [
+            (gate[0], -1.860783),
+            (gate[1], -0.8536155),
+            (drain[0], 1.680691),
+            (drain[1], 0.1237690),
+            (drain[2], 0.005011552),
+        ];
+        for (got, ngspice) in expect {
+            assert!(
+                (got - ngspice).abs() < 5e-3,
+                "JFET ic=: {got} V vs ngspice {ngspice} V"
+            );
+        }
+        // MOSFET `ic=` is refused by name, not as an unknown parameter.
+        let error = parse_netlist(
+            "M1 d g 0 0 NM ic=1,2,0\n.model NM NMOS(VTO=1 KP=1e-4)\nR1 d 0 1k\nR2 g 0 1k\n",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("MOSFET instance ic="), "{error}");
+    }
+
+    #[test]
     fn mutually_coupled_inductors_match_the_be_and_trapezoidal_companions() {
         const L1: f64 = 4e-3;
         const L2: f64 = 1e-3;
