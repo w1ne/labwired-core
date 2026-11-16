@@ -659,6 +659,167 @@ impl SystemBus {
         self.run_bus_tick_pass();
     }
 
+    /// Diff the input word of every GPIO port against the last-seen levels and
+    /// hand each changed pin to every peripheral's `observe_gpio_change`
+    /// (GPIOTE EVENTS_IN, Series-2 EXTI, SAM EIC).
+    ///
+    /// Event-driven: the bus calls this exactly where a port's input word can
+    /// move (an MMIO write into the port, an external pad drive) and at every
+    /// peripheral tick as a safety net, instead of polling every cycle. See
+    /// [`Self::observe_gpio_edges_if_live`].
+    pub(crate) fn observe_gpio_edges_unconditional(&mut self) {
+        // GPIO edge-detection pass: snapshot the IN registers of GPIO ports
+        // 0 and 1, diff against last-known state, and notify every
+        // peripheral of changed pins. GPIOTE overrides observe_gpio_change
+        // to drive EVENTS_IN[i] when a channel watches a matching pin.
+        //
+        // ESP32-C3 does not use this Nordic GPIO/GPIOTE service path; its
+        // board inputs write the C3 GPIO register model directly. Skipping
+        // this block is important because C3 ROM-boot needs very frequent
+        // ticks for interrupt-matrix correctness.
+        // Which peripheral is which port. Numbered (Nordic) and lettered
+        // (Silicon Labs, ST) spellings map onto the same index space, so a
+        // chip's ports are 0..3 whatever it calls them — and the tuple a
+        // watcher receives means the same thing on both.
+        //
+        // ⚠️ Levels come from `Peripheral::read_gpio_input`, NOT from a
+        // hardcoded register offset. This pass used to read `base + 0x510`,
+        // which is the Nordic IN register and is DOUT on a Series-2 port —
+        // so an EFR32 edge was never observed at all and its EXTI could
+        // never fire. `read_gpio_input` asks each model for its own input
+        // register, and answers the identical value for the Nordic ports
+        // it already served.
+        const GPIO_PORT_IDS: [(&str, usize); 8] = [
+            ("gpio0", 0),
+            ("gpio1", 1),
+            ("gpio2", 2),
+            ("gpio3", 3),
+            ("gpioa", 0),
+            ("gpiob", 1),
+            ("gpioc", 2),
+            ("gpiod", 3),
+        ];
+        // Resolved once, then cached — see `SystemBus::gpio_port_idx`. Doing
+        // it per tick is eight linear scans of the peripheral list with a
+        // string compare each, on every boundary of every chip, to arrive at
+        // the same four indices every time.
+        let gpio_idx = match self.gpio_port_idx {
+            Some(cached) => cached,
+            None => {
+                let mut resolved: [Option<usize>; 4] = [None; 4];
+                for (name, port) in GPIO_PORT_IDS {
+                    if resolved[port].is_none() {
+                        resolved[port] = self.find_peripheral_index_by_name(name);
+                    }
+                }
+                // A few chips, including NXP K32W041, expose a single
+                // generic `gpio` port. Only poll that alias when an edge
+                // service needs it. ESP32-C3 also names its GPIO block
+                // `gpio`, but drives it through its own register path;
+                // polling its computed input word on every tick is costly.
+                let has_edge_observer =
+                    self.peripherals.iter().any(|p| p.dev.observes_gpio_edges());
+                if resolved[0].is_none() && has_edge_observer {
+                    resolved[0] = self.find_peripheral_index_by_name("gpio");
+                }
+                self.gpio_port_idx = Some(resolved);
+                resolved
+            }
+        };
+        let mut changes: Vec<(u8, u8, u8)> = Vec::new();
+        // First pass ADOPTS the live levels as the baseline (see
+        // `last_gpio_in`): nothing has transitioned yet, so `baseline` is
+        // `None` and no change is reported for any pin the outside world
+        // already holds.
+        let baseline = self.last_gpio_in;
+        let mut current_in = baseline.unwrap_or([0; 4]);
+        for (port, idx) in gpio_idx.iter().enumerate() {
+            let Some(idx) = idx else { continue };
+            // Whole port in one call. `read_gpio_input_word`'s default IS
+            // the pin-by-pin loop that used to be written out here (first
+            // `None` ends the port, so a port narrower than 32 pins leaves
+            // the rest of the word clear), so a model that does not
+            // override it produces the identical word; `GpioPort` does
+            // override it, and answers with one register read instead of
+            // 32 evaluations of a computed input register.
+            let cur = self.peripherals[*idx].dev.read_gpio_input_word();
+            current_in[port] = cur;
+            let Some(prev) = baseline.map(|b| b[port]) else {
+                continue;
+            };
+            let diff = cur ^ prev;
+            if diff != 0 {
+                for pin in 0..32u8 {
+                    if diff & (1 << pin) != 0 {
+                        let level = ((cur >> pin) & 1) as u8;
+                        changes.push((port as u8, pin, level));
+                    }
+                }
+            }
+        }
+        self.last_gpio_in = Some(current_in);
+        if !changes.is_empty() {
+            // A GPIO edge can make a dynamic peripheral (e.g. GPIOTE)
+            // newly walk-active through `observe_gpio_change` — a
+            // CROSS-peripheral activation that the per-MMIO-write refresh
+            // choke never observes. Refresh the legacy-tick index of every
+            // dynamic peripheral so a freshly-armed GPIOTE re-enters the
+            // walk and drains its EVENTS_IN on the next tick (before this,
+            // a GPIOTE that opts out of the walk while idle would never be
+            // re-added and its input event would be lost). Guarded by an
+            // actual edge, so this is off the steady-state hot path.
+            for idx in 0..self.peripherals.len() {
+                let latched = self.peripherals[idx].dev.observe_gpio_change(&changes);
+                if self.peripherals[idx].dev.legacy_tick_dynamic() {
+                    self.refresh_legacy_tick_index(idx);
+                }
+                // Walk-free: a scheduler-driven peripheral (GPIOTE) that
+                // latched pending work FROM THIS EDGE needs its delay-0
+                // drain event harvested here — the MMIO write choke never
+                // sees a cross-peripheral edge.
+                //
+                // Only the models that latched. Harvesting from every
+                // scheduler-driven peripheral re-arms a duplicate wake on
+                // models that already have one in flight and cannot latch
+                // anything from a GPIO edge: `take_scheduled_events` is a
+                // query of live state, not a one-shot take, so a second
+                // harvest at a later cycle produces a second heap entry at
+                // a DIFFERENT deadline, which the scheduler's byte-identical
+                // dedup cannot collapse. For the RADIO that duplicate fires
+                // inside the same drain as the EasyDMA event and runs
+                // `tick()` while the air-time countdown is pinned at 1 —
+                // raising ADDRESS/PAYLOAD/END immediately and erasing the
+                // whole packet's transmission time.
+                #[cfg(feature = "event-scheduler")]
+                if latched && self.peripherals[idx].dev.uses_scheduler() {
+                    self.collect_scheduled_events(idx);
+                }
+                #[cfg(not(feature = "event-scheduler"))]
+                let _ = latched;
+            }
+        }
+    }
+
+    /// Cheap gate for the event hooks: no-op unless some peripheral consumes
+    /// edges, and never on the ESP32-C3 routing path (which skips the pass).
+    #[inline]
+    pub(crate) fn observe_gpio_edges_if_live(&mut self) {
+        if self.gpio_edge_observers && !self.irq_fabric.esp32c3.routing {
+            self.observe_gpio_edges_unconditional();
+        }
+    }
+
+    /// Whether bus index `idx` is one of the GPIO ports the edge pass reads.
+    #[inline]
+    pub(crate) fn is_edge_watched_gpio_port(&self, idx: usize) -> bool {
+        match self.gpio_port_idx {
+            Some(ports) => ports.contains(&Some(idx)),
+            // Not resolved yet: resolve through a full pass, which also adopts
+            // the baseline.
+            None => true,
+        }
+    }
+
     #[allow(clippy::type_complexity)]
     fn tick_peripherals_phase1(
         &mut self,
@@ -918,136 +1079,7 @@ impl SystemBus {
         }
 
         if !self.irq_fabric.esp32c3.routing {
-            // GPIO edge-detection pass: snapshot the IN registers of GPIO ports
-            // 0 and 1, diff against last-known state, and notify every
-            // peripheral of changed pins. GPIOTE overrides observe_gpio_change
-            // to drive EVENTS_IN[i] when a channel watches a matching pin.
-            //
-            // ESP32-C3 does not use this Nordic GPIO/GPIOTE service path; its
-            // board inputs write the C3 GPIO register model directly. Skipping
-            // this block is important because C3 ROM-boot needs very frequent
-            // ticks for interrupt-matrix correctness.
-            // Which peripheral is which port. Numbered (Nordic) and lettered
-            // (Silicon Labs, ST) spellings map onto the same index space, so a
-            // chip's ports are 0..3 whatever it calls them — and the tuple a
-            // watcher receives means the same thing on both.
-            //
-            // ⚠️ Levels come from `Peripheral::read_gpio_input`, NOT from a
-            // hardcoded register offset. This pass used to read `base + 0x510`,
-            // which is the Nordic IN register and is DOUT on a Series-2 port —
-            // so an EFR32 edge was never observed at all and its EXTI could
-            // never fire. `read_gpio_input` asks each model for its own input
-            // register, and answers the identical value for the Nordic ports
-            // it already served.
-            const GPIO_PORT_IDS: [(&str, usize); 8] = [
-                ("gpio0", 0),
-                ("gpio1", 1),
-                ("gpio2", 2),
-                ("gpio3", 3),
-                ("gpioa", 0),
-                ("gpiob", 1),
-                ("gpioc", 2),
-                ("gpiod", 3),
-            ];
-            // Resolved once, then cached — see `SystemBus::gpio_port_idx`. Doing
-            // it per tick is eight linear scans of the peripheral list with a
-            // string compare each, on every boundary of every chip, to arrive at
-            // the same four indices every time.
-            let gpio_idx = match self.gpio_port_idx {
-                Some(cached) => cached,
-                None => {
-                    let mut resolved: [Option<usize>; 4] = [None; 4];
-                    for (name, port) in GPIO_PORT_IDS {
-                        if resolved[port].is_none() {
-                            resolved[port] = self.find_peripheral_index_by_name(name);
-                        }
-                    }
-                    // A few chips, including NXP K32W041, expose a single
-                    // generic `gpio` port. Only poll that alias when an edge
-                    // service needs it. ESP32-C3 also names its GPIO block
-                    // `gpio`, but drives it through its own register path;
-                    // polling its computed input word on every tick is costly.
-                    let has_edge_observer =
-                        self.peripherals.iter().any(|p| p.dev.observes_gpio_edges());
-                    if resolved[0].is_none() && has_edge_observer {
-                        resolved[0] = self.find_peripheral_index_by_name("gpio");
-                    }
-                    self.gpio_port_idx = Some(resolved);
-                    resolved
-                }
-            };
-            let mut changes: Vec<(u8, u8, u8)> = Vec::new();
-            // First pass ADOPTS the live levels as the baseline (see
-            // `last_gpio_in`): nothing has transitioned yet, so `baseline` is
-            // `None` and no change is reported for any pin the outside world
-            // already holds.
-            let baseline = self.last_gpio_in;
-            let mut current_in = baseline.unwrap_or([0; 4]);
-            for (port, idx) in gpio_idx.iter().enumerate() {
-                let Some(idx) = idx else { continue };
-                // Whole port in one call. `read_gpio_input_word`'s default IS
-                // the pin-by-pin loop that used to be written out here (first
-                // `None` ends the port, so a port narrower than 32 pins leaves
-                // the rest of the word clear), so a model that does not
-                // override it produces the identical word; `GpioPort` does
-                // override it, and answers with one register read instead of
-                // 32 evaluations of a computed input register.
-                let cur = self.peripherals[*idx].dev.read_gpio_input_word();
-                current_in[port] = cur;
-                let Some(prev) = baseline.map(|b| b[port]) else {
-                    continue;
-                };
-                let diff = cur ^ prev;
-                if diff != 0 {
-                    for pin in 0..32u8 {
-                        if diff & (1 << pin) != 0 {
-                            let level = ((cur >> pin) & 1) as u8;
-                            changes.push((port as u8, pin, level));
-                        }
-                    }
-                }
-            }
-            self.last_gpio_in = Some(current_in);
-            if !changes.is_empty() {
-                // A GPIO edge can make a dynamic peripheral (e.g. GPIOTE)
-                // newly walk-active through `observe_gpio_change` — a
-                // CROSS-peripheral activation that the per-MMIO-write refresh
-                // choke never observes. Refresh the legacy-tick index of every
-                // dynamic peripheral so a freshly-armed GPIOTE re-enters the
-                // walk and drains its EVENTS_IN on the next tick (before this,
-                // a GPIOTE that opts out of the walk while idle would never be
-                // re-added and its input event would be lost). Guarded by an
-                // actual edge, so this is off the steady-state hot path.
-                for idx in 0..self.peripherals.len() {
-                    let latched = self.peripherals[idx].dev.observe_gpio_change(&changes);
-                    if self.peripherals[idx].dev.legacy_tick_dynamic() {
-                        self.refresh_legacy_tick_index(idx);
-                    }
-                    // Walk-free: a scheduler-driven peripheral (GPIOTE) that
-                    // latched pending work FROM THIS EDGE needs its delay-0
-                    // drain event harvested here — the MMIO write choke never
-                    // sees a cross-peripheral edge.
-                    //
-                    // Only the models that latched. Harvesting from every
-                    // scheduler-driven peripheral re-arms a duplicate wake on
-                    // models that already have one in flight and cannot latch
-                    // anything from a GPIO edge: `take_scheduled_events` is a
-                    // query of live state, not a one-shot take, so a second
-                    // harvest at a later cycle produces a second heap entry at
-                    // a DIFFERENT deadline, which the scheduler's byte-identical
-                    // dedup cannot collapse. For the RADIO that duplicate fires
-                    // inside the same drain as the EasyDMA event and runs
-                    // `tick()` while the air-time countdown is pinned at 1 —
-                    // raising ADDRESS/PAYLOAD/END immediately and erasing the
-                    // whole packet's transmission time.
-                    #[cfg(feature = "event-scheduler")]
-                    if latched && self.peripherals[idx].dev.uses_scheduler() {
-                        self.collect_scheduled_events(idx);
-                    }
-                    #[cfg(not(feature = "event-scheduler"))]
-                    let _ = latched;
-                }
-            }
+            self.observe_gpio_edges_unconditional();
 
             // CAN synthetic services stay Nordic/non-C3: C3 ROM-boot labs do
             // not host them and the high-frequency IRQ tick must stay lean.
@@ -1829,6 +1861,7 @@ impl SystemBus {
             if self.esp32s3_irq_audit.is_some() {
                 self.audit_esp32s3_irq_boundary();
             }
+            self.observe_gpio_edges_if_live();
             self.collect_enabled_nvic_interrupts(interrupts);
             return;
         }
@@ -1876,6 +1909,7 @@ impl SystemBus {
             if self.esp32s3_irq_audit.is_some() {
                 self.audit_esp32s3_irq_boundary();
             }
+            self.observe_gpio_edges_if_live();
             let mut interrupts = Vec::new();
             self.collect_enabled_nvic_interrupts(&mut interrupts);
             return (interrupts, Vec::new());

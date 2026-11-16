@@ -465,6 +465,35 @@ impl SystemManifest {
                 }
             }
         }
+        // A `microsd` card's `image:` names a disk image on the host; it is
+        // read here and handed to the core inline as `image_base64:`, for the
+        // same reason as `can-player`'s `path:`.
+        for ext in &mut manifest.external_devices {
+            if ext.r#type != "microsd" || !ext.config.contains_key("image") {
+                continue;
+            }
+            if ext.config.contains_key("image_base64") {
+                return Err(anyhow::anyhow!(
+                    "microsd '{}': both 'image' and 'image_base64' are set in config; set only one",
+                    ext.id
+                ));
+            }
+            let rel = ext
+                .config
+                .remove("image")
+                .and_then(|v| v.as_str().map(str::to_string))
+                .ok_or_else(|| {
+                    anyhow::anyhow!("microsd '{}': image must be a path string", ext.id)
+                })?;
+            let full = base.join(&rel);
+            let bytes = std::fs::read(&full).map_err(|e| {
+                anyhow::anyhow!("microsd '{}': cannot read image {:?}: {e}", ext.id, full)
+            })?;
+            ext.config.insert(
+                "image_base64".into(),
+                serde_yaml::Value::String(crate::base64::encode(&bytes)),
+            );
+        }
         // `parts: [- path: ./acme.yaml]` is the same CLI convenience: read it
         // here so the core only ever sees an inline pack (wasm has no fs).
         for entry in &mut manifest.parts {
