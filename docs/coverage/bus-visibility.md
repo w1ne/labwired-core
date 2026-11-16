@@ -47,6 +47,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: PyBadge variant of the atsamd51 twin: generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
 * **cc2538sf53**
   * UART: no UART0 bring-up in this harness; bytes are proven by the cc2538dk survival smoke
+* **ch32l103c8t6**
+  * UART: no UART bring-up for the WCH L103 family in this harness yet; USART1 bytes are proven by ch32l103_compiled_firmware
 * **ch32v003a4m6**
   * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
 * **ch32v003f4p6**
@@ -181,6 +183,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | atsamd51 | — | — | — |
 | atsamd51-pybadge | — | — | — |
 | cc2538sf53 | — | — | — |
+| ch32l103c8t6 | — | — | — |
 | ch32v003a4m6 | — | — | — |
 | ch32v003f4p6 | — | — | — |
 | ch32v003f4u6 | — | — | — |
