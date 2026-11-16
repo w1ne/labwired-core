@@ -334,6 +334,11 @@ FIXTURES = {
 # their own chip config and get their own baseline. A generic CPU-only smoke
 # fixture must not stand in for an unimplemented board platform.
 WAIVED: dict[str, str] = {
+    "ch32v203c8t6": (
+        "The CH32V203 model runs RV32IMAC with WCH/F1-layout peripherals; CI "
+        "has no perf-spin fixture built for this memory map. No throughput "
+        "claim is made for this part yet."
+    ),
     "ch32v003a4m6": (
         "Package variant of the ch32v003f4p6 die (RV32EC); same waiver: CI "
         "has no RV32E-specific perf-spin fixture or compiler. No throughput "

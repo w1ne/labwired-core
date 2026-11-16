@@ -55,6 +55,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
 * **ch32v003j4m6**
   * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
+* **ch32v203c8t6**
+  * UART: no UART bring-up for the WCH V20x family in this harness yet; USART1 bytes are proven by ch32v203_compiled_firmware
 * **efr32mg26**
   * UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode
 * **esp32**
@@ -171,6 +173,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | ch32v003f4p6 | — | — | — |
 | ch32v003f4u6 | — | — | — |
 | ch32v003j4m6 | — | — | — |
+| ch32v203c8t6 | — | — | — |
 | dspic33fj32mc202 | — | — | — |
 | dspic33fj32mc204 | — | — | — |
 | efr32mg26 | ✓ | ✓ | — |
