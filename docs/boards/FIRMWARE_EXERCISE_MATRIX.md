@@ -145,6 +145,18 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 _No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
 
+### `ch32v003f4u6`
+
+_QFN20 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+
+### `ch32v003a4m6`
+
+_SOP16 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+
+### `ch32v003j4m6`
+
+_SOP8 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string. SOP8 has no PC0 pad, so a separate committed fixture blinks PC4 (package pin 7); the test requires PC4 edges and a negative control requires zero PC0 edges. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+
 ### `nrf5340`
 
 _No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; the PR-gated nrf5340_clock_boot test attaches the declarative BMI270 model and reads CHIP_ID 0x24 with a repeated-START transaction. Nine peripheral blocks remain benign boot stubs._
@@ -428,6 +440,13 @@ _Minimal real-register firmware smoke: reset/stack, RCC, GPIO PA5 LED and USART2
 
 **Dead** (2 modeled, never exercised): `PWR`, `FLASH_CTRL`
 
+### `stm32l432kc`
+
+_NUCLEO-L432KC. PR-gated raw-register smoke (examples/nucleo-l432kc/io-smoke.yaml): reset/stack, RCC, GPIOA/GPIOB, USART2 banner and PB3 LED edges. Stock stm32duino also runs the Arduino matrix row L0-L8 (INA219 over I2C1, MAX31855 over SPI1, ADC1_IN5 at a board-held 1650 mV, TIM2_CH2 PWM on PB3, bxCAN1 loopback), but that lane runs nightly and on main, not on PRs, so nothing is recorded as functional here. No physical silicon run exists._
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `SYSCFG` (configs/chips/stm32l432kc.yaml (type: stub; configs/peripherals/stm32l476/syscfg.yaml)) — CLOSABLE: author-declared stub shared with the L476 — read 0, writes dropped, so EXTI source-select is not modelled.
+
 ### `stm32f411ceu6`
 
 _WeAct Black Pill. Its tier-1 fixture (PR-gated `firmware_survival::test_stm32f411_tier1_survival`; nightly coverage-matrix cell examples/stm32f411ceu6-blackpill/io-smoke.yaml) drives clock/gpio/timer/i2c/spi (SPI1+SPI5)/adc/wdt/rtc over USART2, leaving dma unrecorded (the fixture never attempts it, and both stream controllers are zero stubs) and irq/pwm n/a (the fixture does not attempt either class). PWR is a real stm32f4-profile model no firmware drives; the descriptor's remaining stub windows are listed below._
@@ -474,6 +493,17 @@ _SIM-DERIVED first G0 port: its committed tier-1 fixture drives all 12 declared 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `WWDG` (configs/chips/stm32g071.yaml:349 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it (unlike the L476, no misc fingerprint reads its CR/CFR/SR).
 - `SYSCFG` (configs/chips/stm32g071.yaml:375 (type: syscfg; crates/core/src/peripherals/generic_factory.rs:739)) — CLOSABLE: hardcoded StubPeripheral — reads return 0 (plus a canned CCCSR=READY at 0x20 that is an H7-HAL seed, meaningless on G0) and writes are dropped, so EXTI source-select is not modelled; the tier-1 fixture pends its NVIC line via ISPR0 and nothing reads the window back.
+
+### `stm32c031c6`
+
+_No tier-1 target. First STM32C0 part: the stock-STM32duino Arduino matrix row (core-arduino-matrix-smoke, board stm32c031c6) runs USART2 console, SysTick, LD4 GPIO, Wire/I2C1 (INA219 CONFIG/BUS read back exactly), SPI1 (MAX31855 frame) and TIM1_CH1 PWM measured on the PA5 pad. Those are rubric classes. Beyond the rubric nothing runs: CRC, PWR, DBGMCU and the DMAMUX are family models no firmware drives, the ADC is a register file the C0 HAL talks to without a conversion (matrix L5 is skipped, not passed), and SYSCFG is the shared stub._
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `CRC`
+
+**Dead** (2 modeled, never exercised): `PWR`, `DBGMCU`
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `SYSCFG` (configs/chips/stm32c031c6.yaml (type: syscfg); crates/core/src/peripherals/generic_factory.rs (syscfg arm)) — CLOSABLE: StubPeripheral returns zero except a canned H7-style CCCSR readiness bit at 0x20, and drops writes. GPIO source selection lives in the G0-style EXTI EXTICR registers, not here.
 
 ### `stm32g0b1re`
 
@@ -556,6 +586,10 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 ### `atmega2560`
 
 _No tier-1 target. Firmware that runs: the PR-gated `avr_mega2560_io` integration test boots the committed Arduino-core ELF (tests/fixtures/avr/arduino-mega-2560-io.elf, built for arduino:avr:mega from examples/arduino-mega-2560-io) and asserts the 12 LED pins on ports E/G/F/B/H, analogRead(A8)/(A9) through ADCSRB.MUX5, millis() against simulated time, USART0 Serial and an EICALL through a function pointer. The descriptor reuses the 328P rubric classes (`avr_gpio` ports A..L, `avr_adc` with 16 channels, the parking `spi`/`i2c` controllers and the `usart0` peer host), so nothing beyond the rubric is declared and the lists below are empty._
+
+### `atmega32u4`
+
+_No tier-1 target. The Arduino Leonardo matrix row (validation/arduino-matrix/boards/arduino-leonardo.yaml) builds the stock ArduinoCore-avr sketches and runs L0-L7 on the model (8 pass, 1 skip: no CAN); `Serial` is native USB CDC on the CPU's USB device model with a scripted host that enumerates it, and the CPU-owned SPI, TWI and ADC (ADCSRB.MUX5) serve the L3/L4/L5 sensor kits. That lane needs PlatformIO and runs on the nightly/main matrix, not on pull requests; cpu::avr::usb unit tests are the PR-gated evidence. Timer3, the high-speed Timer4, INTn/PCINT and EEPROM are not modelled. No beyond-rubric behavior or physical acceptance is claimed and the lists below are empty._
 
 ### `atmega1281`
 
@@ -660,6 +694,22 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `iomuxc` (configs/chips/imxrt1064.yaml:37-41 (type imx_iomuxc; crates/core/src/peripherals/imx_iomuxc.rs:7-11)) — CLOSABLE: sticky register stub — every SW_MUX_CTL/SW_PAD_CTL/SELECT_INPUT word is stored and read back (2 unit tests pin only that read-back), but no alternate-function routing follows; the smoke never opens the window and a DTCM-linked image cannot reveal a pin-mux mistake.
 - `flexspi` (configs/chips/imxrt1064.yaml:59-62 (type stub; no schema)) — CLOSABLE: zero window at 0x402A8000 — the FlexSPI controller and XIP are not modelled and the descriptor claims no 4 MiB SiP flash; firmware is linked into DTCM because XIP cannot boot here, and nothing opens the window.
+
+### `mimxrt1062-teensy41`
+
+_No tier-1 target. Stock Teensyduino (PJRC core, PlatformIO teensy@6.0.0) boots the Teensy 4.1 profile from the FlexSPI NOR IVT (FlexRAM, PLLs, DCDC, SysTick on the 100 kHz reference, USB1 device controller) and prints through USB CDC to a scripted host; the arduino-matrix row validation/arduino-matrix/boards/teensy41.yaml runs L0-L3, L5 and L7 on it (6 pass, 3 skip: no LPSPI, QuadTimer or FlexCAN model). That lane needs PlatformIO and runs on the nightly/main matrix, not on pull requests. LPI2C1 is a real model (an INA219 is read through stock Wire); the declared stubs are listed as shims. No physical acceptance is claimed._
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `iomuxc_gpr` (configs/chips/mimxrt1062-teensy41.yaml:150-152 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `flexram` (configs/chips/mimxrt1062-teensy41.yaml:153 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `snvs` (configs/chips/mimxrt1062-teensy41.yaml:154 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `pit` (configs/chips/mimxrt1062-teensy41.yaml:155 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `ocotp` (configs/chips/mimxrt1062-teensy41.yaml:156 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `src` (configs/chips/mimxrt1062-teensy41.yaml:157 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `gpc` (configs/chips/mimxrt1062-teensy41.yaml:158 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `tmr1..tmr4 (QuadTimer1-4)` (configs/chips/mimxrt1062-teensy41.yaml:159-162 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `pwm1..pwm4 (eFlexPWM1-4)` (configs/chips/mimxrt1062-teensy41.yaml:163-166 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `scs_debug (CoreDebug DHCSR..DEMCR)` (configs/chips/mimxrt1062-teensy41.yaml:174 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
 
 ### `mkw41z4`
 

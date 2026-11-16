@@ -7,26 +7,16 @@ name: Core Onboarding Smoke
 # about a run they can neither see nor stop. Pushes and manual dispatch are
 # untouched — a fork still gets this workflow on its own changes.
 on:
-  # Slow gates: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
+  # CI cut O11: nightly + manual only. Push-to-main ran this on every merge
+  # touching crates/core or configs; nothing blocks on it, and the nightly run
+  # names the offending range. Not on PRs.
   schedule:
     - cron: "10 2 * * *"
-  push:
-    branches:
-      - main
-    paths:
-      - "configs/chips/**"
-      - "configs/systems/**"
-      - "examples/**"
-      - "crates/core/**"
-      - "crates/firmware-stm32u575-demo/**"
-      - "crates/cli/**"
-      - "crates/labwired-models-**"
-      - ".github/workflows/core-onboarding-smoke.yml"
   workflow_dispatch:
 
 concurrency:
   group: core-onboarding-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   onboarding-smoke:

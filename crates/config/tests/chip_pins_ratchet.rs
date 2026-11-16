@@ -124,6 +124,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // directly onto gpio<port>/bit; no alternate package-label scheme exists
     // to transcribe a `pins:` override from (same reasoning as the peers above).
     "stm32g071",
+    // The C031C6 uses the same PA5/PB6 STM32 labels (DS13867); the parse maps
+    // them onto gpio<port>/bit exactly, as for the G0 it shares IP blocks with.
+    "stm32c031c6",
     "stm32h563",
     "stm32h735",
     "stm32l073",

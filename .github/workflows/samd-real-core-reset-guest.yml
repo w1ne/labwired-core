@@ -21,7 +21,7 @@ permissions:
   contents: read
 concurrency:
   group: real-core-reset-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
   LABWIRED_RESET_SOURCE: 12d4759af0bf2b29726cfd79c487474a282cc5b0
 jobs:
