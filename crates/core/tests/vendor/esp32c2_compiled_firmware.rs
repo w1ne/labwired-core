@@ -266,10 +266,10 @@ fn esp32c2_from_cpu_doorbell_reaches_its_cpu_line_and_intr_status() {
 const ESP_HAL_IRQ_FIXTURE: &str = "tests/fixtures/esp32c2-esp-hal-irq.elf";
 const ESP_HAL_GPIO_IRQ_FIXTURE: &str = "tests/fixtures/esp32c2-esp-hal-gpio-irq.elf";
 
-/// Runs an esp-hal interrupt fixture (examples/esp32c2/esp-hal-irq or
-/// esp-hal-gpio-irq) with the C2 fast-boot CPU state and ROM unpack, with or
-/// without the interrupt matrix armed. Returns the UART0 text once the app
-/// prints its `irq PASS`/`irq FAIL` verdict or `steps` run out.
+/// Runs an esp-hal interrupt fixture (examples/esp32c2/esp-hal-irq,
+/// esp-hal-gpio-irq or esp-hal-embassy) with the C2 fast-boot CPU state and
+/// ROM unpack, with or without the interrupt matrix armed. Returns the UART0
+/// text once the app prints its `PASS`/`FAIL` verdict or `steps` run out.
 fn run_esp_hal_irq(fixture: &str, arm_matrix: bool, steps: usize) -> String {
     let chip = descriptor();
     let mut bus =
@@ -293,7 +293,7 @@ fn run_esp_hal_irq(fixture: &str, arm_matrix: bool, steps: usize) -> String {
                 .unwrap_or_else(|e| panic!("step {chunk}: {e:?}; UART {:?}", uart()));
         }
         let text = uart();
-        if text.contains("irq PASS\n") || text.contains("irq FAIL\n") {
+        if text.contains(" PASS\n") || text.contains(" FAIL\n") {
             return text;
         }
     }
@@ -344,4 +344,35 @@ fn esp32c2_esp_hal_gpio_edges_without_matrix_routing_run_no_handler() {
     let uart = run_esp_hal_irq(ESP_HAL_GPIO_IRQ_FIXTURE, false, 4_000_000);
     assert!(uart.contains("LW-C2 rising hits 0\n"), "{uart:?}");
     assert!(uart.contains("LW-C2 gpio-irq FAIL"), "{uart:?}");
+}
+
+const ESP_HAL_EMBASSY_FIXTURE: &str = "tests/fixtures/esp32c2-esp-hal-embassy.elf";
+
+#[test]
+fn esp32c2_embassy_tasks_and_timers_run_on_esp_rtos() {
+    // esp-rtos takes SYSTIMER alarm 0 as the Embassy time driver and
+    // FROM_CPU_INTR0 for task switches. A spawned task awaits three 1 ms
+    // Timers and signals main; `with_timeout` on a signal nobody sends
+    // expires after 1 ms.
+    let uart = run_esp_hal_irq(ESP_HAL_EMBASSY_FIXTURE, true, 4_000_000);
+    let line = uart
+        .lines()
+        .find_map(|l| l.strip_prefix("LW-C2 ticks "))
+        .unwrap_or_else(|| panic!("tick line missing: {uart:?}"));
+    let (ticks, elapsed) = line.split_once(" elapsed_us ").expect("elapsed field");
+    assert_eq!(ticks, "3", "{uart:?}");
+    let elapsed: u64 = elapsed.parse().expect("microseconds");
+    // Three 1 ms timers in sequence: 3.0 ms plus wake-up latency.
+    assert!((3_000..3_500).contains(&elapsed), "elapsed {elapsed} us");
+    assert!(uart.contains("LW-C2 timeout fired true\n"), "{uart:?}");
+    assert!(uart.contains("LW-C2 embassy PASS"), "{uart:?}");
+}
+
+#[test]
+fn esp32c2_embassy_without_matrix_routing_never_reaches_the_ticks() {
+    // Negative control: with the matrix not armed the SYSTIMER alarm and the
+    // FROM_CPU task-switch doorbell never reach a CPU line, so no timer
+    // completes and main never prints its tick count.
+    let uart = run_esp_hal_irq(ESP_HAL_EMBASSY_FIXTURE, false, 2_000_000);
+    assert_eq!(uart, "LW-C2 embassy boot\n");
 }
