@@ -1,0 +1,46 @@
+# Matched generic BJT junctions compare TLEVC=1's linear temperature law with
+# explicitly adjusted hot parameters and controls through STM32F401 ADC1.
+name: "nucleo-f401re-bjt-linear-junction-temperature"
+chip: "../../configs/chips/stm32f401.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_linear_junction_temperature"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_tlevc.base_v"
+    outputs:
+      temperature_scaled: "board.analog.pa1_volts"
+      explicit_hot: "board.analog.pa2_volts"
+      coefficients_disabled: "board.analog.pa3_volts"
+      silicon_law: "board.analog.pa4_volts"
+      applied_drive: "board.analog.pa5_volts"
+    config:
+      netlist_text: |
+        Vcollector_scaled collector 0 dc 3.3
+        Vcollector_explicit collector_explicit 0 dc 3.3
+        Vcollector_fixed collector_fixed 0 dc 3.3
+        Vcollector_silicon collector_silicon 0 dc 3.3
+        Vbase drive 0 dc 0
+        Qscaled collector base 0 NPN_SCALED TEMP=125
+        Qexplicit collector_explicit base_explicit 0 NPN_EXPLICIT TEMP=125
+        Qfixed collector_fixed base_fixed 0 NPN_FIXED TEMP=125
+        Qsilicon collector_silicon base_silicon 0 NPN_SILICON TEMP=125
+        Rbase_scaled drive base 1k
+        Rbase_explicit drive base_explicit 1k
+        Rbase_fixed drive base_fixed 1k
+        Rbase_silicon drive base_silicon 1k
+        .model NPN_SCALED NPN(IS=1e-40 BF=100 BR=4 VAF=50 TNOM=27 CJE=10n VJE=0.7 MJE=0.33 CJC=10n VJC=0.7 MJC=0.33 FC=0.5 TLEVC=1 CTE=1.5m CTC=1m TVJE=400u TVJC=500u TMJE1=1m TMJE2=2u TMJC1=700u TMJC2=1u)
+        .model NPN_EXPLICIT NPN(IS=1e-40 BF=100 BR=4 VAF=50 TNOM=27 CJE=11.47n VJE=0.6608 MJE=0.36867864 CJC=10.98n VJC=0.651 MJC=0.35580732 FC=0.5 TLEVC=1)
+        .model NPN_FIXED NPN(IS=1e-40 BF=100 BR=4 VAF=50 TNOM=27 CJE=10n VJE=0.7 MJE=0.33 CJC=10n VJC=0.7 MJC=0.33 FC=0.5 TLEVC=1)
+        .model NPN_SILICON NPN(IS=1e-40 BF=100 BR=4 VAF=50 TNOM=27 CJE=10n VJE=0.7 MJE=0.33 CJC=10n VJC=0.7 MJC=0.33 FC=0.5 TLEVC=0 CTE=1.5m CTC=1m TVJE=400u TVJC=500u TMJE1=1m TMJE2=2u TMJC1=700u TMJC2=1u)
+      probes:
+        temperature_scaled: "v(base)"
+        explicit_hot: "v(base_explicit)"
+        coefficients_disabled: "v(base_fixed)"
+        silicon_law: "v(base_silicon)"
+        applied_drive: "v(drive)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3

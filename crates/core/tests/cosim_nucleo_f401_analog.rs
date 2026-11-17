@@ -1389,6 +1389,197 @@ fn nucleo_f401re_bjt_junction_and_transit_charge_reach_adc1_end_to_end() {
     );
 }
 
+/// BJT `TLEVC=1` linear depletion-temperature coefficients reach ADC1 and
+/// match an independently expanded hot parameter card at the board endpoint.
+#[test]
+fn nucleo_f401re_bjt_linear_junction_temperature_reaches_adc1_with_diode() {
+    const BASE_DRIVE_V: f64 = 0.8;
+    const TEMP_C: f64 = 125.0;
+    const TNOM_C: f64 = 27.0;
+    const DELTA_C: f64 = TEMP_C - TNOM_C;
+
+    // Independent expansion of ngspice's TLEVC=1 model-card equations.
+    let explicit_hot = [
+        10e-9 * (1.0 + 1.5e-3 * DELTA_C),
+        0.7 - 4e-4 * DELTA_C,
+        0.33 * (1.0 + 1e-3 * DELTA_C + 2e-6 * DELTA_C * DELTA_C),
+        10e-9 * (1.0 + 1e-3 * DELTA_C),
+        0.7 - 5e-4 * DELTA_C,
+        0.33 * (1.0 + 700e-6 * DELTA_C + 1e-6 * DELTA_C * DELTA_C),
+    ];
+    assert!((explicit_hot[0] - 11.47e-9).abs() < 1e-20);
+    assert!((explicit_hot[1] - 0.6608).abs() < 1e-12);
+    assert!((explicit_hot[2] - 0.36867864).abs() < 1e-10);
+    assert!((explicit_hot[3] - 10.98e-9).abs() < 1e-20);
+    assert!((explicit_hot[4] - 0.651).abs() < 1e-12);
+    assert!((explicit_hot[5] - 0.35580732).abs() < 1e-10);
+
+    let system_path = root("configs/systems/nucleo-f401re.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
+    let diode = SystemManifest::from_file(root("examples/nucleo-f401re/analog-diode-system.yaml"))
+        .expect("load unrelated generic Shockley diode netlist");
+    let bjt = SystemManifest::from_file(root(
+        "examples/nucleo-f401re/analog-bjt-linear-junction-temperature.yaml",
+    ))
+    .expect("load linear and explicit hot BJT junction branches");
+    profile.cosim_models = diode.cosim_models;
+    profile.cosim_models.extend(bjt.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F401 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F401RE bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries a diode and four matched generic BJT junction branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic diode and BJT netlists must resolve through PA0..PA5 to ADC1"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.bjt_tlevc.base_v", 0.0)
+        .expect("initialize all matched BJT branches");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize diode and BJT junction branches");
+    assert_eq!(initial_steps.len(), 2, "the diode and BJT netlists solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.bjt_tlevc.base_v", BASE_DRIVE_V)
+        .expect("step every matched BJT base drive");
+    let mut first_voltages = None;
+    let mut settled_voltages = None;
+    for step in 0..=1_000 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route diode and temperature-adjusted BJT junctions");
+        assert_eq!(
+            steps.len(),
+            2,
+            "both analog netlists solve at each 1 us step"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let diode_v = signal_voltage(&session, "board.analog.pa0_volts");
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode remains on its independent load line"
+        );
+        let voltages = [
+            signal_voltage(&session, "board.analog.pa1_volts"),
+            signal_voltage(&session, "board.analog.pa2_volts"),
+            signal_voltage(&session, "board.analog.pa3_volts"),
+            signal_voltage(&session, "board.analog.pa4_volts"),
+        ];
+        let applied_drive = signal_voltage(&session, "board.analog.pa5_volts");
+        assert!(
+            (applied_drive - BASE_DRIVE_V).abs() < 1e-9,
+            "the routed input must set the analog source to {BASE_DRIVE_V} V, got {applied_drive} V"
+        );
+
+        if step == 0 {
+            assert!(
+                (voltages[0] - voltages[1]).abs() < 1e-8,
+                "TLEVC=1 CTE/CTC/TVJE/TVJC/TMJE/TMJC must match the explicit hot card: {voltages:?}"
+            );
+            assert!(
+                (voltages[0] - voltages[2]).abs() > 1e-3,
+                "dropping linear junction temperature coefficients must change the transient: {voltages:?}"
+            );
+            assert!(
+                (voltages[0] - voltages[3]).abs() > 1e-3,
+                "TLEVC=1 must differ from the default silicon temperature law: {voltages:?}"
+            );
+            first_voltages = Some(voltages);
+        }
+        if step == 1_000 {
+            settled_voltages = Some(voltages);
+        }
+
+        for (channel, voltage) in (1..=4).zip(voltages) {
+            let expected = expected_adc_count(voltage);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved BJT voltage must seed descriptor-routed ADC1_IN{channel}"
+            );
+            if step == 0 || step == 1_000 {
+                assert_eq!(
+                    f401_adc_convert(&mut bus, channel),
+                    u32::from(expected),
+                    "firmware-visible ADC1_IN{channel} conversion reports the routed BJT voltage"
+                );
+            }
+        }
+        let drive_count = expected_adc_count(applied_drive);
+        assert_eq!(
+            adc_channel_count(&mut bus, 5),
+            drive_count,
+            "the BJT source drive probe reaches ADC1_IN5"
+        );
+        if step == 0 || step == 1_000 {
+            assert_eq!(
+                f401_adc_convert(&mut bus, 5),
+                u32::from(drive_count),
+                "firmware-visible ADC1_IN5 conversion reports the applied base drive"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 0),
+            expected_adc_count(diode_v),
+            "unrelated diode stays isolated on ADC1_IN0"
+        );
+        if step == 0 || step == 1_000 {
+            assert_eq!(
+                f401_adc_convert(&mut bus, 0),
+                u32::from(expected_adc_count(diode_v)),
+                "firmware-visible ADC1_IN0 conversion continues to report the diode"
+            );
+        }
+    }
+
+    let first = first_voltages.expect("first transient sample was recorded");
+    assert!(
+        expected_adc_count(first[0]) != expected_adc_count(first[2]),
+        "the linear temperature coefficients must change the firmware-visible ADC code"
+    );
+    assert!(
+        expected_adc_count(first[0]) != expected_adc_count(first[3]),
+        "the TLEVC selector must change the firmware-visible ADC code"
+    );
+    let settled = settled_voltages.expect("settled transient sample was recorded");
+    assert!(
+        settled.iter().all(|voltage| (voltage - settled[0]).abs() < 2e-4),
+        "depletion charge changes only the transient; all hot branches settle to the same DC point: {settled:?}"
+    );
+}
+
 #[test]
 fn nucleo_f401re_jfet_gate_depletion_charge_reaches_adc1_with_unrelated_diode() {
     const STEP_S: f64 = 1e-6;
