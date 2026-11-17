@@ -90,9 +90,10 @@ pub trait I2cDevice: Send {
         false
     }
 
-    /// Width in microseconds of the pulse this device currently drives on PWM
-    /// output `channel`, or `None` when the channel is not producing a pulse
-    /// (never written, full-off, sleeping) or the device has no PWM outputs.
+    /// Modeled pulse width in microseconds for PWM output `channel`. `None`
+    /// includes static, absent, unsupported, and unknown outputs; it is not
+    /// proof of silence. The query does not establish output-enable, servo
+    /// power, or physical signal delivery.
     /// A servo declared with `source_address` / `source_channel` reads this.
     fn pwm_channel_pulse_us(&self, _channel: u8) -> Option<f64> {
         None
