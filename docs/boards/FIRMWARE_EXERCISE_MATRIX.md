@@ -99,6 +99,10 @@ _Narrow ESP32-DevKitC-32E onboarding profile (GPIO23, UART0, I2C0). docs/receipt
 
 _Narrow ESP32-DevKitC-32E onboarding profile that routes UART1 TX to J3 pin 12 / GPIO16. Committed evidence at examples/esp32-devkitc-32e-uart1/evidence/run shows examples/esp32-devkitc-32e-uart1/uart1-smoke.yaml passed 3/3: UART0 printed ESP32_DEVKITC32E_UART1_TX_OK, GPIO16 (UART1 TX) saw at least 32 edges from Serial1 printing UUUUUUUU, and the run stopped at max_steps. Firmware is PlatformIO-built via scripts/build-esp32-devkitc-32e-uart1-smoke.sh, not a committed ELF; no required CI lane runs this script. No beyond-rubric block is listed for this slice._
 
+### `esp32-devkitm-1-bme280`
+
+_Demand rank 1 ESP32 family (38% reported MCU use), maintenance/board-depth work. The committed fast-boot fixture reads BME280 CHIP_ID `0x60` over classic ESP32 I2C0 on GPIO21/22 and raises GPIO23 only after a matching response. The smoke asserts I2C ACK state, both GPIO-matrix routes, the GPIO23-high result, and max-step stop. Live vendor and stock receipts are at examples/esp32-devkitm-1/evidence/vendor-status-bme280.md. The copy-paste Arduino example and model-boundary notes are in examples/esp32-devkitm-1/README.md._
+
 ### `nrf52840`
 
 _TWIM/PWM are firmware-proven via the rubric fixture; the PR-gated OBD2 scanner e2e drives the RADIO TXEN/READY/START/END handshake (asserts ble_tx > 0), and the #[ignore]d proximity e2e adds an on-demand radio path. The Zephyr BME280 temperature read runs in an external west build._

@@ -77,6 +77,11 @@ boards:
     kind: sim-validate
     path: examples/adafruit-feather-esp32-v2
     gate: true
+  # Rank-1 ESP32 family depth: DevKitM-1 reads the BME280 chip ID on I2C0.
+  - id: esp32-devkitm-1-bme280
+    kind: sim-validate
+    path: examples/esp32-devkitm-1
+    gate: true
   # Demand group #2: current Adafruit Feather RP2350 with HSTX, no-PSRAM SKU.
   - id: adafruit-feather-rp2350
     kind: sim-validate
