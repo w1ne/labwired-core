@@ -723,9 +723,9 @@ mod tests {
 
     #[test]
     fn diagnosis_still_refuses_stores() {
-        let (mut cpu, mut bus) = cpu_with(&[0x6008, b_head(1)]);
+        let (mut cpu, bus) = cpu_with(&[0x6008, b_head(1)]);
         assert_eq!(probe(&mut cpu, &bus), Some((2, true)));
-        assert_eq!(cpu.stalled_loads(&mut bus), None);
+        assert_eq!(cpu.stalled_loads(&bus), None);
     }
 
     #[test]
