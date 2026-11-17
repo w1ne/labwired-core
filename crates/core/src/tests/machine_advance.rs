@@ -1272,9 +1272,9 @@ fn idle_fast_forward_is_reconciled_in_report_and_cpu() {
 /// On an active single core with no WFI/poll-loop candidate, the idle
 /// fast-forward probe should not drain an already-bootstrapped empty
 /// scheduler before every CPU window. The regular boundary drain remains.
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn active_cpu_skips_redundant_idle_scheduler_preflight() {
+    let scheduler_enabled = crate::cycle_clock::event_scheduler_enabled();
     let mut bus = SystemBus::new();
     bus.peripherals.clear();
     let mut machine = Machine::new(CountingCpu::default(), bus);
@@ -1291,14 +1291,18 @@ fn active_cpu_skips_redundant_idle_scheduler_preflight() {
     assert_eq!(machine.total_cycles, 2);
     assert_eq!(
         crate::profile::snapshot().sched_calls,
-        1,
+        if scheduler_enabled { 1 } else { 0 },
         "the normal commit boundary should drain once; idle preflight is redundant"
     );
 }
 
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn active_cpu_keeps_idle_preflight_for_due_or_buffered_events() {
+    let expected_scheduler_calls = if crate::cycle_clock::event_scheduler_enabled() {
+        2
+    } else {
+        0
+    };
     let mut bus = SystemBus::new();
     bus.peripherals.clear();
     let mut machine = Machine::new(CountingCpu::default(), bus);
@@ -1312,7 +1316,7 @@ fn active_cpu_keeps_idle_preflight_for_due_or_buffered_events() {
     crate::profile::stop();
     assert_eq!(
         crate::profile::snapshot().sched_calls,
-        2,
+        expected_scheduler_calls,
         "a due-now heap event needs the preflight drain plus the normal boundary drain"
     );
 
@@ -1327,14 +1331,18 @@ fn active_cpu_keeps_idle_preflight_for_due_or_buffered_events() {
     crate::profile::stop();
     assert_eq!(
         crate::profile::snapshot().sched_calls,
-        2,
+        expected_scheduler_calls,
         "a buffered event must be enqueued and drained before the next CPU window"
     );
 }
 
-#[cfg(feature = "event-scheduler")]
 #[test]
 fn active_cpu_keeps_idle_preflight_for_timer_poll_activity() {
+    let expected_scheduler_calls = if crate::cycle_clock::event_scheduler_enabled() {
+        2
+    } else {
+        0
+    };
     let mut bus = SystemBus::new();
     bus.peripherals.clear();
     bus.add_peripheral(
@@ -1360,7 +1368,7 @@ fn active_cpu_keeps_idle_preflight_for_timer_poll_activity() {
     assert_eq!(report.primary_steps, 1);
     assert_eq!(
         crate::profile::snapshot().sched_calls,
-        2,
+        expected_scheduler_calls,
         "timer-poll evidence must be consumed by idle preflight before it is reset"
     );
 }

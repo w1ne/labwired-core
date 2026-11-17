@@ -20,7 +20,7 @@ impl SystemBus {
     /// True when the idle preflight still has batch-local MMIO evidence to
     /// consume for timer-poll coalescing. The preflight must run in that case;
     /// otherwise a split `time_us_64` read could be lost at the next window.
-    #[cfg(feature = "event-scheduler")]
+    #[allow(dead_code)]
     #[inline]
     pub(crate) fn timer_poll_coalesce_has_pending_activity(&self) -> bool {
         self.freerunning_timer_poll_mmio.get() != 0
