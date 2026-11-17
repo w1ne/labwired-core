@@ -1,4 +1,4 @@
-2026-11-16T23:23:44.712126Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32c5.yaml
-2026-11-16T23:23:44.874841Z  INFO labwired_loader: ELF Entry Point: 0x40800000
+2026-11-17T02:22:48.347352Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/esp32c5.yaml
+2026-11-17T02:22:48.424766Z  INFO labwired_loader: ELF Entry Point: 0x40800000
 labwired-cli test: idle_ff=on (event_scheduler=on)
-PASS  3/3 checks · io-smoke · 500000 steps · 0.11s
+PASS  3/3 checks · io-smoke · 500000 steps · 0.08s
