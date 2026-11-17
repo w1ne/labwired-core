@@ -81,6 +81,11 @@ pub const DMA_SIGNAL_TX: u32 = 1;
 /// See [`DMA_SIGNAL_TX`].
 pub const DMA_SIGNAL_RX: u32 = 2;
 
+/// A converter's data-ready DMA request (ADC regular DR update). The bus
+/// names the request after the peripheral alone (`adc1`), the way reference
+/// manuals list it in their DMA request tables.
+pub const DMA_SIGNAL_DATA: u32 = 16;
+
 /// One source-data-unit -> destination-data-unit transform descriptor.
 /// Semantics follow RM0481 §15 and are pinned by the DMA_DataHandling
 /// HAL example's expected-result vectors (sim) and its on-board run.
@@ -1853,6 +1858,26 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// promise on every store that takes the fast path
     /// (`SystemBus::debug_check_plain_memory`).
     fn is_plain_memory(&self) -> bool {
+        false
+    }
+
+    /// True when a CPU read at `offset` is pure: it returns a value and
+    /// changes nothing anyone else can observe. Lazily derived state the
+    /// model brings up to "now" on the read (a free-running counter) is
+    /// allowed, as long as everything that state can cause — an interrupt,
+    /// a scheduled event, a pad edge — still reaches the machine through the
+    /// event scheduler or a later write, never through the read itself.
+    ///
+    /// Under exact batch boundaries (`Machine::exact_batch_boundaries`) a
+    /// device access ends the CPU batch so the machine boundary can tick at
+    /// the cycle where something changed. A pure read changes nothing, so the
+    /// batch continues through it: a `millis()` loop polling a counter keeps
+    /// its full window instead of one per poll.
+    ///
+    /// A promise, like [`Self::is_plain_memory`]: a read that pops a FIFO,
+    /// clears a flag or moves an interrupt level must answer `false`, the
+    /// default.
+    fn read_is_pure(&self, _offset: u64) -> bool {
         false
     }
 

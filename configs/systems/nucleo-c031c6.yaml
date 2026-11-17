@@ -1,0 +1,8 @@
+# ST UM2953 Nucleo-32 board signals (NUCLEO-C031C6).
+# LD4 on PA5; USART2 TX PA2 / RX PA3 to the ST-LINK virtual COM port.
+# Bare official board profile: no Arduino-matrix sensor fixtures.
+name: "nucleo-c031c6"
+chip: "../chips/stm32c031c6.yaml"
+external_devices: []
+board_io:
+  - { id: "ld4_pa5", kind: "led", peripheral: "gpioa", pin: 5, signal: "output", active_high: true }

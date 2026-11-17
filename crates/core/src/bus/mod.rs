@@ -362,6 +362,16 @@ impl BatchStop {
     }
 
     #[inline]
+    /// Would a store of `len` bytes at `addr` hit the armed watch?
+    pub(crate) fn would_hit(&self, addr: u64, len: u64) -> bool {
+        self.armed.get()
+            && self
+                .watch
+                .borrow()
+                .iter()
+                .any(|&(lo, hi)| addr < hi && addr + len > lo)
+    }
+
     pub(crate) fn note_store(&self, addr: u64, len: u64) {
         if self.armed.get()
             && self
