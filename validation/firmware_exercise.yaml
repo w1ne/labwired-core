@@ -91,8 +91,12 @@ chips:
 
   - id: esp32
     arch: xtensa-lx6
-    headline: "tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C command-list engine and a real LEDC duty-latch."
-    functional: []
+    headline: "tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C command-list engine and a real LEDC duty-latch. The PR-gated ESP32-DevKitM-1 profile adds a BME280 chip-id read on classic I2C0."
+    functional:
+      - what: "ESP32-DevKitM-1 + BME280 — CHIP_ID 0x60 over I2C0 GPIO21/22, GPIO23 high on match"
+        fw: esp32-devkitm-1-bme280
+        ev: "examples/esp32-devkitm-1/evidence/bme280 (local smoke 5/5; fast-boot fixture)"
+        gate: pr
     advanced_unit_only: [efuse, sha, syscon, twai, mcpwm, rtc_cntl]
     advanced_dead: []
     shim:
