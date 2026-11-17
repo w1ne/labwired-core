@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 567799,
+  "steps_executed": 568628,
   "cycles": 100000000,
-  "instructions": 567799,
+  "instructions": 568628,
   "stop_reason": "max_cycles",
   "stop_reason_details": {
     "triggered_stop_condition": "max_cycles",
@@ -31,6 +31,12 @@
     {
       "assertion": {
         "uart_contains": "NPCX9 UART1 smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "smbus reset=8 en=8 nack=8 clear=8 stop=8 ok"
       },
       "passed": true
     },
@@ -137,21 +143,21 @@
       10,
       537753476,
       49,
-      2147483648,
       1074659332,
       1329935617,
       1329935617,
+      0,
       537753584,
       65535,
-      65535,
       1,
       1,
-      23940,
+      1,
+      24924,
       537753496,
       1074659332,
-      7098
+      7100
     ],
-    "pc": 7098,
+    "pc": 7100,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -164,7 +170,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "5d5dfc4d1dca1ed49cce34b1d738a2fb1f5fbf4e3fc3810919d6697c184506d3",
+  "firmware_hash": "73e75345e878288f580a47eecc0e6cc5743865861603bea45f07441a560ecb46",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nuvoton_npcx9m6fb_evb.yaml",
@@ -172,6 +178,62 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "smbus4",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus0",
+        "kind": "native",
+        "base": 1073778688,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus1",
+        "kind": "native",
+        "base": 1073786880,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus5",
+        "kind": "native",
+        "base": 1073836032,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus6",
+        "kind": "native",
+        "base": 1073840128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus7",
+        "kind": "native",
+        "base": 1073844224,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus2",
+        "kind": "native",
+        "base": 1074528256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus3",
+        "kind": "native",
+        "base": 1074536448,
+        "registers": [],
+        "artifacts": []
+      },
       {
         "name": "cr_uart1",
         "kind": "native",
@@ -471,6 +533,13 @@
       "detail": "write"
     },
     {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (15000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
       "kind": "unpowered_rail_assumed",
       "address": "0x0",
       "first_pc": "0x0",
@@ -482,6 +551,12 @@
     "lines": [
       {
         "text": "NPCX9 UART1 smoke",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "smbus reset=8 en=8 nack=8 clear=8 stop=8 ok",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -530,65 +605,65 @@
       },
       {
         "text": "uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 30000
       },
       {
         "text": "mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok",
-        "cycle_lo": 44020000,
-        "cycle": 45020000,
-        "end_cycle": 45020000
+        "cycle_lo": 44030000,
+        "cycle": 45030000,
+        "end_cycle": 45030000
       },
       {
         "text": "twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok",
-        "cycle_lo": 90020000,
-        "cycle": 91020000,
-        "end_cycle": 91020000
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
       },
       {
         "text": "cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok",
-        "cycle_lo": 90020000,
-        "cycle": 91020000,
-        "end_cycle": 91020000
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
       },
       {
         "text": "mem code=1 data=1 image=1 pm=4 bb=1 ok",
-        "cycle_lo": 90020000,
-        "cycle": 91020000,
-        "end_cycle": 91020000
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
       },
       {
         "text": "spip reset=1 off=1 x8=1 x16=1 cfg=1 quiet=1 rirq=1 rclr=1 wirq=1 wclr=1 ok",
-        "cycle_lo": 90020000,
-        "cycle": 91020000,
-        "end_cycle": 91020000
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
       },
       {
         "text": "twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok",
-        "cycle_lo": 90020000,
-        "cycle": 91020000,
-        "end_cycle": 91020000
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
       },
       {
         "text": "bbram kept=1 ok",
-        "cycle_lo": 90020000,
-        "cycle": 91020000,
-        "end_cycle": 91020000
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 24516,
+    "text_bytes": 25512,
     "data_bytes": 0,
     "bss_bytes": 80,
-    "flash_used_bytes": 24516,
+    "flash_used_bytes": 25512,
     "ram_static_bytes": 80,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 96256,
-    "flash_used_pct": 37.41,
+    "flash_used_pct": 38.93,
     "ram_static_pct": 0.08,
     "notes": [
       "section_sum_not_bin_image",
@@ -612,35 +687,40 @@
   },
   "metrics": {
     "cycles": 100000000,
-    "instructions": 567799,
-    "steps_executed": 567799,
-    "memory_reads": 9307,
-    "memory_writes": 1512,
-    "peripheral_accesses": 2295,
+    "instructions": 568628,
+    "steps_executed": 568628,
+    "memory_reads": 9893,
+    "memory_writes": 1543,
+    "peripheral_accesses": 2489,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 7862,
+        "pc": 9382,
         "count": 39,
-        "symbol": "core::sync::atomic::atomic_load"
+        "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 15290,
+        "pc": 15780,
         "count": 39,
-        "symbol": "core::sync::atomic::atomic_load"
+        "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 7098,
+        "pc": 7100,
         "count": 23,
         "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 16458,
+        "pc": 16720,
         "count": 3,
         "symbol": "core::sync::atomic::atomic_load"
       },
       {
-        "pc": 16738,
+        "pc": 17784,
+        "count": 3,
+        "symbol": "core::sync::atomic::atomic_load"
+      },
+      {
+        "pc": 18070,
         "count": 1,
         "symbol": "core::sync::atomic::atomic_load"
       }

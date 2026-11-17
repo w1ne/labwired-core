@@ -65,6 +65,50 @@ memory_regions:
   base: 0x400CF000
   size: 256B
 peripherals:
+# NPCX9 SMBus0..7 from Renode nuvoton_npcx9.repl. Register map follows the
+# byte-oriented 0x20-byte NPCX_SMBus window. The model covers master byte
+# transfers, attached I2C devices, address NACK and level IRQ; it does not
+# model slave mode, bus timing/arbitration, SMBus extensions or FIFO bursts.
+- id: smbus4
+  type: npcx_smbus
+  base_address: 0x40008000
+  size: 32B
+  irq: 19
+- id: smbus0
+  type: npcx_smbus
+  base_address: 0x40009000
+  size: 32B
+  irq: 13
+- id: smbus1
+  type: npcx_smbus
+  base_address: 0x4000B000
+  size: 32B
+  irq: 14
+- id: smbus5
+  type: npcx_smbus
+  base_address: 0x40017000
+  size: 32B
+  irq: 20
+- id: smbus6
+  type: npcx_smbus
+  base_address: 0x40018000
+  size: 32B
+  irq: 16
+- id: smbus7
+  type: npcx_smbus
+  base_address: 0x40019000
+  size: 32B
+  irq: 8
+- id: smbus2
+  type: npcx_smbus
+  base_address: 0x400C0000
+  size: 32B
+  irq: 36
+- id: smbus3
+  type: npcx_smbus
+  base_address: 0x400C2000
+  size: 32B
+  irq: 37
 # UART1..4. Bases and NVIC lines from Renode nuvoton_npcx9.repl
 # (UART.NPCX_UART, IRQ -> nvicIrq33 / 32 / 38 / 39) and Zephyr npcx9.dtsi.
 # Polled UTBUF / URBUF / UICTRL TBE+RBF, and the FIFO-mode UFTSTS / UFRSTS /

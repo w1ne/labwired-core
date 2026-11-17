@@ -1,17 +1,19 @@
 # Nuvoton NPCX9 validation status
 
-## Current measurement (2026-11-16)
+## Current measurement (2026-11-17)
 
 The imported NPCX9 system booted `firmware-nuvoton-npcx9-smoke`, rebooted
 once through the TWD watchdog, and ran to **100,000,000 cycles**
-(567,218 instructions). It passed **16/16 smoke assertions**. Firmware
-SHA-256 `31a428efb777bf6e8140594cdef81c6514316afcc82a3bd0f221bad4eb4d8314`.
+(568,628 instructions). It passed **18/18 smoke assertions**. Firmware
+SHA-256 `73e75345e878288f580a47eecc0e6cc5743865861603bea45f07441a560ecb46`.
 UART capture (UART1..4 share one capture stream):
 
 ```text
 NPCX9 UART1 smoke
+smbus reset=8 en=8 nack=8 clear=8 stop=8 ok
 itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok
 gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok
+mdma src=1 data=1 dst=1 count=1 tc=1 fifo=1 ok
 cr_uart2 tx
 cr_uart3 tx
 cr_uart4 tx
@@ -34,6 +36,12 @@ The NPCX9M6F EVB row runs the same firmware on the same chip surface
 
 Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
 
+0. SMBus0..7 at 0x40009000, 0x4000B000, 0x400C0000, 0x400C2000,
+   0x40008000, 0x40017000, 0x40018000 and 0x40019000: all eight report their
+   reset values, enable, NACK address 0x50 on the intentionally empty board
+   buses, clear NEGACK with W1C, and return idle after STOP. The model unit
+   tests separately verify byte writes and reads through an attached I²C
+   device.
 1. ITIM32_1 ITPRE and ITCNT hold while ITEN is clear.
 2. ITEN starts the down-count at 15 MHz / (ITPRE + 1); clearing ITEN stops
    it, restores the load value and clears TO_STS.
@@ -105,11 +113,17 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
     a transfer gives exactly one IRQ (the handler reads DATA and clears
     EIR); EIW with RBF clear gives exactly one IRQ (the handler clears EIW,
     as the Zephyr ISR does), and the line is not pending afterwards.
+21. MDMA1: the smoke injects `m` into UART1, enables UART receive DMA, and
+    checks the fixed URBUF source, copied byte in code RAM, destination and
+    current counts, terminal-count status and empty UART FIFO.
 
 ## Claimed peripherals
 
 | id | model | scope |
 |---|---|---|
+| `smbus0`..`smbus7` | `npcx_smbus` | Byte-oriented master START/address/data/STOP flow with attached I²C devices, address NACK and level IRQ predicate. The profile smoke checks reset, enable, NACK, W1C clear and STOP on all eight empty buses; attached-device transfers are covered by model unit tests. No slave mode, FIFO burst, SMBus extensions, bus timing or arbitration. |
+| `mdma1`..`mdma4` | `npcx_mdma` | UART RX context 0 copies one byte from each fixed URBUF source to configured memory on receive requests; MDMA1 is exercised by the smoke. No TX context or shared UART/MDMA IRQ combiner. |
+| `mdma5` | `npcx_mdma` | Context 0 register source/destination mapping only; I3C routing is not modelled. |
 | `cr_uart1`..`cr_uart4` | `npcx_uart` | Polled TX (UTBUF, UICTRL TBE) and RX (URBUF, UICTRL RBF); FIFO-mode UFTSTS / UFRSTS / UFTCTL / UFRCTL; level IRQ on NVIC 33, 32, 38, 39 from TEMPTY_EN, NXMIP_EN, RNEMPTY_EN and RFULL_LVL_EN. |
 | `port0`..`portf` | `npcx_gpio` | PDOUT latch, PDIN pad level (own drive, external level, pull), PDIR, PPULL/PPUD pulls, PTYPE open-drain, PLOCK_CTL PDOUT lock, PENVDD storage. |
 | `itim32_1`..`itim32_6` | `npcx_itim32` | Down-counter, prescaler, APB2/LFCLK, TO_STS level IRQ on NVIC 28, 27, 17, 43, 44, 45. |
@@ -140,7 +154,9 @@ GPIO ids are `port0`..`portf`, not Zephyr's `gpio0`..`gpiof`: a `gpio0` or
 `gpio1` id switches on the bus's Nordic GPIOTE pass.
 
 Sources: Renode `platforms/cpus/nuvoton_npcx9.repl`, `NPCX_GPIO.cs`,
-`NPCX_HFCG.cs`, `NPCX_ITIM.cs`, `NPCX_LFCG.cs`, `NPCX_MTC.cs`, `NPCX_TWD.cs` and `NPCX_UART.cs`; Zephyr `drivers/serial/uart_npcx.c`, `drivers/clock_control/clock_control_npcx.c`; Zephyr `soc/nuvoton/npcx/common/reg/reg_def.h`
+`NPCX_HFCG.cs`, `NPCX_ITIM.cs`, `NPCX_LFCG.cs`, `NPCX_MTC.cs`,
+`NPCX_MDMA.cs`, `NPCX_SMBus.cs`, `NPCX_TWD.cs` and `NPCX_UART.cs`; Zephyr
+`drivers/serial/uart_npcx.c`, `drivers/clock_control/clock_control_npcx.c`; Zephyr `soc/nuvoton/npcx/common/reg/reg_def.h`
 (`cdcg_reg`, `gpio_reg`, `itim32_reg`, `itim64_reg`), `drivers/gpio/gpio_npcx.c` and
 `dts/arm/nuvoton/npcx/npcx.dtsi` / `npcx9.dtsi`.
 
@@ -153,8 +169,10 @@ Not modelled:
 
 - UART: UICTRL ETI/ERI/EEI (non-FIFO-mode interrupts; Renode does not model
   them either), UFTSTS TEMPTY_LVL_STS and UFRSTS ERR (read 0, as in Renode),
-  UFTCTL TEMPTY_LVL_EN, USTAT errors, MDMA receive, baud and clock
+  UFTCTL TEMPTY_LVL_EN, USTAT errors, MDMA transmit, baud and clock
   configuration. The TX FIFO is always empty: a written byte leaves at once.
+- MDMA: context 1, MDMA5 I3C transfer routing, transfer widths other than the
+  byte RX path, and the shared UART/MDMA IRQ combiner.
 - MIWU: no GPIO wake-up or pin interrupt reaches the NVIC.
 - GPIO: PENVDD drive behaviour, 1.8 V input detection, DEVALT pad muxing,
   PLOCK_CTL stickiness (the lock bits are plain read/write, as in Renode).
@@ -189,8 +207,17 @@ SPIP differences from Renode `NPCX_SPIP`: the IRQ is wired to NVIC 57
 it while RBF is clear (Renode ignores EIW). With no attached device MISO
 reads 0 (Renode needs a registered device).
 
-Not declared (no model in this engine): MDMA, FIU and internal
-flash, SMBus, the DEV_CTL4 / SWRST_CTL4 Python peripherals, and the other
+MDMA limits: context 0 byte receive-to-memory is modelled for MDMA1..4;
+MDMA5's I3C route and context 1 remain outside this profile.
+
+SMBus limits: this model covers master byte transfers and maps attached
+LabWired I²C devices, but not slave mode, FIFO bursts, SMBus protocol
+extensions, clock timing or arbitration. The onboarding system has no
+off-chip I²C device attached, so its smoke intentionally verifies NACK and
+recovery on all eight controllers.
+
+Not declared (no model in this engine): FIU and internal flash, the
+DEV_CTL4 / SWRST_CTL4 Python peripherals, and the other
 Renode NPCX blocks.
 
 ## Negative controls

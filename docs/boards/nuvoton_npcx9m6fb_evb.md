@@ -1,21 +1,23 @@
 # Nuvoton NPCX9M6F EVB validation status
 
-## Current measurement (2026-11-16)
+## Current measurement (2026-11-17)
 
 The imported NPCX9M6F EVB system uses the same chip surface as
 [`nuvoton_npcx9`](nuvoton_npcx9.md) (UART1..4, GPIO0..GPIOF,
-ITIM32_1..6, ITIM64, MTC, TWD, HFCG, LFCG, SPIP, and the code RAM, data RAM view,
+SMBus0..7, MDMA1..5, ITIM32_1..6, ITIM64, MTC, TWD, HFCG, LFCG, SPIP, and the code RAM, data RAM view,
 battery-backed RAM, image_type and PM1..4 memory windows). It booted
 `firmware-nuvoton-npcx9-smoke`
-(SHA-256 `31a428efb777bf6e8140594cdef81c6514316afcc82a3bd0f221bad4eb4d8314`),
+(SHA-256 `73e75345e878288f580a47eecc0e6cc5743865861603bea45f07441a560ecb46`),
 rebooted once through the TWD watchdog, ran to **100,000,000 cycles**
-(567,218 instructions) and passed **16/16 smoke assertions**, with the same
+(568,628 instructions) and passed **18/18 smoke assertions**, with the same
 UART capture (UART1..4 share one capture stream):
 
 ```text
 NPCX9 UART1 smoke
+smbus reset=8 en=8 nack=8 clear=8 stop=8 ok
 itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok
 gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok
+mdma src=1 data=1 dst=1 count=1 tc=1 fifo=1 ok
 cr_uart2 tx
 cr_uart3 tx
 cr_uart4 tx

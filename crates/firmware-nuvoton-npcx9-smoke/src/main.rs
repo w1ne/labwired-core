@@ -1,5 +1,5 @@
-// NPCX9 Renode-onboarding smoke. Keeps the UART1 banner, then exercises the
-// internal timers: ITIM32_1..6 at 0x400B0000 + n * 0x2000 (NVIC 28, 27, 17,
+// NPCX9 Renode-onboarding smoke. Keeps the UART1 banner, checks SMBus0..7,
+// then exercises the internal timers: ITIM32_1..6 at 0x400B0000 + n * 0x2000 (NVIC 28, 27, 17,
 // 43, 44, 45) and ITIM64 at 0x400BE000 (NVIC 58), as in Renode's
 // nuvoton_npcx9.repl. Register layout from Zephyr reg_def.h (itim32_reg /
 // itim64_reg): ITPRE byte +0x01, ITCTS byte +0x04, ITCNT +0x08, ITCNT64H +0x0C.
@@ -14,6 +14,10 @@
 // 5. ITIM32_2..6 and ITIM64 each take one timeout IRQ on their own line.
 // 6. ITIM64 holds a 64-bit load and borrows across the word boundary.
 // 7. CKSEL selects the 32768 Hz LFCLK: the count moves ~460x slower.
+//
+// 0. SMBus0..7 at their Renode bases: reset state, enable, empty-bus NACK,
+//    NEGACK W1C clear and STOP return to idle. The NPCX9 platform has no
+//    attached off-chip I2C devices; the model's unit tests cover slave traffic.
 //
 // Then the GPIO ports: GPIO0..GPIOF at 0x40081000 + n * 0x2000 (Renode
 // GPIOPort.NPCX_GPIO), byte registers from Zephyr reg_def.h gpio_reg.
@@ -231,6 +235,25 @@ const MDMAEN: u32 = 1;
 const MDMA_TC: u32 = 1 << 18;
 const MDMA_RX_DESTINATION: usize = 0x1005_F000;
 
+const SMBUS_BASES: [usize; 8] = [
+    0x4000_9000,
+    0x4000_B000,
+    0x400C_0000,
+    0x400C_2000,
+    0x4000_8000,
+    0x4001_7000,
+    0x4001_8000,
+    0x4001_9000,
+];
+const SMBUS_STATUS: usize = 0x02;
+const SMBUS_CONTROL_STATUS: usize = 0x04;
+const SMBUS_CONTROL1: usize = 0x06;
+const SMBUS_CONTROL2: usize = 0x0A;
+const SMBUS_START: u8 = 1 << 0;
+const SMBUS_STOP: u8 = 1 << 1;
+const SMBUS_INTEN: u8 = 1 << 2;
+const SMBUS_NEGACK: u8 = 1 << 4;
+
 static ITIM1_IRQS: AtomicU32 = AtomicU32::new(0);
 /// Bit n set: TIMERS[n] took its IRQ.
 static SEEN: AtomicU32 = AtomicU32::new(0);
@@ -315,6 +338,42 @@ fn spin(n: u32) {
     for _ in 0..n {
         core::hint::spin_loop();
     }
+}
+
+fn check_smbus_controllers() {
+    let mut reset = 0u32;
+    let mut enabled = 0u32;
+    let mut nacked = 0u32;
+    let mut cleared = 0u32;
+    let mut stopped = 0u32;
+    for &base in &SMBUS_BASES {
+        reset += (rd8(base, SMBUS_STATUS) == 0
+            && rd8(base, SMBUS_CONTROL_STATUS) == 0xC0
+            && rd8(base, SMBUS_CONTROL2) == 0) as u32;
+
+        wr8(base, SMBUS_CONTROL2, 1); // module enable
+        enabled += (rd8(base, SMBUS_CONTROL2) == 1) as u32;
+        wr8(base, SMBUS_CONTROL1, SMBUS_INTEN | SMBUS_START);
+        wr8(base, 0, 0xA0); // address 0x50 on the intentionally empty SMBus
+        nacked += (rd8(base, SMBUS_STATUS) == (SMBUS_NEGACK | (1 << 6))) as u32;
+        wr8(base, SMBUS_STATUS, SMBUS_NEGACK); // W1C
+        cleared += (rd8(base, SMBUS_STATUS) == (1 << 6)) as u32;
+        wr8(base, SMBUS_CONTROL1, SMBUS_INTEN | SMBUS_STOP);
+        stopped += (rd8(base, SMBUS_STATUS) == 0 && rd8(base, SMBUS_CONTROL_STATUS) == 0xC0) as u32;
+    }
+    puts(b"smbus");
+    put_kv(b"reset", reset);
+    put_kv(b"en", enabled);
+    put_kv(b"nack", nacked);
+    put_kv(b"clear", cleared);
+    put_kv(b"stop", stopped);
+    puts(
+        if reset == 8 && enabled == 8 && nacked == 8 && cleared == 8 && stopped == 8 {
+            b" ok\r\n"
+        } else {
+            b" FAIL\r\n"
+        },
+    );
 }
 
 #[exception]
@@ -402,6 +461,10 @@ fn main() -> ! {
     }
 
     puts(b"NPCX9 UART1 smoke\r\n");
+
+    // The imported Renode platform has eight empty SMBus controllers. Verify
+    // each reset register bank, enable, address NACK, W1C clear and STOP.
+    check_smbus_controllers();
 
     // 1. Registers hold while disabled.
     let t1 = ITIM32_1;

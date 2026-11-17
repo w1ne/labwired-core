@@ -1,44 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="18" failures="0" errors="0" time="0.007515">
+<testsuite name="labwired" tests="19" failures="0" errors="0" time="0.010651">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxCycles"/>
-    <property name="firmware_hash" value="5d5dfc4d1dca1ed49cce34b1d738a2fb1f5fbf4e3fc3810919d6697c184506d3"/>
+    <property name="firmware_hash" value="73e75345e878288f580a47eecc0e6cc5743865861603bea45f07441a560ecb46"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.007515">
+  <testcase classname="labwired" name="run" time="0.010651">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: NPCX9 UART1 smoke" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: uart_contains: mdma src=1 data=1 dst=1 count=1 tc=1 fifo=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: uart_contains: smbus reset=8 en=8 nack=8 clear=8 stop=8 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 3: uart_contains: itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfcl…" time="0.000000">
+  <testcase classname="labwired" name="assertion 3: uart_contains: mdma src=1 data=1 dst=1 count=1 tc=1 fifo=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 4: uart_contains: gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 4: uart_contains: itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfcl…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 5: uart_contains: uarts tbe=3 rx=3 isolated=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 5: uart_contains: gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 6: uart_contains: uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 6: uart_contains: uarts tbe=3 rx=3 isolated=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 7: uart_contains: mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 7: uart_contains: uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 8: uart_contains: twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 8: uart_contains: mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 9: uart_contains: cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 9: uart_contains: twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 10: uart_contains: mem code=1 data=1 image=1 pm=4 bb=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 10: uart_contains: cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 11: uart_contains: spip reset=1 off=1 x8=1 x16=1 cfg=1 quiet=1 rirq=1 rclr=1 wirq=1 wclr=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 11: uart_contains: mem code=1 data=1 image=1 pm=4 bb=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 12: uart_contains: twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 12: uart_contains: spip reset=1 off=1 x8=1 x16=1 cfg=1 quiet=1 rirq=1 rclr=1 wirq=1 wclr=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 13: uart_contains: bbram kept=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 13: uart_contains: twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 14: uart_contains: cr_uart2 tx" time="0.000000">
+  <testcase classname="labwired" name="assertion 14: uart_contains: bbram kept=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 15: uart_contains: cr_uart3 tx" time="0.000000">
+  <testcase classname="labwired" name="assertion 15: uart_contains: cr_uart2 tx" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 16: uart_contains: cr_uart4 tx" time="0.000000">
+  <testcase classname="labwired" name="assertion 16: uart_contains: cr_uart3 tx" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 17: expected_stop_reason: MaxCycles" time="0.000000">
+  <testcase classname="labwired" name="assertion 17: uart_contains: cr_uart4 tx" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 18: expected_stop_reason: MaxCycles" time="0.000000">
   </testcase>
 </testsuite>
