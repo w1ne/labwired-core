@@ -593,10 +593,15 @@ fn set_led(on: bool) {
 fn smoke_adc1() -> bool {
     const ADC1: u32 = 0x4001_2000;
     const ADC_SR: *const u32 = ADC1 as *const u32;
+    const ADC_CR1: *mut u32 = (ADC1 + 0x04) as *mut u32;
     const ADC_CR2: *mut u32 = (ADC1 + 0x08) as *mut u32;
     const ADC_SQR3: *mut u32 = (ADC1 + 0x34) as *mut u32;
     const ADC_DR: *const u32 = (ADC1 + 0x4C) as *const u32;
     const ADC1EN: u32 = 1 << 8;
+    const EOCIE: u32 = 1 << 5;
+    const ADC1_IRQ_BIT: u32 = 1 << 18;
+    const NVIC_ISPR0: *const u32 = 0xE000_E200 as *const u32;
+    const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
     const ADON: u32 = 1;
     const SWSTART: u32 = 1 << 30;
     const EOC: u32 = 1 << 1;
@@ -607,6 +612,11 @@ fn smoke_adc1() -> bool {
         let gated = read_volatile(ADC_CR2) == 0;
         write_volatile(RCC_APB2ENR, read_volatile(RCC_APB2ENR) | ADC1EN);
         let clock = read_volatile(RCC_APB2ENR) & ADC1EN != 0;
+
+        // RM0090: ADC1 raises IRQ 18 when EOCIE is set at conversion complete.
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        write_volatile(ADC_CR1, EOCIE);
+        let irq_isolated = read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT == 0;
 
         // PA1 analog mode and the first regular sequence slot select IN1.
         register_rmw(GPIOA + MODER, 0b11 << 2, 0b11 << 2);
@@ -621,7 +631,15 @@ fn smoke_adc1() -> bool {
             }
             core::hint::spin_loop();
         }
+        let irq_asserted = eoc && read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT != 0;
         let code = read_volatile(ADC_DR) & 0x0FFF;
+        write_volatile(ADC_CR1, 0);
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        let mut irq_cleared = true;
+        for _ in 0..16 {
+            irq_cleared &= read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT == 0;
+            core::hint::spin_loop();
+        }
         write_volatile(ADC_CR2, 0);
 
         send(b"adc1 in1=");
@@ -632,7 +650,16 @@ fn smoke_adc1() -> bool {
         send(if clock { b"1" } else { b"0" });
         send(b" eoc=");
         send(if eoc { b"1" } else { b"0" });
-        let passed = gated && clock && eoc && code == 0x03FF;
+        send(b" irq=");
+        send(if irq_isolated && irq_asserted {
+            b"1"
+        } else {
+            b"0"
+        });
+        send(b" clear=");
+        send(if irq_cleared { b"1" } else { b"0" });
+        let passed =
+            gated && clock && eoc && irq_isolated && irq_asserted && irq_cleared && code == 0x03FF;
         send(if passed { b" ok\r\n" } else { b" FAIL\r\n" });
         passed
     }

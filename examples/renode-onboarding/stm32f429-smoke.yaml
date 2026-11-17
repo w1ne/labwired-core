@@ -22,7 +22,7 @@ assertions:
   - uart_contains: "i2c1 bme280_id=00000060 gated=1 clock=1 ok"
   - uart_contains: "usart2 rxne=1 isolated=1 irq=1 data=00005253 released=1 ok"
   - uart_contains: "fpu m4f cpacr=1 mvfr=1 add=1 ok"
-  - uart_contains: "adc1 in1=000003FF gated=1 clock=1 eoc=1 ok"
+  - uart_contains: "adc1 in1=000003FF gated=1 clock=1 eoc=1 irq=1 clear=1 ok"
   - gpio_edges:
       pin: "gpioPortD:12"
       min_edges: 1

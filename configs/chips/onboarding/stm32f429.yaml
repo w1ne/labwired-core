@@ -111,7 +111,8 @@ peripherals:
     config:
       profile: stm32f4
       pad_map: stm32f4
-  # ADC1 on PA1/IN1 is checked by the exact-import smoke.
+  # ADC1 on PA1/IN1 and its EOC interrupt (IRQ 18) are checked by the
+  # exact-import smoke.
   - id: adc1
     type: adc
     bus: sysbus
