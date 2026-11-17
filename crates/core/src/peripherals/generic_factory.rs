@@ -105,6 +105,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_xip_ssi",
     "rp2040_usb",
     "rp2350_bootram",
+    // ESP32-C2 DevKitM profile types. GPIO and UART behavior are shared with
+    // the register-compatible C3 models, with C2 clock/source values supplied
+    // by its family adapter.
+    "esp32c2_gpio",
+    "esp32c2_uart",
     // ESP32-C3 behavioral models (esp32 factory).
     // MUST be listed: without membership the fuzzy fallback would coerce the
     // BLE baseband window onto some unrelated register map instead of erroring.

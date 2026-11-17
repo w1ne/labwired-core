@@ -123,6 +123,50 @@ void setup() {
 void loop() {}
 ```
 
+### ESP8684-DevKitM-1-H4X + UART0 and red LED
+
+ESP32 remains demand rank 1 (38% of reported MCU use); ESP32-C2 is not ranked
+separately. Espressif's live guide lists the H4X order code with 4 MB flash and
+marks the older H4 variant NRND. Mouser showed 35 H4X boards in stock on
+2026-11-17. The board smoke sends a UART0 marker and observes GPIO0 transitions
+on the onboard red LED channel. This adds a working board profile and C2 clock
+pacing; it does not claim ROM boot, the USB-UART bridge, or pad electrical
+routing.
+
+- [Board scope, copy-paste ESP-IDF example, and smoke command](../examples/esp8684-devkitm-1-h4x/README.md)
+- [Live Espressif lifecycle and Mouser availability receipt](../examples/esp8684-devkitm-1-h4x/evidence/vendor-status.md)
+- [Committed UART0 and GPIO0 smoke evidence](../examples/esp8684-devkitm-1-h4x/evidence/)
+
+```c
+#include "driver/gpio.h"
+#include "driver/uart.h"
+#include "esp_rom_sys.h"
+#include <stddef.h>
+
+void app_main(void) {
+    const uart_config_t uart_cfg = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0);
+    uart_param_config(UART_NUM_0, &uart_cfg);
+    gpio_reset_pin(GPIO_NUM_0);
+    gpio_set_direction(GPIO_NUM_0, GPIO_MODE_OUTPUT);
+    static const char marker[] = "C2_H4X_GPIO0_UART_OK\n";
+    uart_write_bytes(UART_NUM_0, marker, sizeof(marker) - 1);
+    for (;;) {
+        gpio_set_level(GPIO_NUM_0, 1);
+        esp_rom_delay_us(250000);
+        gpio_set_level(GPIO_NUM_0, 0);
+        esp_rom_delay_us(250000);
+    }
+}
+```
+
 ### ESP32-S3-DevKitC-1-N16R8 + Adafruit BME280
 
 ESP32 remains demand rank 1 (38% of reported MCU use). Espressif lists the
