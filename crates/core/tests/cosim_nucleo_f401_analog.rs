@@ -1657,6 +1657,198 @@ fn nucleo_f401re_mosfet_geometry_junction_charge_reaches_adc1_with_diode() {
     }
 }
 
+/// A MOSFET instance's TEMP changes bulk-junction PB and zero-bias CBD; the
+/// solved reverse-bias transient must match ngspice's silicon law at ADC1.
+#[test]
+fn nucleo_f401re_mosfet_junction_temperature_reaches_adc1_with_diode() {
+    const TNOM_C: f64 = 27.0;
+    const TEMP_C: f64 = 125.0;
+    const CBD_F: f64 = 10e-9;
+    const PB_V: f64 = 0.8;
+    const MJ: f64 = 0.5;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const CURRENT_A: f64 = 1e-3;
+    const STEP_S: f64 = 1e-6;
+
+    let bandgap_ev = |kelvin: f64| 1.16 - 7.02e-4 * kelvin * kelvin / (kelvin + 1108.0);
+    let thermal_v = |kelvin: f64| 1.380_649e-23 * kelvin / 1.602_176_634e-19;
+    let silicon_potential_at = |potential_v: f64, nominal_kelvin: f64, kelvin: f64| {
+        let vt_nominal = thermal_v(nominal_kelvin);
+        let vt = thermal_v(kelvin);
+        let ratio = kelvin / nominal_kelvin;
+        potential_v * ratio
+            - vt * (3.0 * ratio.ln() + bandgap_ev(nominal_kelvin) / vt_nominal
+                - bandgap_ev(kelvin) / vt)
+    };
+    // Independent ngspice MOS1 junction temperature laws: PB follows the
+    // silicon built-in-potential law and CBD scales by the grading coefficient.
+    let nominal_kelvin = TNOM_C + 273.15;
+    let hot_kelvin = TEMP_C + 273.15;
+    let hot_pb_v = silicon_potential_at(PB_V, nominal_kelvin, hot_kelvin);
+    let hot_cbd_f =
+        CBD_F * (1.0 + MJ * (4e-4 * (hot_kelvin - nominal_kelvin) - hot_pb_v / PB_V + 1.0));
+    assert!(hot_pb_v < PB_V && hot_cbd_f > CBD_F * 1.1);
+
+    let reverse_charge = |voltage_v: f64, capacitance_f: f64, potential_v: f64| {
+        capacitance_f * potential_v / (1.0 - MJ)
+            * ((1.0 + voltage_v / potential_v).powf(1.0 - MJ) - 1.0)
+    };
+    let next_voltage = |previous_v: f64, capacitance_f: f64, potential_v: f64| {
+        let previous_q = reverse_charge(previous_v, capacitance_f, potential_v);
+        let residual = |voltage_v: f64| {
+            voltage_v / LOAD_OHMS
+                + (reverse_charge(voltage_v, capacitance_f, potential_v) - previous_q) / STEP_S
+                - CURRENT_A
+        };
+        let (mut low, mut high) = (0.0, CURRENT_A * LOAD_OHMS);
+        for _ in 0..100 {
+            let mid = 0.5 * (low + high);
+            if residual(mid) < 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let system_path = root("configs/systems/nucleo-f401re.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
+    let diode = SystemManifest::from_file(root("examples/nucleo-f401re/analog-diode-system.yaml"))
+        .expect("load unrelated generic Shockley diode netlist");
+    let mosfet = SystemManifest::from_file(root(
+        "examples/nucleo-f401re/analog-mosfet-junction-temperature.yaml",
+    ))
+    .expect("load matched MOSFET junction temperature branches");
+    profile.cosim_models = diode.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F401 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA2", 2), ("PA3", 3), ("PA4", 4)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F401RE bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries a diode and matched MOSFET junction branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic netlists resolve through PA0 and PA2..PA4 ADC1 routes"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    for input in [
+        "ui.mosfet_junction_temp.nominal_current_a",
+        "ui.mosfet_junction_temp.hot_current_a",
+        "ui.mosfet_junction_temp.explicit_current_a",
+    ] {
+        session
+            .set_signal_number(input, 0.0)
+            .expect("initialize matched MOSFET junction branches");
+    }
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle zero-current junction branches and diode");
+    assert_eq!(initial_steps.len(), 2, "MOSFET and diode models solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    for input in [
+        "ui.mosfet_junction_temp.nominal_current_a",
+        "ui.mosfet_junction_temp.hot_current_a",
+        "ui.mosfet_junction_temp.explicit_current_a",
+    ] {
+        session
+            .set_signal_number(input, CURRENT_A)
+            .expect("step the matched MOSFET junction branches");
+    }
+
+    let expected_diode_v = diode_load_line_voltage();
+    let mut previous_nominal_v = 0.0;
+    let mut previous_hot_v = 0.0;
+    let mut previous_explicit_v = 0.0;
+    let mut largest_temperature_shift: f64 = 0.0;
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route temperature-adjusted junction transients and diode");
+        assert_eq!(steps.len(), 2, "MOSFET and diode models solve each step");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let expected_nominal_v = next_voltage(previous_nominal_v, CBD_F, PB_V);
+        let expected_hot_v = next_voltage(previous_hot_v, hot_cbd_f, hot_pb_v);
+        let expected_explicit_v = next_voltage(previous_explicit_v, hot_cbd_f, hot_pb_v);
+        previous_nominal_v = expected_nominal_v;
+        previous_hot_v = expected_hot_v;
+        previous_explicit_v = expected_explicit_v;
+
+        let diode_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let nominal_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let hot_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let explicit_v = signal_voltage(&session, "board.analog.pa4_volts");
+        assert!(
+            (nominal_v - expected_nominal_v).abs() < 3e-8,
+            "nominal CBD/PB transient at step {step}: expected {expected_nominal_v} V, got {nominal_v} V"
+        );
+        assert!(
+            (hot_v - expected_hot_v).abs() < 3e-8,
+            "TEMP=125 C CBD/PB law at step {step}: expected {expected_hot_v} V, got {hot_v} V"
+        );
+        assert!(
+            (explicit_v - expected_explicit_v).abs() < 3e-8,
+            "explicit PB(T)/CBD(T) control at step {step}: expected {expected_explicit_v} V, got {explicit_v} V"
+        );
+        assert!(
+            (hot_v - explicit_v).abs() < 3e-8,
+            "temperature-adjusted branch must match the explicit hot card"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode remains on its independent load line"
+        );
+        largest_temperature_shift = largest_temperature_shift.max((hot_v - nominal_v).abs());
+
+        for (channel, voltage_v) in [(0, diode_v), (2, nominal_v), (3, hot_v), (4, explicit_v)] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds descriptor-routed ADC1_IN{channel}"
+            );
+            assert_eq!(
+                f401_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion follows its generic device"
+            );
+        }
+        for channel in [1, 5] {
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                u16::MAX,
+                "unconnected ADC1_IN{channel} remains undriven"
+            );
+        }
+    }
+    assert!(
+        largest_temperature_shift > 0.02,
+        "the hot depletion law must produce a resolvable transient shift, got {largest_temperature_shift} V"
+    );
+}
+
 /// Independent Gummel–Poon collector load line with optional forward and
 /// reverse high-injection rolloff.
 fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool) -> f64 {

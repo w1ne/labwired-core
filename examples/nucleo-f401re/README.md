@@ -89,3 +89,13 @@ collector load lines at three base drives and reads all three routes through ADC
 ```sh
 cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_bjt_high_injection_reaches_adc1_with_unrelated_diode
 ```
+
+[`analog-mosfet-junction-temperature.yaml`](analog-mosfet-junction-temperature.yaml)
+compares nominal and `TEMP=125 °C` MOSFET bulk-junction depletion charge against an
+explicit equivalent hot model on PA2–PA4/ADC1_IN2–IN4. The independent silicon-potential
+and backward-Euler charge references are asserted at each transient step; all three routes
+are also read through the firmware-visible ADC1 data register beside the unrelated diode:
+
+```sh
+cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_mosfet_junction_temperature_reaches_adc1_with_diode
+```
