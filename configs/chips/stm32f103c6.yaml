@@ -4,7 +4,7 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 # SOURCE OF TRUTH for geometry, package and ordering data:
-#   ST DS5792 Rev 7 / DocID15060, "STM32F103x4 STM32F103x6" low-density
+#   ST DS5936 Rev 7 / DocID15060, "STM32F103x4 STM32F103x6" low-density
 #   datasheet:
 #     - Table 2 (device features and peripheral counts)
 #     - Table 5 (pin definitions / package bond-out)
@@ -12,7 +12,7 @@
 #   https://www.st.com/resource/en/datasheet/stm32f103c6.pdf
 #
 # SOURCE OF TRUTH for peripheral bases/IRQs and low-density instance counts:
-#   ST RM0008 and DS5792, linked above. This descriptor uses the shared F103
+#   ST RM0008 and DS5936, linked above. This descriptor uses the shared F103
 #   peripheral models but lists only the low-density instances present on the
 #   STM32F103C6: SPI1, I2C1, USART1/2, TIM1-3, ADC1/2 and DMA1. It omits the
 #   medium-density-only SPI2, I2C2, USART3 and TIM4 windows.
@@ -34,9 +34,9 @@ name: "stm32f103c6"
 arch: "arm"
 core: "cortex-m3"
 registers_count: 125
-# STM32F103 maximum core clock, 72 MHz (DS5792 section 5.3).
+# STM32F103 maximum core clock, 72 MHz (DS5936 section 5.3).
 cpu_hz: 72_000_000
-# DS5792 Rev 7, Table 35 "I/O static characteristics", all I/Os except BOOT0:
+# DS5936 Rev 7, Table 35 "I/O static characteristics", all I/Os except BOOT0:
 # VIL max 0.35·VDD, VIH min 0.65·VDD (same electrical family as DS5319).
 io_voltage_v: 3.3
 gpio_input_thresholds:
@@ -44,7 +44,7 @@ gpio_input_thresholds:
   vih: 0.65
 
 # Descriptive ordering data. The engine ignores these keys; the focused
-# `stm32_variant_geometry` gate parses and checks them against DS5792.
+# `stm32_variant_geometry` gate parses and checks them against DS5936.
 package: "LQFP48/UFQFPN48"
 pin_count: 48
 gpio_pin_count: 37
@@ -222,7 +222,7 @@ peripherals:
     clock: { reg: "ahbenr", bit: 0 }
     config:
       debug_schema: "../peripherals/stm32f103/dma1.yaml"
-      # Low-density STM32F103 DMA1 requests (DS5792 / RM0008): SPI1_RX ch2,
+      # Low-density STM32F103 DMA1 requests (DS5936 / RM0008): SPI1_RX ch2,
       # SPI1_TX ch3. SPI2 is not present on this part.
       requests:
         spi1_rx: 2
@@ -354,7 +354,7 @@ peripherals:
 
 # Regular ADC inputs on the shared LQFP48/UFQFPN48 pin map: ADC12_IN0..IN9.
 # The family allocation is PA0..PA7 = IN0..IN7, PB0/PB1 = IN8/IN9 and, on
-# the 64-pin R package only, PC0..PC5 = IN10..IN15 (DS5792 Table 2/5).
+# the 64-pin R package only, PC0..PC5 = IN10..IN15 (DS5936 Table 2/5).
 # Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
 analog_pins:
   PA0: { peripheral: "adc1", channel: 0 }

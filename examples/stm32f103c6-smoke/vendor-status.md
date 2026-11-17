@@ -10,7 +10,7 @@ example, `STM32F103C6T6A`.
   states **Active**, **In stock**, and offers **Add to cart** for quantity 1.
   The listing identifies the package as LQFP48 and the MCU as a 32 KB Flash
   STM32F103C6.
-- ST's [DS5792 low-density datasheet](https://www.st.com/resource/en/datasheet/stm32f103c6.pdf)
+- ST's [DS5936 low-density datasheet](https://www.st.com/resource/en/datasheet/stm32f103c6.pdf)
   identifies the x6 variant as 32 KB Flash / 10 KB SRAM and defines the package
   pin map used by the PA2/PA3/PA5 example.
 - ST's [RM0008 reference manual](https://www.st.com/resource/en/reference_manual/rm0008-stm32f103xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)

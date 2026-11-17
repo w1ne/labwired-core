@@ -71,7 +71,7 @@ The C6 descriptor uses the low-density peripheral instance set: SPI1, I2C1,
 USART1/2, TIM1-3, ADC1/2, and DMA1. It leaves out C8-only SPI2, I2C2, USART3,
 and TIM4 windows. The USB device and backup-register windows are explicit
 stubs; this smoke does not touch them. The exact flash, SRAM, package, pin count,
-ADC count, and debug-port IDCODE come from ST DS5792/RM0008. ES0348's restriction
+ADC count, and debug-port IDCODE come from ST DS5936/RM0008. ES0348's restriction
 on user-mode DBGMCU reads is reflected in the C6 configuration. No physical
 board or silicon test has been run.
 
