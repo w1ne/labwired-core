@@ -380,6 +380,47 @@ fn substrate_load_voltage(substrate_v: f64, iss: f64, ns: f64) -> f64 {
     0.5 * (low + high)
 }
 
+/// Independent backward-Euler load line for a reverse-biased BJT substrate
+/// junction. The source resistor and load set the collector's Thevenin load;
+/// the charge law is the SPICE depletion integral with FC=0.
+fn substrate_charge_step_voltage(
+    substrate_v: f64,
+    old_charge_c: f64,
+    step_s: f64,
+    cjs_f: f64,
+    vjs_v: f64,
+    mjs: f64,
+) -> f64 {
+    const BIAS_V: f64 = 1.0;
+    const SOURCE_OHMS: f64 = 1_000.0;
+    const LOAD_OHMS: f64 = 100_000.0;
+    const GMIN_S: f64 = 1e-12;
+
+    let charge = |junction_v: f64| {
+        -cjs_f * vjs_v / (1.0 - mjs) * ((1.0 - junction_v / vjs_v).powf(1.0 - mjs) - 1.0)
+    };
+    let residual = |collector_v: f64| {
+        let junction_v = substrate_v - collector_v;
+        (collector_v - BIAS_V) / SOURCE_OHMS + collector_v / LOAD_OHMS
+            - GMIN_S * junction_v
+            - (charge(junction_v) - old_charge_c) / step_s
+    };
+    let (mut low, mut high) = (-1.0, 3.0);
+    for _ in 0..120 {
+        let collector_v = 0.5 * (low + high);
+        if residual(collector_v) > 0.0 {
+            high = collector_v;
+        } else {
+            low = collector_v;
+        }
+    }
+    0.5 * (low + high)
+}
+
+fn substrate_depletion_charge(junction_v: f64, cjs_f: f64, vjs_v: f64, mjs: f64) -> f64 {
+    -cjs_f * vjs_v / (1.0 - mjs) * ((1.0 - junction_v / vjs_v).powf(1.0 - mjs) - 1.0)
+}
+
 #[test]
 fn nrf5340dk_bjt_substrate_junction_reaches_saadc_alongside_ntc_and_diode() {
     let system_path = root("configs/systems/nrf5340dk.yaml");
@@ -469,6 +510,120 @@ fn nrf5340dk_bjt_substrate_junction_reaches_saadc_alongside_ntc_and_diode() {
         }
         assert_eq!(undriven_code, 0, "neighboring AIN5 stays at ground");
     }
+}
+
+#[test]
+fn nrf5340dk_bjt_substrate_depletion_charge_reaches_saadc_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let charge = SystemManifest::from_file(root(
+        "examples/nrf5340dk/analog-bjt-substrate-charge-system.yaml",
+    ))
+    .expect("load matched generic BJT substrate-charge branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(charge.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 7);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and matched BJT substrate-charge branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to SAADC channels 0, 1, 5, and 6"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+    session
+        .set_signal_number("ui.bjt_substrate_charge.substrate_v", -1.0)
+        .expect("initialize reverse-biased substrate junctions");
+
+    let mut cycles = 0;
+    for _ in 0..20 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("settle NTC, diode, and matched BJT substrate branches");
+        assert_eq!(steps.len(), 4, "all four generic analog branches solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected analog route errors: {errors:?}"
+        );
+    }
+
+    let old_charge_v = voltage(&session, "adc.saadc.5_volts");
+    let old_control_v = voltage(&session, "adc.saadc.6_volts");
+    assert!(
+        (old_charge_v - old_control_v).abs() < 1e-6,
+        "CJS changes no DC current when ISS=0: {old_charge_v} V vs {old_control_v} V"
+    );
+    const CJS_F: f64 = 100e-9;
+    const VJS_V: f64 = 0.6;
+    const MJS: f64 = 0.4;
+    const STEP_S: f64 = 1e-6;
+    const OLD_SUBSTRATE_V: f64 = -1.0;
+    const NEW_SUBSTRATE_V: f64 = -0.8;
+    let old_junction_v = OLD_SUBSTRATE_V - old_charge_v;
+    let old_charge_c = substrate_depletion_charge(old_junction_v, CJS_F, VJS_V, MJS);
+
+    session
+        .set_signal_number("ui.bjt_substrate_charge.substrate_v", NEW_SUBSTRATE_V)
+        .expect("step substrate voltage while the junction is reverse biased");
+    cycles += session.cycles_until_boundary(cycles);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve BJT substrate displacement-current transient");
+    assert_eq!(steps.len(), 4, "all four generic analog branches solve");
+    assert!(
+        errors.is_empty(),
+        "unexpected analog route errors: {errors:?}"
+    );
+
+    let ntc_v = voltage(&session, "adc.saadc.0_volts");
+    let diode_v = voltage(&session, "adc.saadc.1_volts");
+    let charge_v = voltage(&session, "adc.saadc.5_volts");
+    let control_v = voltage(&session, "adc.saadc.6_volts");
+    let expected_charge_v =
+        substrate_charge_step_voltage(NEW_SUBSTRATE_V, old_charge_c, STEP_S, CJS_F, VJS_V, MJS);
+    assert!(
+        (charge_v - expected_charge_v).abs() < 50e-6,
+        "BJT CJS transient follows independent backward-Euler depletion-charge load line: expected {expected_charge_v} V, got {charge_v} V"
+    );
+    assert!(
+        (control_v - old_control_v).abs() < 1e-6,
+        "zero-CJS control stays at its DC load line: {old_control_v} V -> {control_v} V"
+    );
+    assert!(
+        charge_v > control_v + 0.1,
+        "substrate depletion charge moves the collector while the zero-charge control does not: {charge_v} V vs {control_v} V"
+    );
+    assert!(
+        (ntc_v - 1.65).abs() < 1e-9,
+        "unrelated NTC remains isolated"
+    );
+    assert!(
+        (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+        "unrelated Shockley diode remains isolated"
+    );
+
+    let codes = scan_saadc_channels::<7>(&mut bus);
+    for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (5, charge_v), (6, control_v)] {
+        assert_eq!(
+            codes[channel],
+            expected_saadc_code(voltage_v),
+            "SAADC channel {channel} converts its routed solved voltage"
+        );
+    }
+    assert_eq!(codes[2], 0, "unused AIN2 stays at ground");
+    assert_eq!(codes[3], 0, "unused AIN3 stays at ground");
+    assert_eq!(codes[4], 0, "unused AIN4 stays at ground");
 }
 
 #[test]

@@ -1,0 +1,47 @@
+# Reverse-biased generic BJT substrate depletion charge reaches SAADC AIN5/AIN6.
+# The matched CJS=0 control isolates displacement current from the substrate diode.
+name: "nrf5340dk-analog-bjt-substrate-charge"
+chip: "../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_substrate_charge"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_v: "ui.bjt_substrate_charge.substrate_v"
+    outputs:
+      collector_voltage: "adc.saadc.5_volts"
+    config:
+      netlist_text: |
+        Vbias rail 0 dc 1
+        Rsource rail collector 1k
+        Rload collector 0 100k
+        Vsub substrate 0 dc -1
+        Q1 collector 0 0 substrate NPN_SUBSTRATE_CHARGE
+        .model NPN_SUBSTRATE_CHARGE NPN(IS=1e-16 BF=80 ISS=0 CJS=100n VJS=0.6 MJS=0.4)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        substrate_v: "Vsub"
+      vdd: 3.3
+  - id: "bjt_substrate_charge_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_v: "ui.bjt_substrate_charge.substrate_v"
+    outputs:
+      collector_voltage: "adc.saadc.6_volts"
+    config:
+      netlist_text: |
+        Vbias rail 0 dc 1
+        Rsource rail collector 1k
+        Rload collector 0 100k
+        Vsub substrate 0 dc -1
+        Q1 collector 0 0 substrate NPN_SUBSTRATE_NO_CHARGE
+        .model NPN_SUBSTRATE_NO_CHARGE NPN(IS=1e-16 BF=80 ISS=0 CJS=0)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        substrate_v: "Vsub"
+      vdd: 3.3
