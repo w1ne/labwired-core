@@ -150,5 +150,9 @@
   "arduino-nano-esp32-bme280.elf": {
     "sha256": "9e1b334f716fe3e41dcc13572c08dea62d986c4b3803c0b7db2db433ed57e760",
     "source_rev": "0157d139b2c8c1c66b53192f75e8bb28cdb227ff"
+  },
+  "arduino-uno-r4-minima-bme280.elf": {
+    "sha256": "04bd8c84c636cba2f772ed7fc02f5b6909c0c110f364075f3b1bcb1500b92ee5",
+    "source_rev": "0fe44b1a8b0a47ed611ada3de72d618655e9d441"
   }
 }

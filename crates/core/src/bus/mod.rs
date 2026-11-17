@@ -201,14 +201,16 @@ pub struct RccClockBit {
     pub controller_idx: usize,
     /// Byte offset of the enable register within the controller peripheral.
     pub reg_offset: u64,
-    /// Bit position within that register that must be set.
+    /// Bit position within that register whose polarity selects clocked state.
     pub bit: u8,
+    /// Whether a cleared bit means enabled (RA module-stop semantics).
+    pub active_low: bool,
 }
 
-/// A peripheral's clock-gate: every bit in [`Self::requires`] must be set in the
-/// *live* controller register map for a CPU access to the owning peripheral to
-/// take effect — modelling silicon clock-gating. Optional `gclk_id` additionally
-/// requires the SAM GCLK channel to be enabled.
+/// A peripheral's clock-gate: every bit in [`Self::requires`] must indicate an
+/// enabled clock in the *live* controller register map for a CPU access to the
+/// owning peripheral to take effect — modelling silicon clock-gating. Optional
+/// `gclk_id` additionally requires the SAM GCLK channel to be enabled.
 ///
 /// This is the ONE place the engine expresses "this model may only answer while
 /// the clock controller says it is clocked", and [`SystemBus::is_peripheral_clocked`]

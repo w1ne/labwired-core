@@ -376,6 +376,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "ra8_sysc",
     "ra6_sysc",
     "ra4_sysc",
+    "ra_mstp",
     // Renesas RX SYSTEM (oscillator stable flags, clock-switch handshakes).
     "rx_sysc",
     // Renesas RX FLASH control registers (0xAA-keyed word writes).
@@ -1766,6 +1767,7 @@ pub fn try_build(
         "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra8()),
         "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
         "ra4_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra4()),
+        "ra_mstp" => Box::new(crate::peripherals::ra_mstp::RaMstp::new()),
         "rx_sysc" => Box::new(crate::peripherals::rx_sysc::RxSysc::new()),
         // `irq`: the EVIC vector; `timer_type`: "a" (Timer1) or "b";
         // `clock_hz`: SYSCLK; `pbclk_hz`: the timer's PBCLK3; `sosc_hz`.

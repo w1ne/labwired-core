@@ -110,6 +110,7 @@ pub mod ra_dac12;
 pub mod ra_gpt;
 pub mod ra_icu;
 pub mod ra_iic;
+pub mod ra_mstp;
 pub mod ra_pfs;
 pub mod radio;
 pub mod rcc;

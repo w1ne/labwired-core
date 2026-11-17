@@ -127,6 +127,49 @@ void setup() {
 void loop() {}
 ```
 
+## Arduino kit boards — rank 3, 37% of main-project kits
+
+### Arduino UNO R4 Minima + BME280
+
+Arduino lists the UNO R4 Minima as orderable SKU ABX00080, and Renesas lists
+RA4M1 orderable parts as Active. The Adafruit BME280 STEMMA QT breakout was
+in stock on 2026-11-17. This adds an IIC1 sensor path to the existing UNO R4
+Minima model; RA4M1 itself is not separately ranked in the MCU-use table.
+
+- [Wiring, scope, copy-paste sketch, and smoke instructions](../examples/arduino-uno-r4-minima-bme280/README.md)
+- [Live vendor status receipt](../examples/arduino-uno-r4-minima-bme280/vendor-status.md)
+- [Committed local smoke evidence](../examples/arduino-uno-r4-minima-bme280/evidence/)
+
+The sketch reads the BME280 chip ID over `Wire`/IIC1 on A4/A5 and reports it
+over `Serial1`/SCI2 on D0/D1. USB-C `Serial` uses USBFS, which remains outside
+this profile.
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+
+constexpr uint8_t BME280_ADDRESS = 0x77;
+
+void setup() {
+  Serial1.begin(115200);  // SCI2 on D0/D1
+  Wire.begin();           // IIC1 on A4/A5
+  Wire.setClock(100000);
+
+  Wire.beginTransmission(BME280_ADDRESS);
+  Wire.write(0xD0);
+  if (Wire.endTransmission(false) != 0 ||
+      Wire.requestFrom(static_cast<int>(BME280_ADDRESS), 1) != 1) {
+    Serial1.println("BME280_I2C_ERROR");
+    return;
+  }
+
+  Serial1.print("BME280_ID=0x");
+  Serial1.println(Wire.read(), HEX);
+}
+
+void loop() {}
+```
+
 ### ESP32-C61-DevKitC-1-N8R2
 
 ESP32 is demand rank 1 (38% of reported MCU use); the survey does not score

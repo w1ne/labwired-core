@@ -109,6 +109,12 @@ jobs:
             profile_dir: release
             script: examples/arduino-uno-r4-minima/uart-smoke.yaml
             system: examples/arduino-uno-r4-minima/system.yaml
+          # Arduino kit rank 3 (37%): bare-metal RA4M1 reset entry and a BME280
+          # IIC1/A4-A5 chip-ID read on the UNO R4 Minima.
+          - id: arduino-uno-r4-minima-bme280
+            script: examples/arduino-uno-r4-minima-bme280/bme280-smoke.yaml
+            system: configs/systems/arduino-uno-r4-minima-bme280.yaml
+            firmware_build_script: examples/arduino-uno-r4-minima-bme280/ci/build-bme280-firmware.sh
           - id: teensy-41
             target: thumbv7em-none-eabi
             crate: firmware-imxrt1064-demo

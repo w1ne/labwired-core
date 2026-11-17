@@ -1,0 +1,23 @@
+# Arduino UNO R4 Minima (R7FA4M1AB) with an Adafruit BME280 STEMMA QT
+# breakout. The sensor is on Wire/IIC1 at A4/A5 (P101 SDA1 / P100 SCL1).
+# The profile claims only SCI2 on D0/D1 and IIC1 to this sensor; USB CDC and
+# the other on-chip peripherals are outside this smoke.
+name: "arduino-uno-r4-minima-bme280"
+chip: "../chips/ra4m1.yaml"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "iic1"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_d13"
+    kind: "led"
+    peripheral: "port1"
+    pin: 11   # P111 — ArduinoCore-renesas variants/MINIMA D13 / LED_BUILTIN
+    signal: "output"
+    active_high: true
+connectors:
+  - type: "uart"
+    peripheral: "sci2"
+    endpoint: "host_console"

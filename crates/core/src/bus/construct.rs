@@ -1465,6 +1465,7 @@ impl SystemBus {
                     controller_idx,
                     reg_offset,
                     bit: gate.bit,
+                    active_low: gate.active_low,
                 });
             }
             let gclk_id = p_cfg
@@ -1659,6 +1660,7 @@ mod tests {
                 controller_idx: 0,
                 reg_offset: 0x18,
                 bit: 3,
+                active_low: false,
             }],
             gclk_id: None,
             gclk_idx: None,
