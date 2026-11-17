@@ -111,6 +111,71 @@ fn diode_soft_recovery_first_step_voltage(initial_voltage_v: f64) -> f64 {
     (low + high) / 2.0
 }
 
+/// Independent diode junction current for `IK`-limited forward injection.
+/// `GMIN` remains outside the high-injection correction, as in the SPICE model.
+fn high_injection_diode_current(voltage_v: f64, knee_current_a: Option<f64>) -> f64 {
+    const IS_A: f64 = 1e-12;
+    const N: f64 = 1.0;
+    const GMIN_S: f64 = 1e-12;
+    const THERMAL_V: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let ideal = IS_A * ((voltage_v / (N * THERMAL_V)).exp() - 1.0);
+    let junction = match knee_current_a {
+        Some(knee) if ideal > 1e-18 => ideal / (1.0 + (ideal / knee).sqrt()),
+        _ => ideal,
+    };
+    junction + GMIN_S * voltage_v
+}
+
+/// Independent first backward-Euler step for matched generic diodes. `IK`
+/// must limit both conduction and the `TT·I` diffusion charge.
+fn high_injection_diode_first_step_voltage(supply_v: f64, knee_current_a: Option<f64>) -> f64 {
+    const R_OHMS: f64 = 1_000.0;
+    const TT_S: f64 = 10e-6;
+    const STEP_S: f64 = 1e-6;
+    const GMIN_S: f64 = 1e-12;
+
+    // The circuit starts from the zero-volt operating point, so its prior
+    // diffusion charge is zero. The charge uses junction current only; GMIN
+    // is a numerical shunt and stores no minority-carrier charge.
+    let charge = |voltage_v: f64| {
+        TT_S * (high_injection_diode_current(voltage_v, knee_current_a) - GMIN_S * voltage_v)
+    };
+    let residual = |voltage_v: f64| {
+        (supply_v - voltage_v) / R_OHMS
+            - high_injection_diode_current(voltage_v, knee_current_a)
+            - charge(voltage_v) / STEP_S
+    };
+    let (mut low, mut high) = (0.0, supply_v);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
+/// Independent DC load line after diode diffusion charge has settled.
+fn high_injection_diode_dc_voltage(supply_v: f64, knee_current_a: Option<f64>) -> f64 {
+    const R_OHMS: f64 = 1_000.0;
+    let residual = |voltage_v: f64| {
+        (supply_v - voltage_v) / R_OHMS - high_injection_diode_current(voltage_v, knee_current_a)
+    };
+    let (mut low, mut high) = (0.0, supply_v);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
 /// Independent level-1 NMOS load-line reference for the board-routed test.
 fn mosfet_drain_voltage(gate_v: f64) -> f64 {
     const SUPPLY_V: f64 = 3.3;
@@ -776,6 +841,159 @@ fn nucleo_f407_diode_soft_reverse_recovery_reaches_adc1_with_ntc_and_diode() {
         adc_channel_count(&mut bus, 4),
         0xFFFF,
         "the neighboring ADC1 channel remains undriven"
+    );
+}
+
+#[test]
+fn nucleo_f407_diode_ik_scales_transit_charge_through_adc1() {
+    const IK_A: f64 = 100e-6;
+    const SUPPLY_V: f64 = 3.3;
+    const VT_V: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and Shockley diode netlists");
+    let high_injection = SystemManifest::from_file(root(
+        "examples/nucleo-f407/analog-diode-high-injection.yaml",
+    ))
+    .expect("load generic IK-limited diode and no-knee control");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(high_injection.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC, diode, and matched high-injection pair");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic diode models must resolve through descriptor-routed ADC pads"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.diode_high_injection.supply_v", 0.0)
+        .expect("initialize matched diode branches at zero bias");
+
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("establish the zero-bias operating point");
+    assert_eq!(initial_steps.len(), 4, "all four generic devices solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.diode_high_injection.supply_v", SUPPLY_V)
+        .expect("forward-bias the matched diodes");
+    cycles += session.cycles_until_boundary(cycles);
+    let (first_steps, first_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve the first high-injection diffusion-charge step");
+    assert_eq!(first_steps.len(), 4, "all four generic devices solve");
+    assert!(
+        first_errors.is_empty(),
+        "unexpected route errors: {first_errors:?}"
+    );
+
+    let high_first_v = signal_voltage(&session, "board.analog.pa2_volts");
+    let control_first_v = signal_voltage(&session, "board.analog.pa3_volts");
+    let expected_high_first_v = high_injection_diode_first_step_voltage(SUPPLY_V, Some(IK_A));
+    let expected_control_first_v = high_injection_diode_first_step_voltage(SUPPLY_V, None);
+    assert!(
+        (high_first_v - expected_high_first_v).abs() < 1e-4,
+        "IK-limited TT transient must match the independent BE load line: expected {expected_high_first_v} V, got {high_first_v} V"
+    );
+    assert!(
+        (control_first_v - expected_control_first_v).abs() < 1e-4,
+        "no-knee TT control must match the independent BE load line: expected {expected_control_first_v} V, got {control_first_v} V"
+    );
+    let raw_current_a = 1e-12 * ((high_first_v / VT_V).exp() - 1.0);
+    assert!(
+        raw_current_a / IK_A > 10.0,
+        "the first step must be well into forward high injection: Iraw/IK={}",
+        raw_current_a / IK_A
+    );
+    assert!(
+        high_first_v > control_first_v + 0.01,
+        "the IK-limited diode must store less TT charge and require a higher anode voltage: high={high_first_v} V, control={control_first_v} V"
+    );
+
+    for (channel, path) in [
+        (0, "board.analog.pa0_volts"),
+        (1, "board.analog.pa1_volts"),
+        (2, "board.analog.pa2_volts"),
+        (3, "board.analog.pa3_volts"),
+    ] {
+        let volts = signal_voltage(&session, path);
+        let expected = expected_adc_count(volts);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected,
+            "the solved voltage seeds ADC1_IN{channel}"
+        );
+        assert_eq!(
+            stm32f4_adc_convert(&mut bus, channel),
+            u32::from(expected),
+            "firmware-visible ADC1 conversion reports channel {channel}"
+        );
+    }
+
+    let mut settled_high_v = high_first_v;
+    let mut settled_control_v = control_first_v;
+    for _ in 0..200 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("settle the diode diffusion-charge branches");
+        assert_eq!(steps.len(), 4, "all four generic devices solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+        settled_high_v = signal_voltage(&session, "board.analog.pa2_volts");
+        settled_control_v = signal_voltage(&session, "board.analog.pa3_volts");
+    }
+
+    let expected_high_dc_v = high_injection_diode_dc_voltage(SUPPLY_V, Some(IK_A));
+    let expected_control_dc_v = high_injection_diode_dc_voltage(SUPPLY_V, None);
+    assert!(
+        (settled_high_v - expected_high_dc_v).abs() < 2e-4,
+        "IK-limited branch must settle to its independent DC load line: expected {expected_high_dc_v} V, got {settled_high_v} V"
+    );
+    assert!(
+        (settled_control_v - expected_control_dc_v).abs() < 2e-4,
+        "control branch must settle to its independent DC load line: expected {expected_control_dc_v} V, got {settled_control_v} V"
+    );
+    assert!(
+        settled_high_v > settled_control_v + 0.05,
+        "the forward IK knee must remain observable at DC after TT charge decays: high={settled_high_v} V, control={settled_control_v} V"
+    );
+    for (channel, volts) in [(2, settled_high_v), (3, settled_control_v)] {
+        let expected = expected_adc_count(volts);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected,
+            "the settled voltage seeds ADC1_IN{channel}"
+        );
+        assert_eq!(
+            stm32f4_adc_convert(&mut bus, channel),
+            u32::from(expected),
+            "firmware-visible ADC1 conversion reports settled channel {channel}"
+        );
+    }
+    assert_eq!(
+        adc_channel_count(&mut bus, 4),
+        0xFFFF,
+        "the neighboring ADC1 input remains undriven"
     );
 }
 

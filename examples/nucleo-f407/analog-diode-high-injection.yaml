@@ -1,0 +1,46 @@
+# Matched generic diode branches compare forward IK high-injection limiting
+# through conduction and TT diffusion charge. Both solved anode voltages route
+# through separate NUCLEO-F407 ADC1 inputs.
+name: "nucleo-f407-diode-high-injection"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "diode_high_injection"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_v: "ui.diode_high_injection.supply_v"
+    outputs:
+      v_sense: "board.analog.pa2_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DHI
+        .model DHI D(IS=1p N=1 IK=100u TT=10u)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        supply_v: "Vdrive"
+      vdd: 3.3
+  - id: "diode_no_high_injection_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_v: "ui.diode_high_injection.supply_v"
+    outputs:
+      v_sense: "board.analog.pa3_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DHI
+        .model DHI D(IS=1p N=1 TT=10u)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        supply_v: "Vdrive"
+      vdd: 3.3
