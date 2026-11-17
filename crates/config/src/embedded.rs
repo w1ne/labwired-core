@@ -589,7 +589,11 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/tm1638.yaml"),
     ),
     (
-        &["ir_receiver_tsop38238", "ir-receiver-tsop38238", "tsop38238"],
+        &[
+            "ir_receiver_tsop38238",
+            "ir-receiver-tsop38238",
+            "tsop38238",
+        ],
         include_str!("../../../configs/devices/ir_receiver_tsop38238.yaml"),
     ),
     (

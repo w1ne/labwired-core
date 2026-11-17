@@ -102,13 +102,7 @@ fn out_high(bus: &SystemBus) -> bool {
 }
 
 /// Apply address + command/key at cycle 0 and return the first falling-edge cycle.
-fn press(
-    bus: &mut SystemBus,
-    id: &str,
-    command_key: &str,
-    address: f64,
-    command: f64,
-) -> u64 {
+fn press(bus: &mut SystemBus, id: &str, command_key: &str, address: f64, command: f64) -> u64 {
     service(bus, 0);
     assert!(out_high(bus), "idle OUT/IR must be HIGH");
     bus.set_input(Some(id), "address", address).unwrap();
@@ -119,7 +113,10 @@ fn press(
     }
     // Seeded inputs do not fire; the press is serviced on the next tick.
     service(bus, 1);
-    assert!(!out_high(bus), "press must pull OUT/IR LOW for the 9 ms leader");
+    assert!(
+        !out_high(bus),
+        "press must pull OUT/IR LOW for the 9 ms leader"
+    );
     1
 }
 
@@ -235,5 +232,8 @@ fn nec_remote_repeat_and_release() {
     service(&mut bus, after);
     assert!(out_high(&bus), "remote release returns IR to idle HIGH");
     service(&mut bus, origin + cycles(216_000.0));
-    assert!(out_high(&bus), "released remote must not emit a second repeat");
+    assert!(
+        out_high(&bus),
+        "released remote must not emit a second repeat"
+    );
 }
