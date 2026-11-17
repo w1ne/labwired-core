@@ -146,5 +146,9 @@
   "esp32-devkitm-1-bme280.elf": {
     "sha256": "e558d962e50833d0de8de2ca91d0f905b2d01852f226e383a94816c4695e57f3",
     "source_rev": "23b2cf49c5c1407e2c8fa2d5318962b96c7be0fd"
+  },
+  "arduino-nano-esp32-bme280.elf": {
+    "sha256": "9e1b334f716fe3e41dcc13572c08dea62d986c4b3803c0b7db2db433ed57e760",
+    "source_rev": "0157d139b2c8c1c66b53192f75e8bb28cdb227ff"
   }
 }

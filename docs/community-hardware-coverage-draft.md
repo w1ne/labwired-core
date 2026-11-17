@@ -165,6 +165,49 @@ fn main() -> ! {
 }
 ```
 
+### Arduino Nano ESP32 + Adafruit BME280
+
+ESP32 remains demand rank 1 (38% of reported MCU use), and Arduino kits were
+used by 37% of respondents' main projects. Arduino's current store listing
+offers the Nano ESP32 ABX00092; Adafruit listed the BME280 STEMMA QT breakout
+in stock on 2026-11-17. The board profile wires I2C0 to the official A4/A5
+route, GPIO11/GPIO12. Its local smoke reads BME280 ID `0x60` and the raw
+temperature registers. The copy-paste Arduino sketch is hosted model-verified
+for the BME280 ID using an explicit GPIO11/GPIO12 diagram; that result assumes
+an ideal power rail and does not cover startup or brown-out behavior. The
+connected hosted catalog's default A4/A5 description still says GPIO8/GPIO9,
+so the example spells out the vendor-published GPIO numbers. This adds
+board/peripheral depth to the existing ESP32-S3 model, not a new silicon
+family.
+
+- [Board scope, wiring, copy-paste sketch, and smoke command](../examples/arduino-nano-esp32-bme280/README.md)
+- [Live Arduino and Adafruit availability receipt](../examples/arduino-nano-esp32-bme280/vendor-status.md)
+- [Committed local simulator evidence](../examples/arduino-nano-esp32-bme280/evidence/)
+- [Hosted `model_verified` oracle result](../examples/arduino-nano-esp32-bme280/evidence/hosted-verify.json)
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+
+constexpr uint8_t SDA_PIN = 11;  // A4 / GPIO11
+constexpr uint8_t SCL_PIN = 12;  // A5 / GPIO12
+constexpr uint8_t BME280_ADDR = 0x77;
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin(SDA_PIN, SCL_PIN, 100000);
+  Wire.beginTransmission(BME280_ADDR);
+  Wire.write(0xD0);
+  if (Wire.endTransmission(false) == 0 && Wire.requestFrom(BME280_ADDR, 1) == 1) {
+    Serial.printf("NANO_ESP32_BME280_ID=0x%02X\n", Wire.read());
+  } else {
+    Serial.println("NANO_ESP32_BME280_I2C_ERROR");
+  }
+}
+
+void loop() {}
+```
+
 ## RP2040 / RP2350 — demand group 2
 
 ### Adafruit Feather RP2350 with HSTX (no-PSRAM, Product ID 6000)
