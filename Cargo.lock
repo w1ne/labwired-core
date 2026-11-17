@@ -1496,6 +1496,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "firmware-lp-mspm0g3507-smoke"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "panic-halt",
+]
+
+[[package]]
 name = "firmware-mg26-adc"
 version = "0.26.0"
 dependencies = [
