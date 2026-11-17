@@ -627,6 +627,133 @@ fn nrf5340dk_bjt_substrate_depletion_charge_reaches_saadc_alongside_ntc_and_diod
 }
 
 #[test]
+fn nrf5340dk_bjt_substrate_temperature_coefficients_reach_saadc() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let temperature = SystemManifest::from_file(root(
+        "examples/nrf5340dk/analog-bjt-substrate-temperature-system.yaml",
+    ))
+    .expect("load generic BJT substrate temperature-coefficient branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(temperature.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 8);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and BJT temperature-coefficient branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to SAADC channels 0, 1, and 5 through 7"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+    session
+        .set_signal_number("ui.bjt_substrate_temperature.substrate_v", -1.0)
+        .expect("initialize reverse-biased substrate junctions");
+
+    let mut cycles = 0;
+    for _ in 0..20 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("settle NTC, diode, and BJT substrate branches");
+        assert_eq!(steps.len(), 5, "all five generic analog branches solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected analog route errors: {errors:?}"
+        );
+    }
+
+    const NOMINAL_CJS_F: f64 = 10e-9;
+    const NOMINAL_VJS_V: f64 = 0.6;
+    const NOMINAL_MJS: f64 = 0.4;
+    const TNOM_C: f64 = 27.0;
+    const TEMP_C: f64 = 125.0;
+    const CTS_PER_C: f64 = 5e-3;
+    const TVJS_V_PER_C: f64 = 1e-3;
+    const TMJS_PER_C: f64 = 2e-3;
+    const NEW_SUBSTRATE_V: f64 = -0.8;
+    let delta_c = TEMP_C - TNOM_C;
+    let hot_cjs_f = NOMINAL_CJS_F * (1.0 + CTS_PER_C * delta_c);
+    let hot_vjs_v = NOMINAL_VJS_V - TVJS_V_PER_C * delta_c;
+    let hot_mjs = NOMINAL_MJS * (1.0 + TMJS_PER_C * delta_c);
+    assert!((hot_cjs_f - 14.9e-9).abs() < 1e-20);
+    assert!((hot_vjs_v - 0.502).abs() < 1e-12);
+    assert!((hot_mjs - 0.4784).abs() < 1e-12);
+
+    let old_hot_v = voltage(&session, "adc.saadc.5_volts");
+    let old_explicit_v = voltage(&session, "adc.saadc.6_volts");
+    let old_nominal_v = voltage(&session, "adc.saadc.7_volts");
+    for old_v in [old_hot_v, old_explicit_v, old_nominal_v] {
+        assert!(
+            (old_v - old_nominal_v).abs() < 1e-6,
+            "CJS/VJS/MJS alter no DC current with ISS=0: {old_v} V vs {old_nominal_v} V"
+        );
+    }
+
+    session
+        .set_signal_number("ui.bjt_substrate_temperature.substrate_v", NEW_SUBSTRATE_V)
+        .expect("step substrate voltage while each junction is reverse biased");
+    cycles += session.cycles_until_boundary(cycles);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve temperature-adjusted substrate displacement currents");
+    assert_eq!(steps.len(), 5, "all five generic analog branches solve");
+    assert!(
+        errors.is_empty(),
+        "unexpected analog route errors: {errors:?}"
+    );
+
+    let ntc_v = voltage(&session, "adc.saadc.0_volts");
+    let diode_v = voltage(&session, "adc.saadc.1_volts");
+    let hot_v = voltage(&session, "adc.saadc.5_volts");
+    let explicit_v = voltage(&session, "adc.saadc.6_volts");
+    let nominal_v = voltage(&session, "adc.saadc.7_volts");
+    assert!(
+        (hot_v - explicit_v).abs() < 50e-6,
+        "TLEVC=1 CTS/TVJS/TMJS1 branch must match the explicit hot CJS/VJS/MJS card: {hot_v} V vs {explicit_v} V"
+    );
+    assert!(
+        (hot_v - nominal_v).abs() > 5e-3,
+        "temperature-adjusted CJS/VJS/MJS must move the solved transient, got hot {hot_v} V and nominal {nominal_v} V"
+    );
+    assert!(
+        (ntc_v - 1.65).abs() < 1e-9,
+        "unrelated NTC remains isolated"
+    );
+    assert!(
+        (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+        "unrelated Shockley diode remains isolated"
+    );
+
+    let codes = scan_saadc_channels::<8>(&mut bus);
+    for (channel, voltage_v) in [
+        (0, ntc_v),
+        (1, diode_v),
+        (5, hot_v),
+        (6, explicit_v),
+        (7, nominal_v),
+    ] {
+        assert_eq!(
+            codes[channel],
+            expected_saadc_code(voltage_v),
+            "SAADC channel {channel} converts its routed solved voltage"
+        );
+    }
+    for channel in [2, 3, 4] {
+        assert_eq!(codes[channel], 0, "unused AIN{channel} stays at ground");
+    }
+}
+
+#[test]
 fn nrf5340dk_ntc_and_diode_netlists_reach_distinct_saadc_channels() {
     let system_path = root("configs/systems/nrf5340dk.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");

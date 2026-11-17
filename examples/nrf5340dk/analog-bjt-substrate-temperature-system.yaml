@@ -1,0 +1,67 @@
+# TLEVC=1 BJT substrate-junction temperature coefficients reach SAADC AIN5..AIN7.
+# A fixed hot-parameter card is the independent equivalent for the hot branch.
+name: "nrf5340dk-analog-bjt-substrate-temperature"
+chip: "../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_substrate_temperature_hot"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_v: "ui.bjt_substrate_temperature.substrate_v"
+    outputs:
+      collector_voltage: "adc.saadc.5_volts"
+    config:
+      netlist_text: |
+        Vbias rail 0 dc 1
+        Rsource rail collector 1k
+        Rload collector 0 100k
+        Vsub substrate 0 dc -1
+        Q1 collector 0 0 substrate NPN_SUBSTRATE_TLEVC temp=125
+        .model NPN_SUBSTRATE_TLEVC NPN(IS=1e-16 BF=80 ISS=0 CJS=10n VJS=0.6 MJS=0.4 TLEVC=1 CTS=5m TVJS=1m TMJS1=2m TNOM=27)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        substrate_v: "Vsub"
+      vdd: 3.3
+  - id: "bjt_substrate_temperature_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_v: "ui.bjt_substrate_temperature.substrate_v"
+    outputs:
+      collector_voltage: "adc.saadc.6_volts"
+    config:
+      netlist_text: |
+        Vbias rail 0 dc 1
+        Rsource rail collector 1k
+        Rload collector 0 100k
+        Vsub substrate 0 dc -1
+        Q1 collector 0 0 substrate NPN_SUBSTRATE_EXPLICIT
+        .model NPN_SUBSTRATE_EXPLICIT NPN(IS=1e-16 BF=80 ISS=0 CJS=14.9n VJS=0.502 MJS=0.4784)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        substrate_v: "Vsub"
+      vdd: 3.3
+  - id: "bjt_substrate_temperature_nominal"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_v: "ui.bjt_substrate_temperature.substrate_v"
+    outputs:
+      collector_voltage: "adc.saadc.7_volts"
+    config:
+      netlist_text: |
+        Vbias rail 0 dc 1
+        Rsource rail collector 1k
+        Rload collector 0 100k
+        Vsub substrate 0 dc -1
+        Q1 collector 0 0 substrate NPN_SUBSTRATE_NOMINAL
+        .model NPN_SUBSTRATE_NOMINAL NPN(IS=1e-16 BF=80 ISS=0 CJS=10n VJS=0.6 MJS=0.4)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        substrate_v: "Vsub"
+      vdd: 3.3
