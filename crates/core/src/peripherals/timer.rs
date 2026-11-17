@@ -218,6 +218,10 @@ pub struct Timer {
     /// Only populated in scheduler mode with a non-zero filter.
     #[serde(skip)]
     ic_pending: Vec<PendingInputEdge>,
+    /// Capture DMA requests (DIER.CCxDE) raised and not yet handed to the
+    /// bus, one bit per channel.
+    #[serde(skip)]
+    dma_pending: u8,
 }
 
 /// One raw TIx edge that has not yet been stable for its filter's N samples.
@@ -405,6 +409,7 @@ impl Timer {
             ic_psc_count: [0; 4],
             ti_level: [false; 4],
             ic_pending: Vec::new(),
+            dma_pending: 0,
             wave: TimerOutputWave::default(),
             output_transition: [None; 4],
         }
@@ -968,6 +973,21 @@ impl Timer {
         self.sr.set(sr);
         let cnt = self.cnt.get() & self.cnt_mask();
         *self.ccr_mut(ch) = cnt;
+        // CCxDE: a capture requests a DMA transfer (RM0008 §15.4.4); the
+        // DMA's read of CCRx then clears CCxIF.
+        if self.dier & (1 << (9 + ch)) != 0 {
+            self.dma_pending |= 1 << ch;
+        }
+    }
+
+    /// The capture DMA signals raised since the last call, channel order.
+    fn drain_dma_signals(&mut self, out: &mut Vec<u32>) {
+        let pending = std::mem::take(&mut self.dma_pending);
+        for ch in 0..4u32 {
+            if pending & (1 << ch) != 0 {
+                out.push(crate::DMA_SIGNAL_CH1 + ch);
+            }
+        }
     }
 
     /// A FILTERED edge on input `ti` at absolute cycle `at`: capture on every
@@ -1758,6 +1778,11 @@ impl crate::Peripheral for Timer {
     fn tick(&mut self) -> crate::PeripheralTickResult {
         let freeze_before = self.freeze_revision.get();
         let mut result = self.tick_counter();
+        if self.dma_pending != 0 {
+            let mut signals = result.dma_signals.take().unwrap_or_default();
+            self.drain_dma_signals(&mut signals);
+            result.dma_signals = Some(signals);
+        }
         if self.capture_compare_irq.is_some() {
             result.irq = self.own_irq_held();
             result.explicit_irqs = self.capture_compare_irq_held().map(|irq| vec![irq]);
@@ -1867,6 +1892,10 @@ impl crate::Peripheral for Timer {
         true
     }
 
+    fn take_dma_signals(&mut self, out: &mut Vec<u32>) {
+        self.drain_dma_signals(out);
+    }
+
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if !self.scheduler_mode() {
             return Vec::new();
@@ -1923,6 +1952,8 @@ impl crate::Peripheral for Timer {
         // materialises the update/compare latch this event was scheduled for.
         self.process_pending_edges(sched.now());
         self.advance_to(sched.now());
+        let mut dma_signals = Vec::new();
+        self.drain_dma_signals(&mut dma_signals);
         if self.irq_level_held() {
             // The walk would return `irq: true` on this tick (overflow with
             // UIE, or the held level after a compare latch) and on every tick
@@ -1938,7 +1969,10 @@ impl crate::Peripheral for Timer {
                 raise_own_irq: self.own_irq_held(),
                 explicit_irqs: self.capture_compare_irq_held().into_iter().collect(),
                 reschedule_delay: Some(1),
-                level_hold: self.counter_frozen() && self.ic_pending.is_empty(),
+                level_hold: self.counter_frozen()
+                    && self.ic_pending.is_empty()
+                    && dma_signals.is_empty(),
+                dma_signals,
                 ..Default::default()
             }
         } else {
@@ -1946,6 +1980,7 @@ impl crate::Peripheral for Timer {
             // fire so the chain never silently dies while events are armed.
             crate::sched::EventResult {
                 reschedule_delay: self.ticks_until_first_pend(),
+                dma_signals,
                 ..Default::default()
             }
         }

@@ -80,6 +80,15 @@ pub struct DmaRoute {
 pub const DMA_SIGNAL_TX: u32 = 1;
 /// See [`DMA_SIGNAL_TX`].
 pub const DMA_SIGNAL_RX: u32 = 2;
+/// A timer's capture/compare channel 1..4 DMA requests (STM32 TIMx_DIER
+/// CCxDE): `<peripheral id>_ch1` .. `_ch4`, e.g. `tim3_ch1`.
+pub const DMA_SIGNAL_CH1: u32 = 3;
+/// See [`DMA_SIGNAL_CH1`].
+pub const DMA_SIGNAL_CH2: u32 = 4;
+/// See [`DMA_SIGNAL_CH1`].
+pub const DMA_SIGNAL_CH3: u32 = 5;
+/// See [`DMA_SIGNAL_CH1`].
+pub const DMA_SIGNAL_CH4: u32 = 6;
 
 /// A converter's data-ready DMA request (ADC regular DR update). The bus
 /// names the request after the peripheral alone (`adc1`), the way reference
@@ -1339,6 +1348,12 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn drain_attached_pin_drives(&mut self, _out: &mut Vec<(String, String, bool)>) {}
 
     fn dma_request(&mut self, _request_id: u32) {}
+
+    /// Move the DMA signals ([`DMA_SIGNAL_TX`] and friends) this peripheral
+    /// raised outside a tick or event into `out`, for the bus to route. The
+    /// timer raises its capture requests from an input edge, which arrives
+    /// through the bus rather than through `tick`/`on_event`.
+    fn take_dma_signals(&mut self, _out: &mut Vec<u32>) {}
     /// Flash-controller capability: `true` for the peripheral that decides what
     /// a CPU store into the flash region does (NXP JN51xx / K32W flash
     /// controllers latch addresses and program pages through stores to the
