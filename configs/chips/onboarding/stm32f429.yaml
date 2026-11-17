@@ -62,6 +62,18 @@ peripherals:
     size: 1KB
     config:
       profile: stm32f4
+  # RM0090: TIM2 is a 32-bit APB1 timer at 0x40000000, enabled by
+  # RCC_APB1ENR.TIM2EN (bit 0), and uses external interrupt 28. The exact
+  # import smoke checks its gate, counter, update flag, and NVIC delivery.
+  - id: tim2
+    type: timer
+    bus: sysbus
+    base_address: 0x40000000
+    size: 1KB
+    irq: 28
+    clock: { reg: apb1enr, bit: 0 }
+    config:
+      width: 32
   # ADC1 on PA1/IN1 is checked by the exact-import smoke.
   - id: adc1
     type: adc

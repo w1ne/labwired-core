@@ -3,6 +3,8 @@
 
 use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
+#[cfg(feature = "stm32f429-tim2")]
+use cortex_m_rt::exception;
 use panic_halt as _;
 
 #[cfg(feature = "stm32f429-m4f-fpu")]
@@ -27,6 +29,171 @@ const USART_CR1: *mut u32 = (USART2 + 0x0C) as *mut u32;
 
 const TXE: u32 = 1 << 7;
 const LED: u32 = 1 << 12;
+
+// RM0090: TIM2 is the 32-bit general-purpose timer at 0x4000_0000, clocked
+// from APB1 through RCC_APB1ENR.TIM2EN and routed to NVIC interrupt 28.
+#[cfg(feature = "stm32f429-tim2")]
+const TIM2: u32 = 0x4000_0000;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM_CR1: *mut u32 = TIM2 as *mut u32;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM_DIER: *mut u32 = (TIM2 + 0x0C) as *mut u32;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM_SR: *mut u32 = (TIM2 + 0x10) as *mut u32;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM_EGR: *mut u32 = (TIM2 + 0x14) as *mut u32;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM_CNT: *mut u32 = (TIM2 + 0x24) as *mut u32;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM_PSC: *mut u32 = (TIM2 + 0x28) as *mut u32;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM_ARR: *mut u32 = (TIM2 + 0x2C) as *mut u32;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM_CEN: u32 = 1;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM_UIF: u32 = 1;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM2_IRQ: i16 = 28;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM2_IRQ_BIT: u32 = 1 << TIM2_IRQ;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM2_NVIC_ISER0: *mut u32 = 0xE000_E100 as *mut u32;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM2_NVIC_ICER0: *mut u32 = 0xE000_E180 as *mut u32;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM2_NVIC_ISPR0: *mut u32 = 0xE000_E200 as *mut u32;
+#[cfg(feature = "stm32f429-tim2")]
+const TIM2_NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
+
+#[cfg(feature = "stm32f429-tim2")]
+static mut TIM2_IRQ_RECORD: [u32; 2] = [0; 2];
+
+#[cfg(feature = "stm32f429-tim2")]
+#[exception]
+unsafe fn DefaultHandler(irqn: i16) {
+    let record = core::ptr::addr_of_mut!(TIM2_IRQ_RECORD).cast::<u32>();
+    if irqn == TIM2_IRQ {
+        // TIMx_SR is rc_w0: clearing UIF releases the level interrupt source.
+        write_volatile(TIM_SR, !TIM_UIF);
+        write_volatile(record, read_volatile(record).wrapping_add(1));
+    } else {
+        write_volatile(record.add(1), read_volatile(record.add(1)).wrapping_add(1));
+    }
+}
+
+#[cfg(feature = "stm32f429-tim2")]
+fn smoke_tim2() -> bool {
+    let record = unsafe { core::ptr::addr_of_mut!(TIM2_IRQ_RECORD).cast::<u32>() };
+    unsafe {
+        // TIM2EN is clear after reset; a gated write must not reach the timer.
+        write_volatile(TIM_ARR, 0x1234);
+    }
+    let gated = unsafe { read_volatile(TIM_ARR) } == 0;
+    unsafe {
+        write_volatile(RCC_APB1ENR, read_volatile(RCC_APB1ENR) | 1);
+    }
+    let arr_reset = unsafe { read_volatile(TIM_ARR) } == u32::MAX;
+    unsafe {
+        write_volatile(TIM_CNT, 0x1234_5678);
+    }
+    let width32 = unsafe { read_volatile(TIM_CNT) } == 0x1234_5678;
+
+    // Load a short period, observe an update with UIE clear, and verify the
+    // interrupt remains masked at the NVIC while UIF is latched.
+    unsafe {
+        write_volatile(TIM_PSC, 0);
+        write_volatile(TIM_ARR, 31);
+        write_volatile(TIM_EGR, 1);
+    }
+    let ug =
+        unsafe { read_volatile(TIM_SR) } & TIM_UIF != 0 && unsafe { read_volatile(TIM_CNT) } == 0;
+    unsafe {
+        write_volatile(TIM_SR, !TIM_UIF);
+        write_volatile(TIM2_NVIC_ICPR0, TIM2_IRQ_BIT);
+        write_volatile(TIM_CR1, TIM_CEN);
+    }
+    let uif_cleared = unsafe { read_volatile(TIM_SR) } & TIM_UIF == 0;
+    let start = unsafe { read_volatile(TIM_CNT) };
+    let mut advanced = false;
+    let mut overflowed = false;
+    for _ in 0..20_000 {
+        let now = unsafe { read_volatile(TIM_CNT) };
+        advanced |= now != start && now <= 31;
+        if unsafe { read_volatile(TIM_SR) } & TIM_UIF != 0 {
+            overflowed = true;
+            break;
+        }
+    }
+    let masked = overflowed && unsafe { read_volatile(TIM2_NVIC_ISPR0) } & TIM2_IRQ_BIT == 0;
+
+    // Enable the NVIC line and UIE; the default handler clears UIF and counts
+    // two real timer update exceptions.
+    unsafe {
+        write_volatile(TIM_CR1, 0);
+        write_volatile(TIM_SR, !TIM_UIF);
+        write_volatile(record, 0);
+        write_volatile(record.add(1), 0);
+        write_volatile(TIM2_NVIC_ISER0, TIM2_IRQ_BIT);
+        write_volatile(TIM_DIER, 1);
+        write_volatile(TIM_CR1, TIM_CEN);
+    }
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(record) } >= 2 {
+            break;
+        }
+    }
+    unsafe {
+        write_volatile(TIM_CR1, 0);
+        write_volatile(TIM_DIER, 0);
+    }
+    let irqs = unsafe { read_volatile(record) };
+    let stopped_at = unsafe { read_volatile(TIM_CNT) };
+    for _ in 0..2_000 {
+        let _ = unsafe { read_volatile(TIM_SR) };
+    }
+    let stopped =
+        unsafe { read_volatile(TIM_CNT) } == stopped_at && unsafe { read_volatile(record) } == irqs;
+    let stray = unsafe { read_volatile(record.add(1)) };
+    unsafe {
+        write_volatile(TIM2_NVIC_ICER0, TIM2_IRQ_BIT);
+        write_volatile(TIM_SR, !TIM_UIF);
+        write_volatile(TIM2_NVIC_ICPR0, TIM2_IRQ_BIT);
+    }
+    let released = unsafe { read_volatile(TIM2_NVIC_ISPR0) } & TIM2_IRQ_BIT == 0;
+    let ok = gated
+        && arr_reset
+        && width32
+        && ug
+        && uif_cleared
+        && advanced
+        && masked
+        && irqs == 2
+        && stray == 0
+        && stopped
+        && released;
+    send(b"tim2 gated=");
+    send(if gated { b"1" } else { b"0" });
+    send(b" arr_reset=");
+    send(if arr_reset { b"1" } else { b"0" });
+    send(b" w32=");
+    send(if width32 { b"1" } else { b"0" });
+    send(b" ug=");
+    send(if ug { b"1" } else { b"0" });
+    send(b" uif_clr=");
+    send(if uif_cleared { b"1" } else { b"0" });
+    send(b" run=");
+    send(if advanced { b"1" } else { b"0" });
+    send(b" masked=");
+    send(if masked { b"1" } else { b"0" });
+    send(b" irq=");
+    send(&[b'0' + irqs.min(9) as u8]);
+    send(b" stop=");
+    send(if stopped { b"1" } else { b"0" });
+    send(b" rel=");
+    send(if released { b"1" } else { b"0" });
+    send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
+    ok
+}
 
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
@@ -438,6 +605,9 @@ fn main() -> ! {
 
     set_led(false);
     send(b"STM32F4 shared profile smoke\n");
+
+    #[cfg(feature = "stm32f429-tim2")]
+    let _tim2_ok = smoke_tim2();
 
     let psp_tailchain_ok = smoke_systick_pendsv_psp_tailchain();
     send(if psp_tailchain_ok {
