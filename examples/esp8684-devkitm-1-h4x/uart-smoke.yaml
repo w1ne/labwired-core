@@ -1,0 +1,10 @@
+# ESP8684-DevKitM-1-H4X UART0 FIFO smoke.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp8684-devkitm-1-h4x-smoke"
+  system: "../../configs/systems/esp8684-devkitm-1-h4x.yaml"
+limits:
+  max_steps: 1000000
+assertions:
+  - uart_contains: "ESP8684_H4X_UART0_OK"
+  - expected_stop_reason: max_steps

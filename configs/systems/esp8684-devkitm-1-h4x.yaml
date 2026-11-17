@@ -1,0 +1,8 @@
+# ESP8684-DevKitM-1-H4X (ESP32-C2 family), 4 MiB flash.
+# UART0 is the only modeled peripheral in the current narrow profile.
+name: "esp8684-devkitm-1-h4x"
+chip: "../chips/esp32c2.yaml"
+cpu_hz: 120_000_000
+debug_uart: "uart0"
+external_devices: []
+board_io: []

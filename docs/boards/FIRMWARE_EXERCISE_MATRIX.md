@@ -235,6 +235,10 @@ _Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its decl
 
 _No beyond-rubric H2 peripheral is exercised: the board smoke covers only the UART0 FIFO/console path. This narrow profile does not model mask ROM, the USB bridge, IO_MUX, WS2812/RMT, button/strap behavior, Bluetooth LE, IEEE 802.15.4, Thread, Zigbee, or the other H2 peripherals._
 
+### `esp32c2`
+
+_No beyond-rubric C2 peripheral is exercised: the ESP8684-DevKitM-1-H4X smoke covers only the UART0 FIFO/console path. This fast-boot profile does not run mask ROM or the second-stage bootloader and does not model UART pad routing, GPIO/IO_MUX, Wi-Fi, Bluetooth LE, ADC, I2C, SPI, timers, or the board RGB LED._
+
 ### `esp32c5`
 
 _No beyond-rubric C5 peripheral is exercised: the DevKitC-1-N8R8 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, IEEE 802.15.4 or the other C5 peripherals._

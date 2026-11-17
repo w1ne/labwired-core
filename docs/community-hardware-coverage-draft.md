@@ -8,6 +8,38 @@ and simulator evidence. More demand-ranked targets remain to be added.
 
 ## ESP32 — rank 1, 38% of reported MCU use
 
+### Espressif ESP8684-DevKitM-1-H4X (ESP32-C2)
+
+ESP32 is rank 1 at 38%; the survey does not rank C2 separately. The exact
+ESP8684-DevKitM-1-H4X board has 4 MB flash and Mouser reported 35 in stock on
+2026-11-17. The older H4 sibling is marked NRND and excluded. The local smoke
+boots a bare-metal RV32IMC image and checks UART0 FIFO output on the narrow
+profile; Wi-Fi, BLE, GPIO/IO_MUX and the physical bridge remain outside scope.
+
+- [Board pin map, scope, and copy-paste Rust example](../examples/esp8684-devkitm-1-h4x/README.md)
+- [Live Espressif and Mouser availability receipt](../examples/esp8684-devkitm-1-h4x/vendor-status.md)
+- [Committed local simulator evidence](../examples/esp8684-devkitm-1-h4x/evidence/)
+
+```rust
+#![no_std]
+#![no_main]
+
+use panic_halt as _;
+use riscv_rt::entry;
+
+const UART0_FIFO: *mut u32 = 0x6000_0000 as *mut u32;
+
+#[entry]
+fn main() -> ! {
+    unsafe {
+        for &byte in b"ESP8684_H4X_UART0_OK\n" {
+            core::ptr::write_volatile(UART0_FIFO, u32::from(byte));
+        }
+    }
+    loop { core::hint::spin_loop(); }
+}
+```
+
 ### ESP32-C6-DevKitC-1-N8 + BME280
 
 The exact N8 board is listed in Espressif's current user guide; the dated

@@ -622,6 +622,7 @@ impl SystemBus {
             // out). Try them first; unmigrated families fall through to the match.
             let family_dev = plugin_dev
                 .or_else(|| crate::peripherals::esp32s3::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32c2::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c6::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c5::try_build(&canonical_type, p_cfg))
