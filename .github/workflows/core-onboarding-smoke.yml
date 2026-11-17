@@ -1264,10 +1264,12 @@ jobs:
             script: examples/renode-onboarding/stm32f072-smoke.yaml
             system: configs/systems/onboarding/stm32f072.yaml
           # The shared F4 smoke exercises this imported F429 profile's RCC,
-          # GPIOA/GPIOD and classic USART2 subset.
+          # GPIOA/GPIOD, classic USART2, Cortex-M4F and ADC1 subsets.
           - id: stm32f429
             crate: firmware-stm32f429-smoke
-            target: thumbv7em-none-eabi
+            target: thumbv7em-none-eabihf
+            target_features: vfp4
+            features: stm32f429-m4f-fpu,stm32f429-adc1
             script: examples/renode-onboarding/stm32f429-smoke.yaml
             system: configs/systems/onboarding/stm32f429.yaml
           # Reuse the F4 register fixture against the exact imported F412
@@ -1859,6 +1861,9 @@ jobs:
             --out-dir "out/onboarding-smoke/${{ matrix.id }}"
             --threshold-seconds 3600
           )
+          if [[ -n "${{ matrix.target_features }}" ]]; then
+            args+=(--target-features "${{ matrix.target_features }}")
+          fi
           if [[ -n "${{ matrix.firmware_build_script }}" ]]; then
             args+=(--firmware-build-script "${{ matrix.firmware_build_script }}")
           elif [[ -n "${{ matrix.prebuilt_firmware }}" ]]; then

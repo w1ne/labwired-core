@@ -11,6 +11,7 @@ mod m4f_fpu_smoke;
 const RCC: u32 = 0x4002_3800;
 const RCC_AHB1ENR: *mut u32 = (RCC + 0x30) as *mut u32;
 const RCC_APB1ENR: *mut u32 = (RCC + 0x40) as *mut u32;
+const RCC_APB2ENR: *mut u32 = (RCC + 0x44) as *mut u32;
 
 const GPIOA: u32 = 0x4002_0000;
 const GPIOD: u32 = 0x4002_0C00;
@@ -75,6 +76,64 @@ fn send(text: &[u8]) {
 fn set_led(on: bool) {
     let bit = if on { LED } else { LED << 16 };
     unsafe { write_volatile((GPIOD + BSRR) as *mut u32, bit) };
+}
+
+/// Convert ADC1 channel 1 from the 25% PA1 test fixture. At 0.825 V against
+/// a 3.3 V reference, the STM32F4 12-bit result is floor(0.25 * 4095) = 0x03FF.
+#[cfg(feature = "stm32f429-adc1")]
+fn smoke_adc1() -> bool {
+    const ADC1: u32 = 0x4001_2000;
+    const ADC_SR: *const u32 = ADC1 as *const u32;
+    const ADC_CR2: *mut u32 = (ADC1 + 0x08) as *mut u32;
+    const ADC_SQR3: *mut u32 = (ADC1 + 0x34) as *mut u32;
+    const ADC_DR: *const u32 = (ADC1 + 0x4C) as *const u32;
+    const ADC1EN: u32 = 1 << 8;
+    const ADON: u32 = 1;
+    const SWSTART: u32 = 1 << 30;
+    const EOC: u32 = 1 << 1;
+
+    unsafe {
+        // A write while APB2 is gated must be ignored.
+        write_volatile(ADC_CR2, ADON);
+        let gated = read_volatile(ADC_CR2) == 0;
+        write_volatile(RCC_APB2ENR, read_volatile(RCC_APB2ENR) | ADC1EN);
+        let clock = read_volatile(RCC_APB2ENR) & ADC1EN != 0;
+
+        // PA1 analog mode and the first regular sequence slot select IN1.
+        register_rmw(GPIOA + MODER, 0b11 << 2, 0b11 << 2);
+        write_volatile(ADC_SQR3, 1);
+        write_volatile(ADC_CR2, ADON);
+        write_volatile(ADC_CR2, ADON | SWSTART);
+        let mut eoc = false;
+        for _ in 0..100_000 {
+            if read_volatile(ADC_SR) & EOC != 0 {
+                eoc = true;
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        let code = read_volatile(ADC_DR) & 0x0FFF;
+        write_volatile(ADC_CR2, 0);
+
+        send(b"adc1 in1=");
+        send_hex(code);
+        send(b" gated=");
+        send(if gated { b"1" } else { b"0" });
+        send(b" clock=");
+        send(if clock { b"1" } else { b"0" });
+        send(b" eoc=");
+        send(if eoc { b"1" } else { b"0" });
+        let passed = gated && clock && eoc && code == 0x03FF;
+        send(if passed { b" ok\r\n" } else { b" FAIL\r\n" });
+        passed
+    }
+}
+
+fn send_hex(value: u32) {
+    const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
+    for shift in [28, 24, 20, 16, 12, 8, 4, 0] {
+        putc(DIGITS[((value >> shift) & 0xF) as usize]);
+    }
 }
 
 fn delay() {
@@ -389,6 +448,9 @@ fn main() -> ! {
 
     #[cfg(feature = "stm32f429-m4f-fpu")]
     m4f_fpu_smoke::run();
+
+    #[cfg(feature = "stm32f429-adc1")]
+    let _adc1_ok = smoke_adc1();
 
     loop {
         set_led(true);

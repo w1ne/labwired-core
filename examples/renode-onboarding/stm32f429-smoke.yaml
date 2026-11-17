@@ -1,15 +1,21 @@
-# Cortex-M4 smoke against the imported STM32F429 system.
-schema_version: "1.0"
+# Cortex-M4 smoke against the imported STM32F429 system, including ADC1_IN1
+# on a 25% potentiometer test fixture (0.825 V against 3.3 V).
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabihf/release/firmware-stm32f429-smoke"
   system: "../../configs/systems/onboarding/stm32f429.yaml"
 limits:
   max_steps: 800000
+stimuli:
+  - target: { component: "pot_adc1_in1", channel: "position" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 25.0
 assertions:
   - uart_contains: "STM32F4 shared profile smoke"
   - uart_contains: "systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok"
   - uart_contains: "STM32F429 PSP tailchain PASS"
   - uart_contains: "fpu m4f cpacr=1 mvfr=1 add=1 ok"
+  - uart_contains: "adc1 in1=000003FF gated=1 clock=1 eoc=1 ok"
   - gpio_edges:
       pin: "gpioPortD:12"
       min_edges: 1
