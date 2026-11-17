@@ -592,7 +592,10 @@ _SIM-DERIVED STM32U575 target with NO tier-1 target (absent from TIER1_TARGETS a
 
 ### `stm32u5a5zj`
 
-_SIM-DERIVED NUCLEO-U5A5ZJ-Q target with no tier-1 row or prebuilt CLI firmware. The in-process `stm32u5_exec_oracle` drives the U5A5 SystemBus registers and checks SHA-256 of `abc`, AES-128 ECB, 4^13 mod 497, and negative PKA subtraction sign extension through 4160 bits; it also rejects 4161-bit operands. Separate tests cover SHA-1/SHA-224/MD5 register vectors on the shared HASH model via U575 and an RFC 4231 HMAC unit vector; SAES unit vectors cover AES-128 ECB/CBC/CTR. The model implements AES-256 too, but no AES-256 vector currently tests it. The source-built `examples/nucleo-u5a5zj/io-smoke.yaml` checks USART1, and `examples/nucleo-u5a5zj/saes-smoke.yaml` now drives SAES from firmware with an AES-128 ECB known-answer check; HASH and PKA remain register-oracle-only. No physical U5A5 capture or acceptance is claimed; see `docs/boards/stm32u5a5zj.md` for model limits._
+_SIM-DERIVED NUCLEO-U5A5ZJ-Q target with no tier-1 row or prebuilt CLI firmware. The in-process `stm32u5_exec_oracle` checks SHA-256 of `abc`, AES-128 ECB, 4^13 mod 497, and negative PKA subtraction sign extension through 4160 bits; it also rejects 4161-bit operands. Separate tests cover SHA-1/SHA-224/MD5 register vectors on the shared HASH model via U575 and an RFC 4231 HMAC unit vector. The nightly board firmware smoke now drives SAES AES-128 ECB with the NIST SP 800-38A known-answer vector; other SAES unit vectors cover CBC/CTR, and the model implements AES-256 but has no AES-256 vector yet. HASH and PKA remain register-oracle-only. The SAES model does not cover GCM/CCM or TrustZone key selection. No physical U5A5 capture or acceptance is claimed; see `docs/boards/stm32u5a5zj.md` for model limits._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- NUCLEO-U5A5ZJ-Q SAES AES-128 ECB — NIST SP 800-38A known-answer block — `nucleo-u5a5-saes-smoke` · examples/nucleo-u5a5zj/evidence/saes (local smoke 2/2; CI matrix) (nightly CI)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `HASH`, `PKA`
 
