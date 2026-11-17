@@ -3037,6 +3037,53 @@
       ]
     },
     {
+      "device_type": "bma400",
+      "label": "Bosch BMA400",
+      "summary": "3-axis 12-bit SPI accelerometer. Configurable full scale and stimulus inputs.",
+      "detail": "3-axis 12-bit SPI accelerometer. Configurable full scale and stimulus inputs.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\")."
+        },
+        {
+          "name": "spi_mode",
+          "ty": "int",
+          "doc": "Opt in to edge-accurate (bit-level) slave sampling in this SPI mode (0..=3). Omit for the default byte-level frame exchange."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 1.0
+        }
+      ]
+    },
+    {
       "device_type": "max31855",
       "label": "MAX31855 thermocouple",
       "summary": "K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame).",
@@ -6845,6 +6892,62 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "ir_receiver_tsop38238",
+      "label": "TSOP38238 IR receiver",
+      "summary": "38 kHz IR receiver; NEC demodulated envelope on OUT (idle HIGH)",
+      "detail": "38 kHz IR receiver; NEC demodulated envelope on OUT (idle HIGH)",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "address",
+          "label": "NEC address",
+          "unit": "code",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 48896.0
+        },
+        {
+          "key": "command",
+          "label": "NEC command",
+          "unit": "code",
+          "min": -1.0,
+          "max": 255.0,
+          "default": -1.0
+        }
+      ]
+    },
+    {
+      "device_type": "ir_remote_nec",
+      "label": "NEC IR remote",
+      "summary": "NEC / NEC-extended remote; demodulated envelope on IR",
+      "detail": "NEC / NEC-extended remote; demodulated envelope on IR",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "address",
+          "label": "NEC address",
+          "unit": "code",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 48896.0
+        },
+        {
+          "key": "key",
+          "label": "NEC command",
+          "unit": "code",
+          "min": -1.0,
+          "max": 255.0,
+          "default": -1.0
+        }
+      ]
     }
   ]
 }

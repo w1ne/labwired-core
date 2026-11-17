@@ -477,6 +477,7 @@ canonical `type:`; the table below is rendered from that file by
 | `adxl345_spi` | SPI | 3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g) |
 | `amoled-rm67162` | SPI | 240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C) |
 | `apa102` | SPI | SPI-clocked addressable RGB LED strip (write-only sink) |
+| `bma400` | SPI | 3-axis 12-bit SPI accelerometer. Configurable full scale and stimulus inputs |
 | `bmi270_spi` | SPI | Native four-wire BMI270 with real CS/dummy-byte framing, verified configuration upload and nominal motion sampling |
 | `gc9a01` | SPI | 1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI |
 | `hc595-7seg` | SPI | 4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI |
@@ -520,6 +521,8 @@ canonical `type:`; the table below is rendered from that file by
 | `hc-sr04` | GPIO | Ultrasonic distance sensor (trigger / echo) |
 | `hx711` | GPIO | 24-bit load-cell amplifier (DT/SCK bit-bang) |
 | `ili9341-16bit` | GPIO | 240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang |
+| `ir_receiver_tsop38238` | GPIO | 38 kHz IR receiver; NEC demodulated envelope on OUT (idle HIGH) |
+| `ir_remote_nec` | GPIO | NEC / NEC-extended remote; demodulated envelope on IR |
 | `keypad` | GPIO | 4×4 membrane keypad (row-drive / column-read) |
 | `l298n` | GPIO | L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort) |
 | `led-matrix-mux` | GPIO | Row/column LED matrix (micro:bit 5x5, bare 8x8) multiplexed by GPIO row and column lines, with per-pixel brightness |
