@@ -356,6 +356,16 @@ impl Peripheral for Nrf52Rtc {
         Ok(0)
     }
 
+    /// Every RTC register read is pure. The only state a read touches is the
+    /// lazily advanced counter (`sync_from_clock`), and what that advance can
+    /// cause is parked in `pending_irq` / `pending_fired` for the scheduled
+    /// event to deliver: the read itself raises nothing. Arduino `millis()`
+    /// on nRF52 is a COUNTER read, so a `delay()` loop no longer ends its
+    /// CPU window on every poll.
+    fn read_is_pure(&self, _offset: u64) -> bool {
+        true
+    }
+
     fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
         Ok(())
     }

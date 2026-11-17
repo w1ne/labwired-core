@@ -97,6 +97,17 @@ impl SpiDevice for GatedSpiDevice {
     fn cs_pin(&self) -> &str {
         self.inner.cs_pin()
     }
+    fn cs_active_high(&self) -> bool {
+        self.inner.cs_active_high()
+    }
+    fn next_miso(&self) -> Option<u8> {
+        // Matches `transfer`: an unpowered device answers 0xFF.
+        if self.powered {
+            self.inner.next_miso()
+        } else {
+            Some(0xff)
+        }
+    }
     fn chain_index(&self) -> u32 {
         self.inner.chain_index()
     }

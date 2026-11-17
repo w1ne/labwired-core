@@ -1861,6 +1861,26 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// True when a CPU read at `offset` is pure: it returns a value and
+    /// changes nothing anyone else can observe. Lazily derived state the
+    /// model brings up to "now" on the read (a free-running counter) is
+    /// allowed, as long as everything that state can cause — an interrupt,
+    /// a scheduled event, a pad edge — still reaches the machine through the
+    /// event scheduler or a later write, never through the read itself.
+    ///
+    /// Under exact batch boundaries (`Machine::exact_batch_boundaries`) a
+    /// device access ends the CPU batch so the machine boundary can tick at
+    /// the cycle where something changed. A pure read changes nothing, so the
+    /// batch continues through it: a `millis()` loop polling a counter keeps
+    /// its full window instead of one per poll.
+    ///
+    /// A promise, like [`Self::is_plain_memory`]: a read that pops a FIFO,
+    /// clears a flag or moves an interrupt level must answer `false`, the
+    /// default.
+    fn read_is_pure(&self, _offset: u64) -> bool {
+        false
+    }
+
     /// Tell the peripheral the clock its system's core runs at, in Hz — the
     /// effective `SystemBus::cpu_hz`, i.e. the manifest override if there is
     /// one and otherwise `ChipDescriptor::cpu_hz`. Called from the same attach

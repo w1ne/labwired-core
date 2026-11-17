@@ -4350,3 +4350,52 @@ fn register_numbers_map_to_their_fields() {
     assert_eq!(cpu.read_reg(17), 0);
     assert_eq!(cpu.read_reg(255), 0);
 }
+
+/// `ldr r0, [r1]; b <ldr>`: a two-instruction loop whose head is a poll-loop
+/// anchor on every arrival once the detector has seen it twice.
+fn anchor_loop(r1: u32) -> (CortexM, SystemBus, SimulationConfig) {
+    let mut bus = SystemBus::empty();
+    bus.flash = crate::memory::LinearMemory::new_erased(0x1000, 0x0);
+    bus.ram = crate::memory::LinearMemory::new(0x1000, 0x2000_0000);
+    bus.add_peripheral(
+        "dev",
+        0x4000_0000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::stub::StubPeripheral::new(0)),
+    );
+    assert!(bus.flash.write_u16(0x100, 0x6808)); // ldr r0, [r1]
+    assert!(bus.flash.write_u16(0x102, 0xe7fd)); // b 0x100
+    let mut cpu = CortexM::new();
+    cpu.pc = 0x100;
+    cpu.sp = 0x2000_0400;
+    cpu.r1 = r1;
+    let config = SimulationConfig {
+        idle_fast_forward_enabled: true,
+        decode_cache_enabled: false,
+        ..SimulationConfig::default()
+    };
+    (cpu, bus, config)
+}
+
+/// A batch ends at a poll-loop anchor so the machine can try to prove and
+/// skip the loop. Once the core has seen an iteration of that loop touch a
+/// device, the proof can only refuse: the batch runs on through the anchor.
+/// A loop over plain memory keeps ending at its anchor.
+#[test]
+fn batch_runs_through_an_anchor_whose_last_iteration_touched_a_device() {
+    let (mut cpu, mut bus, config) = anchor_loop(0x4000_0000);
+    let first = cpu.step_batch(&mut bus, &[], &config, 200).unwrap();
+    assert!(first < 200, "the first arrival still ends the batch");
+    let second = cpu.step_batch(&mut bus, &[], &config, 200).unwrap();
+    assert_eq!(second, 200, "a device-polling loop keeps its whole window");
+
+    let (mut cpu, mut bus, config) = anchor_loop(0x2000_0000);
+    let first = cpu.step_batch(&mut bus, &[], &config, 200).unwrap();
+    assert!(first < 200);
+    let second = cpu.step_batch(&mut bus, &[], &config, 200).unwrap();
+    assert!(
+        second < 200,
+        "a loop over plain memory still ends at its anchor ({second})"
+    );
+}
