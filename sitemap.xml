@@ -1570,7 +1570,13 @@
          <loc>https://docs.labwired.com/superpowers/plans/2026-10-27-model-catalog-publisher/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/superpowers/plans/2026-11-17-loop-skip-instruction-accounting/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/superpowers/specs/2026-10-12-rv1103-linux-platform-design/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/superpowers/specs/2026-11-17-loop-skip-instruction-accounting-design/</loc>
     </url>
     <url>
          <loc>https://docs.labwired.com/testing/IGNORED_TESTS/</loc>
