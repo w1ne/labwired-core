@@ -1269,6 +1269,102 @@ fn idle_fast_forward_is_reconciled_in_report_and_cpu() {
     assert_eq!(machine.idle_fast_forward_cycles_skipped, 5);
 }
 
+/// On an active single core with no WFI/poll-loop candidate, the idle
+/// fast-forward probe should not drain an already-bootstrapped empty
+/// scheduler before every CPU window. The regular boundary drain remains.
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn active_cpu_skips_redundant_idle_scheduler_preflight() {
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+    machine.config.idle_fast_forward_enabled = true;
+
+    // The first advance performs scheduler bootstrap; start profiling only
+    // once the machine is in its steady state.
+    machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+    crate::profile::start();
+    let report = machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+    crate::profile::stop();
+
+    assert_eq!(report.primary_steps, 1);
+    assert_eq!(machine.total_cycles, 2);
+    assert_eq!(
+        crate::profile::snapshot().sched_calls,
+        1,
+        "the normal commit boundary should drain once; idle preflight is redundant"
+    );
+}
+
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn active_cpu_keeps_idle_preflight_for_due_or_buffered_events() {
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+    machine.config.idle_fast_forward_enabled = true;
+
+    // Bootstrap the scheduler before arranging a due-now heap event.
+    machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+    machine.sched.schedule(machine.total_cycles, 0, 0);
+    crate::profile::start();
+    machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+    crate::profile::stop();
+    assert_eq!(
+        crate::profile::snapshot().sched_calls,
+        2,
+        "a due-now heap event needs the preflight drain plus the normal boundary drain"
+    );
+
+    // A buffered peripheral event is not visible in the scheduler heap until
+    // preflight drains it, so it must also retain the full path.
+    machine
+        .bus
+        .pending_schedule
+        .push((0, machine.total_cycles, 0));
+    crate::profile::start();
+    machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+    crate::profile::stop();
+    assert_eq!(
+        crate::profile::snapshot().sched_calls,
+        2,
+        "a buffered event must be enqueued and drained before the next CPU window"
+    );
+}
+
+#[cfg(feature = "event-scheduler")]
+#[test]
+fn active_cpu_keeps_idle_preflight_for_timer_poll_activity() {
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    bus.add_peripheral(
+        "systimer",
+        0x6002_3000,
+        0x1000,
+        None,
+        Box::new(crate::peripherals::esp32s3::systimer::Systimer::new(
+            160_000_000,
+        )),
+    );
+    let systimer = bus.find_peripheral_index_by_name("systimer").unwrap();
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+    machine.config.idle_fast_forward_enabled = true;
+
+    machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+    machine.bus.note_mmio_activity(systimer, 0x04);
+    machine.bus.note_mmio_activity(systimer, 0x44);
+    crate::profile::start();
+    let report = machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+    crate::profile::stop();
+
+    assert_eq!(report.primary_steps, 1);
+    assert_eq!(
+        crate::profile::snapshot().sched_calls,
+        2,
+        "timer-poll evidence must be consumed by idle preflight before it is reset"
+    );
+}
+
 /// The skip moves machine time without stepping either core. With the
 /// secondary running (an ESP32 loopTask on APP_CPU while PRO_CPU sits in
 /// WAITI), a skip takes that time away from it: the primary's idle budget

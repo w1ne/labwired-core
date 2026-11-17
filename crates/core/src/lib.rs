@@ -1635,6 +1635,28 @@ impl<C: Cpu> Machine<C> {
                 return 0;
             }
 
+            // The common active-core case cannot fast-forward: it has no WFI
+            // budget, no proven timer-poll loop, and no new timer-poll MMIO
+            // evidence to consume. Once bootstrap is complete and there is no
+            // due or buffered event, skip this redundant preflight drain.
+            // `plan_cpu_window` still services resident edges before execution,
+            // and the regular commit boundary still ticks peripherals and
+            // drains scheduler events.
+            if self.cpu_secondary.is_none()
+                && self.secondary_defer.is_none()
+                && self.scheduler_bootstrapped
+                && self
+                    .sched
+                    .next_event_deadline()
+                    .is_none_or(|deadline| deadline > self.total_cycles)
+                && self.bus.pending_schedule.is_empty()
+                && !self.bus.timer_poll_coalesce_has_pending_activity()
+                && self.cpu.idle_fast_forward_budget(&self.bus).is_none()
+                && !self.cpu.poll_loop_anchor_ready()
+            {
+                return 0;
+            }
+
             // Drain first: a due scheduler event may assert an interrupt, in
             // which case the CPU must resume normally instead of skipping.
             self.drain_scheduler_events();
