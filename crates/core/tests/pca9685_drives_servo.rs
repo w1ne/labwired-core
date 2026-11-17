@@ -126,3 +126,68 @@ external_devices:
     assert!(!servos[0].is_commanded(), "nothing written yet");
     assert_eq!(bus.pwm_channel_pulse_us(0x40, 3), None);
 }
+
+#[test]
+fn servo_source_is_scoped_to_its_declared_i2c_bus() {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::bus::SystemBus;
+    use std::path::PathBuf;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/stm32f103.yaml")).unwrap();
+    let manifest: SystemManifest = serde_yaml::from_str(
+        r#"
+name: same-address-controllers
+chip: "../chips/stm32f103.yaml"
+external_devices:
+  - id: pwm1
+    type: pca9685
+    connection: i2c1
+    config: { address: 0x40 }
+  - id: pwm2
+    type: pca9685
+    connection: i2c2
+    config: { address: 0x40 }
+  - id: elbow
+    type: servo
+    connection: i2c2
+    config: { model: mg995, source_address: 64, source_channel: 0 }
+"#,
+    )
+    .unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    for (bus_name, off) in [("i2c1", 205u16), ("i2c2", 409u16)] {
+        let mut slaves = bus.take_i2c_slaves(bus_name);
+        assert_eq!(slaves.len(), 1);
+        init_50hz(slaves[0].as_mut());
+        write_reg(
+            slaves[0].as_mut(),
+            0x06,
+            &[0, 0, off as u8, (off >> 8) as u8],
+        );
+        for slave in slaves {
+            bus.attach_i2c_slave(bus_name, slave).unwrap();
+        }
+    }
+    bus.sync_pwm_sourced_servos();
+    let servo = bus.observed_of::<Servo>().next().unwrap();
+    assert!(
+        (servo.pulse_us() - 1996.0).abs() < 2.0,
+        "i2c2 pulse was {}",
+        servo.pulse_us()
+    );
+}
+
+#[test]
+fn supply_gate_forwards_pwm_query_only_when_powered() {
+    use labwired_core::peripherals::components::supply_domain::{GatedI2cDevice, SupplyGate};
+    let make_controller = || {
+        let mut d = pca();
+        init_50hz(&mut d);
+        write_reg(&mut d, 0x06, &[0, 0, 0x33, 0x01]);
+        d
+    };
+    let powered = GatedI2cDevice::new(Box::new(make_controller()), SupplyGate::legacy(true));
+    let unpowered = GatedI2cDevice::new(Box::new(make_controller()), SupplyGate::legacy(false));
+    assert!((powered.pwm_channel_pulse_us(0).unwrap() - 1498.0).abs() < 1.0);
+    assert_eq!(unpowered.pwm_channel_pulse_us(0), None);
+}

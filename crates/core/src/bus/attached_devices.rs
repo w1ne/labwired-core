@@ -107,9 +107,29 @@ impl SystemBus {
     /// state. A silent channel leaves the servo where it was.
     pub fn sync_pwm_sourced_servos(&self) {
         for servo in self.observed_of::<crate::peripherals::components::servo::Servo>() {
-            if let Some((address, channel)) = servo.source() {
-                if let Some(us) = self.pwm_channel_pulse_us(address, channel) {
-                    servo.apply_pulse_us(us);
+            if let (Some((address, channel)), Some(bus_name)) =
+                (servo.source(), self.declared_connection(servo.id()))
+            {
+                // Match the servo's declared bus, not just the address: the
+                // same I2C address may exist on multiple controllers. A routed
+                // device needs mux/channel wiring evidence that this source
+                // declaration does not yet carry, so do not guess that route.
+                let mut matches = 0;
+                let mut pulse = None;
+                self.for_each_attached_device(&mut |bus, d| {
+                    if bus == Some(bus_name)
+                        && d.transport == "i2c"
+                        && d.address == Some(address)
+                        && d.mux_address.is_none()
+                    {
+                        matches += 1;
+                        pulse = d.evidence.and_then(|e| e.pwm_channel_pulse_us(channel));
+                    }
+                });
+                if matches == 1 {
+                    if let Some(us) = pulse {
+                        servo.apply_pulse_us(us);
+                    }
                 }
             }
         }

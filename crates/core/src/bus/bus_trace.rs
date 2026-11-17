@@ -364,6 +364,12 @@ impl I2cDevice for TracingI2cDevice {
     fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
         self.inner.logs()
     }
+    /// Forwarded: every attached slave is trace-wrapped, so a wrapper that
+    /// fell through to the trait default would leave every servo wired to a
+    /// PWM controller output without a pulse.
+    fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
+        self.inner.pwm_channel_pulse_us(channel)
+    }
     fn claims_address(&self, addr: u8) -> bool {
         self.inner.claims_address(addr)
     }
