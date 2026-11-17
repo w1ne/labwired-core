@@ -158,6 +158,10 @@ const FPU_FPCCR: *mut u32 = 0xE000_EF34 as *mut u32;
 
 const RCC_AHB4ENR: *mut u32 = 0x5802_44E0 as *mut u32;
 const RCC_APB1LENR: *mut u32 = 0x5802_44E8 as *mut u32;
+#[cfg(feature = "stm32h743-adc1")]
+const RCC_AHB1ENR: *mut u32 = 0x5802_44D8 as *mut u32;
+#[cfg(feature = "stm32h743-adc1")]
+const GPIOA: u32 = 0x5802_0000;
 const GPIOB: u32 = 0x5802_0400;
 const GPIOD: u32 = 0x5802_0C00;
 const USART3: u32 = 0x4000_4800;
@@ -412,6 +416,129 @@ fn check_tim2() {
         && opm_irqs == 2
         && released;
     send(if ok { b" ok\r\n" } else { b" fail\r\n" });
+}
+
+#[cfg(feature = "stm32h743-adc1")]
+fn send_hex16(value: u32) {
+    for shift in [12, 8, 4, 0] {
+        let digit = ((value >> shift) & 0xF) as u8;
+        putc(if digit < 10 {
+            b'0' + digit
+        } else {
+            b'A' + digit - 10
+        });
+    }
+}
+
+/// Run one 12-bit ADC1 conversion from the PA0 / ADC1_INP16 smoke fixture.
+/// The 25% potentiometer supplies 0.825 V against the modeled 3.3 V reference,
+/// yielding floor(0.25 * 4095) = 0x03FF.
+#[cfg(feature = "stm32h743-adc1")]
+fn check_h7_adc1() -> bool {
+    const ADC1: u32 = 0x4002_2000;
+    const ADC_ISR: *const u32 = ADC1 as *const u32;
+    const ADC_CR: *mut u32 = (ADC1 + 0x08) as *mut u32;
+    const ADC_CFGR: *mut u32 = (ADC1 + 0x0C) as *mut u32;
+    const ADC_PCSEL: *mut u32 = (ADC1 + 0x1C) as *mut u32;
+    const ADC_SQR1: *mut u32 = (ADC1 + 0x30) as *mut u32;
+    const ADC_DR: *const u32 = (ADC1 + 0x40) as *const u32;
+    const ADC_CALFACT: *const u32 = (ADC1 + 0xC4) as *const u32;
+    const ADC12EN: u32 = 1 << 5;
+    const GPIOAEN: u32 = 1;
+    const DEEPPWD: u32 = 1 << 29;
+    const ADVREGEN: u32 = 1 << 28;
+    const ADCAL: u32 = 1 << 31;
+    const ADEN: u32 = 1;
+    const ADSTART: u32 = 1 << 2;
+    const LDORDY: u32 = 1 << 12;
+    const ADRDY: u32 = 1;
+    const EOC_EOS: u32 = (1 << 2) | (1 << 3);
+
+    unsafe {
+        // A write while RCC_AHB1ENR.ADC12EN is clear must not reach ADC1.
+        write_volatile(ADC_CR, ADVREGEN | ADEN);
+        let gated = read_volatile(ADC_CR) == 0;
+        write_volatile(RCC_AHB1ENR, read_volatile(RCC_AHB1ENR) | ADC12EN);
+        let clock = read_volatile(RCC_AHB1ENR) & ADC12EN != 0;
+        let reset = read_volatile(ADC_CR) == DEEPPWD;
+
+        // PA0 is ADC1_INP16 on H743; configure the GPIO pad as analog.
+        write_volatile(RCC_AHB4ENR, read_volatile(RCC_AHB4ENR) | GPIOAEN);
+        register_rmw(GPIOA, 0b11, 0b11);
+        let pin = read_volatile(GPIOA as *const u32) & 0b11 == 0b11;
+
+        // H7 wake-up order: clear DEEPPWD, power the regulator, calibrate,
+        // enable the converter, and then start one regular conversion.
+        write_volatile(ADC_CR, 0);
+        write_volatile(ADC_CR, ADVREGEN);
+        let ldo = read_volatile(ADC_ISR) & LDORDY != 0;
+        write_volatile(ADC_CR, ADVREGEN | ADCAL);
+        let cal = read_volatile(ADC_CR) & ADCAL == 0 && read_volatile(ADC_CALFACT) != 0;
+
+        // RES=110 selects 12 bits on H7. PCSEL selects INP16 and SQ1 is the
+        // only conversion in the regular sequence (L=0).
+        write_volatile(ADC_CFGR, (1 << 31) | (0b110 << 2));
+        write_volatile(ADC_PCSEL, 1 << 16);
+        write_volatile(ADC_SQR1, 16 << 6);
+        write_volatile(ADC_CR, ADVREGEN | ADEN);
+        let mut ready = false;
+        for _ in 0..100_000 {
+            if read_volatile(ADC_ISR) & ADRDY != 0 {
+                ready = true;
+                break;
+            }
+            core::hint::spin_loop();
+        }
+
+        write_volatile(ADC_CR, ADVREGEN | ADEN | ADSTART);
+        let mut eoc = false;
+        let mut eos = false;
+        for _ in 0..100_000 {
+            let status = read_volatile(ADC_ISR);
+            eoc = status & (1 << 2) != 0;
+            eos = status & (1 << 3) != 0;
+            if eoc && eos {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        let code = read_volatile(ADC_DR) & 0xFFFF;
+        let start_cleared = read_volatile(ADC_CR) & ADSTART == 0;
+
+        send(b"adc1 inp16=");
+        send_hex16(code);
+        send(b" gated=");
+        send(if gated { b"1" } else { b"0" });
+        send(b" clock=");
+        send(if clock { b"1" } else { b"0" });
+        send(b" pin=");
+        send(if pin { b"1" } else { b"0" });
+        send(b" ldo=");
+        send(if ldo { b"1" } else { b"0" });
+        send(b" cal=");
+        send(if cal { b"1" } else { b"0" });
+        send(b" ready=");
+        send(if ready { b"1" } else { b"0" });
+        send(b" eoc=");
+        send(if eoc { b"1" } else { b"0" });
+        send(b" eos=");
+        send(if eos { b"1" } else { b"0" });
+        send(b" start_clr=");
+        send(if start_cleared { b"1" } else { b"0" });
+        let ok = gated
+            && clock
+            && reset
+            && pin
+            && ldo
+            && cal
+            && ready
+            && eoc
+            && eos
+            && start_cleared
+            && code == 0x03FF;
+        send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
+        ok
+    }
 }
 
 #[cfg(feature = "nucleo-h753zi-rx")]
@@ -2983,6 +3110,8 @@ fn main() -> ! {
     // table: the TIM2 interrupt must enter through the flash vector table.
     #[cfg(feature = "stm32h743-tim2")]
     check_tim2();
+    #[cfg(feature = "stm32h743-adc1")]
+    check_h7_adc1();
     #[cfg(feature = "stm32h743-exception-frame")]
     {
         unsafe {

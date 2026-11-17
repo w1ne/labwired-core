@@ -7,7 +7,10 @@
 # The imported H7 profile claimed external flash and SDRAM as executable
 # memory and included many unrelated peripheral models. Renode's stm32h7.repl
 # uses a Cortex-M7, 1 MiB code flash, and 128 KiB DTCM. Keep only the model
-# backed H7 RCC, GPIOB/GPIOD, USART3, and TIM2 surfaces exercised by this smoke.
+# backed H7 RCC, GPIOA/B/D, USART3, TIM2, and ADC1 surfaces exercised by this
+# smoke. ADC1 tests only the regular single-conversion path on PA0 / INP16;
+# ADC2/3, the ADC12 common block, DMA, injected conversions and oversampling
+# remain outside this profile.
 name: stm32h7
 arch: arm
 core: cortex-m7
@@ -24,6 +27,13 @@ peripherals:
     size: 1KB
     config:
       profile: h7
+  - id: gpioPortA
+    type: gpio
+    base_address: 0x58020000
+    size: 1KB
+    clock: { reg: ahb4enr, bit: 0 }
+    config:
+      profile: stm32v2
   - id: gpioPortB
     type: gpio
     base_address: 0x58020400
@@ -58,3 +68,16 @@ peripherals:
     clock: { reg: apb1lenr, bit: 0 }
     config:
       width: 32
+  # RM0433: ADC1/2 share the 0x40022000 page; ADC2 begins at +0x100, so
+  # keep the ADC1 window at 256 bytes. RCC_AHB1ENR.ADC12EN (bit 5) gates it.
+  - id: adc1
+    type: adc
+    base_address: 0x40022000
+    size: 256B
+    irq: 18
+    clock: { reg: ahb1enr, bit: 5 }
+    config:
+      profile: h7
+analog_pins:
+  # DS12110 maps PA0 to ADC1_INP16 on STM32H742/743/750/753.
+  PA0: { peripheral: adc1, channel: 16 }

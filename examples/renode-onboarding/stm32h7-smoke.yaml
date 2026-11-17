@@ -1,13 +1,18 @@
 # Cortex-M7 register smoke against the bounded imported generic STM32H7 profile.
-schema_version: "1.0"
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32h743-smoke"
   system: "../../configs/systems/onboarding/stm32h7.yaml"
 limits:
   max_steps: 4000000
+stimuli:
+  - target: { component: "pot_adc1_inp16", channel: "position" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 25.0
 assertions:
   - uart_contains: "STM32H7 register smoke"
   - uart_contains: "tim2 gated=1 arr_reset=1 w32=1 ug=1 uif_clr=1 run=1 masked=1 irq=3 stray=0 stop=1 opm=1 opm_irq=2 rel=1 ok"
+  - uart_contains: "adc1 inp16=03FF gated=1 clock=1 pin=1 ldo=1 cal=1 ready=1 eoc=1 eos=1 start_clr=1 ok"
   - gpio_edges:
       pin: "gpioPortB:0"
       min_edges: 1
