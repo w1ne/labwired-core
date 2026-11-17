@@ -1930,10 +1930,15 @@ impl crate::Peripheral for Timer {
             // pending the peripheral's own NVIC line through the same
             // `pend_irq_for_event` choke the legacy walk uses. Re-pends merge
             // in ISPR exactly as the walk's per-tick pends do.
+            //
+            // With the counter frozen and no filtered input edge in flight,
+            // the re-arm only re-pends the held lines: `level_hold` lets the
+            // machine park it while those pends stand.
             crate::sched::EventResult {
                 raise_own_irq: self.own_irq_held(),
                 explicit_irqs: self.capture_compare_irq_held().into_iter().collect(),
                 reschedule_delay: Some(1),
+                level_hold: self.counter_frozen() && self.ic_pending.is_empty(),
                 ..Default::default()
             }
         } else {

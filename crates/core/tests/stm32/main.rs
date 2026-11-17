@@ -49,6 +49,7 @@ mod stm32u5_exec_oracle;
 mod stm32u5_reset_conformance;
 mod timer_input_capture;
 mod timer_level_deassert_unpends;
+mod timer_masked_level_batches;
 mod u545_u575_drift_guard;
 mod u5_exti;
 mod u5_reference_firmware;

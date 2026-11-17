@@ -482,6 +482,7 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: Cell::new(0),
             timer_poll_carry: Cell::new(0),
             side_effecting_mmio: Cell::new(0),

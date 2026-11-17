@@ -1549,6 +1549,40 @@ impl SystemBus {
             });
         }
     }
+}
+
+#[cfg(feature = "event-scheduler")]
+impl SystemBus {
+    /// Park a level-hold event chain (`EventResult::level_hold`) of
+    /// peripheral `idx` while every line in `lines` stands in the NVIC:
+    /// enabled, pending and level-marked. Returns false (the caller re-arms
+    /// as before) when any line does not, or when there is no NVIC.
+    pub(crate) fn park_level_event(&mut self, idx: usize, token: u32, lines: &[u32]) -> bool {
+        let Some(nvic) = &self.nvic else {
+            return false;
+        };
+        if lines.is_empty() {
+            return false;
+        }
+        let standing = lines.iter().all(|&irq| {
+            let word = (irq / 32) as usize;
+            let bit = 1u32 << (irq % 32);
+            word < 8
+                && nvic.iser[word].load(std::sync::atomic::Ordering::SeqCst)
+                    & nvic.ispr[word].load(std::sync::atomic::Ordering::SeqCst)
+                    & nvic.level_pended[word].load(std::sync::atomic::Ordering::SeqCst)
+                    & bit
+                    != 0
+        });
+        if !standing {
+            return false;
+        }
+        self.parked_level_events.retain(|&(p, _, _)| p != idx);
+        for &irq in lines {
+            self.parked_level_events.push((idx, token, irq));
+        }
+        true
+    }
 
     /// The ONE per-fabric choke the event path uses to deliver a scheduler-
     /// driven peripheral's level-sensitive IRQ at its exact firing cycle. Every
@@ -1563,7 +1597,6 @@ impl SystemBus {
     /// bus (Cortex-M / nRF), where the caller pends the peripheral's explicit
     /// lines through `pend_irq_for_event` instead (the classic ESP32 DPORT
     /// fabric is a documented TODO — see the PR body).
-    #[cfg(feature = "event-scheduler")]
     pub(crate) fn deliver_scheduled_irq_levels(&mut self) -> bool {
         if self.irq_fabric.esp32c3.routing {
             self.refresh_esp32c3_sched_sources();
@@ -1600,7 +1633,9 @@ impl SystemBus {
             false
         }
     }
+}
 
+impl SystemBus {
     /// Classic ESP32 DPORT interrupt-matrix routing (TRM §7).
     ///
     /// Peripherals emit matrix *source* IDs via `explicit_irqs` (e.g. UART0 =
