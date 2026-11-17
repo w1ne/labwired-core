@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic NTC and diode netlists reach simulation-only input banks on boards
-//! whose current chip descriptors have no externally routable ADC inputs.
+//! Generic NTC and diode netlists reach simulation-only input banks on profiles
+//! whose chip descriptors have no externally routable ADC inputs.
 
 mod common;
 use common::root;
@@ -54,20 +54,12 @@ fn assert_input_bank_profile(
     analog_rel: &str,
     expected_name: &str,
     expected_chip: &str,
-    retain_teensy_led: bool,
 ) {
     let system_path = root(system_rel);
     let mut profile = SystemManifest::from_file(&system_path).expect("load system profile");
     assert_eq!(profile.name, expected_name);
     assert!(profile.external_devices.is_empty());
-    if retain_teensy_led {
-        assert!(profile
-            .board_io
-            .iter()
-            .any(|io| { io.id == "led_d13" && io.peripheral == "gpio2" && io.pin == 3 }));
-    } else {
-        assert!(profile.board_io.is_empty());
-    }
+    assert!(profile.board_io.is_empty());
 
     let analog = SystemManifest::from_file(root(analog_rel))
         .expect("load generic Beta NTC and Shockley diode netlists");
@@ -147,23 +139,11 @@ fn assert_input_bank_profile(
 }
 
 #[test]
-fn teensy_41_ntc_and_diode_netlists_reach_simulated_input_thresholds() {
-    assert_input_bank_profile(
-        "configs/systems/teensy-41.yaml",
-        "examples/teensy-41/analog-ntc-diode-system.yaml",
-        "teensy-41",
-        "imxrt1064",
-        true,
-    );
-}
-
-#[test]
 fn vegaboard_ri5cy_ntc_and_diode_netlists_reach_simulated_input_thresholds() {
     assert_input_bank_profile(
         "configs/systems/vegaboard-ri5cy.yaml",
         "examples/vegaboard-ri5cy/analog-ntc-diode-system.yaml",
         "vegaboard-ri5cy",
         "vegaboard-ri5cy",
-        false,
     );
 }

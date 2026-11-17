@@ -275,6 +275,47 @@ fn nordic_analog_pins_match_physical_ain_assignment() {
     assert!(analog_pin_problems("nrf52833", &desc).is_empty());
 }
 
+/// Teensyduino's `pin_to_channel[]` table maps A0..A17 to the RT1062 pads and
+/// ADC instances. A wrong channel is more damaging than a missing route: the
+/// co-simulation would silently drive a different ADC input.
+#[test]
+fn imxrt1064_teensy_analog_pads_match_the_physical_adc_assignments() {
+    let desc = load("imxrt1064");
+    let expected = [
+        ("AD_B1_02", "adc1", 7, 18),
+        ("AD_B1_03", "adc1", 8, 19),
+        ("AD_B1_07", "adc1", 12, 23),
+        ("AD_B1_06", "adc1", 11, 22),
+        ("AD_B1_01", "adc1", 6, 17),
+        ("AD_B1_00", "adc1", 5, 16),
+        ("AD_B1_10", "adc1", 15, 26),
+        ("AD_B1_11", "adc1", 0, 27),
+        ("AD_B1_08", "adc1", 13, 24),
+        ("AD_B1_09", "adc1", 14, 25),
+        ("AD_B0_12", "adc1", 1, 12),
+        ("AD_B0_13", "adc1", 2, 13),
+        ("AD_B1_14", "adc2", 3, 30),
+        ("AD_B1_15", "adc2", 4, 31),
+        ("AD_B1_12", "adc2", 1, 28),
+        ("AD_B1_13", "adc2", 2, 29),
+        ("AD_B1_04", "adc1", 9, 20),
+        ("AD_B1_05", "adc1", 10, 21),
+    ];
+    assert_eq!(desc.analog_pins.len(), expected.len());
+    for (pad, peripheral, channel, gpio_bit) in expected {
+        assert_eq!(
+            desc.analog_pins[pad],
+            AdcPinFn {
+                peripheral: peripheral.to_string(),
+                channel,
+            },
+            "{pad} ADC route"
+        );
+        assert_eq!(desc.pins[pad].gpio, "gpio1", "{pad} GPIO port");
+        assert_eq!(desc.pins[pad].bit, gpio_bit, "{pad} GPIO bit");
+    }
+}
+
 #[test]
 fn nordic_validation_rejects_bad_models_ports_channels_and_pads() {
     let original = load("nrf52833");
