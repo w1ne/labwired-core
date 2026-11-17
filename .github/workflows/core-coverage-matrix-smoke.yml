@@ -390,6 +390,17 @@ jobs:
             profile_dir: release
             script: examples/pico2/io-smoke.yaml
             system: configs/systems/pico2.yaml
+          # Pico 2 W + BME280: read the real sensor model's chip ID on I2C0
+          # using the RP2350 map. Build from the crate directory so its
+          # cortex-m-rt linker configuration is loaded.
+          - id: rpi-pico-2-w-bme280
+            target: thumbv8m.main-none-eabi
+            crate: firmware-pico2w-bme280-smoke
+            build_dir: crates/firmware-pico2w-bme280-smoke
+            profile: release
+            profile_dir: release
+            script: examples/rpi-pico-2-w-bme280/io-smoke.yaml
+            system: configs/systems/rpi-pico-2-w-bme280.yaml
           # atsamd21g18a's only CLI proof — the first Microchip part in the
           # engine. Same shape as the rp2350 cell above, `build_dir` included
           # and for the same reason: this crate's `-Tlink.x` comes from its own

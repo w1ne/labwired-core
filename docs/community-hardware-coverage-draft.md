@@ -198,6 +198,20 @@ void loop() {
 }
 ```
 
+### Raspberry Pi Pico 2 W + BME280
+
+The RP2040/RP2350 target group is demand group #2; RP2040 measured rank 5 at
+12%, while RP2350 was not scored separately. The Pico 2 W is Raspberry Pi's
+current RP2350 wireless board. Its profile runs a register-level I2C0 smoke on
+GP4/GP5, checks both I/O mux selections, and requires the attached BME280 to
+return chip ID 0x60. This adds board and sensor coverage to the existing RP2350
+model; the CYW43439 Wi-Fi/Bluetooth path and wireless user LED remain
+unmodelled.
+
+- [Wiring, scope, copy-paste Arduino example, and smoke command](../examples/rpi-pico-2-w-bme280/README.md)
+- [Live lifecycle and stock receipt](../examples/rpi-pico-2-w-bme280/vendor-status.md)
+- [Committed local simulator evidence](../examples/rpi-pico-2-w-bme280/evidence/run/)
+
 ## STM32F103 — rank 3, 17% of reported MCU use
 
 ### NUCLEO-F103RB + BME280

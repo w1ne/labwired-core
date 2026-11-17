@@ -170,8 +170,17 @@ jobs:
           - id: adafruit-feather-rp2350
             crate: firmware-adafruit-feather-rp2350-smoke
             target: thumbv8m.main-none-eabi
+            firmware_build_dir: crates/firmware-adafruit-feather-rp2350-smoke
             script: examples/adafruit-feather-rp2350/io-smoke.yaml
             system: configs/systems/adafruit-feather-rp2350.yaml
+          # Demand group #2 (RP2040/RP2350; RP2040 rank 5 at 12%): Pico 2 W
+          # reads the BME280 chip ID through RP2350 I2C0 on GP4/GP5.
+          - id: rpi-pico-2-w-bme280
+            crate: firmware-pico2w-bme280-smoke
+            target: thumbv8m.main-none-eabi
+            firmware_build_dir: crates/firmware-pico2w-bme280-smoke
+            script: examples/rpi-pico-2-w-bme280/io-smoke.yaml
+            system: configs/systems/rpi-pico-2-w-bme280.yaml
           # Maintenance-only coverage: Microchip lists ATmega328P as NRND, so
           # this preserves the existing Nano path without recommending new use.
           - id: arduino-nano-atmega328p-maintenance
@@ -218,6 +227,9 @@ jobs:
             args+=(--firmware-build-script "${{ matrix.firmware_build_script }}")
           else
             args+=(--crate "${{ matrix.crate }}" --target "${{ matrix.target }}")
+            if [[ -n "${{ matrix.firmware_build_dir }}" ]]; then
+              args+=(--firmware-build-dir "${{ matrix.firmware_build_dir }}")
+            fi
           fi
           scripts/onboarding_smoke.sh "${args[@]}"
 

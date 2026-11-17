@@ -88,6 +88,12 @@ boards:
     path: examples/adafruit-feather-rp2350
     rust_targets: [thumbv8m.main-none-eabi]
     gate: true
+  # Demand group #2: the exact Pico 2 W profile reads BME280 ID over I2C0.
+  - id: rpi-pico-2-w-bme280
+    kind: sim-validate
+    path: examples/rpi-pico-2-w-bme280
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
   # Narrow ESP32-DevKitC-32E onboarding profile. Committed TIER1 ELF, no
   # cross-toolchain, seconds to run. Proves the new chip descriptor through
   # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).
