@@ -59,6 +59,38 @@ board confirmation.
 - [Live Espressif board and module availability receipt](../examples/esp32c5-devkitc-1-bme280-smoke/vendor-status.md)
 - [Committed smoke logs and decoded-frame evidence](../examples/esp32c5-devkitc-1-bme280-smoke/evidence/)
 
+### ESP32-H2-DevKitM-1-N4S + onboard RGB
+
+ESP32 is demand rank 1 (38% of reported MCU use); the survey does not score
+H2 separately. Espressif's live guide lists the N4S order code as current,
+marks the older N4 as NRND, and maps the onboard addressable RGB LED to GPIO8.
+DigiKey currently marks the exact N4S board Active and lists it in stock. The
+existing bare-RISC-V board smoke now exercises UART0 and bit-bangs a red GRB
+frame through GPIO8; the NeoPixel observer must decode one lit pixel. This
+adds board-peripheral coverage to the existing H2 descriptor. USB-to-UART,
+IO_MUX pad routing, RMT, BLE, Thread, Zigbee, and USB remain outside the smoke.
+
+- [Board scope, copy-paste Arduino sketch, and smoke command](../examples/esp32h2-devkitm-1-n4s/README.md)
+- [Live Espressif lifecycle and DigiKey stock receipt](../examples/esp32h2-devkitm-1-n4s/evidence/vendor-status.md)
+- [Committed UART, GPIO, and decoded RGB evidence](../examples/esp32h2-devkitm-1-n4s/evidence/)
+
+```cpp
+#include <Adafruit_NeoPixel.h>
+#include <Arduino.h>
+
+Adafruit_NeoPixel rgb(1, 8, NEO_GRB + NEO_KHZ800);  // onboard LED: GPIO8
+
+void setup() {
+  Serial.begin(115200);
+  rgb.begin();
+  rgb.setPixelColor(0, rgb.Color(255, 0, 0));
+  rgb.show();
+  Serial.println("H2_N4S_RGB_OK");
+}
+
+void loop() {}
+```
+
 ### ESP32-S3-DevKitC-1-N16R8 + Adafruit BME280
 
 ESP32 remains demand rank 1 (38% of reported MCU use). Espressif lists the

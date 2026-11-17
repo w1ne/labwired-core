@@ -149,7 +149,7 @@ jobs:
             crate: firmware-esp32h2-demo
             profile: release
             profile_dir: release
-            script: examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml
+            script: examples/esp32h2-devkitm-1-n4s/io-smoke.yaml
             system: configs/systems/esp32h2-devkitm-1-n4s.yaml
           # Demand rank 1 ESP32-family coverage: C5-specific survey demand is
           # unmeasured, but the current C5-DevKitC-1 adds a new family SKU.
@@ -770,6 +770,12 @@ jobs:
         if: matrix.id == 'esp32c61-devkitc-1-n8r2-bme280'
         run: |
           python3 examples/esp32c61-devkitc-1-n8r2-bme280/ci/verify-rgb-evidence.py \
+            "out/coverage-matrix/${{ matrix.id }}/result.json"
+
+      - name: Check decoded ESP32-H2 onboard RGB evidence
+        if: matrix.id == 'esp32h2-devkitm-1-n4s'
+        run: |
+          python3 examples/esp32h2-devkitm-1-n4s/ci/verify-rgb-evidence.py \
             "out/coverage-matrix/${{ matrix.id }}/result.json"
 
       - name: Run exact STM32 catalog variants
