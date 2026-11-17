@@ -42,6 +42,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "adc cal=1 ready=1 coco=1 result=0400 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "gpio_edges": {
           "pin": "gpio2:3",
           "min_edges": 1
@@ -61,11 +67,11 @@
     "registers": [
       1075412996,
       10,
-      1,
+      48,
       0,
       1,
+      49,
       3221225472,
-      0,
       537001968,
       1,
       1,
@@ -73,11 +79,11 @@
       3758154252,
       1,
       537001952,
-      536936452,
-      536875048
+      1,
+      536877726
     ],
-    "pc": 536875048,
-    "xpsr": 16777216,
+    "pc": 536877726,
+    "xpsr": 16817152,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -89,7 +95,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "f43f8e559e5f98ae639cb92060761c1268dadc34004133047cc24a65ceba6e96",
+  "firmware_hash": "2d8dcb1cfc50154e17c53032399b44513201b733ad3794c63c03a80a51a489fb",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-imxrt1064-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/imxrt1064.yaml",
@@ -126,6 +132,13 @@
         "artifacts": []
       },
       {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1074544640,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "scb",
         "kind": "native",
         "base": 3758157056,
@@ -154,7 +167,19 @@
         "artifacts": []
       }
     ],
-    "devices": []
+    "devices": [
+      {
+        "id": "adc1_pot",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 0
+        },
+        "artifacts": []
+      }
+    ]
   },
   "fidelity": [
     {
@@ -230,28 +255,48 @@
       {
         "text": "OK",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle": 1000,
+        "end_cycle": 1000
       },
       {
         "text": "gpt1 swr=1 cnt=1 irq=3 of1=1 of2=1 ok",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 100000
+        "cycle": 1000,
+        "end_cycle": 101000
+      },
+      {
+        "text": "adc cal=1 ready=1 coco=1 result=0400 ok",
+        "cycle_lo": 101000,
+        "cycle": 111000,
+        "end_cycle": 111000
       }
     ],
     "dropped_lines": 0
   },
+  "stimuli": [
+    {
+      "channel": "position",
+      "component": "adc1_pot",
+      "value": 25.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000
+    }
+  ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 4160,
+    "text_bytes": 6864,
     "data_bytes": 4,
     "bss_bytes": 12,
-    "flash_used_bytes": 4164,
+    "flash_used_bytes": 6868,
     "ram_static_bytes": 16,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 65536,
-    "flash_used_pct": 6.35,
+    "flash_used_pct": 10.48,
     "ram_static_pct": 0.02,
     "notes": [
       "section_sum_not_bin_image",
@@ -277,20 +322,20 @@
     "cycles": 800000,
     "instructions": 800000,
     "steps_executed": 800000,
-    "memory_reads": 25133,
+    "memory_reads": 25486,
     "memory_writes": 53,
-    "peripheral_accesses": 1101,
+    "peripheral_accesses": 3902,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 536873342,
-        "count": 117,
-        "symbol": "firmware_imxrt1064_smoke::wait"
+        "pc": 536873336,
+        "count": 118,
+        "symbol": "core::sync::atomic::atomic_load"
       },
       {
-        "pc": 536873314,
+        "pc": 536873332,
         "count": 78,
-        "symbol": "core::sync::atomic::atomic_load"
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
         "pc": 536873340,
@@ -298,19 +343,29 @@
         "symbol": "firmware_imxrt1064_smoke::wait"
       },
       {
-        "pc": 536873318,
+        "pc": 536873342,
         "count": 39,
         "symbol": "firmware_imxrt1064_smoke::wait"
       },
       {
-        "pc": 536873336,
+        "pc": 536874096,
         "count": 39,
-        "symbol": "core::sync::atomic::atomic_load"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 536875048,
-        "count": 12,
+        "pc": 536875110,
+        "count": 39,
+        "symbol": "firmware_imxrt1064_smoke::wait"
+      },
+      {
+        "pc": 536877726,
+        "count": 9,
         "symbol": "firmware_imxrt1064_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 536873330,
+        "count": 3,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       }
     ]
   }

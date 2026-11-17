@@ -69,6 +69,27 @@ const NVIC_ISPR3: u32 = 0xE000_E20C;
 const NVIC_ICPR3: u32 = 0xE000_E28C;
 const GPT1_NVIC_BIT: u32 = 1 << (GPT1_IRQN as u32 - 96);
 
+#[cfg(feature = "onboarding-adc")]
+const ADC1: u32 = 0x400C_4000;
+#[cfg(feature = "onboarding-adc")]
+const ADC1_HC0: u32 = ADC1;
+#[cfg(feature = "onboarding-adc")]
+const ADC1_HS: u32 = ADC1 + 0x20;
+#[cfg(feature = "onboarding-adc")]
+const ADC1_R0: u32 = ADC1 + 0x24;
+#[cfg(feature = "onboarding-adc")]
+const ADC1_CFG: u32 = ADC1 + 0x44;
+#[cfg(feature = "onboarding-adc")]
+const ADC1_GC: u32 = ADC1 + 0x48;
+#[cfg(feature = "onboarding-adc")]
+const ADC1_GS: u32 = ADC1 + 0x4C;
+#[cfg(feature = "onboarding-adc")]
+const ADC1_GC_CAL: u32 = 1 << 7;
+#[cfg(feature = "onboarding-adc")]
+const ADC1_GS_CALF: u32 = 1 << 1;
+#[cfg(feature = "onboarding-adc")]
+const ADC1_HS_COCO0: u32 = 1;
+
 const OCR1_RESTART: u32 = 49;
 const WANT_IRQS: u32 = 3;
 
@@ -110,6 +131,18 @@ fn send_u32(mut value: u32) {
     while n > 0 {
         n -= 1;
         putc(digits[n]);
+    }
+}
+
+#[cfg(feature = "onboarding-adc")]
+fn send_hex(value: u32) {
+    for shift in [12, 8, 4, 0] {
+        let digit = ((value >> shift) & 0xF) as u8;
+        putc(if digit < 10 {
+            b'0' + digit
+        } else {
+            b'A' + digit - 10
+        });
     }
 }
 
@@ -206,6 +239,44 @@ fn smoke_gpt1() -> bool {
     swr && counting && in_range && irq_ok && of2
 }
 
+#[cfg(feature = "onboarding-adc")]
+fn smoke_adc1() -> bool {
+    // Select 12-bit results while retaining the reset clock selection.
+    let cfg = rd(ADC1_CFG);
+    wr(ADC1_CFG, (cfg & !(0b11 << 2)) | (0b10 << 2));
+
+    // Clear CALF, request calibration, and wait for the model's timed finish.
+    wr(ADC1_GS, ADC1_GS_CALF);
+    wr(ADC1_GC, rd(ADC1_GC) | ADC1_GC_CAL);
+    let started = rd(ADC1_GC) & ADC1_GC_CAL != 0;
+    let ready = wait(20_000, || rd(ADC1_GC) & ADC1_GC_CAL == 0);
+    let calibrated = rd(ADC1_GS) & ADC1_GS_CALF == 0;
+
+    // A 25% position on the 3.3 V test fixture supplies 0.825 V; at 12 bits
+    // the modeled channel result is 1024. HC0 writes start software mode.
+    wr(ADC1_HC0, 0);
+    let complete = wait(20_000, || rd(ADC1_HS) & ADC1_HS_COCO0 != 0);
+    let coco = rd(ADC1_HS) & ADC1_HS_COCO0 != 0;
+    let result = rd(ADC1_R0);
+    let cleared = rd(ADC1_HS) & ADC1_HS_COCO0 == 0;
+    let ok = started && ready && calibrated && complete && coco && result == 0x400 && cleared;
+
+    send(b"adc cal=");
+    putc(if calibrated { b'1' } else { b'0' });
+    send(b" ready=");
+    putc(if started && ready { b'1' } else { b'0' });
+    send(b" coco=");
+    putc(if complete && coco && cleared {
+        b'1'
+    } else {
+        b'0'
+    });
+    send(b" result=");
+    send_hex(result);
+    send(if ok { b" ok\n" } else { b" FAIL\n" });
+    ok
+}
+
 #[entry]
 fn main() -> ! {
     // Ungate GPIO2 (CCGR0 CG15) and LPUART6 (CCGR3 CG3).
@@ -220,6 +291,14 @@ fn main() -> ! {
     send(b"gpt1 ");
     let ok = smoke_gpt1();
     send(if ok { b"ok\n" } else { b"FAIL\n" });
+
+    #[cfg(feature = "onboarding-adc")]
+    {
+        let adc_ok = smoke_adc1();
+        if !adc_ok {
+            send(b"ADC1 smoke failed\n");
+        }
+    }
 
     loop {}
 }

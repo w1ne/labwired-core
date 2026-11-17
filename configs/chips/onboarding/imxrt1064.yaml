@@ -43,3 +43,11 @@ peripherals:
   base_address: 1075757056
   size: 16384
   irq: 100
+
+# ADC1 (i.MX RT1060 RM §66), a real 12-bit SAR conversion window. Only the
+# software-triggered channel conversion is claimed by the imported smoke.
+- id: adc1
+  type: imxrt_adc
+  bus: sysbus
+  base_address: 0x400C4000
+  size: 16KB

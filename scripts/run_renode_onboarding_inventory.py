@@ -945,6 +945,7 @@ SMOKE_MAPPINGS = {
     },
     "imxrt1064": {
         "crate": "firmware-imxrt1064-smoke",
+        "features": "onboarding-adc",
         "target": "thumbv7em-none-eabi",
         "script": "examples/renode-onboarding/imxrt1064-smoke.yaml",
     },
