@@ -317,7 +317,7 @@ _Exact low-density x4/x6 geometry slice for stm32f103c4; it reuses the shared me
 
 ### `stm32f103c6`
 
-_Exact low-density x4/x6 geometry slice for stm32f103c6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+_Exact low-density x4/x6 geometry and peripheral windows for stm32f103c6 (SPI1, I2C1, USART1/2, TIM1-3, ADC1/2, DMA1; no SPI2, I2C2, USART3 or TIM4). A dedicated smoke boots firmware, writes USART2 and toggles PA5; USB and BKP remain explicit untouched stubs. ES0348's user-mode DBGMCU_IDCODE restriction is reflected as a zero read; `stm32_variant_geometry` asserts exact geometry. This is model evidence, not a physical C6 capture._
 
 ### `stm32f103r4`
 

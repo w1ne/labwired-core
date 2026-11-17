@@ -34,6 +34,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/stm32f103-blue-pill/io-smoke.yaml
             system: configs/systems/stm32f103-blue-pill.yaml
+          # Exact low-density C6 x6 order-code profile. This smoke checks
+          # USART2 output and PA5 LED edges; ES0348 makes IDCODE debug-only.
+          - id: stm32f103c6-low-density
+            crate: firmware-stm32f103-lowdensity-smoke
+            target: thumbv7m-none-eabi
+            script: examples/stm32f103c6-smoke/io-smoke.yaml
+            system: examples/stm32f103c6-smoke/system.yaml
           - id: stm32f401cdu6
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi

@@ -475,6 +475,38 @@ void loop() {
 }
 ```
 
+### STM32F103C6T6A low-density MCU
+
+STM32F103 is measured MCU rank 3 (17%). ST currently lists the exact
+STM32F103C6T6A as Active and In Stock. This is exact-variant validation within
+the existing STM32F103 family, not a new demand pick. The C6 profile boots a
+32 KB Flash / 10 KB SRAM image, sends a USART2 marker on PA2/PA3, and toggles an
+LED on PA5. The profile uses only low-density peripherals; the USB-device and
+backup-register windows remain explicit stubs. ST errata ES0348 says user-mode
+firmware reads DBGMCU_IDCODE as zero, which the descriptor reflects. No physical
+board or silicon result is claimed.
+
+- [Wiring, model boundary, copy-paste example, and smoke command](../examples/stm32f103c6-smoke/README.md)
+- [Live ST lifecycle and stock check](../examples/stm32f103c6-smoke/vendor-status.md)
+- [Committed local simulator evidence](../examples/stm32f103c6-smoke/evidence/)
+
+```cpp
+#include <Arduino.h>
+
+void setup() {
+  pinMode(PA5, OUTPUT);
+  Serial2.begin(115200);  // USART2: PA2 TX, PA3 RX
+  Serial2.println("STM32F103C6_LOW_DENSITY_OK");
+}
+
+void loop() {
+  digitalWrite(PA5, HIGH);
+  delay(500);
+  digitalWrite(PA5, LOW);
+  delay(500);
+}
+```
+
 ## STM32 Nucleo/Discovery — kit rank 4, 23% of main projects
 
 ### NUCLEO-U5A5ZJ-Q + STM32U5A5 secure AES

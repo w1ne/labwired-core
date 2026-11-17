@@ -168,6 +168,13 @@ boards:
     path: examples/nucleo-f103rb-bme280
     rust_targets: [thumbv7m-none-eabi]
     gate: true
+  # Demand-rank 3 STM32F103 exact C6 low-density profile. Boots the 32 KB /
+  # 10 KB part configuration and checks USART2 plus PA5 LED behavior.
+  - id: stm32f103c6-low-density
+    kind: sim-validate
+    path: examples/stm32f103c6-smoke
+    rust_targets: [thumbv7m-none-eabi]
+    gate: true
   # atmega2560's only CLI proof. Committed ELF, no toolchain, seconds to run.
   - id: arduino-mega-2560-io
     kind: sim-validate
