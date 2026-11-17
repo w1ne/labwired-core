@@ -3518,7 +3518,7 @@ impl Cpu for CortexM {
         self.poll_skip_budget(bus, limit)
     }
 
-    fn fast_forward_poll_loop(&mut self, cycles: u64) -> bool {
+    fn fast_forward_poll_loop(&mut self, cycles: u64) -> Option<u64> {
         self.poll_fast_forward(cycles)
     }
 
