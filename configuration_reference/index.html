@@ -6440,6 +6440,11 @@ canonical <code>type:</code>; the table below is rendered from that file by
 <td>SPI-clocked addressable RGB LED strip (write-only sink)</td>
 </tr>
 <tr>
+<td><code>bma400</code></td>
+<td>SPI</td>
+<td>3-axis 12-bit SPI accelerometer. Configurable full scale and stimulus inputs</td>
+</tr>
+<tr>
 <td><code>bmi270_spi</code></td>
 <td>SPI</td>
 <td>Native four-wire BMI270 with real CS/dummy-byte framing, verified configuration upload and nominal motion sampling</td>
@@ -6653,6 +6658,16 @@ canonical <code>type:</code>; the table below is rendered from that file by
 <td><code>ili9341-16bit</code></td>
 <td>GPIO</td>
 <td>240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang</td>
+</tr>
+<tr>
+<td><code>ir_receiver_tsop38238</code></td>
+<td>GPIO</td>
+<td>38 kHz IR receiver; NEC demodulated envelope on OUT (idle HIGH)</td>
+</tr>
+<tr>
+<td><code>ir_remote_nec</code></td>
+<td>GPIO</td>
+<td>NEC / NEC-extended remote; demodulated envelope on IR</td>
 </tr>
 <tr>
 <td><code>keypad</code></td>
