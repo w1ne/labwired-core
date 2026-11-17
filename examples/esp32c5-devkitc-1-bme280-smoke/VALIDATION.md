@@ -13,26 +13,31 @@ the C5's full feature set.
 The firmware is built for `riscv32imac-unknown-none-elf`, loaded directly into
 HP SRAM at `0x40800000`, configures the C5 I2C0 GPIO matrix on SDA GPIO8 and SCL
 GPIO9, reads BME280 registers `0xD0` and `0xFA`–`0xFC`, and reports the silicon
-model's ID and raw temperature through UART0. It also toggles GPIO5. The CLI
-assertion requires the success marker emitted only after checking `ID=0x60`
-and raw temperature `0x082DC0`, at least four observed edges on `gpio:5`, and
-the configured instruction-limit stop. Committed build and simulation evidence
-is under [`evidence/`](evidence/).
+model's ID and raw temperature through UART0. It also toggles GPIO5 and
+bit-bangs one red frame on GPIO27. The CLI assertions require the BME280 and
+RGB success markers, at least four observed edges on GPIO5, at least 16 on
+GPIO27, and the configured instruction-limit stop. The evidence checker also
+requires the WS2812 model to decode one lit pixel with GRB bytes `00 FF 00` on
+GPIO27. The 2026-11-17 run passed all five CLI assertions in 800,000 steps.
+Committed build and simulation evidence is under [`evidence/`](evidence/).
 
-The C5-aware GPIO adapter covers direct GPIO0..25 plus the C5 input/output
+The C5-aware GPIO adapter covers direct GPIO0..28 plus the C5 input/output
 matrix register windows needed for I2C0 signals 46/47. I2C0 uses the shared
 Espressif command-list bit engine, paced at C5's 240 MHz core rate and gated on
 the firmware's live GPIO8/9 input/output routes. UART0 uses the shared FIFO
-register model. The PCR clock gate and IOMUX pad electrical behavior are not
-enforced; UART bytes reach the host console sink without claiming U0TXD reaches
-the board bridge. The system deliberately leaves unmodeled or unverified:
+register model. The smoke bit-bangs the onboard GPIO27 WS2812 data line and the
+device observer decodes one red GRB frame (`00 FF 00`). RMT is not modelled.
+The PCR clock gate and IOMUX pad electrical behavior are not enforced; UART
+bytes reach the host console sink without claiming U0TXD reaches the board
+bridge. The system deliberately leaves unmodeled or unverified:
 
 - ROM boot, flash/XIP behavior, and PSRAM access;
 - the ESP32-C5 LP core, CLIC/interrupt behavior, and C5-specific CSRs;
 - Wi-Fi 6, Bluetooth LE, Zigbee, Thread, USB, and UART0 pin routing to the
   USB-to-UART bridge;
-- matrix functions beyond I2C0 (GPIO26..GPIO28, UART pin routing) and the GPIO27
-  addressable RGB LED;
+- matrix functions beyond I2C0 and UART pin routing;
+- physical strap sampling on GPIO27 at reset;
+- hardware-specific timing tolerance of the bit-banged WS2812 waveform;
 - PCR clock/reset gating;
 - physical-board confirmation.
 

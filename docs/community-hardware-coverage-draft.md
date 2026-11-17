@@ -45,6 +45,20 @@ void setup() {
 void loop() {}
 ```
 
+### ESP32-C5-DevKitC-1-N8R8 + BME280 + onboard RGB
+
+ESP32 remains demand rank 1 (38% of reported MCU use); C5-specific use is
+unmeasured. Espressif's current catalog lists this exact N8R8 board with a
+$15 sample-price reference and distributor links. The bare-ELF smoke reads
+BME280 ID `0x60` and raw temperature over I2C0 on GPIO8/GPIO9, toggles GPIO5,
+and bit-bangs a red WS2812 frame on the onboard GPIO27 LED. The WS2812 observer
+decodes the frame; this does not claim RMT support, mask-ROM boot, or physical
+board confirmation.
+
+- [Wiring, scope, and copy-paste Arduino example](../examples/esp32c5-devkitc-1-bme280-smoke/README.md)
+- [Live Espressif board and module availability receipt](../examples/esp32c5-devkitc-1-bme280-smoke/vendor-status.md)
+- [Committed smoke logs and decoded-frame evidence](../examples/esp32c5-devkitc-1-bme280-smoke/evidence/)
+
 ### ESP32-S3-DevKitC-1-N16R8 + Adafruit BME280
 
 ESP32 remains demand rank 1 (38% of reported MCU use). Espressif lists the

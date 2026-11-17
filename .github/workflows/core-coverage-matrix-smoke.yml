@@ -751,6 +751,12 @@ jobs:
           python3 examples/esp32s3-devkitc-1/rgb-smoke/verify-rgb-evidence.py \
             examples/esp32s3-devkitc-1/evidence/rgb/hosted-verify.json
 
+      - name: Check decoded ESP32-C5 onboard RGB evidence
+        if: matrix.id == 'esp32c5-devkitc-1-n8r8-bme280'
+        run: |
+          python3 examples/esp32c5-devkitc-1-bme280-smoke/ci/verify-rgb-evidence.py \
+            "out/coverage-matrix/${{ matrix.id }}/result.json"
+
       - name: Run exact STM32 catalog variants
         if: matrix.id == 'stm32-exact-catalog'
         env:

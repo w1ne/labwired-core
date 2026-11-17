@@ -4,23 +4,24 @@
     "type": "risc_v",
     "registers": [
       0,
-      1082130898,
+      1082169420,
       1082523632,
       0,
       0,
-      0,
-      0,
-      0,
+      53,
+      75,
+      10,
       1611206656,
       32,
-      588,
-      10,
-      69,
-      536000,
-      536000,
+      167,
+      1610612736,
+      4096,
+      134217728,
+      82,
       0,
+      67,
+      79,
       95,
-      32,
       0,
       0,
       0,
@@ -30,13 +31,12 @@
       0,
       0,
       0,
-      0,
-      0,
-      0,
-      0,
-      0
+      1280,
+      1611210752,
+      1611202560,
+      66
     ],
-    "pc": 1082131220,
+    "pc": 1082169752,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -45,7 +45,7 @@
     "mepc": 0,
     "mcause": 0,
     "mtval": 0,
-    "mtime": 500000,
+    "mtime": 800000,
     "mtimecmp": 0,
     "triggers": {
       "tselect": 0,
@@ -72,23 +72,23 @@
       "tcontrol": 0
     }
   },
-  "steps_executed": 500000,
-  "cycles": 500000,
-  "instructions": 500000,
+  "steps_executed": 800000,
+  "cycles": 800000,
+  "instructions": 800000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 500000
+      "value": 800000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 500000
+      "value": 800000
     }
   },
   "limits": {
-    "max_steps": 500000,
+    "max_steps": 800000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "529674f2ede8c69c7763c6504349db54da742c0a84d0a5994224060834adaa28",
+  "firmware_hash": "b1e5b7cfb10bb937218c7632f35cfaa98b5085ced8bf0383d4a4667791d60502",
   "config": {
     "firmware": "examples/esp32c5-devkitc-1-bme280-smoke/build/firmware.elf",
     "system": "examples/esp32c5-devkitc-1-bme280-smoke/../../configs/systems/esp32c5-devkitc-1-n8r8-bme280.yaml",

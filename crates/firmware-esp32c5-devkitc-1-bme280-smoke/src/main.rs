@@ -9,6 +9,8 @@ const GPIO_BASE: usize = 0x6009_1000;
 const GPIO_OUT_W1TS: *mut u32 = (GPIO_BASE + 0x08) as *mut u32;
 const GPIO_OUT_W1TC: *mut u32 = (GPIO_BASE + 0x0C) as *mut u32;
 const GPIO_ENABLE_W1TS: *mut u32 = (GPIO_BASE + 0x38) as *mut u32;
+const GPIO5_OUT_SEL: *mut u32 = (GPIO_BASE + 0xAD4 + 5 * 4) as *mut u32;
+const GPIO27_OUT_SEL: *mut u32 = (GPIO_BASE + 0xAD4 + 27 * 4) as *mut u32;
 const GPIO_I2C_SCL_IN_SEL: *mut u32 = (GPIO_BASE + 0x2D4 + 46 * 4) as *mut u32;
 const GPIO_I2C_SDA_IN_SEL: *mut u32 = (GPIO_BASE + 0x2D4 + 47 * 4) as *mut u32;
 const GPIO8_OUT_SEL: *mut u32 = (GPIO_BASE + 0xAD4 + 8 * 4) as *mut u32;
@@ -20,6 +22,8 @@ const IO_MUX_GPIO9: *mut u32 = 0x6009_0024 as *mut u32;
 const GPIO5_MASK: u32 = 1 << 5;
 const GPIO8_MASK: u32 = 1 << 8;
 const GPIO9_MASK: u32 = 1 << 9;
+const GPIO27_MASK: u32 = 1 << 27;
+const C5_GPIO_OUT_SIGNAL: u32 = 256 | (1 << 10); // SIG_GPIO_OUT_IDX; OEN from GPIO_ENABLE
 
 const UART0_FIFO: *mut u32 = 0x6000_0000 as *mut u32;
 const UART0_CLKDIV: *mut u32 = 0x6000_0014 as *mut u32;
@@ -54,6 +58,17 @@ const INT_TRANS_COMPLETE: u32 = 1 << 7;
 const CTR_TRANS_START: u32 = 1 << 5;
 const SPIN_LIMIT: usize = 120_000;
 
+macro_rules! nops {
+    ($count:literal) => {
+        unsafe {
+            asm!(
+                concat!(".rept ", stringify!($count), "\n nop\n .endr"),
+                options(nomem, nostack)
+            )
+        }
+    };
+}
+
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     unsafe {
@@ -61,6 +76,7 @@ pub extern "C" fn _start() -> ! {
 
         // GPIO5 remains a direct-output indicator for the board's J3 pin 9.
         select_gpio_function(IO_MUX_GPIO5);
+        write_volatile(GPIO5_OUT_SEL, C5_GPIO_OUT_SIGNAL);
         write_volatile(GPIO_OUT_W1TC, GPIO5_MASK);
         write_volatile(GPIO_ENABLE_W1TS, GPIO5_MASK);
 
@@ -90,6 +106,9 @@ pub extern "C" fn _start() -> ! {
         // value are checked above before this success marker is emitted.
         uart_str(b"C5_BME280_OK\n");
 
+        write_onboard_rgb_red();
+        uart_str(b"C5_RGB_OK\n");
+
         loop {
             write_volatile(GPIO_OUT_W1TS, GPIO5_MASK);
             delay();
@@ -116,6 +135,44 @@ unsafe fn setup_i2c0_gpio_matrix() {
     write_volatile(GPIO_I2C_SCL_IN_SEL, (1 << 8) | 9);
     write_volatile(GPIO_I2C_SDA_IN_SEL, (1 << 8) | 8);
     write_volatile(GPIO_ENABLE_W1TS, GPIO8_MASK | GPIO9_MASK);
+}
+
+unsafe fn write_onboard_rgb_red() {
+    const IO_MUX_GPIO27: *mut u32 = 0x6009_0070 as *mut u32;
+
+    select_gpio_function(IO_MUX_GPIO27);
+    write_volatile(GPIO27_OUT_SEL, C5_GPIO_OUT_SIGNAL);
+    write_volatile(GPIO_OUT_W1TC, GPIO27_MASK);
+    write_volatile(GPIO_ENABLE_W1TS, GPIO27_MASK);
+
+    // WS2812 wire order is GRB. Red is 00 FF 00, most-significant bit first.
+    for byte in [0x00u8, 0xFF, 0x00] {
+        for bit in (0..8).rev() {
+            pulse_ws2812_bit(byte & (1 << bit) != 0);
+        }
+    }
+
+    // Hold the line low past the WS2812 reset/latch time (40 us at 240 MHz is
+    // 9,600 cycles). The explicit delay leaves margin before UART output.
+    nops!(12000);
+}
+
+#[inline(always)]
+unsafe fn pulse_ws2812_bit(one: bool) {
+    write_volatile(GPIO_OUT_W1TS, GPIO27_MASK);
+    if one {
+        // 167 NOPs plus the following store/branch overhead gives about 700 ns.
+        nops!(167);
+    } else {
+        // 83 NOPs plus store/branch overhead gives about 350 ns.
+        nops!(83);
+    }
+    write_volatile(GPIO_OUT_W1TC, GPIO27_MASK);
+    if one {
+        nops!(131);
+    } else {
+        nops!(215);
+    }
 }
 
 unsafe fn setup_i2c0() {

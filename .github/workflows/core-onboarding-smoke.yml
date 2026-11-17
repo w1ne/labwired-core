@@ -250,6 +250,12 @@ jobs:
           fi
           scripts/onboarding_smoke.sh "${args[@]}"
 
+      - name: Check decoded ESP32-C5 onboard RGB evidence
+        if: matrix.id == 'esp32c5-devkitc-1-n8r8-bme280'
+        run: |
+          python3 examples/esp32c5-devkitc-1-bme280-smoke/ci/verify-rgb-evidence.py \
+            "out/onboarding-smoke/${{ matrix.id }}/simulation-output/result.json"
+
       - name: Publish onboarding summary
         if: always()
         run: |

@@ -11,7 +11,7 @@ Checked live on 2026-11-17.
   ESP32-C5-WROOM-1-N8R8 module as `Mass Production` and `Available`; the board
   catalog does not expose a separate Active/NRND label.
 - Adafruit's [BME280 STEMMA QT product page](https://www.adafruit.com/product/2652)
-  lists product 2652 at $14.95 and `In stock`.
+  lists product 2652 at $14.95 with an `Add to Cart` option.
 
 This status receipt is for the exact board and sensor used by the smoke. It is
 not a lifecycle statement about every ESP32-C5 die or DevKitC board revision.

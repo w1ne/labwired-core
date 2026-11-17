@@ -1693,7 +1693,7 @@ impl SystemBus {
         }
     }
 
-    /// Install a GPIO edge observer on ESP32 / ESP32-S3 GPIO models when present.
+    /// Install a GPIO edge observer on supported ESP32-family GPIO models.
     ///
     /// Public so kits (`Transport::GpioGroup`) and hand arms share one choke
     /// point — the same path `AttachCtx::install_gpio_observer` uses.
@@ -1717,6 +1717,17 @@ impl SystemBus {
                 .dev
                 .as_any_mut()
                 .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::gpio::Esp32Gpio>())
+            {
+                gpio.add_observer(observer);
+                return true;
+            }
+        }
+        // The shared C3 GPIO adapter also backs the C5, C6 and C61 maps.
+        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
+            if let Some(gpio) = bus.peripherals[idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32c3::gpio::Esp32c3Gpio>())
             {
                 gpio.add_observer(observer);
                 return true;

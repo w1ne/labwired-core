@@ -13,3 +13,6 @@ cargo run -q -p labwired-cli -- test \
   --script examples/esp32c5-devkitc-1-bme280-smoke/io-smoke.yaml \
   --output-dir "${EVIDENCE_DIR}/simulation-output" --no-uart-stdout \
   2>&1 | tee "${EVIDENCE_DIR}/logs/run_smoke.log"
+python3 examples/esp32c5-devkitc-1-bme280-smoke/ci/verify-rgb-evidence.py \
+  "${EVIDENCE_DIR}/simulation-output/result.json" \
+  2>&1 | tee "${EVIDENCE_DIR}/logs/verify_rgb.log"

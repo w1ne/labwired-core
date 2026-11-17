@@ -9,8 +9,9 @@ This example boots a small bare-metal RV32IMAC firmware image on the modeled
 ESP32-C5 HP core, reads the BME280 chip ID (`0xD0`) and raw temperature
 (`0xFA`–`0xFC`) over I2C0 on GPIO8/9, checks the expected values, and reports
 a success marker through UART0.
-GPIO5 also toggles through the GPIO output registers. On the ESP32-C5-DevKitC-1
-v1.2 board, UART0 TX is J3 pin 2 and GPIO5 is J3 pin 9.
+GPIO5 also toggles through the GPIO output registers. The smoke then bit-bangs
+one red WS2812 frame on the onboard RGB LED at GPIO27 (J3 pin 7). On the
+ESP32-C5-DevKitC-1 v1.2 board, UART0 TX is J3 pin 2 and GPIO5 is J3 pin 9.
 
 This is a focused new-chip smoke, not a full C5 system model. The ELF is loaded
 directly into HP SRAM by the simulator; it does not use the C5 mask ROM, flash
@@ -27,13 +28,15 @@ rustup target add riscv32imac-unknown-none-elf
 examples/esp32c5-devkitc-1-bme280-smoke/ci/test.sh
 ```
 
-The assertions require the BME280 ID and raw-temperature UART marker and four
-or more transitions on `gpio:5`. For a physical bench check, connect a 3.3 V
+The assertions require the BME280 ID and raw-temperature UART marker, four or
+more transitions on `gpio:5`, and a decoded red WS2812 frame on GPIO27. For a
+physical bench check, connect a 3.3 V
 BME280 breakout to GPIO8 (SDA), GPIO9 (SCL), 3V3, and GND; these pins are J1
 headers 9 and 10. GPIO7 is a strapping pin and is intentionally avoided.
 UART0 TX is available on J3 pin 2 (U0TXD). GPIO5 is J3 pin 9 and can drive an
 external LED through a current-limiting resistor. The onboard addressable RGB
-LED is on GPIO27 and is not part of this smoke.
+LED is on GPIO27; firmware bit-bangs its data line in this smoke. RMT is not
+modeled or claimed.
 
 See [`VALIDATION.md`](VALIDATION.md) for the claim boundary and committed
 evidence, and [`vendor-status.md`](vendor-status.md) for the current buyability
