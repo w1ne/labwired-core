@@ -686,6 +686,12 @@ struct TestArgs {
     #[arg(long)]
     vcd: Option<PathBuf>,
 
+    /// Export actual engine I2C/SPI byte events from the same test run.
+    /// .json preserves cycle-stamped events; other extensions export VCD.
+    /// This is a diagnostic capture, never a synthetic waveform or assertion.
+    #[arg(long = "bus-trace-out", value_name = "PATH")]
+    bus_trace_out: Option<PathBuf>,
+
     /// Optional path for the in-core analog engine's waveform trace (`.csv`
     /// writes `time_ns,<channel>...`, any other extension writes VCD `real`
     /// vars). Empty unless a co-simulation runner is attached to the run.
