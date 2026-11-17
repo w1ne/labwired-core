@@ -792,9 +792,9 @@ fn smoke_adc1_overrun() -> bool {
 }
 
 /// RM0090 regular scan smoke: convert PA1/IN1 then PA2/IN2 from SQR3, with
-/// EOCS set so firmware can observe EOC at each rank. NVIC pending is checked
-/// before and after the sequence; the CPU does not service the IRQ in this
-/// bounded scan smoke.
+/// EOCS set so firmware can observe EOC at each rank. It checks one-shot stop
+/// and CONT restarting the two-channel group. NVIC pending is checked without
+/// servicing the IRQ in this bounded smoke.
 #[cfg(feature = "stm32f429-adc-scan")]
 fn smoke_adc1_scan() -> bool {
     const ADC1: u32 = 0x4001_2000;
@@ -811,6 +811,7 @@ fn smoke_adc1_scan() -> bool {
     const SCAN: u32 = 1 << 8;
     const EOCIE: u32 = 1 << 5;
     const EOCS: u32 = 1 << 10;
+    const CONT: u32 = 1 << 1;
     const SWSTART: u32 = 1 << 30;
     const EOC: u32 = 1 << 1;
 
@@ -856,10 +857,53 @@ fn smoke_adc1_scan() -> bool {
             end &= read_volatile(ADC_SR) & EOC == 0;
             core::hint::spin_loop();
         }
+
+        // With CONT set and EOCS clear, RM0090 raises EOC at each regular-group
+        // end while the ADC restarts at SQ1. Reading DR acknowledges each group
+        // result before the next group completes.
+        write_volatile(ADC_CR2, 0);
+        write_volatile(ADC_SR as *mut u32, 0);
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        write_volatile(ADC_CR1, SCAN | EOCIE);
+        write_volatile(ADC_CR2, ADON | CONT);
+        write_volatile(ADC_CR2, ADON | CONT | SWSTART);
+        let mut continuous_codes = [0u32; 3];
+        let mut continuous_eocs = true;
+        let mut continuous_irq = true;
+        for code in &mut continuous_codes {
+            let mut completed = false;
+            for _ in 0..100_000 {
+                if read_volatile(ADC_SR) & EOC != 0 {
+                    completed = true;
+                    break;
+                }
+                core::hint::spin_loop();
+            }
+            if !completed {
+                continuous_eocs = false;
+                break;
+            }
+            continuous_irq &= read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT != 0;
+            *code = read_volatile(ADC_DR) & 0x0FFF;
+        }
+        let continuous_groups = continuous_codes == [0x07FF; 3];
+        let continuous_no_overrun = read_volatile(ADC_SR) & (1 << 5) == 0;
+        write_volatile(ADC_CR2, 0);
+        let adon_cleared = read_volatile(ADC_CR2) & ADON == 0;
+        // A result may complete on the same boundary as the disable write.
+        // Clear that already-latched status, then check that no new EOC occurs.
+        write_volatile(ADC_SR as *mut u32, 0);
+        let mut continuous_stopped = adon_cleared;
+        for _ in 0..64 {
+            continuous_stopped &= read_volatile(ADC_SR) & EOC == 0;
+            core::hint::spin_loop();
+        }
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        let continuous_irq_released = read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT == 0;
         write_volatile(ADC_CR1, 0);
         write_volatile(ADC_CR2, 0);
 
-        let ok = first_eoc
+        let one_shot_ok = first_eoc
             && second_eoc
             && first_irq
             && pending_after_second
@@ -867,6 +911,13 @@ fn smoke_adc1_scan() -> bool {
             && first_code == 0x03FF
             && second_code == 0x07FF
             && end;
+        let continuous_ok = continuous_eocs
+            && continuous_irq
+            && continuous_groups
+            && continuous_no_overrun
+            && continuous_irq_released
+            && continuous_stopped;
+        let ok = one_shot_ok && continuous_ok;
         send(b"adc1 scan=");
         send_hex(first_code);
         send(b",");
@@ -879,7 +930,35 @@ fn smoke_adc1_scan() -> bool {
         send(if end { b"1" } else { b"0" });
         send(b" released=");
         send(if irq_released { b"1" } else { b"0" });
-        send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
+        send(if one_shot_ok {
+            b" ok\r\n"
+        } else {
+            b" FAIL\r\n"
+        });
+        send(b"adc1 scan_cont_groups=");
+        for (index, code) in continuous_codes.iter().enumerate() {
+            if index != 0 {
+                send(b",");
+            }
+            send_hex(*code);
+        }
+        send(b" groups=");
+        send(if continuous_groups { b"3" } else { b"0" });
+        send(b" irq=");
+        send(if continuous_irq { b"1" } else { b"0" });
+        send(b" ovr=");
+        send(if continuous_no_overrun { b"0" } else { b"1" });
+        send(b" stop=");
+        send(if continuous_irq_released && continuous_stopped {
+            b"1"
+        } else {
+            b"0"
+        });
+        send(if continuous_ok {
+            b" ok\r\n"
+        } else {
+            b" FAIL\r\n"
+        });
         ok
     }
 }

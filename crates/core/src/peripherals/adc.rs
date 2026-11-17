@@ -390,10 +390,10 @@ pub struct Adc {
     /// Conversion data register — shared result path for both families.
     pub dr: u32,
     /// STM32F4 clears EOC when ADC_DR is read. `Peripheral::read` takes `&self`,
-    /// so this records the read until the next conversion without mutating the
-    /// public bridge-visible status word.
+    /// so this records the acknowledgement until the next EOC event without
+    /// mutating the public bridge-visible status word.
     #[serde(skip)]
-    dr_read_since_conversion: Cell<bool>,
+    dr_read_since_eoc: Cell<bool>,
 
     // Shared conversion engine.
     converting: bool,
@@ -504,7 +504,7 @@ impl Adc {
             regs,
             sr: 0,
             dr: 0,
-            dr_read_since_conversion: Cell::new(false),
+            dr_read_since_eoc: Cell::new(false),
             converting: false,
             cycles_remaining: 0,
             conversion_time: 14,
@@ -626,7 +626,7 @@ impl Adc {
                 let f4_overrun = is_f4
                     && (cr2 & F4_CR2_EOCS) != 0
                     && (self.sr & F4_SR_EOC) != 0
-                    && !self.dr_read_since_conversion.get();
+                    && !self.dr_read_since_eoc.get();
 
                 // The selected SQR3 channel, its input voltage and VREF+ were
                 // latched at SWSTART. Changes while SAR conversion is running
@@ -644,11 +644,11 @@ impl Adc {
                 let f4_eoc = !f4_scan || (cr2 & F4_CR2_EOCS) != 0 || f4_last_rank;
                 if f4_eoc {
                     self.sr |= F4_SR_EOC;
+                    self.dr_read_since_eoc.set(false);
                 }
                 if f4_overrun {
                     self.sr |= F4_SR_OVR;
                 }
-                self.dr_read_since_conversion.set(false);
 
                 if (f4_eoc && (cr1 & F4_CR1_EOCIE) != 0)
                     || (f4_overrun && (cr1 & F4_CR1_OVRIE) != 0)
@@ -1377,7 +1377,7 @@ impl Peripheral for Adc {
             },
             AdcRegs::Stm32F4(r) => match offset {
                 0x00..=0x03 => {
-                    if self.dr_read_since_conversion.get() {
+                    if self.dr_read_since_eoc.get() {
                         self.sr & !F4_SR_EOC
                     } else {
                         self.sr
@@ -1389,7 +1389,7 @@ impl Peripheral for Adc {
                 0x30..=0x33 => r.sqr2,
                 0x34..=0x37 => r.sqr3,
                 0x4C..=0x4F => {
-                    self.dr_read_since_conversion.set(true);
+                    self.dr_read_since_eoc.set(true);
                     self.dr
                 }
                 _ => {
@@ -2430,6 +2430,65 @@ mod tests {
         assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
         assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
         assert!(!adc.converting);
+    }
+
+    /// RM0090 §13.3.5/§13.3.8: CONT keeps a scanned regular group running and
+    /// restarts it at rank 1 after the last selected channel.
+    #[test]
+    fn f4_continuous_scan_restarts_at_first_rank() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(1, 825);
+        adc.set_channel_input(2, 1650);
+        adc.write_u32(0x04, F4_CR1_SCAN | F4_CR1_EOCIE).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap(); // L=1 → two conversions
+        adc.write_u32(0x34, 1 | (2 << 5)).unwrap(); // SQ1=IN1, SQ2=IN2
+        let cr2 = F1_CR2_ADON | F1_CR2_CONT | F4_CR2_EOCS;
+        adc.write_u32(0x08, cr2).unwrap();
+        adc.write_u32(0x08, cr2 | F4_CR2_SWSTART).unwrap();
+
+        for (index, expected) in [1023, 2047, 1023, 2047].into_iter().enumerate() {
+            let irq: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+            assert!(irq[..14].iter().all(|pending| !pending));
+            assert!(irq[14], "EOCIE must report conversion {}", index + 1);
+            assert_eq!(adc.read_u32(0x4C).unwrap(), expected);
+            assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+            assert!(adc.converting, "CONT must keep the scan active");
+            assert_eq!(adc.f4_sequence_rank, (index as u8 + 1) % 2);
+        }
+    }
+
+    /// With EOCS clear, reading DR clears group-end EOC through the next
+    /// non-final rank; it must not reappear before the following group ends.
+    #[test]
+    fn f4_group_eoc_read_stays_clear_until_next_group_end() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(1, 825);
+        adc.set_channel_input(2, 1650);
+        adc.write_u32(0x04, F4_CR1_SCAN | F4_CR1_EOCIE).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap();
+        adc.write_u32(0x34, 1 | (2 << 5)).unwrap();
+        let cr2 = F1_CR2_ADON | F1_CR2_CONT;
+        adc.write_u32(0x08, cr2).unwrap();
+        adc.write_u32(0x08, cr2 | F4_CR2_SWSTART).unwrap();
+
+        let first_rank: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(first_rank.iter().all(|irq| !irq));
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+
+        let first_group_end: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(first_group_end[14]);
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+
+        let next_first_rank: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(next_first_rank.iter().all(|irq| !irq));
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+
+        let next_group_end: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(next_group_end[14]);
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
     }
 }
 
