@@ -435,13 +435,11 @@ impl XtensaLx7 {
     /// Skip `cycles` (a multiple of the period of the plan the last
     /// [`Self::poll_loop_budget`] returned, and at most its cycles): leave
     /// the core exactly where running those iterations would leave it.
-    pub(super) fn apply_poll_loop_skip(&mut self, cycles: u64) -> bool {
-        let Some(plan) = self.poll_plan.take() else {
-            return false;
-        };
+    pub(super) fn apply_poll_loop_skip(&mut self, cycles: u64) -> Option<u64> {
+        let plan = self.poll_plan.take()?;
         let period = u64::from(plan.period);
         if cycles == 0 || cycles % period != 0 || cycles / period > plan.steady_iters {
-            return false;
+            return None;
         }
         let iters = cycles / period;
         // State after one iteration, with every tainted register moved on by
@@ -466,7 +464,7 @@ impl XtensaLx7 {
         self.fast_forward_idle_cycles(cycles);
         self.poll.last_value = self.sr.read(CCOUNT);
         self.bus_irq_memo = None;
-        true
+        Some(cycles)
     }
 
     fn probe_decode(&self, bus: &ProbeBus<'_>, pc: u32) -> SimResult<(u32, xtensa::Instruction)> {
@@ -712,7 +710,7 @@ impl XtensaLx7 {
         let reads = plan.reads.clone();
         let whole = cycles - cycles % period;
         if whole > 0 {
-            if !self.apply_poll_loop_skip(whole) {
+            if self.apply_poll_loop_skip(whole).is_none() {
                 return false;
             }
         } else {

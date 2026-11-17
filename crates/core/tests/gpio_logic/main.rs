@@ -32,6 +32,7 @@ mod gpio_devices_walk_free;
 mod gpio_list_roles;
 mod gpio_schedule_firmware;
 mod iolink_master_config;
+mod ir_receiver_tsop38238;
 mod keypad_scan_directions;
 mod led_strip_system_configs;
 mod logic_analyzer_f1_rp2040_pad_visibility;
