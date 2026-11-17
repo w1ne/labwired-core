@@ -27,6 +27,7 @@
 //!          status, event/error-line isolation, ITERREN-gated ER IRQ assertion
 //!          and release, and recovery
 //!   SPI1   MAX31855 reset frame plus TXEIE/RXNEIE level IRQ assertions
+//!   ADC1   single software-triggered F4 conversion of the externally driven IN1
 //!   USART1 TXEIE, TCIE and RXNEIE assert and release their NVIC line;
 //!   USART2 keeps injected bytes hidden until UE and RE are set, then drains
 //!   two bytes in order and gates RXNE IRQ 38
@@ -94,6 +95,11 @@ const SPI_CR1: u32 = SPI1;
 const SPI_CR2: u32 = SPI1 + 0x04;
 const SPI_SR: u32 = SPI1 + 0x08;
 const SPI_DR: u32 = SPI1 + 0x0C;
+const ADC1: u32 = 0x4001_2000;
+const ADC_SR: u32 = ADC1;
+const ADC_CR2: u32 = ADC1 + 0x08;
+const ADC_SQR3: u32 = ADC1 + 0x34;
+const ADC_DR: u32 = ADC1 + 0x4C;
 const NVIC_ISPR1: u32 = 0xE000_E204;
 const NVIC_ISPR0: u32 = 0xE000_E200;
 const NVIC_ISER1: u32 = 0xE000_E104;
@@ -200,7 +206,7 @@ fn main() -> ! {
         RCC_APB1ENR,
         rd(RCC_APB1ENR) | (1 << 0) | (1 << 17) | (1 << 21) | (1 << 22),
     );
-    wr(RCC_APB2ENR, rd(RCC_APB2ENR) | (1 << 12));
+    wr(RCC_APB2ENR, rd(RCC_APB2ENR) | (1 << 8) | (1 << 12));
     // HSI = 16 MHz, 115200 baud: USARTDIV 8.6875 -> 0x8B.
     wr(USART_BRR, 0x8B);
     wr(USART_CR1, (1 << 13) | (1 << 3)); // UE | TE
@@ -438,14 +444,38 @@ fn main() -> ! {
     let usart2_rx_gate_ok = smoke_usart2_rx_gate();
     passed |= (usart2_rx_gate_ok as u32) << 11;
 
+    let (adc_code, adc_eoc) = smoke_adc1_in1();
+    let adc_ok = adc_code == 0x03FF && adc_eoc;
+    send(b"adc1 in1=");
+    put_hex32(adc_code);
+    send(b" eoc=");
+    send(if adc_eoc { b"1" } else { b"0" });
+    send(if adc_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+    passed |= (adc_ok as u32) << 16;
+
     wr(RESULT, 0xB1AC_0000 | passed);
-    send(if passed == 0xFFFF {
+    send(if passed == 0x1_FFFF {
         b"BLACKPILL PASS\r\n"
     } else {
         b"BLACKPILL FAIL\r\n"
     });
 
     loop {}
+}
+
+/// Exercise one F4 ADC1 software conversion from the imported 25% IN1 source.
+/// The configured 0.825 V on the 3.3 V reference yields code 0x3FF.
+fn smoke_adc1_in1() -> (u32, bool) {
+    const GPIOA_MODER: u32 = GPIOA + MODER;
+    // PA1 is analog (MODER1 = 0b11); channel 1 is the first regular sequence.
+    wr(GPIOA_MODER, rd(GPIOA_MODER) | (0b11 << 2));
+    wr(ADC_SQR3, 1);
+    wr(ADC_CR2, 1); // ADON
+    wr(ADC_CR2, 1 | (1 << 30)); // ADON | SWSTART (F4)
+    let eoc = wait(ADC_SR, 1 << 1, 1 << 1);
+    let code = rd(ADC_DR) & 0x0FFF;
+    wr(ADC_CR2, 0); // ADON=0 cancels any remaining conversion work.
+    (code, eoc)
 }
 
 /// Exercise the F401's Cortex-M4F floating-point context integration. Thread

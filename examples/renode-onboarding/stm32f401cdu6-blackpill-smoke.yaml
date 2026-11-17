@@ -43,9 +43,9 @@
 # RXNEIE assertion/release with an injected RX byte. USART2 keeps its injected
 # `RS` bytes hidden until UE and RE are both set, reads them in order, and gates
 # RXNE IRQ 38. The summary word lands at 0x20001000 and is 0xB1ACFFFF on
-# success. PC13 resets low, so three on/off toggles give 5 edges, not 6. ADC,
-# EXTI, other timers and
-# other USARTs claimed by the chip are not exercised.
+# success. PC13 resets low, so three on/off toggles give 5 edges, not 6. ADC1
+# samples IN1 from a 25% potentiometer input (0.825 V on the 3.3 V reference).
+# EXTI, other timers and other USARTs claimed by the chip are not exercised.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabihf/release/firmware-f401cdu6-blackpill-renode-smoke"
@@ -57,6 +57,10 @@ uart_injections:
     bytes: "R"
   - uart: "usart2"
     bytes: "RS"
+stimuli:
+  - target: { component: "pot_adc1_in1", channel: "position" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 25.0
 assertions:
   - uart_ordered:
       - "BLACKPILL F401 SMOKE"
@@ -88,12 +92,13 @@ assertions:
       - "usart1 tc_isolated=1 gate_asserted=1 released=1 ok"
       - "usart1 rxne_isolated=1 gate_asserted=1 data=00000052 released=1 ok"
       - "usart2 rx_gate re_off=1 ue_off=1 data=00005253 rxne_after_first=1 rxne_after=0 irq=isolated,asserted,released ok"
+      - "adc1 in1=000003FF eoc=1 ok"
       - "BLACKPILL PASS"
   - gpio_edges:
       pin: "gpioc:13"
       min_edges: 5
   - memory_value:
       address: 0x20001000
-      expected_value: 0xB1ACFFFF
+      expected_value: 0xB1ADFFFF
       size: 4
   - expected_stop_reason: max_steps
