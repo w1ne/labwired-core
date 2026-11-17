@@ -1,5 +1,5 @@
-# Matched generic level-1 NMOS loads expose the effect of reverse bulk bias.
-# Their drains resolve through PA2/PA3 to STM32F401 ADC1_IN2/IN3.
+# Matched generic level-1 NMOS and PMOS loads expose reverse bulk bias.
+# NMOS drains resolve through PA2/PA3 and PMOS drains through PA4/PA5 to ADC1.
 name: "nucleo-f401re-analog-mosfet-body-effect"
 chip: "../../configs/chips/stm32f401.yaml"
 external_devices: []
@@ -10,9 +10,12 @@ cosim_models:
     step_ns: 1000
     inputs:
       bulk_bias: "ui.mosfet_body.bulk_v"
+      pmos_bulk_bias: "ui.pmos_body.bulk_v"
     outputs:
       reference_drain: "board.analog.pa2_volts"
       body_effect_drain: "board.analog.pa3_volts"
+      pmos_reference_drain: "board.analog.pa4_volts"
+      pmos_body_effect_drain: "board.analog.pa5_volts"
     config:
       netlist_text: |
         Vdd_ref supply_ref 0 dc 3.3
@@ -25,10 +28,23 @@ cosim_models:
         Vgate_body gate_body 0 dc 2.5
         Vbulk_body bulk_body 0 dc 0
         Mbody drain_body gate_body 0 bulk_body NMOS_BODY
+        Vsource_pm source_pm 0 dc 3.3
+        Vgate_pm gate_pm 0 dc 0.8
+        Vbulk_pm_ref bulk_pm_ref 0 dc 3.3
+        Mpm_ref drain_pm_ref gate_pm source_pm bulk_pm_ref PMOS_BODY
+        Rload_pm_ref drain_pm_ref 0 1k
+        Vsource_pm_ref source_pm_ref 0 dc 3.3
+        Vbulk_pm_body bulk_pm_body 0 dc 3.3
+        Mpm_body drain_pm_body gate_pm source_pm_ref bulk_pm_body PMOS_BODY
+        Rload_pm_body drain_pm_body 0 1k
         .model NMOS_BODY NMOS(VTO=1 KP=20u LAMBDA=0.02 GAMMA=0.4 PHI=0.7 IS=1e-30 W=100u L=10u)
+        .model PMOS_BODY PMOS(VTO=-1 KP=20u LAMBDA=0.02 GAMMA=0.4 PHI=0.7 IS=1e-30 W=100u L=10u)
       probes:
         reference_drain: "v(drain_ref)"
         body_effect_drain: "v(drain_body)"
+        pmos_reference_drain: "v(drain_pm_ref)"
+        pmos_body_effect_drain: "v(drain_pm_body)"
       sources:
         bulk_bias: "Vbulk_body"
+        pmos_bulk_bias: "Vbulk_pm_body"
       vdd: 3.3
