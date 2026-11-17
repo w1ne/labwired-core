@@ -34,6 +34,14 @@ boards:
     kind: sim-validate
     path: examples/esp32c3-blinky
     gate: true
+  # Demand-rank 1 ESP32-family board: the active DevKitM-1-N4X UART0 and
+  # GPIO8 addressable RGB LED smoke uses a board-specific fixture and the
+  # decoded WS2812 observer, leaving the generic C3 reference firmware intact.
+  - id: esp32c3-devkitm-1-n4x
+    kind: sim-validate
+    path: examples/esp32c3-devkitm-1-n4x
+    rust_targets: [riscv32imc-unknown-none-elf]
+    gate: true
   # Demand-rank 1 ESP32-family addition: the current ESP32-S2-DevKitC-1-N8R2.
   # The committed LX7 ELF exercises UART0 through its host-console bridge.
   - id: esp32s2-devkitc-1-n8r2

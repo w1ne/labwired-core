@@ -27,6 +27,7 @@ members = [
     "crates/firmware-uart-echo-fixture",
     "crates/firmware-comparative-benchmark",
     "crates/firmware-esp32c3-demo",
+    "crates/firmware-esp32c3-devkitm-1-n4x-smoke",
     "crates/firmware-esp32c6-demo",
     "crates/firmware-esp32h2-demo",
     "crates/firmware-esp32c6-devkitc-bme280-smoke",
@@ -277,6 +278,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-esp32c3-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c3-devkitm-1-n4x-smoke]
 codegen-units = 1
 opt-level = "s"
 

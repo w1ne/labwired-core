@@ -91,6 +91,38 @@ void setup() {
 void loop() {}
 ```
 
+### ESP32-C3-DevKitM-1-N4X + onboard RGB
+
+ESP32 is demand rank 1 (38% of reported MCU use); C3-specific use is not
+separately measured. Espressif's current guide lists the N4X order code with
+4 MB flash and marks only the older unsuffixed order code EOL. DigiKey lists
+the exact N4X board as Active and in stock. The local bare-RISC-V smoke sends
+UART0 output and a red WS2812 frame through GPIO8; the observer must decode one
+lit pixel. This adds a current, official C3 board profile to the existing C3
+chip model. It does not claim ROM boot, USB-UART bridge, IO_MUX, or timed RMT
+playback.
+
+- [Board scope, copy-paste Arduino sketch, and smoke command](../examples/esp32c3-devkitm-1-n4x/README.md)
+- [Live Espressif lifecycle and DigiKey stock receipt](../examples/esp32c3-devkitm-1-n4x/evidence/vendor-status.md)
+- [Committed UART, GPIO, and decoded RGB evidence](../examples/esp32c3-devkitm-1-n4x/evidence/)
+
+```cpp
+#include <Adafruit_NeoPixel.h>
+#include <Arduino.h>
+
+Adafruit_NeoPixel rgb(1, 8, NEO_GRB + NEO_KHZ800);  // onboard LED: GPIO8
+
+void setup() {
+  Serial.begin(115200);
+  rgb.begin();
+  rgb.setPixelColor(0, rgb.Color(255, 0, 0));
+  rgb.show();
+  Serial.println("C3_N4X_RGB_OK");
+}
+
+void loop() {}
+```
+
 ### ESP32-S3-DevKitC-1-N16R8 + Adafruit BME280
 
 ESP32 remains demand rank 1 (38% of reported MCU use). Espressif lists the

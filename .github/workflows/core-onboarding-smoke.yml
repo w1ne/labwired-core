@@ -81,6 +81,13 @@ jobs:
             target: riscv32imc-unknown-none-elf
             script: examples/esp32h2-devkitm-1-n4s/io-smoke.yaml
             system: configs/systems/esp32h2-devkitm-1-n4s.yaml
+          # Demand-rank 1 ESP32 family board depth: active C3 N4X UART0 and
+          # decoded onboard GPIO8 RGB LED.
+          - id: esp32c3-devkitm-1-n4x
+            crate: firmware-esp32c3-devkitm-1-n4x-smoke
+            target: riscv32imc-unknown-none-elf
+            script: examples/esp32c3-devkitm-1-n4x/io-smoke.yaml
+            system: configs/systems/esp32c3-devkitm-1-n4x.yaml
           # Demand rank 1 ESP32-family addition. The survey does not rank C5
           # separately; this smoke covers the C5 DevKitC-1 UART0 path.
           - id: esp32c5-devkitc-1-n8r8
@@ -272,6 +279,12 @@ jobs:
         if: matrix.id == 'esp32h2-devkitm-1-n4s'
         run: |
           python3 examples/esp32h2-devkitm-1-n4s/ci/verify-rgb-evidence.py \
+            "out/onboarding-smoke/${{ matrix.id }}/simulation-output/result.json"
+
+      - name: Check decoded ESP32-C3 onboard RGB evidence
+        if: matrix.id == 'esp32c3-devkitm-1-n4x'
+        run: |
+          python3 examples/esp32c3-devkitm-1-n4x/ci/verify-rgb-evidence.py \
             "out/onboarding-smoke/${{ matrix.id }}/simulation-output/result.json"
 
       - name: Publish onboarding summary
