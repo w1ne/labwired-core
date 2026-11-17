@@ -421,6 +421,33 @@ fn substrate_depletion_charge(junction_v: f64, cjs_f: f64, vjs_v: f64, mjs: f64)
     -cjs_f * vjs_v / (1.0 - mjs) * ((1.0 - junction_v / vjs_v).powf(1.0 - mjs) - 1.0)
 }
 
+/// Independent load line for a hot BJT substrate junction, including the
+/// temperature-adjusted diode thermal voltage and the simulator's GMIN path.
+fn hot_substrate_load_voltage(substrate_v: f64, iss_a: f64, ns: f64, thermal_v: f64) -> f64 {
+    const BIAS_V: f64 = 1.0;
+    const SOURCE_OHMS: f64 = 1_000.0;
+    const LOAD_OHMS: f64 = 100_000.0;
+    const GMIN_S: f64 = 1e-12;
+
+    let residual = |collector_v: f64| {
+        let junction_v = substrate_v - collector_v;
+        let substrate_current = iss_a * ((junction_v / (ns * thermal_v)).exp() - 1.0);
+        (collector_v - BIAS_V) / SOURCE_OHMS + collector_v / LOAD_OHMS
+            - substrate_current
+            - GMIN_S * junction_v
+    };
+    let (mut low, mut high) = (-1.0, 3.0);
+    for _ in 0..120 {
+        let collector_v = 0.5 * (low + high);
+        if residual(collector_v) > 0.0 {
+            high = collector_v;
+        } else {
+            low = collector_v;
+        }
+    }
+    0.5 * (low + high)
+}
+
 #[test]
 fn nrf5340dk_bjt_substrate_junction_reaches_saadc_alongside_ntc_and_diode() {
     let system_path = root("configs/systems/nrf5340dk.yaml");
@@ -749,6 +776,128 @@ fn nrf5340dk_bjt_substrate_temperature_coefficients_reach_saadc() {
         );
     }
     for channel in [2, 3, 4] {
+        assert_eq!(codes[channel], 0, "unused AIN{channel} stays at ground");
+    }
+}
+
+#[test]
+fn nrf5340dk_bjt_substrate_tiss_temperature_coefficients_reach_saadc() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let tiss = SystemManifest::from_file(root(
+        "examples/nrf5340dk/analog-bjt-substrate-tiss-system.yaml",
+    ))
+    .expect("load generic BJT substrate-current temperature branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(tiss.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 8);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and BJT substrate TISS branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to SAADC channels 0 through 5"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+    session
+        .set_signal_number("ui.bjt_substrate_tiss.substrate_v", 2.0)
+        .expect("forward-bias each substrate junction");
+
+    let mut cycles = 0;
+    for _ in 0..20 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("settle NTC, diode, and BJT substrate-current branches");
+        assert_eq!(steps.len(), 6, "all six generic analog branches solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected analog route errors: {errors:?}"
+        );
+    }
+
+    const ISS_A: f64 = 1e-15;
+    const NS: f64 = 1.2;
+    const TNOM_C: f64 = 27.0;
+    const TEMP_C: f64 = 125.0;
+    const TISS1_PER_C: f64 = -2e-3;
+    const TISS2_PER_C2: f64 = 1e-5;
+    const SUBSTRATE_V: f64 = 2.0;
+    const BOLTZMANN_OVER_Q_V_PER_K: f64 = 1.380_649e-23 / 1.602_176_634e-19;
+    let delta_c = TEMP_C - TNOM_C;
+    let hot_exponent = 1.0 + TISS1_PER_C * delta_c + TISS2_PER_C2 * delta_c * delta_c;
+    let hot_iss_a = ISS_A.powf(hot_exponent);
+    let first_order_iss_a = ISS_A.powf(1.0 + TISS1_PER_C * delta_c);
+    let nominal_iss_a = ISS_A;
+    let thermal_v = BOLTZMANN_OVER_Q_V_PER_K * (TEMP_C + 273.15);
+    assert!((hot_exponent - 0.90004).abs() < 1e-12);
+    assert!((hot_iss_a - 3.157_911_828_632_245e-14).abs() < 1e-25);
+
+    let ntc_v = voltage(&session, "adc.saadc.0_volts");
+    let diode_v = voltage(&session, "adc.saadc.1_volts");
+    let coefficient_v = voltage(&session, "adc.saadc.2_volts");
+    let explicit_v = voltage(&session, "adc.saadc.3_volts");
+    let first_order_v = voltage(&session, "adc.saadc.4_volts");
+    let nominal_v = voltage(&session, "adc.saadc.5_volts");
+    for (name, actual_v, iss_a) in [
+        ("TISS1/TISS2", coefficient_v, hot_iss_a),
+        ("explicit hot ISS", explicit_v, hot_iss_a),
+        ("TISS1 only", first_order_v, first_order_iss_a),
+        ("nominal ISS", nominal_v, nominal_iss_a),
+    ] {
+        let expected_v = hot_substrate_load_voltage(SUBSTRATE_V, iss_a, NS, thermal_v);
+        assert!(
+            (actual_v - expected_v).abs() < 1e-6,
+            "{name} substrate load line should be {expected_v} V, got {actual_v} V"
+        );
+    }
+    assert!(
+        (coefficient_v - explicit_v).abs() < 1e-6,
+        "TLEV=3 TISS1/TISS2 must match the explicitly temperature-adjusted ISS: {coefficient_v} V vs {explicit_v} V"
+    );
+    assert!(
+        (coefficient_v - first_order_v).abs() > 0.05,
+        "TISS2 must change the hot substrate load line beyond the TISS1-only card: {coefficient_v} V vs {first_order_v} V"
+    );
+    assert!(
+        (coefficient_v - nominal_v).abs() > 0.05,
+        "hot TISS coefficients must change the substrate load line from nominal ISS: {coefficient_v} V vs {nominal_v} V"
+    );
+    assert!(
+        (ntc_v - 1.65).abs() < 1e-9,
+        "unrelated NTC remains isolated"
+    );
+    assert!(
+        (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+        "unrelated Shockley diode remains isolated"
+    );
+
+    let codes = scan_saadc_channels::<8>(&mut bus);
+    for (channel, voltage_v) in [
+        (0, ntc_v),
+        (1, diode_v),
+        (2, coefficient_v),
+        (3, explicit_v),
+        (4, first_order_v),
+        (5, nominal_v),
+    ] {
+        assert_eq!(
+            codes[channel],
+            expected_saadc_code(voltage_v),
+            "SAADC channel {channel} converts its routed solved voltage"
+        );
+    }
+    for channel in [6, 7] {
         assert_eq!(codes[channel], 0, "unused AIN{channel} stays at ground");
     }
 }
