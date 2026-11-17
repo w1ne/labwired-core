@@ -142,5 +142,9 @@
   "seeed-xiao-esp32c3-bme280.partitions.bin": {
     "sha256": "148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1",
     "source_rev": "2b8bed09df23d29a0f81dddb29c89011d2c5a522"
+  },
+  "esp32-devkitm-1-bme280.elf": {
+    "sha256": "e558d962e50833d0de8de2ca91d0f905b2d01852f226e383a94816c4695e57f3",
+    "source_rev": "23b2cf49c5c1407e2c8fa2d5318962b96c7be0fd"
   }
 }
