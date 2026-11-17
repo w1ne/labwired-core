@@ -6,24 +6,24 @@
   "script": "examples/arduino-nano-esp32-bme280/bme280-smoke.yaml",
   "system": "configs/systems/arduino-nano-esp32-bme280.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-17T02:38:10Z",
-  "finished_at_utc": "2026-11-17T02:38:23Z",
+  "started_at_utc": "2026-11-17T10:41:04Z",
+  "finished_at_utc": "2026-11-17T10:41:18Z",
   "elapsed_seconds": 14,
-  "elapsed_ms": 13216,
+  "elapsed_ms": 13319,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 2.913,
-    "build_firmware": 9.45,
-    "run_smoke": 0.814
+    "build_cli": 1.795,
+    "build_firmware": 10.686,
+    "run_smoke": 0.795
   },
   "stages_ms": {
-    "build_cli": 2913,
-    "build_firmware": 9450,
-    "run_smoke": 814
+    "build_cli": 1795,
+    "build_firmware": 10686,
+    "run_smoke": 795
   },
   "firmware_build_script": "examples/arduino-nano-esp32-bme280/ci/build-bme280-firmware.sh"
 }

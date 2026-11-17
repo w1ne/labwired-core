@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.308560">
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.308360">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="9e1b334f716fe3e41dcc13572c08dea62d986c4b3803c0b7db2db433ed57e760"/>
+    <property name="firmware_hash" value="2950d0a83a1e751b4cc58d6696b4606088d917aa43918d427013cfc25d6712ae"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.308560">
+  <testcase classname="labwired" name="run" time="0.308360">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: NANO_ESP32_BME280_ID=0x60" time="0.000000">
   </testcase>

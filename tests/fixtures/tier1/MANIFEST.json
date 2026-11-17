@@ -148,8 +148,8 @@
     "source_rev": "23b2cf49c5c1407e2c8fa2d5318962b96c7be0fd"
   },
   "arduino-nano-esp32-bme280.elf": {
-    "sha256": "9e1b334f716fe3e41dcc13572c08dea62d986c4b3803c0b7db2db433ed57e760",
-    "source_rev": "0157d139b2c8c1c66b53192f75e8bb28cdb227ff"
+    "sha256": "2950d0a83a1e751b4cc58d6696b4606088d917aa43918d427013cfc25d6712ae",
+    "source_rev": "a371ab90c421efbbaace184e022d634bcbfa98f1"
   },
   "arduino-uno-r4-minima-bme280.elf": {
     "sha256": "04bd8c84c636cba2f772ed7fc02f5b6909c0c110f364075f3b1bcb1500b92ee5",

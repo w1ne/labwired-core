@@ -37,11 +37,11 @@ Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/MD5Builder.cpp.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/MacAddress.cpp.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/Print.cpp.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/Stream.cpp.o
+Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/StreamString.cpp.o
 esptool v5.4.0
 Creating ESP32-S3 image...
 Merged 2 ELF sections.
 Successfully created ESP32-S3 image.
-Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/StreamString.cpp.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/StringUtils.cpp.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/Tone.cpp.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/USB.cpp.o
@@ -52,10 +52,9 @@ Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/WMath.cpp.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/WString.cpp.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/base64.cpp.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/cbuf.cpp.o
-Archiving .pio/build/nano_esp32_bme280/lib482/libWire.a
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/chip-debug-report.cpp.o
-Indexing .pio/build/nano_esp32_bme280/lib482/libWire.a
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/esp32-hal-adc.c.o
+Archiving .pio/build/nano_esp32_bme280/lib482/libWire.a
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/esp32-hal-bt.c.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/esp32-hal-cpu.c.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/esp32-hal-dac.c.o
@@ -65,6 +64,7 @@ Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/esp32-hal-i2c-ng.c.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/esp32-hal-i2c-slave.c.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/esp32-hal-i2c.c.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/esp32-hal-ldo.c.o
+Indexing .pio/build/nano_esp32_bme280/lib482/libWire.a
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/esp32-hal-ledc.c.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/esp32-hal-log-wrapper.c.o
 Compiling .pio/build/nano_esp32_bme280/FrameworkArduino/esp32-hal-matrix.c.o
@@ -103,6 +103,6 @@ esptool v5.4.0
 Creating ESP32-S3 image...
 Merged 3 ELF sections.
 Successfully created ESP32-S3 image.
-========================= [SUCCESS] Took 7.68 seconds =========================
+========================= [SUCCESS] Took 9.84 seconds =========================
 set fast-boot fixture entry to labwired_entry at 0x420023fc
 updated arduino-nano-esp32-bme280.elf fixture digest in /data/worktrees/legacy-migrated/labwired-hw-onboarding/tests/fixtures/tier1/MANIFEST.json

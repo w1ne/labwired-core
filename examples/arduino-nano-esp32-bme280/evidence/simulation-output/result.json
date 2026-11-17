@@ -67,7 +67,7 @@
     "window_start": 3,
     "vecbase": 1073741824
   },
-  "firmware_hash": "9e1b334f716fe3e41dcc13572c08dea62d986c4b3803c0b7db2db433ed57e760",
+  "firmware_hash": "2950d0a83a1e751b4cc58d6696b4606088d917aa43918d427013cfc25d6712ae",
   "config": {
     "firmware": "examples/arduino-nano-esp32-bme280/../../tests/fixtures/tier1/arduino-nano-esp32-bme280.elf",
     "system": "examples/arduino-nano-esp32-bme280/../../configs/systems/arduino-nano-esp32-bme280.yaml",
