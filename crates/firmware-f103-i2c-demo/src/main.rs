@@ -124,6 +124,18 @@ const SPI_SR_TXE: u32 = 1 << 1;
 const SPI_SR_BSY: u32 = 1 << 7;
 const GPIOA_BSRR: u32 = GPIOA_BASE + 0x10;
 
+const ADC1_BASE: u32 = 0x4001_2400;
+const ADC1_SR: u32 = ADC1_BASE;
+const ADC1_CR2: u32 = ADC1_BASE + 0x08;
+const ADC1_SMPR2: u32 = ADC1_BASE + 0x10;
+const ADC1_SQR1: u32 = ADC1_BASE + 0x2C;
+const ADC1_SQR3: u32 = ADC1_BASE + 0x34;
+const ADC1_DR: u32 = ADC1_BASE + 0x4C;
+const ADC1_ADON: u32 = 1;
+const ADC1_SWSTART: u32 = 1 << 22;
+const ADC1_SOFTWARE_TRIGGER: u32 = 0b111 << 17;
+const ADC1_EOC: u32 = 1 << 1;
+
 const I2C1_BASE: u32 = 0x4000_5400;
 const I2C1_CR1: u32 = I2C1_BASE + 0x00;
 const I2C1_CR2: u32 = I2C1_BASE + 0x04;
@@ -285,6 +297,7 @@ fn main() -> ! {
     }
     putline(b"F103 I2C");
     smoke_rcc_clock_gates(rcc_reset);
+    smoke_adc1_channel0();
     unsafe { smoke_systick_exception_state() };
     unsafe { smoke_systick_external_pause_resume() };
     unsafe { smoke_systick_handler_delivery() };
@@ -3723,6 +3736,52 @@ fn smoke_rcc_clock_gates(reset: bool) {
     putbytes(if passed { b" ok\n" } else { b" FAIL\n" });
 }
 
+/// Convert the imported PA0 potentiometer on STM32F103 ADC1_IN0. This uses
+/// the F1 software trigger (EXTSEL=111, SWSTART=22) and checks APB2 gating.
+fn smoke_adc1_channel0() {
+    const ADC1EN: u32 = 1 << 9;
+    let read = |address: u32| unsafe { read_volatile(address as *const u32) };
+    let write = |address: u32, value: u32| unsafe { write_volatile(address as *mut u32, value) };
+
+    unsafe {
+        // PA0 analog input: MODE=00, CNF=00 in GPIOA_CRL[3:0].
+        let crl = read_volatile(GPIOA_CRL as *const u32);
+        write_volatile(GPIOA_CRL as *mut u32, crl & !0xF);
+    }
+
+    let adc_clock_was_off = read(RCC_APB2ENR) & ADC1EN == 0;
+    write(ADC1_CR2, ADC1_ADON); // Must be ignored while ADC1EN is clear.
+    let gated = adc_clock_was_off && read(ADC1_CR2) == 0;
+
+    write(RCC_APB2ENR, read(RCC_APB2ENR) | ADC1EN);
+    // One regular conversion, channel 0, longest sample time for the input.
+    write(ADC1_SQR1, 0);
+    write(ADC1_SQR3, 0);
+    write(ADC1_SMPR2, (read(ADC1_SMPR2) & !0b111) | 0b111);
+    write(ADC1_CR2, ADC1_ADON | ADC1_SOFTWARE_TRIGGER);
+    write(ADC1_CR2, ADC1_ADON | ADC1_SOFTWARE_TRIGGER | ADC1_SWSTART);
+
+    let mut eoc = false;
+    for _ in 0..100_000 {
+        if read(ADC1_SR) & ADC1_EOC != 0 {
+            eoc = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let code = read(ADC1_DR) & 0x0FFF;
+    write(ADC1_CR2, 0); // ADON=0 cancels any pending conversion.
+
+    let passed = gated && eoc && code == 0x03FF;
+    putbytes(b"ADC1 F1 GATED=");
+    put_flag(gated);
+    putbytes(b" EOC=");
+    put_flag(eoc);
+    putbytes(b" DR=");
+    put_hex32(code);
+    putline(if passed { b" ok" } else { b" FAIL" });
+}
+
 fn smoke_usart2_txe_irq() {
     // TXE is set at idle. With TXEIE enabled, USART2 must pend its shared
     // external IRQ (IRQ 38, RM0008 vector table). Leave NVIC disabled so the
@@ -4229,6 +4288,19 @@ fn print_reg(label: &[u8], v: u32) {
     }
     putbytes(&buf);
     putbyte(b'\n');
+}
+
+fn put_hex32(v: u32) {
+    let mut buf = [0u8; 8];
+    for (i, digit) in buf.iter_mut().enumerate() {
+        let nib = ((v >> ((7 - i) * 4)) & 0xF) as u8;
+        *digit = if nib < 10 {
+            b'0' + nib
+        } else {
+            b'A' + nib - 10
+        };
+    }
+    putbytes(&buf);
 }
 
 fn putline(s: &[u8]) {

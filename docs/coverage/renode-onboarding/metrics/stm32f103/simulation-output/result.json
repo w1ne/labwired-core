@@ -210,6 +210,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "ADC1 F1 GATED=1 EOC=1 DR=000003FF ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "I2C_NACK_OK"
       },
       "passed": true
@@ -536,12 +542,12 @@
       5500,
       536891364,
       632080,
-      134239452,
+      134240156,
       536891136,
       69,
-      134238132
+      134238834
     ],
-    "pc": 134238132,
+    "pc": 134238834,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -554,7 +560,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "8bb05dc174736719713a61a28201b0a9f442ba083b868c225ebf4d374430acf4",
+  "firmware_hash": "9c6750eaf95a0539b42cb76e44bee3dffa63bdedbbf6eb6ae87cf70fc745f8c5",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
@@ -594,6 +600,13 @@
         "name": "spi1",
         "kind": "native",
         "base": 1073819648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073816576,
         "registers": [],
         "artifacts": []
       },
@@ -790,6 +803,17 @@
             }
           }
         ]
+      },
+      {
+        "id": "pot_adc1_in0",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 0
+        },
+        "artifacts": []
       }
     ]
   },
@@ -822,7 +846,7 @@
       }
     ],
     "pc": "0x0800025C",
-    "lr": "0x0800261F",
+    "lr": "0x08002851",
     "exc_return": {
       "value": "0xFFFFFFF9",
       "return_to": "thread",
@@ -835,8 +859,8 @@
       "r1": "0x00000007",
       "r2": "0x2000051C",
       "r3": "0x20000100",
-      "r12": "0x08005DAA",
-      "lr": "0x0800261F",
+      "r12": "0x08006086",
+      "lr": "0x08002851",
       "pc": "0x0800025C",
       "xpsr": "0x61000000"
     },
@@ -846,7 +870,7 @@
     "caller": {
       "function": "firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation",
       "file": "/data/worktrees/legacy-migrated/labwired-renode/crates/firmware-f103-i2c-demo/src/main.rs",
-      "line": 2228
+      "line": 2241
     },
     "registers": {
       "hfsr": "0x00000000",
@@ -863,566 +887,572 @@
       {
         "text": "F103 I2C",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle": 1000,
+        "end_cycle": 1000
       },
       {
         "text": "RCC F1 RESET=1 APB_ENABLES=1 RESERVED=1 GPIOB_OFF=1 WRITE_DROPPED=1 RESTORED=1 ok",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle": 1000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "ADC1 F1 GATED=1 EOC=1 DR=000003FF ok",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "SYSTICK M3 CALIB=00002328 WRAP=1 COUNTFLAG_WRITE=1 READ_CLEAR=1 PENDING=1 CLEAR=1 ok",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "SYSTICK M3 HCLK8 REFERENCE=1 WINDOW=1 FROZEN=1 RESUMED=1 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
       },
       {
         "text": "SYSTICK M3 PERIODIC=1 REPEATED=1 VECTOR=15 IPSR=15 RETURN=1 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
       },
       {
         "text": "SYSTICK M3 WFI_WAKE=1 VECTOR=15 ENTRIES=1 RESUMED=1 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
       },
       {
         "text": "SYSTICK M3 ICSR SET=1 COALESCE=1 CLEAR=1 REPEND=1 ENTRIES=2 ACTIVE=15 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
       },
       {
         "text": "SYSTICK M3 TICKINT=0 COUNTFLAG=1 NO_PEND=1 TICKINT=1 PEND=1 MASKED=1 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
       },
       {
         "text": "SYSTICK M3 CVR_WRITE WRAP=1 ZERO=1 COUNTFLAG_CLEAR=1 PENDING_PRESERVED=1 MASKED=1 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
       },
       {
         "text": "PENDSV M3 CLEAR=1 REPEND=1 VECTOR=14 IPSR=14 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
       },
       {
         "text": "PENDSV M3 DEFERRED=1 AFTER_SYSTICK=1 VECTOR=14 IPSR=14 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 20000
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
       },
       {
         "text": "SYSTICK PENDSV M3 TAILCHAIN DEFERRED=1 FRAME=REUSED R0=LIVE PENDING_CLEAR=1 ok",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 30000
+        "cycle_lo": 11000,
+        "cycle": 21000,
+        "end_cycle": 21000
       },
       {
         "text": "SYSTICK PENDSV M3 PSP TAILCHAIN FRAME=REUSED EXC_RETURN=FFFFFFFD MSP=UNCHANGED R0=LIVE ok",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 21000,
+        "cycle": 31000,
+        "end_cycle": 31000
       },
       {
         "text": "IRQ M3 FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFF9 STACK=ALIGNED RETURN=1 ok",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 21000,
+        "cycle": 31000,
+        "end_cycle": 31000
       },
       {
         "text": "IRQ M3 PSP FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFFD PSP=RESTORED MSP=UNCHANGED ok",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 21000,
+        "cycle": 31000,
+        "end_cycle": 31000
       },
       {
         "text": "SVC M3 MSP VECTOR=11 IMM=42 EXC_RETURN=FFFFFFF9 STACKED_PC=AFTER_SVC RETURN=1 ok",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 21000,
+        "cycle": 31000,
+        "end_cycle": 31000
       },
       {
         "text": "SVC M3 PSP NPRIV=1 CONTROL_IGNORED=1 BASEPRI_IGNORED=1 SVC_BASEPRI=40 RESTORED=1 RETURN_NPRIV=1 EXC_RETURN=FFFFFFFD PSP=RESTORED MSP=UNCHANGED ok",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 21000,
+        "cycle": 31000,
+        "end_cycle": 31000
       },
       {
         "text": "FAULT M3 UNDEFINSTR USAGE=6 ESCALATE=3 CFSR=1 HFSR_FORCED=1 RETURN=1 ok",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 21000,
+        "cycle": 31000,
+        "end_cycle": 31000
       },
       {
         "text": "PRIMASK M3 MASKED=1 PENDING=1 RELEASED=1 VECTOR=54 ok",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 21000,
+        "cycle": 31000,
+        "end_cycle": 31000
       },
       {
         "text": "BASEPRI M3 MAX_KEEP=1 MAX_RAISE=1 HIGH=55 LOW=54 MASKED=1 PENDING=1 RELEASED=1 ok",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 41000
       },
       {
         "text": "NVIC M3 SUBPRIORITY ORDER=55,54 SAME_GROUP_PREEMPT=0 PENDING=1 ok",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 41000
       },
       {
         "text": "NVIC M3 NESTED IRQ54=1 IRQ55=1 ACTIVE=54,55 RESUMED=54 ok",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 41000
       },
       {
         "text": "NVIC M3 TAILCHAIN IRQ54=1 IRQ55=1 FRAME=REUSED R0=LIVE ok",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 41000
       },
       {
         "text": "USART2 TXEIRQ=1 REARM=0",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 41000
       },
       {
         "text": "USART2 RX GATE re_off=1 ue_off=1 data=00005253 released=1 ok",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 41000
       },
       {
         "text": "SPI1 MAX31855=01901600",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 41000
       },
       {
         "text": "SPI1 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 41000
       },
       {
         "text": "SPI1 CHECKS=1",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 40000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 41000
       },
       {
         "text": "GPIOB F1 CRH_RESET=1 PP=1 BRR=1 BS_PRIORITY=1 PULLUP=1 PULLDOWN=1 ok",
-        "cycle_lo": 30000,
-        "cycle": 40000,
-        "end_cycle": 50000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 41000
       },
       {
         "text": "GPIOB F1 LCKR SINGLE=0 LCKK=1 LOCKED=1 UNLOCKED=1 ODR=1 ok",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 51000
       },
       {
         "text": "INIT",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CR1=00000001",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CR2=00000008",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CCR=00000028",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "TRISE=00000009",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "OAR1=00004000",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "SR1=00000000",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "SR2=00000000",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "START",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CR1=00000001",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CR2=00000008",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CCR=00000028",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "TRISE=00000009",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "OAR1=00004000",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "SR1=00000001",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "SR2=00000000",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "ADDR",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CR1=00000001",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CR2=00000008",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CCR=00000028",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "TRISE=00000009",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "OAR1=00004000",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "SR1=00000400",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "SR2=00000003",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "I2C_NACK_OK",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "STOP",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CR1=00000001",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CR2=00000008",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "CCR=00000028",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "TRISE=00000009",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "OAR1=00004000",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "SR1=00000400",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "SR2=00000000",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "I2C_IDLE_OK",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "TMP102=00001900",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "TMP102_READ_OK",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 60000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "TMP102_CONFIG=0000FFF0",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 60000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "TMP102_CONFIG_WRITE_OK",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 60000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "TMP102_TLOW=00003450",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 60000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "TMP102_TLOW_WRITE_OK",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 60000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "TMP102_THIGH=00006788",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 60000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "TMP102_THIGH_WRITE_OK",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 60000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "TMP102_TLOW_SHORT=00002250",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 60000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "TMP102_TLOW_SHORT_WRITE_OK",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 60000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "BME280_ID=00000060",
-        "cycle_lo": 50000,
-        "cycle": 60000,
-        "end_cycle": 70000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "BME280_ID_READ_OK",
-        "cycle_lo": 60000,
-        "cycle": 70000,
-        "end_cycle": 70000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "BME280_T2=00006743",
-        "cycle_lo": 60000,
-        "cycle": 70000,
-        "end_cycle": 70000
+        "cycle_lo": 61000,
+        "cycle": 71000,
+        "end_cycle": 71000
       },
       {
         "text": "BME280_CALIBRATION_READ_OK",
-        "cycle_lo": 60000,
-        "cycle": 70000,
-        "end_cycle": 70000
+        "cycle_lo": 61000,
+        "cycle": 71000,
+        "end_cycle": 71000
       },
       {
         "text": "BME280_CALIBRATION_MAP_READ_OK",
-        "cycle_lo": 80000,
-        "cycle": 90000,
-        "end_cycle": 90000
+        "cycle_lo": 81000,
+        "cycle": 91000,
+        "end_cycle": 91000
       },
       {
         "text": "BME280_WAITING_FOR_OVERSAMPLING_SKIP",
-        "cycle_lo": 80000,
-        "cycle": 90000,
-        "end_cycle": 90000
+        "cycle_lo": 81000,
+        "cycle": 91000,
+        "end_cycle": 91000
       },
       {
         "text": "BME280_SKIPPED_PRESS_RAW=00080000",
-        "cycle_lo": 90000,
-        "cycle": 100000,
-        "end_cycle": 100000
+        "cycle_lo": 91000,
+        "cycle": 101000,
+        "end_cycle": 101000
       },
       {
         "text": "BME280_SKIPPED_TEMP_RAW=00080000",
-        "cycle_lo": 90000,
-        "cycle": 100000,
-        "end_cycle": 100000
+        "cycle_lo": 91000,
+        "cycle": 101000,
+        "end_cycle": 101000
       },
       {
         "text": "BME280_SKIPPED_HUM_RAW=00008000",
-        "cycle_lo": 90000,
-        "cycle": 100000,
-        "end_cycle": 100000
+        "cycle_lo": 91000,
+        "cycle": 101000,
+        "end_cycle": 101000
       },
       {
         "text": "BME280_OVERSAMPLING_SKIP_OK",
-        "cycle_lo": 90000,
-        "cycle": 100000,
-        "end_cycle": 100000
+        "cycle_lo": 91000,
+        "cycle": 101000,
+        "end_cycle": 101000
       },
       {
         "text": "BME280_MEASUREMENT_SETUP_OK",
-        "cycle_lo": 90000,
-        "cycle": 100000,
-        "end_cycle": 100000
+        "cycle_lo": 91000,
+        "cycle": 101000,
+        "end_cycle": 101000
       },
       {
         "text": "BME280_PRESS_RAW=0005883F",
-        "cycle_lo": 100000,
-        "cycle": 110000,
-        "end_cycle": 110000
+        "cycle_lo": 101000,
+        "cycle": 111000,
+        "end_cycle": 111000
       },
       {
         "text": "BME280_TEMP_RAW=0008E910",
-        "cycle_lo": 100000,
-        "cycle": 110000,
-        "end_cycle": 110000
+        "cycle_lo": 101000,
+        "cycle": 111000,
+        "end_cycle": 111000
       },
       {
         "text": "BME280_HUM_RAW=0000853F",
-        "cycle_lo": 100000,
-        "cycle": 110000,
-        "end_cycle": 110000
+        "cycle_lo": 101000,
+        "cycle": 111000,
+        "end_cycle": 111000
       },
       {
         "text": "BME280_SEEDED_ENVIRONMENT_OK",
-        "cycle_lo": 100000,
-        "cycle": 110000,
-        "end_cycle": 110000
+        "cycle_lo": 101000,
+        "cycle": 111000,
+        "end_cycle": 111000
       },
       {
         "text": "BME280_SEEDED_TEMP_CENTI=00000FA0",
-        "cycle_lo": 100000,
-        "cycle": 110000,
-        "end_cycle": 110000
+        "cycle_lo": 101000,
+        "cycle": 111000,
+        "end_cycle": 111000
       },
       {
         "text": "BME280_SEEDED_PRESS_Q8=01731804",
-        "cycle_lo": 100000,
-        "cycle": 110000,
-        "end_cycle": 110000
+        "cycle_lo": 101000,
+        "cycle": 111000,
+        "end_cycle": 111000
       },
       {
         "text": "BME280_SEEDED_HUM_Q10=00014005",
-        "cycle_lo": 100000,
-        "cycle": 110000,
-        "end_cycle": 110000
+        "cycle_lo": 101000,
+        "cycle": 111000,
+        "end_cycle": 111000
       },
       {
         "text": "BME280_SEEDED_COMPENSATION_OK",
-        "cycle_lo": 100000,
-        "cycle": 110000,
-        "end_cycle": 110000
+        "cycle_lo": 101000,
+        "cycle": 111000,
+        "end_cycle": 111000
       },
       {
         "text": "BME280_WAITING_FOR_TEMPERATURE_STIMULUS",
-        "cycle_lo": 100000,
-        "cycle": 110000,
-        "end_cycle": 110000
+        "cycle_lo": 101000,
+        "cycle": 111000,
+        "end_cycle": 111000
       },
       {
         "text": "BME280_DYNAMIC_TEMP_RAW=0009A510",
@@ -1464,7 +1494,7 @@
         "text": "BME280_WAITING_FOR_HUMIDITY_STIMULUS",
         "cycle_lo": 1000000,
         "cycle": 1010000,
-        "end_cycle": 1010000
+        "end_cycle": 1020000
       },
       {
         "text": "BME280_DYNAMIC_HUM_RAW=000064D2",
@@ -1583,6 +1613,18 @@
   "i2c_trace_evicted": true,
   "stimuli": [
     {
+      "channel": "position",
+      "component": "pot_adc1_in0",
+      "value": 25.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000
+    },
+    {
       "channel": "temperature",
       "component": "bme280",
       "value": 55.0,
@@ -1621,14 +1663,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 27946,
+    "text_bytes": 28678,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 27946,
+    "flash_used_bytes": 28678,
     "ram_static_bytes": 0,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 20480,
-    "flash_used_pct": 42.64,
+    "flash_used_pct": 43.76,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -1654,60 +1696,60 @@
     "cycles": 50000125,
     "instructions": 50000000,
     "steps_executed": 50000000,
-    "memory_reads": 97457,
-    "memory_writes": 65686,
-    "peripheral_accesses": 505106,
+    "memory_reads": 92860,
+    "memory_writes": 65695,
+    "peripheral_accesses": 505177,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134238132,
+        "pc": 134238834,
         "count": 183594,
         "symbol": "firmware_f103_i2c_demo::main"
       },
       {
-        "pc": 134220528,
-        "count": 1367,
+        "pc": 134220502,
+        "count": 1680,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134220462,
-        "count": 1290,
+        "pc": 134220534,
+        "count": 1406,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134220458,
+        "count": 820,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134220530,
+        "count": 626,
         "symbol": "core::ptr::read_volatile"
       },
       {
         "pc": 134220504,
-        "count": 898,
+        "count": 586,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
+        "pc": 134220508,
+        "count": 510,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
         "pc": 134220506,
-        "count": 702,
+        "count": 469,
         "symbol": "core::ptr::read_volatile"
       },
       {
         "pc": 134220510,
-        "count": 586,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
-      },
-      {
-        "pc": 134220502,
-        "count": 547,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134220508,
-        "count": 507,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
-      },
-      {
-        "pc": 134220534,
         "count": 469,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
-        "pc": 134220530,
-        "count": 468,
-        "symbol": "core::ptr::read_volatile"
+        "pc": 134220528,
+        "count": 430,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
         "pc": 134220532,
@@ -1716,23 +1758,23 @@
       },
       {
         "pc": 134220526,
-        "count": 429,
+        "count": 390,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
         "pc": 134220460,
-        "count": 313,
+        "count": 312,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134220464,
-        "count": 235,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+        "pc": 134220462,
+        "count": 308,
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134220458,
-        "count": 234,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+        "pc": 134220464,
+        "count": 273,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
         "pc": 134220466,
