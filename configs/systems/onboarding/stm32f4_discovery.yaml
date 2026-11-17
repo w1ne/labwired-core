@@ -7,6 +7,11 @@
 name: stm32f4_discovery
 chip: ../../chips/onboarding/stm32f4_discovery.yaml
 external_devices:
+  - id: pot_adc1_in1
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 1
   - id: tc_spi1
     type: max31855
     connection: spi1

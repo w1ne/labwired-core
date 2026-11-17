@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: MIT
 //
 //! STM32F4-Discovery (MB997, STM32F407VGT6) smoke firmware: a running light
-//! over the four user LEDs plus a heartbeat line on USART2, in bare registers.
+//! over the four user LEDs, a heartbeat line on USART2, and one ADC1 input
+//! conversion, in bare registers.
 //!
 //! Board facts (UM1472; Zephyr `stm32f4_disco`):
 //!   PD12..PD15 — user LEDs LD4 (green), LD3 (orange), LD5 (red), LD6 (blue),
@@ -24,7 +25,7 @@ use core::ptr::{read_volatile, write_volatile};
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-// RCC (F4): AHB1ENR gates the GPIO ports, APB1ENR gates USART2, APB2ENR gates SPI1.
+// RCC (F4): AHB1ENR gates GPIO, APB1ENR gates USART2, APB2ENR gates SPI1 and ADC1.
 const RCC: u32 = 0x4002_3800;
 const RCC_AHB1ENR: u32 = RCC + 0x30;
 const RCC_APB1ENR: u32 = RCC + 0x40;
@@ -44,6 +45,13 @@ const TXE: u32 = 1 << 7;
 
 const GPIOA: u32 = 0x4002_0000;
 const GPIOD: u32 = 0x4002_0C00;
+
+// ADC1 (F4 legacy register block).
+const ADC1: u32 = 0x4001_2000;
+const ADC_SR: *const u32 = ADC1 as *const u32;
+const ADC_CR2: *mut u32 = (ADC1 + 0x08) as *mut u32;
+const ADC_SQR3: *mut u32 = (ADC1 + 0x34) as *mut u32;
+const ADC_DR: *const u32 = (ADC1 + 0x4C) as *const u32;
 
 // SPI1 (F4 classic block: CR1/CR2/SR/DR).
 const SPI1: u32 = 0x4001_3000;
@@ -181,6 +189,7 @@ fn main() -> ! {
     smoke_spi1_irq_and_max31855();
     smoke_systick_pendsv_tailchain();
     smoke_systick_pendsv_psp_tailchain();
+    smoke_adc1_in1();
 
     let mut beat: u32 = 0;
     loop {
@@ -197,6 +206,37 @@ fn main() -> ! {
         beat = beat.wrapping_add(1);
         delay();
     }
+}
+
+/// Convert ADC1 channel 1 from the imported 25% potentiometer on PA1.
+/// 0.825 V on the model's 3.3 V reference yields code 0x03FF.
+fn smoke_adc1_in1() {
+    const ADC_EOC: u32 = 1 << 1;
+    // PA1 analog mode, ADC1 clock, and the first regular-sequence slot.
+    reg_rmw(GPIOA + MODER, 0b11 << 2, 0b11 << 2);
+    reg_rmw(RCC_APB2ENR, 0, 1 << 8); // ADC1EN
+    unsafe {
+        write_volatile(ADC_SQR3, 1);
+        write_volatile(ADC_CR2, 1); // ADON
+        write_volatile(ADC_CR2, 1 | (1 << 30)); // ADON | F4 SWSTART
+    }
+    let mut eoc = false;
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(ADC_SR) } & ADC_EOC != 0 {
+            eoc = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let code = unsafe { read_volatile(ADC_DR) } & 0x0FFF;
+    unsafe { write_volatile(ADC_CR2, 0) }; // ADON=0 cancels any pending work.
+
+    let passed = eoc && code == 0x03FF;
+    send(b"ADC1 IN1=");
+    put_hex32(code);
+    send(b" EOC=");
+    put_dec(u32::from(eoc));
+    send(if passed { b" OK\r\n" } else { b" FAIL\r\n" });
 }
 
 /// Start-injected USART2 bytes remain pending until both legacy CR1 receiver
