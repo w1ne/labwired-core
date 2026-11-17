@@ -165,6 +165,39 @@ struct SerialColorState {
     rejected_colmod: u64,
 }
 
+/// One closed full-plane paint, kept so a later inspect can prove how the
+/// glass changed over time. `bytes` is the oriented framebuffer (same layout
+/// as the inspect payload); it is stored for the run and only serialised when
+/// the caller asked for artifact bytes.
+struct LoggedFrame {
+    generation: u64,
+    t_us: u64,
+    sha256: String,
+    ink_bytes: usize,
+    bytes: Vec<u8>,
+}
+
+impl LoggedFrame {
+    fn to_meta(&self, include_bytes: bool) -> serde_json::Value {
+        let mut meta = serde_json::json!({
+            "generation": self.generation,
+            "t_us": self.t_us,
+            "sha256": self.sha256,
+            "ink_bytes": self.ink_bytes,
+        });
+        if include_bytes {
+            meta["bytes"] = serde_json::Value::Array(
+                self.bytes
+                    .iter()
+                    .copied()
+                    .map(serde_json::Value::from)
+                    .collect(),
+            );
+        }
+        meta
+    }
+}
+
 /// The engine device. One per placed panel.
 pub struct GenericDisplay {
     // ── the descriptor, compiled ────────────────────────────────────────
@@ -243,9 +276,11 @@ pub struct GenericDisplay {
     /// stream (capped). An oracle can prove the glass content changed across
     /// steps from one end-of-run inspect, without mid-run samples.
     generation_history: VecDeque<u64>,
-    /// Closed paints: generation + sim time + sha256 of the oriented framebuffer.
-    /// Cap matches generation_history. Used by Acc framebuffer prove clauses.
-    frames_seen: VecDeque<serde_json::Value>,
+    /// Closed paints: generation + sim time + sha256 + the oriented framebuffer
+    /// bytes (published on inspect only when `InspectOpts.include_bytes` is
+    /// set, so summary mode stays small). Cap matches generation_history.
+    /// Used by Acc framebuffer prove clauses (blink / motion / geometry).
+    frames_seen: VecDeque<LoggedFrame>,
     /// Data bytes written since the last `note_fb_generation` for
     /// `ram.stream: always` panels. Adafruit SSD1306 chunks a display() into
     /// many short I²C transactions; we only log a frame once a full plane
@@ -1913,12 +1948,13 @@ impl GenericDisplay {
             let dig = Sha256::digest(&fb);
             dig.iter().map(|b| format!("{b:02x}")).collect::<String>()
         };
-        self.frames_seen.push_back(serde_json::json!({
-            "generation": gen,
-            "t_us": self.elapsed_us,
-            "sha256": sha,
-            "ink_bytes": fb.iter().filter(|&&b| b != 0).count(),
-        }));
+        self.frames_seen.push_back(LoggedFrame {
+            generation: gen,
+            t_us: self.elapsed_us,
+            sha256: sha,
+            ink_bytes: fb.iter().filter(|&&b| b != 0).count(),
+            bytes: fb,
+        });
     }
 
     fn build_artifacts(
@@ -1960,7 +1996,12 @@ impl GenericDisplay {
         meta.insert("generation_history".into(), serde_json::json!(history));
         meta.insert(
             "frames_seen".into(),
-            serde_json::Value::Array(self.frames_seen.iter().cloned().collect()),
+            serde_json::Value::Array(
+                self.frames_seen
+                    .iter()
+                    .map(|frame| frame.to_meta(opts.include_bytes))
+                    .collect(),
+            ),
         );
         // Which panel this is. Two panels can hold the same picture (three
         // OLEDs at 0x3C behind a TCA9548A drawing one splash), and a consumer
