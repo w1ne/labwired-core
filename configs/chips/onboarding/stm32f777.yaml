@@ -24,10 +24,10 @@
 #   pad routing: only SPI1..3 publish pads to the GPIO wires.
 #
 # Everything else (USART/UART, GPIOA..K, TIM1..14, SPI1..3, I2C1..4,
-# DMA1/2, CRC, RNG) is the F746 block set, identical on the F76x/F77x; see
+# DMA1/2, ADC1, CRC, RNG) is the F746 block set, identical on the F76x/F77x; see
 # stm32f746.yaml. Each block is exercised by crates/firmware-stm32f767-smoke.
 #
-# Not claimed: ADC1..3, DAC, CAN1..3, Ethernet, LTDC, DMA2D, JPEG, DFSDM1,
+# Not claimed: ADC2/3, DAC, CAN1..3, Ethernet, LTDC, DMA2D, JPEG, DFSDM1,
 # MDIOS, SDMMC1/2, RTC, PWR, the flash interface, QUADSPI, FMC, USB OTG,
 # SAI1/2, SPDIFRX, HDMI-CEC, LPTIM1, DCMI, CRYP/HASH (F777), the watchdogs,
 # and the RCC PLLSAI/PLLI2S/DCKCFGR1/2 clock muxing.

@@ -1041,3 +1041,53 @@ pub fn check_rng() -> bool {
     verdict(ok);
     ok
 }
+
+/// Convert ADC1 channel 1 from the 25% PA1 fixture input (0.825 V against
+/// the 3.3 V reference gives floor(0.825 / 3.3 * 4095) = 0x03FF).
+pub fn check_adc1() -> bool {
+    const ADC1: u32 = 0x4001_2000;
+    const ADC_SR: u32 = ADC1;
+    const ADC_CR2: u32 = ADC1 + 0x08;
+    const ADC_SQR3: u32 = ADC1 + 0x34;
+    const ADC_DR: u32 = ADC1 + 0x4C;
+    const ADC1EN: u32 = 1 << 8;
+    const ADON: u32 = 1;
+    const SWSTART: u32 = 1 << 30;
+    const EOC: u32 = 1 << 1;
+
+    // ADC1 is left clock-gated by rcc_bringup. A write while gated must not
+    // change CR2; enabling APB2 ADC1EN then permits a real conversion.
+    wr(ADC_CR2, ADON);
+    let gated = rd(RCC_APB2ENR) & ADC1EN == 0 && rd(ADC_CR2) == 0;
+    wr(RCC_APB2ENR, rd(RCC_APB2ENR) | ADC1EN);
+    let clock = rd(RCC_APB2ENR) & ADC1EN != 0;
+
+    // PA1 analog mode and the first regular-sequence slot select ADC1_IN1.
+    wr(
+        GPIOA + G_MODER,
+        (rd(GPIOA + G_MODER) & !(0b11 << 2)) | (0b11 << 2),
+    );
+    wr(ADC_SQR3, 1);
+    wr(ADC_CR2, ADON);
+    wr(ADC_CR2, ADON | SWSTART);
+    let mut eoc = false;
+    for _ in 0..100_000 {
+        if rd(ADC_SR) & EOC != 0 {
+            eoc = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let code = rd(ADC_DR) & 0x0FFF;
+    wr(ADC_CR2, 0);
+
+    puts("adc1 in1=");
+    hex(code);
+    puts(" ");
+    flag("gated", gated);
+    flag("clock", clock);
+    flag("eoc", eoc);
+    let ok = gated && clock && eoc && code == 0x03FF;
+    verdict(ok);
+    ok
+}

@@ -10,10 +10,11 @@
 # DMA1 streams 3/4, each first with the wrong SxCR.CHSEL (nothing moves);
 # memory-to-memory on DMA2 only; I2C1 reading a TMP102 with RXIE on the
 # event line, and a NACK on each of I2C1..4's own event line; CRC-32, INIT,
-# the 8-bit IDR and a 16-bit polynomial over bytes; RNG draws.
+# the 8-bit IDR and a 16-bit polynomial over bytes; RNG draws; and ADC1_IN1
+# from a 25% potentiometer test fixture on PA1 (0.825 V / 3.3 V).
 # The fixture switches (PK3, PC13) are pressed by the stimuli below; the
 # first stimuli set the SPI2, SPI3 and second SPI1 thermocouples.
-# It does not claim ADC, DAC, CAN, Ethernet, LTDC, DMA2D, SDMMC, RTC, USB,
+# It does not claim ADC2/3, DAC, CAN, Ethernet, LTDC, DMA2D, SDMMC, RTC, USB,
 # QUADSPI, FMC, SAI, SPI4..6, the RNG interrupt or the watchdogs.
 schema_version: "1.2"
 inputs:
@@ -49,6 +50,9 @@ stimuli:
   - target: { component: "sw_pc13", channel: "pressed" }
     trigger: !after_cycles { cycles: 2900000 }
     value: 0.0
+  - target: { component: "pot_adc1_in1", channel: "position" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 25.0
 assertions:
   - uart_contains: "STM32F746 Cortex-M7 smoke"
   - uart_contains: "usart2 ok"
@@ -93,12 +97,13 @@ assertions:
       - "i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok"
       - "crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok"
       - "rng off=1 ready=1 draws=1 stopped=1 ok"
+      - "adc1 in1=0x000003FF gated=1 clock=1 eoc=1 ok"
       - "pendsv m7 clear=1 repend=1 systick=1 priority=1 ok"
-      - "summary 0x747FFFFF"
+      - "summary 0x74FFFFFF"
       - "DONE"
   - memory_value:
       address: 0x20003000
-      expected_value: 0x747FFFFF
+      expected_value: 0x74FFFFFF
       size: 4
   - gpio_edges:
       pin: "gpioi:1"

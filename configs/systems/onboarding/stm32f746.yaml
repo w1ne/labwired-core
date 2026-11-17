@@ -7,13 +7,19 @@
 name: stm32f746
 chip: ../../chips/onboarding/stm32f746.yaml
 # Smoke fixture inputs, not a board: Renode's stm32f746.repl is a bare CPU
-# platform. Two switches to ground on PK3 and PC13 (pressed = low, against
+# platform. A potentiometer on ADC1_IN1/PA1 is a test fixture, not a board
+# component. Two switches to ground on PK3 and PC13 (pressed = low, against
 # the GPIO pull-up) give the EXTI port mux real pad edges to route. A
 # MAX31855 on each SPI (CS on PA4 / PB12 / PD2; the smoke scenario sets
 # SPI2's thermocouple to 100 °C and SPI3's to 75 °C), a second MAX31855 on
 # SPI1 behind its own CS on PB0 (50 °C) and a TMP102 on I2C1 give the serial
 # blocks real slaves.
 external_devices:
+  - id: pot_adc1_in1
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 1
   - id: "tc_spi1"
     type: "max31855"
     connection: "spi1"

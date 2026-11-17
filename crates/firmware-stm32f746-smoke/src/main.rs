@@ -4,7 +4,7 @@
 //! STM32F746xG smoke for the imported Renode platform: RCC clock gates and
 //! ENR masks, USART1/2/3/6 + UART4/5/7/8, GPIOA..K, SYSCFG EXTICR + EXTI,
 //! TIM1..TIM14, SPI1/2/3 (FIFO SPI), I2C1..4 ("v2" I2C), DMA1/DMA2 (stream
-//! DMA), CRC and RNG. Register offsets, bases and IRQ numbers are RM0385 and
+//! DMA), CRC, RNG and ADC1. Register offsets, bases and IRQ numbers are RM0385 and
 //! ST's CMSIS `stm32f746xx.h`.
 //!
 //! The fixture system puts a MAX31855 on each SPI (thermocouple 25, 100 and
@@ -338,6 +338,7 @@ fn main() -> ! {
     }
     mark(19, check_crc());
     mark(20, check_rng());
+    mark(23, check_adc1());
     check_pendsv_m7();
     let summary = summary | 0x7460_0000;
     wr(SUMMARY, summary);

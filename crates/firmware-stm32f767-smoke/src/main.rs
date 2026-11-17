@@ -7,12 +7,12 @@
 
 //! STM32F76x/F77x smoke for the imported Renode stm32f777 platform: the
 //! F746 surface (`f746_checks`: USART1/2/3/6 + UART4/5/7/8, GPIOA..K,
-//! EXTI, TIM1..TIM14, SPI1/2/3, I2C1..4, DMA1/DMA2, CRC, RNG) plus what the
+//! EXTI, TIM1..TIM14, SPI1/2/3, I2C1..4, DMA1/DMA2, ADC1, CRC, RNG) plus what the
 //! F76x changes (`f767_checks`: RCC APB1/APB2 masks, SYSCFG SWP_FB, EXTI
 //! line 24, 2 MiB / 512 KiB, SPI4/5/6). RM0410 and `stm32f767xx.h`.
 //!
-//! The fixture system is the stm32f746 one with a MAX31855 added on each of
-//! SPI4/5/6. Interrupts stay disabled in the NVIC: each check reads the
+//! The fixture system is the stm32f746 one with ADC1_IN1 on a test potentiometer
+//! and a MAX31855 added on each of SPI4/5/6. Interrupts stay disabled in the NVIC: each check reads the
 //! line's ISPR bit. Every check prints one line and sets one bit of the
 //! summary word at `SUMMARY`.
 
@@ -103,6 +103,7 @@ fn main() -> ! {
     }
     mark(18, check_crc());
     mark(19, check_rng());
+    mark(23, check_adc1());
     let summary = summary | 0x7670_0000;
     wr(SUMMARY, summary);
     puts("summary ");

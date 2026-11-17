@@ -15,7 +15,8 @@
 //! through the shared `f746_checks` module: RCC reset state, clock gate and
 //! APB2ENR mask, all eight U(S)ART lines, the GPIO reset state and ports
 //! up to K, SYSCFG MEMRMP/PMC/CMPCR, EXTI software triggers, TIM1..TIM14,
-//! DMA2 memory-to-memory (refused on DMA1), I2C1..4 NACK lines, CRC and RNG.
+//! DMA2 memory-to-memory (refused on DMA1), I2C1..4 NACK lines, ADC1 on PA1,
+//! CRC and RNG.
 //! The board IO adds LD1 and B1 (rising edge through SYSCFG EXTICR3 into
 //! EXTI15_10). SPI and the TMP102 path need slaves the board does not have
 //! and are proven by the stm32f746 fixture smoke instead.
@@ -146,6 +147,7 @@ fn main() -> ! {
     }
     mark(13, check_crc());
     mark(14, check_rng());
+    mark(15, check_adc1());
     let summary = summary | 0x7DC0_0000;
     wr(SUMMARY, summary);
     puts("summary ");

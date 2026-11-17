@@ -53,7 +53,8 @@
           "i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok",
           "crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok",
           "rng off=1 ready=1 draws=1 stopped=1 ok",
-          "summary 0x7DC07FFF",
+          "adc1 in1=0x000003FF gated=1 clock=1 eoc=1 ok",
+          "summary 0x7DC0FFFF",
           "DONE"
         ]
       },
@@ -63,7 +64,7 @@
       "assertion": {
         "memory_value": {
           "address": 536883200,
-          "expected_value": 2109767679,
+          "expected_value": 2109800447,
           "mask": null,
           "size": 4
         }
@@ -94,19 +95,19 @@
       3221225472,
       4294867296,
       4294867296,
-      0,
-      1,
+      1023,
+      65535,
       537198576,
-      1541880983,
       1,
-      851826445,
+      1,
+      1,
       1073811484,
       70,
       537198536,
       70,
-      134232388
+      134233290
     ],
-    "pc": 134232388,
+    "pc": 134233290,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -119,7 +120,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "e2e7014c81d721c69e163d4b2e2efecf7893833b2a84f3826ec7e93697b1743f",
+  "firmware_hash": "687ca36b8ab268ae191287517dd791ccd69773da37ec2c55869f7c8a541b4ad8",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746g-disco-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f7_discovery-bb.yaml",
@@ -127,6 +128,13 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
       {
         "name": "rcc",
         "kind": "native",
@@ -457,6 +465,13 @@
         "artifacts": []
       },
       {
+        "name": "adc1",
+        "kind": "native",
+        "base": 1073815552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "scb",
         "kind": "native",
         "base": 3758157056,
@@ -492,6 +507,17 @@
         "declared": false,
         "attachment": {
           "transport": "gpio"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "pot_adc1_in1",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 1
         },
         "artifacts": []
       }
@@ -645,44 +671,44 @@
       {
         "text": "STM32F746G-DISCO SMOKE",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle": 1000,
+        "end_cycle": 1000
       },
       {
         "text": "rcc reset=1 gate=1 mask=1 ok",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle": 1000,
+        "end_cycle": 1000
       },
       {
         "text": "usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle": 1000,
+        "end_cycle": 11000
       },
       {
         "text": "gpio pa=1 pb=1 reset=1 pi1=1 jk=1 ok",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "led=ld1 odr=0x00000002 blink=1 lit=1 off=1 ok",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "syscfg memrmp=0x00000C00 pmc=0x008700FF fields=1 cmpcr=1 ok",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "exti swier masked=1 routed=1 ok",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "b1 idle=1 presses=1 pa_quiet=1 pi11=1 cleared=1 ok",
@@ -817,7 +843,13 @@
         "end_cycle": 980000
       },
       {
-        "text": "summary 0x7DC07FFF",
+        "text": "adc1 in1=0x000003FF gated=1 clock=1 eoc=1 ok",
+        "cycle_lo": 970000,
+        "cycle": 980000,
+        "end_cycle": 980000
+      },
+      {
+        "text": "summary 0x7DC0FFFF",
         "cycle_lo": 970000,
         "cycle": 980000,
         "end_cycle": 980000
@@ -832,6 +864,18 @@
     "dropped_lines": 0
   },
   "stimuli": [
+    {
+      "channel": "position",
+      "component": "pot_adc1_in1",
+      "value": 25.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000
+    },
     {
       "channel": "pressed",
       "component": "b1",
@@ -883,14 +927,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 15964,
+    "text_bytes": 16876,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 15964,
+    "flash_used_bytes": 16876,
     "ram_static_bytes": 0,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 327680,
-    "flash_used_pct": 1.52,
+    "flash_used_pct": 1.61,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -916,83 +960,78 @@
     "cycles": 6000000,
     "instructions": 6000000,
     "steps_executed": 6000000,
-    "memory_reads": 7526,
-    "memory_writes": 998,
-    "peripheral_accesses": 267998,
+    "memory_reads": 7944,
+    "memory_writes": 1021,
+    "peripheral_accesses": 268106,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134232388,
-        "count": 762,
-        "symbol": "firmware_stm32f746g_disco_smoke::__cortex_m_rt_main"
-      },
-      {
-        "pc": 134227646,
+        "pc": 134227648,
         "count": 157,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
       },
       {
-        "pc": 134227656,
+        "pc": 134227658,
         "count": 156,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
       },
       {
-        "pc": 134227666,
+        "pc": 134227668,
         "count": 156,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134227678,
+        "pc": 134227680,
         "count": 156,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
       },
       {
-        "pc": 134227698,
+        "pc": 134227700,
         "count": 156,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134227718,
+        "pc": 134227720,
         "count": 156,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134227688,
+        "pc": 134227690,
         "count": 118,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
       },
       {
-        "pc": 134227634,
+        "pc": 134227636,
         "count": 117,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
       },
       {
-        "pc": 134227710,
+        "pc": 134227712,
         "count": 117,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
-      },
-      {
-        "pc": 134225512,
-        "count": 79,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134225854,
-        "count": 79,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134225870,
-        "count": 79,
-        "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait_level"
-      },
-      {
-        "pc": 134225516,
-        "count": 78,
-        "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait_level"
       },
       {
         "pc": 134225518,
+        "count": 79,
+        "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait_level"
+      },
+      {
+        "pc": 134225534,
+        "count": 79,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134225856,
+        "count": 79,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134225872,
+        "count": 79,
+        "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait_level"
+      },
+      {
+        "pc": 134225514,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
@@ -1000,6 +1039,11 @@
         "pc": 134225520,
         "count": 78,
         "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134225532,
+        "count": 78,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       }
     ]
   }

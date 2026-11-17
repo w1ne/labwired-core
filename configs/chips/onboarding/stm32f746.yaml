@@ -14,11 +14,12 @@
 # "v2" USART), GPIOA..K, SYSCFG (F7 MEMRMP/PMC, EXTICR port mux) and EXTI
 # (24 lines; EXTI0..4 = 6..10, EXTI9_5 = 23, EXTI15_10 = 40), TIM1..TIM14,
 # SPI1/2/3 (FIFO SPI), I2C1..4 (the "v2" I2C, EV/ER pairs), DMA1/DMA2 (8
-# streams; SPI1 on DMA2 and SPI2 on DMA1 routed), CRC (8-bit IDR,
+# streams; SPI1 on DMA2 and SPI2 on DMA1 routed), ADC1 (F4 register layout,
+# clock-gated, with PA1 mapped to IN1), CRC (8-bit IDR,
 # programmable INIT/POL/POLYSIZE; REV_IN/REV_OUT are not modelled) and RNG
 # (no interrupt: the model has none).
 #
-# Not claimed: ADC1..3, DAC, CAN1/2, Ethernet, LTDC, DMA2D, SDMMC1, RTC, PWR,
+# Not claimed: ADC2/3, DAC, CAN1/2, Ethernet, LTDC, DMA2D, SDMMC1, RTC, PWR,
 # the flash interface, QUADSPI, FMC, USB OTG, SAI, SPDIFRX, HDMI-CEC, LPTIM1,
 # DCMI, SPI4..6, the watchdogs, and the RCC PLLSAI/PLLI2S/DCKCFGR1/2 clock
 # muxing.
@@ -418,3 +419,15 @@ peripherals:
   base_address: 0x50060800
   size: 1KB
   clock: { reg: ahb2enr, bit: 6 }
+# ADC1 (RM0385 §13): F2/F4 legacy control registers, with SWSTART at CR2
+# bit 30. Only PA1/ADC1_IN1 is wired in this profile.
+- id: adc1
+  type: adc
+  base_address: 0x40012000
+  size: 1KB
+  irq: 18
+  clock: { reg: apb2enr, bit: 8 }
+  config:
+    profile: stm32f4
+analog_pins:
+  PA1: { peripheral: adc1, channel: 1 }

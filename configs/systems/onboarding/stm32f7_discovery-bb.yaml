@@ -6,6 +6,14 @@
 
 name: stm32f7_discovery-bb
 chip: ../../chips/onboarding/stm32f7_discovery-bb.yaml
+# Test fixture only: a potentiometer drives ADC1_IN1 on PA1; it is not an
+# on-board component.
+external_devices:
+  - id: pot_adc1_in1
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 1
 # 32F746GDISCOVERY board IO (UM1907 §6.5/§6.6). LD1 (green) is on PI1, active
 # high. B1 USER connects PI11 to VDD when pressed (active high).
 board_io:

@@ -6,6 +6,14 @@
 
 name: nucleo_f767zi
 chip: ../../chips/onboarding/nucleo_f767zi.yaml
+# Test fixture only: a potentiometer drives the otherwise unconnected
+# ADC1_IN1/PA1 path; it is not a NUCLEO board component.
+external_devices:
+  - id: pot_adc1_in1
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 1
 # NUCLEO-F767ZI board IO (UM1974 §6.5/§6.6). LD1 (green) PB0, LD2 (blue) PB7,
 # LD3 (red) PB14, each active high. B1 USER on PC13 is active high: ST's
 # BSP (stm32f7xx_nucleo_144.c) sets it pull-down with a rising-edge EXTI.

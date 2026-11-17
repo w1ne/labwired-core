@@ -9,8 +9,9 @@
 # memory-to-memory (refused on DMA1), I2C1..4 NACK on their event lines, CRC
 # (CRC-32 and a 16-bit polynomial) and RNG draws. SPI and the I2C data path
 # have no on-board slave here; the stm32f746 fixture smoke covers them. It
-# does not claim the Ethernet PHYs, the FT5336 touch controller, LTDC, SDMMC,
-# QUADSPI, FMC, SAI, USB, ADC, DAC, CAN or the watchdogs.
+# The PA1 potentiometer is a test fixture, not a board part. The smoke does
+# not claim the Ethernet PHYs, FT5336, LTDC, SDMMC, QUADSPI, FMC, SAI, USB,
+# ADC2/3, DAC, CAN or the watchdogs.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-stm32f746g-disco-smoke"
@@ -30,6 +31,9 @@ stimuli:
   - target: { component: "b1", channel: "pressed" }
     trigger: !after_cycles { cycles: 600000 }
     value: 0.0
+  - target: { component: "pot_adc1_in1", channel: "position" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 25.0
 assertions:
   - uart_contains: "STM32F746G-DISCO SMOKE"
   - uart_ordered:
@@ -49,11 +53,12 @@ assertions:
       - "i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok"
       - "crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok"
       - "rng off=1 ready=1 draws=1 stopped=1 ok"
-      - "summary 0x7DC07FFF"
+      - "adc1 in1=0x000003FF gated=1 clock=1 eoc=1 ok"
+      - "summary 0x7DC0FFFF"
       - "DONE"
   - memory_value:
       address: 0x20003000
-      expected_value: 0x7DC07FFF
+      expected_value: 0x7DC0FFFF
       size: 4
   - gpio_edges:
       pin: "gpioi:1"
