@@ -9676,24 +9676,24 @@
       "script": "examples/renode-onboarding/stm32f429-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f429.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-17T19:05:37Z",
-      "finished_at_utc": "2026-11-17T19:08:32Z",
-      "elapsed_seconds": 176,
-      "elapsed_ms": 175111,
+      "started_at_utc": "2026-11-17T20:02:26Z",
+      "finished_at_utc": "2026-11-17T20:02:29Z",
+      "elapsed_seconds": 3,
+      "elapsed_ms": 2403,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 172.869,
+        "build_cli": 0.275,
         "build_firmware": 1.618,
-        "run_smoke": 0.551
+        "run_smoke": 0.471
       },
       "stages_ms": {
-        "build_cli": 172869,
+        "build_cli": 275,
         "build_firmware": 1618,
-        "run_smoke": 551
+        "run_smoke": 471
       },
       "_artifact_path": "stm32f429",
       "zero_answering_windows": [],

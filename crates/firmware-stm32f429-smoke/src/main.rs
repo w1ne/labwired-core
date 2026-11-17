@@ -791,6 +791,99 @@ fn smoke_adc1_overrun() -> bool {
     }
 }
 
+/// RM0090 regular scan smoke: convert PA1/IN1 then PA2/IN2 from SQR3, with
+/// EOCS set so firmware can observe EOC at each rank. NVIC pending is checked
+/// before and after the sequence; the CPU does not service the IRQ in this
+/// bounded scan smoke.
+#[cfg(feature = "stm32f429-adc-scan")]
+fn smoke_adc1_scan() -> bool {
+    const ADC1: u32 = 0x4001_2000;
+    const ADC_SR: *const u32 = ADC1 as *const u32;
+    const ADC_CR1: *mut u32 = (ADC1 + 0x04) as *mut u32;
+    const ADC_CR2: *mut u32 = (ADC1 + 0x08) as *mut u32;
+    const ADC_SQR1: *mut u32 = (ADC1 + 0x2C) as *mut u32;
+    const ADC_SQR3: *mut u32 = (ADC1 + 0x34) as *mut u32;
+    const ADC_DR: *const u32 = (ADC1 + 0x4C) as *const u32;
+    const ADC1_IRQ_BIT: u32 = 1 << 18;
+    const NVIC_ISPR0: *const u32 = 0xE000_E200 as *const u32;
+    const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
+    const ADON: u32 = 1;
+    const SCAN: u32 = 1 << 8;
+    const EOCIE: u32 = 1 << 5;
+    const EOCS: u32 = 1 << 10;
+    const SWSTART: u32 = 1 << 30;
+    const EOC: u32 = 1 << 1;
+
+    unsafe {
+        write_volatile(ADC_CR2, 0);
+        write_volatile(ADC_SR as *mut u32, 0);
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        register_rmw(GPIOA + MODER, 0b11 << 2, 0b11 << 2); // PA1 analog
+        register_rmw(GPIOA + MODER, 0b11 << 4, 0b11 << 4); // PA2 analog
+        write_volatile(ADC_CR1, SCAN | EOCIE);
+        write_volatile(ADC_SQR1, 1 << 20); // L=1: two conversions
+        write_volatile(ADC_SQR3, 1 | (2 << 5)); // SQ1=IN1, SQ2=IN2
+        write_volatile(ADC_CR2, ADON | EOCS);
+        write_volatile(ADC_CR2, ADON | EOCS | SWSTART);
+
+        let mut first_eoc = false;
+        for _ in 0..100_000 {
+            first_eoc = read_volatile(ADC_SR) & EOC != 0;
+            if first_eoc {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        let first_irq = first_eoc && read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT != 0;
+        let first_code = read_volatile(ADC_DR) & 0x0FFF;
+
+        let mut second_eoc = false;
+        for _ in 0..100_000 {
+            second_eoc = read_volatile(ADC_SR) & EOC != 0;
+            if second_eoc {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        let pending_after_second = second_eoc && read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT != 0;
+        let second_code = read_volatile(ADC_DR) & 0x0FFF;
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        let irq_released = read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT == 0;
+
+        // A single SWSTART scans the programmed group once when CONT is clear.
+        let mut end = true;
+        for _ in 0..64 {
+            end &= read_volatile(ADC_SR) & EOC == 0;
+            core::hint::spin_loop();
+        }
+        write_volatile(ADC_CR1, 0);
+        write_volatile(ADC_CR2, 0);
+
+        let ok = first_eoc
+            && second_eoc
+            && first_irq
+            && pending_after_second
+            && irq_released
+            && first_code == 0x03FF
+            && second_code == 0x07FF
+            && end;
+        send(b"adc1 scan=");
+        send_hex(first_code);
+        send(b",");
+        send_hex(second_code);
+        send(b" irq=");
+        send(if first_irq { b"1" } else { b"0" });
+        send(b" pending=");
+        send(if pending_after_second { b"1" } else { b"0" });
+        send(b" end=");
+        send(if end { b"1" } else { b"0" });
+        send(b" released=");
+        send(if irq_released { b"1" } else { b"0" });
+        send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
+        ok
+    }
+}
+
 fn send_hex(value: u32) {
     const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
     for shift in [28, 24, 20, 16, 12, 8, 4, 0] {
@@ -1119,6 +1212,9 @@ fn main() -> ! {
 
     #[cfg(feature = "stm32f429-adc-ovr")]
     let _adc1_overrun_ok = smoke_adc1_overrun();
+
+    #[cfg(feature = "stm32f429-adc-scan")]
+    let _adc1_scan_ok = smoke_adc1_scan();
 
     #[cfg(feature = "stm32f429-spi1")]
     let _spi1_ok = smoke_spi1();

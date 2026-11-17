@@ -149,6 +149,10 @@ pub const DEFAULT_AMBIENT_TEMPERATURE_C: f64 = 25.0;
 const F4_CR2_SWSTART: u32 = 1 << 30;
 /// F4 `ADC_CR2.EOCS`: regular overrun detection is enabled when set.
 const F4_CR2_EOCS: u32 = 1 << 10;
+/// F4 `ADC_CR1.SCAN`: advance through the regular sequence after each conversion.
+const F4_CR1_SCAN: u32 = 1 << 8;
+/// F4 `ADC_SQR1.L[3:0]`: number of regular conversions minus one.
+const F4_SQR1_LENGTH: u32 = 0xF << 20;
 const F4_SR_EOC: u32 = 1 << 1;
 const F4_SR_OVR: u32 = 1 << 5;
 const F4_CR1_EOCIE: u32 = 1 << 5;
@@ -237,12 +241,12 @@ impl FromStr for AdcRegisterLayout {
 /// STM32F1 ADC control registers (status `sr` + data `dr` are shared on `Adc`).
 #[derive(Debug, Default, serde::Serialize)]
 pub struct F1AdcRegs {
-    cr1: u32, // 0x04
-    cr2: u32, // 0x08
-    /// ADC_SQR3 @ 0x34 (RM0008 §11.12.14). Only SQ1[4:0] — the first (and, on
-    /// this single-shot model, only) regular-sequence channel — is consumed,
-    /// by `advance_conversion`. Reset value 0 selects channel 0, which is what
-    /// firmware that never programs the sequence converts on silicon.
+    cr1: u32,  // 0x04
+    cr2: u32,  // 0x08
+    sqr1: u32, // 0x2C on STM32F1/F4
+    sqr2: u32, // 0x30 on STM32F1/F4
+    /// ADC_SQR3 @ 0x34. F1 consumes SQ1 only; the bounded F4 SCAN path also
+    /// reads its six regular-sequence ranks from this register.
     sqr3: u32,
 }
 
@@ -395,6 +399,9 @@ pub struct Adc {
     converting: bool,
     cycles_remaining: u32,
     conversion_time: u32,
+    /// Current regular-sequence rank for the STM32F4 SCAN path. Rank is reset
+    /// on SWSTART and after the final conversion; other layouts leave it at 0.
+    f4_sequence_rank: u8,
     /// Per-channel injected levels, held in millivolts. `None` means no
     /// external input; conversion waits until the ADC samples the mux.
     channel_inputs_mv: [Option<u16>; MAX_CHANNELS],
@@ -501,6 +508,7 @@ impl Adc {
             converting: false,
             cycles_remaining: 0,
             conversion_time: 14,
+            f4_sequence_rank: 0,
             channel_inputs_mv: [None; MAX_CHANNELS],
             reference_millivolts: ADC_VREF_MV,
             sampled_input: None,
@@ -574,7 +582,7 @@ impl Adc {
     }
 
     fn sample_f1_input(&self) -> Option<HeldAdcInput> {
-        let channel = self.f1_regular_channel();
+        let channel = self.regular_channel();
         let injected = self
             .channel_inputs_mv
             .get(channel)
@@ -609,9 +617,13 @@ impl Adc {
             } else {
                 self.converting = false;
                 let (cr1, cr2) = self.f1_ctrl();
+                let is_f4 = matches!(self.regs, AdcRegs::Stm32F4(_));
+                let f4_scan = is_f4 && (cr1 & F4_CR1_SCAN) != 0;
+                let f4_last_rank =
+                    !f4_scan || usize::from(self.f4_sequence_rank) + 1 >= self.f4_sequence_length();
                 // This bounded F4 path models EOCS-driven overrun detection;
                 // ADC DMA request/transfer behavior is not implemented here.
-                let f4_overrun = matches!(self.regs, AdcRegs::Stm32F4(_))
+                let f4_overrun = is_f4
                     && (cr2 & F4_CR2_EOCS) != 0
                     && (self.sr & F4_SR_EOC) != 0
                     && !self.dr_read_since_conversion.get();
@@ -627,17 +639,35 @@ impl Adc {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
 
-                self.sr |= F4_SR_EOC;
+                // RM0090: EOCS selects each-conversion EOC. With EOCS clear,
+                // SCAN reports EOC only at the end of the regular sequence.
+                let f4_eoc = !f4_scan || (cr2 & F4_CR2_EOCS) != 0 || f4_last_rank;
+                if f4_eoc {
+                    self.sr |= F4_SR_EOC;
+                }
                 if f4_overrun {
                     self.sr |= F4_SR_OVR;
                 }
                 self.dr_read_since_conversion.set(false);
 
-                if (cr1 & F4_CR1_EOCIE) != 0 || (f4_overrun && (cr1 & F4_CR1_OVRIE) != 0) {
+                if (f4_eoc && (cr1 & F4_CR1_EOCIE) != 0)
+                    || (f4_overrun && (cr1 & F4_CR1_OVRIE) != 0)
+                {
                     irq = true;
                 }
-                // Continuous mode (CONT + ADON).
-                if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
+                if is_f4 {
+                    if f4_scan && !f4_last_rank {
+                        self.f4_sequence_rank += 1;
+                        self.start_conversion();
+                    } else if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
+                        // CONT repeats the full group after its last rank.
+                        self.f4_sequence_rank = 0;
+                        self.start_conversion();
+                    } else {
+                        self.f4_sequence_rank = 0;
+                    }
+                } else if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
+                    // Existing F1 continuous single-channel behavior.
                     self.start_conversion();
                 }
             }
@@ -711,11 +741,32 @@ impl Adc {
         }
     }
 
-    /// Regular channel being converted: SQR3 SQ1[4:0] on the F1 layout; 0 on
-    /// the other families (their engines select from their own SQR1/PCSEL).
-    fn f1_regular_channel(&self) -> usize {
+    /// Number of F4 regular-sequence conversions. SCAN clear keeps the
+    /// single-channel path regardless of the programmed SQR1 length.
+    fn f4_sequence_length(&self) -> usize {
         match &self.regs {
-            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.sqr3 & 0x1F) as usize,
+            AdcRegs::Stm32F4(r) if r.cr1 & F4_CR1_SCAN != 0 => {
+                ((r.sqr1 & F4_SQR1_LENGTH) >> 20) as usize + 1
+            }
+            _ => 1,
+        }
+    }
+
+    /// Regular channel being converted. F1 consumes SQR3.SQ1; the bounded F4
+    /// SCAN path reads ranks 1..=16 from SQR3/SQR2/SQR1 (RM0090 §13.3.8).
+    fn regular_channel(&self) -> usize {
+        match &self.regs {
+            AdcRegs::Stm32F1(r) => (r.sqr3 & 0x1F) as usize,
+            AdcRegs::Stm32F4(r) => {
+                let rank = usize::from(self.f4_sequence_rank);
+                let (word, slot) = match rank {
+                    0..=5 => (r.sqr3, rank),
+                    6..=11 => (r.sqr2, rank - 6),
+                    12..=15 => (r.sqr1, rank - 12),
+                    _ => (0, 0),
+                };
+                ((word >> (slot * 5)) & 0x1F) as usize
+            }
             AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => 0,
         }
     }
@@ -1223,6 +1274,7 @@ impl Adc {
         let adon = (cr2 & F1_CR2_ADON) != 0;
         if !adon {
             self.cancel_f1_pending();
+            self.f4_sequence_rank = 0;
             cr2 &= !F4_CR2_SWSTART;
             if let AdcRegs::Stm32F4(r) = &mut self.regs {
                 r.cr2 = cr2;
@@ -1234,6 +1286,7 @@ impl Adc {
         let mut trigger = false;
         if swstart && !old_swstart {
             cr2 &= !F4_CR2_SWSTART;
+            self.f4_sequence_rank = 0;
             trigger = true;
         }
         if let AdcRegs::Stm32F4(r) = &mut self.regs {
@@ -1313,6 +1366,8 @@ impl Peripheral for Adc {
                 0x00..=0x03 => self.sr,
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
+                0x2C..=0x2F => r.sqr1,
+                0x30..=0x33 => r.sqr2,
                 0x34..=0x37 => r.sqr3,
                 0x4C..=0x4F => self.dr,
                 _ => {
@@ -1330,6 +1385,8 @@ impl Peripheral for Adc {
                 }
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
+                0x2C..=0x2F => r.sqr1,
+                0x30..=0x33 => r.sqr2,
                 0x34..=0x37 => r.sqr3,
                 0x4C..=0x4F => {
                     self.dr_read_since_conversion.set(true);
@@ -1367,6 +1424,18 @@ impl Peripheral for Adc {
                 0x04..=0x07 => match &mut self.regs {
                     AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
                         r.cr1 = (r.cr1 & !mask) | val_shifted;
+                    }
+                    _ => {}
+                },
+                0x2C..=0x2F => match &mut self.regs {
+                    AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
+                        r.sqr1 = (r.sqr1 & !mask) | val_shifted;
+                    }
+                    _ => {}
+                },
+                0x30..=0x33 => match &mut self.regs {
+                    AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
+                        r.sqr2 = (r.sqr2 & !mask) | val_shifted;
                     }
                     _ => {}
                 },
@@ -2299,6 +2368,68 @@ mod tests {
         assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_OVR, 0);
         assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
         assert!(!third.last().copied().unwrap_or(true));
+    }
+
+    /// RM0090 §13.3.8: SCAN consumes the programmed regular ranks in order;
+    /// EOCS raises EOC/IRQ for each conversion, and DR reads acknowledge each
+    /// result before the next one arrives.
+    #[test]
+    fn f4_scan_sequence_converts_selected_ranks_with_per_conversion_eoc() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(1, 825);
+        adc.set_channel_input(2, 1650);
+        adc.write_u32(0x04, F4_CR1_SCAN | F4_CR1_EOCIE).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap(); // L=1 → two conversions
+        adc.write_u32(0x34, 1 | (2 << 5)).unwrap(); // SQ1=IN1, SQ2=IN2
+        adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_EOCS).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_EOCS | F4_CR2_SWSTART)
+            .unwrap();
+
+        let first: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(first[..14].iter().all(|irq| !irq));
+        assert!(first[14], "EOCIE must report the first converted rank");
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 1023);
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.f4_sequence_rank, 1);
+        assert!(
+            adc.converting,
+            "the second sequence rank starts automatically"
+        );
+
+        let second: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(second[..14].iter().all(|irq| !irq));
+        assert!(second[14], "EOCIE must report the second converted rank");
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
+        assert!(!adc.converting, "single-shot scan stops at the last rank");
+        assert_eq!(adc.f4_sequence_rank, 0);
+    }
+
+    /// With SCAN set and EOCS clear, RM0090 reports completion only at the end
+    /// of the regular group, not after each channel.
+    #[test]
+    fn f4_scan_without_eocs_interrupts_only_after_the_group() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(1, 825);
+        adc.set_channel_input(2, 1650);
+        adc.write_u32(0x04, F4_CR1_SCAN | F4_CR1_EOCIE).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap();
+        adc.write_u32(0x34, 1 | (2 << 5)).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_SWSTART).unwrap();
+
+        let first: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(first.iter().all(|irq| !irq));
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert!(adc.converting);
+
+        let second: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(second[..14].iter().all(|irq| !irq));
+        assert!(second[14], "EOCIE is raised at regular-group completion");
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
+        assert!(!adc.converting);
     }
 }
 
