@@ -28,6 +28,13 @@ boards:
     path: examples/nucleo-h563zi
     rust_targets: [thumbv7m-none-eabi]
     gate: false
+  # Maintenance coverage for the already-onboarded NUCLEO-H723ZG. Its exact
+  # USART3 VCP + LD1 smoke is cheap and guards the board profile on main pushes.
+  - id: nucleo-h723zg
+    kind: sim-validate
+    path: examples/nucleo-h723zg
+    rust_targets: [thumbv7em-none-eabi]
+    gate: true
   # TI MSPM0G3507 LaunchPad strategic vendor coverage (TI LaunchPad kits: 7%;
   # this MCU has no separately measured demand rank). The narrow UART0 smoke
   # gates core boot and TXDATA capture on its exact memory map.
