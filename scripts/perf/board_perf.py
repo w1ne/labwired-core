@@ -393,6 +393,12 @@ WAIVED: dict[str, str] = {
         "throughput claim is made for this part "
         "(examples/esp32s2-devkitc-1-n8r2)."
     ),
+    "mspm0g3507": (
+        "LP-MSPM0G3507 is a narrow UART0 smoke profile, not a representative "
+        "throughput workload. CI has no perf-spin fixture linked for its "
+        "0x00000000 flash / 0x20200000 RAM map; no throughput claim is made "
+        "for this profile yet (examples/lp-mspm0g3507-launchpad)."
+    ),
     "atmega1281": (
         "The committed -mmcu=atmega1281 firmware validates boot, USART0 and GPIO, "
         "but no representative AVR6 throughput fixture is built. The available "
