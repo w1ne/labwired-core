@@ -488,7 +488,7 @@ canonical `type:`; the table below is rendered from that file by
 | `max31855` | SPI | K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame) |
 | `mcp2515` | SPI | Functional SPI classical CAN controller for standard 11-bit data frames |
 | `mcp3008` | SPI | 8-channel 10-bit SPI ADC (single-ended / differential, Figure 6-1 framing) |
-| `microsd` | SPI | SPI-mode SDHC card with an in-memory block store (init, CSD/CID, single and multi-block read/write) |
+| `microsd` | SPI | SPI-mode SDHC card backed by a disk image or an in-memory block store (init, CSD/CID, single and multi-block read/write) |
 | `nrf24l01` | SPI | 2.4 GHz SPI transceiver register shell (no air link) |
 | `pcd8544` | SPI | Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI |
 | `rc522` | SPI | MFRC522 SPI RFID reader with ISO/IEC 14443-A cascade-level-1 air interface |

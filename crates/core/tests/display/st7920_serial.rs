@@ -94,11 +94,10 @@ fn device(bus: &mut SystemBus) -> &mut Box<dyn SpiDevice> {
     let idx = bus
         .find_peripheral_index_by_name("spi1")
         .expect("spi1 registered");
-    let any = bus.peripherals[idx].dev.as_any_mut().expect("downcastable");
-    let spi = any
-        .downcast_mut::<labwired_core::peripherals::spi::Spi>()
-        .expect("generic Spi controller");
-    spi.attached_devices
+    bus.peripherals[idx]
+        .dev
+        .spi_attached_devices_mut()
+        .expect("spi1 hosts SPI devices")
         .first_mut()
         .expect("the ST7920 is attached")
 }
@@ -411,6 +410,38 @@ fn gdram_is_hidden_until_graphics_display_on() {
     assert_eq!(artifact(&bus).meta["lit_pixels"], 0);
     send(&mut bus, &cmds(&[0x36]));
     assert_eq!(artifact(&bus).meta["lit_pixels"], 16);
+}
+
+/// Marlin's RepRapDiscount driver (`ultralcd_st7920_u8glib_rrd_AVR.cpp`)
+/// initialises with 0x20, 0x08 (display off), 0x01, 0x24, 0x26 (extended set,
+/// G = 1), clears GDRAM and ends with 0x0C. With RE = 1 that last byte is the
+/// extended "sleep mode" instruction (0000_1SLxx, SL = 1 leaves sleep), not
+/// display on/off, so D stays 0 (Sitronix ST7920 datasheet V4.x, instruction
+/// tables: display status 0000_1DCB in the basic set, sleep mode 0000_1SLxx
+/// in the extended set). The datasheet describes D as the whole-display
+/// switch ("D = 0: display off, DDRAM unchanged"), yet RRD panels on this
+/// init show Marlin's status screen; Marlin's HAL driver
+/// (`u8g_dev_st7920_128x64_HAL.cpp`, `clear_graphics_DRAM`) relies on the same
+/// 0x08 / 0x3E / 0x0C order. The model therefore takes the graphic layer as
+/// shown whenever G = 1 (and the part is neither asleep nor in standby),
+/// independent of D, and reports the panel lit.
+#[test]
+fn marlin_rrd_init_shows_gdram_with_display_bit_clear() {
+    let mut bus = rig();
+    let mut w = cmds(&[0x20, 0x08, 0x01, 0x24, 0x26, 0x80, 0x80]);
+    data(&mut w, &[0xFF, 0xFF]);
+    w.extend(cmds(&[0x0C]));
+    send(&mut bus, &w);
+    let art = artifact(&bus);
+    assert_eq!(art.meta["display_on"], false, "0x0C under RE = 1 is SL");
+    assert_eq!(art.meta["sleep"], false);
+    assert_eq!(art.meta["graphics_on"], true);
+    assert_eq!(art.meta["lit_pixels"], 16);
+    assert_eq!(art.meta["lit"], true, "GDRAM with G = 1 is on the glass");
+
+    // Standby (extended 0x01) still blanks it.
+    send(&mut bus, &cmds(&[0x01]));
+    assert_eq!(artifact(&bus).meta["lit"], false);
 }
 
 /// RE selects which table an opcode is read from: after returning to the

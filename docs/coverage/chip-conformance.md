@@ -120,7 +120,7 @@ This page covers the public models. For every chip we model — public and priva
 | atsamd21 | **L1** | ✓ | 7 | — | — | firmware_survival::test_atsamd21_nano33_smoke_survival |
 | atsamd51 | **L1** | ✓ | 27 | — | — | firmware_survival::test_atsamd51_metro_m4_smoke_survival |
 | atsamd51-pybadge | **L0** | ✓ | 28 | — | — | — |
-| ra4m1 | **L1** | ✓ | 7 | — | — | firmware_survival::test_ra4m1_uno_r4_smoke_survival |
+| ra4m1 | **L1** | ✓ | 34 | — | — | firmware_survival::test_ra4m1_uno_r4_smoke_survival |
 | imxrt1064 | **L1** | ✓ | 6 | — | — | firmware_survival::test_imxrt1064_teensy41_smoke_survival |
 | stm32f746 | **L1** | ✓ | 17 | — | — | firmware_survival::test_stm32f746_discovery_smoke_survival |
 | stm32g071 | **L1** | ✓ | 41 | — | — | firmware_survival::test_nucleo_g071rb_smoke_survival |
@@ -143,6 +143,7 @@ This page covers the public models. For every chip we model — public and priva
 | ch32v203c8t6 | **L1** | ✓ | 7 | — | — | ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13 |
 | ch32v003f4u6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | ch32v003a4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| at32f421g8u7 | **L1** | ✓ | 22 | — | — | at32f421_contract::vendor_sdk_smoke_runs_flash_dma_and_timer_irq_paths |
 | ch32v003j4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | esp32h2 | **L0** | ✓ | 3 | — | — | — |
 | esp32c5 | **L0** | ✓ | 1 | — | — | — |

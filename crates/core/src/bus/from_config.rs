@@ -470,6 +470,7 @@ impl SystemBus {
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             scheduler_driver_indices: Vec::new(),
+            exti_line_driver_indices: Vec::new(),
             matrix_source_scratch: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
@@ -515,7 +516,7 @@ impl SystemBus {
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
             flash_models_ops: false,
-            nordic_gpio_service: false,
+            gpio_edge_observers: false,
             timer_capture_wired: false,
             wire_inputs_live: false,
             resident_scheduling_disabled: false,
@@ -1119,6 +1120,21 @@ impl SystemBus {
                     } else {
                         crate::peripherals::gpio::GpioPort::new_with_layout(layout)
                             .with_window_offset(window_offset)
+                    };
+                    let port = if p_cfg
+                        .config
+                        .get("reset_registers")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        anyhow::ensure!(
+                            layout == GpioRegisterLayout::Stm32V2,
+                            "GPIO '{}': reset_registers currently requires the common V2 subset",
+                            p_cfg.id
+                        );
+                        port.with_v2_register_reset()
+                    } else {
+                        port
                     };
                     // RA4/RA6 PORT: 16-bit PCNTRn aliases with the halves
                     // swapped (FSP R7FA6M5BH.h; see `RaPortGpio`).

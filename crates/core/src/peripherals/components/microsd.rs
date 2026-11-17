@@ -24,7 +24,12 @@
 //!
 //! A command's response starts one 0xFF filler byte after its CRC byte
 //! (NCR = 1, the spec minimum in SPI mode).
-//! Blocks never written read back as zeros. Written blocks are exposed as the
+//! The card can be backed by a disk image ([`MicroSd::from_image`], or the
+//! kit's `image_base64:` / `image:` config): reads come from the image, the
+//! capacity is the image size rounded up to the 512 KiB CSD unit, and writes
+//! and erases land in an overlay so the image itself is never modified.
+//! Blocks that are neither in the image nor written read back as zeros.
+//! Blocks that differ from the image (written or erased) are exposed as the
 //! `sd_card` inspect artifact (LBA list in `meta`, contents in `bytes`) and as
 //! [`MicroSd::block`], so a test or oracle can check what firmware stored.
 //!
@@ -117,6 +122,9 @@ pub struct MicroSd {
     erase_start: Option<u32>,
     erase_end: Option<u32>,
     capacity_blocks: u32,
+    /// Backing image, read-only; blocks past its end read as zeros.
+    image: Vec<u8>,
+    /// Blocks written or erased since attach, over the image.
     blocks: BTreeMap<u32, Box<[u8; BLOCK_LEN]>>,
     /// Bumped on every store change, for the inspect artifact.
     generation: u64,
@@ -146,6 +154,7 @@ impl MicroSd {
             erase_start: None,
             erase_end: None,
             capacity_blocks: (units * 1024) as u32,
+            image: Vec::new(),
             blocks: BTreeMap::new(),
             generation: 0,
             blocks_written: 0,
@@ -153,18 +162,63 @@ impl MicroSd {
         }
     }
 
+    /// A card backed by `image`, sized to hold it (rounded up to a 512 KiB
+    /// CSD unit).
+    pub fn from_image(cs_pin: impl Into<String>, image: Vec<u8>) -> anyhow::Result<Self> {
+        Self::from_image_with_capacity(cs_pin, image, None)
+    }
+
+    /// A card backed by `image` with an explicit capacity in MiB, which must
+    /// hold the whole image. `None` sizes the card to the image.
+    pub fn from_image_with_capacity(
+        cs_pin: impl Into<String>,
+        image: Vec<u8>,
+        capacity_mib: Option<u64>,
+    ) -> anyhow::Result<Self> {
+        const UNIT: u64 = 512 * 1024;
+        let len = image.len() as u64;
+        let need_units = len.div_ceil(UNIT).max(1);
+        if need_units > 0x40_0000 {
+            anyhow::bail!("microsd: image of {len} bytes exceeds the 2 TiB SDXC CSD range");
+        }
+        let mut card = match capacity_mib {
+            Some(mib) => {
+                if mib * 2 < need_units {
+                    anyhow::bail!(
+                        "microsd: capacity_mib {mib} cannot hold a {len}-byte image \
+                         (needs at least {} KiB)",
+                        need_units * 512
+                    );
+                }
+                Self::with_capacity_mib(cs_pin, mib)
+            }
+            None => {
+                let mut card = Self::with_capacity_mib(cs_pin, 1);
+                card.capacity_blocks = (need_units * 1024) as u32;
+                card
+            }
+        };
+        card.image = image;
+        Ok(card)
+    }
+
+    /// Whole or partial 512-byte blocks the backing image covers.
+    pub fn image_blocks(&self) -> u32 {
+        self.image.len().div_ceil(BLOCK_LEN) as u32
+    }
+
     /// Capacity in 512-byte blocks.
     pub fn capacity_blocks(&self) -> u32 {
         self.capacity_blocks
     }
 
-    /// The stored contents of `lba`, or `None` if no write ever reached it
-    /// (it then reads as zeros).
+    /// The contents of `lba` if a write or erase changed it since attach, or
+    /// `None` (it then reads from the image, or as zeros past its end).
     pub fn block(&self, lba: u32) -> Option<&[u8; BLOCK_LEN]> {
         self.blocks.get(&lba).map(|b| &**b)
     }
 
-    /// Every block written so far, ascending.
+    /// Every block written or erased so far, ascending.
     pub fn written_lbas(&self) -> Vec<u32> {
         self.blocks.keys().copied().collect()
     }
@@ -185,7 +239,16 @@ impl MicroSd {
     }
 
     fn read_block(&self, lba: u32) -> [u8; BLOCK_LEN] {
-        self.blocks.get(&lba).map_or([0u8; BLOCK_LEN], |b| **b)
+        if let Some(b) = self.blocks.get(&lba) {
+            return **b;
+        }
+        let mut out = [0u8; BLOCK_LEN];
+        let start = lba as usize * BLOCK_LEN;
+        if start < self.image.len() {
+            let end = (start + BLOCK_LEN).min(self.image.len());
+            out[..end - start].copy_from_slice(&self.image[start..end]);
+        }
+        out
     }
 
     /// Queue a data block: one NAC filler byte, the start token, the payload
@@ -345,6 +408,14 @@ impl MicroSd {
                     let doomed: Vec<u32> = self.blocks.range(s..=e).map(|(k, _)| *k).collect();
                     for lba in doomed {
                         self.blocks.remove(&lba);
+                    }
+                    // Erased blocks read as zeros (SCR DATA_STAT_AFTER_ERASE
+                    // = 0), including those the image covers.
+                    let image_end = self.image_blocks();
+                    if s < image_end {
+                        for lba in s..=e.min(image_end - 1) {
+                            self.blocks.insert(lba, Box::new([0u8; BLOCK_LEN]));
+                        }
                     }
                     self.generation += 1;
                     self.out.push_back(self.r1(0));
@@ -558,6 +629,7 @@ impl SpiDevice for MicroSd {
                 "capacity_blocks": self.capacity_blocks,
                 "ready": !self.idle,
                 "written_lbas": lbas,
+                "image_blocks": self.image_blocks(),
                 "blocks_written": self.blocks_written,
                 "generation": self.generation,
                 "bytes_layout": "written_lbas order, block_size bytes each",
@@ -587,13 +659,14 @@ static MICROSD_METADATA: KitMetadata = KitMetadata {
     device_type: std::borrow::Cow::Borrowed("microsd"),
     label: std::borrow::Cow::Borrowed("microSD (SPI)"),
     summary: std::borrow::Cow::Borrowed(
-        "SPI-mode SDHC card with an in-memory block store (init, CSD/CID, single and multi-block read/write).",
+        "SPI-mode SDHC card backed by a disk image or an in-memory block store (init, CSD/CID, single and multi-block read/write).",
     ),
     detail: std::borrow::Cow::Borrowed(
         "CMD0/8/55+ACMD41/58/59/9/10/13/16/17/18/12/24/25/32/33/38 with R1/R2/R3/R7 framing, \
-             data tokens, data-response 0x05 and busy. Blocks never written read as zeros; \
-             written blocks are exposed in the `sd_card` inspect artifact. No filesystem is \
-             pre-formatted and no SDSC byte addressing.",
+             data tokens, data-response 0x05 and busy. An optional disk image backs the card \
+             (capacity follows its size); writes go to an overlay and never modify the image. \
+             Blocks outside the image that were never written read as zeros; blocks that differ \
+             from the image are exposed in the `sd_card` inspect artifact. No SDSC byte addressing.",
     ),
     transport: Transport::Spi,
     category: Category::Spi,
@@ -606,7 +679,24 @@ static MICROSD_METADATA: KitMetadata = KitMetadata {
         ConfigKey {
             name: std::borrow::Cow::Borrowed("capacity_mib"),
             ty: ConfigType::Int,
-            doc: std::borrow::Cow::Borrowed("Card capacity in MiB. Defaults to 1024."),
+            doc: std::borrow::Cow::Borrowed(
+                "Card capacity in MiB. Defaults to 1024, or to the image size when an image is given.",
+            ),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("image"),
+            ty: ConfigType::Str,
+            doc: std::borrow::Cow::Borrowed(
+                "Host path of a raw disk image, relative to the system manifest. Read when the \
+                 manifest is loaded from a file; the card never writes it back.",
+            ),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("image_base64"),
+            ty: ConfigType::Str,
+            doc: std::borrow::Cow::Borrowed(
+                "Raw disk image inline, base64 (RFC 4648). Alternative to `image`.",
+            ),
         },
     ]),
     labs: std::borrow::Cow::Borrowed(&[]),
@@ -619,11 +709,25 @@ impl PeripheralKit for MicroSdKit {
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
         let cs = ctx.config_str("cs_pin").unwrap_or("PA4").to_string();
         let mib = match ctx.config_i64("capacity_mib") {
-            Some(m) if m > 0 => m as u64,
+            Some(m) if m > 0 => Some(m as u64),
             Some(m) => anyhow::bail!("microsd: capacity_mib must be positive, got {m}"),
-            None => DEFAULT_CAPACITY_MIB,
+            None => None,
         };
-        let mut dev = MicroSd::with_capacity_mib(cs, mib);
+        if ctx.config_str("image").is_some() {
+            anyhow::bail!(
+                "microsd '{}': `image:` is a host path that SystemManifest::from_file inlines; \
+                 a manifest handed to the engine directly must carry `image_base64:`",
+                ctx.device_id()
+            );
+        }
+        let mut dev = match ctx.config_str("image_base64") {
+            Some(text) => {
+                let bytes = labwired_config::base64::decode(text)
+                    .map_err(|e| anyhow::anyhow!("microsd '{}': {e}", ctx.device_id()))?;
+                MicroSd::from_image_with_capacity(cs, bytes, mib)?
+            }
+            None => MicroSd::with_capacity_mib(cs, mib.unwrap_or(DEFAULT_CAPACITY_MIB)),
+        };
         dev.component_id = Some(ctx.device_id().to_string());
         ctx.attach_spi_device(Box::new(dev))?;
         Ok(())

@@ -992,6 +992,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // GPIO15 LED smoke runs in core-onboarding-smoke. No catalog board,
         // no silicon oracle, no differential. Promote when all three exist.
         "esp32c6fh4",
+        // AT32F421G8U7 bare chip (Artery, Cortex-M4). CRM and FLASH have
+        // their own profiles; DMA, EXINT, ADC, USART, GPIO, timers and WDT
+        // reuse the STM32 models. The committed Artery BSP smoke runs in the
+        // coverage matrix and vendor::at32f421_contract. No catalog board,
+        // no silicon oracle, no differential. Promote when all three exist.
+        "at32f421g8u7",
     ];
     // configs/chips id -> ratchet chip id (kw41z ships as mkw41z4.yaml).
     fn to_ratchet_id(stem: &str) -> &str {

@@ -227,8 +227,58 @@ impl SystemBus {
         if change.is_some() {
             self.collect_scheduled_events(idx);
         }
+        self.observe_gpio_edges_if_live();
         self.deliver_wire_input_edges(idx);
         change
+    }
+
+    /// Hand the output edges the peripheral at `idx` produced (a comparator
+    /// changing state) to every EXTI as internal-line edges. One length test
+    /// on chips without such a peripheral.
+    pub(crate) fn deliver_exti_line_edges(&mut self, idx: usize) {
+        if self.exti_line_driver_indices.is_empty() || !self.exti_line_driver_indices.contains(&idx)
+        {
+            return;
+        }
+        let mut edges = Vec::new();
+        self.peripherals[idx].dev.take_exti_line_edges(&mut edges);
+        for (line, before, after) in edges {
+            for sink in 0..self.peripherals.len() {
+                if self.peripherals[sink]
+                    .dev
+                    .exti_internal_line_edge(line, before, after)
+                {
+                    self.peripherals[sink].ticks_remaining = 0;
+                    self.collect_scheduled_events(sink);
+                    self.refresh_bus_tick_index(sink);
+                    self.refresh_legacy_tick_index(sink);
+                }
+            }
+        }
+    }
+
+    /// Drive the analog level on pad `pad` (a chip `pins:` label), in
+    /// millivolts, into everything that samples it: the ADC channel the chip
+    /// descriptor's `analog_pins:` assigns, and every peripheral that takes
+    /// the pad continuously ([`crate::Peripheral::set_analog_pad_input`], an
+    /// analog comparator). A comparator output edge this causes reaches the
+    /// EXTI at once. Returns whether anything took the level.
+    pub fn set_analog_pad_mv(&mut self, pad: &str, millivolts: u16) -> bool {
+        let pad = pad.to_ascii_uppercase();
+        let mut took = match self.analog_pin_map.get(&pad).cloned() {
+            Some((adc, channel)) => self.seed_adc_channel(&adc, channel, millivolts),
+            None => false,
+        };
+        for idx in 0..self.peripherals.len() {
+            if self.peripherals[idx]
+                .dev
+                .set_analog_pad_input(&pad, millivolts)
+            {
+                took = true;
+                self.deliver_exti_line_edges(idx);
+            }
+        }
+        took
     }
 
     /// The [`PortId`](crate::pins::PortId) the port at bus index `idx` was
@@ -364,6 +414,11 @@ impl SystemBus {
         // A select pad of an analog mux may have moved: re-route before the
         // next instruction can start a conversion.
         self.route_analog_muxes_on_write(idx);
+        // A write into a GPIO port can move its input word (OUT/DIR/PIN_CNF):
+        // raise the edge for the pad now, not at the next tick.
+        if self.gpio_edge_observers && self.is_edge_watched_gpio_port(idx) {
+            self.observe_gpio_edges_if_live();
+        }
         // A store to a GPIO input register (a device driving a pad through
         // `drive_idr_bit`) is an external edge like `set_gpio_input`.
         if self.timer_capture_wired {
@@ -532,11 +587,13 @@ impl SystemBus {
             if req.controller_idx >= self.peripherals.len() {
                 return true; // stale index → don't gate
             }
-            match self.peripherals[req.controller_idx]
-                .dev
-                .read_u32(req.reg_offset)
-            {
-                Ok(reg) => (reg >> req.bit) & 1 != 0,
+            let controller = &self.peripherals[req.controller_idx].dev;
+            match controller.read_u32(req.reg_offset) {
+                // A held peripheral reset blocks access like a stopped clock.
+                Ok(reg) => {
+                    (reg >> req.bit) & 1 != 0
+                        && !controller.clock_gate_reset_asserted(req.reg_offset, req.bit)
+                }
                 Err(_) => true, // unreadable controller register → fail open
             }
         });

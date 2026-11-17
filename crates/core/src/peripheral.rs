@@ -116,6 +116,9 @@ pub enum FlashStoreOutcome {
     /// Program the stored bytes: each array byte becomes `existing & new`, the
     /// 1-to-0 rule of NOR flash.
     Program,
+    /// The controller's behaviour for this store is not modelled: the bus
+    /// fails the access with this reason instead of guessing an outcome.
+    Unsupported(&'static str),
 }
 
 // ── Tick result ───────────────────────────────────────────────────────────
@@ -470,6 +473,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// `None` for every other peripheral, and for a name this controller does
     /// not have (which `resolve_clock_gates` turns into a hard config error
     /// rather than a silently ungated peripheral).
+    /// A reset controller holds the peripheral identified by this resolved
+    /// clock-gate bit in reset. Default false keeps existing families unchanged.
+    fn clock_gate_reset_asserted(&self, _register: u64, _bit: u8) -> bool {
+        false
+    }
+
+    /// This controller's reset bits act on the peripherals it clock-gates:
+    /// the bus calls [`Self::on_node_reset`] on a target when its reset is
+    /// asserted. Default false keeps every existing controller unchanged.
+    fn controls_peripheral_resets(&self) -> bool {
+        false
+    }
+
     fn clock_gate_reg_offset(&self, _name: &str) -> Option<u64> {
         None
     }
@@ -1123,6 +1139,18 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Route the CDC data a USB device controller sends to its scripted host
+    /// into a console capture sink (`None` detaches). A controller that
+    /// accepts it reads the device's bulk IN endpoints once its host has
+    /// enumerated and opened the port, as a terminal would. Returns false for
+    /// a peripheral that is not such a controller. Default false.
+    fn attach_usb_cdc_console(
+        &mut self,
+        _sink: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>,
+    ) -> bool {
+        false
+    }
+
     /// Deliver this console's TX bytes into a merged console stream as channel
     /// `ch` (see [`crate::console::ConsoleMerge`]). Returns false for a
     /// peripheral that is not a console that can be merged. Default false.
@@ -1316,11 +1344,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
     /// A CPU store of `width` bytes (1, 2 or 4) with `value` landed at byte
-    /// `offset` of the flash array. Only called on the peripheral that
-    /// [`Self::owns_flash_stores`], and never for device-originated writes
-    /// (`device_write_bypass`): the controller programs and erases the array
-    /// through those.
-    fn flash_cpu_store(&mut self, _offset: u64, _width: u8, _value: u32) -> FlashStoreOutcome {
+    /// `offset` of the flash array, whose current content there is `existing`
+    /// (little-endian, the same `width` bytes), so a controller can refuse
+    /// to program a location that is not erased. Only called on the
+    /// peripheral that [`Self::owns_flash_stores`], and never for
+    /// device-originated writes (`device_write_bypass`): the controller
+    /// programs and erases the array through those.
+    fn flash_cpu_store(
+        &mut self,
+        _offset: u64,
+        _width: u8,
+        _value: u32,
+        _existing: u32,
+    ) -> FlashStoreOutcome {
         FlashStoreOutcome::Commit
     }
     /// Opt-in manual flash page buffer and instruction-boundary commit
@@ -1421,6 +1457,32 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// as on silicon does so here. Default: nothing — the register state is
     /// kept, and firmware that re-initialises the block is unaffected.
     fn on_node_reset(&mut self) {}
+
+    /// Drive an analog pad level, in millivolts, into this peripheral when it
+    /// samples that pad continuously (an analog comparator). Returns whether
+    /// it took it. ADC channels keep their own seam,
+    /// [`Self::set_adc_channel_input`]; the bus fans one pad write out to
+    /// both (`SystemBus::set_analog_pad_mv`).
+    fn set_analog_pad_input(&mut self, _pad: &str, _millivolts: u16) -> bool {
+        false
+    }
+
+    /// Whether this peripheral drives internal EXTI lines (a comparator
+    /// output). Cached by the bus at attach; only such peripherals are asked
+    /// for [`Self::take_exti_line_edges`] after a write or an input change.
+    fn drives_exti_lines(&self) -> bool {
+        false
+    }
+
+    /// Move the `(line, before, after)` output edges this peripheral produced
+    /// since the last call into `out`, for the EXTI to latch.
+    fn take_exti_line_edges(&mut self, _out: &mut Vec<(u8, bool, bool)>) {}
+
+    /// An edge on internal EXTI `line` (16 and up: comparator, PVD, ...),
+    /// which has no GPIO port mux. Returns true when it set a pending bit.
+    fn exti_internal_line_edge(&mut self, _line: u8, _before: bool, _after: bool) -> bool {
+        false
+    }
 
     /// Put this peripheral on a timed network link
     /// ([`crate::network::timed_uart`]). Only a USART with a timed mode

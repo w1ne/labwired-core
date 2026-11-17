@@ -168,9 +168,13 @@ impl St7920 {
         self.cs_active_high = high;
     }
 
-    /// Display ON (D = 1), not asleep and not in standby.
+    /// A layer is on the glass (D = 1, or G = 1 for the graphic layer) and
+    /// the part is neither asleep nor in standby. G alone counts: Marlin's
+    /// RepRapDiscount init leaves D = 0 and only sets G, and those panels
+    /// show the picture (`marlin_rrd_init_shows_gdram_with_display_bit_clear`
+    /// in `tests/display/st7920_serial.rs`).
     pub fn lit(&self) -> bool {
-        self.display_on && !self.sleep && !self.standby
+        (self.display_on || self.graphics_on) && !self.sleep && !self.standby
     }
 
     fn instruction(&mut self, v: u8) {

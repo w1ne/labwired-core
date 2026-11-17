@@ -6,6 +6,7 @@
 
 pub mod adc;
 pub mod afio;
+pub mod analog_comparator;
 pub mod apollo4;
 pub mod armv7;
 pub mod avr_adc;
@@ -103,6 +104,7 @@ pub mod pwr;
 pub mod quadspi;
 pub mod ra_adc12;
 pub mod ra_agt;
+pub mod ra_can;
 pub mod ra_clock;
 pub mod ra_dac12;
 pub mod ra_gpt;
