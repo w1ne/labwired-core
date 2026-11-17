@@ -47,6 +47,12 @@ boards:
     path: examples/esp32h2-devkitm-1-n4s
     rust_targets: [riscv32imc-unknown-none-elf]
     gate: true
+  # ESP8684-DevKitM-1-H4X: fresh RV32IMC build and UART0 FIFO smoke.
+  - id: esp8684-devkitm-1-h4x
+    kind: sim-validate
+    path: examples/esp8684-devkitm-1-h4x
+    rust_targets: [riscv32imc-unknown-none-elf]
+    gate: true
   # Demand-rank 1 ESP32-family depth: current C61 DevKitC-1 N8R2 UART0 path.
   - id: esp32c61-devkitc-1-n8r2
     kind: sim-validate

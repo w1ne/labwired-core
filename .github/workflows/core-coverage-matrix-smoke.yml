@@ -145,6 +145,14 @@ jobs:
             profile_dir: release
             script: examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml
             system: configs/systems/esp32h2-devkitm-1-n4s.yaml
+          # ESP8684-DevKitM-1-H4X: C2-family single-core RV32IMC UART0 smoke.
+          - id: esp8684-devkitm-1-h4x
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp8684-devkitm-1-h4x-smoke
+            profile: release
+            profile_dir: release
+            script: examples/esp8684-devkitm-1-h4x/uart-smoke.yaml
+            system: configs/systems/esp8684-devkitm-1-h4x.yaml
           # Demand rank 1 ESP32-family coverage: C5-specific survey demand is
           # unmeasured, but the current C5-DevKitC-1 adds a new family SKU.
           - id: esp32c5-devkitc-1-n8r8

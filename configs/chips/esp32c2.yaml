@@ -1,0 +1,57 @@
+# Narrow ESP32-C2/ESP8684 profile for the ESP8684-DevKitM-1-H4X.
+#
+# Fast-boot profile: the simulator loads a bare ELF at its entry point; it does
+# not execute mask ROM, the second-stage bootloader, or clock startup. UART0's
+# FIFO/status head is the only modeled peripheral. Wi-Fi/BLE, GPIO, IO_MUX,
+# ADC, I2C, SPI, timers, and the addressable/discrete RGB LED are outside this
+# profile.
+#
+# Sources checked 2026-11-17:
+#   ESP-IDF ESP32-C2 memory map and UART AHB base:
+#     https://github.com/espressif/esp-idf/blob/master/components/soc/esp32c2/include/soc/soc.h
+#   ESP-IDF ESP32-C2 peripheral capabilities, 21 GPIOs and 2 UARTs:
+#     https://github.com/espressif/esp-idf/blob/master/components/soc/esp32c2/include/soc/soc_caps.h
+#   ESP8684-DevKitM-1 v1.1 user guide (H4X = 4 MB flash):
+#     https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c2/esp8684-devkitm-1/user_guide.html
+
+name: "esp32c2"
+arch: "riscv"
+core: "rv32imc"
+registers_count: 31
+cpu_hz: 120_000_000
+io_voltage_v: 3.3
+
+flash:
+  # ESP-IDF maps SPI flash through the 0x42000000 IROM cache window.
+  # The exact ESP8684-DevKitM-1-H4X module has 4 MiB of flash.
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  # ESP-IDF SOC_DRAM_LOW..HIGH: 0x3FCA0000..0x3FCE0000 (256 KiB).
+  base: 0x3FCA0000
+  size: "256KB"
+memory_regions:
+  # Separate instruction-side alias of the HP SRAM.
+  - name: "iram"
+    base: 0x4037C000
+    size: "272KB"
+  # Flash rodata cache window; larger than the installed flash image window
+  # only where ESP-IDF's SoC memory map explicitly defines the address range.
+  - name: "drom"
+    base: 0x3C000000
+    size: "4096KB"
+
+peripherals:
+  # ESP-IDF REG_UART_AHB_BASE(0) = 0x60000000, ETS_UART0_INUM = 5.
+  # UART0 is connected by the board's USB-to-UART bridge; J3 pin 2 is GPIO20/U0TXD
+  # and J3 pin 3 is GPIO19/U0RXD. The modeled profile captures FIFO output but
+  # does not yet route the UART signal to physical pad cells.
+  - id: "uart0"
+    type: "esp32c2_uart"
+    irq: 5
+    base_address: 0x60000000
+    size: "32B"
+    config:
+      echo_stdout: true
+      cpu_clock_hz: 120000000
+      uart_sclk_hz: 80000000
