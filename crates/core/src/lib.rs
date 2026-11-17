@@ -615,6 +615,14 @@ pub struct Machine<C: Cpu> {
     /// expensive u128 divide (and fan-out) on every instruction when the
     /// attached devices only need one update per simulated microsecond.
     next_i2c_time_cycle: u64,
+    /// Whether the current in-tree Machine::advance call may reuse its
+    /// attached-time-device presence probe. The public window runner exposes a
+    /// mutable bus to its callback, so it keeps probing at each boundary.
+    central_device_time_cache_enabled: bool,
+    /// Cached presence for the current Machine::advance call. Attachments may
+    /// change between public calls, but not while the in-tree runner holds
+    /// &mut self across all its internal CPU windows.
+    central_device_time_attached_cache: Option<bool>,
     /// Has this machine already told the fidelity census that its device time
     /// is DERIVED from `cpu_hz` rather than read off a modelled µs counter?
     ///
@@ -1312,6 +1320,8 @@ impl<C: Cpu> Machine<C> {
             i2c_time_controller_indices,
             last_i2c_time_us: u64::MAX,
             next_i2c_time_cycle: 0,
+            central_device_time_cache_enabled: false,
+            central_device_time_attached_cache: None,
             derived_device_time_noted: false,
             unpowered_rail_noted: false,
             net_drive_stop_from: u64::MAX,
@@ -1352,6 +1362,9 @@ impl<C: Cpu> Machine<C> {
         // saves. Most CPU steps do not cross a derived microsecond boundary.
         if self.i2c_time_controller_indices.is_empty()
             || (self.i2c_time_source_index.is_none()
+                && self.central_device_time_cache_enabled
+                && self.central_device_time_attached_cache == Some(false))
+            || (self.i2c_time_source_index.is_none()
                 && self.total_cycles < self.next_i2c_time_cycle)
         {
             return;
@@ -1384,11 +1397,23 @@ impl<C: Cpu> Machine<C> {
                 // No attached device needs a clock: skip the divide and the
                 // controller fan-out. Re-scanned at the next µs boundary, so a
                 // device attached later is picked up without re-construction.
-                if !self
-                    .i2c_time_controller_indices
-                    .iter()
-                    .any(|&idx| self.bus.peripherals[idx].dev.has_attached_time_devices())
-                {
+                let has_attached_time_devices = if self.central_device_time_cache_enabled {
+                    match self.central_device_time_attached_cache {
+                        Some(present) => present,
+                        None => {
+                            let present = self.i2c_time_controller_indices.iter().any(|&idx| {
+                                self.bus.peripherals[idx].dev.has_attached_time_devices()
+                            });
+                            self.central_device_time_attached_cache = Some(present);
+                            present
+                        }
+                    }
+                } else {
+                    self.i2c_time_controller_indices
+                        .iter()
+                        .any(|&idx| self.bus.peripherals[idx].dev.has_attached_time_devices())
+                };
+                if !has_attached_time_devices {
                     return;
                 }
                 // u128 so a long run cannot wrap: `total_cycles * 1_000_000`

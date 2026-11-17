@@ -154,6 +154,16 @@ impl<C: Cpu> Machine<C> {
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
         }
+        let cache_device_time_presence = !request.is_single();
+        if cache_device_time_presence {
+            self.central_device_time_cache_enabled = true;
+            self.central_device_time_attached_cache = None;
+        } else if self.central_device_time_cache_enabled {
+            // Recover only if a caller caught a panic from a previous advance.
+            // The ordinary single-step path leaves this state untouched.
+            self.central_device_time_cache_enabled = false;
+            self.central_device_time_attached_cache = None;
+        }
         let report = self.advance_inner(request, None);
         // Flush the derived device clock at the run boundary; the per-step
         // throttle otherwise stops one µs short when the last call lands just
@@ -170,6 +180,10 @@ impl<C: Cpu> Machine<C> {
         // A deferred secondary never outlives the call: whoever looks at the
         // machine next sees the core where lockstep would have left it.
         self.end_secondary_defer(self.total_cycles);
+        if cache_device_time_presence {
+            self.central_device_time_cache_enabled = false;
+            self.central_device_time_attached_cache = None;
+        }
         report
     }
 
@@ -205,6 +219,12 @@ impl<C: Cpu> Machine<C> {
     {
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
+        }
+        // A caught panic from an earlier in-tree advance must not suppress the
+        // runner's per-window attachment probes.
+        if self.central_device_time_cache_enabled {
+            self.central_device_time_cache_enabled = false;
+            self.central_device_time_attached_cache = None;
         }
         let report = self.advance_inner(request, Some(&mut run_window));
         if report.is_err() {
