@@ -1193,11 +1193,12 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/renode-onboarding/stm32h7-smoke.yaml
             system: configs/systems/onboarding/stm32h7.yaml
-          # The H753 descriptor keeps only the same modeled H7 surfaces as the
-          # shared smoke; its imported system is exercised directly.
+          # The H753 descriptor keeps the modeled H7 RCC, GPIOA/B/D, USART3,
+          # TIM2 and ADC1 surfaces exercised by the shared smoke.
           - id: stm32h753
             crate: firmware-stm32h743-smoke
             target: thumbv7em-none-eabi
+            features: stm32h743-tim2,stm32h743-adc1
             script: examples/renode-onboarding/stm32h753-smoke.yaml
             system: configs/systems/onboarding/stm32h753.yaml
           # The H747 Discovery profile runs only its Cortex-M7 core and keeps

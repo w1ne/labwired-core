@@ -1,8 +1,10 @@
 # Narrow imported STM32H753 profile used by the Renode onboarding smoke.
 # The imported catalogue listed many peripherals that are zero-answering stubs
-# in this engine. Only retain the H7 RCC, GPIOB/GPIOD, USART3 and TIM2 surfaces
-# used by the shared H7 fixture. The 1 MiB flash window is conservative for this
-# generic profile; ST lists 2 MiB for H753xI devices. The RAM window is DTCM.
+# in this engine. Only retain the H7 RCC, GPIOA/B/D, USART3, TIM2 and ADC1
+# surfaces used by the shared H7 fixture. ADC1 coverage is the regular one-shot
+# conversion on PA0/INP16; ADC2/3, common control, DMA, and injected paths are
+# not included. The 1 MiB flash window is conservative for this generic
+# profile; ST lists 2 MiB for H753xI devices. The RAM window is DTCM.
 name: stm32h753
 arch: arm
 core: cortex-m7
@@ -19,6 +21,13 @@ peripherals:
     size: 1KB
     config:
       profile: h7
+  - id: gpioPortA
+    type: gpio
+    base_address: 0x58020000
+    size: 1KB
+    clock: { reg: ahb4enr, bit: 0 }
+    config:
+      profile: stm32v2
   - id: gpioPortB
     type: gpio
     base_address: 0x58020400
@@ -52,3 +61,16 @@ peripherals:
     clock: { reg: apb1lenr, bit: 0 }
     config:
       width: 32
+  # RM0433: ADC1/2 share the 0x40022000 page; ADC2 begins at +0x100, so
+  # retain only the ADC1 window. RCC_AHB1ENR.ADC12EN (bit 5) gates access.
+  - id: adc1
+    type: adc
+    base_address: 0x40022000
+    size: 256B
+    irq: 18
+    clock: { reg: ahb1enr, bit: 5 }
+    config:
+      profile: h7
+analog_pins:
+  # STM32H753xI DS12110 maps PA0 to ADC1_INP16.
+  PA0: { peripheral: adc1, channel: 16 }
