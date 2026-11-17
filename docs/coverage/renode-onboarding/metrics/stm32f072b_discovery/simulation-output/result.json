@@ -59,7 +59,7 @@
           "tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
           "dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok",
           "crc word=0xDF8A8A2B seed=1 std=1 ok",
-          "adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok",
+          "adc in1=0x000003FF ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok",
           "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=",
           " pc=",
           " exc_return=0xFFFFFFF9 sp=",
@@ -118,23 +118,23 @@
     "type": "arm",
     "registers": [
       8,
-      134239351,
+      134238859,
       10,
+      3221225472,
+      3221225472,
       1073821696,
-      1073821696,
-      10000,
-      9952,
+      9951,
       536887280,
       0,
       0,
       0,
       0,
       85,
-      536887040,
-      134237863,
-      134237896
+      536887048,
+      134237255,
+      134237286
     ],
-    "pc": 134237896,
+    "pc": 134237286,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -147,7 +147,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "374555533cd3a632ebdd8965b6c49d278a1d25fbc9a90843ae21153d8843a4c4",
+  "firmware_hash": "53a903592dc8c6d9d81eeebbc842620f0b8247c07bc69774caa679f4f3d17ae3",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml",
@@ -396,6 +396,17 @@
           "transport": "gpio"
         },
         "artifacts": []
+      },
+      {
+        "id": "pot_adc_in1",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 1
+        },
+        "artifacts": []
       }
     ]
   },
@@ -420,27 +431,27 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 2911,
+            "cycle": 2711,
             "value": 1
           },
           {
-            "cycle": 4571,
+            "cycle": 4371,
             "value": 0
           },
           {
-            "cycle": 4573,
+            "cycle": 4373,
             "value": 1
           },
           {
-            "cycle": 4586,
+            "cycle": 4386,
             "value": 0
           },
           {
-            "cycle": 4588,
+            "cycle": 4388,
             "value": 1
           },
           {
-            "cycle": 4605,
+            "cycle": 4405,
             "value": 0
           }
         ],
@@ -448,31 +459,31 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 2899,
+            "cycle": 2699,
             "state": "0"
           },
           {
-            "cycle": 2911,
+            "cycle": 2711,
             "state": "1"
           },
           {
-            "cycle": 4571,
+            "cycle": 4371,
             "state": "0"
           },
           {
-            "cycle": 4573,
+            "cycle": 4373,
             "state": "1"
           },
           {
-            "cycle": 4586,
+            "cycle": 4386,
             "state": "0"
           },
           {
-            "cycle": 4588,
+            "cycle": 4388,
             "state": "1"
           },
           {
-            "cycle": 4605,
+            "cycle": 4405,
             "state": "0"
           }
         ],
@@ -499,68 +510,68 @@
       {
         "text": "STM32F072B-DISCO SMOKE",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle": 1000,
+        "end_cycle": 1000
       },
       {
         "text": "cpu=cortex-m0 uart=usart1",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle": 1000,
+        "end_cycle": 1000
       },
       {
         "text": "rcc reset=1 gate=1 ok",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle": 1000,
+        "end_cycle": 1000
       },
       {
         "text": "aircr prigroup=0 reserved=writes_ignored=1 ok",
         "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle": 1000,
+        "end_cycle": 11000
       },
       {
         "text": "usart irq u2=1 u3=1 u4=1 ok",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 released=1 ok",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "led=ld3 odr=0x00000040",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "led=ld4 odr=0x00000140",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "led=ld5 odr=0x00000340",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "led=ld6 odr=0x000003C0",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "leds walk=1 blink=1 off=1 ok",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       },
       {
         "text": "b1 idle=1 presses=1 pc_quiet=1 pa0=1 cleared=1 ok",
@@ -620,7 +631,7 @@
         "text": "tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
         "cycle_lo": 1210000,
         "cycle": 1220000,
-        "end_cycle": 1230000
+        "end_cycle": 1220000
       },
       {
         "text": "dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok",
@@ -635,13 +646,13 @@
         "end_cycle": 1230000
       },
       {
-        "text": "adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok",
+        "text": "adc in1=0x000003FF ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok",
         "cycle_lo": 1220000,
         "cycle": 1230000,
         "end_cycle": 1230000
       },
       {
-        "text": "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x0800164D pc=0x0800045E xpsr=0x01000000 exc_return=0xFFFFFFF9 sp=0x20003ED8 expected_sp=0x20003ED8 restored_msp=0x20003F00 returned=1 ok",
+        "text": "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08001623 pc=0x0800045E xpsr=0x01000000 exc_return=0xFFFFFFF9 sp=0x20003EE0 expected_sp=0x20003EE0 restored_msp=0x20003F08 returned=1 ok",
         "cycle_lo": 1220000,
         "cycle": 1230000,
         "end_cycle": 1230000
@@ -698,24 +709,24 @@
         "text": "systick late-tickint silent_wrap=1 byte_preserved=1 write_ignored=1 control=0x00000005 no_pending=first=1 read_clear=1 no_immediate=1 tickint_clear_pending=1 control=1 flag=1 next_wrap=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
         "cycle_lo": 1250000,
         "cycle": 1260000,
-        "end_cycle": 1270000
+        "end_cycle": 1260000
       },
       {
         "text": "systick cvr-clear countdown=started=1 pending_after_clear=0 pending_after_period=1 flag_before_clear=1 pending_survived=1 flag_cleared=1 handler_before_unmask=0x00000000 handler_ipsr=0x0000000F active=0x0000000F entries=0x00000001 thread_ipsr=0x00000000 vtor_restored=1 ok",
-        "cycle_lo": 1260000,
-        "cycle": 1270000,
+        "cycle_lo": 1250000,
+        "cycle": 1260000,
         "end_cycle": 1270000
       },
       {
         "text": "systick pending-clear hardware first_wrap=1 flag_survived=1 cleared=1 timer=1 read_clear=1 pending_stays_clear=1 second_wrap=1 pending_after_disable=1 countflag_after_disable=1 control_after_disable=0x00000006 cvr_stable=1 handler_before_unmask=0x00000000 ipsr=0x0000000F active=0x0000000F entries=0x00000001 pending_after=0 thread_ipsr=0x00000000 vtor_restored=1 ok",
         "cycle_lo": 1260000,
         "cycle": 1270000,
-        "end_cycle": 1280000
+        "end_cycle": 1270000
       },
       {
         "text": "systick reload-update rvr=0x0000001F preserved=1 first_wrap=1 pending_clear=1 next_reload=1 old=0x000000D6 current=0x000000CC ok",
-        "cycle_lo": 1270000,
-        "cycle": 1280000,
+        "cycle_lo": 1260000,
+        "cycle": 1270000,
         "end_cycle": 1280000
       },
       {
@@ -725,7 +736,7 @@
         "end_cycle": 1280000
       },
       {
-        "text": "systick clock-source ext_hclk8_delta=0x00000030 cpu_hclk_delta=0x00000185 ext_clksource=0 cpu_clksource=1 ratio_8_to_1=yes cleanup=yes ok",
+        "text": "systick clock-source ext_hclk8_delta=0x00000031 cpu_hclk_delta=0x00000185 ext_clksource=0 cpu_clksource=1 ratio_8_to_1=yes cleanup=yes ok",
         "cycle_lo": 1270000,
         "cycle": 1280000,
         "end_cycle": 1280000
@@ -747,6 +758,18 @@
   },
   "i2c_trace_evicted": true,
   "stimuli": [
+    {
+      "channel": "position",
+      "component": "pot_adc_in1",
+      "value": 25.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000
+    },
     {
       "channel": "pressed",
       "component": "b1",
@@ -798,14 +821,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 23588,
+    "text_bytes": 23104,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 23588,
+    "flash_used_bytes": 23104,
     "ram_static_bytes": 0,
     "flash_total_bytes": 131072,
     "ram_total_bytes": 16384,
-    "flash_used_pct": 18.0,
+    "flash_used_pct": 17.63,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -815,15 +838,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 16384,
-    "main_stack_high_water_bytes": 252,
-    "main_stack_free_min_bytes": 15500,
+    "main_stack_high_water_bytes": 312,
+    "main_stack_free_min_bytes": 15504,
     "main_stack_base": 536870912,
     "main_stack_top": 536887296,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 16384,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 15500,
+    "heap_free_min_bytes": 15504,
     "heap_base": 536870912,
     "heap_top": 536887296
   },
@@ -831,88 +854,88 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 202555,
-    "memory_writes": 4561,
-    "peripheral_accesses": 178784,
+    "memory_reads": 200728,
+    "memory_writes": 4600,
+    "peripheral_accesses": 178874,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134220856,
-        "count": 1562,
+        "pc": 134220810,
+        "count": 1559,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237896,
-        "count": 613,
-        "symbol": "firmware_stm32f072b_disco_smoke::__cortex_m_rt_main"
-      },
-      {
-        "pc": 134221028,
+        "pc": 134220980,
         "count": 196,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134221032,
+        "pc": 134220984,
         "count": 196,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134221026,
+        "pc": 134220978,
         "count": 195,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134221030,
+        "pc": 134220982,
         "count": 195,
         "symbol": "<i32>::overflowing_add"
       },
       {
-        "pc": 134221024,
+        "pc": 134220976,
         "count": 157,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134221022,
+        "pc": 134220974,
         "count": 156,
         "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
       },
       {
-        "pc": 134221034,
+        "pc": 134220986,
         "count": 156,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134221036,
+        "pc": 134220988,
         "count": 156,
         "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
       },
       {
-        "pc": 134221038,
+        "pc": 134220990,
         "count": 156,
         "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
       },
       {
-        "pc": 134220876,
+        "pc": 134220830,
         "count": 117,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134220878,
+        "pc": 134220832,
         "count": 117,
         "symbol": "firmware_stm32f072b_disco_smoke::wait_level"
       },
       {
-        "pc": 134221088,
+        "pc": 134221040,
         "count": 117,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134221090,
+        "pc": 134221042,
         "count": 117,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134220872,
+        "pc": 134220826,
+        "count": 79,
+        "symbol": "<i32>::overflowing_add"
+      },
+      {
+        "pc": 134221044,
         "count": 79,
         "symbol": "<i32>::overflowing_add"
       }

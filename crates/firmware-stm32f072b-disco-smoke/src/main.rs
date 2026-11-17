@@ -18,8 +18,9 @@
 //! the B1 edge through SYSCFG EXTICR into EXTI on the grouped vector, all nine
 //! timers on their own
 //! lines, DMA1 memory-to-memory on channel 1, CRC and the ADC on its internal
-//! channels (the board wires no analog source). SPI1/2 and I2C1 have no
-//! on-board slave and are proven by the stm32f072 fixture smoke instead.
+//! channels, plus a fixture potentiometer on ADC1 channel 1 (PA1). SPI1/2
+//! and I2C1 have no on-board slave and are proven by the stm32f072 fixture
+//! smoke instead.
 //! Bases and IRQ numbers are RM0091 and ST's CMSIS `stm32f072xb.h`.
 //!
 //! Peripheral IRQ checks read each line's ISPR bit without enabling it. The
@@ -220,9 +221,10 @@ const ADC_CR_ADSTART: u32 = 1 << 2;
 const ADC_CR_ADCAL: u32 = 1 << 31;
 const ADC_CCR_VREFEN: u32 = 1 << 22;
 const ADC_CCR_TSEN: u32 = 1 << 23;
+const ADC_CHANNEL_IN1: u32 = 1;
 /// 12-bit TS (IN16, 25 °C: 1.43 V + 5 K * 4.3 mV/K) and V_REFINT (IN17,
 /// 1.23 V) at V_DDA = 3.3 V (DS9826).
-const ADC_WANT: [u32; 2] = [1801, 1526];
+const ADC_WANT: [u32; 3] = [1023, 1801, 1526];
 
 const NVIC_ISPR0: u32 = 0xE000_E200;
 const NVIC_ISER0: u32 = 0xE000_E100;
@@ -2904,10 +2906,12 @@ fn check_crc() -> bool {
     ok
 }
 
-/// The ADC on its internal channels: calibration, ADRDY, then TS and
-/// V_REFINT as one 12-bit sequence with EOS on ADC1_COMP_IRQn = 12, and the
-/// internal channels reading 0 again once CCR switches them off.
+/// The ADC on PA1/channel 1 and the internal TS/V_REFINT channels: calibration,
+/// ADRDY, one 12-bit sequence with EOS on ADC1_COMP_IRQn = 12, and the internal
+/// channels reading 0 again once CCR switches them off.
 fn check_adc() -> bool {
+    let moder = rd(GPIOA + G_MODER) & !(0b11 << 2);
+    wr(GPIOA + G_MODER, moder | (0b11 << 2)); // PA1 analog mode.
     wr(ADC_CR, ADC_CR_ADCAL);
     let cal = wait_clear(ADC_CR, ADC_CR_ADCAL);
     wr(ADC_CCR, ADC_CCR_VREFEN | ADC_CCR_TSEN);
@@ -2915,11 +2919,11 @@ fn check_adc() -> bool {
     let ready = wait_set(ADC_ISR, ADC_ISR_ADRDY);
     wr(ADC_ISR, ADC_ISR_ADRDY);
     wr(ADC_SMPR, 7);
-    wr(ADC_CHSELR, (1 << 16) | (1 << 17));
+    wr(ADC_CHSELR, (1 << ADC_CHANNEL_IN1) | (1 << 16) | (1 << 17));
     unpend(ADC_LINE);
     wr(ADC_IER, ADC_ISR_EOS);
     wr(ADC_CR, ADC_CR_ADEN | ADC_CR_ADSTART);
-    let mut got = [0u32; 2];
+    let mut got = [0u32; 3];
     let mut eoc = true;
     for slot in got.iter_mut() {
         eoc &= wait_set(ADC_ISR, ADC_ISR_EOC);
@@ -2941,10 +2945,12 @@ fn check_adc() -> bool {
     wr(ADC_CR, ADC_CR_ADEN | ADC_CR_ADDIS);
     let off = wait_clear(ADC_CR, ADC_CR_ADEN);
 
-    puts("adc ts=");
+    puts("adc in1=");
     hex(got[0]);
-    puts(" vref=");
+    puts(" ts=");
     hex(got[1]);
+    puts(" vref=");
+    hex(got[2]);
     puts(" ");
     flag("cal", cal);
     flag("ready", ready);

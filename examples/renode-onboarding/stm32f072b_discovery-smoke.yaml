@@ -7,10 +7,11 @@
 # the stimuli below (port C selected in EXTICR1 first: no pend; then port A:
 # EXTI line 0 rising edge on the grouped vector 5), TIM1/2/3/6/7/14/15/16/17
 # width, counting and update line, DMA1 channel 1 memory-to-memory on line 9,
-# CRC-32, and the ADC on TS / V_REFINT (calibration, a 12-bit sequence with
-# EOS on line 12, both read 0 once CCR switches them off). SPI/I2C have no
-# on-board slave here; the stm32f072 fixture smoke covers them, and the ADC
-# pads. It does not claim the L3GD20, CAN, RTC, DAC, USB, TSC or the
+# CRC-32, and the ADC on a PA1 potentiometer fixture plus TS / V_REFINT
+# (calibration, a 12-bit sequence with EOS on line 12, with the internal
+# channels reading 0 once CCR switches them off). SPI/I2C have no on-board
+# slave here; the stm32f072 fixture smoke covers those external buses. It does
+# not claim the L3GD20, CAN, RTC, DAC, USB, TSC or the
 # watchdogs. AIRCR.PRIGROUP writes are checked to read zero on ARMv6-M. A
 # software-pended EXTI0_1 NVIC line then takes a real exception through a RAM
 # vector and verifies handler IPSR/IABR, the eight-word Cortex-M0 stack frame,
@@ -53,6 +54,9 @@ uart_injections:
   - uart: "usart2"
     bytes: "RS"
 stimuli:
+  - target: { component: "pot_adc_in1", channel: "position" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 25.0
   - target: { component: "b1", channel: "pressed" }
     trigger: !after_cycles { cycles: 400000 }
     value: 1.0
@@ -90,7 +94,7 @@ assertions:
       - "tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok"
       - "dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok"
       - "crc word=0xDF8A8A2B seed=1 std=1 ok"
-      - "adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok"
+      - "adc in1=0x000003FF ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok"
       - "irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr="
       - " pc="
       - " exc_return=0xFFFFFFF9 sp="

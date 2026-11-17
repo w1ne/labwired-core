@@ -6,6 +6,15 @@
 
 name: stm32f072b_discovery
 chip: ../../chips/onboarding/stm32f072b_discovery.yaml
+# A fixture potentiometer drives ADC1 channel 1 (PA1) so the board smoke
+# verifies an external analog input as well as the internal temperature/VREF
+# channels. It is a test input, not an on-board STM32F072B-DISCO component.
+external_devices:
+  - id: "pot_adc_in1"
+    type: "potentiometer"
+    connection: "adc"
+    config:
+      channel: 1
 # STM32F072B-DISCO board IO (UM1690 §6.4/§6.5). Renode's board .repl wires one
 # LED (PC6) and the button (PA0); the board has four user LEDs, all active
 # high: LD3 red PC6, LD4 orange PC8, LD5 green PC9, LD6 blue PC7. B1 USER
