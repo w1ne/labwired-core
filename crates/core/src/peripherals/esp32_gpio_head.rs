@@ -265,9 +265,9 @@ impl EspGpioHead {
             self.input_word(false)
         } else if off == l.input1 {
             self.input_word(true)
-        } else if off == l.strap || l.is_w1t(off) {
-            0
         } else {
+            // STRAP and W1T registers are RAZ on read (writes to W1T are
+            // handled in write_word). Unmapped offsets in this window are RAZ too.
             0
         }
     }
