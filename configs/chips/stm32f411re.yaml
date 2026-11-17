@@ -402,6 +402,15 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32f411/dbg.yaml"
 
+# Narrow official NUCLEO-F411RE pin table from ST UM1724 (already cited in
+# configs/systems/nucleo-f411re.yaml): LD2 on PA5, USART2 VCP on PA2/PA3.
+# This is not the complete LQFP64 bond-out; analog_pins below still lists the
+# ADC pads from DS10314.
+pins:
+  PA2: { gpio: "gpioa", bit: 2, functions: [{ type: uart, peripheral: "usart2", role: tx }] }
+  PA3: { gpio: "gpioa", bit: 3, functions: [{ type: uart, peripheral: "usart2", role: rx }] }
+  PA5: { gpio: "gpioa", bit: 5 }
+
 # Regular ADC inputs by pad, from the STM32F411xC/xE datasheet (DS10314), LQFP64 pinout: ADC1_IN0..IN15.
 # Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
 analog_pins:
