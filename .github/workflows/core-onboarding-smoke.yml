@@ -1202,10 +1202,11 @@ jobs:
             script: examples/renode-onboarding/stm32h753-smoke.yaml
             system: configs/systems/onboarding/stm32h753.yaml
           # The H747 Discovery profile runs only its Cortex-M7 core and keeps
-          # the bounded H7 RCC, GPIOB/GPIOD, and USART3 smoke surface.
+          # the bounded H7 RCC, GPIOA/B/D, USART3, TIM2, and ADC1 smoke surface.
           - id: stm32h747-disco
             crate: firmware-stm32h743-smoke
             target: thumbv7em-none-eabi
+            features: stm32h743-tim2,stm32h743-adc1
             script: examples/renode-onboarding/stm32h747-disco-smoke.yaml
             system: configs/systems/onboarding/stm32h747-disco.yaml
           # The generic imported H747 chip descriptor uses the same bounded

@@ -1,8 +1,8 @@
 # Bounded STM32H747I-DISCO profile for the imported Cortex-M7 register smoke.
 # The MCU has Cortex-M7 and Cortex-M4 cores, 2 MiB flash, and 1 MiB total RAM
 # (ST UM2411 / DS12930). This profile runs only M7 and maps only the 128 KiB
-# DTCM window and H7 RCC, GPIOB/GPIOD, USART3 and TIM2 exercised by the smoke.
-# Other cores and peripherals from the Renode import are intentionally omitted.
+# DTCM window and H7 RCC, GPIOA/B/D, USART3, TIM2 and ADC1 surfaces exercised
+# by the smoke. Other cores and peripherals from the Renode import are omitted.
 name: stm32h747-disco
 arch: arm
 core: cortex-m7
@@ -19,6 +19,13 @@ peripherals:
     size: 1KB
     config:
       profile: h7
+  - id: gpioPortA
+    type: gpio
+    base_address: 0x58020000
+    size: 1KB
+    clock: { reg: ahb4enr, bit: 0 }
+    config:
+      profile: stm32v2
   - id: gpioPortB
     type: gpio
     base_address: 0x58020400
@@ -54,3 +61,18 @@ peripherals:
     clock: { reg: apb1lenr, bit: 0 }
     config:
       width: 32
+  # RM0399 maps ADC1/2 at 0x40022000 and gates them with
+  # RCC_AHB1ENR.ADC12EN (bit 5). Only ADC1's window is retained. The smoke
+  # exercises regular one-shot ADC1_INP16; common control, ADC2, DMA and
+  # injected conversions are not claimed.
+  - id: adc1
+    type: adc
+    base_address: 0x40022000
+    size: 256B
+    irq: 18
+    clock: { reg: ahb1enr, bit: 5 }
+    config:
+      profile: h7
+analog_pins:
+  # DS12930 lists PA0 as ADC1_INP16 on STM32H747xI/G.
+  PA0: { peripheral: adc1, channel: 16 }
