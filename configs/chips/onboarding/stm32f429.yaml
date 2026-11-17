@@ -48,6 +48,13 @@ peripherals:
     size: 1KB
     config:
       profile: stm32v2
+  - id: gpioPortB
+    type: stm32_gpioport
+    bus: sysbus
+    base_address: 0x40020400
+    size: 1KB
+    config:
+      profile: stm32v2
   - id: gpioPortD
     type: stm32_gpioport
     bus: sysbus
@@ -74,6 +81,21 @@ peripherals:
     clock: { reg: apb1enr, bit: 0 }
     config:
       width: 32
+  # ST RM0090: I2C1 is the legacy F4 controller at 0x40005400, clocked by
+  # APB1ENR.I2C1EN and routed to PB6/PB7 with AF4 per the STM32F429 datasheet.
+  # It has separate event and error vectors; the smoke reads an attached BME280.
+  # Sources: https://www.st.com/resource/en/reference_manual/dm00031020-stm32f405-415-stm32f407-417-stm32f427-437-and-stm32f429-439-advanced-arm-based-32-bit-mcus-stmicroelectronics.pdf
+  #          https://www.st.com/resource/en/datasheet/stm32f429zi.pdf
+  - id: i2c1
+    type: i2c
+    bus: sysbus
+    base_address: 0x40005400
+    size: 1KB
+    irq: 31
+    clock: { reg: apb1enr, bit: 21 }
+    config:
+      profile: stm32f1
+      irq_error: 32
   # RM0090: SPI1 is the classic F4 block at 0x40013000, clocked by
   # RCC_APB2ENR.SPI1EN (bit 12), with PA4 chip select and AF5 on PA5..PA7.
   - id: spi1

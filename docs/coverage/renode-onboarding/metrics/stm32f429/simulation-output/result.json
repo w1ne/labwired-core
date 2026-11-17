@@ -60,6 +60,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "i2c1 bme280_id=00000060 gated=1 clock=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "fpu m4f cpacr=1 mvfr=1 add=1 ok"
       },
       "passed": true
@@ -89,24 +95,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      4096,
-      268435456,
-      29440,
+      31232,
       0,
-      4352,
+      3221225472,
+      54,
+      1,
       1073875988,
       1073759232,
       537001968,
+      2228225,
+      1,
       3,
-      1,
-      0,
-      8,
-      1,
-      537001856,
       1073872896,
-      134237874
+      134242043,
+      537001856,
+      134240209,
+      134241386
     ],
-    "pc": 134237874,
+    "pc": 134241386,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -119,7 +125,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "d4f10834351b531f6514e7b1d759fbfded913535155979c88309f5b37a61a628",
+  "firmware_hash": "3f132c484834e875881d0d7d9288cc4f80ea96145f67768a018ec00c50624c98",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-stm32f429-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f429.yaml",
@@ -156,6 +162,13 @@
         "artifacts": []
       },
       {
+        "name": "gpioPortB",
+        "kind": "native",
+        "base": 1073873920,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "gpioPortD",
         "kind": "native",
         "base": 1073875968,
@@ -175,6 +188,56 @@
         "base": 1073741824,
         "registers": [],
         "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1073763328,
+        "registers": [],
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x76",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 32768,
+                "PRESS": 8388608,
+                "STATUS": 0,
+                "TEMP": 8388608
+              },
+              "supply_generation": null
+            }
+          }
+        ]
       },
       {
         "name": "spi1",
@@ -221,6 +284,60 @@
     ],
     "devices": [
       {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c1",
+          "address": 118
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 50.0,
+                "pressure": 1013.25,
+                "temperature": 25.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 0,
+                "CTRL_MEAS": 0,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 32768,
+                "PRESS": 8388608,
+                "STATUS": 0,
+                "TEMP": 8388608
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      },
+      {
         "id": "tc_spi1",
         "device_type": "max31855",
         "declared": true,
@@ -265,83 +382,83 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 5366,
+            "cycle": 7142,
             "value": 1
           },
           {
-            "cycle": 46618,
+            "cycle": 48395,
             "value": 0
           },
           {
-            "cycle": 87871,
+            "cycle": 89649,
             "value": 1
           },
           {
-            "cycle": 129123,
+            "cycle": 130902,
             "value": 0
           },
           {
-            "cycle": 170376,
+            "cycle": 172156,
             "value": 1
           },
           {
-            "cycle": 211628,
+            "cycle": 213409,
             "value": 0
           },
           {
-            "cycle": 252881,
+            "cycle": 254663,
             "value": 1
           },
           {
-            "cycle": 294133,
+            "cycle": 295916,
             "value": 0
           },
           {
-            "cycle": 335386,
+            "cycle": 337170,
             "value": 1
           },
           {
-            "cycle": 376638,
+            "cycle": 378423,
             "value": 0
           },
           {
-            "cycle": 417891,
+            "cycle": 419677,
             "value": 1
           },
           {
-            "cycle": 459143,
+            "cycle": 460930,
             "value": 0
           },
           {
-            "cycle": 500396,
+            "cycle": 502184,
             "value": 1
           },
           {
-            "cycle": 541648,
+            "cycle": 543437,
             "value": 0
           },
           {
-            "cycle": 582901,
+            "cycle": 584691,
             "value": 1
           },
           {
-            "cycle": 624153,
+            "cycle": 625944,
             "value": 0
           },
           {
-            "cycle": 665406,
+            "cycle": 667198,
             "value": 1
           },
           {
-            "cycle": 706658,
+            "cycle": 708451,
             "value": 0
           },
           {
-            "cycle": 747911,
+            "cycle": 749705,
             "value": 1
           },
           {
-            "cycle": 789163,
+            "cycle": 790958,
             "value": 0
           }
         ],
@@ -353,83 +470,83 @@
             "state": "0"
           },
           {
-            "cycle": 5366,
+            "cycle": 7142,
             "state": "1"
           },
           {
-            "cycle": 46618,
+            "cycle": 48395,
             "state": "0"
           },
           {
-            "cycle": 87871,
+            "cycle": 89649,
             "state": "1"
           },
           {
-            "cycle": 129123,
+            "cycle": 130902,
             "state": "0"
           },
           {
-            "cycle": 170376,
+            "cycle": 172156,
             "state": "1"
           },
           {
-            "cycle": 211628,
+            "cycle": 213409,
             "state": "0"
           },
           {
-            "cycle": 252881,
+            "cycle": 254663,
             "state": "1"
           },
           {
-            "cycle": 294133,
+            "cycle": 295916,
             "state": "0"
           },
           {
-            "cycle": 335386,
+            "cycle": 337170,
             "state": "1"
           },
           {
-            "cycle": 376638,
+            "cycle": 378423,
             "state": "0"
           },
           {
-            "cycle": 417891,
+            "cycle": 419677,
             "state": "1"
           },
           {
-            "cycle": 459143,
+            "cycle": 460930,
             "state": "0"
           },
           {
-            "cycle": 500396,
+            "cycle": 502184,
             "state": "1"
           },
           {
-            "cycle": 541648,
+            "cycle": 543437,
             "state": "0"
           },
           {
-            "cycle": 582901,
+            "cycle": 584691,
             "state": "1"
           },
           {
-            "cycle": 624153,
+            "cycle": 625944,
             "state": "0"
           },
           {
-            "cycle": 665406,
+            "cycle": 667198,
             "state": "1"
           },
           {
-            "cycle": 706658,
+            "cycle": 708451,
             "state": "0"
           },
           {
-            "cycle": 747911,
+            "cycle": 749705,
             "state": "1"
           },
           {
-            "cycle": 789163,
+            "cycle": 790958,
             "state": "0"
           }
         ],
@@ -494,10 +611,19 @@
         "cycle_lo": 1000,
         "cycle": 11000,
         "end_cycle": 11000
+      },
+      {
+        "text": "i2c1 bme280_id=00000060 gated=1 clock=1 ok",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       }
     ],
     "dropped_lines": 0
   },
+  "i2c_addresses": [
+    118
+  ],
   "stimuli": [
     {
       "channel": "position",
@@ -514,14 +640,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 20860,
+    "text_bytes": 24332,
     "data_bytes": 0,
     "bss_bytes": 8,
-    "flash_used_bytes": 20860,
+    "flash_used_bytes": 24332,
     "ram_static_bytes": 8,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
-    "flash_used_pct": 1.99,
+    "flash_used_pct": 2.32,
     "ram_static_pct": 0.01,
     "notes": [
       "section_sum_not_bin_image",
@@ -531,15 +657,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 131064,
-    "main_stack_high_water_bytes": 124,
-    "main_stack_free_min_bytes": 130736,
+    "main_stack_high_water_bytes": 168,
+    "main_stack_free_min_bytes": 130732,
     "main_stack_base": 536870920,
     "main_stack_top": 537001984,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 131064,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 130736,
+    "heap_free_min_bytes": 130732,
     "heap_base": 536870920,
     "heap_top": 537001984
   },
@@ -547,96 +673,96 @@
     "cycles": 800000,
     "instructions": 800000,
     "steps_executed": 800000,
-    "memory_reads": 3927,
-    "memory_writes": 135,
-    "peripheral_accesses": 773493,
+    "memory_reads": 4377,
+    "memory_writes": 136,
+    "peripheral_accesses": 772227,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134237718,
-        "count": 40,
+        "pc": 134241116,
+        "count": 79,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237730,
-        "count": 40,
+        "pc": 134241244,
+        "count": 79,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237826,
-        "count": 40,
+        "pc": 134241270,
+        "count": 79,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237838,
-        "count": 40,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134237886,
-        "count": 40,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134237710,
-        "count": 39,
+        "pc": 134241114,
+        "count": 78,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134237712,
-        "count": 39,
+        "pc": 134241118,
+        "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237716,
-        "count": 39,
+        "pc": 134241128,
+        "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237722,
-        "count": 39,
+        "pc": 134241130,
+        "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237724,
-        "count": 39,
+        "pc": 134241184,
+        "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237728,
-        "count": 39,
+        "pc": 134241186,
+        "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237734,
-        "count": 39,
+        "pc": 134241188,
+        "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237738,
-        "count": 39,
+        "pc": 134241190,
+        "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237740,
-        "count": 39,
+        "pc": 134241192,
+        "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237744,
-        "count": 39,
+        "pc": 134241194,
+        "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134237746,
-        "count": 39,
+        "pc": 134241256,
+        "count": 78,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134241258,
+        "count": 78,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134241260,
+        "count": 78,
         "symbol": "core::ptr::read_volatile"
       }
     ],
     "stalled_poll": {
       "peripheral": "gpioPortD",
       "offset": 20,
-      "accesses": 10508
+      "accesses": 8768
     }
   }
 }

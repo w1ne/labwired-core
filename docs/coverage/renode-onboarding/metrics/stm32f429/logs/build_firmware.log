@@ -19,12 +19,12 @@ warning: unstable feature specified for `-Ctarget-feature`: `vfp4`
   = note: this feature is not stably supported; its behavior can change in the future
 
 warning: unnecessary `unsafe` block
-   --> crates/firmware-stm32f429-smoke/src/main.rs:111:18
+   --> crates/firmware-stm32f429-smoke/src/main.rs:131:18
     |
-111 |     let record = unsafe { core::ptr::addr_of_mut!(TIM2_IRQ_RECORD).cast::<u32>() };
+131 |     let record = unsafe { core::ptr::addr_of_mut!(TIM2_IRQ_RECORD).cast::<u32>() };
     |                  ^^^^^^ unnecessary `unsafe` block
     |
     = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
 
 warning: `firmware-stm32f429-smoke` (bin "firmware-stm32f429-smoke") generated 2 warnings
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.96s
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.46s

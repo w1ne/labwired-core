@@ -5,3 +5,4 @@ STM32F429 PSP tailchain PASS
 fpu m4f cpacr=1 mvfr=1 add=1 ok
 adc1 in1=000003FF gated=1 clock=1 eoc=1 ok
 spi1 max31855=01901600 gated=1 clock=1 txeirq=1 rearm=0 rxneirq=1 released=1 ok
+i2c1 bme280_id=00000060 gated=1 clock=1 ok

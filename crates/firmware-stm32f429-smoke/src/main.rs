@@ -16,6 +16,7 @@ const RCC_APB1ENR: *mut u32 = (RCC + 0x40) as *mut u32;
 const RCC_APB2ENR: *mut u32 = (RCC + 0x44) as *mut u32;
 
 const GPIOA: u32 = 0x4002_0000;
+const GPIOB: u32 = 0x4002_0400;
 const GPIOD: u32 = 0x4002_0C00;
 const USART2: u32 = 0x4000_4400;
 
@@ -89,6 +90,25 @@ const SPI1_RXNE: u32 = 1;
 const SPI1_TXE: u32 = 1 << 1;
 #[cfg(feature = "stm32f429-spi1")]
 const SPI1_BSY: u32 = 1 << 7;
+
+#[cfg(feature = "stm32f429-i2c1")]
+const I2C1: u32 = 0x4000_5400;
+#[cfg(feature = "stm32f429-i2c1")]
+const I2C1_CR1: *mut u32 = I2C1 as *mut u32;
+#[cfg(feature = "stm32f429-i2c1")]
+const I2C1_CR2: *mut u32 = (I2C1 + 0x04) as *mut u32;
+#[cfg(feature = "stm32f429-i2c1")]
+const I2C1_OAR1: *mut u32 = (I2C1 + 0x08) as *mut u32;
+#[cfg(feature = "stm32f429-i2c1")]
+const I2C1_DR: *mut u32 = (I2C1 + 0x10) as *mut u32;
+#[cfg(feature = "stm32f429-i2c1")]
+const I2C1_SR1: *const u32 = (I2C1 + 0x14) as *const u32;
+#[cfg(feature = "stm32f429-i2c1")]
+const I2C1_SR2: *const u32 = (I2C1 + 0x18) as *const u32;
+#[cfg(feature = "stm32f429-i2c1")]
+const I2C1_CCR: *mut u32 = (I2C1 + 0x1C) as *mut u32;
+#[cfg(feature = "stm32f429-i2c1")]
+const I2C1_TRISE: *mut u32 = (I2C1 + 0x20) as *mut u32;
 
 #[cfg(feature = "stm32f429-tim2")]
 static mut TIM2_IRQ_RECORD: [u32; 2] = [0; 2];
@@ -320,6 +340,104 @@ fn wait_spi1(address: *const u32, mask: u32, want: u32) -> bool {
         core::hint::spin_loop();
     }
     false
+}
+
+#[cfg(feature = "stm32f429-i2c1")]
+fn wait_i2c1(mask: u32, want: u32) -> bool {
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(I2C1_SR1) } & mask == want {
+            return true;
+        }
+        core::hint::spin_loop();
+    }
+    false
+}
+
+#[cfg(feature = "stm32f429-i2c1")]
+fn clear_i2c1_addr() {
+    // The legacy F4 controller clears ADDR after the SR1-then-SR2 read pair.
+    unsafe {
+        let _ = read_volatile(I2C1_SR1);
+        let _ = read_volatile(I2C1_SR2);
+    }
+}
+
+/// Read BME280's chip ID over the imported F429's legacy I2C1 controller.
+#[cfg(feature = "stm32f429-i2c1")]
+fn smoke_i2c1() -> bool {
+    const I2C1EN: u32 = 1 << 21;
+    const BME280_ADDRESS: u8 = 0x76;
+
+    let (gated, clock) = unsafe {
+        // A CR1 write while APB1 is gated must not reach the peripheral.
+        write_volatile(I2C1_CR1, 1);
+        let gated = read_volatile(I2C1_CR1) == 0;
+        write_volatile(RCC_AHB1ENR, read_volatile(RCC_AHB1ENR) | (1 << 1));
+        write_volatile(RCC_APB1ENR, read_volatile(RCC_APB1ENR) | I2C1EN);
+        let clock = read_volatile(RCC_APB1ENR) & I2C1EN != 0;
+
+        // PB6/PB7 are I2C1 SCL/SDA on AF4; real-board open-drain setup.
+        register_rmw(GPIOB + MODER, 0xF << 12, 0xA << 12);
+        register_rmw(GPIOB + AFRL, 0xFF << 24, 0x44 << 24);
+        register_rmw(GPIOB + 0x04, (1 << 6) | (1 << 7), (1 << 6) | (1 << 7));
+
+        // FREQ=16 MHz, standard-mode 100 kHz, and the RM0090 OAR1 reserved bit.
+        write_volatile(I2C1_CR2, 16);
+        write_volatile(I2C1_CCR, 80);
+        write_volatile(I2C1_TRISE, 17);
+        write_volatile(I2C1_OAR1, 1 << 14);
+        write_volatile(I2C1_CR1, 1); // PE; ACK stays clear for a one-byte read.
+
+        // Select BME280 register 0xD0, then repeated-START into a one-byte read.
+        write_volatile(I2C1_CR1, 1 | (1 << 8));
+        (gated, clock)
+    };
+    let start = wait_i2c1(1 << 0, 1 << 0);
+    if !start {
+        send(b"i2c1 bme280_id=00000000 gated=0 clock=0 FAIL\r\n");
+        return false;
+    }
+    unsafe { write_volatile(I2C1_DR, u32::from(BME280_ADDRESS << 1)) };
+    if !wait_i2c1(1 << 1, 1 << 1) {
+        return false;
+    }
+    clear_i2c1_addr();
+    unsafe { write_volatile(I2C1_DR, 0xD0) };
+    if !wait_i2c1(1 << 2, 1 << 2) {
+        return false;
+    }
+
+    register_rmw(I2C1, 0, 1 << 8);
+    if !wait_i2c1(1 << 0, 1 << 0) {
+        return false;
+    }
+    unsafe { write_volatile(I2C1_DR, u32::from((BME280_ADDRESS << 1) | 1)) };
+    if !wait_i2c1(1 << 1, 1 << 1) {
+        return false;
+    }
+    clear_i2c1_addr();
+    register_rmw(I2C1, 0, 1 << 9); // STOP after the byte.
+    if !wait_i2c1(1 << 6, 1 << 6) {
+        return false;
+    }
+    let chip_id = unsafe { read_volatile(I2C1_DR) & 0xFF };
+    let mut idle = false;
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(I2C1_SR2) } & 0x0002 == 0 {
+            idle = true;
+            break;
+        }
+    }
+
+    let ok = gated && clock && start && idle && chip_id == 0x60;
+    send(b"i2c1 bme280_id=");
+    send_hex(chip_id);
+    send(b" gated=");
+    send(if gated { b"1" } else { b"0" });
+    send(b" clock=");
+    send(if clock { b"1" } else { b"0" });
+    send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
+    ok
 }
 
 const SYSTICK_CSR: u32 = 0xE000_E010;
@@ -751,6 +869,9 @@ fn main() -> ! {
 
     #[cfg(feature = "stm32f429-spi1")]
     let _spi1_ok = smoke_spi1();
+
+    #[cfg(feature = "stm32f429-i2c1")]
+    let _i2c1_ok = smoke_i2c1();
 
     loop {
         set_led(true);

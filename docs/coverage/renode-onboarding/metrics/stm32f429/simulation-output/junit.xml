@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="10" failures="0" errors="0" time="0.126001">
+<testsuite name="labwired" tests="11" failures="0" errors="0" time="0.167179">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="d4f10834351b531f6514e7b1d759fbfded913535155979c88309f5b37a61a628"/>
+    <property name="firmware_hash" value="3f132c484834e875881d0d7d9288cc4f80ea96145f67768a018ec00c50624c98"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.126001">
+  <testcase classname="labwired" name="run" time="0.167179">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32F4 shared profile smoke" time="0.000000">
   </testcase>
@@ -17,12 +17,14 @@
   </testcase>
   <testcase classname="labwired" name="assertion 5: uart_contains: spi1 max31855=01901600 gated=1 clock=1 txeirq=1 rearm=0 rxneirq=1 released=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 6: uart_contains: fpu m4f cpacr=1 mvfr=1 add=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 6: uart_contains: i2c1 bme280_id=00000060 gated=1 clock=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 7: uart_contains: adc1 in1=000003FF gated=1 clock=1 eoc=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 7: uart_contains: fpu m4f cpacr=1 mvfr=1 add=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 8: gpio_edges: gpioPortD:12 &gt;= 1 edges" time="0.000000">
+  <testcase classname="labwired" name="assertion 8: uart_contains: adc1 in1=000003FF gated=1 clock=1 eoc=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 9: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 9: gpio_edges: gpioPortD:12 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>
