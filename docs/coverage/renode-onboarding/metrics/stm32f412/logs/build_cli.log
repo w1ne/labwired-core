@@ -17,7 +17,7 @@ workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
    Compiling labwired-core v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/core)
    Compiling labwired-loader v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/loader)
    Compiling labwired-gdbstub v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/gdbstub)
-   Compiling svd-ingestor v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/svd-ingestor)
    Compiling labwired-fuzz v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/labwired-fuzz)
+   Compiling svd-ingestor v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/svd-ingestor)
    Compiling labwired-cli v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/cli)
-    Finished `dev` profile [optimized + debuginfo] target(s) in 6m 00s
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 58s

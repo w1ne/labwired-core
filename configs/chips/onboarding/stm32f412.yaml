@@ -46,3 +46,17 @@ peripherals:
     bus: sysbus
     base_address: 0x40023800
     size: 1KB
+    config:
+      profile: stm32f4
+  # ADC1 IN1 on PA1 is exercised by the exact-import smoke.
+  - id: adc1
+    type: adc
+    bus: sysbus
+    base_address: 0x40012000
+    size: 1KB
+    irq: 18
+    clock: { reg: apb2enr, bit: 8 }
+    config:
+      profile: stm32f4
+analog_pins:
+  PA1: { peripheral: adc1, channel: 1 }

@@ -8,6 +8,7 @@ license = "MIT"
 [features]
 stm32f429-m4f-fpu = []
 stm32f429-adc1 = []
+stm32f412-adc1 = []
 
 [dependencies]
 cortex-m-rt = "0.7"

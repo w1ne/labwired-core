@@ -80,7 +80,7 @@ fn set_led(on: bool) {
 
 /// Convert ADC1 channel 1 from the 25% PA1 test fixture. At 0.825 V against
 /// a 3.3 V reference, the STM32F4 12-bit result is floor(0.25 * 4095) = 0x03FF.
-#[cfg(feature = "stm32f429-adc1")]
+#[cfg(any(feature = "stm32f429-adc1", feature = "stm32f412-adc1"))]
 fn smoke_adc1() -> bool {
     const ADC1: u32 = 0x4001_2000;
     const ADC_SR: *const u32 = ADC1 as *const u32;
@@ -449,7 +449,7 @@ fn main() -> ! {
     #[cfg(feature = "stm32f429-m4f-fpu")]
     m4f_fpu_smoke::run();
 
-    #[cfg(feature = "stm32f429-adc1")]
+    #[cfg(any(feature = "stm32f429-adc1", feature = "stm32f412-adc1"))]
     let _adc1_ok = smoke_adc1();
 
     loop {
