@@ -1,7 +1,8 @@
 # Bounded execution profile for the imported generic STM32H747 descriptor.
-# Exercise only the Cortex-M7, a bounded flash/DTCM window, H7 RCC, GPIOB/D,
-# USART3 and TIM2 paths asserted by the exact-import firmware smoke. Other imported
-# peripheral claims and the H747's second core are intentionally omitted.
+# Exercise only the Cortex-M7, a bounded flash/DTCM window, H7 RCC, GPIOA/B/D,
+# USART3, TIM2, and the bounded ADC1 input path asserted by the exact-import
+# firmware smoke. Other imported peripheral claims and the H747's second core
+# are intentionally omitted.
 name: stm32h747
 arch: arm
 core: cortex-m7
@@ -18,6 +19,14 @@ peripherals:
     size: 1KB
     config:
       profile: h7
+  # RM0399 / DS12930: GPIOA is on AHB4, enabled through AHB4ENR.GPIOAEN.
+  - id: gpioPortA
+    type: gpio
+    base_address: 0x58020000
+    size: 1KB
+    clock: { reg: ahb4enr, bit: 0 }
+    config:
+      profile: stm32v2
   - id: gpioPortB
     type: gpio
     base_address: 0x58020400
@@ -53,3 +62,17 @@ peripherals:
     clock: { reg: apb1lenr, bit: 0 }
     config:
       width: 32
+  # RM0399 maps ADC1/2 at 0x40022000 and gates them with
+  # RCC_AHB1ENR.ADC12EN (bit 5). Only ADC1's regular one-shot path is claimed;
+  # the common block, ADC2, DMA and injected conversions are not included.
+  - id: adc1
+    type: adc
+    base_address: 0x40022000
+    size: 256B
+    irq: 18
+    clock: { reg: ahb1enr, bit: 5 }
+    config:
+      profile: h7
+analog_pins:
+  # DS12930 lists PA0 as ADC1_INP16 on STM32H747xI/G.
+  PA0: { peripheral: adc1, channel: 16 }
