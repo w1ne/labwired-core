@@ -279,6 +279,44 @@ fn jfet_drain_voltage(gate_v: f64, drain_ohms: f64, source_ohms: f64) -> f64 {
     SUPPLY_V - ((low + high) / 2.0) * LOAD_OHMS
 }
 
+/// Independent level-1 NMOS body-effect load line for ADC-routed G071 tests.
+fn mosfet_body_effect_drain_voltage(gate_v: f64, bulk_v: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+    const GAMMA: f64 = 0.4;
+    const PHI: f64 = 0.7;
+
+    let threshold = VTO + GAMMA * ((PHI - bulk_v).sqrt() - PHI.sqrt());
+    let overdrive = gate_v - threshold;
+    if overdrive <= 0.0 {
+        return SUPPLY_V;
+    }
+    let beta = KP_A_PER_V2 * W_M / L_M;
+    let drain_current = |vds: f64| {
+        if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        }
+    };
+    let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -890,6 +928,134 @@ fn nucleo_g071rb_bjt_high_injection_and_diode_reach_adc1_end_to_end() {
     assert!(
         rolloff_v - control_v > 0.05,
         "IKF/NKF high-injection rolloff lowers collector current and raises collector voltage: {rolloff_v} V vs {control_v} V"
+    );
+}
+
+#[test]
+fn nucleo_g071rb_mosfet_body_effect_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-g071rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-G071RB profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and diode ADC routes");
+    let mosfet = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-mosfet-body-effect-adc-system.yaml",
+    ))
+    .expect("load matched generic NMOS body-effect branches");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
+
+    const ADCEN: u32 = 1 << 20;
+    bus.write_u32(RCC_APBENR2, ADCEN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_CR, 0)
+        .expect("leave ADC deep power-down");
+    bus.write_u32(ADC1_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC1_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(bus.read_u32(ADC1_ISR).unwrap() & 1, 0, "ADC1 reports ADRDY");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched NMOS branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic NTC, diode, and NMOS models bind to separate ADC1 channels"
+    );
+    for channel in 4..=7 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.mosfet_body.gate_v", 2.5)
+        .expect("set shared generic NMOS gate drive");
+    session
+        .set_signal_number("ui.mosfet_body.bulk_v", 0.0)
+        .expect("initialize NMOS bulk bias");
+
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut body_samples = Vec::new();
+    for bulk_v in [0.0_f64, -0.5, -1.0, -1.5] {
+        session
+            .set_signal_number("ui.mosfet_body.bulk_v", bulk_v)
+            .expect("set NMOS reverse body bias");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched NMOS netlists");
+        assert_eq!(steps.len(), 3, "NTC, diode, and NMOS pair models solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let expected_reference_v = mosfet_body_effect_drain_voltage(2.5, 0.0);
+        let expected_body_v = mosfet_body_effect_drain_voltage(2.5, bulk_v);
+        let expected_ntc_v = 1.65;
+        for (path, expected_v) in [
+            ("adc.adc1.4_volts", expected_ntc_v),
+            ("adc.adc1.5_volts", diode_v),
+            ("adc.adc1.6_volts", expected_reference_v),
+            ("adc.adc1.7_volts", expected_body_v),
+        ] {
+            let solved_v = signal_voltage(&session, path);
+            assert!(
+                (solved_v - expected_v).abs() < 5e-5,
+                "{path} should resolve to {expected_v} V, got {solved_v} V"
+            );
+        }
+        let reference_v = signal_voltage(&session, "adc.adc1.6_volts");
+        let body_v = signal_voltage(&session, "adc.adc1.7_volts");
+        if bulk_v == 0.0 {
+            assert!(
+                (reference_v - body_v).abs() < 1e-9,
+                "matched NMOS devices agree at zero body bias"
+            );
+        } else {
+            assert!(
+                body_v > reference_v,
+                "reverse body bias raises Vth and the loaded drain voltage: {body_v} V vs {reference_v} V"
+            );
+        }
+
+        for (channel, voltage_v) in [
+            (4, expected_ntc_v),
+            (5, diode_v),
+            (6, reference_v),
+            (7, body_v),
+        ] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds ADC1_IN{channel}"
+            );
+            assert_eq!(
+                stm32g0_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion follows the solved voltage"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 8),
+            u16::MAX,
+            "neighboring ADC1_IN8 remains undriven"
+        );
+        body_samples.push((bulk_v, body_v));
+    }
+    assert!(
+        body_samples.windows(2).all(|pair| pair[1].1 > pair[0].1),
+        "increasing reverse body bias raises the drain voltage: {body_samples:?}"
     );
 }
 
