@@ -13,5 +13,6 @@ twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1
 cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok
 mem code=1 data=1 image=1 pm=4 bb=1 ok
 spip reset=1 off=1 x8=1 x16=1 cfg=1 quiet=1 rirq=1 rclr=1 wirq=1 wclr=1 ok
+fiu reset=1 wel=1 prog=1 clear=1 oneway=1 erase=1 start=1 ok
 twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok
 bbram kept=1 ok

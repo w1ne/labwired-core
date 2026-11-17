@@ -4,8 +4,8 @@
 
 The imported NPCX9 system booted `firmware-nuvoton-npcx9-smoke`, rebooted
 once through the TWD watchdog, and ran to **100,000,000 cycles**
-(568,628 instructions). It passed **18/18 smoke assertions**. Firmware
-SHA-256 `73e75345e878288f580a47eecc0e6cc5743865861603bea45f07441a560ecb46`.
+(569,374 instructions). It passed **19/19 smoke assertions**. Firmware
+SHA-256 `206c39d7c0ffe12882c0ada404a669f78240e65f7eb4ce4e153730cc25a54ba7`.
 UART capture (UART1..4 share one capture stream):
 
 ```text
@@ -24,6 +24,7 @@ twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1
 cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok
 mem code=1 data=1 image=1 pm=4 bb=1 ok
 spip reset=1 off=1 x8=1 x16=1 cfg=1 quiet=1 rirq=1 rclr=1 wirq=1 wclr=1 ok
+fiu reset=1 wel=1 prog=1 clear=1 oneway=1 erase=1 start=1 ok
 twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok
 bbram kept=1 ok
 ```
@@ -116,6 +117,10 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
 21. MDMA1: the smoke injects `m` into UART1, enables UART receive DMA, and
     checks the fixed URBUF source, copied byte in code RAM, destination and
     current counts, terminal-count status and empty UART FIFO.
+22. FIU at 0x40020000: the smoke checks reset values, WREN / RDSR1, page
+    programming, readback, the NOR 1-to-0 rule, WEL clearing, and a 64 KiB
+    block erase through UMA. The internal flash array is sparse and erased by
+    default.
 
 ## Claimed peripherals
 
@@ -132,6 +137,7 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
 | `twd` | `npcx_twd` | T0 at 32768 Hz / 2^MDIV, TWDT0 period, TC (read clears), pulse IRQ per terminal count on NVIC 31; watchdog WDCNT / TWMWD / WDCP, WDCT0I clock select, 87h/61h/63h stop and unlock, 5Ch touch (WDSDME), bad service byte reset, lock bits, system reset with WDRST_STS. |
 | `hfcg` | `npcx_hfcg` | HFCGCTRL LOAD (reads 0, latches M / N), CLK_CHNG (reads 0), LOCK (set-only, drops HFCG writes); HFCGML / HFCGMH / HFCGN / HFCGP / HFCBCD / HFCBCD1..3 / HFCGPIDL read back with reserved bits clear. Register file only. |
 | `spip` | `npcx_spip` | SPIP_DATA transfer through attached devices (8-bit, or 16-bit low byte first with MOD), RBF (DATA read clears), BSY reads 0, CTL1 SPIEN / MOD / EIR / EIW / SCM / SCIDL / SCDV read back; level IRQ on NVIC 57 from EIR && RBF or EIW && !RBF (the EIW term is an assumption from the Zephyr ISR). No chip select, no timing. |
+| `fiu` | `npcx_fiu` | UMA status, read, page program and 64 KiB block erase against a sparse 1 MiB internal flash medium. WEL, 3/4-byte address selection, lock and reset behavior. Direct XIP mapping is not declared. |
 | `lfcg` | `npcx_lfcg` | LFCGCTL LREFEN, UDCP (reads 0), LFLOC (set-only, drops LFCG writes); HFRDI (12 bits), HFRDF, FRCDIV, DIVCOR1/2, LFCGCTL2 read back. Register file only. |
 
 ## Memory windows
@@ -148,12 +154,14 @@ Checks (source: `crates/firmware-nuvoton-npcx9-smoke/src/main.rs`):
 
 Not modelled in these windows: VBAT loss and the BBRAM status byte at
 0x400AF100 (unmapped), PMCH host-interface behaviour (OBF / IBF, host IRQs),
-and the internal flash at 0x64000000 (Renode reaches it through the FIU).
+and direct XIP reads at 0x64000000. FIU accesses use a separate sparse backing
+array until the engine can share it with a mapped memory window.
 
 GPIO ids are `port0`..`portf`, not Zephyr's `gpio0`..`gpiof`: a `gpio0` or
 `gpio1` id switches on the bus's Nordic GPIOTE pass.
 
-Sources: Renode `platforms/cpus/nuvoton_npcx9.repl`, `NPCX_GPIO.cs`,
+Sources: Renode `platforms/cpus/nuvoton_npcx9.repl`, `NPCX_FIU.cs`,
+`NPCX_Flash.cs`, `NPCX_GPIO.cs`,
 `NPCX_HFCG.cs`, `NPCX_ITIM.cs`, `NPCX_LFCG.cs`, `NPCX_MTC.cs`,
 `NPCX_MDMA.cs`, `NPCX_SMBus.cs`, `NPCX_TWD.cs` and `NPCX_UART.cs`; Zephyr
 `drivers/serial/uart_npcx.c`, `drivers/clock_control/clock_control_npcx.c`; Zephyr `soc/nuvoton/npcx/common/reg/reg_def.h`
@@ -216,9 +224,8 @@ extensions, clock timing or arbitration. The onboarding system has no
 off-chip I²C device attached, so its smoke intentionally verifies NACK and
 recovery on all eight controllers.
 
-Not declared (no model in this engine): FIU and internal flash, the
-DEV_CTL4 / SWRST_CTL4 Python peripherals, and the other
-Renode NPCX blocks.
+Not declared (no model in this engine): the direct XIP internal flash window,
+DEV_CTL4 / SWRST_CTL4 Python peripherals, and the other Renode NPCX blocks.
 
 ## Negative controls
 

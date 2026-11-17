@@ -258,6 +258,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // Nuvoton NPCX SPIP (SPI master, Renode `NPCX_SPIP`); devices attach
     // through `external_devices:`.
     "npcx_spip",
+    // Nuvoton NPCX FIU user-mode command path and internal flash medium.
+    "npcx_fiu",
     // Nuvoton NPCX SMBus master controller; devices attach through
     // `external_devices:` and the model's `I2cSlaveHost` hook.
     "npcx_smbus",
@@ -929,6 +931,28 @@ fn build_npcx_cdcg(
     Ok(Box::new(NpcxCdcg::new(block)))
 }
 
+// NPCX FIU user-mode access path and internal flash medium. The direct XIP
+// memory window is intentionally separate and is not declared until it can
+// share storage with the controller.
+#[cold]
+#[inline(never)]
+fn build_npcx_fiu(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    use crate::peripherals::npcx_fiu::NpcxFiu;
+    if let Some(k) = p_cfg.config.keys().find(|k| k.as_str() != "flash_size") {
+        anyhow::bail!("npcx_fiu admits only `flash_size`, not `{k}`");
+    }
+    if p_cfg.irq.is_some() {
+        anyhow::bail!("npcx_fiu '{}' has no IRQ line", p_cfg.id);
+    }
+    let size = p_cfg
+        .config
+        .get("flash_size")
+        .and_then(|value| value.as_u64())
+        .filter(|size| *size > 0 && *size <= 16 * 1024 * 1024)
+        .ok_or_else(|| anyhow::anyhow!("npcx_fiu `flash_size` must be 1..16 MiB in bytes"))?;
+    Ok(Box::new(NpcxFiu::new(size as usize)))
+}
+
 // NPCX MDMA UART receive channel. The Renode MDMA IRQ is combined with the
 // owning UART's IRQ; until the bus can express a shared level input, this
 // profile intentionally does not accept `irq:`.
@@ -1368,6 +1392,7 @@ pub fn try_build(
         "npcx_mtc" => build_npcx_mtc(p_cfg)?,
         "npcx_twd" => build_npcx_twd(p_cfg)?,
         "npcx_hfcg" | "npcx_lfcg" => build_npcx_cdcg(canonical_type, p_cfg)?,
+        "npcx_fiu" => build_npcx_fiu(p_cfg)?,
         "npcx_gpio" => Box::new(crate::peripherals::npcx_gpio::NpcxGpio::new()),
         "npcx_spip" => Box::new(crate::peripherals::npcx_spip::NpcxSpip::new()),
         "npcx_smbus" => {

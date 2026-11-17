@@ -1,4 +1,4 @@
-# Cortex-M4F UART1..4, MDMA UART RX, SMBus0..7, ITIM32_1..6 / ITIM64, GPIO0..F, MTC, TWD, HFCG/LFCG, memory-window and SPIP smoke on the imported system.
+# Cortex-M4F UART1..4, MDMA UART RX, SMBus0..7, ITIM32_1..6 / ITIM64, GPIO0..F, MTC, TWD, HFCG/LFCG, memory windows, SPIP and FIU smoke on the imported system.
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke"
@@ -32,6 +32,7 @@ assertions:
   - uart_contains: "cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok"
   - uart_contains: "mem code=1 data=1 image=1 pm=4 bb=1 ok"
   - uart_contains: "spip reset=1 off=1 x8=1 x16=1 cfg=1 quiet=1 rirq=1 rclr=1 wirq=1 wclr=1 ok"
+  - uart_contains: "fiu reset=1 wel=1 prog=1 clear=1 oneway=1 erase=1 start=1 ok"
   # Exactly nine T0 IRQs, then the watchdog reset and the second boot.
   - uart_contains: "twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok"
   # Battery-backed RAM keeps its signature across the watchdog reset.

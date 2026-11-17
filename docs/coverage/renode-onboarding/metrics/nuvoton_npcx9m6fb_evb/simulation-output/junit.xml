@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="19" failures="0" errors="0" time="0.010651">
+<testsuite name="labwired" tests="20" failures="0" errors="0" time="0.012967">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxCycles"/>
-    <property name="firmware_hash" value="73e75345e878288f580a47eecc0e6cc5743865861603bea45f07441a560ecb46"/>
+    <property name="firmware_hash" value="206c39d7c0ffe12882c0ada404a669f78240e65f7eb4ce4e153730cc25a54ba7"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.010651">
+  <testcase classname="labwired" name="run" time="0.012967">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: NPCX9 UART1 smoke" time="0.000000">
   </testcase>
@@ -31,16 +31,18 @@
   </testcase>
   <testcase classname="labwired" name="assertion 12: uart_contains: spip reset=1 off=1 x8=1 x16=1 cfg=1 quiet=1 rirq=1 rclr=1 wirq=1 wclr=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 13: uart_contains: twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 13: uart_contains: fiu reset=1 wel=1 prog=1 clear=1 oneway=1 erase=1 start=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 14: uart_contains: bbram kept=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 14: uart_contains: twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 15: uart_contains: cr_uart2 tx" time="0.000000">
+  <testcase classname="labwired" name="assertion 15: uart_contains: bbram kept=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 16: uart_contains: cr_uart3 tx" time="0.000000">
+  <testcase classname="labwired" name="assertion 16: uart_contains: cr_uart2 tx" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 17: uart_contains: cr_uart4 tx" time="0.000000">
+  <testcase classname="labwired" name="assertion 17: uart_contains: cr_uart3 tx" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 18: expected_stop_reason: MaxCycles" time="0.000000">
+  <testcase classname="labwired" name="assertion 18: uart_contains: cr_uart4 tx" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 19: expected_stop_reason: MaxCycles" time="0.000000">
   </testcase>
 </testsuite>

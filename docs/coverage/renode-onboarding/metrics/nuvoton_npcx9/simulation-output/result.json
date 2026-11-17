@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 568628,
+  "steps_executed": 569374,
   "cycles": 100000000,
-  "instructions": 568628,
+  "instructions": 569374,
   "stop_reason": "max_cycles",
   "stop_reason_details": {
     "triggered_stop_condition": "max_cycles",
@@ -102,6 +102,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "fiu reset=1 wel=1 prog=1 clear=1 oneway=1 erase=1 start=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok"
       },
       "passed": true
@@ -149,10 +155,10 @@
       0,
       537753584,
       65535,
-      1,
-      1,
-      1,
-      24924,
+      255,
+      9,
+      90,
+      25808,
       537753496,
       1074659332,
       7100
@@ -170,7 +176,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "73e75345e878288f580a47eecc0e6cc5743865861603bea45f07441a560ecb46",
+  "firmware_hash": "206c39d7c0ffe12882c0ada404a669f78240e65f7eb4ce4e153730cc25a54ba7",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nuvoton_npcx9.yaml",
@@ -494,6 +500,13 @@
         "artifacts": []
       },
       {
+        "name": "fiu",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "scb",
         "kind": "native",
         "base": 3758157056,
@@ -605,8 +618,8 @@
       },
       {
         "text": "uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok",
-        "cycle_lo": 20000,
-        "cycle": 30000,
+        "cycle_lo": 10000,
+        "cycle": 20000,
         "end_cycle": 30000
       },
       {
@@ -640,6 +653,12 @@
         "end_cycle": 91030000
       },
       {
+        "text": "fiu reset=1 wel=1 prog=1 clear=1 oneway=1 erase=1 start=1 ok",
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
+      },
+      {
         "text": "twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok",
         "cycle_lo": 90030000,
         "cycle": 91030000,
@@ -656,14 +675,14 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 25512,
+    "text_bytes": 26412,
     "data_bytes": 0,
     "bss_bytes": 80,
-    "flash_used_bytes": 25512,
+    "flash_used_bytes": 26412,
     "ram_static_bytes": 80,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 96256,
-    "flash_used_pct": 38.93,
+    "flash_used_pct": 40.3,
     "ram_static_pct": 0.08,
     "notes": [
       "section_sum_not_bin_image",
@@ -687,11 +706,11 @@
   },
   "metrics": {
     "cycles": 100000000,
-    "instructions": 568628,
-    "steps_executed": 568628,
-    "memory_reads": 9893,
-    "memory_writes": 1543,
-    "peripheral_accesses": 2489,
+    "instructions": 569374,
+    "steps_executed": 569374,
+    "memory_reads": 10199,
+    "memory_writes": 1586,
+    "peripheral_accesses": 2682,
     "exceptions": 0,
     "pc_samples": [
       {
@@ -700,27 +719,27 @@
         "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 15780,
+        "pc": 15792,
         "count": 39,
-        "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
+        "symbol": "core::ptr::write_volatile"
       },
       {
         "pc": 7100,
-        "count": 23,
+        "count": 26,
         "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 16720,
+        "pc": 16570,
         "count": 3,
         "symbol": "core::sync::atomic::atomic_load"
       },
       {
-        "pc": 17784,
+        "pc": 17680,
         "count": 3,
         "symbol": "core::sync::atomic::atomic_load"
       },
       {
-        "pc": 18070,
+        "pc": 17966,
         "count": 1,
         "symbol": "core::sync::atomic::atomic_load"
       }

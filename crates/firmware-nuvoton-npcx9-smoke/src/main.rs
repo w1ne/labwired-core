@@ -60,6 +60,8 @@
 //
 // SPIP at 0x400D2000: 21. check 8/16-bit transfers, status, EIR/EIW and NVIC 57.
 // No SPI device is attached, so MISO reads 0.
+// FIU at 0x40020000: 22. check UMA write-enable/status, page program, readback,
+// NOR one-way programming and 64 KiB block erase. The direct XIP window is not mapped.
 // Bare-register, no HAL.
 
 #![no_std]
@@ -224,6 +226,16 @@ const STAT_RBF: u8 = 1 << 1;
 static SPIP_RD_IRQS: AtomicU32 = AtomicU32::new(0);
 static SPIP_WR_IRQS: AtomicU32 = AtomicU32::new(0);
 
+const FIU: usize = 0x4002_0000;
+const FIU_CODE: usize = 0x16;
+const FIU_ADDR0: usize = 0x17;
+const FIU_DATA0: usize = 0x1A;
+const FIU_CTS: usize = 0x1E;
+const FIU_ECTS: usize = 0x1F;
+const FIU_A_SIZE: u8 = 1 << 3;
+const FIU_WRITE: u8 = 1 << 5;
+const FIU_START: u8 = 1 << 7;
+
 const MDMA1: usize = 0x4001_1100;
 const MDMA_CTRL: usize = 0x00;
 const MDMA_SOURCE: usize = 0x04;
@@ -280,6 +292,18 @@ fn rd32(base: usize, offset: usize) -> u32 {
 
 fn wr32(base: usize, offset: usize, value: u32) {
     unsafe { write_volatile((base + offset) as *mut u32, value) }
+}
+
+fn fiu_exec(code: u8, address: Option<u32>, data: u8, control: u8) -> u8 {
+    wr8(FIU, FIU_CODE, code);
+    if let Some(address) = address {
+        for index in 0..3 {
+            wr8(FIU, FIU_ADDR0 + index, (address >> (index * 8)) as u8);
+        }
+    }
+    wr8(FIU, FIU_DATA0, data);
+    wr8(FIU, FIU_CTS, control | FIU_START);
+    rd8(FIU, FIU_DATA0)
 }
 
 fn nvic(reg: usize, line: u32) -> (usize, u32) {
@@ -1022,6 +1046,41 @@ fn main() -> ! {
         && wr_irq == 1
         && wr_clear == 1;
     puts(if spip_ok { b" ok\r\n" } else { b" FAIL\r\n" });
+
+    // 22. FIU user-mode access to the modeled 1 MiB internal flash medium.
+    let fiu_reset = (rd8(FIU, FIU_CTS) == 0x40 && rd8(FIU, FIU_ECTS) == 0x03) as u32;
+    let _ = fiu_exec(0x06, None, 0, 0); // WREN
+    let write_enabled = (fiu_exec(0x05, None, 0, 1) & 0x02 != 0) as u32; // RDSR1
+
+    let _ = fiu_exec(0x06, None, 0, 0);
+    let _ = fiu_exec(0x02, Some(0x100), 0x5A, FIU_A_SIZE | FIU_WRITE | 1); // Page program
+    let programmed = (fiu_exec(0x03, Some(0x100), 0, FIU_A_SIZE | 1) == 0x5A) as u32;
+    let write_latch_cleared = (fiu_exec(0x05, None, 0, 1) & 0x02 == 0) as u32;
+
+    let _ = fiu_exec(0x06, None, 0, 0);
+    let _ = fiu_exec(0x02, Some(0x100), 0xFF, FIU_A_SIZE | FIU_WRITE | 1);
+    let one_way = (fiu_exec(0x03, Some(0x100), 0, FIU_A_SIZE | 1) == 0x5A) as u32;
+
+    let _ = fiu_exec(0x06, None, 0, 0);
+    let _ = fiu_exec(0xD8, Some(0), 0, FIU_A_SIZE); // Renode-supported 64 KiB erase
+    let erased = (fiu_exec(0x03, Some(0x100), 0, FIU_A_SIZE | 1) == 0xFF) as u32;
+    let start_cleared = (rd8(FIU, FIU_CTS) & FIU_START == 0) as u32;
+    puts(b"fiu");
+    put_kv(b"reset", fiu_reset);
+    put_kv(b"wel", write_enabled);
+    put_kv(b"prog", programmed);
+    put_kv(b"clear", write_latch_cleared);
+    put_kv(b"oneway", one_way);
+    put_kv(b"erase", erased);
+    put_kv(b"start", start_cleared);
+    let fiu_ok = fiu_reset == 1
+        && write_enabled == 1
+        && programmed == 1
+        && write_latch_cleared == 1
+        && one_way == 1
+        && erased == 1
+        && start_cleared == 1;
+    puts(if fiu_ok { b" ok\r\n" } else { b" FAIL\r\n" });
 
     // Expiry: no touch; the watchdog resets the chip on the 10th period.
     puts(b"twd expire ");

@@ -20,9 +20,9 @@ ram:
   # NPCX9 data RAM (Renode data_ram, size 0x17800).
   base: 0x200C0000
   size: 96256B
-# Plain memory windows from Renode nuvoton_npcx9.repl. Not mapped: the
-# internal flash at 0x64000000 (Renode reaches it through the FIU / SPI flash
-# model, which is not modelled here).
+# Plain memory windows from Renode nuvoton_npcx9.repl. The internal flash
+# command medium is modeled behind FIU UMA below; the direct XIP alias at
+# 0x64000000 is not mapped until it can share the same storage.
 memory_regions:
 # Renode data_ram second view: the same bytes as `ram` above.
 - name: data_ram_alias
@@ -345,3 +345,12 @@ peripherals:
   config:
     source_address: 0x400E00C0
     destination_address: 0x400E00B0
+# NPCX9 FIU user-mode access path at 0x40020000. Its sparse 1 MiB medium
+# supports UMA read/program/status/64 KiB erase transactions. Direct XIP access
+# at 0x64000000, bursts, CRC and Quad-SPI are not part of this profile.
+- id: fiu
+  type: npcx_fiu
+  base_address: 0x40020000
+  size: 4KB
+  config:
+    flash_size: 1048576
