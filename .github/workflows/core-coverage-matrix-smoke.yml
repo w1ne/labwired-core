@@ -225,6 +225,11 @@ jobs:
           - id: arduino-nano-esp32-gpio
             script: examples/arduino-nano-esp32/io-smoke.yaml
             system: configs/systems/arduino-nano-esp32.yaml
+          # Maintenance for existing demand-rank 1 ESP32 / Arduino-kit rank 3
+          # coverage: rerun its A4/A5-to-BME280 I2C smoke from the fixture.
+          - id: arduino-nano-esp32-bme280
+            script: examples/arduino-nano-esp32-bme280/bme280-smoke.yaml
+            system: configs/systems/arduino-nano-esp32-bme280.yaml
           # nRF52833 / micro:bit v2 — nRF52-family UART smoke on its own board.
           # Same firmware as tests/fixtures/microbit-v2-smoke.elf, rebuilt here.
           - id: microbit-v2
@@ -723,6 +728,10 @@ jobs:
       - name: Verify Arduino Nano ESP32 GPIO fixture
         if: matrix.id == 'arduino-nano-esp32-gpio'
         run: examples/arduino-nano-esp32/verify-fixture.sh
+
+      - name: Verify Arduino Nano ESP32 BME280 fixture
+        if: matrix.id == 'arduino-nano-esp32-bme280'
+        run: examples/arduino-nano-esp32-bme280/verify-fixture.sh
 
       - name: Run matrix smoke
         if: matrix.id != 'stm32-exact-catalog'

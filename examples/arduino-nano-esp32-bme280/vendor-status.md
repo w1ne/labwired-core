@@ -1,19 +1,22 @@
-# Live vendor status — Arduino Nano ESP32 + BME280
+# Live availability — Arduino Nano ESP32 and Adafruit BME280
 
-Checked live on 2026-11-17 UTC; no archive snapshot was used.
+Checked live on 2026-11-17; no Wayback snapshots used.
 
-- The [Arduino official store listing](https://store.arduino.cc/products/nano-esp32)
-  identifies the Nano ESP32, SKU **ABX00092**, and displayed €14.26 with an
-  **Add to cart** control. It identifies the module as u-blox NORA-W106
-  (ESP32-S3) and lists I2C on A4/SDA and A5/SCL.
-- Arduino's [official Nano ESP32 pin map](https://docs.arduino.cc/tutorials/nano-esp32/cheat-sheet/)
-  maps A4 to GPIO11 and A5 to GPIO12. The [official full pinout](https://docs.arduino.cc/resources/pinouts/ABX00083-full-pinout.pdf)
-  confirms the same route.
-- Adafruit's [BME280 STEMMA QT product 2652](https://www.adafruit.com/product/2652)
-  was listed at **$14.95**, **In stock**, with **Add to Cart**. Its standard
-  I2C address for this profile is `0x77`; Adafruit's [BME280 pinout guide](https://learn.adafruit.com/adafruit-bme280-humidity-barometric-pressure-temperature-sensor-breakout/pinouts)
-  says that is the default, with SDO left unconnected.
+- DigiKey's [Arduino ABX00092 product page](https://www.digikey.co.uk/en/products/detail/arduino/ABX00092/21219771)
+  listed the board as **Active** with **1,385 in stock**. The board is the
+  Nano ESP32 with ESP32-S3 / NORA-W106-10B.
+- Arduino's [Nano ESP32 pinout](https://docs.arduino.cc/tutorials/nano-esp32/cheat-sheet/)
+  maps A4/SDA to GPIO11 and A5/SCL to GPIO12. These are the pins in the board
+  system descriptor and this smoke.
+- Adafruit's [BME280 STEMMA QT breakout, product 2652](https://www.adafruit.com/product/2652)
+  listed **In stock** at USD 14.95 with an Add to Cart control. Its product
+  page describes I²C support and the STEMMA QT connectors.
+- Bosch's current [BME280 product page](https://www.bosch-sensortec.com/en/products/environmental-sensors/humidity-sensors-bme280)
+  describes a current sensor and states a **10 years delivery** commitment.
 
-Demand position: ESP32 family rank **1** (38% of reported MCU use); Arduino
-kits were used by 37% of survey respondents' main projects. This is additional
-board/peripheral coverage on existing ESP32-S3 silicon, not a new part family.
+The model claims only the BME280's I²C identity response (0x60) and this board's
+A4/A5 wiring. It does not claim physical measurements or board bring-up.
+
+Bosch's page showed zero stock at its listed distributors during this recheck.
+The buyability evidence for this specific design is Adafruit's in-stock
+product 2652 breakout above.

@@ -119,6 +119,12 @@ jobs:
             script: examples/arduino-nano-esp32/io-smoke.yaml
             system: configs/systems/arduino-nano-esp32.yaml
             firmware_build_script: examples/arduino-nano-esp32/build-firmware.sh
+          # Maintenance for existing demand-rank 1 ESP32 and Arduino-kit rank 3
+          # coverage: keep the Nano's BME280 I2C0 smoke in the nightly row.
+          - id: arduino-nano-esp32-bme280
+            script: examples/arduino-nano-esp32-bme280/bme280-smoke.yaml
+            system: configs/systems/arduino-nano-esp32-bme280.yaml
+            firmware_build_script: examples/arduino-nano-esp32-bme280/ci/build-bme280-firmware.sh
           # Arduino kit rank 3 (37%); bare-metal UNO R4 Minima image reads a
           # real BME280 on IIC1/A4-A5 and reports over SCI2.
           - id: arduino-uno-r4-minima-bme280
