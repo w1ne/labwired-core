@@ -1,7 +1,9 @@
 # Imported STM32H743 smoke profile. The imported Renode catalogue listed a
 # wider set of peripherals, including blocks that are stubs in this engine.
-# Keep only the H7 RCC, GPIOB/GPIOD, USART3, TIM2, Cortex-M FPU state, flash,
-# and DTCM used by the smoke.
+# Keep only the H7 RCC, GPIOA/B/D, USART3, TIM2, ADC1, Cortex-M FPU state,
+# flash, and DTCM used by the smoke. ADC1 coverage is the regular one-shot
+# conversion on PA0/INP16; ADC2/3, common control, DMA, and injected paths are
+# not included.
 # RM0433 documents the H743 memory map; 1 MiB flash is a conservative window for
 # this generic descriptor because it does not distinguish xG from xI density.
 name: stm32h743
@@ -20,6 +22,13 @@ peripherals:
     size: 1KB
     config:
       profile: h7
+  - id: gpioPortA
+    type: gpio
+    base_address: 0x58020000
+    size: 1KB
+    clock: { reg: ahb4enr, bit: 0 }
+    config:
+      profile: stm32v2
   - id: gpioPortB
     type: gpio
     base_address: 0x58020400
@@ -54,6 +63,16 @@ peripherals:
     clock: { reg: apb1lenr, bit: 0 }
     config:
       width: 32
+  # RM0433: ADC1/2 share the 0x40022000 page; ADC2 begins at +0x100, so
+  # retain only the ADC1 window. RCC_AHB1ENR.ADC12EN (bit 5) gates access.
+  - id: adc1
+    type: adc
+    base_address: 0x40022000
+    size: 256B
+    irq: 18
+    clock: { reg: ahb1enr, bit: 5 }
+    config:
+      profile: h7
   - id: fpu
     type: cortex_m_fpu
     base_address: 0xE000EF30
@@ -62,3 +81,6 @@ peripherals:
     config:
       mvfr0: 0x10110221
       mvfr1: 0x12000011
+analog_pins:
+  # DS12110 maps PA0 to ADC1_INP16 on the STM32H743.
+  PA0: { peripheral: adc1, channel: 16 }

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="30" failures="0" errors="0" time="0.644184">
+<testsuite name="labwired" tests="31" failures="0" errors="0" time="0.658467">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="005b774b5741b1658f7e56b50726bc84136803d267fbfaec7f7ec3d6b35b8ba7"/>
+    <property name="firmware_hash" value="72599a9480ba8e111207346ccbf9cce6bb891fdd70367b8b690e0a44c43dd4b1"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.644184">
+  <testcase classname="labwired" name="run" time="0.658467">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: STM32H7 register smoke" time="0.000000">
   </testcase>
@@ -61,8 +61,10 @@
   </testcase>
   <testcase classname="labwired" name="assertion 27: uart_contains: tim2 gated=1 arr_reset=1 w32=1 ug=1 uif_clr=1 run=1 masked=1 irq=3 stray=0 stop=1 opm=1 opm_irq=2 rel=1 …" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 28: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  <testcase classname="labwired" name="assertion 28: uart_contains: adc1 inp16=03FF gated=1 clock=1 pin=1 ldo=1 cal=1 ready=1 eoc=1 eos=1 start_clr=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 29: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 29: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 30: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>
