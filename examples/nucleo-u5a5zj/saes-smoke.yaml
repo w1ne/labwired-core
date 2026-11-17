@@ -1,0 +1,10 @@
+# NUCLEO-U5A5ZJ-Q firmware-driven SAES AES-128 ECB smoke.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/nucleo-u5a5-saes-smoke"
+  system: "./system.yaml"
+limits:
+  max_steps: 2000
+assertions:
+  - uart_contains: "U5A5_SAES_AES128_ECB_OK"
+  - expected_stop_reason: max_steps

@@ -367,6 +367,36 @@ void loop() {
 }
 ```
 
+## STM32 Nucleo/Discovery — kit rank 4, 23% of main projects
+
+### NUCLEO-U5A5ZJ-Q + STM32U5A5 secure AES
+
+Other STM32 parts were reported by 13% of respondents (MCU rank 4), and
+Nucleo/Discovery kits by 23% of respondents' main projects (kit rank 4). ST
+lists the NUCLEO-U5A5ZJ-Q as Active and In Stock. This board profile drives the
+U5A5-specific SAES peripheral with an AES-128 ECB known-answer block from NIST
+SP 800-38A; firmware compares all four returned words before printing the
+success marker. The SAES model does not cover GCM/CCM, TrustZone key selection,
+side-channel behavior, or hardware timing. This extends the existing U5A5 board
+profile and does not add a new MCU descriptor.
+
+- [Board overview and build/run commands](../examples/nucleo-u5a5zj/README.md)
+- [Live ST lifecycle and availability receipt](../examples/nucleo-u5a5zj/vendor-status.md)
+- [Firmware smoke definition](../examples/nucleo-u5a5zj/saes-smoke.yaml)
+- [Committed simulator evidence](../examples/nucleo-u5a5zj/evidence/saes/)
+
+The copy-paste firmware is
+[`nucleo_u5a5_saes_smoke.rs`](../crates/firmware-stm32u575-demo/src/bin/nucleo_u5a5_saes_smoke.rs).
+Build and run it from the repository root:
+
+```sh
+examples/nucleo-u5a5zj/ci/build-saes-smoke.sh
+cargo run -q -p labwired-cli -- test --script examples/nucleo-u5a5zj/saes-smoke.yaml
+```
+
+Expected output: `U5A5_SAES_AES128_ECB_OK`. This is simulator-model evidence,
+not physical-silicon or side-channel validation.
+
 ## WCH — Tier C vendor bet (not a measured survey rank)
 
 ### WCH CH32V003EVT
