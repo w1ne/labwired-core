@@ -46,6 +46,38 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+/// SPICE single-frequency FM source `SFFM(1.65 0.25 50k 0.8 5k)`.
+fn sffm_drive_voltage(time_s: f64) -> f64 {
+    const TWO_PI: f64 = 2.0 * std::f64::consts::PI;
+    1.65 + 0.25 * (TWO_PI * 50_000.0 * time_s + 0.8 * (TWO_PI * 5_000.0 * time_s).sin()).sin()
+}
+
+/// Independent Shockley load line for the SFFM-driven diode on ADC1_IN4.
+fn sffm_diode_voltage(source_v: f64) -> f64 {
+    const LIMIT_OHMS: f64 = 1_000.0;
+    const IS_A: f64 = 1e-12;
+    const N: f64 = 1.5;
+    const DIODE_RS_OHMS: f64 = 25.0;
+    const THERMAL_V: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+    let current_at_junction_voltage =
+        |junction_v: f64| IS_A * ((junction_v / (N * THERMAL_V)).exp() - 1.0);
+    let residual = |junction_v: f64| {
+        let current = current_at_junction_voltage(junction_v);
+        (source_v - junction_v - current * DIODE_RS_OHMS) / LIMIT_OHMS - current
+    };
+    let (mut low, mut high) = (0.0, source_v);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    let junction_v = 0.5 * (low + high);
+    junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
+}
+
 /// Independent first backward-Euler step of ngspice's `TT`/`VP` soft
 /// reverse-recovery equation. The diode starts at the forward DC load line,
 /// then the source is pulled to zero while stored charge continues to flow.
@@ -1999,4 +2031,102 @@ fn nucleo_f407_pwl_and_exp_rc_transients_reach_adc1_with_ntc_and_diode() {
             );
         }
     }
+}
+
+#[test]
+fn nucleo_f407_sffm_driven_diode_reaches_adc1_alongside_ntc() {
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode circuits");
+    let sffm = SystemManifest::from_file(root("examples/nucleo-f407/analog-sffm-diode.yaml"))
+        .expect("load generic SFFM-driven diode circuit");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(sffm.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    assert_eq!(chip.analog_pins["PA0"].channel, 0);
+    assert_eq!(chip.analog_pins["PA4"].channel, 4);
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile has NTC, diode, and SFFM-driven diode netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the nonlinear SFFM-driven diode must resolve through PA4 to ADC1 channel 4"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    for channel in [0, 1, 4] {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    let mut cycles = 0;
+    let mut adc_counts = Vec::new();
+    for time_step in 1..=20 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the unrelated NTC and SFFM-driven diode");
+        assert_eq!(
+            steps.len(),
+            3,
+            "all three netlists cross each 1 us boundary"
+        );
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9, "unrelated NTC stays isolated");
+        assert_eq!(adc_channel_count(&mut bus, 0), 2047);
+        let unrelated_diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (unrelated_diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode remains at its DC load line"
+        );
+        let unrelated_diode_count = expected_adc_count(unrelated_diode_v);
+        assert_eq!(adc_channel_count(&mut bus, 1), unrelated_diode_count);
+        assert_eq!(
+            stm32f4_adc_convert(&mut bus, 1),
+            u32::from(unrelated_diode_count),
+            "the independent diode continues to reach ADC1 channel 1"
+        );
+
+        let time_s = time_step as f64 * 1e-6;
+        let drive_v = sffm_drive_voltage(time_s);
+        let expected_v = sffm_diode_voltage(drive_v);
+        let diode_v = signal_voltage(&session, "board.analog.pa4_volts");
+        assert!(
+            (diode_v - expected_v).abs() < 2e-5,
+            "at {time_s} s, SFFM drive {drive_v} V should solve the independent diode load line to {expected_v} V, got {diode_v} V"
+        );
+
+        let expected_count = expected_adc_count(expected_v);
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            expected_count,
+            "the routed nonlinear result seeds ADC1 channel 4"
+        );
+        assert_eq!(
+            stm32f4_adc_convert(&mut bus, 4),
+            u32::from(expected_count),
+            "firmware-visible ADC1 conversion follows the SFFM-driven diode"
+        );
+        adc_counts.push(expected_count);
+    }
+
+    let minimum = *adc_counts.iter().min().expect("twenty samples");
+    let maximum = *adc_counts.iter().max().expect("twenty samples");
+    assert!(
+        maximum - minimum >= 10,
+        "the SFFM modulation must move the diode load line at ADC1_IN4: {adc_counts:?}"
+    );
 }

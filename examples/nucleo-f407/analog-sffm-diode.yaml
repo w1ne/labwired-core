@@ -1,0 +1,20 @@
+# A generic SPICE SFFM source drives a generic diode load line into ADC1_IN4.
+name: "nucleo-f407-sffm-diode"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "sffm_diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_sense: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vdrive source 0 SFFM(1.65 0.25 50k 0.8 5k)
+        Rlimit source sense 1k
+        D1 sense 0 DREF
+        .model DREF D(IS=1p N=1.5 RS=25)
+      probes:
+        v_sense: "v(sense)"
+      vdd: 3.3

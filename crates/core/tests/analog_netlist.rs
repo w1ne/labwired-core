@@ -1222,8 +1222,8 @@ C1 out 0 100n $ dollar comment
     // Transient sources
     // -----------------------------------------------------------------------
 
-    /// `SIN`, `EXP`, and `PULSE` source semantics, including each value at
-    /// `t = 0` that the operating point is solved with.
+    /// `SIN`, `SFFM`, `EXP`, and `PULSE` source semantics, including each value
+    /// at `t = 0` that the operating point is solved with.
     #[test]
     fn transient_source_functions_parse_with_spice_semantics() {
         let circuit = parse_netlist(
@@ -1231,7 +1231,8 @@ C1 out 0 100n $ dollar comment
              Vpulse b 0 PULSE(0 3.3 1u 10n 10n 5u 10u)\n\
              Vdc c 0 dc 2\n\
              Vbare d 0 7\n\
-             Vexp e 0 EXP(1 5 1u 2u 4u 1u)\n",
+             Vexp e 0 EXP(1 5 1u 2u 4u 1u)\n\
+             Vfm f 0 SFFM(1 2 1k 0.5 250)\n",
         )
         .expect("source functions parse");
 
@@ -1280,7 +1281,25 @@ C1 out 0 100n $ dollar comment
             1.0 + 4.0 * (1.0 - (-2.0_f64).exp()) - 4.0 * (1.0 - (-1.0_f64).exp()),
         );
         near(exp.at(100e-6), 1.0);
+        let sffm = &circuit.voltage_sources[5].wave;
+        assert!(!sffm.is_constant());
+        assert_eq!(circuit.voltage_sources[5].dc, 1.0, "SFFM starts at VO");
+        assert_eq!(sffm.at(0.0), 1.0);
+        near(sffm.at(1e-3), 1.0 + 2.0 * (0.5_f64).sin());
+        near(sffm.at(2e-3), 1.0);
         assert!(!parse_netlist("V1 a 0 dc 5\n").unwrap().has_waveforms());
+    }
+
+    #[test]
+    fn malformed_sffm_source_parameters_are_rejected() {
+        let error = parse_netlist("V1 a 0 SFFM(1 2 1k 0.5)\n")
+            .expect_err("SFFM requires offset, amplitude, carrier, index, and signal frequency");
+        assert!(
+            error
+                .to_string()
+                .contains("expected `SFFM(vo va fc mdi fs)`"),
+            "{error}"
+        );
     }
 
     #[test]

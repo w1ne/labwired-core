@@ -145,10 +145,11 @@
 //! [`OpAmpModel`] and [`ComparatorModel`] for exactly what it becomes.
 //!
 //! `<source>` is `[dc] <value>`, `SIN(vo va freq [td [theta]])`,
-//! `EXP(v1 v2 td1 tau1 td2 tau2)`, `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, or
-//! `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]`, spelled as in SPICE. A source that
-//! carries a function is driven by the clock, so it cannot also be a routed
-//! input — [`super::adapter`] rejects a manifest that wires one.
+//! `SFFM(vo va fc mdi fs)`, `EXP(v1 v2 td1 tau1 td2 tau2)`,
+//! `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, or
+//! `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]`, spelled as in SPICE. A
+//! source that carries a function is driven by the clock, so it cannot also be
+//! a routed input — [`super::adapter`] rejects a manifest that wires one.
 //!
 //! A resistor can use either an NTC `beta` law or the instance coefficients
 //! `tc1`/`tc2`, not both. The polynomial form is
@@ -645,6 +646,21 @@ pub enum Waveform {
         /// Exponential damping factor, 1/s.
         theta: f64,
     },
+    /// `SFFM(vo va fc mdi fs)`: `vo + va·sin(2π·fc·t + mdi·sin(2π·fs·t))`,
+    /// with carrier frequency `fc`, modulating frequency `fs`, and modulation
+    /// index `mdi`.
+    Sffm {
+        /// Offset, volts or amps.
+        offset: f64,
+        /// Peak amplitude.
+        amplitude: f64,
+        /// Carrier frequency in hertz.
+        carrier_frequency: f64,
+        /// Modulation index.
+        modulation_index: f64,
+        /// Modulating frequency in hertz.
+        signal_frequency: f64,
+    },
     /// `EXP(v1 v2 td1 tau1 td2 tau2)` — exponential rise toward `v2` after
     /// `td1`, then a second exponential term returns toward `v1` after `td2`.
     Exp {
@@ -721,6 +737,21 @@ impl Waveform {
                             * envelope
                             * libm::sin(2.0 * core::f64::consts::PI * *frequency * elapsed)
                 }
+            }
+            Self::Sffm {
+                offset,
+                amplitude,
+                carrier_frequency,
+                modulation_index,
+                signal_frequency,
+            } => {
+                let modulation = *modulation_index
+                    * libm::sin(2.0 * core::f64::consts::PI * *signal_frequency * t);
+                *offset
+                    + *amplitude
+                        * libm::sin(
+                            2.0 * core::f64::consts::PI * *carrier_frequency * t + modulation,
+                        )
             }
             Self::Exp {
                 v1,
@@ -7015,7 +7046,7 @@ fn bind_models(
 }
 
 /// Parse the value part of a `V`/`I` line: `[dc] <value>`, `SIN(...)`,
-/// `EXP(...)`, `PULSE(...)`, or `PWL(...)`.
+/// `SFFM(...)`, `EXP(...)`, `PULSE(...)`, or `PWL(...)`.
 ///
 /// SPICE allows the argument list to be written with or without commas and
 /// with the parenthesis detached from the keyword (`SIN (0 5 1k)`), so the
@@ -7098,7 +7129,7 @@ fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Wavef
         }
     }
 
-    for keyword in ["SIN", "EXP", "PULSE"] {
+    for keyword in ["SIN", "SFFM", "EXP", "PULSE"] {
         let Some(rest) = upper.strip_prefix(keyword) else {
             continue;
         };
@@ -7128,6 +7159,18 @@ fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Wavef
                 frequency: args[2],
                 delay: arg(3, 0.0),
                 theta: arg(4, 0.0),
+            });
+        }
+        if keyword == "SFFM" {
+            if args.len() != 5 {
+                return Err(ctx.parse_err("expected `SFFM(vo va fc mdi fs)`"));
+            }
+            return Ok(Waveform::Sffm {
+                offset: args[0],
+                amplitude: args[1],
+                carrier_frequency: args[2],
+                modulation_index: args[3],
+                signal_frequency: args[4],
             });
         }
         if keyword == "EXP" {
@@ -7186,7 +7229,8 @@ fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Wavef
         _ => {
             return Err(ctx.parse_err(format!(
                 "expected `{shape}`, where `<source>` is `[dc] <value>`, \
-                 `SIN(vo va freq [td [theta]])`, `EXP(v1 v2 td1 tau1 td2 tau2)`, \
+                 `SIN(vo va freq [td [theta]])`, `SFFM(vo va fc mdi fs)`, \
+                 `EXP(v1 v2 td1 tau1 td2 tau2)`, \
                  `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, or \
                  `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]`"
             )))
