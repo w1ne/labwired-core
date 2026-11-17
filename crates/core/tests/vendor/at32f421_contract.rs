@@ -380,8 +380,8 @@ fn tmr1_splits_overflow_and_channel_vectors() {
 }
 
 /// CRM peripheral resets act only on blocks with a register reset model:
-/// the GPIO ports (AHBRST). Every other reset bit refuses instead of leaving
-/// the block's registers untouched.
+/// the GPIO ports (AHBRST) and the timers (APB2RST/APB1RST). Every other
+/// reset bit refuses instead of leaving the block's registers untouched.
 #[test]
 fn crm_peripheral_resets_apply_to_modeled_targets_and_refuse_the_rest() {
     let mut b = bus();
@@ -389,9 +389,7 @@ fn crm_peripheral_resets_apply_to_modeled_targets_and_refuse_the_rest() {
         (0x0c, 0, "SCFGCMP"),
         (0x0c, 1, "EXINT"),
         (0x0c, 9, "ADC1"),
-        (0x0c, 11, "TMR1"),
         (0x0c, 14, "USART1"),
-        (0x10, 1, "TMR3"),
         (0x10, 17, "USART2"),
     ] {
         assert!(
@@ -443,6 +441,33 @@ fn wdt_expiry_resets_the_machine_and_records_the_watchdog_cause() {
         reset_pc,
         "core restarted at its reset vector"
     );
+}
+
+/// CRM_APB1RST.TMR3RST / APB2RST.TMR1RST put the timer back to its register
+/// reset state (RM_AT32F421 V2.05 §14 register tables: all zero, PR 0xFFFF),
+/// as AM32's DShot input re-arm does through `crm_periph_reset`.
+#[test]
+fn crm_timer_reset_returns_the_timer_registers_to_reset() {
+    let mut b = bus();
+    for (en, rst, bit, base) in [
+        (0x4002101c_u64, 0x40021010_u64, 1, 0x40000400_u64), // TMR3
+        (0x40021018, 0x4002100c, 11, 0x40012c00),            // TMR1
+    ] {
+        b.write_u32(en, 1 << bit).unwrap();
+        b.write_u32(base + 0x28, 47).unwrap(); // DIV
+        b.write_u32(base + 0x2c, 999).unwrap(); // PR
+        b.write_u32(base + 0x18, 0x01).unwrap(); // CM1: C1C = input TI1
+        b.write_u32(base + 0x0c, 1 << 1).unwrap(); // IDEN: C1IEN
+        b.write_u32(base, 1).unwrap(); // CTRL1: TMREN
+        b.write_u32(rst, 1 << bit).unwrap();
+        b.write_u32(rst, 0).unwrap();
+        for (off, want) in [(0x00, 0), (0x0c, 0), (0x18, 0), (0x28, 0), (0x2c, 0xffff)] {
+            assert_eq!(b.read_u32(base + off).unwrap(), want, "{base:#x}+{off:#x}");
+        }
+        // Released from reset, the timer takes a new configuration.
+        b.write_u32(base + 0x2c, 1234).unwrap();
+        assert_eq!(b.read_u32(base + 0x2c).unwrap(), 1234);
+    }
 }
 
 /// SCFG/CMP window (RM_AT32F421 V2.05 §7.2, §19.6): SCFG_EXINTCx answer at
