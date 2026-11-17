@@ -2643,11 +2643,28 @@ impl<C: Cpu> Machine<C> {
             // Phase 2B.3b: a level-triggered peripheral re-arms its own event
             // (same token) while it has active work. We own the idx the
             // scheduler needs, so we do it here.
-            if let Some(delay) = result.reschedule_delay {
-                let deadline = self.sched.now() + delay;
-                self.sched.schedule(deadline, idx as u32, ev.event_token);
-            }
+            //
+            // A level-hold re-arm (`EventResult::level_hold`) parks instead
+            // while the lines it raises already stand in the NVIC. Scheduling
+            // after `apply_event_result` is order-identical: the fan-out
+            // never touches `self.sched`.
+            let reschedule = result.reschedule_delay;
+            let hold_lines = (result.level_hold && reschedule == Some(1)).then(|| {
+                let mut lines = result.explicit_irqs.clone();
+                if result.raise_own_irq {
+                    lines.extend(self.bus.peripherals[idx].irq);
+                }
+                lines
+            });
             self.apply_event_result(idx, result);
+            if let Some(delay) = reschedule {
+                let parked = hold_lines
+                    .is_some_and(|lines| self.bus.park_level_event(idx, ev.event_token, &lines));
+                if !parked {
+                    let deadline = self.sched.now() + delay;
+                    self.sched.schedule(deadline, idx as u32, ev.event_token);
+                }
+            }
         }
         // `drain(..)` above emptied it but kept its capacity; restore for reuse.
         self.due_events_scratch = due;
