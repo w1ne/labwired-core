@@ -569,6 +569,7 @@ impl<C: Cpu> Machine<C> {
         mode: ExecutionMode,
         _batch_start: u64,
         progress: CoreProgress,
+        _run_window_active: bool,
     ) -> SimResult<()> {
         let internally_committed_per_cycle_batch =
             mode == ExecutionMode::RunBatch && progress.internally_committed_cycles;
@@ -648,7 +649,16 @@ impl<C: Cpu> Machine<C> {
         #[cfg(feature = "event-scheduler")]
         {
             self.bus.set_current_cycle(self.total_cycles);
-            self.drain_scheduler_events();
+            let scheduler_drain_needed = _run_window_active
+                || !self.scheduler_bootstrapped
+                || !self.bus.pending_schedule.is_empty()
+                || self
+                    .sched
+                    .next_event_deadline()
+                    .is_some_and(|deadline| deadline <= self.total_cycles);
+            if scheduler_drain_needed {
+                self.drain_scheduler_events();
+            }
         }
 
         // Central I²C data-ready time drive (Option A): advance every attached

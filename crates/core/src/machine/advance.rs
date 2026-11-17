@@ -476,7 +476,7 @@ impl<C: Cpu> Machine<C> {
                 return Ok(state.report(AdvanceStop::NoProgress, self.total_cycles - start_cycles));
             }
 
-            self.commit_advance_boundary(mode, batch_start, progress)?;
+            self.commit_advance_boundary(mode, batch_start, progress, run_window.is_some())?;
             if self.sd_hle.is_some() {
                 self.service_sd_hle()?;
             }

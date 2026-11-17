@@ -1269,12 +1269,10 @@ fn idle_fast_forward_is_reconciled_in_report_and_cpu() {
     assert_eq!(machine.idle_fast_forward_cycles_skipped, 5);
 }
 
-/// On an active single core with no WFI/poll-loop candidate, the idle
-/// fast-forward probe should not drain an already-bootstrapped empty
-/// scheduler before every CPU window. The regular boundary drain remains.
+/// On an active single core with no WFI/poll-loop candidate, neither the idle
+/// fast-forward probe nor the commit boundary should drain an empty scheduler.
 #[test]
 fn active_cpu_skips_redundant_idle_scheduler_preflight() {
-    let scheduler_enabled = crate::cycle_clock::event_scheduler_enabled();
     let mut bus = SystemBus::new();
     bus.peripherals.clear();
     let mut machine = Machine::new(CountingCpu::default(), bus);
@@ -1291,15 +1289,39 @@ fn active_cpu_skips_redundant_idle_scheduler_preflight() {
     assert_eq!(machine.total_cycles, 2);
     assert_eq!(
         crate::profile::snapshot().sched_calls,
-        if scheduler_enabled { 1 } else { 0 },
-        "the normal commit boundary should drain once; idle preflight is redundant"
+        0,
+        "an empty, bootstrapped scheduler needs no preflight or boundary drain"
+    );
+}
+
+#[test]
+fn steady_state_empty_scheduler_skips_each_cpu_window_drain() {
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+
+    // Bootstrap once before profiling the steady-state empty scheduler.
+    machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+    crate::profile::start();
+    let report = machine
+        .advance(AdvanceRequest::run(Some(4)).with_batch_cap(NonZeroU32::new(1).unwrap()))
+        .unwrap();
+    crate::profile::stop();
+
+    assert_eq!(report.primary_steps, 4);
+    assert_eq!(report.fuel_consumed, 4);
+    assert_eq!(machine.total_cycles, 5);
+    assert_eq!(
+        crate::profile::snapshot().sched_calls,
+        0,
+        "a bootstrapped scheduler with no due or buffered work needs no boundary drain"
     );
 }
 
 #[test]
 fn active_cpu_keeps_idle_preflight_for_due_or_buffered_events() {
     let expected_scheduler_calls = if crate::cycle_clock::event_scheduler_enabled() {
-        2
+        1
     } else {
         0
     };
@@ -1317,11 +1339,11 @@ fn active_cpu_keeps_idle_preflight_for_due_or_buffered_events() {
     assert_eq!(
         crate::profile::snapshot().sched_calls,
         expected_scheduler_calls,
-        "a due-now heap event needs the preflight drain plus the normal boundary drain"
+        "a due-now heap event is drained by preflight before the CPU window"
     );
 
     // A buffered peripheral event is not visible in the scheduler heap until
-    // preflight drains it, so it must also retain the full path.
+    // preflight drains it, so preflight must retain its full drain path.
     machine
         .bus
         .pending_schedule
@@ -1332,14 +1354,14 @@ fn active_cpu_keeps_idle_preflight_for_due_or_buffered_events() {
     assert_eq!(
         crate::profile::snapshot().sched_calls,
         expected_scheduler_calls,
-        "a buffered event must be enqueued and drained before the next CPU window"
+        "a buffered event is enqueued and drained before the CPU window, not again at commit"
     );
 }
 
 #[test]
 fn active_cpu_keeps_idle_preflight_for_timer_poll_activity() {
     let expected_scheduler_calls = if crate::cycle_clock::event_scheduler_enabled() {
-        2
+        1
     } else {
         0
     };
