@@ -540,6 +540,110 @@ fn nucleo_l476rg_ntc_and_diode_netlists_convert_on_adc1_channels_5_6() {
 }
 
 #[test]
+fn iolink_multiport_demo_ntc_and_diode_convert_on_adc1_beside_iolink_device() {
+    let system_path = root("configs/systems/iolink-multiport-demo.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load IO-Link demo");
+    assert_eq!(profile.name, "iolink-multiport-demo");
+    assert_eq!(profile.external_devices.len(), 1);
+    assert_eq!(profile.external_devices[0].id, "iolink_master_4p");
+
+    let analog =
+        SystemManifest::from_file(root("examples/nucleo-l476rg/analog-ntc-diode-adc.yaml"))
+            .expect("load generic NTC and diode ADC routes");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32L476 descriptor");
+    assert!(
+        chip.analog_pins.is_empty(),
+        "the profile uses explicit ADC endpoints and makes no PAx alias claim"
+    );
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build IO-Link demo bus");
+    let rcc_ahb2enr = bus.read_u32(RCC_AHB2ENR).expect("read RCC AHB2ENR");
+    bus.write_u32(RCC_AHB2ENR, rcc_ahb2enr | (1 << 13))
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC_CR, 0).expect("clear ADC deep power-down");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC_CR, ADC_ADVREGEN | ADC_ADEN)
+        .expect("enable ADC1");
+    assert_ne!(
+        bus.read_u32(ADC_ISR).unwrap() & ADC_ADRDY,
+        0,
+        "ADC1 reports ready"
+    );
+    bus.write_u32(ADC_CFGR, 0)
+        .expect("select 12-bit right-aligned conversion");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile carries both generic analog devices");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the generic NTC and diode resolve to ADC1 channels 5 and 6"
+    );
+
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut ntc_codes = Vec::new();
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("set NTC temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route both analog netlists");
+        assert_eq!(steps.len(), 2, "both analog devices solve per boundary");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "adc.adc1.5_volts");
+        let resistance = ntc_resistance_ohms(temperature_c);
+        let expected_ntc_v = 3.3 * resistance / (10_000.0 + resistance);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "at {temperature_c} °C the NTC divider should solve to {expected_ntc_v} V, got {ntc_v} V"
+        );
+        let diode_v = signal_voltage(&session, "adc.adc1.6_volts");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the independent Shockley load line should solve to {expected_diode_v} V, got {diode_v} V"
+        );
+        assert_eq!(
+            adc1_channel_input_count(&mut bus, 5),
+            expected_adc_count(ntc_v),
+            "the solved NTC level reaches ADC1_IN5"
+        );
+        assert_eq!(
+            adc1_channel_input_count(&mut bus, 6),
+            expected_adc_count(diode_v),
+            "the solved diode level reaches ADC1_IN6"
+        );
+        assert_eq!(
+            adc1_channel_input_count(&mut bus, 7),
+            u16::MAX,
+            "the neighboring ADC1 channel remains undriven"
+        );
+        ntc_codes.push(l476_adc_convert(&mut bus, 5));
+        assert_eq!(
+            l476_adc_convert(&mut bus, 6),
+            u32::from(expected_adc_count(diode_v)),
+            "ADC1_IN6 firmware-visible result"
+        );
+        assert_eq!(
+            l476_adc_convert(&mut bus, 7),
+            3723,
+            "undriven IN7 retains the modeled fixed 3.0 V internal input"
+        );
+    }
+    assert!(
+        ntc_codes[0] > ntc_codes[1] && ntc_codes[1] > ntc_codes[2],
+        "NTC ADC counts fall as it warms: {ntc_codes:?}"
+    );
+}
+
+#[test]
 fn nucleo_l476rg_jfet_terminal_resistances_reach_adc1_alongside_ntc_and_diode() {
     let system_path = root("configs/systems/nucleo-l476rg.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-L476RG profile");
