@@ -41,6 +41,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/stm32f103c6-smoke/io-smoke.yaml
             system: examples/stm32f103c6-smoke/system.yaml
+          # Exact low-density R6 x6 order-code profile: 64-pin package with
+          # 51 GPIOs and 16 ADC channels; USART2/PA5 smoke on its own descriptor.
+          - id: stm32f103r6-low-density
+            crate: firmware-stm32f103-lowdensity-smoke
+            target: thumbv7m-none-eabi
+            script: examples/stm32f103r6-smoke/io-smoke.yaml
+            system: examples/stm32f103r6-smoke/system.yaml
           - id: stm32f401cdu6
             crate: firmware-f401-demo
             target: thumbv7em-none-eabi

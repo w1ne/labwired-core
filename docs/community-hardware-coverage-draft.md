@@ -507,6 +507,37 @@ void loop() {
 }
 ```
 
+### STM32F103R6T6A low-density MCU
+
+STM32F103 is measured MCU rank #3 (17%). ST lists the exact `STM32F103R6T6A`
+as Active and In stock. This is exact-variant validation in the existing
+STM32F103 family, not a new demand pick. The R6 LQFP64 profile runs a
+register-level smoke that prints over USART2 on PA2/PA3 and toggles PA5. The
+descriptor exposes the low-density SPI1, I2C1, USART1/2, TIM1-3, ADC1/2, and
+DMA1 instances; USB and backup registers remain explicit untouched stubs. No
+physical board or silicon test is claimed.
+
+- [Wiring, model boundary, copy-paste example, and smoke command](../examples/stm32f103r6-smoke/README.md)
+- [Live ST lifecycle and stock check](../examples/stm32f103r6-smoke/vendor-status.md)
+- [Committed local simulator evidence](../examples/stm32f103r6-smoke/evidence/)
+
+```cpp
+#include <Arduino.h>
+
+void setup() {
+  pinMode(PA5, OUTPUT);
+  Serial2.begin(115200);  // USART2: PA2 TX, PA3 RX
+  Serial2.println("STM32F103R6_LOW_DENSITY_OK");
+}
+
+void loop() {
+  digitalWrite(PA5, HIGH);
+  delay(500);
+  digitalWrite(PA5, LOW);
+  delay(500);
+}
+```
+
 ## STM32 Nucleo/Discovery — kit rank 4, 23% of main projects
 
 ### NUCLEO-U5A5ZJ-Q + STM32U5A5 secure AES
