@@ -77,6 +77,7 @@ impl SystemBus {
     /// peripheral `idx` while every line in `lines` stands in the NVIC:
     /// enabled, pending and level-marked. Returns false (the caller re-arms
     /// as before) when any line does not, or when there is no NVIC.
+    #[cfg(feature = "event-scheduler")]
     pub(crate) fn park_level_event(&mut self, idx: usize, token: u32, lines: &[u32]) -> bool {
         let Some(nvic) = &self.nvic else {
             return false;
