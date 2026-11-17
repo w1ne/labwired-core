@@ -234,6 +234,69 @@ fn bjt_base_resistance_temperature_collector_voltage(
     collector_for_vbe(0.5 * (low + high))
 }
 
+/// Independent hot Gummel–Poon reverse-active load line. The collector is
+/// pulled to ground through `RCOL`; positive base-collector bias makes its
+/// recombination current visible at the collector endpoint.
+fn bjt_recombination_temperature_collector_voltage(
+    base_drive_v: f64,
+    ise_a: f64,
+    isc_a: f64,
+    temperature_c: f64,
+) -> f64 {
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 2_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VAR: f64 = 75.0;
+    const NE: f64 = 1.5;
+    const NC: f64 = 2.0;
+    let thermal_v = 1.380_649e-23 * (temperature_c + 273.15) / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / thermal_v).exp();
+        let reverse = (vbc / thermal_v).exp();
+        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let transport = IS_A * (forward - reverse) * base_width;
+        let base_collector =
+            (IS_A / BR) * (reverse - 1.0) + isc_a * ((vbc / (NC * thermal_v)).exp() - 1.0);
+        let base_emitter =
+            (IS_A / BF) * (forward - 1.0) + ise_a * ((vbe / (NE * thermal_v)).exp() - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, base_drive_v);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = collector_v / COLLECTOR_OHMS + collector_current;
+            if residual < 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 /// First backward-Euler step of the two linear CJC partitions. With MJC=0,
 /// depletion charge is a constant capacitor; XCJC=0 puts it directly on the
 /// external base, while XCJC=1 puts it behind RB at the internal base.
@@ -1237,4 +1300,175 @@ fn nrf5340dk_bjt_base_resistance_temperature_coefficients_reach_saadc() {
         "combined TRBM/TIRB temperature laws shift the high-drive load line: {both} V vs {nominal} V"
     );
     assert!((both - explicit).abs() < 1e-9);
+}
+
+#[test]
+fn nrf5340dk_bjt_recombination_temperature_coefficients_reach_saadc() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let recombination = SystemManifest::from_file(root(
+        "examples/nrf5340dk/analog-bjt-recombination-temperature-system.yaml",
+    ))
+    .expect("load matched BJT recombination temperature branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(recombination.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 8);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and six generic BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to SAADC AIN0 through AIN7"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_recombination_temperature.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    const TEMP_C: f64 = 125.0;
+    const TNOM_C: f64 = 25.0;
+    const ISE_A: f64 = 2e-12;
+    const ISC_A: f64 = 50e-9;
+    const TISE1: f64 = -2e-3;
+    const TISE2: f64 = 10e-6;
+    const TISC1: f64 = -1e-3;
+    const TISC2: f64 = 8e-6;
+    let delta_c = TEMP_C - TNOM_C;
+    let hot_ise_a = ISE_A.powf(1.0 + TISE1 * delta_c + TISE2 * delta_c * delta_c);
+    let hot_isc_a = ISC_A.powf(1.0 + TISC1 * delta_c + TISC2 * delta_c * delta_c);
+    let first_order_ise_a = ISE_A.powf(1.0 + TISE1 * delta_c);
+    let first_order_isc_a = ISC_A.powf(1.0 + TISC1 * delta_c);
+    assert!((hot_ise_a - 2.957_515_273_256_625_5e-11).abs() < 1e-24);
+    assert!((hot_isc_a - 6.998_268_554_235_417e-8).abs() < 1e-21);
+    assert!((first_order_ise_a - 4.373_448_295_773_107e-10).abs() < 1e-23);
+    assert!((first_order_isc_a - 2.685_795_883_818_437_5e-7).abs() < 1e-20);
+
+    let mut cycles = 0;
+    cycles += session.cycles_until_boundary(cycles);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize the NTC, diode, and BJT branches");
+    assert_eq!(
+        initial_steps.len(),
+        8,
+        "all eight generic analog branches solve"
+    );
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected SAADC route errors: {initial_errors:?}"
+    );
+
+    let mut high_drive_voltages = None;
+    for base_drive_v in [1.2_f64, 1.4, 1.6, 1.8] {
+        session
+            .set_signal_number("ui.bjt_recombination_temperature.base_v", base_drive_v)
+            .expect("set common base drive for matched BJT branches");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and hot BJT recombination branches");
+        assert_eq!(steps.len(), 8, "all eight generic analog branches solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected SAADC route errors: {errors:?}"
+        );
+
+        let ntc_v = voltage(&session, "adc.saadc.0_volts");
+        let diode_v = voltage(&session, "adc.saadc.1_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode remains on its independent load line"
+        );
+
+        let actual = [
+            voltage(&session, "adc.saadc.2_volts"),
+            voltage(&session, "adc.saadc.3_volts"),
+            voltage(&session, "adc.saadc.4_volts"),
+            voltage(&session, "adc.saadc.5_volts"),
+            voltage(&session, "adc.saadc.6_volts"),
+            voltage(&session, "adc.saadc.7_volts"),
+        ];
+        let expected = [
+            (hot_ise_a, hot_isc_a),
+            (hot_ise_a, hot_isc_a),
+            (first_order_ise_a, first_order_isc_a),
+            (hot_ise_a, ISC_A),
+            (ISE_A, hot_isc_a),
+            (ISE_A, ISC_A),
+        ]
+        .map(|(ise_a, isc_a)| {
+            bjt_recombination_temperature_collector_voltage(base_drive_v, ise_a, isc_a, TEMP_C)
+        });
+        for (index, (actual_v, expected_v)) in actual.into_iter().zip(expected).enumerate() {
+            assert!(
+                (actual_v - expected_v).abs() < 5e-5,
+                "SAADC AIN{} independent hot recombination load line at {base_drive_v} V should be {expected_v} V, got {actual_v} V",
+                index + 2
+            );
+        }
+        assert!(
+            (actual[0] - actual[1]).abs() < 1e-9,
+            "TISE/TISC coefficients must match explicitly raised hot ISE/ISC values"
+        );
+
+        let codes = scan_saadc_channels::<8>(&mut bus);
+        for (channel, voltage_v) in [
+            (0, ntc_v),
+            (1, diode_v),
+            (2, actual[0]),
+            (3, actual[1]),
+            (4, actual[2]),
+            (5, actual[3]),
+            (6, actual[4]),
+            (7, actual[5]),
+        ] {
+            assert_eq!(
+                codes[channel],
+                expected_saadc_code(voltage_v),
+                "SAADC AIN{channel} converts its routed solved voltage"
+            );
+        }
+
+        if base_drive_v == 1.8 {
+            high_drive_voltages = Some(actual);
+        }
+    }
+
+    let [combined, explicit, first_order, be_temperature, bc_temperature, nominal] =
+        high_drive_voltages.expect("high-drive sample was recorded");
+    assert!((combined - explicit).abs() < 1e-9);
+    assert!(
+        (combined - first_order).abs() > 0.01,
+        "TISE2/TISC2 must change the first-order-only hot load line"
+    );
+    assert!(
+        (be_temperature - nominal).abs() > 0.01,
+        "TISE1/TISE2 independently change base-emitter recombination"
+    );
+    assert!(
+        (bc_temperature - nominal).abs() > 0.01,
+        "TISC1/TISC2 independently change base-collector recombination"
+    );
+    assert!(
+        (combined - be_temperature).abs() > 0.01,
+        "base-collector coefficient changes remain visible beside base-emitter coefficients"
+    );
+    assert!(
+        (combined - bc_temperature).abs() > 0.01,
+        "base-emitter coefficient changes remain visible beside base-collector coefficients"
+    );
 }
