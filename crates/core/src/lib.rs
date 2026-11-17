@@ -476,6 +476,10 @@ pub struct Machine<C: Cpu> {
     /// the bus), so the per-cycle drain short-circuits without a peripheral
     /// walk or downcast.
     scb_index: Option<usize>,
+    /// The SCB's SYSRESETREQ mirror (`Scb::sysreset_signal`), resolved with
+    /// [`Self::scb_index`] under the same fixed-set assumption. Lets the
+    /// boundary drain skip the downcast while no reset is latched.
+    scb_sysreset_signal: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Cached bus index of the nRF52 NVMC peripheral. Resolved once at
     /// construction; the advance boundary drains a latched erase op every
     /// instruction and used to walk the whole ~40-entry peripheral list,
@@ -1195,12 +1199,18 @@ impl<C: Cpu> Machine<C> {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::simctl::SimCtl>())
                 .is_some()
         });
-        let scb_index = bus.peripherals.iter().position(|p| {
-            p.dev
-                .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::scb::Scb>())
-                .is_some()
-        });
+        // The SCB's index and its SYSRESETREQ mirror, in the one downcast.
+        let (scb_index, scb_sysreset_signal) = bus
+            .peripherals
+            .iter()
+            .enumerate()
+            .find_map(|(i, p)| {
+                p.dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::scb::Scb>())
+                    .map(|scb| (i, scb.sysreset_signal()))
+            })
+            .unzip();
         let reset_request_indices: Vec<usize> = bus
             .peripherals
             .iter()
@@ -1274,6 +1284,7 @@ impl<C: Cpu> Machine<C> {
             flash_index,
             simctl_index,
             scb_index,
+            scb_sysreset_signal,
             nvmc_index,
             reset_request_indices,
             sd_hle: None,
@@ -2762,6 +2773,16 @@ impl<C: Cpu> Machine<C> {
     /// resolved at construction — non-Cortex-M configs (no SCB on the bus)
     /// short-circuit to `false` without touching the peripheral vector at all.
     pub(crate) fn drain_scb_reset_request(&self) -> bool {
+        // The SCB raises this lock-free mirror together with its latch, so a
+        // clear mirror answers "nothing pending" without the `as_any` call and
+        // `TypeId` compare a downcast costs at every boundary.
+        if self
+            .scb_sysreset_signal
+            .as_ref()
+            .is_some_and(|signal| !signal.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            return false;
+        }
         let Some(idx) = self.scb_index else {
             return false;
         };
@@ -2783,6 +2804,12 @@ impl<C: Cpu> Machine<C> {
     fn drain_flash_op(&self) -> Option<crate::peripherals::flash::FlashOp> {
         let idx = self.flash_index?;
         let p = self.bus.peripherals.get(idx)?;
+        // Runs at every boundary of every board with a FLASH model, and an
+        // op is almost never pending: ask through the trait (one call) before
+        // paying `as_any` plus a `TypeId` compare to downcast.
+        if !p.dev.has_pending_op() {
+            return None;
+        }
         p.dev
             .as_any()
             .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())
