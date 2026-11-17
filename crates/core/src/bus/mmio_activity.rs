@@ -17,6 +17,17 @@ impl SystemBus {
         self.side_effecting_mmio.set(0);
     }
 
+    /// True when the idle preflight still has batch-local MMIO evidence to
+    /// consume for timer-poll coalescing. The preflight must run in that case;
+    /// otherwise a split `time_us_64` read could be lost at the next window.
+    #[allow(dead_code)]
+    #[inline]
+    pub(crate) fn timer_poll_coalesce_has_pending_activity(&self) -> bool {
+        self.freerunning_timer_poll_mmio.get() != 0
+            || self.side_effecting_mmio.get() != 0
+            || self.timer_poll_carry.get() != 0
+    }
+
     /// True when the just-finished batch only performed freerunning-timer
     /// polls (no side-effecting MMIO). Consumes and clears the counters.
     /// Chip-specific which regs count as polls — decided by each peripheral.
