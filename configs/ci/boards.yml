@@ -100,6 +100,12 @@ boards:
     path: examples/rpi-pico-2-w-bme280
     rust_targets: [thumbv8m.main-none-eabi]
     gate: true
+  # Demand group #2: the non-wireless Pico 2 reads the BME280 ID on I2C0/GP4-GP5.
+  - id: pico2-bme280
+    kind: sim-validate
+    path: examples/pico2-bme280
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
   # Narrow ESP32-DevKitC-32E onboarding profile. Committed TIER1 ELF, no
   # cross-toolchain, seconds to run. Proves the new chip descriptor through
   # `labwired test` on every PR (chip-coverage ceiling forbids another waiver).

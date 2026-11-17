@@ -314,6 +314,20 @@ unmodelled.
 - [Live lifecycle and stock receipt](../examples/rpi-pico-2-w-bme280/vendor-status.md)
 - [Committed local simulator evidence](../examples/rpi-pico-2-w-bme280/evidence/run/)
 
+### Raspberry Pi Pico 2 + BME280
+
+The RP2040/RP2350 target group is demand group #2; RP2040 measured rank 5 at
+12%, while RP2350 was not scored separately. This profile covers the exact
+non-wireless Pico 2 on I2C0 GP4/GP5, reads the attached BME280 chip ID `0x60`,
+and checks both IO_BANK0 pin-function selections. It extends the existing
+RP2350 model to the non-W board variant; it does not claim USB or boot-ROM
+behavior. The shared RP2350 descriptor still has storage-only `powman` and
+`tbman` stubs, which this smoke does not exercise.
+
+- [Wiring, scope, copy-paste Arduino-Pico example, and smoke command](../examples/pico2-bme280/README.md)
+- [Live lifecycle and stock receipt](../examples/pico2-bme280/vendor-status.md)
+- [Committed local simulator evidence](../examples/pico2-bme280/evidence/run/)
+
 ## STM32F103 — rank 3, 17% of reported MCU use
 
 ### NUCLEO-F103RB + BME280
