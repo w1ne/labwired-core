@@ -2095,3 +2095,141 @@ fn stm32f411ceu6_bjt_terminal_resistances_reach_adc1_with_explicit_network_refer
         "unrouted ADC1 neighbors remain undriven"
     );
 }
+
+#[test]
+fn stm32f411ceu6_bjt_terminal_resistance_temperature_laws_reach_adc1() {
+    const TNOM_C: f64 = 27.0;
+    const HOT_C: f64 = 127.0;
+    const RB_OHMS: f64 = 1_000.0;
+    const RC_OHMS: f64 = 150.0;
+    const RE_OHMS: f64 = 100.0;
+    const TRB1: f64 = 1e-3;
+    const TRB2: f64 = 1e-5;
+    const TRC1: f64 = 2e-3;
+    const TRC2: f64 = 1e-5;
+    const TRE1: f64 = 5e-4;
+    const TRE2: f64 = 1e-5;
+
+    let delta_c = HOT_C - TNOM_C;
+    let scale = |tc1: f64, tc2: f64| 1.0 + tc1 * delta_c + tc2 * delta_c * delta_c;
+    let (rb_hot, rc_hot, re_hot) = (
+        RB_OHMS * scale(TRB1, TRB2),
+        RC_OHMS * scale(TRC1, TRC2),
+        RE_OHMS * scale(TRE1, TRE2),
+    );
+    for (actual, expected) in [(rb_hot, 1_200.0), (rc_hot, 195.0), (re_hot, 115.0)] {
+        assert!((actual - expected).abs() < 1e-9);
+    }
+
+    let system_path = root("configs/systems/stm32f411ceu6-blackpill.yaml");
+    let mut profile =
+        SystemManifest::from_file(&system_path).expect("load STM32F411CEU6 Black Pill profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and diode routes");
+    let temperature_resistances = SystemManifest::from_file(root(
+        "examples/stm32f411ceu6-blackpill/analog-bjt-terminal-resistance-temp-adc.yaml",
+    ))
+    .expect("load generic BJT terminal-resistance temperature branches");
+    profile.cosim_models = generic.cosim_models;
+    profile
+        .cosim_models
+        .extend(temperature_resistances.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F411CEU6 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Black Pill bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries NTC, diode, and four generic BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to ADC1 channels 0 through 5"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_terminal_temp.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    let mut cycles = 0;
+    for base_drive_v in [0.8_f64, 0.9, 1.0] {
+        session
+            .set_signal_number("ui.bjt_terminal_temp.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and temperature-adjusted BJT branches");
+        assert_eq!(steps.len(), 6, "all six generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa4_volts");
+        let nominal_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let hot_fixed_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let hot_coeff_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let hot_explicit_v = signal_voltage(&session, "board.analog.pa5_volts");
+
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated NTC stays isolated, got {ntc_v} V"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode stays on its independent load line"
+        );
+        assert!(
+            (hot_coeff_v - hot_explicit_v).abs() < 1e-6,
+            "TRB/TRC/TRE at TEMP={HOT_C} C must match explicit RB={rb_hot} RC={rc_hot} RE={re_hot} ohm: model {hot_coeff_v} V, reference {hot_explicit_v} V"
+        );
+        assert!(
+            hot_coeff_v > hot_fixed_v + 0.002,
+            "hot terminal-resistance coefficients must change the collector load line at {base_drive_v} V: fixed {hot_fixed_v} V, adjusted {hot_coeff_v} V"
+        );
+        assert!(
+            (nominal_v - hot_fixed_v).abs() > 0.01,
+            "the nominal and hot instances must expose the same-temperature control separately"
+        );
+
+        for (channel, voltage_v) in [
+            (0, nominal_v),
+            (1, ntc_v),
+            (2, hot_fixed_v),
+            (3, hot_coeff_v),
+            (4, diode_v),
+            (5, hot_explicit_v),
+        ] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 conversion follows channel {channel}"
+            );
+        }
+    }
+    assert_eq!(
+        [6, 7, 8, 9].map(|channel| adc_channel_count(&mut bus, channel)),
+        [u16::MAX; 4],
+        "unrouted neighboring ADC1 channels remain undriven"
+    );
+}

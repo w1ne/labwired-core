@@ -1,0 +1,91 @@
+# Generic Gummel-Poon terminal-resistance temperature laws through STM32F411 ADC1.
+# The hot coefficient branch is compared with the same transistor at TEMP=127 C
+# and equivalent explicit resistors evaluated at that temperature.
+name: "stm32f411ceu6-blackpill-bjt-terminal-resistance-temperature"
+chip: "../../configs/chips/stm32f411ceu6.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_terminal_temp_nominal"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_terminal_temp.base_v"
+    outputs:
+      collector_voltage: "board.analog.pa0_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 10k
+        Q1 collector base 0 NPN_TEMP TEMP=27
+        .model NPN_TEMP NPN(IS=1e-15 BF=100 BR=4 VAF=50 VAR=75 TNOM=27 RB=1k TRB1=1m TRB2=10u RC=150 TRC1=2m TRC2=10u RE=100 TRE1=500u TRE2=10u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_terminal_temp_fixed_hot"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_terminal_temp.base_v"
+    outputs:
+      collector_voltage: "board.analog.pa2_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 10k
+        Q1 collector base 0 NPN_TEMP TEMP=127
+        .model NPN_TEMP NPN(IS=1e-15 BF=100 BR=4 VAF=50 VAR=75 TNOM=27 RB=1k RC=150 RE=100)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_terminal_temp_coeff_hot"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_terminal_temp.base_v"
+    outputs:
+      collector_voltage: "board.analog.pa3_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 10k
+        Q1 collector base 0 NPN_TEMP TEMP=127
+        .model NPN_TEMP NPN(IS=1e-15 BF=100 BR=4 VAF=50 VAR=75 TNOM=27 RB=1k TRB1=1m TRB2=10u RC=150 TRC1=2m TRC2=10u RE=100 TRE1=500u TRE2=10u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_terminal_temp_explicit_hot"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_terminal_temp.base_v"
+    outputs:
+      collector_voltage: "board.analog.pa5_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 10k
+        Rbase base intrinsic_base 1.2k
+        Rcollector collector intrinsic_collector 195
+        Remitter 0 intrinsic_emitter 115
+        Q1 intrinsic_collector intrinsic_base intrinsic_emitter NPN_TEMP TEMP=127
+        .model NPN_TEMP NPN(IS=1e-15 BF=100 BR=4 VAF=50 VAR=75 TNOM=27)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
