@@ -444,11 +444,12 @@ impl CortexM {
 
     /// See [`crate::Cpu::fast_forward_poll_loop`]. The loop is a fixed point,
     /// so whole iterations leave the core exactly as it is.
-    pub(super) fn poll_fast_forward(&mut self, cycles: u64) -> bool {
+    pub(super) fn poll_fast_forward(&mut self, cycles: u64) -> Option<u64> {
         matches!(
             self.poll.plan.take(),
             Some((head, period, _)) if head == self.pc && cycles % period == 0
         )
+        .then_some(cycles)
     }
 
     /// See [`crate::Cpu::poll_loop_plan_stores`].
@@ -745,7 +746,61 @@ mod tests {
         cpu.poll.anchor = Some(0x100);
         assert_eq!(cpu.poll_skip_budget(&bus, 1000), Some((8, 1000 / 8 * 8)));
         assert!(cpu.poll_plan_stores());
-        assert!(cpu.poll_fast_forward(800));
+        assert_eq!(cpu.poll_fast_forward(800), Some(800));
         assert!(!cpu.poll_plan_stores());
+    }
+
+    #[test]
+    fn mbed_idle_loop_fast_forward_preserves_reported_instruction_count() {
+        // cpsid i; ldr r0,[r1]; adds r0,#1; str r0,[r1];
+        // subs r0,#1; str r0,[r1]; cpsie i; b head
+        let code = [
+            0xb672,
+            0x6808,
+            0x3001,
+            0x6008,
+            0x3801,
+            0x6008,
+            0xb662,
+            b_head(7),
+        ];
+        let (mut fast_cpu, mut fast_bus) = cpu_with(&code);
+        run(&mut fast_cpu, &mut fast_bus, 8);
+        fast_cpu.poll.anchor = Some(0x100);
+        fast_bus.peripherals.clear();
+        fast_bus.rebuild_peripheral_ranges();
+        let mut fast = crate::Machine::new(fast_cpu, fast_bus);
+        fast.config.idle_fast_forward_enabled = true;
+
+        let (mut reference_cpu, mut reference_bus) = cpu_with(&code);
+        run(&mut reference_cpu, &mut reference_bus, 8);
+        reference_cpu.poll.anchor = Some(0x100);
+        reference_bus.peripherals.clear();
+        reference_bus.rebuild_peripheral_ranges();
+        let mut reference = crate::Machine::new(reference_cpu, reference_bus);
+        reference.config.idle_fast_forward_enabled = false;
+
+        let fast_report = fast.advance(crate::AdvanceRequest::run(Some(256))).unwrap();
+        let reference_report = reference
+            .advance(crate::AdvanceRequest::run(Some(256)))
+            .unwrap();
+
+        assert_eq!(fast_report.primary_steps, reference_report.primary_steps);
+        assert_eq!(fast_report.fuel_consumed, reference_report.fuel_consumed);
+        assert_eq!(fast_report.elapsed_cycles, reference_report.elapsed_cycles);
+        assert_eq!(snapshot(&fast.cpu), snapshot(&reference.cpu));
+        assert_eq!(fast.bus.ram.data, reference.bus.ram.data);
+        assert_eq!(
+            fast.step_profile().cpu_instructions,
+            reference.step_profile().cpu_instructions
+        );
+        if crate::cycle_clock::event_scheduler_enabled() {
+            assert!(
+                fast_report.idle_cycles > 0,
+                "the mbed loop should fast-forward"
+            );
+        } else {
+            assert_eq!(fast_report.idle_cycles, 0);
+        }
     }
 }
