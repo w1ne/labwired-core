@@ -86,7 +86,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f401ve | open | L0 | 24 | 935.8 | 1.5 | ≥1× (CI) | — |
 | stm32f405 | open | L1 | 22 | 936.3 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32f405.md) |
 | stm32f767 | open | L1 | 36 | 936.7 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f767.md) |
-| rp2350 | open | L1 | 27 | 906.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2350.md) |
+| rp2350 | open | L1 | 28 | 906.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2350.md) |
 | stm32f407 | open | L1 | 34 | 936.8 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f407.md) |
 | stm32f407ie | open | L0 | 34 | 935.8 | 1.6 | ≥1× (CI) | — |
 | stm32f407ig | open | L0 | 34 | 935.8 | 1.6 | ≥1× (CI) | — |
@@ -154,7 +154,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | esp32p4 | open | L0 | 2 | — | — | ≥1× (CI) | — |
 | esp32s2 | open | L0 | 2 | — | — | ≥1× (CI) | — |
 | rp2040-feather | open | L0 | 24 | 906.8 | 1.6 | ≥1× (CI) | — |
-| rp2350-feather | open | L0 | 27 | 906.8 | 1.7 | ≥1× (CI) | — |
+| rp2350-feather | open | L0 | 28 | 906.8 | 1.7 | ≥1× (CI) | — |
 | stm32h723zg | open | L0 | 7 | 900.5 | 1.5 | ≥1× (CI) | — |
 | esp32c6fh4 | open | L0 | 69 | — | 3.8 | ≥1× (CI) | — |
 | k32w041z (closed) | closed | L2 | 9 | 987.8 | 1.6 | 6.50× | [doc](docs/boards/k32w041amdk6.md) |
