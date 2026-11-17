@@ -3159,7 +3159,7 @@ impl Solver {
                 jfet.operating_model.beta,
                 jfet.model.lambda,
                 jfet.model.b,
-                jfet.model.pb,
+                jfet.operating_model.pb,
             );
 
             // The channel's GMIN keeps a cut-off device connected. The gate

@@ -289,6 +289,40 @@ fn jfet_drain_voltage(gate_v: f64) -> f64 {
     0.5 * (low + high)
 }
 
+/// Independent level-1 NJF load line for model-card temperature parameters.
+fn jfet_drain_voltage_with_model(gate_v: f64, vto: f64, beta: f64, pb: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const LAMBDA_PER_V: f64 = 0.025;
+    const B: f64 = 0.8;
+    let overdrive = gate_v - vto;
+    if overdrive <= 0.0 {
+        return SUPPLY_V;
+    }
+    let bfac = (1.0 - B) / (pb - vto);
+    let drain_current = |vds: f64| {
+        let beta_p = beta * (1.0 + LAMBDA_PER_V * vds);
+        if overdrive >= vds {
+            beta_p
+                * vds
+                * (vds * (bfac * vds - B) + overdrive * (2.0 * B + 3.0 * bfac * (overdrive - vds)))
+        } else {
+            beta_p * overdrive * overdrive * (B + overdrive * bfac)
+        }
+    };
+    let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
 /// Independent level-1 JFET load line with optional SPICE model-card RD/RS and
 /// an explicit source return resistor. The circuit solver must reproduce the
 /// external drain/source voltages without using its internal junction nodes.
@@ -1864,6 +1898,164 @@ fn nucleo_f767zi_heated_jfet_gate_thermometer_reaches_pa6_pa7_adc1() {
                 "unconnected ADC1 channel {channel} remains undriven"
             );
         }
+    }
+}
+
+#[test]
+fn nucleo_f767zi_jfet_channel_temperature_coefficients_reach_adc1() {
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI profile");
+    assert_eq!(profile.name, "nucleo-f767zi");
+
+    let analog =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load the unrelated generic NTC and diode netlists");
+    let temperature = SystemManifest::from_file(root(
+        "examples/nucleo-f767zi/analog-jfet-channel-temperature-adc.yaml",
+    ))
+    .expect("load generic JFET channel temperature comparisons");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(temperature.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries NTC, diode, and five generic NJF routes");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all JFET outputs must resolve through PA2..PA6 to ADC1"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at its nominal temperature");
+
+    const NOMINAL_VTO: f64 = -2.0;
+    const NOMINAL_BETA: f64 = 500e-6;
+    const DELTA_C: f64 = 60.0;
+    let primary_vto = NOMINAL_VTO + 4e-3 * DELTA_C;
+    let primary_beta = NOMINAL_BETA * 1.01_f64.powf(-0.15 * DELTA_C);
+    let fallback_vto = NOMINAL_VTO - 4e-3 * DELTA_C;
+    let fallback_beta = NOMINAL_BETA * (358.15_f64 / 298.15).powf(0.8);
+    // JFET TEMP also moves PB by ngspice's silicon junction-potential law;
+    // calculate it independently because the Parker–Skellern fit uses PB.
+    let tnom_k = 298.15_f64;
+    let temp_k = 358.15_f64;
+    let thermal_v = |kelvin: f64| 1.380_649e-23 * kelvin / 1.602_176_634e-19;
+    let energy_gap = |kelvin: f64| 1.16 - 7.02e-4 * kelvin * kelvin / (kelvin + 1108.0);
+    let hot_pb = temp_k / tnom_k
+        - thermal_v(temp_k)
+            * (3.0 * (temp_k / tnom_k).ln() + energy_gap(tnom_k) / thermal_v(tnom_k)
+                - energy_gap(temp_k) / thermal_v(temp_k));
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+
+    for gate_v in [0.0_f64, 0.25, 0.5] {
+        session
+            .set_signal_number("ui.jfet_temperature.gate_v", gate_v)
+            .expect("drive all matched JFET channel load lines");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC, diode, and five JFETs");
+        assert_eq!(
+            steps.len(),
+            7,
+            "all seven analog models solve at the 1 us boundary"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let cases = [
+            ("nominal", 2, NOMINAL_VTO, NOMINAL_BETA, 1.0),
+            ("VTOTC/BETATCE", 3, primary_vto, primary_beta, hot_pb),
+            (
+                "explicit primary equivalent",
+                4,
+                primary_vto,
+                primary_beta,
+                hot_pb,
+            ),
+            ("TCV/BEX fallback", 5, fallback_vto, fallback_beta, hot_pb),
+            (
+                "explicit fallback equivalent",
+                6,
+                fallback_vto,
+                fallback_beta,
+                hot_pb,
+            ),
+        ];
+        let mut measured = Vec::new();
+        for (label, channel, vto, beta, pb) in cases {
+            let expected_v = jfet_drain_voltage_with_model(gate_v, vto, beta, pb);
+            let path = format!("board.analog.pa{channel}_volts");
+            let actual_v = signal_voltage(&session, &path);
+            assert!(
+                (actual_v - expected_v).abs() < 5e-5,
+                "{label} NJF load line at Vgs={gate_v} V should be {expected_v} V, got {actual_v} V"
+            );
+            let expected_count = expected_adc_count(actual_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "the solved {label} voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 conversion must report the {label} JFET voltage"
+            );
+            measured.push((label, actual_v));
+        }
+
+        assert!(
+            (measured[1].1 - measured[2].1).abs() < 5e-5,
+            "VTOTC/BETATCE must match explicit hot VTO/BETA values: {measured:?}"
+        );
+        assert!(
+            (measured[3].1 - measured[4].1).abs() < 5e-5,
+            "TCV/BEX fallback must match its explicit hot equivalent: {measured:?}"
+        );
+        assert!(
+            (measured[1].1 - measured[3].1).abs() > 0.1,
+            "primary coefficients must take precedence over conflicting TCV/BEX values: {measured:?}"
+        );
+        assert!(
+            (measured[0].1 - measured[1].1).abs() > 0.1,
+            "the temperature coefficients must change the channel operating point: {measured:?}"
+        );
+
+        for (channel, volts) in [(0, 1.65), (1, diode_v)] {
+            let expected_count = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "the unrelated device must remain isolated on ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "the unrelated device still converts on ADC1 channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 7),
+            0xFFFF,
+            "unrouted ADC1 channel 7 remains undriven"
+        );
     }
 }
 
