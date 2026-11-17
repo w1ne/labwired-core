@@ -55,6 +55,17 @@ memory_regions:
   - name: "lp_sram"
     base: 0x50000000
     size: "16KB"
+# Narrow official Seeed Studio XIAO ESP32-C6 pads from the Getting Started
+# guide and schematic, already cited in configs/systems/seeed-xiao-esp32c6.yaml:
+# active-low user LED on GPIO15, BOOT on GPIO9. UART0 USB-UART pads GPIO16/17
+# are named in the descriptor comments below; GPIO matrix itself is modelled,
+# but this table stays on the cited board pads.
+pins:
+  GPIO9: { gpio: "gpio", bit: 9 }
+  GPIO15: { gpio: "gpio", bit: 15 }
+  GPIO16: { gpio: "gpio", bit: 16, functions: [{ type: uart, peripheral: "uart0", role: tx }] }
+  GPIO17: { gpio: "gpio", bit: 17, functions: [{ type: uart, peripheral: "uart0", role: rx }] }
+
 peripherals:
   # Espressif UART IP. The C6 UART is a newer revision of the same family the
   # C3/S3 carry: the head register map the console path uses (FIFO@0x00,

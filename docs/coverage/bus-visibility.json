@@ -12,6 +12,12 @@
     "name": "arty-litex-vexriscv"
   },
   {
+    "buses": [
+      "UART"
+    ],
+    "name": "at32f421g8u7"
+  },
+  {
     "buses": [],
     "name": "atmega1281"
   },

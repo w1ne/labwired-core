@@ -1,0 +1,15 @@
+# Adafruit Feather RP2040 (Product ID 4884).
+# Bare official board profile: onboard LED on GP13 (Adafruit pinout; the
+# existing io-smoke asserts gpio_edges on sio:13). No STEMMA sensor fixtures.
+# USB, power, charger, and NeoPixel behavior are outside this profile.
+name: "adafruit-feather-rp2040"
+chip: "../chips/rp2040-feather.yaml"
+cpu_hz: 133000000
+external_devices: []
+board_io:
+  - id: "led_gp13"
+    kind: "led"
+    peripheral: "sio"
+    pin: 13
+    signal: "output"
+    active_high: true
