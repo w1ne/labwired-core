@@ -73,6 +73,23 @@ fn expected_adc_code(volts: f64) -> u16 {
     ((millivolts * 4096 / 3300).min(4095)) as u16
 }
 
+/// Independent backward-Euler update for the level-1 MOSFET gate-bulk
+/// overlap capacitance `CGBO·L` driving a bulk node through a shunt resistor.
+fn expected_mosfet_cgbo_bulk_voltage(
+    previous_gate_v: f64,
+    previous_bulk_v: f64,
+    gate_v: f64,
+    step_s: f64,
+) -> f64 {
+    const CGBO_F_PER_M: f64 = 10e-6;
+    const LENGTH_M: f64 = 100e-6;
+    const BULK_OHMS: f64 = 1_000.0;
+    let capacitance_f = CGBO_F_PER_M * LENGTH_M;
+    let cap_conductance = capacitance_f / step_s;
+    cap_conductance * (gate_v + previous_bulk_v - previous_gate_v)
+        / (cap_conductance + 1.0 / BULK_OHMS)
+}
+
 /// Independent level-1 NMOS load-line reference for the board-routed test.
 fn mosfet_drain_voltage(gate_v: f64) -> f64 {
     const SUPPLY_V: f64 = 3.3;
@@ -620,5 +637,107 @@ fn pico_bjt_high_injection_reaches_adc0_adc1_alongside_ntc_and_diode() {
     assert!(
         rolloff_v - control_v > 0.05,
         "IKF/IKR/NKF rolloff reduces collector current and raises collector voltage: {rolloff_v} V vs {control_v} V"
+    );
+}
+
+#[test]
+fn pico_mosfet_gate_bulk_overlap_charge_reaches_adc_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/pico.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Pico system profile");
+    let mut generic = SystemManifest::from_file(root("examples/pico/analog-ntc-diode-system.yaml"))
+        .expect("load unrelated generic NTC and Shockley diode netlists");
+    generic.cosim_models[0]
+        .outputs
+        .insert("v_sense".to_string(), "adc.adc.2_volts".to_string());
+    generic.cosim_models[1]
+        .outputs
+        .insert("v_diode".to_string(), "adc.adc.3_volts".to_string());
+    let cgbo = SystemManifest::from_file(root("examples/pico/analog-mosfet-cgbo.yaml"))
+        .expect("load matched generic MOSFET CGBO and control branches");
+    profile.cosim_models = cgbo.cosim_models;
+    profile.cosim_models.extend(generic.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load RP2040 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Pico system bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries matched MOSFETs, NTC, and diode");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all four generic devices must resolve to distinct RP2040 ADC inputs"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.mosfet_cgbo.gate_v", 0.0)
+        .expect("initialize matched MOSFET gate drives");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle independent devices before the gate step");
+    assert_eq!(initial_steps.len(), 4, "all four analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected ADC route errors: {initial_errors:?}"
+    );
+
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    let mut previous_gate_v = 0.0;
+    let mut previous_bulk_v = 0.0;
+    for gate_v in [2.0_f64, 1.8, 1.7, 1.65] {
+        session
+            .set_signal_number("ui.mosfet_cgbo.gate_v", gate_v)
+            .expect("step the matched MOSFET gate drives");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route MOSFET, NTC, and diode branches");
+        assert_eq!(steps.len(), 4, "all four branches solve at each step");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let bulk_v = signal_voltage(&session, "adc.adc.0_volts");
+        let control_v = signal_voltage(&session, "adc.adc.1_volts");
+        let expected_bulk_v =
+            expected_mosfet_cgbo_bulk_voltage(previous_gate_v, previous_bulk_v, gate_v, 1e-6);
+        assert!(
+            (bulk_v - expected_bulk_v).abs() < 2e-5,
+            "CGBO·L backward-Euler bulk voltage at gate {gate_v} V should be {expected_bulk_v} V, got {bulk_v} V"
+        );
+        assert!(
+            control_v.abs() < 1e-8,
+            "the matched zero-CGBO control stays at ground, got {control_v} V"
+        );
+        if gate_v == 2.0 {
+            assert!(
+                bulk_v > 0.9,
+                "CGBO must create a measurable first transient: {bulk_v} V"
+            );
+        }
+
+        let ntc_v = signal_voltage(&session, "adc.adc.2_volts");
+        let diode_v = signal_voltage(&session, "adc.adc.3_volts");
+        assert!((ntc_v - expected_ntc_v).abs() < 1e-9);
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains on its independent load line"
+        );
+        for (channel, voltage_v) in [(0, bulk_v), (1, control_v), (2, ntc_v), (3, diode_v)] {
+            assert_eq!(
+                convert_channel(&mut bus, RP2040_ADC_BASE, channel),
+                expected_adc_code(voltage_v),
+                "RP2040 ADC{channel} conversion follows the solved voltage"
+            );
+        }
+        previous_gate_v = gate_v;
+        previous_bulk_v = bulk_v;
+    }
+    assert!(
+        previous_bulk_v < 0.1,
+        "the charged bulk node discharges as the gate steps down: {previous_bulk_v} V"
     );
 }
