@@ -14,3 +14,8 @@ external_devices:
     connection: adc
     config:
       channel: 1
+  - id: tc_spi1
+    type: max31855
+    connection: spi1
+    config:
+      cs_pin: PA4

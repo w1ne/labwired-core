@@ -65,6 +65,31 @@ const TIM2_NVIC_ISPR0: *mut u32 = 0xE000_E200 as *mut u32;
 #[cfg(feature = "stm32f429-tim2")]
 const TIM2_NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
 
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1: u32 = 0x4001_3000;
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1_CR1: *mut u32 = SPI1 as *mut u32;
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1_CR2: *mut u32 = (SPI1 + 0x04) as *mut u32;
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1_SR: *const u32 = (SPI1 + 0x08) as *const u32;
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1_DR: *mut u32 = (SPI1 + 0x0C) as *mut u32;
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1_IRQ: u32 = 35;
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1_IRQ_BIT: u32 = 1 << (SPI1_IRQ % 32);
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1_NVIC_ISPR1: *const u32 = 0xE000_E204 as *const u32;
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1_NVIC_ICPR1: *mut u32 = 0xE000_E284 as *mut u32;
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1_RXNE: u32 = 1;
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1_TXE: u32 = 1 << 1;
+#[cfg(feature = "stm32f429-spi1")]
+const SPI1_BSY: u32 = 1 << 7;
+
 #[cfg(feature = "stm32f429-tim2")]
 static mut TIM2_IRQ_RECORD: [u32; 2] = [0; 2];
 
@@ -193,6 +218,108 @@ fn smoke_tim2() -> bool {
     send(if released { b"1" } else { b"0" });
     send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
     ok
+}
+
+#[cfg(feature = "stm32f429-spi1")]
+fn smoke_spi1() -> bool {
+    unsafe {
+        // A write while APB2 is gated must not reach SPI1.
+        write_volatile(SPI1_CR1, 1 << 6);
+    }
+    let gated = unsafe { read_volatile(SPI1_CR1) == 0 };
+    unsafe {
+        write_volatile(RCC_APB2ENR, read_volatile(RCC_APB2ENR) | (1 << 12));
+    }
+    let clock = unsafe { read_volatile(RCC_APB2ENR) & (1 << 12) != 0 };
+
+    // PA4 is the GPIO chip select; PA5..PA7 are SPI1 SCK/MISO/MOSI (AF5).
+    unsafe {
+        register_rmw(GPIOA + MODER, 0b11 << (4 * 2), 0b01 << (4 * 2));
+        write_volatile((GPIOA + BSRR) as *mut u32, 1 << 4); // deselect
+        for pin in [5u32, 6, 7] {
+            register_rmw(GPIOA + MODER, 0b11 << (pin * 2), 0b10 << (pin * 2));
+            register_rmw(GPIOA + AFRL, 0xF << (pin * 4), 5 << (pin * 4));
+        }
+
+        // Master, software NSS, fPCLK/8, mode 0, 8-bit frames.
+        write_volatile(SPI1_CR1, (1 << 9) | (1 << 8) | (0b010 << 3) | (1 << 2));
+        write_volatile(SPI1_CR1, read_volatile(SPI1_CR1) | (1 << 6)); // SPE
+        write_volatile(SPI1_NVIC_ICPR1, SPI1_IRQ_BIT);
+        write_volatile(SPI1_CR2, 1 << 7); // TXEIE
+    }
+    let txe_pended = unsafe { read_volatile(SPI1_NVIC_ISPR1) & SPI1_IRQ_BIT != 0 };
+    unsafe {
+        write_volatile(SPI1_CR2, 0);
+        write_volatile(SPI1_NVIC_ICPR1, SPI1_IRQ_BIT);
+    }
+    let txe_released = unsafe { read_volatile(SPI1_NVIC_ISPR1) & SPI1_IRQ_BIT == 0 };
+
+    unsafe {
+        write_volatile(SPI1_CR2, 1 << 6); // RXNEIE
+        write_volatile((GPIOA + BSRR) as *mut u32, 1 << (4 + 16)); // select PA4-low slave
+    }
+    let mut frame = 0u32;
+    let mut rxne_pended = false;
+    let mut transfer_ok = true;
+    for _ in 0..4 {
+        if !wait_spi1(SPI1_SR, SPI1_TXE, SPI1_TXE) {
+            transfer_ok = false;
+            break;
+        }
+        unsafe { write_volatile(SPI1_DR, 0) };
+        if !wait_spi1(SPI1_SR, SPI1_RXNE, SPI1_RXNE) {
+            transfer_ok = false;
+            break;
+        }
+        let rxne = unsafe { read_volatile(SPI1_SR) } & SPI1_RXNE != 0;
+        let pending = unsafe { read_volatile(SPI1_NVIC_ISPR1) } & SPI1_IRQ_BIT != 0;
+        rxne_pended |= rxne && pending;
+        frame = (frame << 8) | (unsafe { read_volatile(SPI1_DR) } & 0xFF);
+    }
+    let idle = wait_spi1(SPI1_SR, SPI1_BSY, 0);
+    unsafe { write_volatile((GPIOA + BSRR) as *mut u32, 1 << 4) }; // deselect
+    let rxne_released = unsafe {
+        read_volatile(SPI1_NVIC_ISPR1) & SPI1_IRQ_BIT == 0
+            && read_volatile(SPI1_SR) & SPI1_RXNE == 0
+    };
+    unsafe { write_volatile(SPI1_CR2, 0) };
+
+    let ok = gated
+        && clock
+        && transfer_ok
+        && idle
+        && frame == 0x0190_1600
+        && txe_pended
+        && txe_released
+        && rxne_pended
+        && rxne_released;
+    send(b"spi1 max31855=");
+    send_hex(frame);
+    send(b" gated=");
+    send(if gated { b"1" } else { b"0" });
+    send(b" clock=");
+    send(if clock { b"1" } else { b"0" });
+    send(b" txeirq=");
+    send(if txe_pended { b"1" } else { b"0" });
+    send(b" rearm=");
+    send(if txe_released { b"0" } else { b"1" });
+    send(b" rxneirq=");
+    send(if rxne_pended { b"1" } else { b"0" });
+    send(b" released=");
+    send(if rxne_released { b"1" } else { b"0" });
+    send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
+    ok
+}
+
+#[cfg(feature = "stm32f429-spi1")]
+fn wait_spi1(address: *const u32, mask: u32, want: u32) -> bool {
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(address) } & mask == want {
+            return true;
+        }
+        core::hint::spin_loop();
+    }
+    false
 }
 
 const SYSTICK_CSR: u32 = 0xE000_E010;
@@ -621,6 +748,9 @@ fn main() -> ! {
 
     #[cfg(any(feature = "stm32f429-adc1", feature = "stm32f412-adc1"))]
     let _adc1_ok = smoke_adc1();
+
+    #[cfg(feature = "stm32f429-spi1")]
+    let _spi1_ok = smoke_spi1();
 
     loop {
         set_led(true);

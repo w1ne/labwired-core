@@ -74,6 +74,18 @@ peripherals:
     clock: { reg: apb1enr, bit: 0 }
     config:
       width: 32
+  # RM0090: SPI1 is the classic F4 block at 0x40013000, clocked by
+  # RCC_APB2ENR.SPI1EN (bit 12), with PA4 chip select and AF5 on PA5..PA7.
+  - id: spi1
+    type: spi
+    bus: sysbus
+    base_address: 0x40013000
+    size: 1KB
+    irq: 35
+    clock: { reg: apb2enr, bit: 12 }
+    config:
+      profile: stm32f4
+      pad_map: stm32f4
   # ADC1 on PA1/IN1 is checked by the exact-import smoke.
   - id: adc1
     type: adc

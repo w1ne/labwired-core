@@ -9,6 +9,7 @@ license = "MIT"
 stm32f429-m4f-fpu = []
 stm32f429-adc1 = []
 stm32f429-tim2 = []
+stm32f429-spi1 = []
 stm32f412-adc1 = []
 
 [dependencies]
