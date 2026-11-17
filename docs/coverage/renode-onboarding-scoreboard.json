@@ -11,7 +11,7 @@
     "pass_observable_assertions": 226,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1657,
+    "pass_claimed_peripherals_total": 1658,
     "pass_claimed_peripherals_median": 4,
     "median_elapsed_ms": 1600,
     "median_elapsed_seconds": 1.6,
@@ -449,28 +449,28 @@
       "script": "examples/renode-onboarding/arty_litex_vexriscv-smoke.yaml",
       "system": "configs/systems/onboarding/arty_litex_vexriscv.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-05T14:47:35Z",
-      "finished_at_utc": "2026-11-05T14:47:39Z",
-      "elapsed_seconds": 4,
-      "elapsed_ms": 3557,
+      "started_at_utc": "2026-11-17T08:38:27Z",
+      "finished_at_utc": "2026-11-17T08:41:46Z",
+      "elapsed_seconds": 199,
+      "elapsed_ms": 198697,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.296,
-        "build_firmware": 1.04,
-        "run_smoke": 2.209
+        "build_cli": 193.652,
+        "build_firmware": 2.43,
+        "run_smoke": 2.567
       },
       "stages_ms": {
-        "build_cli": 296,
-        "build_firmware": 1040,
-        "run_smoke": 2209
+        "build_cli": 193652,
+        "build_firmware": 2430,
+        "run_smoke": 2567
       },
       "_artifact_path": "arty_litex_vexriscv",
       "zero_answering_windows": [],
-      "claimed_peripherals": 3,
+      "claimed_peripherals": 4,
       "smoke_assertion_kinds": [
         "uart_contains",
         "uart_ordered",

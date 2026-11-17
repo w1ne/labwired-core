@@ -1,7 +1,9 @@
 # Narrowed imported Renode profile for the Arty A7 LiteX VexRiscv system.
 # The generated descriptor called this ARM and listed MMCM/Ethernet windows
 # that this engine does not model. Keep only the RV32IM, memory, UART, timer,
-# and Control-and-Status surfaces covered by the exact-import smoke.
+# and Control-and-Status surfaces covered by the exact-import smoke. The
+# LiteX SPI-flash controller is included only for the smoke's ID/status probe;
+# it does not model flash array reads, program, erase, or BIOS boot.
 name: "arty_litex_vexriscv"
 arch: "riscv"
 core: "rv32im"
@@ -29,3 +31,8 @@ peripherals:
     size: "2KB"
     config:
       buttons_active_low: true
+  # LiteX SPI-flash bitbang CSRs with the MT25Q ID/status command subset.
+  - id: "spi_flash_ctrl"
+    type: "litex_spi_flash"
+    base_address: 0x60005000
+    size: "2KB"

@@ -4,16 +4,16 @@
     "type": "risc_v",
     "registers": [
       0,
-      268440200,
+      268442188,
       268697456,
       268634112,
       0,
       999424,
       1125900288,
       8192,
-      1610620928,
       3,
-      300595,
+      1610620928,
+      300786,
       0,
       0,
       274878464,
@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 4000000,
-  "cycles": 16000000,
+  "cycles": 4000000,
   "instructions": 4000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "43b14d4a50f96213429a12a6e9debd9c78e3adffe4aec135acb7c80af47bf272",
+  "firmware_hash": "5bfc6cc7eb6c62b170e8ad37f055b4426037152a3601ab81c11dffaf1112f334",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-arty-litex-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/arty_litex_vexriscv.yaml",
