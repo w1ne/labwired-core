@@ -1,9 +1,10 @@
 # Narrow ESP32-C61 HP-core profile for the ESP32-C61-DevKitC-1-N8R2.
 #
-# This fast-boot profile exposes only UART0's FIFO/status register head. It
-# loads a bare ELF directly; it does not execute the C61 mask ROM or the
-# Espressif bootloader. GPIO, PCR clock control, IO_MUX routing, USB, Wi-Fi,
-# Bluetooth LE, PSRAM and the addressable RGB LED are not claimed here.
+# This fast-boot profile exposes UART0's FIFO/status register head and the
+# official GPIO data/enable/input head through IN1. It loads a bare ELF
+# directly; it does not execute the C61 mask ROM or the Espressif bootloader.
+# PCR clock control, IO_MUX routing, USB, Wi-Fi, Bluetooth LE, PSRAM and the
+# addressable RGB LED protocol are not claimed here.
 #
 # Sources checked 2026-11-13:
 #   ESP32-C61 Series Datasheet v1.1:
@@ -28,6 +29,18 @@ ram:
   base: 0x40800000
   size: "320KB"
 
+# J3 TX/RX map to GPIO11/GPIO10 in Espressif's C61-DevKitC-1 v2.0 guide.
+# The USB-UART bridge and IO_MUX routing stay outside this profile.
+pins:
+  GPIO10:
+    gpio: "gpio"
+    bit: 10
+    functions: [{ type: uart, peripheral: "uart0", role: rx }]
+  GPIO11:
+    gpio: "gpio"
+    bit: 11
+    functions: [{ type: uart, peripheral: "uart0", role: tx }]
+
 peripherals:
   # UART0 uses the C61 register head at 0x60000000. The descriptor exposes
   # FIFO@0 and STATUS@0x1C only; later family-specific registers are omitted.
@@ -38,3 +51,10 @@ peripherals:
     size: "32B"
     config:
       echo_stdout: true
+  # GPIO data/enable/input head at DR_REG_GPIO_BASE 0x6009_1000 (esp-idf C61
+  # reg_base.h). Same ENABLE @0x34 / IN @0x64 head as the C5. The 108-byte
+  # window ends at IN1; matrix, PIN_x and IO_MUX are omitted.
+  - id: "gpio"
+    type: "esp32c61_gpio"
+    base_address: 0x60091000
+    size: "108B"
