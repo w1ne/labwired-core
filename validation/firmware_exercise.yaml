@@ -1383,3 +1383,11 @@ chips:
       - {p: "CMP", ev: "crates/core/src/peripherals/at32f421.rs; crates/core/tests/vendor/at32f421_contract.rs", note: "Mux/polarity/lock and EXINT line-21 rising/falling routing; no firmware drives it yet."}
     advanced_dead: []
     shim: []
+
+  - id: mspm0g3507
+    arch: arm
+    headline: "Local UART0 smoke; no beyond-rubric content. The LP-MSPM0G3507 profile boots a bare-metal image and captures LP_MSPM0G3507_UART0_OK through the TXDATA register path (examples/lp-mspm0g3507-launchpad/evidence/). This proves core execution and register-side TX only; GPRCM, IOMUX/pad routing, UART timing/FIFO, GPIO and the other LaunchPad peripherals are outside the profile (examples/lp-mspm0g3507-launchpad/VALIDATION.md), so no beyond-rubric blocks exist to list."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
