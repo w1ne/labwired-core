@@ -1,5 +1,5 @@
 # Exact-import profile for the STM32F4 platform smoke. It claims only the
-# Cortex-M4 memory, SysTick, RCC, USART2, SPI1, and GPIOA/GPIOD paths exercised
+# Cortex-M4 memory, SysTick, RCC, USART2, SPI1, ADC1 and GPIOA/GPIOD paths exercised
 # by the shared F4 Discovery smoke; other imported peripherals are outside it.
 name: stm32f4
 arch: arm
@@ -52,3 +52,14 @@ peripherals:
   size: 1KB
   config:
     profile: stm32f4
+- id: adc1
+  type: adc
+  bus: sysbus
+  base_address: 0x40012000
+  size: 1KB
+  irq: 18
+  clock: { reg: apb2enr, bit: 8 }
+  config:
+    profile: stm32f4
+analog_pins:
+  PA1: { peripheral: adc1, channel: 1 }
