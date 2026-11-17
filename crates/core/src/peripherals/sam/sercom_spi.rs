@@ -112,7 +112,8 @@ impl SamSercomSpi {
             let next = if dev.cs_pin().is_empty() {
                 true
             } else {
-                bus.read_gpio_output_by_label(dev.cs_pin()) == Some(false)
+                bus.read_gpio_output_by_label(dev.cs_pin())
+                    .is_some_and(|high| dev.cs_selected_at(high))
             };
             if next != *selected {
                 if next {

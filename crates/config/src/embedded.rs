@@ -588,6 +588,18 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["tm1638"],
         include_str!("../../../configs/devices/tm1638.yaml"),
     ),
+    (
+        &[
+            "ir_receiver_tsop38238",
+            "ir-receiver-tsop38238",
+            "tsop38238",
+        ],
+        include_str!("../../../configs/devices/ir_receiver_tsop38238.yaml"),
+    ),
+    (
+        &["ir_remote_nec", "ir-remote-nec"],
+        include_str!("../../../configs/devices/ir_remote_nec.yaml"),
+    ),
 ];
 
 /// The embedded `configs/devices/*.yaml` descriptors, keyed by `type:` string.
