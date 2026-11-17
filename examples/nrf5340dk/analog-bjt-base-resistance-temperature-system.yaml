@@ -1,0 +1,107 @@
+# Generic Gummel-Poon base-resistance temperature coefficients route through
+# nRF5340-DK SAADC channels 2..6 beside unrelated NTC and diode netlists.
+name: "nrf5340dk-analog-bjt-base-resistance-temperature"
+chip: "../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_base_resistance_temperature_coefficients"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_base_resistance_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.2_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 collector base 0 NPN_RB_TEMP temp=125
+        .model NPN_RB_TEMP NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 TLEV=3 TNOM=25 TIS1=0 TIS2=0 RB=10k RBM=1k IRB=20u TRBM1=1m TRBM2=10u TIRB1=1m TIRB2=20u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_base_resistance_temperature_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_base_resistance_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.3_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 collector base 0 NPN_RB_EXPLICIT temp=125
+        .model NPN_RB_EXPLICIT NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 TLEV=3 TNOM=25 TIS1=0 TIS2=0 RB=10k RBM=1.2k IRB=26u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_base_resistance_trbm_temperature"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_base_resistance_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.4_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 collector base 0 NPN_TRBM_TEMP temp=125
+        .model NPN_TRBM_TEMP NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 TLEV=3 TNOM=25 TIS1=0 TIS2=0 RB=10k RBM=1k IRB=20u TRBM1=1m TRBM2=10u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_base_resistance_tirb_temperature"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_base_resistance_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.5_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 collector base 0 NPN_TIRB_TEMP temp=125
+        .model NPN_TIRB_TEMP NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 TLEV=3 TNOM=25 TIS1=0 TIS2=0 RB=10k RBM=1k IRB=20u TIRB1=1m TIRB2=20u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_base_resistance_temperature_nominal"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_base_resistance_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.6_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 collector base 0 NPN_RB_NOMINAL temp=125
+        .model NPN_RB_NOMINAL NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 TLEV=3 TNOM=25 TIS1=0 TIS2=0 RB=10k RBM=1k IRB=20u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3

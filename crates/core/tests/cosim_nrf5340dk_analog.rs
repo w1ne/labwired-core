@@ -163,6 +163,77 @@ fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool)
     collector_for_vbe(0.5 * (low + high))
 }
 
+/// Independent ngspice level-1 base-spreading resistance interpolation.
+fn bjt_base_resistance_ohms(base_current_a: f64, rb_ohms: f64, rbm_ohms: f64, irb_a: f64) -> f64 {
+    let ratio = (base_current_a / irb_a).max(1e-9);
+    let z = ((1.0 + 14.59025 * ratio).sqrt() - 1.0) / (2.4317 * ratio.sqrt());
+    let tan_z = z.tan();
+    rbm_ohms + 3.0 * (rb_ohms - rbm_ohms) * (tan_z - z) / (z * tan_z * tan_z)
+}
+
+/// Independent Gummel–Poon collector load line with explicit temperature-
+/// adjusted RBM/IRB values. TLEV=3 with zero IS coefficients in the fixture
+/// keeps the saturation current and beta fixed; only thermal voltage and the
+/// base resistance coefficients change with instance temperature.
+fn bjt_base_resistance_temperature_collector_voltage(
+    base_drive_v: f64,
+    rbm_ohms: f64,
+    irb_a: f64,
+    temperature_c: f64,
+) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const DRIVE_OHMS: f64 = 2_000.0;
+    const RB_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VAR: f64 = 75.0;
+    let thermal_v = 1.380_649e-23 * (temperature_c + 273.15) / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / thermal_v).exp();
+        let reverse = (vbc / thermal_v).exp();
+        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let transport = IS_A * (forward - reverse) * base_width;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let base_resistance = bjt_base_resistance_ohms(base_current, RB_OHMS, rbm_ohms, irb_a);
+        let residual = (base_drive_v - vbe) / (DRIVE_OHMS + base_resistance) - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 /// First backward-Euler step of the two linear CJC partitions. With MJC=0,
 /// depletion charge is a constant capacitor; XCJC=0 puts it directly on the
 /// external base, while XCJC=1 puts it behind RB at the internal base.
@@ -1009,4 +1080,161 @@ fn nrf5340dk_ntc_and_diode_netlists_reach_distinct_saadc_channels() {
         samples.iter().all(|sample| sample.3 == samples[0].3),
         "the independent diode channel should stay constant while the NTC changes: {samples:?}"
     );
+}
+
+#[test]
+fn nrf5340dk_bjt_base_resistance_temperature_coefficients_reach_saadc() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let base_resistance = SystemManifest::from_file(root(
+        "examples/nrf5340dk/analog-bjt-base-resistance-temperature-system.yaml",
+    ))
+    .expect("load matched BJT RBM/IRB temperature-coefficient branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(base_resistance.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 8);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and five BJT resistance branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic netlists must resolve to SAADC channels 0 through 6"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_base_resistance_temperature.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    const RBM_NOMINAL_OHMS: f64 = 1_000.0;
+    const IRB_NOMINAL_A: f64 = 20e-6;
+    // TNOM=25 °C, TEMP=125 °C: TRBM1/2 produce ×1.2 and TIRB1/2
+    // produce ×1.3. The explicit branch is a second encoding of those values.
+    const RBM_HOT_OHMS: f64 = 1_200.0;
+    const IRB_HOT_A: f64 = 26e-6;
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive_voltages = None;
+
+    for base_drive_v in [0.9_f64, 1.0, 1.1, 1.2] {
+        session
+            .set_signal_number("ui.bjt_base_resistance_temperature.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and temperature-adjusted BJT branches");
+        assert_eq!(steps.len(), 7, "all seven generic analog branches solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected SAADC route errors: {errors:?}"
+        );
+
+        let routed_ntc_v = voltage(&session, "adc.saadc.0_volts");
+        let routed_diode_v = voltage(&session, "adc.saadc.1_volts");
+        assert!((routed_ntc_v - ntc_v).abs() < 1e-9);
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "the independent Shockley diode remains isolated"
+        );
+
+        let actual = [
+            voltage(&session, "adc.saadc.2_volts"),
+            voltage(&session, "adc.saadc.3_volts"),
+            voltage(&session, "adc.saadc.4_volts"),
+            voltage(&session, "adc.saadc.5_volts"),
+            voltage(&session, "adc.saadc.6_volts"),
+        ];
+        let expected = [
+            bjt_base_resistance_temperature_collector_voltage(
+                base_drive_v,
+                RBM_HOT_OHMS,
+                IRB_HOT_A,
+                125.0,
+            ),
+            bjt_base_resistance_temperature_collector_voltage(
+                base_drive_v,
+                RBM_HOT_OHMS,
+                IRB_HOT_A,
+                125.0,
+            ),
+            bjt_base_resistance_temperature_collector_voltage(
+                base_drive_v,
+                RBM_HOT_OHMS,
+                IRB_NOMINAL_A,
+                125.0,
+            ),
+            bjt_base_resistance_temperature_collector_voltage(
+                base_drive_v,
+                RBM_NOMINAL_OHMS,
+                IRB_HOT_A,
+                125.0,
+            ),
+            bjt_base_resistance_temperature_collector_voltage(
+                base_drive_v,
+                RBM_NOMINAL_OHMS,
+                IRB_NOMINAL_A,
+                125.0,
+            ),
+        ];
+        for (channel, (actual_v, expected_v)) in actual.into_iter().zip(expected).enumerate() {
+            assert!(
+                (actual_v - expected_v).abs() < 5e-5,
+                "SAADC channel {} independent RBM/IRB load line at {base_drive_v} V should be {expected_v} V, got {actual_v} V",
+                channel + 2
+            );
+        }
+        assert!(
+            (actual[0] - actual[1]).abs() < 1e-9,
+            "TRBM/TIRB coefficients must match an explicit hot RBM/IRB model card"
+        );
+
+        let codes = scan_saadc_channels::<8>(&mut bus);
+        for (channel, voltage_v) in [
+            (0, routed_ntc_v),
+            (1, routed_diode_v),
+            (2, actual[0]),
+            (3, actual[1]),
+            (4, actual[2]),
+            (5, actual[3]),
+            (6, actual[4]),
+        ] {
+            assert_eq!(
+                codes[channel],
+                expected_saadc_code(voltage_v),
+                "SAADC channel {channel} converts its routed solved voltage"
+            );
+        }
+        assert_eq!(codes[7], 0, "neighboring undriven AIN7 stays at ground");
+
+        if base_drive_v == 1.2 {
+            high_drive_voltages = Some(actual);
+        }
+    }
+
+    let [both, explicit, trbm_only, tirb_only, nominal] =
+        high_drive_voltages.expect("high-drive sample was recorded");
+    assert!(
+        trbm_only - nominal > 0.01,
+        "TRBM temperature coefficients raise the high-drive collector voltage: {trbm_only} V vs {nominal} V"
+    );
+    assert!(
+        tirb_only - nominal > 0.05,
+        "TIRB temperature coefficients independently raise the high-drive collector voltage: {tirb_only} V vs {nominal} V"
+    );
+    assert!(
+        both - nominal > 0.05,
+        "combined TRBM/TIRB temperature laws shift the high-drive load line: {both} V vs {nominal} V"
+    );
+    assert!((both - explicit).abs() < 1e-9);
 }
