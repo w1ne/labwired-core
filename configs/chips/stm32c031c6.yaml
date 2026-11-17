@@ -273,3 +273,11 @@ peripherals:
     type: "nvic"
     base_address: 0xE000E100
     size: "1KB"
+
+# Narrow official NUCLEO-C031C6 pin table from ST UM2953 Rev 2 (already cited
+# above): LD4 on PA5, USART2 VCP on PA2/PA3. Not the complete LQFP48 bond-out.
+# Board wiring lives in configs/systems/nucleo-c031c6.yaml.
+pins:
+  PA2: { gpio: "gpioa", bit: 2, functions: [{ type: uart, peripheral: "usart2", role: tx }] }
+  PA3: { gpio: "gpioa", bit: 3, functions: [{ type: uart, peripheral: "usart2", role: rx }] }
+  PA5: { gpio: "gpioa", bit: 5 }
