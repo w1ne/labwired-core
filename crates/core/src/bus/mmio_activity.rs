@@ -301,13 +301,26 @@ impl SystemBus {
     /// (resource metrics P1) — every peri MMIO, regardless of access class.
     #[inline]
     pub(crate) fn note_mmio_activity(&self, peri_idx: usize, offset: u64) {
-        self.note_mmio_activities(peri_idx, offset, 1);
+        self.note_mmio_accesses::<false>(peri_idx, offset, 1);
+    }
+
+    /// [`Self::note_mmio_activity`] for a CPU read. A read the device
+    /// declares pure ([`crate::Peripheral::read_is_pure`]) does not end an
+    /// armed batch: it changes nothing a boundary would have to observe.
+    #[inline]
+    pub(crate) fn note_mmio_read(&self, peri_idx: usize, offset: u64) {
+        self.note_mmio_accesses::<true>(peri_idx, offset, 1);
     }
 
     /// Bulk form used only after a peripheral has explicitly promised that
     /// repeated reads are stable and side-effect-free until the next event.
     #[inline]
     pub(crate) fn note_mmio_activities(&self, peri_idx: usize, offset: u64, count: u32) {
+        self.note_mmio_accesses::<true>(peri_idx, offset, count);
+    }
+
+    #[inline]
+    fn note_mmio_accesses<const READ: bool>(&self, peri_idx: usize, offset: u64, count: u32) {
         // Before the bounds check: a model that lazily advances off the clock
         // must see "now" even if the index lookup below bails.
         //
@@ -327,7 +340,10 @@ impl SystemBus {
             self.batch_stop.note_device_access();
             return;
         };
-        if self.batch_stop.armed() && !p.dev.is_plain_memory() {
+        if self.batch_stop.armed()
+            && !p.dev.is_plain_memory()
+            && !(READ && p.dev.read_is_pure(offset))
+        {
             self.batch_stop.note_device_access();
         }
         let class = p.dev.mmio_access_class(offset);

@@ -739,9 +739,12 @@ impl<C: Cpu> Machine<C> {
         // nRF52 peripheral that cannot exist on, say, an ESP32-C3.
         {
             let op = self.nvmc_index.and_then(|idx| {
-                self.bus
-                    .peripherals
-                    .get_mut(idx)?
+                let entry = self.bus.peripherals.get_mut(idx)?;
+                // One trait call while nothing is latched, not a downcast.
+                if !entry.dev.has_pending_op() {
+                    return None;
+                }
+                entry
                     .dev
                     .as_any_mut()?
                     .downcast_mut::<crate::peripherals::nrf52::nvmc::Nrf52Nvmc>()
