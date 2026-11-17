@@ -5568,6 +5568,51 @@ mod analog {
         assert_eq!(error.line(), None);
     }
 
+    #[test]
+    fn nonconvergence_reports_the_last_iteration_residual() {
+        // A stiff, poorly conditioned network remains inconclusive; its error
+        // must name the actual last change, not a fabricated zero residual.
+        let netlist = r#"V1 n1 0 dc 3.7
+R2 n2 n3 23.7943m
+R3 n4 n5 98.295m
+R4 n1 n6 18.0723m
+R5 n1 n7 38.4429m
+R6 n8 n9 15.3891m
+R7 n10 n11 11.04m
+R8 n12 n13 23.9767m
+R9 n12 n14 23.7272m
+R10 n15 n16 17.2577m
+R11 n17 n18 42.5428m
+R12 n19 n20 16.6073m
+R13 n21 n20 92.1083m
+R14 n22 n23 89.2611m
+R15 n24 n25 17.8761m
+R16 n26 n27 33.7794m
+D17 n12 n6 diode
+M18 n16 n22 n28 n28 PMOS
+M19 n10 n17 n29 n29 NMOS
+R20 n30 n25 1k
+R21 n31 n23 10k
+R22 n9 n32 47k
+R23 n33 n3 100k
+R24 n18 n34 10k
+R25 n35 n27 1k
+R26 n7 n36 100k
+.model diode D (IS=2.52e-9 N=1.752 RS=0)
+S27 n37 n4 n38 ron=25 roff=1e12
+"#;
+        let circuit = parse_netlist(netlist).expect("network parses");
+        match Solver::new(circuit, Integration::BackwardEuler) {
+            Err(AnalogError::NoConvergence { delta, .. }) => {
+                assert!(
+                    delta.is_finite() && delta > 0.0,
+                    "last Newton residual: {delta}"
+                );
+            }
+            other => panic!("expected nonconvergence, got {other:?}"),
+        }
+    }
+
     /// Whatever a nonlinear circuit does, it does not produce `NaN`: a step
     /// that cannot be solved returns `Err`. Swept over a stiff rectifier driven
     /// hard in both directions with a reactive load.
