@@ -330,11 +330,16 @@ chips:
 
   - id: esp32c61
     arch: riscv32imac
-    headline: "No beyond-rubric C61 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, PSRAM or the other C61 peripherals."
-    functional: []
+    headline: "The DevKitC-1-N8R2 profile exercises the UART0 TX FIFO, GPIO4 output latch, and the C61 GPIO-matrix I2C0 route to a BME280 on GPIO6/GPIO22. Firmware reads the sensor ID and a raw-temperature vector. It does not model mask-ROM boot, the physical USB bridge, electrical IO_MUX, other GPIO-matrix functions, GPIO26..29, GPIO interrupts, the RGB LED, Wi-Fi 6, Bluetooth LE, PSRAM, or sensor conversion timing."
+    functional:
+      - what: "BME280 ID and raw-temperature read over GPIO6/22-routed C61 I2C0"
+        fw: esp32c61-bme280-smoke
+        ev: "examples/esp32c61-devkitc-1-n8r2-bme280/evidence/run/logs/run_smoke.log"
+        gate: pr
     advanced_unit_only: []
     advanced_dead: []
-    shim: []
+    shim:
+      - {p: io_mux, ev: "configs/chips/esp32c61.yaml (declarative; configs/peripherals/esp32c6/io_mux.yaml)", note: "Register storage only; electrical pad muxing is not enforced."}
 
   - id: esp32p4
     arch: riscv32imac
