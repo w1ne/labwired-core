@@ -1,0 +1,102 @@
+# BJT TTF1/TTF2 temperature scaling is compared with explicit TF values.
+# Matched NPN branches and an unrelated diode route through F401 ADC1.
+name: "nucleo-f401re-bjt-temp-transit-charge"
+chip: "../../configs/chips/stm32f401.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_ttf_nominal"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_temp_transit.base_v"
+    outputs:
+      base_voltage: "board.analog.pa1_volts"
+    config:
+      netlist_text: |
+        Vcollector collector 0 dc 0.1
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST temp=27
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 TNOM=27 TF=1u TTF1=20m TTF2=200u)
+      probes:
+        base_voltage: "v(base)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_ttf_nominal_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_temp_transit.base_v"
+    outputs:
+      base_voltage: "board.analog.pa2_volts"
+    config:
+      netlist_text: |
+        Vcollector collector 0 dc 0.1
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST temp=27
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 TNOM=27 TF=1u)
+      probes:
+        base_voltage: "v(base)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_ttf_hot"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_temp_transit.base_v"
+    outputs:
+      base_voltage: "board.analog.pa3_volts"
+    config:
+      netlist_text: |
+        Vcollector collector 0 dc 0.1
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST temp=77
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 TNOM=27 TF=1u TTF1=20m TTF2=200u)
+      probes:
+        base_voltage: "v(base)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_ttf_hot_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_temp_transit.base_v"
+    outputs:
+      base_voltage: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vcollector collector 0 dc 0.1
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST temp=77
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 TNOM=27 TF=2.5u)
+      probes:
+        base_voltage: "v(base)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_ttf_hot_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_temp_transit.base_v"
+    outputs:
+      base_voltage: "board.analog.pa5_volts"
+    config:
+      netlist_text: |
+        Vcollector collector 0 dc 0.1
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST temp=77
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 TNOM=27 TF=1u)
+      probes:
+        base_voltage: "v(base)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
