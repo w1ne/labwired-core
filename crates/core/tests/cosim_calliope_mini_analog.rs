@@ -44,6 +44,57 @@ fn diode_load_line_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+/// Independent Gummel–Poon collector load line with optional forward Early effect.
+fn bjt_collector_voltage(base_drive_v: f64, vaf_v: Option<f64>) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAR: f64 = 75.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - vaf_v.map_or(0.0, |vaf| vbc / vaf) - vbe / VAR;
+        let transport = IS_A * (forward - reverse) * base_width;
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = (low + high) / 2.0;
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        (low + high) / 2.0
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = (low + high) / 2.0;
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        if (base_drive_v - vbe) / BASE_OHMS > base_current {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe((low + high) / 2.0)
+}
+
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
     match session.signals().get(path) {
         Some(CosimSignalValue::F64(volts)) => *volts,
@@ -156,6 +207,129 @@ fn calliope_mini_ntc_and_diode_netlists_reach_distinct_adc_channels() {
     assert!(
         samples.iter().all(|sample| sample.3 == samples[0].3),
         "the independent diode channel should stay constant while the NTC changes: {samples:?}"
+    );
+}
+
+#[test]
+fn calliope_mini_bjt_early_effect_reaches_adc_beside_ntc_and_diode() {
+    let system_path = root("configs/systems/calliope-mini-v1.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Calliope profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/calliope-mini-v1/analog-bjt-early-adc-system.yaml",
+    ))
+    .expect("load NTC, diode and matched generic BJT branches");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF51822 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Calliope system bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile carries NTC, diode, and matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must bind to nRF51 ADC channels 0 through 3"
+    );
+
+    const NTC_TEMPERATURE_C: f64 = 25.0;
+    session
+        .set_signal_number("ui.ntc.temperature_c", NTC_TEMPERATURE_C)
+        .expect("hold the unrelated NTC at nominal temperature");
+    session
+        .set_signal_number("ui.bjt_early.base_v", 0.0)
+        .expect("initialize both BJT base-drive sources");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize all four independent device netlists");
+    assert_eq!(initial_steps.len(), 4, "NTC, diode and both BJTs solve");
+    assert!(
+        initial_errors.is_empty(),
+        "route errors: {initial_errors:?}"
+    );
+
+    let ntc_resistance = ntc_resistance_ohms(NTC_TEMPERATURE_C);
+    let expected_ntc_v = 3.3 * ntc_resistance / (ntc_resistance + 10_000.0);
+    let expected_diode_v = diode_load_line_voltage();
+    let mut early_effect_deltas = Vec::new();
+    let mut unrelated_codes = None;
+    for base_drive_v in [0.70_f64, 0.78, 0.86] {
+        session
+            .set_signal_number("ui.bjt_early.base_v", base_drive_v)
+            .expect("set matched BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode and both BJT branches");
+        assert_eq!(steps.len(), 4, "all four branches solve at each drive");
+        assert!(errors.is_empty(), "route errors: {errors:?}");
+
+        let voltages = [
+            signal_voltage(&session, "adc.adc.0_volts"),
+            signal_voltage(&session, "adc.adc.1_volts"),
+            signal_voltage(&session, "adc.adc.2_volts"),
+            signal_voltage(&session, "adc.adc.3_volts"),
+        ];
+        assert!(
+            (voltages[0] - expected_ntc_v).abs() < 1e-9,
+            "unrelated NTC should remain at {expected_ntc_v} V, got {} V",
+            voltages[0]
+        );
+        assert!(
+            (voltages[1] - expected_diode_v).abs() < 2e-5,
+            "unrelated diode should remain at {expected_diode_v} V, got {} V",
+            voltages[1]
+        );
+
+        let expected_early_v = bjt_collector_voltage(base_drive_v, Some(50.0));
+        let expected_control_v = bjt_collector_voltage(base_drive_v, None);
+        assert!(
+            (voltages[2] - expected_early_v).abs() < 5e-5,
+            "VAF=50 branch should match independent load line {expected_early_v} V, got {} V",
+            voltages[2]
+        );
+        assert!(
+            (voltages[3] - expected_control_v).abs() < 5e-5,
+            "no-forward-Early control should match independent load line {expected_control_v} V, got {} V",
+            voltages[3]
+        );
+        assert!(
+            voltages[2] < voltages[3] - 0.001,
+            "finite VAF should increase collector current: {} V vs {} V",
+            voltages[2],
+            voltages[3]
+        );
+        early_effect_deltas.push(voltages[3] - voltages[2]);
+
+        let codes = [
+            convert_channel(&mut bus, 0),
+            convert_channel(&mut bus, 1),
+            convert_channel(&mut bus, 2),
+            convert_channel(&mut bus, 3),
+        ];
+        for (channel, voltage) in voltages.iter().copied().enumerate() {
+            assert_eq!(
+                codes[channel],
+                expected_10_bit_code(voltage),
+                "ADC channel {channel} must convert its routed device voltage"
+            );
+        }
+        match unrelated_codes {
+            Some((ntc_code, diode_code)) => {
+                assert_eq!(codes[0], ntc_code, "BJT drive must not disturb NTC route");
+                assert_eq!(
+                    codes[1], diode_code,
+                    "BJT drive must not disturb diode route"
+                );
+            }
+            None => unrelated_codes = Some((codes[0], codes[1])),
+        }
+    }
+
+    assert!(
+        early_effect_deltas.iter().any(|delta| *delta > 0.02),
+        "finite VAF must measurably shift collector voltage: {early_effect_deltas:?}"
     );
 }
 
