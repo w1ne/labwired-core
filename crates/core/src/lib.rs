@@ -476,6 +476,10 @@ pub struct Machine<C: Cpu> {
     /// the bus), so the per-cycle drain short-circuits without a peripheral
     /// walk or downcast.
     scb_index: Option<usize>,
+    /// The SCB's SYSRESETREQ mirror (`Scb::sysreset_signal`), resolved with
+    /// [`Self::scb_index`] under the same fixed-set assumption. Lets the
+    /// boundary drain skip the downcast while no reset is latched.
+    scb_sysreset_signal: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Cached bus index of the nRF52 NVMC peripheral. Resolved once at
     /// construction; the advance boundary drains a latched erase op every
     /// instruction and used to walk the whole ~40-entry peripheral list,
@@ -1195,12 +1199,18 @@ impl<C: Cpu> Machine<C> {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::simctl::SimCtl>())
                 .is_some()
         });
-        let scb_index = bus.peripherals.iter().position(|p| {
-            p.dev
-                .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::scb::Scb>())
-                .is_some()
-        });
+        // The SCB's index and its SYSRESETREQ mirror, in the one downcast.
+        let (scb_index, scb_sysreset_signal) = bus
+            .peripherals
+            .iter()
+            .enumerate()
+            .find_map(|(i, p)| {
+                p.dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::scb::Scb>())
+                    .map(|scb| (i, scb.sysreset_signal()))
+            })
+            .unzip();
         let reset_request_indices: Vec<usize> = bus
             .peripherals
             .iter()
@@ -1274,6 +1284,7 @@ impl<C: Cpu> Machine<C> {
             flash_index,
             simctl_index,
             scb_index,
+            scb_sysreset_signal,
             nvmc_index,
             reset_request_indices,
             sd_hle: None,
@@ -1554,6 +1565,11 @@ impl<C: Cpu> Machine<C> {
         let Some((_, cycles)) = sec.poll_loop_skip_budget(&self.bus, limit) else {
             return false;
         };
+        // The primary runs beside a deferral and could read a store's
+        // intermediate value.
+        if sec.poll_loop_plan_stores() {
+            return false;
+        }
         // The step that raises CCOMPARE0 (the `edge`-th from now) runs live.
         let len = edge.map_or(cycles, |edge| cycles.min(edge.saturating_sub(1)));
         if len < 2 {
@@ -1616,6 +1632,28 @@ impl<C: Cpu> Machine<C> {
         #[cfg(feature = "event-scheduler")]
         {
             if !self.bus.idle_fast_forward_legacy_safe() {
+                return 0;
+            }
+
+            // The common active-core case cannot fast-forward: it has no WFI
+            // budget, no proven timer-poll loop, and no new timer-poll MMIO
+            // evidence to consume. Once bootstrap is complete and there is no
+            // due or buffered event, skip this redundant preflight drain.
+            // `plan_cpu_window` still services resident edges before execution,
+            // and the regular commit boundary still ticks peripherals and
+            // drains scheduler events.
+            if self.cpu_secondary.is_none()
+                && self.secondary_defer.is_none()
+                && self.scheduler_bootstrapped
+                && self
+                    .sched
+                    .next_event_deadline()
+                    .is_none_or(|deadline| deadline > self.total_cycles)
+                && self.bus.pending_schedule.is_empty()
+                && !self.bus.timer_poll_coalesce_has_pending_activity()
+                && self.cpu.idle_fast_forward_budget(&self.bus).is_none()
+                && !self.cpu.poll_loop_anchor_ready()
+            {
                 return 0;
             }
 
@@ -1704,6 +1742,19 @@ impl<C: Cpu> Machine<C> {
                 }
                 _ => None,
             };
+            // A loop that stores is a fixed point only on its own: a second
+            // core running beside it could read an intermediate value.
+            let primary_stores = primary_spin.is_some() && self.cpu.poll_loop_plan_stores();
+            let secondary_stores = secondary_spin.is_some()
+                && self
+                    .cpu_secondary
+                    .as_ref()
+                    .is_some_and(|sec| sec.poll_loop_plan_stores());
+            if (primary_stores && (secondary_spin.is_some() || deferred_end.is_some()))
+                || (secondary_stores && primary_spin.is_some())
+            {
+                return 0;
+            }
             let spinning =
                 primary_spin.is_some() || secondary_spin.is_some() || deferred_end.is_some();
             let mut budget = match (wfi_budget, primary_spin) {
@@ -2744,6 +2795,16 @@ impl<C: Cpu> Machine<C> {
     /// resolved at construction — non-Cortex-M configs (no SCB on the bus)
     /// short-circuit to `false` without touching the peripheral vector at all.
     pub(crate) fn drain_scb_reset_request(&self) -> bool {
+        // The SCB raises this lock-free mirror together with its latch, so a
+        // clear mirror answers "nothing pending" without the `as_any` call and
+        // `TypeId` compare a downcast costs at every boundary.
+        if self
+            .scb_sysreset_signal
+            .as_ref()
+            .is_some_and(|signal| !signal.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            return false;
+        }
         let Some(idx) = self.scb_index else {
             return false;
         };
@@ -2765,6 +2826,12 @@ impl<C: Cpu> Machine<C> {
     fn drain_flash_op(&self) -> Option<crate::peripherals::flash::FlashOp> {
         let idx = self.flash_index?;
         let p = self.bus.peripherals.get(idx)?;
+        // Runs at every boundary of every board with a FLASH model, and an
+        // op is almost never pending: ask through the trait (one call) before
+        // paying `as_any` plus a `TypeId` compare to downcast.
+        if !p.dev.has_pending_op() {
+            return None;
+        }
         p.dev
             .as_any()
             .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())

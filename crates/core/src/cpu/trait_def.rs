@@ -406,6 +406,15 @@ pub trait Cpu: Send {
         None
     }
 
+    /// True when the loop the last [`Self::poll_loop_skip_budget`] proved
+    /// stores to memory on every iteration (writing back the bytes memory
+    /// already holds). Its intermediate values are then visible to anything
+    /// running beside it, so the machine skips it only while no other core
+    /// runs. Default `false`.
+    fn poll_loop_plan_stores(&self) -> bool {
+        false
+    }
+
     /// End-of-run diagnosis only. When the core sits in a loop that is a
     /// fixed point on plain memory (one iteration from the current PC comes
     /// back to it with the architectural state unchanged, loading only RAM or
@@ -689,6 +698,9 @@ impl Cpu for Box<dyn Cpu> {
     }
     fn fast_forward_poll_loop(&mut self, cycles: u64) -> bool {
         (**self).fast_forward_poll_loop(cycles)
+    }
+    fn poll_loop_plan_stores(&self) -> bool {
+        (**self).poll_loop_plan_stores()
     }
     fn poll_loop_defer_changed(&self, bus: &dyn Bus) -> bool {
         (**self).poll_loop_defer_changed(bus)

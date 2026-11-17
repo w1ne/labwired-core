@@ -225,6 +225,10 @@ pub struct ResolvedClockGate {
     /// Bus index of the GCLK peripheral, resolved at config-build when
     /// [`Self::gclk_id`] is `Some`. `None` when no GCLK channel is required.
     pub gclk_idx: Option<usize>,
+    /// Last observed reset hold from the controller
+    /// ([`crate::Peripheral::clock_gate_reset_asserted`]), so an assertion
+    /// is applied once, on its edge.
+    pub reset_asserted: bool,
 }
 
 /// The `peripheral_tick_interval` recommended for a fully scheduler-driven
@@ -358,6 +362,16 @@ impl BatchStop {
     }
 
     #[inline]
+    /// Would a store of `len` bytes at `addr` hit the armed watch?
+    pub(crate) fn would_hit(&self, addr: u64, len: u64) -> bool {
+        self.armed.get()
+            && self
+                .watch
+                .borrow()
+                .iter()
+                .any(|&(lo, hi)| addr < hi && addr + len > lo)
+    }
+
     pub(crate) fn note_store(&self, addr: u64, len: u64) {
         if self.armed.get()
             && self
@@ -523,6 +537,10 @@ pub struct SystemBus {
     /// `rebuild_peripheral_ranges` so IRQ-level re-derivation on MMIO write
     /// can poll only those models (not the full bus).
     scheduler_driver_indices: Vec<usize>,
+    /// Indices of peripherals that drive internal EXTI lines
+    /// ([`crate::Peripheral::drives_exti_lines`]). Empty on most chips, which
+    /// keeps the per-write delivery check to one length test.
+    exti_line_driver_indices: Vec<usize>,
     /// Retained scratch for `poll_scheduler_matrix_sources`: each scheduler-driven
     /// peripheral fills this buffer via `Peripheral::matrix_irq_sources_into`
     /// instead of returning a freshly-allocated `Vec` per poll. Cleared before

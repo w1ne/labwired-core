@@ -557,8 +557,8 @@
     {
       "device_type": "microsd",
       "label": "microSD (SPI)",
-      "summary": "SPI-mode SDHC card with an in-memory block store (init, CSD/CID, single and multi-block read/write).",
-      "detail": "CMD0/8/55+ACMD41/58/59/9/10/13/16/17/18/12/24/25/32/33/38 with R1/R2/R3/R7 framing, data tokens, data-response 0x05 and busy. Blocks never written read as zeros; written blocks are exposed in the `sd_card` inspect artifact. No filesystem is pre-formatted and no SDSC byte addressing.",
+      "summary": "SPI-mode SDHC card backed by a disk image or an in-memory block store (init, CSD/CID, single and multi-block read/write).",
+      "detail": "CMD0/8/55+ACMD41/58/59/9/10/13/16/17/18/12/24/25/32/33/38 with R1/R2/R3/R7 framing, data tokens, data-response 0x05 and busy. An optional disk image backs the card (capacity follows its size); writes go to an overlay and never modify the image. Blocks outside the image that were never written read as zeros; blocks that differ from the image are exposed in the `sd_card` inspect artifact. No SDSC byte addressing.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -570,7 +570,39 @@
         {
           "name": "capacity_mib",
           "ty": "int",
-          "doc": "Card capacity in MiB. Defaults to 1024."
+          "doc": "Card capacity in MiB. Defaults to 1024, or to the image size when an image is given."
+        },
+        {
+          "name": "image",
+          "ty": "str",
+          "doc": "Host path of a raw disk image, relative to the system manifest. Read when the manifest is loaded from a file; the card never writes it back."
+        },
+        {
+          "name": "image_base64",
+          "ty": "str",
+          "doc": "Raw disk image inline, base64 (RFC 4648). Alternative to `image`."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "st7920",
+      "label": "ST7920 128x64 LCD",
+      "summary": "Sitronix ST7920 128x64 monochrome graphic LCD (LCD12864) in serial mode.",
+      "detail": "Serial interface framing (sync byte with RW/RS, split nibbles, CS active high), basic and extended instruction sets, DDRAM text with half-width characters and four CGRAM glyphs, GDRAM graphics with the 128x64 fold, display on/off, clear, home and entry mode. The framebuffer artifact combines text and graphics. Half-width glyphs use a public-domain 8x13 font, not the Sitronix ROM bitmaps; full-width CGROM characters are reported as unknown pixels. Cursor, blink, display shift, scroll and ICON RAM are not modelled.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS (RS pin in serial mode) GPIO, e.g. \"PA4\". Empty means CS tied high."
+        },
+        {
+          "name": "cs_active_high",
+          "ty": "bool",
+          "doc": "CS polarity. Defaults to true (the ST7920 is selected while CS is high)."
         }
       ],
       "labs": [],
@@ -1805,7 +1837,7 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -55.0,
-          "max": 150.0,
+          "max": 300.0,
           "default": 25.0
         }
       ]
@@ -3460,6 +3492,16 @@
           "name": "model",
           "ty": "str",
           "doc": "Calibration: sg90 | mg996r | mg995 | mg90s | standard. Defaults from type alias when omitted."
+        },
+        {
+          "name": "source_address",
+          "ty": "int",
+          "doc": "I2C address of a PWM controller (PCA9685) whose output drives this servo. With source_channel, replaces the GPIO/LEDC drive path."
+        },
+        {
+          "name": "source_channel",
+          "ty": "int",
+          "doc": "Output channel (0..15) of the PWM controller at source_address."
         },
         {
           "name": "ledc_channel",

@@ -4652,6 +4652,52 @@ fn test_exec_movsp_overflow_raises_exception() {
     );
 }
 
+/// `prime_faithful_windows` gives a fast-booted core the root caller frame
+/// that `_WindowOverflow8` needs.
+///
+/// The app entry starts with `entry a1, N`. With `PS.CALLINC = 0` the entry
+/// function would own window 0 and have no caller, so its first spill would
+/// read the caller SP from an unwritten `[a1 - 12]` and store to
+/// `0xffff_ffe0` (the fault the Arduino Nano ESP32 hit on fast boot). After
+/// priming, ENTRY rotates to window 1 and window 0 keeps the boot SP, which
+/// `_WindowOverflow4` writes to `[entry_sp - 12]` when it spills that frame.
+#[test]
+fn test_prime_faithful_windows_leaves_root_caller_frame() {
+    let (mut cpu, mut bus) = make_cpu_bus();
+    const BOOT_SP: u32 = 0x3FCD_8000;
+    cpu.set_pc(TEST_PC);
+    cpu.set_sp(BOOT_SP);
+    labwired_core::boot::esp32s3::prime_faithful_windows(&mut cpu);
+    assert!(cpu.faithful_windows);
+    assert!(cpu.ps.woe() && !cpu.ps.excm() && cpu.ps.intlevel() == 0);
+
+    // entry a1, 48 ; rotw -1
+    write_insns(&mut bus, TEST_PC as u64, &[enc_entry(1, 6)]);
+    write_insns(&mut bus, TEST_PC as u64 + 3, &[enc_rotw(-1)]);
+    let cfg = labwired_core::SimulationConfig::default();
+    cpu.step(&mut bus, &[], &cfg).expect("ENTRY");
+    assert_eq!(
+        cpu.regs.windowbase(),
+        1,
+        "ENTRY rotates above the root frame"
+    );
+    assert_eq!(
+        cpu.regs.windowstart(),
+        0b11,
+        "root frame and entry frame live"
+    );
+    assert_eq!(cpu.regs.read_logical(1), BOOT_SP - 48);
+    assert_eq!(cpu.ps.callinc(), 0);
+
+    cpu.step(&mut bus, &[], &cfg).expect("ROTW");
+    assert_eq!(cpu.regs.windowbase(), 0);
+    assert_eq!(
+        cpu.regs.read_logical(1),
+        BOOT_SP,
+        "root frame a1 is the SP that _WindowOverflow4 stores at entry_sp - 12"
+    );
+}
+
 /// ROTW rotates WindowBase by (old_WB + n) & 0xF and leaves WindowStart alone.
 ///
 /// HW-oracle byte encodings: `rotw 1` → 0x408010 (WB 3 → 4); `rotw -1` →

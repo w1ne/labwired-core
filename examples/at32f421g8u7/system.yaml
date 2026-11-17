@@ -1,0 +1,5 @@
+# Standalone vendor smoke on the exact bare AT32F421G8U7 profile.
+# No external board or measured supply circuit is asserted by this fixture.
+name: at32f421g8u7-vendor-smoke
+chip: ../../configs/chips/at32f421g8u7.yaml
+external_devices: []

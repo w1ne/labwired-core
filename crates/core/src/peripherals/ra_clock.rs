@@ -143,6 +143,11 @@ pub struct RaSyscLayout {
     pub stopped_at_reset: &'static [usize],
     /// Peripheral clock control registers with the CKSREQ/CKSRDY handshake.
     pub ckcr: &'static [usize],
+    /// `(VBTCR1, VBTSR)` on parts with `BSP_FEATURE_BSP_VBATT_HAS_VBTCR1_BPWSWSTP`:
+    /// FSP `SystemInit` sets VBTCR1.BPWSWSTP (bit0) and spins on
+    /// VBTSR.VBTRVLD (bit4, read-only); VBTRVLD reads BPWSWSTP here, valid
+    /// at once (no VBATT_R settling time is modelled).
+    pub vbatt_valid: Option<(usize, usize)>,
 }
 
 /// RA8M1 (FSP `R7FA8M1AH.h`, 0xD80 bytes): MOSCCR/PLLCR/PLL2CR and SOSCCR
@@ -153,6 +158,7 @@ pub const RA8_SYSC: RaSyscLayout = RaSyscLayout {
     size: 0xD80,
     stopped_at_reset: &[RA_MOSCCR, RA_PLLCR, RA_PLL2CR, 0xC00],
     ckcr: &[0x55, 0x57, 0x5B, 0x5D, 0x5F, 0x74, 0x75, 0x76, 0x77, 0x78],
+    vbatt_valid: None,
 };
 
 /// RA6M5 (FSP `R7FA6M5BH.h`, 0x700 bytes: VBTBKR[512] at +0x500 is the
@@ -165,6 +171,21 @@ pub const RA6_SYSC: RaSyscLayout = RaSyscLayout {
     size: 0x700,
     stopped_at_reset: &[RA_MOSCCR, RA_PLLCR, RA_PLL2CR],
     ckcr: &[0x74, 0x75, 0x76],
+    vbatt_valid: None,
+};
+
+/// RA4M1 (FSP `R7FA4M1AB.h`, 0x700 bytes, VBTBKR[512] at +0x500 last, as
+/// on the RA6M5): MOSCCR/PLLCR/PLL2CR reset stopped, so OSCSF reads only
+/// HOCOSF out of reset; no peripheral clock has a CKCR switch handshake.
+/// VBTCR1 (+0x41F) / VBTSR (+0x4B1) carry the VBATT_R handshake.
+/// This is the layout ArduinoCore-renesas' `bsp_clock_init` needs: it
+/// unlocks PRCR (+0x3FE), which the 256-byte `ra_sysc` does not reach.
+pub const RA4_SYSC: RaSyscLayout = RaSyscLayout {
+    name: "ra4_sysc",
+    size: 0x700,
+    stopped_at_reset: &[RA_MOSCCR, RA_PLLCR, RA_PLL2CR],
+    ckcr: &[],
+    vbatt_valid: Some((RA_VBTCR1, RA_VBTSR)),
 };
 
 const RA_SCKSCR: usize = 0x26;
@@ -176,6 +197,10 @@ const RA_PLL2CR: usize = 0x4A;
 const RA_MOSCSF: u8 = 1 << 3;
 const RA_PLLSF: u8 = 1 << 5;
 const RA_PLL2SF: u8 = 1 << 6;
+const RA_VBTCR1: usize = 0x41F;
+const RA_VBTSR: usize = 0x4B1;
+const BPWSWSTP: u8 = 1 << 0;
+const VBTRVLD: u8 = 1 << 4;
 const CKSREQ: u8 = 1 << 6;
 const CKSRDY: u8 = 1 << 7;
 
@@ -195,6 +220,10 @@ impl RaSyscRegs {
 
     pub fn ra6() -> Self {
         Self::new(&RA6_SYSC)
+    }
+
+    pub fn ra4() -> Self {
+        Self::new(&RA4_SYSC)
     }
 
     fn oscsf(&self) -> u8 {
@@ -234,6 +263,12 @@ impl Peripheral for RaSyscRegs {
             return Ok(self.oscsf());
         }
         let v = self.regs[off];
+        if let Some((vbtcr1, vbtsr)) = self.layout.vbatt_valid {
+            if off == vbtsr {
+                let valid = self.regs[vbtcr1] & BPWSWSTP != 0;
+                return Ok((v & !VBTRVLD) | if valid { VBTRVLD } else { 0 });
+            }
+        }
         if self.layout.ckcr.contains(&off) {
             return Ok((v & !CKSRDY) | if v & CKSREQ != 0 { CKSRDY } else { 0 });
         }
@@ -279,6 +314,28 @@ mod tests {
         sys.write(HOCOCR, 0).unwrap();
         assert_eq!(sys.read(HOCOCR).unwrap() & HCSTP, 0);
         assert_eq!(sys.read(OSCSF).unwrap() & HOCOSF, HOCOSF);
+    }
+
+    #[test]
+    fn ra4_vbatt_valid_follows_bpwswstp() {
+        let mut sys = RaSyscRegs::ra4();
+        // Out of reset only HOCO runs, and VBATT_R is not yet valid.
+        assert_eq!(sys.read(RA_OSCSF as u64).unwrap(), HOCOSF);
+        assert_eq!(sys.read(RA_VBTSR as u64).unwrap() & VBTRVLD, 0);
+        // FSP SystemInit: PRCR at +0x3FE is inside the window and stores.
+        sys.write(0x3FE, 0x02).unwrap();
+        sys.write(0x3FF, 0xA5).unwrap();
+        assert_eq!(sys.read(0x3FE).unwrap(), 0x02);
+        // VBTCR1.BPWSWSTP = 1 makes VBTSR.VBTRVLD read 1; VBTRVLD is
+        // read-only, so a store to it does not stick.
+        sys.write(RA_VBTSR as u64, VBTRVLD).unwrap();
+        assert_eq!(sys.read(RA_VBTSR as u64).unwrap() & VBTRVLD, 0);
+        sys.write(RA_VBTCR1 as u64, BPWSWSTP).unwrap();
+        assert_eq!(sys.read(RA_VBTSR as u64).unwrap() & VBTRVLD, VBTRVLD);
+        // The RA6 layout has no such handshake.
+        let mut ra6 = RaSyscRegs::ra6();
+        ra6.write(RA_VBTCR1 as u64, BPWSWSTP).unwrap();
+        assert_eq!(ra6.read(RA_VBTSR as u64).unwrap() & VBTRVLD, 0);
     }
 
     #[test]

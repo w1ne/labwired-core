@@ -3984,6 +3984,7 @@ fn test_flash_boot_alias_read_and_write() {
         legacy_tick_indices: Vec::new(),
         bus_tick_indices: Vec::new(),
         scheduler_driver_indices: Vec::new(),
+        exti_line_driver_indices: Vec::new(),
         matrix_source_scratch: Vec::new(),
         peripheral_hint: Cell::new(None),
         last_route: Cell::new(None),
@@ -4125,6 +4126,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         legacy_tick_indices: Vec::new(),
         bus_tick_indices: Vec::new(),
         scheduler_driver_indices: Vec::new(),
+        exti_line_driver_indices: Vec::new(),
         matrix_source_scratch: Vec::new(),
         peripheral_hint: Cell::new(None),
         last_route: Cell::new(None),
@@ -4419,6 +4421,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         legacy_tick_indices: Vec::new(),
         bus_tick_indices: Vec::new(),
         scheduler_driver_indices: Vec::new(),
+        exti_line_driver_indices: Vec::new(),
         matrix_source_scratch: Vec::new(),
         peripheral_hint: Cell::new(None),
         last_route: Cell::new(None),
@@ -4709,6 +4712,7 @@ fn test_peripheral_range_index_lookup() {
         legacy_tick_indices: Vec::new(),
         bus_tick_indices: Vec::new(),
         scheduler_driver_indices: Vec::new(),
+        exti_line_driver_indices: Vec::new(),
         matrix_source_scratch: Vec::new(),
         peripheral_hint: Cell::new(None),
         last_route: Cell::new(None),
@@ -4855,6 +4859,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         legacy_tick_indices: Vec::new(),
         bus_tick_indices: Vec::new(),
         scheduler_driver_indices: Vec::new(),
+        exti_line_driver_indices: Vec::new(),
         matrix_source_scratch: Vec::new(),
         peripheral_hint: Cell::new(None),
         last_route: Cell::new(None),
@@ -6953,7 +6958,13 @@ impl crate::Peripheral for FlashStoreProbe {
     fn owns_flash_stores(&self) -> bool {
         true
     }
-    fn flash_cpu_store(&mut self, offset: u64, width: u8, value: u32) -> crate::FlashStoreOutcome {
+    fn flash_cpu_store(
+        &mut self,
+        offset: u64,
+        width: u8,
+        value: u32,
+        _existing: u32,
+    ) -> crate::FlashStoreOutcome {
         self.seen.lock().unwrap().push((offset, width, value));
         self.outcome
     }
@@ -7242,4 +7253,61 @@ external_devices:
         after_mode_change,
         "a pad released from AF must not forward the timer wire (had {before})"
     );
+}
+
+/// Under exact batch boundaries every device access ends the CPU batch so the
+/// machine can tick where state changed. A read the device declares pure
+/// changes nothing and must not; a write, or a read the device does not vouch
+/// for, still must.
+#[test]
+fn an_armed_batch_stop_skips_only_pure_device_reads() {
+    let rtc_base = 0x4001_1000;
+    let stub_base = 0x4002_0000;
+    for optimized in [false, true] {
+        let mut bus = SystemBus::empty();
+        bus.config.optimized_bus_access = optimized;
+        bus.ram = crate::memory::LinearMemory::new(0x1000, 0x2000_0000);
+        bus.add_peripheral(
+            "rtc1",
+            rtc_base,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::nrf52::rtc::Nrf52Rtc::new()),
+        );
+        bus.add_peripheral(
+            "stub",
+            stub_base,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::stub::StubPeripheral::new(0)),
+        );
+        let stops = |bus: &mut SystemBus, access: &dyn Fn(&mut SystemBus)| {
+            bus.batch_stop.arm(&[]);
+            access(bus);
+            bus.batch_stop.disarm()
+        };
+        // COUNTER, at every width the CPU can load it with.
+        assert!(!stops(&mut bus, &|b| {
+            b.read_u32(rtc_base + 0x504).unwrap();
+        }));
+        assert!(!stops(&mut bus, &|b| {
+            b.read_u16(rtc_base + 0x504).unwrap();
+        }));
+        assert!(!stops(&mut bus, &|b| {
+            b.read_u8(rtc_base + 0x504).unwrap();
+        }));
+        assert!(!stops(&mut bus, &|b| {
+            b.read_u32(0x2000_0010).unwrap();
+        }));
+        assert!(
+            stops(&mut bus, &|b| b.write_u32(rtc_base + 0x508, 0).unwrap()),
+            "a write to a pure-read device still ends the batch (optimized={optimized})"
+        );
+        assert!(
+            stops(&mut bus, &|b| {
+                b.read_u32(stub_base).unwrap();
+            }),
+            "a read of a device that makes no promise still ends the batch (optimized={optimized})"
+        );
+    }
 }

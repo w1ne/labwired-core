@@ -38,3 +38,4 @@ mod everyday_display_set;
 mod leo_oled_i2c_readback;
 mod nokia5110_pcd8544_differential;
 mod panel_artifact_evidence;
+mod st7920_serial;
