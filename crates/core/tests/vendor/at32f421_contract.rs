@@ -443,6 +443,70 @@ fn wdt_expiry_resets_the_machine_and_records_the_watchdog_cause() {
     );
 }
 
+/// ADC sequence mode with DMA, as AM32's ADC_Init sets it up (RM_AT32F421
+/// §18.4.3.1 SQEN, §18.4.4.2 OCDMAEN; DMA Table 9-3: ADC on channel 1): one
+/// software trigger converts the whole ordinary sequence, each ODT update
+/// requests a DMA transfer, and OCCE marks the end of the group.
+#[test]
+fn adc_sequence_mode_moves_every_conversion_through_dma_channel1() {
+    use labwired_core::{AdvanceRequest, Cpu, Machine};
+    let mut b = bus();
+    let spin = 0x2000_0100u64;
+    b.write_u16(spin, 0xe7fe).unwrap(); // b .
+
+    // Pad levels through the bus: each pad's `analog_pins:` ADC channel.
+    assert!(b.set_analog_pad_mv("PA1", 1650)); // IN1
+    assert!(b.set_analog_pad_mv("PA3", 3000)); // IN3
+    assert!(b.set_analog_pad_mv("PA5", 600)); // IN5
+    let (cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut b);
+    let mut m = Machine::new(cpu, b);
+    m.cpu.set_pc(spin as u32);
+    m.cpu.set_sp(0x2000_3ff0);
+    let w = |m: &mut Machine<_>, a: u64, v: u32| m.bus.write_u32(a, v).unwrap();
+    w(&mut m, 0x40021014, (1 << 0) | (1 << 2)); // AHBEN: DMA1, SRAM
+    w(&mut m, 0x40021018, 1 << 9); // APB2EN: ADC1
+    w(&mut m, 0x40020010, 0x4001_244c); // DMA ch1 PADDR = ADC1 ODT
+    w(&mut m, 0x40020014, 0x2000_1000); // MADDR
+    w(&mut m, 0x4002000c, 3); // DTCNT: three halfwords
+    w(&mut m, 0x40020008, 0x5a1); // CTRL: PWIDTH/MWIDTH 16, MINCM, LM, CHEN
+    w(&mut m, 0x40012404, 1 << 8); // CTRL1: SQEN
+    w(&mut m, 0x4001242c, 2 << 20); // OSQ1: OCLEN = 3 conversions
+    w(&mut m, 0x40012434, 1 | (3 << 5) | (5 << 10)); // OSQ3: IN1, IN3, IN5
+    let ctrl2 = 1 | (1 << 8) | (7 << 17); // ADCEN, OCDMAEN, OCTESEL = software
+    w(&mut m, 0x40012408, ctrl2);
+    w(&mut m, 0x40012408, ctrl2 | (1 << 22)); // OCSWTRG
+    m.advance(AdvanceRequest::run(Some(500))).unwrap();
+    let got: Vec<u16> = (0..3)
+        .map(|i| m.bus.read_u16(0x2000_1000 + 2 * i).unwrap())
+        .collect();
+    // floor(mV * 4095 / 3300): 1650 -> 2047, 3000 -> 3722, 600 -> 744.
+    assert_eq!(
+        got,
+        vec![2047, 3722, 744],
+        "one trigger, the whole sequence"
+    );
+    assert_eq!(
+        m.bus.read_u32(0x4002000c).unwrap(),
+        3,
+        "loop mode reloaded the count after three transfers"
+    );
+    assert_ne!(
+        m.bus.read_u32(0x40020000).unwrap() & (1 << 1),
+        0,
+        "ch1 FDTF"
+    );
+    assert_ne!(
+        m.bus.read_u32(0x40012400).unwrap() & (1 << 1),
+        0,
+        "OCCE at group end"
+    );
+    // A second trigger converts the sequence again from OSN1.
+    assert!(m.bus.set_analog_pad_mv("PA1", 3300));
+    w(&mut m, 0x40012408, ctrl2 | (1 << 22));
+    m.advance(AdvanceRequest::run(Some(500))).unwrap();
+    assert_eq!(m.bus.read_u16(0x2000_1000).unwrap(), 4095);
+}
+
 /// CRM_APB1RST.TMR3RST / APB2RST.TMR1RST put the timer back to its register
 /// reset state (RM_AT32F421 V2.05 §14 register tables: all zero, PR 0xFFFF),
 /// as AM32's DShot input re-arm does through `crm_periph_reset`.
