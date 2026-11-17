@@ -123,6 +123,13 @@ boards:
     path: examples/rpi-pico-2-w-bme280
     rust_targets: [thumbv8m.main-none-eabi]
     gate: true
+  # Demand group #2: original Pico W/RP2040 reads a BME280 on I2C0 GP4/GP5;
+  # wireless/CYW43439 behavior is explicitly outside this profile.
+  - id: pico-w-bme280
+    kind: sim-validate
+    path: examples/pico-w-bme280
+    rust_targets: [thumbv6m-none-eabi]
+    gate: true
   # Demand group #2: the non-wireless Pico 2 reads the BME280 ID on I2C0/GP4-GP5.
   - id: pico2-bme280
     kind: sim-validate

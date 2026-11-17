@@ -231,6 +231,12 @@ jobs:
             firmware_build_dir: crates/firmware-pico2w-bme280-smoke
             script: examples/rpi-pico-2-w-bme280/io-smoke.yaml
             system: configs/systems/rpi-pico-2-w-bme280.yaml
+          # Demand group #2, RP2040 survey rank 5: original Pico W reads the
+          # BME280 ID over I2C0 GP4/GP5 and reports over UART0 GP0.
+          - id: pico-w-bme280
+            script: examples/pico-w-bme280/io-smoke.yaml
+            system: configs/systems/pico-w-bme280.yaml
+            firmware_build_script: examples/pico-w-bme280/ci/build.sh
           # Maintenance-only coverage: Microchip lists ATmega328P as NRND, so
           # this preserves the existing Nano path without recommending new use.
           - id: arduino-nano-atmega328p-maintenance

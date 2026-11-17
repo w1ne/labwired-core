@@ -422,6 +422,16 @@ jobs:
             profile_dir: release
             script: examples/rpi-pico-2-w-bme280/io-smoke.yaml
             system: configs/systems/rpi-pico-2-w-bme280.yaml
+          # Original Pico W/RP2040 with the BME280 on I2C0 GP4/GP5; radio and
+          # the CYW43439-controlled LED remain outside the claimed profile.
+          - id: pico-w-bme280
+            target: thumbv6m-none-eabi
+            crate: firmware-pico-w-bme280-smoke
+            profile: release
+            profile_dir: release
+            script: examples/pico-w-bme280/io-smoke.yaml
+            system: configs/systems/pico-w-bme280.yaml
+            firmware_build_script: examples/pico-w-bme280/ci/build.sh
           # atsamd21g18a's only CLI proof — the first Microchip part in the
           # engine. Same shape as the rp2350 cell above, `build_dir` included
           # and for the same reason: this crate's `-Tlink.x` comes from its own

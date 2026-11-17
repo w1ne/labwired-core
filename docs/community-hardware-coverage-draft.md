@@ -391,6 +391,47 @@ void loop() {}
 
 ## RP2040 / RP2350 — demand group 2
 
+### Raspberry Pi Pico W + BME280
+
+RP2040 is survey rank 5 at 12% of reported MCU use and belongs to target-list
+group #2. Raspberry Pi's current Pico W product brief keeps the board in
+production through January 2036; Mouser listed exact board SKU SC0918 in stock.
+The profile reads the BME280 chip ID `0x60` on I2C0 GP4/GP5 and reports the
+result over UART0 GP0. Wi-Fi, Bluetooth, USB, and the CYW43439-driven onboard
+LED remain outside the profile.
+
+- [Wiring, scope, copy-paste Arduino-Pico example, and smoke command](../examples/pico-w-bme280/README.md)
+- [Live Raspberry Pi, Mouser, and Adafruit status receipt](../examples/pico-w-bme280/vendor-status.md)
+- [Committed local simulator evidence](../examples/pico-w-bme280/evidence/run/)
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+
+constexpr uint8_t BME280_ADDRESS = 0x77;
+
+void setup() {
+  Serial1.setTX(0);
+  Serial1.setRX(1);
+  Serial1.begin(115200);  // UART0 TX on GP0
+  Wire.setSDA(4);         // I2C0 SDA on GP4
+  Wire.setSCL(5);         // I2C0 SCL on GP5
+  Wire.begin();
+
+  Wire.beginTransmission(BME280_ADDRESS);
+  Wire.write(0xD0);  // BME280 chip-ID register
+  if (Wire.endTransmission(false) == 0 &&
+      Wire.requestFrom(BME280_ADDRESS, static_cast<uint8_t>(1)) == 1 &&
+      Wire.read() == 0x60) {
+    Serial1.println("PICO_W_BME280_ID=0x60_I2C0_GP4_GP5");
+  } else {
+    Serial1.println("PICO_W_BME280_I2C_ERROR");
+  }
+}
+
+void loop() {}
+```
+
 ### Adafruit Feather RP2350 with HSTX (no-PSRAM, Product ID 6000)
 
 RP2040 was reported by 12% of respondents (MCU rank 5); RP2350 was not
