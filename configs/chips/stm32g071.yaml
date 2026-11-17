@@ -435,3 +435,24 @@ peripherals:
     type: "nvic"
     base_address: 0xE000E100
     size: "1KB"
+
+# STM32G071RB (LQFP64) external ADC inputs from DS12232 Rev 5, Table 12.
+# Channels 0..11 map to PA0..PA7, PB0/PB1/PB2/PB10; channels 15..18 map
+# to PB11/PB12/PC4/PC5. The remaining ADC channels are internal sources.
+analog_pins:
+  PA0: { peripheral: "adc1", channel: 0 }
+  PA1: { peripheral: "adc1", channel: 1 }
+  PA2: { peripheral: "adc1", channel: 2 }
+  PA3: { peripheral: "adc1", channel: 3 }
+  PA4: { peripheral: "adc1", channel: 4 }
+  PA5: { peripheral: "adc1", channel: 5 }
+  PA6: { peripheral: "adc1", channel: 6 }
+  PA7: { peripheral: "adc1", channel: 7 }
+  PB0: { peripheral: "adc1", channel: 8 }
+  PB1: { peripheral: "adc1", channel: 9 }
+  PB2: { peripheral: "adc1", channel: 10 }
+  PB10: { peripheral: "adc1", channel: 11 }
+  PB11: { peripheral: "adc1", channel: 15 }
+  PB12: { peripheral: "adc1", channel: 16 }
+  PC4: { peripheral: "adc1", channel: 17 }
+  PC5: { peripheral: "adc1", channel: 18 }

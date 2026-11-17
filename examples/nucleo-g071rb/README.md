@@ -59,11 +59,15 @@ are test assumptions.
 
 [`analog-ntc-diode-adc-system.yaml`](analog-ntc-diode-adc-system.yaml) routes
 the same generic devices to explicit ADC1 IN4/IN5 endpoints.
+[`analog-ntc-diode-pad-adc-system.yaml`](analog-ntc-diode-pad-adc-system.yaml)
+routes the NTC and diode through the G071RB LQFP64 PA4/PA5 aliases to ADC1
+IN4/IN5, then checks the firmware-visible conversions. The aliases follow
+DS12232 Rev 5, Table 12; this is model routing evidence, not a silicon capture.
 [`analog-jfet-terminal-resistance-adc-system.yaml`](analog-jfet-terminal-resistance-adc-system.yaml)
 adds matched level-1 NJF branches with RD/RS on ADC1 IN6–IN9. These fixtures
 prove ADC routing and firmware-visible conversion in the model; their channel
-indices are explicit co-simulation endpoints, with no PAx alias or silicon
-analog capture claimed.
+indices are explicit co-simulation endpoints. The separate pad-alias fixture
+tests PA4/PA5 resolution; no silicon analog capture is claimed.
 [`analog-jfet-gate-charge-adc-system.yaml`](analog-jfet-gate-charge-adc-system.yaml)
 compares a generic NJF with CGS/CGD depletion charge against a matched zero-charge
 control on ADC1 IN6/IN7, alongside the NTC and diode on IN4/IN5.

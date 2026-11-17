@@ -683,6 +683,94 @@ fn nucleo_g071rb_ntc_and_diode_netlists_convert_through_adc1_channels() {
 }
 
 #[test]
+fn nucleo_g071rb_ntc_and_diode_pad_aliases_reach_adc1_end_to_end() {
+    let system_path = root("configs/systems/nucleo-g071rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-G071RB profile");
+    let analog = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-ntc-diode-pad-adc-system.yaml",
+    ))
+    .expect("load generic NTC and diode routes through physical ADC pads");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
+
+    const ADCEN: u32 = 1 << 20;
+    bus.write_u32(RCC_APBENR2, ADCEN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_CR, 0)
+        .expect("leave ADC deep power-down");
+    bus.write_u32(ADC1_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC1_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(bus.read_u32(ADC1_ISR).unwrap() & 1, 0, "ADC1 reports ADRDY");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC and an unrelated diode");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "PA4 and PA5 aliases bind to their G071 ADC1 channels"
+    );
+    for channel in [4, 5, 6] {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    for temperature_c in [-10.0_f64, 25.0, 80.0] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("set NTC temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve both netlists and route PA4/PA5 to ADC1");
+        assert_eq!(steps.len(), 2, "both unrelated netlists solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa4_volts");
+        let resistance = ntc_resistance_ohms(temperature_c);
+        let expected_ntc_v = 3.3 * resistance / (10_000.0 + resistance);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "PA4 NTC voltage at {temperature_c} °C should be {expected_ntc_v} V, got {ntc_v} V"
+        );
+        let routed_diode_v = signal_voltage(&session, "board.analog.pa5_volts");
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "PA5 diode load line should be {diode_v} V, got {routed_diode_v} V"
+        );
+
+        let ntc_code = expected_adc_count(ntc_v);
+        let diode_code = expected_adc_count(routed_diode_v);
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            ntc_code,
+            "PA4 resolves to IN4"
+        );
+        assert_eq!(
+            adc_channel_count(&mut bus, 5),
+            diode_code,
+            "PA5 resolves to IN5"
+        );
+        assert_eq!(stm32g0_adc_convert(&mut bus, 4), u32::from(ntc_code));
+        assert_eq!(stm32g0_adc_convert(&mut bus, 5), u32::from(diode_code));
+        assert_eq!(
+            adc_channel_count(&mut bus, 6),
+            u16::MAX,
+            "unrelated IN6 stays undriven"
+        );
+    }
+}
+
+#[test]
 fn nucleo_g071rb_bjt_high_injection_and_diode_reach_adc1_end_to_end() {
     let system_path = root("configs/systems/nucleo-g071rb.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-G071RB profile");
