@@ -47,7 +47,7 @@ boards:
     path: examples/esp32h2-devkitm-1-n4s
     rust_targets: [riscv32imc-unknown-none-elf]
     gate: true
-  # Demand-rank 1 ESP32-family depth: current C61 DevKitC-1 N8R2 UART0 path.
+  # Demand-rank 1 ESP32-family depth: C61 DevKitC-1 N8R2 UART0 + GPIO4 output.
   - id: esp32c61-devkitc-1-n8r2
     kind: sim-validate
     path: examples/esp32c61-devkitc-1-n8r2

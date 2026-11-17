@@ -1,6 +1,6 @@
 # ESP32-C61-DevKitC-1-N8R2 vendor status
 
-Checked live on 2026-11-13.
+Checked live on 2026-11-17.
 
 Espressif's current [ESP32-C61-DevKitC-1 v2.0 guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c61/esp32-c61-devkitc-1/user_guide.html)
 lists `ESP32-C61-DevKitC-1-N8R2`, built with ESP32-C61-WROOM-1, 8 MB flash and

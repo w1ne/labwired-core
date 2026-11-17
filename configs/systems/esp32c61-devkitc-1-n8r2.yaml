@@ -1,9 +1,11 @@
-# Narrow UART0 profile for the buyable ESP32-C61-DevKitC-1-N8R2.
-# J3 TX/RX map to GPIO11/GPIO10 in Espressif's v2.0 guide. The simulator
-# captures UART0 internally and does not model GPIO, IO_MUX or the USB bridge.
+# UART0 plus GPIO4 register-output profile for the current
+# ESP32-C61-DevKitC-1-N8R2. J3 TX/RX map to GPIO11/GPIO10 and J1 pin 3 maps to
+# GPIO4 in Espressif's v2.0 guide. GPIO4 output is checked at the chip register
+# head; pad routing, IO_MUX and the physical USB bridge remain outside scope.
 
 name: "esp32c61-devkitc-1-n8r2"
 chip: "../chips/esp32c61.yaml"
 cpu_hz: 160_000_000
 debug_uart: "uart0"
 external_devices: []
+board_io: []

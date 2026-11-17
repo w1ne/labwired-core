@@ -1,15 +1,17 @@
-# ESP32-C61-DevKitC-1-N8R2 UART smoke
+# ESP32-C61-DevKitC-1-N8R2 UART and GPIO smoke
 
-**Demand rank:** ESP32 is rank 1 in the measured MCU list (38%). The survey
-does not report a separate ESP32-C61 score. This adds a current C61 board to
-the family; it does not claim that C61 itself has 38% usage. Current vendor
-availability is recorded in [`vendor-status.md`](vendor-status.md).
+**Demand rank:** ESP32 family is rank 1 in the measured MCU list (38%). The
+survey does not report a separate ESP32-C61 score. This round expands the
+existing C61 board from UART-only to include its HP GPIO output-register path;
+it does not claim that C61 itself has 38% usage. Current vendor availability is
+recorded in [`vendor-status.md`](vendor-status.md).
 
 ## Copy-paste firmware example
 
-The board's USB-to-UART bridge is connected to UART0. Espressif's v2.0 board
-guide maps J3 TX/RX to GPIO11/GPIO10. The simulator captures the UART0
-peripheral internally, so the example writes to its FIFO:
+On the v2.0 board, GPIO4 is J1 pin 3. The sample enables its output latch and
+sets the output bit, then writes a marker to UART0. LabWired checks the GPIO
+register state and captures the UART FIFO; it does not simulate IO_MUX routing
+or electrical behavior at the physical pin.
 
 ```rust
 #![no_std]
@@ -18,11 +20,16 @@ peripheral internally, so the example writes to its FIFO:
 use panic_halt as _;
 use riscv_rt::entry;
 
+const GPIO_OUT_W1TS: *mut u32 = 0x6009_1008 as *mut u32;
+const GPIO_ENABLE_W1TS: *mut u32 = 0x6009_1038 as *mut u32;
 const UART0_FIFO: *mut u32 = 0x6000_0000 as *mut u32;
+const GPIO4: u32 = 1 << 4;
 
 #[entry]
 fn main() -> ! {
     unsafe {
+        core::ptr::write_volatile(GPIO_ENABLE_W1TS, GPIO4);
+        core::ptr::write_volatile(GPIO_OUT_W1TS, GPIO4);
         for &byte in b"C61_N8R2_OK\n" {
             core::ptr::write_volatile(UART0_FIFO, u32::from(byte));
         }
@@ -39,19 +46,20 @@ examples/esp32c61-devkitc-1-n8r2/ci/build.sh
 examples/esp32c61-devkitc-1-n8r2/ci/test.sh
 ```
 
-The committed UART assertion expects `C61_N8R2_OK`.
+The UART test expects `C61_N8R2_OK`. The GPIO test checks bit 4 in both
+`GPIO_OUT_REG` (`0x60091004`) and `GPIO_ENABLE_REG` (`0x60091034`).
 
 ## Verified scope
 
 The chip profile maps the C61 HP RISC-V core, 8 MiB flash window, 320 KiB
-on-chip HP SRAM, and the UART0 FIFO/status register head. The smoke loads a bare
-ELF at its entry and checks UART0 output in the simulator host console. It does
-not execute the mask ROM or Espressif bootloader.
+on-chip HP SRAM, UART0 FIFO/status head, and the first 104 bytes of the HP GPIO
+register window. The GPIO model covers the output latch and output enable used
+by GPIO4. It does not cover the C61 GPIO matrix, IO_MUX, GPIO26..29, GPIO
+interrupts, or electrical pad behavior. The onboard GPIO8 addressable RGB LED
+protocol is not modeled.
 
-The physical UART pins are documented, but GPIO, IO_MUX pad routing, the
-USB-to-UART bridge, the 2 MiB PSRAM, the GPIO8 addressable RGB LED, USB, Wi-Fi,
-Bluetooth LE, and other peripheral blocks are not modeled by this board
-profile. The UART assertion proves the UART FIFO/console model only; it does
-not prove the physical bridge or pad route.
+Both smokes fast-load a bare ELF; they do not execute the mask ROM or Espressif
+bootloader. The UART assertion does not prove the physical USB-to-UART bridge.
+The 2 MiB PSRAM, USB, Wi-Fi, and Bluetooth LE remain outside this profile.
 
-Evidence logs: [`evidence/`](evidence/).
+Evidence logs and structured results are in [`evidence/`](evidence/).

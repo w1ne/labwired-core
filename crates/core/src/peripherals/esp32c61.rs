@@ -2,11 +2,12 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Narrow ESP32-C61 UART profile for the ESP32-C61-DevKitC-1-N8R2.
+//! Narrow ESP32-C61 UART and GPIO-output profile for the
+//! ESP32-C61-DevKitC-1-N8R2.
 //!
-//! This profile exposes only the UART0 FIFO/status head used by the board
-//! smoke. It does not claim GPIO, IO_MUX routing, the ROM/bootloader path, or
-//! the physical USB-to-UART bridge.
+//! The GPIO slice exposes the TRM-backed output latch and enable registers
+//! through GPIO4. It does not claim C61 peripheral-matrix routing, IO_MUX
+//! electrical behavior, the ROM/bootloader path, or the physical USB bridge.
 
 use crate::Peripheral;
 use labwired_config::PeripheralConfig;
@@ -17,6 +18,11 @@ pub const UART0_INTR_SOURCE_ID: u32 = 40;
 pub const CPU_CLOCK_HZ: u64 = 160_000_000;
 
 pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<dyn Peripheral>> {
+    if canonical_type == "esp32c61_gpio" {
+        return Some(Box::new(
+            crate::peripherals::esp32c3::gpio::Esp32c3Gpio::for_esp32c61(),
+        ));
+    }
     if canonical_type != "esp32c61_uart" {
         return None;
     }
@@ -38,7 +44,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
     ))
 }
 
-pub const SUPPORTED_TYPES: &[&str] = &["esp32c61_uart"];
+pub const SUPPORTED_TYPES: &[&str] = &["esp32c61_gpio", "esp32c61_uart"];
 
 #[cfg(test)]
 mod tests {
@@ -76,5 +82,22 @@ mod tests {
         let mut sources = Vec::new();
         uart.matrix_irq_sources_into(&mut sources);
         assert_eq!(sources, vec![UART0_INTR_SOURCE_ID]);
+    }
+
+    #[test]
+    fn c61_gpio_uses_shifted_enable_registers_and_updates_gpio4_output() {
+        let mut gpio_cfg = uart_cfg();
+        gpio_cfg.id = "gpio".to_string();
+        gpio_cfg.r#type = "esp32c61_gpio".to_string();
+        gpio_cfg.base_address = 0x6009_1000;
+        gpio_cfg.size = Some("104B".to_string());
+        let mut gpio = try_build("esp32c61_gpio", &gpio_cfg).expect("C61 GPIO model");
+
+        // C61 TRM: OUT_W1TS@0x08, ENABLE_W1TS@0x38, OUT@0x04,
+        // ENABLE@0x34. GPIO4 is J1 pin 3 on the DevKitC-1 v2.0.
+        gpio.write_u32(0x38, 1 << 4).unwrap();
+        gpio.write_u32(0x08, 1 << 4).unwrap();
+        assert_eq!(gpio.read_u32(0x34).unwrap(), 1 << 4);
+        assert_eq!(gpio.read_u32(0x04).unwrap(), 1 << 4);
     }
 }

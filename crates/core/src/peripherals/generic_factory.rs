@@ -174,6 +174,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c5_uart",
     // C61 UART0 uses the shared Espressif FIFO/status head at its 160 MHz
     // core rate and interrupt source 40; the descriptor limits the window.
+    // C61's narrow GPIO4 output path uses the C5-shaped ENABLE/IN offsets and
+    // deliberately leaves the C61 peripheral matrix outside the model.
+    "esp32c61_gpio",
     "esp32c61_uart",
     // P4 UART0 uses the shared FIFO/status head with P4's 400 MHz core and
     // 90 MHz APB clock. Its chip descriptor exposes only FIFO and STATUS.

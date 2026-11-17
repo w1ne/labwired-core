@@ -1291,10 +1291,11 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin",
         ),
     },
-    // ESP32-H2/C5/C61/P4/S2 UART0-only board profiles. SIM-DERIVED: no silicon
-    // capture, so no reset_oracle. Their board smokes run as CLI scripts in
-    // core-board-ci / core-onboarding-smoke, not as Rust integration tests, so
-    // no behavior_gate can resolve yet.
+    // ESP32-H2/C5/P4/S2 UART0-only board profiles; C61 also includes its
+    // narrow GPIO4 output-register head. SIM-DERIVED: no silicon capture, so
+    // no reset_oracle. Board smokes run as CLI scripts in core-board-ci /
+    // core-onboarding-smoke, not as Rust integration tests, so no behavior_gate
+    // can resolve yet.
     ChipConf {
         name: "esp32h2",
         yaml: "configs/chips/esp32h2.yaml",

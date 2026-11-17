@@ -1,15 +1,18 @@
 # Narrow ESP32-C61 HP-core profile for the ESP32-C61-DevKitC-1-N8R2.
 #
-# This fast-boot profile exposes only UART0's FIFO/status register head. It
-# loads a bare ELF directly; it does not execute the C61 mask ROM or the
-# Espressif bootloader. GPIO, PCR clock control, IO_MUX routing, USB, Wi-Fi,
-# Bluetooth LE, PSRAM and the addressable RGB LED are not claimed here.
+# This fast-boot profile exposes UART0's FIFO/status register head and the
+# narrow HP GPIO output-register path used by GPIO4. It loads a bare ELF
+# directly; it does not execute the C61 mask ROM or the Espressif bootloader.
+# GPIO matrix routing, IO_MUX electrical behavior, USB, Wi-Fi, Bluetooth LE,
+# PSRAM and the addressable RGB LED protocol are not claimed here.
 #
-# Sources checked 2026-11-13:
+# Sources checked 2026-11-17:
 #   ESP32-C61 Series Datasheet v1.1:
 #     https://documentation.espressif.com/esp32-c61_datasheet_en.html
 #   ESP32-C61-DevKitC-1 v2.0 guide:
 #     https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c61/esp32-c61-devkitc-1/user_guide.html
+#   ESP32-C61 Technical Reference Manual v1.0, Chapter 7 (GPIO register offsets):
+#     https://documentation.espressif.com/esp32-c61_technical_reference_manual_en.pdf
 #   ESP-IDF C61 register map and interrupt table:
 #     https://github.com/espressif/esp-idf/tree/master/components/soc/esp32c61
 
@@ -20,13 +23,18 @@ registers_count: 31
 cpu_hz: 160_000_000
 
 # ESP32-C61-WROOM-1 N8R2: 8 MiB SPI flash and 2 MiB PSRAM. Only the flash
-# window and 320 KiB on-chip HP SRAM are mapped for this UART smoke.
+# window and 320 KiB on-chip HP SRAM are mapped; PSRAM is outside this profile.
 flash:
   base: 0x42000000
   size: "8192KB"
 ram:
   base: 0x40800000
   size: "320KB"
+
+# The v2.0 DevKitC-1 header exposes J1 pin 3 as GPIO4. The profile records
+# this pin identity; IO_MUX and electrical pad routing are not simulated.
+pins:
+  GPIO4: { gpio: "gpio", bit: 4 }
 
 peripherals:
   # UART0 uses the C61 register head at 0x60000000. The descriptor exposes
@@ -38,3 +46,11 @@ peripherals:
     size: "32B"
     config:
       echo_stdout: true
+
+  # HP GPIO register head. C61 TRM offsets: OUT@0x04, OUT_W1TS@0x08,
+  # ENABLE@0x34, ENABLE_W1TS@0x38. This 104-byte window ends after IN@0x64;
+  # the C61 matrix, IO_MUX, GPIO26..29, and interrupt registers are omitted.
+  - id: "gpio"
+    type: "esp32c61_gpio"
+    base_address: 0x60091000
+    size: "104B"

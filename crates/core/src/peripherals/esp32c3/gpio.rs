@@ -154,6 +154,23 @@ pub(crate) const C5_MATRIX: MatrixLayout = MatrixLayout {
     },
 };
 
+/// The ESP32-C61 profile in this engine claims plain GPIO output only. Its
+/// register head uses the C5-style shifted ENABLE/IN offsets, while its
+/// peripheral-matrix signal numbering has not been onboarded here.
+const C61_GPIO_ONLY_MATRIX: MatrixLayout = MatrixLayout {
+    i2c_scl: u32::MAX,
+    i2c_sda: u32::MAX,
+    fspiclk: u32::MAX,
+    fspiq: u32::MAX,
+    fspid: u32::MAX,
+    fspics0: u32::MAX,
+    ledc_ls_out0: None,
+    in_sel: crate::peripherals::esp_gpio_net::InSelLayout {
+        pad_mask: 0,
+        sel_bit: 1 << 31,
+    },
+};
+
 impl MatrixLayout {
     /// Output signal index → name, for `gpio_routing`.
     fn out_signal_name(&self, idx: u32) -> Option<&'static str> {
@@ -248,9 +265,11 @@ pub struct Esp32c3Gpio {
     intr_source: u32,
     /// Matrix numbering of the chip this block sits on (C3, C5 or C6).
     layout: MatrixLayout,
-    /// C5 moves GPIO_ENABLE and GPIO_IN and uses different matrix selector
-    /// windows; supported registers are normalized to this model's C3 map.
+    /// C5 and C61 move GPIO_ENABLE and GPIO_IN and use different matrix
+    /// selector windows; supported registers are normalized to this model's
+    /// C3 map. Each chip selects its own matrix layout above.
     c5_register_map: bool,
+    c61_register_map: bool,
     /// Peripheral input signals bound to wire lines (`FUNCn_IN_SEL_CFG`).
     in_routes: crate::peripherals::esp_gpio_net::MatrixInputs,
     /// Pads on a world `gpio_net` ([`PinPort::join_wire`]).
@@ -290,6 +309,7 @@ impl Esp32c3Gpio {
             intr_source: GPIO_INTR_SOURCE,
             layout: C3_MATRIX,
             c5_register_map: false,
+            c61_register_map: false,
             in_routes: Default::default(),
             net_pads: 0,
             wire_edges: Vec::new(),
@@ -327,8 +347,20 @@ impl Esp32c3Gpio {
         }
     }
 
+    /// ESP32-C61 GPIO4 output slice. The C61 TRM confirms the shifted
+    /// ENABLE/IN offsets used by C5, but this profile does not claim the C61
+    /// peripheral matrix or GPIO26..29, which exceed this shared model's pin
+    /// count.
+    pub fn for_esp32c61() -> Self {
+        Self {
+            layout: C61_GPIO_ONLY_MATRIX,
+            c61_register_map: true,
+            ..Self::new()
+        }
+    }
+
     fn normalize_register_offset(&self, offset: u64) -> u64 {
-        if !self.c5_register_map {
+        if !self.c5_register_map && !self.c61_register_map {
             return offset;
         }
         let word = offset & !3;
@@ -721,7 +753,10 @@ impl Esp32c3Gpio {
             }
         }
         let input_pad = |signal: u32| {
-            let pin = self.layout.in_sel.pad(self.in_sel[signal as usize])?;
+            // Narrow sibling profiles may use an out-of-range signal sentinel
+            // to state that they do not model I2C matrix routing.
+            let selector = self.in_sel.get(signal as usize)?;
+            let pin = self.layout.in_sel.pad(*selector)?;
             (pin < PIN_COUNT).then_some(pin)
         };
         self.i2c_matrix_route
@@ -1163,7 +1198,13 @@ impl Peripheral for Esp32c3Gpio {
 
     fn snapshot(&self) -> serde_json::Value {
         serde_json::json!({
-            "layout": if self.c5_register_map { "esp32c5_direct_gpio_i2c_matrix" } else { "esp32c3" },
+            "layout": if self.c5_register_map {
+                "esp32c5_direct_gpio_i2c_matrix"
+            } else if self.c61_register_map {
+                "esp32c61_gpio_output_only"
+            } else {
+                "esp32c3"
+            },
             "odr": self.out,
             "idr": self.effective_input(),
             "enable": self.enable,

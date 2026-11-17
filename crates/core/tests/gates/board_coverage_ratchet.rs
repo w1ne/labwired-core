@@ -957,10 +957,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         "ch32v003f4u6",
         "ch32v003a4m6",
         "ch32v003j4m6",
-        // ESP32-H2/C5/P4/S2 UART0-only board profiles. Each has a descriptor,
-        // a system manifest and a board smoke that asserts a UART0 token, but
-        // no bundled-configs.ts catalog board, no silicon oracle and no
-        // executing-fidelity differential. Promote when all three exist.
+        // ESP32-H2/C5/P4/S2 UART0-only board profiles; C61 also checks the
+        // GPIO4 output-register head. Each has a descriptor, system manifest,
+        // and committed board smoke, but no bundled-configs.ts catalog board,
+        // silicon oracle, or executing-fidelity differential.
         "esp32h2",
         "esp32c5",
         "esp32c61",
