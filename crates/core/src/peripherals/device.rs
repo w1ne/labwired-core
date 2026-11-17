@@ -84,6 +84,12 @@ pub trait I2cDevice: Send {
     fn start(&mut self) {}
     fn stop(&mut self) {}
 
+    /// Whether this device is an I2C bus switch with downstream devices.
+    /// This describes its topology even when a supply wrapper is off.
+    fn is_i2c_mux(&self) -> bool {
+        false
+    }
+
     /// Width in microseconds of the pulse this device currently drives on PWM
     /// output `channel`, or `None` when the channel is not producing a pulse
     /// (never written, full-off, sleeping) or the device has no PWM outputs.

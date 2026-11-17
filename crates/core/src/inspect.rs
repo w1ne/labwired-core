@@ -563,9 +563,7 @@ impl DeviceEvidence for I2cEvidence<'_> {
         self.0.pwm_channel_pulse_us(channel)
     }
     fn is_i2c_mux(&self) -> bool {
-        self.0
-            .as_any()
-            .is_some_and(|model| model.is::<crate::peripherals::components::tca9548a::Tca9548a>())
+        self.0.is_i2c_mux()
     }
 }
 

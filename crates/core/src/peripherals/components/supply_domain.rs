@@ -405,6 +405,10 @@ impl GatedI2cDevice {
     }
 }
 impl I2cDevice for GatedI2cDevice {
+    fn is_i2c_mux(&self) -> bool {
+        self.inner.is_i2c_mux()
+    }
+
     fn address(&self) -> u8 {
         self.inner.address()
     }

@@ -343,6 +343,10 @@ impl TracingI2cDevice {
 }
 
 impl I2cDevice for TracingI2cDevice {
+    fn is_i2c_mux(&self) -> bool {
+        self.inner.is_i2c_mux()
+    }
+
     fn transaction_generation(&self) -> Option<u64> {
         self.inner.transaction_generation()
     }

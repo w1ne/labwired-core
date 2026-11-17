@@ -192,6 +192,18 @@ fn supply_gate_forwards_pwm_query_only_when_powered() {
     assert_eq!(unpowered.pwm_channel_pulse_us(0), None);
 }
 
+#[test]
+fn mux_capability_survives_supply_wrapping_without_misclassifying_slaves() {
+    use labwired_core::peripherals::components::supply_domain::{GatedI2cDevice, SupplyGate};
+    use labwired_core::peripherals::components::tca9548a::Tca9548a;
+
+    assert!(!pca().is_i2c_mux());
+    for powered in [false, true] {
+        let gated = GatedI2cDevice::new(Box::new(Tca9548a::new(0x70)), SupplyGate::legacy(powered));
+        assert!(gated.is_i2c_mux(), "power state must not erase topology");
+    }
+}
+
 fn assert_ambiguous_sources_are_not_applied(devices: &str) {
     use labwired_config::{ChipDescriptor, SystemManifest};
     use labwired_core::bus::SystemBus;
@@ -233,17 +245,17 @@ external_devices:
             init_50hz(slave.as_mut());
             write_reg(slave.as_mut(), 0x06, &[0, 0, 0x33, 0x01]);
             if devices.contains("id: inner") {
-                use labwired_core::peripherals::components::tca9548a::Tca9548a;
-                let outer = slave.as_any().unwrap().downcast_ref::<Tca9548a>().unwrap();
-                let inner = outer.channel_devices(0)[0]
-                    .as_any()
-                    .unwrap()
-                    .downcast_ref::<Tca9548a>()
-                    .unwrap();
-                let pulse = inner.channel_devices(0)[0]
-                    .pwm_channel_pulse_us(0)
-                    .expect("programmed nested child");
-                assert!((pulse - 1498.0).abs() < 1.0);
+                // Read back the actual nested device over both enabled muxes.
+                // This proves it received the pulse command without reaching
+                // into concrete mux models through runtime downcasts.
+                assert!(slave.claims_address(0x40));
+                slave.select_address(0x40);
+                slave.start();
+                slave.write(0x06);
+                slave.start();
+                let regs = [slave.read(), slave.read(), slave.read(), slave.read()];
+                slave.stop();
+                assert_eq!(regs, [0, 0, 0x33, 0x01]);
             }
         }
     }
