@@ -49,6 +49,7 @@ peripherals:
     irq: 40 # ETS_UART0_INTR_SOURCE from C61 interrupts.h
     base_address: 0x60000000
     size: "32B"
+    clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
     config:
       echo_stdout: true
 
@@ -73,7 +74,7 @@ peripherals:
     clock: { controller: "pcr", reg: "I2C_CONF", bit: 0 }
 
   # PCR subset for UART0 and I2C0 functional clocks. C61 places I2C_CONF at
-  # +0x2C and I2C_SCLK_CONF at +0x30.
+  # +0x2C and I2C_SCLK_CONF at +0x30; UART0 uses +0x00/+0x04.
   - id: "pcr"
     type: "esp32c61_pcr"
     base_address: 0x60096000

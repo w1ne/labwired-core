@@ -1,10 +1,11 @@
-# ESP32-C61-DevKitC-1-N8R2 UART and GPIO smoke
+# ESP32-C61-DevKitC-1-N8R2 UART, GPIO, and BME280 smokes
 
 **Demand rank:** ESP32 family is rank 1 in the measured MCU list (38%). The
 survey does not report a separate ESP32-C61 score. This round expands the
-existing C61 board from UART-only to include its HP GPIO output-register path;
-it does not claim that C61 itself has 38% usage. Current vendor availability is
-recorded in [`vendor-status.md`](vendor-status.md).
+existing C61 board with a BME280 I2C path on GPIO6/GPIO22; earlier UART0 and
+GPIO4 output-register smokes remain. The survey does not report a separate
+C61 score. Live board and sensor availability is recorded in the [BME280
+receipt](../esp32c61-devkitc-1-n8r2-bme280/vendor-status.md).
 
 ## Copy-paste firmware example
 
@@ -47,19 +48,34 @@ examples/esp32c61-devkitc-1-n8r2/ci/test.sh
 ```
 
 The UART test expects `C61_N8R2_OK`. The GPIO test checks bit 4 in both
-`GPIO_OUT_REG` (`0x60091004`) and `GPIO_ENABLE_REG` (`0x60091034`).
+`GPIO_OUT_REG` (`0x60091004`) and `GPIO_ENABLE_REG` (`0x60091034`). The chip
+descriptor connects UART0 to the modeled C61 PCR `UART0_CONF.CLK_EN` gate.
+
+## BME280 I2C example
+
+Connect a BME280 breakout at address `0x77` with SDA on GPIO6 (J1 pin 5) and
+SCL on GPIO22 (J3 pin 6). The [sensor example](../esp32c61-devkitc-1-n8r2-bme280/README.md)
+includes a copy-paste ESP-IDF `app_main`, smoke command, live availability
+receipt, and committed output. Its firmware reads the sensor ID and a raw
+temperature vector over the C61 GPIO matrix route.
+
+```bash
+examples/esp32c61-devkitc-1-n8r2-bme280/ci/test.sh
+```
 
 ## Verified scope
 
 The chip profile maps the C61 HP RISC-V core, 8 MiB flash window, 320 KiB
-on-chip HP SRAM, UART0 FIFO/status head, and the first 104 bytes of the HP GPIO
-register window. The GPIO model covers the output latch and output enable used
-by GPIO4. It does not cover the C61 GPIO matrix, IO_MUX, GPIO26..29, GPIO
-interrupts, or electrical pad behavior. The onboard GPIO8 addressable RGB LED
-protocol is not modeled.
+on-chip HP SRAM, UART0 FIFO/status head, GPIO4 output state, and the C61 GPIO
+matrix selectors needed for I2C0 on GPIO6/GPIO22. It also models the UART0 and
+I2C0 PCR clock gates. The BME280 smoke verifies register reads and route
+selection. IO_MUX is storage only; electrical pad behavior, GPIO26..29, other
+matrix functions, GPIO interrupts, and the onboard GPIO8 addressable RGB LED
+protocol are outside this profile.
 
-Both smokes fast-load a bare ELF; they do not execute the mask ROM or Espressif
-bootloader. The UART assertion does not prove the physical USB-to-UART bridge.
+All three smokes fast-load a bare ELF; they do not execute the mask ROM or
+Espressif bootloader. The UART assertion does not prove the physical USB-to-UART bridge.
 The 2 MiB PSRAM, USB, Wi-Fi, and Bluetooth LE remain outside this profile.
 
-Evidence logs and structured results are in [`evidence/`](evidence/).
+UART/GPIO evidence logs are in [`evidence/`](evidence/); BME280 evidence and
+the live availability receipt are in the linked sensor example.

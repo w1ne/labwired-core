@@ -3,7 +3,7 @@
 **Demand rank:** ESP32 family is rank 1 in the JetBrains State of Embedded
 2025 MCU survey (38%). The survey does not report a C61-specific percentage.
 The current C61 variant is listed in Espressif's live board guide and catalog;
-see the [availability receipt](../../examples/esp32c61-devkitc-1-n8r2/vendor-status.md).
+see the [live board and BME280 availability receipt](../../examples/esp32c61-devkitc-1-n8r2-bme280/vendor-status.md).
 
 | Artifact | Path |
 |---|---|
@@ -15,7 +15,7 @@ see the [availability receipt](../../examples/esp32c61-devkitc-1-n8r2/vendor-sta
 
 | Board pin | SoC signal | LabWired profile |
 |---|---|---|
-| J3 TX | UART0 TX, GPIO11 | UART0 FIFO is modeled; pad routing is not |
+| J3 TX | UART0 TX, GPIO11 | UART0 FIFO and PCR clock gate are modeled; pad routing is not |
 | J3 RX | UART0 RX, GPIO10 | UART0 receive and pad routing are not modeled |
 | J1 pin 3 | GPIO4 | Output latch and enable register are modeled; IO_MUX and electrical behavior are not |
 | J1 pin 5 | GPIO6 | I2C0 SDA for the BME280 smoke; GPIO matrix route is modeled |
