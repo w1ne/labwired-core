@@ -379,6 +379,97 @@ fn bjt_beta_temperature_voltage(base_drive_v: f64, bf: f64, br: f64, reverse_act
     emitter_for_vbase(0.5 * (low + high))
 }
 
+/// Independent hot Gummel–Poon load lines with the square-root high-injection
+/// base charge. `IKF` is exercised in common-emitter operation and `IKR` in
+/// reverse-active operation, with Early effect disabled in the fixture.
+fn bjt_knee_temperature_voltage(
+    base_drive_v: f64,
+    ikf_a: f64,
+    ikr_a: f64,
+    reverse_active: bool,
+) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const TEMP_K: f64 = 125.0 + 273.15;
+    const THERMAL_V: f64 = 1.380_649e-23 * TEMP_K / 1.602_176_634e-19;
+    let currents = |vbe: f64, vbc: f64| {
+        let forward = (vbe / THERMAL_V).exp();
+        let reverse = (vbc / THERMAL_V).exp();
+        let q2 = IS_A * (forward - 1.0) / ikf_a + IS_A * (reverse - 1.0) / ikr_a;
+        let qb = 0.5 * (1.0 + (1.0 + 4.0 * q2).max(0.0).sqrt());
+        let transport = IS_A * (forward - reverse) / qb;
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let collector = transport - base_collector;
+        let base = base_emitter + base_collector;
+        (collector, base, -(collector + base))
+    };
+
+    if !reverse_active {
+        const LOAD_OHMS: f64 = 1_000.0;
+        const BASE_OHMS: f64 = 2_000.0;
+        let collector_for_vbe = |vbe: f64| {
+            let (mut low, mut high) = (0.0, SUPPLY_V);
+            for _ in 0..100 {
+                let collector_v = 0.5 * (low + high);
+                let (collector_current, _, _) = currents(vbe, vbe - collector_v);
+                let residual = (SUPPLY_V - collector_v) / LOAD_OHMS - collector_current;
+                if residual > 0.0 {
+                    low = collector_v;
+                } else {
+                    high = collector_v;
+                }
+            }
+            0.5 * (low + high)
+        };
+        let (mut low, mut high) = (0.0, base_drive_v);
+        for _ in 0..100 {
+            let vbe = 0.5 * (low + high);
+            let collector_v = collector_for_vbe(vbe);
+            let (_, base_current, _) = currents(vbe, vbe - collector_v);
+            let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+            if residual > 0.0 {
+                low = vbe;
+            } else {
+                high = vbe;
+            }
+        }
+        return collector_for_vbe(0.5 * (low + high));
+    }
+
+    const LOAD_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 2_000.0;
+    let emitter_for_vbase = |base_v: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let emitter_v = 0.5 * (low + high);
+            let (_, _, emitter_current) = currents(base_v - emitter_v, base_v);
+            let residual = (SUPPLY_V - emitter_v) / LOAD_OHMS - emitter_current;
+            if residual > 0.0 {
+                low = emitter_v;
+            } else {
+                high = emitter_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let base_v = 0.5 * (low + high);
+        let emitter_v = emitter_for_vbase(base_v);
+        let (_, base_current, _) = currents(base_v - emitter_v, base_v);
+        let residual = (base_drive_v - base_v) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = base_v;
+        } else {
+            high = base_v;
+        }
+    }
+    emitter_for_vbase(0.5 * (low + high))
+}
+
 /// First backward-Euler step of the two linear CJC partitions. With MJC=0,
 /// depletion charge is a constant capacitor; XCJC=0 puts it directly on the
 /// external base, while XCJC=1 puts it behind RB at the internal base.
@@ -1702,5 +1793,148 @@ fn nrf5340dk_bjt_beta_temperature_coefficients_reach_saadc() {
     assert!(
         (br_full - br_first).abs() > 0.01,
         "TBR2 must change the reverse-active high-drive load line: {br_full} V vs {br_first} V"
+    );
+}
+
+#[test]
+fn nrf5340dk_bjt_injection_knee_temperature_coefficients_reach_saadc() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let knees = SystemManifest::from_file(root(
+        "examples/nrf5340dk/analog-bjt-knee-temperature-system.yaml",
+    ))
+    .expect("load matched forward/reverse high-injection temperature branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(knees.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 8);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and six generic BJT knee branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic netlists must resolve to SAADC AIN0 through AIN7"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_knee_temperature.forward_base_v", 0.0)
+        .expect("initialize forward-active BJT base drives");
+    session
+        .set_signal_number("ui.bjt_knee_temperature.reverse_base_v", 0.0)
+        .expect("initialize reverse-active BJT base drives");
+
+    const IKF_NOMINAL_A: f64 = 50e-6;
+    const IKR_NOMINAL_A: f64 = 500e-6;
+    const IKF_HOT_A: f64 = IKF_NOMINAL_A * (1.0 - 1e-3 * 100.0 + 20e-6 * 100.0 * 100.0);
+    const IKF_FIRST_ORDER_A: f64 = IKF_NOMINAL_A * (1.0 - 1e-3 * 100.0);
+    const IKR_HOT_A: f64 = IKR_NOMINAL_A * (1.0 + 1e-3 * 100.0 + 50e-6 * 100.0 * 100.0);
+    const IKR_FIRST_ORDER_A: f64 = IKR_NOMINAL_A * (1.0 + 1e-3 * 100.0);
+    assert!((IKF_HOT_A - 55e-6).abs() < 1e-18);
+    assert!((IKF_FIRST_ORDER_A - 45e-6).abs() < 1e-18);
+    assert!((IKR_HOT_A - 800e-6).abs() < 1e-18);
+    assert!((IKR_FIRST_ORDER_A - 550e-6).abs() < 1e-18);
+
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive_voltages = None;
+    for (forward_drive_v, reverse_drive_v) in [(1.0_f64, 0.9_f64), (1.2, 1.0), (1.4, 1.1)] {
+        session
+            .set_signal_number("ui.bjt_knee_temperature.forward_base_v", forward_drive_v)
+            .expect("set common forward-active base drive");
+        session
+            .set_signal_number("ui.bjt_knee_temperature.reverse_base_v", reverse_drive_v)
+            .expect("set common reverse-active base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and hot BJT knee branches");
+        assert_eq!(steps.len(), 8, "all eight generic analog branches solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected SAADC route errors: {errors:?}"
+        );
+
+        let routed_ntc_v = voltage(&session, "adc.saadc.0_volts");
+        let routed_diode_v = voltage(&session, "adc.saadc.1_volts");
+        assert!((routed_ntc_v - ntc_v).abs() < 1e-9);
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "the independent Shockley diode remains isolated"
+        );
+        let actual = [
+            voltage(&session, "adc.saadc.2_volts"),
+            voltage(&session, "adc.saadc.3_volts"),
+            voltage(&session, "adc.saadc.4_volts"),
+            voltage(&session, "adc.saadc.5_volts"),
+            voltage(&session, "adc.saadc.6_volts"),
+            voltage(&session, "adc.saadc.7_volts"),
+        ];
+        let expected = [
+            bjt_knee_temperature_voltage(forward_drive_v, IKF_HOT_A, IKR_NOMINAL_A, false),
+            bjt_knee_temperature_voltage(forward_drive_v, IKF_HOT_A, IKR_NOMINAL_A, false),
+            bjt_knee_temperature_voltage(forward_drive_v, IKF_FIRST_ORDER_A, IKR_NOMINAL_A, false),
+            bjt_knee_temperature_voltage(reverse_drive_v, IKF_NOMINAL_A, IKR_HOT_A, true),
+            bjt_knee_temperature_voltage(reverse_drive_v, IKF_NOMINAL_A, IKR_HOT_A, true),
+            bjt_knee_temperature_voltage(reverse_drive_v, IKF_NOMINAL_A, IKR_FIRST_ORDER_A, true),
+        ];
+        for (index, (actual_v, expected_v)) in actual.into_iter().zip(expected).enumerate() {
+            assert!(
+                (actual_v - expected_v).abs() < 5e-5,
+                "SAADC AIN{} independent temperature-adjusted knee load line should be {expected_v} V, got {actual_v} V",
+                index + 2
+            );
+        }
+        assert!(
+            (actual[0] - actual[1]).abs() < 1e-9,
+            "TIKF1/TIKF2 must match the explicit hot IKF model card"
+        );
+        assert!(
+            (actual[3] - actual[4]).abs() < 1e-9,
+            "TIKR1/TIKR2 must match the explicit hot IKR model card"
+        );
+
+        let codes = scan_saadc_channels::<8>(&mut bus);
+        for (channel, voltage_v) in [
+            (0, routed_ntc_v),
+            (1, routed_diode_v),
+            (2, actual[0]),
+            (3, actual[1]),
+            (4, actual[2]),
+            (5, actual[3]),
+            (6, actual[4]),
+            (7, actual[5]),
+        ] {
+            assert_eq!(
+                codes[channel],
+                expected_saadc_code(voltage_v),
+                "SAADC AIN{channel} converts its routed solved voltage"
+            );
+        }
+        if forward_drive_v == 1.4 {
+            high_drive_voltages = Some(actual);
+        }
+    }
+
+    let [ikf_full, ikf_explicit, ikf_first, ikr_full, ikr_explicit, ikr_first] =
+        high_drive_voltages.expect("high-drive sample was recorded");
+    assert!((ikf_full - ikf_explicit).abs() < 1e-9);
+    assert!(
+        (ikf_full - ikf_first).abs() > 0.01,
+        "TIKF2 must change the forward high-injection load line: {ikf_full} V vs {ikf_first} V"
+    );
+    assert!((ikr_full - ikr_explicit).abs() < 1e-9);
+    assert!(
+        (ikr_full - ikr_first).abs() > 0.01,
+        "TIKR2 must change the reverse-active high-injection load line: {ikr_full} V vs {ikr_first} V"
     );
 }
