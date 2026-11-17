@@ -41,6 +41,9 @@ peripherals:
     bus: sysbus
     base_address: 0x40004400
     size: 1KB
+    # RM0090: USART2 is clocked by APB1ENR.USART2EN (bit 17), IRQ 38.
+    irq: 38
+    clock: { reg: apb1enr, bit: 17 }
   - id: gpioPortA
     type: stm32_gpioport
     bus: sysbus

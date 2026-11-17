@@ -27,4 +27,4 @@ warning: unnecessary `unsafe` block
     = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
 
 warning: `firmware-stm32f429-smoke` (bin "firmware-stm32f429-smoke") generated 2 warnings
-    Finished `release` profile [optimized + debuginfo] target(s) in 1.46s
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.11s

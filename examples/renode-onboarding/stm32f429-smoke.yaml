@@ -6,6 +6,9 @@ inputs:
   system: "../../configs/systems/onboarding/stm32f429.yaml"
 limits:
   max_steps: 800000
+uart_injections:
+  - uart: "usart2"
+    bytes: "RS"
 stimuli:
   - target: { component: "pot_adc1_in1", channel: "position" }
     trigger: !after_cycles { cycles: 1000 }
@@ -17,6 +20,7 @@ assertions:
   - uart_contains: "tim2 gated=1 arr_reset=1 w32=1 ug=1 uif_clr=1 run=1 masked=1 irq=2 stop=1 rel=1 ok"
   - uart_contains: "spi1 max31855=01901600 gated=1 clock=1 txeirq=1 rearm=0 rxneirq=1 released=1 ok"
   - uart_contains: "i2c1 bme280_id=00000060 gated=1 clock=1 ok"
+  - uart_contains: "usart2 rxne=1 isolated=1 irq=1 data=00005253 released=1 ok"
   - uart_contains: "fpu m4f cpacr=1 mvfr=1 add=1 ok"
   - uart_contains: "adc1 in1=000003FF gated=1 clock=1 eoc=1 ok"
   - gpio_edges:

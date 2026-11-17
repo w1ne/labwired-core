@@ -440,6 +440,103 @@ fn smoke_i2c1() -> bool {
     ok
 }
 
+/// Read two start-injected bytes from USART2 while checking its APB1 clock
+/// gate, UE/RE enables, RXNE interrupt level, and release after draining DR.
+#[cfg(feature = "stm32f429-usart2-rx")]
+fn smoke_usart2_rx() -> bool {
+    const USART2EN: u32 = 1 << 17;
+    const UE: u32 = 1 << 13;
+    const RE: u32 = 1 << 2;
+    const TE: u32 = 1 << 3;
+    const RXNE: u32 = 1 << 5;
+    const RXNEIE: u32 = 1 << 5;
+    const USART2_IRQ_BIT: u32 = 1 << (38 % 32);
+    const NVIC_ISPR1: *const u32 = 0xE000_E204 as *const u32;
+    const NVIC_ICPR1: *mut u32 = 0xE000_E284 as *mut u32;
+
+    let re_off = unsafe { read_volatile(USART_SR) } & RXNE == 0;
+    unsafe {
+        write_volatile(RCC_APB1ENR, read_volatile(RCC_APB1ENR) & !USART2EN);
+        write_volatile(USART_CR1, UE | RE | TE);
+    }
+    let clock_gated =
+        unsafe { read_volatile(USART_CR1) == 0 && read_volatile(USART_SR) & RXNE == 0 };
+    unsafe {
+        write_volatile(RCC_APB1ENR, read_volatile(RCC_APB1ENR) | USART2EN);
+        write_volatile(USART_CR1, TE | RE); // RE without UE must not receive.
+    }
+    let ue_off = unsafe { read_volatile(USART_SR) } & RXNE == 0;
+    unsafe { write_volatile(USART_CR1, UE | TE) }; // UE without RE must not receive.
+    let re_off_after_ue = unsafe { read_volatile(USART_SR) } & RXNE == 0;
+
+    unsafe {
+        write_volatile(NVIC_ICPR1, USART2_IRQ_BIT);
+        write_volatile(USART_CR1, UE | RE | TE);
+    }
+    let mut rxne_seen = false;
+    for _ in 0..4096 {
+        if unsafe { read_volatile(USART_SR) } & RXNE != 0 {
+            rxne_seen = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let irq_isolated = rxne_seen && unsafe { read_volatile(NVIC_ISPR1) } & USART2_IRQ_BIT == 0;
+    unsafe { write_volatile(USART_CR1, UE | RE | TE | RXNEIE) };
+    let mut irq_asserted = false;
+    for _ in 0..4096 {
+        if unsafe { read_volatile(NVIC_ISPR1) } & USART2_IRQ_BIT != 0 {
+            irq_asserted = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+
+    let first = unsafe { read_volatile(USART_DR) } & 0xFF;
+    let rxne_after_first = unsafe { read_volatile(USART_SR) } & RXNE != 0;
+    let second = if rxne_after_first {
+        unsafe { read_volatile(USART_DR) & 0xFF }
+    } else {
+        0
+    };
+    let rxne_cleared = unsafe { read_volatile(USART_SR) } & RXNE == 0;
+    unsafe {
+        write_volatile(USART_CR1, UE | TE);
+        write_volatile(NVIC_ICPR1, USART2_IRQ_BIT);
+    }
+    let mut irq_released = true;
+    for _ in 0..16 {
+        irq_released &= unsafe { read_volatile(NVIC_ISPR1) } & USART2_IRQ_BIT == 0;
+    }
+
+    let data = (first << 8) | second;
+    let ok = re_off
+        && clock_gated
+        && ue_off
+        && re_off_after_ue
+        && irq_isolated
+        && irq_asserted
+        && data == 0x5253
+        && rxne_cleared
+        && irq_released;
+    send(b"usart2 rxne=");
+    putc(if rxne_seen { b'1' } else { b'0' });
+    send(b" isolated=");
+    putc(if irq_isolated { b'1' } else { b'0' });
+    send(b" irq=");
+    putc(if irq_asserted { b'1' } else { b'0' });
+    send(b" data=");
+    send_hex(data);
+    send(b" released=");
+    putc(if rxne_cleared && irq_released {
+        b'1'
+    } else {
+        b'0'
+    });
+    send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
+    ok
+}
+
 const SYSTICK_CSR: u32 = 0xE000_E010;
 const SYSTICK_RVR: u32 = 0xE000_E014;
 const SCB_ICSR: u32 = 0xE000_ED04;
@@ -872,6 +969,9 @@ fn main() -> ! {
 
     #[cfg(feature = "stm32f429-i2c1")]
     let _i2c1_ok = smoke_i2c1();
+
+    #[cfg(feature = "stm32f429-usart2-rx")]
+    let _usart2_rx_ok = smoke_usart2_rx();
 
     loop {
         set_led(true);

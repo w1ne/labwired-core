@@ -66,6 +66,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "usart2 rxne=1 isolated=1 irq=1 data=00005253 released=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "fpu m4f cpacr=1 mvfr=1 add=1 ok"
       },
       "passed": true
@@ -95,24 +101,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      31232,
+      4096,
+      268435456,
+      32704,
       0,
-      3221225472,
-      54,
-      1,
+      21075,
       1073875988,
       1073759232,
       537001968,
-      2228225,
+      0,
+      0,
       1,
-      3,
-      1073872896,
-      134242043,
+      1,
+      134244587,
       537001856,
-      134240209,
-      134241386
+      134242819,
+      134243870
     ],
-    "pc": 134241386,
+    "pc": 134243870,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -125,7 +131,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "3f132c484834e875881d0d7d9288cc4f80ea96145f67768a018ec00c50624c98",
+  "firmware_hash": "fc2ff3ec0dc195b0c990e046589e086754f94e84af0edf3586eb2d28e9907e1c",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-stm32f429-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f429.yaml",
@@ -382,83 +388,83 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 7142,
+            "cycle": 8707,
             "value": 1
           },
           {
-            "cycle": 48395,
+            "cycle": 49959,
             "value": 0
           },
           {
-            "cycle": 89649,
+            "cycle": 91212,
             "value": 1
           },
           {
-            "cycle": 130902,
+            "cycle": 132464,
             "value": 0
           },
           {
-            "cycle": 172156,
+            "cycle": 173717,
             "value": 1
           },
           {
-            "cycle": 213409,
+            "cycle": 214969,
             "value": 0
           },
           {
-            "cycle": 254663,
+            "cycle": 256222,
             "value": 1
           },
           {
-            "cycle": 295916,
+            "cycle": 297474,
             "value": 0
           },
           {
-            "cycle": 337170,
+            "cycle": 338727,
             "value": 1
           },
           {
-            "cycle": 378423,
+            "cycle": 379979,
             "value": 0
           },
           {
-            "cycle": 419677,
+            "cycle": 421232,
             "value": 1
           },
           {
-            "cycle": 460930,
+            "cycle": 462484,
             "value": 0
           },
           {
-            "cycle": 502184,
+            "cycle": 503737,
             "value": 1
           },
           {
-            "cycle": 543437,
+            "cycle": 544989,
             "value": 0
           },
           {
-            "cycle": 584691,
+            "cycle": 586242,
             "value": 1
           },
           {
-            "cycle": 625944,
+            "cycle": 627494,
             "value": 0
           },
           {
-            "cycle": 667198,
+            "cycle": 668747,
             "value": 1
           },
           {
-            "cycle": 708451,
+            "cycle": 709999,
             "value": 0
           },
           {
-            "cycle": 749705,
+            "cycle": 751252,
             "value": 1
           },
           {
-            "cycle": 790958,
+            "cycle": 792504,
             "value": 0
           }
         ],
@@ -470,83 +476,83 @@
             "state": "0"
           },
           {
-            "cycle": 7142,
+            "cycle": 8707,
             "state": "1"
           },
           {
-            "cycle": 48395,
+            "cycle": 49959,
             "state": "0"
           },
           {
-            "cycle": 89649,
+            "cycle": 91212,
             "state": "1"
           },
           {
-            "cycle": 130902,
+            "cycle": 132464,
             "state": "0"
           },
           {
-            "cycle": 172156,
+            "cycle": 173717,
             "state": "1"
           },
           {
-            "cycle": 213409,
+            "cycle": 214969,
             "state": "0"
           },
           {
-            "cycle": 254663,
+            "cycle": 256222,
             "state": "1"
           },
           {
-            "cycle": 295916,
+            "cycle": 297474,
             "state": "0"
           },
           {
-            "cycle": 337170,
+            "cycle": 338727,
             "state": "1"
           },
           {
-            "cycle": 378423,
+            "cycle": 379979,
             "state": "0"
           },
           {
-            "cycle": 419677,
+            "cycle": 421232,
             "state": "1"
           },
           {
-            "cycle": 460930,
+            "cycle": 462484,
             "state": "0"
           },
           {
-            "cycle": 502184,
+            "cycle": 503737,
             "state": "1"
           },
           {
-            "cycle": 543437,
+            "cycle": 544989,
             "state": "0"
           },
           {
-            "cycle": 584691,
+            "cycle": 586242,
             "state": "1"
           },
           {
-            "cycle": 625944,
+            "cycle": 627494,
             "state": "0"
           },
           {
-            "cycle": 667198,
+            "cycle": 668747,
             "state": "1"
           },
           {
-            "cycle": 708451,
+            "cycle": 709999,
             "state": "0"
           },
           {
-            "cycle": 749705,
+            "cycle": 751252,
             "state": "1"
           },
           {
-            "cycle": 790958,
+            "cycle": 792504,
             "state": "0"
           }
         ],
@@ -617,6 +623,12 @@
         "cycle_lo": 1000,
         "cycle": 11000,
         "end_cycle": 11000
+      },
+      {
+        "text": "usart2 rxne=1 isolated=1 irq=1 data=00005253 released=1 ok",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       }
     ],
     "dropped_lines": 0
@@ -640,14 +652,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 24332,
+    "text_bytes": 26876,
     "data_bytes": 0,
     "bss_bytes": 8,
-    "flash_used_bytes": 24332,
+    "flash_used_bytes": 26876,
     "ram_static_bytes": 8,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
-    "flash_used_pct": 2.32,
+    "flash_used_pct": 2.56,
     "ram_static_pct": 0.01,
     "notes": [
       "section_sum_not_bin_image",
@@ -673,96 +685,96 @@
     "cycles": 800000,
     "instructions": 800000,
     "steps_executed": 800000,
-    "memory_reads": 4377,
-    "memory_writes": 136,
-    "peripheral_accesses": 772227,
+    "memory_reads": 5019,
+    "memory_writes": 157,
+    "peripheral_accesses": 771146,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134241116,
-        "count": 79,
+        "pc": 134243870,
+        "count": 76,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241244,
-        "count": 79,
+        "pc": 134243690,
+        "count": 40,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241270,
-        "count": 79,
+        "pc": 134243702,
+        "count": 40,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241114,
-        "count": 78,
+        "pc": 134243714,
+        "count": 40,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134243882,
+        "count": 40,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134243656,
+        "count": 39,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134241118,
-        "count": 78,
+        "pc": 134243660,
+        "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241128,
-        "count": 78,
+        "pc": 134243662,
+        "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241130,
-        "count": 78,
+        "pc": 134243666,
+        "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241184,
-        "count": 78,
+        "pc": 134243668,
+        "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241186,
-        "count": 78,
+        "pc": 134243672,
+        "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241188,
-        "count": 78,
+        "pc": 134243674,
+        "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241190,
-        "count": 78,
+        "pc": 134243678,
+        "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241192,
-        "count": 78,
+        "pc": 134243684,
+        "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241194,
-        "count": 78,
+        "pc": 134243688,
+        "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134241256,
-        "count": 78,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134241258,
-        "count": 78,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134241260,
-        "count": 78,
+        "pc": 134243694,
+        "count": 39,
         "symbol": "core::ptr::read_volatile"
       }
     ],
     "stalled_poll": {
       "peripheral": "gpioPortD",
       "offset": 20,
-      "accesses": 8768
+      "accesses": 7269
     }
   }
 }
