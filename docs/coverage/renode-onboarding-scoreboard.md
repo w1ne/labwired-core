@@ -139,7 +139,7 @@
 | `mspsim-msp430f5437` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `0` | n/a | 0 | `not_configured` | Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub. | MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage. |
 | `murax_vexriscv` | `pass` | `True` | `yes` | `yes` | `1032` | `1.032` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `murax_vexriscv_verilated_uart` | `pass` | `True` | `yes` | `yes` | `754` | `0.754` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `nrf52840` | `pass` | `True` | `yes` | `yes` | `2475` | `2.475` | `True` | `observable` | `50` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `nrf52840` | `pass` | `True` | `yes` | `yes` | `2390` | `2.39` | `True` | `observable` | `50` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `nrf52840dk_nrf52840` | `pass` | `True` | `yes` | `yes` | `4547` | `4.547` | `True` | `observable` | `50` | `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_f767zi` | `pass` | `True` | `yes` | `yes` | `1219` | `1.219` | `True` | `observable` | `52` | `uart_regex`, `uart_contains`, `uart_ordered`, `memory_value`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `nucleo_h753zi` | `pass` | `True` | `yes` | `yes` | `269012` | `269.012` | `True` | `observable` | `5` | `uart_regex`, `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |

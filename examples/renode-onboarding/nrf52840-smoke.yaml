@@ -6,18 +6,24 @@
 # TIMER0 compare/capture/clear, RTC0 counter + compare (EVTEN on), two RNG
 # samples, and PPI CH0 routing EGU0 TRIGGERED[0] -> EGU1 TRIGGER[0] only while
 # the channel is enabled. A summary word lands at 0x2003FF00.
-# SysTick-to-PendSV tail chaining also checks exception-frame reuse and live
-# R0 preservation on the Cortex-M4 profile. Not exercised: TEMP/ECB (unmodelled
-# residuals in the chip's silicon block), radio, USBD, QSPI, SAADC, PWM,
+# SAADC converts a 50% potentiometer on AIN3 through EasyDMA, checking the
+# 12-bit result and END/AMOUNT. SysTick-to-PendSV tail chaining also checks
+# exception-frame reuse and live R0 preservation on the Cortex-M4 profile.
+# Not exercised: TEMP/ECB (unmodelled residuals in the chip's silicon block),
+# radio, USBD, QSPI, PWM,
 # TWI/SPI, UART1, WDT. GPIOTE on a pin whose PIN_CNF.DIR = output is a known
 # engine gap (IN shows OUT, not the GPIOTE drive) — see
 # attempt-history/nrf52840/2026-11-08-direct-probe-failures.
-schema_version: "1.0"
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-nrf52840-renode-smoke"
   system: "../../configs/systems/onboarding/nrf52840.yaml"
 limits:
   max_steps: 4000000
+stimuli:
+  - target: { component: "pot_saadc_ain3", channel: "position" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 50.0
 assertions:
   - uart_ordered:
       - "NRF52840 RENODE SMOKE"
@@ -30,12 +36,13 @@ assertions:
       - "rng valrdy=11 bytes<=ff ok"
       - "ppi egu0->egu1 off=0 on=1 ok"
       - "systick-pendsv frame=1 r0=1 pending=1 priority=1 ok"
+      - "saadc ain3=00000755 amount=1 end=1 ok"
       - "NRF52840 PASS"
   - gpio_edges:
       pin: "gpio0:13"
       min_edges: 4
   - memory_value:
       address: 0x2003FF00
-      expected_value: 0x528401FF
+      expected_value: 0x528403FF
       size: 4
   - expected_stop_reason: max_steps

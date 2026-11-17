@@ -23,6 +23,7 @@
 //!           nrfx does; the INTEN-only event path is not exercised)
 //!   RNG     two EVENTS_VALRDY samples
 //!   PPI     EGU0 TRIGGERED[0] -> EGU1 TASKS_TRIGGER[0] only while CH0 is on
+//!   SAADC   12-bit conversion of potentiometer input AIN3 through EasyDMA
 //! SysTick-to-PendSV tail chaining is also checked on this Cortex-M4 profile,
 //! including exception-frame reuse and preservation of the live handler R0.
 //! A summary word goes to RAM at 0x2003FF00 (one bit per block passed). TEMP
@@ -46,9 +47,11 @@ fn main() -> ! {
     summary |= chip_checks(&mut l);
     let tailchain_ok = check_systick_pendsv_tailchain(&mut l);
     summary |= u32::from(tailchain_ok) << 8;
+    let saadc_ok = check_saadc_ain3(&mut l);
+    summary |= u32::from(saadc_ok) << 9;
 
     wr(RESULT, 0x5284_0000 | summary);
-    if summary == 0x1FF {
+    if summary == 0x3FF {
         l.s(b"NRF52840 PASS").send();
     } else {
         l.s(b"NRF52840 FAIL summary=").hex(summary, 2).send();

@@ -83,6 +83,9 @@ pub const PPI_CHENCLR: u32 = PPI + 0x508;
 pub const PPI_CH0_EEP: u32 = PPI + 0x510;
 pub const PPI_CH0_TEP: u32 = PPI + 0x514;
 
+pub const SAADC: u32 = 0x4000_7000;
+pub const SAADC_RESULT: u32 = 0x2000_1000;
+
 pub const RESULT: u32 = 0x2003_FF00;
 pub const SPIN: u32 = 200_000;
 
@@ -332,6 +335,42 @@ pub fn chip_checks(l: &mut Line) -> u32 {
     summary |= (pass as u32) << 7;
 
     summary
+}
+
+/// Convert the held 1.65 V input on AIN3 into one 12-bit EasyDMA sample.
+/// CONFIG=0 selects single-ended, gain 1/6 and the 600 mV internal reference:
+/// floor(1650 mV * (1/6) * 4096 / 600 mV) = 1877 (0x755).
+pub fn check_saadc_ain3(l: &mut Line) -> bool {
+    // CH[0]: AIN3 is PSELP=4; PSELN is ignored in single-ended mode.
+    wr(SAADC + 0x510, 4);
+    wr(SAADC + 0x514, 0);
+    wr(SAADC + 0x518, 0);
+    wr(SAADC + 0x5F0, 2); // 12-bit resolution
+    wr(SAADC + 0x62C, SAADC_RESULT);
+    wr(SAADC + 0x630, 1);
+    for event in [0x100, 0x104, 0x108, 0x10C] {
+        wr(SAADC + event, 0);
+    }
+    wr(SAADC + 0x500, 1); // ENABLE
+    wr(SAADC, 1); // TASKS_START
+    let started = rd(SAADC + 0x100) == 1;
+    wr(SAADC + 0x004, 1); // TASKS_SAMPLE
+    let ended = wait_set(SAADC + 0x104);
+    let amount = rd(SAADC + 0x634);
+    let sample = rd(SAADC_RESULT) & 0xFFFF;
+    let done = rd(SAADC + 0x108) == 1;
+    let pass = started && ended && amount == 1 && sample == 0x755 && done;
+    l.s(b"saadc ain3=")
+        .hex(sample, 8)
+        .s(b" amount=")
+        .hex(amount, 1)
+        .s(b" end=")
+        .hex(ended as u32, 1)
+        .ok(pass)
+        .send();
+    wr(SAADC + 0x008, 1); // TASKS_STOP
+    wr(SAADC + 0x500, 0);
+    pass
 }
 
 /// Pend the lower-priority PendSV exception from SysTick and prove the M4
