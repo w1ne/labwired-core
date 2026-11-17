@@ -2,9 +2,10 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic analog netlists drive the NUCLEO-WBA52CG model's PA0/PA1 GPIO
-//! inputs. This proves voltage solving, pad routing, and GPIO threshold
-//! behavior; thresholds are test assumptions and ADC4 is not modeled here.
+//! Generic analog netlists drive the NUCLEO-WBA52CG model's PA0..PA3 GPIO
+//! inputs. This proves voltage solving, pad routing, device physics, and GPIO
+//! threshold behavior; thresholds are test assumptions and ADC4 is not modeled
+//! here.
 
 mod common;
 use common::root;
@@ -55,6 +56,44 @@ fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
         Some(CosimSignalValue::F64(volts)) => *volts,
         other => panic!("expected solved voltage at {path}, got {other:?}"),
     }
+}
+
+/// Independent level-1 NMOS load line including `GAMMA`/`PHI` body effect.
+fn mosfet_body_effect_drain_voltage(gate_v: f64, bulk_v: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 100_000.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+    const GAMMA: f64 = 0.4;
+    const PHI: f64 = 0.7;
+
+    let threshold = VTO + GAMMA * ((PHI - bulk_v).sqrt() - PHI.sqrt());
+    let overdrive = gate_v - threshold;
+    if overdrive <= 0.0 {
+        return SUPPLY_V;
+    }
+    let beta = KP_A_PER_V2 * W_M / L_M;
+    let drain_current = |vds: f64| {
+        if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        }
+    };
+    let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
 }
 
 #[test]
@@ -150,4 +189,122 @@ fn nucleo_wba52cg_ntc_and_diode_netlists_reach_pa0_pa1_gpio_inputs() {
         );
         assert_eq!(gpioa_idr & 2, 0, "PA1 must read low below the assumed VIL");
     }
+}
+
+#[test]
+fn nucleo_wba52cg_mosfet_body_effect_reaches_pa2_pa3_gpio_beside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo_wba52cg.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-WBA52CG profile");
+    let analog =
+        SystemManifest::from_file(root("examples/nucleo-wba52cg/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC divider and Shockley diode netlists");
+    let mosfet = SystemManifest::from_file(root(
+        "examples/nucleo-wba52cg/analog-mosfet-body-effect-system.yaml",
+    ))
+    .expect("load matched generic NMOS body-effect branches");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let mut chip = ChipDescriptor::from_file(&chip_path).expect("load STM32WBA52 descriptor");
+    // Assumed thresholds for the digital endpoint; no WBA52 silicon limits are claimed.
+    chip.io_voltage_v = Some(3.3);
+    chip.gpio_input_thresholds = Some(GpioInputThresholds::uniform(0.3, 0.7));
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-WBA52CG bus");
+    for (pin, bit) in [("PA2", 2), ("PA3", 3)] {
+        assert_eq!(
+            SystemBus::resolve_pin_idr_pub(&bus, pin),
+            Some((GPIOA_IDR, bit)),
+            "{pin} must resolve to modeled GPIOA IDR bit {bit}"
+        );
+    }
+    bus.write_u32(RCC_AHB2ENR, 1).expect("enable GPIOA clock");
+    let moder = bus.read_u32(GPIOA_MODER).expect("read GPIO mode");
+    bus.write_u32(GPIOA_MODER, moder & !0xFF)
+        .expect("configure PA0..PA3 as digital inputs");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and generic NMOS branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must route to distinct modeled GPIO inputs"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", -10.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.mosfet_body.gate_v", 1.5)
+        .expect("set shared generic NMOS gate drive");
+
+    const VIL_V: f64 = 0.3 * 3.3;
+    const VIH_V: f64 = 0.7 * 3.3;
+    let expected_ntc_v = 3.3 * ntc_resistance_ohms(-10.0) / (10_000.0 + ntc_resistance_ohms(-10.0));
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut body_samples = Vec::new();
+    for bulk_v in [0.0_f64, -0.5, -1.0, -1.5] {
+        session
+            .set_signal_number("ui.mosfet_body.bulk_v", bulk_v)
+            .expect("set NMOS reverse body bias");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched NMOS netlists");
+        assert_eq!(steps.len(), 3, "NTC, diode, and NMOS models solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let reference_v = signal_voltage(&session, "board.gpio_in.pa2");
+        let body_v = signal_voltage(&session, "board.gpio_in.pa3");
+        let expected_reference_v = mosfet_body_effect_drain_voltage(1.5, 0.0);
+        let expected_body_v = mosfet_body_effect_drain_voltage(1.5, bulk_v);
+        assert!((reference_v - expected_reference_v).abs() < 5e-5);
+        assert!((body_v - expected_body_v).abs() < 5e-5);
+        if bulk_v == 0.0 {
+            assert!(
+                (reference_v - body_v).abs() < 1e-9,
+                "matched NMOS devices agree at zero body bias"
+            );
+        } else {
+            assert!(
+                body_v > reference_v,
+                "reverse body bias raises Vth and the loaded drain voltage: {body_v} V vs {reference_v} V"
+            );
+        }
+        let ntc_v = signal_voltage(&session, "board.gpio_in.pa0");
+        let diode_v = signal_voltage(&session, "board.gpio_in.pa1");
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "NTC route is isolated"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "diode route is isolated"
+        );
+
+        let gpioa_idr = bus.read_u32(GPIOA_IDR).expect("read GPIOA input data");
+        assert_ne!(gpioa_idr & 1, 0, "cold NTC drives PA0 above assumed VIH");
+        assert_eq!(
+            gpioa_idr & 2,
+            0,
+            "Shockley diode drives PA1 below assumed VIL"
+        );
+        assert_eq!(gpioa_idr & (1 << 2), 0, "zero-bias NMOS keeps PA2 low");
+        assert_eq!(
+            gpioa_idr & (1 << 3) != 0,
+            body_v > VIH_V,
+            "PA3 follows the solved NMOS drain after the assumed Schmitt threshold"
+        );
+        body_samples.push((bulk_v, body_v));
+    }
+    assert!(
+        body_samples.windows(2).all(|pair| pair[1].1 > pair[0].1),
+        "increasing reverse body bias raises the drain voltage: {body_samples:?}"
+    );
+    assert!(
+        body_samples.last().unwrap().1 > VIH_V && body_samples[0].1 < VIL_V,
+        "body effect must move the routed endpoint across the assumed GPIO thresholds: {body_samples:?}"
+    );
 }
