@@ -73,38 +73,6 @@ pub(crate) use motors::CircuitMotorLookup;
 pub use motors::{MotorCoupling, MotorSnapshot, STEPPER_SNAPSHOT_KIND};
 
 impl SystemBus {
-    /// Park a level-hold event chain (`EventResult::level_hold`) of
-    /// peripheral `idx` while every line in `lines` stands in the NVIC:
-    /// enabled, pending and level-marked. Returns false (the caller re-arms
-    /// as before) when any line does not, or when there is no NVIC.
-    #[cfg(feature = "event-scheduler")]
-    pub(crate) fn park_level_event(&mut self, idx: usize, token: u32, lines: &[u32]) -> bool {
-        let Some(nvic) = &self.nvic else {
-            return false;
-        };
-        if lines.is_empty() {
-            return false;
-        }
-        let standing = lines.iter().all(|&irq| {
-            let word = (irq / 32) as usize;
-            let bit = 1u32 << (irq % 32);
-            word < 8
-                && nvic.iser[word].load(std::sync::atomic::Ordering::SeqCst)
-                    & nvic.ispr[word].load(std::sync::atomic::Ordering::SeqCst)
-                    & nvic.level_pended[word].load(std::sync::atomic::Ordering::SeqCst)
-                    & bit
-                    != 0
-        });
-        if !standing {
-            return false;
-        }
-        self.parked_level_events.retain(|&(p, _, _)| p != idx);
-        for &irq in lines {
-            self.parked_level_events.push((idx, token, irq));
-        }
-        true
-    }
-
     /// Exception entry consumed the pend of NVIC line `irq`: re-arm every
     /// chain parked on it for the next cycle, where its per-cycle re-pend
     /// would have landed.
