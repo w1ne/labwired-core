@@ -297,6 +297,88 @@ fn bjt_recombination_temperature_collector_voltage(
     collector_for_vbe(0.5 * (low + high))
 }
 
+/// Independent hot Gummel–Poon load lines with zero Early voltage terms and
+/// zero high-injection terms. The first result is a common-emitter collector;
+/// the second is the high-side emitter in reverse-active operation.
+fn bjt_beta_temperature_voltage(base_drive_v: f64, bf: f64, br: f64, reverse_active: bool) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const IS_A: f64 = 1e-16;
+    const TEMP_K: f64 = 125.0 + 273.15;
+    const BASE_THERMAL_V: f64 = 1.380_649e-23 * TEMP_K / 1.602_176_634e-19;
+    let currents = |vbe: f64, vbc: f64| {
+        let forward = (vbe / BASE_THERMAL_V).exp();
+        let reverse = (vbc / BASE_THERMAL_V).exp();
+        let transport = IS_A * (forward - reverse);
+        let base_emitter = (IS_A / bf) * (forward - 1.0);
+        let base_collector = (IS_A / br) * (reverse - 1.0);
+        let collector = transport - base_collector;
+        let base = base_emitter + base_collector;
+        (collector, base, -(collector + base))
+    };
+
+    if !reverse_active {
+        const LOAD_OHMS: f64 = 10_000.0;
+        const BASE_OHMS: f64 = 1_000_000.0;
+        let collector_for_vbe = |vbe: f64| {
+            let (mut low, mut high) = (0.0, SUPPLY_V);
+            for _ in 0..100 {
+                let collector_v = 0.5 * (low + high);
+                let (collector_current, _, _) = currents(vbe, vbe - collector_v);
+                let residual = (SUPPLY_V - collector_v) / LOAD_OHMS - collector_current;
+                if residual > 0.0 {
+                    low = collector_v;
+                } else {
+                    high = collector_v;
+                }
+            }
+            0.5 * (low + high)
+        };
+        let (mut low, mut high) = (0.0, base_drive_v);
+        for _ in 0..100 {
+            let vbe = 0.5 * (low + high);
+            let collector_v = collector_for_vbe(vbe);
+            let (_, base_current, _) = currents(vbe, vbe - collector_v);
+            let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+            if residual > 0.0 {
+                low = vbe;
+            } else {
+                high = vbe;
+            }
+        }
+        return collector_for_vbe(0.5 * (low + high));
+    }
+
+    const LOAD_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 2_000.0;
+    let emitter_for_vbase = |base_v: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let emitter_v = 0.5 * (low + high);
+            let (_, _, emitter_current) = currents(base_v - emitter_v, base_v);
+            let residual = (SUPPLY_V - emitter_v) / LOAD_OHMS - emitter_current;
+            if residual > 0.0 {
+                low = emitter_v;
+            } else {
+                high = emitter_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let base_v = 0.5 * (low + high);
+        let emitter_v = emitter_for_vbase(base_v);
+        let (_, base_current, _) = currents(base_v - emitter_v, base_v);
+        let residual = (base_drive_v - base_v) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = base_v;
+        } else {
+            high = base_v;
+        }
+    }
+    emitter_for_vbase(0.5 * (low + high))
+}
+
 /// First backward-Euler step of the two linear CJC partitions. With MJC=0,
 /// depletion charge is a constant capacitor; XCJC=0 puts it directly on the
 /// external base, while XCJC=1 puts it behind RB at the internal base.
@@ -1470,5 +1552,155 @@ fn nrf5340dk_bjt_recombination_temperature_coefficients_reach_saadc() {
     assert!(
         (combined - bc_temperature).abs() > 0.01,
         "base-emitter coefficient changes remain visible beside base-collector coefficients"
+    );
+}
+
+#[test]
+fn nrf5340dk_bjt_beta_temperature_coefficients_reach_saadc() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let beta = SystemManifest::from_file(root(
+        "examples/nrf5340dk/analog-bjt-beta-temperature-system.yaml",
+    ))
+    .expect("load matched forward/reverse beta temperature branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(beta.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 8);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and six generic BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic netlists must resolve to SAADC AIN0 through AIN7"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_beta_temperature.forward_base_v", 0.0)
+        .expect("initialize forward-active BJT base drives");
+    session
+        .set_signal_number("ui.bjt_beta_temperature.reverse_base_v", 0.0)
+        .expect("initialize reverse-active BJT base drives");
+
+    const TNOM_C: f64 = 25.0;
+    const TEMP_C: f64 = 125.0;
+    const DELTA_C: f64 = TEMP_C - TNOM_C;
+    const BF_NOMINAL: f64 = 80.0;
+    const BR_NOMINAL: f64 = 4.0;
+    const TBF1: f64 = 2e-3;
+    const TBF2: f64 = 15e-6;
+    const TBR1: f64 = 3e-3;
+    const TBR2: f64 = 30e-6;
+    let bf_hot = BF_NOMINAL * (1.0 + TBF1 * DELTA_C + TBF2 * DELTA_C * DELTA_C);
+    let bf_first_order = BF_NOMINAL * (1.0 + TBF1 * DELTA_C);
+    let br_hot = BR_NOMINAL * (1.0 + TBR1 * DELTA_C + TBR2 * DELTA_C * DELTA_C);
+    let br_first_order = BR_NOMINAL * (1.0 + TBR1 * DELTA_C);
+    assert!((bf_hot - 108.0).abs() < 1e-12);
+    assert!((bf_first_order - 96.0).abs() < 1e-12);
+    assert!((br_hot - 6.4).abs() < 1e-12);
+    assert!((br_first_order - 5.2).abs() < 1e-12);
+
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive_voltages = None;
+    for (forward_drive_v, reverse_drive_v) in [(1.0_f64, 0.9_f64), (1.1, 1.0), (1.2, 1.1)] {
+        session
+            .set_signal_number("ui.bjt_beta_temperature.forward_base_v", forward_drive_v)
+            .expect("set common forward-active base drive");
+        session
+            .set_signal_number("ui.bjt_beta_temperature.reverse_base_v", reverse_drive_v)
+            .expect("set common reverse-active base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and hot BJT beta branches");
+        assert_eq!(steps.len(), 8, "all eight generic analog branches solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected SAADC route errors: {errors:?}"
+        );
+
+        let routed_ntc_v = voltage(&session, "adc.saadc.0_volts");
+        let routed_diode_v = voltage(&session, "adc.saadc.1_volts");
+        assert!((routed_ntc_v - ntc_v).abs() < 1e-9);
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "the independent Shockley diode remains isolated"
+        );
+        let actual = [
+            voltage(&session, "adc.saadc.2_volts"),
+            voltage(&session, "adc.saadc.3_volts"),
+            voltage(&session, "adc.saadc.4_volts"),
+            voltage(&session, "adc.saadc.5_volts"),
+            voltage(&session, "adc.saadc.6_volts"),
+            voltage(&session, "adc.saadc.7_volts"),
+        ];
+        let expected = [
+            bjt_beta_temperature_voltage(forward_drive_v, bf_hot, BR_NOMINAL, false),
+            bjt_beta_temperature_voltage(forward_drive_v, bf_hot, BR_NOMINAL, false),
+            bjt_beta_temperature_voltage(forward_drive_v, bf_first_order, BR_NOMINAL, false),
+            bjt_beta_temperature_voltage(reverse_drive_v, BF_NOMINAL, br_hot, true),
+            bjt_beta_temperature_voltage(reverse_drive_v, BF_NOMINAL, br_hot, true),
+            bjt_beta_temperature_voltage(reverse_drive_v, BF_NOMINAL, br_first_order, true),
+        ];
+        for (index, (actual_v, expected_v)) in actual.into_iter().zip(expected).enumerate() {
+            assert!(
+                (actual_v - expected_v).abs() < 5e-5,
+                "SAADC AIN{} independent beta temperature load line should be {expected_v} V, got {actual_v} V",
+                index + 2
+            );
+        }
+        assert!(
+            (actual[0] - actual[1]).abs() < 1e-9,
+            "TBF1/TBF2 must match an explicit hot BF model card"
+        );
+        assert!(
+            (actual[3] - actual[4]).abs() < 1e-9,
+            "TBR1/TBR2 must match an explicit hot BR model card"
+        );
+
+        let codes = scan_saadc_channels::<8>(&mut bus);
+        for (channel, voltage_v) in [
+            (0, routed_ntc_v),
+            (1, routed_diode_v),
+            (2, actual[0]),
+            (3, actual[1]),
+            (4, actual[2]),
+            (5, actual[3]),
+            (6, actual[4]),
+            (7, actual[5]),
+        ] {
+            assert_eq!(
+                codes[channel],
+                expected_saadc_code(voltage_v),
+                "SAADC AIN{channel} converts its routed solved voltage"
+            );
+        }
+        if forward_drive_v == 1.2 {
+            high_drive_voltages = Some(actual);
+        }
+    }
+
+    let [bf_full, bf_explicit, bf_first, br_full, br_explicit, br_first] =
+        high_drive_voltages.expect("high-drive sample was recorded");
+    assert!((bf_full - bf_explicit).abs() < 1e-9);
+    assert!(
+        (bf_full - bf_first).abs() > 0.01,
+        "TBF2 must change the forward high-drive load line: {bf_full} V vs {bf_first} V"
+    );
+    assert!((br_full - br_explicit).abs() < 1e-9);
+    assert!(
+        (br_full - br_first).abs() > 0.01,
+        "TBR2 must change the reverse-active high-drive load line: {br_full} V vs {br_first} V"
     );
 }
