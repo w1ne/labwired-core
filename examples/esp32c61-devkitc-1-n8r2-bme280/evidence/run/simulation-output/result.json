@@ -36,6 +36,21 @@
     },
     {
       "assertion": {
+        "uart_contains": "C61_RGB_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:8",
+          "min_edges": 16
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "expected_stop_reason": "max_steps"
       },
       "passed": true
@@ -46,38 +61,38 @@
     "registers": [
       0,
       1107296588,
-      1082458080,
+      1082458048,
       1082132480,
       0,
-      73,
-      67,
-      56,
-      80,
-      536000,
-      1610612736,
-      71,
-      47,
+      49,
+      66,
+      79,
       50,
       48,
-      10,
-      79,
+      6144,
+      4096,
+      1280,
+      239,
+      1610612736,
+      256,
+      67,
       54,
-      77,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
+      95,
+      73,
       32,
       61,
       68,
-      120
+      1611210752,
+      1611206656,
+      1611202560,
+      4294938623,
+      0,
+      75,
+      82,
+      71,
+      10
     ],
-    "pc": 1107297546,
+    "pc": 1107321374,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -113,7 +128,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "7b85f6ba44bb5905a60a04cc737a79e42462b157bf8c4dc1edfd983c4ac3db79",
+  "firmware_hash": "3983fc2847398bda77e23fb3808eb60893d8aeb6da4fe6db529b20eee33456e5",
   "config": {
     "firmware": "examples/esp32c61-devkitc-1-n8r2-bme280/build/firmware.elf",
     "system": "examples/esp32c61-devkitc-1-n8r2-bme280/../../configs/systems/esp32c61-devkitc-1-n8r2-bme280.yaml",
@@ -969,7 +984,7 @@
             "name": "GPIO7",
             "offset": 32,
             "size": 32,
-            "value": 2048,
+            "value": 6144,
             "fields": [
               {
                 "name": "MCU_OE",
@@ -1057,7 +1072,7 @@
                   14,
                   12
                 ],
-                "value": 0
+                "value": 1
               },
               {
                 "name": "FILTER_EN",
@@ -3577,6 +3592,40 @@
             }
           }
         ]
+      },
+      {
+        "id": "rgb_led",
+        "device_type": "neopixel",
+        "declared": true,
+        "attachment": {
+          "transport": "gpio",
+          "bus": "gpio"
+        },
+        "artifacts": [
+          {
+            "kind": "framebuffer",
+            "id": "rgb_led",
+            "meta": {
+              "data_pin": 8,
+              "format": "ws2812_grb",
+              "frames_seen": [
+                {
+                  "bytes": [
+                    0,
+                    255,
+                    0
+                  ],
+                  "lit_pixels": 1
+                }
+              ],
+              "generation": 15475485528314852384,
+              "h": 1,
+              "lit_pixels": 1,
+              "pixels_decoded": 1,
+              "w": 1
+            }
+          }
+        ]
       }
     ]
   },
@@ -3596,6 +3645,231 @@
       "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
     }
   ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 5000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 8,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 146392,
+            "value": 1
+          },
+          {
+            "cycle": 146448,
+            "value": 0
+          },
+          {
+            "cycle": 146592,
+            "value": 1
+          },
+          {
+            "cycle": 146648,
+            "value": 0
+          },
+          {
+            "cycle": 146792,
+            "value": 1
+          },
+          {
+            "cycle": 146848,
+            "value": 0
+          },
+          {
+            "cycle": 146992,
+            "value": 1
+          },
+          {
+            "cycle": 147048,
+            "value": 0
+          },
+          {
+            "cycle": 147192,
+            "value": 1
+          },
+          {
+            "cycle": 147248,
+            "value": 0
+          },
+          {
+            "cycle": 147392,
+            "value": 1
+          },
+          {
+            "cycle": 147448,
+            "value": 0
+          },
+          {
+            "cycle": 147592,
+            "value": 1
+          },
+          {
+            "cycle": 147648,
+            "value": 0
+          },
+          {
+            "cycle": 147792,
+            "value": 1
+          },
+          {
+            "cycle": 147848,
+            "value": 0
+          },
+          {
+            "cycle": 147992,
+            "value": 1
+          },
+          {
+            "cycle": 148104,
+            "value": 0
+          },
+          {
+            "cycle": 148192,
+            "value": 1
+          },
+          {
+            "cycle": 148304,
+            "value": 0
+          },
+          {
+            "cycle": 148392,
+            "value": 1
+          },
+          {
+            "cycle": 148504,
+            "value": 0
+          },
+          {
+            "cycle": 148592,
+            "value": 1
+          },
+          {
+            "cycle": 148704,
+            "value": 0
+          },
+          {
+            "cycle": 148792,
+            "value": 1
+          },
+          {
+            "cycle": 148904,
+            "value": 0
+          },
+          {
+            "cycle": 148992,
+            "value": 1
+          },
+          {
+            "cycle": 149104,
+            "value": 0
+          },
+          {
+            "cycle": 149192,
+            "value": 1
+          },
+          {
+            "cycle": 149304,
+            "value": 0
+          },
+          {
+            "cycle": 149392,
+            "value": 1
+          },
+          {
+            "cycle": 149504,
+            "value": 0
+          },
+          {
+            "cycle": 149592,
+            "value": 1
+          },
+          {
+            "cycle": 149648,
+            "value": 0
+          },
+          {
+            "cycle": 149792,
+            "value": 1
+          },
+          {
+            "cycle": 149848,
+            "value": 0
+          },
+          {
+            "cycle": 149992,
+            "value": 1
+          },
+          {
+            "cycle": 150048,
+            "value": 0
+          },
+          {
+            "cycle": 150192,
+            "value": 1
+          },
+          {
+            "cycle": 150248,
+            "value": 0
+          },
+          {
+            "cycle": 150392,
+            "value": 1
+          },
+          {
+            "cycle": 150448,
+            "value": 0
+          },
+          {
+            "cycle": 150592,
+            "value": 1
+          },
+          {
+            "cycle": 150648,
+            "value": 0
+          },
+          {
+            "cycle": 150792,
+            "value": 1
+          },
+          {
+            "cycle": 150848,
+            "value": 0
+          },
+          {
+            "cycle": 150992,
+            "value": 1
+          },
+          {
+            "cycle": 151048,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [],
+        "mode": "af",
+        "edge_count": 48
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 8,
+      "mode": "af",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": null
+    }
+  ],
   "uart_lines": {
     "lines": [
       {
@@ -3603,6 +3877,12 @@
         "cycle_lo": 160000,
         "cycle": 170000,
         "end_cycle": 900000
+      },
+      {
+        "text": "C61_RGB_OK",
+        "cycle_lo": 900000,
+        "cycle": 910000,
+        "end_cycle": 1050000
       }
     ],
     "dropped_lines": 0
@@ -3612,14 +3892,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 1766,
+    "text_bytes": 25598,
     "data_bytes": 0,
     "bss_bytes": 327680,
-    "flash_used_bytes": 1766,
+    "flash_used_bytes": 25598,
     "ram_static_bytes": 327680,
     "flash_total_bytes": 8388608,
     "ram_total_bytes": 327680,
-    "flash_used_pct": 0.02,
+    "flash_used_pct": 0.31,
     "ram_static_pct": 100.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -3635,25 +3915,30 @@
     "cycles": 5000000,
     "instructions": 5000000,
     "steps_executed": 5000000,
-    "memory_reads": 3,
-    "memory_writes": 7,
-    "peripheral_accesses": 29327,
+    "memory_reads": 93,
+    "memory_writes": 15,
+    "peripheral_accesses": 29391,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1107297546,
-        "count": 18985,
+        "pc": 1107321374,
+        "count": 18946,
         "symbol": "core::core_arch::riscv_shared::pause"
       },
       {
-        "pc": 1107297218,
+        "pc": 1107297260,
         "count": 351,
-        "symbol": "<usize as core::cmp::PartialOrd>::lt"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 1107297124,
+        "pc": 1107297158,
         "count": 195,
-        "symbol": "<usize as core::cmp::PartialOrd>::lt"
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 1107304926,
+        "count": 39,
+        "symbol": "firmware_esp32c61_bme280_smoke::pulse_ws2812_bit"
       }
     ]
   }

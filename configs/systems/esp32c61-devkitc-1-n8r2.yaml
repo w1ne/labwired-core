@@ -1,11 +1,19 @@
-# UART0 plus GPIO4 register-output profile for the current
-# ESP32-C61-DevKitC-1-N8R2. J3 TX/RX map to GPIO11/GPIO10 and J1 pin 3 maps to
-# GPIO4 in Espressif's v2.0 guide. GPIO4 output is checked at the chip register
-# head; pad routing, IO_MUX and the physical USB bridge remain outside scope.
+# UART0 and GPIO4 register-output profile for the current ESP32-C61-DevKitC-1-N8R2.
+# J3 TX/RX map to GPIO11/GPIO10 and J1 pin 3 maps to GPIO4 in Espressif's v2.0
+# guide. The onboard WS2812 LED is wired to GPIO8. GPIO4 register output and
+# GPIO8 LED frames are checked; pad routing, IO_MUX and the physical USB bridge
+# remain outside scope.
 
 name: "esp32c61-devkitc-1-n8r2"
 chip: "../chips/esp32c61.yaml"
 cpu_hz: 160_000_000
 debug_uart: "uart0"
-external_devices: []
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 1
+      cpu_hz: 160000000
 board_io: []

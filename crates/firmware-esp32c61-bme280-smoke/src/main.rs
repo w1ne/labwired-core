@@ -14,6 +14,8 @@ const UART0_BASE: *mut u32 = 0x6000_0000 as *mut u32;
 const UART0_CLKDIV: *mut u32 = 0x6000_0014 as *mut u32;
 
 const GPIO_BASE: usize = 0x6009_1000;
+const GPIO_OUT_W1TS: *mut u32 = (GPIO_BASE + 0x08) as *mut u32;
+const GPIO_OUT_W1TC: *mut u32 = (GPIO_BASE + 0x0C) as *mut u32;
 const GPIO_ENABLE_W1TS: *mut u32 = (GPIO_BASE + 0x38) as *mut u32;
 const GPIO_I2C_SCL_IN_SEL: *mut u32 = (GPIO_BASE + 0x2D4 + 46 * 4) as *mut u32;
 const GPIO_I2C_SDA_IN_SEL: *mut u32 = (GPIO_BASE + 0x2D4 + 47 * 4) as *mut u32;
@@ -21,9 +23,13 @@ const GPIO6_OUT_SEL: *mut u32 = (GPIO_BASE + 0xAD4 + 6 * 4) as *mut u32;
 const GPIO22_OUT_SEL: *mut u32 = (GPIO_BASE + 0xAD4 + 22 * 4) as *mut u32;
 const GPIO6_MASK: u32 = 1 << 6;
 const GPIO22_MASK: u32 = 1 << 22;
+const GPIO8_MASK: u32 = 1 << 8;
+const GPIO8_OUT_SEL: *mut u32 = (GPIO_BASE + 0xAD4 + 8 * 4) as *mut u32;
 
 const IO_MUX_GPIO6: *mut u32 = 0x6009_001C as *mut u32;
+const IO_MUX_GPIO8: *mut u32 = 0x6009_0020 as *mut u32;
 const IO_MUX_GPIO22: *mut u32 = 0x6009_005C as *mut u32;
+const GPIO_OUT_SIGNAL: u32 = 256 | (1 << 10); // SIG_GPIO_OUT_IDX; OEN from GPIO_ENABLE
 
 const I2C0_BASE: usize = 0x6000_4000;
 const I2C_SCL_LOW_PERIOD: *mut u32 = I2C0_BASE as *mut u32;
@@ -102,10 +108,60 @@ fn main() -> ! {
         }
 
         uart_str(b"C61_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO6/22\n");
+
+        write_onboard_rgb_red();
+        uart_str(b"C61_RGB_OK\n");
     }
 
     loop {
         core::hint::spin_loop();
+    }
+}
+
+macro_rules! nops {
+    ($count:literal) => {
+        unsafe {
+            core::arch::asm!(
+                concat!(".rept ", stringify!($count), "\n nop\n .endr"),
+                options(nomem, nostack)
+            )
+        }
+    };
+}
+
+unsafe fn write_onboard_rgb_red() {
+    // GPIO8 is the onboard RGB LED input on this board. It is also a strapping
+    // pin; this directly loaded ELF starts after reset/strap sampling, which
+    // is outside this fast-boot profile.
+    select_gpio_function(IO_MUX_GPIO8);
+    core::ptr::write_volatile(GPIO8_OUT_SEL, GPIO_OUT_SIGNAL);
+    core::ptr::write_volatile(GPIO_OUT_W1TC, GPIO8_MASK);
+    core::ptr::write_volatile(GPIO_ENABLE_W1TS, GPIO8_MASK);
+
+    // WS2812 wire order is GRB. Red is 00 FF 00, most-significant bit first.
+    for byte in [0x00u8, 0xFF, 0x00] {
+        for bit in (0..8).rev() {
+            pulse_ws2812_bit(byte & (1 << bit) != 0);
+        }
+    }
+
+    // Keep GPIO8 low for >40 us at the C61's 160 MHz core clock.
+    nops!(7000);
+}
+
+#[inline(always)]
+unsafe fn pulse_ws2812_bit(one: bool) {
+    core::ptr::write_volatile(GPIO_OUT_W1TS, GPIO8_MASK);
+    if one {
+        nops!(111);
+    } else {
+        nops!(55);
+    }
+    core::ptr::write_volatile(GPIO_OUT_W1TC, GPIO8_MASK);
+    if one {
+        nops!(87);
+    } else {
+        nops!(143);
     }
 }
 

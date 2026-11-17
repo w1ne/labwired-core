@@ -12,4 +12,11 @@ external_devices:
       scl: "GPIO22"
     config:
       i2c_address: 0x77
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 1
+      cpu_hz: 160000000
 board_io: []

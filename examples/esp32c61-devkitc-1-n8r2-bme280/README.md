@@ -2,7 +2,9 @@
 
 **Demand position:** ESP32 is rank 1 in the measured MCU list (38%); the survey
 does not report a C61-specific share. This round adds a real I²C sensor path to
-the current C61 DevKitC-1 profile.
+the current C61 DevKitC-1 profile and verifies its onboard WS2812 RGB LED on
+GPIO8. Live board availability and the GPIO8 LED mapping are in the
+[vendor receipt](vendor-status.md).
 
 ## Wiring
 
@@ -69,9 +71,11 @@ void app_main(void) {
 The committed bare-metal RISC-V firmware configures the C61 PCR I²C clock,
 selects I²C0 on GPIO6/GPIO22, reads BME280 register `0xD0` and the raw
 temperature test vector at `0xFA`, then emits
-`C61_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO6/22`. Passing therefore
-depends on the modeled I²C command engine, live GPIO matrix route, attached
-BME280 register model, and UART output.
+`C61_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO6/22`. It then bit-bangs one
+red WS2812 frame on GPIO8 and emits `C61_RGB_OK`. The smoke requires the
+NeoPixel model to decode one lit pixel with GRB bytes `00 FF 00`. Passing
+therefore depends on the modeled I²C command engine, live GPIO matrix route,
+attached BME280 register model, GPIO output path, WS2812 observer, and UART.
 
 ```sh
 examples/esp32c61-devkitc-1-n8r2-bme280/ci/test.sh
@@ -79,7 +83,8 @@ examples/esp32c61-devkitc-1-n8r2-bme280/ci/test.sh
 
 The smoke fast-loads a bare ELF; it does not run mask ROM or Espressif's
 bootloader. IO_MUX writes are stored but electrical pad muxing is not enforced.
-The result does not validate the wireless companion, PSRAM, GPIO8 RGB LED,
-sensor conversion timing, environmental readings, or physical hardware.
+The result does not validate strap sampling on GPIO8 during reset, RMT, the
+wireless companion, PSRAM, sensor conversion timing, environmental readings,
+or physical hardware. The LED smoke bit-bangs GPIO8 and does not claim RMT.
 Evidence and the dated live availability receipt are under [`evidence/`](evidence/)
 and [`vendor-status.md`](vendor-status.md).

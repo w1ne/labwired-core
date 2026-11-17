@@ -1,10 +1,10 @@
-# ESP32-C61-DevKitC-1-N8R2 UART, GPIO, and BME280 smokes
+# ESP32-C61-DevKitC-1-N8R2 UART, GPIO, BME280, and RGB smokes
 
 **Demand rank:** ESP32 family is rank 1 in the measured MCU list (38%). The
 survey does not report a separate ESP32-C61 score. This round expands the
-existing C61 board with a BME280 I2C path on GPIO6/GPIO22; earlier UART0 and
-GPIO4 output-register smokes remain. The survey does not report a separate
-C61 score. Live board and sensor availability is recorded in the [BME280
+existing C61 board with the onboard GPIO8 RGB LED smoke, alongside its BME280
+I2C path on GPIO6/GPIO22. Earlier UART0 and GPIO4 output-register smokes
+remain. Live board and sensor availability is recorded in the [vendor
 receipt](../esp32c61-devkitc-1-n8r2-bme280/vendor-status.md).
 
 ## Copy-paste firmware example
@@ -67,11 +67,13 @@ examples/esp32c61-devkitc-1-n8r2-bme280/ci/test.sh
 
 The chip profile maps the C61 HP RISC-V core, 8 MiB flash window, 320 KiB
 on-chip HP SRAM, UART0 FIFO/status head, GPIO4 output state, and the C61 GPIO
-matrix selectors needed for I2C0 on GPIO6/GPIO22. It also models the UART0 and
-I2C0 PCR clock gates. The BME280 smoke verifies register reads and route
-selection. IO_MUX is storage only; electrical pad behavior, GPIO26..29, other
-matrix functions, GPIO interrupts, and the onboard GPIO8 addressable RGB LED
-protocol are outside this profile.
+matrix selectors needed for I2C0 on GPIO6/GPIO22, plus the GPIO8 output path
+used by the onboard WS2812 RGB LED. It also models the UART0 and I2C0 PCR
+clock gates. The BME280 smoke verifies sensor register reads and route
+selection, then checks that the NeoPixel model decodes one red LED frame.
+IO_MUX is storage only; electrical pad behavior, GPIO26..29, other matrix
+functions, GPIO interrupts, reset-time strap sampling, and the RMT peripheral
+are outside this profile. The smoke bit-bangs GPIO8.
 
 All three smokes fast-load a bare ELF; they do not execute the mask ROM or
 Espressif bootloader. The UART assertion does not prove the physical USB-to-UART bridge.

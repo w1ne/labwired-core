@@ -9,3 +9,6 @@ CARGO_BUILD_RUSTC_WRAPPER='' scripts/onboarding_smoke.sh \
   --script examples/esp32c61-devkitc-1-n8r2-bme280/bme280-smoke.yaml \
   --system configs/systems/esp32c61-devkitc-1-n8r2-bme280.yaml \
   --out-dir examples/esp32c61-devkitc-1-n8r2-bme280/evidence/run
+python3 examples/esp32c61-devkitc-1-n8r2-bme280/ci/verify-rgb-evidence.py \
+  examples/esp32c61-devkitc-1-n8r2-bme280/evidence/run/simulation-output/result.json \
+  2>&1 | tee examples/esp32c61-devkitc-1-n8r2-bme280/evidence/run/logs/verify_rgb.log

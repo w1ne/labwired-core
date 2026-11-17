@@ -1,10 +1,10 @@
 # Narrow ESP32-C61 HP-core profile for the ESP32-C61-DevKitC-1-N8R2.
 #
-# This fast-boot profile exposes UART0, GPIO4 output, and the GPIO-matrix / I2C0
-# path used by the BME280 smoke. It loads a bare ELF directly; it does not
-# execute the C61 mask ROM or Espressif bootloader. IO_MUX is storage only;
-# electrical pad behavior, USB, Wi-Fi, Bluetooth LE, PSRAM, and the RGB LED
-# protocol are not claimed here.
+# This fast-boot profile exposes UART0, GPIO4 output, the GPIO8 output used to
+# bit-bang the onboard WS2812, and the GPIO-matrix / I2C0 path used by the
+# BME280 smoke. It loads a bare ELF directly; it does not execute the C61 mask
+# ROM or Espressif bootloader. IO_MUX is storage only; electrical pad behavior,
+# RMT, USB, Wi-Fi, Bluetooth LE, and PSRAM are not claimed here.
 #
 # Sources checked 2026-11-17:
 #   ESP32-C61 Series Datasheet v1.1:
@@ -39,6 +39,8 @@ ram:
 pins:
   GPIO4: { gpio: "gpio", bit: 4 }
   GPIO6: { gpio: "gpio", bit: 6 }
+  # The DevKitC-1 N8R2's onboard addressable RGB LED is driven from GPIO8.
+  GPIO8: { gpio: "gpio", bit: 8 }
   GPIO22: { gpio: "gpio", bit: 22 }
 
 peripherals:
