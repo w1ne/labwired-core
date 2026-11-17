@@ -112,7 +112,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | efr32mg26 | open | L2 | 34 | 1513.7 | 2.2 | ≥1× (CI) | [doc](docs/boards/efr32mg26.md) |
 | atmega328p | open | L1 | 7 | 1044.8 | 7.6 | ≥1× (CI) | — |
 | atmega328pb | open | L1 | 8 | 1026.4 | 7.6 | ≥1× (CI) | — |
-| atmega2560 | open | L1 | 15 | — | — | ≥1× (CI) | — |
+| atmega2560 | open | L1 | 18 | — | — | ≥1× (CI) | — |
 | atmega2561 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega2561.md) |
 | atmega4809 | open | L0 | 19 | — | — | ≥1× (CI) | — |
 | atmega32u4 | open | L0 | 8 | 1020.0 | 7.7 | ≥1× (CI) | — |
@@ -147,12 +147,12 @@ same fields but never their source, chip YAML, binary or build paths.
 | at32f421g8u7 | open | L1 | 22 | 982.3 | 1.5 | ≥1× (CI) | [doc](docs/boards/at32f421g8u7.md) |
 | ch32v003j4m6 | open | L1 | 5 | — | — | ≥1× (CI) | — |
 | esp32h2 | open | L0 | 3 | — | 2.4 | ≥1× (CI) | — |
-| esp32c5 | open | L0 | 1 | — | 2.2 | ≥1× (CI) | — |
-| esp32c61 | open | L0 | 1 | — | 2.2 | ≥1× (CI) | — |
+| esp32c5 | open | L0 | 2 | — | 2.2 | ≥1× (CI) | — |
+| esp32c61 | open | L0 | 2 | — | 2.2 | ≥1× (CI) | — |
 | nrf54l05 | open | L0 | 6 | 1377.5 | 1.9 | ≥1× (CI) | [doc](docs/boards/nrf54l05.md) |
 | nrf54l10 | open | L0 | 6 | 1377.5 | 1.9 | ≥1× (CI) | [doc](docs/boards/nrf54l10.md) |
-| esp32p4 | open | L0 | 1 | — | — | ≥1× (CI) | — |
-| esp32s2 | open | L0 | 1 | — | — | ≥1× (CI) | — |
+| esp32p4 | open | L0 | 2 | — | — | ≥1× (CI) | — |
+| esp32s2 | open | L0 | 2 | — | — | ≥1× (CI) | — |
 | rp2040-feather | open | L0 | 24 | 906.8 | 1.6 | ≥1× (CI) | — |
 | rp2350-feather | open | L0 | 27 | 906.8 | 1.7 | ≥1× (CI) | — |
 | stm32h723zg | open | L0 | 7 | 900.5 | 1.5 | ≥1× (CI) | — |

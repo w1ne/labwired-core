@@ -140,6 +140,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     // Declarative SPI devices — model lives entirely in configs/devices/*.yaml,
     // interpreted by the generic GenericSpiDevice (zero per-part Rust).
     &components::declarative_spi::ADXL345_KIT,
+    &components::declarative_spi::BMA400_KIT,
     &components::declarative_spi::MAX31855_KIT,
     &components::declarative_led_strip::APA102_KIT,
     // Migrated from i2c_factory-only → universal kit attach (any MCU).

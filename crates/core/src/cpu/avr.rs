@@ -54,9 +54,10 @@ pub const SRAM_START: u16 = 0x0100;
 /// Timer0/1/2 output-compare pads use the mega pins (OC0A = PB7, OC0B = PG5,
 /// OC1A/OC1B = PB5/PB6, OC2A = PB4, OC2B = PH6; see `avr/oc_pins.rs`).
 /// INT0..7 and PCINT0..23 on the mega pins (`avr/mega_ext_int.rs`), the
-/// timed, auto-triggered ADC (`avr/mega_adc.rs`) and the timed SPI block
-/// (`avr/mega_spi.rs`) are the mega's own. Not modelled on the ATmega2560:
-/// OC1C, Timer3/4/5 and USART1..3 (registers stored only).
+/// timed, auto-triggered ADC (`avr/mega_adc.rs`), the timed SPI block
+/// (`avr/mega_spi.rs`) and USART0..3 (`avr/usart.rs`) are the mega's own.
+/// Not modelled on the ATmega2560: OC1C and Timer3/4/5 (registers stored
+/// only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -478,7 +479,7 @@ pub fn mega2560_vector(vec328: u32) -> u32 {
         23 => 31,              // EE READY
         24 => 29,              // ANALOG COMP
         25 => 40,              // TWI
-        26 => 58,              // SPM READY
+        26 => 41,              // SPM READY
         v => v,
     }
 }
@@ -643,6 +644,9 @@ pub struct Avr {
     /// Data EEPROM and `EECR`/`EEDR`/`EEAR` (`avr/eeprom.rs`). Empty on the
     /// parts whose EEPROM is not modelled.
     eeprom: eeprom::Eeprom,
+    /// ATmega2560/1281 USART0..3 (`avr/usart.rs`). Behind a lock because a
+    /// `UDRn` read pops the receive FIFO from the `&self` read path.
+    musart: std::sync::Mutex<usart::MegaUsarts>,
     /// ATmega2560 family: INT0..7 / PCINT0..23 (`avr/mega_ext_int.rs`), the
     /// timed ADC (`avr/mega_adc.rs`) and the timed SPI (`avr/mega_spi.rs`).
     mx: mega_ext_int::MegaExt,
@@ -996,6 +1000,7 @@ impl Avr {
             usb: usb::UsbDevice::default(),
             wdt: wdt::Wdt::new(model.has_wdtcsr()),
             eeprom: eeprom::Eeprom::new(model.eeprom_size()),
+            musart: std::sync::Mutex::new(usart::MegaUsarts::new(model)),
             mx: mega_ext_int::MegaExt::default(),
             madc: mega_adc::MegaAdc::default(),
             mspi: mega_spi::MegaSpi::default(),
@@ -1359,6 +1364,7 @@ impl Avr {
             a if self.is_32u4_own_reg(a) => {
                 Ok(self.usb_read(a).unwrap_or(self.io[usize::from(a - 0x20)]))
             }
+            a if self.is_mega_usart_reg(a) => self.mega_usart_read(a, bus),
             a if self.is_low_sram(a) => Ok(self.sram[(a - self.sram_start) as usize]),
             // PINB/PINC/PIND — the registers on this part whose value the
             // OUTSIDE WORLD moves, so they are the ones the IO shadow cannot
@@ -1491,8 +1497,8 @@ impl Avr {
             a if self.wdt.handles(a) => Ok(self.wdt.read(self.cycles)),
             a if self.eeprom.handles(a) => Ok(self.eeprom.read(a, self.cycles)),
             0x0020..=0x00FF => Ok(self.io[(addr - 0x20) as usize]),
-            // ATmega2560 extended I/O (ports H..L, Timer3/4/5, USART1..3):
-            // stored registers.
+            // ATmega2560 extended I/O (ports H..L, Timer3/4/5): stored
+            // registers.
             0x0100..=0x01FF if self.is_mega() => Ok(self.io[(addr - 0x20) as usize]),
             a if (self.sram_start..=self.ramend).contains(&a) => {
                 Ok(self.sram[(a - self.sram_start) as usize])
@@ -1513,6 +1519,7 @@ impl Avr {
                 self.r[addr as usize] = value;
                 Ok(())
             }
+            a if self.is_mega_usart_reg(a) => self.mega_usart_write(a, value, bus),
             a if self.is_32u4_own_reg(a) => {
                 if (0xC0..=0xC7).contains(&a) {
                     self.io[usize::from(a - 0x20)] = value;
@@ -2258,9 +2265,8 @@ impl Avr {
     /// pending. This is also what wakes a sleeping core.
     #[inline]
     fn wake_pending(&self) -> bool {
-        self.flag_i()
-            && (self.pending_irq & 0xFFFF_FFFE != 0
-                || (self.is_mega() && self.pending_irq >> mega_ext_int::NATIVE_BASE != 0))
+        let vectors = if self.is_mega() { !1 } else { 0xFFFF_FFFE };
+        self.flag_i() && self.pending_irq & vectors != 0
     }
 
     pub fn portb(&self) -> u8 {
@@ -2542,7 +2548,7 @@ impl Avr {
             return Ok(false);
         }
         // ATmega2560 INT2..INT7: native vector numbers (`avr/mega_ext_int.rs`).
-        if self.pending_irq >> mega_ext_int::NATIVE_BASE != 0 && self.is_mega() {
+        if self.pending_irq & mega_ext_int::HIGH_MASK != 0 && self.is_mega() {
             if let Some(slot) = self.mega_take_native_irq() {
                 self.set_flag_i(false);
                 self.push_pc(bus)?;
@@ -2551,7 +2557,10 @@ impl Avr {
             }
         }
         let vec = self.pending_irq.trailing_zeros();
-        if vec == 0 || vec > 31 {
+        // The mega's table runs to slot 57 (USART3 TX); its USART1..3 vectors
+        // are pending at their slot numbers.
+        let last = if self.is_mega() { 63 } else { 31 };
+        if vec == 0 || vec > last {
             return Ok(false);
         }
         self.pending_irq &= !(1u64 << vec);
@@ -2582,6 +2591,7 @@ impl Avr {
         }
         // ... and the INTn / PCIFn flag of an external or pin-change vector.
         self.ext_vector_entered(vec);
+        self.mega_usart_vector_entered(vec);
         if self.is_mega() {
             match vec {
                 mega_adc::VEC_ADC => self.mega_adc_vector_entered(),
@@ -2843,6 +2853,9 @@ impl Cpu for Avr {
         if self.ucsr0b & UCSRB_RXCIE != 0 && Self::usart_on_bus(bus) {
             return None;
         }
+        if self.mega_usart_keeps_awake() {
+            return None;
+        }
         Some(
             [
                 self.timer0_wake_cycles(),
@@ -2946,6 +2959,7 @@ impl Cpu for Avr {
         }
         self.wdt_after_reset();
         self.eeprom.reset();
+        self.mega_usart_reset();
         self.irq_shadow = false;
         // A reset drops the pull-up: the host sees a disconnect.
         self.usb = usb::UsbDevice::default();
@@ -3029,6 +3043,9 @@ impl Cpu for Avr {
         if self.eeprom.irq_watched() || self.pending_irq & (1u64 << eeprom::VEC_EE_READY) != 0 {
             self.sync_eeprom_irq();
         }
+
+        // ATmega2560/1281 USARTs: frames that end by now, host input, levels.
+        self.mega_usart_service(bus)?;
 
         // INT0/INT1 and PCINT: sample the pads at this boundary.
         if self.ext_watch != 0 {
@@ -3265,6 +3282,8 @@ mod mega_spi;
 mod oc_pins;
 #[path = "avr/timer1.rs"]
 mod timer1;
+#[path = "avr/usart.rs"]
+mod usart;
 /// ATmega32U4 USB device controller.
 mod usb;
 #[path = "avr/wdt.rs"]
@@ -5143,9 +5162,48 @@ mod tests {
             (21, 28), // USART0_TX
             (22, 30), // ADC
             (25, 40), // TWI
+            (26, 41), // SPM_READY
         ];
         for (v328, v2560) in table {
             assert_eq!(mega2560_vector(v328), v2560, "328P vector {v328}");
+        }
+    }
+
+    /// Every interrupt source of the ATmega2560 owns its own `pending_irq`
+    /// bits, and every pending bit enters its own Table 14-1 slot. Two sources
+    /// on one bit would enter each other's vector, and the recompute of one
+    /// would clear the request of the other.
+    #[test]
+    fn mega2560_interrupt_sources_never_share_a_pending_bit() {
+        let sources: &[(&str, u64)] = &[
+            // The peripherals shared with the 328P, at its 1-based numbers
+            // INT0 (2) .. SPM READY (26).
+            ("328P-numbered vectors", ((1u64 << 27) - 1) & !0b11),
+            ("INT2..INT7", mega_ext_int::HIGH_MASK),
+            ("USART1..3", usart::MEGA_ONLY_MASK),
+        ];
+        for (i, (a, mask_a)) in sources.iter().enumerate() {
+            assert_ne!(*mask_a, 0, "{a} owns no pending bit");
+            for (b, mask_b) in &sources[i + 1..] {
+                let shared = mask_a & mask_b;
+                assert_eq!(shared, 0, "{a} and {b} share pending bits {shared:#x}");
+            }
+        }
+        let all = sources.iter().fold(0u64, |m, (_, mask)| m | mask);
+        let mut slots = HashMap::new();
+        for bit in (0..64).filter(|b| all & (1u64 << b) != 0) {
+            let slot = if mega_ext_int::HIGH_MASK & (1u64 << bit) != 0 {
+                bit - mega_ext_int::NATIVE_BASE
+            } else {
+                mega2560_vector(bit)
+            };
+            assert!(
+                (2..=57).contains(&slot),
+                "pending bit {bit} enters slot {slot}, outside the 2560 table"
+            );
+            if let Some(other) = slots.insert(slot, bit) {
+                panic!("pending bits {other} and {bit} both enter slot {slot}");
+            }
         }
     }
 
