@@ -111,6 +111,37 @@ fn diode_soft_recovery_first_step_voltage(initial_voltage_v: f64) -> f64 {
     (low + high) / 2.0
 }
 
+/// Independent backward-Euler first step for a generic Shockley diode with
+/// transit charge after a 0-to-1 V step. EG=0 and XTI=0 keep IS fixed, so
+/// temperature changes only Vt and the TTT-adjusted TT.
+fn diode_transit_temperature_first_step_voltage(temperature_c: f64, tt_s: f64) -> f64 {
+    const SUPPLY_V: f64 = 1.0;
+    const RESISTANCE_OHMS: f64 = 1_000.0;
+    const IS_A: f64 = 1e-12;
+    const STEP_S: f64 = 1e-6;
+    const GMIN_S: f64 = 1e-12;
+    const BOLTZMANN: f64 = 1.380_649e-23;
+    const ELEMENTARY_CHARGE: f64 = 1.602_176_634e-19;
+    let thermal_voltage = BOLTZMANN * (temperature_c + 273.15) / ELEMENTARY_CHARGE;
+    let residual = |voltage_v: f64| {
+        let junction_current = IS_A * ((voltage_v / thermal_voltage).exp() - 1.0);
+        (SUPPLY_V - voltage_v) / RESISTANCE_OHMS
+            - junction_current
+            - tt_s * junction_current / STEP_S
+            - GMIN_S * voltage_v
+    };
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let midpoint = 0.5 * (low + high);
+        if residual(midpoint) > 0.0 {
+            low = midpoint;
+        } else {
+            high = midpoint;
+        }
+    }
+    0.5 * (low + high)
+}
+
 /// Independent diode junction current for `IK`-limited forward injection.
 /// `GMIN` remains outside the high-injection correction, as in the SPICE model.
 fn high_injection_diode_current(voltage_v: f64, knee_current_a: Option<f64>) -> f64 {
@@ -2447,4 +2478,169 @@ fn nucleo_f407_sffm_driven_mosfet_reaches_adc1_alongside_ntc_and_diode() {
         maximum - minimum >= 50,
         "SFFM must modulate the MOSFET load line through ADC1_IN6: {adc_counts:?}"
     );
+}
+
+#[test]
+fn nucleo_f407_diode_transit_temperature_coefficients_reach_adc1() {
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    let unrelated =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let transit = SystemManifest::from_file(root(
+        "examples/nucleo-f407/analog-diode-transit-temperature.yaml",
+    ))
+    .expect("load matched generic diode transit-temperature branches");
+    profile.cosim_models = unrelated.cosim_models;
+    profile.cosim_models.extend(transit.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile has NTC, diode, and five temperature-adjusted diode branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic diode branches must resolve through PA2..PA6 to ADC1"
+    );
+    for channel in 0..=6 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.diode_ttt.supply_v", 0.0)
+        .expect("initialize all matched diode branches at zero volts");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize the NTC and all diode branches before the source step");
+    assert_eq!(initial_steps.len(), 7, "all seven analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.diode_ttt.supply_v", 1.0)
+        .expect("step all generic diode branches to one volt");
+    let mut final_voltages = None;
+    for step in 0..=1_000 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC, unrelated diode, and transit-temperature branches");
+        assert_eq!(
+            steps.len(),
+            7,
+            "all seven analog branches solve at each step"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let unrelated_diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9, "unrelated NTC stays isolated");
+        assert!(
+            (unrelated_diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode stays on its independent load line"
+        );
+
+        let voltages = [
+            signal_voltage(&session, "board.analog.pa2_volts"),
+            signal_voltage(&session, "board.analog.pa3_volts"),
+            signal_voltage(&session, "board.analog.pa4_volts"),
+            signal_voltage(&session, "board.analog.pa5_volts"),
+            signal_voltage(&session, "board.analog.pa6_volts"),
+        ];
+        if step == 0 {
+            assert!(
+                (voltages[0] - voltages[1]).abs() < 1e-7,
+                "at TNOM, TTT1/TTT2 must equal the explicit TT=1 us model: {voltages:?}"
+            );
+            assert!(
+                (voltages[2] - voltages[3]).abs() < 1e-7,
+                "at 77 C, TT=1 us with TTT1/TTT2 must equal explicit TT=2.5 us: {voltages:?}"
+            );
+            for (actual, expected) in [
+                (
+                    voltages[0],
+                    diode_transit_temperature_first_step_voltage(27.0, 1e-6),
+                ),
+                (
+                    voltages[2],
+                    diode_transit_temperature_first_step_voltage(77.0, 2.5e-6),
+                ),
+                (
+                    voltages[4],
+                    diode_transit_temperature_first_step_voltage(77.0, 1e-6),
+                ),
+            ] {
+                assert!(
+                    (actual - expected).abs() < 2e-5,
+                    "routed first-step voltage must follow the independent Shockley/backward-Euler charge equation: expected {expected} V, got {actual} V"
+                );
+            }
+            assert!(
+                voltages[2] < voltages[4] - 1e-3,
+                "the longer hot transit time stores more charge than the hot nominal-TT control: scaled={} V, control={} V",
+                voltages[2],
+                voltages[4]
+            );
+        }
+
+        for (channel, voltage) in (2..=6).zip(voltages) {
+            let expected = expected_adc_count(voltage);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved diode voltage seeds descriptor-routed ADC1_IN{channel}"
+            );
+            if step == 0 || step == 1_000 {
+                assert_eq!(
+                    stm32f4_adc_convert(&mut bus, channel),
+                    u32::from(expected),
+                    "modeled ADC1 conversion follows diode channel {channel}"
+                );
+            }
+        }
+        for (channel, voltage) in [(0, ntc_v), (1, unrelated_diode_v)] {
+            let expected = expected_adc_count(voltage);
+            assert_eq!(adc_channel_count(&mut bus, channel), expected);
+            if step == 0 || step == 1_000 {
+                assert_eq!(stm32f4_adc_convert(&mut bus, channel), u32::from(expected));
+            }
+        }
+        final_voltages = Some(voltages);
+    }
+
+    let [nominal_scaled, nominal_explicit, hot_scaled, hot_explicit, hot_control] =
+        final_voltages.expect("the final transient sample was recorded");
+    let hot_dc = diode_transit_temperature_first_step_voltage(77.0, 0.0);
+    assert!(
+        (hot_scaled - hot_dc).abs() < 5e-4 && (hot_control - hot_dc).abs() < 5e-4,
+        "transit time changes the transient only; both hot branches settle to the independent DC load line {hot_dc} V: scaled={hot_scaled} V, control={hot_control} V"
+    );
+    assert!((nominal_scaled - nominal_explicit).abs() < 1e-7);
+    assert!((hot_scaled - hot_explicit).abs() < 1e-7);
+    assert!((hot_explicit - hot_control).abs() < 5e-4);
 }

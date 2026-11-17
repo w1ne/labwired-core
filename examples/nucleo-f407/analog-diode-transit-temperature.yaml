@@ -1,0 +1,102 @@
+# Matched generic diode branches route temperature-adjusted TT and explicit-TT
+# references through PA2..PA6 to NUCLEO-F407 ADC1.
+name: "nucleo-f407-diode-transit-temperature"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "diode_ttt_nominal_coeff"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_v: "ui.diode_ttt.supply_v"
+    outputs:
+      v_sense: "board.analog.pa2_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DTT TEMP=27
+        .model DTT D(IS=1p N=1 TNOM=27 EG=0 XTI=0 TT=1u TTT1=20m TTT2=200u)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        supply_v: "Vdrive"
+      vdd: 3.3
+  - id: "diode_ttt_nominal_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_v: "ui.diode_ttt.supply_v"
+    outputs:
+      v_sense: "board.analog.pa3_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DTT TEMP=27
+        .model DTT D(IS=1p N=1 TNOM=27 EG=0 XTI=0 TT=1u)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        supply_v: "Vdrive"
+      vdd: 3.3
+  - id: "diode_ttt_hot_coeff"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_v: "ui.diode_ttt.supply_v"
+    outputs:
+      v_sense: "board.analog.pa4_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DTT TEMP=77
+        .model DTT D(IS=1p N=1 TNOM=27 EG=0 XTI=0 TT=1u TTT1=20m TTT2=200u)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        supply_v: "Vdrive"
+      vdd: 3.3
+  - id: "diode_ttt_hot_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_v: "ui.diode_ttt.supply_v"
+    outputs:
+      v_sense: "board.analog.pa5_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DTT TEMP=77
+        .model DTT D(IS=1p N=1 TNOM=27 EG=0 XTI=0 TT=2.5u)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        supply_v: "Vdrive"
+      vdd: 3.3
+  - id: "diode_ttt_hot_nominal_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_v: "ui.diode_ttt.supply_v"
+    outputs:
+      v_sense: "board.analog.pa6_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DTT TEMP=77
+        .model DTT D(IS=1p N=1 TNOM=27 EG=0 XTI=0 TT=1u)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        supply_v: "Vdrive"
+      vdd: 3.3
