@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.980204">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="7b85f6ba44bb5905a60a04cc737a79e42462b157bf8c4dc1edfd983c4ac3db79"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.980204">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: C61_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO6/22" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

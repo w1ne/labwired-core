@@ -138,8 +138,9 @@ pub(crate) const C6_MATRIX: MatrixLayout = MatrixLayout {
     },
 };
 
-/// The ESP32-C5 I²C0 matrix subset. Other C5 matrix signals are deliberately
-/// omitted; this descriptor only claims GPIO output and the I²C0 route.
+/// The ESP32-C5/C61 I²C0 matrix subset. Both expose I2CEXT0 SCL/SDA at
+/// selectors 46/47 and use the selector layout below. Other matrix signals
+/// remain outside these chip profiles.
 pub(crate) const C5_MATRIX: MatrixLayout = MatrixLayout {
     i2c_scl: 46,
     i2c_sda: 47,
@@ -151,23 +152,6 @@ pub(crate) const C5_MATRIX: MatrixLayout = MatrixLayout {
     in_sel: crate::peripherals::esp_gpio_net::InSelLayout {
         pad_mask: 0x7F,
         sel_bit: 1 << 8,
-    },
-};
-
-/// The ESP32-C61 profile in this engine claims plain GPIO output only. Its
-/// register head uses the C5-style shifted ENABLE/IN offsets, while its
-/// peripheral-matrix signal numbering has not been onboarded here.
-const C61_GPIO_ONLY_MATRIX: MatrixLayout = MatrixLayout {
-    i2c_scl: u32::MAX,
-    i2c_sda: u32::MAX,
-    fspiclk: u32::MAX,
-    fspiq: u32::MAX,
-    fspid: u32::MAX,
-    fspics0: u32::MAX,
-    ledc_ls_out0: None,
-    in_sel: crate::peripherals::esp_gpio_net::InSelLayout {
-        pad_mask: 0,
-        sel_bit: 1 << 31,
     },
 };
 
@@ -347,13 +331,13 @@ impl Esp32c3Gpio {
         }
     }
 
-    /// ESP32-C61 GPIO4 output slice. The C61 TRM confirms the shifted
-    /// ENABLE/IN offsets used by C5, but this profile does not claim the C61
-    /// peripheral matrix or GPIO26..29, which exceed this shared model's pin
-    /// count.
+    /// ESP32-C61 GPIO output plus its I²C0 matrix subset. C61 uses the same
+    /// I2CEXT0 signal IDs and input-selector fields as C5, while keeping its
+    /// shifted ENABLE/IN and matrix register windows. Other matrix functions
+    /// and GPIO26..29 are not exposed by this adapter.
     pub fn for_esp32c61() -> Self {
         Self {
-            layout: C61_GPIO_ONLY_MATRIX,
+            layout: C5_MATRIX,
             c61_register_map: true,
             ..Self::new()
         }
@@ -1201,7 +1185,7 @@ impl Peripheral for Esp32c3Gpio {
             "layout": if self.c5_register_map {
                 "esp32c5_direct_gpio_i2c_matrix"
             } else if self.c61_register_map {
-                "esp32c61_gpio_output_only"
+                "esp32c61_gpio_i2c_matrix"
             } else {
                 "esp32c3"
             },

@@ -18,19 +18,23 @@ see the [availability receipt](../../examples/esp32c61-devkitc-1-n8r2/vendor-sta
 | J3 TX | UART0 TX, GPIO11 | UART0 FIFO is modeled; pad routing is not |
 | J3 RX | UART0 RX, GPIO10 | UART0 receive and pad routing are not modeled |
 | J1 pin 3 | GPIO4 | Output latch and enable register are modeled; IO_MUX and electrical behavior are not |
+| J1 pin 5 | GPIO6 | I2C0 SDA for the BME280 smoke; GPIO matrix route is modeled |
+| J3 pin 6 | GPIO22 | I2C0 SCL for the BME280 smoke; GPIO matrix route is modeled |
 | J1 pin 9 | GPIO8, addressable RGB LED | LED protocol is not modeled |
 
 The GPIO output smoke checks bit 4 in `GPIO_OUT_REG` and `GPIO_ENABLE_REG` after
-firmware sets GPIO4. The GPIO model covers the C61 HP output-register slice
-through GPIO4. The C61 GPIO matrix, IO_MUX, GPIO26..29, GPIO interrupts, and
-electrical pad behavior remain outside the profile. The board's addressable
-RGB LED on GPIO8 is also outside scope.
+firmware sets GPIO4. The BME280 smoke configures GPIO6/GPIO22 for I2C0 and reads
+the device ID (`0x60`) plus a deterministic raw-temperature test vector. The
+GPIO model covers those C61 matrix selectors, but not other peripheral matrix
+routes, GPIO26..29, GPIO interrupts, or electrical pad behavior. IO_MUX values
+are stored but not enforced. The board's addressable RGB LED on GPIO8 is also
+outside scope.
 
 The board profile fast-loads a bare ELF directly; it does not execute the
 mask-ROM boot path or Espressif bootloader. The UART test captures FIFO output
 in the host console but does not model the physical USB-to-UART bridge.
 
-## Copy-paste example
+## GPIO copy-paste example
 
 ```rust
 const GPIO_OUT_W1TS: *mut u32 = 0x6009_1008 as *mut u32;
@@ -48,3 +52,7 @@ The full firmware and build/test commands are in
 The GPIO smoke expects bits 4 in `GPIO_OUT_REG` and `GPIO_ENABLE_REG`; the UART
 smoke expects `C61_N8R2_OK`. Logs and structured results are under the example's
 `evidence/` directory.
+
+The BME280 wiring, copy-paste ESP-IDF example, fresh smoke, scope, and live
+availability receipt are documented in
+[`examples/esp32c61-devkitc-1-n8r2-bme280`](../../examples/esp32c61-devkitc-1-n8r2-bme280/README.md).

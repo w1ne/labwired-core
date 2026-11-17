@@ -53,6 +53,12 @@ boards:
     path: examples/esp32c61-devkitc-1-n8r2
     rust_targets: [riscv32imc-unknown-none-elf]
     gate: true
+  # C61 I2C0 and BME280 sensor smoke on the live GPIO6/GPIO22 board route.
+  - id: esp32c61-devkitc-1-n8r2-bme280
+    kind: sim-validate
+    path: examples/esp32c61-devkitc-1-n8r2-bme280
+    rust_targets: [riscv32imc-unknown-none-elf]
+    gate: true
   # Demand-rank 1 ESP32 family: current Arduino Nano ESP32 with a committed
   # S3 GPIO48/D13 smoke fixture. The onboarding workflow rebuilds it with PIO.
   - id: arduino-nano-esp32-gpio

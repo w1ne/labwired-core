@@ -173,38 +173,54 @@ void loop() {}
 ### ESP32-C61-DevKitC-1-N8R2
 
 ESP32 is demand rank 1 (38% of reported MCU use); the survey does not score
-C61 separately. Espressif's current guide lists the exact N8R2 board, and
-Mouser showed 378 in stock on 2026-11-17. This narrow board profile fast-loads a
-bare RISC-V ELF and checks the GPIO4 output-enable/output latches plus a UART0
-marker. The example does not claim the ROM/bootloader, GPIO matrix or electrical
-pad behavior, PSRAM, Wi-Fi, Bluetooth LE, or the onboard RGB LED.
+C61 separately. Espressif lists the exact N8R2 board, and Mouser showed 378 in
+stock on 2026-11-17. The C61 profile now exercises UART0, GPIO4 output, and
+I2C0 routed through GPIO6/GPIO22 to a BME280. It reads the BME280 ID (`0x60`)
+and a deterministic raw-temperature vector. ROM/bootloader, electrical IO_MUX,
+PSRAM, Wi-Fi, Bluetooth LE, and the onboard RGB LED remain outside scope.
 
-- [Board scope, wiring, and runnable example](../examples/esp32c61-devkitc-1-n8r2/README.md)
-- [Live Espressif lifecycle and Mouser stock receipt](../examples/esp32c61-devkitc-1-n8r2/vendor-status.md)
-- [Committed UART and GPIO smoke evidence](../examples/esp32c61-devkitc-1-n8r2/evidence/)
+- [Board scope, wiring, and copy-paste ESP-IDF example](../examples/esp32c61-devkitc-1-n8r2-bme280/README.md)
+- [Live Espressif, Mouser, Bosch, and Adafruit availability receipt](../examples/esp32c61-devkitc-1-n8r2-bme280/vendor-status.md)
+- [Committed UART/GPIO and BME280 smoke evidence](../examples/esp32c61-devkitc-1-n8r2-bme280/evidence/)
 
-```rust
-#![no_std]
-#![no_main]
+```c
+#include <stdint.h>
 
-use panic_halt as _;
-use riscv_rt::entry;
+#include "driver/gpio.h"
+#include "driver/i2c_master.h"
+#include "esp_err.h"
+#include "esp_log.h"
 
-const GPIO_OUT_W1TS: *mut u32 = 0x6009_1008 as *mut u32;
-const GPIO_ENABLE_W1TS: *mut u32 = 0x6009_1038 as *mut u32;
-const UART0_FIFO: *mut u32 = 0x6000_0000 as *mut u32;
-const GPIO4: u32 = 1 << 4;
+#define BME280_ADDRESS 0x77
 
-#[entry]
-fn main() -> ! {
-    unsafe {
-        core::ptr::write_volatile(GPIO_ENABLE_W1TS, GPIO4);
-        core::ptr::write_volatile(GPIO_OUT_W1TS, GPIO4);
-        for &byte in b"C61_N8R2_OK\n" {
-            core::ptr::write_volatile(UART0_FIFO, u32::from(byte));
-        }
+void app_main(void) {
+    i2c_master_bus_handle_t bus;
+    const i2c_master_bus_config_t bus_config = {
+        .i2c_port = I2C_NUM_0,
+        .sda_io_num = GPIO_NUM_6,   // J1 pin 5
+        .scl_io_num = GPIO_NUM_22,  // J3 pin 6
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
+    };
+    ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, &bus));
+
+    i2c_master_dev_handle_t sensor;
+    const i2c_device_config_t sensor_config = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = BME280_ADDRESS,
+        .scl_speed_hz = 100000,
+    };
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus, &sensor_config, &sensor));
+
+    const uint8_t chip_id_register = 0xD0;
+    uint8_t chip_id = 0;
+    ESP_ERROR_CHECK(i2c_master_transmit_receive(
+        sensor, &chip_id_register, 1, &chip_id, 1, 1000));
+    if (chip_id != 0x60) {
+        ESP_LOGE("bme280", "unexpected chip id: 0x%02x", chip_id);
+        return;
     }
-    loop { core::hint::spin_loop(); }
+    ESP_LOGI("bme280", "BME280_ID=0x%02x", chip_id);
 }
 ```
 

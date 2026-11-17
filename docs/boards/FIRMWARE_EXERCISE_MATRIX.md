@@ -250,7 +250,7 @@ _The C5 DevKitC-1-N8R8 smoke reads a BME280 ID and raw temperature over the C5 I
 
 ### `esp32c61`
 
-_No beyond-rubric C61 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, PSRAM or the other C61 peripherals._
+_The DevKitC-1-N8R2 profile exercises the UART0 TX FIFO, GPIO4 output latch, and the C61 GPIO-matrix I2C0 route to a BME280 on GPIO6/GPIO22. Firmware reads the sensor ID and a raw-temperature vector. It does not model mask-ROM boot, the physical USB bridge, electrical IO_MUX, other GPIO-matrix functions, GPIO26..29, GPIO interrupts, the RGB LED, Wi-Fi 6, Bluetooth LE, PSRAM, or sensor conversion timing._
 
 ### `esp32p4`
 

@@ -2,12 +2,12 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Narrow ESP32-C61 UART and GPIO-output profile for the
+//! Narrow ESP32-C61 UART, GPIO-output, and I2C-matrix profile for the
 //! ESP32-C61-DevKitC-1-N8R2.
 //!
-//! The GPIO slice exposes the TRM-backed output latch and enable registers
-//! through GPIO4. It does not claim C61 peripheral-matrix routing, IO_MUX
-//! electrical behavior, the ROM/bootloader path, or the physical USB bridge.
+//! The GPIO adapter exposes the TRM-backed output latch and enable registers,
+//! plus the I2C0 matrix route used on GPIO6/GPIO22. IO_MUX is storage only;
+//! ROM/bootloader behavior and the physical USB bridge are outside this slice.
 
 use crate::Peripheral;
 use labwired_config::PeripheralConfig;
