@@ -191,3 +191,149 @@ fn supply_gate_forwards_pwm_query_only_when_powered() {
     assert!((powered.pwm_channel_pulse_us(0).unwrap() - 1498.0).abs() < 1.0);
     assert_eq!(unpowered.pwm_channel_pulse_us(0), None);
 }
+
+fn assert_ambiguous_sources_are_not_applied(devices: &str) {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::bus::SystemBus;
+    use std::path::PathBuf;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/stm32f103.yaml")).unwrap();
+    let yaml = format!(
+        r#"
+name: ambiguous-servo-source
+chip: "../chips/stm32f103.yaml"
+external_devices:
+{devices}
+  - id: elbow
+    type: servo
+    connection: i2c1
+    config: {{ model: mg995, source_address: 64, source_channel: 0 }}
+"#
+    );
+    let manifest: SystemManifest = serde_yaml::from_str(&yaml).unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    let mut slaves = bus.take_i2c_slaves("i2c1");
+    for slave in &mut slaves {
+        if slave.address() == 0x40 {
+            init_50hz(slave.as_mut());
+            write_reg(slave.as_mut(), 0x06, &[0, 0, 0x33, 0x01]);
+        } else if slave.address() == 0x70 {
+            // Enable channel 0 and program the actual downstream PCA via the mux.
+            slave.select_address(0x70);
+            slave.start();
+            slave.write(1);
+            slave.stop();
+            if devices.contains("id: inner") {
+                slave.select_address(0x71);
+                slave.start();
+                slave.write(1);
+                slave.stop();
+            }
+            slave.select_address(0x40);
+            init_50hz(slave.as_mut());
+            write_reg(slave.as_mut(), 0x06, &[0, 0, 0x33, 0x01]);
+            if devices.contains("id: inner") {
+                use labwired_core::peripherals::components::tca9548a::Tca9548a;
+                let outer = slave.as_any().unwrap().downcast_ref::<Tca9548a>().unwrap();
+                let inner = outer.channel_devices(0)[0]
+                    .as_any()
+                    .unwrap()
+                    .downcast_ref::<Tca9548a>()
+                    .unwrap();
+                let pulse = inner.channel_devices(0)[0]
+                    .pwm_channel_pulse_us(0)
+                    .expect("programmed nested child");
+                assert!((pulse - 1498.0).abs() < 1.0);
+            }
+        }
+    }
+    for slave in slaves {
+        bus.attach_i2c_slave("i2c1", slave).unwrap();
+    }
+    if devices.contains("type: tca9548a") && !devices.contains("id: inner") {
+        let mut child_pulse = None;
+        bus.for_each_attached_device(&mut |_, d| {
+            if d.mux_address == Some(0x70) && d.address == Some(0x40) {
+                child_pulse = d.evidence.and_then(|e| e.pwm_channel_pulse_us(0));
+            }
+        });
+        assert!((child_pulse.expect("programmed mux child") - 1498.0).abs() < 1.0);
+    }
+    bus.sync_pwm_sourced_servos();
+    let servo = bus.observed_of::<Servo>().next().unwrap();
+    assert!(
+        !servo.is_commanded(),
+        "ambiguous or routed sources must not command servo"
+    );
+}
+
+#[test]
+fn direct_and_muxed_same_address_are_ambiguous() {
+    assert_ambiguous_sources_are_not_applied(
+        r#"  - { id: direct, type: pca9685, connection: i2c1, config: { address: 0x40 } }
+  - { id: mux, type: tca9548a, connection: i2c1, config: { i2c_address: 0x70 } }
+  - { id: child, type: pca9685, connection: mux, channel: 0, config: { address: 0x40 } }"#,
+    );
+}
+
+#[test]
+fn mux_only_source_is_not_assumed() {
+    assert_ambiguous_sources_are_not_applied(
+        r#"  - { id: mux, type: tca9548a, connection: i2c1, config: { i2c_address: 0x70 } }
+  - { id: child, type: pca9685, connection: mux, channel: 0, config: { address: 0x40 } }"#,
+    );
+}
+
+#[test]
+fn duplicate_direct_same_address_is_ambiguous() {
+    assert_ambiguous_sources_are_not_applied(
+        r#"  - { id: first, type: pca9685, connection: i2c1, config: { address: 0x40 } }
+  - { id: second, type: pca9685, connection: i2c1, config: { address: 0x40 } }"#,
+    );
+}
+
+#[test]
+fn direct_and_nested_mux_same_address_are_ambiguous() {
+    assert_ambiguous_sources_are_not_applied(
+        r#"  - { id: direct, type: pca9685, connection: i2c1, config: { address: 0x40 } }
+  - { id: mux, type: tca9548a, connection: i2c1, config: { i2c_address: 0x70 } }
+  - { id: inner, type: tca9548a, connection: mux, channel: 0, config: { i2c_address: 0x71 } }
+  - { id: child, type: pca9685, connection: inner, channel: 0, config: { address: 0x40 } }"#,
+    );
+}
+
+#[test]
+fn unrelated_mux_child_at_switch_address_does_not_block_direct_source() {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::bus::SystemBus;
+    use std::path::PathBuf;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/stm32f103.yaml")).unwrap();
+    let manifest: SystemManifest = serde_yaml::from_str(r#"
+name: direct-and-unrelated-child
+chip: "../chips/stm32f103.yaml"
+external_devices:
+  - { id: direct, type: pca9685, connection: i2c1, config: { address: 0x40 } }
+  - { id: mux, type: tca9548a, connection: i2c1, config: { i2c_address: 0x71 } }
+  - { id: sensor, type: tmp102, connection: mux, channel: 0, config: { i2c_address: 0x70 } }
+  - { id: elbow, type: servo, connection: i2c1, config: { model: mg995, source_address: 64, source_channel: 0 } }
+"#).unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    let mut slaves = bus.take_i2c_slaves("i2c1");
+    for slave in &mut slaves {
+        if slave.address() == 0x40 {
+            init_50hz(slave.as_mut());
+            write_reg(slave.as_mut(), 0x06, &[0, 0, 0x33, 0x01]);
+        }
+    }
+    for slave in slaves {
+        bus.attach_i2c_slave("i2c1", slave).unwrap();
+    }
+    bus.sync_pwm_sourced_servos();
+    let servo = bus.observed_of::<Servo>().next().unwrap();
+    assert!(
+        (servo.pulse_us() - 1498.0).abs() < 1.0,
+        "direct pulse {}",
+        servo.pulse_us()
+    );
+}

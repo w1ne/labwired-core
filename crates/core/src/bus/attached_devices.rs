@@ -116,17 +116,23 @@ impl SystemBus {
                 // declaration does not yet carry, so do not guess that route.
                 let mut matches = 0;
                 let mut pulse = None;
+                let mut nested_route_possible = false;
                 self.for_each_attached_device(&mut |bus, d| {
                     if bus == Some(bus_name)
                         && d.transport == "i2c"
-                        && d.address == Some(address)
-                        && d.mux_address.is_none()
+                        && d.mux_address.is_some()
+                        && d.evidence.is_some_and(|e| e.is_i2c_mux())
                     {
+                        nested_route_possible = true;
+                    }
+                    if bus == Some(bus_name) && d.transport == "i2c" && d.address == Some(address) {
                         matches += 1;
-                        pulse = d.evidence.and_then(|e| e.pwm_channel_pulse_us(channel));
+                        if d.mux_address.is_none() {
+                            pulse = d.evidence.and_then(|e| e.pwm_channel_pulse_us(channel));
+                        }
                     }
                 });
-                if matches == 1 {
+                if matches == 1 && !nested_route_possible {
                     if let Some(us) = pulse {
                         servo.apply_pulse_us(us);
                     }

@@ -539,6 +539,12 @@ pub trait DeviceEvidence {
     fn pwm_channel_pulse_us(&self, _channel: u8) -> Option<f64> {
         None
     }
+
+    /// Whether this device is a modeled I2C mux whose descendants may not be
+    /// included by the one-level attachment walk.
+    fn is_i2c_mux(&self) -> bool {
+        false
+    }
 }
 
 /// Adapter letting an `&dyn I2cDevice` be carried as evidence. Lives on the
@@ -555,6 +561,11 @@ impl DeviceEvidence for I2cEvidence<'_> {
     }
     fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
         self.0.pwm_channel_pulse_us(channel)
+    }
+    fn is_i2c_mux(&self) -> bool {
+        self.0
+            .as_any()
+            .is_some_and(|model| model.is::<crate::peripherals::components::tca9548a::Tca9548a>())
     }
 }
 
