@@ -111,7 +111,7 @@ This page covers the public models. For every chip we model — public and priva
 | efr32mg26 | **L2** | ✓ | 34 | 243/243 (100%) | 1 | efr32_deck_behavior::the_deck_firmware_drives_every_part |
 | atmega328p | **L1** | ✓ | 7 | — | — | avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks |
 | atmega328pb | **L1** | ✓ | 8 | — | — | avr_atmega328pb_usart1::atmega328pb_firmware_uses_usart1_and_drives_pb5 |
-| atmega2560 | **L1** | ✓ | 15 | — | — | avr_mega2560_io::each_led_lands_on_its_mega_port_pin |
+| atmega2560 | **L1** | ✓ | 18 | — | — | avr_mega2560_io::each_led_lands_on_its_mega_port_pin |
 | atmega2561 | **L1** | ✓ | 11 | — | — | avr_atmega2561::atmega2561_boots_and_prints |
 | atmega4809 | **L0** | ✓ | 19 | — | — | — |
 | atmega32u4 | **L0** | ✓ | 8 | — | — | — |
@@ -146,12 +146,12 @@ This page covers the public models. For every chip we model — public and priva
 | at32f421g8u7 | **L1** | ✓ | 22 | — | — | at32f421_contract::vendor_sdk_smoke_runs_flash_dma_and_timer_irq_paths |
 | ch32v003j4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | esp32h2 | **L0** | ✓ | 3 | — | — | — |
-| esp32c5 | **L0** | ✓ | 1 | — | — | — |
-| esp32c61 | **L0** | ✓ | 1 | — | — | — |
+| esp32c5 | **L0** | ✓ | 2 | — | — | — |
+| esp32c61 | **L0** | ✓ | 2 | — | — | — |
 | nrf54l05 | **L0** | ✓ | 6 | — | — | — |
 | nrf54l10 | **L0** | ✓ | 6 | — | — | — |
-| esp32p4 | **L0** | ✓ | 1 | — | — | — |
-| esp32s2 | **L0** | ✓ | 1 | — | — | — |
+| esp32p4 | **L0** | ✓ | 2 | — | — | — |
+| esp32s2 | **L0** | ✓ | 2 | — | — | — |
 | rp2040-feather | **L0** | ✓ | 24 | — | — | — |
 | rp2350-feather | **L0** | ✓ | 27 | — | — | — |
 | stm32h723zg | **L0** | ✓ | 7 | — | — | — |

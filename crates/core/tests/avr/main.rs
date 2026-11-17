@@ -32,6 +32,7 @@ mod avr_max7219_cascade;
 mod avr_mega2560_io;
 mod avr_mega2560_irq_adc_spi;
 mod avr_mega2560_pwm;
+mod avr_mega2560_usart_eeprom;
 mod avr_nano_golden_survival;
 mod avr_nano_live_run;
 mod avr_nano_machine_run;

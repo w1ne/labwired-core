@@ -36,6 +36,7 @@ mod parts_batch5;
 mod peripheral_kit_gate;
 mod rcc_kernel_clock_gate;
 mod register_compliance;
+mod spi_gpio_decoder;
 mod tier2_device_pins;
 mod uart_attach_seam;
 mod unknown_peripheral_type;

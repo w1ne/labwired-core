@@ -1,0 +1,14 @@
+# Arduino Leonardo (ATmega32U4 @ 16 MHz).
+# LED_BUILTIN is D13 = PC7 (Microchip DS7766 / Arduino Leonardo pinout).
+# Bare official board profile: no Arduino-matrix sensor fixtures.
+name: "arduino-leonardo"
+chip: "../chips/atmega32u4.yaml"
+cpu_hz: 16000000
+external_devices: []
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "portc"
+    pin: 7
+    signal: "output"
+    active_high: true

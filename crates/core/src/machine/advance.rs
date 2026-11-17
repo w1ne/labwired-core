@@ -347,10 +347,12 @@ impl<C: Cpu> Machine<C> {
                 // a pc, and the pc it leaves was checked above. A debugged run
                 // that stepped through every idle cycle took a billion steps
                 // to get past one `delay(1000)`.
-                let skipped = self.try_idle_fast_forward(skip_limit, 0);
-                if skipped > 0 {
-                    state.fuel_consumed += skipped;
-                    state.idle_cycles += skipped;
+                if let Some(skipped) = self.try_idle_fast_forward(skip_limit, 0) {
+                    state.fuel_consumed += skipped.cycles;
+                    state.idle_cycles += skipped.cycles;
+                    state.primary_steps += skipped.primary_steps;
+                    state.secondary_steps += skipped.secondary_steps;
+                    self.step_profile.cpu_instructions += skipped.primary_steps;
                     self.logic_observe(self.total_cycles);
                     self.pace_realtime(start_cycles, start_wall);
                     if self.net_drive_stop_hit {
@@ -434,11 +436,12 @@ impl<C: Cpu> Machine<C> {
                         (Some(a), None) | (None, Some(a)) => Some(a),
                         (None, None) => None,
                     };
-                    let before = self.total_cycles;
-                    let skipped = self.try_idle_fast_forward(limit, 0);
-                    if skipped > 0 && self.total_cycles > before {
-                        state.fuel_consumed += skipped;
-                        state.idle_cycles += skipped;
+                    if let Some(skipped) = self.try_idle_fast_forward(limit, 0) {
+                        state.fuel_consumed += skipped.cycles;
+                        state.idle_cycles += skipped.cycles;
+                        state.primary_steps += skipped.primary_steps;
+                        state.secondary_steps += skipped.secondary_steps;
+                        self.step_profile.cpu_instructions += skipped.primary_steps;
                         self.logic_observe(self.total_cycles);
                         self.pace_realtime(start_cycles, start_wall);
                         if self.net_drive_stop_hit {

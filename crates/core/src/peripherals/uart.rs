@@ -1079,6 +1079,9 @@ pub struct Uart {
     /// AVR layout: UBRR0 and whether firmware wrote it.
     avr_ubrr: u16,
     avr_baud_set: bool,
+    /// AVR layout: the CPU does not write this USART to its console (the
+    /// mega's USART1..3), so the window keeps a host TX sink.
+    avr_host_sink: bool,
     /// SCI_B layout: CCR0-CCR4, CESR, ICR, FCR, (reserved), MCR, DCR,
     /// XCR0-XCR2 at 0x08 + 4*i, as firmware last wrote them. CESR is not
     /// stored; it reads CCR0.TE/RE back as TIST/RIST.
@@ -1192,6 +1195,7 @@ impl Uart {
             avr_ucsra: 0,
             avr_ubrr: 0,
             avr_baud_set: false,
+            avr_host_sink: false,
             sci_b_regs: SCI_B_RESET,
             sci_b_irq: None,
             sci_irq_vectors: false,
@@ -1277,6 +1281,13 @@ impl Uart {
 
     pub fn set_u5_features(mut self, yes: bool) -> Self {
         self.u5_features = yes;
+        self
+    }
+
+    /// AVR layout: keep a host TX sink (`config.cpu_console: false`), for a
+    /// USART whose transmitted frames the CPU does not copy to its console.
+    pub(crate) fn with_avr_host_sink(mut self, yes: bool) -> Self {
+        self.avr_host_sink = yes;
         self
     }
 
@@ -2459,7 +2470,7 @@ impl Uart {
 
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>, echo_stdout: bool) {
         // The AVR core writes its own console; this model only hosts the peers.
-        if matches!(self.layout, UartRegisterLayout::Avr) {
+        if matches!(self.layout, UartRegisterLayout::Avr) && !self.avr_host_sink {
             self.sink = None;
             self.echo_stdout = false;
             return;

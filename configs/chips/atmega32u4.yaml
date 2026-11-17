@@ -85,3 +85,34 @@ peripherals:
     size: "32"
     config:
       channels: 16
+
+# Official 44-pin TQFP/QFN GPIO set, Microchip DS7766 (already cited above).
+# PB0-7, PC6-7, PD0-7, PE2, PE6, PF0-1 and PF4-7. Arduino Leonardo LED_BUILTIN
+# is D13 = PC7; that board wiring lives in configs/systems/arduino-leonardo.yaml.
+pins:
+  PB0: { gpio: "portb", bit: 0 }
+  PB1: { gpio: "portb", bit: 1 }
+  PB2: { gpio: "portb", bit: 2 }
+  PB3: { gpio: "portb", bit: 3 }
+  PB4: { gpio: "portb", bit: 4 }
+  PB5: { gpio: "portb", bit: 5 }
+  PB6: { gpio: "portb", bit: 6 }
+  PB7: { gpio: "portb", bit: 7 }
+  PC6: { gpio: "portc", bit: 6 }
+  PC7: { gpio: "portc", bit: 7 }
+  PD0: { gpio: "portd", bit: 0 }
+  PD1: { gpio: "portd", bit: 1 }
+  PD2: { gpio: "portd", bit: 2 }
+  PD3: { gpio: "portd", bit: 3 }
+  PD4: { gpio: "portd", bit: 4 }
+  PD5: { gpio: "portd", bit: 5 }
+  PD6: { gpio: "portd", bit: 6 }
+  PD7: { gpio: "portd", bit: 7 }
+  PE2: { gpio: "porte", bit: 2 }
+  PE6: { gpio: "porte", bit: 6 }
+  PF0: { gpio: "portf", bit: 0 }
+  PF1: { gpio: "portf", bit: 1 }
+  PF4: { gpio: "portf", bit: 4 }
+  PF5: { gpio: "portf", bit: 5 }
+  PF6: { gpio: "portf", bit: 6 }
+  PF7: { gpio: "portf", bit: 7 }

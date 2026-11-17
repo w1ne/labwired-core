@@ -364,6 +364,16 @@ impl<'a> AttachCtx<'a> {
         }
         let routed = self.ext.config.contains_key("supply_rails")
             || self.ext.config.contains_key("supply_domain");
+        // `connection: spi_gpio`: no controller; a decoder on the pads the
+        // config names feeds the device (see `peripherals::spi_gpio`).
+        if self.ext.connection == crate::peripherals::spi_gpio::CONNECTION {
+            anyhow::ensure!(
+                !routed,
+                "device '{}': routed supply is not supported on spi_gpio",
+                self.ext.id
+            );
+            return crate::peripherals::spi_gpio::attach(self, device);
+        }
         anyhow::ensure!(
             !routed || device.supports_power_control(),
             "device '{}' does not support routed SPI power transitions",

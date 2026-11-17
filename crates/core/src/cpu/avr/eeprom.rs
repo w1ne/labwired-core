@@ -235,6 +235,17 @@ impl Avr {
         &self.eeprom.data
     }
 
+    /// Restore an EEPROM image saved from an earlier run (see [`Avr::eeprom`]):
+    /// the array is non-volatile, so settings a sketch stored survive into
+    /// the next power-up. Bytes past the part's array are ignored; cells the
+    /// image does not cover stay erased (0xFF).
+    pub fn load_eeprom(&mut self, image: &[u8]) {
+        let data = &mut self.eeprom.data;
+        data.fill(0xFF);
+        let n = image.len().min(data.len());
+        data[..n].copy_from_slice(&image[..n]);
+    }
+
     /// Re-raise or drop the `EE_READY` level at an instruction boundary.
     #[inline]
     pub(super) fn sync_eeprom_irq(&mut self) {
