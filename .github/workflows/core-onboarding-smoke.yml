@@ -1267,12 +1267,12 @@ jobs:
             script: examples/renode-onboarding/stm32f072-smoke.yaml
             system: configs/systems/onboarding/stm32f072.yaml
           # The shared F4 smoke exercises this imported F429 profile's RCC,
-          # GPIOA/B/D, classic USART2/I2C1, Cortex-M4F, ADC1, TIM2 and SPI1 subsets.
+          # GPIOA/B/D, Cortex-M4F, ADC1 EOC/OVR, TIM2, SPI1, I2C1 and USART2 RX subsets.
           - id: stm32f429
             crate: firmware-stm32f429-smoke
             target: thumbv7em-none-eabihf
             target_features: vfp4
-            features: stm32f429-m4f-fpu,stm32f429-adc1,stm32f429-tim2,stm32f429-spi1,stm32f429-i2c1
+            features: stm32f429-m4f-fpu,stm32f429-adc1,stm32f429-adc-ovr,stm32f429-tim2,stm32f429-spi1,stm32f429-i2c1,stm32f429-usart2-rx
             script: examples/renode-onboarding/stm32f429-smoke.yaml
             system: configs/systems/onboarding/stm32f429.yaml
           # Reuse the F4 register fixture against the exact imported F412

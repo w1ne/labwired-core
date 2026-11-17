@@ -13,6 +13,7 @@
 
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
+use std::cell::Cell;
 use std::str::FromStr;
 
 // ── Modeled internal source (L4/V2 path) ────────────────────────────────────
@@ -146,6 +147,12 @@ pub const DEFAULT_AMBIENT_TEMPERATURE_C: f64 = 25.0;
 /// STM32F2/F4 ADC_CR2.SWSTART (RM0090) — same legacy register *block* as F1,
 /// different bit. Kept so F4 board bindings are not silently retargeted to F1.
 const F4_CR2_SWSTART: u32 = 1 << 30;
+/// F4 `ADC_CR2.EOCS`: regular overrun detection is enabled when set.
+const F4_CR2_EOCS: u32 = 1 << 10;
+const F4_SR_EOC: u32 = 1 << 1;
+const F4_SR_OVR: u32 = 1 << 5;
+const F4_CR1_EOCIE: u32 = 1 << 5;
+const F4_CR1_OVRIE: u32 = 1 << 26;
 
 /// Approximate F1 RSTCAL completion latency in model cycles (not host time).
 /// Silicon clears RSTCAL after a short internal reset; a fixed 2-cycle delay is
@@ -378,6 +385,11 @@ pub struct Adc {
     pub sr: u32,
     /// Conversion data register — shared result path for both families.
     pub dr: u32,
+    /// STM32F4 clears EOC when ADC_DR is read. `Peripheral::read` takes `&self`,
+    /// so this records the read until the next conversion without mutating the
+    /// public bridge-visible status word.
+    #[serde(skip)]
+    dr_read_since_conversion: Cell<bool>,
 
     // Shared conversion engine.
     converting: bool,
@@ -485,6 +497,7 @@ impl Adc {
             regs,
             sr: 0,
             dr: 0,
+            dr_read_since_conversion: Cell::new(false),
             converting: false,
             cycles_remaining: 0,
             conversion_time: 14,
@@ -596,6 +609,12 @@ impl Adc {
             } else {
                 self.converting = false;
                 let (cr1, cr2) = self.f1_ctrl();
+                // This bounded F4 path models EOCS-driven overrun detection;
+                // ADC DMA request/transfer behavior is not implemented here.
+                let f4_overrun = matches!(self.regs, AdcRegs::Stm32F4(_))
+                    && (cr2 & F4_CR2_EOCS) != 0
+                    && (self.sr & F4_SR_EOC) != 0
+                    && !self.dr_read_since_conversion.get();
 
                 // The selected SQR3 channel, its input voltage and VREF+ were
                 // latched at SWSTART. Changes while SAR conversion is running
@@ -608,10 +627,14 @@ impl Adc {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
 
-                self.sr |= 1 << 1; // EOC
+                self.sr |= F4_SR_EOC;
+                if f4_overrun {
+                    self.sr |= F4_SR_OVR;
+                }
+                self.dr_read_since_conversion.set(false);
 
-                if (cr1 & (1 << 5)) != 0 {
-                    irq = true; // EOCIE
+                if (cr1 & F4_CR1_EOCIE) != 0 || (f4_overrun && (cr1 & F4_CR1_OVRIE) != 0) {
+                    irq = true;
                 }
                 // Continuous mode (CONT + ADON).
                 if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
@@ -669,7 +692,13 @@ impl Adc {
         self.converting = true;
         self.cycles_remaining = self.conversion_time;
         self.sampled_input = self.sample_f1_input();
-        self.sr &= !0x2; // clear EOC on start
+        // F1's existing model clears EOC when conversion begins. RM0090's F4
+        // layout clears it by ADC_DR read or software write to ADC_SR; a new
+        // conversion leaves an unread result visible so EOCS overrun detection
+        // can distinguish a lost sample.
+        if matches!(self.regs, AdcRegs::Stm32F1(_)) {
+            self.sr &= !F4_SR_EOC;
+        }
     }
 
     /// (cr1, cr2) for the F1 control registers; (0, 0) on L4 (no conversion
@@ -1280,12 +1309,32 @@ impl Peripheral for Adc {
 
     fn read(&self, offset: u64) -> SimResult<u8> {
         let val = match &self.regs {
-            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => match offset {
+            AdcRegs::Stm32F1(r) => match offset {
                 0x00..=0x03 => self.sr,
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
                 0x34..=0x37 => r.sqr3,
                 0x4C..=0x4F => self.dr,
+                _ => {
+                    crate::census_reg!("adc:Adc", offset, "read");
+                    0
+                }
+            },
+            AdcRegs::Stm32F4(r) => match offset {
+                0x00..=0x03 => {
+                    if self.dr_read_since_conversion.get() {
+                        self.sr & !F4_SR_EOC
+                    } else {
+                        self.sr
+                    }
+                }
+                0x04..=0x07 => r.cr1,
+                0x08..=0x0B => r.cr2,
+                0x34..=0x37 => r.sqr3,
+                0x4C..=0x4F => {
+                    self.dr_read_since_conversion.set(true);
+                    self.dr
+                }
                 _ => {
                     crate::census_reg!("adc:Adc", offset, "read");
                     0
@@ -1306,7 +1355,15 @@ impl Peripheral for Adc {
 
         match self.regs {
             AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_) => match offset {
-                0x00..=0x03 => self.sr = (self.sr & !mask) | val_shifted,
+                0x00..=0x03 => {
+                    if matches!(self.regs, AdcRegs::Stm32F4(_)) {
+                        // RM0090 ADC_SR flags are rc_w0: write zero to clear,
+                        // write one to leave the current flag unchanged.
+                        self.sr &= !(mask & !val_shifted);
+                    } else {
+                        self.sr = (self.sr & !mask) | val_shifted;
+                    }
+                }
                 0x04..=0x07 => match &mut self.regs {
                     AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
                         r.cr1 = (r.cr1 & !mask) | val_shifted;
@@ -2201,6 +2258,47 @@ mod tests {
             !adc.converting,
             "F4 layout must not treat bit 22 as SWSTART"
         );
+    }
+
+    /// RM0090 §13.8.2/§13.13: with EOCS set, an unread result at the next
+    /// conversion raises OVR; OVRIE shares the ADC interrupt line. Reading DR
+    /// clears EOC, and ADC_SR is rc_w0 for these flags.
+    #[test]
+    fn f4_eocs_overrun_sets_flag_irq_and_recovers() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        let cr2 = F1_CR2_ADON | F4_CR2_EOCS;
+        adc.write_u32(0x04, F4_CR1_OVRIE).unwrap();
+        adc.write_u32(0x08, cr2).unwrap();
+        adc.write_u32(0x08, cr2 | F4_CR2_SWSTART).unwrap();
+        let first: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(adc.read_u32(0x00).unwrap() & F4_SR_EOC != 0);
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_OVR, 0);
+        assert!(first.iter().all(|irq| !irq), "OVRIE alone ignores EOC");
+
+        // EOC remains pending across SWSTART until DR is read or ADC_SR is
+        // explicitly cleared, so this second completion loses the old result.
+        adc.write_u32(0x08, cr2 | F4_CR2_SWSTART).unwrap();
+        let second: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert_eq!(
+            adc.read_u32(0x00).unwrap() & (F4_SR_EOC | F4_SR_OVR),
+            F4_SR_EOC | F4_SR_OVR
+        );
+        assert!(second.last().copied().unwrap_or(false), "OVRIE raises IRQ");
+
+        // Writing one preserves EOC and zero clears OVR (rc_w0).
+        adc.write_u32(0x00, !F4_SR_OVR).unwrap();
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_OVR, 0);
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        let _ = adc.read_u32(0x4C).unwrap();
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+
+        // Reading DR before the next completion acknowledges the prior result,
+        // so the resumed single conversion must not raise another overrun.
+        adc.write_u32(0x08, cr2 | F4_CR2_SWSTART).unwrap();
+        let third: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_OVR, 0);
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert!(!third.last().copied().unwrap_or(true));
     }
 }
 

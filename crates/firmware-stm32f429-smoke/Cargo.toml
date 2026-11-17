@@ -8,6 +8,7 @@ license = "MIT"
 [features]
 stm32f429-m4f-fpu = []
 stm32f429-adc1 = []
+stm32f429-adc-ovr = []
 stm32f429-tim2 = []
 stm32f429-spi1 = []
 stm32f429-i2c1 = []

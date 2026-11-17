@@ -665,6 +665,132 @@ fn smoke_adc1() -> bool {
     }
 }
 
+/// RM0090 EOCS overrun path: leave ADC_DR unread across two regular
+/// conversions, then check OVR/OVRIE and the rc_w0/read-to-clear recovery.
+#[cfg(feature = "stm32f429-adc-ovr")]
+fn smoke_adc1_overrun() -> bool {
+    const ADC1: u32 = 0x4001_2000;
+    const ADC_SR: *mut u32 = ADC1 as *mut u32;
+    const ADC_CR1: *mut u32 = (ADC1 + 0x04) as *mut u32;
+    const ADC_CR2: *mut u32 = (ADC1 + 0x08) as *mut u32;
+    const ADC_DR: *const u32 = (ADC1 + 0x4C) as *const u32;
+    const ADC1_IRQ_BIT: u32 = 1 << 18;
+    const NVIC_ISPR0: *const u32 = 0xE000_E200 as *const u32;
+    const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
+    const ADON: u32 = 1;
+    const EOCS: u32 = 1 << 10;
+    const SWSTART: u32 = 1 << 30;
+    const OVRIE: u32 = 1 << 26;
+    const EOC: u32 = 1 << 1;
+    const OVR: u32 = 1 << 5;
+    let base = ADON | EOCS;
+
+    unsafe {
+        // Clear the preceding single-conversion result and any stale NVIC bit.
+        write_volatile(ADC_CR2, 0);
+        write_volatile(ADC_SR, 0);
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        write_volatile(ADC_CR1, OVRIE);
+        write_volatile(ADC_CR2, base);
+        write_volatile(ADC_CR2, base | SWSTART);
+
+        let mut first_eoc = false;
+        for _ in 0..100_000 {
+            first_eoc = read_volatile(ADC_SR) & EOC != 0;
+            if first_eoc {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        let first_no_overrun = read_volatile(ADC_SR) & OVR == 0;
+        let first_irq_masked = read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT == 0;
+
+        // SWSTART is a self-clearing command. Leave DR unread to overrun the
+        // single-result data register on this next EOCS-enabled conversion.
+        write_volatile(ADC_CR2, base | SWSTART);
+        let mut overrun = false;
+        for _ in 0..100_000 {
+            overrun = read_volatile(ADC_SR) & OVR != 0;
+            if overrun {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        let eoc = read_volatile(ADC_SR) & EOC != 0;
+        let irq = read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT != 0;
+
+        // OVR is cleared by writing zero to ADC_SR. Keep EOC set, then read DR
+        // to exercise RM0090's other EOC clear path.
+        write_volatile(ADC_SR, !OVR);
+        let overrun_cleared = read_volatile(ADC_SR) & OVR == 0;
+        let eoc_preserved = read_volatile(ADC_SR) & EOC != 0;
+        let _ = read_volatile(ADC_DR);
+        let dr_read_clears_eoc = read_volatile(ADC_SR) & EOC == 0;
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        let mut irq_released = true;
+        for _ in 0..16 {
+            irq_released &= read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT == 0;
+            core::hint::spin_loop();
+        }
+
+        // RM0090 recovery is to clear OVR and retrigger. DR was read above, so
+        // this conversion should complete without a second overrun or IRQ.
+        write_volatile(ADC_CR2, base | SWSTART);
+        let mut resumed_eoc = false;
+        for _ in 0..100_000 {
+            resumed_eoc = read_volatile(ADC_SR) & EOC != 0;
+            if resumed_eoc {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        let resumed_no_overrun = read_volatile(ADC_SR) & OVR == 0;
+        let resumed_no_irq = read_volatile(NVIC_ISPR0) & ADC1_IRQ_BIT == 0;
+
+        write_volatile(ADC_CR1, 0);
+        write_volatile(ADC_CR2, 0);
+        write_volatile(ADC_SR, 0);
+
+        let ok = first_eoc
+            && first_no_overrun
+            && first_irq_masked
+            && overrun
+            && eoc
+            && irq
+            && overrun_cleared
+            && eoc_preserved
+            && dr_read_clears_eoc
+            && irq_released;
+        let ok = ok && resumed_eoc && resumed_no_overrun && resumed_no_irq;
+        send(b"adc1 ovr=eocs:");
+        putc(if first_eoc && first_no_overrun && first_irq_masked {
+            b'1'
+        } else {
+            b'0'
+        });
+        send(b" flag=");
+        putc(if overrun { b'1' } else { b'0' });
+        send(b" irq=");
+        putc(if irq { b'1' } else { b'0' });
+        send(b" clear=");
+        putc(if overrun_cleared && eoc_preserved && dr_read_clears_eoc {
+            b'1'
+        } else {
+            b'0'
+        });
+        send(b" released=");
+        putc(if irq_released { b'1' } else { b'0' });
+        send(b" resume=");
+        putc(if resumed_eoc && resumed_no_overrun && resumed_no_irq {
+            b'1'
+        } else {
+            b'0'
+        });
+        send(if ok { b" ok\r\n" } else { b" FAIL\r\n" });
+        ok
+    }
+}
+
 fn send_hex(value: u32) {
     const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
     for shift in [28, 24, 20, 16, 12, 8, 4, 0] {
@@ -990,6 +1116,9 @@ fn main() -> ! {
 
     #[cfg(any(feature = "stm32f429-adc1", feature = "stm32f412-adc1"))]
     let _adc1_ok = smoke_adc1();
+
+    #[cfg(feature = "stm32f429-adc-ovr")]
+    let _adc1_overrun_ok = smoke_adc1_overrun();
 
     #[cfg(feature = "stm32f429-spi1")]
     let _spi1_ok = smoke_spi1();
