@@ -164,6 +164,10 @@
       "expect": "map rram=ffffffff ram=54120000 p3cnf=00000003",
       "note": "Snake on an RM67162 AMOLED over SPIM22. Firmware is committed (tests/fixtures/nrf54lm20a-snake.elf), so a clone plus the CLI is the whole prerequisite. The expected map is read back from the model: each value reaches memory or GPIO3 outside the nRF54L15 sibling's map."
     },
+    "mspm0g3507": {
+      "how": "needs-build",
+      "why": "The LP-MSPM0G3507 UART0 smoke is built from crates/firmware-lp-mspm0g3507-smoke; its passing source-tree evidence is under examples/lp-mspm0g3507-launchpad/evidence/. No firmware ELF is committed for a clean install, so this chip is not yet a released-CLI runnable entry."
+    },
     "rp2040": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/rp2040.elf",
