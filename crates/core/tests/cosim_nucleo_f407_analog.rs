@@ -2130,3 +2130,103 @@ fn nucleo_f407_sffm_driven_diode_reaches_adc1_alongside_ntc() {
         "the SFFM modulation must move the diode load line at ADC1_IN4: {adc_counts:?}"
     );
 }
+
+#[test]
+fn nucleo_f407_sffm_driven_mosfet_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode circuits");
+    let sffm_mosfet =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-sffm-mosfet.yaml"))
+            .expect("load generic SFFM-driven MOSFET circuit");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(sffm_mosfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    assert_eq!(chip.analog_pins["PA0"].channel, 0);
+    assert_eq!(chip.analog_pins["PA1"].channel, 1);
+    assert_eq!(chip.analog_pins["PA6"].channel, 6);
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile has NTC, diode, and SFFM-driven MOSFET netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the MOSFET drain must resolve through PA6 to ADC1 channel 6"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    for channel in [0, 1, 6, 7] {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut adc_counts = Vec::new();
+    for time_step in 1..=20 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the unrelated NTC, diode, and SFFM-driven MOSFET");
+        assert_eq!(
+            steps.len(),
+            3,
+            "all three netlists cross each 1 us boundary"
+        );
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9, "unrelated NTC stays isolated");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated Shockley diode stays at its DC load line"
+        );
+
+        let time_s = time_step as f64 * 1e-6;
+        let gate_v = sffm_drive_voltage(time_s);
+        let expected_drain_v = mosfet_drain_voltage(gate_v);
+        let drain_v = signal_voltage(&session, "board.analog.pa6_volts");
+        assert!(
+            (drain_v - expected_drain_v).abs() < 5e-5,
+            "at {time_s} s, SFFM gate drive {gate_v} V should solve the independent MOSFET load line to {expected_drain_v} V, got {drain_v} V"
+        );
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (6, drain_v)] {
+            let expected_count = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "the solved voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 conversion follows channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 7),
+            u16::MAX,
+            "the neighboring ADC1 channel remains undriven"
+        );
+        adc_counts.push(expected_adc_count(drain_v));
+    }
+
+    let minimum = *adc_counts.iter().min().expect("twenty samples");
+    let maximum = *adc_counts.iter().max().expect("twenty samples");
+    assert!(
+        maximum - minimum >= 50,
+        "SFFM must modulate the MOSFET load line through ADC1_IN6: {adc_counts:?}"
+    );
+}
