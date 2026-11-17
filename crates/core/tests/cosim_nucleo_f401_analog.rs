@@ -1047,6 +1047,149 @@ fn nucleo_f401re_bjt_transit_temperature_coefficients_reach_adc1_with_diode() {
 }
 
 #[test]
+fn nucleo_f401re_bjt_reverse_transit_temperature_coefficients_reach_adc1_with_diode() {
+    let system_path = root("configs/systems/nucleo-f401re.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
+    let diode = SystemManifest::from_file(root("examples/nucleo-f401re/analog-diode-system.yaml"))
+        .expect("load unrelated generic Shockley diode netlist");
+    let transit = SystemManifest::from_file(root(
+        "examples/nucleo-f401re/analog-bjt-reverse-transit-temperature.yaml",
+    ))
+    .expect("load reverse transit-temperature and explicit-TR BJT branches");
+    profile.cosim_models = diode.cosim_models;
+    profile.cosim_models.extend(transit.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F401 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F401RE bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries a diode and five matched generic BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic diode and reverse-active BJT devices must resolve through PA0–PA5 to ADC1"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.bjt_ttr.base_v", 0.0)
+        .expect("initialize all matched reverse-active BJT branches");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize the diode and reverse-active BJT branches");
+    assert_eq!(initial_steps.len(), 6, "all six analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.bjt_ttr.base_v", 0.8)
+        .expect("step all matched reverse-active BJT base drives");
+    let mut final_voltages = None;
+    for step in 0..=1_000 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the diode and reverse transit-charge branches");
+        assert_eq!(
+            steps.len(),
+            6,
+            "all six analog branches solve at each 1 us step"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let diode_v = signal_voltage(&session, "board.analog.pa0_volts");
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode stays on its independent load line"
+        );
+        let voltages = [
+            signal_voltage(&session, "board.analog.pa1_volts"),
+            signal_voltage(&session, "board.analog.pa2_volts"),
+            signal_voltage(&session, "board.analog.pa3_volts"),
+            signal_voltage(&session, "board.analog.pa4_volts"),
+            signal_voltage(&session, "board.analog.pa5_volts"),
+        ];
+        assert!(
+            (voltages[0] - voltages[1]).abs() < 1e-7,
+            "at TNOM=27 °C, TTR1/TTR2 reduce to the explicit TR=1 µs reference: {voltages:?}"
+        );
+        assert!(
+            (voltages[2] - voltages[3]).abs() < 1e-7,
+            "at TEMP=77 °C, TTR1=20m and TTR2=200u make TR=2.5 µs: {voltages:?}"
+        );
+        if step == 0 {
+            assert!(
+                voltages[2] < voltages[4] - 1e-3,
+                "the longer hot reverse transit time stores more B-C charge and lowers the first-step base voltage: scaled={} V, nominal-TR={} V",
+                voltages[2],
+                voltages[4]
+            );
+        }
+
+        for (channel, voltage) in (1..=5).zip(voltages) {
+            let expected = expected_adc_count(voltage);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved reverse-active BJT voltage seeds descriptor-routed ADC1_IN{channel}"
+            );
+            if step == 0 || step == 1_000 {
+                assert_eq!(
+                    f401_adc_convert(&mut bus, channel),
+                    u32::from(expected),
+                    "firmware-visible ADC1_IN{channel} conversion follows the routed BJT"
+                );
+            }
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 0),
+            expected_adc_count(diode_v),
+            "the unrelated diode remains isolated on ADC1_IN0"
+        );
+        if step == 0 || step == 1_000 {
+            assert_eq!(
+                f401_adc_convert(&mut bus, 0),
+                u32::from(expected_adc_count(diode_v)),
+                "firmware-visible ADC1_IN0 conversion continues to report the diode"
+            );
+        }
+        final_voltages = Some(voltages);
+    }
+
+    let [_, _, hot_scaled, hot_explicit, hot_nominal] =
+        final_voltages.expect("the final reverse transit-charge sample was recorded");
+    assert!(
+        (hot_scaled - hot_nominal).abs() < 5e-4,
+        "reverse transit charge changes the transient only; hot branches converge to the same DC point: scaled={hot_scaled} V, nominal-TR={hot_nominal} V"
+    );
+    assert!(
+        (hot_scaled - hot_explicit).abs() < 1e-7,
+        "temperature-adjusted reverse transit time remains equivalent to its explicit-TR reference after settling"
+    );
+}
+
+#[test]
 fn nucleo_f401re_bjt_junction_and_transit_charge_reach_adc1_end_to_end() {
     let system_path = root("configs/systems/nucleo-f401re.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F401RE profile");
