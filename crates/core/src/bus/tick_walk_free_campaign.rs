@@ -155,6 +155,25 @@ fn featureless_expected_forcing(bus: &SystemBus) -> Vec<String> {
         if ty == "BxCan" {
             continue;
         }
+        // Generic register banks are state-dependent: read/write hooks always
+        // need service, and periodic hooks are armed at construction. This bus
+        // has not executed yet, so its descriptor independently determines the
+        // initial state; do not use the runtime predicate being tested.
+        if ty == "GenericPeripheral" {
+            assert!(found.iter().all(|i|
+                i.body("needs_legacy_walk") == Some(
+                    "self.has_read_trigger() || self.has_write_trigger() || !self.inflight_events.borrow().is_empty()"
+                ) && i.body("uses_scheduler").is_none()
+            ), "GenericPeripheral's walk predicate changed; review its derivation");
+            let descriptor = p
+                .dev
+                .peripheral_descriptor()
+                .expect("GenericPeripheral exposes its descriptor");
+            if generic_initial_forces_walk(&descriptor) {
+                out.push(p.name.clone());
+            }
+            continue;
+        }
         let verdicts: Vec<Option<bool>> = found
             .iter()
             .map(|i| {
@@ -204,6 +223,59 @@ fn featureless_expected_forcing(bus: &SystemBus) -> Vec<String> {
     }
     out.sort();
     out
+}
+
+fn generic_initial_forces_walk(descriptor: &labwired_config::PeripheralDescriptor) -> bool {
+    descriptor.timing.as_ref().is_some_and(|hooks| {
+        hooks.iter().any(|hook| match hook.trigger {
+            labwired_config::TimingTrigger::Read { .. }
+            | labwired_config::TimingTrigger::Write { .. }
+            | labwired_config::TimingTrigger::Periodic { .. } => true,
+        })
+    })
+}
+
+#[test]
+fn generic_initial_derivation_keeps_each_active_trigger_walk_forcing() {
+    use crate::peripherals::declarative::GenericPeripheral;
+    use crate::Peripheral;
+    use labwired_config::{PeripheralDescriptor, TimingAction, TimingDescriptor, TimingTrigger};
+    let mut descriptor = PeripheralDescriptor {
+        peripheral: "synthetic-register-bank".into(),
+        version: "1".into(),
+        registers: vec![],
+        interrupts: None,
+        timing: None,
+    };
+    for inert in [None, Some(vec![])] {
+        descriptor.timing = inert;
+        assert!(!generic_initial_forces_walk(&descriptor));
+        assert!(!GenericPeripheral::new(descriptor.clone()).needs_legacy_walk());
+    }
+    for trigger in [
+        TimingTrigger::Read {
+            register: "STATUS".into(),
+        },
+        TimingTrigger::Write {
+            register: "CTRL".into(),
+            value: None,
+            mask: None,
+        },
+        TimingTrigger::Periodic { period_cycles: 7 },
+    ] {
+        descriptor.timing = Some(vec![TimingDescriptor {
+            id: "active".into(),
+            trigger,
+            delay_cycles: 3,
+            action: TimingAction::WriteValue {
+                register: "STATUS".into(),
+                value: 1,
+            },
+            interrupt: None,
+        }]);
+        assert!(generic_initial_forces_walk(&descriptor));
+        assert!(GenericPeripheral::new(descriptor.clone()).needs_legacy_walk());
+    }
 }
 
 fn invaders_bus_walk_stripped() -> SystemBus {

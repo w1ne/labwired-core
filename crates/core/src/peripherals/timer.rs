@@ -110,6 +110,10 @@ pub struct Timer {
     /// lazily latch UIF/CCxIF up to the bus-published clock. In legacy mode
     /// only `tick()`/`write_reg` mutate it.
     sr: Cell<u32>,
+    /// DMA event pulses awaiting the existing bus route. These are separate
+    /// from SR: another capture requests again while its flag is still set.
+    #[serde(skip)]
+    pending_dma: Cell<u8>,
     egr: u32,
     ccmr1: u32,
     ccmr2: u32,
@@ -367,6 +371,7 @@ impl Timer {
             smcr: 0,
             dier: 0,
             sr: Cell::new(0),
+            pending_dma: Cell::new(0),
             egr: 0,
             ccmr1: 0,
             ccmr2: 0,
@@ -946,6 +951,74 @@ impl Timer {
         div * n
     }
 
+    fn request_dma(&self, source: u8) {
+        if self.dier & (1 << (source + 8)) != 0 {
+            self.pending_dma.set(self.pending_dma.get() | (1 << source));
+        }
+    }
+
+    fn request_channel_dma(&self, channel: usize) {
+        // CR2.CCDS / AT32 CTRL2.DRS selects channel event versus update.
+        if self.cr2 & (1 << 3) == 0 {
+            self.request_dma(channel as u8 + 1);
+        }
+    }
+
+    fn request_update_dma(&self, counter_overflow: bool) {
+        // UDIS suppresses update events; URS excludes UG and slave reset
+        // from update interrupt/DMA requests, but not natural overflow.
+        if self.cr1 & (1 << 1) != 0 || (!counter_overflow && self.cr1 & (1 << 2) != 0) {
+            return;
+        }
+        self.request_dma(0);
+        if !self.basic && self.cr2 & (1 << 3) != 0 {
+            for channel in 1..=4 {
+                self.request_dma(channel);
+            }
+        }
+    }
+
+    fn take_dma_signals(&self) -> Option<Vec<u32>> {
+        let pending = self.pending_dma.replace(0);
+        (pending != 0).then(|| {
+            (0..7)
+                .filter(|source| pending & (1 << source) != 0)
+                .map(|source| crate::DMA_SIGNAL_TIMER_UPDATE + source)
+                .collect()
+        })
+    }
+
+    /// Next counter event that must reach DMA. DMA does not use the IRQ
+    /// model's held-flag freeze and does not require SR to be cleared first.
+    fn first_dma_event(&self) -> Option<u64> {
+        if self.cr1 & 1 == 0 || self.counter_frozen() {
+            return None;
+        }
+        let v = self.cnt.get();
+        let channel_on_update = self.cr2 & (1 << 3) != 0;
+        let update_enabled = self.dier & (1 << 8) != 0
+            || (!self.basic && channel_on_update && self.dier & (0xf << 9) != 0);
+        let mut best = if update_enabled && self.cr1 & (1 << 1) == 0 {
+            self.increments_to_wrap(v)
+        } else {
+            None
+        };
+        if !self.basic && !channel_on_update {
+            for (channel, ccr) in [self.ccr1, self.ccr2, self.ccr3, self.ccr4]
+                .into_iter()
+                .enumerate()
+            {
+                if self.ccs(channel) != 0 || self.dier & (1 << (channel + 9)) == 0 {
+                    continue;
+                }
+                if let Some(next) = self.increments_to_output_compare(v, ccr & self.cnt_mask()) {
+                    best = Some(best.map_or(next, |old| old.min(next)));
+                }
+            }
+        }
+        best
+    }
+
     /// Latch CNT into CCRx for input channel `ch` if CCxE is set and the
     /// ICxPSC divider lets this event through. Sets CCxIF, and CCxOF when
     /// CCxIF was still set from the previous capture (RM0368 §13.3.5).
@@ -968,6 +1041,7 @@ impl Timer {
         self.sr.set(sr);
         let cnt = self.cnt.get() & self.cnt_mask();
         *self.ccr_mut(ch) = cnt;
+        self.request_channel_dma(ch);
     }
 
     /// A FILTERED edge on input `ti` at absolute cycle `at`: capture on every
@@ -1005,6 +1079,7 @@ impl Timer {
                 }
             }
             self.sr.set(self.sr.get() | SR_TIF);
+            self.request_dma(6);
             // SMS=100 reset mode: reinitialise the counter and generate an
             // update event — UIF unless CR1.URS restricts it to overflow.
             // Gated (101), trigger (110) and external-clock (111) modes are
@@ -1015,7 +1090,8 @@ impl Timer {
                 if (self.cr1 >> 2) & 1 == 0 {
                     self.sr.set(self.sr.get() | 1);
                 }
-                self.latch_compare_match_flags();
+                self.request_update_dma(false);
+                self.latch_compare_match_flags(false);
                 self.phase_revision = self.phase_revision.wrapping_add(1);
             }
         }
@@ -1080,7 +1156,9 @@ impl Timer {
     /// CCMR in output-compare mode) CNT=0 matches every channel, so SR reads
     /// 0x1F after a bare UG — silicon-verified on STM32F103 TIM2. Channels in
     /// input-capture mode (CCxS != 0) don't compare and are skipped.
-    fn latch_compare_match_flags(&mut self) {
+    /// RM0386, TIMx_SR CC1IF: CCRx above ARR raises the output-compare
+    /// event on natural overflow. UG/slave reset does not create that event.
+    fn latch_compare_match_flags(&mut self, natural_wrap: bool) {
         let mask = self.cnt_mask();
         let cnt = self.cnt.get();
         let channels = [
@@ -1090,8 +1168,9 @@ impl Timer {
             (self.ccr4, (self.ccmr2 >> 8) & 0x3, 4),
         ];
         for (ccr, ccs, bit) in channels {
-            if ccs == 0 && (ccr & mask) == cnt {
+            if ccs == 0 && ((ccr & mask) == cnt || (natural_wrap && (ccr & mask) > self.arr)) {
                 self.sr.set(self.sr.get() | (1 << bit));
+                self.request_channel_dma(bit as usize - 1);
             }
         }
         // Advanced timers carry the output-only internal channels 5/6 whose
@@ -1167,6 +1246,19 @@ impl Timer {
         }
     }
 
+    /// Channel 1..4 output-compare event: either a counter match or, when
+    /// CCRx is above ARR, the natural overflow. The latter is specified by
+    /// STM32 RM0386 TIMx_SR CC1IF and is also required by the unchanged
+    /// AT32 AM32 PWM/DMA path (ARR=76, CCR1=0 or 128). This model retains its
+    /// existing upcounter scope; it does not add down/center-aligned counting.
+    fn increments_to_output_compare(&self, v: u32, ccr: u32) -> Option<u64> {
+        if ccr > self.arr {
+            self.increments_to_wrap(v)
+        } else {
+            self.increments_to_value(v, ccr)
+        }
+    }
+
     /// Number of increments until the first update event (wrap to 0 with
     /// UIF), or `None` if ARR never wraps (32-bit 0xFFFF_FFFF).
     fn increments_to_wrap(&self, v: u32) -> Option<u64> {
@@ -1223,7 +1315,7 @@ impl Timer {
                 if ccs != 0 || (self.dier >> bit) & 1 == 0 {
                     continue;
                 }
-                if let Some(j) = self.increments_to_value(v, ccr & mask) {
+                if let Some(j) = self.increments_to_output_compare(v, ccr & mask) {
                     // Strict `<` keeps update-event precedence on a tie (the
                     // overflow tick pends itself when UIE is set).
                     if best.is_none_or(|b| j < b) {
@@ -1277,6 +1369,7 @@ impl Timer {
         if let Some(j) = self.increments_to_wrap(v) {
             if j <= m {
                 sr |= 1; // UIF
+                self.request_update_dma(true);
             }
         }
         if !self.basic {
@@ -1291,9 +1384,10 @@ impl Timer {
                 if ccs != 0 {
                     continue;
                 }
-                if let Some(j) = self.increments_to_value(v, ccr & mask) {
+                if let Some(j) = self.increments_to_output_compare(v, ccr & mask) {
                     if j <= m {
                         sr |= 1 << bit;
+                        self.request_channel_dma(bit as usize - 1);
                     }
                 }
             }
@@ -1348,8 +1442,8 @@ impl Timer {
     /// `irq: true`; that made the scheduler fire one cycle after the walk and
     /// the `stm32_timer_walk_differential` compare gate went red.
     fn ticks_until_first_pend(&self) -> Option<u64> {
-        if self.irq_level_held() {
-            // Already held: the walk pends on the very next tick.
+        if self.irq_level_held() || self.pending_dma.get() != 0 {
+            // Already held or a captured DMA pulse awaits routing: the walk pends on the very next tick.
             return Some(1);
         }
         // A filtered input edge still waiting to be accepted needs a wake at
@@ -1359,8 +1453,11 @@ impl Timer {
             .ic_pending
             .first()
             .map(|p| p.accept.saturating_sub(anchor).max(1));
-        let counter = self
-            .first_enabled_event()
+        let next_event = match (self.first_enabled_event(), self.first_dma_event()) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+        let counter = next_event
             .map(|j| self.ticks_to_first_increment() + (j - 1) * (self.count_psc() as u64 + 1));
         match (counter, filter) {
             (Some(a), Some(b)) => Some(a.min(b)),
@@ -1449,41 +1546,42 @@ impl Timer {
                     self.cnt.set(0);
                     self.psc_cnt.set(0);
                     self.sr.set(self.sr.get() | 1);
+                    self.request_update_dma(false);
                     // The UG reload re-evaluates every output-compare channel:
                     // on a general-purpose/advanced timer the channels whose
                     // CCRx now equals CNT latch their CCxIF (at reset, all of
                     // them — SR=0x1F, silicon-verified on F103 TIM2). Basic
                     // timers have no compare channels, so UG sets UIF only.
                     if !self.basic {
-                        self.latch_compare_match_flags();
+                        self.latch_compare_match_flags(false);
                     }
                 }
-                // CCxG on a channel in INPUT mode is a software capture on
-                // every timer that has channels (RM0368 §13.4.6): CNT into
-                // CCRx, CCxIF, and CCxOF if CCxIF was still set.
+                // Software capture/compare requests use the same event
+                // source and DMA enable as the corresponding hardware event.
                 if !self.basic {
                     for ch in 0..4 {
-                        if self.ccs(ch) != 0 && (self.egr >> (ch + 1)) & 1 != 0 {
-                            self.sw_capture(ch);
+                        if (self.egr >> (ch + 1)) & 1 != 0 {
+                            if self.ccs(ch) != 0 {
+                                self.sw_capture(ch);
+                            } else {
+                                self.sr.set(self.sr.get() | (1 << (ch + 1)));
+                                self.request_channel_dma(ch);
+                            }
                         }
+                    }
+                    if self.egr & (1 << 6) != 0 {
+                        self.sr.set(self.sr.get() | SR_TIF);
+                        self.request_dma(6);
                     }
                 }
                 if self.advanced {
-                    if (self.egr & 0x02) != 0 {
-                        self.sr.set(self.sr.get() | (1 << 1));
-                    } // CC1IF
-                    if (self.egr & 0x04) != 0 {
-                        self.sr.set(self.sr.get() | (1 << 2));
+                    if self.egr & (1 << 5) != 0 {
+                        self.sr.set(self.sr.get() | (1 << 5));
+                        self.request_dma(5);
                     }
-                    if (self.egr & 0x08) != 0 {
-                        self.sr.set(self.sr.get() | (1 << 3));
-                    }
-                    if (self.egr & 0x10) != 0 {
-                        self.sr.set(self.sr.get() | (1 << 4));
-                    }
-                    if (self.egr & 0x80) != 0 {
+                    if self.egr & (1 << 7) != 0 {
                         self.sr.set(self.sr.get() | (1 << 7));
-                    } // BIF (break)
+                    }
                 }
             }
             // CCMR1/2 are 16-bit on every layout: 0xFFFF, silicon-confirmed on
@@ -1601,6 +1699,7 @@ impl Timer {
         self.sr.set(sr | flag);
         let cnt = self.cnt.get() & self.cnt_mask();
         *self.ccr_mut(ch) = cnt;
+        self.request_channel_dma(ch);
     }
 }
 
@@ -1655,8 +1754,9 @@ impl Timer {
             if self.cnt.get() > self.arr {
                 self.cnt.set(0);
                 self.sr.set(self.sr.get() | 1); // Set UIF (Update Interrupt Flag)
+                self.request_update_dma(true);
                 if !self.basic {
-                    self.latch_compare_match_flags();
+                    self.latch_compare_match_flags(true);
                 }
 
                 // Return true if Update Interrupt Enable (UIE) is set
@@ -1676,7 +1776,7 @@ impl Timer {
             // (2026-06-11): CC1IF rises once the running CNT crosses CCR1 in
             // PWM mode 1.
             if !self.basic {
-                self.latch_compare_match_flags();
+                self.latch_compare_match_flags(false);
             }
         }
 
@@ -1758,6 +1858,9 @@ impl crate::Peripheral for Timer {
     fn tick(&mut self) -> crate::PeripheralTickResult {
         let freeze_before = self.freeze_revision.get();
         let mut result = self.tick_counter();
+        if !self.scheduler_mode() {
+            result.dma_signals = self.take_dma_signals();
+        }
         if self.capture_compare_irq.is_some() {
             result.irq = self.own_irq_held();
             result.explicit_irqs = self.capture_compare_irq_held().map(|irq| vec![irq]);
@@ -1923,6 +2026,7 @@ impl crate::Peripheral for Timer {
         // materialises the update/compare latch this event was scheduled for.
         self.process_pending_edges(sched.now());
         self.advance_to(sched.now());
+        let dma_signals = self.take_dma_signals().unwrap_or_default();
         if self.irq_level_held() {
             // The walk would return `irq: true` on this tick (overflow with
             // UIE, or the held level after a compare latch) and on every tick
@@ -1936,6 +2040,7 @@ impl crate::Peripheral for Timer {
             // machine park it while those pends stand.
             crate::sched::EventResult {
                 raise_own_irq: self.own_irq_held(),
+                dma_signals,
                 explicit_irqs: self.capture_compare_irq_held().into_iter().collect(),
                 reschedule_delay: Some(1),
                 level_hold: self.counter_frozen() && self.ic_pending.is_empty(),
@@ -1946,6 +2051,7 @@ impl crate::Peripheral for Timer {
             // fire so the chain never silently dies while events are armed.
             crate::sched::EventResult {
                 reschedule_delay: self.ticks_until_first_pend(),
+                dma_signals,
                 ..Default::default()
             }
         }
@@ -2684,7 +2790,7 @@ mod tests {
         #[test]
         fn compare_match_walk_identity() {
             for (psc, arr, ccr) in [(0u32, 20u32, 7u32), (2, 50, 0), (1, 10, 10), (0, 5, 9)] {
-                // ccr=9 > arr=5: unreachable compare — no event may ever fire.
+                // ccr=9 > arr=5: the compare event occurs at natural overflow.
                 let script = [
                     (1u64, 0x28u64, psc),
                     (1, 0x2C, arr),
