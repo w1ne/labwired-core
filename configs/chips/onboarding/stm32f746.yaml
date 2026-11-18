@@ -419,8 +419,8 @@ peripherals:
   base_address: 0x50060800
   size: 1KB
   clock: { reg: ahb2enr, bit: 6 }
-# ADC1 (RM0385 §13): F2/F4 legacy control registers, with SWSTART at CR2
-# bit 30. Only PA1/ADC1_IN1 is wired in this profile.
+# ADC1 (RM0385 §15): F2/F4 legacy control registers, with SWSTART at CR2
+# bit 30. PA1/ADC1_IN1 and PA2/ADC1_IN2 are wired in this profile.
 - id: adc1
   type: adc
   base_address: 0x40012000
@@ -431,3 +431,4 @@ peripherals:
     profile: stm32f4
 analog_pins:
   PA1: { peripheral: adc1, channel: 1 }
+  PA2: { peripheral: adc1, channel: 2 }

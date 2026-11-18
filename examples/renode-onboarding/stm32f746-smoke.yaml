@@ -10,8 +10,9 @@
 # DMA1 streams 3/4, each first with the wrong SxCR.CHSEL (nothing moves);
 # memory-to-memory on DMA2 only; I2C1 reading a TMP102 with RXIE on the
 # event line, and a NACK on each of I2C1..4's own event line; CRC-32, INIT,
-# the 8-bit IDR and a 16-bit polynomial over bytes; RNG draws; and ADC1_IN1
-# from a 25% potentiometer test fixture on PA1 (0.825 V / 3.3 V).
+# the 8-bit IDR and a 16-bit polynomial over bytes; RNG draws; ADC1_IN1 and
+# ADC1_IN2 from 25% and 50% potentiometer test fixtures on PA1/PA2; one-shot
+# two-rank sequencing, EOC interrupts, and continuous group-end conversions.
 # The fixture switches (PK3, PC13) are pressed by the stimuli below; the
 # first stimuli set the SPI2, SPI3 and second SPI1 thermocouples.
 # It does not claim ADC2/3, DAC, CAN, Ethernet, LTDC, DMA2D, SDMMC, RTC, USB,
@@ -53,6 +54,9 @@ stimuli:
   - target: { component: "pot_adc1_in1", channel: "position" }
     trigger: !after_cycles { cycles: 1000 }
     value: 25.0
+  - target: { component: "pot_adc1_in2", channel: "position" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 50.0
 assertions:
   - uart_contains: "STM32F746 Cortex-M7 smoke"
   - uart_contains: "usart2 ok"
@@ -98,6 +102,8 @@ assertions:
       - "crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok"
       - "rng off=1 ready=1 draws=1 stopped=1 ok"
       - "adc1 in1=0x000003FF gated=1 clock=1 eoc=1 ok"
+      - "adc1 scan=0x000003FF,0x000007FF irq=1 pending=1 end=1 released=1 ok"
+      - "adc1 scan_cont_groups=0x000007FF,0x000007FF,0x000007FF groups=3 irq=1 ovr=0 stop=1 ok"
       - "pendsv m7 clear=1 repend=1 systick=1 priority=1 ok"
       - "summary 0x74FFFFFF"
       - "DONE"

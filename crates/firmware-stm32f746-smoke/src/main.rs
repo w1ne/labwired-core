@@ -338,7 +338,9 @@ fn main() -> ! {
     }
     mark(19, check_crc());
     mark(20, check_rng());
-    mark(23, check_adc1());
+    let adc_single = check_adc1();
+    let adc_scan = check_adc1_scan();
+    mark(23, adc_single && adc_scan);
     check_pendsv_m7();
     let summary = summary | 0x7460_0000;
     wr(SUMMARY, summary);

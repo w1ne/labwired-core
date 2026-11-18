@@ -1091,3 +1091,129 @@ pub fn check_adc1() -> bool {
     verdict(ok);
     ok
 }
+
+/// Verify the F746 regular scan and continuous group behavior with 25% and
+/// 50% test fixtures on ADC1_IN1/PA1 and ADC1_IN2/PA2.
+pub fn check_adc1_scan() -> bool {
+    const ADC1: u32 = 0x4001_2000;
+    const ADC_SR: u32 = ADC1;
+    const ADC_CR1: u32 = ADC1 + 0x04;
+    const ADC_CR2: u32 = ADC1 + 0x08;
+    const ADC_SQR1: u32 = ADC1 + 0x2C;
+    const ADC_SQR3: u32 = ADC1 + 0x34;
+    const ADC_DR: u32 = ADC1 + 0x4C;
+    const ADC1_IRQ: u32 = 18;
+    const ADON: u32 = 1;
+    const SCAN: u32 = 1 << 8;
+    const EOCIE: u32 = 1 << 5;
+    const EOCS: u32 = 1 << 10;
+    const CONT: u32 = 1 << 1;
+    const SWSTART: u32 = 1 << 30;
+    const EOC: u32 = 1 << 1;
+    const OVR: u32 = 1 << 5;
+
+    wr(ADC_CR2, 0);
+    wr(ADC_SR, 0);
+    unpend(ADC1_IRQ);
+    wr(
+        GPIOA + G_MODER,
+        (rd(GPIOA + G_MODER) & !((0b11 << 2) | (0b11 << 4))) | (0b11 << 2) | (0b11 << 4),
+    );
+    wr(ADC_CR1, SCAN | EOCIE);
+    wr(ADC_SQR1, 1 << 20); // L=1 selects a two-conversion regular group.
+    wr(ADC_SQR3, 1 | (2 << 5)); // SQ1=IN1, SQ2=IN2.
+    wr(ADC_CR2, ADON | EOCS);
+    wr(ADC_CR2, ADON | EOCS | SWSTART);
+
+    let first_eoc = wait(ADC_SR, EOC, EOC);
+    let first_irq = first_eoc && pending(ADC1_IRQ);
+    let first_code = rd(ADC_DR) & 0x0FFF;
+    let second_eoc = wait(ADC_SR, EOC, EOC);
+    let pending_after_second = second_eoc && pending(ADC1_IRQ);
+    let second_code = rd(ADC_DR) & 0x0FFF;
+    unpend(ADC1_IRQ);
+    let irq_released = !pending(ADC1_IRQ);
+    let mut one_shot_end = true;
+    for _ in 0..64 {
+        one_shot_end &= rd(ADC_SR) & EOC == 0;
+        core::hint::spin_loop();
+    }
+
+    // EOCS=0 reports at the end of each regular group. CONT restarts at SQ1.
+    wr(ADC_CR2, 0);
+    wr(ADC_SR, 0);
+    unpend(ADC1_IRQ);
+    wr(ADC_CR1, SCAN | EOCIE);
+    wr(ADC_CR2, ADON | CONT);
+    wr(ADC_CR2, ADON | CONT | SWSTART);
+    let mut continuous_codes = [0u32; 3];
+    let mut continuous_eocs = true;
+    let mut continuous_irq = true;
+    for code in &mut continuous_codes {
+        let completed = wait(ADC_SR, EOC, EOC);
+        if !completed {
+            continuous_eocs = false;
+            break;
+        }
+        continuous_irq &= pending(ADC1_IRQ);
+        *code = rd(ADC_DR) & 0x0FFF;
+    }
+    let continuous_groups = continuous_codes == [0x07FF; 3];
+    let continuous_no_overrun = rd(ADC_SR) & OVR == 0;
+    wr(ADC_CR2, 0);
+    let adon_cleared = rd(ADC_CR2) & ADON == 0;
+    wr(ADC_SR, 0);
+    let mut continuous_stopped = adon_cleared;
+    for _ in 0..64 {
+        continuous_stopped &= rd(ADC_SR) & EOC == 0;
+        core::hint::spin_loop();
+    }
+    unpend(ADC1_IRQ);
+    let continuous_irq_released = !pending(ADC1_IRQ);
+    wr(ADC_CR1, 0);
+    wr(ADC_CR2, 0);
+
+    let one_shot_ok = first_eoc
+        && second_eoc
+        && first_irq
+        && pending_after_second
+        && irq_released
+        && first_code == 0x03FF
+        && second_code == 0x07FF
+        && one_shot_end;
+    let continuous_ok = continuous_eocs
+        && continuous_irq
+        && continuous_groups
+        && continuous_no_overrun
+        && continuous_irq_released
+        && continuous_stopped;
+
+    puts("adc1 scan=");
+    hex(first_code);
+    puts(",");
+    hex(second_code);
+    puts(" ");
+    flag("irq", first_irq);
+    flag("pending", pending_after_second);
+    flag("end", one_shot_end);
+    flag("released", irq_released);
+    verdict(one_shot_ok);
+    puts("adc1 scan_cont_groups=");
+    for (index, code) in continuous_codes.iter().enumerate() {
+        if index != 0 {
+            puts(",");
+        }
+        hex(*code);
+    }
+    puts(" ");
+    puts("groups=");
+    puts(if continuous_groups { "3" } else { "0" });
+    puts(" ");
+    flag("irq", continuous_irq);
+    puts("ovr=");
+    puts(if continuous_no_overrun { "0" } else { "1" });
+    puts(" ");
+    flag("stop", continuous_irq_released && continuous_stopped);
+    verdict(continuous_ok);
+    one_shot_ok && continuous_ok
+}
