@@ -293,7 +293,113 @@ fn lab_pin_map_matches_attached_panel() {
     assert_eq!(pins.cs, CS);
     assert_eq!(pins.rs, RS);
     assert_eq!(pins.wr, WR);
-    assert_eq!(pins.rd, RD);
+    assert_eq!(pins.rd, Some(RD));
     assert_eq!(pins.rst, RST);
     assert_eq!(pins.db, DB);
+}
+
+/// Both a normal GPIO and a fixed-high wire must attach honestly. Invalid
+/// declarations must fail before an apparently working panel is installed.
+#[test]
+fn rd_wiring_config_is_explicit_and_strict() {
+    let (chip_path, system_path) = lab_paths();
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let base = SystemManifest::from_file(&system_path).unwrap();
+    for (config, expected) in [
+        ("{}", Some(5)),
+        ("{rd_tied_high: false}", Some(5)),
+        ("{rd_tied_high: true}", None),
+        ("{rd_tied_high: false, rd_pin: GPIO6}", Some(6)),
+        ("{RD: GPIO7}", Some(7)),
+        ("{rd_pin: GPIO6, RD: GPIO6}", Some(6)),
+    ] {
+        let mut manifest = base.clone();
+        let tft = manifest
+            .external_devices
+            .iter_mut()
+            .find(|d| d.id == "tft")
+            .unwrap();
+        tft.config.remove("rd_pin");
+        tft.config.remove("RD");
+        let extra: std::collections::HashMap<String, serde_yaml::Value> =
+            serde_yaml::from_str(config).unwrap();
+        tft.config.extend(extra);
+        let bus = SystemBus::from_config(&chip, &manifest)
+            .unwrap_or_else(|error| panic!("valid {config}: {error:#}"));
+        let panel = bus
+            .observed_of::<labwired_core::peripherals::components::ili9341_parallel::Ili9341Parallel>()
+            .next().unwrap();
+        assert_eq!(panel.pins().rd, expected, "{config}");
+    }
+    for (config, message) in [
+        ("{rd_tied_high: true, rd_pin: GPIO5}", "contradicts"),
+        ("{rd_tied_high: true, RD: GPIO5}", "contradicts"),
+        ("{rd_tied_high: true, rd_pin: null}", "contradicts"),
+        ("{rd_tied_high: 1}", "must be a boolean"),
+        ("{rd_tied_high: 'true'}", "must be a boolean"),
+        ("{rd_tied_high: null}", "must be a boolean"),
+        ("{rd_tied_high: []}", "must be a boolean"),
+        ("{rd_pin: 5}", "must be a GPIO pad string"),
+        ("{RD: false}", "must be a GPIO pad string"),
+        ("{rd_pin: 3V3}", "not a parseable GPIO pad label"),
+        ("{rd_pin: GPIO6, RD: GPIO7}", "disagree"),
+        (
+            "{rd_pin: GPIO6, RD: invalid}",
+            "not a parseable GPIO pad label",
+        ),
+    ] {
+        let mut manifest = base.clone();
+        let tft = manifest
+            .external_devices
+            .iter_mut()
+            .find(|d| d.id == "tft")
+            .unwrap();
+        tft.config.remove("rd_pin");
+        tft.config.remove("RD");
+        let extra: std::collections::HashMap<String, serde_yaml::Value> =
+            serde_yaml::from_str(config).unwrap();
+        tft.config.extend(extra);
+        let error = match SystemBus::from_config(&chip, &manifest) {
+            Ok(_) => panic!("invalid RD wiring attached: {config}"),
+            Err(error) => format!("{error:#}"),
+        };
+        assert!(error.contains(message), "{config}: {error}");
+    }
+}
+
+/// Exercise the same GPIO observer attach path as the diagram/compiler. RD
+/// has no MCU GPIO. The two golden RGB565 words include both LSB values.
+#[test]
+fn tied_high_rd_bitbang_paints_through_real_gpio_registers() {
+    let (chip_path, system_path) = lab_paths();
+    let chip = ChipDescriptor::from_file(&chip_path).unwrap();
+    let mut manifest = SystemManifest::from_file(&system_path).unwrap();
+    let tft = manifest
+        .external_devices
+        .iter_mut()
+        .find(|d| d.id == "tft")
+        .unwrap();
+    tft.config.remove("rd_pin");
+    tft.config
+        .insert("rd_tied_high".into(), serde_yaml::Value::Bool(true));
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    // No RD output enable or transition: the physical wire stays at 3.3 V.
+    let driven: Vec<_> = [CS, RS, WR, RST].into_iter().chain(DB).collect();
+    bus.write_u32(GPIO_BASE + GPIO_ENABLE_W1TS, bank0_mask(&driven))
+        .unwrap();
+    bus.write_u32(GPIO_BASE + GPIO_ENABLE1_W1TS, bank1_mask(&driven))
+        .unwrap();
+    set_pin(&mut bus, RST, true);
+    set_pin(&mut bus, WR, true);
+    set_pin(&mut bus, CS, true); // Establish idle before the selecting edge.
+    set_pin(&mut bus, CS, false);
+    cmd(&mut bus, 0x29);
+    cmd(&mut bus, 0x2C);
+    data16(&mut bus, 0xF801);
+    data16(&mut bus, 0x07E0);
+    let artifact = panel_artifact(&bus, true);
+    assert_eq!(artifact.meta["display_on"], true);
+    let pixels = artifact.bytes.unwrap();
+    assert_eq!(&pixels[..4], &[0xF8, 0x01, 0x07, 0xE0]);
+    assert!(pixels[4..].iter().all(|&byte| byte == 0));
 }
