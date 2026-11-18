@@ -1052,12 +1052,7 @@ impl SystemBus {
         // by `configure_xtensa_esp32s3` names UART0 `uart0_s3`; the manifest
         // (and the chip yaml) call it `uart0`. Without the alias, the S3 flash
         // boot path refused `debug_uart: uart0` although the UART is there.
-        let index = self.find_peripheral_index_by_name(name).or_else(|| {
-            super::attach::ESP32S3_UART_INSTANCE_NAMES
-                .iter()
-                .find(|[_, yaml]| *yaml == name)
-                .and_then(|[programmatic, _]| self.find_peripheral_index_by_name(programmatic))
-        });
+        let index = self.uart_index_by_name(name);
         if let Some(p) = index.map(|i| &mut self.peripherals[i]) {
             if p.dev.as_uart_stream_host().is_some_and(|u| {
                 !u.hosts_protocol_peer() && u.attach_console_sink(Some(sink.clone()), echo_stdout)
@@ -1145,6 +1140,22 @@ impl SystemBus {
         sources
     }
 
+    /// Resolve a named UART consistently for console, RX and peer operations.
+    /// Exact registered names win when both spellings are present. The fallback
+    /// is the same bounded S3 instance table already used by console wiring.
+    fn uart_index_by_name(&self, name: &str) -> Option<usize> {
+        self.find_peripheral_index_by_name(name).or_else(|| {
+            super::attach::ESP32S3_UART_INSTANCE_NAMES
+                .iter()
+                .find(|names| names.contains(&name))
+                .and_then(|names| {
+                    names
+                        .iter()
+                        .find_map(|alias| self.find_peripheral_index_by_name(alias))
+                })
+        })
+    }
+
     /// Push `bytes` into the named UART's external RX queue and re-arm its
     /// scheduler wake.
     ///
@@ -1156,7 +1167,7 @@ impl SystemBus {
     /// so `EspUart::take_scheduled_events` can wake, ingest, and raise
     /// `RXFIFO_TOUT` / `RXFIFO_FULL`.
     pub fn deliver_uart_rx_named(&mut self, name: &str, bytes: &[u8]) -> Result<usize, String> {
-        let index = self.find_peripheral_index_by_name(name).ok_or_else(|| {
+        let index = self.uart_index_by_name(name).ok_or_else(|| {
             format!("uart_injection: UART peripheral '{name}' not found on the bus")
         })?;
         let rx = self.attach_uart_rx_source_named(name).ok_or_else(|| {
@@ -1181,7 +1192,7 @@ impl SystemBus {
         bytes: &[u8],
     ) -> Result<(), String> {
         let index = self
-            .find_peripheral_index_by_name(uart)
+            .uart_index_by_name(uart)
             .ok_or_else(|| format!("UART peripheral '{uart}' not found on the bus"))?;
         self.peripherals[index]
             .dev
@@ -1193,7 +1204,7 @@ impl SystemBus {
     /// Check that the UART `uart` hosts an external device `device`.
     pub fn check_uart_peer(&mut self, uart: &str, device: &str) -> Result<(), String> {
         let index = self
-            .find_peripheral_index_by_name(uart)
+            .uart_index_by_name(uart)
             .ok_or_else(|| format!("UART peripheral '{uart}' not found on the bus"))?;
         let ids = self.peripherals[index]
             .dev
@@ -1221,42 +1232,29 @@ impl SystemBus {
     /// in the queue rather than being dropped (see `Uart::read`: RX presence
     /// is derived from the queue being non-empty, with no enable gating).
     pub fn attach_uart_rx_source_named(&self, name: &str) -> Option<Arc<Mutex<VecDeque<u8>>>> {
-        for p in &self.peripherals {
-            if p.name != name {
-                continue;
-            }
-            // i.MX RT LPUART (the queue feeds the RX wire once RE is on) and
-            // any later UART answer through the named capability.
-            if let Some(rx) = p.dev.uart_rx_source() {
-                return Some(rx);
-            }
-            let any = p.dev.as_any()?;
-            if let Some(uart) = any.downcast_ref::<Uart>() {
-                return Some(uart.rx_buffer());
-            }
-            // nRF52 UARTE/legacy-UART twin: same injection queue, drained by
-            // EasyDMA (UARTE personality) or RXD pops (legacy personality).
-            if let Some(uarte) = any.downcast_ref::<crate::peripherals::nrf52::uarte::Nrf52Uarte>()
-            {
-                return Some(uarte.rx_buffer());
-            }
-            // nRF54L UARTE: DMA.RX-cluster generation, same queue contract.
-            if let Some(uarte) =
-                any.downcast_ref::<crate::peripherals::nrf54l::uarte::Nrf54lUarte>()
-            {
-                return Some(uarte.rx_buffer());
-            }
-            // Microchip SERCOM in USART mode: same injection queue contract.
-            if let Some(sercom) =
-                any.downcast_ref::<crate::peripherals::sam::sercom_usart::SamSercomUsart>()
-            {
-                return Some(sercom.rx_buffer());
-            }
-            return any
-                .downcast_ref::<crate::peripherals::esp_uart::EspUart>()
-                .map(|uart| uart.rx_buffer());
+        let p = self.peripherals.get(self.uart_index_by_name(name)?)?;
+        // Capability-based UARTs, including i.MX RT LPUART, use the same
+        // instance resolution as the legacy concrete models below.
+        if let Some(rx) = p.dev.uart_rx_source() {
+            return Some(rx);
         }
-        None
+        let any = p.dev.as_any()?;
+        if let Some(uart) = any.downcast_ref::<Uart>() {
+            return Some(uart.rx_buffer());
+        }
+        if let Some(uarte) = any.downcast_ref::<crate::peripherals::nrf52::uarte::Nrf52Uarte>() {
+            return Some(uarte.rx_buffer());
+        }
+        if let Some(uarte) = any.downcast_ref::<crate::peripherals::nrf54l::uarte::Nrf54lUarte>() {
+            return Some(uarte.rx_buffer());
+        }
+        if let Some(sercom) =
+            any.downcast_ref::<crate::peripherals::sam::sercom_usart::SamSercomUsart>()
+        {
+            return Some(sercom.rx_buffer());
+        }
+        any.downcast_ref::<crate::peripherals::esp_uart::EspUart>()
+            .map(|uart| uart.rx_buffer())
     }
 
     /// Whether this chip's core implements the Cortex-M bit-band feature.
