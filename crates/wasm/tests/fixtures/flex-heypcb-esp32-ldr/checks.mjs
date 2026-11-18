@@ -57,10 +57,11 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
       );
       const batch = canonical(runtime.digital_trace_snapshot(0n));
       const analogBatch = canonical(runtime.analog_trace_snapshot(0n));
-      check(analogBatch.channels.length === 1
+      check(analogBatch.time_unit === 'ns'
+        && analogBatch.channels.length === 1
         && analogBatch.channels[0].name === 'source-u4-gl5528.voltage_mv'
         && analogBatch.channels[0].unit === 'mV',
-      'the registered LDR output is missing from the oscilloscope trace');
+      'the registered LDR output or its nanosecond time unit is missing from the oscilloscope trace');
       check(analogBatch.samples.length > 0, 'the LDR oscilloscope trace has no samples');
       const signalById = new Map(batch.channels.map((channel) => [channel.id, channel.signal]));
       return {
@@ -80,6 +81,7 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
           })).sort((a, b) => a.time_ns - b.time_ns || a.signal.localeCompare(b.signal)),
         },
         analog_trace: {
+          time_unit: analogBatch.time_unit,
           channels: analogBatch.channels,
           dropped: analogBatch.dropped,
           next_cursor: analogBatch.next_cursor,
@@ -102,6 +104,7 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
   check(negative.adc_code === 0 && negative.led_final === 0, 'dark negative control must keep the LED off');
   check(negative.trace.dropped === 0 && negative.trace.edges.length === 0, 'dark negative control emitted a digital edge');
   const scopeSummary = (run) => ({
+    time_unit: run.analog_trace.time_unit,
     channels: run.analog_trace.channels,
     dropped: run.analog_trace.dropped,
     samples: run.analog_trace.samples.map(({ time_ns, values }) => [time_ns, values[0]]),
@@ -124,6 +127,6 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
     },
     native_model_equality: true,
     run_report: runReport,
-    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'bright-output', 'dark-negative-control', 'oscilloscope-samples'],
+    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'bright-output', 'dark-negative-control', 'oscilloscope-samples', 'oscilloscope-nanosecond-time-unit'],
   };
 }

@@ -543,6 +543,7 @@ fn heypcb_ldr_analog_evidence(runtime: &FlexRuntime) -> serde_json::Value {
         "the LDR scope trace must contain samples"
     );
     serde_json::json!({
+        "time_unit": "ns",
         "channels": batch.channels,
         "dropped": batch.dropped,
         "next_cursor": batch.next_cursor,

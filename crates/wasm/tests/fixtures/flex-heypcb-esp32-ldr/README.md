@@ -12,7 +12,7 @@ The runtime source map uses the pinned source's U3.GPIO1 sensor net and U3.GPIO4
 
 ## What runs
 
-The portable Wasm firmware applies dark (`0 lx`) and bright (`100000 lx`) stimuli, reads the model's source.U3.GPIO1 millivolts, computes a 12-bit ADC count, and drives source.U3.GPIO48 based on a half-scale threshold. The modeled D1 logic output is read back. The dark case is the negative control; the bright case checks LED on and off transitions. The existing oscilloscope trace now includes the registered LDR output as `source-u4-gl5528.voltage_mv` in `mV`, sampled at its 1 µs model boundaries; the existing logic-analyzer trace carries the named digital signals in nanoseconds. Native Flex observations and the actual browser Wasm run are recorded in [native.json](native.json) and [browser.json](browser.json).
+The portable Wasm firmware applies dark (`0 lx`) and bright (`100000 lx`) stimuli, reads the model's source.U3.GPIO1 millivolts, computes a 12-bit ADC count, and drives source.U3.GPIO48 based on a half-scale threshold. The modeled D1 logic output is read back. The dark case is the negative control; the bright case checks LED on and off transitions. The existing oscilloscope trace now includes the registered LDR output as `source-u4-gl5528.voltage_mv` in `mV`, sampled at its 1 µs model boundaries; both digital and analog snapshots label their timestamps as `ns`. Native Flex observations and the actual browser Wasm run are recorded in [native.json](native.json) and [browser.json](browser.json).
 
 The oscilloscope samples show the catalog lookup output. They do not model a GL5528 transient response or C7's analog smoothing; the board's other power, USB, boot/reset, RF, MCU and board behavior is outside this slice.
 
