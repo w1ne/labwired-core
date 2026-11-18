@@ -8,11 +8,11 @@ use labwired_core::{bus::SystemBus, machine::AdvanceRequest, Bus};
 use std::sync::{Arc, Mutex};
 
 fn chip() -> ChipDescriptor {
-    ChipDescriptor::from_file(&common::root("configs/chips/stm32f767.yaml")).unwrap()
+    ChipDescriptor::from_file(common::root("configs/chips/stm32f767.yaml")).unwrap()
 }
 
 fn manifest() -> SystemManifest {
-    SystemManifest::from_file(&common::root("examples/nucleo-f767zi/system.yaml")).unwrap()
+    SystemManifest::from_file(common::root("examples/nucleo-f767zi/system.yaml")).unwrap()
 }
 
 #[test]
