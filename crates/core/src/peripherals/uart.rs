@@ -1074,6 +1074,10 @@ pub struct Uart {
     /// Digital single-wire transceiver. Separate from the RS-485 gate.
     #[serde(skip)]
     transceiver: Option<Arc<dyn super::uart_transceiver::DigitalUartTransceiver>>,
+    /// Existing TIOL112 callers retain a typed handle to the SAME shared gate.
+    /// It owns no second electrical state or serialization engine.
+    #[serde(skip)]
+    tiol112_handle: Option<super::components::tiol112::Tiol112>,
     /// AVR layout: UCSR0A as the CPU last wrote it (U2X is bit 1).
     avr_ucsra: u8,
     /// AVR layout: UBRR0 and whether firmware wrote it.
@@ -1192,6 +1196,7 @@ impl Uart {
             timed: None,
             rs485: None,
             transceiver: None,
+            tiol112_handle: None,
             avr_ucsra: 0,
             avr_ubrr: 0,
             avr_baud_set: false,
@@ -2470,11 +2475,13 @@ impl Uart {
 
     /// Compatibility accessor for existing exact TIOL112 diagnostics.
     pub fn set_tiol112(&mut self, phy: super::components::tiol112::Tiol112) -> anyhow::Result<()> {
-        self.set_digital_transceiver(Arc::new(phy))
+        self.set_digital_transceiver(Arc::new(phy.clone()))?;
+        self.tiol112_handle = Some(phy);
+        Ok(())
     }
 
     pub fn tiol112(&self) -> Option<&super::components::tiol112::Tiol112> {
-        self.transceiver.as_ref()?.as_any().downcast_ref()
+        self.tiol112_handle.as_ref()
     }
 
     pub fn digital_transceiver(
@@ -2875,6 +2882,19 @@ impl crate::Peripheral for Uart {
         if let Some(irq) = self.sci_b_irq.as_deref_mut() {
             irq.reset();
         }
+    }
+
+    fn attach_digital_uart_transceiver(
+        &mut self,
+        phy: Arc<dyn super::uart_transceiver::DigitalUartTransceiver>,
+    ) -> anyhow::Result<()> {
+        self.set_digital_transceiver(phy)
+    }
+
+    fn digital_uart_transceiver(
+        &self,
+    ) -> Option<&dyn super::uart_transceiver::DigitalUartTransceiver> {
+        self.transceiver.as_deref()
     }
 
     fn attach_timed_uart_port(

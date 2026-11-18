@@ -20,7 +20,6 @@ use crate::peripherals::kit::{
     AttachCtx, Category, ConfigKey, ConfigType, KitMetadata, PeripheralKit, Transport,
 };
 use crate::peripherals::rs485::PinSense;
-use crate::peripherals::uart::Uart;
 use crate::peripherals::uart_transceiver::DigitalUartTransceiver;
 use crate::sim_input::{InputChannel, SimInput, SimInputError};
 use anyhow::{anyhow, ensure, Result};
@@ -222,9 +221,6 @@ impl L6360 {
     }
 }
 impl DigitalUartTransceiver for L6360 {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
     fn id(&self) -> &str {
         &self.id
     }
@@ -530,12 +526,9 @@ impl PeripheralKit for L6360Kit {
         gate.state.lock().unwrap_or_else(|e| e.into_inner()).supply = supply;
         let now = ctx.bus.current_cycle;
         pins.service(ctx.bus, now);
-        let uart = ctx.bus.peripherals[idx]
+        ctx.bus.peripherals[idx]
             .dev
-            .as_any_mut()
-            .and_then(|p| p.downcast_mut::<Uart>())
-            .ok_or_else(|| anyhow!("l6360 selected instance is not a generic UART"))?;
-        uart.set_digital_transceiver(Arc::new(gate))?;
+            .attach_digital_uart_transceiver(Arc::new(gate))?;
         ctx.bus.gpio_devices.push(Box::new(pins));
         Ok(())
     }

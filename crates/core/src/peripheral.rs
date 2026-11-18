@@ -1499,6 +1499,22 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// Attach an off-chip digital electrical gate to the existing UART engine.
+    /// Unsupported UARTs refuse the operation; no concrete controller cast is needed.
+    fn attach_digital_uart_transceiver(
+        &mut self,
+        _phy: Arc<dyn crate::peripherals::uart_transceiver::DigitalUartTransceiver>,
+    ) -> anyhow::Result<()> {
+        anyhow::bail!("this peripheral cannot attach a digital UART transceiver")
+    }
+
+    /// Read the attached gate's shared direction/polarity capabilities.
+    fn digital_uart_transceiver(
+        &self,
+    ) -> Option<&dyn crate::peripherals::uart_transceiver::DigitalUartTransceiver> {
+        None
+    }
+
     /// Put this peripheral on a timed network link
     /// ([`crate::network::timed_uart`]). Only a USART with a timed mode
     /// accepts; the default refuses, so a link is never silently untimed.

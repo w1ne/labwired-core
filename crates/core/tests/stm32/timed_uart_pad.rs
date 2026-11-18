@@ -5,7 +5,6 @@ use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::{
     bus::{DevicePins, SystemBus},
     network::timed_uart::TimedUartNet,
-    peripherals::uart::Uart,
     Bus,
 };
 const UART: u64 = 0x40013800;
@@ -28,15 +27,7 @@ fn setup(inverted: bool) -> SystemBus {
         0,
         1,
     );
-    let index = bus.find_peripheral_index_by_name("uart1").unwrap();
-    bus.peripherals[index]
-        .dev
-        .as_any_mut()
-        .unwrap()
-        .downcast_mut::<Uart>()
-        .unwrap()
-        .attach_timed_port(port)
-        .unwrap();
+    bus.attach_timed_uart_by_id("uart1", port).unwrap();
     bus.write_u32(0x4002104c, 1).unwrap();
     bus.write_u32(0x40021060, 1 << 14).unwrap();
     bus.write_u32(0x48000000, 2 << 18).unwrap(); // PA9 AF

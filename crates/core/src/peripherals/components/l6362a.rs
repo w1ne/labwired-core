@@ -199,9 +199,6 @@ impl L6362a {
     }
 }
 impl DigitalUartTransceiver for L6362a {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
     fn id(&self) -> &str {
         &self.id
     }

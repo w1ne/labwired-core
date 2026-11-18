@@ -6,13 +6,11 @@
 //! supplies direction, polarity, propagation and status; UART serialization,
 //! sampling, parity and overrun remain in the shared timed UART implementation.
 
-use std::any::Any;
 use std::fmt::Debug;
 
 use crate::network::timed_uart::{LineFormat, TimedUartPort};
 
 pub trait DigitalUartTransceiver: Debug + Send + Sync {
-    fn as_any(&self) -> &dyn Any;
     fn id(&self) -> &str;
     fn driver_delay_ps(&self) -> u64;
     fn receiver_delay_ps(&self) -> u64;

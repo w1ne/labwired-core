@@ -169,20 +169,35 @@ fn bus(extra: &str, second: bool) -> SystemBus {
     tick(&mut b, 5);
     b
 }
-fn phy(b: &SystemBus, name: &str) -> L6360 {
+fn phy<'a>(b: &'a SystemBus, name: &str) -> &'a dyn DigitalUartTransceiver {
     let i = b.find_peripheral_index_by_name(name).unwrap();
-    b.peripherals[i]
-        .dev
-        .as_any()
-        .unwrap()
-        .downcast_ref::<Uart>()
-        .unwrap()
-        .digital_transceiver()
-        .unwrap()
-        .as_any()
-        .downcast_ref::<L6360>()
-        .unwrap()
-        .clone()
+    b.peripherals[i].dev.digital_uart_transceiver().unwrap()
+}
+fn observe_wire(
+    b: &mut SystemBus,
+    name: &str,
+) -> labwired_core::network::timed_uart::TimedUartPort {
+    let net = labwired_core::network::timed_uart::TimedUartNet::new();
+    let (_, local, peer) = net.add_link(("master", name, HZ), ("observer", name, HZ), 0, 0, 1);
+    b.attach_timed_uart_by_id(name, local).unwrap();
+    peer
+}
+fn config_read(b: &mut SystemBus, address: u8) -> u8 {
+    // DS8900 random read: register pointer write with STOP, then CONFIG..PARITY.
+    i2c_write(b, address, &[1]).unwrap();
+    b.write_u32(0x4000541c, 0x3f).unwrap();
+    b.write_u32(
+        0x40005404,
+        (u32::from(address) << 1) | (8 << 16) | (1 << 10) | (1 << 25) | (1 << 13),
+    )
+    .unwrap();
+    let mut bytes = [0u8; 8];
+    for value in &mut bytes {
+        wait(b, 1 << 2).unwrap();
+        *value = b.read_u32(0x40005424).unwrap() as u8;
+    }
+    wait(b, 1 << 5).unwrap();
+    bytes[0]
 }
 fn tick(b: &mut SystemBus, count: u64) {
     for _ in 0..count {
@@ -219,47 +234,57 @@ fn i2c_write(b: &mut SystemBus, address: u8, bytes: &[u8]) -> Result<(), u32> {
 #[test]
 fn both_native_i2c_addresses_and_gpio_enables_remain_independent() {
     let mut b = bus("", true);
-    let a = phy(&b, "uart1");
-    let z = phy(&b, "uart4");
-    assert_eq!(a.control().snapshot().address, 0x60);
-    assert_eq!(z.control().snapshot().address, 0x61);
+    let a = observe_wire(&mut b, "uart1");
+    let z = observe_wire(&mut b, "uart4");
+    assert_eq!(config_read(&mut b, 0x60) & 0xe0, 0x80);
+    assert_eq!(config_read(&mut b, 0x61) & 0xe0, 0x80);
     i2c_write(&mut b, 0x60, &[0xe0, 0xa1]).unwrap();
-    assert_eq!(a.control().snapshot().mode, L6360Mode::PushPull);
-    assert_eq!(z.control().snapshot().mode, L6360Mode::TriState);
+    assert_eq!(config_read(&mut b, 0x60) & 0xe0, 0xe0);
+    assert_eq!(config_read(&mut b, 0x61) & 0xe0, 0x80);
     b.write_u32(0x48000818, 1).unwrap();
     b.write_u32(0x48000018, 1 << 6).unwrap();
-    tick(&mut b, 10);
-    assert_eq!(a.observation().drive, DigitalDrive::High);
-    assert!(a.observation().lplus_enabled);
-    assert_eq!(z.observation().drive, DigitalDrive::HighImpedance);
-    assert!(!z.observation().lplus_enabled);
+    tick(&mut b, 20);
+    assert_eq!(a.peer_digital_drive(b.current_cycle), DigitalDrive::High);
+    assert!(format!("{:?}", b.peripheral_logs("port1").unwrap()).contains("L+=true"));
+    assert_eq!(
+        z.peer_digital_drive(b.current_cycle),
+        DigitalDrive::HighImpedance
+    );
+    assert!(format!("{:?}", b.peripheral_logs("port2").unwrap()).contains("L+=false"));
     i2c_write(&mut b, 0x61, &[0xe0, 0xa1]).unwrap();
-    assert_eq!(z.control().snapshot().mode, L6360Mode::PushPull);
+    assert_eq!(config_read(&mut b, 0x61) & 0xe0, 0xe0);
     b.write_u32(0x48000418, 1 << (5 + 16)).unwrap();
-    tick(&mut b, 5);
-    assert_eq!(a.observation().drive, DigitalDrive::HighImpedance);
+    tick(&mut b, 20);
+    assert_eq!(
+        a.peer_digital_drive(b.current_cycle),
+        DigitalDrive::HighImpedance
+    );
     assert!(i2c_write(&mut b, 0x60, &[0xe0, 0xa1]).is_err());
-    assert_eq!(z.control().snapshot().mode, L6360Mode::PushPull);
+    assert_eq!(config_read(&mut b, 0x61) & 0xe0, 0xe0);
 }
+
 #[test]
 fn the_same_declared_supply_gates_i2c_and_uart_and_gpio() {
     let mut b = bus(", supply_rails: {vcc: {min_v: 18, max_v: 32.5}}", false);
-    let p = phy(&b, "uart1");
-    assert!(!p.clock_valid());
+    let p = observe_wire(&mut b, "uart1");
+    assert!(!phy(&b, "uart1").clock_valid());
     assert!(i2c_write(&mut b, 0x60, &[0xe0, 0xa1]).is_err());
     b.apply_device_supply_voltages(&[("port1".into(), "vcc".into(), 24.)])
         .unwrap();
-    tick(&mut b, 5);
+    tick(&mut b, 20);
     i2c_write(&mut b, 0x60, &[0xe0, 0xa1]).unwrap();
     b.write_u32(0x48000818, 1).unwrap();
-    tick(&mut b, 5);
-    assert!(p.allow_tx());
-    assert_eq!(p.observation().drive, DigitalDrive::High);
+    tick(&mut b, 20);
+    assert!(phy(&b, "uart1").allow_tx());
+    assert_eq!(p.peer_digital_drive(b.current_cycle), DigitalDrive::High);
     b.apply_device_supply_voltages(&[("port1".into(), "vcc".into(), 0.)])
         .unwrap();
-    assert!(!p.allow_tx());
-    tick(&mut b, 5);
-    assert_eq!(p.observation().drive, DigitalDrive::HighImpedance);
+    assert!(!phy(&b, "uart1").allow_tx());
+    tick(&mut b, 20);
+    assert_eq!(
+        p.peer_digital_drive(b.current_cycle),
+        DigitalDrive::HighImpedance
+    );
     assert!(i2c_write(&mut b, 0x60, &[0xe0, 0xa1]).is_err());
 }
 

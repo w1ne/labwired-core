@@ -538,9 +538,6 @@ impl PeripheralKit for Tiol112Kit {
 }
 
 impl crate::peripherals::uart_transceiver::DigitalUartTransceiver for Tiol112 {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
     fn id(&self) -> &str {
         self.id()
     }
