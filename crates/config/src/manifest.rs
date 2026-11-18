@@ -110,6 +110,11 @@ pub struct SystemManifest {
     /// nevertheless being told 80 MHz. Reading the key is the fix.
     #[serde(default, deserialize_with = "deserialize_opt_u64_lax")]
     pub cpu_hz: Option<u64>,
+    /// Maximum peripheral tick interval in simulated CPU cycles.
+    /// Larger host requests are clamped at the Machine::advance boundary,
+    /// including custom runners. Omit to keep existing defaults. Zero is invalid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_peripheral_tick_interval: Option<std::num::NonZeroU32>,
     #[serde(default)]
     pub memory_overrides: HashMap<String, String>,
     #[serde(default)]

@@ -246,16 +246,14 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             .ok()
             .and_then(|v| v.parse::<u32>().ok())
             .unwrap_or(labwired_core::bus::RECOMMENDED_TICK_INTERVAL);
-        ctx.machine.config.peripheral_tick_interval = interval;
-        ctx.machine.bus.config.peripheral_tick_interval = interval;
+        ctx.machine.set_peripheral_tick_interval(interval);
     }
 
     // An explicit script limit sets the peripheral tick for this run.
     // Absent leaves the interval set above: one tick per cycle, or the JIT widen.
     if let Some(interval) = ctx.resolved_limits.peripheral_tick_interval {
         if interval > 0 {
-            ctx.machine.config.peripheral_tick_interval = interval;
-            ctx.machine.bus.config.peripheral_tick_interval = interval;
+            ctx.machine.set_peripheral_tick_interval(interval);
         }
     }
 

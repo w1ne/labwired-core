@@ -151,6 +151,7 @@ impl<C: Cpu> Machine<C> {
     /// Callers must arrange an honored breakpoint, CPU progress termination,
     /// or external termination when issuing such a request.
     pub fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport> {
+        self.enforce_peripheral_tick_cap();
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
         }
@@ -217,6 +218,7 @@ impl<C: Cpu> Machine<C> {
             u32,
         ) -> SimResult<u32>,
     {
+        self.enforce_peripheral_tick_cap();
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
         }
