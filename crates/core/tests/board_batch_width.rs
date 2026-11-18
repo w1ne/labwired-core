@@ -116,6 +116,21 @@ fn assert_batches(chip: &str, system: &str, fixture: &str) {
     );
 }
 
+/// #2005: the inert CAN model used to keep this shipped board at one
+/// instruction per batch. Use its real descriptor and committed smoke image.
+#[test]
+fn ra4m1_uno_r4_minima_batches() {
+    let manifest = SystemManifest::from_file(
+        workspace_root().join("configs/systems/arduino-uno-r4-minima.yaml"),
+    )
+    .expect("load UNO R4 Minima manifest");
+    assert!(
+        manifest.walk_deleted.is_none(),
+        "RA4M1 batching must derive from peripheral capabilities"
+    );
+    assert_batches("ra4m1", "arduino-uno-r4-minima", "ra4m1-uno-r4-smoke.elf");
+}
+
 /// The #835 regression. Held at 1.00 by a leaked I²C BUSY bit; ~511 once
 /// `L4I2c` honours CR1.PE=0 the way silicon does.
 #[test]
