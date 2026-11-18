@@ -18,9 +18,11 @@ NUCLEO-H723ZG as Active and In Stock; see [`vendor-status.md`](vendor-status.md)
 | ST-LINK virtual COM port | PD8 / PD9 | USART3 TX/RX, default solder-bridge route |
 
 The board wiring follows ST UM2407. The profile models the H7 RCC, GPIOB/C/D/E,
-USART3 and SysTick needed for these board signals. It does not map the Ethernet,
-USB, ADC, timers, DMA or other H723 peripherals. The test firmware uses the
-reset HSI clock; it does not exercise the H7 PLL or external oscillator.
+USART3 and SysTick needed for these board signals. FLASH_ACR and the exact
+CMSIS FMC bank-disable write are handled for startup; flash programming and
+FMC operations are not modeled. Ethernet, USB, ADC, timers, DMA and other H723
+peripherals are not mapped. The test firmware uses the reset HSI clock; it does
+not exercise the H7 PLL or external oscillator.
 
 ## Smoke
 

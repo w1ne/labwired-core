@@ -10,3 +10,9 @@ scripts/onboarding_smoke.sh \
   --crate firmware-nucleo-h723zg-smoke \
   --target thumbv7em-none-eabi \
   --out-dir "$OUT_DIR"
+# This fixture includes the stock PlatformIO STM32Cube CMSIS SystemInit path,
+# which accesses FLASH_ACR and the FMC bank-disable register before main.
+cargo run -q -p labwired-cli -- test \
+  --script examples/nucleo-h723zg/stm32cube-smoke.yaml \
+  --output-dir "$OUT_DIR/stm32cube" \
+  --no-uart-stdout
