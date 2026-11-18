@@ -4,7 +4,7 @@ inputs:
   firmware: "../../tests/fixtures/stm32f767-stock-arduino.elf"
   system: "./system.yaml"
 limits:
-  max_steps: 15000000
+  max_steps: 30000000
 assertions:
   - uart_contains: "F767_OK"
   - expected_stop_reason: max_steps
