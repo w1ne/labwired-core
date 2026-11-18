@@ -15,9 +15,11 @@ pub enum CosimAdapter {
     /// Persistent ngspice circuit hosted by a co-simulation runtime.
     Ngspice,
     Mock,
+    /// In-process scalar device behavior using the shared declarative rule engine.
+    Behavior,
     /// `labwired_core::analog` — the in-core MNA engine. No `model` path: the
     /// circuit is a SPICE netlist under `config.netlist` / `config.netlist_text`.
-    /// The only adapter the browser can run, since it spawns no process.
+    /// Runs in the browser without spawning a process.
     Analog,
 }
 
