@@ -1,0 +1,129 @@
+# Generic SPICE level-1 PJF RD/RS terminal resistance, routed through
+# STM32F767 ADC1. Model-card branches are paired with explicit resistor
+# networks; the NTC and Shockley diode are loaded from the shared fixture.
+name: "nucleo-f767zi-analog-pjfet-terminal-resistance-adc"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "pjfet_terminal_reference"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pa2_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload drain 0 1k
+        Vgate gate 0 dc 3.3
+        J1 drain gate supply PJF_BASE
+        .model PJF_BASE PJF(VTO=2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-30)
+      probes:
+        drain_voltage: "v(drain)"
+      vdd: 3.3
+  - id: "pjfet_terminal_rd_card"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pa3_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload drain 0 1k
+        Vgate gate 0 dc 3.3
+        J1 drain gate supply PJF_RD
+        .model PJF_RD PJF(VTO=2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-30 RD=1k)
+      probes:
+        drain_voltage: "v(drain)"
+      vdd: 3.3
+  - id: "pjfet_terminal_rd_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload drain 0 1k
+        Rseries junction drain 1k
+        Vgate gate 0 dc 3.3
+        J1 junction gate supply PJF_BASE
+        .model PJF_BASE PJF(VTO=2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-30)
+      probes:
+        drain_voltage: "v(drain)"
+      vdd: 3.3
+  - id: "pjfet_terminal_rs_card"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pa5_volts"
+      source_voltage: "board.analog.pa6_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload drain 0 1k
+        Rreturn supply source 1k
+        Vgate gate 0 dc 3.3
+        J1 drain gate source PJF_RS
+        .model PJF_RS PJF(VTO=2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-30 RS=1k)
+      probes:
+        drain_voltage: "v(drain)"
+        source_voltage: "v(source)"
+      vdd: 3.3
+  - id: "pjfet_terminal_rs_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pa7_volts"
+      source_voltage: "board.analog.pb0_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload drain 0 1k
+        Rreturn supply source 1k
+        Rseries source junction 1k
+        Vgate gate 0 dc 3.3
+        J1 drain gate junction PJF_BASE
+        .model PJF_BASE PJF(VTO=2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-30)
+      probes:
+        drain_voltage: "v(drain)"
+        source_voltage: "v(source)"
+      vdd: 3.3
+  - id: "pjfet_terminal_both_card"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pb1_volts"
+      source_voltage: "board.analog.pc0_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload drain 0 1k
+        Rreturn supply source 1k
+        Vgate gate 0 dc 3.3
+        J1 drain gate source PJF_BOTH
+        .model PJF_BOTH PJF(VTO=2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-30 RD=1k RS=1k)
+      probes:
+        drain_voltage: "v(drain)"
+        source_voltage: "v(source)"
+      vdd: 3.3
+  - id: "pjfet_terminal_both_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      drain_voltage: "board.analog.pc1_volts"
+      source_voltage: "board.analog.pc2_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload drain 0 1k
+        Rreturn supply source 1k
+        Rseries_source source junction_source 1k
+        Rseries_drain junction_drain drain 1k
+        Vgate gate 0 dc 3.3
+        J1 junction_drain gate junction_source PJF_BASE
+        .model PJF_BASE PJF(VTO=2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-30)
+      probes:
+        drain_voltage: "v(drain)"
+        source_voltage: "v(source)"
+      vdd: 3.3

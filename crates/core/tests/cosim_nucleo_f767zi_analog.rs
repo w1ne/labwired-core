@@ -506,6 +506,57 @@ fn jfet_terminal_resistance_load_line(
     (SUPPLY_V - current * LOAD_OHMS, current * source_return_ohms)
 }
 
+/// Independent high-side PJF level-1 load line with model-card RD/RS and an
+/// explicit source return. Voltages are solved in the PJF's mirrored N-channel
+/// coordinates, then returned at the external drain/source terminals.
+fn pjfet_terminal_resistance_load_line(
+    drain_resistance_ohms: f64,
+    source_resistance_ohms: f64,
+    source_return_ohms: f64,
+) -> (f64, f64) {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const GATE_V: f64 = 3.3;
+    const VTO_N: f64 = -2.0;
+    const BETA_A_PER_V2: f64 = 500e-6;
+    const LAMBDA_PER_V: f64 = 0.025;
+    const B: f64 = 0.8;
+    const PB: f64 = 1.0;
+    let source_total_ohms = source_return_ohms + source_resistance_ohms;
+    let channel_current = |current: f64| {
+        let source_v = SUPPLY_V - current * source_total_ohms;
+        let drain_v = current * (LOAD_OHMS + drain_resistance_ohms);
+        let vgs = source_v - GATE_V;
+        let vds = source_v - drain_v;
+        let overdrive = vgs - VTO_N;
+        if overdrive <= 0.0 || vds <= 0.0 {
+            return 0.0;
+        }
+        let beta_p = BETA_A_PER_V2 * (1.0 + LAMBDA_PER_V * vds);
+        let bfac = (1.0 - B) / (PB - VTO_N);
+        if overdrive >= vds {
+            beta_p
+                * vds
+                * (vds * (bfac * vds - B) + overdrive * (2.0 * B + 3.0 * bfac * (overdrive - vds)))
+        } else {
+            beta_p * overdrive * overdrive * (B + overdrive * bfac)
+        }
+    };
+    let current_limit = SUPPLY_V / (LOAD_OHMS + drain_resistance_ohms + source_total_ohms);
+    let residual = |current: f64| channel_current(current) - current;
+    let (mut low, mut high) = (0.0, current_limit);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    let current = 0.5 * (low + high);
+    (current * LOAD_OHMS, SUPPLY_V - current * source_return_ohms)
+}
+
 /// Independent forward gate-junction root for a JFET whose drain and source
 /// are both grounded: the bias resistor feeds two parallel gate diodes whose
 /// `IS` follows the `EG`/`XTI` law at the instance temperature.
@@ -2428,6 +2479,153 @@ fn nucleo_f767zi_jfet_terminal_resistances_match_explicit_networks_on_adc1() {
         (9, voltages[4]),
         (10, voltages[5]),
         (11, voltages[6]),
+    ] {
+        let expected = expected_adc_count(volts);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected,
+            "the solved voltage seeds ADC1 channel {channel}"
+        );
+        assert_eq!(
+            stm32f4_adc_convert(&mut bus, channel),
+            u32::from(expected),
+            "firmware-visible ADC1 channel {channel} follows its routed analog device"
+        );
+    }
+}
+
+#[test]
+fn nucleo_f767zi_pjfet_terminal_resistances_match_explicit_networks_on_adc1() {
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI profile");
+    assert_eq!(profile.name, "nucleo-f767zi");
+
+    let analog =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let pjfet = SystemManifest::from_file(root(
+        "examples/nucleo-f767zi/analog-pjfet-terminal-resistance-adc.yaml",
+    ))
+    .expect("load generic PJF terminal-resistance branches");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(pjfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+        ("PA7", 7),
+        ("PB0", 8),
+        ("PB1", 9),
+        ("PC0", 10),
+        ("PC1", 11),
+        ("PC2", 12),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and PJF terminal-resistance branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all generic device routes must resolve to their F767 ADC1 channels"
+    );
+    for channel in 0..=12 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    let cycles = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve and route all PJF, NTC, and diode branches");
+    assert_eq!(steps.len(), 9, "NTC, diode, and seven PJF circuits solve");
+    assert!(
+        errors.is_empty(),
+        "unexpected analog route errors: {errors:?}"
+    );
+
+    const NTC_V: f64 = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let reference = pjfet_terminal_resistance_load_line(0.0, 0.0, 0.0);
+    let drain_card = pjfet_terminal_resistance_load_line(1_000.0, 0.0, 0.0);
+    let drain_explicit = drain_card;
+    let source_card = pjfet_terminal_resistance_load_line(0.0, 1_000.0, 1_000.0);
+    let source_explicit = source_card;
+    let combined_card = pjfet_terminal_resistance_load_line(1_000.0, 1_000.0, 1_000.0);
+    let combined_explicit = combined_card;
+    let solved = [
+        ("board.analog.pa2_volts", reference.0),
+        ("board.analog.pa3_volts", drain_card.0),
+        ("board.analog.pa4_volts", drain_explicit.0),
+        ("board.analog.pa5_volts", source_card.0),
+        ("board.analog.pa6_volts", source_card.1),
+        ("board.analog.pa7_volts", source_explicit.0),
+        ("board.analog.pb0_volts", source_explicit.1),
+        ("board.analog.pb1_volts", combined_card.0),
+        ("board.analog.pc0_volts", combined_card.1),
+        ("board.analog.pc1_volts", combined_explicit.0),
+        ("board.analog.pc2_volts", combined_explicit.1),
+    ];
+    let mut voltages = Vec::new();
+    for (path, expected) in solved {
+        let volts = signal_voltage(&session, path);
+        assert!(
+            (volts - expected).abs() < 5e-5,
+            "independent mirrored level-1 PJF load line expects {expected} V at {path}, got {volts} V"
+        );
+        voltages.push(volts);
+    }
+    assert!(
+        (voltages[1] - voltages[2]).abs() < 1e-8,
+        "PJF model-card RD must match an explicit drain resistor: {voltages:?}"
+    );
+    assert!(
+        (voltages[3] - voltages[5]).abs() < 1e-8
+            && (voltages[4] - voltages[6]).abs() < 1e-8,
+        "PJF model-card RS must match an explicit source resistor at drain and source: {voltages:?}"
+    );
+    assert!(
+        (voltages[7] - voltages[9]).abs() < 1e-8 && (voltages[8] - voltages[10]).abs() < 1e-8,
+        "combined PJF model-card RD/RS must match the explicit terminal network: {voltages:?}"
+    );
+    assert!(
+        (voltages[1] - voltages[0]).abs() > 0.1
+            && (voltages[3] - voltages[0]).abs() > 0.1
+            && (voltages[7] - voltages[0]).abs() > 0.1
+            && voltages[4] < 3.3,
+        "PJF RD, RS, and their combination change the load line and expose the source drop: {voltages:?}"
+    );
+
+    for (channel, volts) in [
+        (0, NTC_V),
+        (1, diode_v),
+        (2, voltages[0]),
+        (3, voltages[1]),
+        (4, voltages[2]),
+        (5, voltages[3]),
+        (6, voltages[4]),
+        (7, voltages[5]),
+        (8, voltages[6]),
+        (9, voltages[7]),
+        (10, voltages[8]),
+        (11, voltages[9]),
+        (12, voltages[10]),
     ] {
         let expected = expected_adc_count(volts);
         assert_eq!(
