@@ -2300,14 +2300,14 @@ fn nrf5340dk_bjt_itf_temperature_law_reaches_saadc_during_transit_charge() {
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
     let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
     let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
-    configure_saadc_channels(&mut bus, 6);
+    configure_saadc_channels(&mut bus, 8);
     let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
         .expect("build mixed-signal session")
-        .expect("profile contains NTC, diode, and four generic BJT transit branches");
+        .expect("profile contains NTC, diode, and six generic BJT transit branches");
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "generic netlists must resolve to SAADC AIN0 through AIN5"
+        "generic netlists must resolve to SAADC AIN0 through AIN7"
     );
     session
         .set_signal_number("ui.ntc.temperature_c", 25.0)
@@ -2319,10 +2319,12 @@ fn nrf5340dk_bjt_itf_temperature_law_reaches_saadc_during_transit_charge() {
     const DELTA_C: f64 = 80.0 - 27.0;
     const ITF_NOMINAL_A: f64 = 2e-6;
     const TITF1_PER_C: f64 = -8e-3;
-    const TITF2_PER_C2: f64 = 0.0;
-    let itf_hot_a =
+    const TITF2_PER_C2: f64 = 200e-6;
+    let itf_first_order_a = ITF_NOMINAL_A * (1.0 + TITF1_PER_C * DELTA_C);
+    let itf_quadratic_a =
         ITF_NOMINAL_A * (1.0 + TITF1_PER_C * DELTA_C + TITF2_PER_C2 * DELTA_C * DELTA_C);
-    assert!((itf_hot_a - 1.152e-6).abs() < 1e-18);
+    assert!((itf_first_order_a - 1.152e-6).abs() < 1e-18);
+    assert!((itf_quadratic_a - 2.2756e-6).abs() < 1e-18);
 
     let ntc_v = 1.65;
     let diode_v = diode_load_line_voltage();
@@ -2332,11 +2334,11 @@ fn nrf5340dk_bjt_itf_temperature_law_reaches_saadc_during_transit_charge() {
         let (steps, errors) = session
             .advance_to(cycles, &mut bus)
             .expect("initialize NTC, diode and matched BJT branches at zero drive");
-        let expected_steps = if boundary == 99 { 6 } else { 4 };
+        let expected_steps = if boundary == 99 { 8 } else { 6 };
         assert_eq!(
             steps.len(),
             expected_steps,
-            "the four 10 ns BJT branches and 1 us generic routes advance at their own periods"
+            "the six 10 ns BJT branches and 1 us generic routes advance at their own periods"
         );
         assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
     }
@@ -2351,11 +2353,11 @@ fn nrf5340dk_bjt_itf_temperature_law_reaches_saadc_during_transit_charge() {
         let (steps, errors) = session
             .advance_to(cycles, &mut bus)
             .expect("solve and route NTC, diode and BJT transit-charge branches");
-        let expected_steps = if step % 100 == 99 { 6 } else { 4 };
+        let expected_steps = if step % 100 == 99 { 8 } else { 6 };
         assert_eq!(
             steps.len(),
             expected_steps,
-            "BJT branches solve each 10 ns step; NTC and diode refresh each microsecond"
+            "six BJT branches solve each 10 ns step; NTC and diode refresh each microsecond"
         );
         assert!(
             errors.is_empty(),
@@ -2377,6 +2379,8 @@ fn nrf5340dk_bjt_itf_temperature_law_reaches_saadc_during_transit_charge() {
             voltage(&session, "adc.saadc.3_volts"),
             voltage(&session, "adc.saadc.4_volts"),
             voltage(&session, "adc.saadc.5_volts"),
+            voltage(&session, "adc.saadc.6_volts"),
+            voltage(&session, "adc.saadc.7_volts"),
         ];
         if step == 0 {
             assert!(
@@ -2395,6 +2399,14 @@ fn nrf5340dk_bjt_itf_temperature_law_reaches_saadc_during_transit_charge() {
                 actual[3] > actual[2] + 1e-3,
                 "ITF=0 removes current suppression and changes the transient: {actual:?}"
             );
+            assert!(
+                (actual[4] - actual[5]).abs() < 1e-8,
+                "quadratic TITF branch must match its explicit hot-ITF equivalent: {actual:?}"
+            );
+            assert!(
+                actual[0] > actual[4] + 1e-3,
+                "TITF2 must change transit charge from the first-order TITF1 result: {actual:?}"
+            );
             first_voltages = Some(actual);
         }
         if step == 999 {
@@ -2402,7 +2414,7 @@ fn nrf5340dk_bjt_itf_temperature_law_reaches_saadc_during_transit_charge() {
         }
 
         if step == 0 || step == 999 {
-            let codes = scan_saadc_channels::<6>(&mut bus);
+            let codes = scan_saadc_channels::<8>(&mut bus);
             for (channel, voltage_v) in [
                 (0, routed_ntc_v),
                 (1, routed_diode_v),
@@ -2410,11 +2422,19 @@ fn nrf5340dk_bjt_itf_temperature_law_reaches_saadc_during_transit_charge() {
                 (3, actual[1]),
                 (4, actual[2]),
                 (5, actual[3]),
+                (6, actual[4]),
+                (7, actual[5]),
             ] {
                 assert_eq!(
                     codes[channel],
                     expected_saadc_code(voltage_v),
                     "SAADC AIN{channel} converts its routed solved voltage at step {step}"
+                );
+            }
+            if step == 0 {
+                assert_ne!(
+                    codes[2], codes[6],
+                    "TITF2 must change the firmware-visible SAADC code from the first-order TITF1 result"
                 );
             }
         }
@@ -2426,6 +2446,8 @@ fn nrf5340dk_bjt_itf_temperature_law_reaches_saadc_during_transit_charge() {
         ("TITF", settled[0]),
         ("explicit hot ITF", settled[1]),
         ("ITF=0", settled[3]),
+        ("quadratic TITF", settled[4]),
+        ("explicit hot quadratic ITF", settled[5]),
     ] {
         assert!(
             (voltage_v - settled[2]).abs() < 1e-3,
