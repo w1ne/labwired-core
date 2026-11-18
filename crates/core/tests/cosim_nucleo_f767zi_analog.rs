@@ -2941,3 +2941,126 @@ fn nucleo_f767zi_mosfet_gate_bulk_overlap_charge_reaches_adc1_with_ntc_and_diode
         previous_bulk_v = bulk_v;
     }
 }
+
+#[test]
+fn nucleo_f767zi_mosfet_gate_drain_overlap_charge_reaches_adc1_with_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let cgdo =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-mosfet-cgdo-adc.yaml"))
+            .expect("load matched generic MOSFET CGDO and control branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(cgdo.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA4", 4), ("PA5", 5)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries an NTC, diode, and matched MOSFET overlap branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "NTC, diode, and MOSFET drain branches must route to ADC1 channels 0, 1, 4, and 5"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.mosfet_cgdo.gate_v", 0.0)
+        .expect("initialize the matched NMOS gate drives");
+
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC, diode, and MOSFET branches before the gate step");
+    assert_eq!(initial_steps.len(), 4, "all four analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert!(signal_voltage(&session, "board.analog.pa4_volts").abs() < 1e-12);
+    assert!(signal_voltage(&session, "board.analog.pa5_volts").abs() < 1e-12);
+
+    session
+        .set_signal_number("ui.mosfet_cgdo.gate_v", 3.3)
+        .expect("step the generic NMOS gate");
+
+    // CGDO=10 uF/m times W=100 um gives 1 nF. With a 1 kOhm drain
+    // resistor and a 1 us backward-Euler step, CGDO couples half the 3.3 V
+    // gate step to the drain, then the transient halves on each held step.
+    let mut expected_drain_v = 1.65;
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the MOSFET gate-drain overlap transient");
+        assert_eq!(
+            steps.len(),
+            4,
+            "all four analog branches solve at each step"
+        );
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let control_v = signal_voltage(&session, "board.analog.pa4_volts");
+        let charged_v = signal_voltage(&session, "board.analog.pa5_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated Beta NTC remains isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode remains at its DC load line"
+        );
+        assert!(
+            control_v.abs() < 1e-12,
+            "zero-CGDO matched control stays at ground"
+        );
+        assert!(
+            (charged_v - expected_drain_v).abs() < 2e-8,
+            "CGDO RC recurrence at step {step}: expected {expected_drain_v} V, got {charged_v} V"
+        );
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (4, control_v), (5, charged_v)] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds ADC1_IN{channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion reports the routed voltage"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 6),
+            u16::MAX,
+            "neighboring ADC1_IN6 remains undriven"
+        );
+        if step == 0 {
+            assert_eq!(
+                adc_channel_count(&mut bus, 5),
+                2047,
+                "the first CGDO transient reaches PA5/ADC1_IN5 at half scale"
+            );
+        }
+        expected_drain_v *= 0.5;
+    }
+
+    assert!(
+        signal_voltage(&session, "board.analog.pa5_volts") < 1e-3,
+        "CGDO changes the transient but not the settled DC operating point"
+    );
+}
