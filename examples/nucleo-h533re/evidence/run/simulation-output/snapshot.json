@@ -6,21 +6,21 @@
       1107427328,
       32,
       2097152,
-      7950,
-      0,
-      0,
-      0,
-      537149424,
-      0,
-      0,
-      0,
-      0,
+      6700,
+      671088640,
+      1073763352,
       0,
       537149424,
-      134220883,
-      134220768
+      0,
+      0,
+      0,
+      0,
+      134220619,
+      537149424,
+      100000,
+      134220438
     ],
-    "pc": 134220768,
+    "pc": 134220438,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 200000,
-  "cycles": 200000,
-  "instructions": 200000,
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 200000
+      "value": 400000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 200000
+      "value": 400000
     }
   },
   "limits": {
-    "max_steps": 200000,
+    "max_steps": 400000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,
@@ -59,10 +59,10 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "41cef924bc670dd5b6554c61d2e5d67ee2a2df809db206463c4d229b1fc89877",
+  "firmware_hash": "c1d9ad5d0490a07c767147f87194e2862797e919153248684614bb74c12cefb1",
   "config": {
     "firmware": "examples/nucleo-h533re/../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-h533re-smoke",
-    "system": "examples/nucleo-h533re/../../configs/systems/nucleo-h533re.yaml",
+    "system": "examples/nucleo-h533re/../../configs/systems/nucleo-h533re-bme280.yaml",
     "script": "examples/nucleo-h533re/io-smoke.yaml"
   }
 }

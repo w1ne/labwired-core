@@ -65,12 +65,13 @@ jobs:
             target: thumbv7em-none-eabi
             script: examples/nucleo-h723zg/io-smoke.yaml
             system: configs/systems/nucleo-h723zg.yaml
-          # Demand group #4/#4: active H533RE Nucleo with USART2 VCP + LD2.
+          # Demand group #4/#4: active H533RE Nucleo with USART2 VCP, LD2,
+          # and BME280 CHIP_ID over its Arduino-header I2C1 route.
           - id: nucleo-h533re
             crate: firmware-nucleo-h533re-smoke
             target: thumbv8m.main-none-eabi
             script: examples/nucleo-h533re/io-smoke.yaml
-            system: configs/systems/nucleo-h533re.yaml
+            system: configs/systems/nucleo-h533re-bme280.yaml
           - id: stm32u575-nucleo
             crate: firmware-stm32u575-demo
             target: thumbv8m.main-none-eabi
