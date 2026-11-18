@@ -666,6 +666,13 @@ impl PeripheralKit for LazyLock<DeclarativeAnalogKit> {
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
         LazyLock::force(self).attach(ctx)
     }
+
+    fn build_analog_source(
+        &self,
+        channel: u8,
+    ) -> Result<Option<Box<dyn crate::bus::sim_inputs::AnalogSource>>> {
+        Ok(Some(Box::new(LazyLock::force(self).build(channel)?)))
+    }
 }
 
 /// Sharp GP2Y0A21YK0F IR distance sensor (declarative `gp2y0a21.yaml`) — the

@@ -1,0 +1,55 @@
+{
+  "source": {
+    "repository": "HeyPCB/esp32-sensors-1",
+    "revision": "57a2122a19ac1aa9c092e43fb5b123c461508752",
+    "asset": "boards/ldr/kicad/esp32_ldr",
+    "title": "HeyPCB ESP32-S3 LDR - GL5528 photoresistor light sensor",
+    "board_revision": "A",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "files": {
+      "schematic": { "path": "boards/ldr/kicad/esp32_ldr.kicad_sch", "git_blob": "64667760dad1369a130b8935718b7a262d746d66" },
+      "pcb": { "path": "boards/ldr/kicad/esp32_ldr.kicad_pcb", "git_blob": "54b05837a3e254b6a424b2ea2eb97a4b8318e578" },
+      "board_json": { "path": "boards/ldr/board.json", "git_blob": "409e43b9a6afe61c082635c30461e433e8d39772" },
+      "board_readme": { "path": "boards/ldr/README.md", "git_blob": "e41508ce5052097c2e6ab1a11ba6b31a1d37cbd6" },
+      "license": { "path": "LICENSE", "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1" }
+    },
+    "fabrication_status": "source README says not fabricated, assembled, or powered",
+    "original_board_firmware": "none found for this board in the pinned source"
+  },
+  "source_board_identity": {
+    "mcu_ref": "U3",
+    "mcu_source_part": "ESP32-S3-WROOM-1-N16R8",
+    "sensor_ref": "U4",
+    "sensor_source_part": "GL5528(10-20)",
+    "user_led_ref": "D1",
+    "user_led_source_value": "Blue (IO48)",
+    "size_mm": [30, 48],
+    "layers": 4,
+    "parts": 22,
+    "nets": 13
+  },
+  "source_grounded_behavior_slice": {
+    "components": [
+      { "ref": "U3", "catalog_type": "esp32-s3-devkitc-1-n16r8", "source_part": "ESP32-S3-WROOM-1-N16R8" },
+      { "ref": "U4", "catalog_type": "ldr", "source_part": "GL5528(10-20)" },
+      { "ref": "D1", "catalog_type": "led", "source_part": "Blue (IO48)" }
+    ],
+    "source_connections": [
+      { "net": "SNS_AN1", "endpoints": ["U3.GPIO1", "U4.2", "R6.1", "C7.1"], "evidence": ["pinned schematic", "board.json sensor OUT to SNS_AN1", "README says SNS_AN1 is on IO1"] },
+      { "net": "IO48", "endpoints": ["U3.GPIO48", "R4.1"], "evidence": ["pinned schematic", "board.json user LED SIG to IO48"] },
+      { "net": "D1 anode path", "endpoints": ["R4.2", "D1.A"], "evidence": ["pinned schematic"] }
+    ],
+    "observable_scope": "static GL5528 divider voltage and D1 digital logic state; no optical or physical hardware observation"
+  },
+  "runtime_bindings": {
+    "manifest": "system.yaml",
+    "sensor_model": { "id": "source-u4-gl5528", "adapter": "behavior", "config_device_type": "ldr", "input": "environment.lux", "output": "source.U3.GPIO1", "output_unit": "mV" },
+    "led_model": { "id": "source-d1-user-led", "adapter": "behavior", "input": "source.U3.GPIO48", "output": "source.D1.logic_state", "behavior_primitive": "gpio_device" },
+    "firmware_ports": { "lux_write": "lux", "sensor_read": "sensor_mv", "user_led_write": "user_led_drive", "led_state_read": "user_led_state" }
+  },
+  "catalog_model_gaps": [
+    "The existing ldr kit uses a typical 10 kohm-at-10-lux power-law model; it does not encode the GL5528 part's manufacturing spread.",
+    "The source's C7 100 nF smoothing capacitor and analog transient behavior are omitted by the static analog_source model.",
+    "The generic led model exposes logic state only; LED current, optical output, and the complete board circuit are not simulated."
+  ]
+}

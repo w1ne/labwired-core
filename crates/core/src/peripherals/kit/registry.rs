@@ -223,6 +223,22 @@ pub fn kits() -> &'static [&'static dyn PeripheralKit] {
     &ALL_KITS
 }
 
+/// Build a data-driven analog source through the existing PeripheralKit
+/// registry. Co-simulation callers name the same canonical `device_type` used
+/// by system manifests; this does not create a second part registry.
+pub fn build_analog_source(
+    device_type: &str,
+    channel: u8,
+) -> anyhow::Result<Box<dyn crate::bus::sim_inputs::AnalogSource>> {
+    let kit = kits()
+        .iter()
+        .find(|kit| kit.metadata().device_type == device_type)
+        .ok_or_else(|| anyhow::anyhow!("unknown analog-source device type '{device_type}'"))?;
+    kit.build_analog_source(channel)?.ok_or_else(|| {
+        anyhow::anyhow!("device type '{device_type}' is not a registered analog_source")
+    })
+}
+
 /// Legacy `type:` spellings that predate the canonical `device_type` and are
 /// still accepted. These used to be understood only by the ESP32-classic attach
 /// arm, which meant the same manifest resolved on one chip and was skipped as

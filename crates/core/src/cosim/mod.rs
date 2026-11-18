@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+mod analog_source;
 mod behavior;
 mod external_process;
 mod registry;
@@ -128,7 +129,7 @@ pub trait CosimAdapter: Send {
     /// Unit of a numeric input, when the adapter knows it. Values are passed
     /// without implicit conversion; Boolean voltage drives use their explicit
     /// adapter Vdd conversion instead.
-    fn input_unit(&self, name: &str) -> Option<&'static str> {
+    fn input_unit(&self, name: &str) -> Option<&str> {
         let _ = name;
         None
     }

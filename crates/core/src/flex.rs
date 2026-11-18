@@ -188,6 +188,13 @@ impl FlexRuntime {
                 }
             }
         }
+        for model in &manifest.cosim_models {
+            if model.adapter == CosimAdapter::Behavior && model.config.contains_key("device_type") {
+                for signal in model.outputs.values() {
+                    units.insert(signal.clone(), "mV".to_owned());
+                }
+            }
+        }
         for port in &manifest.ports {
             if port.access == FlexPortAccess::Read
                 && port.kind == FlexPortKind::Number

@@ -10,6 +10,11 @@ const POMODORO_IMPORT: &str =
     include_str!("../tests/fixtures/flex-heypcb-pomodoro/mcp-import.json");
 const POMODORO_SOURCE_MAP: &str =
     include_str!("../tests/fixtures/flex-heypcb-pomodoro/source-map.json");
+const HEYPCB_LDR_SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-ldr/system.yaml");
+const HEYPCB_LDR_IMPORT: &str =
+    include_str!("../tests/fixtures/flex-heypcb-esp32-ldr/mcp-import.json");
+const HEYPCB_LDR_SOURCE_MAP: &str =
+    include_str!("../tests/fixtures/flex-heypcb-esp32-ldr/source-map.json");
 const GPIO_REUSE_POMODORO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/system.yaml");
 const GPIO_REUSE_UNO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/arduino-uno.yaml");
 
@@ -475,6 +480,215 @@ fn pomodoro_digital_evidence(runtime: &mut FlexRuntime) -> serde_json::Value {
             "value": value,
         })).collect::<Vec<_>>(),
     })
+}
+
+fn heypcb_ldr_reference(runtime: &mut FlexRuntime, lux: f64) -> serde_json::Value {
+    let lux_port = runtime.port_id("lux").unwrap();
+    let sensor_port = runtime.port_id("sensor_mv").unwrap();
+    let led_drive = runtime.port_id("user_led_drive").unwrap();
+    let led_state = runtime.port_id("user_led_state").unwrap();
+
+    runtime.write(lux_port, lux).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    let sensor_mv = runtime.read(sensor_port).unwrap();
+    let adc_code = (sensor_mv * 4095.0 / 3300.0) as u32;
+    let expected_led = adc_code >= 2048;
+    runtime
+        .write(led_drive, if expected_led { 1.0 } else { 0.0 })
+        .unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    let asserted = runtime.read(led_state).unwrap() == f64::from(u8::from(expected_led));
+    let cleared = if expected_led {
+        runtime.write(led_drive, 0.0).unwrap();
+        runtime.advance_ns(1_000).unwrap();
+        runtime.read(led_state).unwrap() == 0.0
+    } else {
+        asserted
+    };
+
+    serde_json::json!({
+        "result": if asserted && cleared { adc_code } else { u32::MAX },
+        "lux": lux,
+        "sensor_mv": sensor_mv,
+        "adc_code": adc_code,
+        "led_final": runtime.read(led_state).unwrap(),
+        "time_ns": runtime.time_ns(),
+        "trace": pomodoro_digital_evidence(runtime),
+    })
+}
+
+#[test]
+fn flex_heypcb_ldr_runtime_ports_match_the_pinned_generic_import() {
+    let imported: serde_json::Value = serde_json::from_str(HEYPCB_LDR_IMPORT).unwrap();
+    let source_map: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+    let source = &source_map["source"];
+    assert_eq!(source["repository"], "HeyPCB/esp32-sensors-1");
+    assert_eq!(
+        source["revision"],
+        "57a2122a19ac1aa9c092e43fb5b123c461508752"
+    );
+    assert_eq!(source["asset"], "boards/ldr/kicad/esp32_ldr");
+    assert_eq!(source["license_spdx"], "CERN-OHL-S-2.0");
+    assert_eq!(
+        source["title"],
+        "HeyPCB ESP32-S3 LDR - GL5528 photoresistor light sensor"
+    );
+    assert_eq!(source["board_revision"], "A");
+    for artifact in ["schematic", "pcb", "license"] {
+        assert_eq!(
+            imported["source"]["files"][artifact], source["files"][artifact],
+            "live MCP import and source map must pin the same {artifact} blob"
+        );
+    }
+    assert_eq!(
+        source["files"]["schematic"]["git_blob"],
+        "64667760dad1369a130b8935718b7a262d746d66"
+    );
+    assert_eq!(
+        source["files"]["pcb"]["git_blob"],
+        "54b05837a3e254b6a424b2ea2eb97a4b8318e578"
+    );
+    assert_eq!(
+        source["files"]["board_json"]["git_blob"],
+        "409e43b9a6afe61c082635c30461e433e8d39772"
+    );
+    assert_eq!(
+        source["files"]["license"]["git_blob"],
+        "0f1092207caa645ff426e0cc40b7eaad69caecb1"
+    );
+
+    let schematic = &imported["generic_import"]["schematic"];
+    assert_eq!(schematic["mode"], "twin_ready");
+    assert_eq!(schematic["mapped"], 19);
+    assert_eq!(schematic["ignored"], 1);
+    assert_eq!(schematic["dropped"], 2);
+    assert_eq!(schematic["diagram_wire_edges"], 29);
+    let mapping = schematic["selected_mapping"].as_array().unwrap();
+    assert_eq!(
+        mapping.iter().find(|item| item["ref"] == "U4").unwrap()["catalog_type"],
+        "resistor",
+        "the fixture must expose the generic import's LDR mapping gap"
+    );
+    let imported_edges = schematic["relevant_import_wires"].as_array().unwrap();
+    for edge in [
+        serde_json::json!(["C7.1", "U3.GPIO1"]),
+        serde_json::json!(["C7.1", "U4.2"]),
+        serde_json::json!(["C7.1", "R6.1"]),
+        serde_json::json!(["R4.1", "U3.GPIO48"]),
+        serde_json::json!(["D1.A", "R4.2"]),
+    ] {
+        assert!(
+            imported_edges.contains(&edge),
+            "import snapshot omits {edge}"
+        );
+    }
+    assert_eq!(imported["generic_import"]["pcb"]["mapped"], 17);
+    assert_eq!(imported["generic_import"]["pcb"]["ignored"], 1);
+    assert_eq!(imported["generic_import"]["pcb"]["dropped"], 4);
+    assert!(source["original_board_firmware"]
+        .as_str()
+        .unwrap()
+        .contains("none"));
+
+    let board_identity = &source_map["source_board_identity"];
+    assert_eq!(board_identity["mcu_ref"], "U3");
+    assert_eq!(board_identity["sensor_ref"], "U4");
+    assert_eq!(board_identity["user_led_ref"], "D1");
+    let source_connections = source_map["source_grounded_behavior_slice"]["source_connections"]
+        .as_array()
+        .unwrap();
+    let sns_net = source_connections
+        .iter()
+        .find(|connection| connection["net"] == "SNS_AN1")
+        .expect("pinned source map's sensor net");
+    assert_eq!(
+        sns_net["endpoints"],
+        serde_json::json!(["U3.GPIO1", "U4.2", "R6.1", "C7.1"])
+    );
+
+    let runtime_map = &source_map["runtime_bindings"];
+    let yaml: serde_yaml::Value = serde_yaml::from_str(HEYPCB_LDR_SYSTEM).unwrap();
+    let ports = yaml["ports"].as_sequence().unwrap();
+    for (name, expected_signal, access, kind) in [
+        ("lux", "environment.lux", "write", "number"),
+        ("sensor_mv", "source.U3.GPIO1", "read", "number"),
+        ("user_led_drive", "source.U3.GPIO48", "write", "bool"),
+        ("user_led_state", "source.D1.logic_state", "read", "bool"),
+    ] {
+        let port = ports
+            .iter()
+            .find(|port| port["name"].as_str() == Some(name))
+            .unwrap_or_else(|| panic!("missing Flex port {name}"));
+        assert_eq!(port["signal"].as_str(), Some(expected_signal));
+        assert_eq!(port["access"].as_str(), Some(access));
+        assert_eq!(port["kind"].as_str(), Some(kind));
+    }
+    assert_eq!(runtime_map["sensor_model"]["config_device_type"], "ldr");
+    assert_eq!(runtime_map["sensor_model"]["output"], "source.U3.GPIO1");
+    assert_eq!(runtime_map["led_model"]["input"], "source.U3.GPIO48");
+    assert_eq!(runtime_map["led_model"]["output"], "source.D1.logic_state");
+
+    let mut runtime =
+        FlexRuntime::from_yaml(HEYPCB_LDR_SYSTEM).expect("load LDR Flex behavior slice");
+    let lux = runtime.port_id("lux").unwrap();
+    let sensor = runtime.port_id("sensor_mv").unwrap();
+    let led_drive = runtime.port_id("user_led_drive").unwrap();
+    let led_state = runtime.port_id("user_led_state").unwrap();
+    assert!(runtime.read(sensor).is_ok());
+    assert!(runtime.write(led_state, 1.0).is_err());
+    assert!(runtime.read(led_drive).is_err());
+    assert!(runtime.write(lux, 100_001.0).is_ok());
+    assert!(
+        runtime.advance_ns(1_000).is_err(),
+        "the LDR catalog model must enforce its 100000 lx input range"
+    );
+}
+
+#[test]
+fn flex_heypcb_ldr_portable_behavior_has_native_reference_and_dark_negative_control() {
+    let mut positive = FlexRuntime::from_yaml(HEYPCB_LDR_SYSTEM).expect("LDR Flex manifest");
+    let positive_evidence = heypcb_ldr_reference(&mut positive, 100_000.0);
+    assert_eq!(positive_evidence["result"], positive_evidence["adc_code"]);
+    assert!(positive_evidence["adc_code"].as_u64().unwrap() >= 4080);
+    assert_eq!(positive_evidence["led_final"], 0.0);
+    assert_eq!(positive.time_ns(), 3_000);
+    assert_eq!(positive_evidence["trace"]["dropped"], 0);
+    assert_eq!(
+        positive_evidence["trace"]["edges"]
+            .as_array()
+            .unwrap()
+            .len(),
+        4
+    );
+
+    let mut negative = FlexRuntime::from_yaml(HEYPCB_LDR_SYSTEM).expect("LDR Flex manifest");
+    let negative_evidence = heypcb_ldr_reference(&mut negative, 0.0);
+    assert_eq!(negative_evidence["result"], 0);
+    assert_eq!(negative_evidence["sensor_mv"], 0.0);
+    assert_eq!(negative_evidence["led_final"], 0.0);
+    assert_eq!(negative.time_ns(), 2_000);
+    assert!(negative_evidence["trace"]["edges"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+
+    let measured =
+        serde_json::json!({ "positive": positive_evidence, "negative": negative_evidence });
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/flex-heypcb-esp32-ldr/native.json");
+    if std::env::var_os("LABWIRED_REGEN_FLEX_HEYPCB_LDR").is_some() {
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&measured).unwrap() + "\n",
+        )
+        .unwrap();
+    }
+    let expected: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        measured, expected,
+        "source-mapped LDR model observations changed"
+    );
 }
 
 #[test]

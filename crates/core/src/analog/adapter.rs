@@ -877,7 +877,7 @@ impl CosimAdapter for AnalogCosimAdapter {
         })
     }
 
-    fn input_unit(&self, name: &str) -> Option<&'static str> {
+    fn input_unit(&self, name: &str) -> Option<&str> {
         match self.inputs.get(name)? {
             InputTarget::VoltageSource(_) => Some("V"),
             InputTarget::CurrentSource(_) => Some("A"),

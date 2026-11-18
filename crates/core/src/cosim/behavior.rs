@@ -35,6 +35,9 @@ use crate::{SimResult, SimulationError};
 /// Construct one sampled behavior block. Its input/output map keys are local
 /// aliases; CosimRunner owns the mapping to shared signal paths.
 pub fn build_behavior_adapter(config: &CosimModelConfig) -> SimResult<Box<dyn CosimAdapter>> {
+    if config.config.contains_key("device_type") {
+        return super::analog_source::build_analog_source_adapter(config);
+    }
     BehaviorAdapter::from_config(config)
         .map(|adapter| Box::new(adapter) as Box<dyn CosimAdapter>)
         .map_err(|error| {

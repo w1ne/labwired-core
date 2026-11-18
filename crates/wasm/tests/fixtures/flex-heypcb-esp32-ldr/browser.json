@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-18",
+  "status": "passed",
+  "runtime": "compiled-wasm",
+  "firmware_bytes": 379,
+  "firmware_sha256": "366f562ab8a19449a479e3b5e4b2d783f108fdaceb6e61948a0f6b559c314294",
+  "cpu_emulation": false,
+  "source_board": "HeyPCB ESP32-S3 LDR / GL5528 / ESP32-S3-WROOM-1-N16R8",
+  "observable": "source.U3.GPIO1 returns 3294 mV / ADC 4087 at 100000 lx; source.U3.GPIO48 drives D1 on then off",
+  "positive_adc_code": 4087,
+  "positive_led_edges": 4,
+  "negative_adc_code": 0,
+  "negative_led_edges": 0,
+  "native_model_equality": true,
+  "checks": [
+    "portable-firmware-execution",
+    "native-model-equality",
+    "pinned-source-mapping",
+    "bright-output",
+    "dark-negative-control"
+  ],
+  "browser": "156.0.8078.79",
+  "playwright": "1.58.2",
+  "measured_wall_seconds": 6.153
+}
