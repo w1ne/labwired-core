@@ -371,6 +371,27 @@ impl I2cDevice for TracingI2cDevice {
     /// Forwarded: every attached slave is trace-wrapped, so a wrapper that
     /// fell through to the trait default would leave every servo wired to a
     /// PWM controller output without a pulse.
+    fn i2c_component_id(&self) -> Option<&str> {
+        self.inner.i2c_component_id()
+    }
+    fn reset_pwm_controller(&mut self) {
+        self.inner.reset_pwm_controller();
+    }
+    fn clear_servo_pwm_observers(&self) {
+        self.inner.clear_servo_pwm_observers();
+    }
+    fn subscribe_servo_pwm_output(
+        &self,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        self.inner.subscribe_servo_pwm_output(observer)
+    }
+    fn subscribe_pwm_output(
+        &self,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        self.inner.subscribe_pwm_output(observer)
+    }
     fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
         self.inner.pwm_channel_pulse_us(channel)
     }

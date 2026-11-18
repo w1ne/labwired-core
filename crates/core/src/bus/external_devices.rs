@@ -114,6 +114,7 @@ impl SystemBus {
             }
         }
         self.recompute_walk_deletable();
+        self.bind_direct_pwm_servos();
         Ok(())
     }
 }

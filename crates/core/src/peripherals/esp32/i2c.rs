@@ -167,6 +167,7 @@ pub struct Esp32I2c {
     /// slave. STOP or natural completion clears them back to the reset shape.
     active_slave: Option<usize>,
     expects_addr: bool,
+    rstart_notified: Option<usize>,
     /// Interrupt-matrix source this instance asserts (49 for I2C0).
     intr_source_id: u32,
     /// Round-trip backing for timing / config registers the engine ignores.
@@ -235,6 +236,7 @@ impl Esp32I2c {
             core: EspI2cCore::new(),
             active_slave: None,
             expects_addr: true,
+            rstart_notified: None,
             intr_source_id: I2C0_INTR_SOURCE_ID,
             wire: EspI2cWire::new(),
             other: BTreeMap::new(),
@@ -313,6 +315,20 @@ impl Esp32I2c {
     }
 
     /// Borrow attached slaves (browser sensor readback / inspect).
+    pub(crate) fn direct_pwm_pulse_us(&self, address: u8, channel: u8) -> Option<f64> {
+        self.core.direct_pwm_pulse_us(address, channel)
+    }
+    pub(crate) fn clear_pwm_subscribers(&self) {
+        self.core.clear_pwm_subscribers();
+    }
+    pub(crate) fn subscribe_direct_pwm_output(
+        &self,
+        address: u8,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        self.core.subscribe_direct_pwm_output(address, observer)
+    }
+
     pub fn attached_slaves(&self) -> &[Box<dyn I2cDevice>] {
         self.core.slaves()
     }
@@ -880,6 +896,7 @@ impl Esp32I2c {
         // WRITE/READ resumes the in-flight transfer instead of re-addressing.
         let mut active = self.active_slave;
         let mut expects_addr = self.expects_addr;
+        let mut rstart_notified = self.rstart_notified;
         let mut last_op_was_end = false;
 
         // Reset ACK_REC and the TX-FIFO read pointer at the start of a run.
@@ -892,6 +909,7 @@ impl Esp32I2c {
             let byte_num = (word & 0xFF) as usize;
             match opcode {
                 OP_RSTART => {
+                    rstart_notified = active;
                     if let Some(slave_idx) = active {
                         self.core.slave_mut(slave_idx).start();
                     }
@@ -911,7 +929,10 @@ impl Esp32I2c {
                         let addr_byte = self.slave_addr_byte();
                         self.wire.push(addr_byte, active.is_some());
                         if let Some(slave_idx) = active {
-                            self.core.slave_mut(slave_idx).start();
+                            if rstart_notified != Some(slave_idx) {
+                                self.core.slave_mut(slave_idx).start();
+                            }
+                            rstart_notified = None;
                             self.sr |= SR_ACK_REC;
                         } else {
                             self.int_raw |= INT_NACK;
@@ -936,7 +957,10 @@ impl Esp32I2c {
                                 let addr_byte = self.slave_addr_byte();
                                 self.wire.push(addr_byte, active.is_some());
                                 if let Some(slave_idx) = active {
-                                    self.core.slave_mut(slave_idx).start();
+                                    if rstart_notified != Some(slave_idx) {
+                                        self.core.slave_mut(slave_idx).start();
+                                    }
+                                    rstart_notified = None;
                                     self.sr |= SR_ACK_REC;
                                     // First FIFO byte is data when SLAVE_ADDR holds target.
                                     self.core.slave_mut(slave_idx).write(b);
@@ -946,6 +970,14 @@ impl Esp32I2c {
                                 }
                                 self.int_raw |= INT_NACK;
                             } else {
+                                // A newly selected slave must see START before its
+                                // first data byte, as it does on the S3 path.
+                                if let Some(slave_idx) = active {
+                                    if rstart_notified != Some(slave_idx) {
+                                        self.core.slave_mut(slave_idx).start();
+                                    }
+                                }
+                                rstart_notified = None;
                                 self.sr |= SR_ACK_REC;
                             }
                             expects_addr = false;
@@ -1002,6 +1034,7 @@ impl Esp32I2c {
         if last_op_was_end {
             self.active_slave = active;
             self.expects_addr = expects_addr;
+            self.rstart_notified = rstart_notified;
             self.int_raw |= INT_END_DETECT;
         } else {
             // STOP (or a list that ran out) completes the transaction: NOW the
@@ -1012,6 +1045,7 @@ impl Esp32I2c {
             self.wire_flush();
             self.active_slave = None;
             self.expects_addr = true;
+            self.rstart_notified = None;
             self.int_raw |= INT_TRANS_COMPLETE;
         }
     }

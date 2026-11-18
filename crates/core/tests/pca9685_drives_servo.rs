@@ -349,3 +349,28 @@ external_devices:
         servo.pulse_us()
     );
 }
+
+#[test]
+fn pwm_observer_receives_only_committed_powered_output() {
+    use labwired_core::peripherals::components::supply_domain::{GatedI2cDevice, SupplyGate};
+    use std::sync::{Arc, Mutex};
+    let mut gated = GatedI2cDevice::new(Box::new(pca()), SupplyGate::legacy(true));
+    let pulses = Arc::new(Mutex::new(Vec::new()));
+    let out = Arc::clone(&pulses);
+    assert!(gated.subscribe_pwm_output(Arc::new(move |ch, us| {
+        if ch == 0 {
+            out.lock().unwrap().push(us);
+        }
+    })));
+    init_50hz(&mut gated);
+    gated.start();
+    for byte in [0x06, 0, 0, 0x33, 0x01] {
+        gated.write(byte);
+    }
+    assert!(
+        pulses.lock().unwrap().is_empty(),
+        "OCH=0 cannot publish before STOP"
+    );
+    gated.stop();
+    assert!((pulses.lock().unwrap().last().copied().unwrap() - 1498.0).abs() < 1.0);
+}

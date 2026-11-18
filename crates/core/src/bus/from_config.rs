@@ -1587,6 +1587,7 @@ impl SystemBus {
                 .bind_backup_domain_write_enable(flag);
         }
 
+        bus.bind_direct_pwm_servos();
         Ok(bus)
     }
 

@@ -342,7 +342,11 @@ impl<'a> AttachCtx<'a> {
         // asymmetry is load-bearing: the curated labs declare no rails at all.
         let gate = crate::peripherals::components::supply_domain::SupplyGate::from_config(self)?;
         device = Box::new(
-            crate::peripherals::components::supply_domain::GatedI2cDevice::new(device, gate),
+            crate::peripherals::components::supply_domain::GatedI2cDevice::with_attachment_id(
+                device,
+                gate,
+                self.ext.id.clone(),
+            ),
         );
         // Funnel through the single bus choke point, which wraps the device in
         // the shared bus trace before handing it to whichever I²C controller the

@@ -64,6 +64,7 @@ struct Selection {
 pub struct Tca9548a {
     /// 7-bit address decoded from the A2/A1/A0 straps (0x70 … 0x77).
     address: u8,
+    attachment_id: Option<String>,
     /// The one control register. Bit *n* = channel *n* pass-gates closed.
     /// Reset value 0x00 (all channels isolated).
     control: u8,
@@ -80,10 +81,15 @@ impl Tca9548a {
     pub fn new(address: u8) -> Self {
         Self {
             address: TCA9548A_BASE_ADDR + (address & 0x07),
+            attachment_id: None,
             control: 0x00,
             channels: std::array::from_fn(|_| Vec::new()),
             selected: Selection::default(),
         }
+    }
+
+    pub(crate) fn set_attachment_id(&mut self, id: &str) {
+        self.attachment_id = Some(id.to_owned());
     }
 
     /// Switch at the strap-decoded address `0x70 | (a2<<2) | (a1<<1) | a0`.
@@ -184,6 +190,9 @@ impl std::fmt::Debug for Tca9548a {
 }
 
 impl I2cDevice for Tca9548a {
+    fn i2c_component_id(&self) -> Option<&str> {
+        self.attachment_id.as_deref()
+    }
     fn is_i2c_mux(&self) -> bool {
         true
     }

@@ -142,6 +142,10 @@ pub struct F1I2c {
     #[serde(skip)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
     #[serde(skip)]
+    pwm_topology_epoch: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    #[serde(skip)]
+    pwm_legacy_view_escaped: std::sync::atomic::AtomicBool,
+    #[serde(skip)]
     current_target: Option<usize>,
     #[serde(skip)]
     is_reading: bool,
@@ -241,6 +245,8 @@ impl Default for F1I2c {
             state: I2cState::Idle,
             cycles_remaining: 0,
             attached_devices: Vec::new(),
+            pwm_topology_epoch: Default::default(),
+            pwm_legacy_view_escaped: Default::default(),
             current_target: None,
             is_reading: false,
             stop_requested: false,
@@ -872,6 +878,10 @@ pub struct L4I2c {
 
     #[serde(skip)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+    #[serde(skip)]
+    pwm_topology_epoch: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    #[serde(skip)]
+    pwm_legacy_view_escaped: std::sync::atomic::AtomicBool,
     /// Index of the addressed slave for the armed/in-flight transfer (None when
     /// no attached device matches SADD — the tier-1 no-device case).
     #[serde(skip)]
@@ -932,6 +942,8 @@ impl Default for L4I2c {
             nbytes: 0,
             first_tx_loaded: false,
             attached_devices: Vec::new(),
+            pwm_topology_epoch: Default::default(),
+            pwm_legacy_view_escaped: Default::default(),
             current_target: None,
             is_reading: false,
             autoend: false,
@@ -1578,6 +1590,10 @@ pub struct KinetisI2c {
     #[serde(skip)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
     #[serde(skip)]
+    pwm_topology_epoch: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    #[serde(skip)]
+    pwm_legacy_view_escaped: std::sync::atomic::AtomicBool,
+    #[serde(skip)]
     current_target: Option<usize>,
 
     /// Bus-published cycle clock (walk-free plan Part 1). `Some` once the bus
@@ -1616,6 +1632,8 @@ impl Default for KinetisI2c {
             rx_dummy_pending: Cell::new(false),
             is_reading: false,
             attached_devices: Vec::new(),
+            pwm_topology_epoch: Default::default(),
+            pwm_legacy_view_escaped: Default::default(),
             current_target: None,
             clock: None,
             chain_live: false,
@@ -1887,6 +1905,10 @@ pub struct Efr32s2I2c {
     #[serde(skip)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
     #[serde(skip)]
+    pwm_topology_epoch: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    #[serde(skip)]
+    pwm_legacy_view_escaped: std::sync::atomic::AtomicBool,
+    #[serde(skip)]
     current_target: Option<usize>,
 
     /// Bus-published cycle clock, attached by `SystemBus::add_peripheral`.
@@ -1935,6 +1957,8 @@ impl Default for Efr32s2I2c {
             busy: false,
             nacked: false,
             attached_devices: Vec::new(),
+            pwm_topology_epoch: Default::default(),
+            pwm_legacy_view_escaped: Default::default(),
             current_target: None,
         }
     }
@@ -2491,6 +2515,10 @@ impl I2c {
     /// device first; nothing else should attach directly (that would bypass the
     /// universal bus trace).
     pub(crate) fn push_slave(&mut self, device: Box<dyn I2cDevice>) {
+        self.invalidate_pwm_epoch();
+        for cell in self.attached_devices_internal() {
+            cell.borrow().clear_servo_pwm_observers();
+        }
         match self {
             Self::Stm32F1(i) => i.attached_devices.push(RefCell::new(device)),
             Self::Stm32L4(i) => i.attached_devices.push(RefCell::new(device)),
@@ -2499,9 +2527,12 @@ impl I2c {
         }
     }
 
-    /// Drain every attached slave (AVR parks kits on a bus `i2c` controller,
-    /// then moves them onto the CPU TWI model after `from_config`).
+    /// Drain every attached slave.
     pub fn take_slaves(&mut self) -> Vec<Box<dyn I2cDevice>> {
+        self.invalidate_pwm_epoch();
+        for cell in self.attached_devices_internal() {
+            cell.borrow().clear_servo_pwm_observers();
+        }
         let cells = match self {
             Self::Stm32F1(i) => std::mem::take(&mut i.attached_devices),
             Self::Stm32L4(i) => std::mem::take(&mut i.attached_devices),
@@ -2510,15 +2541,125 @@ impl I2c {
         };
         cells.into_iter().map(RefCell::into_inner).collect()
     }
-
-    /// Attached I2C devices (used by config/bus validation + tests).
-    pub fn attached_devices(&self) -> &[RefCell<Box<dyn I2cDevice>>] {
+    fn pwm_epoch(&self) -> &std::sync::Arc<std::sync::atomic::AtomicU64> {
+        match self {
+            Self::Stm32F1(i) => &i.pwm_topology_epoch,
+            Self::Stm32L4(i) => &i.pwm_topology_epoch,
+            Self::Kinetis(i) => &i.pwm_topology_epoch,
+            Self::Efr32s2(i) => &i.pwm_topology_epoch,
+        }
+    }
+    fn legacy_view_flag(&self) -> &std::sync::atomic::AtomicBool {
+        match self {
+            Self::Stm32F1(i) => &i.pwm_legacy_view_escaped,
+            Self::Stm32L4(i) => &i.pwm_legacy_view_escaped,
+            Self::Kinetis(i) => &i.pwm_legacy_view_escaped,
+            Self::Efr32s2(i) => &i.pwm_legacy_view_escaped,
+        }
+    }
+    pub(crate) fn invalidate_pwm_epoch(&self) {
+        let _ = self.pwm_epoch().fetch_update(
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+            |x| Some(x.saturating_add(1)),
+        );
+    }
+    /// Once a mutable-capable legacy view escapes, its lifetime cannot be
+    /// observed. Retain legacy polling for this host until reconstruction.
+    pub fn legacy_view_escaped(&self) -> bool {
+        self.legacy_view_flag()
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+    pub(crate) fn attached_devices_internal(&self) -> &[RefCell<Box<dyn I2cDevice>>] {
         match self {
             Self::Stm32F1(i) => &i.attached_devices,
             Self::Stm32L4(i) => &i.attached_devices,
             Self::Kinetis(i) => &i.attached_devices,
             Self::Efr32s2(i) => &i.attached_devices,
         }
+    }
+    /// Original mutable-capable API. Calling this conservatively moves this
+    /// controller to the pre-existing readback path, since the borrowed cells
+    /// can be mutated later without a host notification.
+    pub fn attached_devices(&self) -> &[RefCell<Box<dyn I2cDevice>>] {
+        self.legacy_view_flag()
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.invalidate_pwm_epoch();
+        self.attached_devices_internal()
+    }
+    /// Read-only device walk which does not expose a replaceable cell.
+    pub fn visit_attached_devices(&self, f: &mut dyn FnMut(&dyn I2cDevice)) {
+        for cell in self.attached_devices_internal() {
+            f(cell.borrow().as_ref());
+        }
+    }
+
+    /// Subscribe only while this controller has a unique, direct source.
+    /// All public mutable slave access and push/take invalidate the binding.
+    pub fn subscribe_direct_pwm_output(
+        &self,
+        address: u8,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        if self.legacy_view_escaped() {
+            return false;
+        }
+        let cells = self.attached_devices_internal();
+        if cells.iter().any(|cell| {
+            let device = cell.borrow();
+            device.is_i2c_mux()
+                && crate::peripherals::device::pwm_mux_may_contend(device.as_ref(), address, 0)
+        }) {
+            return false;
+        }
+        let matching: Vec<_> = cells
+            .iter()
+            .filter(|cell| {
+                let d = cell.borrow();
+                !d.is_i2c_mux() && (d.address() == address || d.claims_address(address))
+            })
+            .collect();
+        let [cell] = matching.as_slice() else {
+            return false;
+        };
+        let epoch = self.pwm_epoch().clone();
+        let generation = epoch.load(std::sync::atomic::Ordering::SeqCst);
+        if generation == u64::MAX {
+            return false;
+        }
+        cell.borrow()
+            .subscribe_servo_pwm_output(std::sync::Arc::new(move |channel, us| {
+                if epoch.load(std::sync::atomic::Ordering::SeqCst) == generation {
+                    observer(channel, us);
+                }
+            }))
+    }
+
+    /// Read an existing pulse only when the source remains unique and direct.
+    pub fn direct_pwm_pulse_us(&self, address: u8, channel: u8) -> Option<f64> {
+        if self.legacy_view_escaped() {
+            return None;
+        }
+        let cells = self.attached_devices_internal();
+        if cells.iter().any(|cell| {
+            let device = cell.borrow();
+            device.is_i2c_mux()
+                && crate::peripherals::device::pwm_mux_may_contend(device.as_ref(), address, 0)
+        }) {
+            return None;
+        }
+        let matching: Vec<_> = cells
+            .iter()
+            .filter(|cell| {
+                let d = cell.borrow();
+                !d.is_i2c_mux() && (d.address() == address || d.claims_address(address))
+            })
+            .collect();
+        let [cell] = matching.as_slice() else {
+            return None;
+        };
+        let value = cell.borrow().pwm_channel_pulse_us(channel);
+        value
     }
 
     /// True when the event scheduler owns this instance's IRQ delivery. All
@@ -2647,7 +2788,7 @@ impl crate::Peripheral for I2c {
     }
 
     fn has_attached_time_devices(&self) -> bool {
-        !self.attached_devices().is_empty()
+        !self.attached_devices_internal().is_empty()
     }
 
     /// Advance every attached slave's data-ready clock. Slaves live behind
@@ -2661,14 +2802,14 @@ impl crate::Peripheral for I2c {
         if us == 0 {
             return;
         }
-        for cell in self.attached_devices() {
+        for cell in self.attached_devices_internal() {
             cell.borrow_mut().advance_time_us(us);
         }
     }
 
     /// Tier 2: collect this controller's attached devices' pin drives.
     fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
-        for cell in self.attached_devices() {
+        for cell in self.attached_devices_internal() {
             crate::peripherals::device::drain_i2c_pin_drives(&mut **cell.borrow_mut(), out);
         }
     }
@@ -2979,7 +3120,7 @@ impl crate::Peripheral for I2c {
         &mut self,
         f: &mut dyn FnMut(&mut dyn crate::sim_input::SimInput) -> bool,
     ) -> bool {
-        for cell in self.attached_devices() {
+        for cell in self.attached_devices_internal() {
             // `for_each_sim_input`, not `as_sim_input_mut`: a container slave
             // (TCA9548A mux) exposes the inputs of the devices behind it, which
             // a single-surface accessor cannot represent.
@@ -2993,7 +3134,7 @@ impl crate::Peripheral for I2c {
     /// Slaves live behind `RefCell` here for the same reason
     /// [`Self::for_each_attached_sim_input`] borrows each cell in turn.
     fn for_each_attached_device(&self, f: &mut dyn FnMut(crate::inspect::AttachedDeviceRef<'_>)) {
-        for cell in self.attached_devices() {
+        for cell in self.attached_devices_internal() {
             crate::inspect::visit_i2c_device(&**cell.borrow(), f);
         }
     }
@@ -3017,7 +3158,7 @@ impl crate::Peripheral for I2c {
     ) -> crate::inspect::PeripheralInspect {
         let mut pi = crate::inspect::default_inspect(self, base, name, opts);
         pi.kind = "i2c".to_string();
-        for dev_cell in self.attached_devices() {
+        for dev_cell in self.attached_devices_internal() {
             let dev = dev_cell.borrow();
             pi.artifacts
                 .extend(crate::inspect::i2c_artifacts(&**dev, opts));

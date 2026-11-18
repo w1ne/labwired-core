@@ -104,14 +104,345 @@ impl SystemBus {
         found
     }
 
+    /// Bind PWM-driven servos to unambiguous direct sources on supported hosts.
+    /// Unsupported controller and mux topologies remain unbound.
+    pub fn bind_direct_pwm_servos(&self) {
+        // Every rebinding replaces earlier topology-qualified subscriptions.
+        for peripheral in &self.peripherals {
+            if let Some(host) = peripheral
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::i2c::I2c>())
+            {
+                for cell in host.attached_devices_internal() {
+                    cell.borrow().clear_servo_pwm_observers();
+                }
+            } else if let Some(host) = peripheral
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32s3::i2c::Esp32s3I2c>())
+            {
+                host.clear_pwm_subscribers();
+            } else if let Some(host) = peripheral
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::i2c::Esp32I2c>())
+            {
+                host.clear_pwm_subscribers();
+            } else if let Some(host) = peripheral
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>())
+            {
+                host.clear_pwm_subscribers();
+            } else if let Some(host) = peripheral
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::nrf52::twim::Nrf52Twim>())
+            {
+                host.clear_pwm_subscribers();
+            } else if let Some(host) = peripheral.dev.as_any().and_then(|a| {
+                a.downcast_ref::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>()
+            }) {
+                host.twim_pwm_host().clear_pwm_subscribers();
+            }
+        }
+        for servo in self.observed_arcs_of::<crate::peripherals::components::servo::Servo>() {
+            let (Some((address, channel)), Some(bus_name)) =
+                (servo.source(), self.declared_connection(servo.id()))
+            else {
+                continue;
+            };
+            // Replay only after every declared direct I2C peer is accounted
+            // for by attachment-stamped identity and declared address.
+            let expected: Vec<_> = self
+                .external_device_decls
+                .iter()
+                .filter(|d| {
+                    d.connection == bus_name
+                        && !matches!(
+                            d.device_type.as_str(),
+                            "servo" | "sg90" | "mg995" | "mg996r" | "mg90s"
+                        )
+                })
+                .collect();
+            let Some(peripheral) = self.peripherals.iter().find(|p| p.name == bus_name) else {
+                continue;
+            };
+            let Some(any) = peripheral.dev.as_any() else {
+                continue;
+            };
+            let mut actual: Vec<(Option<String>, u8, bool)> = if let Some(host) =
+                any.downcast_ref::<crate::peripherals::i2c::I2c>()
+            {
+                host.attached_devices_internal()
+                    .iter()
+                    .map(|cell| {
+                        let d = cell.borrow();
+                        (
+                            d.i2c_component_id().map(str::to_string),
+                            d.address(),
+                            d.is_i2c_mux(),
+                        )
+                    })
+                    .collect()
+            } else if let Some(host) =
+                any.downcast_ref::<crate::peripherals::esp32s3::i2c::Esp32s3I2c>()
+            {
+                host.attached_slaves()
+                    .iter()
+                    .map(|d| {
+                        (
+                            d.i2c_component_id().map(str::to_string),
+                            d.address(),
+                            d.is_i2c_mux(),
+                        )
+                    })
+                    .collect()
+            } else if let Some(host) =
+                any.downcast_ref::<crate::peripherals::esp32::i2c::Esp32I2c>()
+            {
+                host.attached_slaves()
+                    .iter()
+                    .map(|d| {
+                        (
+                            d.i2c_component_id().map(str::to_string),
+                            d.address(),
+                            d.is_i2c_mux(),
+                        )
+                    })
+                    .collect()
+            } else if let Some(host) =
+                any.downcast_ref::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>()
+            {
+                host.attached_slaves()
+                    .iter()
+                    .map(|d| {
+                        (
+                            d.i2c_component_id().map(str::to_string),
+                            d.address(),
+                            d.is_i2c_mux(),
+                        )
+                    })
+                    .collect()
+            } else if let Some(host) =
+                any.downcast_ref::<crate::peripherals::nrf52::twim::Nrf52Twim>()
+            {
+                host.attached_devices_internal()
+                    .iter()
+                    .map(|cell| {
+                        let d = cell.borrow();
+                        (
+                            d.i2c_component_id().map(str::to_string),
+                            d.address(),
+                            d.is_i2c_mux(),
+                        )
+                    })
+                    .collect()
+            } else if let Some(host) =
+                any.downcast_ref::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>(
+                )
+            {
+                host.twim_pwm_host()
+                    .attached_devices_internal()
+                    .iter()
+                    .map(|cell| {
+                        let d = cell.borrow();
+                        (
+                            d.i2c_component_id().map(str::to_string),
+                            d.address(),
+                            d.is_i2c_mux(),
+                        )
+                    })
+                    .collect()
+            } else {
+                continue;
+            };
+            let mut complete = true;
+            let mut source_declared = false;
+            for declared in expected {
+                let matched = actual.iter().position(|(id, addr, is_mux)| {
+                    id.as_deref() == Some(declared.id.as_str())
+                        && declared.address.is_none_or(|expected| expected == *addr)
+                        && (declared.device_type != "tca9548a" || *is_mux)
+                });
+                if let Some(index) = matched {
+                    source_declared |= actual[index].1 == address;
+                    actual.remove(index);
+                } else {
+                    complete = false;
+                    break;
+                }
+            }
+            if !complete || !source_declared {
+                continue;
+            }
+            let target = servo.clone();
+            let observer: crate::peripherals::device::PwmOutputObserver =
+                std::sync::Arc::new(move |ch, us| {
+                    if ch == channel {
+                        target.apply_pulse_us(us);
+                    }
+                });
+            let (subscribed, existing) = if let Some(host) = peripheral
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::i2c::I2c>())
+            {
+                (
+                    host.subscribe_direct_pwm_output(address, observer),
+                    host.direct_pwm_pulse_us(address, channel),
+                )
+            } else if let Some(host) = peripheral
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32s3::i2c::Esp32s3I2c>())
+            {
+                (
+                    host.subscribe_direct_pwm_output(address, observer),
+                    host.direct_pwm_pulse_us(address, channel),
+                )
+            } else if let Some(host) = peripheral
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::i2c::Esp32I2c>())
+            {
+                (
+                    host.subscribe_direct_pwm_output(address, observer),
+                    host.direct_pwm_pulse_us(address, channel),
+                )
+            } else if let Some(host) = peripheral
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>())
+            {
+                (
+                    host.subscribe_direct_pwm_output(address, observer),
+                    host.direct_pwm_pulse_us(address, channel),
+                )
+            } else if let Some(host) = peripheral
+                .dev
+                .as_any()
+                .and_then(|a| a.downcast_ref::<crate::peripherals::nrf52::twim::Nrf52Twim>())
+            {
+                (
+                    host.subscribe_direct_pwm_output(address, observer),
+                    host.direct_pwm_pulse_us(address, channel),
+                )
+            } else if let Some(host) = peripheral.dev.as_any().and_then(|a| {
+                a.downcast_ref::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>()
+            }) {
+                (
+                    host.twim_pwm_host()
+                        .subscribe_direct_pwm_output(address, observer),
+                    host.twim_pwm_host().direct_pwm_pulse_us(address, channel),
+                )
+            } else {
+                (false, None)
+            };
+            if subscribed {
+                if let Some(us) = existing {
+                    servo.apply_pulse_us(us);
+                }
+            }
+        }
+    }
+
     /// Bring every servo wired to a PWM-controller output up to date with the
     /// pulse the firmware last wrote there. Cheap; call before reading servo
     /// state. An absent or unknown pulse leaves the servo where it was.
     pub fn sync_pwm_sourced_servos(&self) {
+        self.sync_pwm_sourced_servos_inner(false);
+    }
+
+    /// Compatibility readback for hosts without event delivery and existing
+    /// raw-mutation callers. Unsupported hosts remain inspection-dependent.
+    pub fn sync_legacy_pwm_servos(&self) {
+        self.bind_direct_pwm_servos();
+        self.sync_pwm_sourced_servos_inner(true);
+    }
+
+    fn sync_pwm_sourced_servos_inner(&self, legacy_only: bool) {
         for servo in self.observed_of::<crate::peripherals::components::servo::Servo>() {
             if let (Some((address, channel)), Some(bus_name)) =
                 (servo.source(), self.declared_connection(servo.id()))
             {
+                if legacy_only {
+                    let event_host = self
+                        .peripherals
+                        .iter()
+                        .find(|p| p.name == bus_name)
+                        .and_then(|p| p.dev.as_any())
+                        .is_some_and(|a| {
+                            a.downcast_ref::<crate::peripherals::i2c::I2c>()
+                                .is_some_and(|h| !h.legacy_view_escaped())
+                                || a.is::<crate::peripherals::esp32s3::i2c::Esp32s3I2c>()
+                                || a.is::<crate::peripherals::esp32::i2c::Esp32I2c>()
+                                || a.is::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>()
+                                || a.downcast_ref::<crate::peripherals::nrf52::twim::Nrf52Twim>().is_some_and(|h| !h.legacy_view_escaped())
+                                || a.downcast_ref::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>().is_some_and(|h| !h.twim_pwm_host().legacy_view_escaped())
+                        });
+                    if event_host {
+                        continue;
+                    }
+                }
+                // Supported hosts must qualify even explicit polling: a raw
+                // view is not required for an undeclared device to appear.
+                let mut escaped_devices = Vec::new();
+                let mut escaped = false;
+                if let Some(any) = self
+                    .peripherals
+                    .iter()
+                    .find(|p| p.name == bus_name)
+                    .and_then(|p| p.dev.as_any())
+                {
+                    let mut record = |d: &dyn crate::peripherals::i2c::I2cDevice| {
+                        escaped_devices.push((
+                            d.i2c_component_id().map(str::to_owned),
+                            d.address(),
+                            d.is_i2c_mux(),
+                        ))
+                    };
+                    if let Some(host) = any.downcast_ref::<crate::peripherals::i2c::I2c>() {
+                        escaped = true; host.visit_attached_devices(&mut record);
+                    } else if let Some(host) = any.downcast_ref::<crate::peripherals::nrf52::twim::Nrf52Twim>() {
+                        escaped = true; host.visit_attached_devices(&mut record);
+                    } else if let Some(host) = any.downcast_ref::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>() {
+                        escaped = true; host.twim_pwm_host().visit_attached_devices(&mut record);
+                    } else if let Some(host) = any.downcast_ref::<crate::peripherals::esp32s3::i2c::Esp32s3I2c>() {
+                        escaped = true; for d in host.attached_slaves() { record(d.as_ref()); }
+                    } else if let Some(host) = any.downcast_ref::<crate::peripherals::esp32::i2c::Esp32I2c>() {
+                        escaped = true; for d in host.attached_slaves() { record(d.as_ref()); }
+                    } else if let Some(host) = any.downcast_ref::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>() {
+                        escaped = true; for d in host.attached_slaves() { record(d.as_ref()); }
+                    }
+                }
+                if escaped {
+                    let mut complete = true;
+                    let mut source_declared = false;
+                    for declared in self.external_device_decls.iter().filter(|d| {
+                        d.connection == bus_name
+                            && !matches!(
+                                d.device_type.as_str(),
+                                "servo" | "sg90" | "mg995" | "mg996r" | "mg90s"
+                            )
+                    }) {
+                        if let Some(index) = escaped_devices.iter().position(|(id, addr, mux)| {
+                            id.as_deref() == Some(declared.id.as_str())
+                                && declared.address.is_none_or(|a| a == *addr)
+                                && (declared.device_type != "tca9548a" || *mux)
+                        }) {
+                            source_declared |= escaped_devices[index].1 == address;
+                            escaped_devices.remove(index);
+                        } else {
+                            complete = false;
+                            break;
+                        }
+                    }
+                    if !complete || !source_declared {
+                        continue;
+                    }
+                }
                 // Match the servo's declared bus, not just the address: the
                 // same I2C address may exist on multiple controllers. A routed
                 // device needs mux/channel wiring evidence that this source

@@ -653,9 +653,7 @@ fn for_each_i2c_slave(
             continue;
         };
         if let Some(i2c) = any.downcast_ref::<I2c>() {
-            for d in i2c.attached_devices() {
-                f(name, d.borrow().as_ref());
-            }
+            i2c.visit_attached_devices(&mut |device| f(name, device));
         } else if let Some(i2c) = any.downcast_ref::<Esp32c3I2c>() {
             for d in i2c.attached_slaves() {
                 f(name, d.as_ref());
@@ -669,9 +667,9 @@ fn for_each_i2c_slave(
                 f(name, d.as_ref());
             }
         } else if let Some(i2c) = any.downcast_ref::<Nrf52Twim>() {
-            for d in i2c.attached_devices() {
-                f(name, d.borrow().as_ref());
-            }
+            i2c.visit_attached_devices(&mut |device| f(name,device));
+        } else if let Some(i2c) = any.downcast_ref::<labwired_core::peripherals::nrf52::serial_instance::Nrf52SerialInstance>() {
+            i2c.visit_attached_i2c_devices(&mut |device| f(name,device));
         } else if let Some(i2c) = any.downcast_ref::<Nrf54lTwim>() {
             for d in i2c.attached_slaves() {
                 f(name, d.as_ref());
