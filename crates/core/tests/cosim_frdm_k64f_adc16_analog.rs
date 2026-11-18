@@ -207,6 +207,69 @@ fn nmos_drain_voltage(gate_v: f64, beta: f64) -> f64 {
     0.5 * (low + high)
 }
 
+/// Independent level-1 NMOS channel load line at the model's nominal
+/// temperature or an explicit instance temperature. The reference applies
+/// ngspice's Varshni bandgap and silicon-potential laws to VTO and the
+/// `T^-1.5` mobility law to KP, then solves the external drain load by
+/// bisection rather than using the analog solver.
+fn mosfet_channel_voltage_at_temperature(temperature_celsius: Option<f64>) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 2_000.0;
+    const VTO: f64 = 1.0;
+    const KP: f64 = 50e-6;
+    const GAMMA: f64 = 0.5;
+    const PHI: f64 = 0.65;
+    const LAMBDA: f64 = 0.02;
+    const W: f64 = 20e-6;
+    const L: f64 = 2e-6;
+    const GATE_V: f64 = 2.5;
+    const TNOM_K: f64 = 27.0 + 273.15;
+    const GMIN_S: f64 = 1e-12;
+    const Q_C: f64 = 1.602_176_634e-19;
+    const K_B: f64 = 1.380_649e-23;
+
+    let (kp_t, vto_t) = temperature_celsius.map_or((KP, VTO), |temperature_celsius| {
+        let temperature_k = temperature_celsius + 273.15;
+        let vt_nominal = K_B * TNOM_K / Q_C;
+        let vt = K_B * temperature_k / Q_C;
+        let eg = |kelvin: f64| 1.16 - 7.02e-4 * kelvin * kelvin / (kelvin + 1108.0);
+        let eg_nominal = eg(TNOM_K);
+        let eg_temperature = eg(temperature_k);
+        let ratio = temperature_k / TNOM_K;
+        let phi_t =
+            PHI * ratio - vt * (3.0 * ratio.ln() + eg_nominal / vt_nominal - eg_temperature / vt);
+        let vto_t = VTO
+            + GAMMA * (phi_t.sqrt() - PHI.sqrt())
+            + 0.5 * (phi_t - PHI)
+            + 0.5 * (eg_nominal - eg_temperature);
+        (KP / ratio.powf(1.5), vto_t)
+    });
+    let beta = kp_t * W / L;
+    let channel_current = |drain_v: f64| {
+        let overdrive = GATE_V - vto_t;
+        if overdrive <= 0.0 {
+            0.0
+        } else if drain_v < overdrive {
+            beta * drain_v * (overdrive - 0.5 * drain_v) * (1.0 + LAMBDA * drain_v)
+        } else {
+            0.5 * beta * overdrive * overdrive * (1.0 + LAMBDA * drain_v)
+        }
+    };
+    let residual = |drain_v: f64| {
+        (SUPPLY_V - drain_v) / LOAD_OHMS - channel_current(drain_v) - GMIN_S * drain_v
+    };
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let drain_v = 0.5 * (low + high);
+        if residual(drain_v) > 0.0 {
+            low = drain_v;
+        } else {
+            high = drain_v;
+        }
+    }
+    0.5 * (low + high)
+}
+
 /// Independent level-1 MOSFET bulk-diode load line for two equal drain/source
 /// junctions, including ngspice's bandgap temperature scaling for `JS`.
 fn mosfet_bulk_voltage_with_js_temperature(temperature_c: Option<f64>) -> f64 {
@@ -1004,6 +1067,116 @@ fn frdm_k64f_mosfet_js_temperature_reaches_adc16_alongside_ntc_and_diode() {
     assert!(
         nominal_v > hot_v + 0.1,
         "the level-1 bandgap law must raise JS and lower the hot bulk voltage: {nominal_v} / {hot_v} V"
+    );
+
+    let ntc_v = signal_voltage(&session, "board.analog.ptb2_volts");
+    let diode_v = signal_voltage(&session, "board.analog.ptb10_volts");
+    assert!(
+        (ntc_v - ntc_volts(25.0)).abs() < 1e-9,
+        "the unrelated Beta NTC remains on its independent divider"
+    );
+    assert!(
+        (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+        "the unrelated Shockley diode remains on its independent load line"
+    );
+    for (adc, channel, voltage_v) in [
+        (ADC0, 8, nominal_v),
+        (ADC0, 9, hot_v),
+        (ADC0, AD12, ntc_v),
+        (ADC1, AD14, diode_v),
+    ] {
+        assert_eq!(
+            convert(&mut bus, adc, channel),
+            se_code(voltage_v, 12),
+            "ADC16 {adc:#x} channel {channel} must convert its solved device voltage"
+        );
+    }
+    assert_eq!(
+        convert(&mut bus, ADC0, 10),
+        0,
+        "undriven SE10 stays isolated"
+    );
+}
+
+#[test]
+fn frdm_k64f_mosfet_channel_temperature_reaches_adc16_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/frdm-k64f.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load FRDM-K64F profile");
+    let analog = SystemManifest::from_file(root("examples/frdm-k64f/analog-ntc-diode-system.yaml"))
+        .expect("load unrelated generic NTC and Shockley diode netlists");
+    let channel_temperature = SystemManifest::from_file(root(
+        "examples/frdm-k64f/analog-mosfet-channel-temperature-adc-system.yaml",
+    ))
+    .expect("load matched nominal and hot MOSFET channel branches");
+    profile.cosim_models = analog.cosim_models;
+    for model in &mut profile.cosim_models {
+        let (key, pad) = match model.id.as_str() {
+            "ntc_divider" => ("v_sense", "ptb2"),
+            "diode_load_line" => ("v_diode", "ptb10"),
+            other => panic!("unexpected existing model {other}"),
+        };
+        model
+            .outputs
+            .insert(key.to_string(), format!("board.analog.{pad}_volts"));
+    }
+    profile
+        .cosim_models
+        .extend(channel_temperature.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load MK64F12 descriptor");
+    for (pad, channel) in [("PTB0", 8), ("PTB1", 9), ("PTB2", 12), ("PTB10", 14)] {
+        assert_eq!(
+            chip.analog_pins[pad].peripheral,
+            if pad == "PTB10" { "adc1" } else { "adc0" },
+            "{pad} ADC instance"
+        );
+        assert_eq!(chip.analog_pins[pad].channel, channel, "{pad} ADC channel");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build FRDM-K64F bus");
+    init_and_calibrate(&mut bus, ADC0, MODE_12);
+    init_and_calibrate(&mut bus, ADC1, MODE_12);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries MOSFETs, NTC, and diode");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "MOSFET channel, NTC, and diode routes must resolve through K64F ADC16 inputs"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold unrelated NTC at 25 °C");
+    session
+        .set_signal_number("ui.mos_channel_temperature.gate_v", 2.5)
+        .expect("drive the matched MOSFET gate branches");
+
+    let cycles = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve and route the generic analog netlists");
+    assert_eq!(steps.len(), 3, "MOSFET, NTC, and diode netlists all solve");
+    assert!(
+        errors.is_empty(),
+        "unexpected ADC16 routing errors: {errors:?}"
+    );
+
+    let nominal_v = signal_voltage(&session, "board.analog.ptb0_volts");
+    let hot_v = signal_voltage(&session, "board.analog.ptb1_volts");
+    for (label, actual, temperature) in [
+        ("nominal", nominal_v, None),
+        ("TEMP=125 °C", hot_v, Some(125.0)),
+    ] {
+        let expected = mosfet_channel_voltage_at_temperature(temperature);
+        assert!(
+            (actual - expected).abs() < 5e-5,
+            "{label} MOSFET channel load line should be {expected} V, got {actual} V"
+        );
+    }
+    assert!(
+        hot_v > nominal_v + 0.15,
+        "the higher threshold and lower mobility at 125 °C should reduce drain current: {nominal_v} / {hot_v} V"
     );
 
     let ntc_v = signal_voltage(&session, "board.analog.ptb2_volts");
