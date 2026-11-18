@@ -485,6 +485,9 @@ impl SystemBus {
 }
 
 impl crate::Bus for SystemBus {
+    fn cpu_i2c_pwm_event(&mut self, devices: &[Box<dyn crate::peripherals::i2c::I2cDevice>]) {
+        self.sync_cpu_i2c_pwm_servos(devices);
+    }
     fn rp2350_dcp_mut(&mut self) -> Option<&mut crate::cpu::cortex_m::rp2350_dcp::Rp2350Dcp> {
         self.rp2350_dcp.as_deref_mut()
     }
