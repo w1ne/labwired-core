@@ -1,0 +1,23 @@
+# Held-out generic Flex exercise of the catalog's two-input LiPo analog source.
+# This is a functional behavior approximation, not a TP4056 or cell model.
+schema_version: 1
+name: flex-lipo-charger-dual-stimulus
+assumptions:
+  - The registered catalog model approximates terminal voltage as 3300–4200 mV linearly over state of charge.
+  - A connected charger adds a fixed 150 mV before the terminal voltage is clamped at 4200 mV.
+  - The observable is the modeled half-voltage divider output, sampled at 1 us boundaries.
+unsupported_checks:
+  - LiPo chemistry, discharge curve variation, temperature, aging, and physical safety behavior.
+  - TP4056 control-loop dynamics, charge current, and the CHRG status pin.
+ports:
+  - { name: soc_pct, signal: environment.soc_pct, access: write, kind: number, unit: "%", initial: 50 }
+  - { name: usb_present, signal: environment.usb_present, access: write, kind: number, unit: "1", initial: 0 }
+  - { name: battery_mv, signal: board.battery_divider_mv, access: read, kind: number, unit: mV }
+cosim_models:
+  - id: lipo-battery
+    adapter: behavior
+    step_ns: 1000
+    inputs: { soc_pct: environment.soc_pct, usb_present: environment.usb_present }
+    outputs: { voltage_mv: board.battery_divider_mv }
+    config:
+      device_type: lipo_charger

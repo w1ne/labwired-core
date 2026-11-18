@@ -25,6 +25,15 @@ const HEYPCB_LDR_SYSTEM_BYTES: &[u8] =
     include_bytes!("../tests/fixtures/flex-heypcb-esp32-ldr/system.yaml");
 const HEYPCB_LDR_SOURCE_MAP_BYTES: &[u8] =
     include_bytes!("../tests/fixtures/flex-heypcb-esp32-ldr/source-map.json");
+const LIPO_SYSTEM: &str = include_str!("../tests/fixtures/flex-analog-multi-input/system.yaml");
+const LIPO_BROWSER: &str = include_str!("../tests/fixtures/flex-analog-multi-input/browser.json");
+const LIPO_NATIVE: &str = include_str!("../tests/fixtures/flex-analog-multi-input/native.json");
+const LIPO_FIRMWARE: &[u8] =
+    include_bytes!("../tests/fixtures/flex-analog-multi-input/firmware.wasm");
+const LIPO_FIRMWARE_SOURCE: &[u8] =
+    include_bytes!("../tests/fixtures/flex-analog-multi-input/firmware.rs");
+const LIPO_SYSTEM_BYTES: &[u8] =
+    include_bytes!("../tests/fixtures/flex-analog-multi-input/system.yaml");
 const GPIO_REUSE_POMODORO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/system.yaml");
 const GPIO_REUSE_UNO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/arduino-uno.yaml");
 
@@ -553,6 +562,141 @@ fn heypcb_ldr_analog_evidence(runtime: &FlexRuntime) -> serde_json::Value {
             "values": sample.values,
         })).collect::<Vec<_>>(),
     })
+}
+
+fn lipo_analog_reference(soc_pct: f64, usb_present: f64) -> serde_json::Value {
+    let mut runtime = FlexRuntime::from_yaml(LIPO_SYSTEM).expect("load multi-input Lipo source");
+    let soc = runtime.port_id("soc_pct").unwrap();
+    let usb = runtime.port_id("usb_present").unwrap();
+    let battery = runtime.port_id("battery_mv").unwrap();
+    let default_mv = runtime.read(battery).unwrap();
+    runtime.write(soc, soc_pct).unwrap();
+    runtime.write(usb, usb_present).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    let result_mv = runtime.read(battery).unwrap();
+    let batch = runtime.analog_trace_snapshot(0);
+    assert_eq!(batch.dropped, 0);
+    assert_eq!(
+        batch.channels,
+        [labwired_core::analog::AnalogChannel {
+            name: "lipo-battery.voltage_mv".to_owned(),
+            unit: "mV".to_owned(),
+        }]
+    );
+    assert_eq!(batch.samples.len(), 2);
+    serde_json::json!({
+        "soc_pct": soc_pct,
+        "usb_present": usb_present,
+        "default_mv": default_mv,
+        "result_mv": result_mv,
+        "time_ns": runtime.time_ns(),
+        "trace": {
+            "time_unit": "ns",
+            "channels": batch.channels,
+            "dropped": batch.dropped,
+            "samples": batch.samples.into_iter().map(|sample| serde_json::json!({
+                "cycle": sample.cycle,
+                "time_ns": sample.time_ns,
+                "values": sample.values,
+            })).collect::<Vec<_>>(),
+        },
+    })
+}
+
+#[test]
+fn flex_lipo_charger_reuses_multi_input_catalog_source_and_dimensionless_unit() {
+    let yaml: serde_yaml::Value = serde_yaml::from_str(LIPO_SYSTEM).unwrap();
+    let ports = yaml["ports"].as_sequence().unwrap();
+    assert_eq!(
+        ports
+            .iter()
+            .find(|port| port["name"] == "usb_present")
+            .unwrap()["unit"],
+        "1",
+        "the catalog's empty dimensionless input unit must be explicit in Flex"
+    );
+    assert_eq!(
+        yaml["cosim_models"][0]["config"]["device_type"],
+        "lipo_charger"
+    );
+
+    let positive = lipo_analog_reference(50.0, 1.0);
+    assert_eq!(positive["default_mv"], 1_875.0);
+    assert_eq!(positive["result_mv"], 1_950.0);
+    assert_eq!(positive["time_ns"], 1_000);
+    let negative = lipo_analog_reference(50.0, 0.0);
+    assert_eq!(negative["result_mv"], 1_875.0);
+    let high_charge = lipo_analog_reference(100.0, 0.0);
+    assert_eq!(high_charge["result_mv"], 2_100.0);
+    assert!(positive["result_mv"].as_f64().unwrap() > negative["result_mv"].as_f64().unwrap());
+
+    let measured = serde_json::json!({
+        "positive": positive,
+        "negative": negative,
+        "high_charge": high_charge,
+    });
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/flex-analog-multi-input/native.json");
+    if std::env::var_os("LABWIRED_REGEN_FLEX_LIPO").is_some() {
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&measured).unwrap() + "\n",
+        )
+        .unwrap();
+    }
+    let expected: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        measured, expected,
+        "multi-input catalog analog observations changed"
+    );
+}
+
+#[test]
+fn flex_lipo_browser_evidence_pins_firmware_and_manifest_inputs() {
+    use sha2::{Digest, Sha256};
+
+    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Number(number) => {
+                serde_json::json!(number.as_f64().expect("finite fixture number"))
+            }
+            serde_json::Value::Array(items) => {
+                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
+            }
+            serde_json::Value::Object(fields) => serde_json::Value::Object(
+                fields
+                    .iter()
+                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+
+    fn sha256(bytes: &[u8]) -> String {
+        format!("{:x}", Sha256::digest(bytes))
+    }
+
+    let browser: serde_json::Value = serde_json::from_str(LIPO_BROWSER).unwrap();
+    let native: serde_json::Value = serde_json::from_str(LIPO_NATIVE).unwrap();
+    let core_commit = browser["core_commit"].as_str().unwrap();
+    assert_eq!(core_commit.len(), 40);
+    assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(browser["native_model_equality"], true);
+    assert_eq!(browser["firmware_sha256"], sha256(LIPO_FIRMWARE));
+    assert_eq!(
+        browser["firmware_source_sha256"],
+        sha256(LIPO_FIRMWARE_SOURCE)
+    );
+    assert_eq!(browser["system_sha256"], sha256(LIPO_SYSTEM_BYTES));
+    for case in ["positive", "negative", "high_charge"] {
+        assert_eq!(
+            normalize_numbers(&browser["observations"][case]),
+            normalize_numbers(&native[case]),
+            "browser evidence for {case} must include the exact native-matched instrument samples"
+        );
+    }
 }
 
 #[test]

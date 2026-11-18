@@ -93,7 +93,16 @@ impl AnalogSourceAdapter {
                 "model is missing analog_source input '{}'",
                 channel.key
             );
-            input_units.insert(channel.key.to_string(), channel.unit.to_string());
+            // Catalog descriptors use an empty unit for dimensionless numeric
+            // inputs (for example `usb_present` on `lipo_charger`). Flex ports
+            // require an explicit unit token, so publish that same contract as
+            // the conventional dimensionless unit `1`.
+            let unit = if channel.unit.is_empty() {
+                "1"
+            } else {
+                channel.unit.as_ref()
+            };
+            input_units.insert(channel.key.to_string(), unit.to_owned());
             if let Some(default) = channel.default {
                 input_defaults.insert(channel.key.to_string(), CosimSignalValue::F64(default));
             }

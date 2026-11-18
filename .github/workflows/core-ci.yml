@@ -1516,6 +1516,10 @@ jobs:
         run: |
           sh crates/wasm/tests/fixtures/flex-mixed-signal/build.sh
           node scripts/test_browser_flex.mjs
+          sh crates/wasm/tests/fixtures/flex-analog-multi-input/build.sh
+          node scripts/test_browser_flex.mjs \
+            --fixture crates/wasm/tests/fixtures/flex-analog-multi-input \
+            --check runMultiInputAnalogSourceChecks
 
   # Post-merge since 2026-11-13 (the job id keeps its old name so the
   # lane references in crates/core/src/tests and validation/ stay valid).
