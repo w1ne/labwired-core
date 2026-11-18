@@ -4,7 +4,7 @@
 # STM32F746NGH6. The silicon is the imported stm32f746 profile, included whole
 # rather than copied so the two rows cannot drift: 1 MiB / 320 KiB, RCC,
 # USART1/2/3/6 + UART4/5/7/8, GPIOA..K, SYSCFG + EXTI, TIM1..TIM14, SPI1/2/3,
-# I2C1..4, DMA1/DMA2, ADC1 on PA1, CRC and RNG.
+# I2C1..4, DMA1/DMA2, ADC1 on PA1/PA2, CRC and RNG.
 # See stm32f746.yaml for the per-block sources and what it does not claim.
 #
 # The board-level parts (LD1 on PI1, B1 on PI11) live in the system file.

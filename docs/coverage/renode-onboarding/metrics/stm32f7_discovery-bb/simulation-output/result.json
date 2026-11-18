@@ -54,6 +54,8 @@
           "crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok",
           "rng off=1 ready=1 draws=1 stopped=1 ok",
           "adc1 in1=0x000003FF gated=1 clock=1 eoc=1 ok",
+          "adc1 scan=0x000003FF,0x000007FF irq=1 pending=1 end=1 released=1 ok",
+          "adc1 scan_cont_groups=0x000007FF,0x000007FF,0x000007FF groups=3 irq=1 ovr=0 stop=1 ok",
           "summary 0x7DC0FFFF",
           "DONE"
         ]
@@ -92,22 +94,22 @@
     "registers": [
       10,
       3221225472,
-      3221225472,
       4294867296,
       4294867296,
-      1023,
-      65535,
+      0,
+      1,
+      1,
       537198576,
       1,
-      1,
-      1,
+      32767,
+      0,
       1073811484,
       70,
-      537198536,
+      537198504,
       70,
-      134233290
+      134236978
     ],
-    "pc": 134233290,
+    "pc": 134236978,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -120,7 +122,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "687ca36b8ab268ae191287517dd791ccd69773da37ec2c55869f7c8a541b4ad8",
+  "firmware_hash": "7a254561d0343e28ba95c78203eb06aa85f5700b7fb9152cae5111f6eb24b9b3",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746g-disco-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f7_discovery-bb.yaml",
@@ -520,6 +522,17 @@
           "channel": 1
         },
         "artifacts": []
+      },
+      {
+        "id": "pot_adc1_in2",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 2
+        },
+        "artifacts": []
       }
     ]
   },
@@ -544,51 +557,51 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 2089,
+            "cycle": 2065,
             "value": 1
           },
           {
-            "cycle": 2097,
+            "cycle": 2074,
             "value": 0
           },
           {
-            "cycle": 2100,
+            "cycle": 2077,
             "value": 1
           },
           {
-            "cycle": 2108,
+            "cycle": 2085,
             "value": 0
           },
           {
-            "cycle": 2502,
+            "cycle": 2475,
             "value": 1
           },
           {
-            "cycle": 2511,
+            "cycle": 2484,
             "value": 0
           },
           {
-            "cycle": 2523,
+            "cycle": 2495,
             "value": 1
           },
           {
-            "cycle": 2532,
+            "cycle": 2504,
             "value": 0
           },
           {
-            "cycle": 2542,
+            "cycle": 2514,
             "value": 1
           },
           {
-            "cycle": 2550,
+            "cycle": 2522,
             "value": 0
           },
           {
-            "cycle": 2562,
+            "cycle": 2535,
             "value": 1
           },
           {
-            "cycle": 2564,
+            "cycle": 2537,
             "value": 0
           }
         ],
@@ -596,55 +609,55 @@
         "initial_state": "z",
         "states": [
           {
-            "cycle": 2087,
+            "cycle": 2063,
             "state": "0"
           },
           {
-            "cycle": 2089,
+            "cycle": 2065,
             "state": "1"
           },
           {
-            "cycle": 2097,
+            "cycle": 2074,
             "state": "0"
           },
           {
-            "cycle": 2100,
+            "cycle": 2077,
             "state": "1"
           },
           {
-            "cycle": 2108,
+            "cycle": 2085,
             "state": "0"
           },
           {
-            "cycle": 2502,
+            "cycle": 2475,
             "state": "1"
           },
           {
-            "cycle": 2511,
+            "cycle": 2484,
             "state": "0"
           },
           {
-            "cycle": 2523,
+            "cycle": 2495,
             "state": "1"
           },
           {
-            "cycle": 2532,
+            "cycle": 2504,
             "state": "0"
           },
           {
-            "cycle": 2542,
+            "cycle": 2514,
             "state": "1"
           },
           {
-            "cycle": 2550,
+            "cycle": 2522,
             "state": "0"
           },
           {
-            "cycle": 2562,
+            "cycle": 2535,
             "state": "1"
           },
           {
-            "cycle": 2564,
+            "cycle": 2537,
             "state": "0"
           }
         ],
@@ -849,16 +862,28 @@
         "end_cycle": 980000
       },
       {
+        "text": "adc1 scan=0x000003FF,0x000007FF irq=1 pending=1 end=1 released=1 ok",
+        "cycle_lo": 980000,
+        "cycle": 990000,
+        "end_cycle": 990000
+      },
+      {
+        "text": "adc1 scan_cont_groups=0x000007FF,0x000007FF,0x000007FF groups=3 irq=1 ovr=0 stop=1 ok",
+        "cycle_lo": 980000,
+        "cycle": 990000,
+        "end_cycle": 990000
+      },
+      {
         "text": "summary 0x7DC0FFFF",
-        "cycle_lo": 970000,
-        "cycle": 980000,
-        "end_cycle": 980000
+        "cycle_lo": 980000,
+        "cycle": 990000,
+        "end_cycle": 990000
       },
       {
         "text": "DONE",
-        "cycle_lo": 970000,
-        "cycle": 980000,
-        "end_cycle": 980000
+        "cycle_lo": 980000,
+        "cycle": 990000,
+        "end_cycle": 990000
       }
     ],
     "dropped_lines": 0
@@ -868,6 +893,18 @@
       "channel": "position",
       "component": "pot_adc1_in1",
       "value": 25.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000
+    },
+    {
+      "channel": "position",
+      "component": "pot_adc1_in2",
+      "value": 50.0,
       "trigger": {
         "after_cycles": {
           "cycles": 1000
@@ -927,14 +964,14 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 16876,
+    "text_bytes": 20768,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 16876,
+    "flash_used_bytes": 20768,
     "ram_static_bytes": 0,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 327680,
-    "flash_used_pct": 1.61,
+    "flash_used_pct": 1.98,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -944,15 +981,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 327680,
-    "main_stack_high_water_bytes": 88,
-    "main_stack_free_min_bytes": 327556,
+    "main_stack_high_water_bytes": 120,
+    "main_stack_free_min_bytes": 327524,
     "main_stack_base": 536870912,
     "main_stack_top": 537198592,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 327680,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 327556,
+    "heap_free_min_bytes": 327524,
     "heap_base": 536870912,
     "heap_top": 537198592
   },
@@ -960,88 +997,88 @@
     "cycles": 6000000,
     "instructions": 6000000,
     "steps_executed": 6000000,
-    "memory_reads": 7944,
-    "memory_writes": 1021,
-    "peripheral_accesses": 268106,
+    "memory_reads": 8353,
+    "memory_writes": 1121,
+    "peripheral_accesses": 268624,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134227648,
+        "pc": 134227478,
         "count": 157,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
       },
       {
-        "pc": 134227658,
+        "pc": 134227392,
         "count": 156,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
       },
       {
-        "pc": 134227668,
-        "count": 156,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134227680,
+        "pc": 134227406,
         "count": 156,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
       },
       {
-        "pc": 134227700,
+        "pc": 134227430,
+        "count": 156,
+        "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
+      },
+      {
+        "pc": 134227452,
         "count": 156,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134227720,
+        "pc": 134227488,
         "count": 156,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
       },
       {
-        "pc": 134227690,
+        "pc": 134227416,
         "count": 118,
-        "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134227636,
+        "pc": 134227442,
         "count": 117,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
       },
       {
-        "pc": 134227712,
+        "pc": 134227466,
         "count": 117,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait"
       },
       {
-        "pc": 134225518,
+        "pc": 134225338,
         "count": 79,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait_level"
       },
       {
-        "pc": 134225534,
+        "pc": 134225354,
+        "count": 79,
+        "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait_level"
+      },
+      {
+        "pc": 134225614,
+        "count": 79,
+        "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait_level"
+      },
+      {
+        "pc": 134225628,
         "count": 79,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134225856,
-        "count": 79,
+        "pc": 134225334,
+        "count": 78,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134225872,
-        "count": 79,
+        "pc": 134225342,
+        "count": 78,
         "symbol": "firmware_stm32f746g_disco_smoke::f746_checks::wait_level"
       },
       {
-        "pc": 134225514,
-        "count": 78,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134225520,
-        "count": 78,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134225532,
+        "pc": 134225344,
         "count": 78,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       }
