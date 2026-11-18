@@ -138,6 +138,30 @@
   },
   "saved_project_query": {
     "query": "Pomodoro",
-    "saved_projects": 0
+    "saved_projects": 0,
+    "checked_date": "2026-11-18"
+  },
+  "live_follow_up": {
+    "checked_date": "2026-11-18",
+    "mcu_catalog_match_count": 1,
+    "mcu": {
+      "type": "ch32v003f4p6",
+      "class": "mcu",
+      "pin_count": 22,
+      "catalog_runnable": true,
+      "toolchains": [],
+      "pd6": { "gpio": 6, "functions": [] }
+    },
+    "led": {
+      "type": "led",
+      "class": "board_io",
+      "pins": ["A", "K"],
+      "simulation": {
+        "available": true,
+        "backing": "netlist-only",
+        "degraded": false,
+        "validation": "none"
+      }
+    }
   }
 }

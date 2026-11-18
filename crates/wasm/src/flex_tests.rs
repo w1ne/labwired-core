@@ -366,8 +366,58 @@ fn flex_heypcb_pomodoro_behavior_ports_match_the_pinned_generic_import_graph() {
             "Flex contract omits {signal}"
         );
     }
-    assert!(POMODORO_SYSTEM.contains("adapter: behavior"));
-    assert!(POMODORO_SYSTEM.contains("primitive: gpio_device"));
+
+    // Tie the runtime port names and model aliases back to the source map.
+    // Checking only that these strings occur in the YAML would allow a port
+    // to be wired to a different source signal while still passing this test.
+    let system: serde_yaml::Value = serde_yaml::from_str(POMODORO_SYSTEM).unwrap();
+    let ports = system["ports"].as_sequence().expect("Flex ports");
+    let port_for = |name: &str| {
+        ports
+            .iter()
+            .find(|port| port["name"].as_str() == Some(name))
+            .unwrap_or_else(|| panic!("Flex manifest is missing port '{name}'"))
+    };
+    let source_slice = &source_map["source_grounded_behavior_slice"];
+    let gpio_signal = format!(
+        "source.{}.{}",
+        source_slice["mcu_ref"].as_str().unwrap(),
+        source_slice["gpio_pin"].as_str().unwrap()
+    );
+    let gpio_port = port_for("u1_pd6");
+    assert_eq!(gpio_port["signal"].as_str(), Some(gpio_signal.as_str()));
+    assert_eq!(gpio_port["access"].as_str(), Some("write"));
+    assert_eq!(gpio_port["kind"].as_str(), Some("bool"));
+    assert_eq!(gpio_port["initial"].as_i64(), Some(0));
+
+    let models = system["cosim_models"]
+        .as_sequence()
+        .expect("Flex co-simulation models");
+    assert_eq!(
+        models.len(),
+        1,
+        "the source slice has one shared behavior model"
+    );
+    let model = &models[0];
+    assert_eq!(model["id"].as_str(), Some("source-pd6-green-indicators"));
+    assert_eq!(model["adapter"].as_str(), Some("behavior"));
+    assert_eq!(model["step_ns"].as_u64(), Some(1_000));
+    assert_eq!(
+        model["inputs"]["drive"].as_str(),
+        Some(gpio_signal.as_str())
+    );
+    assert_eq!(
+        model["outputs"]["d1"].as_str(),
+        Some("source.D1.logic_state")
+    );
+    assert_eq!(
+        model["outputs"]["d2"].as_str(),
+        Some("source.D2.logic_state")
+    );
+    assert_eq!(
+        model["config"]["behavior"]["primitive"].as_str(),
+        Some("gpio_device")
+    );
 }
 
 fn pomodoro_digital_evidence(runtime: &mut FlexRuntime) -> serde_json::Value {
