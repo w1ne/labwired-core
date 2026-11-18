@@ -98,7 +98,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32g474re | **L1** | ✓ | 23 | — | — | firmware_survival::test_stm32g474_zephyr_survival |
 | stm32g431rb | **L0** | ✓ | 22 | — | — | — |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
-| stm32h533re | **L1** | ✓ | 3 | — | — | stm32h563_walk_differential::stm32h533re_boot_walk_vs_scheduler_is_byte_identical |
+| stm32h533re | **L1** | ✓ | 5 | — | — | stm32h563_walk_differential::stm32h533re_boot_walk_vs_scheduler_is_byte_identical |
 | stm32u575 | **L1** | ✓ | 43 | — | — | firmware_survival::test_stm32u575_zephyr_survival |
 | stm32u545 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32u545_blinky_survival |
 | stm32u5a5zj | **L1** | ✓ | 45 | — | — | stm32u5_exec_oracle::u5a5_hash_saes_and_pka_execute_register_level_operations |
@@ -157,7 +157,7 @@ This page covers the public models. For every chip we model — public and priva
 | esp32s2 | **L0** | ✓ | 2 | — | — | — |
 | rp2040-feather | **L0** | ✓ | 24 | — | — | — |
 | rp2350-feather | **L0** | ✓ | 27 | — | — | — |
-| stm32h723zg | **L0** | ✓ | 7 | — | — | — |
+| stm32h723zg | **L0** | ✓ | 9 | — | — | — |
 | esp32c6fh4 | **L0** | ✓ | 69 | — | — | — |
 
 ## Declared platforms without a model
