@@ -375,6 +375,68 @@ fn expected_adc_count(voltage_v: f64) -> u16 {
     (millivolts * 4095.0 / 3300.0).floor().clamp(0.0, 4095.0) as u16
 }
 
+/// Independent PMOS Ward-Dutton drain charge from a Simpson integral of the
+/// level-1 inversion charge along the channel.
+fn pmos_ward_dutton_drain_charge(gate_v: f64, drain_v: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const WIDTH_M: f64 = 100e-6;
+    const LENGTH_M: f64 = 10e-6;
+    const TOX_M: f64 = 10e-9;
+    const VTO_MAGNITUDE_V: f64 = 1.0;
+    const EPSILON_OX_F_PER_M: f64 = 3.453_133e-11;
+    const INTERVALS: usize = 4000;
+
+    let overdrive = (SUPPLY_V - gate_v - VTO_MAGNITUDE_V).max(0.0);
+    if overdrive == 0.0 {
+        return 0.0;
+    }
+    let channel_drop = (SUPPLY_V - drain_v).clamp(0.0, overdrive);
+    let denominator = overdrive * channel_drop - 0.5 * channel_drop * channel_drop;
+    let mut integral = 0.0;
+    for point in 0..=INTERVALS {
+        let position = point as f64 / INTERVALS as f64;
+        let local_charge = (overdrive * overdrive - 2.0 * position * denominator).sqrt();
+        let weight = if point == 0 || point == INTERVALS {
+            1.0
+        } else if point % 2 == 0 {
+            2.0
+        } else {
+            4.0
+        };
+        integral += weight * position * local_charge;
+    }
+    let cox = EPSILON_OX_F_PER_M * WIDTH_M * LENGTH_M / TOX_M;
+    cox * integral / (3.0 * INTERVALS as f64)
+}
+
+/// Independent backward-Euler PMOS drain voltage, with the physical drain
+/// tied to VDD through a load resistor and the source/bulk held at VDD.
+fn pmos_ward_dutton_drain_voltage(
+    gate_v: f64,
+    previous_gate_v: f64,
+    previous_drain_v: f64,
+    resistance_ohms: f64,
+    step_s: f64,
+) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    let previous_charge = pmos_ward_dutton_drain_charge(previous_gate_v, previous_drain_v);
+    let residual = |drain_v: f64| {
+        (drain_v - SUPPLY_V) / resistance_ohms
+            + (pmos_ward_dutton_drain_charge(gate_v, drain_v) - previous_charge) / step_s
+    };
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    assert!(residual(low) <= 0.0 && residual(high) >= 0.0);
+    for _ in 0..80 {
+        let middle = 0.5 * (low + high);
+        if residual(middle) < 0.0 {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    0.5 * (low + high)
+}
+
 /// Independent backward-Euler base-node solve for a generic NPN with fixed
 /// collector bias. With no Early effect or high-injection knees, the forward
 /// transit charge is `Qbe = TF·IS·(e^(Vbe/Vt)-1)`.
@@ -1523,6 +1585,168 @@ fn nucleo_g071rb_pmos_tox_gate_charge_reaches_adc1_alongside_ntc_and_diode() {
     assert!(
         (expected_gate_v - GATE_DRIVE_V).abs() < 1e-3,
         "PMOS gate voltage approaches its DC drive after repeated steps"
+    );
+}
+
+#[test]
+fn nucleo_g071rb_pmos_ward_dutton_channel_charge_reaches_adc1_with_ntc_and_diode() {
+    const SUPPLY_V: f64 = 3.3;
+    const GATE_ON_V: f64 = 1.8;
+    const LOAD_OHMS: f64 = 5e6;
+    const STEP_S: f64 = 1e-6;
+
+    let system_path = root("configs/systems/nucleo-g071rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-G071RB profile");
+    let unrelated = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode routes");
+    let pmos = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-mosfet-pmos-ward-dutton-adc-system.yaml",
+    ))
+    .expect("load matched generic PMOS channel-charge branches");
+    profile.cosim_models = unrelated.cosim_models;
+    profile.cosim_models.extend(pmos.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
+    const ADCEN: u32 = 1 << 20;
+    bus.write_u32(RCC_APBENR2, ADCEN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_CR, 0)
+        .expect("leave ADC deep power-down");
+    bus.write_u32(ADC1_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC1_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(bus.read_u32(ADC1_ISR).unwrap() & 1, 0, "ADC1 reports ADRDY");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and two PMOS channel-charge branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic models bind to ADC1 channels 4 through 7"
+    );
+    for channel in 4..=8 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.pmos_ward_dutton.gate_v", SUPPLY_V)
+        .expect("initialize PMOS gates at their source and bulk");
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle the NTC, diode, and PMOS drain branches");
+    assert_eq!(initial_steps.len(), 3, "all three analog models solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert!(
+        (signal_voltage(&session, "adc.adc1.6_volts") - SUPPLY_V).abs() < 1e-9
+            && (signal_voltage(&session, "adc.adc1.7_volts") - SUPPLY_V).abs() < 1e-9,
+        "both PMOS drain nodes start at the source voltage"
+    );
+
+    session
+        .set_signal_number("ui.pmos_ward_dutton.gate_v", GATE_ON_V)
+        .expect("turn on the matched PMOS branches");
+    session
+        .set_signal_number("ui.ntc.temperature_c", 80.0)
+        .expect("heat the unrelated Beta NTC while the PMOS channel charges");
+    let hot_ntc_resistance = ntc_resistance_ohms(80.0);
+    let expected_ntc_v = 3.3 * hot_ntc_resistance / (10_000.0 + hot_ntc_resistance);
+    let expected_diode_v = diode_load_line_voltage();
+    let mut previous_gate_v = SUPPLY_V;
+    let mut previous_drain_v = SUPPLY_V;
+
+    for step in 0..8 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route PMOS channel charge beside NTC and diode");
+        assert_eq!(
+            steps.len(),
+            3,
+            "all three analog models solve at every step"
+        );
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let expected_drain_v = pmos_ward_dutton_drain_voltage(
+            GATE_ON_V,
+            previous_gate_v,
+            previous_drain_v,
+            LOAD_OHMS,
+            STEP_S,
+        );
+        let ntc_v = signal_voltage(&session, "adc.adc1.4_volts");
+        let diode_v = signal_voltage(&session, "adc.adc1.5_volts");
+        let charged_v = signal_voltage(&session, "adc.adc1.6_volts");
+        let reference_v = signal_voltage(&session, "adc.adc1.7_volts");
+
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "unrelated NTC stays isolated"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated diode stays at its load line"
+        );
+        assert!(
+            (charged_v - expected_drain_v).abs() < 5e-5,
+            "independent PMOS Ward-Dutton charge recurrence at step {step}: expected {expected_drain_v} V, got {charged_v} V"
+        );
+        assert!(
+            (reference_v - SUPPLY_V).abs() < 1e-9,
+            "the matched no-channel-charge PMOS stays at its zero-current load line"
+        );
+
+        for (channel, voltage_v) in [(4, ntc_v), (5, diode_v), (6, charged_v), (7, reference_v)] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32g0_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 channel {channel} conversion reports {voltage_v} V"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 8),
+            u16::MAX,
+            "neighboring ADC1_IN8 remains undriven"
+        );
+
+        if step == 0 {
+            assert!(
+                charged_v < SUPPLY_V - 0.5,
+                "PMOS inversion charge must move the drain measurably"
+            );
+            assert!(
+                (charged_v - reference_v).abs() > 0.5,
+                "the zero-charge control must distinguish Ward-Dutton inversion charge"
+            );
+        }
+        previous_gate_v = GATE_ON_V;
+        previous_drain_v = charged_v;
+    }
+
+    assert!(
+        (previous_drain_v - SUPPLY_V).abs() < 0.2,
+        "PMOS channel charge must settle back toward the DC load line"
     );
 }
 
