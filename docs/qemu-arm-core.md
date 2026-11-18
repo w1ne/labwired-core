@@ -45,9 +45,9 @@ cargo run --locked -p labwired-cli --features qemu-arm -- run --firmware tests/f
 cargo run --locked -p labwired-cli --features qemu-arm -- test --script examples/cortex-a7-core/smoke.yaml --output-dir /tmp/labwired-cortex-a7-smoke
 ```
 
-The checked-in [ARM assembly](../examples/cortex-a7-core/firmware.S) computes
+The checked-in [ARM assembly](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/cortex-a7-core/firmware.S) computes
 7 + 5, writes **12** to `0x20000000`, then loops at ELF PC `0x1010`.
-The [script](../examples/cortex-a7-core/smoke.yaml) checks that RAM result.
+The [script](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/cortex-a7-core/smoke.yaml) checks that RAM result.
 This is a synthetic initialized-memory platform with no RV1103 peripherals.
 It must not be flashed onto a Luckfox board.
 
@@ -84,7 +84,7 @@ also passed: the native dependency remains excluded and execution unavailable.
 Existing unrelated WASM warnings were emitted in Wi-Fi and GDB stub code.
 
 These establish the tested CPU/bus contract, not Linux boot or Mini A support.
-The [native CI lane](../.github/workflows/core-qemu-arm.yml) runs CPU/trace,
+The [native CI lane](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/.github/workflows/core-qemu-arm.yml) runs CPU/trace,
 declaration, snapshot/observer, and
 CLI tests in both feature configurations; local evidence does not claim CI ran.
 
@@ -94,7 +94,7 @@ The separate optional `qemu-arm-system` backend now implements privileged
 Cortex-A7/MMU and physical SystemBus access, GIC400, architectural timer and DW
 UART2. On 2026-10-12 its optimized panic-unwind CLI passed a real reduced RV1103
 direct zImage boot to PID1, mounted proc/sys/devtmpfs and completed guest sleep
-with advancing uptime. See the [exact acceptance receipt and commands](../examples/luckfox-pico-mini-a-linux/VALIDATION.md).
+with advancing uptime. See the [exact acceptance receipt and commands](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a-linux/VALIDATION.md).
 This does not extend the older `qemu-arm` ELF adapter's MMU/sleep contract above.
 CRU/reset, pinmux, GPIO, I2C, SD/eMMC, external modules and vendor BSP remain
 later work. A reduced native Linux boot does not prove that a stock Luckfox
