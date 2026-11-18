@@ -1,0 +1,87 @@
+# Generic BJT forward transit-charge temperature law routed through SAADC
+# beside unrelated Beta NTC and Shockley diode netlists.
+name: "nrf5340dk-analog-bjt-itf-temperature"
+chip: "../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_itf_temperature_scaled"
+    adapter: "analog"
+    step_ns: 10
+    inputs:
+      base_drive: "ui.bjt_itf_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.2_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 1k
+        Q1 collector base 0 NPN_TITF temp=80
+        .model NPN_TITF NPN(IS=1e-12 BF=100 BR=4 TF=10n XTF=40 VTF=2 ITF=2u TITF1=-8m)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_itf_temperature_explicit_hot"
+    adapter: "analog"
+    step_ns: 10
+    inputs:
+      base_drive: "ui.bjt_itf_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.3_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 1k
+        Q1 collector base 0 NPN_TITF_HOT temp=80
+        .model NPN_TITF_HOT NPN(IS=1e-12 BF=100 BR=4 TF=10n XTF=40 VTF=2 ITF=1.152u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_itf_temperature_nominal"
+    adapter: "analog"
+    step_ns: 10
+    inputs:
+      base_drive: "ui.bjt_itf_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.4_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 1k
+        Q1 collector base 0 NPN_TITF_NOMINAL temp=80
+        .model NPN_TITF_NOMINAL NPN(IS=1e-12 BF=100 BR=4 TF=10n XTF=40 VTF=2 ITF=2u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_itf_temperature_unlimited"
+    adapter: "analog"
+    step_ns: 10
+    inputs:
+      base_drive: "ui.bjt_itf_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.5_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 1k
+        Q1 collector base 0 NPN_TITF_UNLIMITED temp=80
+        .model NPN_TITF_UNLIMITED NPN(IS=1e-12 BF=100 BR=4 TF=10n XTF=40 VTF=2 ITF=0)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3

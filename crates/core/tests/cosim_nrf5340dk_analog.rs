@@ -2282,3 +2282,158 @@ fn nrf5340dk_bjt_tlev_zero_and_one_beta_temperature_laws_reach_saadc() {
         "TLEV selector must change reverse-active beta load line: {reverse_tlev0} V vs {reverse_tlev1} V"
     );
 }
+
+#[test]
+fn nrf5340dk_bjt_itf_temperature_law_reaches_saadc_during_transit_charge() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let transit = SystemManifest::from_file(root(
+        "examples/nrf5340dk/analog-bjt-itf-temperature-system.yaml",
+    ))
+    .expect("load generic BJT TITF branch and explicit hot references");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(transit.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 6);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and four generic BJT transit branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic netlists must resolve to SAADC AIN0 through AIN5"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_itf_temperature.base_v", 0.0)
+        .expect("initialize all matched BJT base drives");
+
+    const DELTA_C: f64 = 80.0 - 27.0;
+    const ITF_NOMINAL_A: f64 = 2e-6;
+    const TITF1_PER_C: f64 = -8e-3;
+    const TITF2_PER_C2: f64 = 0.0;
+    let itf_hot_a =
+        ITF_NOMINAL_A * (1.0 + TITF1_PER_C * DELTA_C + TITF2_PER_C2 * DELTA_C * DELTA_C);
+    assert!((itf_hot_a - 1.152e-6).abs() < 1e-18);
+
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    for boundary in 0..100 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("initialize NTC, diode and matched BJT branches at zero drive");
+        let expected_steps = if boundary == 99 { 6 } else { 4 };
+        assert_eq!(
+            steps.len(),
+            expected_steps,
+            "the four 10 ns BJT branches and 1 us generic routes advance at their own periods"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+    }
+
+    session
+        .set_signal_number("ui.bjt_itf_temperature.base_v", 0.65)
+        .expect("step every BJT base to charge its forward transit capacitance");
+    let mut first_voltages = None;
+    let mut settled_voltages = None;
+    for step in 0..1_000 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode and BJT transit-charge branches");
+        let expected_steps = if step % 100 == 99 { 6 } else { 4 };
+        assert_eq!(
+            steps.len(),
+            expected_steps,
+            "BJT branches solve each 10 ns step; NTC and diode refresh each microsecond"
+        );
+        assert!(
+            errors.is_empty(),
+            "unexpected SAADC route errors: {errors:?}"
+        );
+
+        let routed_ntc_v = voltage(&session, "adc.saadc.0_volts");
+        let routed_diode_v = voltage(&session, "adc.saadc.1_volts");
+        assert!(
+            (routed_ntc_v - ntc_v).abs() < 1e-9,
+            "NTC route stays isolated"
+        );
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode remains isolated"
+        );
+        let actual = [
+            voltage(&session, "adc.saadc.2_volts"),
+            voltage(&session, "adc.saadc.3_volts"),
+            voltage(&session, "adc.saadc.4_volts"),
+            voltage(&session, "adc.saadc.5_volts"),
+        ];
+        if step == 0 {
+            assert!(
+                (actual[0] - actual[1]).abs() < 1e-8,
+                "TITF hot branch must match its explicit hot-ITF card: {actual:?}"
+            );
+            assert!(
+                actual[0] > actual[2] + 1e-3,
+                "reduced hot ITF increases transit charge and raises the loaded collector: {actual:?}"
+            );
+            assert!(
+                (actual[0] - actual[3]).abs() > 1e-3,
+                "the temperature-adjusted ITF must differ from the ITF=0 control: {actual:?}"
+            );
+            assert!(
+                actual[3] > actual[2] + 1e-3,
+                "ITF=0 removes current suppression and changes the transient: {actual:?}"
+            );
+            first_voltages = Some(actual);
+        }
+        if step == 999 {
+            settled_voltages = Some(actual);
+        }
+
+        if step == 0 || step == 999 {
+            let codes = scan_saadc_channels::<6>(&mut bus);
+            for (channel, voltage_v) in [
+                (0, routed_ntc_v),
+                (1, routed_diode_v),
+                (2, actual[0]),
+                (3, actual[1]),
+                (4, actual[2]),
+                (5, actual[3]),
+            ] {
+                assert_eq!(
+                    codes[channel],
+                    expected_saadc_code(voltage_v),
+                    "SAADC AIN{channel} converts its routed solved voltage at step {step}"
+                );
+            }
+        }
+    }
+
+    let first = first_voltages.expect("first transit-charge sample exists");
+    let settled = settled_voltages.expect("settled transit-charge sample exists");
+    for (label, voltage_v) in [
+        ("TITF", settled[0]),
+        ("explicit hot ITF", settled[1]),
+        ("ITF=0", settled[3]),
+    ] {
+        assert!(
+            (voltage_v - settled[2]).abs() < 1e-3,
+            "TITF changes transit charge only; {label} and nominal ITF settle to one DC point: {settled:?}"
+        );
+    }
+    assert!(
+        (first[0] - first[2]).abs() > 1e-3,
+        "TITF must change the first transient before it decays: {first:?}"
+    );
+}

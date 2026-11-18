@@ -204,8 +204,9 @@
 //! minimum-base, base-current knee, collector, and emitter resistances using
 //! `ΔT = TEMP − TNOM`; `TRM1`/`TRM2` are accepted aliases for `TRBM1`/`TRBM2`.
 //! `TTF1`/`TTF2` and `TTR1`/`TTR2` apply the same polynomial to forward and
-//! reverse transit times. Without instance `TEMP`, these parameters retain
-//! their nominal values.
+//! reverse transit times. `TITF1`/`TITF2` apply it to `ITF`, which shapes the
+//! forward `XTF` transit-charge current adjustment. Without instance `TEMP`,
+//! these parameters retain their nominal values.
 //! A JFET instance `TEMP` adjusts level-1 `VTO` by `VTOTC` when supplied, or
 //! otherwise by `-TCV`; it adjusts `BETA` by `1.01^(BETATCE·ΔT)` when
 //! `BETATCE` is supplied, or otherwise by `(T/TNOM)^BEX` using absolute
