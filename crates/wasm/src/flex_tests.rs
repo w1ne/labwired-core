@@ -486,7 +486,10 @@ fn run_gpio_reuse_reference(runtime: &mut FlexRuntime, positive: bool) -> u32 {
     let second_led = runtime.port_id("led_state_2").ok();
     let outputs_are = |runtime: &FlexRuntime, value: f64| {
         runtime.read(led).unwrap() == value
-            && second_led.map_or(true, |port| runtime.read(port).unwrap() == value)
+            && match second_led {
+                Some(port) => runtime.read(port).unwrap() == value,
+                None => true,
+            }
     };
     if !positive {
         runtime.write(drive, 0.0).unwrap();
