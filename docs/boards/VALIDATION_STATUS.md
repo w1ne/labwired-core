@@ -46,9 +46,9 @@ The models column is a content digest over everything that board's `models` list
 | `nano-33-iot` | 🟡 smoke-manual | — | `cb8a0e2ff54e0e2a` | no silicon capture |
 | `metro-m4` | 🟡 smoke-manual | — | `a5f6c45af6ee38f1` | no silicon capture |
 | `arduino-uno-r4-minima` | 🟡 smoke-manual | — | `5b3496110ef61884` | no silicon capture |
-| `teensy-41` | 🟡 smoke-manual | — | `cc3a8d8596be6c87` | no silicon capture |
+| `teensy-41` | 🟡 smoke-manual | — | `c7cf44d3306671fa` | no silicon capture |
 | `stm32f7-discovery` | 🟡 smoke-manual | — | `39df8eed4c690e58` | no silicon capture |
-| `nucleo-g071rb` | 🟡 smoke-manual | — | `c33841185bd6e94e` | no silicon capture |
+| `nucleo-g071rb` | 🟡 smoke-manual | — | `04b2603e2f28e2a2` | no silicon capture |
 | `esp32c6-devkitc` | 🟡 smoke-manual | — | `f0775c7020bae421` | no silicon capture |
 | `litex-vexriscv` | 🟡 smoke-manual | — | `c95d90c83bf458f5` | no silicon capture |
 | `stm32l552` | 🟡 smoke-manual | — | `bd5a08f889a6c741` | no silicon capture |
