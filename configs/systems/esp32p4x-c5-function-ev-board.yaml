@@ -8,5 +8,13 @@ name: "esp32p4x-c5-function-ev-board"
 chip: "../chips/esp32p4.yaml"
 cpu_hz: 400_000_000
 debug_uart: "uart0"
-external_devices: []
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO7"
+      scl: "GPIO8"
+    config:
+      i2c_address: 0x77
 board_io: []

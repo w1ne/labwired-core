@@ -1,0 +1,101 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1073742188,
+      1341915104,
+      1341392896,
+      0,
+      73,
+      69,
+      56,
+      86,
+      75,
+      1343004672,
+      85,
+      95,
+      70,
+      79,
+      78,
+      52,
+      84,
+      53,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      67,
+      10,
+      80,
+      88
+    ],
+    "pc": 1073743188,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 1073742188,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 2860436,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 2860436,
+  "cycles": 2860436,
+  "instructions": 2860436,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 5000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "0f7fd680794d0986dc18b6b1e27987613d825d7bf217cd9afdbf32478c48303d",
+  "config": {
+    "firmware": "examples/esp32p4x-c5-function-ev-board/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32p4-demo",
+    "system": "examples/esp32p4x-c5-function-ev-board/../../configs/systems/esp32p4x-c5-function-ev-board.yaml",
+    "script": "examples/esp32p4x-c5-function-ev-board/io-smoke.yaml"
+  }
+}

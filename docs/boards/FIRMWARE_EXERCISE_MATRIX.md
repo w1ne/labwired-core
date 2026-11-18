@@ -268,7 +268,10 @@ _The DevKitC-1-N8R2 profile exercises the UART0 TX FIFO, GPIO4 output latch, and
 
 ### `esp32p4`
 
-_No beyond-rubric P4 peripheral is exercised: the P4X-C5 Function EV board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the second HP core, the LP core, MIPI-CSI/DSI, the H.264/JPEG/PPA media blocks, USB, Ethernet, the companion ESP32-C5 radio or the other P4 peripherals._
+_The P4X-C5 Function EV board smoke checks UART0 output and reads the BME280 chip ID and raw temperature over HP I2C0 routed through GPIO7/8. GPIO supports its data/enable/input head and only the four I2C matrix selector words needed for that route; IO_MUX stores the two pad setup words without electrical enforcement. The profile does not model mask ROM, the second HP core, the LP core, MIPI-CSI/DSI, the H.264/JPEG/PPA media blocks, USB, Ethernet, the companion ESP32-C5 radio, or the other P4 peripherals._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- BME280 ID and raw-temperature read over GPIO7/8-routed P4 HP I2C0 — `firmware-esp32p4-demo` · examples/esp32p4x-c5-function-ev-board/evidence/run/logs/run_smoke.log
 
 ### `esp32s2`
 
