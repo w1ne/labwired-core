@@ -4221,26 +4221,31 @@ fn smoke_adc1_dma_continuous_circular_two_laps() {
             if read(DMA1_CNDTR1) == expected.len() as u32
                 && read(DMA1_ISR) & transfer_flags == transfer_flags
             {
-                return true;
+                let channel_enabled = read(DMA1_CCR1) & DMA1_CCR1_EN != 0;
+                return (true, channel_enabled);
             }
             core::hint::spin_loop();
         }
-        false
+        (false, false)
     };
 
-    let first_lap = wait_for_lap();
+    let (first_lap, first_lap_enabled) = wait_for_lap();
     let first_sequence_matches = expected.iter().enumerate().all(|(rank, expected_value)| {
         (unsafe { read_volatile(results.add(rank)) }) == *expected_value
     });
     write(DMA1_IFCR, transfer_flags);
     unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
-    let second_lap = wait_for_lap();
+    let (second_lap, second_lap_enabled) = wait_for_lap();
     write(ADC1_CR2, 0);
 
     let final_flags = read(DMA1_ISR) & transfer_flags == transfer_flags;
     let irq_pending = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
-    let reloaded = read(DMA1_CNDTR1) == expected.len() as u32;
-    let channel_enabled = read(DMA1_CCR1) & DMA1_CCR1_EN != 0;
+    // Observe CNDTR at the TC boundary in `wait_for_lap`. CONT can advance
+    // again before firmware disables it, so the later count is not the reload
+    // value and must not be used to judge circular mode.
+    let reloaded = first_lap && second_lap;
+    let channel_enabled =
+        first_lap_enabled && second_lap_enabled && read(DMA1_CCR1) & DMA1_CCR1_EN != 0;
     let sequence_matches = expected.iter().enumerate().all(|(rank, expected_value)| {
         (unsafe { read_volatile(results.add(rank)) }) == *expected_value
     });
@@ -4259,7 +4264,11 @@ fn smoke_adc1_dma_continuous_circular_two_laps() {
         && channel_enabled
         && sequence_matches
         && eoc_cleared;
-    putbytes(b"ADC1 F1 CONTINUOUS CIRCULAR LAPS=2 FLAGS=");
+    putbytes(b"ADC1 F1 CONTINUOUS CIRCULAR LAP1=");
+    put_flag(first_lap);
+    putbytes(b" LAP2=");
+    put_flag(second_lap);
+    putbytes(b" FLAGS=");
     put_flag(final_flags);
     putbytes(b" IRQ=");
     put_flag(irq_pending);

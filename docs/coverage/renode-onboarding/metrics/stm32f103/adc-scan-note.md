@@ -33,7 +33,10 @@ It checks two laps into the same two-item PA0/PA1 buffer, both HTIF and TCIF,
 DMA1 channel 1's pending IRQ, CNDTR reload, the enabled channel, and EOC
 clearing after DMA reads DR. This covers the combined continuous-request and
 circular-reload path; it does not measure sample timing or long-duration ADC
-throughput.
+throughput. Reload is sampled at each transfer-complete boundary while CONT
+is still running; a later CNDTR read can reflect the next in-flight group.
+The initial final-count assertion failure is preserved under
+`docs/coverage/renode-onboarding/attempt-history/stm32f103/2026-11-18-continuous-circular-reload-missing/`.
 
 The two earlier failed integration attempts for repeated NVIC pending during
 the CPU-serviced scan remain under
