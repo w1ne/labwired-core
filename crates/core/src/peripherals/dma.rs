@@ -46,6 +46,8 @@ impl DmaChannel {
 
 /// `CCR.TEIE`.
 const CCR_TEIE: u32 = 1 << 3;
+/// `CCR.CIRC`: reload the transfer count and internal addresses at TC.
+const CCR_CIRC: u32 = 1 << 5;
 /// The scheduler token of the controller's arbiter event.
 const ARBITER_TOKEN: u32 = 0;
 
@@ -129,6 +131,9 @@ struct DmaObservation {
 /// - **One element per served request**: a non-mem2mem channel transfers a
 ///   single element per latched request; a mem2mem channel stays `active`
 ///   and moves one element each slot it wins.
+/// - **Peripheral circular mode**: at CNDTR zero with `CCR.CIRC` set, reload
+///   CNDTR and the internal addresses, retain `CCR.EN`, and wait for the next
+///   peripheral request (RM0008 §13.3.1). MEM2MEM does not use this path.
 /// - **One data item per element, at its programmed widths**: each element is
 ///   a [`DmaRequest`] copy reading PSIZE/MSIZE bytes from the source side and
 ///   writing the other width to the destination (zero-padded / truncated as
@@ -579,8 +584,20 @@ impl Dma1 {
             chan.active = chan.requests > 0;
         }
         if cndtr_after == 0 {
-            self.channels[i].active = false;
-            self.channels[i].requests = 0;
+            let chan = &mut self.channels[i];
+            if mem2mem == 0 && chan.ccr & CCR_CIRC != 0 {
+                // RM0008 §13.3.1: in peripheral circular mode the channel
+                // stays enabled, CNDTR reloads, and the internal address
+                // pointers return to their configured base for the next lap.
+                // Any already-latched peripheral requests belong to that lap.
+                chan.cndtr = chan.cndtr_initial;
+                chan.cpar_ptr = chan.cpar;
+                chan.cmar_ptr = chan.cmar;
+                chan.active = chan.requests > 0;
+            } else {
+                chan.active = false;
+                chan.requests = 0;
+            }
             self.isr |= 1 << (i * 4 + 1); // TCIF_x
             self.isr |= 1 << (i * 4); // GIF_x — global IF tracks the
                                       // logical-OR of TCIF/HTIF/TEIF.
@@ -929,6 +946,37 @@ mod tests {
         assert_eq!(reqs[0].addr, 0x2000_0010);
         // CH1 TCIF is bit 1.
         assert_ne!(dma.read_reg(0x00) & (1 << 1), 0);
+    }
+
+    /// RM0008 §13.3.1: peripheral circular mode reloads CNDTR and the
+    /// internal memory pointer at each completed lap while leaving CCR.EN set.
+    #[test]
+    fn peripheral_circular_mode_reloads_count_and_memory_pointer() {
+        let mut dma = Dma1::new();
+        let ccr = 1 | (1 << 1) | CCR_CIRC | (1 << 7) | (1 << 8) | (1 << 10);
+        dma.write_reg(0x0C, 2); // CH1 CNDTR
+        dma.write_reg(0x10, 0x4001_244C); // ADC1 DR
+        dma.write_reg(0x14, 0x2000_0100); // two half-word results
+        dma.write_reg(0x08, ccr); // EN | TCIE | CIRC | MINC | half-word widths
+
+        dma.dma_request(1);
+        let first = dma.tick().dma_requests.unwrap()[0];
+        assert_eq!((first.addr, first.remaining), (0x2000_0100, Some(1)));
+        dma.dma_request(1);
+        let second_tick = dma.tick();
+        let second = second_tick.dma_requests.unwrap()[0];
+        assert!(second_tick.irq, "TCIE reports the completed circular lap");
+        assert_eq!((second.addr, second.remaining), (0x2000_0102, Some(0)));
+        assert_eq!(dma.read_reg(0x0C), 2, "CNDTR reloads at TC");
+        assert_eq!(dma.read_reg(0x08) & 1, 1, "the channel remains enabled");
+        assert_ne!(dma.read_reg(0x00) & (1 << 1), 0, "TCIF is set");
+
+        dma.write_reg(0x04, 0xF); // clear CH1 flags
+        dma.dma_request(1);
+        let next_lap = dma.tick().dma_requests.unwrap()[0];
+        assert_eq!(next_lap.addr, 0x2000_0100, "CMAR pointer reloads");
+        assert_eq!(next_lap.remaining, Some(1));
+        assert_eq!(dma.read_reg(0x0C), 1);
     }
 
     /// MEM2MEM keeps DIR: DIR=0 (ST HAL `DMA_MEMORY_TO_MEMORY`) copies

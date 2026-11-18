@@ -152,11 +152,13 @@ const DMA1_CMAR1: u32 = DMA1_BASE + 0x14;
 const DMA1_TCIF1: u32 = 1 << 1;
 const DMA1_CCR1_EN: u32 = 1;
 const DMA1_CCR1_TCIE: u32 = 1 << 1;
+const DMA1_CCR1_CIRC: u32 = 1 << 5;
 const DMA1_CCR1_MINC: u32 = 1 << 7;
 const DMA1_CCR1_PSIZE_HALFWORD: u32 = 1 << 8;
 const DMA1_CCR1_MSIZE_HALFWORD: u32 = 1 << 10;
 
 static mut ADC1_DMA_SCAN_RESULTS: [u16; 13] = [0; 13];
+static mut ADC1_DMA_CIRCULAR_RESULTS: [u16; 2] = [0; 2];
 
 const I2C1_BASE: u32 = 0x4000_5400;
 const I2C1_CR1: u32 = I2C1_BASE + 0x00;
@@ -321,6 +323,7 @@ fn main() -> ! {
     smoke_rcc_clock_gates(rcc_reset);
     smoke_adc1_channel0();
     smoke_adc1_dma_scan_rank_boundaries();
+    smoke_adc1_dma_circular_two_laps();
     unsafe { smoke_systick_exception_state() };
     unsafe { smoke_systick_external_pause_resume() };
     unsafe { smoke_systick_handler_delivery() };
@@ -3931,6 +3934,90 @@ fn smoke_adc1_dma_scan_rank_boundaries() {
     } else {
         b" FAIL"
     });
+}
+
+/// Run two software-started two-rank scans through DMA1 channel 1 in circular
+/// mode. Each completed lap must reload CNDTR and the memory pointer while
+/// keeping the channel enabled for the next peripheral requests.
+fn smoke_adc1_dma_circular_two_laps() {
+    let read = |address: u32| unsafe { read_volatile(address as *const u32) };
+    let write = |address: u32, value: u32| unsafe { write_volatile(address as *mut u32, value) };
+    let expected = [0x03FFu16, 0x07FF];
+    let rank_channels = (1 << 5) | (1 << 15); // SQ1=IN0, SQ2=IN1
+
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, 0xF);
+    write(DMA1_CNDTR1, expected.len() as u32);
+    write(DMA1_CPAR1, ADC1_DR);
+    let results = core::ptr::addr_of_mut!(ADC1_DMA_CIRCULAR_RESULTS).cast::<u16>();
+    write(DMA1_CMAR1, results as u32);
+    write(
+        DMA1_CCR1,
+        DMA1_CCR1_EN
+            | DMA1_CCR1_TCIE
+            | DMA1_CCR1_CIRC
+            | DMA1_CCR1_MINC
+            | DMA1_CCR1_PSIZE_HALFWORD
+            | DMA1_CCR1_MSIZE_HALFWORD,
+    );
+
+    let scan_base = ADC1_ADON | ADC1_DMA | ADC1_SOFTWARE_TRIGGER;
+    write(ADC1_CR1, ADC1_SCAN);
+    write(ADC1_SQR3, rank_channels);
+    write(ADC1_SQR1, 1 << 20); // L=1 -> two ranks
+
+    let run_lap = || {
+        write(ADC1_CR2, scan_base);
+        write(ADC1_CR2, scan_base | ADC1_SWSTART);
+        for _ in 0..100_000 {
+            if read(DMA1_ISR) & DMA1_TCIF1 != 0 {
+                return true;
+            }
+            core::hint::spin_loop();
+        }
+        false
+    };
+
+    let first_complete = run_lap();
+    let first_reloaded = read(DMA1_CNDTR1) == expected.len() as u32;
+    let mut first_matches = first_complete;
+    for (rank, expected_value) in expected.iter().enumerate() {
+        first_matches &= unsafe { read_volatile(results.add(rank)) } == *expected_value;
+    }
+
+    // Stop between scans so the second TCIF belongs to a distinct circular
+    // lap; the DMA channel itself stays enabled with its reloaded count.
+    write(DMA1_IFCR, 0xF);
+    let second_complete = run_lap();
+    let second_reloaded = read(DMA1_CNDTR1) == expected.len() as u32;
+    let mut second_matches = second_complete;
+    for (rank, expected_value) in expected.iter().enumerate() {
+        second_matches &= unsafe { read_volatile(results.add(rank)) } == *expected_value;
+    }
+    let enabled = read(DMA1_CCR1) & DMA1_CCR1_EN != 0;
+    let eoc_cleared = read(ADC1_SR) & ADC1_EOC == 0;
+
+    write(ADC1_CR2, 0);
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, 0xF);
+
+    let count_reloaded = first_reloaded && second_reloaded;
+    let sequence_matches = first_matches && second_matches;
+    let passed = first_complete
+        && second_complete
+        && count_reloaded
+        && sequence_matches
+        && enabled
+        && eoc_cleared;
+    putbytes(b"ADC1 F1 CIRCULAR LAPS=2 RELOAD=");
+    put_flag(count_reloaded);
+    putbytes(b" SEQ=");
+    put_flag(sequence_matches);
+    putbytes(b" ENABLED=");
+    put_flag(enabled);
+    putbytes(b" EOC_CLEAR=");
+    put_flag(eoc_cleared);
+    putline(if passed { b" ok" } else { b" FAIL" });
 }
 
 fn smoke_usart2_txe_irq() {

@@ -12,11 +12,18 @@ when CR2.DMA is set. The imported chip profile routes `adc1_rx` to DMA1 channel
 1, the STM32F1 fixed mapping. The unit regression checks the per-rank request;
 the imported-system smoke checks the request-to-memory path.
 
+The smoke also runs two software-started two-rank scans with DMA1 channel 1 in
+circular mode. It checks both buffer laps, CNDTR reload to 2 at transfer
+complete, the channel remaining enabled, and EOC clearing after DMA reads DR.
+This verifies DMA circular reload between scans; continuous ADC operation,
+circular half-transfer behavior, and other DMA routes remain unclaimed.
+
 The two earlier failed integration attempts for repeated NVIC pending during
 the CPU-serviced scan remain under
 `docs/coverage/renode-onboarding/attempt-history/stm32f103/`. The passing
 smoke claims the first-rank pending bit only. It does not exercise continuous
-ADC scans, circular DMA, other DMA routes, or physical hardware behavior.
+ADC scans, circular half-transfer behavior, other DMA routes, or physical
+hardware behavior.
 
 Register behavior follows ST RM0008 Rev 21 §§11.3.8, 11.12.3, 11.12.9–11.12.11,
-and 13.3.4: [STM32F1 reference manual](https://www.st.com/resource/en/reference_manual/rm0008-stm32f103xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf).
+and 13.3.1, 13.3.4: [STM32F1 reference manual](https://www.st.com/resource/en/reference_manual/rm0008-stm32f103xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf).
