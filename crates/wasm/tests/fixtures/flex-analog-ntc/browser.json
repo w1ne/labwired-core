@@ -1,0 +1,366 @@
+{
+  "status": "passed",
+  "runtime": "compiled-wasm",
+  "firmware_bytes": 261,
+  "cpu_emulation": false,
+  "catalog_device_type": "ntc-thermistor",
+  "alarm_threshold_mv": 2000,
+  "observations": {
+    "cold": {
+      "temperature_c": 0,
+      "voltage_mv": 756,
+      "alarm_state": false,
+      "time_ns": 2000,
+      "analog": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "ntc-sensor.voltage_mv",
+            "port_names": [
+              "temperature_mv"
+            ],
+            "unit": "mV"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              1650
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 1000,
+            "values": [
+              756
+            ]
+          },
+          {
+            "cycle": 2,
+            "time_ns": 2000,
+            "values": [
+              756
+            ]
+          }
+        ]
+      },
+      "digital": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "id": 0,
+            "initial": false,
+            "port_names": [
+              "hot_alarm_drive"
+            ],
+            "signal": "alarm.drive"
+          },
+          {
+            "id": 1,
+            "initial": false,
+            "port_names": [
+              "hot_alarm_state"
+            ],
+            "signal": "alarm.state"
+          }
+        ],
+        "dropped": 0,
+        "edges": []
+      }
+    },
+    "ambient": {
+      "temperature_c": 25,
+      "voltage_mv": 1650,
+      "alarm_state": false,
+      "time_ns": 2000,
+      "analog": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "ntc-sensor.voltage_mv",
+            "port_names": [
+              "temperature_mv"
+            ],
+            "unit": "mV"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              1650
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 1000,
+            "values": [
+              1650
+            ]
+          },
+          {
+            "cycle": 2,
+            "time_ns": 2000,
+            "values": [
+              1650
+            ]
+          }
+        ]
+      },
+      "digital": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "id": 0,
+            "initial": false,
+            "port_names": [
+              "hot_alarm_drive"
+            ],
+            "signal": "alarm.drive"
+          },
+          {
+            "id": 1,
+            "initial": false,
+            "port_names": [
+              "hot_alarm_state"
+            ],
+            "signal": "alarm.state"
+          }
+        ],
+        "dropped": 0,
+        "edges": []
+      }
+    },
+    "hot": {
+      "temperature_c": 50,
+      "voltage_mv": 2428,
+      "alarm_state": true,
+      "time_ns": 2000,
+      "analog": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "ntc-sensor.voltage_mv",
+            "port_names": [
+              "temperature_mv"
+            ],
+            "unit": "mV"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              1650
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 1000,
+            "values": [
+              2428
+            ]
+          },
+          {
+            "cycle": 2,
+            "time_ns": 2000,
+            "values": [
+              2428
+            ]
+          }
+        ]
+      },
+      "digital": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "id": 0,
+            "initial": false,
+            "port_names": [
+              "hot_alarm_drive"
+            ],
+            "signal": "alarm.drive"
+          },
+          {
+            "id": 1,
+            "initial": false,
+            "port_names": [
+              "hot_alarm_state"
+            ],
+            "signal": "alarm.state"
+          }
+        ],
+        "dropped": 0,
+        "edges": [
+          {
+            "ch": 0,
+            "time_ns": 1000,
+            "value": 1
+          },
+          {
+            "ch": 1,
+            "time_ns": 2000,
+            "value": 1
+          }
+        ]
+      }
+    }
+  },
+  "native_model_equality": true,
+  "run_report": {
+    "assumptions": [
+      "The registered 10 kΩ B3950 NTC model and its 10 kΩ pull-down divider provide the sensor millivolts.",
+      "Portable firmware asserts the alarm above a fixed 2000 mV threshold; it does not run a target ADC driver."
+    ],
+    "execution_path": "flex_portable_wasm",
+    "manifest_sha256": "0b30434b802e8fbb68d5d4ff5a9dd8ac1de186cbb3e5b9f4aba0c16fabfca48f",
+    "model_name": "Reusable NTC over-temperature alarm",
+    "models": [
+      {
+        "adapter": "behavior",
+        "config": {
+          "device_type": "ntc-thermistor"
+        },
+        "id": "ntc-sensor",
+        "inputs": [
+          {
+            "name": "temperature",
+            "signal": "environment.temperature_c"
+          }
+        ],
+        "model_type": "ntc-thermistor",
+        "outputs": [
+          {
+            "name": "voltage_mv",
+            "signal": "sensor.output_mv"
+          }
+        ],
+        "step_ns": 1000
+      },
+      {
+        "adapter": "behavior",
+        "config": {
+          "behavior": {
+            "outputs": [
+              "state"
+            ],
+            "pin_defaults": {
+              "state": false
+            },
+            "primitive": "gpio_device",
+            "rules": [
+              {
+                "do": [
+                  {
+                    "goto": "on"
+                  },
+                  {
+                    "level": 1,
+                    "pin": "state"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) != 0"
+              },
+              {
+                "do": [
+                  {
+                    "goto": "off"
+                  },
+                  {
+                    "level": 0,
+                    "pin": "state"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) == 0"
+              }
+            ],
+            "states": [
+              "off",
+              "on"
+            ]
+          }
+        },
+        "id": "alarm-indicator",
+        "inputs": [
+          {
+            "name": "drive",
+            "signal": "alarm.drive"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "state",
+            "signal": "alarm.state"
+          }
+        ],
+        "step_ns": 1000
+      }
+    ],
+    "ports": [
+      {
+        "access": "write",
+        "initial": 25,
+        "kind": "number",
+        "name": "temperature_c",
+        "signal": "environment.temperature_c",
+        "unit": "°C"
+      },
+      {
+        "access": "read",
+        "kind": "number",
+        "name": "temperature_mv",
+        "signal": "sensor.output_mv",
+        "unit": "mV"
+      },
+      {
+        "access": "write",
+        "initial": 0,
+        "kind": "bool",
+        "name": "hot_alarm_drive",
+        "signal": "alarm.drive"
+      },
+      {
+        "access": "read",
+        "kind": "bool",
+        "name": "hot_alarm_state",
+        "signal": "alarm.state"
+      }
+    ],
+    "schema_version": 1,
+    "scope_notes_complete": true,
+    "target_cpu_emulated": false,
+    "time_unit": "ns",
+    "unsupported_checks": [
+      "Original target-MCU firmware, ADC peripheral behavior, thermistor tolerance, divider tolerance, and physical measurement are not modeled."
+    ]
+  },
+  "checks": [
+    "portable-firmware-execution",
+    "registered-ntc-formula",
+    "named-analog-and-digital-ports",
+    "oscilloscope-nanoseconds",
+    "logic-analyzer-nanoseconds",
+    "cold-negative-control",
+    "hot-positive-control"
+  ],
+  "measured_browser_ms": 680.6,
+  "browser": "156.0.8078.79",
+  "browser_driver": "Playwright",
+  "core_commit": "a65c60c6cf4c9fd8a30814bc1b40a3d1af6d79d2",
+  "firmware_sha256": "3ebee4a49c9f4d5d35496e4275bb8b9eda8742a1114abcede18bcdf08d727768",
+  "firmware_source_sha256": "ca88ab2e7f22794a8929caa67791161f64eb4bcb359e4fe2b8927c05408d0204",
+  "system_sha256": "0b30434b802e8fbb68d5d4ff5a9dd8ac1de186cbb3e5b9f4aba0c16fabfca48f"
+}

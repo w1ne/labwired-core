@@ -1,0 +1,208 @@
+{
+  "ambient": {
+    "alarm_state": false,
+    "analog": {
+      "channels": [
+        {
+          "name": "ntc-sensor.voltage_mv",
+          "port_names": [
+            "temperature_mv"
+          ],
+          "unit": "mV"
+        }
+      ],
+      "dropped": 0,
+      "samples": [
+        {
+          "cycle": 0,
+          "time_ns": 0,
+          "values": [
+            1650.0
+          ]
+        },
+        {
+          "cycle": 1,
+          "time_ns": 1000,
+          "values": [
+            1650.0
+          ]
+        },
+        {
+          "cycle": 2,
+          "time_ns": 2000,
+          "values": [
+            1650.0
+          ]
+        }
+      ],
+      "time_unit": "ns"
+    },
+    "digital": {
+      "channels": [
+        {
+          "id": 0,
+          "initial": false,
+          "port_names": [
+            "hot_alarm_drive"
+          ],
+          "signal": "alarm.drive"
+        },
+        {
+          "id": 1,
+          "initial": false,
+          "port_names": [
+            "hot_alarm_state"
+          ],
+          "signal": "alarm.state"
+        }
+      ],
+      "dropped": 0,
+      "edges": [],
+      "time_unit": "ns"
+    },
+    "temperature_c": 25.0,
+    "time_ns": 2000,
+    "voltage_mv": 1650.0
+  },
+  "cold": {
+    "alarm_state": false,
+    "analog": {
+      "channels": [
+        {
+          "name": "ntc-sensor.voltage_mv",
+          "port_names": [
+            "temperature_mv"
+          ],
+          "unit": "mV"
+        }
+      ],
+      "dropped": 0,
+      "samples": [
+        {
+          "cycle": 0,
+          "time_ns": 0,
+          "values": [
+            1650.0
+          ]
+        },
+        {
+          "cycle": 1,
+          "time_ns": 1000,
+          "values": [
+            756.0
+          ]
+        },
+        {
+          "cycle": 2,
+          "time_ns": 2000,
+          "values": [
+            756.0
+          ]
+        }
+      ],
+      "time_unit": "ns"
+    },
+    "digital": {
+      "channels": [
+        {
+          "id": 0,
+          "initial": false,
+          "port_names": [
+            "hot_alarm_drive"
+          ],
+          "signal": "alarm.drive"
+        },
+        {
+          "id": 1,
+          "initial": false,
+          "port_names": [
+            "hot_alarm_state"
+          ],
+          "signal": "alarm.state"
+        }
+      ],
+      "dropped": 0,
+      "edges": [],
+      "time_unit": "ns"
+    },
+    "temperature_c": 0.0,
+    "time_ns": 2000,
+    "voltage_mv": 756.0
+  },
+  "hot": {
+    "alarm_state": true,
+    "analog": {
+      "channels": [
+        {
+          "name": "ntc-sensor.voltage_mv",
+          "port_names": [
+            "temperature_mv"
+          ],
+          "unit": "mV"
+        }
+      ],
+      "dropped": 0,
+      "samples": [
+        {
+          "cycle": 0,
+          "time_ns": 0,
+          "values": [
+            1650.0
+          ]
+        },
+        {
+          "cycle": 1,
+          "time_ns": 1000,
+          "values": [
+            2428.0
+          ]
+        },
+        {
+          "cycle": 2,
+          "time_ns": 2000,
+          "values": [
+            2428.0
+          ]
+        }
+      ],
+      "time_unit": "ns"
+    },
+    "digital": {
+      "channels": [
+        {
+          "id": 0,
+          "initial": false,
+          "port_names": [
+            "hot_alarm_drive"
+          ],
+          "signal": "alarm.drive"
+        },
+        {
+          "id": 1,
+          "initial": false,
+          "port_names": [
+            "hot_alarm_state"
+          ],
+          "signal": "alarm.state"
+        }
+      ],
+      "dropped": 0,
+      "edges": [
+        {
+          "ch": 0,
+          "time_ns": 1000,
+          "value": 1
+        },
+        {
+          "ch": 1,
+          "time_ns": 2000,
+          "value": 1
+        }
+      ],
+      "time_unit": "ns"
+    },
+    "temperature_c": 50.0,
+    "time_ns": 2000,
+    "voltage_mv": 2428.0
+  }
+}

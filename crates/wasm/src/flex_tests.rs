@@ -41,6 +41,12 @@ const TMP36_FIRMWARE: &[u8] = include_bytes!("../tests/fixtures/flex-analog-tmp3
 const TMP36_FIRMWARE_SOURCE: &[u8] =
     include_bytes!("../tests/fixtures/flex-analog-tmp36/firmware.rs");
 const TMP36_SYSTEM_BYTES: &[u8] = include_bytes!("../tests/fixtures/flex-analog-tmp36/system.yaml");
+const NTC_SYSTEM: &str = include_str!("../tests/fixtures/flex-analog-ntc/system.yaml");
+const NTC_BROWSER: &str = include_str!("../tests/fixtures/flex-analog-ntc/browser.json");
+const NTC_NATIVE: &str = include_str!("../tests/fixtures/flex-analog-ntc/native.json");
+const NTC_FIRMWARE: &[u8] = include_bytes!("../tests/fixtures/flex-analog-ntc/firmware.wasm");
+const NTC_FIRMWARE_SOURCE: &[u8] = include_bytes!("../tests/fixtures/flex-analog-ntc/firmware.rs");
+const NTC_SYSTEM_BYTES: &[u8] = include_bytes!("../tests/fixtures/flex-analog-ntc/system.yaml");
 const GPIO_REUSE_POMODORO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/system.yaml");
 const GPIO_REUSE_UNO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/arduino-uno.yaml");
 
@@ -1206,6 +1212,141 @@ fn gpio_reuse_evidence(yaml: &str, positive: bool) -> serde_json::Value {
         "time_ns": runtime.time_ns(),
         "trace": pomodoro_digital_evidence(&mut runtime),
     })
+}
+
+fn ntc_analog_alarm_reference(temperature_c: f64) -> serde_json::Value {
+    let mut runtime = FlexRuntime::from_yaml(NTC_SYSTEM).expect("load registered NTC source");
+    let temperature = runtime.port_id("temperature_c").unwrap();
+    let voltage = runtime.port_id("temperature_mv").unwrap();
+    let alarm_drive = runtime.port_id("hot_alarm_drive").unwrap();
+    let alarm_state = runtime.port_id("hot_alarm_state").unwrap();
+    runtime.write(temperature, temperature_c).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    let voltage_mv = runtime.read(voltage).unwrap();
+    runtime
+        .write(alarm_drive, if voltage_mv >= 2_000.0 { 1.0 } else { 0.0 })
+        .unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    let analog = runtime.analog_trace_snapshot(0);
+    let digital = runtime.digital_trace_snapshot(0);
+    assert_eq!(analog.time_unit, "ns");
+    assert_eq!(analog.channels.len(), 1);
+    assert_eq!(analog.channels[0].name, "ntc-sensor.voltage_mv");
+    assert_eq!(analog.channels[0].unit, "mV");
+    assert_eq!(analog.channels[0].port_names, ["temperature_mv"]);
+    assert_eq!(analog.samples.len(), 3);
+    assert_eq!(digital.time_unit, "ns");
+    serde_json::json!({
+        "temperature_c": temperature_c,
+        "voltage_mv": voltage_mv,
+        "alarm_state": runtime.read(alarm_state).unwrap() == 1.0,
+        "time_ns": runtime.time_ns(),
+        "analog": {
+            "time_unit": analog.time_unit,
+            "channels": analog.channels,
+            "dropped": analog.dropped,
+            "samples": analog.samples.into_iter().map(|sample| serde_json::json!({
+                "cycle": sample.cycle,
+                "time_ns": sample.time_ns,
+                "values": sample.values,
+            })).collect::<Vec<_>>(),
+        },
+        "digital": {
+            "time_unit": digital.time_unit,
+            "channels": digital.channels,
+            "dropped": digital.dropped,
+            "edges": digital.edges.into_iter().map(|edge| serde_json::json!({
+                "ch": edge.ch,
+                "time_ns": edge.time_ns,
+                "value": edge.value,
+            })).collect::<Vec<_>>(),
+        },
+    })
+}
+
+#[test]
+fn flex_ntc_reuses_registered_formula_for_a_portable_overtemperature_workload() {
+    let yaml: serde_yaml::Value = serde_yaml::from_str(NTC_SYSTEM).unwrap();
+    assert_eq!(
+        yaml["cosim_models"][0]["config"]["device_type"],
+        "ntc-thermistor"
+    );
+    assert_eq!(yaml["ports"][0]["unit"], "°C");
+    assert_eq!(yaml["ports"][1]["unit"], "mV");
+
+    let cold = ntc_analog_alarm_reference(0.0);
+    let ambient = ntc_analog_alarm_reference(25.0);
+    let hot = ntc_analog_alarm_reference(50.0);
+    assert!(cold["voltage_mv"].as_f64().unwrap() < 2_000.0);
+    assert_eq!(ambient["voltage_mv"], 1_650.0);
+    assert!(hot["voltage_mv"].as_f64().unwrap() > 2_000.0);
+    assert_eq!(cold["alarm_state"], false);
+    assert_eq!(ambient["alarm_state"], false);
+    assert_eq!(hot["alarm_state"], true);
+    assert_eq!(hot["digital"]["edges"].as_array().unwrap().len(), 2);
+    assert_eq!(hot["digital"]["edges"][0]["time_ns"], 1_000);
+    assert_eq!(hot["digital"]["edges"][1]["time_ns"], 2_000);
+
+    let measured = serde_json::json!({ "cold": cold, "ambient": ambient, "hot": hot });
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/flex-analog-ntc/native.json");
+    if std::env::var_os("LABWIRED_REGEN_FLEX_NTC").is_some() {
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&measured).unwrap() + "\n",
+        )
+        .unwrap();
+    }
+    let expected: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(measured, expected, "registered NTC workload changed");
+}
+
+#[test]
+fn flex_ntc_browser_evidence_pins_firmware_and_manifest_inputs() {
+    use sha2::{Digest, Sha256};
+
+    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Number(number) => {
+                serde_json::json!(number.as_f64().expect("finite fixture number"))
+            }
+            serde_json::Value::Array(items) => {
+                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
+            }
+            serde_json::Value::Object(fields) => serde_json::Value::Object(
+                fields
+                    .iter()
+                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+
+    fn sha256(bytes: &[u8]) -> String {
+        format!("{:x}", Sha256::digest(bytes))
+    }
+
+    let browser: serde_json::Value = serde_json::from_str(NTC_BROWSER).unwrap();
+    let native: serde_json::Value = serde_json::from_str(NTC_NATIVE).unwrap();
+    let core_commit = browser["core_commit"].as_str().unwrap();
+    assert_eq!(core_commit.len(), 40);
+    assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(browser["native_model_equality"], true);
+    assert_eq!(browser["firmware_sha256"], sha256(NTC_FIRMWARE));
+    assert_eq!(
+        browser["firmware_source_sha256"],
+        sha256(NTC_FIRMWARE_SOURCE)
+    );
+    assert_eq!(browser["system_sha256"], sha256(NTC_SYSTEM_BYTES));
+    for case in ["cold", "ambient", "hot"] {
+        assert_eq!(
+            normalize_numbers(&browser["observations"][case]),
+            normalize_numbers(&native[case]),
+            "browser NTC evidence for {case} must equal native analog/digital traces"
+        );
+    }
 }
 
 #[test]
