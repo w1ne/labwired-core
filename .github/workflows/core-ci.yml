@@ -1508,6 +1508,14 @@ jobs:
       - name: Browser analog macros and regulated supply (wasm == native, bit for bit)
         if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: node scripts/test_browser_analog_macros.mjs
+      # Portable firmware executes directly as Wasm, through named device ports.
+      # Compare digital transitions and the complete analog trace with the
+      # native reference, and require incorrect drivers to fail. No CPU model.
+      - name: Browser Flex portable firmware and mixed-signal contracts
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
+        run: |
+          sh crates/wasm/tests/fixtures/flex-mixed-signal/build.sh
+          node scripts/test_browser_flex.mjs
 
   # Post-merge since 2026-11-13 (the job id keeps its old name so the
   # lane references in crates/core/src/tests and validation/ stay valid).
@@ -2190,7 +2198,8 @@ jobs:
         run: >
           cargo test --release -p labwired-core --features event-scheduler --lib --test world_esp32c3_ble_pong --test esp32c3_usb_cdc_console --test esp32c3_pms_shipped_firmware --test world_can_dashboard_demo &&
           cargo test --release -p labwired-core --features event-scheduler --test gates -- event_scheduler:: release_only_cfg_ratchet:: &&
-          cargo test --release -p labwired-core --features event-scheduler --test world -- world_can_perf::
+          cargo test --release -p labwired-core --features event-scheduler --test world -- world_can_perf:: &&
+          cargo test --release -p labwired-physics --lib
 
       # `esp32_classic_walk_differential` is BOTH arms here, and both arms are
       # covered pre-merge as well — do not read this step as their only lane.

@@ -1,17 +1,20 @@
 # Narrow ESP32-C5 HP-core profile for the ESP32-C5-DevKitC-1-N8R8.
 #
-# This is a fast-boot UART profile. The simulator loads a bare ELF at its entry
+# This is a fast-start board-smoke profile. The simulator loads a bare ELF at its entry
 # point; it does not execute the C5 mask ROM or the Espressif bootloader.
-# UART0's FIFO/status register head and the official GPIO data/enable/input
-# head through IN1 are modeled. PCR clock control, UART1, USB, PSRAM, Wi-Fi,
-# Bluetooth, 802.15.4, LP core, IO_MUX and the RGB LED protocol are not
-# claimed by this descriptor.
+# Models UART0's FIFO/status register head, the official GPIO data/enable/input
+# registers through IN1, and the I2C0 command-list engine with the GPIO8/9
+# matrix route. A system may attach a GPIO-observed WS2812 model to GPIO27; RMT
+# is not modelled. IO_MUX is register storage only. PCR clock control, UART1,
+# USB, PSRAM, Wi-Fi, Bluetooth, 802.15.4 and LP core are outside this profile.
 #
-# Sources checked 2026-11-12:
+# Sources checked 2026-11-17:
 #   ESP32-C5 product page:
 #     https://www.espressif.com/en/products/socs/esp32-c5
 #   ESP32-C5-DevKitC-1 v1.2 guide:
 #     https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c5/esp32-c5-devkitc-1/user_guide.html
+#   ESP32-C5-DevKitC-1 v1.2 schematic (WS2812B on GPIO27):
+#     https://dl.espressif.com/dl/schematics/SCH_ESP32-C5-DevkitC-1_V1.2_20250211.pdf
 #   ESP-IDF C5 memory map and register definitions:
 #     https://github.com/espressif/esp-idf/tree/master/components/soc/esp32c5
 
@@ -54,11 +57,29 @@ peripherals:
     size: "32B"
     config:
       echo_stdout: true
-  # GPIO data/enable/input head at DR_REG_GPIO_BASE 0x6009_1000 (esp-idf C5
-  # reg_base.h). ENABLE @0x34 and IN @0x64 — not the C3 ENABLE @0x20 / IN
-  # @0x3C map. The 108-byte window ends at IN1; matrix, PIN_x and IO_MUX
-  # are omitted.
+  # Direct GPIO0..28 output, plus the I2C0 matrix selector subset used by the
+  # BME280 smoke. C5 moves GPIO_ENABLE/GPIO_IN and matrix selectors from the
+  # C3 map; the chip-specific adapter normalizes those registers and leaves
+  # other matrix functions outside this profile.
   - id: "gpio"
     type: "esp32c5_gpio"
     base_address: 0x60091000
-    size: "108B"
+    size: "4KB"
+
+  # C5 HP I2C0 command-list engine. It uses the C3-family behavioral engine
+  # with C5's core pacing and interrupt source. Only the route used by this
+  # smoke is enabled in the C5 GPIO adapter.
+  - id: "i2c0"
+    type: "esp32c5_i2c"
+    irq: 55
+    base_address: 0x60004000
+    size: "4KB"
+
+  # Register-backed pad words permit the firmware's GPIO5/8/9 function writes;
+  # this descriptor does not claim electrical IO_MUX enforcement.
+  - id: "io_mux"
+    type: "declarative"
+    base_address: 0x60090000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32c6/io_mux.yaml"

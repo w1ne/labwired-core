@@ -18,9 +18,9 @@
       134219280,
       537001968,
       28,
-      134219088
+      134219086
     ],
-    "pc": 134219088,
+    "pc": 134219086,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "4dc50ffb3d13c10020e6584eb2082357961d471359e78a7f8db8f18f43106aa4",
+  "firmware_hash": "5c1ea62c841348d4b83969c8334f627ce7f187772b47df1e0a86bfdb59e7d3d5",
   "config": {
     "firmware": "examples/nucleo-h723zg/../../target/thumbv7em-none-eabi/release/firmware-nucleo-h723zg-smoke",
     "system": "examples/nucleo-h723zg/../../configs/systems/nucleo-h723zg.yaml",

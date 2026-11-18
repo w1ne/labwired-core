@@ -1,0 +1,13 @@
+# Raspberry Pi Pico W (RP2040) with an external BME280 breakout on I2C0.
+# The CYW43439 radio, WL_GPIO0 onboard LED path, and USB are outside this
+# narrow sensor profile; GP0 UART0 is the external smoke console.
+name: "pico-w-bme280"
+chip: "../chips/rp2040.yaml"
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x77
+board_io: []

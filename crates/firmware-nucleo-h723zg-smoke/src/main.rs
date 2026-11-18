@@ -58,7 +58,7 @@ fn main() -> ! {
 
         // Reset HSI is 64 MHz. BRR = 64 MHz / 115200, rounded to 556.
         write_volatile(USART3_BRR, 556);
-        write_volatile(USART3_CR1, (1 << 13) | (1 << 3)); // UE | TE
+        write_volatile(USART3_CR1, (1 << 0) | (1 << 3)); // UE | TE (STM32v2 CR1)
     }
 
     send(b"NUCLEO-H723ZG: USART3 + LD1\n");

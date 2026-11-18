@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1074827528,
+      24,
+      432,
+      100001,
+      10,
+      100001,
+      2147483648,
+      539000816,
+      0,
+      0,
+      0,
+      0,
+      0,
+      539000816,
+      389,
+      388
+    ],
+    "pc": 388,
+    "xpsr": 1627389952,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 300000,
+  "cycles": 300000,
+  "instructions": 300000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 300000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 300000
+    }
+  },
+  "limits": {
+    "max_steps": 300000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "748edaed63e3a107850e479caac774d349d112432606213f2a04d341eba38215",
+  "config": {
+    "firmware": "examples/lp-mspm0g3507-launchpad/build/firmware.elf",
+    "system": "examples/lp-mspm0g3507-launchpad/../../configs/systems/lp-mspm0g3507.yaml",
+    "script": "examples/lp-mspm0g3507-launchpad/io-smoke.yaml"
+  }
+}
