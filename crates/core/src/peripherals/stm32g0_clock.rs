@@ -142,7 +142,19 @@ pub fn validate_timed_uart_clock(bus: &SystemBus, uart: &str) -> Result<G0Clocks
         .find_peripheral_index_by_name("rcc")
         .ok_or_else(|| anyhow::anyhow!("G0 RCC missing"))?;
     ensure!(
-        bus.peripherals[rcc].dev.stm32_uart_pad_af_override() == Some(1),
+        // Match the required register-map contract, not a UART AF number:
+        // AT32 also uses AF1, but its CRM offsets are different.
+        [
+            ("cr", 0x00),
+            ("iopenr", 0x34),
+            ("ahbenr", 0x38),
+            ("apbenr1", 0x3c),
+            ("apbenr2", 0x40)
+        ]
+        .iter()
+        .all(
+            |(name, offset)| bus.peripherals[rcc].dev.clock_gate_reg_offset(name) == Some(*offset)
+        ),
         "timing guard requires the STM32G0 RCC profile"
     );
     let clocks = G0Clocks::from_registers(

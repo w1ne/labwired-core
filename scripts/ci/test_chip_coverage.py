@@ -22,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 GATE = REPO_ROOT / "scripts/ci/chip_coverage.py"
 
 
-def build_tree(root: Path, *, chips, arduino_boards, matrix_ids, ledger, scripts=()):
+def build_tree(root: Path, *, chips, arduino_boards, matrix_ids, ledger, scripts=(), dynamic=False):
     """Write the smallest tree the gate can grade.
 
     scripts: iterable of (workflow_name, script_rel, system_rel, chip) — a
@@ -36,18 +36,25 @@ def build_tree(root: Path, *, chips, arduino_boards, matrix_ids, ledger, scripts
     for chip in chips:
         (root / f"configs/chips/{chip}.yaml").write_text(f"name: {chip}\n")
 
-    (root / "validation/arduino-matrix").mkdir(parents=True)
-    boards = "boards:\n" + "".join(
-        f"  - id: {b[0]}\n    chip: {b[1]}\n" + (b[2] if len(b) > 2 else "")
-        for b in arduino_boards
-    )
-    (root / "validation/arduino-matrix/boards.yaml").write_text(boards)
+    boards_dir = root / "validation/arduino-matrix/boards"
+    boards_dir.mkdir(parents=True)
+    (boards_dir / "_index.yaml").write_text("# fixture\n")
+    for b in arduino_boards:
+        extra = "".join(ln[4:] + "\n" for ln in (b[2] if len(b) > 2 else "").splitlines())
+        (boards_dir / f"{b[0]}.yaml").write_text(f"id: {b[0]}\nchip: {b[1]}\n" + extra)
 
     (root / ".github/workflows").mkdir(parents=True)
-    listed = "".join(f"          - {bid}\n" for bid in matrix_ids)
-    (root / ".github/workflows/core-arduino-matrix-smoke.yml").write_text(
-        "jobs:\n  arduino-matrix:\n    strategy:\n      matrix:\n        board:\n" + listed
-    )
+    if dynamic:
+        workflow = (
+            "jobs:\n  arduino-matrix-plan:\n    steps:\n"
+            "      - run: python3 scripts/ci/arduino_matrix_plan.py >> \"$GITHUB_OUTPUT\"\n"
+            "  arduino-matrix:\n    needs: arduino-matrix-plan\n    strategy:\n"
+            "      matrix: ${{ fromJSON(needs.arduino-matrix-plan.outputs.matrix) }}\n"
+        )
+    else:
+        listed = "".join(f"          - {bid}\n" for bid in matrix_ids)
+        workflow = "jobs:\n  arduino-matrix:\n    strategy:\n      matrix:\n        board:\n" + listed
+    (root / ".github/workflows/core-arduino-matrix-smoke.yml").write_text(workflow)
 
     for name, script_rel, system_rel, chip in scripts:
         script = root / script_rel
@@ -145,7 +152,85 @@ def test_a_chip_with_no_gate_fails(tmp_path):
     assert "stm32f042" in out and "NO CI gate executes firmware" in out
 
 
-def test_a_boards_yaml_entry_the_workflow_never_names_is_not_coverage(tmp_path):
+def test_an_onboarding_profile_is_a_valid_ci_target_not_a_shipped_chip(tmp_path):
+    build_tree(
+        tmp_path,
+        chips=[],
+        arduino_boards=[],
+        matrix_ids=[],
+        ledger=EMPTY_LEDGER,
+        scripts=(
+            (
+                "core-onboarding-smoke.yml",
+                "examples/onboarding/example-smoke.yaml",
+                "configs/systems/onboarding/example.yaml",
+                "example",
+            ),
+        ),
+    )
+    onboarding_dir = tmp_path / "configs/chips/onboarding"
+    onboarding_dir.mkdir(parents=True)
+    (onboarding_dir / "example.yaml").write_text("name: example\n")
+    (tmp_path / "configs/systems/onboarding/example.yaml").write_text(
+        'chip: "../../chips/onboarding/example.yaml"\n'
+    )
+
+    previous_root = cc.REPO_ROOT
+    try:
+        cc.set_root(tmp_path)
+        assert cc.shipped_chips() == []
+        assert cc.known_ci_chip_descriptors() == {"onboarding/example"}
+    finally:
+        cc.set_root(previous_root)
+
+    code, out = run_gate(tmp_path)
+    assert code == 0, out
+
+
+def test_onboarding_profile_does_not_prove_a_same_named_shipped_chip(tmp_path):
+    build_tree(
+        tmp_path,
+        chips=["example"],
+        arduino_boards=[],
+        matrix_ids=[],
+        ledger=EMPTY_LEDGER,
+        scripts=((
+            "core-onboarding-smoke.yml", "examples/onboarding/example-smoke.yaml",
+            "configs/systems/onboarding/example.yaml", "example",
+        ),),
+    )
+    onboarding_dir = tmp_path / "configs/chips/onboarding"
+    onboarding_dir.mkdir(parents=True)
+    (onboarding_dir / "example.yaml").write_text("name: example\n")
+    (tmp_path / "configs/systems/onboarding/example.yaml").write_text(
+        'chip: "../../chips/onboarding/example.yaml"\n'
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 1
+    assert "chip 'example' ships but NO CI gate executes firmware" in out
+
+
+def test_missing_onboarding_descriptor_is_not_accepted(tmp_path):
+    build_tree(
+        tmp_path,
+        chips=[],
+        arduino_boards=[],
+        matrix_ids=[],
+        ledger=EMPTY_LEDGER,
+        scripts=((
+            "core-onboarding-smoke.yml", "examples/onboarding/example-smoke.yaml",
+            "configs/systems/onboarding/example.yaml", "example",
+        ),),
+    )
+    (tmp_path / "configs/systems/onboarding/example.yaml").write_text(
+        'chip: "../../chips/onboarding/example.yaml"\n'
+    )
+    code, out = run_gate(tmp_path)
+    assert code == 1
+    assert "onboarding/example" in out and "stale system manifest" in out
+
+
+def test_a_boards_entry_the_workflow_never_names_is_not_coverage(tmp_path):
     """The h735 shape: declared in the manifest, run by nothing."""
     build_tree(
         tmp_path,
@@ -633,3 +718,56 @@ def test_stm32_exact_catalog_skips_the_fixture_smoke():
 
     assert "if: matrix.id != 'stm32-exact-catalog'" in generic_step
     assert "if: matrix.id == 'stm32-exact-catalog'" in exact_step
+
+
+# -- matrix computed from boards/ (fromJSON), not listed literally -----------
+
+def test_dynamic_matrix_runs_every_board_without_external_compile(tmp_path):
+    """With the plan-job workflow no literal list exists to compare against: a
+    board file is run by construction, and an external_compile board is not."""
+    build_tree(
+        tmp_path,
+        chips=["stm32f103", "efr32mg26"],
+        arduino_boards=[
+            ("stm32f103", "stm32f103"),
+            ("brd2709a", "efr32mg26", "    external_compile: { lane: elsewhere }\n    lane: monorepo.yml\n"),
+        ],
+        matrix_ids=[],  # unused: the workflow is dynamic
+        ledger=None,
+        dynamic=True,
+    )
+    proofs, unrun = cc.arduino_proofs()
+    assert unrun == []
+    assert proofs["stm32f103"] == {"arduino-matrix: stm32f103"}
+    assert any("external lane" in p for p in proofs["efr32mg26"])
+
+
+def test_plan_ids_are_the_sorted_non_external_boards(tmp_path):
+    import arduino_matrix_plan as plan
+
+    build_tree(
+        tmp_path,
+        chips=["a", "b", "c"],
+        arduino_boards=[
+            ("zeta", "a"),
+            ("alpha", "b"),
+            ("ext", "c", "    external_compile: { lane: x }\n    lane: y.yml\n"),
+        ],
+        matrix_ids=[],
+        ledger=None,
+        dynamic=True,
+    )
+    assert plan.simulated_board_ids(tmp_path / "validation/arduino-matrix/boards") == ["alpha", "zeta"]
+
+
+def test_committed_workflow_matrix_is_computed_not_listed():
+    """The committed workflow must use the plan job, so adding a board file is
+    the only edit needed, and chip_coverage must agree with the plan script."""
+    import arduino_matrix_plan as plan
+
+    text = (REPO_ROOT / ".github/workflows/core-arduino-matrix-smoke.yml").read_text()
+    assert cc.DYNAMIC_MATRIX_RE.search(text), "workflow no longer computes its matrix from boards/"
+    proofs, unrun = cc.arduino_proofs()
+    assert unrun == []
+    assert {c for c in proofs} >= {"stm32f103", "esp32"}
+    assert len(plan.simulated_board_ids()) >= 20

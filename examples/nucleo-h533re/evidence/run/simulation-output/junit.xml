@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.003822">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="41cef924bc670dd5b6554c61d2e5d67ee2a2df809db206463c4d229b1fc89877"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.003822">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NUCLEO_H533RE_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpioa:5 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -64,10 +64,18 @@ impl SystemBus {
     /// wider path into the peripheral table.
     ///
     /// Early-outs on a bus with no such device, which is almost every bus.
+    #[inline]
     pub(crate) fn service_device_pin_drives(&mut self) {
-        if self.device_pin_pads.is_empty() {
-            return;
+        if !self.device_pin_pads.is_empty() {
+            self.service_bound_device_pin_drives();
         }
+    }
+
+    // Keep the common path for systems without device-output bindings small.
+    // Bound systems still service their outputs on every tick.
+    #[cold]
+    #[inline(never)]
+    fn service_bound_device_pin_drives(&mut self) {
         let mut drives: Vec<(String, String, bool)> = Vec::new();
         for entry in self.peripherals.iter_mut() {
             entry.dev.drain_attached_pin_drives(&mut drives);
@@ -75,24 +83,33 @@ impl SystemBus {
         if drives.is_empty() {
             return;
         }
-        for (device_id, role, level) in drives {
-            let Some(pad) = self
+        for (device_id, role, raw_level) in drives {
+            // One source can feed several pads. Resolve each destination
+            // independently; the source level also remains available unchanged
+            // for a future direct device-output observer.
+            let pads: Vec<_> = self
                 .device_pin_pads
                 .iter()
-                .find(|p| p.device_id == device_id && p.role == role)
+                .filter(|p| p.device_id == device_id && p.role == role)
                 .cloned()
-            else {
-                // A role with no pad is a part wired for an interrupt line the
-                // placement did not connect. That is a real board, not a bug:
-                // the rule still ran, the line simply goes nowhere.
-                continue;
-            };
-            // ⚠️ BOTH SEAMS — see `rotary_encoder.rs`. `drive_idr_bit` lands
-            // only where a store to the input register lands (STM32);
-            // `drive_input_bit` is the external-world seam the read-only-IN
-            // models (EFR32, SAM, ESP32-C3) actually sample.
-            let _ = crate::bus::DevicePins::drive_input_bit(self, pad.addr, pad.bit, level);
-            crate::bus::DevicePins::drive_idr_bit(self, pad.addr, pad.bit, level);
+                .collect();
+            let driver = crate::bus::open_drain::OpenDrainDriver { device_id, role };
+            for pad in pads {
+                let pad_level = if self
+                    .device_open_drain_nets
+                    .contains_pad((pad.addr, pad.bit))
+                {
+                    self.device_open_drain_nets
+                        .drive((pad.addr, pad.bit), &driver, raw_level)
+                        .expect("open-drain pad bindings register every driver")
+                } else {
+                    raw_level
+                };
+                // BOTH SEAMS: STM32 samples its input register; the read-only-IN
+                // models (EFR32, SAM, ESP32-C3) sample the external input seam.
+                let _ = crate::bus::DevicePins::drive_input_bit(self, pad.addr, pad.bit, pad_level);
+                crate::bus::DevicePins::drive_idr_bit(self, pad.addr, pad.bit, pad_level);
+            }
         }
     }
 
@@ -210,8 +227,58 @@ impl SystemBus {
         if change.is_some() {
             self.collect_scheduled_events(idx);
         }
+        self.observe_gpio_edges_if_live();
         self.deliver_wire_input_edges(idx);
         change
+    }
+
+    /// Hand the output edges the peripheral at `idx` produced (a comparator
+    /// changing state) to every EXTI as internal-line edges. One length test
+    /// on chips without such a peripheral.
+    pub(crate) fn deliver_exti_line_edges(&mut self, idx: usize) {
+        if self.exti_line_driver_indices.is_empty() || !self.exti_line_driver_indices.contains(&idx)
+        {
+            return;
+        }
+        let mut edges = Vec::new();
+        self.peripherals[idx].dev.take_exti_line_edges(&mut edges);
+        for (line, before, after) in edges {
+            for sink in 0..self.peripherals.len() {
+                if self.peripherals[sink]
+                    .dev
+                    .exti_internal_line_edge(line, before, after)
+                {
+                    self.peripherals[sink].ticks_remaining = 0;
+                    self.collect_scheduled_events(sink);
+                    self.refresh_bus_tick_index(sink);
+                    self.refresh_legacy_tick_index(sink);
+                }
+            }
+        }
+    }
+
+    /// Drive the analog level on pad `pad` (a chip `pins:` label), in
+    /// millivolts, into everything that samples it: the ADC channel the chip
+    /// descriptor's `analog_pins:` assigns, and every peripheral that takes
+    /// the pad continuously ([`crate::Peripheral::set_analog_pad_input`], an
+    /// analog comparator). A comparator output edge this causes reaches the
+    /// EXTI at once. Returns whether anything took the level.
+    pub fn set_analog_pad_mv(&mut self, pad: &str, millivolts: u16) -> bool {
+        let pad = pad.to_ascii_uppercase();
+        let mut took = match self.analog_pin_map.get(&pad).cloned() {
+            Some((adc, channel)) => self.seed_adc_channel(&adc, channel, millivolts),
+            None => false,
+        };
+        for idx in 0..self.peripherals.len() {
+            if self.peripherals[idx]
+                .dev
+                .set_analog_pad_input(&pad, millivolts)
+            {
+                took = true;
+                self.deliver_exti_line_edges(idx);
+            }
+        }
+        took
     }
 
     /// The [`PortId`](crate::pins::PortId) the port at bus index `idx` was
@@ -312,8 +379,15 @@ impl SystemBus {
         }
         let now = self.current_cycle;
         let mut devices = std::mem::take(&mut self.gpio_devices);
+        // Edge/stimulus-clocked residents (`needs_per_cycle_service == false`)
+        // already run from the MMIO write hook and from `flush_gpio_device_inputs`.
+        // Re-servicing them every tick was pure host cost with no behavioural
+        // effect (displays, pybadge buttons). Open-drain matrix parts (keypad)
+        // stay on this walk.
         for device in &mut devices {
-            device.service(self, now);
+            if device.needs_per_cycle_service() {
+                device.service(self, now);
+            }
         }
         self.gpio_devices = devices;
     }
@@ -340,6 +414,11 @@ impl SystemBus {
         // A select pad of an analog mux may have moved: re-route before the
         // next instruction can start a conversion.
         self.route_analog_muxes_on_write(idx);
+        // A write into a GPIO port can move its input word (OUT/DIR/PIN_CNF):
+        // raise the edge for the pad now, not at the next tick.
+        if self.gpio_edge_observers && self.is_edge_watched_gpio_port(idx) {
+            self.observe_gpio_edges_if_live();
+        }
         // A store to a GPIO input register (a device driving a pad through
         // `drive_idr_bit`) is an external edge like `set_gpio_input`.
         if self.timer_capture_wired {
@@ -508,11 +587,13 @@ impl SystemBus {
             if req.controller_idx >= self.peripherals.len() {
                 return true; // stale index → don't gate
             }
-            match self.peripherals[req.controller_idx]
-                .dev
-                .read_u32(req.reg_offset)
-            {
-                Ok(reg) => (reg >> req.bit) & 1 != 0,
+            let controller = &self.peripherals[req.controller_idx].dev;
+            match controller.read_u32(req.reg_offset) {
+                // A held peripheral reset blocks access like a stopped clock.
+                Ok(reg) => {
+                    (((reg >> req.bit) & 1 != 0) ^ req.active_low)
+                        && !controller.clock_gate_reset_asserted(req.reg_offset, req.bit)
+                }
                 Err(_) => true, // unreadable controller register → fail open
             }
         });

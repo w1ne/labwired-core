@@ -1,7 +1,7 @@
 // LabWired - Firmware Simulation Platform
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
-//! Opt-in SAMD51 SERCOM I2C master slice (DS60001507F 36): 7-bit addressing,
+//! Opt-in SAMD51 / SAMD21 SERCOM I2C master slice (DS60001507F 36, DS40001882 28): 7-bit addressing,
 //! writes, smart-mode reads, repeated start, STOP and the MB/SB/RXNACK
 //! handshake against attached `I2cDevice` slaves. Each bus operation completes
 //! on the next bus tick and only while the SERCOM's bus clock and core generic
@@ -38,50 +38,114 @@ const MODE_I2C_MASTER: u32 = 5 << 2;
 #[derive(Clone, Copy, Debug)]
 pub struct SercomInstance {
     pub base: u64,
+    /// SERCOM number (the `n` of SERCOMn): selects its rows of the pad table.
+    pub number: u8,
+    /// First NVIC line. SAMD51 SERCOMs have four (MB, SB, -, ERROR at +0,
+    /// +1, +3); a SAMD21 SERCOM has one carrying every flag.
     pub first_irq: u32,
-    pub core_gclk: u64,
-    /// (MCLK mask register offset, bit)
+    pub irq_lines: IrqLines,
+    /// GCLK PCHCTRL channel of the core clock. `None` on the SAMD21, whose
+    /// GCLK.CLKCTRL is an indirect (write-ID-then-read) register this engine
+    /// declares as a plain bank: there the core clock is not checked and an
+    /// operation completes on the next bus tick (no SCL timing).
+    pub core_gclk: Option<u64>,
+    /// (absolute APB mask register address, bit): MCLK.APBxMASK on the
+    /// SAMD51, PM.APBCMASK on the SAMD21.
     pub bus_clock: (u64, u32),
+    /// PORT group A base; group B is 0x80 above it.
+    pub port_base: u64,
+    /// (SERCOM, PAD, port, pin, PMUX function) rows for PAD0/PAD1.
+    pub pads: &'static [(u8, u8, u8, u8, u8)],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IrqLines {
+    /// SAMD51: MB, SB and ERROR on first_irq, +1 and +3.
+    PerFlag,
+    /// SAMD21: one line per SERCOM.
+    Single,
+}
+
+const fn d51(
+    number: u8,
+    base: u64,
+    first_irq: u32,
+    core_gclk: u64,
+    mask: u64,
+    bit: u32,
+) -> SercomInstance {
+    SercomInstance {
+        base,
+        number,
+        first_irq,
+        irq_lines: IrqLines::PerFlag,
+        core_gclk: Some(core_gclk),
+        bus_clock: (0x40000800 + mask, bit),
+        port_base: 0x41008000,
+        pads: &PADS,
+    }
 }
 
 /// SERCOM0..SERCOM5 on the SAMD51J19A (ATDF instance parameters).
 pub const SERCOM_INSTANCES: [SercomInstance; 6] = [
+    d51(0, 0x40003000, 46, 7, 0x14, 12),
+    d51(1, 0x40003400, 50, 8, 0x14, 13),
+    d51(2, 0x41012000, 54, 23, 0x18, 9),
+    d51(3, 0x41014000, 58, 24, 0x18, 10),
+    d51(4, 0x43000000, 62, 34, 0x20, 0),
+    d51(5, 0x43000400, 66, 35, 0x20, 1),
+];
+
+/// PM.APBCMASK on the SAMD21; SERCOMn is bit 2 + n (CMSIS `pm.h`,
+/// `PM_APBCMASK_SERCOM0_Pos` = 2).
+const SAMD21_PM_APBCMASK: u64 = 0x40000420;
+
+const fn d21(number: u8) -> SercomInstance {
     SercomInstance {
-        base: 0x40003000,
-        first_irq: 46,
-        core_gclk: 7,
-        bus_clock: (0x14, 12),
-    },
-    SercomInstance {
-        base: 0x40003400,
-        first_irq: 50,
-        core_gclk: 8,
-        bus_clock: (0x14, 13),
-    },
-    SercomInstance {
-        base: 0x41012000,
-        first_irq: 54,
-        core_gclk: 23,
-        bus_clock: (0x18, 9),
-    },
-    SercomInstance {
-        base: 0x41014000,
-        first_irq: 58,
-        core_gclk: 24,
-        bus_clock: (0x18, 10),
-    },
-    SercomInstance {
-        base: 0x43000000,
-        first_irq: 62,
-        core_gclk: 34,
-        bus_clock: (0x20, 0),
-    },
-    SercomInstance {
-        base: 0x43000400,
-        first_irq: 66,
-        core_gclk: 35,
-        bus_clock: (0x20, 1),
-    },
+        base: 0x42000800 + 0x400 * number as u64,
+        number,
+        // SERCOM0_IRQn = 9 .. SERCOM5_IRQn = 14 (CMSIS samd21g18a.h).
+        first_irq: 9 + number as u32,
+        irq_lines: IrqLines::Single,
+        core_gclk: None,
+        bus_clock: (SAMD21_PM_APBCMASK, 2 + number as u32),
+        port_base: 0x41004400,
+        pads: &SAMD21_PADS,
+    }
+}
+
+/// SERCOM0..SERCOM5 on the SAMD21 (ATSAMD21G18A SVD bases, 0x400 stride).
+pub const SAMD21_SERCOM_INSTANCES: [SercomInstance; 6] =
+    [d21(0), d21(1), d21(2), d21(3), d21(4), d21(5)];
+
+/// (SERCOM, PAD, port, pin, PMUX function) for SERCOM PAD0/PAD1 on the
+/// ATSAMD21G18A: every `PINMUX_P<x><n><C|D>_SERCOM<s>_PAD<0|1>` in CMSIS
+/// `pio/samd21g18a.h` (Atmel, BSD-3); C = 2, D = 3.
+const SAMD21_PADS: [(u8, u8, u8, u8, u8); 24] = [
+    (0, 0, 0, 4, 3),
+    (0, 0, 0, 8, 2),
+    (0, 1, 0, 5, 3),
+    (0, 1, 0, 9, 2),
+    (1, 0, 0, 16, 2),
+    (1, 0, 0, 0, 3),
+    (1, 1, 0, 17, 2),
+    (1, 1, 0, 1, 3),
+    (2, 0, 0, 8, 3),
+    (2, 0, 0, 12, 2),
+    (2, 1, 0, 9, 3),
+    (2, 1, 0, 13, 2),
+    (3, 0, 0, 16, 3),
+    (3, 0, 0, 22, 2),
+    (3, 1, 0, 17, 3),
+    (3, 1, 0, 23, 2),
+    (4, 0, 0, 12, 3),
+    (4, 0, 1, 8, 3),
+    (4, 1, 0, 13, 3),
+    (4, 1, 1, 9, 3),
+    (5, 0, 0, 22, 3),
+    (5, 0, 1, 2, 3),
+    (5, 1, 0, 23, 3),
+    (5, 1, 1, 3, 3),
 ];
 
 /// (SERCOM, PAD, port, pin, PMUX function) for SERCOM PAD0/PAD1 on the
@@ -120,11 +184,13 @@ const PADS: [(u8, u8, u8, u8, u8); 30] = [
 ];
 
 /// True when some pad carrying `pad` of SERCOM `sercom` is muxed to it.
-fn pad_routed(bus: &dyn Bus, sercom: u8, pad: u8) -> bool {
-    PADS.iter()
-        .filter(|r| r.0 == sercom && r.1 == pad)
+fn pad_routed(bus: &dyn Bus, instance: &SercomInstance, pad: u8) -> bool {
+    instance
+        .pads
+        .iter()
+        .filter(|r| r.0 == instance.number && r.1 == pad)
         .any(|&(_, _, port, pin, function)| {
-            let group = 0x41008000 + 0x80 * u64::from(port);
+            let group = instance.port_base + 0x80 * u64::from(port);
             let pincfg = bus.read_u8(group + 0x40 + u64::from(pin)).unwrap_or(0);
             let pmux = bus.read_u8(group + 0x30 + u64::from(pin / 2)).unwrap_or(0);
             let selected = if pin & 1 != 0 { pmux >> 4 } else { pmux & 0xf };
@@ -233,7 +299,7 @@ impl Samd51SercomI2cm {
     }
     fn refuse<T>(what: &str) -> SimResult<T> {
         Err(SimulationError::NotImplemented(format!(
-            "samd51 SERCOM I2C master slice: {what}"
+            "SAM SERCOM I2C master slice: {what}"
         )))
     }
     fn enabled(&self) -> bool {
@@ -339,16 +405,21 @@ impl Samd51SercomI2cm {
         }
     }
     fn command(&mut self, cmd: u32) {
+        // INTFLAG.MB/SB are also cleared by "writing a valid command to
+        // CTRLB.CMD" (both datasheets' INTFLAG descriptions). Without that,
+        // the SB of the byte just read satisfies the guest's wait for the
+        // next one and it reads DATA again.
         match cmd {
             2 if self.reading => self.pending.set(Some(Op::ReadNext)),
             3 => self.pending.set(Some(Op::Stop)),
-            _ => {}
+            _ => return,
         }
+        self.intflag.set(self.intflag.get() & !(MB | SB));
     }
     /// CPU cycles `op` holds the bus, or `None` when the core clock or the CPU
     /// clock does not resolve (the operation then completes on the next tick).
     fn duration(&self, bus: &dyn Bus, op: Op) -> Option<u64> {
-        let gclk = super::clock_tree::peripheral_hz(bus, self.instance.core_gclk)?;
+        let gclk = super::clock_tree::peripheral_hz(bus, self.instance.core_gclk?)?;
         let cpu = super::clock_tree::cpu_hz(bus)?;
         // The device that stretches: the one claiming the address, or the
         // selected one for its bytes. A NACKed address and STOP stretch nothing.
@@ -573,17 +644,12 @@ impl Peripheral for Samd51SercomI2cm {
     }
     fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
         let (mask, bit) = self.instance.bus_clock;
-        let clocked = bus
-            .read_u32(0x40000800 + mask)
-            .is_ok_and(|m| m & (1 << bit) != 0)
-            && bus
-                .read_u32(0x40001c80 + 4 * self.instance.core_gclk)
-                .is_ok_and(|c| c & (1 << 6) != 0);
-        let sercom = SERCOM_INSTANCES
-            .iter()
-            .position(|i| i.base == self.instance.base)
-            .unwrap_or(0) as u8;
-        let routed = pad_routed(bus, sercom, 0) && pad_routed(bus, sercom, 1);
+        let clocked = bus.read_u32(mask).is_ok_and(|m| m & (1 << bit) != 0)
+            && self.instance.core_gclk.is_none_or(|channel| {
+                bus.read_u32(0x40001c80 + 4 * channel)
+                    .is_ok_and(|c| c & (1 << 6) != 0)
+            });
+        let routed = pad_routed(bus, &self.instance, 0) && pad_routed(bus, &self.instance, 1);
         if !clocked || !self.enabled() || !routed {
             // An unclocked, disabled or unrouted master drives no bus: the
             // operation stays pending and the guest sees no MB/SB.
@@ -615,17 +681,28 @@ impl Peripheral for Samd51SercomI2cm {
     }
     fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
         let lines = self.lines();
-        report(self.instance.first_irq, lines & MB != 0);
-        report(self.instance.first_irq + 1, lines & SB != 0);
-        report(self.instance.first_irq + 3, lines & ERROR != 0);
+        match self.instance.irq_lines {
+            IrqLines::PerFlag => {
+                report(self.instance.first_irq, lines & MB != 0);
+                report(self.instance.first_irq + 1, lines & SB != 0);
+                report(self.instance.first_irq + 3, lines & ERROR != 0);
+            }
+            IrqLines::Single => report(self.instance.first_irq, lines != 0),
+        }
     }
     fn tick_elapsed(&mut self, _cycles: u64) -> PeripheralTickResult {
         let lines = self.lines();
         let mut irqs = vec![];
-        for (flag, line) in [(MB, 0), (SB, 1), (ERROR, 3)] {
-            if lines & flag != 0 {
-                irqs.push(self.instance.first_irq + line);
+        match self.instance.irq_lines {
+            IrqLines::PerFlag => {
+                for (flag, line) in [(MB, 0), (SB, 1), (ERROR, 3)] {
+                    if lines & flag != 0 {
+                        irqs.push(self.instance.first_irq + line);
+                    }
+                }
             }
+            IrqLines::Single if lines != 0 => irqs.push(self.instance.first_irq),
+            IrqLines::Single => {}
         }
         PeripheralTickResult {
             explicit_irqs: (!irqs.is_empty()).then_some(irqs),
@@ -837,5 +914,56 @@ mod tests {
             "USART mode on the I2C slice"
         );
         assert!(d.write_u32(0x24, 0x77 << 1).is_err(), "ADDR while disabled");
+    }
+
+    #[test]
+    fn a_read_command_clears_sb_until_the_next_byte_lands() {
+        // Non-smart mode, the Arduino SAMD Wire shape: CMD=2 acknowledges a
+        // byte and asks for the next; the guest then waits on SB.
+        let mut m = master();
+        m.write_u32(4, 0).unwrap(); // smart mode off
+        m.write_u32(0x24, (0x77 << 1) | 1).unwrap();
+        run(&mut m);
+        assert_eq!(m.read(0x18).unwrap() & SB, SB);
+        m.write_u32(4, 2 << 16).unwrap(); // ACK + read next
+        assert_eq!(m.read(0x18).unwrap() & SB, 0, "CMD clears SB");
+        run(&mut m);
+        assert_eq!(m.read(0x18).unwrap() & SB, SB);
+    }
+
+    #[test]
+    fn samd21_instances_gate_on_pm_apbcmask_and_their_own_pads() {
+        // Zero Wire: SERCOM3 at 0x42001400, PAD0/PAD1 = PA22/PA23 on PMUX C,
+        // one NVIC line (12), PM.APBCMASK bit 5.
+        let sercom3 = SAMD21_SERCOM_INSTANCES[3];
+        assert_eq!(sercom3.base, 0x42001400);
+        assert_eq!(sercom3.first_irq, 12);
+        assert_eq!(sercom3.bus_clock, (0x40000420, 5));
+        assert_eq!(sercom3.irq_lines, IrqLines::Single);
+        assert!(sercom3.core_gclk.is_none());
+        let rows: Vec<_> = SAMD21_PADS.iter().filter(|r| r.0 == 3).collect();
+        assert!(rows.contains(&&(3, 0, 0, 22, 2)) && rows.contains(&&(3, 1, 0, 23, 2)));
+        for (i, inst) in SAMD21_SERCOM_INSTANCES.iter().enumerate() {
+            assert_eq!(inst.number as usize, i);
+            assert_eq!(
+                SAMD21_PADS.iter().filter(|r| r.0 as usize == i).count(),
+                4,
+                "SERCOM{i}: two pins each for PAD0 and PAD1 on the G18A"
+            );
+        }
+    }
+
+    #[test]
+    fn a_single_line_samd21_master_raises_its_one_irq() {
+        let mut m = Samd51SercomI2cm::new(SAMD21_SERCOM_INSTANCES[3]);
+        m.write_u32(0, MODE_I2C_MASTER | 2).unwrap();
+        m.write_u16(0x1a, IDLE).unwrap();
+        m.write(0x16, MB | SB | ERROR).unwrap();
+        m.write_u32(0x24, 0x10 << 1).unwrap(); // nobody: NACK, MB
+        run(&mut m);
+        let mut lines = vec![];
+        m.irq_line_levels(&mut |line, level| lines.push((line, level)));
+        assert_eq!(lines, vec![(12, true)]);
+        assert_eq!(m.tick_elapsed(1).explicit_irqs, Some(vec![12]));
     }
 }

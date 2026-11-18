@@ -1,7 +1,7 @@
 name: SAMD actual CODAL clock-gated SPI timeout guest
 on:
   pull_request:
-    paths: ['crates/core/tests/samd_real_spi_timeout_guest.rs', '.github/workflows/samd-real-spi-timeout-guest.yml']
+    paths: ['crates/core/tests/samd/samd_real_spi_timeout_guest.rs', '.github/workflows/samd-real-spi-timeout-guest.yml']
 permissions:
   contents: read
 concurrency:
@@ -64,7 +64,7 @@ jobs:
       - name: Nonvacuous success cancellation timeout and recovery ordering controls
         run: |
           for fixture in samd_real_spi_guest samd_real_spi_cancel_guest samd_real_spi_timeout_guest; do
-            cargo test --release --locked -p labwired-core --test "$fixture" -- --nocapture
+            cargo test --release --locked -p labwired-core --test samd -- --nocapture "$fixture::"
           done
       - name: Execute all eight actual success cancellation and timeout cases
         run: |
@@ -81,7 +81,7 @@ jobs:
               if test "$profile" = scheduler; then feature_args=(--features event-scheduler); fi
               export LABWIRED_SPI_MODE="$mode"
               export LABWIRED_SPI_FIXTURE_DIR="$RUNNER_TEMP/spi-timeout-$mode"
-              if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test "$fixture" -- --ignored --nocapture 2>&1 | tee "spi-timeout-$mode-$profile.log"; then
+              if ! cargo test --release --locked -p labwired-core "${feature_args[@]}" --test samd -- --ignored --nocapture "$fixture::" 2>&1 | tee "spi-timeout-$mode-$profile.log"; then
                 timeout_failures=$((timeout_failures + 1))
               fi
             done

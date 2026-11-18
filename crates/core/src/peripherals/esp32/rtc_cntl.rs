@@ -27,9 +27,32 @@
 //!   * `STORE0..3` (offsets 0x4C..0x58) are retention RAM scratch words.
 //!     Plain read/write round-trip — no side effects modeled.
 //!
-//! Analog config registers (`ANA_CONF` at 0x30, `DIG_PWC` at 0x8C,
+//! Analog config registers (`ANA_CONF` at 0x30, `DIG_PWC` at 0x84,
 //! `BIAS_CONF` at 0x80) and other power-domain knobs read-as-zero
 //! unless previously written, and accept any write.
+//!
+//! ## Sleep
+//!
+//! ESP-IDF's `rtc_sleep_start` writes the wake-up enables into
+//! `WAKEUP_STATE[21:11]`, clears `INT_RAW` through `INT_CLR`, sets
+//! `STATE0.SLEEP_EN` and polls `INT_RAW[1:0]`. The only wake source this
+//! model can raise is the RTC main timer (`TIMER_TRIG` in `WAKEUP_ENA`, alarm
+//! in `SLP_TIMER0/1`). ESP-IDF writes only the alarm value to `SLP_TIMER1`;
+//! it never sets `MAIN_TIMER_ALARM_EN`, which gates the main-timer
+//! interrupt, not the wake-up. When the timer is enabled, `SLEEP_EN` moves
+//! the slow counter to the alarm and records `TIMER_TRIG` in
+//! `WAKEUP_STATE.WAKEUP_CAUSE`. Then:
+//!
+//!   * light sleep (`DIG_PWC.DG_WRAP_PD_EN` clear): `INT_RAW.SLP_WAKEUP` is
+//!     set, so the poll returns as on silicon;
+//!   * deep sleep (`DG_WRAP_PD_EN` set): the digital domain powers off. Both
+//!     cores take `DEEPSLEEP_RESET` and the machine reboots the app
+//!     (see `Machine::capture_esp32_deep_sleep_boot`). This block, RTC slow
+//!     memory and RTC fast memory keep their contents.
+//!
+//! With no armed wake source the chip sleeps for ever: `INT_RAW` stays 0.
+//! The CPU-cycle clock does not advance across the sleep; only the RTC slow
+//! counter does.
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 use std::cell::Cell;
@@ -55,6 +78,32 @@ pub const RTC_CNTL_TIME0_OFFSET: u64 = 0x10;
 pub const RTC_CNTL_TIME1_OFFSET: u64 = 0x14;
 /// RTC_CNTL_RESET_STATE_REG — bits[3:0]=PRO_CPU cause, bits[7:4]=APP_CPU cause.
 pub const RTC_CNTL_RESET_STATE_OFFSET: u64 = 0x34;
+/// RTC_CNTL_SLP_TIMER0_REG — low 32 bits of the RTC main-timer alarm.
+pub const RTC_CNTL_SLP_TIMER0_OFFSET: u64 = 0x04;
+/// RTC_CNTL_SLP_TIMER1_REG — bits[15:0] = alarm high 16 bits.
+pub const RTC_CNTL_SLP_TIMER1_OFFSET: u64 = 0x08;
+/// RTC_CNTL_STATE0_REG — bit 31 = `SLEEP_EN` (write 1 to enter sleep).
+pub const RTC_CNTL_STATE0_OFFSET: u64 = 0x18;
+/// `STATE0` bit 31 — `SLEEP_EN`.
+pub const RTC_CNTL_SLEEP_EN: u32 = 1 << 31;
+/// RTC_CNTL_WAKEUP_STATE_REG — bits[21:11] = `WAKEUP_ENA`,
+/// bits[10:0] = `WAKEUP_CAUSE`.
+pub const RTC_CNTL_WAKEUP_STATE_OFFSET: u64 = 0x38;
+const WAKEUP_ENA_SHIFT: u32 = 11;
+const WAKEUP_FIELD_MASK: u32 = 0x7FF;
+/// Wake-up source bit 3 (`RTC_TIMER_TRIG_EN` in ESP-IDF `rtc.h`).
+pub const RTC_TIMER_TRIG: u32 = 1 << 3;
+/// RTC_CNTL_INT_RAW_REG — bit 0 = `SLP_WAKEUP`, bit 1 = `SLP_REJECT`.
+pub const RTC_CNTL_INT_RAW_OFFSET: u64 = 0x40;
+/// `INT_RAW` bit 0 — `SLP_WAKEUP_INT_RAW`.
+pub const RTC_CNTL_SLP_WAKEUP_INT: u32 = 1 << 0;
+/// RTC_CNTL_INT_CLR_REG — write 1 to clear the matching `INT_RAW` bit.
+pub const RTC_CNTL_INT_CLR_OFFSET: u64 = 0x48;
+/// RTC_CNTL_DIG_PWC_REG — bit 31 = `DG_WRAP_PD_EN` (power the digital
+/// domain down in sleep: set for deep sleep, clear for light sleep).
+pub const RTC_CNTL_DIG_PWC_OFFSET: u64 = 0x84;
+/// `DIG_PWC` bit 31 — `DG_WRAP_PD_EN`.
+pub const RTC_CNTL_DG_WRAP_PD_EN: u32 = 1 << 31;
 /// RTC_CNTL_STORE0_REG..STORE3_REG — 4 retention scratch words.
 pub const RTC_CNTL_STORE0_OFFSET: u64 = 0x4C;
 pub const RTC_CNTL_STORE1_OFFSET: u64 = 0x50;
@@ -90,6 +139,8 @@ const RESET_CAUSE_MASK: u32 = 0x3F;
 pub const POWERON_RESET: u32 = 1;
 #[allow(dead_code)]
 pub const SW_RESET: u32 = 3;
+/// `DEEPSLEEP_RESET` — reset cause after a wake-up from deep sleep.
+pub const DEEPSLEEP_RESET: u32 = 5;
 /// `RTCWDT_BROWN_OUT_RESET` — "reset when the VDD voltage is not stable"
 /// (ESP-IDF `components/esp_rom/include/esp32/rom/rtc.h`, `RESET_REASON`).
 pub const RTCWDT_BROWN_OUT_RESET: u32 = 15;
@@ -117,6 +168,10 @@ pub struct RtcCntl {
     /// the store never returns. Held in a `Cell` so it can be drained via
     /// the shared `&dyn Peripheral` reference the bus hands out.
     reset_requested: Cell<bool>,
+    /// Latch set when a deep sleep ends on its timer. The machine drains it
+    /// between instructions and reboots the app with this block and RTC
+    /// memory kept (`Machine::drain_rtc_cntl_requests`).
+    deep_sleep_wake: Cell<bool>,
     /// Phase 2B.3c (issue #192): peripheral-tick index of the last `sync_to`.
     /// In scheduler mode `slow_counter` advances lazily here instead of one
     /// per `tick()`. Firmware reads RTC time via the TIME_UPDATE strobe (an
@@ -152,6 +207,7 @@ impl RtcCntl {
             regs,
             slow_counter: 0,
             reset_requested: Cell::new(false),
+            deep_sleep_wake: Cell::new(false),
             anchor_tick: 0,
         }
     }
@@ -169,7 +225,49 @@ impl RtcCntl {
     /// SW_SYS_RST is latched — unlike SCB, RTC presence alone must not kill
     /// dual-core WAITI primary batching for the whole run.
     pub fn reset_request_pending(&self) -> bool {
-        self.reset_requested.get()
+        self.reset_requested.get() || self.deep_sleep_wake.get()
+    }
+
+    /// Returns true (and clears the latch) if a deep sleep has ended on its
+    /// timer since the last drain. The machine reboots the app at a clean
+    /// instruction boundary.
+    pub fn drain_deep_sleep_wake(&self) -> bool {
+        self.deep_sleep_wake.replace(false)
+    }
+
+    /// `STATE0.SLEEP_EN` was written. See the module docs, "Sleep".
+    fn enter_sleep(&mut self, state0: u32) {
+        let reg = |s: &Self, off: u64| s.regs.get(&(off as u32)).copied().unwrap_or(0);
+        let wakeup_state = reg(self, RTC_CNTL_WAKEUP_STATE_OFFSET);
+        let ena = (wakeup_state >> WAKEUP_ENA_SHIFT) & WAKEUP_FIELD_MASK;
+        let timer1 = reg(self, RTC_CNTL_SLP_TIMER1_OFFSET);
+        if ena & RTC_TIMER_TRIG == 0 {
+            // No wake source this model can raise: asleep for ever.
+            self.regs.insert(RTC_CNTL_STATE0_OFFSET as u32, state0);
+            return;
+        }
+        let alarm =
+            u64::from(reg(self, RTC_CNTL_SLP_TIMER0_OFFSET)) | (u64::from(timer1 & 0xFFFF) << 32);
+        if alarm > self.slow_counter {
+            self.slow_counter = alarm;
+        }
+        self.regs.insert(
+            RTC_CNTL_WAKEUP_STATE_OFFSET as u32,
+            (wakeup_state & !WAKEUP_FIELD_MASK) | RTC_TIMER_TRIG,
+        );
+        // SLEEP_EN self-clears when the chip wakes.
+        self.regs
+            .insert(RTC_CNTL_STATE0_OFFSET as u32, state0 & !RTC_CNTL_SLEEP_EN);
+        if reg(self, RTC_CNTL_DIG_PWC_OFFSET) & RTC_CNTL_DG_WRAP_PD_EN != 0 {
+            self.set_reset_cause(DEEPSLEEP_RESET, DEEPSLEEP_RESET);
+            self.deep_sleep_wake.set(true);
+        } else {
+            let raw = reg(self, RTC_CNTL_INT_RAW_OFFSET);
+            self.regs.insert(
+                RTC_CNTL_INT_RAW_OFFSET as u32,
+                raw | RTC_CNTL_SLP_WAKEUP_INT,
+            );
+        }
     }
 
     /// Base MMIO address (informational).
@@ -230,6 +328,20 @@ impl RtcCntl {
             self.regs
                 .insert(word_off, value & !RTC_CNTL_OPTIONS0_SW_SYS_RST_BIT);
             return;
+        }
+        match u64::from(word_off) {
+            RTC_CNTL_STATE0_OFFSET if value & RTC_CNTL_SLEEP_EN != 0 => {
+                self.enter_sleep(value);
+                return;
+            }
+            RTC_CNTL_INT_CLR_OFFSET => {
+                let raw_off = RTC_CNTL_INT_RAW_OFFSET as u32;
+                let raw = self.regs.get(&raw_off).copied().unwrap_or(0);
+                self.regs.insert(raw_off, raw & !value);
+                // INT_CLR is write-only; it reads back 0.
+                return;
+            }
+            _ => {}
         }
         self.regs.insert(word_off, value);
     }
@@ -312,11 +424,13 @@ impl Peripheral for RtcCntl {
             regs: Vec<(u32, u32)>,
             slow_counter: u64,
             reset_requested: bool,
+            deep_sleep_wake: bool,
         }
         let snap = Snap {
             regs: self.regs.iter().map(|(k, v)| (*k, *v)).collect(),
             slow_counter: self.slow_counter,
             reset_requested: self.reset_requested.get(),
+            deep_sleep_wake: self.deep_sleep_wake.get(),
         };
         bincode::serialize(&snap).expect("bincode serialize RtcCntl")
     }
@@ -328,6 +442,8 @@ impl Peripheral for RtcCntl {
             slow_counter: u64,
             #[serde(default)]
             reset_requested: bool,
+            #[serde(default)]
+            deep_sleep_wake: bool,
         }
         let snap: Snap = bincode::deserialize(bytes).map_err(|e| {
             crate::SimulationError::NotImplemented(format!("RtcCntl snapshot decode: {e}"))
@@ -335,6 +451,7 @@ impl Peripheral for RtcCntl {
         self.regs = snap.regs.into_iter().collect();
         self.slow_counter = snap.slow_counter;
         self.reset_requested.set(snap.reset_requested);
+        self.deep_sleep_wake.set(snap.deep_sleep_wake);
         Ok(())
     }
 }
@@ -583,5 +700,102 @@ mod tests {
     fn base_is_esp32_classic_canonical_address() {
         let p = RtcCntl::new();
         assert_eq!(p.base(), 0x3FF4_8000);
+    }
+
+    /// The `rtc_sleep_start` sequence from a stock arduino-esp32 3.x image:
+    /// alarm into SLP_TIMER0/1 (no MAIN_TIMER_ALARM_EN), TIMER_TRIG into
+    /// WAKEUP_ENA, INT_CLR, then STATE0.SLEEP_EN.
+    fn start_timer_sleep(p: &mut RtcCntl, alarm: u64, deep: bool) {
+        if deep {
+            write_u32_at(p, RTC_CNTL_DIG_PWC_OFFSET, RTC_CNTL_DG_WRAP_PD_EN);
+        }
+        write_u32_at(p, RTC_CNTL_SLP_TIMER0_OFFSET, alarm as u32);
+        write_u32_at(p, RTC_CNTL_SLP_TIMER1_OFFSET, (alarm >> 32) as u32);
+        write_u32_at(p, RTC_CNTL_WAKEUP_STATE_OFFSET, RTC_TIMER_TRIG << 11);
+        write_u32_at(p, RTC_CNTL_INT_CLR_OFFSET, 3);
+        write_u32_at(p, RTC_CNTL_STATE0_OFFSET, RTC_CNTL_SLEEP_EN);
+    }
+
+    #[test]
+    fn deep_sleep_on_timer_latches_wake_with_deepsleep_reset_and_timer_cause() {
+        let mut p = RtcCntl::new();
+        write_u32_at(&mut p, RTC_CNTL_STORE0_OFFSET, 0xCAFE);
+        start_timer_sleep(&mut p, 0x1_0000_1234, true);
+        assert!(p.reset_request_pending(), "the wake must stop batching");
+        assert!(p.drain_deep_sleep_wake());
+        assert!(!p.drain_deep_sleep_wake(), "latch clears on drain");
+        assert_eq!(
+            p.slow_counter(),
+            0x1_0000_1234,
+            "slow clock ran to the alarm"
+        );
+        assert_eq!(
+            read_u32_at(&p, RTC_CNTL_WAKEUP_STATE_OFFSET) & 0x7FF,
+            RTC_TIMER_TRIG,
+            "WAKEUP_CAUSE = timer"
+        );
+        let rs = read_u32_at(&p, RTC_CNTL_RESET_STATE_OFFSET);
+        assert_eq!(rs & 0x3F, DEEPSLEEP_RESET);
+        assert_eq!((rs >> 6) & 0x3F, DEEPSLEEP_RESET);
+        assert_eq!(
+            read_u32_at(&p, RTC_CNTL_STATE0_OFFSET) & RTC_CNTL_SLEEP_EN,
+            0
+        );
+        assert_eq!(
+            read_u32_at(&p, RTC_CNTL_STORE0_OFFSET),
+            0xCAFE,
+            "RTC domain kept"
+        );
+        // A light-sleep wake-up flag must not appear: the chip reset instead.
+        assert_eq!(
+            read_u32_at(&p, RTC_CNTL_INT_RAW_OFFSET) & RTC_CNTL_SLP_WAKEUP_INT,
+            0
+        );
+    }
+
+    #[test]
+    fn light_sleep_on_timer_sets_slp_wakeup_and_int_clr_clears_it() {
+        let mut p = RtcCntl::new();
+        start_timer_sleep(&mut p, 5000, false);
+        assert!(!p.drain_deep_sleep_wake(), "light sleep does not reset");
+        assert_eq!(
+            read_u32_at(&p, RTC_CNTL_INT_RAW_OFFSET) & RTC_CNTL_SLP_WAKEUP_INT,
+            RTC_CNTL_SLP_WAKEUP_INT
+        );
+        assert_eq!(
+            read_u32_at(&p, RTC_CNTL_RESET_STATE_OFFSET) & 0x3F,
+            POWERON_RESET
+        );
+        write_u32_at(&mut p, RTC_CNTL_INT_CLR_OFFSET, RTC_CNTL_SLP_WAKEUP_INT);
+        assert_eq!(read_u32_at(&p, RTC_CNTL_INT_RAW_OFFSET), 0);
+        assert_eq!(
+            read_u32_at(&p, RTC_CNTL_INT_CLR_OFFSET),
+            0,
+            "INT_CLR is write-only"
+        );
+    }
+
+    #[test]
+    fn sleep_without_a_timer_wake_source_never_wakes() {
+        let mut p = RtcCntl::new();
+        write_u32_at(&mut p, RTC_CNTL_DIG_PWC_OFFSET, RTC_CNTL_DG_WRAP_PD_EN);
+        write_u32_at(&mut p, RTC_CNTL_SLP_TIMER0_OFFSET, 100);
+        // EXT0 only (bit 0): no stimulus in this model can raise it.
+        write_u32_at(&mut p, RTC_CNTL_WAKEUP_STATE_OFFSET, 1 << 11);
+        write_u32_at(&mut p, RTC_CNTL_STATE0_OFFSET, RTC_CNTL_SLEEP_EN);
+        assert!(!p.drain_deep_sleep_wake());
+        assert_eq!(read_u32_at(&p, RTC_CNTL_INT_RAW_OFFSET), 0);
+        assert_eq!(p.slow_counter(), 0);
+    }
+
+    #[test]
+    fn alarm_in_the_past_does_not_move_the_slow_counter_back() {
+        let mut p = RtcCntl::new();
+        for _ in 0..50 {
+            p.tick();
+        }
+        start_timer_sleep(&mut p, 10, true);
+        assert_eq!(p.slow_counter(), 50);
+        assert!(p.drain_deep_sleep_wake());
     }
 }

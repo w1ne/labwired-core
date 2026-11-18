@@ -119,6 +119,7 @@ fn acceptance_sid(bytes: [u8; 4]) -> u32 {
 
 pub struct Mcp2515 {
     cs_pin: String,
+    selected: bool,
     regs: [u8; 128],
     phase: Phase,
     inst: u8,
@@ -150,6 +151,7 @@ impl Mcp2515 {
         regs[REG_CANSTAT as usize] = 0x80;
         Self {
             cs_pin: cs_pin.into(),
+            selected: false,
             regs,
             phase: Phase::Instruction,
             inst: 0,
@@ -495,12 +497,18 @@ impl SpiDevice for Mcp2515 {
         &self.cs_pin
     }
 
+    fn is_selected(&self) -> bool {
+        self.selected
+    }
+
     fn cs_select(&mut self) {
+        self.selected = true;
         self.phase = Phase::Instruction;
         self.rx_read_buffer = None;
     }
 
     fn cs_release(&mut self) {
+        self.selected = false;
         if let Some(buffer) = self.rx_read_buffer.take() {
             let intf = self.regs[REG_CANINTF as usize] & !(1 << buffer);
             self.write_register(REG_CANINTF, intf);

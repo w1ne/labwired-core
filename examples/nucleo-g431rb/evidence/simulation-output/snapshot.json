@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1073774620,
+      10,
+      32,
+      0,
+      0,
+      0,
+      0,
+      536893432,
+      0,
+      0,
+      0,
+      0,
+      0,
+      536893432,
+      134217745,
+      134218620
+    ],
+    "pc": 134218620,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "7cfaafa1db10a1c3a9e426e6db5f1bf8f1a615a00bf82ea4e8e10cfcd286126d",
+  "config": {
+    "firmware": "examples/nucleo-g431rb/./board_firmware/target/thumbv7em-none-eabihf/release/firmware-nucleo-g431rb-smoke",
+    "system": "examples/nucleo-g431rb/./system.yaml",
+    "script": "examples/nucleo-g431rb/io-smoke.yaml"
+  }
+}

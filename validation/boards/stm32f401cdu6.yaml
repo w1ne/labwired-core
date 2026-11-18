@@ -1,0 +1,31 @@
+id: stm32f401cdu6
+doc: docs/boards/stm32f401.md
+chip: configs/chips/stm32f401cdu6.yaml
+tier: sim-validated
+note: "STM32F401CDU6 (Cortex-M4F, 384 KiB flash package variant of the F401). Runs the committed demo fixture (tests/fixtures/stm32f401cdu6-blackpill-demo.elf, built from crates/firmware-f401cdu6-blackpill-demo) via the PR-run gate firmware_survival::test_stm32f401cdu6_demo_survival, which asserts the firmware's `OK` marker over USART2. No silicon capture; the F401 family doc covers the shared model."
+offline_tests:
+  - "firmware_survival::test_stm32f401cdu6_demo_survival (USART2 `OK` marker)"
+  - "examples/stm32f401cdu6/uart-smoke.yaml (CLI smoke lane)"
+models:
+  - crates/core/src/peripherals/esp_ledc_wave.rs
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - configs/chips/stm32f401cdu6.yaml
+  # 2026-09-22, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/adc.rs
+  - crates/core/src/peripherals/exti.rs
+  - crates/core/src/peripherals/syscfg.rs
+  - crates/core/src/peripherals/flash.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/i2c.rs
+  - crates/core/src/peripherals/pwr.rs
+  - crates/core/src/peripherals/rcc.rs
+  - crates/core/src/peripherals/spi.rs
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs
+  - crates/core/src/peripherals/timer.rs
+  - crates/core/src/peripherals/timer_output.rs
+  - crates/core/src/peripherals/uart.rs

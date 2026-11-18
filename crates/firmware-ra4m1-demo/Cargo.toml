@@ -20,3 +20,9 @@ name = "firmware-ra4m1-demo"
 path = "src/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "firmware-ra4m1-bme280-smoke"
+path = "src/bin/bme280_smoke.rs"
+test = false
+bench = false

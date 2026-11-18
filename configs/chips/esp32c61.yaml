@@ -1,0 +1,107 @@
+# Narrow ESP32-C61 HP-core profile for the ESP32-C61-DevKitC-1-N8R2.
+#
+# This fast-boot profile exposes UART0's FIFO/status register head, the
+# official GPIO data/enable/input registers through IN1, and the GPIO-matrix /
+# I2C0 path used by the BME280 smoke. GPIO4 output and GPIO8 WS2812 frames are
+# also observed. It loads a bare ELF directly; it does not execute the C61 mask
+# ROM or Espressif bootloader. IO_MUX is storage only; electrical pad behavior,
+# RMT, USB, Wi-Fi, Bluetooth LE, and PSRAM are outside this profile.
+#
+# Sources checked 2026-11-17:
+#   ESP32-C61 Series Datasheet v1.1:
+#     https://documentation.espressif.com/esp32-c61_datasheet_en.html
+#   ESP32-C61-DevKitC-1 v2.0 guide:
+#     https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c61/esp32-c61-devkitc-1/user_guide.html
+#   ESP32-C61 Technical Reference Manual v1.0, Chapters 7 (GPIO), 8 (clock),
+#   and 28 (I2C):
+#     https://documentation.espressif.com/esp32-c61_technical_reference_manual_en.pdf
+#   ESP-IDF C61 GPIO, I2C, PCR, and interrupt register headers:
+#     https://github.com/espressif/esp-idf/tree/master/components/soc/esp32c61
+#     GPIO signal IDs 46/47 and I2C_EXT0 source 45 are from this target's headers.
+
+name: "esp32c61"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 160_000_000
+
+# ESP32-C61-WROOM-1 N8R2: 8 MiB SPI flash and 2 MiB PSRAM. Only the flash
+# window and 320 KiB on-chip HP SRAM are mapped; PSRAM is outside this profile.
+flash:
+  base: 0x42000000
+  size: "8192KB"
+ram:
+  base: 0x40800000
+  size: "320KB"
+
+# DevKitC-1 v2.0 header pad identities used by the profile. J3 TX/RX map to
+# GPIO11/GPIO10; the USB-UART bridge and IO_MUX routing remain outside scope.
+pins:
+  GPIO4:
+    gpio: "gpio"
+    bit: 4
+  GPIO6:
+    gpio: "gpio"
+    bit: 6
+  # The onboard addressable RGB LED is driven from GPIO8.
+  GPIO8:
+    gpio: "gpio"
+    bit: 8
+  GPIO10:
+    gpio: "gpio"
+    bit: 10
+    functions: [{ type: uart, peripheral: "uart0", role: rx }]
+  GPIO11:
+    gpio: "gpio"
+    bit: 11
+    functions: [{ type: uart, peripheral: "uart0", role: tx }]
+  GPIO22:
+    gpio: "gpio"
+    bit: 22
+
+peripherals:
+  # UART0 uses the C61 register head at 0x60000000. The descriptor exposes
+  # FIFO@0 and STATUS@0x1C only; later family-specific registers are omitted.
+  - id: "uart0"
+    type: "esp32c61_uart"
+    irq: 40 # ETS_UART0_INTR_SOURCE from C61 interrupts.h
+    base_address: 0x60000000
+    size: "32B"
+    clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
+    config:
+      echo_stdout: true
+  # C61 GPIO output latch plus the I2C0 matrix selectors exercised by the
+  # BME280 smoke. The model normalizes the C61 selector windows at +0x2D4 and
+  # +0xAD4 to its shared GPIO implementation. GPIO26..29, non-I2C matrix
+  # functions, and GPIO interrupts remain outside this profile.
+  - id: "gpio"
+    type: "esp32c61_gpio"
+    base_address: 0x60091000
+    # GPIO_EXT starts at +0xE00 on C61. The selected GPIO22 output selector
+    # ends at +0xB30, so map only through the supported HP GPIO window.
+    size: "3584"
+
+  # C61's single HP I2C controller uses the C3-family command-list engine.
+  # Its 160 MHz pacing, interrupt source, and PCR gate are C61-specific.
+  - id: "i2c0"
+    type: "esp32c61_i2c"
+    irq: 45 # I2C_EXT0 interrupt source from the ESP-IDF C61 target headers
+    base_address: 0x60004000
+    size: "4KB"
+    clock: { controller: "pcr", reg: "I2C_CONF", bit: 0 }
+
+  # PCR subset for UART0 and I2C0 functional clocks. C61 places I2C_CONF at
+  # +0x2C and I2C_SCLK_CONF at +0x30; UART0 uses +0x00/+0x04.
+  - id: "pcr"
+    type: "esp32c61_pcr"
+    base_address: 0x60096000
+    size: "4KB"
+
+  # Register-backed IO_MUX storage for GPIO6/GPIO22 function writes. This does
+  # not enforce electrical pull-ups or pad routing.
+  - id: "io_mux"
+    type: "declarative"
+    base_address: 0x60090000
+    size: "4KB"
+    config:
+      path: "../peripherals/esp32c6/io_mux.yaml"

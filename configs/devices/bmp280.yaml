@@ -5,27 +5,25 @@
 # descriptor; `tests/bmp280_migration_parity.rs` drives that model and this one
 # through the same I²C script.
 #
-# ── ⚠️ WHAT THIS PART DOES NOT DO, AND WHY IT STILL DOES NOT ──────────────
+# ── Stimulus: pressure and temperature, through Bosch's own compensation ──
 #
-# The BMP280 answers RAW ADC words. What a driver prints is the output of
-# Bosch's compensation polynomials applied to those words and to the factory
-# calibration block — so a twin that wants to report a TEMPERATURE has to
-# answer the raw word that INVERTS to it.
+# The BMP280 answers RAW ADC words; a driver turns them into °C and Pa with
+# Bosch's compensation polynomials (datasheet §3.11.3 / §8.2, the 32-bit
+# temperature and 64-bit pressure reference code) applied to the factory
+# calibration block. So a twin that is told "1013.25 hPa, 25 °C" has to answer
+# the raw words that COMPENSATE back to those values.
 #
-# The hand-written model did not do that. `ADC_T` and `ADC_P` were the two
-# constants `0x80000`, it declared NO stimulus channels at all
-# (`inputs: &[]`), and its own header says the numbers are
-# "middle-of-range placeholders". This descriptor is that model, exactly: the
-# same constants, the same calibration bytes, the same register map. A byte
-# for byte port of a constant part is still a port — the model is data now,
-# a customer can fork it, and one less file ships in every binary — but it is
-# not a sensor yet and this file will not pretend otherwise.
+# `derived:` below is the same exact integer program and bounded inversion as
+# bme280.yaml (no humidity), with THIS part's calibration coefficients written
+# into it — the dig_T*/dig_P* words declared in the register map further down.
+# The inversion searches the 20-bit ADC range for the word whose compensated
+# value is the quantized target, so the firmware's own Bosch math recovers the
+# stimulus (to the 0.01 °C / 1/256 Pa resolution of the compensation output).
 #
-# The generic exact integer programs and bounded inversion added for BME280
-# can now express Bosch compensation without changing factory coefficients.
-# This descriptor intentionally retains the previous BMP280 constant-output
-# contract; making its measurements stimulus-driven is a separate behavior
-# change. See bme280.yaml for the exact arithmetic/inversion schema.
+# History: until #3356 this descriptor was a byte-for-byte port of the deleted
+# hand model, whose ADC_T/ADC_P were the constant 0x80000 and which declared no
+# stimulus. The calibration block, chip id, control registers and soft reset
+# are unchanged; only the data registers now follow the two input channels.
 #
 # ── The register map, and the one address that is not what it reads ───────
 #
@@ -47,8 +45,9 @@
 #               change NOTHING: there is no conversion time, no forced-mode
 #               one-shot, and no sleep.
 #   0xF5        CONFIG — storage. Standby, IIR filter and 3-wire SPI likewise.
-#   0xF7..0xF9  raw pressure, 20 bits left-justified in three big-endian bytes.
-#   0xFA..0xFC  raw temperature, same shape.
+#   0xF7..0xF9  raw pressure, 20 bits left-justified in three big-endian bytes,
+#               the inverse of the 64-bit compensation at the `pressure` input.
+#   0xFA..0xFC  raw temperature, same shape, from the `temperature` input.
 #
 # Every other address reads 0xFF (the engine's default `unmapped_byte`) and
 # swallows writes, which is what the hand model's `_ => 0xFF` arm did.
@@ -56,6 +55,57 @@ type: bmp280
 
 behavior:
   primitive: i2c_device
+  # Bosch compensation with the coefficients declared below:
+  #   dig_T1 27504, dig_T2 26435, dig_T3 -1000,
+  #   dig_P1 36477, dig_P2 -10845, dig_P3 3024, dig_P4 2855, dig_P5 140,
+  #   dig_P6 -7, dig_P7 15500, dig_P8 -14600, dig_P9 6000.
+  # ⚠️ Change a coefficient in the register map and you must change it here:
+  # the parity test recomputes the compensation from the BYTES read off the
+  # bus, so a mismatch between the two shows up as a wrong reading.
+  derived:
+    - name: target_t
+      quantize: { expr: 'temperature * 100', rounding: nearest }
+    - name: adc_t
+      invert:
+        variable: x
+        over: [0, 1048575]
+        target: target_t
+        bindings:
+          - { name: a, expr: 'shr(x, 4) - 27504' }
+          - { name: v1, expr: 'shr((shr(x, 3) - shl(27504, 1)) * 26435, 11)' }
+          - { name: v2, expr: 'shr(shr(a * a, 12) * -1000, 14)' }
+          - { name: fine, expr: 'v1 + v2' }
+        of: 'shr(fine * 5 + 128, 8)'
+    - name: t_fine
+      integer:
+        bindings:
+          - { name: a, expr: 'shr(adc_t, 4) - 27504' }
+          - { name: v1, expr: 'shr((shr(adc_t, 3) - shl(27504, 1)) * 26435, 11)' }
+          - { name: v2, expr: 'shr(shr(a * a, 12) * -1000, 14)' }
+        of: 'v1 + v2'
+    # Pressure in Pa as Q24.8 (what bmp280_compensate_P_int64 returns). The
+    # compensation FALLS as the raw word rises, so the search runs on its
+    # negation, exactly as bme280.yaml does.
+    - name: target_p
+      quantize: { expr: 'pressure * 100 * 256', rounding: nearest }
+    - name: adc_p
+      invert:
+        variable: x
+        over: [0, 1048575]
+        target: '-target_p'
+        bindings:
+          - { name: a, expr: 't_fine - 128000' }
+          - { name: b0, expr: 'a * a * -7' }
+          - { name: b1, expr: 'b0 + shl(a * 140, 17)' }
+          - { name: b, expr: 'b1 + shl(2855, 35)' }
+          - { name: c0, expr: 'shr(a * a * 3024, 8) + shl(a * -10845, 12)' }
+          - { name: c, expr: 'shr((shl(1, 47) + c0) * 36477, 33)' }
+          - { name: p0, expr: '1048576 - x' }
+          - { name: p1, expr: '((shl(p0, 31) - b) * 3125) / c', when: 'c != 0' }
+          - { name: q1, expr: 'shr(6000 * shr(p1, 13) * shr(p1, 13), 25)', when: 'c != 0' }
+          - { name: q2, expr: 'shr(-14600 * p1, 19)', when: 'c != 0' }
+        when: 'c != 0'
+        of: '-min(max(shr(p1 + q1 + q2, 8) + shl(15500, 4), 0), 4294967295)'
   i2c:
     default_address: 0x76
     # Every BMP280 library reads the 24-byte calibration block and the 6-byte
@@ -106,10 +156,9 @@ behavior:
 
       # ── The raw conversions ─────────────────────────────────────────────
       # 20 bits left-justified into 24: `press_msb/lsb/xlsb`, `temp_msb/lsb/xlsb`
-      # (§4.2). 0x800000 is the 20-bit word 0x80000 shifted into place — the
-      # `ADC_P` / `ADC_T` constants of the model this replaces.
-      - { name: PRESS, addr: 0xF7, width: 3, endian: be, access: r, reset: 0x800000 }
-      - { name: TEMP,  addr: 0xFA, width: 3, endian: be, access: r, reset: 0x800000 }
+      # (§4.2). `scale: 16` is that left shift by four.
+      - { name: PRESS, addr: 0xF7, width: 3, endian: be, access: r, source: adc_p, encode: { scale: 16 } }
+      - { name: TEMP,  addr: 0xFA, width: 3, endian: be, access: r, source: adc_t, encode: { scale: 16 } }
 
   # §5.4.2: "The soft reset is triggered by writing 0xB6 to the reset
   # register." Any other value is ignored — which is the `when:` guard, not a
@@ -127,9 +176,12 @@ behavior:
 metadata:
   label: "BMP280 Pressure"
   summary: "Bosch BMP280 I²C pressure + temperature sensor (no humidity)."
-  detail: "Bosch BMP280 at 0x76 (0x77 with SDO high). Register map compatible with the common Arduino BMP280 libraries: CHIP_ID 0x58 at 0xD0, the Bosch reference calibration block at 0x88, CTRL_MEAS / CONFIG storage, and the 0xB6 soft reset. ⚠️ The raw ADC words are CONSTANTS (0x80000 each), so the part reports the same ~25 °C / ~100 kPa reading for ever and has no stimulus channels — the same as the hand-written model it replaces. The exact integer inversion used by bme280.yaml could support stimulus-driven measurements in a separate behavior change; this parity port retains the constant outputs. Oversampling, the IIR filter, the measurement modes and the conversion time are not modelled."
+  detail: "Bosch BMP280 at 0x76 (0x77 with SDO high). Register map compatible with the common Arduino BMP280 libraries: CHIP_ID 0x58 at 0xD0, the Bosch reference calibration block at 0x88, CTRL_MEAS / CONFIG storage, and the 0xB6 soft reset. The raw pressure and temperature words are the exact inverse of Bosch's integer compensation at the pressure (hPa) and temperature (°C) stimulus, so firmware running the standard compensation reads the stimulus back. Defaults to 25 °C / 1013.25 hPa. Oversampling, the IIR filter, the measurement modes and the conversion time are not modelled."
   category: i2c
   config_keys:
     - name: i2c_address
       ty: int
       doc: "7-bit slave address. Defaults to 0x76 (SDO low); 0x77 with SDO high."
+  inputs:
+    - { key: temperature, label: Temperature, unit: '°C', min: -40, max: 85, default: 25 }
+    - { key: pressure, label: Pressure, unit: hPa, min: 300, max: 1100, default: 1013.25 }

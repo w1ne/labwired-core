@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1107313570,
+      1070481376,
+      1070073856,
+      0,
+      3,
+      1070481408,
+      0,
+      1610612736,
+      0,
+      1107329642,
+      1107329642,
+      10,
+      0,
+      256,
+      4294967295,
+      1070481372,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1107329594,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 0,
+    "mtvec": 1107296568,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 300000,
+    "mtimecmp": 18446744073709551615,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 300000,
+  "cycles": 300000,
+  "instructions": 300000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 300000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 300000
+    }
+  },
+  "limits": {
+    "max_steps": 300000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "8204f45ad29585070af0244b734df14f161811791c6943f6b7b39be24fd73df6",
+  "config": {
+    "firmware": "examples/esp32c3-devkitm-1-n4x/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c3-devkitm-1-n4x-smoke",
+    "system": "examples/esp32c3-devkitm-1-n4x/../../configs/systems/esp32c3-devkitm-1-n4x.yaml",
+    "script": "examples/esp32c3-devkitm-1-n4x/io-smoke.yaml"
+  }
+}

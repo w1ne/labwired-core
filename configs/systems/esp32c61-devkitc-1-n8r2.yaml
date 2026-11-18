@@ -1,0 +1,18 @@
+# Current ESP32-C61-DevKitC-1-N8R2 board profile. J3 TX/RX map to GPIO11/GPIO10
+# and J1 pin 3 maps to GPIO4 in Espressif's v2.0 guide. The simulator captures
+# UART0 internally, observes GPIO4 output and GPIO8 WS2812 frames, and leaves
+# pad routing, IO_MUX and the physical USB bridge outside scope.
+
+name: "esp32c61-devkitc-1-n8r2"
+chip: "../chips/esp32c61.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 1
+      cpu_hz: 160000000
+board_io: []

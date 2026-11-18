@@ -1,0 +1,13 @@
+# Bare RV32IMAC UART0 + GPIO0 smoke for the ESP8684-DevKitM-1-H4X.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imac-unknown-none-elf/release/firmware-esp8684-devkitm-1-h4x-smoke"
+  system: "../../configs/systems/esp8684-devkitm-1-h4x.yaml"
+limits:
+  max_steps: 300000
+assertions:
+  - uart_contains: "C2_H4X_GPIO0_UART_OK"
+  - gpio_edges:
+      pin: "gpio:0"
+      min_edges: 4
+  - expected_stop_reason: max_steps

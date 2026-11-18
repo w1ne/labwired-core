@@ -3,10 +3,12 @@ chip: "../../configs/chips/stm32l476.yaml"
 # STM32L476 reset clock: MSI range 6, 4 MHz. Peripheral calibration clocks
 # below are independent device settings and must not affect MCU pacing.
 cpu_hz: 4_000_000
-# Walk-deletion (event-scheduler builds): the firmware drives only SPI1
-# (event-migrated) + GPIO (no-op tick); the HC-SR04 echo is serviced outside
-# the walk; every other peripheral is inert here. Verified byte-identical
-# walk-free — see the walk-identity check. ~2x sim throughput in the browser.
+# 32 cycles / 4 MHz = 8 us. A 2 cm echo lasts 116 us; an unrestricted
+# 1024-cycle (256 us) grid can erase it before the firmware observes it.
+max_peripheral_tick_interval: 32
+# TIM2 and SPI1 use the generic event scheduler. TIM2 CNT reads derive
+# elapsed cycles lazily; GPIO and the HC-SR04 use the existing pad/event path.
+# Keep the walk differential and shipping tick-interval behavior gates.
 walk_deleted: true
 # spi1, gpioa-e and rcc all come from the chip descriptor; we only attach the
 # external devices and declare the host-controllable I/O here.
@@ -25,5 +27,5 @@ external_devices:
       trig_pin: "PA8"
       echo_pin: "PB10"
       distance_cm: 30.0
-      cpu_hz: 250000
+      cpu_hz: 4000000
 board_io: []

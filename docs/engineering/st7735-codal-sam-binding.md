@@ -22,7 +22,7 @@ silently normalized or required to match a future host's compiler string.
 
 ## Proposed authored guest proof
 
-The sixth test in `crates/core/tests/st7735_sam_guest.rs` embeds those captured
+The sixth test in `crates/core/tests/samd/st7735_sam_guest.rs` embeds those captured
 CASET, RASET, RGBSET and RAMWR payloads into authored Thumb instructions. The
 guest configures clocks, mux and SPI, drives CS/D/C and polls TXC. It writes the
 actual production palette upload, not the earlier independently authored LUT.

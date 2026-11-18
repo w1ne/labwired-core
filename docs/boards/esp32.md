@@ -36,6 +36,23 @@ models the memory map probed against a real ESP32-WROOM-32 module (chip type
 - No silicon diff of any kind against a real ESP32.
 - WiFi/BT/radio are not modeled.
 
+## Narrow onboarding profiles
+
+The [GPIO/UART0/I2C0 profile](../../examples/esp32-devkitc-32e-gpio-smoke/README.md)
+and [UART1 TX profile](../../examples/esp32-devkitc-32e-uart1/README.md) describe
+separate bounded DevKitC-32E examples. The coverage ratchet requires each exact
+descriptor to have reset/conformance coverage and its own executing core-timer
+oracle. `esp32_onboarding_exec_oracle` checks CCOMPARE0 interrupt delivery,
+the vector trace and the handler's RAM write at every instruction boundary,
+with a disarmed-timer negative control. These checks establish the simulator's
+core-timer contract; they do not establish silicon timing or additional
+peripheral coverage.
+
+The [ESP32-DevKitM-1 + BME280 profile](../../examples/esp32-devkitm-1/README.md#bme280-profile)
+also uses the classic I2C0 model on GPIO21/22 to read BME280 `CHIP_ID` and
+asserts GPIO23 high only on `0x60`. Its local smoke does not use the hosted
+generic-ESP32 catalog board or claim hosted verification of the exact board.
+
 ## Sources
 
 - ESP32 Technical Reference Manual v4.6 §1.3 (Memory Map), Table 1-2, as cited

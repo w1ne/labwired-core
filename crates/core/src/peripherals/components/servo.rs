@@ -12,23 +12,25 @@
 //! ## How it reads the command
 //!
 //! Real silicon drives the control pin from a PWM source (ESP32 LEDC /
-//! MCPWM, or a bit-banged GPIO). What the servo physically keys off is the
-//! **duty ratio** of that signal — `high_time / frame_period`. This model
-//! is therefore driven by a duty fraction, obtained two ways:
+//! MCPWM, or a bit-banged GPIO). The shaft keys off the **high-pulse
+//! width** of that signal. This model exposes two drive paths:
 //!
 //!   * [`Servo::on_gpio_edge`] — fed from real pin transitions (the
 //!     [`GpioObserver`](crate::peripherals::device::GpioObserver)
-//!     path). It measures `high_cycles / period_cycles` across frames, so
-//!     it is robust to the simulator's instruction-paced (non-wall-clock)
-//!     cycle counter: only the *ratio* matters, not absolute cycle timing.
+//!     path). When a cycle clock is known ([`Servo::with_cycle_hz`], set
+//!     from the chip's `cpu_hz` at attach), pulse width is
+//!     `high_cycles * 1e6 / cycle_hz` — the same high interval reports
+//!     the same pulse at any refresh period. Without a known clock the
+//!     previous duty-ratio contract stays in force
+//!     (`high / period * 1e6 / frame_hz`) for unknown-timebase observers.
 //!   * [`Servo::apply_duty_fraction`] — fed directly from a PWM
-//!     peripheral's introspected duty (e.g. `Ledc::channel_duty_fraction`),
-//!     for sources that don't toggle a GPIO pin in the model.
+//!     peripheral's introspected duty (e.g. `Ledc::channel_duty_fraction`).
+//!     That path stays `pulse_us = fraction * 1e6 / frame_hz` because those
+//!     sources report duty, not timestamps.
 //!
-//! The duty fraction is converted to an equivalent pulse width using the
-//! nominal frame rate (`pulse_us = fraction * 1e6 / frame_hz`), then mapped
-//! to an angle through the servo's pulse↔angle calibration. Because servos
-//! run a fixed ~50 Hz frame, the nominal rate is a faithful conversion.
+//! The resulting pulse width is mapped to an angle through the servo's
+//! pulse↔angle calibration. A refresh period that differs from the
+//! nominal `frame_hz` is not rewritten into a different high time.
 //!
 //! Interior mutability: the GPIO observer hook is `&self`, so measured
 //! state lives behind a `Mutex`. Hold the servo as `Arc<Servo>` — register
@@ -170,6 +172,13 @@ pub struct Servo {
     /// GPIO pin this servo's control wire is connected to (for the
     /// observer path). Edges on other pins are ignored.
     pin: u8,
+    /// Known GPIO cycle clock (Hz). `None` keeps the duty-ratio contract
+    /// for observers that have no timebase.
+    cycle_hz: Option<u64>,
+    /// `(I2C address, channel)` of the PWM-controller output wired to this
+    /// servo's signal pin. When set the servo follows that channel's pulse
+    /// (see [`Self::apply_pulse_us`]) instead of watching a GPIO pad.
+    source: Option<(u8, u8)>,
     state: Mutex<ServoState>,
 }
 
@@ -187,8 +196,34 @@ impl Servo {
             id: id.into(),
             cal,
             pin,
+            cycle_hz: None,
+            source: None,
             state: Mutex::new(ServoState::default()),
         }
+    }
+
+    /// A servo wired to output `channel` of the PWM controller at I2C
+    /// `address` (PCA9685 and compatibles). It follows the pulse the firmware
+    /// wrote there, through `cal`.
+    pub fn with_source(id: impl Into<String>, cal: ServoCal, address: u8, channel: u8) -> Self {
+        let mut servo = Self::with_id(id, cal, 0);
+        servo.source = Some((address, channel));
+        servo
+    }
+
+    /// `(I2C address, channel)` of the PWM controller output driving this servo.
+    pub fn source(&self) -> Option<(u8, u8)> {
+        self.source
+    }
+
+    /// Take a control pulse of `pulse_us` microseconds from a PWM controller.
+    pub fn apply_pulse_us(&self, pulse_us: f64) {
+        let pulse_us = pulse_us as f32;
+        let angle = self.cal.pulse_to_angle(pulse_us);
+        let mut s = self.state.lock().unwrap();
+        s.pulse_us = pulse_us;
+        s.angle = angle;
+        s.commanded = true;
     }
 
     /// Convenience: a standard 1–2 ms / 0–180° servo on `pin`.
@@ -199,6 +234,16 @@ impl Servo {
     /// Convenience: an SG90 micro servo on `pin`.
     pub fn sg90(pin: u8) -> Self {
         Self::new(ServoCal::sg90(), pin)
+    }
+
+    /// Bind the GPIO-edge path to a known cycle clock (Hz). High time
+    /// becomes `high_cycles * 1e6 / hz`. A zero clock is ignored so the
+    /// unknown-timebase duty-ratio contract stays in force.
+    pub fn with_cycle_hz(mut self, hz: u64) -> Self {
+        if hz > 0 {
+            self.cycle_hz = Some(hz);
+        }
+        self
     }
 
     pub fn mg995(pin: u8) -> Self {
@@ -300,9 +345,10 @@ impl Servo {
 
     /// Feed a single GPIO pin transition (the
     /// [`GpioObserver`](crate::peripherals::device::GpioObserver)
-    /// hook). Measures the duty ratio across frames and updates the angle
-    /// on each falling edge once a frame period is known. No-op for edges
-    /// on other pins.
+    /// hook). Updates the angle on each falling edge. When a cycle clock
+    /// is known, pulse width is the high interval in microseconds; otherwise
+    /// the duty-ratio contract (`high / period * 1e6 / frame_hz`) applies
+    /// once a frame period is known. No-op for edges on other pins.
     pub fn on_gpio_edge(&self, pin: u8, to: bool, sim_cycle: u64) {
         if pin != self.pin {
             return;
@@ -322,18 +368,32 @@ impl Servo {
             }
             s.edge.last_rise = Some(sim_cycle);
         } else {
-            // Falling edge: high time = fall - last_rise. Convert to a duty
-            // fraction using the most recent measured frame period.
-            if let (Some(rise), Some(period)) = (s.edge.last_rise, s.edge.period_cycles) {
-                if sim_cycle >= rise && period > 0 {
-                    let high = sim_cycle - rise;
-                    let fraction = (high as f64 / period as f64).clamp(0.0, 1.0);
-                    let pulse_us = (fraction as f32) * (1.0e6 / self.cal.frame_hz);
-                    s.pulse_us = pulse_us;
-                    s.angle = self.cal.pulse_to_angle(pulse_us);
-                    s.commanded = true;
-                }
+            // Falling edge: high time = fall - last_rise.
+            let Some(rise) = s.edge.last_rise else {
+                return;
+            };
+            if sim_cycle < rise {
+                return;
             }
+            let high = sim_cycle - rise;
+            let pulse_us = if let Some(hz) = self.cycle_hz {
+                // Known timebase: report the measured high interval. Do not
+                // rescale by the nominal 50 Hz frame — equal highs at 20 ms
+                // and 10 ms must stay the same pulse_us.
+                (high as f64 * 1_000_000.0 / hz as f64) as f32
+            } else {
+                let Some(period) = s.edge.period_cycles else {
+                    return;
+                };
+                if period == 0 {
+                    return;
+                }
+                let fraction = (high as f64 / period as f64).clamp(0.0, 1.0);
+                (fraction as f32) * (1.0e6 / self.cal.frame_hz)
+            };
+            s.pulse_us = pulse_us;
+            s.angle = self.cal.pulse_to_angle(pulse_us);
+            s.commanded = true;
         }
     }
 }
@@ -448,6 +508,16 @@ static SERVO_METADATA: KitMetadata = KitMetadata {
             doc: std::borrow::Cow::Borrowed("Calibration: sg90 | mg996r | mg995 | mg90s | standard. Defaults from type alias when omitted."),
         },
         ConfigKey {
+            name: std::borrow::Cow::Borrowed("source_address"),
+            ty: ConfigType::Int,
+            doc: std::borrow::Cow::Borrowed("I2C address of a PWM controller (PCA9685) whose output drives this servo. With source_channel, replaces the GPIO/LEDC drive path."),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("source_channel"),
+            ty: ConfigType::Int,
+            doc: std::borrow::Cow::Borrowed("Output channel (0..15) of the PWM controller at source_address."),
+        },
+        ConfigKey {
             name: std::borrow::Cow::Borrowed("ledc_channel"),
             ty: ConfigType::Int,
             doc: std::borrow::Cow::Borrowed("Optional ESP32 LEDC channel (0..15). When omitted, the servo follows the channel the GPIO matrix routes to its pad."),
@@ -462,6 +532,32 @@ impl PeripheralKit for ServoKit {
     }
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        if let (Some(address), Some(channel)) = (
+            ctx.config_i64("source_address"),
+            ctx.config_i64("source_channel"),
+        ) {
+            anyhow::ensure!(
+                (0..=0x7f).contains(&address) && (0..16).contains(&channel),
+                "servo '{}' source_address must be a 7-bit I2C address and source_channel 0..15",
+                ctx.device_id()
+            );
+            let model = ctx.config_str("model").unwrap_or(ctx.device_type());
+            let cal = match model {
+                "sg90" => ServoCal::sg90(),
+                "mg996r" => ServoCal::mg996r(),
+                "mg995" => ServoCal::mg995(),
+                "mg90s" => ServoCal::mg90s(),
+                _ => ServoCal::standard(),
+            };
+            let servo = Arc::new(Servo::with_source(
+                ctx.device_id().to_string(),
+                cal,
+                address as u8,
+                channel as u8,
+            ));
+            ctx.bus.observe_device(servo);
+            return Ok(());
+        }
         let pin_label = ctx
             .config_str("signal_pin")
             .or_else(|| ctx.config_str("control_pin"))
@@ -484,7 +580,11 @@ impl PeripheralKit for ServoKit {
             _ => ServoCal::standard(),
         };
         let pad_odr = ctx.resolve_pin_odr(pin_label);
-        let servo = Arc::new(Servo::with_id(ctx.device_id().to_string(), cal, pin));
+        let mut servo = Servo::with_id(ctx.device_id().to_string(), cal, pin);
+        if ctx.bus.cpu_hz > 0 {
+            servo = servo.with_cycle_hz(ctx.bus.cpu_hz);
+        }
+        let servo = Arc::new(servo);
         if !ctx.install_gpio_observer(servo.clone()) {
             // No edge-reporting GPIO block (AVR, STM32, ...): watch the pad
             // from the output-register write hook instead, so a bit-banged
@@ -693,6 +793,31 @@ mod tests {
             "max={}",
             servo.angle_degrees()
         );
+    }
+
+    #[test]
+    fn gpio_edges_report_high_time_across_refresh_periods() {
+        // 16 MHz Uno-class clock: 24_000 high cycles = 1_500 µs. SG90 maps
+        // that pulse to ~94.7° ((1500-500)/(2400-500)*180). The same high
+        // interval at a 20 ms frame (320_000 cycles) and a 10 ms frame
+        // (160_000) must agree. Scaling by nominal 50 Hz would report
+        // 3_000 µs / 180° at 10 ms.
+        const HZ: u64 = 16_000_000;
+        const HIGH: u64 = 24_000;
+        for period in [320_000_u64, 160_000_u64] {
+            let servo = Servo::sg90(9).with_cycle_hz(HZ);
+            drive_pwm(&servo, 9, 0, HIGH, period, 2);
+            assert!(
+                (servo.pulse_us() - 1500.0).abs() < 1.0,
+                "period={period} pulse_us={}",
+                servo.pulse_us()
+            );
+            assert!(
+                (servo.angle_degrees() - 94.7).abs() < 1.0,
+                "period={period} angle={}",
+                servo.angle_degrees()
+            );
+        }
     }
 
     #[test]

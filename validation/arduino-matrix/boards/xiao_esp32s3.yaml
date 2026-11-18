@@ -1,0 +1,17 @@
+id: xiao_esp32s3
+chip: esp32s3
+system: systems/xiao_esp32s3.yaml
+# Seeed Studio XIAO ESP32S3 on stock Arduino-ESP32. The board JSON builds
+# with ARDUINO_USB_CDC_ON_BOOT=1, so `Serial` is the USB-Serial-JTAG (HWCDC);
+# the sketches mirror every line to Serial0 (UART0) as well.
+pio: { platform: espressif32, board: seeed_xiao_esp32s3, framework: arduino }
+max_steps: 50000000
+budget_reason: "Same S3 Arduino boot as the esp32s3 row (~0.6M steps to L0); L3 Wire headroom"
+# LED_BUILTIN = GPIO21, a plain active-low GPIO LED (not RMT as on the DevKitC).
+led_watch: "gpio:21"
+led_min_edges: 2
+# L6: analogWrite(2, 128) on GPIO2 (D1); the watch counts real LEDC pad edges.
+pwm_watch: "gpio:2"
+pwm_min_edges: 20
+family: esp32
+notes: "XIAO pins: Wire D4/D5 = GPIO5/6, SPI D8/D9/D10 = GPIO7/8/9, CS = SS = GPIO44; L5 A0 = GPIO1 held at 1650 mV (2047); L8 TWAI self-RX"

@@ -30,6 +30,8 @@ pub mod semihost;
 #[path = "cortex_m/poll_loop.rs"]
 mod poll_loop;
 
+#[path = "cortex_m/rp2040_rom_hle.rs"]
+mod rp2040_rom_hle;
 #[path = "cortex_m/rp2350_dcp.rs"]
 pub mod rp2350_dcp;
 #[path = "cortex_m/rp2350_gpioc.rs"]
@@ -84,8 +86,36 @@ pub struct DecodeCacheEntry {
     pub cycles: u32,
 }
 
+/// Field of each register number `read_reg`/`write_reg` accept (R0-R12,
+/// SP, LR, PC, then xPSR as 16). Indexing beats the 17-way branch the
+/// match compiled to: these run several times per interpreted instruction
+/// with an operand-dependent register number.
+const REG_FIELD_OFFSETS: [usize; 17] = [
+    std::mem::offset_of!(CortexM, r0),
+    std::mem::offset_of!(CortexM, r1),
+    std::mem::offset_of!(CortexM, r2),
+    std::mem::offset_of!(CortexM, r3),
+    std::mem::offset_of!(CortexM, r4),
+    std::mem::offset_of!(CortexM, r5),
+    std::mem::offset_of!(CortexM, r6),
+    std::mem::offset_of!(CortexM, r7),
+    std::mem::offset_of!(CortexM, r8),
+    std::mem::offset_of!(CortexM, r9),
+    std::mem::offset_of!(CortexM, r10),
+    std::mem::offset_of!(CortexM, r11),
+    std::mem::offset_of!(CortexM, r12),
+    std::mem::offset_of!(CortexM, sp),
+    std::mem::offset_of!(CortexM, lr),
+    std::mem::offset_of!(CortexM, pc),
+    std::mem::offset_of!(CortexM, xpsr),
+];
+
 const T16_FAST_BLOCK_MAX: usize = 16;
-const T16_DISCOVERY_MISS_SLOTS: usize = 64;
+/// Decode-cache slots on either side of a PC whose contents can change that
+/// PC's block discovery: the backward search starts at most
+/// `T16_FAST_BLOCK_MAX - 1` halfwords behind it and each candidate scans at
+/// most that many halfwords forward.
+const T16_DISCOVERY_REACH: usize = T16_FAST_BLOCK_MAX - 1;
 
 #[derive(Debug, Clone, Copy)]
 struct T16FastBlock {
@@ -243,9 +273,23 @@ pub struct CortexM {
     /// Loop-head detection and the last proven fixed-point poll loop
     /// (`poll_loop.rs`).
     poll: poll_loop::PollDetector,
-    // Bounded 1 KiB, direct-mapped (PC, generation) discovery-only memo.
+    /// `(head, device accesses)` the last time the batch loop met a poll-loop
+    /// anchor at `head`, for the four most recent heads (a loop with calls
+    /// in it has several). See [`Self::anchor_may_skip`].
+    anchor_device_marks: [(u32, u64); 4],
+    // Shape-only rejection memo, one slot per decode-cache slot. Each half
+    // holds `pc | 1` of a PC whose decoded neighbourhood was rejected:
+    // `.0` by generic block discovery, `.1` by every fixed-pattern runner
+    // (self-branch, countdown, store-spin, RAM loop). Both read only the
+    // decode-cache slots within `T16_DISCOVERY_REACH` of the PC's slot, so an
+    // insert clears exactly the memo slots that reach it (see
+    // `insert_decoded_entry`); unrelated decodes leave a rejection valid.
     // Register-dependent execution failures MUST NOT be recorded here.
-    t16_discovery_misses: [(u32, u64); T16_DISCOVERY_MISS_SLOTS],
+    t16_discovery_misses: Box<[(u32, u32); 4096]>,
+    /// Set by a fixed-pattern runner whose shape check admitted the current
+    /// PC; its refusal after that point may depend on registers or the bus,
+    /// so the PC is not memoized as a shape rejection.
+    t16_pattern_admitted: bool,
     /// Last observer-free Thumb-1 RAM loop admitted by the generic block
     /// executor. This is derived execution state, never part of a snapshot.
     t16_fast_block: Option<T16FastBlock>,
@@ -359,7 +403,9 @@ impl Default for CortexM {
             decode_cache: Box::new([None; 4096]),
             decode_generation: 1,
             poll: poll_loop::PollDetector::default(),
-            t16_discovery_misses: [(0, 0); T16_DISCOVERY_MISS_SLOTS],
+            anchor_device_marks: [(u32::MAX, 0); 4],
+            t16_discovery_misses: Box::new([(0, 0); 4096]),
+            t16_pattern_admitted: false,
             t16_fast_block: None,
             fpu_s: [0u32; 32],
             fpscr: 0,
@@ -658,6 +704,19 @@ impl CortexM {
         let Some(op) = self.cached_t16(self.pc) else {
             return 0;
         };
+        // The fixed-pattern runners below refuse most PCs on their decoded
+        // shape alone (four or more tagged cache reads each for every LDR,
+        // STR and ADDS). Once all of them have refused a PC's neighbourhood,
+        // only the generic block runner can still take it.
+        if self.t16_patterns_rejected(self.pc) {
+            let fast = self.run_t16_fast_block(bus, max_count);
+            #[cfg(target_arch = "wasm32")]
+            if fast == 0 {
+                return self.run_t16_cached_run(bus, max_count);
+            }
+            return fast;
+        }
+        self.t16_pattern_admitted = false;
         let mut fast = 0;
         if op & 0xf800 == 0xe000 {
             fast = self.run_t16_self_branch(max_count);
@@ -675,6 +734,11 @@ impl CortexM {
         }
         if fast == 0 && matches!(op & 0xf800, 0x3000 | 0x6000 | 0x6800 | 0xe000) {
             fast = self.run_t16_ram_fast(bus, max_count, true);
+        }
+        // A zero budget makes every runner refuse before its shape check.
+        if fast == 0 && !self.t16_pattern_admitted && max_count > 0 {
+            let slot = ((self.pc >> 1) & 0x0fff) as usize;
+            self.t16_discovery_misses[slot].1 = self.pc | 1;
         }
         if fast == 0 {
             fast = self.run_t16_fast_block(bus, max_count);
@@ -727,7 +791,7 @@ impl CortexM {
     /// next scheduler/peripheral observation point and excludes pending
     /// exceptions, debug halt, IT state, observers, and logic taps.
     #[inline(always)]
-    fn run_t16_self_branch(&self, max_count: u32) -> u32 {
+    fn run_t16_self_branch(&mut self, max_count: u32) -> u32 {
         if max_count == 0 {
             return 0;
         }
@@ -741,6 +805,7 @@ impl CortexM {
         let offset = (((i32::from(op & 0x07ff)) << 21) >> 20) as u32;
         let target = self.pc.wrapping_add(4).wrapping_add(offset);
         if target == self.pc {
+            self.t16_pattern_admitted = true;
             max_count
         } else {
             0
@@ -762,6 +827,7 @@ impl CortexM {
         if sub & 0xf8ff != 0x3801 || self.cached_t16(start.wrapping_add(2)) != Some(0xd1fd) {
             return 0;
         }
+        self.t16_pattern_admitted = true;
         let rd = ((sub >> 8) & 7) as u8;
         let initial = self.read_reg(rd);
         // Zero is NOT a zero-trip loop: SUBS wraps to u32::MAX and would
@@ -965,6 +1031,7 @@ impl CortexM {
         {
             return 0;
         }
+        self.t16_pattern_admitted = true;
 
         // Finish the partial iteration at the front of a rotated batch, then
         // coalesce complete iterations from the canonical block start.
@@ -1090,6 +1157,7 @@ impl CortexM {
         {
             return 0;
         }
+        self.t16_pattern_admitted = true;
 
         let addr = self.sp.wrapping_add(store_imm);
         // A non-Allow RAM policy must not commit through the closed-form
@@ -1666,27 +1734,41 @@ impl CortexM {
     }
 
     fn advance_decode_generation(&mut self) {
-        self.decode_generation = self.decode_generation.wrapping_add(1);
-        if self.decode_generation == 0 {
-            self.t16_discovery_misses.fill((0, 0));
-            self.decode_generation = 1;
-        }
+        self.decode_generation = self.decode_generation.wrapping_add(1).max(1);
     }
 
     fn insert_decoded_entry(&mut self, entry: DecodeCacheEntry) {
         self.advance_decode_generation();
-        self.decode_cache[((entry.tag >> 1) & 0x0fff) as usize] = Some(entry);
+        let slot = ((entry.tag >> 1) & 0x0fff) as usize;
+        self.decode_cache[slot] = Some(entry);
+        // A new entry can make discovery succeed for any PC whose window
+        // reaches this slot; forget exactly those misses. Removing an entry
+        // (store invalidation) can only turn a success into a failure, so it
+        // needs no memo update.
+        for d in 0..=2 * T16_DISCOVERY_REACH {
+            self.t16_discovery_misses[(slot + 4096 - T16_DISCOVERY_REACH + d) & 0x0fff] = (0, 0);
+        }
     }
 
     fn clear_decoded_state(&mut self) {
         self.advance_decode_generation();
         self.decode_cache.fill(None);
+        self.t16_discovery_misses.fill((0, 0));
         self.t16_fast_block = None;
     }
 
+    #[inline(always)]
+    fn t16_discovery_memoized(&self, pc: u32) -> bool {
+        self.t16_discovery_misses[((pc >> 1) & 0x0fff) as usize].0 == pc | 1
+    }
+
     fn memoize_t16_discovery_miss(&mut self) {
-        let index = ((self.pc >> 1) as usize) % T16_DISCOVERY_MISS_SLOTS;
-        self.t16_discovery_misses[index] = (self.pc, self.decode_generation);
+        self.t16_discovery_misses[((self.pc >> 1) & 0x0fff) as usize].0 = self.pc | 1;
+    }
+
+    #[inline(always)]
+    fn t16_patterns_rejected(&self, pc: u32) -> bool {
+        self.t16_discovery_misses[((pc >> 1) & 0x0fff) as usize].1 == pc | 1
     }
 
     fn run_t16_fast_block(&mut self, bus: &mut SystemBus, max_count: u32) -> u32 {
@@ -1699,8 +1781,7 @@ impl CortexM {
             // Do not copy the payload of Option::None on the common rejection
             // path. Only successful discovery materializes a block.
             self.t16_fast_block = None;
-            let miss_index = ((self.pc >> 1) as usize) % T16_DISCOVERY_MISS_SLOTS;
-            if self.t16_discovery_misses[miss_index] == (self.pc, self.decode_generation) {
+            if self.t16_discovery_memoized(self.pc) {
                 return 0;
             }
             if !self.t16_block_entry_admitted(self.pc) {
@@ -2139,26 +2220,20 @@ impl CortexM {
         }
     }
 
+    #[inline(always)]
     fn read_reg(&self, n: u8) -> u32 {
-        match n {
-            0 => self.r0,
-            1 => self.r1,
-            2 => self.r2,
-            3 => self.r3,
-            4 => self.r4,
-            5 => self.r5,
-            6 => self.r6,
-            7 => self.r7,
-            8 => self.r8,
-            9 => self.r9,
-            10 => self.r10,
-            11 => self.r11,
-            12 => self.r12,
-            13 => self.sp,
-            14 => self.lr,
-            15 => self.pc,
-            16 => self.xpsr,
-            _ => 0,
+        let Some(&offset) = REG_FIELD_OFFSETS.get(usize::from(n)) else {
+            return 0;
+        };
+        // SAFETY: `offset` is `offset_of!` of one of the `u32` fields named in
+        // `REG_FIELD_OFFSETS`, so the pointer is in bounds of `*self`, aligned
+        // for `u32` and derived from a reference to the whole struct.
+        unsafe {
+            std::ptr::from_ref(self)
+                .cast::<u8>()
+                .add(offset)
+                .cast::<u32>()
+                .read()
         }
     }
 
@@ -2174,26 +2249,18 @@ impl CortexM {
         }
     }
 
+    #[inline(always)]
     fn write_reg(&mut self, n: u8, val: u32) {
-        match n {
-            0 => self.r0 = val,
-            1 => self.r1 = val,
-            2 => self.r2 = val,
-            3 => self.r3 = val,
-            4 => self.r4 = val,
-            5 => self.r5 = val,
-            6 => self.r6 = val,
-            7 => self.r7 = val,
-            8 => self.r8 = val,
-            9 => self.r9 = val,
-            10 => self.r10 = val,
-            11 => self.r11 = val,
-            12 => self.r12 = val,
-            13 => self.sp = val,
-            14 => self.lr = val,
-            15 => self.pc = val,
-            16 => self.xpsr = val,
-            _ => {}
+        let Some(&offset) = REG_FIELD_OFFSETS.get(usize::from(n)) else {
+            return;
+        };
+        // SAFETY: as in `read_reg`; the pointer comes from `&mut self`.
+        unsafe {
+            std::ptr::from_mut(self)
+                .cast::<u8>()
+                .add(offset)
+                .cast::<u32>()
+                .write(val)
         }
     }
 
@@ -2849,6 +2916,37 @@ impl CortexM {
     }
 }
 
+impl CortexM {
+    /// Whether ending the batch at the poll-loop anchor just reached can pay
+    /// off. The anchor exists so the machine can prove the loop a fixed point
+    /// and skip it ([`Cpu::poll_loop_skip_budget`]); that proof refuses any
+    /// iteration that touches a device. When the core's previous arrival at
+    /// this same head is known and a device access happened since, the
+    /// iteration just run touched a device: the batch runs on instead of
+    /// handing the machine a window boundary and a proof that would fail. The
+    /// anchor stays set and is refused at the next batch start, like any
+    /// anchor the machine did not take, so the detector still backs off.
+    ///
+    /// Only the cost of a refused proof is saved. No clause that guards
+    /// observable behaviour depends on this break: a skip the machine does
+    /// take is exact by construction, and every deadline still ends the
+    /// window through the plan.
+    #[inline]
+    fn anchor_may_skip(&mut self, bus: &SystemBus) -> bool {
+        let accesses = bus.access_counts().2;
+        let pc = self.pc;
+        let marks = &mut self.anchor_device_marks;
+        if let Some(slot) = marks.iter_mut().find(|(head, _)| *head == pc) {
+            let quiet = slot.1 == accesses;
+            slot.1 = accesses;
+            return quiet;
+        }
+        marks.rotate_left(1);
+        marks[3] = (pc, accesses);
+        true
+    }
+}
+
 impl Cpu for CortexM {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
@@ -3351,11 +3449,13 @@ impl Cpu for CortexM {
                 }
                 // Taken branches no longer break the batch — the run loop bounds
                 // it to the next peripheral tick, so bouncing back through
-                // `Machine::run` at every branch was pure overhead. Only WFI
-                // sleep leaves the batch, so the machine can fast-forward the
-                // idle window.
+                // `Machine::run` at every branch was pure overhead. WFI sleep
+                // leaves the batch, so the machine can fast-forward the idle
+                // window, and so does a poll-loop anchor, so the machine can
+                // try to prove and skip the loop.
                 if config.idle_fast_forward_enabled
-                    && (self.idle_fast_forward_budget(sysbus).is_some() || self.poll_anchor_ready())
+                    && (self.idle_fast_forward_budget(sysbus).is_some()
+                        || (self.poll_anchor_ready() && self.anchor_may_skip(sysbus)))
                 {
                     break;
                 }
@@ -3418,11 +3518,24 @@ impl Cpu for CortexM {
         self.poll_skip_budget(bus, limit)
     }
 
-    fn fast_forward_poll_loop(&mut self, cycles: u64) -> bool {
+    fn fast_forward_poll_loop(&mut self, cycles: u64) -> Option<u64> {
         self.poll_fast_forward(cycles)
     }
 
+    fn poll_loop_plan_stores(&self) -> bool {
+        self.poll_plan_stores()
+    }
+
+    fn stalled_loop_loads(&mut self, bus: &dyn Bus) -> Option<Vec<u64>> {
+        self.stalled_loads(bus)
+    }
+
     fn idle_fast_forward_budget(&self, _bus: &dyn Bus) -> Option<u64> {
+        // Asked after every interpreted instruction of a batch; a core that
+        // is neither in WFE nor WFI answers before the debug-state loads.
+        if !self.waiting_for_event && !self.sleeping {
+            return None;
+        }
         if self.debug_batch_break() {
             return None;
         }
@@ -3557,12 +3670,15 @@ impl CortexM {
         ];
         for pc in candidates {
             let idx = ((pc >> 1) & 0x0fff) as usize;
-            if let Some(entry) = self.decode_cache[idx] {
+            // Borrow the tag and width; copying the whole entry out of the
+            // slot costs more than the check on every store.
+            let overlaps = self.decode_cache[idx].as_ref().is_some_and(|entry| {
                 let start = entry.tag & !1;
                 let inst_end = start.wrapping_add(u32::from(entry.pc_increment));
-                if store_overlaps(start, inst_end, addr, end) {
-                    self.decode_cache[idx] = None;
-                }
+                store_overlaps(start, inst_end, addr, end)
+            });
+            if overlaps {
+                self.decode_cache[idx] = None;
             }
         }
         if let Some(block) = self.t16_fast_block {

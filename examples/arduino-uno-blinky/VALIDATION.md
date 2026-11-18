@@ -37,7 +37,7 @@ Pass criteria: exit `0`, `PASS 1/1 checks`, UART contains `uno-ok`.
 cargo run -q -p labwired-cli -- test \
   --script examples/arduino-uno-io/io-smoke.yaml \
   --no-uart-stdout
-cargo test -p labwired-core --test avr_uno_io --test avr_uno_machine_run
+cargo test -p labwired-core --test avr -- avr_uno_io:: avr_uno_machine_run::
 ```
 
 Pass criteria: the smoke prints `D2=1 A0=337` (button released, knob centred);
@@ -72,6 +72,12 @@ ICSP is the next validation step and is not part of this record.
 
 ## Validation record
 
+- 2026-11-18: maintenance gate added for the existing Arduino Uno R3 path.
+  The blinky smoke passes its USART0 marker assertion; the I/O smoke passes
+  with `D2=1 A0=337`, covering GPIO and ADC behavior. Microchip's live Chrome
+  check still reports ATmega328P **Not Recommended for new designs**, so no
+  new part or board profile was added. See committed logs and results in both
+  examples' `evidence/` directories.
 - 2026-11-05: existing-path maintenance rerun after rebuilding both Arduino sketches with PlatformIO. `arduino-uno-blinky` passed its USART0 marker smoke; `arduino-uno-io` passed with `D2=1 A0=337`. Hosted `labwired_verify` returned `model_verified` for serial `.` and GPIO `D13 toggled`. Its only gap was the ideal 5 V rail assumption, so POR/brown-out behavior was not simulated. Logs, metrics, and the typed oracle result are in the examples' `evidence/` directories. Microchip's live ATmega328P page reported **Not Recommended for new designs**; this is a maintenance record, not new onboarding.
 - 2026-09-14: `arduino-uno-blinky` smoke exit 0, `PASS 1/1 checks` over
   2,000,000 steps. A negative control expecting a string the sketch never prints

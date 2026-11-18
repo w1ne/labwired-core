@@ -74,6 +74,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         }
@@ -83,6 +84,7 @@ pub mod integration_tests {
     /// name with `chip` → `system`; `chip` points at the descriptor name.
     fn manifest_for(chip_name: &str) -> SystemManifest {
         SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -523,11 +525,13 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -743,11 +747,13 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -823,11 +829,13 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -897,6 +905,7 @@ pub mod integration_tests {
         bus.attach_uart_tx_sink(sink.clone(), false);
 
         let base = 0x4000_4800;
+        bus.write_u32(base, (1 << 0) | (1 << 3)).unwrap(); // UE + TE
         bus.write_u8(base + 0x04, b'X').unwrap(); // legacy DR offset should not TX in v2 mode
         bus.write_u8(base + 0x28, b'Y').unwrap(); // TDR
         assert_eq!(bus.read_u8(base + 0x1C).unwrap(), 0xC0); // ISR ready flags
@@ -1037,6 +1046,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
             reset_vector_offset: 0,
@@ -1047,6 +1057,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -2357,11 +2368,13 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -2462,11 +2475,13 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -2552,11 +2567,13 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -2975,6 +2992,7 @@ pub mod integration_tests {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         };
@@ -2985,6 +3003,7 @@ pub mod integration_tests {
             serde_yaml::Value::Number(0x3C.into()),
         );
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -3110,10 +3129,12 @@ pub mod integration_tests {
                 analog_pins: Default::default(),
                 io_voltage_v: None,
                 gpio_input_thresholds: None,
+                reset_input: None,
                 supply_monitor: None,
                 include: None,
             };
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),
@@ -3192,10 +3213,12 @@ pub mod integration_tests {
                 analog_pins: Default::default(),
                 io_voltage_v: None,
                 gpio_input_thresholds: None,
+                reset_input: None,
                 supply_monitor: None,
                 include: None,
             };
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),
@@ -3308,6 +3331,7 @@ pub mod integration_tests {
                 analog_pins: Default::default(),
                 io_voltage_v: None,
                 gpio_input_thresholds: None,
+                reset_input: None,
                 supply_monitor: None,
                 include: None,
             };
@@ -3317,6 +3341,7 @@ pub mod integration_tests {
                 serde_yaml::Value::Number(0x3C.into()),
             );
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),

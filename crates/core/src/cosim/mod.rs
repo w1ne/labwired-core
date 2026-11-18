@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+mod behavior;
 mod external_process;
 mod registry;
 pub mod routing;
@@ -86,6 +87,26 @@ pub struct CosimStepResult {
 pub trait CosimAdapter: Send {
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult>;
 
+    /// [`Self::step`] over borrowed buffers: the runner's hot path. `outputs`
+    /// holds the adapter's previous answer and must be left holding exactly
+    /// this step's. The default clones `inputs` into a [`CosimStep`]; an
+    /// adapter that wants a step without allocation overrides it.
+    fn step_into(
+        &mut self,
+        time_ns: u64,
+        dt_ns: u64,
+        inputs: &CosimSignals,
+        outputs: &mut CosimSignals,
+    ) -> SimResult<()> {
+        let result = self.step(CosimStep {
+            time_ns,
+            dt_ns,
+            inputs: inputs.clone(),
+        })?;
+        *outputs = result.outputs;
+        Ok(())
+    }
+
     /// Adopt the runner's shared analog-sample ring, naming this model's
     /// channels `<channel_prefix><name>`.
     ///
@@ -96,6 +117,20 @@ pub trait CosimAdapter: Send {
     /// one place to publish it.
     fn attach_analog_trace(&mut self, trace: &AnalogTraceHandle, channel_prefix: &str) {
         let _ = (trace, channel_prefix);
+    }
+
+    /// Optional initial value for a routed input whose physical default is not zero.
+    fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {
+        let _ = name;
+        None
+    }
+
+    /// Unit of a numeric input, when the adapter knows it. Values are passed
+    /// without implicit conversion; Boolean voltage drives use their explicit
+    /// adapter Vdd conversion instead.
+    fn input_unit(&self, name: &str) -> Option<&'static str> {
+        let _ = name;
+        None
     }
 
     /// The value shape model input `name` expects, or `None` when this adapter

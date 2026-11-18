@@ -10,6 +10,10 @@ use crate::{CycleClock, SimResult};
 use std::cell::Cell;
 use std::sync::Arc;
 
+#[path = "timer_output.rs"]
+mod output;
+pub(crate) use output::{output_pair, OutputPulse};
+
 /// STM32 timer peripheral covering basic, general-purpose, and advanced-
 /// control variants:
 ///
@@ -181,6 +185,11 @@ pub struct Timer {
     /// `config: { input_capture: stm32f4 }` sets it.
     #[serde(skip)]
     ccer_np: bool,
+    /// Separate capture/compare vector, when the chip splits the timer's
+    /// interrupt (AT32F421 TMR1: OVF/TRG/HALL on IRQ13, channels on IRQ14).
+    /// `None` keeps the single shared line every other timer has.
+    #[serde(skip)]
+    capture_compare_irq: Option<u32>,
     /// The V2 alternate-function table the bus routes this timer's channel
     /// OUTPUTS through, when it is not the F4 one (chip yaml `config: {
     /// pad_map: stm32g0 | stm32g4 | stm32l0 | stm32l4 | stm32wb | stm32wba |
@@ -196,11 +205,15 @@ pub struct Timer {
     /// port only ever reports real level changes).
     #[serde(skip)]
     ti_level: [bool; 4],
-    /// Channel OUTPUT waveform (OC1..OC4) published onto the GPIO pads the
+    /// Channel OUTPUT waveforms (OC1..OC4 and OC1N..OC3N) published onto the GPIO pads the
     /// bus routed to this timer. Inert until the bus asks for the wire
     /// ([`Timer::output_lines_arc`]).
     #[serde(skip)]
     wave: TimerOutputWave,
+    /// A write-induced change in the advanced output stage, shared with
+    /// motor integration. Absolute cycle deadlines survive service batching.
+    #[serde(skip)]
+    output_transition: [Option<TimerOutputTransition>; 4],
     /// Raw input edges waiting out their ICxF digital filter, oldest first.
     /// Only populated in scheduler mode with a non-zero filter.
     #[serde(skip)]
@@ -217,17 +230,17 @@ struct PendingInputEdge {
 }
 
 /// Line names of a timer's channel-output wire, in channel order.
-pub const TIMER_OUTPUT_LINES: &[&str] = &["CH1", "CH2", "CH3", "CH4"];
+pub const TIMER_OUTPUT_LINES: &[&str] = &["CH1", "CH2", "CH3", "CH4", "CH1N", "CH2N", "CH3N"];
 
-/// The channel outputs OC1..OC4 as a waveform in engine cycles.
+/// The channel outputs OC1..OC4 and OC1N..OC3N in engine cycles.
 ///
 /// The waveform engine is the one the ESP LEDC models use
 /// ([`LedcPads`]): a channel is either a constant level or a periodic pulse
 /// `[hpoint, hpoint + duty)` of a counter that advances one count every
 /// `PSC + 1` cycles, published edge-exact onto a [`PadLines`] wire. A duty
-/// change on a running channel takes effect at the next counter period
-/// boundary, as `CCRx` preload (`OCxPE`, which STM32 HAL/Arduino PWM set)
-/// does on silicon at the update event.
+/// change applies immediately, as the timer counter and motor snapshot do.
+/// OCxPE/ARPE shadow-register semantics are not modeled; do not reuse LEDC's
+/// period-latched duty changes for this immediate-compare timer contract.
 #[derive(Debug)]
 struct TimerOutputWave {
     pads: LedcPads,
@@ -238,6 +251,7 @@ struct TimerOutputWave {
     walk_ticks: u64,
     /// Any channel currently a periodic waveform (cheap walk-path skip).
     running: bool,
+    idle_since: [Option<u64>; 4],
 }
 
 impl Default for TimerOutputWave {
@@ -247,6 +261,7 @@ impl Default for TimerOutputWave {
             wired: false,
             walk_ticks: 0,
             running: false,
+            idle_since: [None; 4],
         }
     }
 }
@@ -276,12 +291,36 @@ pub struct TimerChannelOutputSnapshot {
     pub active_low: bool,
     pub complementary_active_low: bool,
     pub duty_fraction: f64,
+    /// Native compare count, clamped to the period, before polarity.
+    pub compare_ticks: u64,
+    pub transition: Option<TimerOutputTransition>,
+    /// MOE=0 output-stage state. None means the running output stage; an
+    /// absent level within the pair means that pad is not driven by the timer.
+    pub idle: Option<TimerIdleOutputSnapshot>,
+    /// OSSR can drive the disabled side at its inactive physical polarity.
+    pub inactive_when_disabled: [Option<bool>; 2],
     pub mode: TimerChannelOutputMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TimerOutputTransition {
+    /// 0 = OCx, 1 = OCxN; active is before polarity.
+    pub side: usize,
+    pub active: bool,
+    pub until_cycle: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TimerIdleOutputSnapshot {
+    pub levels: [Option<bool>; 2],
+    pub until_cycle: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimerChannelOutputMode {
     Unsupported,
+    ForcedInactive,
+    ForcedActive,
     Pwm1,
     Pwm2,
 }
@@ -290,6 +329,9 @@ pub enum TimerChannelOutputMode {
 pub struct TimerOutputSnapshot {
     pub channels: [TimerChannelOutputSnapshot; 4],
     pub dead_time_ticks: u16,
+    /// DTG decoded through tDTS (CR1.CKD and the timer kernel clock), in
+    /// engine cycles. PSC divides the counter, not the dead-time generator.
+    pub dead_time_cycles: u64,
     pub main_output_enabled: bool,
     pub counter_enabled: bool,
     pub period_ticks: u64,
@@ -358,11 +400,13 @@ impl Timer {
             clock: None,
             kernel_div: 1,
             ccer_np: false,
+            capture_compare_irq: None,
             pad_map: None,
             ic_psc_count: [0; 4],
             ti_level: [false; 4],
             ic_pending: Vec::new(),
             wave: TimerOutputWave::default(),
+            output_transition: [None; 4],
         }
     }
 
@@ -371,6 +415,13 @@ impl Timer {
     /// [`Self::basic`].
     pub fn ccer_np(mut self, np: bool) -> Self {
         self.ccer_np = np;
+        self
+    }
+
+    /// Route CC1..CC4 flags to their own vector instead of the timer's line.
+    /// Builder form, like [`Self::ccer_np`].
+    pub fn capture_compare_irq(mut self, irq: Option<u32>) -> Self {
+        self.capture_compare_irq = irq;
         self
     }
 
@@ -429,27 +480,53 @@ impl Timer {
                 2 => (self.ccmr2, 0),
                 _ => (self.ccmr2, 8),
             };
-            let output_mode = if ((ccmr >> lane_shift) & 0x3) != 0 {
+            let output_channel = !self.basic && ((ccmr >> lane_shift) & 0x3) == 0;
+            let output_mode = if !output_channel {
                 TimerChannelOutputMode::Unsupported
             } else {
                 match (ccmr >> (lane_shift + 4)) & 0x7 {
+                    0b100 => TimerChannelOutputMode::ForcedInactive,
+                    0b101 => TimerChannelOutputMode::ForcedActive,
                     0b110 => TimerChannelOutputMode::Pwm1,
                     0b111 => TimerChannelOutputMode::Pwm2,
                     _ => TimerChannelOutputMode::Unsupported,
                 }
             };
             TimerChannelOutputSnapshot {
-                enabled: (self.ccer & (1 << shift)) != 0,
+                enabled: output_channel && (self.ccer & (1 << shift)) != 0,
                 active_low: (self.ccer & (1 << (shift + 1))) != 0,
-                complementary_enabled: self.advanced && (self.ccer & (1 << (shift + 2))) != 0,
-                complementary_active_low: self.advanced && (self.ccer & (1 << (shift + 3))) != 0,
+                complementary_enabled: output_channel
+                    && self.advanced
+                    && channel < 3
+                    && (self.ccer & (1 << (shift + 2))) != 0,
+                complementary_active_low: self.advanced
+                    && channel < 3
+                    && (self.ccer & (1 << (shift + 3))) != 0,
                 duty_fraction: (f64::from(ccr[channel]) / period as f64).clamp(0.0, 1.0),
+                compare_ticks: u64::from(ccr[channel]).min(period),
+                transition: self.output_transition[channel],
+                idle: (self.advanced && self.bdtr & (1 << 15) == 0).then(|| {
+                    TimerIdleOutputSnapshot {
+                        levels: self.idle_output_levels(channel),
+                        until_cycle: self.wave.idle_since[channel]
+                            .unwrap_or_else(|| self.wave_now())
+                            .saturating_add(if channel < 3 {
+                                self.dead_time_cycles()
+                            } else {
+                                0
+                            }),
+                    }
+                }),
+                inactive_when_disabled: std::array::from_fn(|side| {
+                    self.disabled_output_level(channel, side)
+                }),
                 mode: output_mode,
             }
         });
         TimerOutputSnapshot {
             channels,
             dead_time_ticks: decode_dead_time_ticks((self.bdtr & 0xff) as u8),
+            dead_time_cycles: self.dead_time_cycles(),
             // Only advanced-control timers have the BDTR/MOE latch; a
             // general-purpose timer's main outputs are enabled whenever CEN and
             // CCxE allow. Reporting `false` for TIM2-class timers would gate
@@ -467,7 +544,7 @@ impl Timer {
         }
     }
 
-    /// The channel-output wire (`CH1`..`CH4`), created on first call — bus
+    /// The channel-output wire (`CH1`..`CH4`, `CH1N`..`CH3N`), created on first call — bus
     /// wiring time, when a GPIO pad is routed to it. From then on every
     /// register write re-derives the outputs and every edge is published at
     /// its own cycle.
@@ -491,14 +568,55 @@ impl Timer {
         (self.psc + 1) * self.kernel_div.max(1) - 1
     }
 
+    fn dead_time_cycles(&self) -> u64 {
+        if !self.advanced {
+            return 0;
+        }
+        let dts_divisor = match (self.cr1 >> 8) & 3 {
+            1 => 2,
+            2 => 4,
+            _ => 1, // CKD=11 is reserved.
+        };
+        u64::from(decode_dead_time_ticks((self.bdtr & 0xff) as u8))
+            * dts_divisor
+            * u64::from(self.kernel_div.max(1))
+    }
+
+    fn idle_output_levels(&self, ch: usize) -> [Option<bool>; 2] {
+        if !self.advanced || self.basic || self.ccs(ch) != 0 || self.bdtr & (1 << 10) == 0 {
+            return [None; 2];
+        }
+        let enables = (self.ccer >> (ch * 4)) & if ch < 3 { 5 } else { 1 };
+        if enables == 0 {
+            return [None; 2];
+        }
+        [
+            Some(self.cr2 & (1 << (8 + 2 * ch)) != 0),
+            (ch < 3).then(|| self.cr2 & (1 << (9 + 2 * ch)) != 0),
+        ]
+    }
+
+    fn disabled_output_level(&self, ch: usize, side: usize) -> Option<bool> {
+        if !self.advanced || ch >= 3 || self.ccs(ch) != 0 || self.bdtr & (1 << 11) == 0 {
+            return None;
+        }
+        let nibble = self.ccer >> (ch * 4);
+        (nibble & 5 != 0 && nibble & (1 << (2 * side)) == 0)
+            .then_some(nibble & (1 << (1 + 2 * side)) != 0)
+    }
+
     /// See [`crate::Peripheral::set_timer_kernel_clock_div`].
     pub fn set_kernel_clock_div(&mut self, div: u32) -> bool {
         let div = div.max(1);
         if div == self.kernel_div.max(1) {
             return false;
         }
+        let previous = self.advanced.then(|| self.output_snapshot());
         self.kernel_div = div;
         self.phase_revision = self.phase_revision.wrapping_add(1);
+        if let Some(previous) = previous {
+            self.update_output_transition(previous, self.wave_now());
+        }
         if self.wave.wired {
             let now = self.wave_now();
             self.redrive_outputs(now);
@@ -536,12 +654,12 @@ impl Timer {
         self.wave.pads.advance_to(now);
         let lines = self.wave.pads.lines_arc();
         let mut running = false;
-        for ch in 0..TIMER_OUTPUT_LINES.len() {
-            let (drive, drives) = self.channel_output_drive(ch, now);
-            running |= matches!(drive, LedcDrive::Pwm { .. });
-            self.wave.pads.set_drive(ch, drive, now);
+        for line in 0..TIMER_OUTPUT_LINES.len() {
+            let (drive, drives) = self.channel_output_drive(line, now);
+            running |= !matches!(drive, LedcDrive::Level(_));
+            self.wave.pads.set_drive_immediate(line, drive, now);
             lines.set_mode(
-                ch,
+                line,
                 if drives {
                     LineDrive::PushPull
                 } else {
@@ -552,87 +670,125 @@ impl Timer {
         self.wave.running = running;
     }
 
-    /// What channel `ch` (0-based) puts on its `OCx` output, and whether the
-    /// timer drives the pad at all.
-    ///
-    /// RM0008 Rev 21 §15.4.7 (TIMx_CCMR1 `OCxM`) and §15.4.9 (TIMx_CCER) for
-    /// TIM2-5, §14.4.7 / §14.4.9 / §14.4.18 (BDTR) for TIM1:
-    ///
-    /// * `CCxS != 00` — the channel is an input; nothing driven.
-    /// * `CCxE = 0` — output off; the timer does not drive the pad.
-    /// * TIM1 with `BDTR.MOE = 0` — outputs off, unless `OSSI = 1` holds an
-    ///   enabled channel at its idle level `CR2.OISx`.
-    /// * `OCxM` = 110 PWM mode 1: active while `CNT < CCRx`; 111 PWM mode 2:
-    ///   inactive while `CNT < CCRx`; 011 toggle on `CNT == CCRx`; 100 / 101
-    ///   forced inactive / active. `CCxP = 1` inverts (active low).
-    /// * 000 frozen and the one-shot 001 / 010 match modes hold the present
-    ///   level (the one-shot set/clear on match is not modelled).
-    ///
-    /// Edge-aligned up-counting only, like the counter model itself; CMS /
-    /// DIR, dead time and the complementary `OCxN` outputs are not generated.
-    fn channel_output_drive(&self, ch: usize, now: u64) -> (LedcDrive, bool) {
-        let held = self.wave.pads.level(ch);
-        if self.basic || self.ccs(ch) != 0 {
-            return (LedcDrive::Level(held), false);
+    /// The native OCx/OCxN pad drive. RM0351 Rev 10 section 30.3.15 and table
+    /// 199 define complementary selection, dead time, MOE, OSSI and OSSR.
+    /// As with the counter model, PWM is edge-aligned up-counting. The existing
+    /// frozen/one-shot OC modes hold their level; center-aligned counting,
+    /// hardware break inputs and lock/preload control are not added here.
+    fn channel_output_drive(&self, line: usize, now: u64) -> (LedcDrive, bool) {
+        let complementary = line >= 4;
+        let ch = if complementary { line - 4 } else { line };
+        let held = self.wave.pads.level(line);
+        let undriven = (LedcDrive::Level(held), false);
+        if self.basic || (complementary && !self.advanced) || self.ccs(ch) != 0 {
+            return undriven;
         }
         let nibble = self.ccer >> (ch * 4);
-        let enabled = nibble & 1 != 0;
-        let active_low = nibble & 2 != 0;
+        let enabled = [nibble & 1 != 0, self.advanced && ch < 3 && nibble & 4 != 0];
+        let active_low = [nibble & 2 != 0, nibble & 8 != 0];
+        let side = usize::from(complementary);
         if self.advanced && self.bdtr & (1 << 15) == 0 {
-            if enabled && self.bdtr & (1 << 10) != 0 {
-                let ois = (self.cr2 >> (8 + 2 * ch)) & 1 != 0;
-                return (LedcDrive::Level(ois), true);
+            // Table 199 specifies valid OIS pairs, not an arbitration rule
+            // for two active idle requests. Do not invent a safety clamp.
+            let Some(idle) = self.idle_output_levels(ch)[side] else {
+                return undriven;
+            };
+            if ch == 3 {
+                return (LedcDrive::Level(idle), true);
             }
-            return (LedcDrive::Level(held), false);
+            let at = self.wave.idle_since[ch]
+                .unwrap_or(now)
+                .saturating_add(self.dead_time_cycles());
+            return (
+                LedcDrive::Transition {
+                    before: active_low[side],
+                    after: idle,
+                    at,
+                },
+                true,
+            );
         }
-        if !enabled {
-            return (LedcDrive::Level(held), false);
+        if !enabled[side] {
+            // OSSR retains the unused side at its inactive polarity while
+            // the other side owns the output stage; with both disabled, Hi-Z.
+            return self
+                .disabled_output_level(ch, side)
+                .map_or(undriven, |level| (LedcDrive::Level(level), true));
         }
         let mask = self.cnt_mask();
         let period = u64::from(self.arr & mask) + 1;
-        let ccr = u64::from(self.ccr_value(ch) & mask);
-        // (hpoint, duty, waveform period) of OCxREF, before polarity.
-        let (hpoint, duty, wave_period) = match (self.ic_lane(ch) >> 4) & 0x7 {
-            0b100 => return (LedcDrive::Level(active_low), true),
-            0b101 => return (LedcDrive::Level(!active_low), true),
-            0b110 => (0, ccr.min(period), period),
-            0b111 => (ccr.min(period), period - ccr.min(period), period),
+        let ccr = u64::from(self.ccr_value(ch) & mask).min(period);
+        let (start, width, wave_period) = match (self.ic_lane(ch) >> 4) & 7 {
+            0b100 => (0, 0, period),
+            0b101 => (0, period, period),
+            0b110 => (0, ccr, period),
+            0b111 => (ccr, period - ccr, period),
             0b011 if ccr < period => (ccr, period, 2 * period),
             _ => return (LedcDrive::Level(held), true),
         };
-        let (hpoint, duty) = if active_low {
-            ((hpoint + duty) % wave_period, wave_period - duty)
-        } else {
-            (hpoint, duty)
-        };
-        // Phase: count index 0 is the cycle CNT last read 0 with an empty
-        // prescaler, so the waveform lines up with the counter firmware reads.
         let div = u64::from(self.count_psc()) + 1;
         let elapsed =
             (u64::from(self.cnt.get()) % period) * div + u64::from(self.psc_cnt.get()).min(div - 1);
         let timer = LedcTimebase {
-            period: wave_period,
-            num: u128::from(div),
+            period: wave_period * div,
+            num: 1,
             den: 1,
-            origin: now.saturating_sub(elapsed),
+            // CNT/PSC writes can make elapsed exceed the absolute cycle.
+            // Anchor at the real write cycle and rotate the pulse below;
+            // saturating a fictitious negative origin would shift the edges.
+            origin: now,
         };
+        let mut reference = OutputPulse {
+            period: timer.period,
+            start: start * div,
+            width: width * div,
+        };
+        let pulse =
+            |reference| output_pair(reference, enabled, active_low, self.dead_time_cycles());
+        if wave_period != period {
+            // Preserve the existing toggle phase using one shared reference
+            // for both pads, rather than independently negating their levels.
+            let owner = if enabled[0] { 0 } else { 1 };
+            let owner_line = if owner == 0 { ch } else { ch + 4 };
+            if pulse(reference)[owner].unwrap().level_at(elapsed)
+                != self.wave.pads.level(owner_line)
+            {
+                reference.start = (reference.start + period * div) % reference.period;
+            }
+        }
+        let pulse = pulse(reference)[side].expect("enabled output");
+        let hpoint = (pulse.start + pulse.period - elapsed % pulse.period) % pulse.period;
         let mut drive = LedcDrive::Pwm {
             timer,
             hpoint,
-            duty,
+            duty: pulse.width,
         };
-        if wave_period != period && drive.level_at(now) != held {
-            // Toggle mode: the output's present level, not the counter alone,
-            // says which half of the double period this is.
-            drive = LedcDrive::Pwm {
+        let transition =
+            self.output_transition[ch].filter(|t| t.side == side && now < t.until_cycle);
+        if let Some(t) = transition {
+            drive = LedcDrive::PwmAfter {
+                before: t.active ^ active_low[side],
+                at: t.until_cycle,
                 timer,
-                hpoint: (hpoint + period) % wave_period,
-                duty,
+                hpoint,
+                duty: pulse.width,
             };
         }
         if (self.cr1 & 1) == 0 || self.counter_frozen() {
-            // A stopped counter holds its compare result.
-            return (LedcDrive::Level(drive.level_at(now)), true);
+            let after = output_pair(reference, enabled, active_low, 0)[side]
+                .expect("enabled output")
+                .level_at(elapsed);
+            return (
+                match transition {
+                    Some(t) => LedcDrive::Transition {
+                        before: t.active ^ active_low[side],
+                        after,
+                        at: t.until_cycle,
+                    },
+                    None => LedcDrive::Level(after),
+                },
+                true,
+            );
         }
         (drive, true)
     }
@@ -643,6 +799,23 @@ impl Timer {
     #[inline]
     fn irq_level_held(&self) -> bool {
         (self.sr.get() & self.dier & 0x1F) != 0
+    }
+
+    /// The timer's own line: UIF only when CC flags have a separate vector.
+    #[inline]
+    fn own_irq_held(&self) -> bool {
+        if self.capture_compare_irq.is_some() {
+            self.sr.get() & self.dier & 1 != 0
+        } else {
+            self.irq_level_held()
+        }
+    }
+
+    /// The separate capture/compare vector, while an enabled CCxIF is held.
+    #[inline]
+    fn capture_compare_irq_held(&self) -> Option<u32> {
+        self.capture_compare_irq
+            .filter(|_| self.sr.get() & self.dier & 0x1e != 0)
     }
 
     /// The counter-freeze predicate. The same conjunction as
@@ -1230,6 +1403,7 @@ impl Timer {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        let previous_output = self.advanced.then(|| self.output_snapshot());
         let frozen_before = self.counter_frozen();
         let phase_mapping_before = (
             self.cr1 & 1,
@@ -1390,6 +1564,16 @@ impl Timer {
             self.freeze_revision
                 .set(self.freeze_revision.get().wrapping_add(1));
         }
+        if let Some(previous) = previous_output {
+            self.update_output_transition(previous, self.wave_now());
+        }
+    }
+
+    fn write_output_register(&mut self, offset: u64, value: u32) {
+        self.write_reg(offset, value);
+        if self.wave.wired {
+            self.redrive_outputs(self.wave_now());
+        }
     }
 }
 
@@ -1538,19 +1722,51 @@ impl crate::Peripheral for Timer {
         reg_val &= !mask;
         reg_val |= (value as u32) << (byte_offset * 8);
 
-        self.write_reg(reg_offset, reg_val);
-        if self.wave.wired {
-            let now = self.wave_now();
-            self.redrive_outputs(now);
+        self.write_output_register(reg_offset, reg_val);
+        Ok(())
+    }
+
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        if offset & 1 != 0 {
+            for (i, byte) in value.to_le_bytes().into_iter().enumerate() {
+                self.write(offset + i as u64, byte)?;
+            }
+        } else {
+            let shift = (offset & 2) * 8;
+            let old = self.read_reg(offset & !3);
+            self.write_output_register(
+                offset & !3,
+                (old & !(0xffff << shift)) | (u32::from(value) << shift),
+            );
+        }
+        Ok(())
+    }
+
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if offset & 3 != 0 {
+            for (i, byte) in value.to_le_bytes().into_iter().enumerate() {
+                self.write(offset + i as u64, byte)?;
+            }
+        } else {
+            // One native MMIO write changes the output stage once. Splitting
+            // CCR into bytes can invent an OCREF edge from an intermediate value.
+            self.write_output_register(offset, value);
         }
         Ok(())
     }
 
     fn tick(&mut self) -> crate::PeripheralTickResult {
         let freeze_before = self.freeze_revision.get();
-        let result = self.tick_counter();
-        if self.wave.wired && !self.scheduler_mode() {
+        let mut result = self.tick_counter();
+        if self.capture_compare_irq.is_some() {
+            result.irq = self.own_irq_held();
+            result.explicit_irqs = self.capture_compare_irq_held().map(|irq| vec![irq]);
+        }
+        if !self.scheduler_mode() {
             self.wave.walk_ticks += 1;
+            if !self.wave.wired {
+                return result;
+            }
             if self.freeze_revision.get() != freeze_before {
                 // The counter stopped or restarted under a held flag: the
                 // outputs follow the counter, not the old phase.
@@ -1573,6 +1789,11 @@ impl crate::Peripheral for Timer {
         self.scheduler_mode()
     }
 
+    fn force_legacy_walk(&mut self) -> bool {
+        Timer::force_legacy_walk(self);
+        true
+    }
+
     fn needs_legacy_walk(&self) -> bool {
         // Everything this model's `tick()` can ever do (prescaled up-count,
         // UIF/CCxIF latching, held-level NVIC pend) is event-expressible —
@@ -1591,6 +1812,35 @@ impl crate::Peripheral for Timer {
                 let now = self.wave_now();
                 self.wave.pads.advance_to(now);
             }
+        }
+    }
+
+    /// Peripheral reset (RCC/CRM APBxRST) or node reset: every register goes
+    /// back to its reset value (RM0008 §15.4, RM_AT32F421 §14: all zero but
+    /// ARR, which resets to its all-ones width). What the bus wired to the
+    /// instance stays: its width and layout, the cycle clock, the kernel
+    /// clock divider and the output wire, which is re-driven from the reset
+    /// registers (every channel released). An in-flight event chain dies on
+    /// its stale token.
+    fn on_node_reset(&mut self) {
+        let now = self.clock.as_ref().map(|c| c.now());
+        let mut fresh = Self::new_with_layout(self.width, self.advanced)
+            .basic(self.basic)
+            .ccer_np(self.ccer_np)
+            .capture_compare_irq(self.capture_compare_irq)
+            .pad_map(self.pad_map);
+        fresh.clock = self.clock.take();
+        fresh.kernel_div = self.kernel_div;
+        fresh.anchor.set(now.unwrap_or(0));
+        fresh.arm_seq = self.arm_seq.wrapping_add(1) & !WAVE_TOKEN_BIT;
+        fresh.phase_revision = self.phase_revision.wrapping_add(1);
+        fresh
+            .freeze_revision
+            .set(self.freeze_revision.get().wrapping_add(1));
+        fresh.wave = std::mem::take(&mut self.wave);
+        *self = fresh;
+        if self.wave.wired {
+            self.redrive_outputs(self.wave_now());
         }
     }
 
@@ -1680,9 +1930,15 @@ impl crate::Peripheral for Timer {
             // pending the peripheral's own NVIC line through the same
             // `pend_irq_for_event` choke the legacy walk uses. Re-pends merge
             // in ISPR exactly as the walk's per-tick pends do.
+            //
+            // With the counter frozen and no filtered input edge in flight,
+            // the re-arm only re-pends the held lines: `level_hold` lets the
+            // machine park it while those pends stand.
             crate::sched::EventResult {
-                raise_own_irq: true,
+                raise_own_irq: self.own_irq_held(),
+                explicit_irqs: self.capture_compare_irq_held().into_iter().collect(),
                 reschedule_delay: Some(1),
+                level_hold: self.counter_frozen() && self.ic_pending.is_empty(),
                 ..Default::default()
             }
         } else {
@@ -1745,7 +2001,13 @@ impl crate::Peripheral for Timer {
     /// post-MMIO-write reconcile reads the flag the write just cleared.
     fn irq_line_level(&self) -> Option<bool> {
         self.sync_from_clock();
-        Some(self.irq_level_held())
+        Some(self.own_irq_held())
+    }
+
+    fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
+        if let Some(irq) = self.capture_compare_irq {
+            report(irq, self.sr.get() & self.dier & 0x1e != 0);
+        }
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
@@ -1928,6 +2190,49 @@ mod tests {
         let mut tim = Timer::new_with_layout(16, true);
         tim.write(0x30, 0x05).unwrap();
         assert_eq!(tim.read(0x30).unwrap(), 0x05);
+    }
+
+    /// A peripheral reset (RCC/CRM APBxRST) returns every register to its
+    /// reset value, ARR to all-ones; the instance keeps its layout.
+    #[test]
+    fn node_reset_returns_registers_to_reset_and_keeps_the_layout() {
+        let mut t = Timer::new_with_layout(16, true).ccer_np(true);
+        t.write_u32(0x28, 7).unwrap(); // PSC
+        t.write_u32(0x2C, 99).unwrap(); // ARR
+        t.write_u32(0x34, 40).unwrap(); // CCR1
+        t.write_u32(0x18, 0x68).unwrap(); // CCMR1: OC1M=PWM1, OC1PE
+        t.write_u32(0x20, 1).unwrap(); // CCER: CC1E
+        t.write_u32(0x44, 1 << 15).unwrap(); // BDTR: MOE
+        t.write_u32(0x0C, 1).unwrap(); // DIER: UIE
+        t.write_u32(0x00, 1).unwrap(); // CR1: CEN
+        for _ in 0..50 {
+            t.tick();
+        }
+        assert_ne!(t.read_u32(0x24).unwrap(), 0, "counting before the reset");
+        t.on_node_reset();
+        for (off, want) in [
+            (0x00, 0),
+            (0x0C, 0),
+            (0x10, 0),
+            (0x18, 0),
+            (0x20, 0),
+            (0x24, 0),
+            (0x28, 0),
+            (0x2C, 0xFFFF),
+            (0x34, 0),
+            (0x44, 0),
+        ] {
+            assert_eq!(t.read_u32(off).unwrap(), want, "register {off:#x}");
+        }
+        assert!(!t.output_snapshot().counter_enabled);
+        for _ in 0..10 {
+            t.tick();
+        }
+        assert_eq!(t.read_u32(0x24).unwrap(), 0, "a reset timer is stopped");
+        // Still the advanced layout with the F4 capture stage.
+        t.write_u32(0x44, 1 << 15).unwrap();
+        assert_eq!(t.read_u32(0x44).unwrap(), 1 << 15);
+        assert!(t.has_f4_input_capture());
     }
 
     #[test]
