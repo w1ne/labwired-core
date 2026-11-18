@@ -4992,9 +4992,9 @@ binary must account for its upstream license.</p>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>cargo<span class="w"> </span>run<span class="w"> </span>--locked<span class="w"> </span>-p<span class="w"> </span>labwired-cli<span class="w"> </span>--features<span class="w"> </span>qemu-arm<span class="w"> </span>--<span class="w"> </span>run<span class="w"> </span>--firmware<span class="w"> </span>tests/fixtures/cortex-a7-core-smoke.elf<span class="w"> </span>--system<span class="w"> </span>examples/cortex-a7-core/system.yaml<span class="w"> </span>--max-steps<span class="w"> </span><span class="m">10</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>cargo<span class="w"> </span>run<span class="w"> </span>--locked<span class="w"> </span>-p<span class="w"> </span>labwired-cli<span class="w"> </span>--features<span class="w"> </span>qemu-arm<span class="w"> </span>--<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>examples/cortex-a7-core/smoke.yaml<span class="w"> </span>--output-dir<span class="w"> </span>/tmp/labwired-cortex-a7-smoke
 </span></code></pre></div>
-<p>The checked-in <a href="../examples/cortex-a7-core/firmware.S">ARM assembly</a> computes
+<p>The checked-in <a href="https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/cortex-a7-core/firmware.S">ARM assembly</a> computes
 7 + 5, writes <strong>12</strong> to <code>0x20000000</code>, then loops at ELF PC <code>0x1010</code>.
-The <a href="../examples/cortex-a7-core/smoke.yaml">script</a> checks that RAM result.
+The <a href="https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/cortex-a7-core/smoke.yaml">script</a> checks that RAM result.
 This is a synthetic initialized-memory platform with no RV1103 peripherals.
 It must not be flashed onto a Luckfox board.</p>
 <p>Rebuild the fixture with <code>arm-none-eabi-gcc</code>:</p>
@@ -5024,7 +5024,7 @@ A separate <code>wasm32-unknown-unknown</code> compile with the core's <code>qem
 also passed: the native dependency remains excluded and execution unavailable.
 Existing unrelated WASM warnings were emitted in Wi-Fi and GDB stub code.</p>
 <p>These establish the tested CPU/bus contract, not Linux boot or Mini A support.
-The <a href="../.github/workflows/core-qemu-arm.yml">native CI lane</a> runs CPU/trace,
+The <a href="https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/.github/workflows/core-qemu-arm.yml">native CI lane</a> runs CPU/trace,
 declaration, snapshot/observer, and
 CLI tests in both feature configurations; local evidence does not claim CI ran.</p>
 <h2 id="linux-and-luckfox-follow-on">Linux and Luckfox follow-on</h2>
@@ -5032,7 +5032,7 @@ CLI tests in both feature configurations; local evidence does not claim CI ran.<
 Cortex-A7/MMU and physical SystemBus access, GIC400, architectural timer and DW
 UART2. On 2026-10-12 its optimized panic-unwind CLI passed a real reduced RV1103
 direct zImage boot to PID1, mounted proc/sys/devtmpfs and completed guest sleep
-with advancing uptime. See the <a href="../examples/luckfox-pico-mini-a-linux/VALIDATION.md">exact acceptance receipt and commands</a>.
+with advancing uptime. See the <a href="https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a-linux/VALIDATION.md">exact acceptance receipt and commands</a>.
 This does not extend the older <code>qemu-arm</code> ELF adapter's MMU/sleep contract above.
 CRU/reset, pinmux, GPIO, I2C, SD/eMMC, external modules and vendor BSP remain
 later work. A reduced native Linux boot does not prove that a stock Luckfox
