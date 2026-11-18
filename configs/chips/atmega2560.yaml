@@ -5,10 +5,16 @@ registers_count: 32
 # ATmega2560 (Arduino Mega 2560): the ATmega328P core model (cpu/avr.rs) with
 # AvrModel::Atmega2560: 256 KB flash and a 3-byte PC (EIND/EIJMP/EICALL,
 # RAMPZ/ELPM), 8 KB SRAM at 0x0200, ports A..L, a 16-channel ADC (ADCSRB.MUX5
-# selects ADC8..15 = A8..A15) and the 2560 vector table. Timer0 (millis/delay)
-# and Timer1/Timer2 are the 328P models at the same addresses.
-# analogWrite reaches the Timer0/1/2 pads (OC0A PB7, OC0B PG5, OC1A/B PB5/PB6,
-# OC2A PB4, OC2B PH6; cpu/avr/oc_pins.rs).
+# selects ADC8..15 = A8..A15) and the 2560 vector table. Timer0 (millis/delay),
+# Timer2 use the 328P models at the same addresses.
+# Timer1/3/4/5 are the 16-bit timers with compare units A/B/C: every WGM mode
+# (normal, CTC on OCRnA or ICRn, fast PWM, phase correct, phase and frequency
+# correct), compare A/B/C, overflow and input-capture interrupts at their 2560
+# vectors, ICFn at TOP when ICRn is TOP, ICP1/3/4/5 on PD4/PE7/PL0/PL1
+# (cpu/avr/timer345.rs).
+# analogWrite reaches every timer pad (OC0A PB7, OC0B PG5, OC1A/B/C
+# PB5/PB6/PB7, OC2A PB4, OC2B PH6, OC3A/B/C PE3/PE4/PE5, OC4A/B/C PH3/PH4/PH5,
+# OC5A/B/C PL3/PL4/PL5; cpu/avr/oc_pins.rs), with the OC0A/OC1C modulator on PB7.
 # USART0..3 (Serial..Serial3, cpu/avr/usart.rs): UCSRnA/B/C, UBRRn with U2X,
 # the UDRn transmit buffer and shift register timed at the programmed baud,
 # the two-character receive FIFO with FE/DOR/UPE/RXB8, and the RX complete,
@@ -28,8 +34,9 @@ registers_count: 32
 # (SS/SCK/MOSI/MISO = PB0/PB1/PB2/PB3) times SPIF by SPR/SPI2X, honours DORD,
 # WCOL and the SS mode fault, interrupts on vector 25 and clocks the attached
 # SPI device models (cpu/avr/mega_spi.rs).
-# Not modelled here: OC1C, Timer3/4/5 (and their PWM pads), the analog
-# comparator, SPI slave transfers from an external master.
+# Not modelled here: the analog comparator, SPI slave transfers
+# from an external master; on the 16-bit timers external clock (Tn pins),
+# toggle and non-PWM compare-output pads, double-buffered OCRnx.
 # Microchip DS2549 (ATmega640/1280/1281/2560/2561), 16 MHz on the Arduino Mega.
 cpu_hz: 16_000_000
 io_voltage_v: 5.0
