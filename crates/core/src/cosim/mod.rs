@@ -4,6 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+mod behavior;
 mod external_process;
 mod registry;
 pub mod routing;
@@ -120,6 +121,14 @@ pub trait CosimAdapter: Send {
 
     /// Optional initial value for a routed input whose physical default is not zero.
     fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {
+        let _ = name;
+        None
+    }
+
+    /// Unit of a numeric input, when the adapter knows it. Values are passed
+    /// without implicit conversion; Boolean voltage drives use their explicit
+    /// adapter Vdd conversion instead.
+    fn input_unit(&self, name: &str) -> Option<&'static str> {
         let _ = name;
         None
     }

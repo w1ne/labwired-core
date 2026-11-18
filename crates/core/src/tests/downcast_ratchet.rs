@@ -261,13 +261,17 @@ const MAX_DOWNCAST_REF: usize = 198;
 // downcasts. This is an explicit chip-family clock contract; a general clock
 // snapshot capability should replace the reach if another clock family needs
 // it, rather than adding an unused general trait for one binding today.
-const MAX_AS_ANY_MUT: usize = 275;
+// 276 → 273: ESP GPIO observers now use the `Peripheral` capability, so C3
+// support shares the classic ESP32/S3 registration path without new downcasts.
+const MAX_AS_ANY_MUT: usize = 273;
 // 341 → 342 (`downcast_mut` only): `attach_uart_tx_sink` hands the console
 // sink to the i.MX RT USB1 device controller, whose bulk IN endpoint carries
 // Teensy 4.x `Serial` (USB CDC) — the same one-time attach arm the RP2040 USB
 // and ESP USB-Serial-JTAG consoles already pay. It is not a UART, so it must
 // not claim `as_uart_stream_host` (cross-links would bind to it).
-const MAX_DOWNCAST_MUT: usize = 342;
+// 342 → 340: the three ESP GPIO observer downcasts moved behind the
+// `Peripheral::register_esp_gpio_observer` capability.
+const MAX_DOWNCAST_MUT: usize = 340;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

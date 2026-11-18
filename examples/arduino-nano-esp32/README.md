@@ -96,3 +96,9 @@ behavior, or the separate RGB LED on GPIO46/GPIO0/GPIO45. The hosted run
 reported the engine's existing approximation that assumes an ideal supply
 rail; it does not simulate power-on or brown-out reset. No physical board was
 tested.
+
+## External I²C sensor example
+
+The matching [BME280 example](../arduino-nano-esp32-bme280/README.md) uses the
+board's A4/SDA and A5/SCL pins (GPIO11/GPIO12) and checks the sensor's 0x60 chip
+ID through the modelled I²C0 path.

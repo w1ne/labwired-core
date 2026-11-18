@@ -29,9 +29,11 @@ use std::path::{Path, PathBuf};
 
 /// `(directory relative to the workspace root, module prefix it is mounted at)`.
 ///
-/// Today there is one root and no prefix. When a module tree moves to another
-/// crate, add `("crates/core/<new>/src", "<module>")` (or move the first entry).
-pub const CORE_SRC_ROOTS: &[(&str, &str)] = &[("crates/core/src", "")];
+/// Extracted crates keep their historical module-relative names through a mount.
+pub const CORE_SRC_ROOTS: &[(&str, &str)] = &[
+    ("crates/core/src", ""),
+    ("crates/core/physics/src", "physics"),
+];
 
 /// A Rust source file found under the engine's source roots.
 #[derive(Debug, Clone)]

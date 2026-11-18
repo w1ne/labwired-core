@@ -104,6 +104,9 @@ pub const I2C0_SIZE: u64 = 0x1000;
 /// `i2c0.yaml` likewise declares `interrupts: { I2C_EXT0: 29 }`.
 pub const I2C0_INTR_SOURCE_ID: u32 = 29;
 
+/// ESP32-C5 I2C_EXT0 interrupt source used by its HP I2C0 controller.
+pub const C5_I2C0_INTR_SOURCE_ID: u32 = 55;
+
 /// One physical C3 GPIO-matrix route for an I²C device. The system manifest
 /// deliberately names signals rather than target registers; this is the C3
 /// lowering of the target-neutral `route: { sda: GPIOx, scl: GPIOy }` shape.
@@ -281,7 +284,7 @@ const CMD_ACK_VALUE_BIT: u32 = 1 << 10;
 /// cycles per 16 MHz tick", `Systimer::new_with_source(160_000_000, …)`) uses
 /// the same 160 MHz convention, so I²C wire time shares one clock base with
 /// the timers firmware uses to measure it.
-const CPU_CLK_HZ: u64 = 160_000_000;
+const DEFAULT_CPU_CLK_HZ: u64 = 160_000_000;
 /// I²C module source clocks selectable via `CLK_CONF.SCLK_SEL` (C3 TRM):
 /// 0 = XTAL_CLK (40 MHz), 1 = RC_FAST_CLK (17.5 MHz).
 const XTAL_CLK_HZ: u64 = 40_000_000;
@@ -425,14 +428,14 @@ struct BitEngine {
 }
 
 impl BitEngine {
-    fn new() -> Self {
+    fn new(cpu_clk_hz: u64) -> Self {
         Self {
             state: EngineState::Idle,
             ticks_left: 0,
             acc: 0,
             // Placeholder; recomputed from the registers at every TRANS_START.
             timing: EngineTiming {
-                num: CPU_CLK_HZ,
+                num: cpu_clk_hz,
                 den: XTAL_CLK_HZ,
                 low: 1,
                 high: 1,
@@ -482,6 +485,8 @@ pub struct Esp32c3I2c {
     matrix_route: Option<C3I2cMatrixRoute>,
     /// Interrupt-matrix source this instance asserts (29 for I2C0).
     intr_source_id: u32,
+    /// Core cycles per second used to pace the I²C module clock.
+    cpu_clk_hz: u64,
     active_slave: Option<usize>,
     expects_addr: bool,
     /// Cycle-driven bit engine executing the command list on the wire.
@@ -554,6 +559,11 @@ pub struct Esp32c3I2c {
 
 impl Esp32c3I2c {
     pub fn new() -> Self {
+        Self::with_cpu_clock_and_intr(DEFAULT_CPU_CLK_HZ, I2C0_INTR_SOURCE_ID)
+    }
+
+    /// Construct with the chip-specific core clock and interrupt-matrix source.
+    pub fn with_cpu_clock_and_intr(cpu_clk_hz: u64, intr_source_id: u32) -> Self {
         Self {
             // CTR reset 0x020B (== C3 i2c0.yaml reset_value 523):
             // SCL_FORCE_OUT|SDA_FORCE_OUT|SAMPLE_SCL_LEVEL|RX_FULL_ACK_LEVEL.
@@ -573,10 +583,11 @@ impl Esp32c3I2c {
             core: EspI2cCore::new(),
             slave_routes: Vec::new(),
             matrix_route: None,
-            intr_source_id: I2C0_INTR_SOURCE_ID,
+            intr_source_id,
+            cpu_clk_hz,
             active_slave: None,
             expects_addr: true,
-            engine: BitEngine::new(),
+            engine: BitEngine::new(cpu_clk_hz),
             lines: None,
             clock: None,
             last_synced: 0,
@@ -607,10 +618,7 @@ impl Esp32c3I2c {
 
     /// Construct an instance asserting a different interrupt-matrix source.
     pub fn with_intr_source(intr_source_id: u32) -> Self {
-        Self {
-            intr_source_id,
-            ..Self::new()
-        }
+        Self::with_cpu_clock_and_intr(DEFAULT_CPU_CLK_HZ, intr_source_id)
     }
 
     /// Interrupt-matrix source this instance asserts (debug/test introspection;
@@ -1391,7 +1399,7 @@ impl Esp32c3I2c {
         // div_a == 0 disables the fractional part.
         let (a, b) = if div_a == 0 { (1, 0) } else { (div_a, div_b) };
         EngineTiming {
-            num: CPU_CLK_HZ * (div_num * a + b),
+            num: self.cpu_clk_hz * (div_num * a + b),
             den: src_hz * a,
             low: (self.reg_scl_low_period & 0x1FF) + 1,
             high: (self.reg_scl_high_period & 0x1FF) + ((self.reg_scl_high_period >> 9) & 0x7F) + 1,

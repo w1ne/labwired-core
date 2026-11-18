@@ -51,13 +51,13 @@ pub const SRAM_START: u16 = 0x0100;
 /// explicitly configured GPIO windows and their interrupt controllers are not
 /// yet modelled.
 ///
-/// Timer0/1/2 output-compare pads use the mega pins (OC0A = PB7, OC0B = PG5,
-/// OC1A/OC1B = PB5/PB6, OC2A = PB4, OC2B = PH6; see `avr/oc_pins.rs`).
+/// Output-compare pads use the mega pins (OC0A = PB7, OC0B = PG5,
+/// OC1A/B/C = PB5/PB6/PB7, OC2A = PB4, OC2B = PH6, OC3x = PE3..5,
+/// OC4x = PH3..5, OC5x = PL3..5; see `avr/oc_pins.rs`). Timer1 gains its
+/// compare unit C and Timer3/4/5 run on the mega parts (`avr/timer345.rs`).
 /// INT0..7 and PCINT0..23 on the mega pins (`avr/mega_ext_int.rs`), the
 /// timed, auto-triggered ADC (`avr/mega_adc.rs`), the timed SPI block
 /// (`avr/mega_spi.rs`) and USART0..3 (`avr/usart.rs`) are the mega's own.
-/// Not modelled on the ATmega2560: OC1C and Timer3/4/5 (registers stored
-/// only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -480,7 +480,10 @@ pub fn mega2560_vector(vec328: u32) -> u32 {
         24 => 29,              // ANALOG COMP
         25 => 40,              // TWI
         26 => 41,              // SPM READY
-        v => v,
+        timer1::VEC_TIMER1_COMPC => 20,
+        // INT2..INT7 (`avr/mega_ext_int.rs`) -> 4..9
+        58..=63 => vec328 - mega_ext_int::NATIVE_BASE,
+        v => v, // Timer3/4/5 raise their own vector numbers (32..36, 42..51)
     }
 }
 pub const AVR_DATA_VMA_BIAS: u64 = 0x0080_0000;
@@ -566,11 +569,13 @@ pub struct Avr {
     pub t2_down: bool,
     /// Timer1, the 16-bit counter (`avr/timer1.rs`).
     t1: timer1::Timer1,
-    /// Pads an output-compare unit owns, per port slot of `oc_pins::OcMap`
-    /// (B/D on the 328P, B/G/H on the mega), and the level it drives there,
-    /// as last pushed to the bus-side port model.
-    oc_mask: [u8; 3],
-    oc_level: [u8; 3],
+    /// Timer3/4/5 and the ICPn pad watch of the mega parts
+    /// (`avr/timer345.rs`).
+    t16: timer345::MegaTimers,
+    /// Pads the output-compare units own, per port slot of `oc_pins::OcMap`
+    /// (B/D on the 328P, B/G/H/E/L on the mega), and the level they drive
+    /// there, as last pushed to the bus-side port model.
+    oc: oc_pins::OcState,
     pub serial_tx: Vec<u8>,
     /// Optional live sink for MachineTrait UART capture.
     pub serial_sink: Option<Arc<Mutex<Vec<u8>>>>,
@@ -956,9 +961,9 @@ impl Avr {
             assr: 0,
             t2_prescale_acc: 0,
             t2_down: false,
-            t1: timer1::Timer1::default(),
-            oc_mask: [0; 3],
-            oc_level: [0; 3],
+            t1: timer1::Timer1::for_model(model),
+            t16: timer345::MegaTimers::default(),
+            oc: oc_pins::OcState::default(),
             serial_tx: Vec::new(),
             serial_sink: None,
             ucsr0a: UCSRA_UDRE,
@@ -1418,6 +1423,18 @@ impl Avr {
             0x00B3 => Ok(self.ocr2a),
             0x00B4 => Ok(self.ocr2b),
             0x00B6 => Ok(self.assr),
+            0x0036
+            | 0x0038..=0x003A
+            | 0x006F
+            | 0x0071..=0x0073
+            | 0x0080..=0x008D
+            | 0x0090..=0x009D
+            | 0x00A0..=0x00AD
+            | 0x0120..=0x012D
+                if self.is_mega() =>
+            {
+                Ok(self.timer16_read(addr))
+            }
             timer1::ADDR_TIFR1
             | timer1::ADDR_TIMSK1
             | timer1::ADDR_TCCR1A..=0x0082
@@ -1624,6 +1641,19 @@ impl Avr {
             }
             0x00B6 => {
                 self.assr = value & (ASSR_EXCLK | ASSR_AS2);
+                Ok(())
+            }
+            0x0036
+            | 0x0038..=0x003A
+            | 0x006F
+            | 0x0071..=0x0073
+            | 0x0080..=0x008D
+            | 0x0090..=0x009D
+            | 0x00A0..=0x00AD
+            | 0x0120..=0x012D
+                if self.is_mega() =>
+            {
+                self.timer16_write(addr, value, bus);
                 Ok(())
             }
             timer1::ADDR_TIFR1
@@ -2191,6 +2221,9 @@ impl Avr {
         if self.t2_prescaler() != 0 {
             self.tick_timer2(cpu_cycles);
         }
+        if self.t16.any_running() {
+            self.tick_timer345(cpu_cycles);
+        }
     }
 
     /// CPU cycles until the next Timer2 interrupt that can wake a sleeper.
@@ -2559,11 +2592,14 @@ impl Avr {
                 return Ok(true);
             }
         }
-        let vec = self.pending_irq.trailing_zeros();
-        // The mega's table runs to slot 57 (USART3 TX); its USART1..3 vectors
-        // are pending at their slot numbers.
-        let last = if self.is_mega() { 63 } else { 31 };
-        if vec == 0 || vec > last {
+        let vec = if self.is_mega() {
+            // Timer3/4/5 and COMPC sit outside the 328P numbering, and the
+            // internal bit order is not the 2560's priority order.
+            timer345::mega_highest_priority(self.pending_irq)
+        } else {
+            self.pending_irq.trailing_zeros()
+        };
+        if vec == 0 || vec > 63 || (vec > 31 && !self.is_mega()) {
             return Ok(false);
         }
         self.pending_irq &= !(1u64 << vec);
@@ -2589,6 +2625,9 @@ impl Avr {
             self.sync_timer2_irq();
         }
         self.timer1_vector_entered(vec);
+        if self.is_mega() {
+            self.timer345_vector_entered(vec);
+        }
         if vec == wdt::VEC_WDT && self.wdt.handles(wdt::ADDR_WDTCSR) {
             self.wdt_vector_entered();
         }
@@ -2847,7 +2886,11 @@ impl Cpu for Avr {
     /// watched pad moved since the last sample, or the USART receive interrupt
     /// is on.
     fn idle_fast_forward_budget(&self, bus: &dyn Bus) -> Option<u64> {
-        if !self.sleeping || self.wake_pending() || self.ext_pins_moved(bus) {
+        if !self.sleeping
+            || self.wake_pending()
+            || self.ext_pins_moved(bus)
+            || self.mega_icp_moved(bus)
+        {
             return None;
         }
         // A byte arriving for RXCIE wakes the core, and its arrival time is the
@@ -2864,6 +2907,7 @@ impl Cpu for Avr {
                 self.timer0_wake_cycles(),
                 self.timer1_wake_cycles(),
                 self.timer2_wake_cycles(),
+                self.timer345_wake_cycles(),
                 self.usb.wake_cycles(self.cycles),
                 self.wdt.wake_cycles(self.cycles),
                 self.eeprom.ready_wake_cycles(self.cycles),
@@ -2936,9 +2980,9 @@ impl Cpu for Avr {
         self.assr = 0;
         self.t2_prescale_acc = 0;
         self.t2_down = false;
-        self.t1 = timer1::Timer1::default();
-        self.oc_mask = [0; 3];
-        self.oc_level = [0; 3];
+        self.t1 = timer1::Timer1::for_model(self.model);
+        self.t16 = timer345::MegaTimers::default();
+        self.oc = oc_pins::OcState::default();
         self.serial_tx.clear();
         self.ucsr0a = UCSRA_UDRE;
         self.ucsr0b = 0;
@@ -3054,6 +3098,10 @@ impl Cpu for Avr {
         if self.ext_watch != 0 {
             self.sample_ext_pins(bus);
         }
+        // ICPn of the mega 16-bit timers (`avr/timer345.rs`).
+        if self.t16.icp_watch != 0 {
+            self.sample_mega_icp(bus);
+        }
         // ATmega2560 family: ADC conversions, triggers and SPI transfers due
         // at this boundary.
         if self.is_mega() {
@@ -3142,14 +3190,19 @@ impl Cpu for Avr {
         max_count: u32,
     ) -> SimResult<u32> {
         let push_tap = bus.logic_tap().filter(|tap| tap.push_armed());
-        let timer_stopped =
-            self.t0_prescaler() == 0 && self.t1.prescaler() == 0 && self.t2_prescaler() == 0;
+        let timer_stopped = self.t0_prescaler() == 0
+            && self.t1.prescaler() == 0
+            && self.t2_prescaler() == 0
+            && !self.t16.any_running();
         let irq_takeable = self.flag_i() && self.pending_irq != 0;
         // A sleeping core, or pads that must be sampled at every boundary for
         // INT/PCINT, keep the one-instruction path.
         // So does an attached USB device: its frames come on cycle deadlines.
-        let irq_takeable =
-            irq_takeable || self.sleeping || self.ext_watch != 0 || self.usb.active();
+        let irq_takeable = irq_takeable
+            || self.sleeping
+            || self.ext_watch != 0
+            || self.t16.icp_watch != 0
+            || self.usb.active();
         // So do an ATmega2560 ADC conversion or SPI transfer in flight.
         let irq_takeable = irq_takeable
             || (self.is_mega() && (self.madc.active(self.adcsra) || self.mega_spi_active()));
@@ -3285,6 +3338,8 @@ mod mega_spi;
 mod oc_pins;
 #[path = "avr/timer1.rs"]
 mod timer1;
+#[path = "avr/timer345.rs"]
+mod timer345;
 #[path = "avr/usart.rs"]
 mod usart;
 /// ATmega32U4 USB device controller.
@@ -5182,6 +5237,8 @@ mod tests {
             // The peripherals shared with the 328P, at its 1-based numbers
             // INT0 (2) .. SPM READY (26).
             ("328P-numbered vectors", ((1u64 << 27) - 1) & !0b11),
+            ("TIMER1 COMPC", 1u64 << timer1::VEC_TIMER1_COMPC),
+            ("TIMER3/4/5", (0x1fu64 << 32) | (0x3ffu64 << 42)),
             ("INT2..INT7", mega_ext_int::HIGH_MASK),
             ("USART1..3", usart::MEGA_ONLY_MASK),
         ];

@@ -57,6 +57,10 @@ _Richest ARM coverage: drives 11 rubric classes via real firmware, plus the gate
 - `SYSCFG` (configs/chips/stm32l476.yaml:421 (type: stub; configs/peripherals/stm32l476/syscfg.yaml; docs/coverage/silent-path-census.md:403)) — CLOSABLE: author-declared stub — read 0, writes dropped, so EXTI source-select (the block's main job) is not modelled and nothing reads the window back: r12 gates its clock because COMP shares the window (crates/firmware-l476-demo/src/r12.rs:130), and the silent-path census records it as the live stub of examples/ci/l476-bldc-stall.yaml.
 - `WWDG` (crates/core/src/peripherals/wwdg.rs:63 (configs/chips/stm32l476.yaml:396; configs/peripherals/stm32l476/wwdg.yaml)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; the PR-gated nucleo_l476rg_misc fingerprint reads CR/CFR/SR off it (crates/core/tests/gates/firmware_survival.rs:623), but that exercises storage only, not watchdog behaviour.
 
+### `esp32c2`
+
+_No beyond-rubric content is claimed. The ESP8684-DevKitM-1-H4X smoke fast-loads firmware that checks UART0 output and the GPIO0 red LED latch; this profile does not exercise mask-ROM boot, electrical pad routing, or radio behavior._
+
 ### `esp32c3`
 
 _Leo air-quality is the sensor-depth proof: the nightly example e2e asserts it explicitly, and the advisory PR workspace shards also exercise it. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass._
@@ -84,7 +88,10 @@ _Broad model surface (~35); the rubric grid proves ~9, plus a TMP102 functional 
 
 ### `esp32`
 
-_tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C command-list engine and a real LEDC duty-latch._
+_tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C command-list engine and a real LEDC duty-latch. The PR-gated ESP32-DevKitM-1 profile adds a BME280 chip-id read on classic I2C0._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- ESP32-DevKitM-1 + BME280 — CHIP_ID 0x60 over I2C0 GPIO21/22, GPIO23 high on match — `esp32-devkitm-1-bme280` · examples/esp32-devkitm-1/evidence/bme280 (local smoke 5/5; fast-boot fixture) (PR gate)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `efuse`, `sha`, `syscon`, `twai`, `mcpwm`, `rtc_cntl`
 
@@ -140,6 +147,10 @@ _tier1 fixture drives clock/timer/gpio/spi/i2c (PL022/DW_apb); boots unmodified 
 _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broadest rubric coverage. UDS bootloader/ECU examples exist but are not yet gated as automated tests._
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `UDS bootloader/ECU (0x10/0x27/0x34/0x36/0x37/0x85/0x28 — example firmware, not gated)`
+
+### `stm32h533re`
+
+_No beyond-rubric peripheral behavior is claimed. The NUCLEO-H533RE profile exercises only USART2 output and GPIOA LED control in its committed smoke._
 
 ### `ch32l103c8t6`
 
@@ -237,11 +248,23 @@ _No beyond-rubric H2 peripheral is exercised: the board smoke covers only the UA
 
 ### `esp32c5`
 
-_No beyond-rubric C5 peripheral is exercised: the DevKitC-1-N8R8 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, IEEE 802.15.4 or the other C5 peripherals._
+_The C5 DevKitC-1-N8R8 smoke reads a BME280 ID and raw temperature over the C5 I2C0 command-list engine, observes GPIO5 output edges, and reports a UART0 marker. The profile does not model ROM boot, flash/XIP, PSRAM, wireless, the RGB LED, PCR clock gating, or electrical IO_MUX enforcement._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- BME280 ID and raw-temperature read over GPIO8/9-routed C5 I2C0 — `esp32c5-devkitc-1-bme280-smoke` · examples/esp32c5-devkitc-1-bme280-smoke/evidence/logs/run_smoke.log (PR gate)
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `io_mux` (configs/chips/esp32c5.yaml (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: register words are stored, but pad electrical mux behavior is not enforced; the smoke's GPIO output and I2C route use the modeled GPIO/matrix subset directly.
 
 ### `esp32c61`
 
-_No beyond-rubric C61 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the USB bridge, IO_MUX, GPIO, the RGB LED, Wi-Fi 6, Bluetooth LE, PSRAM or the other C61 peripherals._
+_The DevKitC-1-N8R2 profile exercises the UART0 TX FIFO, GPIO4 output latch, and the C61 GPIO-matrix I2C0 route to a BME280 on GPIO6/GPIO22. Firmware reads the sensor ID and a raw-temperature vector. It does not model mask-ROM boot, the physical USB bridge, electrical IO_MUX, other GPIO-matrix functions, GPIO26..29, GPIO interrupts, the RGB LED, Wi-Fi 6, Bluetooth LE, PSRAM, or sensor conversion timing._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- BME280 ID and raw-temperature read over GPIO6/22-routed C61 I2C0 — `esp32c61-bme280-smoke` · examples/esp32c61-devkitc-1-n8r2-bme280/evidence/run/logs/run_smoke.log (PR gate)
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `io_mux` (configs/chips/esp32c61.yaml (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — Register storage only; electrical pad muxing is not enforced.
 
 ### `esp32p4`
 
@@ -302,7 +325,7 @@ _Exact low-density x4/x6 geometry slice for stm32f103c4; it reuses the shared me
 
 ### `stm32f103c6`
 
-_Exact low-density x4/x6 geometry slice for stm32f103c6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+_Exact low-density x4/x6 geometry and peripheral windows for stm32f103c6 (SPI1, I2C1, USART1/2, TIM1-3, ADC1/2, DMA1; no SPI2, I2C2, USART3 or TIM4). A dedicated smoke boots firmware, writes USART2 and toggles PA5; USB and BKP remain explicit untouched stubs. ES0348's user-mode DBGMCU_IDCODE restriction is reflected as a zero read; `stm32_variant_geometry` asserts exact geometry. This is model evidence, not a physical C6 capture._
 
 ### `stm32f103r4`
 
@@ -314,7 +337,7 @@ _Exact low-density x4/x6 geometry slice for stm32f103r4h; it reuses the shared m
 
 ### `stm32f103r6`
 
-_Exact low-density x4/x6 geometry slice for stm32f103r6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+_Exact low-density x4/x6 geometry for stm32f103r6 (32 KB flash, 10 KB SRAM, LQFP64, 51 GPIOs, 16 ADC channels), with only the low-density SPI1, I2C1, USART1/2, TIM1-3, ADC1/2 and DMA1 instances exposed. Its dedicated smoke runs USART2 output and PA5 edges; USB and backup-register windows remain explicit untouched stubs. Exact geometry is asserted by `stm32_variant_geometry`. This is local simulator evidence, not a physical R6 capture._
 
 ### `stm32f103r6h`
 
@@ -583,9 +606,12 @@ _SIM-DERIVED STM32U575 target with NO tier-1 target (absent from TIER1_TARGETS a
 
 ### `stm32u5a5zj`
 
-_SIM-DERIVED NUCLEO-U5A5ZJ-Q target with no tier-1 row or prebuilt CLI firmware. The in-process `stm32u5_exec_oracle` drives the U5A5 SystemBus registers and checks SHA-256 of `abc`, AES-128 ECB, 4^13 mod 497, and negative PKA subtraction sign extension through 4160 bits; it also rejects 4161-bit operands. Separate tests cover SHA-1/SHA-224/MD5 register vectors on the shared HASH model via U575 and an RFC 4231 HMAC unit vector; SAES unit vectors cover AES-128 ECB/CBC/CTR. The model implements AES-256 too, but no AES-256 vector currently tests it. The source-built `examples/nucleo-u5a5zj/io-smoke.yaml` checks basic UART only; no firmware test currently exercises U5A5 HASH/SAES/PKA. No physical U5A5 capture or acceptance is claimed; see `docs/boards/stm32u5a5zj.md` for model limits._
+_SIM-DERIVED NUCLEO-U5A5ZJ-Q target with no tier-1 row or prebuilt CLI firmware. The in-process `stm32u5_exec_oracle` checks SHA-256 of `abc`, AES-128 ECB, 4^13 mod 497, and negative PKA subtraction sign extension through 4160 bits; it also rejects 4161-bit operands. Separate tests cover SHA-1/SHA-224/MD5 register vectors on the shared HASH model via U575 and an RFC 4231 HMAC unit vector. The nightly board firmware smoke now drives SAES AES-128 ECB with the NIST SP 800-38A known-answer vector; other SAES unit vectors cover CBC/CTR, and the model implements AES-256 but has no AES-256 vector yet. HASH and PKA remain register-oracle-only. The SAES model does not cover GCM/CCM or TrustZone key selection. No physical U5A5 capture or acceptance is claimed; see `docs/boards/stm32u5a5zj.md` for model limits._
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `HASH`, `SAES`, `PKA`
+**Functional device/protocol reads** (real driver, decoded value):
+- NUCLEO-U5A5ZJ-Q SAES AES-128 ECB — NIST SP 800-38A known-answer block — `nucleo-u5a5-saes-smoke` · examples/nucleo-u5a5zj/evidence/saes (local smoke 2/2; CI matrix) (nightly CI)
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `HASH`, `PKA`
 
 ### `stm32u545`
 
@@ -912,3 +938,7 @@ _L1 + stock RTOS, SIM-DERIVED. First Cortex-R part: the Zynq UltraScale+ XCK26 R
 _Bare AT32F421G8U7 (QFN28), reference-derived, no silicon capture. The committed Artery BSP 2.1.9 SDK smoke (examples/at32f421g8u7/io-smoke.yaml, PR-gated coverage-matrix cell, and the vendor::at32f421_contract Rust gate) switches CRM to the 120 MHz PLL, erases and programs the last flash sector, copies four words by DMA1 memory-to-memory and toggles PA5 from real TMR6 interrupts over USART2. The comparator/EXINT line-21 path, ADC ordinary scan with DMA handshake and the shared IWDG expiry reset are exercised only by register-level unit tests._
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `{'p': 'CMP', 'ev': 'crates/core/src/peripherals/at32f421.rs; crates/core/tests/vendor/at32f421_contract.rs', 'note': 'Mux/polarity/lock and EXINT line-21 rising/falling routing; no firmware drives it yet.'}`
+
+### `mspm0g3507`
+
+_Local UART0 smoke; no beyond-rubric content. The LP-MSPM0G3507 profile boots a bare-metal image and captures LP_MSPM0G3507_UART0_OK through the TXDATA register path (examples/lp-mspm0g3507-launchpad/evidence/). This proves core execution and register-side TX only; GPRCM, IOMUX/pad routing, UART timing/FIFO, GPIO and the other LaunchPad peripherals are outside the profile (examples/lp-mspm0g3507-launchpad/VALIDATION.md), so no beyond-rubric blocks exist to list._
