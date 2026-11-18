@@ -532,6 +532,21 @@ fn heypcb_ldr_reference(runtime: &mut FlexRuntime, lux: f64) -> serde_json::Valu
         asserted
     };
 
+    let mut trace = pomodoro_digital_evidence(runtime);
+    for channel in trace["channels"].as_array_mut().unwrap() {
+        let signal = channel["signal"].as_str().unwrap();
+        let names: Vec<_> = runtime
+            .manifest()
+            .ports
+            .iter()
+            .filter(|port| {
+                port.kind == labwired_config::FlexPortKind::Bool && port.signal == signal
+            })
+            .map(|port| port.name.clone())
+            .collect();
+        channel["port_names"] = serde_json::json!(names);
+    }
+
     serde_json::json!({
         "result": if asserted && cleared { adc_code } else { u32::MAX },
         "lux": lux,
@@ -539,7 +554,7 @@ fn heypcb_ldr_reference(runtime: &mut FlexRuntime, lux: f64) -> serde_json::Valu
         "adc_code": adc_code,
         "led_final": runtime.read(led_state).unwrap(),
         "time_ns": runtime.time_ns(),
-        "trace": pomodoro_digital_evidence(runtime),
+        "trace": trace,
         "analog_trace": heypcb_ldr_analog_evidence(runtime),
     })
 }
@@ -955,6 +970,15 @@ fn flex_heypcb_ldr_runtime_ports_match_the_pinned_generic_import() {
 fn flex_heypcb_ldr_portable_behavior_has_native_reference_and_dark_negative_control() {
     let mut positive = FlexRuntime::from_yaml(HEYPCB_LDR_SYSTEM).expect("LDR Flex manifest");
     let positive_evidence = heypcb_ldr_reference(&mut positive, 100_000.0);
+    let channels = positive_evidence["trace"]["channels"].as_array().unwrap();
+    assert!(channels.iter().any(|channel| {
+        channel["signal"] == "source.U3.GPIO48"
+            && channel["port_names"] == serde_json::json!(["user_led_drive"])
+    }));
+    assert!(channels.iter().any(|channel| {
+        channel["signal"] == "source.D1.logic_state"
+            && channel["port_names"] == serde_json::json!(["user_led_state"])
+    }));
     assert_eq!(positive_evidence["result"], positive_evidence["adc_code"]);
     assert!(positive_evidence["adc_code"].as_u64().unwrap() >= 4080);
     assert_eq!(positive_evidence["led_final"], 0.0);
@@ -1013,6 +1037,18 @@ fn flex_heypcb_ldr_browser_evidence_pins_source_and_exact_runtime_inputs() {
     assert_eq!(core_commit.len(), 40);
     assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
     assert_eq!(browser["native_model_equality"], true);
+    assert!(browser["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|check| check == "named-digital-port-aliases"));
+    assert_eq!(
+        browser["digital_port_aliases"],
+        serde_json::json!([
+            {"signal": "source.D1.logic_state", "port_names": ["user_led_state"]},
+            {"signal": "source.U3.GPIO48", "port_names": ["user_led_drive"]}
+        ])
+    );
     assert_eq!(browser["firmware_sha256"], sha256(HEYPCB_LDR_FIRMWARE));
     assert_eq!(
         browser["firmware_source_sha256"],

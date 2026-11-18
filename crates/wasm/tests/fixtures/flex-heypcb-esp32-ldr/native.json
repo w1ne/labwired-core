@@ -44,10 +44,16 @@
       "channels": [
         {
           "initial": false,
+          "port_names": [
+            "user_led_state"
+          ],
           "signal": "source.D1.logic_state"
         },
         {
           "initial": false,
+          "port_names": [
+            "user_led_drive"
+          ],
           "signal": "source.U3.GPIO48"
         }
       ],
@@ -108,10 +114,16 @@
       "channels": [
         {
           "initial": false,
+          "port_names": [
+            "user_led_state"
+          ],
           "signal": "source.D1.logic_state"
         },
         {
           "initial": false,
+          "port_names": [
+            "user_led_drive"
+          ],
           "signal": "source.U3.GPIO48"
         }
       ],

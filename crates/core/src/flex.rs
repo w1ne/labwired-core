@@ -27,6 +27,9 @@ const MAX_TIME_NS: u64 = (1 << 53) - 1;
 pub struct FlexDigitalChannel {
     pub id: u32,
     pub signal: String,
+    /// Firmware-facing Boolean port names attached to this signal. Internal
+    /// model signals have no aliases and remain available by their signal path.
+    pub port_names: Vec<String>,
     pub initial: bool,
 }
 
@@ -56,7 +59,18 @@ struct DigitalCapture {
 }
 
 impl DigitalCapture {
-    fn new(signals: &CosimSignals) -> SimResult<Self> {
+    fn new(signals: &CosimSignals, ports: &[FlexPort]) -> SimResult<Self> {
+        let mut port_names_by_signal = BTreeMap::<String, Vec<String>>::new();
+        for port in ports.iter().filter(|port| port.kind == FlexPortKind::Bool) {
+            port_names_by_signal
+                .entry(port.signal.clone())
+                .or_default()
+                .push(port.name.clone());
+        }
+        for names in port_names_by_signal.values_mut() {
+            names.sort();
+        }
+
         let mut channels = Vec::new();
         for (signal, value) in signals {
             if let CosimSignalValue::Bool(initial) = value {
@@ -65,6 +79,10 @@ impl DigitalCapture {
                 channels.push(FlexDigitalChannel {
                     id,
                     signal: signal.clone(),
+                    port_names: port_names_by_signal
+                        .get(signal)
+                        .cloned()
+                        .unwrap_or_default(),
                     initial: *initial,
                 });
             }
@@ -207,7 +225,7 @@ impl FlexRuntime {
             }
         }
         runner.validate_numeric_input_units(&signals, &units)?;
-        let digital = DigitalCapture::new(&signals)?;
+        let digital = DigitalCapture::new(&signals, &manifest.ports)?;
         let runtime = Self {
             manifest,
             ports,
@@ -432,6 +450,19 @@ cosim_models:
             .iter()
             .find(|channel| channel.signal == "pulse")
             .unwrap();
+        assert_eq!(channel.port_names, vec!["pulse"]);
+        let command_channel = trace
+            .channels
+            .iter()
+            .find(|channel| channel.signal == "command")
+            .unwrap();
+        assert_eq!(command_channel.port_names, vec!["command"]);
+        let internal_channel = trace
+            .channels
+            .iter()
+            .find(|channel| channel.signal == "ready")
+            .unwrap();
+        assert!(internal_channel.port_names.is_empty());
         let edges: Vec<_> = trace
             .edges
             .iter()

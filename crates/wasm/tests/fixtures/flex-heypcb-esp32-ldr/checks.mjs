@@ -90,6 +90,10 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
       'the registered LDR output or its nanosecond time unit is missing from the oscilloscope trace');
       check(analogBatch.samples.length > 0, 'the LDR oscilloscope trace has no samples');
       const signalById = new Map(batch.channels.map((channel) => [channel.id, channel.signal]));
+      const portNamesBySignal = new Map(batch.channels.map((channel) => [channel.signal, channel.port_names]));
+      check(portNamesBySignal.get('source.U3.GPIO48')?.includes('user_led_drive')
+        && portNamesBySignal.get('source.D1.logic_state')?.includes('user_led_state'),
+      'logic-analyzer channels must expose named firmware ports alongside imported signal paths');
       return {
         result: adcCode,
         lux,
@@ -100,7 +104,7 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
         trace: {
           time_unit: batch.time_unit,
           dropped: batch.dropped,
-          channels: batch.channels.map(({ signal, initial }) => ({ signal, initial }))
+          channels: batch.channels.map(({ signal, port_names, initial }) => ({ signal, port_names, initial }))
             .sort((a, b) => a.signal.localeCompare(b.signal)),
           edges: batch.edges.map((edge) => ({
             signal: signalById.get(edge.ch), time_ns: edge.time_ns, value: edge.value,
@@ -129,6 +133,10 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
   equal(negative, expected.negative, 'dark negative control differs from the native Flex model reference');
   check(negative.adc_code === 0 && negative.led_final === 0, 'dark negative control must keep the LED off');
   check(negative.trace.dropped === 0 && negative.trace.edges.length === 0, 'dark negative control emitted a digital edge');
+  const digital_port_aliases = positive.trace.channels
+    .filter(({ port_names }) => port_names.length > 0)
+    .map(({ signal, port_names }) => ({ signal, port_names }))
+    .sort((a, b) => a.signal.localeCompare(b.signal));
   const scopeSummary = (run) => ({
     time_unit: run.analog_trace.time_unit,
     channels: run.analog_trace.channels,
@@ -147,12 +155,13 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
     positive_led_edges: positive.trace.edges.length,
     negative_adc_code: negative.adc_code,
     negative_led_edges: negative.trace.edges.length,
+    digital_port_aliases,
     analog_trace: {
       positive: scopeSummary(positive),
       negative: scopeSummary(negative),
     },
     native_model_equality: true,
     run_report: runReport,
-    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'bright-output', 'dark-negative-control', 'oscilloscope-samples', 'oscilloscope-nanosecond-time-unit'],
+    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'named-digital-port-aliases', 'bright-output', 'dark-negative-control', 'oscilloscope-samples', 'oscilloscope-nanosecond-time-unit'],
   };
 }
