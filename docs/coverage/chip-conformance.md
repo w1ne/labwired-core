@@ -87,6 +87,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f405 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32f405_tier1_survival |
 | stm32f767 | **L1** | ✓ | 36 | — | — | firmware_survival::test_stm32f767_tier1_survival |
 | rp2350 | **L1** | ✓ | 27 | — | — | firmware_survival::test_rp2350_demo_survival |
+| rp2354b | **L1** | ✓ | 35 | — | — | firmware_survival::test_rp2354b_demo_survival |
 | stm32f407 | **L1** | ✓ | 34 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32f407ie | **L0** | ✓ | 34 | — | — | — |
 | stm32f407ig | **L0** | ✓ | 34 | — | — | — |
@@ -98,7 +99,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32g474re | **L1** | ✓ | 23 | — | — | firmware_survival::test_stm32g474_zephyr_survival |
 | stm32g431rb | **L0** | ✓ | 22 | — | — | — |
 | stm32h563 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32h563_demo_survival |
-| stm32h533re | **L1** | ✓ | 3 | — | — | stm32h563_walk_differential::stm32h533re_boot_walk_vs_scheduler_is_byte_identical |
+| stm32h533re | **L1** | ✓ | 5 | — | — | stm32h563_walk_differential::stm32h533re_boot_walk_vs_scheduler_is_byte_identical |
 | stm32u575 | **L1** | ✓ | 43 | — | — | firmware_survival::test_stm32u575_zephyr_survival |
 | stm32u545 | **L1** | ✓ | 39 | — | — | firmware_survival::test_stm32u545_blinky_survival |
 | stm32u5a5zj | **L1** | ✓ | 45 | — | — | stm32u5_exec_oracle::u5a5_hash_saes_and_pka_execute_register_level_operations |

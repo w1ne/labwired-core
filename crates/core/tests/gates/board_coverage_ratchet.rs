@@ -810,6 +810,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // no catalog board, no silicon oracle, no TrustZone/bootrom/PIO
         // v2. Promote when benched on Pico 2 silicon.
         "rp2350",
+        // QFN80 / 48-pad / 2 MiB stacked-flash RP2354B profile. CI executes
+        // the shared Cortex-M33 demo and native B-bank register controls.
+        // No silicon oracle or full-device executing-fidelity claim exists.
+        "rp2354b",
         // WeAct F411 Black Pill. Has a tier-1 fixture + io-smoke and rides the
         // shared stm32f4 peripheral models, but it is not a bundled-configs.ts
         // catalog board and carries NO executing-fidelity test of its own (no

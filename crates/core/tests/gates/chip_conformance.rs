@@ -751,6 +751,13 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_rp2350_demo_survival"),
     },
     ChipConf {
+        name: "rp2354b",
+        yaml: "configs/chips/rp2354b.yaml",
+        reset_oracle: None,
+        // Reuse the Cortex-M33 demo on the exact B-package descriptor.
+        behavior_gate: Some("firmware_survival::test_rp2354b_demo_survival"),
+    },
+    ChipConf {
         name: "stm32f407",
         yaml: "configs/chips/stm32f407.yaml",
         reset_oracle: None,

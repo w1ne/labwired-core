@@ -383,7 +383,7 @@ chips:
 
   - id: rp2354b
     arch: cortex-m33
-    headline: "QFN80 RP2354B variant with 48 GPIO pads and 2 MiB stacked flash. Native descriptor, high GPIO bank, ADC channel and vector-selection tests cover the package contract. No beyond-rubric firmware result is accepted under this chip name yet: the physical motor-bench PIO/DMA path is pending, and the separate full Betaflight image stops at flash initialization. Shared RP2350 models and clean-room ROM helpers do not establish mask-ROM, security, dual-core or flight qualification."
+    headline: "QFN80 RP2354B variant with 48 GPIO pads and 2 MiB stacked flash. Native descriptor, high GPIO bank, ADC channel and vector-selection tests cover the package contract. The shared Cortex-M33 RP2350 UART0 demo also runs on the exact RP2354B system in the PR survival harness and the ordinary CLI coverage matrix; this is common-IP survival, not a B-package physical capture. No beyond-rubric firmware result is accepted under this chip name yet: the physical motor-bench PIO/DMA path is pending, and the separate full Betaflight image stops at flash initialization. Shared RP2350 models and clean-room ROM helpers do not establish mask-ROM, security, dual-core or flight qualification."
     functional: []
     advanced_unit_only: []
     advanced_dead: []

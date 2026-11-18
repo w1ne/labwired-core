@@ -2,7 +2,7 @@
 
 Source-grounded onboarding dossier for the RV1103 board and a battery-powered smart basket prototype.
 
-> **Experimental, below L0.** The generic RV1103 chip and Mini A system descriptors declare CPU/memory geometry only. The separate optional `rv1103-linux` native CLI passed a reduced direct zImage boot to real PID1 on 2026-10-12, using privileged Cortex-A7/MMU, SystemBus, GIC400, architectural timer and DW UART2. This leaves board reset, SD/vendor BSP and physical acceptance open. The older `qemu-arm` ELF adapter remains an instruction fixture. See the [Linux receipt and scope](../../examples/luckfox-pico-mini-a-linux/VALIDATION.md), [support rubric](../target_support_rubric.md), and [validation record](../../examples/luckfox-pico-mini-a/VALIDATION.md).
+> **Experimental, below L0.** The generic RV1103 chip and Mini A system descriptors declare CPU/memory geometry only. The separate optional `rv1103-linux` native CLI passed a reduced direct zImage boot to real PID1 on 2026-10-12, using privileged Cortex-A7/MMU, SystemBus, GIC400, architectural timer and DW UART2. This leaves board reset, SD/vendor BSP and physical acceptance open. The older `qemu-arm` ELF adapter remains an instruction fixture. See the [Linux receipt and scope](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a-linux/VALIDATION.md), [support rubric](../target_support_rubric.md), and [validation record](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a/VALIDATION.md).
 
 ## Status at a glance
 
@@ -64,7 +64,7 @@ The illustration also labels ACT as GPIO3_C6_d and USER as GPIO1_A2; these are n
 
 The [official schematic](../assets/luckfox-pico-mini-a/schematic.pdf) identifies the SARADC/PWM VCCIO2 domain as **1.8 V only**. Header pads **19/20 (GPIO4_C0/C1)** belong to that domain; do not apply 3.3 V or a battery voltage. The selected UART4/I2C3 connections use the separate 3.3 V domain. The schematic also requires SARADC_IN0 to remain pulled up; preserve that board function when considering pad 19. Absolute maximum ratings and ADC behavior still require the silicon documentation.
 
-For the basket, reserve **14/15 for ADXL345 I2C3** and **10/11 for ESP-AT UART4**. Optional flow control uses **17 CTS / 16 RTS**. Preserve **4/5 UART2** for recovery and boot logs. See [complete wiring and power notes](../../examples/luckfox-pico-mini-a/HARDWARE.md). The vendor [I2C](https://wiki.luckfox.com/Luckfox-Pico-Plus-Mini/I2C/) and [UART](https://wiki.luckfox.com/Luckfox-Pico-Plus-Mini/UART/) guides corroborate the Mini A/B interface selection.
+For the basket, reserve **14/15 for ADXL345 I2C3** and **10/11 for ESP-AT UART4**. Optional flow control uses **17 CTS / 16 RTS**. Preserve **4/5 UART2** for recovery and boot logs. See [complete wiring and power notes](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a/HARDWARE.md). The vendor [I2C](https://wiki.luckfox.com/Luckfox-Pico-Plus-Mini/I2C/) and [UART](https://wiki.luckfox.com/Luckfox-Pico-Plus-Mini/UART/) guides corroborate the Mini A/B interface selection.
 
 ![Official shared Mini A/B dimension diagram showing 21.00 mm width, 28.14 mm height, 17.78 mm pin-row spacing and 2.54 mm pin pitch](../assets/luckfox-pico-mini-a/dimensions.jpg)
 
@@ -93,19 +93,19 @@ The reduced Linux platform catches privileged CPU, MMU, GIC/timer/console and re
 
 ## How to run (CLI · Playground · MCP)
 
-The [chip descriptor](../../configs/chips/rv1103.yaml), [system manifest](../../configs/systems/luckfox-pico-mini-a.yaml) and [example manifest](../../examples/luckfox-pico-mini-a/system.yaml) declare CPU and memory geometry. They do **not** provide a Mini A boot/run command. For the instruction-only experiment, use the native-feature commands and receipts in [QEMU ARM core prototype](../qemu-arm-core.md) with [`examples/cortex-a7-core`](../../examples/cortex-a7-core/). Its synthetic memory map is not the RV1103 memory map. Playground and MCP board execution remain unavailable.
+The [chip descriptor](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/configs/chips/rv1103.yaml), [system manifest](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/configs/systems/luckfox-pico-mini-a.yaml) and [example manifest](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a/system.yaml) declare CPU and memory geometry. They do **not** provide a Mini A boot/run command. For the instruction-only experiment, use the native-feature commands and receipts in [QEMU ARM core prototype](../qemu-arm-core.md) with [`examples/cortex-a7-core`](https://github.com/w1ne/labwired-core/tree/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/cortex-a7-core). Its synthetic memory map is not the RV1103 memory map. Playground and MCP board execution remain unavailable.
 
-For the separate reduced Linux platform, follow the [native zImage preparation/build/gate commands](../../examples/luckfox-pico-mini-a-linux/README.md). Its backend is optional, Linux x86_64 GNU only, and requires panic unwind; default CLI and browser builds remain independent of it.
+For the separate reduced Linux platform, follow the [native zImage preparation/build/gate commands](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a-linux/README.md). Its backend is optional, Linux x86_64 GNU only, and requires panic unwind; default CLI and browser builds remain independent of it.
 
 ## Related systems & examples
 
-- [Onboarding package and implementation gates](../../examples/luckfox-pico-mini-a/README.md)
-- [Hardware, power and interface design](../../examples/luckfox-pico-mini-a/HARDWARE.md)
-- [Required vendor documents](../../examples/luckfox-pico-mini-a/REQUIRED_DOCS.md)
-- [External components and model gaps](../../examples/luckfox-pico-mini-a/EXTERNAL_COMPONENTS.md)
-- [Validation record](../../examples/luckfox-pico-mini-a/VALIDATION.md)
+- [Onboarding package and implementation gates](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a/README.md)
+- [Hardware, power and interface design](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a/HARDWARE.md)
+- [Required vendor documents](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a/REQUIRED_DOCS.md)
+- [External components and model gaps](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a/EXTERNAL_COMPONENTS.md)
+- [Validation record](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a/VALIDATION.md)
 - [Board onboarding playbook](../board_onboarding_playbook.md)
 
 ## Joint native basket evidence
 
-The [joint Linux basket receipt and reproduction](../../examples/luckfox-pico-mini-a-linux/BASKET.md) add native-only ADXL345 I2C3 and behavioral UART4 integration through actual Machine/SystemBus/CosimSession plus one persistent reduced power plant. Actual 644.13082329 wall seconds / 89 functional-clock seconds at fixed 24MHz is not 1x performance. Recovery uses a fresh CPU/bus/controllers/components with the SAME plant, battery and time. Register retention applies only within one external cut/restore fixture. Raw5V maps to synthetic execution VDD; raw3V/effective external domain uses functional2.7V. Carrier disconnect and latch reset are explicit interventions. Browser/default still refuse Linux; full RV1103/vendorBSP/SD/ROM/RF/all50silicon/physical acceptance remain unavailable.
+The [joint Linux basket receipt and reproduction](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a-linux/BASKET.md) add native-only ADXL345 I2C3 and behavioral UART4 integration through actual Machine/SystemBus/CosimSession plus one persistent reduced power plant. Actual 644.13082329 wall seconds / 89 functional-clock seconds at fixed 24MHz is not 1x performance. Recovery uses a fresh CPU/bus/controllers/components with the SAME plant, battery and time. Register retention applies only within one external cut/restore fixture. Raw5V maps to synthetic execution VDD; raw3V/effective external domain uses functional2.7V. Carrier disconnect and latch reset are explicit interventions. Browser/default still refuse Linux; full RV1103/vendorBSP/SD/ROM/RF/all50silicon/physical acceptance remain unavailable.
