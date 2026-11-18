@@ -4,9 +4,9 @@
 2025 MCU survey (38%). The survey does not report a separate ESP32-C5 score.
 This is a demand-aligned family addition; C5-specific usage is unmeasured.
 
-**Vendor status, checked 2026-11-17:** Espressif's live product catalog lists
+**Vendor status, checked 2026-11-18:** Espressif's live product catalog lists
 `ESP32-C5-DevKitC-1-N8R8` with distributor links and a $15 sample price
-reference. See the
+reference; DigiKey lists the exact board SKU as Active with 259 in stock. See the
 [vendor-status receipt](../../examples/esp32c5-devkitc-1-n8r8/vendor-status.md).
 
 ## Pin map
