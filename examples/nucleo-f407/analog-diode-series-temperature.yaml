@@ -1,0 +1,50 @@
+# Matched generic diode branches route temperature-adjusted RS through PA2..PA7
+# to NUCLEO-F407 ADC1, with explicit hot-resistance controls.
+name: "nucleo-f407-diode-series-temperature"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "diode_series_resistance_temperature"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_v: "ui.diode_rs.supply_v"
+    outputs:
+      nominal_coeff_voltage: "board.analog.pa2_volts"
+      nominal_explicit_voltage: "board.analog.pa3_volts"
+      hot_coeff_voltage: "board.analog.pa4_volts"
+      hot_explicit_voltage: "board.analog.pa5_volts"
+      hot_first_order_voltage: "board.analog.pa6_volts"
+      hot_nominal_control_voltage: "board.analog.pa7_volts"
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rload_nominal_coeff drive nominal_coeff 1k
+        Dnominal_coeff nominal_coeff 0 DTRS TEMP=27
+        .model DTRS D(IS=1e-14 N=1.2 RS=300 EG=0 XTI=0 TNOM=27 TRS=1m TRS2=2u)
+        Rload_nominal_explicit drive nominal_explicit 1k
+        Dnominal_explicit nominal_explicit 0 DREF27 TEMP=27
+        .model DREF27 D(IS=1e-14 N=1.2 RS=300 EG=0 XTI=0 TNOM=27)
+        Rload_hot_coeff drive hot_coeff 1k
+        Dhot_coeff hot_coeff 0 DTRSHOT TEMP=127
+        .model DTRSHOT D(IS=1e-14 N=1.2 RS=300 EG=0 XTI=0 TNOM=27 TRS=1m TRS2=2u)
+        Rload_hot_explicit drive hot_explicit 1k
+        Dhot_explicit hot_explicit 0 DREF336 TEMP=127
+        .model DREF336 D(IS=1e-14 N=1.2 RS=336 EG=0 XTI=0 TNOM=27)
+        Rload_hot_first_order drive hot_first_order 1k
+        Dhot_first_order hot_first_order 0 DTRS1 TEMP=127
+        .model DTRS1 D(IS=1e-14 N=1.2 RS=300 EG=0 XTI=0 TNOM=27 TRS1=1m)
+        Rload_hot_nominal drive hot_nominal_control 1k
+        Dhot_nominal hot_nominal_control 0 DREF300 TEMP=127
+        .model DREF300 D(IS=1e-14 N=1.2 RS=300 EG=0 XTI=0 TNOM=27)
+      probes:
+        nominal_coeff_voltage: "v(nominal_coeff)"
+        nominal_explicit_voltage: "v(nominal_explicit)"
+        hot_coeff_voltage: "v(hot_coeff)"
+        hot_explicit_voltage: "v(hot_explicit)"
+        hot_first_order_voltage: "v(hot_first_order)"
+        hot_nominal_control_voltage: "v(hot_nominal_control)"
+      sources:
+        supply_v: "Vdrive"
+      vdd: 3.3

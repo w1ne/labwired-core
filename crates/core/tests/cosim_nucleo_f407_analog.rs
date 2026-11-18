@@ -3192,3 +3192,166 @@ fn nucleo_f407_diode_transit_temperature_coefficients_reach_adc1() {
     assert!((hot_scaled - hot_explicit).abs() < 1e-7);
     assert!((hot_explicit - hot_control).abs() < 5e-4);
 }
+
+#[test]
+fn nucleo_f407_diode_series_resistance_temperature_coefficients_reach_adc1() {
+    const SUPPLY_V: f64 = 2.0;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const IS_A: f64 = 1e-14;
+    const N: f64 = 1.2;
+
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    let unrelated =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let diode_rs = SystemManifest::from_file(root(
+        "examples/nucleo-f407/analog-diode-series-temperature.yaml",
+    ))
+    .expect("load matched generic diode series-resistance branches");
+    profile.cosim_models = unrelated.cosim_models;
+    profile.cosim_models.extend(diode_rs.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+        ("PA7", 7),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC, diode, and six series-resistance branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the generic diode branches must resolve through PA2..PA7 to ADC1"
+    );
+    for channel in 0..=7 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.diode_rs.supply_v", 0.0)
+        .expect("initialize all diode branches at zero volts");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize the NTC and all diode branches before the load step");
+    assert_eq!(initial_steps.len(), 3, "all three analog netlists solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.diode_rs.supply_v", SUPPLY_V)
+        .expect("drive all matched diode branches");
+    cycles += session.cycles_until_boundary(cycles);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve and route the diode series-resistance temperature sweep");
+    assert_eq!(
+        steps.len(),
+        3,
+        "all three analog netlists solve at the driven point"
+    );
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+    let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+    assert!((ntc_v - 1.65).abs() < 1e-9, "unrelated NTC stays isolated");
+    let unrelated_diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+    assert!(
+        (unrelated_diode_v - diode_load_line_voltage()).abs() < 2e-5,
+        "unrelated Shockley diode stays on its independent load line"
+    );
+
+    // EG=XTI=0 holds IS fixed, so the independent load-line reference isolates
+    // the change in internal RS while still evaluating Vt at each instance TEMP.
+    let expected_voltage = |temperature_c: f64, series_resistance_ohms: f64| {
+        let thermal_voltage = 1.380_649e-23 * (temperature_c + 273.15) / 1.602_176_634e-19;
+        let current_at_junction = |junction_v: f64| {
+            IS_A * ((junction_v / (N * thermal_voltage)).exp() - 1.0) + 1e-12 * junction_v
+        };
+        let residual = |junction_v: f64| {
+            (SUPPLY_V - junction_v - current_at_junction(junction_v) * series_resistance_ohms)
+                / LOAD_OHMS
+                - current_at_junction(junction_v)
+        };
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let junction_v = 0.5 * (low + high);
+            if residual(junction_v) > 0.0 {
+                low = junction_v;
+            } else {
+                high = junction_v;
+            }
+        }
+        let junction_v = 0.5 * (low + high);
+        junction_v + current_at_junction(junction_v) * series_resistance_ohms
+    };
+    let expected = [
+        expected_voltage(27.0, 300.0),
+        expected_voltage(27.0, 300.0),
+        expected_voltage(127.0, 336.0),
+        expected_voltage(127.0, 336.0),
+        expected_voltage(127.0, 330.0),
+        expected_voltage(127.0, 300.0),
+    ];
+    let actual = [
+        signal_voltage(&session, "board.analog.pa2_volts"),
+        signal_voltage(&session, "board.analog.pa3_volts"),
+        signal_voltage(&session, "board.analog.pa4_volts"),
+        signal_voltage(&session, "board.analog.pa5_volts"),
+        signal_voltage(&session, "board.analog.pa6_volts"),
+        signal_voltage(&session, "board.analog.pa7_volts"),
+    ];
+    for (index, (voltage, reference)) in actual.into_iter().zip(expected).enumerate() {
+        assert!(
+            (voltage - reference).abs() < 2e-5,
+            "diode branch {index} should match the independent temperature-adjusted load line: expected {reference} V, got {voltage} V"
+        );
+    }
+    assert!(
+        (actual[0] - actual[1]).abs() < 1e-7,
+        "at TNOM, TRS/TRS2 must match the explicit nominal RS branch"
+    );
+    assert!(
+        (actual[2] - actual[3]).abs() < 1e-7,
+        "at 127 C, the quadratic TRS law must match explicit RS(T)=336 Ω"
+    );
+    assert!(
+        actual[2] > actual[4] + 1e-3 && actual[4] > actual[5] + 1e-3,
+        "the TRS2 term and first-order TRS1 term must both change the hot load line: {actual:?}"
+    );
+
+    for (channel, voltage) in (0..=7).zip([ntc_v, unrelated_diode_v].into_iter().chain(actual)) {
+        let expected_count = expected_adc_count(voltage);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected_count,
+            "the solved voltage seeds descriptor-routed ADC1_IN{channel}"
+        );
+        assert_eq!(
+            stm32f4_adc_convert(&mut bus, channel),
+            u32::from(expected_count),
+            "firmware-visible ADC1_IN{channel} conversion reports the solved voltage"
+        );
+    }
+}
