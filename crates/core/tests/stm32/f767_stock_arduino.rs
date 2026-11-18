@@ -88,3 +88,19 @@ fn f767_stock_arduino_prints_and_toggles_board_led() {
     assert!(serial.matches("F767_OK").count() >= 2, "serial: {serial:?}");
     assert!(transitions >= 4, "PB0 transitions: {transitions}");
 }
+
+#[test]
+fn f767_board_vcp_attaches_usart3_only() {
+    use labwired_core::console::HostConsole;
+    let system = manifest();
+    assert_eq!(system.debug_uart.as_deref(), Some("usart3"));
+    let mut bus = SystemBus::from_config(&chip(), &system).unwrap();
+    let sink = Arc::new(Mutex::new(Vec::new()));
+    bus.attach_host_console(&HostConsole::from_manifest(&system), sink.clone())
+        .unwrap();
+    for (base, byte) in [(0x4000_4400, b'2'), (0x4000_4800, b'3')] {
+        bus.write_u32(base, 9).unwrap();
+        bus.write_u32(base + 0x28, u32::from(byte)).unwrap();
+    }
+    assert_eq!(sink.lock().unwrap().as_slice(), b"3");
+}
