@@ -61,10 +61,12 @@
       ]
     }
   },
+  "native_model_equality": true,
   "run_report": {
     "assumptions": [
       "Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.",
       "The registered LDR kit uses a typical 10 kΩ-at-10-lux curve and samples a static divider value at model boundaries.",
+      "Public verified Part Knowledge returned NOT_FOUND for GL5528; this generic curve is not verified for the source part.",
       "The IO48 user LED is represented by digital logic state only."
     ],
     "execution_path": "flex_portable_wasm",
@@ -205,7 +207,39 @@
     "dark-negative-control",
     "oscilloscope-samples"
   ],
-  "measured_browser_ms": 427.9,
+  "measured_browser_ms": 372.6,
   "browser": "156.0.8078.79",
-  "browser_driver": "Playwright"
+  "browser_driver": "Playwright",
+  "firmware_sha256": "366f562ab8a19449a479e3b5e4b2d783f108fdaceb6e61948a0f6b559c314294",
+  "firmware_source_sha256": "04cdc152150ed1ca85924081f124438698370c12af6535aaff934c1ddd539402",
+  "system_sha256": "5203d8f5b0e69b5bff01bc7da953ffe6881cfc8cd17b8a2b132ddf2db8a3cdef",
+  "source_map_sha256": "081ebf13e10b03595ce00c1a732df8d59c959d17acfeb8188603a7828772f8c2",
+  "source": {
+    "repository": "HeyPCB/esp32-sensors-1",
+    "revision": "57a2122a19ac1aa9c092e43fb5b123c461508752",
+    "asset": "boards/ldr/kicad/esp32_ldr",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "files": {
+      "schematic": {
+        "path": "boards/ldr/kicad/esp32_ldr.kicad_sch",
+        "git_blob": "64667760dad1369a130b8935718b7a262d746d66"
+      },
+      "pcb": {
+        "path": "boards/ldr/kicad/esp32_ldr.kicad_pcb",
+        "git_blob": "54b05837a3e254b6a424b2ea2eb97a4b8318e578"
+      },
+      "board_json": {
+        "path": "boards/ldr/board.json",
+        "git_blob": "409e43b9a6afe61c082635c30461e433e8d39772"
+      },
+      "board_readme": {
+        "path": "boards/ldr/README.md",
+        "git_blob": "e41508ce5052097c2e6ab1a11ba6b31a1d37cbd6"
+      },
+      "license": {
+        "path": "LICENSE",
+        "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1"
+      }
+    }
+  }
 }

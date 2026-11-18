@@ -54,3 +54,6 @@ gdbstub = "0.7"
 gdbstub_arch = "0.3"
 anyhow = "1.0"
 tracing = "0.1"
+
+[dev-dependencies]
+sha2.workspace = true

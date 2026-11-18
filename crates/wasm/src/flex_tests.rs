@@ -15,6 +15,16 @@ const HEYPCB_LDR_IMPORT: &str =
     include_str!("../tests/fixtures/flex-heypcb-esp32-ldr/mcp-import.json");
 const HEYPCB_LDR_SOURCE_MAP: &str =
     include_str!("../tests/fixtures/flex-heypcb-esp32-ldr/source-map.json");
+const HEYPCB_LDR_BROWSER: &str =
+    include_str!("../tests/fixtures/flex-heypcb-esp32-ldr/browser.json");
+const HEYPCB_LDR_FIRMWARE: &[u8] =
+    include_bytes!("../tests/fixtures/flex-heypcb-esp32-ldr/firmware.wasm");
+const HEYPCB_LDR_FIRMWARE_SOURCE: &[u8] =
+    include_bytes!("../tests/fixtures/flex-heypcb-esp32-ldr/firmware.rs");
+const HEYPCB_LDR_SYSTEM_BYTES: &[u8] =
+    include_bytes!("../tests/fixtures/flex-heypcb-esp32-ldr/system.yaml");
+const HEYPCB_LDR_SOURCE_MAP_BYTES: &[u8] =
+    include_bytes!("../tests/fixtures/flex-heypcb-esp32-ldr/source-map.json");
 const GPIO_REUSE_POMODORO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/system.yaml");
 const GPIO_REUSE_UNO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/arduino-uno.yaml");
 
@@ -716,6 +726,44 @@ fn flex_heypcb_ldr_portable_behavior_has_native_reference_and_dark_negative_cont
         measured, expected,
         "source-mapped LDR model observations changed"
     );
+}
+
+#[test]
+fn flex_heypcb_ldr_browser_evidence_pins_source_and_exact_runtime_inputs() {
+    use sha2::{Digest, Sha256};
+
+    fn sha256(bytes: &[u8]) -> String {
+        format!("{:x}", Sha256::digest(bytes))
+    }
+
+    let browser: serde_json::Value = serde_json::from_str(HEYPCB_LDR_BROWSER).unwrap();
+    let source_map: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+
+    assert_eq!(browser["native_model_equality"], true);
+    assert_eq!(browser["firmware_sha256"], sha256(HEYPCB_LDR_FIRMWARE));
+    assert_eq!(
+        browser["firmware_source_sha256"],
+        sha256(HEYPCB_LDR_FIRMWARE_SOURCE)
+    );
+    assert_eq!(browser["system_sha256"], sha256(HEYPCB_LDR_SYSTEM_BYTES));
+    assert_eq!(
+        browser["source_map_sha256"],
+        sha256(HEYPCB_LDR_SOURCE_MAP_BYTES)
+    );
+    assert_eq!(
+        browser["source"]["repository"],
+        source_map["source"]["repository"]
+    );
+    assert_eq!(
+        browser["source"]["revision"],
+        source_map["source"]["revision"]
+    );
+    assert_eq!(browser["source"]["asset"], source_map["source"]["asset"]);
+    assert_eq!(
+        browser["source"]["license_spdx"],
+        source_map["source"]["license_spdx"]
+    );
+    assert_eq!(browser["source"]["files"], source_map["source"]["files"]);
 }
 
 #[test]

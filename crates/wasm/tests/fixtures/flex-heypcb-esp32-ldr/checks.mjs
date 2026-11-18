@@ -25,7 +25,9 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
         && report.scope_notes_complete === true,
       'the project run report must identify portable firmware, nanoseconds, and declared scope');
       check(report.model_name === 'heypcb-esp32-s3-ldr-gl5528'
-        && report.assumptions.length === 3
+        && report.assumptions.length === 4
+        && report.assumptions.some((assumption) => assumption.includes('Part Knowledge')
+          && assumption.includes('GL5528'))
         && report.unsupported_checks.length === 3,
       'the project run report omitted its model assumptions or unsupported checks');
       const sensorModel = report.models.find((model) => model.id === 'source-u4-gl5528');
@@ -120,6 +122,7 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
       positive: scopeSummary(positive),
       negative: scopeSummary(negative),
     },
+    native_model_equality: true,
     run_report: runReport,
     checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'bright-output', 'dark-negative-control', 'oscilloscope-samples'],
   };

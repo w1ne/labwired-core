@@ -48,6 +48,7 @@
     "firmware_ports": { "lux_write": "lux", "sensor_read": "sensor_mv", "user_led_write": "user_led_drive", "led_state_read": "user_led_state" }
   },
   "catalog_model_gaps": [
+    "Public verified Part Knowledge returned NOT_FOUND for GL5528; the generic LDR curve is not verified for the source part.",
     "The existing ldr kit uses a typical 10 kohm-at-10-lux power-law model; it does not encode the GL5528 part's manufacturing spread.",
     "The source's C7 100 nF smoothing capacitor and analog transient behavior are omitted by the static analog_source model.",
     "The generic led model exposes logic state only; LED current, optical output, and the complete board circuit are not simulated."

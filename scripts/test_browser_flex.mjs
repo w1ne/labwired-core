@@ -10,6 +10,7 @@
 // Optional Node mode uses crates/wasm/pkg from wasm-pack --target nodejs.
 // Firmware: crates/wasm/tests/fixtures/flex-mixed-signal/build.sh
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -28,6 +29,11 @@ const checkModulePath = resolve(fixture, 'checks.mjs');
 assert(existsSync(checkModulePath), `Missing ${checkModulePath}.`);
 const checkModuleUrl = pathToFileURL(checkModulePath).href;
 const fixtureUrl = `/${relative(root, fixture).split(sep).join('/')}/`;
+const sha256 = (name) => createHash('sha256')
+  .update(readFileSync(resolve(fixture, name)))
+  .digest('hex');
+const sourceMapPath = resolve(fixture, 'source-map.json');
+const sourceMap = existsSync(sourceMapPath) ? JSON.parse(readFileSync(sourceMapPath, 'utf8')) : null;
 const nodeChecks = await import(checkModuleUrl);
 assert(typeof nodeChecks[checkName] === 'function', `Missing ${checkName} in ${checkModulePath}.`);
 let result;
@@ -93,5 +99,13 @@ if (process.argv.includes('--browser')) {
     JSON.parse(read('native.json').toString()),
   );
   result.host = 'Node';
+}
+result.firmware_sha256 = sha256('firmware.wasm');
+if (existsSync(resolve(fixture, 'firmware.rs'))) result.firmware_source_sha256 = sha256('firmware.rs');
+result.system_sha256 = sha256('system.yaml');
+if (sourceMap) {
+  result.source_map_sha256 = sha256('source-map.json');
+  const { repository, revision, asset, license_spdx, files } = sourceMap.source;
+  result.source = { repository, revision, asset, license_spdx, files };
 }
 console.log(JSON.stringify(result, null, 2));
