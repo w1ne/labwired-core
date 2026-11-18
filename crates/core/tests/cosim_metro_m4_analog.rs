@@ -89,6 +89,61 @@ fn enable_function_b(bus: &mut SystemBus, port: u64, pin: u8) {
         .expect("enable peripheral mux on analog pad");
 }
 
+/// Independent first backward-Euler step for a generic diode with optional
+/// SPICE depletion capacitance and transit time. The four branches start at
+/// zero volts, so their prior stored charge is zero.
+fn diode_first_step_voltage(supply_v: f64, cjo_f: f64, tt_s: f64) -> f64 {
+    const LIMIT_OHMS: f64 = 1_000.0;
+    const RS_OHMS: f64 = 0.568;
+    const IS_A: f64 = 2.52e-9;
+    const N: f64 = 1.752;
+    const VT: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+    const VJ: f64 = 0.7;
+    const M: f64 = 0.5;
+    const FC: f64 = 0.5;
+    const H: f64 = 1e-6;
+    const GMIN: f64 = 1e-12;
+
+    let depletion_charge = |voltage_v: f64| {
+        if cjo_f == 0.0 {
+            return 0.0;
+        }
+        let vfc = FC * VJ;
+        if voltage_v < vfc {
+            cjo_f * VJ / (1.0 - M) * (1.0 - (1.0 - voltage_v / VJ).powf(1.0 - M))
+        } else {
+            let xfc = 1.0 - FC;
+            let cfc = cjo_f * xfc.powf(-M);
+            let slope = M * cjo_f * xfc.powf(-1.0 - M) / VJ;
+            let qfc = cjo_f * VJ / (1.0 - M) * (1.0 - xfc.powf(1.0 - M));
+            let dv = voltage_v - vfc;
+            qfc + cfc * dv + 0.5 * slope * dv * dv
+        }
+    };
+    let current = |voltage_v: f64| IS_A * ((voltage_v / (N * VT)).exp() - 1.0);
+    let residual = |voltage_v: f64| {
+        let junction_current = current(voltage_v) + GMIN * voltage_v;
+        let stored_charge = depletion_charge(voltage_v) + tt_s * current(voltage_v);
+        let branch_current = junction_current + stored_charge / H;
+        (supply_v - voltage_v - branch_current * RS_OHMS) / LIMIT_OHMS - branch_current
+    };
+
+    let (mut low, mut high) = (0.0, supply_v);
+    for _ in 0..120 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    let junction_v = 0.5 * (low + high);
+    let junction_current = current(junction_v) + GMIN * junction_v;
+    let stored_charge = depletion_charge(junction_v) + tt_s * current(junction_v);
+    let branch_current = junction_current + stored_charge / H;
+    junction_v + branch_current * RS_OHMS
+}
+
 #[test]
 fn metro_m4_ntc_and_diode_netlists_reach_adc0_a0_and_a4() {
     let system_path = root("configs/systems/metro-m4.yaml");
@@ -332,5 +387,160 @@ fn metro_m4_mosfet_junction_density_reaches_adc0_alongside_ntc_and_diode() {
         assert_eq!(convert_adc0(&mut bus, 0), expected_code(ntc_v));
         assert_eq!(convert_adc0(&mut bus, 2), expected_code(diode_v));
         assert_eq!(convert_adc0(&mut bus, 1), 0, "undriven AIN1 stays at zero");
+    }
+}
+
+#[test]
+fn metro_m4_diode_depletion_and_transit_charge_reach_adc0_with_unrelated_devices() {
+    let system_path = root("configs/systems/metro-m4.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Metro M4 profile");
+    let generic = SystemManifest::from_file(root("examples/metro-m4/analog-ntc-diode-system.yaml"))
+        .expect("load unrelated generic NTC and Shockley diode");
+    let charge = SystemManifest::from_file(root("examples/metro-m4/analog-diode-charge.yaml"))
+        .expect("load generic diode depletion/transit charge branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(charge.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load ATSAMD51J19A descriptor");
+    for (pad, channel) in [
+        ("PA02", 0),
+        ("PB08", 2),
+        ("PA04", 4),
+        ("PA05", 5),
+        ("PA06", 6),
+        ("PB09", 3),
+    ] {
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc0");
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Metro M4 system bus");
+    bus.write_u32(MCLK_APBDMASK, 1 << 7)
+        .expect("enable ADC0 APB clock");
+    bus.write_u32(GCLK_PCHCTRL40, 1 << 6)
+        .expect("enable ADC0 generic clock");
+    bus.write_u8(ADC0 + 0x08, 3)
+        .expect("select VDDANA reference");
+    bus.write_u8(ADC0, 1 << 1).expect("enable ADC0");
+    for (port, pin) in [
+        (PORTA, 2),
+        (PORTB, 8),
+        (PORTA, 4),
+        (PORTA, 5),
+        (PORTA, 6),
+        (PORTB, 9),
+    ] {
+        enable_function_b(&mut bus, port, pin);
+    }
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("fixture carries NTC, diode, and four diode charge branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all six generic devices must bind through the SAMD51 analog pad map"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated Beta NTC at nominal temperature");
+    session
+        .set_signal_number("ui.diode_charge.supply_v", 0.0)
+        .expect("initialize the four diode charge branches at zero volts");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle all diode branches before the rising supply step");
+    assert_eq!(initial_steps.len(), 6, "all six independent netlists solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected initial route errors: {initial_errors:?}"
+    );
+
+    session
+        .set_signal_number("ui.diode_charge.supply_v", 3.3)
+        .expect("apply a supply step to each diode charge branch");
+    let mut samples = Vec::new();
+    for step in 0..2_000 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC, diode, and charge branches");
+        assert_eq!(steps.len(), 6, "all six netlists solve at every timestep");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = voltage(&session, "board.analog.pa02_volts");
+        let unrelated_diode_v = voltage(&session, "board.analog.pb08_volts");
+        let reference_v = voltage(&session, "board.analog.pa04_volts");
+        let depletion_v = voltage(&session, "board.analog.pa05_volts");
+        let transit_v = voltage(&session, "board.analog.pa06_volts");
+        let combined_v = voltage(&session, "board.analog.pb09_volts");
+        let expected_ntc_v = 3.3 * 2_200.0 / (ntc_resistance_ohms(25.0) + 2_200.0);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (unrelated_diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode stays at its DC load line"
+        );
+        assert!(
+            (reference_v - diode_load_line_voltage()).abs() < 2e-5,
+            "zero-charge control stays at the independent diode load line"
+        );
+
+        for (ain, volts) in [
+            (0, ntc_v),
+            (2, unrelated_diode_v),
+            (4, reference_v),
+            (5, depletion_v),
+            (6, transit_v),
+            (3, combined_v),
+        ] {
+            assert_eq!(
+                convert_adc0(&mut bus, ain),
+                expected_code(volts),
+                "ADC0 AIN{ain} must convert the independently routed voltage at step {step}"
+            );
+        }
+        assert_eq!(
+            convert_adc0(&mut bus, 1),
+            0,
+            "undriven AIN1 stays at ground"
+        );
+
+        samples.push((reference_v, depletion_v, transit_v, combined_v));
+        if step == 0 {
+            for (name, actual, cjo_f, tt_s) in [
+                ("depletion", depletion_v, 100e-9, 0.0),
+                ("transit", transit_v, 0.0, 10e-6),
+                ("combined", combined_v, 100e-9, 10e-6),
+            ] {
+                let expected = diode_first_step_voltage(3.3, cjo_f, tt_s);
+                assert!(
+                    (actual - expected).abs() < 5e-4,
+                    "first-step {name} charge should follow the independent diode equation: expected {expected} V, got {actual} V"
+                );
+                assert!(
+                    (actual - reference_v).abs() > 1e-3,
+                    "first-step {name} charge must change the voltage from its control"
+                );
+            }
+        }
+    }
+
+    let settled = samples.last().expect("transient samples exist");
+    for (name, voltage_v) in [
+        ("depletion", settled.1),
+        ("transit", settled.2),
+        ("combined", settled.3),
+    ] {
+        assert!(
+            (voltage_v - settled.0).abs() < 2e-4,
+            "{name} charge branch must settle to the zero-charge DC point: {voltage_v} V vs {} V",
+            settled.0
+        );
     }
 }
