@@ -5002,6 +5002,10 @@ the vector trace and the handler's RAM write at every instruction boundary,
 with a disarmed-timer negative control. These checks establish the simulator's
 core-timer contract; they do not establish silicon timing or additional
 peripheral coverage.</p>
+<p>The <a href="../../examples/esp32-devkitm-1/README.md#bme280-profile">ESP32-DevKitM-1 + BME280 profile</a>
+also uses the classic I2C0 model on GPIO21/22 to read BME280 <code>CHIP_ID</code> and
+asserts GPIO23 high only on <code>0x60</code>. Its local smoke does not use the hosted
+generic-ESP32 catalog board or claim hosted verification of the exact board.</p>
 <h2 id="sources">Sources</h2>
 <ul>
 <li>ESP32 Technical Reference Manual v4.6 §1.3 (Memory Map), Table 1-2, as cited

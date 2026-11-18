@@ -4923,8 +4923,9 @@
 <p><strong>Demand rank:</strong> ESP32 family is rank 1 in the JetBrains State of Embedded
 2025 MCU survey (38%). The survey does not report a separate ESP32-C5 score.
 This is a demand-aligned family addition; C5-specific usage is unmeasured.</p>
-<p><strong>Vendor status, checked 2026-11-12:</strong> Espressif's current v1.2 guide lists
-<code>ESP32-C5-DevKitC-1-N8R8</code> as an available retail-sample variant. See the
+<p><strong>Vendor status, checked 2026-11-18:</strong> Espressif's live product catalog lists
+<code>ESP32-C5-DevKitC-1-N8R8</code> with distributor links and a $15 sample price
+reference; DigiKey lists the exact board SKU as Active with 259 in stock. See the
 <a href="../../examples/esp32c5-devkitc-1-n8r8/vendor-status.md">vendor-status receipt</a>.</p>
 <h2 id="pin-map">Pin map</h2>
 <table>
@@ -4947,15 +4948,29 @@ This is a demand-aligned family addition; C5-specific usage is unmeasured.</p>
 <td>UART0 receive path and pad routing are not modeled</td>
 </tr>
 <tr>
-<td>J3 pin 27</td>
+<td>J3 pin 9</td>
+<td>GPIO5</td>
+<td>Direct GPIO output; exercised by the BME280 smoke</td>
+</tr>
+<tr>
+<td>J1 pins 9/10</td>
+<td>GPIO8/GPIO9</td>
+<td>I2C0 SDA/SCL route; exercised by the BME280 smoke</td>
+</tr>
+<tr>
+<td>J3 pin 7</td>
 <td>GPIO27, addressable RGB LED</td>
-<td>Not modeled</td>
+<td>Direct output and WS2812 frame decode exercised</td>
 </tr>
 </tbody>
 </table>
-<p>Espressif also breaks out the available GPIO pins on J1/J3. The simulator does
-not currently model the C5 GPIO block, so this profile does not expose GPIO as
-a working peripheral.</p>
+<p>The profile models direct GPIO0..28 output and the C5 I2C0 command-list engine
+with the GPIO8/9 matrix selectors used by the sensor smoke. Its RGB smoke
+bit-bangs one red WS2812 frame on GPIO27 into the GPIO observer. The RMT
+peripheral is not modelled. IO_MUX words are register-backed only; electrical
+pad mux behavior and matrix functions beyond I2C0 are not claimed. GPIO27 is
+also an ESP32-C5 strapping pin; the bare-ELF smoke does not model ROM sampling
+at physical reset.</p>
 <h2 id="copy-paste-example">Copy-paste example</h2>
 <p>Write a short message to the UART0 FIFO:</p>
 <div class="language-rust highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">const</span><span class="w"> </span><span class="n">UART0_FIFO</span><span class="p">:</span><span class="w"> </span><span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="kt">u32</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x6000_0000</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="kt">u32</span><span class="p">;</span>
@@ -4964,19 +4979,25 @@ a working peripheral.</p>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">core</span><span class="p">::</span><span class="n">ptr</span><span class="p">::</span><span class="n">write_volatile</span><span class="p">(</span><span class="n">UART0_FIFO</span><span class="p">,</span><span class="w"> </span><span class="kt">u32</span><span class="p">::</span><span class="n">from</span><span class="p">(</span><span class="n">byte</span><span class="p">));</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">}</span>
 </span></code></pre></div>
-<p>The full bare-metal example and build commands are in
-<a href="../../examples/esp32c5-devkitc-1-n8r8/README.md"><code>examples/esp32c5-devkitc-1-n8r8</code></a>.</p>
+<p>The full UART example and build commands are in
+<a href="../../examples/esp32c5-devkitc-1-n8r8/README.md"><code>examples/esp32c5-devkitc-1-n8r8</code></a>.
+The sensor quickstart, with copy-paste Arduino code, is in
+<a href="../../examples/esp32c5-devkitc-1-bme280-smoke/README.md"><code>examples/esp32c5-devkitc-1-bme280-smoke</code></a>.</p>
 <h2 id="evidence-and-limits">Evidence and limits</h2>
 <p>The system descriptor maps the ESP32-C5 HP RISC-V core, the N8R8's 8 MiB flash
-window, 384 KiB HP SRAM, and UART0's FIFO/status head. The smoke boots the ELF
-at its entry point and checks UART output. It does not run the mask ROM or
-bootloader.</p>
+window, 384 KiB HP SRAM, UART0's FIFO/status head, direct GPIO output, and the
+I2C0 command-list path needed by the BME280 example. The smoke boots a bare ELF
+at its entry point, checks BME280 ID and raw-temperature reads, captures a
+UART success marker, observes GPIO5 edges, and decodes one red frame from the
+onboard GPIO27 WS2812 LED. It does not run the mask ROM or bootloader.</p>
 <p>The UART0 register head uses Espressif's shared UART model at the C5's 240 MHz
-core rate. The model uses C5 interrupt source 47. The C5 GPIO offsets differ
-from C3/C6, so the existing GPIO model is not reused. The simulator also omits
-UART clock gating, the UART tail, pad electrical behavior, the physical
-USB-to-UART bridge, PSRAM, RGB LED protocol, USB, radios, and the LP core.</p>
-<p>Evidence log: <code>examples/esp32c5-devkitc-1-n8r8/evidence/</code>.</p>
+core rate and interrupt source 47. The C5 GPIO adapter normalizes its different
+register offsets and only enables the I2C0 matrix subset used by the smoke. The
+simulator also omits UART clock gating, the UART tail, electrical IO_MUX
+enforcement, the physical USB-to-UART bridge, PSRAM, RMT, USB, radios, and the
+LP core.</p>
+<p>Evidence logs: <code>examples/esp32c5-devkitc-1-n8r8/evidence/</code> and
+<code>examples/esp32c5-devkitc-1-bme280-smoke/evidence/</code>.</p>
 
 
 

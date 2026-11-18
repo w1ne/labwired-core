@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#copy-paste-example" class="md-nav__link">
+  <a href="#gpio-copy-paste-example" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Copy-paste example
+        GPIO copy-paste example
       
     </span>
   </a>
@@ -4911,8 +4911,8 @@
 <h1 id="esp32-c61-devkitc-1-n8r2">ESP32-C61-DevKitC-1-N8R2</h1>
 <p><strong>Demand rank:</strong> ESP32 family is rank 1 in the JetBrains State of Embedded
 2025 MCU survey (38%). The survey does not report a C61-specific percentage.
-The current C61 variant is listed in Espressif's live board guide and
-distributor catalog; see the <a href="../../examples/esp32c61-devkitc-1-n8r2/vendor-status.md">availability receipt</a>.</p>
+The current C61 variant is listed in Espressif's live board guide and catalog;
+see the <a href="../../examples/esp32c61-devkitc-1-n8r2-bme280/vendor-status.md">live board and BME280 availability receipt</a>.</p>
 <table>
 <thead>
 <tr>
@@ -4930,7 +4930,7 @@ distributor catalog; see the <a href="../../examples/esp32c61-devkitc-1-n8r2/ven
 <td><a href="../../configs/systems/esp32c61-devkitc-1-n8r2.yaml"><code>configs/systems/esp32c61-devkitc-1-n8r2.yaml</code></a></td>
 </tr>
 <tr>
-<td>Firmware and smoke</td>
+<td>Firmware and smokes</td>
 <td><a href="../../examples/esp32c61-devkitc-1-n8r2/README.md"><code>examples/esp32c61-devkitc-1-n8r2</code></a></td>
 </tr>
 </tbody>
@@ -4948,7 +4948,7 @@ distributor catalog; see the <a href="../../examples/esp32c61-devkitc-1-n8r2/ven
 <tr>
 <td>J3 TX</td>
 <td>UART0 TX, GPIO11</td>
-<td>UART0 FIFO is modeled; pad routing is not</td>
+<td>UART0 FIFO and PCR clock gate are modeled; pad routing is not</td>
 </tr>
 <tr>
 <td>J3 RX</td>
@@ -4956,27 +4956,57 @@ distributor catalog; see the <a href="../../examples/esp32c61-devkitc-1-n8r2/ven
 <td>UART0 receive and pad routing are not modeled</td>
 </tr>
 <tr>
+<td>J1 pin 3</td>
+<td>GPIO4</td>
+<td>Output latch and enable register are modeled; IO_MUX and electrical behavior are not</td>
+</tr>
+<tr>
+<td>J1 pin 5</td>
+<td>GPIO6</td>
+<td>I2C0 SDA for the BME280 smoke; GPIO matrix route is modeled</td>
+</tr>
+<tr>
+<td>J3 pin 6</td>
+<td>GPIO22</td>
+<td>I2C0 SCL for the BME280 smoke; GPIO matrix route is modeled</td>
+</tr>
+<tr>
 <td>J1 pin 9</td>
 <td>GPIO8, addressable RGB LED</td>
-<td>Not modeled</td>
+<td>GPIO output and WS2812 decode are checked by the BME280 board smoke</td>
 </tr>
 </tbody>
 </table>
-<p>The smoke profile includes only the C61 UART0 FIFO/status head and captures
-transmitted bytes in the host console. It fast-loads an ELF directly, without
-executing the mask ROM or bootloader. GPIO, PCR, IO_MUX, the physical bridge,
-PSRAM, USB, Wi-Fi and Bluetooth LE are outside the profile.</p>
-<h2 id="copy-paste-example">Copy-paste example</h2>
-<div class="language-rust highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">const</span><span class="w"> </span><span class="n">UART0_FIFO</span><span class="p">:</span><span class="w"> </span><span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="kt">u32</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x6000_0000</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="kt">u32</span><span class="p">;</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">for</span><span class="w"> </span><span class="o">&amp;</span><span class="n">byte</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="s">b"C61_N8R2_OK</span><span class="se">\n</span><span class="s">"</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">core</span><span class="p">::</span><span class="n">ptr</span><span class="p">::</span><span class="n">write_volatile</span><span class="p">(</span><span class="n">UART0_FIFO</span><span class="p">,</span><span class="w"> </span><span class="kt">u32</span><span class="p">::</span><span class="n">from</span><span class="p">(</span><span class="n">byte</span><span class="p">));</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">}</span>
+<p>The GPIO output smoke checks bit 4 in <code>GPIO_OUT_REG</code> and <code>GPIO_ENABLE_REG</code> after
+firmware sets GPIO4. The BME280 smoke configures GPIO6/GPIO22 for I2C0 and reads
+the device ID (<code>0x60</code>) plus a deterministic raw-temperature test vector. It
+then bit-bangs a red WS2812 frame on GPIO8 and requires the attached NeoPixel
+model to decode one lit pixel. The GPIO model covers the C61 I2C0 matrix
+selectors and direct output path; it does not cover other peripheral matrix
+routes, GPIO26..29, GPIO interrupts, or electrical pad behavior. IO_MUX values
+are stored but not enforced. GPIO8 strap sampling during reset and the RMT
+peripheral are outside scope.</p>
+<p>The board profile fast-loads a bare ELF directly; it does not execute the
+mask-ROM boot path or Espressif bootloader. The UART test captures FIFO output
+in the host console but does not model the physical USB-to-UART bridge.</p>
+<h2 id="gpio-copy-paste-example">GPIO copy-paste example</h2>
+<div class="language-rust highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">const</span><span class="w"> </span><span class="n">GPIO_OUT_W1TS</span><span class="p">:</span><span class="w"> </span><span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="kt">u32</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x6009_1008</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="kt">u32</span><span class="p">;</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">const</span><span class="w"> </span><span class="n">GPIO_ENABLE_W1TS</span><span class="p">:</span><span class="w"> </span><span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="kt">u32</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x6009_1038</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="o">*</span><span class="k">mut</span><span class="w"> </span><span class="kt">u32</span><span class="p">;</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">const</span><span class="w"> </span><span class="n">GPIO4</span><span class="p">:</span><span class="w"> </span><span class="kt">u32</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">unsafe</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="n">core</span><span class="p">::</span><span class="n">ptr</span><span class="p">::</span><span class="n">write_volatile</span><span class="p">(</span><span class="n">GPIO_ENABLE_W1TS</span><span class="p">,</span><span class="w"> </span><span class="n">GPIO4</span><span class="p">);</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="n">core</span><span class="p">::</span><span class="n">ptr</span><span class="p">::</span><span class="n">write_volatile</span><span class="p">(</span><span class="n">GPIO_OUT_W1TS</span><span class="p">,</span><span class="w"> </span><span class="n">GPIO4</span><span class="p">);</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>The full firmware and build/test commands are in
 <a href="../../examples/esp32c61-devkitc-1-n8r2/README.md"><code>examples/esp32c61-devkitc-1-n8r2</code></a>.
-The UART smoke expects <code>C61_N8R2_OK</code>; its committed logs and structured result
-are under that example's <code>evidence/</code> directory.</p>
+The GPIO smoke expects bits 4 in <code>GPIO_OUT_REG</code> and <code>GPIO_ENABLE_REG</code>; the UART
+smoke expects <code>C61_N8R2_OK</code>. Logs and structured results are under the example's
+<code>evidence/</code> directory.</p>
+<p>The BME280 wiring, copy-paste ESP-IDF example, GPIO8 LED smoke, fresh smoke,
+scope, and live availability receipt are documented in
+<a href="../../examples/esp32c61-devkitc-1-n8r2-bme280/README.md"><code>examples/esp32c61-devkitc-1-n8r2-bme280</code></a>.</p>
 
 
 
