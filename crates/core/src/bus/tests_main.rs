@@ -381,6 +381,58 @@ fn max_safe_tick_interval_relaxes_only_walk_deleted_buses() {
     );
 }
 
+/// Host CAN test devices are serviced on the tick grid, even when their
+/// controller uses the scheduler. Their normal timeout cadence must not change
+/// when a browser asks for the recommended interval.
+#[test]
+fn can_tester_recommendation_preserves_tick_counted_timeout() {
+    let mut bus = SystemBus::new();
+    bus.legacy_walk_disabled = true;
+    let relaxed = bus.max_safe_tick_interval();
+    let mut tester = CanUdsTester::new("tester".into(), "not-yet-attached".into());
+    tester.max_ticks = 3;
+    bus.can_uds_testers.push(tester);
+    let interval = bus.max_safe_tick_interval();
+    for cycle in 1..=4 {
+        bus.current_cycle = cycle;
+        if cycle % u64::from(interval) == 0 {
+            bus.service_can_uds_testers();
+        }
+    }
+    assert_eq!(bus.can_uds_testers[0].ticks, 4);
+    assert_eq!(bus.can_uds_testers[0].state, CanUdsTesterState::Failed);
+    assert!(bus.can_uds_testers[0]
+        .failure
+        .as_deref()
+        .unwrap()
+        .contains("3 tester ticks"));
+    bus.can_uds_testers.clear();
+    assert_eq!(
+        bus.max_safe_tick_interval(),
+        relaxed,
+        "unattached systems retain their batching default"
+    );
+}
+
+#[test]
+fn one_shot_can_tester_keeps_its_service_grid_without_overriding_forced_intervals() {
+    let mut bus = SystemBus::new();
+    bus.legacy_walk_disabled = true;
+    bus.can_diagnostic_testers.push(CanDiagnosticTester {
+        id: "tester".into(),
+        connection: "fdcan1".into(),
+        request_id: 0x7e0,
+        request_data: vec![3, 0x22, 0xf1, 0x90],
+        sent: false,
+    });
+    assert_eq!(bus.max_safe_tick_interval(), 1);
+    assert_eq!(
+        bus.clamp_peripheral_tick_interval(1024),
+        1024,
+        "an explicit diagnostic interval remains an explicit choice"
+    );
+}
+
 /// `derive_walk_deletable`: an all-scheduler / inert bus derives deletion;
 /// a single walk-dependent peripheral (native Timer, or an unknown model
 /// keeping the conservative default) pins the walk on.
