@@ -4,3 +4,10 @@
 name: "stm32f103r6-smoke"
 chip: "../../configs/chips/stm32f103r6.yaml"
 external_devices: []
+board_io:
+  - id: "led_pa5"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

@@ -23,6 +23,10 @@ const HOCOSF: u8 = 1 << 0;
 
 // SCI2 @ 0x40070040 — TDR @ +0x03 (classic SCI, async non-FIFO).
 const SCI2_TDR: *mut u8 = 0x4007_0043 as *mut u8;
+// PRCR @ 0x4001E3FE and MSTPCRB @ 0x40047000. PRC1 permits module-stop
+// control writes; MSTPB29=1 stops SCI2 out of reset.
+const PRCR: *mut u16 = 0x4001_E3FE as *mut u16;
+const MSTPCRB: *mut u32 = 0x4004_7000 as *mut u32;
 
 // PORT1 @ 0x40040020 — PCNTR1 (PDR/PODR) @ +0x00, PCNTR3 (POSR/PORR) @ +0x08.
 const PORT1_PCNTR1: *mut u32 = 0x4004_0020 as *mut u32;
@@ -33,6 +37,10 @@ const LED: u32 = 1 << 11; // P111 — D13 / LED_BUILTIN
 #[entry]
 fn main() -> ! {
     unsafe {
+        write_volatile(PRCR, 0xA502);
+        write_volatile(MSTPCRB, read_volatile(MSTPCRB) & !(1 << 29));
+        write_volatile(PRCR, 0xA500);
+
         // HOCO is typically already running out of reset (OFS1); clear HCSTP
         // and wait for OSCSF.HOCOSF in case firmware or OFS1 left it stopped.
         write_volatile(HOCOCR, 0);

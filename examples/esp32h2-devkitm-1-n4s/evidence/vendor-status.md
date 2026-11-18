@@ -1,15 +1,17 @@
-# Vendor availability — 2026-11-11
+# Vendor status — 2026-11-17
 
-Target order code: **ESP32-H2-DevKitM-1-N4S** (the current 4 MiB module board).
+Target order code: **ESP32-H2-DevKitM-1-N4S**.
 
-- Espressif's live [ESP32-H2-DevKitM-1 user guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32h2/esp32-h2-devkitm-1/user_guide.html)
-  lists **ESP32-H2-DevKitM-1-N4S** as the current variant and labels the older
-  **ESP32-H2-DevKitM-1-N4** variant **NRND**. This onboarding uses N4S only.
-- Espressif's live [DevKits catalog](https://www.espressif.com/products/devkits)
-  links N4S to AliExpress, DigiKey and Mouser, with a sample reference price
-  of $10 at the time checked.
+- Espressif's [live DevKitM-1 user guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32h2/esp32-h2-devkitm-1/user_guide.html)
+  lists N4S as the current 4 MiB variant and marks the earlier N4 variant
+  **NRND**. The same guide identifies the addressable RGB LED data pin as
+  GPIO8 (J3 pin 8).
+- Espressif's [DevKits catalog](https://www.espressif.com/products/devkits)
+  lists the exact N4S board with DigiKey, Mouser, and other purchase links and
+  a $10 sample-price reference.
 - DigiKey's [N4S product listing](https://www.digikey.com/en/products/detail/espressif-systems/ESP32-H2-DEVKITM-1-N4S/26282483)
-  reported **Part Status: Active**, **In-Stock: 10**, and a $9.68 unit price
-  for quantity one at the time checked.
+  currently reports **Part Status: Active**, **245 in stock**, and $9.68 for
+  quantity one.
 
-This is a dated availability check; distributor stock can change.
+The vendor lifecycle status and distributor stock were checked live on
+2026-11-17. Distributor inventory can change.

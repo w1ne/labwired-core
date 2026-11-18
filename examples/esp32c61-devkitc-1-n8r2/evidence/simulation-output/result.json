@@ -30,7 +30,23 @@
   "assertions": [
     {
       "assertion": {
-        "uart_contains": "C61_N8R2_OK"
+        "memory_value": {
+          "address": 1611206660,
+          "expected_value": 16,
+          "mask": 16,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1611206708,
+          "expected_value": 16,
+          "mask": 16,
+          "size": 4
+        }
       },
       "passed": true
     },
@@ -54,9 +70,9 @@
       0,
       1082458112,
       0,
-      1610612736,
       10,
       75,
+      1610612736,
       0,
       0,
       0,
@@ -77,7 +93,7 @@
       0,
       0
     ],
-    "pc": 1107296950,
+    "pc": 1107296960,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -113,11 +129,11 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "1a95635266aaa65fd85add0ec5defb9cebbd88d693367f5107bc0275297fa601",
+  "firmware_hash": "9149cd37ceb4b1d6872a92afe25e419b2bafed52994fefd6540c2104d4fb0aaa",
   "config": {
-    "firmware": "examples/esp32c61-devkitc-1-n8r2/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-demo",
+    "firmware": "examples/esp32c61-devkitc-1-n8r2/build/firmware.elf",
     "system": "examples/esp32c61-devkitc-1-n8r2/../../configs/systems/esp32c61-devkitc-1-n8r2.yaml",
-    "script": "examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml"
+    "script": "examples/esp32c61-devkitc-1-n8r2/gpio-smoke.yaml"
   },
   "inspect": {
     "peripherals": [
@@ -125,6 +141,13 @@
         "name": "uart0",
         "kind": "native",
         "base": 1610612736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 1611206656,
         "registers": [],
         "artifacts": []
       },
@@ -608,10 +631,10 @@
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 840,
+    "text_bytes": 850,
     "data_bytes": 0,
     "bss_bytes": 327680,
-    "flash_used_bytes": 840,
+    "flash_used_bytes": 850,
     "ram_static_bytes": 327680,
     "flash_total_bytes": 8388608,
     "ram_total_bytes": 327680,
@@ -633,11 +656,11 @@
     "steps_executed": 400000,
     "memory_reads": 0,
     "memory_writes": 1,
-    "peripheral_accesses": 12,
+    "peripheral_accesses": 14,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 1107296950,
+        "pc": 1107296960,
         "count": 1562,
         "symbol": "core::core_arch::riscv_shared::pause"
       }

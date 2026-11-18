@@ -18,11 +18,10 @@
 //!   * ST DS8626 Rev 12 — STM32F405xx/STM32F407xx, Table 2 and section 7.
 //!
 //! This says nothing about peripheral fidelity beyond the reference engines.
-//! In particular the low-density F103 configs reuse the medium-density
-//! STM32F103C8 peripheral map (including SPI2/I2C2/USART3/TIM4), because no
-//! separate low-density register model exists yet. That boundary is asserted
-//! here by requiring every variant's peripheral-id set to equal its public
-//! reference descriptor's set, and it is documented in each F103 YAML header.
+//! The STM32F103C6 and STM32F103R6 configs expose the low-density instance set;
+//! other low-density catalog geometries still inherit the medium-density map.
+//! This boundary is asserted here per descriptor and documented in the F103
+//! YAML headers.
 
 use crate::common;
 use common::root;
@@ -72,6 +71,35 @@ const V100: &[&str] = &["T6", "T6TR", "T7", "T7TR", "H6", "H6TR", "H7", "H7TR"];
 const V100_1M: &[&str] = &["T6", "T6TR", "T7", "T7TR"];
 const I176: &[&str] = &["T6", "T6TR", "T7", "T7TR", "H6", "H6TR", "H7", "H7TR"];
 const C_PACKAGE_PINS: &[(&str, u64)] = &[("UFQFPN48", 48), ("WLCSP49", 49)];
+const F103_LOW_DENSITY_PERIPHERALS: &[&str] = &[
+    "rcc",
+    "gpioa",
+    "gpiob",
+    "gpioc",
+    "systick",
+    "uart1",
+    "uart2",
+    "i2c1",
+    "spi1",
+    "afio",
+    "exti",
+    "dma1",
+    "flash_ctrl",
+    "dbgmcu",
+    "pwr",
+    "iwdg",
+    "wwdg",
+    "rtc",
+    "crc",
+    "bxcan1",
+    "usb_dev",
+    "bkp",
+    "tim1",
+    "tim2",
+    "tim3",
+    "adc1",
+    "adc2",
+];
 
 const VARIANTS: &[Variant] = &[
     // ── STM32F103 low-density x4/x6 (DS5792 Table 2/5/58) ───────────────────
@@ -564,22 +592,27 @@ fn variant_geometry_matches_the_st_datasheets() {
 }
 
 #[test]
-fn variants_reuse_their_public_reference_peripheral_map() {
-    // This is the explicit fidelity boundary. A variant is a geometry slice,
-    // not a new peripheral model: its instance set must stay byte-identical to
-    // the public base engine. For the low-density F103s this records the known
-    // limitation that the medium-density map (SPI2/I2C2/USART3/TIM4) is reused
-    // even though x4/x6 silicon has fewer instances.
+fn variants_expose_the_declared_peripheral_instance_set() {
+    // The C6 and R6 are the two x6 low-density profiles with exact instance
+    // lists. Other geometry-only variants continue to inherit their public
+    // family reference map until their instance lists are narrowed.
     for v in VARIANTS {
         let reference = load(reference(v.family));
         let variant = load(v.name);
-        let want: BTreeSet<&str> = reference
-            .peripherals
-            .iter()
-            .map(|p| p.id.as_str())
-            .collect();
+        let want: BTreeSet<&str> = match v.name {
+            "stm32f103c6" | "stm32f103r6" => F103_LOW_DENSITY_PERIPHERALS.iter().copied().collect(),
+            _ => reference
+                .peripherals
+                .iter()
+                .map(|p| p.id.as_str())
+                .collect(),
+        };
         let got: BTreeSet<&str> = variant.peripherals.iter().map(|p| p.id.as_str()).collect();
-        assert_eq!(got, want, "{} no longer reuses {}", v.name, reference.name);
+        assert_eq!(
+            got, want,
+            "{} has an unexpected peripheral instance set",
+            v.name
+        );
     }
 }
 

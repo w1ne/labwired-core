@@ -591,7 +591,7 @@ impl SystemBus {
             match controller.read_u32(req.reg_offset) {
                 // A held peripheral reset blocks access like a stopped clock.
                 Ok(reg) => {
-                    (reg >> req.bit) & 1 != 0
+                    (((reg >> req.bit) & 1 != 0) ^ req.active_low)
                         && !controller.clock_gate_reset_asserted(req.reg_offset, req.bit)
                 }
                 Err(_) => true, // unreadable controller register → fail open

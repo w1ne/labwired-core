@@ -1,4 +1,4 @@
-# L1 UART0 smoke on the active ESP32-H2-DevKitM-1-N4S board variant.
+# L1 UART0 + onboard WS2812 smoke on the active ESP32-H2-DevKitM-1-N4S.
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32h2-demo"
@@ -6,5 +6,8 @@ inputs:
 limits:
   max_steps: 200000
 assertions:
-  - uart_contains: "H2_N4S_UART_OK"
+  - uart_contains: "H2_N4S_RGB_OK"
+  - gpio_edges:
+      pin: "gpio:8"
+      min_edges: 16
   - expected_stop_reason: max_steps
