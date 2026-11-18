@@ -1,8 +1,8 @@
 # Onboarding Smoke: nucleo-h533re
 
 - status: `pass`
-- elapsed_seconds: `5`
-- elapsed_ms: `4967`
+- elapsed_seconds: `3`
+- elapsed_ms: `2877`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`
