@@ -739,6 +739,9 @@ fn flex_heypcb_ldr_browser_evidence_pins_source_and_exact_runtime_inputs() {
     let browser: serde_json::Value = serde_json::from_str(HEYPCB_LDR_BROWSER).unwrap();
     let source_map: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
 
+    let core_commit = browser["core_commit"].as_str().unwrap();
+    assert_eq!(core_commit.len(), 40);
+    assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
     assert_eq!(browser["native_model_equality"], true);
     assert_eq!(browser["firmware_sha256"], sha256(HEYPCB_LDR_FIRMWARE));
     assert_eq!(

@@ -10,6 +10,7 @@
 // Optional Node mode uses crates/wasm/pkg from wasm-pack --target nodejs.
 // Firmware: crates/wasm/tests/fixtures/flex-mixed-signal/build.sh
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -34,6 +35,7 @@ const sha256 = (name) => createHash('sha256')
   .digest('hex');
 const sourceMapPath = resolve(fixture, 'source-map.json');
 const sourceMap = existsSync(sourceMapPath) ? JSON.parse(readFileSync(sourceMapPath, 'utf8')) : null;
+const coreCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const nodeChecks = await import(checkModuleUrl);
 assert(typeof nodeChecks[checkName] === 'function', `Missing ${checkName} in ${checkModulePath}.`);
 let result;
@@ -100,6 +102,7 @@ if (process.argv.includes('--browser')) {
   );
   result.host = 'Node';
 }
+result.core_commit = coreCommit;
 result.firmware_sha256 = sha256('firmware.wasm');
 if (existsSync(resolve(fixture, 'firmware.rs'))) result.firmware_source_sha256 = sha256('firmware.rs');
 result.system_sha256 = sha256('system.yaml');
