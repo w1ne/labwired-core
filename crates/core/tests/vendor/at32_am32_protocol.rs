@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
 const APP_SHA: &str = "2dc65fec5924f31548cc3041690b9b5a1645466832a09e46d012c33b14f8452d";
-const COMPLETE_SHA: &str = "c6ae7b29e1fe35dd56070435aa271b18ec9cba77ec5329f092b3296776664e2a";
+const COMPLETE_SHA: &str = "af3b8fec8a51d730c2255b63829d8ce8eae6c6f0aba665b82e57489b8d16cd54";
 fn scalar(machine: &Machine<CortexM>, elf: &[u8], name: &str) -> u32 {
     let address = u64::from(labwired_loader::resolve_symbol_in_elf(elf, name).expect(name));
     match name {
