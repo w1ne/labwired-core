@@ -1456,7 +1456,10 @@ pub fn try_build(
             )?)
         }
         "tsc" => Box::new(crate::peripherals::tsc::Tsc::new()),
-        "fmc" => Box::new(crate::peripherals::fmc::Fmc::new()),
+        "fmc" => match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+            Some("stm32h7_boot_disable") => Box::new(crate::peripherals::fmc::H7BootDisable),
+            _ => Box::new(crate::peripherals::fmc::Fmc::new()),
+        },
         "exti" => {
             let layout: crate::peripherals::exti::ExtiRegisterLayout =
                 SystemBus::parse_profile_or_default(p_cfg, "EXTI")?;

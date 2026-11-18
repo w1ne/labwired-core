@@ -64,6 +64,11 @@ pub enum FlashRegisterLayout {
     /// ACR=0x13, OPTCR=1, NSCR=1, OPTSR_CUR=0x2D30EDF8 (this part's option
     /// bytes, representative).
     Stm32H5,
+    /// STM32H723/H735 (RM0468): FLASH_ACR latency/frequency read-back only.
+    /// Programming, erase, option bytes and other registers are unmodelled
+    /// and refuse access. Reset is specified by ST RM0468 section 4.9.1; no H723
+    /// silicon capture is claimed.
+    Stm32H7Boot,
     /// STM32F4 (RM0368 §3.8, STM32F401). Distinct from both F1 and L4: the
     /// prefetch/cache ACR has NO PRFTBE→PRFTBS read-back mirror (bits read back
     /// as written), and the reset values differ from every other family —
@@ -96,11 +101,12 @@ impl FromStr for FlashRegisterLayout {
             "stm32l4" | "l4" => Ok(Self::Stm32L4),
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "stm32h5" | "h5" => Ok(Self::Stm32H5),
+            "stm32h7_boot" => Ok(Self::Stm32H7Boot),
             "stm32f4" | "f4" => Ok(Self::Stm32F4),
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
             "at32f421" => Ok(Self::At32F421),
             _ => Err(format!(
-                "unsupported FLASH register layout '{}'; supported: stm32l4, stm32f1, stm32f4, stm32h5, stm32u5",
+                "unsupported FLASH register layout '{}'; supported: stm32l4, stm32f1, stm32f4, stm32h5, stm32h7_boot, stm32u5, at32f421",
                 value
             )),
         }
@@ -305,6 +311,7 @@ impl Flash {
             FlashRegisterLayout::Stm32F1 => (0x0000_0030u32, 0x0000_0080u32, 0x0000_0000u32),
             // NSCR (the only modeled control reg) reset 0x1; OPTSR_CUR via optr.
             FlashRegisterLayout::Stm32H5 => (0x0000_0013u32, 0x0000_0001u32, 0x2D30_EDF8u32),
+            FlashRegisterLayout::Stm32H7Boot => (0x37, 0, 0),
             // F401 (RM0368 §3.8 / STM32F401 CMSIS SVD): ACR=0 (no
             // prefetch/cache/latency out of reset), CR=0x8000_0000 (LOCK bit
             // 31), OPTCR=0x0000_0014. NB: RM0368 §3.8.6 prints the option-byte-
@@ -750,7 +757,12 @@ impl Flash {
         Ok(())
     }
 
-    fn check_at32_offset(&self, offset: u64) -> SimResult<()> {
+    fn check_supported_offset(&self, offset: u64) -> SimResult<()> {
+        if self.layout == FlashRegisterLayout::Stm32H7Boot && offset != 0 {
+            return Err(crate::SimulationError::Other(format!(
+                "STM32H7 FLASH: register offset {offset:#x} is not modelled"
+            )));
+        }
         if self.layout == FlashRegisterLayout::At32F421
             && !matches!(
                 offset,
@@ -765,6 +777,9 @@ impl Flash {
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
+        if self.layout == FlashRegisterLayout::Stm32H7Boot {
+            return self.acr;
+        }
         if self.layout == FlashRegisterLayout::At32F421 {
             return match offset {
                 // PSR PFT_ENF/PFT_ENF2 mirror prefetch enable, not writable flags.
@@ -889,6 +904,10 @@ impl Flash {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        if self.layout == FlashRegisterLayout::Stm32H7Boot {
+            self.acr = value & 0x3f;
+            return;
+        }
         if self.layout == FlashRegisterLayout::At32F421 {
             match offset {
                 0x00 => self.acr = value & 0x15f,
@@ -1334,7 +1353,7 @@ impl crate::Peripheral for Flash {
 
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
-        self.check_at32_offset(reg)?;
+        self.check_supported_offset(reg)?;
         let byte = (offset % 4) as u32;
         Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
     }
@@ -1342,7 +1361,7 @@ impl crate::Peripheral for Flash {
         // KEYR/OPTKEYR sequence works on full-word writes only. For
         // byte-level access (rare), update word and re-trigger.
         let reg = offset & !3;
-        self.check_at32_offset(reg)?;
+        self.check_supported_offset(reg)?;
         let byte = (offset % 4) as u32;
         let mut v = self.read_reg(reg);
         let mask: u32 = 0xFF << (byte * 8);
@@ -1357,7 +1376,7 @@ impl crate::Peripheral for Flash {
         // a single write_reg call. The byte path is correct for data regs but
         // would fragment each 32-bit key write into 4 independent sub-word
         // triggers, none of which match FLASH_KEY1 / FLASH_KEY2.
-        self.check_at32_offset(offset & !3)?;
+        self.check_supported_offset(offset & !3)?;
         self.check_at32_write(offset & !3, value)?;
         self.write_reg(offset & !3, value);
         self.check_at32_key_lockout(offset & !3)
@@ -1853,5 +1872,21 @@ mod u5_wrong_key_tests {
             0,
             "later key writes are ignored on this peripheral instance"
         );
+    }
+}
+
+#[cfg(test)]
+mod h7_boot_acr_tests {
+    use super::{Flash, FlashRegisterLayout};
+    use crate::Peripheral;
+
+    #[test]
+    fn h723_boot_acr_round_trips_and_rejects_unmodelled_flash_registers() {
+        let mut flash = Flash::new_with_layout(FlashRegisterLayout::Stm32H7Boot);
+        assert_eq!(flash.read_u32(0).unwrap() & 0x3f, 0x37);
+        flash.write_u32(0, 0x21).unwrap();
+        assert_eq!(flash.read_u32(0).unwrap() & 0x3f, 0x21);
+        assert!(flash.read_u32(4).is_err());
+        assert!(flash.write_u32(4, 0x1234).is_err());
     }
 }

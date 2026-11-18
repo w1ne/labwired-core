@@ -207,3 +207,50 @@ mod tests {
         assert_ne!(read32(&f, 0x84) & 0x40, 0); // FEMPT still set
     }
 }
+/// Narrow STM32H723 CMSIS startup compatibility: the reset-time FMC bank-1
+/// disable write only. External memory and every other FMC operation remain
+/// unmodelled, so reads, partial writes and other values explicitly fail.
+#[derive(Debug, Default)]
+pub struct H7BootDisable;
+
+impl crate::Peripheral for H7BootDisable {
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+    fn read(&self, _offset: u64) -> SimResult<u8> {
+        Err(crate::SimulationError::Other(
+            "STM32H7 FMC reads are not modelled".into(),
+        ))
+    }
+    fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+        Err(crate::SimulationError::Other(
+            "STM32H7 FMC partial writes are not modelled".into(),
+        ))
+    }
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if offset == 0 && value == 0x0000_30d2 {
+            Ok(())
+        } else {
+            Err(crate::SimulationError::Other(
+                "STM32H7 FMC configuration is not modelled".into(),
+            ))
+        }
+    }
+}
+
+#[cfg(test)]
+mod h7_boot_disable_tests {
+    use super::H7BootDisable;
+    use crate::Peripheral;
+
+    #[test]
+    fn permits_only_stock_disable_and_rejects_fmc_use() {
+        let mut fmc = H7BootDisable;
+        assert!(fmc.write_u32(0, 0x30d2).is_ok());
+        assert!(fmc.write_u32(0, 0x30d3).is_err()); // bank enable
+        assert!(fmc.write_u32(0, 0x30d0).is_err()); // other configuration
+        assert!(fmc.write_u32(4, 0x30d2).is_err());
+        assert!(fmc.write(0, 0xd2).is_err());
+        assert!(fmc.read(0).is_err());
+    }
+}

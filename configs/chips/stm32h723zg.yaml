@@ -10,8 +10,8 @@
 # - UM2407 identifies the board wiring in configs/systems/nucleo-h723zg.yaml.
 #
 # This descriptor intentionally covers the board-facing smoke subset only:
-# H7 RCC, GPIOB/C/D/E, USART3 and SysTick. Other H723 peripherals are not
-# mapped by this profile. No H723 silicon capture is available; the model is
+# H7 RCC, GPIOB/C/D/E, USART3 and SysTick, plus startup-only FLASH_ACR and
+# FMC bank-disable handling. Other H723 peripherals are not mapped. No H723 silicon capture is available; the model is
 # SIM-DERIVED and reuses the shared H7 RCC, STM32v2 GPIO and UART models.
 
 name: "stm32h723zg"
@@ -113,3 +113,24 @@ peripherals:
     config:
       profile: "stm32v2"
     clock: { reg: "apb1lenr", bit: 18 }
+
+  # RM0468 FLASH_ACR only: clock startup may read and set latency. Flash
+  # erase/program and every other FLASH register remain unmapped.
+  - id: "flash_acr"
+    type: "flash"
+    base_address: 0x52002000
+    size: "4B"
+    config:
+      profile: "stm32h7_boot"
+      debug_schema: "../peripherals/stm32h723zg/flash-acr.yaml"
+
+  # CMSIS SystemInit disables FMC bank 1 by the fixed 32-bit BTCR1 write.
+  # The boot shim rejects all other writes, reads and partial accesses; it
+  # does not model FMC. Remaining FMC registers and external-memory behavior
+  # remain unmapped.
+  - id: "fmc_bank1_boot_disable"
+    type: "fmc"
+    base_address: 0x52004000
+    size: "4B"
+    config:
+      profile: "stm32h7_boot_disable"
