@@ -7,7 +7,6 @@
 //! It executes directly in the browser; this object contains no emulated CPU.
 
 use labwired_config::{CosimAdapter, CosimModelConfig, FlexPort};
-use labwired_core::analog::{AnalogChannel, AnalogSample};
 use labwired_core::flex::FlexRuntime;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -93,15 +92,6 @@ struct BrowserRunReport {
     models: Vec<BrowserModelSummary>,
 }
 
-#[derive(Serialize)]
-struct BrowserAnalogTraceBatch {
-    time_unit: &'static str,
-    channels: Vec<AnalogChannel>,
-    samples: Vec<AnalogSample>,
-    next_cursor: u64,
-    dropped: u64,
-}
-
 #[wasm_bindgen]
 pub struct WasmFlexRuntime {
     runtime: FlexRuntime,
@@ -178,14 +168,6 @@ impl WasmFlexRuntime {
 
     pub fn analog_trace_snapshot(&self, cursor: f64) -> Result<JsValue, JsValue> {
         let cursor = js_trace_cursor(cursor)?;
-        let batch = self.runtime.analog_trace_snapshot(cursor);
-        let batch = BrowserAnalogTraceBatch {
-            time_unit: "ns",
-            channels: batch.channels,
-            samples: batch.samples,
-            next_cursor: batch.next_cursor,
-            dropped: batch.dropped,
-        };
-        serde_wasm_bindgen::to_value(&batch).map_err(js_error)
+        serde_wasm_bindgen::to_value(&self.runtime.analog_trace_snapshot(cursor)).map_err(js_error)
     }
 }

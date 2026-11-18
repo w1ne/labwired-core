@@ -561,20 +561,17 @@ fn heypcb_ldr_reference(runtime: &mut FlexRuntime, lux: f64) -> serde_json::Valu
 
 fn heypcb_ldr_analog_evidence(runtime: &FlexRuntime) -> serde_json::Value {
     let batch = runtime.analog_trace_snapshot(0);
-    assert_eq!(
-        batch.channels,
-        [labwired_core::analog::AnalogChannel {
-            name: "source-u4-gl5528.voltage_mv".to_owned(),
-            unit: "mV".to_owned(),
-        }],
-        "the registered LDR output must be visible to the existing oscilloscope trace"
-    );
+    assert_eq!(batch.time_unit, "ns");
+    assert_eq!(batch.channels.len(), 1);
+    assert_eq!(batch.channels[0].name, "source-u4-gl5528.voltage_mv");
+    assert_eq!(batch.channels[0].unit, "mV");
+    assert_eq!(batch.channels[0].port_names, ["sensor_mv"]);
     assert!(
         !batch.samples.is_empty(),
         "the LDR scope trace must contain samples"
     );
     serde_json::json!({
-        "time_unit": "ns",
+        "time_unit": batch.time_unit,
         "channels": batch.channels,
         "dropped": batch.dropped,
         "next_cursor": batch.next_cursor,
@@ -598,13 +595,11 @@ fn lipo_analog_reference(soc_pct: f64, usb_present: f64) -> serde_json::Value {
     let result_mv = runtime.read(battery).unwrap();
     let batch = runtime.analog_trace_snapshot(0);
     assert_eq!(batch.dropped, 0);
-    assert_eq!(
-        batch.channels,
-        [labwired_core::analog::AnalogChannel {
-            name: "lipo-battery.voltage_mv".to_owned(),
-            unit: "mV".to_owned(),
-        }]
-    );
+    assert_eq!(batch.time_unit, "ns");
+    assert_eq!(batch.channels.len(), 1);
+    assert_eq!(batch.channels[0].name, "lipo-battery.voltage_mv");
+    assert_eq!(batch.channels[0].unit, "mV");
+    assert_eq!(batch.channels[0].port_names, ["battery_mv"]);
     assert_eq!(batch.samples.len(), 2);
     serde_json::json!({
         "soc_pct": soc_pct,
@@ -613,7 +608,7 @@ fn lipo_analog_reference(soc_pct: f64, usb_present: f64) -> serde_json::Value {
         "result_mv": result_mv,
         "time_ns": runtime.time_ns(),
         "trace": {
-            "time_unit": "ns",
+            "time_unit": batch.time_unit,
             "channels": batch.channels,
             "dropped": batch.dropped,
             "samples": batch.samples.into_iter().map(|sample| serde_json::json!({
@@ -730,13 +725,11 @@ fn tmp36_analog_reference(temperature_c: f64) -> serde_json::Value {
     runtime.advance_ns(1_000).unwrap();
     let result_mv = runtime.read(voltage).unwrap();
     let batch = runtime.analog_trace_snapshot(0);
-    assert_eq!(
-        batch.channels,
-        [labwired_core::analog::AnalogChannel {
-            name: "tmp36-sensor.voltage_mv".to_owned(),
-            unit: "mV".to_owned(),
-        }]
-    );
+    assert_eq!(batch.time_unit, "ns");
+    assert_eq!(batch.channels.len(), 1);
+    assert_eq!(batch.channels[0].name, "tmp36-sensor.voltage_mv");
+    assert_eq!(batch.channels[0].unit, "mV");
+    assert_eq!(batch.channels[0].port_names, ["temperature_mv"]);
     assert_eq!(batch.samples.len(), 2);
     serde_json::json!({
         "temperature_c": temperature_c,
@@ -744,7 +737,7 @@ fn tmp36_analog_reference(temperature_c: f64) -> serde_json::Value {
         "result_mv": result_mv,
         "time_ns": runtime.time_ns(),
         "trace": {
-            "time_unit": "ns",
+            "time_unit": batch.time_unit,
             "channels": batch.channels,
             "dropped": batch.dropped,
             "samples": batch.samples.into_iter().map(|sample| serde_json::json!({

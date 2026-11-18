@@ -9,7 +9,7 @@
 //! No `Cpu`, `Machine`, MMIO address map, second rule engine, or analog solver
 //! is constructed here. Target binaries keep the separate machine path.
 
-use crate::analog::AnalogTraceBatch;
+use crate::analog::{AnalogSample, AnalogTraceBatch};
 use crate::cosim::{CosimRunner, CosimSignalValue, CosimSignals};
 use crate::logic_capture::{LogicCapture, PadEvent};
 use crate::{SimResult, SimulationError};
@@ -49,6 +49,27 @@ pub struct FlexDigitalTraceBatch {
     pub dropped: u64,
     pub channels: Vec<FlexDigitalChannel>,
     pub edges: Vec<FlexDigitalEdge>,
+}
+
+/// One oscilloscope channel with any firmware-facing numeric read ports that
+/// observe the same model output. This keeps the reusable model name while
+/// making the project's named port available to existing instrument views.
+#[derive(Debug, Clone, Serialize)]
+pub struct FlexAnalogChannel {
+    pub name: String,
+    pub unit: String,
+    pub port_names: Vec<String>,
+}
+
+/// The existing co-simulation analog samples, annotated with Flex-facing
+/// names and an explicit virtual-time unit for browser instruments.
+#[derive(Debug, Serialize)]
+pub struct FlexAnalogTraceBatch {
+    pub time_unit: &'static str,
+    pub channels: Vec<FlexAnalogChannel>,
+    pub samples: Vec<AnalogSample>,
+    pub next_cursor: u64,
+    pub dropped: u64,
 }
 
 struct DigitalCapture {
@@ -386,8 +407,44 @@ impl FlexRuntime {
         self.digital.snapshot(cursor)
     }
 
-    pub fn analog_trace_snapshot(&self, cursor: u64) -> AnalogTraceBatch {
-        self.runner.analog_trace_snapshot(cursor)
+    pub fn analog_trace_snapshot(&self, cursor: u64) -> FlexAnalogTraceBatch {
+        let batch: AnalogTraceBatch = self.runner.analog_trace_snapshot(cursor);
+        let channels = batch
+            .channels
+            .into_iter()
+            .map(|channel| {
+                let signal = self.manifest.cosim_models.iter().find_map(|model| {
+                    model.outputs.iter().find_map(|(output, signal)| {
+                        (channel.name == format!("{}.{}", model.id, output))
+                            .then_some(signal.as_str())
+                    })
+                });
+                let mut port_names: Vec<_> = signal
+                    .into_iter()
+                    .flat_map(|signal| {
+                        self.manifest.ports.iter().filter_map(move |port| {
+                            (port.access == FlexPortAccess::Read
+                                && port.kind == FlexPortKind::Number
+                                && port.signal == signal)
+                                .then_some(port.name.clone())
+                        })
+                    })
+                    .collect();
+                port_names.sort();
+                FlexAnalogChannel {
+                    name: channel.name,
+                    unit: channel.unit,
+                    port_names,
+                }
+            })
+            .collect();
+        FlexAnalogTraceBatch {
+            time_unit: "ns",
+            channels,
+            samples: batch.samples,
+            next_cursor: batch.next_cursor,
+            dropped: batch.dropped,
+        }
     }
 }
 
