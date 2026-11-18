@@ -2319,3 +2319,187 @@ fn nucleo_g071rb_bjt_transit_charge_reaches_adc1_alongside_ntc_and_diode() {
         "transit charge changes the transient only; both branches settle to the same DC base voltage"
     );
 }
+
+/// Independent Weil second-order recurrence for the forward transport current
+/// after a direct base-voltage step. The base-collector junction remains
+/// reverse-biased, so its diffusion and GMIN currents are negligible here.
+fn bjt_excess_phase_collector_voltages(base_v: f64, steps: usize) -> Vec<(f64, f64)> {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const IS_A: f64 = 1e-15;
+    const STEP_S: f64 = 50e-9;
+    const VT: f64 = 1.380_649e-23 * 300.15 / 1.602_176_634e-19;
+    let td = 90.0 * std::f64::consts::PI / 180.0 * 1e-6;
+    let target_current = IS_A * ((base_v / VT).exp() - 1.0);
+    let arg2 = 3.0 * STEP_S / td;
+    let arg1 = arg2 * STEP_S / td;
+    let denom = 1.0 + arg1 + arg2;
+    let (mut newest, mut older) = (0.0, 0.0);
+    (0..steps)
+        .map(|_| {
+            let delayed = (newest * (2.0 + arg2) - older + arg1 * target_current) / denom;
+            (older, newest) = (newest, delayed);
+            (
+                SUPPLY_V - LOAD_OHMS * delayed,
+                SUPPLY_V - LOAD_OHMS * target_current,
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn nucleo_g071rb_bjt_excess_phase_reaches_adc1_alongside_ntc_and_diode() {
+    const SUBSTEPS: usize = 20;
+    const BASE_V: f64 = 0.72;
+    const MICROSECONDS: usize = 8;
+    let system_path = root("configs/systems/nucleo-g071rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-G071RB profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and Shockley diode netlists");
+    let excess_phase = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-bjt-excess-phase-adc-system.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon excess-phase branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(excess_phase.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
+
+    const ADCEN: u32 = 1 << 20;
+    bus.write_u32(RCC_APBENR2, ADCEN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_CR, 0)
+        .expect("leave ADC deep power-down");
+    bus.write_u32(ADC1_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC1_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(bus.read_u32(ADC1_ISR).unwrap() & 1, 0, "ADC1 reports ADRDY");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and matched BJT excess-phase branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic models bind to independent ADC1 channels"
+    );
+    for channel in [4, 5, 6, 7] {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated Beta NTC at 25 °C");
+    session
+        .set_signal_number("ui.bjt_ptf.base_v", 0.0)
+        .expect("start both NPN stages off");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize the NTC, diode, and both BJT branches");
+    assert_eq!(initial_steps.len(), 4, "all four generic branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected ADC route errors: {initial_errors:?}"
+    );
+    for channel in [6, 7] {
+        assert!(
+            (signal_voltage(&session, &format!("adc.adc1.{channel}_volts")) - 3.3).abs() < 1e-8,
+            "off-stage collector on ADC1_IN{channel} starts at the supply"
+        );
+    }
+
+    session
+        .set_signal_number("ui.bjt_ptf.base_v", BASE_V)
+        .expect("step both base drives");
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let reference = bjt_excess_phase_collector_voltages(BASE_V, MICROSECONDS * SUBSTEPS);
+    let mut first_codes = None;
+    let mut final_codes = None;
+    for microsecond in 0..MICROSECONDS {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and both BJT stages");
+        assert_eq!(
+            steps.len(),
+            4,
+            "all four generic branches solve each microsecond"
+        );
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let expected = reference[(microsecond + 1) * SUBSTEPS - 1];
+        let ptf_v = signal_voltage(&session, "adc.adc1.6_volts");
+        let control_v = signal_voltage(&session, "adc.adc1.7_volts");
+        assert!(
+            (ptf_v - expected.0).abs() < 1e-6,
+            "PTF stage at {} µs: independent Weil recursion predicts {} V, got {ptf_v} V",
+            microsecond + 1,
+            expected.0
+        );
+        assert!(
+            (control_v - expected.1).abs() < 1e-6,
+            "control stage at {} µs: independent DC load line predicts {} V, got {control_v} V",
+            microsecond + 1,
+            expected.1
+        );
+        assert!(
+            (signal_voltage(&session, "adc.adc1.4_volts") - ntc_v).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (signal_voltage(&session, "adc.adc1.5_volts") - diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains isolated"
+        );
+
+        let codes =
+            [(4, ntc_v), (5, diode_v), (6, ptf_v), (7, control_v)].map(|(channel, voltage_v)| {
+                let expected_count = expected_adc_count(voltage_v);
+                assert_eq!(
+                    adc_channel_count(&mut bus, channel),
+                    expected_count,
+                    "solved voltage seeds ADC1 channel {channel}"
+                );
+                let actual = stm32g0_adc_convert(&mut bus, channel);
+                assert_eq!(
+                    actual,
+                    u32::from(expected_count),
+                    "firmware-visible ADC1 conversion on channel {channel}"
+                );
+                expected_count
+            });
+        for channel in [8, 9, 10, 11, 12, 13] {
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                u16::MAX,
+                "unrelated ADC1_IN{channel} remains undriven"
+            );
+        }
+        if microsecond == 0 {
+            first_codes = Some((codes[2], codes[3]));
+        }
+        if microsecond + 1 == MICROSECONDS {
+            final_codes = Some((codes[2], codes[3]));
+        }
+    }
+
+    let (ptf_first, control_first) = first_codes.expect("first ADC sample exists");
+    assert!(
+        ptf_first > control_first + 100,
+        "PTF=90 must delay the collector fall relative to the zero-PTF control: {ptf_first} vs {control_first}"
+    );
+    let (ptf_final, control_final) = final_codes.expect("final ADC sample exists");
+    assert!(
+        ptf_final.abs_diff(control_final) <= 2,
+        "the excess-phase branch must settle to the control after five delays: {ptf_final} vs {control_final}"
+    );
+}
