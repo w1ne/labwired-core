@@ -45,6 +45,20 @@ void setup() {
 void loop() {}
 ```
 
+### Waveshare ESP32-C6-Zero-M + BME280
+
+ESP32 remains rank 1 (38% of reported MCU use); demand for this exact board is
+not measured separately. Waveshare's current page lists the C6-Zero-M header
+SKU, and Electrokit listed 232 units in stock on 2026-11-18. Their flash
+specifications disagree: Waveshare lists C6FH8 / 8 MB, while Electrokit lists
+C6FH4 / 4 MB. The model uses the conservative 4 MB profile. The smoke reads
+BME280 ID `0x60` and raw temperature over I2C0 on GPIO6/GPIO7. The onboard RGB,
+USB, radio, LP core, and reset/strap behavior are outside this profile.
+
+- [Wiring, scope, and copy-paste Arduino example](../examples/esp32c6-zero-m-bme280/README.md)
+- [Live Waveshare and Electrokit availability receipt](../examples/esp32c6-zero-m-bme280/vendor-status.md)
+- [Committed local smoke evidence](../examples/esp32c6-zero-m-bme280/evidence/)
+
 ### ESP32-C5-DevKitC-1-N8R8 + BME280 + onboard RGB
 
 ESP32 remains demand rank 1 (38% of reported MCU use); C5-specific use is

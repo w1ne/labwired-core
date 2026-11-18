@@ -174,6 +174,11 @@ jobs:
             script: examples/esp32c6-devkitc/bme280-smoke.yaml
             system: configs/systems/esp32c6-devkitc-bme280.yaml
             firmware_build_script: examples/esp32c6-devkitc/build-bme280-firmware.sh
+          # C6-Zero-M with an external BME280 on the header GPIO6/GPIO7 route.
+          - id: esp32c6-zero-m-bme280
+            script: examples/esp32c6-zero-m-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32c6-zero-m-bme280.yaml
+            firmware_build_script: examples/esp32c6-zero-m-bme280/ci/build.sh
           # Demand-rank 1 ESP32 family: the N16R8 S3 DevKitC reads a BME280
           # over I2C0 on GPIO8/GPIO9. Rebuild the Arduino firmware with PIO.
           - id: esp32s3-devkitc-1-n16r8-bme280

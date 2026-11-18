@@ -141,6 +141,16 @@ jobs:
             profile_dir: release
             script: examples/esp32c6-devkitc/uart-smoke.yaml
             system: examples/esp32c6-devkitc/system.yaml
+          # Rank-1 ESP32-family board coverage: C6-Zero-M header route to a BME280.
+          # The descriptor limits this system to the stocked 4 MB C6FH4 profile.
+          - id: esp32c6-zero-m-bme280
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32c6-devkitc-bme280-smoke
+            profile: release
+            profile_dir: release
+            script: examples/esp32c6-zero-m-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32c6-zero-m-bme280.yaml
+            firmware_build_script: examples/esp32c6-zero-m-bme280/ci/build.sh
           # ESP32-H2-DevKitM-1-N4S. The exact active H2 board gets its own
           # UART0 profile; only the H2/C6-common UART head and PCR prefix are
           # exposed, and the USB bridge/pad route are explicitly out of scope.

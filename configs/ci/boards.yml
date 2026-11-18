@@ -89,6 +89,13 @@ boards:
     path: examples/esp32c61-devkitc-1-n8r2-bme280
     rust_targets: [riscv32imc-unknown-none-elf]
     gate: true
+  # Demand-rank 1 ESP32 family: C6-Zero-M with a BME280 on GPIO6/GPIO7.
+  # This board profile uses the conservative 4 MB C6FH4 stock listing.
+  - id: esp32c6-zero-m-bme280
+    kind: sim-validate
+    path: examples/esp32c6-zero-m-bme280
+    rust_targets: [riscv32imc-unknown-none-elf]
+    gate: true
   # Demand-rank 1 ESP32 family: current Arduino Nano ESP32 with a committed
   # S3 GPIO48/D13 smoke fixture. The onboarding workflow rebuilds it with PIO.
   - id: arduino-nano-esp32-gpio
