@@ -1,0 +1,48 @@
+# Matched generic level-1 PMOS branches isolate gate-drain overlap charge on
+# ADC1. The control omits CGDO; both branches stay below threshold so the
+# transient is the drain response to the gate's Miller capacitance.
+name: "nucleo-f767zi-pmos-cgdo"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "pmos_cgdo_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_drive: "ui.pmos_cgdo.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa4_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Vgate gate 0 dc 3.3
+        Rdrain drain supply 1k
+        M1 drain gate supply supply PMOS_CONTROL W=100u L=10u
+        .model PMOS_CONTROL PMOS(VTO=-5 KP=20u LAMBDA=0 IS=1e-30)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_drive: "Vgate"
+      vdd: 3.3
+  - id: "pmos_cgdo"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_drive: "ui.pmos_cgdo.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa5_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Vgate gate 0 dc 3.3
+        Rdrain drain supply 1k
+        M1 drain gate supply supply PMOS_CGDO W=100u L=10u
+        .model PMOS_CGDO PMOS(VTO=-5 KP=20u LAMBDA=0 IS=1e-30 CGDO=10u)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_drive: "Vgate"
+      vdd: 3.3

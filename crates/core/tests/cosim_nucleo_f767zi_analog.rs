@@ -3179,3 +3179,147 @@ fn nucleo_f767zi_mosfet_gate_drain_overlap_charge_reaches_adc1_with_ntc_and_diod
         "CGDO changes the transient but not the settled DC operating point"
     );
 }
+
+#[test]
+fn nucleo_f767zi_pmos_gate_drain_overlap_charge_reaches_adc1_with_ntc_and_diode() {
+    const SUPPLY_V: f64 = 3.3;
+    const DRAIN_OHMS: f64 = 1e3;
+    const CGDO_F_PER_M: f64 = 10e-6;
+    const WIDTH_M: f64 = 100e-6;
+    const STEP_S: f64 = 1e-6;
+    const GATE_INITIAL_V: f64 = SUPPLY_V;
+    const GATE_DRIVE_V: f64 = 0.0;
+
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let pmos = SystemManifest::from_file(root("examples/nucleo-f767zi/analog-pmos-cgdo-adc.yaml"))
+        .expect("load matched generic PMOS CGDO and control branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(pmos.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA4", 4), ("PA5", 5)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries an NTC, diode, and matched PMOS charge branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "NTC, diode, and PMOS drain branches must route to ADC1 channels 0, 1, 4, and 5"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.pmos_cgdo.gate_v", GATE_INITIAL_V)
+        .expect("initialize the matched PMOS gate drives at the source rail");
+
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC, diode, and PMOS branches before the gate step");
+    assert_eq!(initial_steps.len(), 4, "all four analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert!((signal_voltage(&session, "board.analog.pa4_volts") - SUPPLY_V).abs() < 1e-9);
+    assert!((signal_voltage(&session, "board.analog.pa5_volts") - SUPPLY_V).abs() < 1e-9);
+
+    session
+        .set_signal_number("ui.pmos_cgdo.gate_v", GATE_DRIVE_V)
+        .expect("step both generic PMOS gates low");
+
+    // CGDO·W = 1 nF; R·C = 1 µs, so one backward-Euler step injects half
+    // the negative gate step into the otherwise off PMOS drain. Later samples
+    // recover toward VCC through Rdrain.
+    let capacitance_f = CGDO_F_PER_M * WIDTH_M;
+    let conductance_ratio = DRAIN_OHMS * capacitance_f / STEP_S;
+    let mut previous_gate_v = GATE_INITIAL_V;
+    let mut expected_drain_v = SUPPLY_V;
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the PMOS gate-drain overlap transient");
+        assert_eq!(
+            steps.len(),
+            4,
+            "all four analog branches solve at every step"
+        );
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        expected_drain_v = (SUPPLY_V
+            + conductance_ratio * (expected_drain_v + GATE_DRIVE_V - previous_gate_v))
+            / (1.0 + conductance_ratio);
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let control_v = signal_voltage(&session, "board.analog.pa4_volts");
+        let charged_v = signal_voltage(&session, "board.analog.pa5_volts");
+
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated Beta NTC remains isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode remains at its DC load line"
+        );
+        assert!(
+            (control_v - SUPPLY_V).abs() < 1e-9,
+            "zero-CGDO matched PMOS control remains at the rail"
+        );
+        assert!(
+            (charged_v - expected_drain_v).abs() < 2e-8,
+            "PMOS CGDO RC recurrence at step {step}: expected {expected_drain_v} V, got {charged_v} V"
+        );
+        if step == 0 {
+            assert!((charged_v - 1.65).abs() < 2e-8);
+            assert!(
+                control_v - charged_v > 1.6,
+                "CGDO moves the PMOS drain on the gate edge"
+            );
+        }
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (4, control_v), (5, charged_v)] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds ADC1_IN{channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion reports the routed voltage"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 6),
+            u16::MAX,
+            "neighboring ADC1_IN6 remains undriven"
+        );
+        previous_gate_v = GATE_DRIVE_V;
+    }
+
+    assert!(
+        (signal_voltage(&session, "board.analog.pa5_volts") - SUPPLY_V).abs() < 0.01,
+        "CGDO changes the transient but settles back to the same PMOS DC point"
+    );
+}
