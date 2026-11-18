@@ -6,23 +6,23 @@
   "script": "examples/nucleo-h533re/io-smoke.yaml",
   "system": "configs/systems/nucleo-h533re-bme280.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-18T19:30:49Z",
-  "finished_at_utc": "2026-11-18T19:30:54Z",
-  "elapsed_seconds": 5,
-  "elapsed_ms": 4584,
+  "started_at_utc": "2026-11-18T19:47:09Z",
+  "finished_at_utc": "2026-11-18T19:47:22Z",
+  "elapsed_seconds": 13,
+  "elapsed_ms": 12603,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 3.702,
-    "build_firmware": 0.347,
-    "run_smoke": 0.483
+    "build_cli": 9.901,
+    "build_firmware": 1.649,
+    "run_smoke": 0.967
   },
   "stages_ms": {
-    "build_cli": 3702,
-    "build_firmware": 347,
-    "run_smoke": 483
+    "build_cli": 9901,
+    "build_firmware": 1649,
+    "run_smoke": 967
   }
 }
