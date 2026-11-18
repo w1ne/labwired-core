@@ -165,6 +165,7 @@ const DMA1_CCR1_MSIZE_HALFWORD: u32 = 1 << 10;
 
 static mut ADC1_DMA_SCAN_RESULTS: [u16; 13] = [0; 13];
 static mut ADC1_DMA_CIRCULAR_RESULTS: [u16; 2] = [0; 2];
+static mut ADC1_DMA_CIRCULAR_FOUR_RESULTS: [u16; 4] = [0; 4];
 static mut ADC1_DMA_CONTINUOUS_RESULTS: [u16; 4] = [0; 4];
 static mut ADC1_DMA_CONTINUOUS_CIRCULAR_RESULTS: [u16; 2] = [0; 2];
 
@@ -332,6 +333,7 @@ fn main() -> ! {
     smoke_adc1_channel0();
     smoke_adc1_dma_scan_rank_boundaries();
     smoke_adc1_dma_circular_two_laps();
+    smoke_adc1_dma_circular_four_item_half_boundary();
     smoke_adc1_dma_continuous_two_groups();
     smoke_adc1_dma_continuous_circular_two_laps();
     unsafe { smoke_systick_exception_state() };
@@ -4108,6 +4110,150 @@ fn smoke_adc1_dma_circular_two_laps() {
     putbytes(b" NVIC_CLEAR=");
     put_flag(pending_survives_clear && nvic_pending_cleared);
     putline(if passed { b" ok" } else { b" FAIL" });
+}
+
+/// Check the half-transfer boundary of a four-item STM32F1 circular buffer.
+/// One two-rank scan must stop at CNDTR=2 with HTIF only; the next scan wraps
+/// the count at TC, and the following scan must raise HTIF at the same point.
+fn smoke_adc1_dma_circular_four_item_half_boundary() {
+    let read = |address: u32| unsafe { read_volatile(address as *const u32) };
+    let write = |address: u32, value: u32| unsafe { write_volatile(address as *mut u32, value) };
+    let expected = [0x03FFu16, 0x07FF, 0x03FF, 0x07FF];
+    let rank_channels = (1 << 5) | (1 << 15); // SQ1=IN0, SQ2=IN1
+    let transfer_flags = DMA1_HTIF1 | DMA1_TCIF1;
+
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
+    write(DMA1_CNDTR1, expected.len() as u32);
+    write(DMA1_CPAR1, ADC1_DR);
+    let results = core::ptr::addr_of_mut!(ADC1_DMA_CIRCULAR_FOUR_RESULTS).cast::<u16>();
+    write(DMA1_CMAR1, results as u32);
+    for rank in 0..expected.len() {
+        unsafe { write_volatile(results.add(rank), 0) };
+    }
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
+    write(
+        DMA1_CCR1,
+        DMA1_CCR1_EN
+            | DMA1_CCR1_HTIE
+            | DMA1_CCR1_TCIE
+            | DMA1_CCR1_CIRC
+            | DMA1_CCR1_MINC
+            | DMA1_CCR1_PSIZE_HALFWORD
+            | DMA1_CCR1_MSIZE_HALFWORD,
+    );
+
+    let scan_base = ADC1_ADON | ADC1_DMA | ADC1_SOFTWARE_TRIGGER;
+    write(ADC1_CR1, ADC1_SCAN);
+    write(ADC1_SQR3, rank_channels);
+    write(ADC1_SQR1, 1 << 20); // L=1 -> two ranks
+    write(ADC1_CR2, scan_base);
+
+    let run_scan = || {
+        write(ADC1_CR2, scan_base);
+        write(ADC1_CR2, scan_base | ADC1_SWSTART);
+    };
+    let wait_for_half = || {
+        for _ in 0..100_000 {
+            if read(DMA1_CNDTR1) == 2 && read(DMA1_ISR) & DMA1_HTIF1 != 0 {
+                return true;
+            }
+            core::hint::spin_loop();
+        }
+        false
+    };
+    let wait_for_wrap = || {
+        for _ in 0..100_000 {
+            if read(DMA1_CNDTR1) == expected.len() as u32 && read(DMA1_ISR) & DMA1_TCIF1 != 0 {
+                return true;
+            }
+            core::hint::spin_loop();
+        }
+        false
+    };
+
+    run_scan();
+    let first_half = wait_for_half();
+    let first_flags = read(DMA1_ISR);
+    let first_half_only = first_flags & DMA1_HTIF1 != 0 && first_flags & DMA1_TCIF1 == 0;
+    let first_half_irq = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
+    let first_count = read(DMA1_CNDTR1) == 2;
+    let first_data = unsafe { read_volatile(results) } == expected[0]
+        && unsafe { read_volatile(results.add(1)) } == expected[1]
+        && unsafe { read_volatile(results.add(2)) } == 0
+        && unsafe { read_volatile(results.add(3)) } == 0;
+
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
+    run_scan();
+    let wrapped = wait_for_wrap();
+    let wrap_flags = read(DMA1_ISR);
+    let wrap_both_flags = wrap_flags & transfer_flags == transfer_flags;
+    let wrap_irq = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
+    let wrap_count = read(DMA1_CNDTR1) == expected.len() as u32;
+    let full_data = expected
+        .iter()
+        .enumerate()
+        .all(|(rank, value)| (unsafe { read_volatile(results.add(rank)) }) == *value);
+
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
+    run_scan();
+    let repeated_half = wait_for_half();
+    let repeated_flags = read(DMA1_ISR);
+    let repeated_half_only = repeated_flags & DMA1_HTIF1 != 0 && repeated_flags & DMA1_TCIF1 == 0;
+    let repeated_irq = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
+    let repeated_count = read(DMA1_CNDTR1) == 2;
+    let enabled = read(DMA1_CCR1) & DMA1_CCR1_EN != 0;
+    let eoc_cleared = read(ADC1_SR) & ADC1_EOC == 0;
+
+    write(ADC1_CR2, 0);
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
+
+    let passed = first_half
+        && first_half_only
+        && first_half_irq
+        && first_count
+        && first_data
+        && wrapped
+        && wrap_both_flags
+        && wrap_irq
+        && wrap_count
+        && full_data
+        && repeated_half
+        && repeated_half_only
+        && repeated_irq
+        && repeated_count
+        && enabled
+        && eoc_cleared;
+    putbytes(b"ADC1 F1 CIRCULAR FOUR HALF1=");
+    put_flag(first_half && first_half_only && first_count);
+    putbytes(b" LAP=");
+    put_flag(wrapped && wrap_count);
+    putbytes(b" HT_REPEAT=");
+    put_flag(repeated_half && repeated_half_only && repeated_count);
+    putbytes(b" IRQ=");
+    put_flag(first_half_irq && wrap_irq && repeated_irq);
+    putbytes(b" HALF_DATA=");
+    put_flag(first_data);
+    putbytes(b" FULL_DATA=");
+    put_flag(full_data);
+    putbytes(b" ENABLED=");
+    put_flag(enabled);
+    putbytes(b" EOC_CLEAR=");
+    put_flag(eoc_cleared);
+    putline(if passed { b" ok" } else { b" FAIL" });
+
+    putbytes(b"ADC1 F1 CIRCULAR FOUR BUFFER=");
+    for rank in 0..expected.len() {
+        if rank != 0 {
+            putbyte(b',');
+        }
+        put_hex32(unsafe { read_volatile(results.add(rank)) } as u32);
+    }
+    putline(b"");
 }
 
 /// Start one continuous two-rank ADC scan and let DMA drain two complete

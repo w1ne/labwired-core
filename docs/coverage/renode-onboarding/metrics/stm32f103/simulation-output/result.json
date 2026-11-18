@@ -234,6 +234,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "ADC1 F1 CIRCULAR FOUR HALF1=1 LAP=1 HT_REPEAT=1 IRQ=1 HALF_DATA=1 FULL_DATA=1 ENABLED=1 EOC_CLEAR=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "ADC1 F1 CONTINUOUS GROUPS=2 COMPLETE=1 REM=00000000 DMA_EN=1 SEQ=1 ok"
       },
       "passed": true
@@ -572,12 +578,12 @@
       5500,
       536891364,
       632080,
-      134244428,
+      134245864,
       536891128,
       69,
-      134243010
+      134244446
     ],
-    "pc": 134243010,
+    "pc": 134244446,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -590,7 +596,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "0729f5862d4cacbaa074663c44cfe740e929bb1b016677d5c2d10414109216bc",
+  "firmware_hash": "4799cfa3e6fa1b81695b3fdd7f077df5a343a737f71913c49f3774b6942faf1e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f103.yaml",
@@ -894,7 +900,7 @@
       }
     ],
     "pc": "0x0800025C",
-    "lr": "0x08003897",
+    "lr": "0x08003E45",
     "exc_return": {
       "value": "0xFFFFFFF9",
       "return_to": "thread",
@@ -906,9 +912,9 @@
       "r0": "0x20000400",
       "r1": "0x00000007",
       "r2": "0x2000051C",
-      "r3": "0x00000000",
-      "r12": "0x08000000",
-      "lr": "0x08003897",
+      "r3": "0x000F4240",
+      "r12": "0x080076FA",
+      "lr": "0x08003E45",
       "pc": "0x0800025C",
       "xpsr": "0x61000000"
     },
@@ -918,7 +924,7 @@
     "caller": {
       "function": "firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation",
       "file": "/data/worktrees/legacy-migrated/labwired-renode/crates/firmware-f103-i2c-demo/src/main.rs",
-      "line": 2277
+      "line": 2279
     },
     "registers": {
       "hfsr": "0x00000000",
@@ -969,6 +975,18 @@
         "end_cycle": 11000
       },
       {
+        "text": "ADC1 F1 CIRCULAR FOUR HALF1=1 LAP=1 HT_REPEAT=1 IRQ=1 HALF_DATA=1 FULL_DATA=1 ENABLED=1 EOC_CLEAR=1 ok",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "ADC1 F1 CIRCULAR FOUR BUFFER=000003FF,000007FF,000003FF,000007FF",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
         "text": "ADC1 F1 CONTINUOUS GROUPS=2 COMPLETE=1 REM=00000000 DMA_EN=1 SEQ=1 ok",
         "cycle_lo": 1000,
         "cycle": 11000,
@@ -978,24 +996,24 @@
         "text": "ADC1 F1 CONTINUOUS CIRCULAR LAP1=1 LAP2=1 FLAGS=1 IRQ=1 RELOAD=1 SEQ=1 ENABLED=1 EOC_CLEAR=1 ok",
         "cycle_lo": 1000,
         "cycle": 11000,
-        "end_cycle": 11000
+        "end_cycle": 21000
       },
       {
         "text": "SYSTICK M3 CALIB=00002328 WRAP=1 COUNTFLAG_WRITE=1 READ_CLEAR=1 PENDING=1 CLEAR=1 ok",
-        "cycle_lo": 1000,
-        "cycle": 11000,
-        "end_cycle": 11000
-      },
-      {
-        "text": "SYSTICK M3 HCLK8 REFERENCE=1 WINDOW=1 FROZEN=1 RESUMED=1 ok",
         "cycle_lo": 11000,
         "cycle": 21000,
         "end_cycle": 21000
       },
       {
+        "text": "SYSTICK M3 HCLK8 REFERENCE=1 WINDOW=1 FROZEN=1 RESUMED=1 ok",
+        "cycle_lo": 21000,
+        "cycle": 31000,
+        "end_cycle": 31000
+      },
+      {
         "text": "SYSTICK M3 PERIODIC=1 REPEATED=1 VECTOR=15 IPSR=15 RETURN=1 ok",
-        "cycle_lo": 11000,
-        "cycle": 21000,
+        "cycle_lo": 21000,
+        "cycle": 31000,
         "end_cycle": 31000
       },
       {
@@ -1038,18 +1056,18 @@
         "text": "SYSTICK PENDSV M3 TAILCHAIN DEFERRED=1 FRAME=REUSED R0=LIVE PENDING_CLEAR=1 ok",
         "cycle_lo": 21000,
         "cycle": 31000,
-        "end_cycle": 31000
+        "end_cycle": 41000
       },
       {
         "text": "SYSTICK PENDSV M3 PSP TAILCHAIN FRAME=REUSED EXC_RETURN=FFFFFFFD MSP=UNCHANGED R0=LIVE ok",
-        "cycle_lo": 21000,
-        "cycle": 31000,
-        "end_cycle": 31000
+        "cycle_lo": 31000,
+        "cycle": 41000,
+        "end_cycle": 41000
       },
       {
         "text": "IRQ M3 FRAME IPSR=54 ACTIVE=1 PENDING=0 SENTINELS=1 EXC_RETURN=FFFFFFF9 STACK=ALIGNED RETURN=1 ok",
-        "cycle_lo": 21000,
-        "cycle": 31000,
+        "cycle_lo": 31000,
+        "cycle": 41000,
         "end_cycle": 41000
       },
       {
@@ -1084,15 +1102,15 @@
       },
       {
         "text": "BASEPRI M3 MAX_KEEP=1 MAX_RAISE=1 HIGH=55 LOW=54 MASKED=1 PENDING=1 RELEASED=1 ok",
-        "cycle_lo": 31000,
-        "cycle": 41000,
-        "end_cycle": 41000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "NVIC M3 SUBPRIORITY ORDER=55,54 SAME_GROUP_PREEMPT=0 PENDING=1 ok",
-        "cycle_lo": 31000,
-        "cycle": 41000,
-        "end_cycle": 41000
+        "cycle_lo": 41000,
+        "cycle": 51000,
+        "end_cycle": 51000
       },
       {
         "text": "NVIC M3 NESTED IRQ54=1 IRQ55=1 ACTIVE=54,55 RESUMED=54 ok",
@@ -1146,78 +1164,78 @@
         "text": "GPIOB F1 LCKR SINGLE=0 LCKK=1 LOCKED=1 UNLOCKED=1 ODR=1 ok",
         "cycle_lo": 41000,
         "cycle": 51000,
-        "end_cycle": 51000
+        "end_cycle": 61000
       },
       {
         "text": "INIT",
-        "cycle_lo": 41000,
-        "cycle": 51000,
-        "end_cycle": 51000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "CR1=00000001",
-        "cycle_lo": 41000,
-        "cycle": 51000,
-        "end_cycle": 51000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "CR2=00000008",
-        "cycle_lo": 41000,
-        "cycle": 51000,
-        "end_cycle": 51000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "CCR=00000028",
-        "cycle_lo": 41000,
-        "cycle": 51000,
-        "end_cycle": 51000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "TRISE=00000009",
-        "cycle_lo": 41000,
-        "cycle": 51000,
-        "end_cycle": 51000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "OAR1=00004000",
-        "cycle_lo": 41000,
-        "cycle": 51000,
-        "end_cycle": 51000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "SR1=00000000",
-        "cycle_lo": 41000,
-        "cycle": 51000,
-        "end_cycle": 51000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "SR2=00000000",
-        "cycle_lo": 41000,
-        "cycle": 51000,
-        "end_cycle": 51000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "START",
-        "cycle_lo": 41000,
-        "cycle": 51000,
-        "end_cycle": 51000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "CR1=00000001",
-        "cycle_lo": 41000,
-        "cycle": 51000,
-        "end_cycle": 51000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "CR2=00000008",
-        "cycle_lo": 41000,
-        "cycle": 51000,
-        "end_cycle": 51000
+        "cycle_lo": 51000,
+        "cycle": 61000,
+        "end_cycle": 61000
       },
       {
         "text": "CCR=00000028",
-        "cycle_lo": 41000,
-        "cycle": 51000,
+        "cycle_lo": 51000,
+        "cycle": 61000,
         "end_cycle": 61000
       },
       {
@@ -1366,15 +1384,15 @@
       },
       {
         "text": "TMP102_CONFIG=0000FFF0",
-        "cycle_lo": 51000,
-        "cycle": 61000,
-        "end_cycle": 61000
+        "cycle_lo": 61000,
+        "cycle": 71000,
+        "end_cycle": 71000
       },
       {
         "text": "TMP102_CONFIG_WRITE_OK",
-        "cycle_lo": 51000,
-        "cycle": 61000,
-        "end_cycle": 61000
+        "cycle_lo": 61000,
+        "cycle": 71000,
+        "end_cycle": 71000
       },
       {
         "text": "TMP102_TLOW=00003450",
@@ -1422,19 +1440,19 @@
         "text": "BME280_ID_READ_OK",
         "cycle_lo": 61000,
         "cycle": 71000,
-        "end_cycle": 71000
+        "end_cycle": 81000
       },
       {
         "text": "BME280_T2=00006743",
-        "cycle_lo": 61000,
-        "cycle": 71000,
-        "end_cycle": 71000
+        "cycle_lo": 71000,
+        "cycle": 81000,
+        "end_cycle": 81000
       },
       {
         "text": "BME280_CALIBRATION_READ_OK",
-        "cycle_lo": 61000,
-        "cycle": 71000,
-        "end_cycle": 71000
+        "cycle_lo": 71000,
+        "cycle": 81000,
+        "end_cycle": 81000
       },
       {
         "text": "BME280_CALIBRATION_MAP_READ_OK",
@@ -1480,8 +1498,8 @@
       },
       {
         "text": "BME280_PRESS_RAW=0005883F",
-        "cycle_lo": 101000,
-        "cycle": 111000,
+        "cycle_lo": 111000,
+        "cycle": 121000,
         "end_cycle": 121000
       },
       {
@@ -1560,18 +1578,18 @@
         "text": "BME280_DYNAMIC_HUM_Q10=00013FFF",
         "cycle_lo": 1000000,
         "cycle": 1010000,
-        "end_cycle": 1010000
+        "end_cycle": 1020000
       },
       {
         "text": "BME280_DYNAMIC_TEMP_COMPENSATION_OK",
-        "cycle_lo": 1000000,
-        "cycle": 1010000,
-        "end_cycle": 1010000
+        "cycle_lo": 1010000,
+        "cycle": 1020000,
+        "end_cycle": 1020000
       },
       {
         "text": "BME280_WAITING_FOR_HUMIDITY_STIMULUS",
-        "cycle_lo": 1000000,
-        "cycle": 1010000,
+        "cycle_lo": 1010000,
+        "cycle": 1020000,
         "end_cycle": 1020000
       },
       {
@@ -1753,15 +1771,15 @@
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 33223,
+    "text_bytes": 34754,
     "data_bytes": 0,
-    "bss_bytes": 42,
-    "flash_used_bytes": 33223,
-    "ram_static_bytes": 42,
+    "bss_bytes": 50,
+    "flash_used_bytes": 34754,
+    "ram_static_bytes": 50,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 20480,
-    "flash_used_pct": 50.69,
-    "ram_static_pct": 0.21,
+    "flash_used_pct": 53.03,
+    "ram_static_pct": 0.24,
     "notes": [
       "section_sum_not_bin_image",
       "totals_from_chip_catalog"
@@ -1770,15 +1788,15 @@
   "memory": {
     "main_stack_method": "paint",
     "main_stack_limit_bytes": 20480,
-    "main_stack_high_water_bytes": 336,
-    "main_stack_free_min_bytes": 18424,
+    "main_stack_high_water_bytes": 236,
+    "main_stack_free_min_bytes": 18432,
     "main_stack_base": 536870912,
     "main_stack_top": 536891392,
     "main_stack_overflow_suspected": false,
     "heap_method": "paint",
     "heap_limit_bytes": 20480,
     "heap_high_water_bytes": 0,
-    "heap_free_min_bytes": 18424,
+    "heap_free_min_bytes": 18432,
     "heap_base": 536870912,
     "heap_top": 536891392
   },
@@ -1786,90 +1804,90 @@
     "cycles": 50000125,
     "instructions": 50000000,
     "steps_executed": 50000000,
-    "memory_reads": 170957,
-    "memory_writes": 65797,
-    "peripheral_accesses": 504737,
+    "memory_reads": 197019,
+    "memory_writes": 65850,
+    "peripheral_accesses": 504697,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134243010,
+        "pc": 134244446,
         "count": 183594,
         "symbol": "firmware_f103_i2c_demo::main"
       },
       {
-        "pc": 134220502,
-        "count": 1642,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134220534,
-        "count": 1523,
+        "pc": 134220508,
+        "count": 1406,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
-        "pc": 134220458,
-        "count": 938,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134220506,
-        "count": 587,
+        "pc": 134220530,
+        "count": 976,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134220508,
-        "count": 470,
+        "pc": 134220466,
+        "count": 938,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134220532,
+        "count": 819,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
         "pc": 134220504,
-        "count": 469,
+        "count": 587,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134220530,
+        "pc": 134220502,
         "count": 469,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134220526,
-        "count": 468,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134220532,
-        "count": 468,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
-      },
-      {
-        "pc": 134220510,
-        "count": 430,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
         "pc": 134220528,
-        "count": 430,
+        "count": 468,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134220464,
-        "count": 312,
+        "pc": 134220534,
+        "count": 466,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134220526,
+        "count": 429,
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 134220506,
+        "count": 390,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220510,
+        "count": 390,
         "symbol": "firmware_f103_i2c_demo::wait_sr1"
       },
       {
         "pc": 134220462,
-        "count": 230,
+        "count": 235,
         "symbol": "core::ptr::read_volatile"
       },
       {
+        "pc": 134220464,
+        "count": 234,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
         "pc": 134220460,
-        "count": 195,
+        "count": 196,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134220466,
+        "pc": 134220458,
         "count": 156,
-        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       }
     ]
   }
