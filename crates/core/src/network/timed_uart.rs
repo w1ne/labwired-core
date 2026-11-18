@@ -426,6 +426,82 @@ impl DirStats {
     }
 }
 
+/// A digital line contribution. Unknown is distinct from high impedance:
+/// a query older than retained history must not create a clean electrical state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DigitalDrive {
+    HighImpedance,
+    Low,
+    High,
+    Unknown,
+}
+
+impl DigitalDrive {
+    pub fn level(self) -> Option<bool> {
+        match self {
+            Self::Low => Some(false),
+            Self::High => Some(true),
+            _ => None,
+        }
+    }
+    pub fn from_level(level: Option<bool>) -> Self {
+        match level {
+            Some(false) => Self::Low,
+            Some(true) => Self::High,
+            None => Self::HighImpedance,
+        }
+    }
+}
+
+const DIGITAL_HISTORY_CAP: usize = 4096;
+
+#[derive(Debug)]
+struct DigitalHistory {
+    transitions: VecDeque<(u64, DigitalDrive)>,
+    discarded: u64,
+}
+
+impl DigitalHistory {
+    fn new() -> Self {
+        Self {
+            transitions: VecDeque::new(),
+            discarded: 0,
+        }
+    }
+    fn push(&mut self, at: u64, level: DigitalDrive) -> anyhow::Result<()> {
+        if let Some((last_at, last_level)) = self.transitions.back() {
+            anyhow::ensure!(
+                at >= *last_at,
+                "digital line transition is out of time order"
+            );
+            if *last_level == level {
+                return Ok(());
+            }
+        }
+        if self.transitions.len() == DIGITAL_HISTORY_CAP {
+            self.transitions.pop_front();
+            self.discarded += 1;
+        }
+        self.transitions.push_back((at, level));
+        Ok(())
+    }
+    fn at(&self, at: u64) -> DigitalDrive {
+        if self.discarded > 0
+            && self
+                .transitions
+                .front()
+                .is_some_and(|(first, _)| at < *first)
+        {
+            return DigitalDrive::Unknown;
+        }
+        self.transitions
+            .iter()
+            .rev()
+            .find(|(time, _)| *time <= at)
+            .map_or(DigitalDrive::HighImpedance, |(_, level)| *level)
+    }
+}
+
 #[derive(Debug)]
 struct Port {
     node: String,
@@ -445,6 +521,9 @@ struct Port {
     /// Digital transceiver propagation at this endpoint; zero on bare UARTs.
     tx_path_delay_ps: u64,
     rx_path_delay_ps: u64,
+    /// Non-UART drive on this same wire (for example GPIO/TIM SIO). UART
+    /// serialization remains in Wire; this history does not inject bytes.
+    digital_drive: DigitalHistory,
 }
 
 #[derive(Debug)]
@@ -678,6 +757,7 @@ impl TimedUartNet {
                 tx_sniff: Sniffer::default(),
                 tx_path_delay_ps: 0,
                 rx_path_delay_ps: 0,
+                digital_drive: DigitalHistory::new(),
             });
         }
         let dir_stats = |from: &Port, to: &Port| DirStats {
@@ -919,6 +999,36 @@ impl TimedUartPort {
         let mut g = self.lock();
         g.ports[self.port].tx_path_delay_ps = tx_ps;
         g.ports[self.port].rx_path_delay_ps = rx_ps;
+    }
+
+    /// Publish a non-UART electrical drive from the MCU pad, with this
+    /// endpoint's driver propagation. High impedance is a real release.
+    pub fn drive_digital(&self, cycle: u64, level: DigitalDrive) -> anyhow::Result<()> {
+        let mut g = self.lock();
+        let port = &mut g.ports[self.port];
+        let at = cycles_to_ps(cycle, self.hz).saturating_add(port.tx_path_delay_ps);
+        port.digital_drive.push(at, level)
+    }
+
+    /// Peer CQ contribution at this endpoint in physical line time. It
+    /// includes cable delay, before the receiving transceiver's propagation.
+    /// Queries search history, so a later CPU slice cannot overwrite the past.
+    pub fn peer_digital_drive(&self, cycle: u64) -> DigitalDrive {
+        let g = self.lock();
+        let own = &g.ports[self.port];
+        let link = &g.links[own.link];
+        if !link.connected {
+            return DigitalDrive::HighImpedance;
+        }
+        let at = cycles_to_ps(cycle, self.hz);
+        let Some(at) = at.checked_sub(link.delay_ps) else {
+            return DigitalDrive::HighImpedance;
+        };
+        g.ports[link.ports[own.side ^ 1]].digital_drive.at(at)
+    }
+
+    pub fn digital_history_discarded(&self) -> u64 {
+        self.lock().ports[self.port].digital_drive.discarded
     }
 
     /// The USART's registers changed: record its line format.

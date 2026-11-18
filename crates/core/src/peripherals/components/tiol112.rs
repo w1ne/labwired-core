@@ -536,3 +536,45 @@ impl PeripheralKit for Tiol112Kit {
         Ok(())
     }
 }
+
+impl crate::peripherals::uart_transceiver::DigitalUartTransceiver for Tiol112 {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn id(&self) -> &str {
+        self.id()
+    }
+    fn driver_delay_ps(&self) -> u64 {
+        self.driver_delay_ps
+    }
+    fn receiver_delay_ps(&self) -> u64 {
+        self.receiver_delay_ps
+    }
+    fn bind_timed_port(&self, port: TimedUartPort) {
+        self.bind_timed_port(port);
+    }
+    fn clock_valid(&self) -> bool {
+        self.clock_valid()
+    }
+    fn allow_tx(&self) -> bool {
+        self.allow_tx()
+    }
+    fn accept_peer_byte(&self) -> bool {
+        self.accept_peer_byte()
+    }
+    fn allow_timed_tx(&self, cycle: u64, hz: u64) -> bool {
+        self.allow_timed_tx(cycle, hz)
+    }
+    fn driving_at(&self, cycle: u64, hz: u64) -> bool {
+        self.cq_driving_at(cycle, hz)
+    }
+    fn tx_inverted(&self) -> bool {
+        true
+    }
+    fn rx_inverted(&self) -> bool {
+        true
+    }
+    fn record_timed_tx(&self, cycle: u64, value: u16, format: LineFormat, hz: u64) {
+        self.record_timed_tx(cycle, value, format, hz);
+    }
+}

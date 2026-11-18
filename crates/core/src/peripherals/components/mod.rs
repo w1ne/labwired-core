@@ -54,6 +54,7 @@ pub mod iolink_master;
 pub mod iolink_native;
 pub mod iolink_station;
 pub mod joystick;
+pub mod l6362a;
 pub mod lcd1602;
 pub mod limit_switch;
 pub mod max30102;

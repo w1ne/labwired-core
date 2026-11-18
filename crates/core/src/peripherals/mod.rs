@@ -140,6 +140,7 @@ pub mod systick;
 pub mod timer;
 pub mod tsc;
 pub mod uart;
+pub mod uart_transceiver;
 pub mod uart_waveform;
 pub mod usb_otg;
 pub mod virtual_ble;

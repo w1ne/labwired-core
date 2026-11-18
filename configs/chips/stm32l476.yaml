@@ -466,13 +466,16 @@ peripherals:
       debug_schema: "../peripherals/stm32l476/exti.yaml"
       profile: "stm32l4"
 
-  # SYSCFG — system config (mostly EXTI line source selection); modeled as stub.
+  # RM0351 SYSCFG: descriptor-owned EXTICR fields select each EXTI source.
+  # Other words remain register storage; SRAM2 erase/remap are not modeled.
   - id: "syscfg"
-    type: "stub"
+    type: "declarative"
     base_address: 0x40010000
     size: "1KB"
+    clock: { reg: "apb2enr", bit: 0 }
     config:
-      debug_schema: "../peripherals/stm32l476/syscfg.yaml"
+      path: "../peripherals/stm32l476/syscfg.yaml"
+      exti_line_source: true
 
   # Low-power timers.
   - id: "lptim1"

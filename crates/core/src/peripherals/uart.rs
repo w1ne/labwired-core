@@ -1049,9 +1049,9 @@ pub struct Uart {
     /// MAX485 is wired to it. See [`crate::peripherals::rs485`].
     #[serde(skip)]
     rs485: Option<Box<crate::peripherals::rs485::Rs485Gate>>,
-    /// TI single-wire CQ transceiver. Separate from the RS-485 gate.
+    /// Digital single-wire transceiver. Separate from the RS-485 gate.
     #[serde(skip)]
-    tiol112: Option<super::components::tiol112::Tiol112>,
+    transceiver: Option<Arc<dyn super::uart_transceiver::DigitalUartTransceiver>>,
     /// AVR layout: UCSR0A as the CPU last wrote it (U2X is bit 1).
     avr_ucsra: u8,
     /// AVR layout: UBRR0 and whether firmware wrote it.
@@ -1162,7 +1162,7 @@ impl Uart {
             wave_cursor_rx: 0,
             timed: None,
             rs485: None,
-            tiol112: None,
+            transceiver: None,
             avr_ucsra: 0,
             avr_ubrr: 0,
             avr_baud_set: false,
@@ -1631,7 +1631,7 @@ impl Uart {
                 attached_streams,
                 elapsed_us,
                 rs485,
-                tiol112,
+                transceiver,
                 stream_clock,
                 trace_name,
                 ..
@@ -1668,7 +1668,7 @@ impl Uart {
                             let Some(byte) = stream.poll(credit) else {
                                 break;
                             };
-                            if let Some(phy) = tiol112.as_ref() {
+                            if let Some(phy) = transceiver.as_ref() {
                                 if !tiol_rx_enabled || !phy.accept_peer_byte() {
                                     credit = 0;
                                     continue;
@@ -2242,7 +2242,7 @@ impl Uart {
         // driver is enabled; see `peripherals::rs485`.
         let mut echo = false;
         let mut on_bus = true;
-        if let Some(phy) = &self.tiol112 {
+        if let Some(phy) = &self.transceiver {
             if self.cr1 & (1 | (1 << 3)) != (1 | (1 << 3)) || self.presc != 0 {
                 return;
             }
@@ -2262,7 +2262,7 @@ impl Uart {
                 }
             }
         }
-        self.last_tx_on_bus = (self.rs485.is_some() || self.tiol112.is_some()) && on_bus;
+        self.last_tx_on_bus = (self.rs485.is_some() || self.transceiver.is_some()) && on_bus;
         // A byte the driver put on the bus is a frame, not console text: it
         // is in the `rs485` bus log instead.
         if !self.last_tx_on_bus {
@@ -2315,29 +2315,43 @@ impl Uart {
         self.rs485.as_deref()
     }
 
-    /// Attach the exact TI digital model; sharing one UART with another
-    /// transceiver would hide conflicting wire ownership, so reject it.
-    pub fn set_tiol112(&mut self, phy: super::components::tiol112::Tiol112) -> anyhow::Result<()> {
+    /// Attach one physical digital transceiver to the existing UART engine.
+    pub fn set_digital_transceiver(
+        &mut self,
+        phy: Arc<dyn super::uart_transceiver::DigitalUartTransceiver>,
+    ) -> anyhow::Result<()> {
         anyhow::ensure!(
-            self.rs485.is_none() && self.tiol112.is_none(),
+            self.rs485.is_none() && self.transceiver.is_none(),
             "UART already has a transceiver attached"
         );
         anyhow::ensure!(
             matches!(self.layout, UartRegisterLayout::Stm32V2),
-            "TIOL112 currently requires a modern STM32 USART"
+            "digital transceiver currently requires a modern STM32 USART"
         );
         if let Some(t) = &self.timed {
             t.port
-                .set_path_delays(phy.driver_delay_ps, phy.receiver_delay_ps);
+                .set_path_delays(phy.driver_delay_ps(), phy.receiver_delay_ps());
             phy.bind_timed_port(t.port.clone());
         }
         self.set_sink(None, false);
-        self.tiol112 = Some(phy);
+        self.transceiver = Some(phy);
+        self.timed_publish();
         Ok(())
     }
 
+    /// Compatibility accessor for existing exact TIOL112 diagnostics.
+    pub fn set_tiol112(&mut self, phy: super::components::tiol112::Tiol112) -> anyhow::Result<()> {
+        self.set_digital_transceiver(Arc::new(phy))
+    }
+
     pub fn tiol112(&self) -> Option<&super::components::tiol112::Tiol112> {
-        self.tiol112.as_ref()
+        self.transceiver.as_ref()?.as_any().downcast_ref()
+    }
+
+    pub fn digital_transceiver(
+        &self,
+    ) -> Option<&dyn super::uart_transceiver::DigitalUartTransceiver> {
+        self.transceiver.as_deref()
     }
 
     pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>, echo_stdout: bool) {

@@ -1219,9 +1219,16 @@ impl SystemBus {
                         )?
                     };
 
-                    Box::new(crate::peripherals::declarative::GenericPeripheral::new(
-                        desc,
-                    ))
+                    let mut model = crate::peripherals::declarative::GenericPeripheral::new(desc);
+                    if let Some(value) = p_cfg.config.get("exti_line_source") {
+                        let enabled = value.as_bool().ok_or_else(|| {
+                            anyhow::anyhow!("{}: exti_line_source must be a boolean", p_cfg.id)
+                        })?;
+                        if enabled {
+                            model = model.with_exti_line_source()?;
+                        }
+                    }
+                    Box::new(model)
                 }
                 "strict_ir" => {
                     let descriptor_path = p_cfg
