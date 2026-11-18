@@ -18,7 +18,7 @@ bit-bangs one red frame on GPIO27. The CLI assertions require the BME280 and
 RGB success markers, at least four observed edges on GPIO5, at least 16 on
 GPIO27, and the configured instruction-limit stop. The evidence checker also
 requires the WS2812 model to decode one lit pixel with GRB bytes `00 FF 00` on
-GPIO27. The 2026-11-17 run passed all five CLI assertions in 800,000 steps.
+GPIO27. The 2026-11-18 run passed all five CLI assertions in 800,000 steps.
 Committed build and simulation evidence is under [`evidence/`](evidence/).
 
 The C5-aware GPIO adapter covers direct GPIO0..28 plus the C5 input/output
