@@ -103,6 +103,7 @@ const SLAVE_ADDR: u8 = 0x76;
 /// not something a system yaml decorated.
 fn dummy_manifest(path: &str) -> SystemManifest {
     SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),

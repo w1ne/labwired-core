@@ -84,6 +84,7 @@ pub mod integration_tests {
     /// name with `chip` → `system`; `chip` points at the descriptor name.
     fn manifest_for(chip_name: &str) -> SystemManifest {
         SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -530,6 +531,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -751,6 +753,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -832,6 +835,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -1053,6 +1057,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -2369,6 +2374,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -2475,6 +2481,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -2566,6 +2573,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -2995,6 +3003,7 @@ pub mod integration_tests {
             serde_yaml::Value::Number(0x3C.into()),
         );
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -3125,6 +3134,7 @@ pub mod integration_tests {
                 include: None,
             };
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),
@@ -3208,6 +3218,7 @@ pub mod integration_tests {
                 include: None,
             };
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),
@@ -3330,6 +3341,7 @@ pub mod integration_tests {
                 serde_yaml::Value::Number(0x3C.into()),
             );
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),

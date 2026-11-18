@@ -86,6 +86,7 @@ fn two_potentiometers_are_individually_addressable() {
     let chip_path = root("configs/chips/stm32f103.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("load chip descriptor");
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
@@ -203,6 +204,7 @@ fn c3_gp2y0a21_attaches_and_distance_drives_apb_saradc() {
     let mut config = std::collections::HashMap::new();
     config.insert("channel".to_string(), serde_yaml::Value::from(1u64));
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
@@ -263,6 +265,7 @@ fn lipo_charger_inputs_reach_the_attached_adc_channel() {
     let mut config = std::collections::HashMap::new();
     config.insert("channel".to_string(), serde_yaml::Value::from(2u64));
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
