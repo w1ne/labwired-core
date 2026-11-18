@@ -375,6 +375,39 @@ fn expected_adc_count(voltage_v: f64) -> u16 {
     (millivolts * 4095.0 / 3300.0).floor().clamp(0.0, 4095.0) as u16
 }
 
+/// Independent backward-Euler base-node solve for a generic NPN with fixed
+/// collector bias. With no Early effect or high-injection knees, the forward
+/// transit charge is `Qbe = TF·IS·(e^(Vbe/Vt)-1)`.
+fn bjt_transit_base_voltage(previous_v: f64, drive_v: f64, tf_s: f64, step_s: f64) -> f64 {
+    const BASE_OHMS: f64 = 10_000.0;
+    const COLLECTOR_V: f64 = 0.1;
+    const IS_A: f64 = 1e-15;
+    const BF: f64 = 100.0;
+    const BR: f64 = 4.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let junction_current = |voltage_v: f64| IS_A * ((voltage_v / VT).exp() - 1.0);
+    let charge = |vbe_v: f64| tf_s * junction_current(vbe_v);
+    let previous_charge = charge(previous_v);
+    let residual = |vbe_v: f64| {
+        let vbc_v = vbe_v - COLLECTOR_V;
+        (drive_v - vbe_v) / BASE_OHMS
+            - junction_current(vbe_v) / BF
+            - junction_current(vbc_v) / BR
+            - (charge(vbe_v) - previous_charge) / step_s
+    };
+    let (mut low, mut high) = (0.0, drive_v);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
 /// Independent level-1 JFET gate-junction depletion charge below FC * PB.
 fn jfet_gate_junction_charge(voltage_v: f64) -> f64 {
     const C0_F: f64 = 1e-9;
@@ -1767,4 +1800,147 @@ fn nucleo_g071rb_bjt_terminal_resistances_reach_adc1_with_explicit_network_refer
             "unrelated ADC1_IN{channel} remains undriven"
         );
     }
+}
+
+#[test]
+fn nucleo_g071rb_bjt_transit_charge_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-g071rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-G071RB profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load unrelated generic NTC divider and Shockley diode");
+    let transit = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-bjt-transit-adc-system.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon transit-charge branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(transit.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
+
+    const ADCEN: u32 = 1 << 20;
+    bus.write_u32(RCC_APBENR2, ADCEN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_CR, 0)
+        .expect("leave ADC deep power-down");
+    bus.write_u32(ADC1_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC1_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(bus.read_u32(ADC1_ISR).unwrap() & 1, 0, "ADC1 reports ADRDY");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC, diode, and matched BJT transit branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices bind to independent ADC1 channels"
+    );
+    for channel in [4, 5, 8, 9] {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_transit.base_v", 0.0)
+        .expect("initialize both BJT base-drive branches");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize NTC, diode, and BJT charge state");
+    assert_eq!(initial_steps.len(), 4, "all four analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected ADC route errors: {initial_errors:?}"
+    );
+
+    const BASE_DRIVE_V: f64 = 0.8;
+    const STEP_S: f64 = 1e-6;
+    const TRANSIT_S: f64 = 1e-6;
+    session
+        .set_signal_number("ui.bjt_transit.base_v", BASE_DRIVE_V)
+        .expect("step both matched BJT base drives");
+    let mut previous_transit_v = 0.0;
+    let mut first_difference = None;
+    let mut final_voltages = None;
+    for step in 0..1_000 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and BJT transit charge");
+        assert_eq!(steps.len(), 4, "all four generic branches solve each step");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "adc.adc1.4_volts");
+        let diode_v = signal_voltage(&session, "adc.adc1.5_volts");
+        let control_v = signal_voltage(&session, "adc.adc1.8_volts");
+        let transit_v = signal_voltage(&session, "adc.adc1.9_volts");
+        let expected_control_v = bjt_transit_base_voltage(0.0, BASE_DRIVE_V, 0.0, STEP_S);
+        let expected_transit_v =
+            bjt_transit_base_voltage(previous_transit_v, BASE_DRIVE_V, TRANSIT_S, STEP_S);
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "the unrelated NTC stays isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode stays on its independent load line"
+        );
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "zero-TF BJT must match the independent DC base solution {expected_control_v} V, got {control_v} V"
+        );
+        assert!(
+            (transit_v - expected_transit_v).abs() < 5e-3,
+            "TF backward-Euler base solution at step {step} should be {expected_transit_v} V, got {transit_v} V"
+        );
+
+        for (channel, voltage_v) in [(4, ntc_v), (5, diode_v), (8, control_v), (9, transit_v)] {
+            let expected_count = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "solved voltage seeds ADC1 channel {channel}"
+            );
+            if step == 0 || step == 999 {
+                assert_eq!(
+                    stm32g0_adc_convert(&mut bus, channel),
+                    u32::from(expected_count),
+                    "firmware-visible ADC1 conversion follows channel {channel}"
+                );
+            }
+        }
+        for channel in [6, 7, 10, 11] {
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                u16::MAX,
+                "unrelated ADC1_IN{channel} remains undriven"
+            );
+        }
+
+        if step == 0 {
+            first_difference = Some(control_v - transit_v);
+        }
+        previous_transit_v = expected_transit_v;
+        final_voltages = Some((control_v, transit_v));
+    }
+
+    let (control_v, transit_v) = final_voltages.expect("final transient sample exists");
+    assert!(
+        first_difference.unwrap_or_default() > 0.05,
+        "TF must store forward charge and lower the first-step base voltage"
+    );
+    assert!(
+        (control_v - transit_v).abs() < 2e-4,
+        "transit charge changes the transient only; both branches settle to the same DC base voltage"
+    );
 }
