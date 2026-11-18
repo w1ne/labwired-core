@@ -11,6 +11,7 @@ pub mod apollo4;
 pub mod armv7;
 pub mod avr_adc;
 pub mod avr_gpio;
+pub mod bcm2835_bsc;
 pub mod ble_air;
 pub mod ble_central;
 pub mod bxcan;

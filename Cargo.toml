@@ -12,6 +12,7 @@ members = [
     "crates/codegen",
     "crates/config",
     "crates/core",
+    "crates/qemu-bridge",
     "crates/nrf-softdevice-hle",
     "crates/dap",
     "crates/egress-relay",

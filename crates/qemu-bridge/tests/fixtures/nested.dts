@@ -1,0 +1,129 @@
+// Fixture for crates/qemu-bridge/src/dt.rs tests.
+// Rebuild: dtc -I dts -O dtb -o nested.dtb nested.dts
+/dts-v1/;
+
+/ {
+	#address-cells = <2>;
+	#size-cells = <1>;
+	interrupt-parent = <&gic>;
+
+	aliases {
+		i2c1 = "/soc/i2c@7e804000";
+		i2c = "/soc/i2c@7e804000";
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a72";
+			reg = <0>;
+		};
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x0 0x40000000>;
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <1 13 4>, <1 14 4>;
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x7e000000 0x0 0xfe000000 0x01800000>,
+			 <0x40000000 0x0 0xff800000 0x00800000>;
+
+		gic: intc@40041000 {
+			compatible = "arm,gic-400";
+			interrupt-controller;
+			#interrupt-cells = <3>;
+			reg = <0x40041000 0x1000>, <0x40042000 0x2000>;
+		};
+
+		l1: l1intc@40000000 {
+			compatible = "brcm,bcm2836-l1-intc";
+			interrupt-controller;
+			#interrupt-cells = <1>;
+			reg = <0x40000000 0x100>;
+		};
+
+		i2c@7e804000 {
+			compatible = "brcm,bcm2711-i2c", "brcm,bcm2835-i2c";
+			reg = <0x7e804000 0x1000>;
+			interrupts = <0 117 4>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			sensor@76 {
+				compatible = "bosch,bme280";
+				reg = <0x76>;
+			};
+		};
+
+		i2c@7e205600 {
+			compatible = "brcm,bcm2711-i2c", "brcm,bcm2835-i2c";
+			reg = <0x7e205600 0x200>;
+			interrupts = <0 117 4>;
+			status = "disabled";
+		};
+
+		gpio@7e200000 {
+			compatible = "brcm,bcm2711-gpio";
+			reg = <0x7e200000 0xb4>;
+			interrupts-extended = <&gic 0 113 4>, <&l1 5>;
+		};
+
+		timer@7e003000 {
+			compatible = "brcm,bcm2835-system-timer";
+			reg = <0x7e003000 0x1000>;
+			interrupt-parent = <&l1>;
+			interrupts = <3>;
+		};
+
+		sub@7e300000 {
+			compatible = "simple-bus";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			reg = <0x7e300000 0x1000>;
+			ranges = <0x0 0x7e300000 0x1000>;
+
+			uart@100 {
+				compatible = "arm,pl011";
+				reg = <0x100 0x100>;
+				interrupts = <0 121 4>, <1 9 4>;
+			};
+		};
+	};
+
+	wide {
+		compatible = "simple-bus";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		blk@4,10000000 {
+			compatible = "vendor,blk";
+			reg = <0x4 0x10000000 0x1 0x0>;
+		};
+	};
+
+	offbus {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x0 0x80000000 0x1000>;
+		status = "disabled";
+
+		dev@10 {
+			compatible = "vendor,dev";
+			reg = <0x10 0x10>;
+		};
+	};
+};
