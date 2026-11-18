@@ -29,6 +29,9 @@
       "channels": [
         {
           "name": "source-u4-gl5528.voltage_mv",
+          "port_names": [
+            "sensor_mv"
+          ],
           "unit": "mV"
         }
       ],
@@ -57,6 +60,9 @@
       "channels": [
         {
           "name": "source-u4-gl5528.voltage_mv",
+          "port_names": [
+            "sensor_mv"
+          ],
           "unit": "mV"
         }
       ],
@@ -222,15 +228,16 @@
     "pinned-source-mapping",
     "run-scope-report",
     "named-digital-port-aliases",
+    "named-analog-port-aliases",
     "bright-output",
     "dark-negative-control",
     "oscilloscope-samples",
     "oscilloscope-nanosecond-time-unit"
   ],
-  "measured_browser_ms": 1714.2,
-  "browser": "149.0.7827.55",
+  "measured_browser_ms": 468.1,
+  "browser": "156.0.8078.79",
   "browser_driver": "Playwright",
-  "core_commit": "02eb942c4801905da2535a76b244cb1e19d9c393",
+  "core_commit": "95bedb576a93996125faf3763e64c03d47d3c875",
   "firmware_sha256": "366f562ab8a19449a479e3b5e4b2d783f108fdaceb6e61948a0f6b559c314294",
   "firmware_source_sha256": "04cdc152150ed1ca85924081f124438698370c12af6535aaff934c1ddd539402",
   "system_sha256": "9c78f66d7564bfb8027fea1515141b6e1273ca8918b168280915c82fdf1dacd8",

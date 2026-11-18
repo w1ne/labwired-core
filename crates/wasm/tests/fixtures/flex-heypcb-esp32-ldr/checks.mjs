@@ -89,8 +89,9 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
       check(analogBatch.time_unit === 'ns'
         && analogBatch.channels.length === 1
         && analogBatch.channels[0].name === 'source-u4-gl5528.voltage_mv'
+        && analogBatch.channels[0].port_names?.includes('sensor_mv')
         && analogBatch.channels[0].unit === 'mV',
-      'the registered LDR output or its nanosecond time unit is missing from the oscilloscope trace');
+      'the registered LDR output, named read port, or nanosecond time unit is missing from the oscilloscope trace');
       check(analogBatch.samples.length > 0, 'the LDR oscilloscope trace has no samples');
       const signalById = new Map(batch.channels.map((channel) => [channel.id, channel.signal]));
       const portNamesBySignal = new Map(batch.channels.map((channel) => [channel.signal, channel.port_names]));
@@ -165,6 +166,6 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
     },
     native_model_equality: true,
     run_report: runReport,
-    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'named-digital-port-aliases', 'bright-output', 'dark-negative-control', 'oscilloscope-samples', 'oscilloscope-nanosecond-time-unit'],
+    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'named-digital-port-aliases', 'named-analog-port-aliases', 'bright-output', 'dark-negative-control', 'oscilloscope-samples', 'oscilloscope-nanosecond-time-unit'],
   };
 }
