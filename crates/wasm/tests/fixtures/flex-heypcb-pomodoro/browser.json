@@ -16,5 +16,6 @@
     "positive-output",
     "negative-control"
   ],
-  "browser": "156.0.8078.79"
+  "browser": "149.0.7827.55",
+  "playwright": "1.58.2"
 }
