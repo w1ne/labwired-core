@@ -253,27 +253,28 @@ fn mosfet_body_effect_drain_voltage(gate_v: f64, bulk_v: f64) -> f64 {
 /// Independent SPICE level-1 JFET load-line reference, including the
 /// Parker–Skellern B fit and channel-length modulation.
 fn jfet_drain_voltage(gate_v: f64) -> f64 {
+    jfet_drain_voltage_for_model(gate_v, -2.0, 500e-6, 1.0, 0.8)
+}
+
+/// Independent Parker–Skellern level-1 load line with selectable card values.
+fn jfet_drain_voltage_for_model(gate_v: f64, vto: f64, beta: f64, pb: f64, b: f64) -> f64 {
     const SUPPLY_V: f64 = 3.3;
     const LOAD_OHMS: f64 = 1_000.0;
-    const VTO: f64 = -2.0;
-    const BETA_A_PER_V2: f64 = 500e-6;
     const LAMBDA_PER_V: f64 = 0.025;
-    const B: f64 = 0.8;
-    const PB: f64 = 1.0;
 
-    let overdrive = gate_v - VTO;
+    let overdrive = gate_v - vto;
     if overdrive <= 0.0 {
         return SUPPLY_V;
     }
-    let bfac = (1.0 - B) / (PB - VTO);
+    let bfac = (1.0 - b) / (pb - vto);
     let drain_current = |vds: f64| {
-        let beta_p = BETA_A_PER_V2 * (1.0 + LAMBDA_PER_V * vds);
+        let beta_p = beta * (1.0 + LAMBDA_PER_V * vds);
         if overdrive >= vds {
             beta_p
                 * vds
-                * (vds * (bfac * vds - B) + overdrive * (2.0 * B + 3.0 * bfac * (overdrive - vds)))
+                * (vds * (bfac * vds - b) + overdrive * (2.0 * b + 3.0 * bfac * (overdrive - vds)))
         } else {
-            beta_p * overdrive * overdrive * (B + overdrive * bfac)
+            beta_p * overdrive * overdrive * (b + overdrive * bfac)
         }
     };
     let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
@@ -291,36 +292,7 @@ fn jfet_drain_voltage(gate_v: f64) -> f64 {
 
 /// Independent level-1 NJF load line for model-card temperature parameters.
 fn jfet_drain_voltage_with_model(gate_v: f64, vto: f64, beta: f64, pb: f64) -> f64 {
-    const SUPPLY_V: f64 = 3.3;
-    const LOAD_OHMS: f64 = 1_000.0;
-    const LAMBDA_PER_V: f64 = 0.025;
-    const B: f64 = 0.8;
-    let overdrive = gate_v - vto;
-    if overdrive <= 0.0 {
-        return SUPPLY_V;
-    }
-    let bfac = (1.0 - B) / (pb - vto);
-    let drain_current = |vds: f64| {
-        let beta_p = beta * (1.0 + LAMBDA_PER_V * vds);
-        if overdrive >= vds {
-            beta_p
-                * vds
-                * (vds * (bfac * vds - B) + overdrive * (2.0 * B + 3.0 * bfac * (overdrive - vds)))
-        } else {
-            beta_p * overdrive * overdrive * (B + overdrive * bfac)
-        }
-    };
-    let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * drain_current(vds);
-    let (mut low, mut high) = (0.0, SUPPLY_V);
-    for _ in 0..100 {
-        let mid = 0.5 * (low + high);
-        if residual(mid) > 0.0 {
-            low = mid;
-        } else {
-            high = mid;
-        }
-    }
-    0.5 * (low + high)
+    jfet_drain_voltage_for_model(gate_v, vto, beta, pb, 0.8)
 }
 
 /// Independent level-1 JFET load line with optional SPICE model-card RD/RS and
@@ -1585,6 +1557,126 @@ fn nucleo_f767zi_jfet_load_line_reaches_pa4_adc1_alongside_unrelated_devices() {
         drain_samples.windows(2).all(|pair| pair[1].1 > pair[0].1),
         "the drain voltage rises monotonically toward cutoff as Vgs becomes more negative: {drain_samples:?}"
     );
+}
+
+#[test]
+fn nucleo_f767zi_jfet_parker_skellern_b_fit_reaches_adc1_with_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI profile");
+    assert_eq!(profile.name, "nucleo-f767zi");
+
+    let analog =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let b_fit =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-jfet-b-fit-adc.yaml"))
+            .expect("load matched level-1 JFET B-fit branches");
+    profile.cosim_models = analog.cosim_models;
+    profile.cosim_models.extend(b_fit.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3), ("PA4", 4)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and three matched JFET B cards");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the NTC, diode, and all JFET branches must resolve to ADC1"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+    let diode_v = diode_load_line_voltage();
+    let b_cards = [(2, 0.4), (3, 1.0), (4, 1.6)];
+    let mut cycles = 0;
+    let mut sweep = Vec::new();
+
+    for gate_v in [0.0_f64, -0.5, -1.0, -1.5] {
+        session
+            .set_signal_number("ui.jfet_b_fit.gate_v", gate_v)
+            .expect("drive the matched generic NJF branches");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and JFET B-fit netlists");
+        assert_eq!(steps.len(), 5, "all five analog circuits solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let routed_diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "the unrelated 25 °C NTC remains isolated on PA0: {ntc_v} V"
+        );
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode remains isolated on PA1: {routed_diode_v} V"
+        );
+
+        let mut drain_voltages = Vec::new();
+        for (channel, b) in b_cards {
+            let volts = signal_voltage(&session, &format!("board.analog.pa{channel}_volts"));
+            let expected = jfet_drain_voltage_for_model(gate_v, -2.0, 500e-6, 1.0, b);
+            assert!(
+                (volts - expected).abs() < 5e-5,
+                "Parker–Skellern B={b} load line at Vgs={gate_v} V should be {expected} V, got {volts} V"
+            );
+            let count = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                count,
+                "the solved B={b} voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(count),
+                "firmware-visible ADC1 conversion must report the B={b} load line"
+            );
+            drain_voltages.push(volts);
+        }
+        assert!(
+            drain_voltages[0] > drain_voltages[1] && drain_voltages[1] > drain_voltages[2],
+            "higher B raises channel current and lowers the loaded drain: {drain_voltages:?}"
+        );
+        assert!(
+            drain_voltages[0] - drain_voltages[2] > 0.05,
+            "non-default Parker–Skellern fits must remain ADC-distinguishable: {drain_voltages:?}"
+        );
+        for (channel, volts) in [(0, ntc_v), (1, routed_diode_v)] {
+            let count = expected_adc_count(volts);
+            assert_eq!(adc_channel_count(&mut bus, channel), count);
+            assert_eq!(stm32f4_adc_convert(&mut bus, channel), u32::from(count));
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 5),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+        sweep.push(drain_voltages);
+    }
+
+    for (branch, (_, b)) in b_cards.iter().enumerate() {
+        assert!(
+            sweep
+                .windows(2)
+                .all(|pair| pair[1][branch] > pair[0][branch]),
+            "B={b} branch approaches cutoff monotonically as the gate is reverse-biased: {sweep:?}"
+        );
+    }
 }
 
 #[test]

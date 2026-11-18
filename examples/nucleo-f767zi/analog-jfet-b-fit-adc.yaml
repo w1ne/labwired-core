@@ -1,0 +1,64 @@
+# Matched generic level-1 NJF channels isolate Parker–Skellern B on
+# STM32F767 ADC1_IN2/3/4. The unrelated NTC and Shockley diode stay on IN0/1.
+name: "nucleo-f767zi-analog-jfet-b-fit"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "jfet_b_fit_low"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.jfet_b_fit.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa2_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        J1 drain gate 0 NJF_B04
+        .model NJF_B04 NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=0.4 PB=1 IS=1e-30)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
+  - id: "jfet_b_fit_default"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.jfet_b_fit.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa3_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        J1 drain gate 0 NJF_B10
+        .model NJF_B10 NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=1 PB=1 IS=1e-30)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
+  - id: "jfet_b_fit_high"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.jfet_b_fit.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        J1 drain gate 0 NJF_B16
+        .model NJF_B16 NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=1.6 PB=1 IS=1e-30)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
