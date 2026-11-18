@@ -353,6 +353,30 @@ fn avr_guest_direction_loss_discards_partial_bits_and_reacquires_clock_level() {
 }
 
 #[test]
+fn avr_guest_selected_sd_cmd59_changes_following_bad_crc_response() {
+    for with_max in [false, true] {
+        for cpu_owned in [false, true] {
+            let (mut cpu, mut bus) = mixed_rig("microsd", "cs_pin: PB1", with_max);
+            if cpu_owned {
+                for device in bus.take_spi_devices("spi") {
+                    cpu.push_spi_device(device);
+                }
+            }
+            let mut guest = Guest::default();
+            guest.hardware_init();
+            guest.peer_transaction(&[0x40, 0, 0, 0, 0, 0x95], 19);
+            guest.peer_transaction(&[0x7B, 0, 0, 0, 1, 0], 19);
+            guest.peer_transaction(&[0x7A, 0, 0, 0, 0, 0, 0xFF, 0xFF], 17);
+            guest.run(&mut cpu, &mut bus);
+            assert_eq!(
+                cpu.r[17], 0x09,
+                "selected CMD59 must enable CRC: MAX={with_max}, CPU-owned={cpu_owned}"
+            );
+        }
+    }
+}
+
+#[test]
 fn avr_guest_mixed_bus_keeps_real_slave_commands_intact_and_ignores_cs_high() {
     // Each read requires one uninterrupted command across several SPDR writes.
     // The deselected command would change the subsequent read if it leaked.
@@ -375,8 +399,10 @@ fn avr_guest_mixed_bus_keeps_real_slave_commands_intact_and_ignores_cs_high() {
         (
             "microsd",
             &[0x40, 0, 0, 0, 0, 0x95],
-            &[0x77, 0, 0, 0, 0, 0],
-            &[0x69, 0, 0, 0, 0, 0],
+            // SD returns an NCR filler byte before its R1 response.
+            &[0x7A, 0, 0, 0, 0, 0, 0xFF, 0xFF],
+            // If this CMD59 leaked, CRC checking would make the next CMD58 fail.
+            &[0x7B, 0, 0, 0, 1, 0],
             1,
         ),
     ];
