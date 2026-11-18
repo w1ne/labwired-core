@@ -470,6 +470,57 @@ fn bjt_knee_temperature_voltage(
     emitter_for_vbase(0.5 * (low + high))
 }
 
+/// Independent hot Gummel–Poon load line for the TLEV=3 transport-current
+/// temperature law. The only varying model quantity is the effective `IS`.
+fn bjt_is_temperature_voltage(base_drive_v: f64, is_a: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000_000.0;
+    const BASE_OHMS: f64 = 2_000.0;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const TEMP_K: f64 = 125.0 + 273.15;
+    const THERMAL_V: f64 = 1.380_649e-23 * TEMP_K / 1.602_176_634e-19;
+    let currents = |vbe: f64, vbc: f64| {
+        let forward = (vbe / THERMAL_V).exp();
+        let reverse = (vbc / THERMAL_V).exp();
+        let transport = is_a * (forward - reverse);
+        let base_emitter = (is_a / BF) * (forward - 1.0);
+        let base_collector = (is_a / BR) * (reverse - 1.0);
+        let collector = transport - base_collector;
+        let base = base_emitter + base_collector;
+        (collector, base)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, vbe - collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, vbe - collector_v);
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 /// First backward-Euler step of the two linear CJC partitions. With MJC=0,
 /// depletion charge is a constant capacitor; XCJC=0 puts it directly on the
 /// external base, while XCJC=1 puts it behind RB at the internal base.
@@ -1936,5 +1987,131 @@ fn nrf5340dk_bjt_injection_knee_temperature_coefficients_reach_saadc() {
     assert!(
         (ikr_full - ikr_first).abs() > 0.01,
         "TIKR2 must change the reverse-active high-injection load line: {ikr_full} V vs {ikr_first} V"
+    );
+}
+
+#[test]
+fn nrf5340dk_bjt_transport_is_temperature_coefficients_reach_saadc() {
+    let system_path = root("configs/systems/nrf5340dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF5340-DK profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nrf5340dk/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let transport_is = SystemManifest::from_file(root(
+        "examples/nrf5340dk/analog-bjt-is-temperature-system.yaml",
+    ))
+    .expect("load matched TIS1/TIS2 transport-current branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(transport_is.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF5340 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF5340-DK bus");
+    configure_saadc_channels(&mut bus, 6);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile contains NTC, diode, and four generic BJT TIS branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic netlists must resolve to SAADC AIN0 through AIN5"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_is_temperature.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    const IS_NOMINAL_A: f64 = 1e-14;
+    const TIS1_PER_C: f64 = -1e-3;
+    const TIS2_PER_C2: f64 = 6e-6;
+    const DELTA_C: f64 = 100.0;
+    let hot_exponent = 1.0 + TIS1_PER_C * DELTA_C + TIS2_PER_C2 * DELTA_C * DELTA_C;
+    let first_order_exponent = 1.0 + TIS1_PER_C * DELTA_C;
+    let is_hot_a = IS_NOMINAL_A.powf(hot_exponent);
+    let is_first_order_a = IS_NOMINAL_A.powf(first_order_exponent);
+    assert!((hot_exponent - 0.96).abs() < 1e-15);
+    assert!((first_order_exponent - 0.9).abs() < 1e-15);
+
+    let ntc_v = 1.65;
+    let diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive_voltages = None;
+    for base_drive_v in [0.35_f64, 0.4, 0.45] {
+        session
+            .set_signal_number("ui.bjt_is_temperature.base_v", base_drive_v)
+            .expect("set common forward-active base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and hot BJT transport-current branches");
+        assert_eq!(steps.len(), 6, "all six generic analog branches solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected SAADC route errors: {errors:?}"
+        );
+
+        let routed_ntc_v = voltage(&session, "adc.saadc.0_volts");
+        let routed_diode_v = voltage(&session, "adc.saadc.1_volts");
+        assert!((routed_ntc_v - ntc_v).abs() < 1e-9);
+        assert!(
+            (routed_diode_v - diode_v).abs() < 2e-5,
+            "the independent Shockley diode remains isolated"
+        );
+        let actual = [
+            voltage(&session, "adc.saadc.2_volts"),
+            voltage(&session, "adc.saadc.3_volts"),
+            voltage(&session, "adc.saadc.4_volts"),
+            voltage(&session, "adc.saadc.5_volts"),
+        ];
+        let expected = [
+            bjt_is_temperature_voltage(base_drive_v, is_hot_a),
+            bjt_is_temperature_voltage(base_drive_v, is_hot_a),
+            bjt_is_temperature_voltage(base_drive_v, is_first_order_a),
+            bjt_is_temperature_voltage(base_drive_v, IS_NOMINAL_A),
+        ];
+        for (index, (actual_v, expected_v)) in actual.into_iter().zip(expected).enumerate() {
+            assert!(
+                (actual_v - expected_v).abs() < 5e-5,
+                "SAADC AIN{} independent TIS-adjusted load line should be {expected_v} V, got {actual_v} V",
+                index + 2
+            );
+        }
+        assert!(
+            (actual[0] - actual[1]).abs() < 1e-9,
+            "TIS1/TIS2 must match the explicit hot IS model card: {actual:?}"
+        );
+
+        let codes = scan_saadc_channels::<6>(&mut bus);
+        for (channel, voltage_v) in [
+            (0, routed_ntc_v),
+            (1, routed_diode_v),
+            (2, actual[0]),
+            (3, actual[1]),
+            (4, actual[2]),
+            (5, actual[3]),
+        ] {
+            assert_eq!(
+                codes[channel],
+                expected_saadc_code(voltage_v),
+                "SAADC AIN{channel} converts its routed solved voltage"
+            );
+        }
+        if base_drive_v == 0.45 {
+            high_drive_voltages = Some(actual);
+        }
+    }
+
+    let [full, explicit, first_order, nominal] =
+        high_drive_voltages.expect("high-drive sample was recorded");
+    assert!((full - explicit).abs() < 1e-9);
+    assert!(
+        (full - first_order).abs() > 0.01,
+        "TIS2 must change the transport-current load line: {full} V vs {first_order} V"
+    );
+    assert!(
+        (full - nominal).abs() > 0.005,
+        "hot TIS coefficients must change the load line from nominal IS: {full} V vs {nominal} V"
     );
 }
