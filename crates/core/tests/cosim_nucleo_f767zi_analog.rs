@@ -1102,6 +1102,121 @@ fn nucleo_f767zi_bjt_high_injection_rolloff_reaches_adc1_alongside_ntc_and_diode
 }
 
 #[test]
+fn nucleo_f767zi_pnp_bjt_high_injection_rolloff_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI profile");
+    assert_eq!(profile.name, "nucleo-f767zi");
+
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and Shockley diode netlists");
+    let high_injection = SystemManifest::from_file(root(
+        "examples/nucleo-f767zi/analog-pnp-bjt-high-injection-adc.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon PNP high-injection branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(high_injection.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries NTC, diode, and matched PNP BJT netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to distinct ADC1 channels 0 through 3"
+    );
+    for channel in 0..=4 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.bjt_pnp_high_injection.base_v", 3.3)
+        .expect("initialize matched PNP base drives");
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+
+    let expected_ntc_v = 1.65;
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive_samples = None;
+    for base_drive_v in [2.5_f64, 1.8, 0.0] {
+        session
+            .set_signal_number("ui.bjt_pnp_high_injection.base_v", base_drive_v)
+            .expect("set common PNP base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched PNP BJT branches");
+        assert_eq!(steps.len(), 4, "all four generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let rolloff_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let control_v = signal_voltage(&session, "board.analog.pa3_volts");
+        // Reflect supply, base drive and collector voltage around 1.65 V. The
+        // PNP reference is therefore independent of the PNP solver path.
+        let mirrored_drive_v = 3.3 - base_drive_v;
+        let expected_rolloff_v = 3.3 - bjt_high_injection_collector_voltage(mirrored_drive_v, true);
+        let expected_control_v =
+            3.3 - bjt_high_injection_collector_voltage(mirrored_drive_v, false);
+        assert!(
+            (rolloff_v - expected_rolloff_v).abs() < 5e-5,
+            "mirrored IKF/IKR/NKF PNP load line at base drive {base_drive_v} V should be {expected_rolloff_v} V, got {rolloff_v} V"
+        );
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "mirrored matched no-rolloff PNP load line at base drive {base_drive_v} V should be {expected_control_v} V, got {control_v} V"
+        );
+        assert!((ntc_v - expected_ntc_v).abs() < 1e-9);
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains at its independent load line"
+        );
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (2, rolloff_v), (3, control_v)] {
+            let expected_count = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "ADC1 channel {channel} conversion follows its independent netlist voltage"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 4),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+        if base_drive_v == 0.0 {
+            high_drive_samples = Some((rolloff_v, control_v));
+        }
+    }
+
+    let (rolloff_v, control_v) = high_drive_samples.expect("recorded high-drive sample");
+    assert!(
+        control_v - rolloff_v > 0.05,
+        "PNP IKF/IKR/NKF rolloff reduces collector current and lowers collector voltage: {rolloff_v} V vs {control_v} V"
+    );
+}
+
+#[test]
 fn nucleo_f767zi_bjt_terminal_resistances_reach_adc1_with_explicit_network_references() {
     let system_path = root("configs/systems/nucleo-f767zi.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI profile");
