@@ -32,6 +32,8 @@ The test compares the compiled portable firmware's positive pulse and inactive n
 - This round's pinned-import graph and native behavior tests: 8.96 s including compilation; both tests executed in 0.00 s.
 - Portable firmware module build: 0.18 s.
 - First `wasm-pack` browser-runtime build: 5m56s, including the initial Wasm dependency build.
-- Chromium fixture run: about 1.4 s.
+- This round's provenance-bound native tests: 5.89 s on the first run and 9.54 s on the final rerun, including compilation; both tests executed in 0.00 s.
+- This round's warm `wasm-pack` browser-runtime build: 12.30 s.
+- Chromium fixture run: 2.46 s in Chromium 149.0.7827.55 with Playwright 1.58.2; the browser returned six positive logic edges and zero negative-control edges.
 
 These are reproducible lane measurements for this fixture, not a speed comparison. No comparable CH32V003 Rust-model onboarding run was measured, so no speed claim is made.

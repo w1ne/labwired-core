@@ -220,13 +220,32 @@ fn flex_heypcb_pomodoro_behavior_ports_match_the_pinned_generic_import_graph() {
     let imported: serde_json::Value = serde_json::from_str(POMODORO_IMPORT).unwrap();
     let source_map: serde_json::Value = serde_json::from_str(POMODORO_SOURCE_MAP).unwrap();
 
+    assert_eq!(imported["source"]["repository"], "HeyPCB/pomodoro-pal");
+    assert_eq!(source_map["source"]["repository"], "HeyPCB/pomodoro-pal");
     assert_eq!(
         imported["source"]["revision"], source_map["source"]["revision"],
         "MCP import snapshot and behavior source map must use the same immutable project revision"
     );
     assert_eq!(
-        imported["source"]["files"]["schematic"]["git_blob"],
-        source_map["source"]["files"]["schematic"]["git_blob"]
+        imported["source"]["revision"], "1d6e50ff9998978e6f4521895042ae240fff7c42",
+        "the source-backed demonstration must stay on its reviewed immutable revision"
+    );
+    assert_eq!(imported["source"]["license_spdx"], "CERN-OHL-S-2.0");
+    assert_eq!(source_map["source"]["license_spdx"], "CERN-OHL-S-2.0");
+    for artifact in ["schematic", "pcb", "license"] {
+        assert_eq!(
+            imported["source"]["files"][artifact], source_map["source"]["files"][artifact],
+            "MCP import and source map must pin the same {artifact} file"
+        );
+    }
+    assert_eq!(
+        source_map["source"]["files"]["original_firmware_hex"]["path"],
+        "firmware/pomodoro.hex"
+    );
+    assert_eq!(
+        source_map["source"]["files"]["original_firmware_hex"]["git_blob"],
+        "be13b893def87531ac8f06468b81b1da3b93c963",
+        "the original firmware reference must remain pinned even though it is not executed"
     );
     assert_eq!(
         imported["generic_import"]["schematic"]["mode"],

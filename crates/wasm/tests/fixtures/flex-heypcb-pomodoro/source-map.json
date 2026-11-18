@@ -12,6 +12,10 @@
         "path": "kicad/pomodoro_pal.kicad_pcb",
         "git_blob": "561268221ce4d066582156a71ffc5ec3e071f047"
       },
+      "license": {
+        "path": "LICENSE",
+        "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1"
+      },
       "original_firmware_hex": {
         "path": "firmware/pomodoro.hex",
         "git_blob": "be13b893def87531ac8f06468b81b1da3b93c963"
