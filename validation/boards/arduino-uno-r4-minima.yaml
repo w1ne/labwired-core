@@ -29,4 +29,5 @@ models:
   - crates/core/src/peripherals/ra_gpt.rs
   - crates/core/src/peripherals/ra_icu.rs
   - crates/core/src/peripherals/ra_iic.rs
+  - crates/core/src/peripherals/ra_mstp.rs
   - crates/core/src/peripherals/spi.rs
