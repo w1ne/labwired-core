@@ -28,6 +28,19 @@ fn js_trace_cursor(cursor: f64) -> Result<u64, JsValue> {
     Ok(cursor as u64)
 }
 
+fn js_advance_delta(delta_ns: f64) -> Result<u64, JsValue> {
+    if !delta_ns.is_finite()
+        || delta_ns < 0.0
+        || delta_ns.fract() != 0.0
+        || delta_ns > MAX_SAFE_JS_INTEGER
+    {
+        return Err(JsValue::from_str(
+            "advance delta must be a nonnegative safe integer Number",
+        ));
+    }
+    Ok(delta_ns as u64)
+}
+
 #[derive(Serialize)]
 struct BrowserSignalBinding {
     name: String,
@@ -125,10 +138,9 @@ impl WasmFlexRuntime {
         self.runtime.write(port, value).map_err(js_error)
     }
 
-    pub fn advance_ns(&mut self, delta_ns: u32) -> Result<(), JsValue> {
-        self.runtime
-            .advance_ns(u64::from(delta_ns))
-            .map_err(js_error)
+    pub fn advance_ns(&mut self, delta_ns: f64) -> Result<(), JsValue> {
+        let delta_ns = js_advance_delta(delta_ns)?;
+        self.runtime.advance_ns(delta_ns).map_err(js_error)
     }
 
     pub fn time_ns(&self) -> f64 {

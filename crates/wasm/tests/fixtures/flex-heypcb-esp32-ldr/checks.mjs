@@ -18,6 +18,26 @@ export async function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes,
   equal(WebAssembly.Module.imports(firmware).map(({ module, name }) => `${module}.${name}`).sort(),
     ['labwired.advance_ns', 'labwired.read', 'labwired.write'], 'unexpected portable firmware imports');
 
+  // The UI-facing host method must use Flex's exact Number time range. A u32
+  // binding capped a single advance at about 4.29 seconds despite the
+  // runtime's wider nanosecond trace range.
+  const advanceProbe = WasmFlexRuntime.new_from_yaml(
+    'schema_version: 1\nname: safe host advance\nports: []\ncosim_models: []\n',
+  );
+  try {
+    const longDelta = 4_294_967_296;
+    advanceProbe.advance_ns(longDelta);
+    check(Number(advanceProbe.time_ns()) === longDelta,
+      'host advance must accept an exact delta larger than u32');
+    for (const invalid of [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      let rejected = false;
+      try { advanceProbe.advance_ns(invalid); } catch { rejected = true; }
+      check(rejected, `host advance must reject invalid delta ${String(invalid)}`);
+    }
+    check(Number(advanceProbe.time_ns()) === longDelta,
+      'rejected host deltas must leave simulated time unchanged');
+  } finally { advanceProbe.free(); }
+
   let runReport;
   const run = (lux) => {
     const runtime = WasmFlexRuntime.new_from_yaml(system);
@@ -171,6 +191,6 @@ export async function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes,
     },
     native_model_equality: true,
     run_report: runReport,
-    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'named-digital-port-aliases', 'named-analog-port-aliases', 'bright-output', 'dark-negative-control', 'oscilloscope-samples', 'oscilloscope-nanosecond-time-unit'],
+    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'named-digital-port-aliases', 'named-analog-port-aliases', 'bright-output', 'dark-negative-control', 'oscilloscope-samples', 'oscilloscope-nanosecond-time-unit', 'safe-integer-host-advance'],
   };
 }
