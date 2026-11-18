@@ -1457,7 +1457,9 @@ pub fn try_build(
         }
         "tsc" => Box::new(crate::peripherals::tsc::Tsc::new()),
         "fmc" => match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
-            Some("stm32h7_boot_disable") => Box::new(crate::peripherals::fmc::H7BootDisable),
+            Some("stm32h7_boot_disable") => {
+                Box::new(crate::peripherals::fmc::H7BootDisable::default())
+            }
             _ => Box::new(crate::peripherals::fmc::Fmc::new()),
         },
         "exti" => {

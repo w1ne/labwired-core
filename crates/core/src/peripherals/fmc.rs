@@ -208,19 +208,32 @@ mod tests {
     }
 }
 /// Narrow STM32H723 CMSIS startup compatibility: the reset-time FMC bank-1
-/// disable write only. External memory and every other FMC operation remain
-/// unmodelled, so reads, partial writes and other values explicitly fail.
-#[derive(Debug, Default)]
-pub struct H7BootDisable;
+/// disable write and BCR1 readback only. External memory and every other FMC
+/// operation remain unmodelled, so partial writes and other values fail.
+#[derive(Debug)]
+pub struct H7BootDisable {
+    bcr1: u32,
+}
+
+impl Default for H7BootDisable {
+    fn default() -> Self {
+        // FMC_BCR1 reset value from STM32H723 CMSIS SVD / RM0468.
+        Self { bcr1: 0x0000_30db }
+    }
+}
 
 impl crate::Peripheral for H7BootDisable {
     fn needs_legacy_walk(&self) -> bool {
         false
     }
-    fn read(&self, _offset: u64) -> SimResult<u8> {
-        Err(crate::SimulationError::Other(
-            "STM32H7 FMC reads are not modelled".into(),
-        ))
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        if offset < 4 {
+            Ok((self.bcr1 >> (offset * 8)) as u8)
+        } else {
+            Err(crate::SimulationError::Other(
+                "STM32H7 FMC reads are not modelled".into(),
+            ))
+        }
     }
     fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
         Err(crate::SimulationError::Other(
@@ -229,6 +242,7 @@ impl crate::Peripheral for H7BootDisable {
     }
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         if offset == 0 && value == 0x0000_30d2 {
+            self.bcr1 = value;
             Ok(())
         } else {
             Err(crate::SimulationError::Other(
@@ -245,12 +259,15 @@ mod h7_boot_disable_tests {
 
     #[test]
     fn permits_only_stock_disable_and_rejects_fmc_use() {
-        let mut fmc = H7BootDisable;
+        let mut fmc = H7BootDisable::default();
+        assert_eq!(fmc.read_u32(0).unwrap(), 0x30db);
         assert!(fmc.write_u32(0, 0x30d2).is_ok());
+        assert_eq!(fmc.read_u32(0).unwrap(), 0x30d2);
         assert!(fmc.write_u32(0, 0x30d3).is_err()); // bank enable
         assert!(fmc.write_u32(0, 0x30d0).is_err()); // other configuration
+        assert_eq!(fmc.read_u32(0).unwrap(), 0x30d2);
         assert!(fmc.write_u32(4, 0x30d2).is_err());
         assert!(fmc.write(0, 0xd2).is_err());
-        assert!(fmc.read(0).is_err());
+        assert!(fmc.read(4).is_err());
     }
 }

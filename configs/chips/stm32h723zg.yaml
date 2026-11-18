@@ -125,9 +125,9 @@ peripherals:
       debug_schema: "../peripherals/stm32h723zg/flash-acr.yaml"
 
   # CMSIS SystemInit disables FMC bank 1 by the fixed 32-bit BTCR1 write.
-  # The boot shim rejects all other writes, reads and partial accesses; it
-  # does not model FMC. Remaining FMC registers and external-memory behavior
-  # remain unmapped.
+  # The boot shim supplies BCR1 reset/readback and rejects all other writes
+  # and partial writes; it does not model FMC. Remaining FMC registers and
+  # external-memory behavior remain unmapped.
   - id: "fmc_bank1_boot_disable"
     type: "fmc"
     base_address: 0x52004000
