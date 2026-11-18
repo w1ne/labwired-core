@@ -139,6 +139,7 @@ const ADC1_EOC: u32 = 1 << 1;
 const ADC1_SCAN: u32 = 1 << 8;
 const ADC1_EOCIE: u32 = 1 << 5;
 const ADC1_DMA: u32 = 1 << 8;
+const ADC1_CONT: u32 = 1 << 1;
 const ADC1_IRQ: u32 = 18;
 const ADC1_IRQ_BIT: u32 = 1 << (ADC1_IRQ % 32);
 
@@ -164,6 +165,7 @@ const DMA1_CCR1_MSIZE_HALFWORD: u32 = 1 << 10;
 
 static mut ADC1_DMA_SCAN_RESULTS: [u16; 13] = [0; 13];
 static mut ADC1_DMA_CIRCULAR_RESULTS: [u16; 2] = [0; 2];
+static mut ADC1_DMA_CONTINUOUS_RESULTS: [u16; 4] = [0; 4];
 
 const I2C1_BASE: u32 = 0x4000_5400;
 const I2C1_CR1: u32 = I2C1_BASE + 0x00;
@@ -329,6 +331,7 @@ fn main() -> ! {
     smoke_adc1_channel0();
     smoke_adc1_dma_scan_rank_boundaries();
     smoke_adc1_dma_circular_two_laps();
+    smoke_adc1_dma_continuous_two_groups();
     unsafe { smoke_systick_exception_state() };
     unsafe { smoke_systick_external_pause_resume() };
     unsafe { smoke_systick_handler_delivery() };
@@ -4102,6 +4105,73 @@ fn smoke_adc1_dma_circular_two_laps() {
     put_flag(channel_flags_cleared);
     putbytes(b" NVIC_CLEAR=");
     put_flag(pending_survives_clear && nvic_pending_cleared);
+    putline(if passed { b" ok" } else { b" FAIL" });
+}
+
+/// Start one continuous two-rank ADC scan and let DMA drain two complete
+/// groups. After CNDTR reaches zero, further ADC requests must not overwrite
+/// the results even though ADC CONT has restarted conversion.
+fn smoke_adc1_dma_continuous_two_groups() {
+    let read = |address: u32| unsafe { read_volatile(address as *const u32) };
+    let write = |address: u32, value: u32| unsafe { write_volatile(address as *mut u32, value) };
+    let expected = [0x03FFu16, 0x07FF, 0x03FF, 0x07FF];
+    let rank_channels = (1 << 5) | (1 << 15); // SQ1=IN0, SQ2=IN1
+
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
+    write(DMA1_CNDTR1, expected.len() as u32);
+    write(DMA1_CPAR1, ADC1_DR);
+    let results = core::ptr::addr_of_mut!(ADC1_DMA_CONTINUOUS_RESULTS).cast::<u16>();
+    write(DMA1_CMAR1, results as u32);
+    write(
+        DMA1_CCR1,
+        DMA1_CCR1_EN
+            | DMA1_CCR1_TCIE
+            | DMA1_CCR1_MINC
+            | DMA1_CCR1_PSIZE_HALFWORD
+            | DMA1_CCR1_MSIZE_HALFWORD,
+    );
+
+    let scan_base = ADC1_ADON | ADC1_DMA | ADC1_CONT | ADC1_SOFTWARE_TRIGGER;
+    write(ADC1_CR1, ADC1_SCAN);
+    write(ADC1_SQR3, rank_channels);
+    write(ADC1_SQR1, 1 << 20); // L=1 -> two ranks
+    write(ADC1_CR2, scan_base);
+    write(ADC1_CR2, scan_base | ADC1_SWSTART);
+
+    let mut complete = false;
+    for _ in 0..1_000_000 {
+        if read(DMA1_ISR) & DMA1_TCIF1 != 0 {
+            complete = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+
+    // Give CONT several conversion intervals to issue further requests. A
+    // normal-mode channel with CNDTR zero must ignore them; EN remains set
+    // until software disables the channel.
+    for _ in 0..256 {
+        core::hint::spin_loop();
+    }
+    write(ADC1_CR2, 0);
+    let remaining = read(DMA1_CNDTR1);
+    let dma_enabled = read(DMA1_CCR1) & DMA1_CCR1_EN != 0;
+    let sequence_matches = expected.iter().enumerate().all(|(rank, expected_value)| {
+        (unsafe { read_volatile(results.add(rank)) }) == *expected_value
+    });
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
+
+    let passed = complete && remaining == 0 && dma_enabled && sequence_matches;
+    putbytes(b"ADC1 F1 CONTINUOUS GROUPS=2 COMPLETE=");
+    put_flag(complete);
+    putbytes(b" REM=");
+    put_hex32(remaining);
+    putbytes(b" DMA_EN=");
+    put_flag(dma_enabled);
+    putbytes(b" SEQ=");
+    put_flag(sequence_matches);
     putline(if passed { b" ok" } else { b" FAIL" });
 }
 

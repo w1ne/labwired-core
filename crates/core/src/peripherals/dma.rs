@@ -670,7 +670,7 @@ impl Peripheral for Dma1 {
         let chan_idx = (request_id.saturating_sub(1)) as usize;
         if chan_idx < 7 {
             let chan = &mut self.channels[chan_idx];
-            if (chan.ccr & 1) != 0 {
+            if (chan.ccr & 1) != 0 && chan.cndtr > 0 {
                 // Channel is enabled: latch the request for the arbiter. In
                 // scheduler mode the bus follows this with
                 // `collect_scheduled_events`, which arms the arbiter event.
@@ -946,6 +946,31 @@ mod tests {
         assert_eq!(reqs[0].addr, 0x2000_0010);
         // CH1 TCIF is bit 1.
         assert_ne!(dma.read_reg(0x00) & (1 << 1), 0);
+        assert_ne!(dma.read_reg(0x08) & 1, 0, "normal-mode TC leaves EN set");
+    }
+
+    /// RM0008 §13.3.1: a non-circular channel serves no further peripheral
+    /// requests once CNDTR reaches zero; software must disable it before
+    /// reloading the count. EN itself remains set at transfer complete.
+    #[test]
+    fn normal_mode_ignores_peripheral_requests_after_transfer_complete() {
+        let mut dma = Dma1::new();
+        dma.write_reg(0x0C, 1); // CH1 CNDTR
+        dma.write_reg(0x10, 0x4001_244C); // ADC1 DR
+        dma.write_reg(0x14, 0x2000_0100); // result
+        dma.write_reg(0x08, 1 | (1 << 1) | (1 << 7)); // EN | TCIE | MINC
+
+        dma.dma_request(1);
+        assert!(dma.tick().dma_requests.is_some());
+        assert_eq!(dma.read_reg(0x0C), 0);
+        assert_ne!(dma.read_reg(0x00) & (1 << 1), 0, "TCIF is set");
+        assert_ne!(dma.read_reg(0x08) & 1, 0, "EN remains set at TC");
+
+        dma.dma_request(1);
+        assert_eq!(dma.channels[0].requests, 0, "zero-count request is ignored");
+        assert!(!dma.channels[0].active);
+        assert!(dma.tick().dma_requests.is_none());
+        assert_eq!(dma.read_reg(0x0C), 0, "CNDTR stays at zero");
     }
 
     /// RM0008 §13.3.1: peripheral circular mode reloads CNDTR and the
