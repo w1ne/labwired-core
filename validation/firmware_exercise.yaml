@@ -175,6 +175,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: stm32h533re
+    arch: cortex-m33
+    headline: "No beyond-rubric peripheral behavior is claimed. The NUCLEO-H533RE profile exercises only USART2 output and GPIOA LED control in its committed smoke."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   # ── Chips with NO tier1 fixture (not in the rubric grid) ─────────────────
   - id: ch32l103c8t6
     arch: riscv32imac

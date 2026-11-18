@@ -296,6 +296,10 @@
       "expect": "TIER1 clock PASS",
       "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
     },
+    "stm32h533re": {
+      "how": "needs-build",
+      "why": "NUCLEO-H533RE descriptor and USART2/GPIOA model are newer than the installed CLI this gate checks. The committed source-tree smoke boots and prints NUCLEO_H533RE_OK in examples/nucleo-h533re; clean-install release support starts with a release containing this chip model."
+    },
     "stm32h563": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/stm32h563.elf",

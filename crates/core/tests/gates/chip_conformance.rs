@@ -837,7 +837,7 @@ const CHIPS: &[ChipConf] = &[
         yaml: "configs/chips/stm32h533re.yaml",
         reset_oracle: None,
         behavior_gate: Some(
-            "stm32h533re_walk_differential::stm32h533re_boot_walk_vs_scheduler_is_byte_identical",
+            "stm32h563_walk_differential::stm32h533re_boot_walk_vs_scheduler_is_byte_identical",
         ),
     },
     ChipConf {
