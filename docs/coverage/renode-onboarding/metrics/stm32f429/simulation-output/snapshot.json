@@ -5,22 +5,22 @@
     "registers": [
       4096,
       268435456,
-      34688,
+      35712,
       0,
       21075,
-      1073875988,
       0,
+      1073875988,
       537001968,
       1073759232,
       1,
       1,
       0,
-      134262739,
+      134265995,
       537001840,
-      134260537,
-      134261786
+      134263759,
+      134265096
     ],
-    "pc": 134261786,
+    "pc": 134265096,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "fd661dd433a48219c99c9006e64508b3cd36820ea50a90a24b4370226da473b3",
+  "firmware_hash": "9b063a3aa4ca8855b48daa1ae74ec6fa02c984c03b4e3084f59df194acf89f4f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-stm32f429-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f429.yaml",

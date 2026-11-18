@@ -963,6 +963,111 @@ fn smoke_adc1_scan() -> bool {
     }
 }
 
+/// RM0090 injected conversion group: JSQ3/JSQ4 select IN1/IN2 for a two-rank
+/// group. The first JDR write must not set JEOC or assert IRQ; both happen only
+/// after the second rank. Regular DR/EOC remain independent of injected data.
+#[cfg(feature = "stm32f429-adc-injected")]
+fn smoke_adc1_injected_scan() -> bool {
+    const ADC1: u32 = 0x4001_2000;
+    const ADC_SR: *mut u32 = ADC1 as *mut u32;
+    const ADC_CR1: *mut u32 = (ADC1 + 0x04) as *mut u32;
+    const ADC_CR2: *mut u32 = (ADC1 + 0x08) as *mut u32;
+    const ADC_JSQR: *mut u32 = (ADC1 + 0x38) as *mut u32;
+    const ADC_JDR1: *const u32 = (ADC1 + 0x3C) as *const u32;
+    const ADC_JDR2: *const u32 = (ADC1 + 0x40) as *const u32;
+    const ADC_DR: *const u32 = (ADC1 + 0x4C) as *const u32;
+    const ADC1_IRQ_BIT: u32 = 1 << 18;
+    const NVIC_ISPR0: *const u32 = 0xE000_E200 as *const u32;
+    const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
+    const ADON: u32 = 1;
+    const SCAN: u32 = 1 << 8;
+    const JEOCIE: u32 = 1 << 7;
+    const JSWSTART: u32 = 1 << 22;
+    const JEOC: u32 = 1 << 2;
+    const EOC: u32 = 1 << 1;
+
+    unsafe { write_volatile(ADC_CR2, 0) };
+    // Preserve the previous regular result while clearing any legacy EOC.
+    // Injected conversions must update JDRx without changing DR.
+    let regular_data_before = unsafe { read_volatile(ADC_DR) };
+    unsafe {
+        write_volatile(ADC_SR, 0);
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        write_volatile(ADC_CR1, SCAN | JEOCIE);
+        // JL=1 is two ranks. Short injected sequences use JSQ3 then JSQ4.
+        write_volatile(ADC_JSQR, (1 << 20) | (1 << 10) | (2 << 15));
+        write_volatile(ADC_CR2, ADON);
+        write_volatile(ADC_CR2, ADON | JSWSTART);
+    }
+
+    let mut first_rank_ready = false;
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(ADC_JDR1) } & 0x0FFF == 0x03FF {
+            first_rank_ready = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let no_early_jeoc = first_rank_ready && unsafe { read_volatile(ADC_SR) } & JEOC == 0;
+    let no_early_irq = first_rank_ready && unsafe { read_volatile(NVIC_ISPR0) } & ADC1_IRQ_BIT == 0;
+
+    let mut group_done = false;
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(ADC_SR) } & JEOC != 0 {
+            group_done = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let jeoc_irq = group_done && unsafe { read_volatile(NVIC_ISPR0) } & ADC1_IRQ_BIT != 0;
+    let first_code = unsafe { read_volatile(ADC_JDR1) } & 0x0FFF;
+    let second_code = unsafe { read_volatile(ADC_JDR2) } & 0x0FFF;
+    let regular_untouched = unsafe { read_volatile(ADC_SR) } & EOC == 0
+        && unsafe { read_volatile(ADC_DR) } == regular_data_before;
+
+    unsafe {
+        write_volatile(ADC_SR, !JEOC);
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+    }
+    let jeoc_cleared = unsafe { read_volatile(ADC_SR) } & JEOC == 0;
+    let irq_released = unsafe { read_volatile(NVIC_ISPR0) } & ADC1_IRQ_BIT == 0;
+    unsafe { write_volatile(ADC_CR2, 0) };
+    let mut stopped = unsafe { read_volatile(ADC_CR2) } & ADON == 0;
+    for _ in 0..64 {
+        stopped &= unsafe { read_volatile(ADC_SR) } & JEOC == 0;
+        core::hint::spin_loop();
+    }
+    unsafe { write_volatile(ADC_CR1, 0) };
+
+    let passed = first_rank_ready
+        && no_early_jeoc
+        && no_early_irq
+        && group_done
+        && jeoc_irq
+        && first_code == 0x03FF
+        && second_code == 0x07FF
+        && regular_untouched
+        && jeoc_cleared
+        && irq_released
+        && stopped;
+    send(b"adc1 injected jdr=");
+    send_hex(first_code);
+    send(b",");
+    send_hex(second_code);
+    send(b" jeoc=");
+    send(if group_done { b"1" } else { b"0" });
+    send(b" irq=");
+    send(if jeoc_irq && no_early_irq { b"1" } else { b"0" });
+    send(b" clear=");
+    send(if jeoc_cleared && irq_released && stopped {
+        b"1"
+    } else {
+        b"0"
+    });
+    send(if passed { b" ok\r\n" } else { b" FAIL\r\n" });
+    passed
+}
+
 fn send_hex(value: u32) {
     const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
     for shift in [28, 24, 20, 16, 12, 8, 4, 0] {
@@ -1294,6 +1399,9 @@ fn main() -> ! {
 
     #[cfg(any(feature = "stm32f429-adc-scan", feature = "stm32f412-adc-scan"))]
     let _adc1_scan_ok = smoke_adc1_scan();
+
+    #[cfg(feature = "stm32f429-adc-injected")]
+    let _adc1_injected_ok = smoke_adc1_injected_scan();
 
     #[cfg(feature = "stm32f429-spi1")]
     let _spi1_ok = smoke_spi1();

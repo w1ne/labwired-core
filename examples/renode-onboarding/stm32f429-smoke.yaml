@@ -1,5 +1,5 @@
 # Cortex-M4 smoke against the imported STM32F429 system, including ADC1_IN1
-# on a 25% potentiometer test fixture (0.825 V against 3.3 V).
+# (25%) and ADC1_IN2 (50%) potentiometer test fixtures (not board parts).
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabihf/release/firmware-stm32f429-smoke"
@@ -29,6 +29,7 @@ assertions:
   - uart_contains: "adc1 ovr=eocs:1 flag=1 irq=1 clear=1 released=1 resume=1 ok"
   - uart_contains: "adc1 scan=000003FF,000007FF irq=1 pending=1 end=1 released=1 ok"
   - uart_contains: "adc1 scan_cont_groups=000007FF,000007FF,000007FF groups=3 irq=1 ovr=0 stop=1 ok"
+  - uart_contains: "adc1 injected jdr=000003FF,000007FF jeoc=1 irq=1 clear=1 ok"
   - gpio_edges:
       pin: "gpioPortD:12"
       min_edges: 1
