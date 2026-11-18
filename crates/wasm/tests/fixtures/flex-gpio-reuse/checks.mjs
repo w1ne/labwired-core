@@ -24,16 +24,17 @@ export async function runGpioReuseChecks(WasmFlexRuntime, system, firmwareBytes,
       })).sort((a, b) => a.time_ns - b.time_ns || a.signal.localeCompare(b.signal)),
     };
   };
-  const run = (system, pulses) => {
+  const run = (system, pulses, hasSecondLed = false) => {
     const runtime = WasmFlexRuntime.new_from_yaml(system);
     try {
+      const secondLedPort = hasSecondLed ? runtime.port_id('led_state_2') : 0xffffffff;
       const instance = new WebAssembly.Instance(firmware, { labwired: {
         read: (port) => runtime.read(port),
         write: (port, value) => runtime.write(port, value),
         advance_ns: (delta) => runtime.advance_ns(delta),
       } });
       const result = instance.exports.run(
-        runtime.port_id('drive'), runtime.port_id('led_state'), pulses,
+        runtime.port_id('drive'), runtime.port_id('led_state'), secondLedPort, pulses,
       );
       return { result, time_ns: Number(runtime.time_ns()), trace: trace(runtime) };
     } finally {
@@ -49,19 +50,20 @@ export async function runGpioReuseChecks(WasmFlexRuntime, system, firmwareBytes,
           return r.text();
         });
   };
-  const fixture = (yaml, name, expectedCase) => {
-    const positive = run(yaml, 0);
+  const fixture = (yaml, name, expectedCase, hasSecondLed = false) => {
+    const positive = run(yaml, 0, hasSecondLed);
     equal(positive, expectedCase.positive, name + ' positive run differs from the native reference');
     check(positive.result === 1, name + ' did not observe every LED pulse');
     check(positive.time_ns === 5000, name + ' positive run duration');
-    check(positive.trace.edges.length === 8, name + ' positive edge count');
+    const expectedEdges = hasSecondLed ? 12 : 8;
+    check(positive.trace.edges.length === expectedEdges, name + ' positive edge count');
     check(positive.trace.dropped === 0 && positive.trace.time_unit === 'ns', name + ' positive trace quality');
-    const negative = run(yaml, 1);
+    const negative = run(yaml, 1, hasSecondLed);
     equal(negative, expectedCase.negative, name + ' negative control differs from the native reference');
     check(negative.result === 0 && negative.trace.edges.length === 0, name + ' negative control activated the LED');
     return { positive, negative };
   };
-  const pomodoro = fixture(system, 'HeyPCB Pomodoro Pal', expected.pomodoro);
+  const pomodoro = fixture(system, 'HeyPCB Pomodoro Pal', expected.pomodoro, true);
   const arduinoUno = fixture(await load('arduino-uno.yaml'), 'Arduino Uno model', expected.arduino_uno);
   return {
     status: 'passed',
@@ -71,7 +73,7 @@ export async function runGpioReuseChecks(WasmFlexRuntime, system, firmwareBytes,
     bindings: {
       heypcb_pomodoro: {
         drive: 'source.U1.PD6',
-        observable: 'source.D1.logic_state',
+        observables: ['source.D1.logic_state', 'source.D2.logic_state'],
         positive_edges: pomodoro.positive.trace.edges.length,
         negative_edges: pomodoro.negative.trace.edges.length,
       },
@@ -84,7 +86,7 @@ export async function runGpioReuseChecks(WasmFlexRuntime, system, firmwareBytes,
       },
     },
     native_model_equality: true,
-    checks: ['portable-firmware-execution', 'two-board-bindings',
+    checks: ['portable-firmware-execution', 'two-board-bindings', 'two-source-led-outputs',
       'held-out-asymmetric-pulse-workload', 'native-model-equality', 'positive-output', 'negative-control'],
   };
 }
