@@ -11,13 +11,45 @@
   "positive_led_edges": 4,
   "negative_adc_code": 0,
   "negative_led_edges": 0,
+  "analog_trace": {
+    "positive": {
+      "channels": [
+        {
+          "name": "source-u4-gl5528.voltage_mv",
+          "unit": "mV"
+        }
+      ],
+      "dropped": 0,
+      "samples": [
+        [0, 2751],
+        [1000, 3294],
+        [2000, 3294],
+        [3000, 3294]
+      ]
+    },
+    "negative": {
+      "channels": [
+        {
+          "name": "source-u4-gl5528.voltage_mv",
+          "unit": "mV"
+        }
+      ],
+      "dropped": 0,
+      "samples": [
+        [0, 2751],
+        [1000, 0],
+        [2000, 0]
+      ]
+    }
+  },
   "native_model_equality": true,
   "checks": [
     "portable-firmware-execution",
     "native-model-equality",
     "pinned-source-mapping",
     "bright-output",
-    "dark-negative-control"
+    "dark-negative-control",
+    "oscilloscope-samples"
   ],
   "browser": "156.0.8078.79",
   "playwright": "1.58.2",

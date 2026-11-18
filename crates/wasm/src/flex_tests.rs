@@ -514,6 +514,33 @@ fn heypcb_ldr_reference(runtime: &mut FlexRuntime, lux: f64) -> serde_json::Valu
         "led_final": runtime.read(led_state).unwrap(),
         "time_ns": runtime.time_ns(),
         "trace": pomodoro_digital_evidence(runtime),
+        "analog_trace": heypcb_ldr_analog_evidence(runtime),
+    })
+}
+
+fn heypcb_ldr_analog_evidence(runtime: &FlexRuntime) -> serde_json::Value {
+    let batch = runtime.analog_trace_snapshot(0);
+    assert_eq!(
+        batch.channels,
+        [labwired_core::analog::AnalogChannel {
+            name: "source-u4-gl5528.voltage_mv".to_owned(),
+            unit: "mV".to_owned(),
+        }],
+        "the registered LDR output must be visible to the existing oscilloscope trace"
+    );
+    assert!(
+        !batch.samples.is_empty(),
+        "the LDR scope trace must contain samples"
+    );
+    serde_json::json!({
+        "channels": batch.channels,
+        "dropped": batch.dropped,
+        "next_cursor": batch.next_cursor,
+        "samples": batch.samples.into_iter().map(|sample| serde_json::json!({
+            "cycle": sample.cycle,
+            "time_ns": sample.time_ns,
+            "values": sample.values,
+        })).collect::<Vec<_>>(),
     })
 }
 

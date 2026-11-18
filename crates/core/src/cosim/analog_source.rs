@@ -9,10 +9,12 @@
 //! existing model and publishes its millivolt output into CosimRunner.
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, MutexGuard};
 
 use labwired_config::CosimModelConfig;
 use serde_yaml::Value;
 
+use crate::analog::{AnalogChannel, AnalogTrace, AnalogTraceHandle};
 use crate::bus::sim_inputs::AnalogSource;
 use crate::cosim::{CosimAdapter, CosimInputKind, CosimSignalValue, CosimStep, CosimStepResult};
 use crate::peripherals::kit::registry::build_analog_source;
@@ -35,6 +37,8 @@ struct AnalogSourceAdapter {
     input_units: HashMap<String, String>,
     input_defaults: HashMap<String, CosimSignalValue>,
     output_alias: String,
+    trace: Option<(AnalogTraceHandle, usize)>,
+    trace_cycle: u64,
 }
 
 impl AnalogSourceAdapter {
@@ -106,6 +110,8 @@ impl AnalogSourceAdapter {
             input_units,
             input_defaults,
             output_alias: config.outputs.keys().next().unwrap().clone(),
+            trace: None,
+            trace_cycle: 0,
         })
     }
 }
@@ -130,12 +136,32 @@ impl CosimAdapter for AnalogSourceAdapter {
             })?;
         }
 
+        let output_mv = self.source.output_mv();
+        if let Some((trace, channel_base)) = &self.trace {
+            lock_analog_trace(trace).push(
+                *channel_base,
+                self.trace_cycle,
+                step.time_ns,
+                &[f64::from(output_mv)],
+            );
+        }
+        self.trace_cycle = self.trace_cycle.saturating_add(1);
+
         Ok(CosimStepResult {
             outputs: BTreeMap::from([(
                 self.output_alias.clone(),
-                CosimSignalValue::I64(i64::from(self.source.output_mv())),
+                CosimSignalValue::I64(i64::from(output_mv)),
             )]),
         })
+    }
+
+    fn attach_analog_trace(&mut self, trace: &AnalogTraceHandle, channel_prefix: &str) {
+        let channel = AnalogChannel {
+            name: format!("{channel_prefix}{}", self.output_alias),
+            unit: "mV".to_owned(),
+        };
+        let channel_base = lock_analog_trace(trace).register_channels(&[channel]);
+        self.trace = Some((Arc::clone(trace), channel_base));
     }
 
     fn input_kind(&self, name: &str) -> Option<CosimInputKind> {
@@ -150,5 +176,12 @@ impl CosimAdapter for AnalogSourceAdapter {
 
     fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {
         self.input_defaults.get(name).cloned()
+    }
+}
+
+fn lock_analog_trace(trace: &AnalogTraceHandle) -> MutexGuard<'_, AnalogTrace> {
+    match trace.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
     }
 }

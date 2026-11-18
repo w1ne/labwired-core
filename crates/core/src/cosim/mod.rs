@@ -111,11 +111,11 @@ pub trait CosimAdapter: Send {
     /// Adopt the runner's shared analog-sample ring, naming this model's
     /// channels `<channel_prefix><name>`.
     ///
-    /// Only the in-core analog engine implements this; every other adapter
-    /// produces no waveform of its own, and a default that fabricated one
-    /// would put a line on the oscilloscope that nothing measured. The runner
-    /// calls it on every model, so an adapter that later grows a waveform has
-    /// one place to publish it.
+    /// The circuit solver records its probes, and registered analog-source
+    /// adapters record their modeled scalar output. Discrete behavior adapters
+    /// leave this empty: a Boolean signal alone is not an electrical waveform.
+    /// The runner calls this on every model so each producer can publish into
+    /// the existing oscilloscope ring.
     fn attach_analog_trace(&mut self, trace: &AnalogTraceHandle, channel_prefix: &str) {
         let _ = (trace, channel_prefix);
     }

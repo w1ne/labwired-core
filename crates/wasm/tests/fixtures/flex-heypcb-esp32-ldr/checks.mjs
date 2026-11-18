@@ -28,6 +28,12 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
         ports.lux, ports.sensor_mv, ports.user_led_drive, ports.user_led_state, lux,
       );
       const batch = canonical(runtime.digital_trace_snapshot(0n));
+      const analogBatch = canonical(runtime.analog_trace_snapshot(0n));
+      check(analogBatch.channels.length === 1
+        && analogBatch.channels[0].name === 'source-u4-gl5528.voltage_mv'
+        && analogBatch.channels[0].unit === 'mV',
+      'the registered LDR output is missing from the oscilloscope trace');
+      check(analogBatch.samples.length > 0, 'the LDR oscilloscope trace has no samples');
       const signalById = new Map(batch.channels.map((channel) => [channel.id, channel.signal]));
       return {
         result: adcCode,
@@ -45,6 +51,12 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
             signal: signalById.get(edge.ch), time_ns: edge.time_ns, value: edge.value,
           })).sort((a, b) => a.time_ns - b.time_ns || a.signal.localeCompare(b.signal)),
         },
+        analog_trace: {
+          channels: analogBatch.channels,
+          dropped: analogBatch.dropped,
+          next_cursor: analogBatch.next_cursor,
+          samples: analogBatch.samples.map(({ cycle, time_ns, values }) => ({ cycle, time_ns, values })),
+        },
       };
     } finally {
       runtime.free();
@@ -61,6 +73,11 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
   equal(negative, expected.negative, 'dark negative control differs from the native Flex model reference');
   check(negative.adc_code === 0 && negative.led_final === 0, 'dark negative control must keep the LED off');
   check(negative.trace.dropped === 0 && negative.trace.edges.length === 0, 'dark negative control emitted a digital edge');
+  const scopeSummary = (run) => ({
+    channels: run.analog_trace.channels,
+    dropped: run.analog_trace.dropped,
+    samples: run.analog_trace.samples.map(({ time_ns, values }) => [time_ns, values[0]]),
+  });
 
   return {
     status: 'passed',
@@ -73,6 +90,10 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
     positive_led_edges: positive.trace.edges.length,
     negative_adc_code: negative.adc_code,
     negative_led_edges: negative.trace.edges.length,
-    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'bright-output', 'dark-negative-control'],
+    analog_trace: {
+      positive: scopeSummary(positive),
+      negative: scopeSummary(negative),
+    },
+    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'bright-output', 'dark-negative-control', 'oscilloscope-samples'],
   };
 }

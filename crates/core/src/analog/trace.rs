@@ -57,7 +57,7 @@ pub const SERIES_DEADBAND_REL: f64 = 5e-3;
 pub struct AnalogSeriesChannel {
     /// Same name as the scope channel (`<model>.<probe or trace expression>`).
     pub name: String,
-    /// `"V"` or `"A"`; `"rpm"` for a motor speed channel.
+    /// Engineering unit such as `"V"`, `"mV"`, `"A"`, or `"rpm"`.
     pub unit: String,
     /// `[time_ns, value]` change points, oldest first.
     pub points: Vec<(u64, f64)>,
@@ -80,7 +80,7 @@ pub struct AnalogChannel {
     /// Channel name — the probe name, or the `trace:` expression, prefixed
     /// with `<model id>.` when the adapter is registered on a runner.
     pub name: String,
-    /// `"V"` or `"A"`; `"rpm"` for a motor speed channel.
+    /// Engineering unit such as `"V"`, `"mV"`, `"A"`, or `"rpm"`.
     pub unit: String,
 }
 
