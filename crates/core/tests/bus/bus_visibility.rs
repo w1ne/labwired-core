@@ -1082,6 +1082,12 @@ fn family_of(chip: &str) -> Family {
         Family::Esp32
     } else if chip.starts_with("efr32") {
         Family::Efr32s2
+    } else if chip == "at32f421g8u7" {
+        // usart1/usart2 are the classic F1 STS/DT/BAUDR/CTRL1 subset
+        // (`profile: stm32f1`), audited against at32f421_usart.h. This
+        // descriptor has no SPI/I2C instances, so the classification only
+        // selects the existing STM32 UART F1/V2 drive.
+        Family::Stm32F1
     } else {
         Family::Unknown
     }

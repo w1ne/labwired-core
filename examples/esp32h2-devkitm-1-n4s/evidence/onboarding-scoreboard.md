@@ -3,11 +3,11 @@
 - targets_total: `1`
 - pass: `1`
 - fail: `0`
-- median_elapsed_ms: `63279`
-- median_elapsed_seconds: `63.279`
+- median_elapsed_ms: `2043`
+- median_elapsed_seconds: `2.043`
 - threshold_seconds: `3600`
 - threshold_met: `1/1`
 
 | Target | Status | Elapsed (ms) | Elapsed (s) | Threshold Met | Failure Stage | Hint | Signature |
 |---|---|---:|---:|---|---|---|---|
-| `esp32h2-devkitm-1-n4s` | `pass` | `63279` | `63.279` | `True` | `n/a` | `n/a` | `n/a` |
+| `esp32h2-devkitm-1-n4s` | `pass` | `2043` | `2.043` | `True` | `n/a` | `n/a` | `n/a` |

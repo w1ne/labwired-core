@@ -247,12 +247,30 @@ impl FromStr for AdcRegisterLayout {
 pub struct F1AdcRegs {
     cr1: u32, // 0x04
     cr2: u32, // 0x08
-    /// ADC_SQR3 @ 0x34 (RM0008 §11.12.14). Only SQ1[4:0] — the first (and, on
-    /// this single-shot model, only) regular-sequence channel — is consumed,
-    /// by `advance_conversion`. Reset value 0 selects channel 0, which is what
-    /// firmware that never programs the sequence converts on silicon.
+    /// ADC_SQR3 @ 0x34 (RM0008 §11.12.14): SQ1..SQ6. Reset value 0 selects
+    /// channel 0, which is what firmware that never programs the sequence
+    /// converts on silicon.
     sqr3: u32,
+    /// ADC_SMPR1/2 @ 0x0C/0x10: per-channel sample times. Stored for
+    /// read-back; the conversion takes the model's fixed `conversion_time`.
+    #[serde(default)]
+    smpr1: u32,
+    #[serde(default)]
+    smpr2: u32,
+    /// ADC_SQR1 @ 0x2C: L[23:20] (sequence length - 1) and SQ13..SQ16.
+    #[serde(default)]
+    sqr1: u32,
+    /// ADC_SQR2 @ 0x30: SQ7..SQ12.
+    #[serde(default)]
+    sqr2: u32,
 }
+
+/// ADC_CR1.SCAN (RM0008 §11.12.2; AT32 ADC_CTRL1.SQEN): convert the whole
+/// regular sequence on one trigger.
+const F1_CR1_SCAN: u32 = 1 << 8;
+/// ADC_CR2.DMA (RM0008 §11.12.3; AT32 ADC_CTRL2.OCDMAEN): a DMA request each
+/// time a regular conversion updates DR.
+const F1_CR2_DMA: u32 = 1 << 8;
 
 /// STM32L4 ADC register file (data `dr` is shared on `Adc`).
 #[derive(Debug, Default, serde::Serialize)]
@@ -407,6 +425,14 @@ pub struct Adc {
     /// F1 sample-and-hold value captured at SWSTART. A later pad, mux or Vdda
     /// change applies to the next sample.
     sampled_input: Option<HeldAdcInput>,
+    /// Position in the regular sequence of the conversion in progress
+    /// (0 = SQ1). Always 0 outside scan mode.
+    #[serde(skip)]
+    seq_index: u8,
+    /// A DR update with CR2.DMA set requested a DMA transfer that has not been
+    /// handed to the bus yet.
+    #[serde(skip)]
+    dma_pending: bool,
 
     /// Bus-published cycle clock (walk-free campaign). `Some` once attached →
     /// event-schedulable; `None` keeps the legacy walk.
@@ -519,6 +545,8 @@ impl Adc {
             channel_inputs_mv: [None; MAX_CHANNELS],
             reference_millivolts: ADC_VREF_MV,
             sampled_input: None,
+            seq_index: 0,
+            dma_pending: false,
             clock: None,
             chain_live: false,
             conv_gen: 0,
@@ -641,6 +669,22 @@ impl Adc {
                 } else {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
+                // CR2.DMA: every DR update requests a transfer (RM0008
+                // §11.12.3; RM_AT32F421 §18.4.4.2).
+                if cr2 & F1_CR2_DMA != 0 {
+                    self.dma_pending = true;
+                }
+                // Scan mode: the next channel of the sequence follows at once;
+                // EOC marks the end of the group (RM0008 §11.12.1 / AT32
+                // ADC_STS.OCCE).
+                if self.seq_index + 1 < self.f1_sequence_len() {
+                    self.seq_index += 1;
+                    // In-chain continuation, like CONT: the running wake
+                    // carries on (no new generation).
+                    self.begin_conversion();
+                    return irq;
+                }
+                self.seq_index = 0;
 
                 self.sr |= 1 << 1; // EOC
 
@@ -744,13 +788,38 @@ impl Adc {
         }
     }
 
-    /// Regular channel being converted: SQR3 SQ1[4:0] on the F1 layout; 0 on
-    /// the other families (their engines select from their own SQR1/PCSEL).
+    /// Regular channel being converted: SQ(n+1) of SQR3/SQR2/SQR1 for
+    /// sequence position n on the F1 layout; 0 on the other families (their
+    /// engines select from their own SQR1/PCSEL).
     fn f1_regular_channel(&self) -> usize {
         match &self.regs {
-            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.sqr3 & 0x1F) as usize,
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
+                let n = u32::from(self.seq_index);
+                let (word, slot) = match n {
+                    0..=5 => (r.sqr3, n),
+                    6..=11 => (r.sqr2, n - 6),
+                    _ => (r.sqr1, n - 12),
+                };
+                ((word >> (5 * slot)) & 0x1F) as usize
+            }
             AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => 0,
         }
+    }
+
+    /// Regular-sequence length: SQR1.L + 1 with CR1.SCAN set, else one.
+    fn f1_sequence_len(&self) -> u8 {
+        match &self.regs {
+            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) if r.cr1 & F1_CR1_SCAN != 0 => {
+                ((r.sqr1 >> 20) & 0xF) as u8 + 1
+            }
+            _ => 1,
+        }
+    }
+
+    /// A trigger converts the regular sequence from SQ1.
+    fn start_sequence(&mut self) {
+        self.seq_index = 0;
+        self.start_conversion();
     }
 
     fn read_reg_l4(r: &L4AdcRegs, dr: u32, reg: u64) -> u32 {
@@ -1376,6 +1445,10 @@ impl Peripheral for Adc {
                 0x00..=0x03 => self.sr,
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
+                0x0C..=0x0F => r.smpr1,
+                0x10..=0x13 => r.smpr2,
+                0x2C..=0x2F => r.sqr1,
+                0x30..=0x33 => r.sqr2,
                 0x34..=0x37 => r.sqr3,
                 0x4C..=0x4F => self.dr,
                 _ => {
@@ -1420,15 +1493,24 @@ impl Peripheral for Adc {
                         self.apply_f4_cr2(old_cr2, merged)
                     };
                     if trigger {
-                        self.start_conversion();
+                        self.start_sequence();
                     }
                 }
-                0x34..=0x37 => match &mut self.regs {
-                    AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
-                        r.sqr3 = (r.sqr3 & !mask) | val_shifted;
+                0x0C..=0x0F | 0x10..=0x13 | 0x2C..=0x2F | 0x30..=0x33 | 0x34..=0x37 => {
+                    if let AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) = &mut self.regs {
+                        let (reg, writable) = match offset & !3 {
+                            // SMP17..10 / SMP9..0, three bits each.
+                            0x0C => (&mut r.smpr1, 0x00FF_FFFF),
+                            0x10 => (&mut r.smpr2, 0x3FFF_FFFF),
+                            // L[23:20] + SQ16..13.
+                            0x2C => (&mut r.sqr1, 0x00FF_FFFF),
+                            // SQ12..7 / SQ6..1.
+                            0x30 => (&mut r.sqr2, 0x3FFF_FFFF),
+                            _ => (&mut r.sqr3, 0x3FFF_FFFF),
+                        };
+                        *reg = ((*reg & !mask) | val_shifted) & writable;
                     }
-                    _ => {}
-                },
+                }
                 _ => {
                     crate::census_reg!("adc:Adc", offset, "write");
                 }
@@ -1495,9 +1577,12 @@ impl Peripheral for Adc {
         // scheduler never runs a per-cycle tick to charge it). Both modes now
         // charge zero, so the walk-on reference and the scheduler path agree
         // cycle-for-cycle.
+        let dma_signals =
+            std::mem::take(&mut self.dma_pending).then(|| vec![crate::DMA_SIGNAL_DATA]);
         PeripheralTickResult {
             irq,
             cycles: 0,
+            dma_signals,
             ..Default::default()
         }
     }
@@ -1598,6 +1683,11 @@ impl Peripheral for Adc {
                 crate::sched::EventResult {
                     raise_own_irq: irq,
                     reschedule_delay,
+                    dma_signals: if std::mem::take(&mut self.dma_pending) {
+                        vec![crate::DMA_SIGNAL_DATA]
+                    } else {
+                        Vec::new()
+                    },
                     ..Default::default()
                 }
             }

@@ -191,6 +191,12 @@ const SHIPPED: &[Board] = &[
         display_lab: false,
     },
     Board {
+        chip: "stm32h533re",
+        aliases: &["stm32h533re", "h533re", "nucleo-h533re"],
+        yaml_stem: "stm32h533re",
+        display_lab: false,
+    },
+    Board {
         chip: "nrf52840",
         aliases: &["nrf52840", "nrf52_", "nrf52 "],
         yaml_stem: "nrf52840",
@@ -596,6 +602,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         // catalog board, no silicon oracle and no executing-fidelity
         // differential. LPSPI, QuadTimer PWM and FlexCAN are not modelled.
         "mimxrt1062-teensy41",
+        // LP-MSPM0G3507 LaunchPad is an onboarding-matrix profile, not a
+        // bundled-configs.ts catalog board. Its narrow UART0 smoke is in CI;
+        // it has no silicon oracle or executing-fidelity differential yet.
+        "mspm0g3507",
         // First Microchip part in the engine. Has a chip descriptor, an
         // io-smoke executed by the coverage matrix and the strict-onboarding
         // gate, and a peripheral-estate test — but it is NOT a
@@ -622,10 +632,13 @@ fn every_shipped_descriptor_is_ratcheted() {
         "atsamd21j16a",
         "atsamd21j17a",
         "atsamd21j18a",
-        "esp32",        // classic Xtensa, separate e2e lane, not a catalog board
-        "esp32s3-zero", // board variant of esp32s3 (covered by esp32s3)
+        "esp32", // classic Xtensa, separate e2e lane, not a catalog board
+        // ESP8684/C2 LaunchPad smoke profile is in onboarding CI but not the
+        // bundled-configs.ts catalog and has no executing-fidelity differential.
+        "esp32c2",
+        "esp32s3-zero",                // board variant of esp32s3 (covered by esp32s3)
         "esp32s3-devkitc-1-n16r8-adc", // narrow N16R8 ADC profile of esp32s3
-        "stm32f401cdu6", // BlackPill variant of stm32f401 (covered by stm32f401)
+        "stm32f401cdu6",               // BlackPill variant of stm32f401 (covered by stm32f401)
         // Exact STM32 order-code geometries for the F103/F401/F407 engines.
         // These are core chip descriptors, not Playground boards in
         // bundled-configs.ts; their family behavior is shared with the three
@@ -957,10 +970,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         "ch32v003f4u6",
         "ch32v003a4m6",
         "ch32v003j4m6",
-        // ESP32-H2/C5/P4/S2 UART0-only board profiles. Each has a descriptor,
-        // a system manifest and a board smoke that asserts a UART0 token, but
-        // no bundled-configs.ts catalog board, no silicon oracle and no
-        // executing-fidelity differential. Promote when all three exist.
+        // ESP32-H2/C5/P4/S2 UART0-only board profiles; C61 also checks the
+        // GPIO4 output-register head. Each has a descriptor, system manifest,
+        // and committed board smoke, but no bundled-configs.ts catalog board,
+        // silicon oracle, or executing-fidelity differential.
         "esp32h2",
         "esp32c5",
         "esp32c61",

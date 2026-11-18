@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="0.001887">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="b9b6e5e351c4eda3331759d478172d51e56442853857a2ce54e5205d5e74fc08"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.001887">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: U5A5_SAES_AES128_ECB_OK" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -1,0 +1,22 @@
+# ESP32-DevKitM-1 with a BME280 breakout on the Arduino-default I2C0 pins.
+# Scope is limited to UART0, GPIO23, and I2C0 GPIO21/22.
+name: "esp32-devkitm-1-bme280"
+chip: "../chips/esp32.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO21"
+      scl: "GPIO22"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "header_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 23
+    signal: "output"
+    active_high: true

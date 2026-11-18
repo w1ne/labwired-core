@@ -24,7 +24,7 @@
 //! baseline is `docs/coverage/chip-conformance.json`. A chip's estate must stay
 //! green, its reg-match% may not fall, and a present behavior gate may not vanish.
 //! Re-baseline (after a deliberate, explained change):
-//!   UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test chip_conformance -- --nocapture
+//!   UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test gates chip_conformance_ratchet -- --nocapture
 //!
 //! "Are the gates enough?" is now a number per chip on the board — and missing
 //! coverage is a visible red cell, not a silent gap.
@@ -71,6 +71,15 @@ const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[
 /// The modeled fleet. Every descriptor MUST appear here or in the explicitly
 /// validated declaration table (enforced below), so new chips cannot disappear.
 const CHIPS: &[ChipConf] = &[
+    ChipConf {
+        // Narrow ESP8684/C2 DevKit profile. The board's CLI smoke is in the
+        // onboarding matrix, but there is no in-crate behavior gate or silicon
+        // reset capture for this exact descriptor yet.
+        name: "esp32c2",
+        yaml: "configs/chips/esp32c2.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     ChipConf {
         name: "esp32c3",
         yaml: "configs/chips/esp32c3.yaml",
@@ -821,6 +830,17 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32h563_demo_survival"),
     },
     ChipConf {
+        // NUCLEO-H533RE. Sim-derived from the H5 register models and the
+        // official H533RE datasheet/schematic; USART2 + PA5 execution is
+        // checked by the walk-vs-scheduler differential.
+        name: "stm32h533re",
+        yaml: "configs/chips/stm32h533re.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "stm32h563_walk_differential::stm32h533re_boot_walk_vs_scheduler_is_byte_identical",
+        ),
+    },
+    ChipConf {
         // First U5 part. Sim-derived (RM0456 + the vendor SVD); no bench part
         // has been captured, so no reset_oracle. The running-firmware gate is
         // the committed stock Zephyr 3.7.2 hello_world for nucleo_u575zi_q
@@ -1066,6 +1086,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: None,
     },
     ChipConf {
+        // Narrow LP-MSPM0G3507 LaunchPad profile. Its committed onboarding
+        // smoke runs in board CI; it has no Rust test-target behavior gate or
+        // silicon reset capture yet, so the public conformance row is estate-only.
+        name: "mspm0g3507",
+        yaml: "configs/chips/mspm0g3507.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "ra4m1",
         yaml: "configs/chips/ra4m1.yaml",
         reset_oracle: None,
@@ -1291,10 +1320,11 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin",
         ),
     },
-    // ESP32-H2/C5/C61/P4/S2 UART0-only board profiles. SIM-DERIVED: no silicon
-    // capture, so no reset_oracle. Their board smokes run as CLI scripts in
-    // core-board-ci / core-onboarding-smoke, not as Rust integration tests, so
-    // no behavior_gate can resolve yet.
+    // ESP32-H2/C5/P4/S2 UART0-only board profiles; C61 also includes its
+    // narrow GPIO4 output-register head. SIM-DERIVED: no silicon capture, so
+    // no reset_oracle. Board smokes run as CLI scripts in core-board-ci /
+    // core-onboarding-smoke, not as Rust integration tests, so no behavior_gate
+    // can resolve yet.
     ChipConf {
         name: "esp32h2",
         yaml: "configs/chips/esp32h2.yaml",

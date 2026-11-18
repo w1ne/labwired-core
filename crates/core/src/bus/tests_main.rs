@@ -1310,9 +1310,14 @@ board_io: []
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("build C3 bus with servo");
 
     const LEDC: u64 = 0x6001_9000;
+    const GPIO: u64 = 0x6000_4000;
     // ledcSetup(ch 2, 50 Hz, 14 bit) on timer 1, channel bound to timer 1.
     bus.write_u32(LEDC + 0xA0 + 8, 14).unwrap();
     bus.write_u32(LEDC + 2 * 0x14, 1).unwrap();
+    // Route LEDC low-speed channel 2 to GPIO7 and enable its output driver.
+    // The servo was attached before firmware configured this matrix route.
+    bus.write_u32(GPIO + 0x24, 1 << 7).unwrap();
+    bus.write_u32(GPIO + 0x554 + 4 * 7, 45 + 2).unwrap();
     // ESP32Servo write(angle) on a 500..2400 us attach: ticks = us * 2^14 / 20000.
     for angle in [155u32, 46, 25] {
         let us = 500 + angle * 1900 / 180;
@@ -1335,8 +1340,7 @@ board_io: []
 #[test]
 fn test_from_config_attaches_ili9341_16bit_parallel_panel() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // Classic ESP32: `install_gpio_observer` wires Esp32Gpio (C3 has no
-    // observer path for this model yet).
+    // Classic ESP32: `install_gpio_observer` wires its GPIO output observer.
     let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32.yaml"))
         .expect("read ESP32 chip descriptor");
 
@@ -3559,6 +3563,7 @@ motor_models:
                     timed_cycles: None,
                     internally_committed_cycles: false,
                 },
+                false,
             )
             .unwrap();
         assert_eq!(machine.bus.motor_service_anchor(), expected_anchor);
@@ -3578,6 +3583,7 @@ motor_models:
                     timed_cycles: None,
                     internally_committed_cycles: false,
                 },
+                false,
             )
             .unwrap();
         assert_eq!(coincident.bus.motor_service_anchor(), expected_anchor);
@@ -3996,6 +4002,7 @@ fn test_flash_boot_alias_read_and_write() {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
@@ -4138,6 +4145,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
@@ -4433,6 +4441,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
@@ -4724,6 +4733,7 @@ fn test_peripheral_range_index_lookup() {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
@@ -4871,6 +4881,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
@@ -7253,4 +7264,61 @@ external_devices:
         after_mode_change,
         "a pad released from AF must not forward the timer wire (had {before})"
     );
+}
+
+/// Under exact batch boundaries every device access ends the CPU batch so the
+/// machine can tick where state changed. A read the device declares pure
+/// changes nothing and must not; a write, or a read the device does not vouch
+/// for, still must.
+#[test]
+fn an_armed_batch_stop_skips_only_pure_device_reads() {
+    let rtc_base = 0x4001_1000;
+    let stub_base = 0x4002_0000;
+    for optimized in [false, true] {
+        let mut bus = SystemBus::empty();
+        bus.config.optimized_bus_access = optimized;
+        bus.ram = crate::memory::LinearMemory::new(0x1000, 0x2000_0000);
+        bus.add_peripheral(
+            "rtc1",
+            rtc_base,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::nrf52::rtc::Nrf52Rtc::new()),
+        );
+        bus.add_peripheral(
+            "stub",
+            stub_base,
+            0x1000,
+            None,
+            Box::new(crate::peripherals::stub::StubPeripheral::new(0)),
+        );
+        let stops = |bus: &mut SystemBus, access: &dyn Fn(&mut SystemBus)| {
+            bus.batch_stop.arm(&[]);
+            access(bus);
+            bus.batch_stop.disarm()
+        };
+        // COUNTER, at every width the CPU can load it with.
+        assert!(!stops(&mut bus, &|b| {
+            b.read_u32(rtc_base + 0x504).unwrap();
+        }));
+        assert!(!stops(&mut bus, &|b| {
+            b.read_u16(rtc_base + 0x504).unwrap();
+        }));
+        assert!(!stops(&mut bus, &|b| {
+            b.read_u8(rtc_base + 0x504).unwrap();
+        }));
+        assert!(!stops(&mut bus, &|b| {
+            b.read_u32(0x2000_0010).unwrap();
+        }));
+        assert!(
+            stops(&mut bus, &|b| b.write_u32(rtc_base + 0x508, 0).unwrap()),
+            "a write to a pure-read device still ends the batch (optimized={optimized})"
+        );
+        assert!(
+            stops(&mut bus, &|b| {
+                b.read_u32(stub_base).unwrap();
+            }),
+            "a read of a device that makes no promise still ends the batch (optimized={optimized})"
+        );
+    }
 }

@@ -184,6 +184,10 @@ impl std::fmt::Debug for Tca9548a {
 }
 
 impl I2cDevice for Tca9548a {
+    fn is_i2c_mux(&self) -> bool {
+        true
+    }
+
     /// The switch's OWN address. Resolution never goes through this — see
     /// [`I2cDevice::claims_address`] — but the bus trace uses it to label the
     /// device and tooling uses it to identify the part.

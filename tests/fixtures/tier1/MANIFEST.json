@@ -142,5 +142,17 @@
   "seeed-xiao-esp32c3-bme280.partitions.bin": {
     "sha256": "148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1",
     "source_rev": "2b8bed09df23d29a0f81dddb29c89011d2c5a522"
+  },
+  "esp32-devkitm-1-bme280.elf": {
+    "sha256": "e558d962e50833d0de8de2ca91d0f905b2d01852f226e383a94816c4695e57f3",
+    "source_rev": "23b2cf49c5c1407e2c8fa2d5318962b96c7be0fd"
+  },
+  "arduino-nano-esp32-bme280.elf": {
+    "sha256": "2950d0a83a1e751b4cc58d6696b4606088d917aa43918d427013cfc25d6712ae",
+    "source_rev": "a371ab90c421efbbaace184e022d634bcbfa98f1"
+  },
+  "arduino-uno-r4-minima-bme280.elf": {
+    "sha256": "04bd8c84c636cba2f772ed7fc02f5b6909c0c110f364075f3b1bcb1500b92ee5",
+    "source_rev": "0fe44b1a8b0a47ed611ada3de72d618655e9d441"
   }
 }

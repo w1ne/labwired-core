@@ -560,10 +560,10 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Wire the ESP32-C3 I²C0 bit engine to C3 GPIO in both directions: GPIO
+    /// Wire the ESP32 C3/C5/C61 I²C0 bit engine to the shared GPIO model: GPIO
     /// reads the live SDA/SCL waveform, while I²C reads GPIO's live input/output
     /// matrix state before allowing a physically routed slave to acknowledge.
-    /// No-op unless both C3 models are on the bus.
+    /// No-op unless both compatible controller and GPIO models are on the bus.
     pub(crate) fn wire_esp32c3_i2c_pads(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
@@ -4435,7 +4435,8 @@ impl SystemBus {
         miso
     }
 
-    /// Sync parking-SPI chip-selects from live GPIO levels (active-low).
+    /// Sync parking-SPI chip-selects from live GPIO levels, honouring each
+    /// device's CS polarity (active-low unless it declares otherwise).
     ///
     /// Soft-SPI and bit-banged CS on AVR never touch a controller's NSS, so the
     /// parking kits only see CS through this walk, after every PORT mirror
@@ -4474,7 +4475,7 @@ impl SystemBus {
             if let Some(devs) = self.peripherals[idx].dev.spi_attached_devices_mut() {
                 for (device, level) in devs.iter_mut().zip(levels) {
                     let Some(high) = level else { continue };
-                    let selected = !high; // active-low CS
+                    let selected = device.cs_selected_at(high);
                     match (device.is_selected(), selected) {
                         (false, true) => device.cs_select(),
                         (true, false) => {

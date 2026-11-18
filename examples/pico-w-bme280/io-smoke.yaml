@@ -1,0 +1,18 @@
+# Pico W/RP2040 reads the BME280 chip ID on I2C0 GP4/GP5 and reports over UART0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv6m-none-eabi/release/firmware-pico-w-bme280-smoke"
+  system: "../../configs/systems/pico-w-bme280.yaml"
+limits:
+  max_steps: 200000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "PICO_W_BME280_ID=0x60_I2C0_GP4_GP5"
+  - memory_value:
+      address: 0x40014024
+      expected_value: 3
+      size: 4
+  - memory_value:
+      address: 0x4001402c
+      expected_value: 3
+      size: 4

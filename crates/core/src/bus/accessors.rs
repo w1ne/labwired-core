@@ -705,7 +705,7 @@ impl crate::Bus for SystemBus {
                 }
                 let p = &self.peripherals[idx];
                 let off = mmio_addr - p.base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = p.dev.read(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -722,7 +722,7 @@ impl crate::Bus for SystemBus {
                 }
                 let p = &self.peripherals[idx];
                 let off = mmio_addr - p.base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = p.dev.read(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1040,7 +1040,7 @@ impl crate::Bus for SystemBus {
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u16(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1053,7 +1053,7 @@ impl crate::Bus for SystemBus {
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u16(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1171,7 +1171,7 @@ impl crate::Bus for SystemBus {
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u32(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1184,7 +1184,7 @@ impl crate::Bus for SystemBus {
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u32(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1625,6 +1625,22 @@ impl crate::Bus for SystemBus {
         self.plain_memory_slice_at(addr)
     }
 
+    fn plain_ram_store_unobserved(&self, addr: u64, len: u64) -> bool {
+        // The conditions under which `try_plain_ram_store` commits a store
+        // as a bare RAM write, plus the batch-stop watch every store notes
+        // first. An aliased address is refused: the proof keys stores by the
+        // address the core used.
+        len > 0
+            && self.resolve_mem_alias(addr) == addr
+            && self.ram.read_u8(addr).is_some()
+            && self.ram.read_u8(addr + len - 1).is_some()
+            && self.debug_watches.is_empty()
+            && !self.memory_policy.active()
+            && !self.esp32c3_pms_armed
+            && self.observers.is_empty()
+            && !self.batch_stop.would_hit(addr, len)
+    }
+
     fn fetch_slice(&self, pc: u64) -> Option<(u64, u64, &[u8])> {
         let idx = self.find_peripheral_index(pc)?;
         let entry = self.peripherals.get(idx)?;
@@ -1889,6 +1905,7 @@ impl crate::Bus for SystemBus {
                     nvic.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
                 }
             }
+            self.unpark_level_events(exception_num - 16);
         }
     }
 

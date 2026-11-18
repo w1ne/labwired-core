@@ -533,6 +533,15 @@ pub trait Bus {
         self.fetch_slice(addr)
     }
 
+    /// True when a CPU store of `len` bytes at `addr` would only change the
+    /// bytes [`Self::plain_memory_slice`] serves there: plain RAM, with no
+    /// watch, observer, memory policy or batch stop that a store reaches, and
+    /// no alias in between. Used by poll-loop proofs that allow stores.
+    /// Default: `false` (every store is observable).
+    fn plain_ram_store_unobserved(&self, _addr: u64, _len: u64) -> bool {
+        false
+    }
+
     fn fetch_slice(&self, _pc: u64) -> Option<(u64, u64, &[u8])> {
         None
     }
