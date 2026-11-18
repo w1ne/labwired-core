@@ -1,0 +1,28 @@
+{
+  "target_id": "pico2-bme280",
+  "status": "pass",
+  "crate": "firmware-pico2-bme280-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/pico2-bme280/io-smoke.yaml",
+  "system": "configs/systems/pico2-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-17T06:19:16Z",
+  "finished_at_utc": "2026-11-17T06:19:18Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1824,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.258,
+    "build_firmware": 1.091,
+    "run_smoke": 0.44
+  },
+  "stages_ms": {
+    "build_cli": 258,
+    "build_firmware": 1091,
+    "run_smoke": 440
+  }
+}
