@@ -3559,6 +3559,7 @@ motor_models:
                     timed_cycles: None,
                     internally_committed_cycles: false,
                 },
+                false,
             )
             .unwrap();
         assert_eq!(machine.bus.motor_service_anchor(), expected_anchor);
@@ -3578,6 +3579,7 @@ motor_models:
                     timed_cycles: None,
                     internally_committed_cycles: false,
                 },
+                false,
             )
             .unwrap();
         assert_eq!(coincident.bus.motor_service_anchor(), expected_anchor);
@@ -3996,6 +3998,7 @@ fn test_flash_boot_alias_read_and_write() {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
@@ -4138,6 +4141,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
@@ -4433,6 +4437,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
@@ -4724,6 +4729,7 @@ fn test_peripheral_range_index_lookup() {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),
@@ -4871,6 +4877,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         current_cycle: 0,
         cycle_clock: crate::CycleClock::default(),
         pending_schedule: Vec::new(),
+        parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
         side_effecting_mmio: std::cell::Cell::new(0),

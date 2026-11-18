@@ -1,10 +1,11 @@
 # Narrow ESP32-C61 HP-core profile for the ESP32-C61-DevKitC-1-N8R2.
 #
-# This fast-boot profile exposes UART0, GPIO4 output, the GPIO8 output used to
-# bit-bang the onboard WS2812, and the GPIO-matrix / I2C0 path used by the
-# BME280 smoke. It loads a bare ELF directly; it does not execute the C61 mask
+# This fast-boot profile exposes UART0's FIFO/status register head, the
+# official GPIO data/enable/input registers through IN1, and the GPIO-matrix /
+# I2C0 path used by the BME280 smoke. GPIO4 output and GPIO8 WS2812 frames are
+# also observed. It loads a bare ELF directly; it does not execute the C61 mask
 # ROM or Espressif bootloader. IO_MUX is storage only; electrical pad behavior,
-# RMT, USB, Wi-Fi, Bluetooth LE, and PSRAM are not claimed here.
+# RMT, USB, Wi-Fi, Bluetooth LE, and PSRAM are outside this profile.
 #
 # Sources checked 2026-11-17:
 #   ESP32-C61 Series Datasheet v1.1:
@@ -33,15 +34,30 @@ ram:
   base: 0x40800000
   size: "320KB"
 
-# The v2.0 DevKitC-1 header exposes GPIO4, GPIO6, and GPIO22 on J1/J3. The
-# profile records these pad identities; IO_MUX and electrical pad routing are
-# not simulated.
+# DevKitC-1 v2.0 header pad identities used by the profile. J3 TX/RX map to
+# GPIO11/GPIO10; the USB-UART bridge and IO_MUX routing remain outside scope.
 pins:
-  GPIO4: { gpio: "gpio", bit: 4 }
-  GPIO6: { gpio: "gpio", bit: 6 }
-  # The DevKitC-1 N8R2's onboard addressable RGB LED is driven from GPIO8.
-  GPIO8: { gpio: "gpio", bit: 8 }
-  GPIO22: { gpio: "gpio", bit: 22 }
+  GPIO4:
+    gpio: "gpio"
+    bit: 4
+  GPIO6:
+    gpio: "gpio"
+    bit: 6
+  # The onboard addressable RGB LED is driven from GPIO8.
+  GPIO8:
+    gpio: "gpio"
+    bit: 8
+  GPIO10:
+    gpio: "gpio"
+    bit: 10
+    functions: [{ type: uart, peripheral: "uart0", role: rx }]
+  GPIO11:
+    gpio: "gpio"
+    bit: 11
+    functions: [{ type: uart, peripheral: "uart0", role: tx }]
+  GPIO22:
+    gpio: "gpio"
+    bit: 22
 
 peripherals:
   # UART0 uses the C61 register head at 0x60000000. The descriptor exposes
@@ -54,7 +70,6 @@ peripherals:
     clock: { controller: "pcr", reg: "UART0_CONF", bit: 0 }
     config:
       echo_stdout: true
-
   # C61 GPIO output latch plus the I2C0 matrix selectors exercised by the
   # BME280 smoke. The model normalizes the C61 selector windows at +0x2D4 and
   # +0xAD4 to its shared GPIO implementation. GPIO26..29, non-I2C matrix

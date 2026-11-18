@@ -2,11 +2,11 @@
 #
 # This is a fast-start board-smoke profile. The simulator loads a bare ELF at its entry
 # point; it does not execute the C5 mask ROM or the Espressif bootloader.
-# Models UART0's FIFO/status register head, direct GPIO0..28 output, and the
-# I2C0 command-list engine with the GPIO8/9 matrix route. A system may attach
-# a GPIO-observed WS2812 model to GPIO27; the RMT peripheral is not modelled.
-# PCR clock control, UART1, USB, PSRAM, Wi-Fi, Bluetooth, 802.15.4 and LP core
-# are not claimed by this descriptor.
+# Models UART0's FIFO/status register head, the official GPIO data/enable/input
+# registers through IN1, and the I2C0 command-list engine with the GPIO8/9
+# matrix route. A system may attach a GPIO-observed WS2812 model to GPIO27; RMT
+# is not modelled. IO_MUX is register storage only. PCR clock control, UART1,
+# USB, PSRAM, Wi-Fi, Bluetooth, 802.15.4 and LP core are outside this profile.
 #
 # Sources checked 2026-11-17:
 #   ESP32-C5 product page:
@@ -33,6 +33,19 @@ ram:
   base: 0x40800000
   size: "384KB"
 
+# Board pin map (Espressif C5-DevKitC-1 v1.2 guide): J3 TX is GPIO11/U0TXD;
+# J3 RX is GPIO12/U0RXD. The USB-UART bridge and IO_MUX routing stay outside
+# this profile.
+pins:
+  GPIO11:
+    gpio: "gpio"
+    bit: 11
+    functions: [{ type: uart, peripheral: "uart0", role: tx }]
+  GPIO12:
+    gpio: "gpio"
+    bit: 12
+    functions: [{ type: uart, peripheral: "uart0", role: rx }]
+
 peripherals:
   # C5 UART FIFO/status head (FIFO@0x00, STATUS@0x1C) matches the shared
   # Espressif UART model. The descriptor ends at STATUS, before the C5-specific
@@ -44,7 +57,6 @@ peripherals:
     size: "32B"
     config:
       echo_stdout: true
-
   # Direct GPIO0..28 output, plus the I2C0 matrix selector subset used by the
   # BME280 smoke. C5 moves GPIO_ENABLE/GPIO_IN and matrix selectors from the
   # C3 map; the chip-specific adapter normalizes those registers and leaves

@@ -81,6 +81,11 @@ pub const DMA_SIGNAL_TX: u32 = 1;
 /// See [`DMA_SIGNAL_TX`].
 pub const DMA_SIGNAL_RX: u32 = 2;
 
+/// A converter's data-ready DMA request (ADC regular DR update). The bus
+/// names the request after the peripheral alone (`adc1`), the way reference
+/// manuals list it in their DMA request tables.
+pub const DMA_SIGNAL_DATA: u32 = 16;
+
 /// One source-data-unit -> destination-data-unit transform descriptor.
 /// Semantics follow RM0481 §15 and are pinned by the DMA_DataHandling
 /// HAL example's expected-result vectors (sim) and its on-board run.

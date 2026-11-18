@@ -425,10 +425,11 @@ pub trait Cpu: Send {
     }
 
     /// Skip `cycles` of the loop the last [`Self::poll_loop_skip_budget`]
-    /// proved (a multiple of its period, at most its cycles). `false`, having
-    /// changed nothing, when there is no such plan.
-    fn fast_forward_poll_loop(&mut self, _cycles: u64) -> bool {
-        false
+    /// proved (a multiple of its period, at most its cycles). Returns the
+    /// number of retired instructions represented by the skip, or `None` if
+    /// no skip was applied. On `None`, architectural CPU state is unchanged.
+    fn fast_forward_poll_loop(&mut self, _cycles: u64) -> Option<u64> {
+        None
     }
 
     /// While the machine defers this core's proven poll loop (the plan the
@@ -696,7 +697,7 @@ impl Cpu for Box<dyn Cpu> {
     fn stalled_loop_loads(&mut self, bus: &dyn Bus) -> Option<Vec<u64>> {
         (**self).stalled_loop_loads(bus)
     }
-    fn fast_forward_poll_loop(&mut self, cycles: u64) -> bool {
+    fn fast_forward_poll_loop(&mut self, cycles: u64) -> Option<u64> {
         (**self).fast_forward_poll_loop(cycles)
     }
     fn poll_loop_plan_stores(&self) -> bool {

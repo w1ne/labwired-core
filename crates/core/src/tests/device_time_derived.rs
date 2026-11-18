@@ -322,6 +322,132 @@ fn idle_ra_iic_picks_up_late_devices_at_microsecond_boundaries() {
 }
 
 #[test]
+fn empty_time_controller_probe_is_cached_per_normal_advance_only() {
+    use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+
+    #[derive(Debug)]
+    struct TimeProbe {
+        probes: Arc<AtomicUsize>,
+        attached: Arc<AtomicBool>,
+        elapsed_us: Arc<AtomicU64>,
+    }
+
+    impl crate::Peripheral for TimeProbe {
+        fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+            Ok(0)
+        }
+
+        fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+            Ok(())
+        }
+
+        fn drives_central_device_time(&self) -> bool {
+            true
+        }
+
+        fn has_attached_time_devices(&self) -> bool {
+            self.probes.fetch_add(1, Ordering::Relaxed);
+            self.attached.load(Ordering::Relaxed)
+        }
+
+        fn advance_attached_device_time_us(&mut self, us: u64) {
+            self.elapsed_us.fetch_add(us, Ordering::Relaxed);
+        }
+    }
+
+    fn machine(
+        probes: Arc<AtomicUsize>,
+        attached: Arc<AtomicBool>,
+        elapsed_us: Arc<AtomicU64>,
+    ) -> Machine<CountingCpu> {
+        let mut bus = crate::bus::SystemBus::new();
+        bus.cpu_hz = 8_000_000;
+        bus.add_peripheral(
+            "time_probe",
+            0x4009_0000,
+            0x20,
+            None,
+            Box::new(TimeProbe {
+                probes,
+                attached,
+                elapsed_us,
+            }),
+        );
+        let mut machine = Machine::new(CountingCpu::default(), bus);
+        machine.config.peripheral_tick_interval = 16;
+        machine.bus.config.peripheral_tick_interval = 16;
+        machine
+    }
+
+    let probes = Arc::new(AtomicUsize::new(0));
+    let attached = Arc::new(AtomicBool::new(false));
+    let elapsed_us = Arc::new(AtomicU64::new(0));
+    let mut normal = machine(probes.clone(), attached.clone(), elapsed_us.clone());
+    normal.advance(AdvanceRequest::run(Some(128))).unwrap();
+    assert_eq!(normal.total_cycles, 128);
+    assert_eq!(probes.load(Ordering::Relaxed), 1);
+    assert_eq!(elapsed_us.load(Ordering::Relaxed), 0);
+
+    // A supported attachment between public calls must be seen by the next run.
+    attached.store(true, Ordering::Relaxed);
+    normal.advance(AdvanceRequest::run(Some(128))).unwrap();
+    assert_eq!(normal.total_cycles, 256);
+    assert_eq!(
+        probes.load(Ordering::Relaxed),
+        2,
+        "the next public advance must recheck devices attached between calls"
+    );
+    assert!(
+        elapsed_us.load(Ordering::Relaxed) > 0,
+        "a newly attached timed device must receive later simulated time"
+    );
+
+    // Model a cache left behind when a caller catches a panic from advance.
+    // A following single-step must clear it without carrying stale absence into
+    // the next normal run.
+    normal.central_device_time_cache_enabled = true;
+    normal.central_device_time_attached_cache = Some(false);
+    normal.advance(AdvanceRequest::single()).unwrap();
+    assert!(!normal.central_device_time_cache_enabled);
+    assert_eq!(normal.central_device_time_attached_cache, None);
+    normal.advance(AdvanceRequest::run(Some(128))).unwrap();
+    assert_eq!(probes.load(Ordering::Relaxed), 3);
+
+    let runner_probes = Arc::new(AtomicUsize::new(0));
+    let runner_attached = Arc::new(AtomicBool::new(false));
+    let runner_elapsed_us = Arc::new(AtomicU64::new(0));
+    let mut runner = machine(
+        runner_probes.clone(),
+        runner_attached.clone(),
+        runner_elapsed_us.clone(),
+    );
+    // The runner also recovers if the caller catches a panic from the prior
+    // in-tree advance and reuses the machine.
+    runner.central_device_time_cache_enabled = true;
+    runner.central_device_time_attached_cache = Some(false);
+    let runner_windows = AtomicUsize::new(0);
+    runner
+        .advance_with_window_runner(
+            AdvanceRequest::run(Some(128)),
+            |_cpu, _bus, _observers, _config, count| {
+                if runner_windows.fetch_add(1, Ordering::Relaxed) == 1 {
+                    runner_attached.store(true, Ordering::Relaxed);
+                }
+                Ok(count)
+            },
+        )
+        .unwrap();
+    assert!(
+        runner_probes.load(Ordering::Relaxed) > 1,
+        "a mutable window runner must retain per-window attachment checks"
+    );
+    assert!(
+        runner_elapsed_us.load(Ordering::Relaxed) > 0,
+        "a device attached between runner windows must receive later time"
+    );
+}
+
+#[test]
 fn absolute_source_reloads_ignore_derived_deadlines() {
     use crate::peripherals::ra_iic::{RaIic, DEFAULT_ELC_EVENT};
     use crate::Peripheral;

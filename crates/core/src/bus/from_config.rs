@@ -482,6 +482,7 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: Cell::new(0),
             timer_poll_carry: Cell::new(0),
             side_effecting_mmio: Cell::new(0),
@@ -627,6 +628,10 @@ impl SystemBus {
                 .or_else(|| crate::peripherals::esp32c6::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c5::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c61::try_build(&canonical_type, p_cfg))
+                // C5/C61 have richer board GPIO adapters for the I2C matrix
+                // routes used by their sensor profiles. Keep the shared
+                // data/enable/input-only heads as a later fallback.
+                .or_else(|| crate::peripherals::esp32_gpio_head::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32h2::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32p4::try_build(&canonical_type, p_cfg))
                 // ESP32-classic was missing from this chain. Its factory has

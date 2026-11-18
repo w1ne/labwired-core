@@ -187,6 +187,13 @@ pub const MODEL_TYPES: &[&str] = &[
     // P4 UART0 uses the shared FIFO/status head with P4's 400 MHz core and
     // 90 MHz APB clock. Its chip descriptor exposes only FIFO and STATUS.
     "esp32p4_uart",
+    // Narrow GPIO data/enable/input heads (S2/P4 classic head, C5/C61 later
+    // head). Listed so a fuzzy "gpio" heuristic cannot coerce them onto an
+    // STM32 GPIO map.
+    "esp32s2_gpio",
+    "esp32p4_gpio",
+    "esp32c5_gpio",
+    "esp32c61_gpio",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",

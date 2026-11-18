@@ -1,8 +1,8 @@
 # Onboarding Smoke: esp32c6-zero-m-bme280
 
 - status: `pass`
-- elapsed_seconds: `23`
-- elapsed_ms: `22265`
+- elapsed_seconds: `440`
+- elapsed_ms: `439870`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

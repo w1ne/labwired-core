@@ -174,7 +174,10 @@ struct LoggedFrame {
     t_us: u64,
     sha256: String,
     ink_bytes: usize,
-    bytes: Vec<u8>,
+    /// Oriented plane, kept only when it is small enough for Acc geometry
+    /// prove (mono OLEDs). Color panels keep sha256 / t_us only — 128 frames
+    /// of RGB888 would be a silent tens-of-MB growth per panel.
+    bytes: Option<Vec<u8>>,
 }
 
 impl LoggedFrame {
@@ -186,13 +189,11 @@ impl LoggedFrame {
             "ink_bytes": self.ink_bytes,
         });
         if include_bytes {
-            meta["bytes"] = serde_json::Value::Array(
-                self.bytes
-                    .iter()
-                    .copied()
-                    .map(serde_json::Value::from)
-                    .collect(),
-            );
+            if let Some(bytes) = &self.bytes {
+                meta["bytes"] = serde_json::Value::Array(
+                    bytes.iter().copied().map(serde_json::Value::from).collect(),
+                );
+            }
         }
         meta
     }
@@ -1948,12 +1949,17 @@ impl GenericDisplay {
             let dig = Sha256::digest(&fb);
             dig.iter().map(|b| format!("{b:02x}")).collect::<String>()
         };
+        // A 128x64 1-bpp plane is 1024 bytes; 128 of those is fine. A
+        // 170x320 RGB888 plane is ~160 KiB, and 128 of those would be ~20 MiB
+        // per panel. Keep the plane only when Acc geometry can reasonably
+        // use it.
+        const FRAME_BYTES_KEEP: usize = 4096;
         self.frames_seen.push_back(LoggedFrame {
             generation: gen,
             t_us: self.elapsed_us,
             sha256: sha,
             ink_bytes: fb.iter().filter(|&&b| b != 0).count(),
-            bytes: fb,
+            bytes: (fb.len() <= FRAME_BYTES_KEEP).then_some(fb),
         });
     }
 

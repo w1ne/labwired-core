@@ -1,8 +1,8 @@
 # Onboarding Smoke: esp32c61-devkitc-1-n8r2-bme280
 
 - status: `pass`
-- elapsed_seconds: `384`
-- elapsed_ms: `383873`
+- elapsed_seconds: `7`
+- elapsed_ms: `6488`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

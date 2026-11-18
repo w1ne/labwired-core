@@ -309,6 +309,7 @@ impl<C: Cpu> Machine<C> {
                 nvic.iabr[w].store(0, Ordering::SeqCst);
                 nvic.level_pended[w].store(0, Ordering::SeqCst);
             }
+            self.bus.parked_level_events.clear();
             for p in nvic.ipr.iter() {
                 p.store(0, Ordering::SeqCst);
             }

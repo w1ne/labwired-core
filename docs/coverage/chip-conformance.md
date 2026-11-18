@@ -146,12 +146,12 @@ This page covers the public models. For every chip we model — public and priva
 | at32f421g8u7 | **L1** | ✓ | 22 | — | — | at32f421_contract::vendor_sdk_smoke_runs_flash_dma_and_timer_irq_paths |
 | ch32v003j4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | esp32h2 | **L0** | ✓ | 3 | — | — | — |
-| esp32c5 | **L0** | ✓ | 1 | — | — | — |
-| esp32c61 | **L0** | ✓ | 1 | — | — | — |
+| esp32c5 | **L0** | ✓ | 2 | — | — | — |
+| esp32c61 | **L0** | ✓ | 2 | — | — | — |
 | nrf54l05 | **L0** | ✓ | 6 | — | — | — |
 | nrf54l10 | **L0** | ✓ | 6 | — | — | — |
-| esp32p4 | **L0** | ✓ | 1 | — | — | — |
-| esp32s2 | **L0** | ✓ | 1 | — | — | — |
+| esp32p4 | **L0** | ✓ | 2 | — | — | — |
+| esp32s2 | **L0** | ✓ | 2 | — | — | — |
 | rp2040-feather | **L0** | ✓ | 24 | — | — | — |
 | rp2350-feather | **L0** | ✓ | 27 | — | — | — |
 | stm32h723zg | **L0** | ✓ | 7 | — | — | — |

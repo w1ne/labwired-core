@@ -12,6 +12,16 @@ on:
       - '.github/workflows/iolinki-reference.yml'
   push:
     branches: [main]
+    paths:
+      - 'validation/iolinki/**'
+      - 'configs/systems/iolinki-g0-startup.yaml'
+      - 'configs/chips/stm32g0b1re.yaml'
+      - 'configs/chips/stm32u575.yaml'
+      - '.github/workflows/iolinki-reference.yml'
+      - 'crates/core/**'
+      - 'crates/cli/**'
+      - 'crates/config/**'
+      - 'Cargo.*'
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

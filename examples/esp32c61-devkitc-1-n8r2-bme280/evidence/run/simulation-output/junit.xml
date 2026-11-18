@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.998530">
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.970748">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="3983fc2847398bda77e23fb3808eb60893d8aeb6da4fe6db529b20eee33456e5"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.998530">
+  <testcase classname="labwired" name="run" time="0.970748">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: C61_BME280_OK ID=0x60 TEMP_RAW=0x082DC0 I2C0=GPIO6/22" time="0.000000">
   </testcase>
