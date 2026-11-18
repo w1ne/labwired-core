@@ -68,6 +68,10 @@ _Leo air-quality is the sensor-depth proof: the nightly example e2e asserts it e
 
 **Dead** (2 modeled, never exercised): `cache`, `rng`
 
+### `esp32c2`
+
+_Narrow ESP8684H4X UART0-only profile; no beyond-rubric feature exercise is recorded. The 1,000,000-step bare-ELF smoke covers UART0 only; mask ROM, IO_MUX, Wi-Fi/BLE, ADC, I2C, SPI, timers, and LEDs are outside scope._
+
 ### `esp32s3`
 
 _Broad model surface (~35); the rubric grid proves ~9, plus a TMP102 functional read in the nightly fixtures lane. GDMA is a real 65-test mem-to-mem engine (proven via the dma rubric cell), not a stub. `spi_mem_flash`/`extmem` stay unit-only: mask-ROM bring-up reads are not firmware exercise._
@@ -234,10 +238,6 @@ _Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its decl
 ### `esp32h2`
 
 _No beyond-rubric H2 peripheral is exercised: the board smoke covers only the UART0 FIFO/console path. This narrow profile does not model mask ROM, the USB bridge, IO_MUX, WS2812/RMT, button/strap behavior, Bluetooth LE, IEEE 802.15.4, Thread, Zigbee, or the other H2 peripherals._
-
-### `esp32c2`
-
-_No beyond-rubric C2 peripheral is exercised: the ESP8684-DevKitM-1-H4X smoke covers only the UART0 FIFO/console path. This fast-boot profile does not run mask ROM or the second-stage bootloader and does not model UART pad routing, GPIO/IO_MUX, Wi-Fi, Bluetooth LE, ADC, I2C, SPI, timers, or the board RGB LED._
 
 ### `esp32c5`
 

@@ -1,0 +1,19 @@
+{
+  "id": "esp32c2",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "examples/esp8684-devkitm-1-h4x/firmware/src/main.rs",
+    "test": "uart-smoke",
+    "signal": "The committed bare ELF runs on the exact ESP8684-DevKitM-1-H4X system and writes ESP8684_H4X_UART0_OK through the modeled UART0 FIFO; the CLI smoke asserts the captured marker and expected max-step stop (2/2 assertions at 1,000,000 steps). This does not prove UART pad routing or the physical USB bridge.",
+    "lane": "core-onboarding-smoke: examples/esp8684-devkitm-1-h4x/ci/test.sh"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No SPI window is declared on configs/chips/esp32c2.yaml; SPI is outside this narrow profile."
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No I2C window is declared on configs/chips/esp32c2.yaml; I2C is outside this narrow profile."
+  }
+}

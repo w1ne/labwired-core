@@ -72,6 +72,14 @@ chips:
     advanced_dead: [cache, rng]
     shim: []
 
+  - id: esp32c2
+    arch: riscv32imc
+    headline: "Narrow ESP8684H4X UART0-only profile; no beyond-rubric feature exercise is recorded. The 1,000,000-step bare-ELF smoke covers UART0 only; mask ROM, IO_MUX, Wi-Fi/BLE, ADC, I2C, SPI, timers, and LEDs are outside scope."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: esp32s3
     arch: xtensa-lx7
     headline: "Broad model surface (~35); the rubric grid proves ~9, plus a TMP102 functional read in the nightly fixtures lane. GDMA is a real 65-test mem-to-mem engine (proven via the dma rubric cell), not a stub. `spi_mem_flash`/`extmem` stay unit-only: mask-ROM bring-up reads are not firmware exercise."
