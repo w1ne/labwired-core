@@ -60,6 +60,18 @@
     },
     {
       "assertion": {
+        "uart_contains": "ADC1 SCAN IN1=000003FF IN9=000007FF IRQ=1 RELEASED=1 END=1 OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "ADC1 SCAN CONT=000007FF,000007FF,000007FF GROUPS=3 IRQ=1 OVR=0 STOP=1 OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "uart_contains": "SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok"
       },
       "passed": true
@@ -91,24 +103,24 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      13,
-      537001958,
       0,
       3221225472,
-      128640,
-      1073759232,
-      1073875988,
+      10,
+      134246751,
+      537001956,
+      130368,
+      537001957,
       537001968,
       429496730,
-      13,
-      134236927,
-      57,
-      111,
-      537001848,
+      134246592,
+      1073759232,
+      1073875988,
       19,
-      134235726
+      537001848,
+      0,
+      134245472
     ],
-    "pc": 134235726,
+    "pc": 134245472,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -121,7 +133,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "fefd493198932fb2a51b4eaa0aa771e2fde95b99b14f0de803ef16baed06d0f1",
+  "firmware_hash": "9e4761f9ec06875e2f28dc205499968edf2ccf10e2acf2a5bf014e0477adabec",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f4_discovery.yaml",
@@ -154,6 +166,13 @@
         "name": "gpioPortA",
         "kind": "native",
         "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortB",
+        "kind": "native",
+        "base": 1073873920,
         "registers": [],
         "artifacts": []
       },
@@ -229,6 +248,17 @@
           "channel": 1
         },
         "artifacts": []
+      },
+      {
+        "id": "pot_adc1_in9",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 9
+        },
+        "artifacts": []
       }
     ]
   },
@@ -286,6 +316,18 @@
         "end_cycle": 11000
       },
       {
+        "text": "ADC1 SCAN IN1=000003FF IN9=000007FF IRQ=1 RELEASED=1 END=1 OK",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
+        "text": "ADC1 SCAN CONT=000007FF,000007FF,000007FF GROUPS=3 IRQ=1 OVR=0 STOP=1 OK",
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
+      },
+      {
         "text": "hb=0 ld4=on odr=00001000",
         "cycle_lo": 1000,
         "cycle": 11000,
@@ -293,9 +335,9 @@
       },
       {
         "text": "hb=1 ld4=off odr=00000000",
-        "cycle_lo": 201000,
-        "cycle": 211000,
-        "end_cycle": 211000
+        "cycle_lo": 211000,
+        "cycle": 221000,
+        "end_cycle": 221000
       },
       {
         "text": "hb=2 ld3=on odr=00002000",
@@ -311,9 +353,9 @@
       },
       {
         "text": "hb=4 ld5=on odr=00004000",
-        "cycle_lo": 821000,
-        "cycle": 831000,
-        "end_cycle": 831000
+        "cycle_lo": 831000,
+        "cycle": 841000,
+        "end_cycle": 841000
       },
       {
         "text": "hb=5 ld5=off odr=00000000",
@@ -377,9 +419,9 @@
       },
       {
         "text": "hb=15 ld6=off odr=00000000",
-        "cycle_lo": 3091000,
-        "cycle": 3101000,
-        "end_cycle": 3101000
+        "cycle_lo": 3101000,
+        "cycle": 3111000,
+        "end_cycle": 3111000
       },
       {
         "text": "hb=16 ld4=on odr=00001000",
@@ -395,9 +437,9 @@
       },
       {
         "text": "hb=18 ld3=on odr=00002000",
-        "cycle_lo": 3711000,
-        "cycle": 3721000,
-        "end_cycle": 3721000
+        "cycle_lo": 3721000,
+        "cycle": 3731000,
+        "end_cycle": 3731000
       },
       {
         "text": "hb=19 ld3=off odr=00000000",
@@ -420,18 +462,30 @@
       },
       "outcome": "applied",
       "at_cycle": 1000
+    },
+    {
+      "channel": "position",
+      "component": "pot_adc1_in9",
+      "value": 50.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000
     }
   ],
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 19216,
+    "text_bytes": 29040,
     "data_bytes": 0,
     "bss_bytes": 0,
-    "flash_used_bytes": 19216,
+    "flash_used_bytes": 29040,
     "ram_static_bytes": 0,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
-    "flash_used_pct": 1.83,
+    "flash_used_pct": 2.77,
     "ram_static_pct": 0.0,
     "notes": [
       "section_sum_not_bin_image",
@@ -457,96 +511,96 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 4059,
-    "memory_writes": 277,
-    "peripheral_accesses": 3873420,
+    "memory_reads": 6037,
+    "memory_writes": 372,
+    "peripheral_accesses": 3872201,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134235790,
-        "count": 353,
+        "pc": 134245356,
+        "count": 314,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134235772,
-        "count": 351,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134235808,
-        "count": 351,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134235840,
-        "count": 351,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134235726,
-        "count": 348,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134235826,
+        "pc": 134245468,
         "count": 313,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134235740,
+        "pc": 134245340,
         "count": 312,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134235744,
+        "pc": 134245368,
         "count": 312,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134235776,
+        "pc": 134245476,
         "count": 312,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134235780,
+        "pc": 134245492,
         "count": 312,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134235804,
+        "pc": 134245504,
         "count": 312,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134235844,
-        "count": 312,
+        "pc": 134245496,
+        "count": 276,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134235848,
-        "count": 312,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
-      },
-      {
-        "pc": 134235722,
-        "count": 275,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134235822,
-        "count": 275,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134235734,
+        "pc": 134245332,
         "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134245360,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134245376,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134245296,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134245324,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134245348,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134245352,
+        "count": 273,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134245364,
+        "count": 273,
         "symbol": "core::ptr::read_volatile"
       }
     ],
     "stalled_poll": {
       "peripheral": "gpioPortD",
       "offset": 20,
-      "accesses": 71299
+      "accesses": 69618
     }
   }
 }

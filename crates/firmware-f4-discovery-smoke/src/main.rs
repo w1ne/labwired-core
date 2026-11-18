@@ -44,12 +44,15 @@ const USART_UE: u32 = 1 << 13;
 const TXE: u32 = 1 << 7;
 
 const GPIOA: u32 = 0x4002_0000;
+const GPIOB: u32 = 0x4002_0400;
 const GPIOD: u32 = 0x4002_0C00;
 
 // ADC1 (F4 legacy register block).
 const ADC1: u32 = 0x4001_2000;
 const ADC_SR: *const u32 = ADC1 as *const u32;
+const ADC_CR1: *mut u32 = (ADC1 + 0x04) as *mut u32;
 const ADC_CR2: *mut u32 = (ADC1 + 0x08) as *mut u32;
+const ADC_SQR1: *mut u32 = (ADC1 + 0x2C) as *mut u32;
 const ADC_SQR3: *mut u32 = (ADC1 + 0x34) as *mut u32;
 const ADC_DR: *const u32 = (ADC1 + 0x4C) as *const u32;
 
@@ -190,6 +193,8 @@ fn main() -> ! {
     smoke_systick_pendsv_tailchain();
     smoke_systick_pendsv_psp_tailchain();
     smoke_adc1_in1();
+    #[cfg(feature = "stm32f4-adc-scan")]
+    smoke_adc1_scan_in1_in9();
 
     let mut beat: u32 = 0;
     loop {
@@ -237,6 +242,165 @@ fn smoke_adc1_in1() {
     send(b" EOC=");
     put_dec(u32::from(eoc));
     send(if passed { b" OK\r\n" } else { b" FAIL\r\n" });
+}
+
+/// RM0090 §13.3.5/§13.3.8: scan two regular ranks, observe per-rank EOC with
+/// EOCS, then verify continuous scans report each completed group. IN1 is the
+/// existing PA1 fixture; IN9 uses PB1 so USART2 TX on PA2 remains available.
+#[cfg(feature = "stm32f4-adc-scan")]
+fn smoke_adc1_scan_in1_in9() {
+    const ADC_EOC: u32 = 1 << 1;
+    const ADC_OVR: u32 = 1 << 5;
+    const SCAN: u32 = 1 << 8;
+    const EOCIE: u32 = 1 << 5;
+    const EOCS: u32 = 1 << 10;
+    const CONT: u32 = 1 << 1;
+    const SWSTART: u32 = 1 << 30;
+    const ADON: u32 = 1;
+    const ADC1_IRQ_BIT: u32 = 1 << 18;
+    const NVIC_ISPR0: *const u32 = 0xE000_E200 as *const u32;
+    const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
+
+    // PB1 is ADC1_IN9 on the F407. GPIOB is separate from the board's USART,
+    // SPI and LED pins, and is only claimed because this smoke exercises it.
+    reg_rmw(RCC_AHB1ENR, 0, 1 << 1);
+    reg_rmw(GPIOB + MODER, 0b11 << 2, 0b11 << 2);
+    unsafe {
+        write_volatile(ADC_CR2, 0);
+        write_volatile(ADC_SR as *mut u32, 0);
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        write_volatile(ADC_CR1, SCAN | EOCIE);
+        write_volatile(ADC_SQR1, 1 << 20); // L=1: two regular ranks.
+        write_volatile(ADC_SQR3, 1 | (9 << 5)); // SQ1=IN1, SQ2=IN9.
+        write_volatile(ADC_CR2, ADON | EOCS);
+        write_volatile(ADC_CR2, ADON | EOCS | SWSTART);
+    }
+
+    let mut first_eoc = false;
+    for _ in 0..100_000 {
+        first_eoc = unsafe { read_volatile(ADC_SR) } & ADC_EOC != 0;
+        if first_eoc {
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let first_irq = first_eoc && unsafe { read_volatile(NVIC_ISPR0) } & ADC1_IRQ_BIT != 0;
+    let first_code = unsafe { read_volatile(ADC_DR) } & 0x0FFF;
+
+    let mut second_eoc = false;
+    for _ in 0..100_000 {
+        second_eoc = unsafe { read_volatile(ADC_SR) } & ADC_EOC != 0;
+        if second_eoc {
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let second_irq = second_eoc && unsafe { read_volatile(NVIC_ISPR0) } & ADC1_IRQ_BIT != 0;
+    let second_code = unsafe { read_volatile(ADC_DR) } & 0x0FFF;
+    unsafe { write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT) };
+    let irq_released = unsafe { read_volatile(NVIC_ISPR0) } & ADC1_IRQ_BIT == 0;
+
+    let mut one_shot_ended = true;
+    for _ in 0..64 {
+        one_shot_ended &= unsafe { read_volatile(ADC_SR) } & ADC_EOC == 0;
+        core::hint::spin_loop();
+    }
+
+    // With EOCS clear, EOC/IRQ reports each completed regular group.
+    unsafe {
+        write_volatile(ADC_CR2, 0);
+        write_volatile(ADC_SR as *mut u32, 0);
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        write_volatile(ADC_CR1, SCAN | EOCIE);
+        write_volatile(ADC_CR2, ADON | CONT);
+        write_volatile(ADC_CR2, ADON | CONT | SWSTART);
+    }
+    let mut continuous_codes = [0u32; 3];
+    let mut continuous_eocs = true;
+    let mut continuous_irq = true;
+    for code in &mut continuous_codes {
+        let mut completed = false;
+        for _ in 0..100_000 {
+            if unsafe { read_volatile(ADC_SR) } & ADC_EOC != 0 {
+                completed = true;
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        if !completed {
+            continuous_eocs = false;
+            break;
+        }
+        continuous_irq &= unsafe { read_volatile(NVIC_ISPR0) } & ADC1_IRQ_BIT != 0;
+        *code = unsafe { read_volatile(ADC_DR) } & 0x0FFF;
+    }
+    let continuous_groups = continuous_codes == [0x07FF; 3];
+    let no_overrun = unsafe { read_volatile(ADC_SR) } & ADC_OVR == 0;
+    unsafe { write_volatile(ADC_CR2, 0) };
+    let adon_cleared = unsafe { read_volatile(ADC_CR2) } & ADON == 0;
+    unsafe { write_volatile(ADC_SR as *mut u32, 0) };
+    let mut continuous_stopped = adon_cleared;
+    for _ in 0..64 {
+        continuous_stopped &= unsafe { read_volatile(ADC_SR) } & ADC_EOC == 0;
+        core::hint::spin_loop();
+    }
+    unsafe {
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        write_volatile(ADC_CR1, 0);
+    }
+    let continuous_irq_released = unsafe { read_volatile(NVIC_ISPR0) } & ADC1_IRQ_BIT == 0;
+
+    let one_shot_ok = first_eoc
+        && second_eoc
+        && first_irq
+        && second_irq
+        && irq_released
+        && first_code == 0x03FF
+        && second_code == 0x07FF
+        && one_shot_ended;
+    let continuous_ok = continuous_eocs
+        && continuous_irq
+        && continuous_groups
+        && no_overrun
+        && continuous_stopped
+        && continuous_irq_released;
+
+    send(b"ADC1 SCAN IN1=");
+    put_hex32(first_code);
+    send(b" IN9=");
+    put_hex32(second_code);
+    send(b" IRQ=");
+    put_dec(u32::from(first_irq && second_irq));
+    send(b" RELEASED=");
+    put_dec(u32::from(irq_released));
+    send(b" END=");
+    put_dec(u32::from(one_shot_ended));
+    send(if one_shot_ok {
+        b" OK\r\n"
+    } else {
+        b" FAIL\r\n"
+    });
+
+    send(b"ADC1 SCAN CONT=");
+    for (index, code) in continuous_codes.iter().enumerate() {
+        if index != 0 {
+            send(b",");
+        }
+        put_hex32(*code);
+    }
+    send(b" GROUPS=");
+    put_dec(if continuous_groups { 3 } else { 0 });
+    send(b" IRQ=");
+    put_dec(u32::from(continuous_irq));
+    send(b" OVR=");
+    put_dec(u32::from(!no_overrun));
+    send(b" STOP=");
+    put_dec(u32::from(continuous_stopped && continuous_irq_released));
+    send(if continuous_ok {
+        b" OK\r\n"
+    } else {
+        b" FAIL\r\n"
+    });
 }
 
 /// Start-injected USART2 bytes remain pending until both legacy CR1 receiver

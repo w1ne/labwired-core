@@ -12,6 +12,12 @@ external_devices:
     connection: adc
     config:
       channel: 1
+  # External smoke fixture on the unshared PB1/ADC1_IN9 input.
+  - id: pot_adc1_in9
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 9
   - id: tc_spi1
     type: max31855
     connection: spi1

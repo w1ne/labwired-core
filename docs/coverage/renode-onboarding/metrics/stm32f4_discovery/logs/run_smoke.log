@@ -1,7 +1,8 @@
-2026-11-17T03:20:36.352687Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f4_discovery.yaml
-2026-11-17T03:20:36.420221Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+2026-11-18T03:16:16.858259Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f4_discovery.yaml
+2026-11-18T03:16:16.916529Z  INFO labwired_loader: ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-17T03:20:36.421400Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
-2026-11-17T03:20:36.421689Z  INFO labwired_cli::execute: stimulus: position = 25 applied
-PASS  9/9 checks · stm32f4_discovery-smoke · 4000000 steps · 0.76s
+2026-11-18T03:16:16.917759Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-18T03:16:16.918010Z  INFO labwired_cli::execute: stimulus: position = 25 applied
+2026-11-18T03:16:16.918023Z  INFO labwired_cli::execute: stimulus: position = 50 applied
+PASS  11/11 checks · stm32f4_discovery-smoke · 4000000 steps · 0.57s

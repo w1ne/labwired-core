@@ -1127,6 +1127,7 @@ jobs:
           - id: stm32f4_discovery
             crate: firmware-f4-discovery-smoke
             target: thumbv7em-none-eabi
+            features: stm32f4-adc-scan
             script: examples/renode-onboarding/stm32f4_discovery-smoke.yaml
             system: configs/systems/onboarding/stm32f4_discovery.yaml
           # Exercise the same bounded F4 smoke surface on the imported generic

@@ -16,7 +16,7 @@ ram:
 # exposes only the 128 KiB main SRAM used by the firmware.
 # This onboarding profile intentionally claims only the STM32F407 surface used
 # by the exact-import smoke: Cortex-M SysTick, F4 RCC, USART2, SPI1, ADC1, and
-# GPIO A/D. The remaining imported peripheral map is untested here and includes
+# GPIO A/B/D. The remaining imported peripheral map is untested here and includes
 # zero-answering stubs.
 peripherals:
 - id: systick
@@ -46,6 +46,13 @@ peripherals:
   size: 1KB
   config:
     profile: stm32v2
+- id: gpioPortB
+  type: stm32_gpioport
+  bus: sysbus
+  base_address: 0x40020400
+  size: 1KB
+  config:
+    profile: stm32v2
 - id: gpioPortD
   type: stm32_gpioport
   bus: sysbus
@@ -71,3 +78,4 @@ peripherals:
     profile: stm32f4
 analog_pins:
   PA1: { peripheral: adc1, channel: 1 }
+  PB1: { peripheral: adc1, channel: 9 }
