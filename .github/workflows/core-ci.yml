@@ -1508,6 +1508,14 @@ jobs:
       - name: Browser analog macros and regulated supply (wasm == native, bit for bit)
         if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: node scripts/test_browser_analog_macros.mjs
+      # Portable firmware executes directly as Wasm, through named device ports.
+      # Compare digital transitions and the complete analog trace with the
+      # native reference, and require incorrect drivers to fail. No CPU model.
+      - name: Browser Flex portable firmware and mixed-signal contracts
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
+        run: |
+          sh crates/wasm/tests/fixtures/flex-mixed-signal/build.sh
+          node scripts/test_browser_flex.mjs
 
   # Post-merge since 2026-11-13 (the job id keeps its old name so the
   # lane references in crates/core/src/tests and validation/ stay valid).
