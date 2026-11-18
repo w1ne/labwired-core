@@ -36,7 +36,7 @@ boards:
     rust_targets: [thumbv7em-none-eabi]
     gate: true
   # Demand group #4/#4: other STM32 is 13% of MCU use; Nucleo/Discovery kits
-  # are 23%. The active H533RE Nucleo smoke covers USART2 VCP and PA5/LD2.
+  # are 23%. Active H533RE Nucleo smoke covers USART2, PA5/LD2, and BME280 I2C1.
   - id: nucleo-h533re
     kind: sim-validate
     path: examples/nucleo-h533re
