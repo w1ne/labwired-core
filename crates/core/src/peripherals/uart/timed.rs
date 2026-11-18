@@ -223,6 +223,10 @@ impl Uart {
             stop_half_bits,
             rx_enabled: ue && self.cr1 & CR1_RE != 0,
             tx_enabled: ue && self.cr1 & CR1_TE != 0,
+            // ST RM0351 USART_CR2: RXINV bit16, TXINV bit17. Legacy STM32
+            // layouts do not expose these modern polarity controls.
+            tx_inverted: self.modern_timed() && self.cr2 & (1 << 17) != 0,
+            rx_inverted: self.modern_timed() && self.cr2 & (1 << 16) != 0,
         }
     }
 

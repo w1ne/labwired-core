@@ -40,6 +40,8 @@ fn setup() -> (Uart, CycleClock, TimedUartPort, LineFormat) {
         stop_half_bits: 2,
         rx_enabled: true,
         tx_enabled: true,
+        tx_inverted: false,
+        rx_inverted: false,
     };
     (uart, clock, peer, format)
 }
@@ -158,4 +160,76 @@ fn icr_clears_only_selected_error_and_rx_flush_preserves_error() {
     assert_eq!(read32(&uart, 0x1c) & 3, 2);
     write32(&mut uart, 0x20, 2);
     assert_eq!(read32(&uart, 0x1c) & 3, 0);
+}
+
+// Real L6362A firmware programs both CR2 polarity bits. Ignoring them can
+// make two incorrectly wired transceivers appear to exchange valid bytes.
+#[test]
+fn txinv_inverts_the_complete_8e1_waveform() {
+    for tx_inverted in [false, true] {
+        for rx_inverted in [false, true] {
+            let (mut uart, clock, peer, mut format) = setup();
+            write32(&mut uart, 4, u32::from(tx_inverted) << 17);
+            format.rx_inverted = rx_inverted;
+            write32(&mut uart, 0x28, 0x5a);
+            clock.publish(1);
+            uart.tick();
+            let (received, _) = peer.receive_due(10_000, &format, false);
+            let clean = received
+                .is_some_and(|d| d.value & 0xff == 0x5a && !d.parity_error && !d.framing_error);
+            assert_eq!(
+                clean,
+                tx_inverted == rx_inverted,
+                "TXINV={tx_inverted}, receiver inversion={rx_inverted}"
+            );
+        }
+    }
+}
+
+#[test]
+fn rxinv_normalizes_start_data_parity_and_stop_before_decoding() {
+    for tx_inverted in [false, true] {
+        for rx_inverted in [false, true] {
+            let (mut uart, clock, peer, mut format) = setup();
+            write32(&mut uart, 4, u32::from(rx_inverted) << 16);
+            format.tx_inverted = tx_inverted;
+            peer.transmit(0, 0xa5, format);
+            clock.publish(10_000);
+            uart.tick();
+            let status = read32(&uart, 0x1c);
+            let value = uart.read(0x24).unwrap();
+            let clean = status & (1 << 5) != 0 && status & 3 == 0 && value == 0xa5;
+            assert_eq!(
+                clean,
+                tx_inverted == rx_inverted,
+                "sender inversion={tx_inverted}, RXINV={rx_inverted}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_transmitted_frames_polarity_does_not_change_with_later_cr2_writes() {
+    let (mut uart, clock, peer, mut format) = setup();
+    write32(&mut uart, 4, 1 << 17);
+    write32(&mut uart, 0x28, 0xff);
+    clock.publish(1);
+    uart.tick();
+    // Change CR2 after the start bit. The active frame retains its format.
+    write32(&mut uart, 4, 0);
+    format.rx_inverted = true;
+    let (received, _) = peer.receive_due(5000, &format, false);
+    let received = received.expect("inverted frame");
+    assert_eq!(received.value & 0xff, 0xff);
+    assert!(!received.parity_error && !received.framing_error);
+    clock.publish(6000);
+    uart.tick();
+    write32(&mut uart, 0x28, 0);
+    clock.publish(6001);
+    uart.tick();
+    format.rx_inverted = false;
+    let (received, _) = peer.receive_due(12000, &format, false);
+    let received = received.expect("next non-inverted frame");
+    assert_eq!(received.value & 0xff, 0);
+    assert!(!received.parity_error && !received.framing_error);
 }

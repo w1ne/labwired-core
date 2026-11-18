@@ -69,6 +69,8 @@ fn format() -> LineFormat {
         stop_half_bits: 2,
         rx_enabled: true,
         tx_enabled: true,
+        tx_inverted: false,
+        rx_inverted: false,
     }
 }
 
