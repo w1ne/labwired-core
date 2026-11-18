@@ -54,6 +54,9 @@ const ADC_CR1: *mut u32 = (ADC1 + 0x04) as *mut u32;
 const ADC_CR2: *mut u32 = (ADC1 + 0x08) as *mut u32;
 const ADC_SQR1: *mut u32 = (ADC1 + 0x2C) as *mut u32;
 const ADC_SQR3: *mut u32 = (ADC1 + 0x34) as *mut u32;
+const ADC_JSQR: *mut u32 = (ADC1 + 0x38) as *mut u32;
+const ADC_JDR1: *const u32 = (ADC1 + 0x3C) as *const u32;
+const ADC_JDR2: *const u32 = (ADC1 + 0x40) as *const u32;
 const ADC_DR: *const u32 = (ADC1 + 0x4C) as *const u32;
 
 // SPI1 (F4 classic block: CR1/CR2/SR/DR).
@@ -195,6 +198,8 @@ fn main() -> ! {
     smoke_adc1_in1();
     #[cfg(feature = "stm32f4-adc-scan")]
     smoke_adc1_scan_in1_in9();
+    #[cfg(feature = "stm32f4-adc-injected")]
+    smoke_adc1_injected_scan_in1_in9();
 
     let mut beat: u32 = 0;
     loop {
@@ -401,6 +406,94 @@ fn smoke_adc1_scan_in1_in9() {
     } else {
         b" FAIL\r\n"
     });
+}
+
+/// RM0090 §§13.3.9, 13.13.12: software-start a two-rank injected group on
+/// JSQ3=IN1 and JSQ4=IN9, read JDR1/JDR2, and check group-end JEOC/IRQ.
+/// This smoke does not claim external timer triggers, auto-injection, or
+/// preemption of an in-flight regular conversion.
+#[cfg(feature = "stm32f4-adc-injected")]
+fn smoke_adc1_injected_scan_in1_in9() {
+    const ADC_JEOC: u32 = 1 << 2;
+    const SCAN: u32 = 1 << 8;
+    const JEOCIE: u32 = 1 << 7;
+    const JSWSTART: u32 = 1 << 22;
+    const ADON: u32 = 1;
+    const ADC1_IRQ_BIT: u32 = 1 << 18;
+    const NVIC_ISPR0: *const u32 = 0xE000_E200 as *const u32;
+    const NVIC_ICPR0: *mut u32 = 0xE000_E280 as *mut u32;
+
+    unsafe {
+        write_volatile(ADC_CR2, 0);
+        write_volatile(ADC_SR as *mut u32, 0);
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+        write_volatile(ADC_CR1, SCAN | JEOCIE);
+        // JL=1 gives two conversions; short injected groups use JSQ3 then JSQ4.
+        write_volatile(ADC_JSQR, (1 << 20) | (1 << 10) | (9 << 15));
+        write_volatile(ADC_CR2, ADON);
+        write_volatile(ADC_CR2, ADON | JSWSTART);
+    }
+
+    let mut first_rank_ready = false;
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(ADC_JDR1) } & 0x0FFF == 0x03FF {
+            first_rank_ready = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let no_early_jeoc = first_rank_ready && unsafe { read_volatile(ADC_SR) } & ADC_JEOC == 0;
+    let no_early_irq = first_rank_ready && unsafe { read_volatile(NVIC_ISPR0) } & ADC1_IRQ_BIT == 0;
+
+    let mut group_done = false;
+    for _ in 0..100_000 {
+        if unsafe { read_volatile(ADC_SR) } & ADC_JEOC != 0 {
+            group_done = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let jeoc_irq = group_done && unsafe { read_volatile(NVIC_ISPR0) } & ADC1_IRQ_BIT != 0;
+    let first_code = unsafe { read_volatile(ADC_JDR1) } & 0x0FFF;
+    let second_code = unsafe { read_volatile(ADC_JDR2) } & 0x0FFF;
+    let regular_eoc_clear = unsafe { read_volatile(ADC_SR) } & (1 << 1) == 0;
+
+    unsafe {
+        write_volatile(ADC_SR as *mut u32, !ADC_JEOC);
+        write_volatile(NVIC_ICPR0, ADC1_IRQ_BIT);
+    }
+    let jeoc_cleared = unsafe { read_volatile(ADC_SR) } & ADC_JEOC == 0;
+    let irq_released = unsafe { read_volatile(NVIC_ISPR0) } & ADC1_IRQ_BIT == 0;
+    unsafe { write_volatile(ADC_CR2, 0) };
+    let mut stopped = unsafe { read_volatile(ADC_CR2) } & ADON == 0;
+    for _ in 0..64 {
+        stopped &= unsafe { read_volatile(ADC_SR) } & ADC_JEOC == 0;
+        core::hint::spin_loop();
+    }
+    unsafe { write_volatile(ADC_CR1, 0) };
+
+    let passed = first_rank_ready
+        && no_early_jeoc
+        && no_early_irq
+        && group_done
+        && jeoc_irq
+        && first_code == 0x03FF
+        && second_code == 0x07FF
+        && regular_eoc_clear
+        && jeoc_cleared
+        && irq_released
+        && stopped;
+    send(b"ADC1 INJECTED JDR=");
+    put_hex32(first_code);
+    send(b",");
+    put_hex32(second_code);
+    send(b" JEOC=");
+    put_dec(u32::from(group_done));
+    send(b" IRQ=");
+    put_dec(u32::from(jeoc_irq && no_early_irq));
+    send(b" CLEAR=");
+    put_dec(u32::from(jeoc_cleared && irq_released && stopped));
+    send(if passed { b" OK\r\n" } else { b" FAIL\r\n" });
 }
 
 /// Start-injected USART2 bytes remain pending until both legacy CR1 receiver

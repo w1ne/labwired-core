@@ -11,6 +11,7 @@ license = "MIT"
 
 [features]
 stm32f4-adc-scan = []
+stm32f4-adc-injected = []
 
 [dependencies]
 cortex-m-rt = "0.7"

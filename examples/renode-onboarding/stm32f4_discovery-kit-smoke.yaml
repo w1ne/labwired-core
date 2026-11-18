@@ -23,6 +23,7 @@ assertions:
   - uart_contains: "ADC1 IN1=000003FF EOC=1 OK"
   - uart_contains: "ADC1 SCAN IN1=000003FF IN9=000007FF IRQ=1 RELEASED=1 END=1 OK"
   - uart_contains: "ADC1 SCAN CONT=000007FF,000007FF,000007FF GROUPS=3 IRQ=1 OVR=0 STOP=1 OK"
+  - uart_contains: "ADC1 INJECTED JDR=000003FF,000007FF JEOC=1 IRQ=1 CLEAR=1 OK"
   - uart_contains: "SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok"
   - uart_contains: "SysTick PendSV PSP tailchain frame=1 r0=1 pending=1 ipsr=14 ok"
   - uart_ordered:

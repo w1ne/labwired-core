@@ -835,7 +835,7 @@ SMOKE_MAPPINGS = {
     "stm32f4_discovery-kit": {
         "crate": "firmware-f4-discovery-smoke",
         "target": "thumbv7em-none-eabi",
-        "features": "stm32f4-adc-scan",
+        "features": "stm32f4-adc-scan,stm32f4-adc-injected",
         "script": "examples/renode-onboarding/stm32f4_discovery-kit-smoke.yaml",
     },
     "stm32f746": {
