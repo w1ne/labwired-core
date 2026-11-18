@@ -14,9 +14,30 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
   equal(WebAssembly.Module.imports(firmware).map(({ module, name }) => `${module}.${name}`).sort(),
     ['labwired.advance_ns', 'labwired.read', 'labwired.write'], 'unexpected portable firmware imports');
 
+  let runReport;
   const run = (lux) => {
     const runtime = WasmFlexRuntime.new_from_yaml(system);
     try {
+      const report = canonical(runtime.run_report());
+      check(report.execution_path === 'flex_portable_wasm'
+        && report.target_cpu_emulated === false
+        && report.time_unit === 'ns'
+        && report.scope_notes_complete === true,
+      'the project run report must identify portable firmware, nanoseconds, and declared scope');
+      check(report.model_name === 'heypcb-esp32-s3-ldr-gl5528'
+        && report.assumptions.length === 3
+        && report.unsupported_checks.length === 3,
+      'the project run report omitted its model assumptions or unsupported checks');
+      const sensorModel = report.models.find((model) => model.id === 'source-u4-gl5528');
+      check(sensorModel?.adapter === 'behavior' && sensorModel.step_ns === 1000
+        && sensorModel.model_type === 'ldr'
+        && sensorModel.inputs.some((binding) => binding.name === 'lux'
+          && binding.signal === 'environment.lux')
+        && sensorModel.outputs.some((binding) => binding.name === 'voltage_mv'
+          && binding.signal === 'source.U3.GPIO1'),
+      'the project run report omitted the registered LDR binding, model type, or time resolution');
+      if (runReport === undefined) runReport = report;
+      else equal(report, runReport, 'run report changed between positive and negative controls');
       const ports = Object.fromEntries(['lux', 'sensor_mv', 'user_led_drive', 'user_led_state']
         .map((name) => [name, runtime.port_id(name)]));
       const instance = new WebAssembly.Instance(firmware, { labwired: {
@@ -94,6 +115,7 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
       positive: scopeSummary(positive),
       negative: scopeSummary(negative),
     },
-    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'bright-output', 'dark-negative-control', 'oscilloscope-samples'],
+    run_report: runReport,
+    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'bright-output', 'dark-negative-control', 'oscilloscope-samples'],
   };
 }

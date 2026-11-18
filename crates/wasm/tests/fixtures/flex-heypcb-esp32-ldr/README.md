@@ -16,6 +16,8 @@ The portable Wasm firmware applies dark (`0 lx`) and bright (`100000 lx`) stimul
 
 The oscilloscope samples show the catalog lookup output. They do not model a GL5528 transient response or C7's analog smoothing; the board's other power, USB, boot/reset, RF, MCU and board behavior is outside this slice.
 
+`WasmFlexRuntime.run_report()` returns the model name, named ports, model IDs/types, signal bindings and resolutions, declared assumptions and unsupported checks, and the selected `flex_portable_wasm` path with `target_cpu_emulated: false` and `time_unit: ns`. Older manifests without both scope lists report `scope_notes_complete: false`; an empty list is not presented as evidence that there are no gaps. The full YAML model, pinned source/license and firmware artifact hashes remain project provenance for the existing Library/Playground UI to display alongside this compact runtime report.
+
 This proves the functional portable behavior program against the existing generic Flex runtime in the local ephemeral browser harness. It is not a public Library/Playground launch. It does **not** execute original ESP32 firmware, emulate ESP32-S3 instructions or ADC peripherals, prove chip parity, cover the full board, or provide physical hardware evidence. The source project had no board firmware to run.
 
 ## Reproduce
@@ -36,3 +38,5 @@ LABWIRED_PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs \
 The README, source pins, live discovery, schematic import, PCB import, and runtime proof above are the reproducible steps for this board. A parallel GitHub fetch + LabWired discovery + two imports completed in 3.541s. On this lane, the first native compile for the targeted source-map/runtime tests took 2m13s including dependency compilation; those two tests executed in 0.09s. The latest full eight-test Flex suite run took 5.87s including a small test recompilation (0.06s test execution). The error-boundary ratchet completed in 0.11s (0.01s test execution). Building the portable module from `firmware.rs` took 0.06s. `wasm-pack build crates/wasm --target web --dev --out-dir pkg-flex-web` took 2m26.78s, and the browser fixture completed in 6.153s in Chrome 156.0.8078.79 with Playwright 1.58.2.
 
 These are lane measurements for reproducing this fixture, not a comparison of development effort. No comparable chip-specific Rust model onboarding run was measured, so no speed claim is made.
+
+The updated `browser.json.measured_browser_ms` records the page-side WebAssembly initialization and positive/negative checks in the current Chromium run; it is not onboarding time.

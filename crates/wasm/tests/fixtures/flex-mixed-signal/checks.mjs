@@ -28,6 +28,17 @@ export function runPortableChecks(WasmFlexRuntime, system, firmwareBytes, expect
     } });
     return { runtime, instance };
   };
+  const reportProbe = WasmFlexRuntime.new_from_yaml(system);
+  try {
+    const report = canonical(reportProbe.run_report());
+    check(report.execution_path === 'flex_portable_wasm'
+      && report.target_cpu_emulated === false && report.time_unit === 'ns',
+    'the run report must identify the selected portable execution path and time unit');
+    check(report.scope_notes_complete === false
+      && report.assumptions.length === 0
+      && report.unsupported_checks.length === 0,
+    'missing scope notes must be reported as incomplete rather than as no unsupported checks');
+  } finally { reportProbe.free(); }
   const digital = (runtime, driven) => {
     const batch = canonical(runtime.digital_trace_snapshot(0n));
     check(batch.time_unit === 'ns' && batch.dropped === 0, 'digital trace time unit or loss');

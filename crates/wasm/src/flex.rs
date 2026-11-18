@@ -6,8 +6,68 @@
 //! module whose `labwired.read/write/advance_ns` imports call this facade.
 //! It executes directly in the browser; this object contains no emulated CPU.
 
+use labwired_config::{CosimAdapter, CosimModelConfig, FlexPort};
 use labwired_core::flex::FlexRuntime;
+use serde::Serialize;
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
+
+#[derive(Serialize)]
+struct BrowserSignalBinding {
+    name: String,
+    signal: String,
+}
+
+#[derive(Serialize)]
+struct BrowserModelSummary {
+    id: String,
+    adapter: CosimAdapter,
+    model_type: Option<String>,
+    step_ns: u64,
+    inputs: Vec<BrowserSignalBinding>,
+    outputs: Vec<BrowserSignalBinding>,
+}
+
+fn signal_bindings(bindings: &HashMap<String, String>) -> Vec<BrowserSignalBinding> {
+    let mut result: Vec<_> = bindings
+        .iter()
+        .map(|(name, signal)| BrowserSignalBinding {
+            name: name.clone(),
+            signal: signal.clone(),
+        })
+        .collect();
+    result.sort_by(|left, right| left.name.cmp(&right.name));
+    result
+}
+
+fn model_summary(model: &CosimModelConfig) -> BrowserModelSummary {
+    BrowserModelSummary {
+        id: model.id.clone(),
+        adapter: model.adapter,
+        model_type: model
+            .config
+            .get("device_type")
+            .and_then(serde_yaml::Value::as_str)
+            .map(str::to_owned),
+        step_ns: model.step_ns,
+        inputs: signal_bindings(&model.inputs),
+        outputs: signal_bindings(&model.outputs),
+    }
+}
+
+#[derive(Serialize)]
+struct BrowserRunReport {
+    execution_path: &'static str,
+    target_cpu_emulated: bool,
+    time_unit: &'static str,
+    scope_notes_complete: bool,
+    schema_version: u32,
+    model_name: String,
+    assumptions: Vec<String>,
+    unsupported_checks: Vec<String>,
+    ports: Vec<FlexPort>,
+    models: Vec<BrowserModelSummary>,
+}
 
 #[wasm_bindgen]
 pub struct WasmFlexRuntime {
@@ -50,6 +110,27 @@ impl WasmFlexRuntime {
 
     pub fn ports(&self) -> Result<JsValue, JsValue> {
         serde_wasm_bindgen::to_value(&self.runtime.manifest().ports).map_err(js_error)
+    }
+
+    /// Compact execution context plus the validated, reproducible model
+    /// contract for the existing project UI. Empty scope notes remain visible
+    /// through `scope_notes_complete` instead of being treated as "no gaps".
+    pub fn run_report(&self) -> Result<JsValue, JsValue> {
+        let manifest = self.runtime.manifest();
+        let report = BrowserRunReport {
+            execution_path: "flex_portable_wasm",
+            target_cpu_emulated: false,
+            time_unit: "ns",
+            scope_notes_complete: !manifest.assumptions.is_empty()
+                && !manifest.unsupported_checks.is_empty(),
+            schema_version: manifest.schema_version,
+            model_name: manifest.name.clone(),
+            assumptions: manifest.assumptions.clone(),
+            unsupported_checks: manifest.unsupported_checks.clone(),
+            ports: manifest.ports.clone(),
+            models: manifest.cosim_models.iter().map(model_summary).collect(),
+        };
+        serde_wasm_bindgen::to_value(&report).map_err(js_error)
     }
 
     pub fn digital_trace_snapshot(&mut self, cursor: u64) -> Result<JsValue, JsValue> {

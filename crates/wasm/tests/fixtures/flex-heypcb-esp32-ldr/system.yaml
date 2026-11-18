@@ -2,6 +2,14 @@
 # Portable firmware runs in WasmFlexRuntime; the ESP32 CPU is not emulated.
 schema_version: 1
 name: heypcb-esp32-s3-ldr-gl5528
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - The registered LDR kit uses a typical 10 kΩ-at-10-lux curve and samples a static divider value at model boundaries.
+  - The IO48 user LED is represented by digital logic state only.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or ADC peripheral fidelity; the pinned source contains no board firmware.
+  - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+  - GL5528 production spread, C7 transient smoothing, and physical optical or electrical behavior.
 ports:
   - { name: lux, signal: environment.lux, access: write, kind: number, unit: lx, initial: 100 }
   - { name: sensor_mv, signal: source.U3.GPIO1, access: read, kind: number, unit: mV }

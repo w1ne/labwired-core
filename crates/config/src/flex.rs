@@ -18,6 +18,13 @@ use crate::{CosimAdapter, CosimModelConfig};
 pub struct FlexManifest {
     pub schema_version: u32,
     pub name: String,
+    /// User-visible assumptions that scope this functional model. Empty for
+    /// older manifests; callers must surface that as incomplete metadata.
+    #[serde(default)]
+    pub assumptions: Vec<String>,
+    /// Checks the model cannot establish, even when its modeled behavior runs.
+    #[serde(default)]
+    pub unsupported_checks: Vec<String>,
     pub ports: Vec<FlexPort>,
     pub cosim_models: Vec<CosimModelConfig>,
 }
@@ -75,6 +82,17 @@ impl FlexManifest {
             !self.name.trim().is_empty() && self.name == self.name.trim(),
             "Flex name must be a nonempty, trimmed string"
         );
+        for (field, notes) in [
+            ("assumptions", &self.assumptions),
+            ("unsupported_checks", &self.unsupported_checks),
+        ] {
+            ensure!(
+                notes
+                    .iter()
+                    .all(|note| !note.trim().is_empty() && note == note.trim()),
+                "Flex {field} entries must be nonempty and trimmed"
+            );
+        }
 
         let mut port_names = HashSet::new();
         let mut write_signals = HashMap::new();
@@ -439,6 +457,30 @@ cosim_models:
         ] {
             assert!(FlexManifest::from_yaml(&yaml).is_err(), "{yaml}");
         }
+    }
+
+    #[test]
+    fn scope_notes_round_trip_and_reject_blank_entries() {
+        let mut manifest = manifest();
+        manifest.assumptions = vec!["portable firmware uses named ports".into()];
+        manifest.unsupported_checks = vec!["target instruction fidelity".into()];
+        let loaded = FlexManifest::from_yaml(&serde_yaml::to_string(&manifest).unwrap()).unwrap();
+        assert_eq!(loaded.assumptions, manifest.assumptions);
+        assert_eq!(loaded.unsupported_checks, manifest.unsupported_checks);
+
+        manifest.assumptions.push("  ".into());
+        assert!(manifest
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("assumptions entries"));
+        manifest.assumptions.pop();
+        manifest.unsupported_checks.push("not trimmed ".into());
+        assert!(manifest
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("unsupported_checks entries"));
     }
 
     #[test]

@@ -21,10 +21,22 @@
       ],
       "dropped": 0,
       "samples": [
-        [0, 2751],
-        [1000, 3294],
-        [2000, 3294],
-        [3000, 3294]
+        [
+          0,
+          2751
+        ],
+        [
+          1000,
+          3294
+        ],
+        [
+          2000,
+          3294
+        ],
+        [
+          3000,
+          3294
+        ]
       ]
     },
     "negative": {
@@ -36,9 +48,18 @@
       ],
       "dropped": 0,
       "samples": [
-        [0, 2751],
-        [1000, 0],
-        [2000, 0]
+        [
+          0,
+          2751
+        ],
+        [
+          1000,
+          0
+        ],
+        [
+          2000,
+          0
+        ]
       ]
     }
   },
@@ -47,11 +68,97 @@
     "portable-firmware-execution",
     "native-model-equality",
     "pinned-source-mapping",
+    "run-scope-report",
     "bright-output",
     "dark-negative-control",
     "oscilloscope-samples"
   ],
   "browser": "156.0.8078.79",
-  "playwright": "1.58.2",
-  "measured_wall_seconds": 6.153
+  "run_report": {
+    "assumptions": [
+      "Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.",
+      "The registered LDR kit uses a typical 10 kΩ-at-10-lux curve and samples a static divider value at model boundaries.",
+      "The IO48 user LED is represented by digital logic state only."
+    ],
+    "execution_path": "flex_portable_wasm",
+    "model_name": "heypcb-esp32-s3-ldr-gl5528",
+    "models": [
+      {
+        "adapter": "behavior",
+        "id": "source-u4-gl5528",
+        "inputs": [
+          {
+            "name": "lux",
+            "signal": "environment.lux"
+          }
+        ],
+        "model_type": "ldr",
+        "outputs": [
+          {
+            "name": "voltage_mv",
+            "signal": "source.U3.GPIO1"
+          }
+        ],
+        "step_ns": 1000
+      },
+      {
+        "adapter": "behavior",
+        "id": "source-d1-user-led",
+        "inputs": [
+          {
+            "name": "drive",
+            "signal": "source.U3.GPIO48"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "led",
+            "signal": "source.D1.logic_state"
+          }
+        ],
+        "step_ns": 1000
+      }
+    ],
+    "ports": [
+      {
+        "access": "write",
+        "initial": 100,
+        "kind": "number",
+        "name": "lux",
+        "signal": "environment.lux",
+        "unit": "lx"
+      },
+      {
+        "access": "read",
+        "kind": "number",
+        "name": "sensor_mv",
+        "signal": "source.U3.GPIO1",
+        "unit": "mV"
+      },
+      {
+        "access": "write",
+        "initial": 0,
+        "kind": "bool",
+        "name": "user_led_drive",
+        "signal": "source.U3.GPIO48"
+      },
+      {
+        "access": "read",
+        "kind": "bool",
+        "name": "user_led_state",
+        "signal": "source.D1.logic_state"
+      }
+    ],
+    "schema_version": 1,
+    "scope_notes_complete": true,
+    "target_cpu_emulated": false,
+    "time_unit": "ns",
+    "unsupported_checks": [
+      "Original ESP32-S3 firmware execution and target instruction or ADC peripheral fidelity; the pinned source contains no board firmware.",
+      "Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.",
+      "GL5528 production spread, C7 transient smoothing, and physical optical or electrical behavior."
+    ]
+  },
+  "browser_driver": "Chrome DevTools MCP",
+  "measured_browser_ms": 601.5
 }
