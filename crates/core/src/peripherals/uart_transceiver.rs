@@ -20,6 +20,9 @@ pub trait DigitalUartTransceiver: Debug + Send + Sync {
     fn clock_valid(&self) -> bool {
         true
     }
+    /// True only while the physical receiver can present a valid serial
+    /// waveform to the MCU, including its enable and filter state. This
+    /// also governs local TX echo; a forced idle output is not an echo.
     fn receiver_valid(&self) -> bool {
         self.clock_valid()
     }

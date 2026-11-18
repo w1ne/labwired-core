@@ -2375,8 +2375,9 @@ impl Uart {
                 return;
             }
             on_bus = phy.allow_tx();
-            // TI RX is always active; the MCU must disable RE to reject echo.
-            echo = on_bus && self.cr1 & (1 | (1 << 2)) == (1 | (1 << 2));
+            // Local echo requires both the PHY receiver and MCU RE. Some
+            // PHYs force RX idle while their driver is active.
+            echo = on_bus && phy.receiver_valid() && self.cr1 & (1 | (1 << 2)) == (1 | (1 << 2));
         }
         if self.rs485.is_some() {
             let now = self.stream_clock.as_ref().map_or(0, |c| c.now());

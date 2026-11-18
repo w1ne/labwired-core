@@ -193,7 +193,12 @@ fn physical_noninverting_phy_composes_with_stm32_pin_inversion() {
     assert!(!got.parity_error && !got.framing_error);
     clock.publish(25000);
     uart.tick();
-    let _ = uart.read(0x24);
+    assert_eq!(
+        read32(&uart, 0x1c) & ((1 << 5) | 0xf),
+        1 << 5,
+        "L6362A receiver remains active during TX: genuine echo is preserved"
+    );
+    assert_eq!(uart.read(0x24).unwrap(), 0xa5);
     en.store(false, Ordering::Relaxed);
     peer.transmit(30000, 0x3c, fmt);
     clock.publish(55000);

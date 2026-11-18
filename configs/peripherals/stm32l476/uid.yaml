@@ -6,9 +6,10 @@
 #
 # Zero is an explicitly unspecified SIMULATED identity, not a factory reset
 # value and not a reading from a physical die. For per-node identity tests,
-# override peripheral id uid with a source-pinned declarative descriptor
-# containing that node's explicit synthetic 96-bit fixture. Do not claim
-# uniqueness from the shared default.
+# set config.reset_values on peripheral id uid to the node's explicit
+# synthetic UID0/UID1/UID2 fixture. Register widths/access stay unchanged,
+# and the same embedded descriptor works in native and WASM builds.
+# Do not claim uniqueness from the shared default.
 peripheral: "STM32L476_UID"
 version: "1.0"
 registers:

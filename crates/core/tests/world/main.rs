@@ -25,3 +25,5 @@ mod world_manifest_validation;
 mod world_node_factory;
 mod world_uart_network;
 mod world_yaml_and_plugin;
+
+mod world_iolink_physical;
