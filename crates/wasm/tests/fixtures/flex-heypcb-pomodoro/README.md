@@ -6,16 +6,17 @@ The exact source is [HeyPCB Pomodoro Pal at revision `1d6e50ff9998978e6f45218950
 
 The imported schematic connects U1.PD6 to R5.1 and ties R5.1 to R6.1; R5.2 and R6.2 connect to D1.A and D2.A. The PCB file names that shared trace `LEAF` and connects it to footprint pad U1.3, R5.1 and R6.1. The schematic also ties D1.K and D2.K to BZ1's negative pin. The Flex fixture maps the GPIO signal and two LED logic-state outputs through `FlexManifest` ports and the existing `CosimRunner` behavior engine; it does not model current through the resistors, LED physics, BZ1, or that shared return path.
 
-The observation is limited to digital logic state. The LabWired catalog describes generic `led` as `netlist-only`; this fixture does not claim LED current, optical output, analog fidelity, full-board coverage, or physical hardware behavior. Discovery lists a 22-pin `ch32v003f4p6` catalog model and its PD6 entry, while the fresh Part Knowledge lookup for that exact name returned `NOT_FOUND`; the model inventory is not vendor-backed Part Knowledge. Part Knowledge also returned `NOT_FOUND` for the source buzzer MPN `PKMCS0909E4000`; the schematic maps it to a generic buzzer, but the PCB importer marks BZ1 design-only and it is not simulated. The fresh `labwired_validate` call processed the imported schematic and returned one error (`BOARDIO_NOT_TO_MCU` for D2) and two warnings (`COMPONENT_DANGLING` for D2 and `BOARD_NOT_RUNNABLE` for the MCU); the board has no hosted compile/run lane, so this is not a validation pass. The original HEX's prior 746-cycle stop at unmapped `0xe000f000` remains an unsupported original-firmware result.
+The observation is limited to digital logic state. The LabWired catalog describes generic `led` as `netlist-only`; this fixture does not claim LED current, optical output, analog fidelity, full-board coverage, or physical hardware behavior. A live discovery refresh on 2026-11-18 returned one 22-pin `ch32v003f4p6` catalog model, with `PD6` at GPIO 6, `catalog_runnable=true`, and no hosted toolchains. The fresh Part Knowledge lookup for that exact name returned `NOT_FOUND`; the catalog model is not vendor-backed Part Knowledge or evidence that the original firmware can run. Part Knowledge also returned `NOT_FOUND` for the source buzzer MPN `PKMCS0909E4000`; the schematic maps it to a generic buzzer, but the PCB importer marks BZ1 design-only and it is not simulated. The live LED description returned pins A/K and `netlist-only` backing (`degraded=false`, `validation=none`). The fresh `labwired_validate` call processed the imported schematic and returned one error (`BOARDIO_NOT_TO_MCU` for D2) and two warnings (`COMPONENT_DANGLING` for D2 and `BOARD_NOT_RUNNABLE` for the MCU); this is not a validation pass. The original HEX's prior 746-cycle stop at unmapped `0xe000f000` remains an unsupported original-firmware result.
 
-The source import is not currently a saved LabWired project. `labwired_project_list(q: "Pomodoro")` returned no projects. The browser Library owner retains the paired-source importer and browser launch flow.
+The source import is not currently a saved LabWired project. `labwired_project_list(q: "Pomodoro")` returned no projects. The saved board-project flow uses a board, diagram and firmware, and invokes hosted-twin verification during creation. This fixture runs portable Wasm through Flex and supplies no target-board firmware to that flow, so no saved board project exists for this slice. The browser Library owner retains the paired-source importer and browser launch flow.
 
-`browser.json` records the actual Chromium run: portable Wasm returned `status=passed`, emitted six positive logic edges and zero negative-control edges in Chromium 149.0.7827.55. The test completed by matching the browser observations to `native.json`.
+`browser.json` records the actual Chromium run: portable Wasm returned `status=passed`, emitted six positive logic edges and zero negative-control edges in Chrome 156.0.8078.79. The test completed by matching the browser observations to `native.json`. The native test now checks the exact manifest port/model bindings against the pinned source map, so a YAML signal substitution cannot pass by merely leaving the expected signal strings elsewhere in the file.
 
 ## Reproduce
 
 ```sh
-cargo test -p labwired-wasm --lib flex_heypcb_pomodoro -- --nocapture
+cargo test -p labwired-wasm --lib flex_ -- --nocapture
+cargo test -p labwired-wasm --lib error_boundary_ratchet -- --nocapture
 crates/wasm/tests/fixtures/flex-heypcb-pomodoro/build.sh
 wasm-pack build crates/wasm --target web --dev --out-dir pkg-flex-web
 LABWIRED_PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs \
@@ -32,8 +33,9 @@ The test compares the compiled portable firmware's positive pulse and inactive n
 - This round's pinned-import graph and native behavior tests: 8.96 s including compilation; both tests executed in 0.00 s.
 - Portable firmware module build: 0.18 s.
 - First `wasm-pack` browser-runtime build: 5m56s, including the initial Wasm dependency build.
-- This round's provenance-bound native tests: 5.89 s on the first run and 9.54 s on the final rerun, including compilation; both tests executed in 0.00 s.
-- This round's warm `wasm-pack` browser-runtime build: 12.30 s.
-- Chromium fixture run: 2.46 s in Chromium 149.0.7827.55 with Playwright 1.58.2; the browser returned six positive logic edges and zero negative-control edges.
+- This round's six native Flex tests: 6.01 s including compilation; tests executed in 0.00 s.
+- This round's error-boundary ratchet: 0.20 s; all seven tests passed, including the omitted-source negative control.
+- This round's `wasm-pack` browser-runtime build: 27.31 s.
+- Chromium fixture run: 3.79 s in Chrome 156.0.8078.79 with Playwright 1.58.2; the browser returned six positive logic edges and zero negative-control edges. Rebuilding the portable firmware from `firmware.rs` reproduced SHA-256 `ab98dfec16e96f75e72f39bec6d98fc12fb9b92cf7439a45bbcb43811f137d5f`.
 
 These are reproducible lane measurements for this fixture, not a speed comparison. No comparable CH32V003 Rust-model onboarding run was measured, so no speed claim is made.

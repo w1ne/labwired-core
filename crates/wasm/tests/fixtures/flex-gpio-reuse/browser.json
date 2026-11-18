@@ -2,16 +2,19 @@
   "date": "2026-11-18",
   "status": "passed",
   "runtime": "compiled-wasm",
-  "firmware_bytes": 434,
-  "firmware_sha256": "f39b05778568c49b038b008e334f6405281d0bde672f419c431f775927a7f268",
+  "firmware_bytes": 471,
+  "firmware_sha256": "2f7e3b35ebb21f02f89edeb657a48a9aa924c52eb8cefe09417e593dc44cf2cc",
   "cpu_emulation": false,
-  "browser": "Chromium 149.0.7827.55",
+  "browser": "Google Chrome 156.0.8078.79",
   "playwright": "1.61.1",
   "bindings": {
     "heypcb_pomodoro": {
       "drive": "source.U1.PD6",
-      "observable": "source.D1.logic_state",
-      "positive_edges": 8,
+      "observables": [
+        "source.D1.logic_state",
+        "source.D2.logic_state"
+      ],
+      "positive_edges": 12,
       "negative_edges": 0
     },
     "arduino_uno_model": {
@@ -26,18 +29,17 @@
   "checks": [
     "portable-firmware-execution",
     "two-board-bindings",
+    "two-source-led-outputs",
     "held-out-asymmetric-pulse-workload",
     "native-model-equality",
     "positive-output",
     "negative-control"
   ],
   "measured_seconds": {
-    "first_native_test_build_and_run": 11.97,
-    "warm_flex_native_tests": 0.16,
-    "portable_firmware_compile": 0.3,
-    "wasm_pack_web_build": 15.78,
-    "node_harness": 0.3,
-    "chromium_harness": 1.0
+    "flex_native_suite_build_and_run": 5.69,
+    "portable_firmware_compile": 0.13,
+    "wasm_pack_web_build": 24.80,
+    "browser_harness": 18.60
   },
   "effort_note": "No comparable chip-specific Rust onboarding run was measured; no speed claim."
 }

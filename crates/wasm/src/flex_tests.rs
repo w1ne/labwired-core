@@ -366,8 +366,70 @@ fn flex_heypcb_pomodoro_behavior_ports_match_the_pinned_generic_import_graph() {
             "Flex contract omits {signal}"
         );
     }
-    assert!(POMODORO_SYSTEM.contains("adapter: behavior"));
-    assert!(POMODORO_SYSTEM.contains("primitive: gpio_device"));
+
+    // Tie the runtime port names and model aliases back to the source map.
+    // Checking only that these strings occur in the YAML would allow a port
+    // to be wired to a different source signal while still passing this test.
+    let system: serde_yaml::Value = serde_yaml::from_str(POMODORO_SYSTEM).unwrap();
+    let ports = system["ports"].as_sequence().expect("Flex ports");
+    let port_for = |name: &str| {
+        ports
+            .iter()
+            .find(|port| port["name"].as_str() == Some(name))
+            .unwrap_or_else(|| panic!("Flex manifest is missing port '{name}'"))
+    };
+    let source_slice = &source_map["source_grounded_behavior_slice"];
+    let gpio_signal = format!(
+        "source.{}.{}",
+        source_slice["mcu_ref"].as_str().unwrap(),
+        source_slice["gpio_pin"].as_str().unwrap()
+    );
+    let gpio_port = port_for("u1_pd6");
+    assert_eq!(gpio_port["signal"].as_str(), Some(gpio_signal.as_str()));
+    assert_eq!(gpio_port["access"].as_str(), Some("write"));
+    assert_eq!(gpio_port["kind"].as_str(), Some("bool"));
+    assert_eq!(gpio_port["initial"].as_i64(), Some(0));
+
+    let models = system["cosim_models"]
+        .as_sequence()
+        .expect("Flex co-simulation models");
+    assert_eq!(
+        models.len(),
+        1,
+        "the source slice has one shared behavior model"
+    );
+    let model = &models[0];
+    assert_eq!(model["id"].as_str(), Some("source-pd6-green-indicators"));
+    assert_eq!(model["adapter"].as_str(), Some("behavior"));
+    assert_eq!(model["step_ns"].as_u64(), Some(1_000));
+    assert_eq!(
+        model["inputs"]["drive"].as_str(),
+        Some(gpio_signal.as_str())
+    );
+    let source_components = source_slice["components"]
+        .as_array()
+        .expect("source-slice components");
+    for (port_name, alias, component_ref) in [("d1_state", "d1", "D1"), ("d2_state", "d2", "D2")] {
+        assert!(
+            source_components
+                .iter()
+                .any(|component| component["ref"].as_str() == Some(component_ref)),
+            "source map omits indicator {component_ref}"
+        );
+        let expected_signal = format!("source.{component_ref}.logic_state");
+        assert_eq!(
+            model["outputs"][alias].as_str(),
+            Some(expected_signal.as_str())
+        );
+        let read_port = port_for(port_name);
+        assert_eq!(read_port["signal"].as_str(), Some(expected_signal.as_str()));
+        assert_eq!(read_port["access"].as_str(), Some("read"));
+        assert_eq!(read_port["kind"].as_str(), Some("bool"));
+    }
+    assert_eq!(
+        model["config"]["behavior"]["primitive"].as_str(),
+        Some("gpio_device")
+    );
 }
 
 fn pomodoro_digital_evidence(runtime: &mut FlexRuntime) -> serde_json::Value {
@@ -483,34 +545,38 @@ fn flex_heypcb_pomodoro_source_mapped_pd6_pair_has_native_reference_and_negative
 fn run_gpio_reuse_reference(runtime: &mut FlexRuntime, positive: bool) -> u32 {
     let drive = runtime.port_id("drive").unwrap();
     let led = runtime.port_id("led_state").unwrap();
+    let second_led = runtime.port_id("led_state_2").ok();
+    let outputs_are = |runtime: &FlexRuntime, value: f64| {
+        runtime.read(led).unwrap() == value
+            && match second_led {
+                Some(port) => runtime.read(port).unwrap() == value,
+                None => true,
+            }
+    };
     if !positive {
         runtime.write(drive, 0.0).unwrap();
         runtime.advance_ns(5_000).unwrap();
-        return if runtime.read(led).unwrap() == 0.0 {
-            0
-        } else {
-            2
-        };
+        return if outputs_are(runtime, 0.0) { 0 } else { 2 };
     }
 
     runtime.write(drive, 1.0).unwrap();
     runtime.advance_ns(1_000).unwrap();
-    if runtime.read(led).unwrap() != 1.0 {
+    if !outputs_are(runtime, 1.0) {
         return 2;
     }
     runtime.write(drive, 0.0).unwrap();
     runtime.advance_ns(1_000).unwrap();
-    if runtime.read(led).unwrap() != 0.0 {
+    if !outputs_are(runtime, 0.0) {
         return 2;
     }
     runtime.write(drive, 1.0).unwrap();
     runtime.advance_ns(2_000).unwrap();
-    if runtime.read(led).unwrap() != 1.0 {
+    if !outputs_are(runtime, 1.0) {
         return 2;
     }
     runtime.write(drive, 0.0).unwrap();
     runtime.advance_ns(1_000).unwrap();
-    if runtime.read(led).unwrap() != 0.0 {
+    if !outputs_are(runtime, 0.0) {
         return 2;
     }
     1
@@ -527,7 +593,7 @@ fn gpio_reuse_evidence(yaml: &str, positive: bool) -> serde_json::Value {
 }
 
 #[test]
-fn flex_gpio_reuse_binds_one_data_driven_behavior_to_pomodoro_and_uno_with_held_out_workload() {
+fn flex_gpio_reuse_binds_shared_behavior_to_pomodoro_and_uno_with_held_out_workload() {
     let pomodoro: serde_yaml::Value = serde_yaml::from_str(GPIO_REUSE_POMODORO).unwrap();
     let uno: serde_yaml::Value = serde_yaml::from_str(GPIO_REUSE_UNO).unwrap();
     assert_eq!(
@@ -536,12 +602,21 @@ fn flex_gpio_reuse_binds_one_data_driven_behavior_to_pomodoro_and_uno_with_held_
         "both hardware descriptions must use the same reusable behavior block"
     );
     assert_eq!(
+        pomodoro["cosim_models"][1]["config"]["behavior"],
+        uno["cosim_models"][0]["config"]["behavior"],
+        "the second Pomodoro indicator must use the same reusable behavior block"
+    );
+    assert_eq!(
         pomodoro["cosim_models"][0]["inputs"]["drive"].as_str(),
         Some("source.U1.PD6")
     );
     assert_eq!(
         pomodoro["cosim_models"][0]["outputs"]["led"].as_str(),
         Some("source.D1.logic_state")
+    );
+    assert_eq!(
+        pomodoro["cosim_models"][1]["outputs"]["led"].as_str(),
+        Some("source.D2.logic_state")
     );
     assert_eq!(
         uno["cosim_models"][0]["inputs"]["drive"].as_str(),
@@ -569,8 +644,20 @@ fn flex_gpio_reuse_binds_one_data_driven_behavior_to_pomodoro_and_uno_with_held_
             .as_array()
             .unwrap()
             .len(),
-        8
+        12
     );
+    for output in ["source.D1.logic_state", "source.D2.logic_state"] {
+        assert_eq!(
+            measured["pomodoro"]["positive"]["trace"]["edges"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|edge| edge["signal"] == output)
+                .count(),
+            4,
+            "both source-mapped indicators must follow the held-out pulse workload"
+        );
+    }
     assert_eq!(measured["pomodoro"]["negative"]["result"], 0);
     assert!(measured["pomodoro"]["negative"]["trace"]["edges"]
         .as_array()
