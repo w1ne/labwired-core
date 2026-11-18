@@ -4,7 +4,7 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-use crate::physics::PhysicalModel;
+use crate::PhysicalModel;
 
 /// A bridge for Functional Mock-up Units (FMUs) following the FMI 3.0 standard.
 pub struct Fmi3Bridge {

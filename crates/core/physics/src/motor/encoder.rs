@@ -418,8 +418,8 @@ mod tests {
 
     #[test]
     fn encoder_types_are_reexported_from_motor_module() {
-        let encoder = crate::physics::motor::QuadratureEncoder::new(4).unwrap();
-        let pins: crate::physics::motor::EncoderPins = encoder.sample(0.0).unwrap();
+        let encoder = crate::motor::QuadratureEncoder::new(4).unwrap();
+        let pins: crate::motor::EncoderPins = encoder.sample(0.0).unwrap();
 
         assert!(pins.index);
     }

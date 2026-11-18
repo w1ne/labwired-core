@@ -463,7 +463,7 @@ impl BldcMotor {
     /// the coupled electrical/mechanical envelope enforced by `step`.
     /// The electrical `L/R` time constant alone does not bound a low-inertia
     /// motor; merely staying stable also leaves large first-order errors.
-    pub(crate) fn service_timestep_s(&self) -> Result<f64, ModelError> {
+    pub fn service_timestep_s(&self) -> Result<f64, ModelError> {
         let [electrical_rate, mechanical_rate, coupling_rate] = integration_rates(self.params);
         let step_s = 0.025 / (electrical_rate + mechanical_rate + coupling_rate);
         validate_positive("dt_s", step_s)?;
