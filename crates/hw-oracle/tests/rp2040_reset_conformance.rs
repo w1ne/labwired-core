@@ -119,6 +119,7 @@ fn build_sim_bus() -> SystemBus {
     let chip = ChipDescriptor::from_file(&chip_path)
         .unwrap_or_else(|e| panic!("load chip {chip_path:?}: {e}"));
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

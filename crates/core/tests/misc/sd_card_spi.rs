@@ -86,6 +86,7 @@ fn bus_with(manifest_devices: Vec<ExternalDevice>) -> SystemBus {
     let chip_path = repo("configs/chips/stm32f103.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("chip");
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
         walk_deleted: Some(false),

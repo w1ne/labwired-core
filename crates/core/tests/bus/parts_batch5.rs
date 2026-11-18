@@ -939,6 +939,7 @@ fn gpio_rig(device_type: &str, config: &[(&str, &str)]) -> SystemBus {
         .join("../../configs/chips/stm32f103.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("load chip descriptor");
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
         walk_deleted: Some(false),

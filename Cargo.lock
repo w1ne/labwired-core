@@ -2680,6 +2680,7 @@ dependencies = [
  "labwired-hw-trace",
  "labwired-ir",
  "labwired-loader",
+ "labwired-physics",
  "libc",
  "libm",
  "md-5",
@@ -2830,6 +2831,10 @@ dependencies = [
  "serde",
  "tracing",
 ]
+
+[[package]]
+name = "labwired-physics"
+version = "0.26.0"
 
 [[package]]
 name = "labwired-python"

@@ -71,6 +71,7 @@ fn nrf54lm20a_chip_path() -> std::path::PathBuf {
 fn bus_for_chip(path: &std::path::Path) -> SystemBus {
     let chip = ChipDescriptor::from_file(path).expect("load chip");
     let manifest = labwired_config::SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

@@ -142,6 +142,7 @@ fn rig(config: &[(&str, serde_yaml::Value)]) -> SystemBus {
         cfg.insert(k.to_string(), v.clone());
     }
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
         walk_deleted: Some(false),
