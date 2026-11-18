@@ -57,6 +57,46 @@ fn package_select_flash_and_pad_count_match_the_named_variant() {
 }
 
 #[test]
+fn split_clock_reset_and_pad_windows_keep_native_register_behavior() {
+    let mut b = bus();
+    // RP2350 addressmap.h: each physical block gets its own window. In
+    // particular, pad writes and PLL probes cannot be absorbed by IO_BANK0.
+    for (name, base) in [
+        ("clk_rst", 0x4001_0000),
+        ("psm", 0x4001_8000),
+        ("resets", 0x4002_0000),
+        ("io_bank0", 0x4002_8000),
+        ("io_qspi", 0x4003_0000),
+        ("pads_bank0", 0x4003_8000),
+        ("pads_qspi", 0x4004_0000),
+        ("xosc", 0x4004_8000),
+        ("pll_sys", 0x4005_0000),
+        ("pll_usb", 0x4005_8000),
+    ] {
+        let entry = &b.peripherals[b.find_peripheral_index_by_name(name).unwrap()];
+        assert_eq!((entry.base, entry.size), (base, 0x1000), "{name}");
+    }
+    assert_eq!(b.read_u32(0x4002_0000).unwrap(), 0x1fff_ffff);
+    assert_eq!(b.read_u32(0x4002_0008).unwrap(), 0);
+    b.write_u32(0x4002_3000, 0x81).unwrap(); // RESET atomic CLR
+    assert_eq!(b.read_u32(0x4002_0008).unwrap(), 0x81);
+    b.write_u32(0x4001_0030, 2).unwrap(); // CLK_REF_CTRL.SRC
+    assert_eq!(b.read_u32(0x4001_0038).unwrap(), 4);
+    for status in [0x4004_8004, 0x4005_0000, 0x4005_8000] {
+        assert_ne!(b.read_u32(status).unwrap() & (1 << 31), 0);
+    }
+    b.write_u32(ctrl(47), 5).unwrap();
+    for register in [0x4001_8000, 0x4003_0004, 0x4003_80c0, 0x4004_0004] {
+        b.write_u32(register, 0x12a).unwrap();
+        assert_eq!(b.read_u32(register).unwrap(), 0x12a);
+    }
+    assert_eq!(b.read_u32(ctrl(47)).unwrap() & 0x1f, 5);
+    b.write_u32(SIO + 0x3c, 1 << 15).unwrap();
+    b.write_u32(SIO + 0x1c, 1 << 15).unwrap();
+    assert_eq!(DevicePins::known_pad_bit(&b, SIO + 0x14, 15), Some(true));
+}
+
+#[test]
 fn both_sio_words_and_their_set_clear_xor_aliases_keep_other_bank_state() {
     let mut b = bus();
     for pin in [30, 31, 32, 40, 47] {

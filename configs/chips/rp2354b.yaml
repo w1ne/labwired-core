@@ -163,24 +163,32 @@ peripherals:
     size: "4KB"
     config:
       path: "../peripherals/rp2350/sysinfo-qfn80.yaml"
-  # CLOCKS / RESETS / XOSC / PLL_SYS / PLL_USB — the shared clock-reset model
-  # on the RP2350 address map (rp2350 profile: CLOCKS @0x40010000, RESETS
-  # @0x40020000, XOSC @0x40048000, PLLs @0x40050000/0x40058000). Window ends
-  # at ACCESSCTRL (0x40060000): 0x50000 = 320KB. (288KB stopped at
-  # 0x40058000 and cut PLL_USB off — pico-sdk pll_init(pll_usb) BusFaulted.)
+  # Native RP2350 addressmap.h blocks are separate 4KB register windows.
+  # Reuse the existing clock/reset register model at each block's actual base;
+  # its ready-bit behavior remains local to CLOCKS/RESETS/XOSC/PLLs. PSM and
+  # pad/QSPI windows retain register storage only, as in the shared model.
+  # No aggregate window covers IO_BANK0 or relies on overlap routing.
   - id: "clk_rst"
     type: "rp2040_clkrst"
     base_address: 0x40010000
-    size: "320KB"
+    size: "4KB"
     config:
       debug_schema: "../peripherals/rp2350/clocks.yaml"
       profile: "rp2350"
-  # IO_BANK0: the pad function mux, inside the clk_rst window (greatest start
-  # wins, as on rp2040.yaml). The RP2040 model on the RP2350 map: same
-  # GPIOn_STATUS/CTRL array and FUNCSEL numbers for SPI/UART/I2C/PWM/SIO,
-  # the interrupt block at 0x230 (pico-sdk rp2350 io_bank0.h), IO_IRQ_BANK0
-  # = NVIC 21 (intctrl.h). Without it GPIOn_CTRL was clk_rst storage and no
-  # peripheral output (PWM, UART, SPI, I2C) reached a pad.
+  - id: "psm"
+    type: "rp2040_clkrst"
+    base_address: 0x40018000
+    size: "4KB"
+    config:
+      profile: "rp2350"
+  - id: "resets"
+    type: "rp2040_clkrst"
+    base_address: 0x40020000
+    size: "4KB"
+    config:
+      profile: "rp2350"
+  # IO_BANK0 owns the 48 physical pad muxes and six IRQ words. IO_IRQ_BANK0
+  # is NVIC21; the RP2350 interrupt block starts at offset0x230.
   - id: "io_bank0"
     type: "rp2040_io_bank0"
     base_address: 0x40028000
@@ -188,6 +196,42 @@ peripherals:
     irq: 21
     config:
       profile: "rp2350b"
+  - id: "io_qspi"
+    type: "rp2040_clkrst"
+    base_address: 0x40030000
+    size: "4KB"
+    config:
+      profile: "rp2350"
+  - id: "pads_bank0"
+    type: "rp2040_clkrst"
+    base_address: 0x40038000
+    size: "4KB"
+    config:
+      profile: "rp2350"
+  - id: "pads_qspi"
+    type: "rp2040_clkrst"
+    base_address: 0x40040000
+    size: "4KB"
+    config:
+      profile: "rp2350"
+  - id: "xosc"
+    type: "rp2040_clkrst"
+    base_address: 0x40048000
+    size: "4KB"
+    config:
+      profile: "rp2350"
+  - id: "pll_sys"
+    type: "rp2040_clkrst"
+    base_address: 0x40050000
+    size: "4KB"
+    config:
+      profile: "rp2350"
+  - id: "pll_usb"
+    type: "rp2040_clkrst"
+    base_address: 0x40058000
+    size: "4KB"
+    config:
+      profile: "rp2350"
   - id: "rosc"
     type: "rp2040_clkrst"
     base_address: 0x400E8000
