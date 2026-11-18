@@ -51,6 +51,29 @@ fn drive_adc_input(
     Ok(())
 }
 
+impl WasmSimulator {
+    pub(crate) fn feed_uart_input_named_s(
+        &mut self,
+        peripheral_name: &str,
+        data: &[u8],
+    ) -> Result<u32, String> {
+        let count = u32::try_from(data.len())
+            .map_err(|_| "UART input exceeds the wasm byte-count range".to_owned())?;
+        self.machine
+            .as_mut()
+            .ok_or_else(|| "simulator has no machine".to_owned())?
+            .bus
+            .deliver_uart_rx_named(peripheral_name, data)?;
+        // Failed delivery changes no input and must not become a replayed
+        // stimulus. Successful delivery records the same selected UART.
+        self.record(lab_tools::Op::FeedUartNamed(
+            peripheral_name.to_owned(),
+            data.to_vec(),
+        ));
+        Ok(count)
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 struct MotorControlError {
     code: &'static str,
@@ -353,6 +376,21 @@ impl WasmSimulator {
                 guard.extend(data.iter());
             }
         }
+    }
+
+    /// Deliver bytes only to the named UART and re-arm its scheduler wake.
+    ///
+    /// Returns the accepted byte count. A missing machine, unknown UART or
+    /// failed RX queue returns an error; input is never redirected to another
+    /// port. Use the peripheral ID from the system/chip descriptor.
+    #[wasm_bindgen]
+    pub fn feed_uart_input_named(
+        &mut self,
+        peripheral_name: &str,
+        data: &[u8],
+    ) -> Result<u32, JsValue> {
+        self.feed_uart_input_named_s(peripheral_name, data)
+            .map_err(|error| JsValue::from_str(&error))
     }
 
     /// Bytes accepted into SEGGER RTT down-channel 0, the buffer
@@ -1032,6 +1070,139 @@ board_io:
             cosim: None,
             tools: Default::default(),
         }
+    }
+
+    fn s3_uart_sim() -> WasmSimulator {
+        use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3Opts};
+        let mut bus = SystemBus::new();
+        let wiring = configure_xtensa_esp32s3(&mut bus, &Esp32s3Opts::default());
+        let uart_rx_bufs = (0..3)
+            .map(|instance| {
+                bus.attach_uart_rx_source_named(&format!("uart{instance}"))
+                    .unwrap()
+            })
+            .collect();
+        WasmSimulator {
+            machine: Some(Machine::new(Box::new(wiring.cpu) as Box<dyn Cpu>, bus)),
+            board_io: Vec::new(),
+            uart_sink: Arc::new(Mutex::new(Vec::new())),
+            console: ConsoleCapture::new(HostConsole::Undeclared, HostConsole::Undeclared),
+            uart_rx_bufs,
+            arch: MachineFamily::Xtensa,
+            esp32_ipi: None,
+            jit_browser_enabled: false,
+            jit_browser_cache: None,
+            cosim: None,
+            tools: Default::default(),
+        }
+    }
+
+    #[test]
+    fn uart_input_named_wakes_only_selected_s3_port_and_delivers_real_fifo_irq() {
+        let mut sim = s3_uart_sim();
+        let ports: Vec<_> = {
+            let bus = &mut sim.machine.as_mut().unwrap().bus;
+            (0..3)
+                .map(|instance| {
+                    let index = bus
+                        .find_peripheral_index_by_name(&format!("uart{instance}_s3"))
+                        .unwrap();
+                    let base = bus.peripherals[index].base;
+                    bus.write_u32(base + 0x24, 1).unwrap(); // RXFIFO_FULL threshold 1
+                    bus.write_u32(base + 0x0c, 1).unwrap(); // enable RXFIFO_FULL IRQ
+                    (index, base)
+                })
+                .collect()
+        };
+        for (selected, &(index, base)) in ports.iter().enumerate() {
+            sim.machine.as_mut().unwrap().bus.pending_schedule.clear();
+            let payload = [0x1b, b'A' + selected as u8];
+            assert_eq!(
+                sim.feed_uart_input_named(&format!("uart{selected}"), &payload)
+                    .unwrap(),
+                2
+            );
+            let bus = &mut sim.machine.as_mut().unwrap().bus;
+            assert!(labwired_core::cycle_clock::event_scheduler_enabled());
+            assert!(
+                bus.pending_schedule.iter().any(|(idx, _, _)| *idx == index),
+                "interactive input must wake the selected idle UART"
+            );
+            assert!(
+                bus.pending_schedule.iter().all(|(idx, _, _)| *idx == index),
+                "input must not schedule another UART"
+            );
+            for (peer, &(_, peer_base)) in ports.iter().enumerate() {
+                assert_eq!(
+                    bus.read_u32(peer_base + 0x08).unwrap() & 1,
+                    u32::from(peer == selected),
+                    "RX interrupt isolation for UART{peer}"
+                );
+            }
+            assert_eq!(bus.read_u32(base).unwrap(), u32::from(payload[0]));
+            assert_eq!(bus.read_u32(base).unwrap(), u32::from(payload[1]));
+            assert_eq!(bus.read_u32(base + 0x08).unwrap() & 1, 0);
+        }
+    }
+
+    #[test]
+    fn uart_input_named_native_alias_and_empty_input_have_exact_counts() {
+        let mut sim = s3_uart_sim();
+        assert_eq!(sim.feed_uart_input_named("uart1_s3", b"ABC").unwrap(), 3);
+        assert_eq!(sim.feed_uart_input_named("uart1", b"").unwrap(), 0);
+        for (instance, queue) in sim.uart_rx_bufs.iter().enumerate() {
+            let bytes: Vec<_> = queue.lock().unwrap().iter().copied().collect();
+            assert_eq!(
+                bytes,
+                if instance == 1 {
+                    b"ABC".to_vec()
+                } else {
+                    Vec::new()
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn uart_input_named_rejects_missing_or_non_uart_without_delivery_or_replay() {
+        let mut sim = s3_uart_sim();
+        for name in ["uart9", "gpio", ""] {
+            let error = sim.feed_uart_input_named_s(name, b"bad").unwrap_err();
+            assert!(error.contains("not found"), "{error}");
+            assert!(sim
+                .uart_rx_bufs
+                .iter()
+                .all(|queue| queue.lock().unwrap().is_empty()));
+            assert!(sim.tools.borrow().journal.is_empty());
+        }
+    }
+
+    #[test]
+    fn uart_input_named_rejects_absent_machine_without_replay() {
+        let mut sim = s3_uart_sim();
+        sim.machine = None;
+        assert_eq!(
+            sim.feed_uart_input_named_s("uart0", b"bad").unwrap_err(),
+            "simulator has no machine"
+        );
+        assert!(sim.tools.borrow().journal.is_empty());
+    }
+
+    #[test]
+    fn uart_input_named_addition_preserves_legacy_broadcast() {
+        let sim = s3_uart_sim();
+        sim.feed_uart_input(b"old");
+        assert_eq!(sim.uart_rx_bufs.len(), 3);
+        for queue in &sim.uart_rx_bufs {
+            assert_eq!(
+                queue.lock().unwrap().iter().copied().collect::<Vec<_>>(),
+                b"old"
+            );
+        }
+        assert_eq!(
+            sim.tools.borrow().journal,
+            vec![(lab_tools::Op::FeedUart(b"old".to_vec()), 1)]
+        );
     }
 
     fn button_active(sim: &WasmSimulator) -> bool {

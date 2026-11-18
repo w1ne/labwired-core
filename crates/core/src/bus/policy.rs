@@ -128,6 +128,12 @@ impl SystemBus {
             .iter()
             .any(|d| d.needs_per_cycle_service())
             || (self.has_grid_gpio_schedules() && self.resident_scheduling_disabled)
+            // These off-board testers still advance in tick_peripherals_fully,
+            // not by scheduler deadlines. A wider grid changes FC delivery and
+            // the tick-counted response budget even when the CAN controller
+            // itself is scheduler-driven. Keep their existing service contract.
+            || !self.can_uds_testers.is_empty()
+            || !self.can_diagnostic_testers.is_empty()
         {
             return 1;
         }

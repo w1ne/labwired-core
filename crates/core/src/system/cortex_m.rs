@@ -158,6 +158,23 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     const NVIC_WINDOW_SIZE: u64 = 0x4F0;
     bus.replace_or_add_peripheral_at("nvic", 0xE000_E100, NVIC_WINDOW_SIZE, None, Box::new(nvic));
 
+    // DEMCR is a firmware-visible register even without a connected debugger.
+    // The RP2350 M33 register definitions place it at 0xE000_EDFC with TRCENA
+    // at bit24; ordinary cycleCounterInit code writes it before DWT.CYCCNTENA.
+    // Keep the same inactive state for a later SWD attachment. Only DEMCR is
+    // mapped here: DHCSR remains unmapped and C_DEBUGEN stays clear.
+    let debug_state = crate::peripherals::scs_debug::DebugHaltState::new();
+    cpu.set_debug_halt(debug_state.clone());
+    bus.replace_or_add_peripheral_at(
+        "scs_debug",
+        0xE000_EDFC,
+        4,
+        None,
+        Box::new(crate::peripherals::scs_debug::ScsDebug::demcr_only(
+            debug_state,
+        )),
+    );
+
     // Ensure DWT exists. Size 0x1000 covers the full CoreSight DWT register space,
     // including the CYCCNT enable bit at offset 0 and CYCCNT at offset 4, as well as
     // extended offsets accessed by some HAL dwt_init routines (e.g. offset 0xfc).
@@ -175,8 +192,10 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
 }
 
 pub fn attach_swd_dp(bus: &mut SystemBus, cpu: &mut CortexM, idcode: u32) -> crate::debug::SwdDp {
-    let state = crate::peripherals::scs_debug::DebugHaltState::new();
-    cpu.set_debug_halt(state.clone());
+    let state = cpu
+        .debug_halt
+        .get_or_insert_with(crate::peripherals::scs_debug::DebugHaltState::new)
+        .clone();
     bus.replace_or_add_peripheral(
         "scs_debug",
         0xE000_EDF0,
@@ -216,6 +235,89 @@ mod swd_attach_tests {
             "peek before attach: {:?}",
             peek.bytes
         );
+    }
+
+    #[test]
+    fn firmware_can_enable_trace_without_attaching_or_enabling_a_debugger() {
+        use crate::Cpu;
+        let mut m = nrf_machine();
+        // ldr r0,=DEMCR; ldr r1,[r0]; movs r2,1; lsls r2,24;
+        // orrs r1,r2; str r1,[r0]; b .; nop; .word DEMCR.
+        for (index, halfword) in [
+            0x4803, 0x6801, 0x2201, 0x0612, 0x4311, 0x6001, 0xe7fe, 0xbf00,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            m.bus
+                .write_u16(0x2000_0000 + (index as u64) * 2, halfword)
+                .unwrap();
+        }
+        m.bus.write_u32(0x2000_0010, 0xE000_EDFC).unwrap();
+        m.cpu.set_pc(0x2000_0000);
+        m.cpu.set_sp(0x2000_2000);
+        for _ in 0..7 {
+            m.step().unwrap();
+        }
+        assert_eq!(m.bus.read_u32(0xE000_EDFC).unwrap(), 1 << 24);
+        assert_eq!(m.bus.read_u32(0xE000_ED28).unwrap(), 0, "no BusFault");
+        assert!(!m.cpu.debug_halted());
+        assert_eq!(m.cpu.debug_halt.as_ref().unwrap().read_dhcsr() & 1, 0);
+        assert!(m
+            .peek(0xE000_EDF0, 12)
+            .bytes
+            .iter()
+            .all(|b| *b == PeekByte::Unmapped));
+
+        // The already-existing DWT counter remains reachable and counts
+        // instructions after the firmware's normal trace-enable sequence.
+        m.bus.write_u32(0xE000_1004, 0).unwrap();
+        m.bus.write_u32(0xE000_1000, 1).unwrap();
+        for _ in 0..20 {
+            m.step().unwrap();
+        }
+        assert!(m.bus.read_u32(0xE000_1004).unwrap() > 0);
+    }
+
+    #[test]
+    fn trace_byte_lanes_and_reserved_bits_remain_bounded_before_attach() {
+        let mut m = nrf_machine();
+        assert_eq!(m.bus.read_u32(0xE000_EDFC).unwrap(), 0);
+        m.bus.write_u8(0xE000_EDFF, 0xff).unwrap();
+        assert_eq!(m.bus.read_u32(0xE000_EDFC).unwrap(), 1 << 24);
+        m.bus.write_u8(0xE000_EDFC, 0x10).unwrap();
+        assert_eq!(m.bus.read_u32(0xE000_EDFC).unwrap(), (1 << 24) | 0x10);
+        m.bus.write_u8(0xE000_EDFF, 0).unwrap();
+        assert_eq!(m.bus.read_u32(0xE000_EDFC).unwrap(), 0x10);
+        assert!(
+            !m.cpu.debug_halted(),
+            "vector catch cannot halt with C_DEBUGEN clear"
+        );
+    }
+
+    #[test]
+    fn swd_attachment_preserves_the_firmware_demcr_state_and_keyed_halt() {
+        let mut m = nrf_machine();
+        m.bus.write_u32(0xE000_EDFC, (1 << 24) | (1 << 10)).unwrap();
+        let original = m.cpu.debug_halt.as_ref().unwrap().clone();
+        attach_swd_dp(&mut m.bus, &mut m.cpu, 0x2BA0_1477);
+        assert!(std::sync::Arc::ptr_eq(
+            &original,
+            m.cpu.debug_halt.as_ref().unwrap()
+        ));
+        assert_eq!(m.bus.read_u32(0xE000_EDFC).unwrap(), (1 << 24) | (1 << 10));
+        assert_eq!(
+            m.bus
+                .peripherals
+                .iter()
+                .filter(|p| p.name == "scs_debug")
+                .count(),
+            1
+        );
+        m.bus.write_u32(0xE000_EDF0, 3).unwrap();
+        assert!(!m.cpu.debug_halted(), "wrong key");
+        m.bus.write_u32(0xE000_EDF0, 0xA05F_0003).unwrap();
+        assert!(m.cpu.debug_halted());
     }
 
     #[test]
