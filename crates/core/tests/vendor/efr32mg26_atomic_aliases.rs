@@ -59,6 +59,7 @@ fn bus_for(chip_name: &str) -> SystemBus {
     let abs = root(&format!("configs/chips/{chip_name}.yaml"));
     let chip = ChipDescriptor::from_file(&abs).expect("load chip descriptor");
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),

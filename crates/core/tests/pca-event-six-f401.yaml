@@ -1,0 +1,66 @@
+name: "playground-board"
+chip: "inline"
+external_devices:
+  - id: "pca"
+    type: "pca9685"
+    connection: "i2c1"
+    route:
+      sda: "PB9"
+      scl: "PB8"
+    config:
+      i2c_address: 0x41
+  - id: "servo0"
+    type: "servo"
+    connection: "i2c1"
+    config:
+      source_address: 65
+      source_channel: 0
+      model: "sg90"
+  - id: "servo1"
+    type: "servo"
+    connection: "i2c1"
+    config:
+      source_address: 65
+      source_channel: 1
+      model: "sg90"
+  - id: "servo2"
+    type: "servo"
+    connection: "i2c1"
+    config:
+      source_address: 65
+      source_channel: 2
+      model: "sg90"
+  - id: "servo3"
+    type: "servo"
+    connection: "i2c1"
+    config:
+      source_address: 65
+      source_channel: 3
+      model: "sg90"
+  - id: "servo4"
+    type: "servo"
+    connection: "i2c1"
+    config:
+      source_address: 65
+      source_channel: 4
+      model: "sg90"
+  - id: "servo5"
+    type: "servo"
+    connection: "i2c1"
+    config:
+      source_address: 65
+      source_channel: 5
+      model: "sg90"
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

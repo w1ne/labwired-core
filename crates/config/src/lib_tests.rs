@@ -1371,3 +1371,25 @@ fn adding_pic18_leaves_existing_arch_aliases_unchanged() {
         assert_eq!(arch, want, "alias {name:?} changed meaning");
     }
 }
+
+#[test]
+fn system_manifest_tick_cap_is_optional_and_strictly_positive() {
+    let base = "name: bounded-grid\nchip: stm32l476\n";
+    let default = crate::SystemManifest::from_yaml(base).unwrap();
+    assert!(default.max_peripheral_tick_interval.is_none());
+    let bounded =
+        crate::SystemManifest::from_yaml(&(base.to_owned() + "max_peripheral_tick_interval: 32\n"))
+            .unwrap();
+    assert_eq!(bounded.max_peripheral_tick_interval.unwrap().get(), 32);
+    for invalid in ["0", "-1", "1.5", "not-a-number", "4294967296"] {
+        let err = crate::SystemManifest::from_yaml(&format!(
+            "{base}max_peripheral_tick_interval: {invalid}\n"
+        ))
+        .unwrap_err();
+        let message = format!("{err:#}");
+        assert!(
+            message.contains("max_peripheral_tick_interval"),
+            "{message}"
+        );
+    }
+}

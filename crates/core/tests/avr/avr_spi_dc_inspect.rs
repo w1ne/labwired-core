@@ -27,6 +27,7 @@ fn uno_st7789_bus() -> SystemBus {
     cfg.insert("cs_pin".into(), serde_yaml::Value::String("PB2".into()));
     cfg.insert("dc_pin".into(), serde_yaml::Value::String("PB1".into()));
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
         walk_deleted: Some(false),
