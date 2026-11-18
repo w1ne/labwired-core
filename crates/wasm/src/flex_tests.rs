@@ -406,14 +406,26 @@ fn flex_heypcb_pomodoro_behavior_ports_match_the_pinned_generic_import_graph() {
         model["inputs"]["drive"].as_str(),
         Some(gpio_signal.as_str())
     );
-    assert_eq!(
-        model["outputs"]["d1"].as_str(),
-        Some("source.D1.logic_state")
-    );
-    assert_eq!(
-        model["outputs"]["d2"].as_str(),
-        Some("source.D2.logic_state")
-    );
+    let source_components = source_slice["components"]
+        .as_array()
+        .expect("source-slice components");
+    for (port_name, alias, component_ref) in [("d1_state", "d1", "D1"), ("d2_state", "d2", "D2")] {
+        assert!(
+            source_components
+                .iter()
+                .any(|component| component["ref"].as_str() == Some(component_ref)),
+            "source map omits indicator {component_ref}"
+        );
+        let expected_signal = format!("source.{component_ref}.logic_state");
+        assert_eq!(
+            model["outputs"][alias].as_str(),
+            Some(expected_signal.as_str())
+        );
+        let read_port = port_for(port_name);
+        assert_eq!(read_port["signal"].as_str(), Some(expected_signal.as_str()));
+        assert_eq!(read_port["access"].as_str(), Some("read"));
+        assert_eq!(read_port["kind"].as_str(), Some("bool"));
+    }
     assert_eq!(
         model["config"]["behavior"]["primitive"].as_str(),
         Some("gpio_device")
