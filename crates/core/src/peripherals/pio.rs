@@ -10,6 +10,7 @@ use crate::Peripheral;
 use crate::PeripheralTickResult;
 use crate::SimResult;
 use anyhow::Result;
+use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 
 /// Event-token for the self-perpetuating SM step chain under `event-scheduler`.
@@ -100,12 +101,10 @@ pub struct Pio {
     pub input_sync_bypass: u32,
 
     pub tx_fifo: [Vec<u32>; 4],
-    pub rx_fifo: [Vec<u32>; 4],
+    pub rx_fifo: [RefCell<Vec<u32>>; 4],
+    rx_under: Cell<u32>,
 
     // Write accumulator: buffers byte writes until a complete 32-bit word
-    write_acc: u32,
-    write_acc_mask: u8, // bitmask of which bytes have been written (0b1111 = complete)
-    write_acc_offset: u64, // register offset being accumulated
     /// The block's 32 pin outputs and output enables, shared by all four
     /// state machines (a later SM wins a same-cycle write, as on silicon).
     pub pin_out: u32,
@@ -155,9 +154,7 @@ impl Pio {
             input_sync_bypass: 0,
             tx_fifo: Default::default(),
             rx_fifo: Default::default(),
-            write_acc: 0,
-            write_acc_mask: 0,
-            write_acc_offset: 0xFFFF_FFFF,
+            rx_under: Cell::new(0),
             pin_out: 0,
             pin_dir: 0,
             lines: None,
@@ -226,6 +223,7 @@ impl Pio {
         p.pin_dir = self.pin_dir;
         p.tx_fifo = self.tx_fifo.clone();
         p.rx_fifo = self.rx_fifo.clone();
+        p.lines = self.lines.clone(); // read the same external pad levels; scratch is never wired
         p
     }
 
@@ -265,10 +263,10 @@ impl Pio {
     /// True when ticking again would change nothing observable except each
     /// enabled divider's phase: every enabled state machine is either parked
     /// (see [`Self::sm_parked`]) or blocked and idle
-    /// ([`Self::stalled_and_idle`]). Those can only be released by an MMIO
-    /// write (FIFO, IRQ, instruction, config) — which re-arms the chain through
-    /// `take_scheduled_events` — because the only input pad this block reads
-    /// is its own output. A divider accumulator at or past its period never
+    /// ([`Self::stalled_and_idle`]). MMIO writes and routed wire-input edges
+    /// re-arm the chain through `take_scheduled_events`. A producer blocked
+    /// on a full RX FIFO stays clocked so a read can release it. A divider
+    /// accumulator at or past its period never
     /// happens after a tick of a settled divider; it keeps the chain awake so
     /// [`Self::catch_up`] can stay a closed form.
     fn all_enabled_sms_quiescent(&self) -> bool {
@@ -279,6 +277,19 @@ impl Pio {
             }
             any = true;
             if sm.clk_counter >= Self::div_total(sm) {
+                return false;
+            }
+            // An RX FIFO read is an &self bus operation and cannot enqueue
+            // a scheduler wake. Keep the blocked producer clocked while a
+            // full FIFO can be released by that read. No skipped divider tick.
+            let opcode = self.instruction_mem[(sm.pc & 31) as usize] >> 13;
+            let pushes = (opcode == 2 && sm.shift_ctrl & SHIFTCTRL_AUTOPUSH != 0)
+                || (opcode == 4 && self.instruction_mem[(sm.pc & 31) as usize] & 0x80 == 0);
+            if sm.stalled
+                && pushes
+                && self.rx_depth(i) > 0
+                && self.rx_fifo[i].borrow().len() >= self.rx_depth(i)
+            {
                 return false;
             }
             if !self.sm_parked(sm) && !self.stalled_and_idle(i) {
@@ -331,7 +342,7 @@ impl Pio {
     fn fstat_value(&self) -> u32 {
         let mut v = 0;
         for i in 0..4 {
-            let (tx, rx) = (self.tx_fifo[i].len(), self.rx_fifo[i].len());
+            let (tx, rx) = (self.tx_fifo[i].len(), self.rx_fifo[i].borrow().len());
             if tx == 0 {
                 v |= 1 << (24 + i);
             }
@@ -352,15 +363,27 @@ impl Pio {
     fn flevel_value(&self) -> u32 {
         (0..4).fold(0, |acc, i| {
             acc | ((self.tx_fifo[i].len() as u32 & 0xF) << (8 * i))
-                | ((self.rx_fifo[i].len() as u32 & 0xF) << (8 * i + 4))
+                | ((self.rx_fifo[i].borrow().len() as u32 & 0xF) << (8 * i + 4))
         })
     }
 
-    /// Level the state machines see on the GPIO inputs. Only the pads this
-    /// block drives itself are known here: an input pad reads 0 (the block
-    /// has no view of the outside world yet).
+    /// GPIO input levels from the existing routed pad wires. The outside
+    /// level wins when a peer drives it; an unwired input keeps the historical
+    /// low value. This is independent of the PIO output-enable latch.
     fn pins_in(&self) -> u32 {
-        self.pin_out & self.pin_dir
+        let mut pins = self.pin_out & self.pin_dir;
+        if let Some(lines) = &self.lines {
+            for pin in 0..32 {
+                if let Some(level) = lines.input(pin) {
+                    if level {
+                        pins |= 1 << pin;
+                    } else {
+                        pins &= !(1 << pin);
+                    }
+                }
+            }
+        }
+        pins
     }
 
     /// Side-set value (data, bit count) and delay encoded in `instr`'s
@@ -427,10 +450,10 @@ impl Pio {
     }
 
     fn push_isr(&mut self, i: usize, sm: &mut StateMachine) -> bool {
-        if self.rx_fifo[i].len() >= self.rx_depth(i) {
+        if self.rx_fifo[i].borrow().len() >= self.rx_depth(i) {
             return false;
         }
-        self.rx_fifo[i].push(sm.isr);
+        self.rx_fifo[i].borrow_mut().push(sm.isr);
         sm.isr = 0;
         sm.isr_count = 0;
         true
@@ -612,7 +635,7 @@ impl Pio {
                         // STATUS: all-ones while the selected FIFO level < N.
                         let n = (sm.exec_ctrl & 0xF) as usize;
                         let level = if sm.exec_ctrl & 0x10 != 0 {
-                            self.rx_fifo[i].len()
+                            self.rx_fifo[i].borrow().len()
                         } else {
                             self.tx_fifo[i].len()
                         };
@@ -774,12 +797,12 @@ impl Pio {
         match offset {
             0x000 => self.ctrl,
             0x004 => self.fstat_value(),
-            0x008 => self.fdebug,
+            0x008 => self.fdebug | self.rx_under.get(),
             0x00c => self.flevel_value(),
             0x020..=0x02c => {
                 let idx = ((offset - 0x020) / 4) as usize;
-                if idx < 4 && !self.rx_fifo[idx].is_empty() {
-                    self.rx_fifo[idx][0]
+                if idx < 4 && !self.rx_fifo[idx].borrow().is_empty() {
+                    self.rx_fifo[idx].borrow()[0]
                 } else {
                     0
                 }
@@ -844,7 +867,10 @@ impl Pio {
                     }
                 }
             }
-            0x008 => self.fdebug &= !value, // W1C
+            0x008 => {
+                self.fdebug &= !value;
+                self.rx_under.set(self.rx_under.get() & !value);
+            } // W1C
             0x010..=0x01c => {
                 let sm_idx = ((offset - 0x010) / 4) as usize;
                 if self.tx_fifo[sm_idx].len() < self.tx_depth(sm_idx) {
@@ -872,7 +898,16 @@ impl Pio {
                             self.sm[sm_idx].clkdiv_frac = (value >> 8) as u8;
                         }
                         4 => self.sm[sm_idx].exec_ctrl = value,
-                        8 => self.sm[sm_idx].shift_ctrl = value,
+                        8 => {
+                            if (self.sm[sm_idx].shift_ctrl ^ value)
+                                & (SHIFTCTRL_FJOIN_TX | SHIFTCTRL_FJOIN_RX)
+                                != 0
+                            {
+                                self.tx_fifo[sm_idx].clear();
+                                self.rx_fifo[sm_idx].borrow_mut().clear();
+                            }
+                            self.sm[sm_idx].shift_ctrl = value;
+                        }
                         12 => self.sm[sm_idx].pc = (value & 0x1F) as u8,
                         16 => self.exec_now(sm_idx, value as u16),
                         _ => self.sm[sm_idx].pin_ctrl = value,
@@ -887,37 +922,60 @@ impl Pio {
 }
 
 impl Peripheral for Pio {
-    fn read(&self, offset: u64) -> SimResult<u8> {
-        let reg_offset = offset & !3;
-        let byte_offset = (offset % 4) as u32;
-        let reg_val = self.read_reg(reg_offset);
-        Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        if offset & 3 != 0 {
+            return Err(crate::SimulationError::MemoryViolation(offset));
+        }
+        if (0x20..=0x2c).contains(&offset) {
+            let sm = ((offset - 0x20) / 4) as usize;
+            let mut fifo = self.rx_fifo[sm].borrow_mut();
+            return Ok(if fifo.is_empty() {
+                self.rx_under.set(self.rx_under.get() | (1 << (8 + sm)));
+                0
+            } else {
+                fifo.remove(0)
+            });
+        }
+        Ok(self.read_reg(offset))
     }
-
-    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
-        let reg_offset = offset & !3;
-        let byte_offset = (offset % 4) as u32;
-
-        // Start new accumulation if register changed
-        if reg_offset != self.write_acc_offset {
-            self.write_acc = 0;
-            self.write_acc_mask = 0;
-            self.write_acc_offset = reg_offset;
+    fn read_u16(&self, offset: u64) -> SimResult<u16> {
+        Ok((self.read_u32(offset & !3)? >> ((offset & 2) * 8)) as u16)
+    }
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        Ok((self.read_u32(offset & !3)? >> ((offset & 3) * 8)) as u8)
+    }
+    fn peek(&self, offset: u64) -> Option<u8> {
+        Some((self.read_reg(offset & !3) >> ((offset & 3) * 8)) as u8)
+    }
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if offset & 3 != 0 {
+            return Err(crate::SimulationError::MemoryViolation(offset));
         }
-
-        // Accumulate byte
-        let mask = 0xFFu32 << (byte_offset * 8);
-        self.write_acc = (self.write_acc & !mask) | ((value as u32) << (byte_offset * 8));
-        self.write_acc_mask |= 1 << byte_offset;
-
-        // Once all 4 bytes are written, commit the full 32-bit value
-        if self.write_acc_mask == 0x0F {
-            self.write_reg(reg_offset, self.write_acc);
-            self.write_acc = 0;
-            self.write_acc_mask = 0;
-            self.write_acc_offset = 0xFFFF_FFFF;
-        }
+        self.write_reg(offset, value);
         Ok(())
+    }
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        // RP peripheral narrow stores replicate their data across the bus.
+        self.write_u32(offset & !3, u32::from(value) * 0x0001_0001)
+    }
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        self.write_u32(offset & !3, u32::from(value) * 0x0101_0101)
+    }
+    fn dma_request_active(&self, line: u8) -> bool {
+        match line {
+            0..=3 => self.tx_fifo[line as usize].len() < self.tx_depth(line as usize),
+            4..=7 => !self.rx_fifo[(line - 4) as usize].borrow().is_empty(),
+            _ => false,
+        }
+    }
+    fn wire_input_edge(&mut self, line: usize, level: bool, _cycle: u64) -> bool {
+        if line >= 32 {
+            return false;
+        }
+        if let Some(lines) = &self.lines {
+            lines.set_input(line, level);
+        }
+        self.any_sm_enabled()
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
@@ -1398,7 +1456,7 @@ mod tests {
         assert_eq!(pio.sm[0].pc, 2);
 
         pio.tick(); // PUSH
-        assert_eq!(pio.rx_fifo[0][0], 0);
+        assert_eq!(pio.rx_fifo[0].borrow()[0], 0);
         assert_eq!(pio.sm[0].pc, 3);
     }
 
@@ -1539,7 +1597,7 @@ mod tests {
         assert_eq!(pio.sm[0].isr_count, 16);
 
         pio.tick(); // PUSH
-        assert_eq!(pio.rx_fifo[0][0], 0x56780000);
+        assert_eq!(pio.rx_fifo[0].borrow()[0], 0x56780000);
 
         pio.write_reg(0x10, 0xDEADBEEF); // TX FIFO
         pio.sm[0].osr = 0xDEADBEEF;
