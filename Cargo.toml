@@ -12,6 +12,7 @@ members = [
     "crates/codegen",
     "crates/config",
     "crates/core",
+    "crates/core/physics",
     "crates/nrf-softdevice-hle",
     "crates/dap",
     "crates/egress-relay",
@@ -185,7 +186,8 @@ exclude = [
     "examples/tier1-fixture/esp32",
     "crates/firmware-perf-spin-xtensa",
 ]
-default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader", "crates/labwired-fuzz"]
+# Keep extracted engine unit tests in the normal cargo test --lib / clippy lane.
+default-members = ["crates/cli", "crates/core", "crates/core/physics", "crates/dap", "crates/loader", "crates/labwired-fuzz"]
 
 [workspace.package]
 version = "0.26.0"
