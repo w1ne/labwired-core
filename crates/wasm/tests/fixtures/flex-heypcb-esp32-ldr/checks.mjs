@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Portable Wasm firmware + generic Flex runtime checks for the LDR behavior slice.
-export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expected) {
+export async function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expected) {
   const check = (ok, message) => { if (!ok) throw new Error(message); };
   const canonical = (v) => typeof v === 'bigint' ? Number(v) : Array.isArray(v) ? v.map(canonical)
     : v !== null && typeof v === 'object'
       ? Object.fromEntries(Object.keys(v).sort().map((key) => [key, canonical(v[key])])) : v;
+  const manifestDigest = new Uint8Array(await crypto.subtle.digest(
+    'SHA-256', new TextEncoder().encode(system),
+  ));
+  const systemSha256 = Array.from(manifestDigest, (byte) => byte.toString(16).padStart(2, '0')).join('');
   const equal = (got, wanted, message) => {
     const actual = JSON.stringify(canonical(got));
     const expectedJson = JSON.stringify(canonical(wanted));
@@ -32,8 +36,9 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
       check(report.execution_path === 'flex_portable_wasm'
         && report.target_cpu_emulated === false
         && report.time_unit === 'ns'
+        && report.manifest_sha256 === systemSha256
         && report.scope_notes_complete === true,
-      'the project run report must identify portable firmware, nanoseconds, and declared scope');
+      'the project run report must identify portable firmware, nanoseconds, the exact model input, and declared scope');
       check(report.model_name === 'heypcb-esp32-s3-ldr-gl5528'
         && report.assumptions.length === 4
         && report.assumptions.some((assumption) => assumption.includes('Part Knowledge')

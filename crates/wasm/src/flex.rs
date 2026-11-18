@@ -9,6 +9,7 @@
 use labwired_config::{CosimAdapter, CosimModelConfig, FlexPort};
 use labwired_core::flex::FlexRuntime;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use wasm_bindgen::prelude::*;
 
@@ -86,6 +87,7 @@ struct BrowserRunReport {
     scope_notes_complete: bool,
     schema_version: u32,
     model_name: String,
+    manifest_sha256: String,
     assumptions: Vec<String>,
     unsupported_checks: Vec<String>,
     ports: Vec<FlexPort>,
@@ -95,6 +97,7 @@ struct BrowserRunReport {
 #[wasm_bindgen]
 pub struct WasmFlexRuntime {
     runtime: FlexRuntime,
+    manifest_sha256: String,
 }
 
 fn js_error(error: impl std::fmt::Display) -> JsValue {
@@ -106,6 +109,7 @@ impl WasmFlexRuntime {
     pub fn new_from_yaml(yaml: &str) -> Result<WasmFlexRuntime, JsValue> {
         Ok(Self {
             runtime: FlexRuntime::from_yaml(yaml).map_err(js_error)?,
+            manifest_sha256: format!("{:x}", Sha256::digest(yaml.as_bytes())),
         })
     }
 
@@ -149,6 +153,7 @@ impl WasmFlexRuntime {
                 && !manifest.unsupported_checks.is_empty(),
             schema_version: manifest.schema_version,
             model_name: manifest.name.clone(),
+            manifest_sha256: self.manifest_sha256.clone(),
             assumptions: manifest.assumptions.clone(),
             unsupported_checks: manifest.unsupported_checks.clone(),
             ports: manifest.ports.clone(),

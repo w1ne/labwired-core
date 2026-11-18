@@ -1070,6 +1070,10 @@ fn flex_heypcb_ldr_browser_evidence_pins_source_and_exact_runtime_inputs() {
     );
     assert_eq!(browser["system_sha256"], sha256(HEYPCB_LDR_SYSTEM_BYTES));
     assert_eq!(
+        browser["run_report"]["manifest_sha256"],
+        browser["system_sha256"]
+    );
+    assert_eq!(
         browser["source_map_sha256"],
         sha256(HEYPCB_LDR_SOURCE_MAP_BYTES)
     );
