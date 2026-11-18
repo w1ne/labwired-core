@@ -2201,10 +2201,12 @@ impl<C: Cpu> Machine<C> {
         if self.bus.vector_pair_valid(flash_base) {
             let sp = self.bus.read_u32(flash_base)?;
             let pc = self.bus.read_u32(flash_base + 4)? & !1;
-            // If address 0 does not already present the same SP (bootrom or
-            // empty), retarget VTOR so exceptions hit the app table too.
+            // A ROM and application can use the same top-of-RAM stack. Compare
+            // both reset words before treating address zero as the app alias;
+            // otherwise SDK vector-table relocation copies ROM instructions.
             let sp0 = self.bus.read_u32(0).unwrap_or(0);
-            if flash_base != 0 && sp0 != sp {
+            let pc0 = self.bus.read_u32(4).unwrap_or(0) & !1;
+            if flash_base != 0 && (sp0 != sp || pc0 != pc) {
                 let _ = self.bus.write_u32(0xE000_ED08, flash_base as u32);
             }
             self.cpu.set_sp(sp);

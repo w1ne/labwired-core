@@ -48,3 +48,5 @@ mod pin_map_resolution;
 mod pin_trace_four_state;
 mod reset_input;
 mod rotary_encoder_semantics;
+
+mod rp2354b_gpio;
