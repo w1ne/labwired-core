@@ -10,6 +10,8 @@ const POMODORO_IMPORT: &str =
     include_str!("../tests/fixtures/flex-heypcb-pomodoro/mcp-import.json");
 const POMODORO_SOURCE_MAP: &str =
     include_str!("../tests/fixtures/flex-heypcb-pomodoro/source-map.json");
+const GPIO_REUSE_POMODORO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/system.yaml");
+const GPIO_REUSE_UNO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/arduino-uno.yaml");
 
 fn run_model(yaml: &str, wrong_command: bool) -> (FlexRuntime, u32) {
     let mut runtime = FlexRuntime::from_yaml(yaml).expect("load portable Flex contract");
@@ -475,5 +477,135 @@ fn flex_heypcb_pomodoro_source_mapped_pd6_pair_has_native_reference_and_negative
     assert_eq!(
         measured, expected,
         "source-mapped native model observation changed"
+    );
+}
+
+fn run_gpio_reuse_reference(runtime: &mut FlexRuntime, positive: bool) -> u32 {
+    let drive = runtime.port_id("drive").unwrap();
+    let led = runtime.port_id("led_state").unwrap();
+    if !positive {
+        runtime.write(drive, 0.0).unwrap();
+        runtime.advance_ns(5_000).unwrap();
+        return if runtime.read(led).unwrap() == 0.0 {
+            0
+        } else {
+            2
+        };
+    }
+
+    runtime.write(drive, 1.0).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    if runtime.read(led).unwrap() != 1.0 {
+        return 2;
+    }
+    runtime.write(drive, 0.0).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    if runtime.read(led).unwrap() != 0.0 {
+        return 2;
+    }
+    runtime.write(drive, 1.0).unwrap();
+    runtime.advance_ns(2_000).unwrap();
+    if runtime.read(led).unwrap() != 1.0 {
+        return 2;
+    }
+    runtime.write(drive, 0.0).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    if runtime.read(led).unwrap() != 0.0 {
+        return 2;
+    }
+    1
+}
+
+fn gpio_reuse_evidence(yaml: &str, positive: bool) -> serde_json::Value {
+    let mut runtime = FlexRuntime::from_yaml(yaml).expect("load GPIO reuse contract");
+    let result = run_gpio_reuse_reference(&mut runtime, positive);
+    serde_json::json!({
+        "result": result,
+        "time_ns": runtime.time_ns(),
+        "trace": pomodoro_digital_evidence(&mut runtime),
+    })
+}
+
+#[test]
+fn flex_gpio_reuse_binds_one_data_driven_behavior_to_pomodoro_and_uno_with_held_out_workload() {
+    let pomodoro: serde_yaml::Value = serde_yaml::from_str(GPIO_REUSE_POMODORO).unwrap();
+    let uno: serde_yaml::Value = serde_yaml::from_str(GPIO_REUSE_UNO).unwrap();
+    assert_eq!(
+        pomodoro["cosim_models"][0]["config"]["behavior"],
+        uno["cosim_models"][0]["config"]["behavior"],
+        "both hardware descriptions must use the same reusable behavior block"
+    );
+    assert_eq!(
+        pomodoro["cosim_models"][0]["inputs"]["drive"].as_str(),
+        Some("source.U1.PD6")
+    );
+    assert_eq!(
+        pomodoro["cosim_models"][0]["outputs"]["led"].as_str(),
+        Some("source.D1.logic_state")
+    );
+    assert_eq!(
+        uno["cosim_models"][0]["inputs"]["drive"].as_str(),
+        Some("arduino.portb.pb5")
+    );
+    assert_eq!(
+        uno["cosim_models"][0]["outputs"]["led"].as_str(),
+        Some("arduino.status_led.logic_state")
+    );
+
+    let measured = serde_json::json!({
+        "pomodoro": {
+            "positive": gpio_reuse_evidence(GPIO_REUSE_POMODORO, true),
+            "negative": gpio_reuse_evidence(GPIO_REUSE_POMODORO, false),
+        },
+        "arduino_uno": {
+            "positive": gpio_reuse_evidence(GPIO_REUSE_UNO, true),
+            "negative": gpio_reuse_evidence(GPIO_REUSE_UNO, false),
+        },
+    });
+    assert_eq!(measured["pomodoro"]["positive"]["result"], 1);
+    assert_eq!(measured["pomodoro"]["positive"]["time_ns"], 5_000);
+    assert_eq!(
+        measured["pomodoro"]["positive"]["trace"]["edges"]
+            .as_array()
+            .unwrap()
+            .len(),
+        8
+    );
+    assert_eq!(measured["pomodoro"]["negative"]["result"], 0);
+    assert!(measured["pomodoro"]["negative"]["trace"]["edges"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert_eq!(measured["arduino_uno"]["positive"]["result"], 1);
+    assert_eq!(measured["arduino_uno"]["positive"]["time_ns"], 5_000);
+    assert_eq!(
+        measured["arduino_uno"]["positive"]["trace"]["edges"]
+            .as_array()
+            .unwrap()
+            .len(),
+        8
+    );
+    assert_eq!(measured["arduino_uno"]["negative"]["result"], 0);
+    assert!(measured["arduino_uno"]["negative"]["trace"]["edges"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert!(measured["pomodoro"]["positive"]["trace"]["dropped"].as_u64() == Some(0));
+    assert!(measured["arduino_uno"]["positive"]["trace"]["dropped"].as_u64() == Some(0));
+
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/flex-gpio-reuse/native.json");
+    if std::env::var_os("LABWIRED_REGEN_FLEX_GPIO_REUSE").is_some() {
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&measured).unwrap() + "\n",
+        )
+        .unwrap();
+    }
+    let expected: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        measured, expected,
+        "cross-hardware GPIO behavior evidence changed"
     );
 }
