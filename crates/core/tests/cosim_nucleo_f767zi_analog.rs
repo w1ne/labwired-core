@@ -143,6 +143,77 @@ fn bjt_collector_voltage(base_drive_v: f64) -> f64 {
     collector_for_vbe(0.5 * (low + high))
 }
 
+/// Independent Gummel–Poon load line with optional B-E and B-C recombination.
+fn bjt_recombination_collector_voltage(
+    base_drive_v: f64,
+    base_emitter_recombination: bool,
+    base_collector_recombination: bool,
+) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VAR: f64 = 75.0;
+    const ISE_A: f64 = 2e-12;
+    const NE: f64 = 1.5;
+    const ISC_A: f64 = 5e-10;
+    const NC: f64 = 2.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let transport = IS_A * (forward - reverse) * base_width;
+        let base_collector = (IS_A / BR) * (reverse - 1.0)
+            + if base_collector_recombination {
+                ISC_A * ((vbc / (NC * VT)).exp() - 1.0)
+            } else {
+                0.0
+            };
+        let base_emitter = (IS_A / BF) * (forward - 1.0)
+            + if base_emitter_recombination {
+                ISE_A * ((vbe / (NE * VT)).exp() - 1.0)
+            } else {
+                0.0
+            };
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        let residual = (base_drive_v - vbe) / BASE_OHMS - base_current;
+        if residual > 0.0 {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 /// Independent Gummel–Poon reference including forward/reverse Early effect
 /// and optional high-injection rolloff.
 fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool) -> f64 {
@@ -1158,6 +1229,130 @@ fn nucleo_f767zi_bjt_terminal_resistances_reach_adc1_with_explicit_network_refer
             "neighboring ADC1 channel 8 remains undriven"
         );
     }
+}
+
+#[test]
+fn nucleo_f767zi_bjt_base_recombination_reaches_adc1_alongside_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI profile");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and Shockley diode netlists");
+    let recombination = SystemManifest::from_file(root(
+        "examples/nucleo-f767zi/analog-bjt-recombination-adc.yaml",
+    ))
+    .expect("load matched generic Gummel–Poon recombination branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(recombination.cosim_models);
+
+    let chip = ChipDescriptor::from_file(system_path.parent().unwrap().join(&profile.chip))
+        .expect("load STM32F767 descriptor");
+    for (pad, channel) in [("PA2", 2), ("PA3", 3), ("PA4", 4), ("PA5", 5)] {
+        assert_eq!(
+            chip.analog_pins.get(pad).map(|route| route.channel),
+            Some(channel),
+            "{pad} must resolve to ADC1 channel {channel}"
+        );
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries an NTC, diode, and four matched recombination branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic devices must resolve to ADC1 channels zero through five"
+    );
+    for channel in 0..=6 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_recombination.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    let mut cycles = 0;
+    let mut saw_base_emitter_effect = false;
+    let mut saw_base_collector_effect = false;
+    for base_drive_v in [0.7_f64, 0.9, 1.2] {
+        session
+            .set_signal_number("ui.bjt_recombination.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and four BJT branches");
+        assert_eq!(steps.len(), 6, "all six generic analog branches solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9, "unrelated NTC stays isolated");
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode stays on its independent load line"
+        );
+
+        let bjt_voltages = [
+            signal_voltage(&session, "board.analog.pa2_volts"),
+            signal_voltage(&session, "board.analog.pa3_volts"),
+            signal_voltage(&session, "board.analog.pa4_volts"),
+            signal_voltage(&session, "board.analog.pa5_volts"),
+        ];
+        let expected = [
+            bjt_recombination_collector_voltage(base_drive_v, false, false),
+            bjt_recombination_collector_voltage(base_drive_v, true, false),
+            bjt_recombination_collector_voltage(base_drive_v, false, true),
+            bjt_recombination_collector_voltage(base_drive_v, true, true),
+        ];
+        for (index, (voltage, expected_v)) in bjt_voltages.iter().zip(expected).enumerate() {
+            assert!(
+                (voltage - expected_v).abs() < 5e-5,
+                "ADC1 BJT branch {index} at base drive {base_drive_v} V should match independent load line {expected_v} V, got {voltage} V"
+            );
+        }
+        assert!(
+            bjt_voltages[1] > bjt_voltages[0] + 0.005,
+            "ISE/NE base-emitter recombination loads the base drive and raises collector voltage"
+        );
+        saw_base_emitter_effect |= bjt_voltages[1] - bjt_voltages[0] > 0.005;
+        saw_base_collector_effect |= bjt_voltages[2] - bjt_voltages[0] > 0.1;
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v)]
+            .into_iter()
+            .chain((2..=5).zip(bjt_voltages))
+        {
+            let expected_count = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "solved voltage seeds descriptor-routed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 conversion follows analog device on channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 6),
+            0xFFFF,
+            "adjacent ADC1 channel 6 stays undriven"
+        );
+    }
+    assert!(saw_base_emitter_effect, "ISE/NE effect reaches ADC1");
+    assert!(
+        saw_base_collector_effect,
+        "forward-biased ISC/NC recombination changes the collector load line"
+    );
 }
 
 #[test]
