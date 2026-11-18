@@ -11,6 +11,7 @@
   "negative_led_edges": 0,
   "analog_trace": {
     "positive": {
+      "time_unit": "ns",
       "channels": [
         {
           "name": "source-u4-gl5528.voltage_mv",
@@ -38,6 +39,7 @@
       ]
     },
     "negative": {
+      "time_unit": "ns",
       "channels": [
         {
           "name": "source-u4-gl5528.voltage_mv",
@@ -205,12 +207,13 @@
     "run-scope-report",
     "bright-output",
     "dark-negative-control",
-    "oscilloscope-samples"
+    "oscilloscope-samples",
+    "oscilloscope-nanosecond-time-unit"
   ],
-  "measured_browser_ms": 465.9,
+  "measured_browser_ms": 405.4,
   "browser": "156.0.8078.79",
   "browser_driver": "Playwright",
-  "core_commit": "f91009b8fc7a64008745152d409bf44d8e62534c",
+  "core_commit": "5bb9debd6cc6e5f6d4e9041de2e73cb1f2c4e632",
   "firmware_sha256": "366f562ab8a19449a479e3b5e4b2d783f108fdaceb6e61948a0f6b559c314294",
   "firmware_source_sha256": "04cdc152150ed1ca85924081f124438698370c12af6535aaff934c1ddd539402",
   "system_sha256": "5203d8f5b0e69b5bff01bc7da953ffe6881cfc8cd17b8a2b132ddf2db8a3cdef",
