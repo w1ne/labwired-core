@@ -149,8 +149,10 @@ const DMA1_CCR1: u32 = DMA1_BASE + 0x08;
 const DMA1_CNDTR1: u32 = DMA1_BASE + 0x0C;
 const DMA1_CPAR1: u32 = DMA1_BASE + 0x10;
 const DMA1_CMAR1: u32 = DMA1_BASE + 0x14;
+const DMA1_GIF1: u32 = 1;
 const DMA1_TCIF1: u32 = 1 << 1;
 const DMA1_HTIF1: u32 = 1 << 2;
+const DMA1_CHANNEL1_FLAGS: u32 = 0xF;
 const DMA1_IRQ_BIT: u32 = 1 << 11;
 const DMA1_CCR1_EN: u32 = 1;
 const DMA1_CCR1_TCIE: u32 = 1 << 1;
@@ -3939,9 +3941,9 @@ fn smoke_adc1_dma_scan_rank_boundaries() {
     });
 }
 
-/// Run two software-started two-rank scans through DMA1 channel 1 in circular
-/// mode. Check HTIF and its IRQ with TCIE disabled, then verify each completed
-/// lap reloads CNDTR and the memory pointer while keeping the channel enabled.
+/// Run software-started two-rank scans through DMA1 channel 1 in circular
+/// mode. Check HTIF and its IRQ with TCIE disabled, then check the combined
+/// HTIF/TCIF flags, their individual clears, and the channel-wide clear.
 fn smoke_adc1_dma_circular_two_laps() {
     let read = |address: u32| unsafe { read_volatile(address as *const u32) };
     let write = |address: u32, value: u32| unsafe { write_volatile(address as *mut u32, value) };
@@ -3949,7 +3951,7 @@ fn smoke_adc1_dma_circular_two_laps() {
     let rank_channels = (1 << 5) | (1 << 15); // SQ1=IN0, SQ2=IN1
 
     write(DMA1_CCR1, 0);
-    write(DMA1_IFCR, 0xF);
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
     write(DMA1_CNDTR1, expected.len() as u32);
     write(DMA1_CPAR1, ADC1_DR);
     let results = core::ptr::addr_of_mut!(ADC1_DMA_CIRCULAR_RESULTS).cast::<u16>();
@@ -4001,7 +4003,7 @@ fn smoke_adc1_dma_circular_two_laps() {
 
     // Stop between scans so the second TCIF belongs to a distinct circular
     // lap; the DMA channel itself stays enabled with its reloaded count.
-    write(DMA1_IFCR, 0xF);
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
     unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
     let second_complete = run_lap();
     let second_reloaded = read(DMA1_CNDTR1) == expected.len() as u32;
@@ -4016,20 +4018,73 @@ fn smoke_adc1_dma_circular_two_laps() {
 
     write(ADC1_CR2, 0);
     write(DMA1_CCR1, 0);
-    write(DMA1_IFCR, 0xF);
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
     unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
 
-    let count_reloaded = first_reloaded && second_reloaded;
+    // Enable both interrupt sources for another circular lap. At the second
+    // transfer the ISR should contain GIF1, HTIF1 and TCIF1 together.
+    write(DMA1_CNDTR1, expected.len() as u32);
+    write(DMA1_CPAR1, ADC1_DR);
+    write(DMA1_CMAR1, results as u32);
+    write(
+        DMA1_CCR1,
+        DMA1_CCR1_EN
+            | DMA1_CCR1_HTIE
+            | DMA1_CCR1_TCIE
+            | DMA1_CCR1_CIRC
+            | DMA1_CCR1_MINC
+            | DMA1_CCR1_PSIZE_HALFWORD
+            | DMA1_CCR1_MSIZE_HALFWORD,
+    );
+    let both_irq_complete = run_lap();
+    let required_flags = DMA1_GIF1 | DMA1_HTIF1 | DMA1_TCIF1;
+    let both_flags = read(DMA1_ISR) & required_flags == required_flags;
+    let both_irq_pending = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
+    let third_reloaded = read(DMA1_CNDTR1) == expected.len() as u32;
+    let third_sequence_matches = expected.iter().enumerate().all(
+        |(rank, expected_value)| unsafe { read_volatile(results.add(rank)) } == *expected_value,
+    );
+
+    // RM0008 exposes independent CHTIFx/CTCIFx clears. CGIFx clears all four
+    // channel flags, including GIFx.
+    write(DMA1_IFCR, DMA1_HTIF1);
+    let half_clear_preserves_tc = read(DMA1_ISR) & DMA1_HTIF1 == 0
+        && read(DMA1_ISR) & (DMA1_GIF1 | DMA1_TCIF1) == (DMA1_GIF1 | DMA1_TCIF1);
+    write(DMA1_IFCR, DMA1_TCIF1);
+    let tc_clear_preserves_gif =
+        read(DMA1_ISR) & DMA1_TCIF1 == 0 && read(DMA1_ISR) & DMA1_GIF1 != 0;
+    write(DMA1_IFCR, DMA1_GIF1);
+    let channel_flags_cleared = read(DMA1_ISR) & DMA1_CHANNEL1_FLAGS == 0;
+    let pending_survives_clear = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
+    let nvic_pending_cleared = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT == 0;
+
+    write(ADC1_CR2, 0);
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
+
+    let count_reloaded = first_reloaded && second_reloaded && third_reloaded;
     let half_transfer_irq = first_half_irq && second_half_irq;
-    let sequence_matches = first_matches && second_matches;
+    let sequence_matches = first_matches && second_matches && third_sequence_matches;
     let passed = first_complete
         && second_complete
         && count_reloaded
         && half_transfer_irq
         && sequence_matches
         && enabled
-        && eoc_cleared;
-    putbytes(b"ADC1 F1 CIRCULAR HT LAPS=2 HT_IRQ=");
+        && eoc_cleared
+        && both_irq_complete
+        && both_flags
+        && both_irq_pending
+        && third_reloaded
+        && third_sequence_matches
+        && half_clear_preserves_tc
+        && tc_clear_preserves_gif
+        && channel_flags_cleared
+        && pending_survives_clear
+        && nvic_pending_cleared;
+    putbytes(b"ADC1 F1 CIRCULAR HT_LAPS=2 HT_IRQ=");
     put_flag(half_transfer_irq);
     putbytes(b" RELOAD=");
     put_flag(count_reloaded);
@@ -4039,6 +4094,14 @@ fn smoke_adc1_dma_circular_two_laps() {
     put_flag(enabled);
     putbytes(b" EOC_CLEAR=");
     put_flag(eoc_cleared);
+    putbytes(b" IRQ_FLAGS=");
+    put_flag(both_irq_complete && both_flags && both_irq_pending);
+    putbytes(b" INDIVIDUAL_CLEAR=");
+    put_flag(half_clear_preserves_tc && tc_clear_preserves_gif);
+    putbytes(b" GIF_CLEAR=");
+    put_flag(channel_flags_cleared);
+    putbytes(b" NVIC_CLEAR=");
+    put_flag(pending_survives_clear && nvic_pending_cleared);
     putline(if passed { b" ok" } else { b" FAIL" });
 }
 

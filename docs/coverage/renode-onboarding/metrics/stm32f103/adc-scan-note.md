@@ -12,20 +12,20 @@ when CR2.DMA is set. The imported chip profile routes `adc1_rx` to DMA1 channel
 1, the STM32F1 fixed mapping. The unit regression checks the per-rank request;
 the imported-system smoke checks the request-to-memory path.
 
-The smoke also runs two software-started two-rank scans with DMA1 channel 1 in
-circular mode. With TCIE disabled and HTIE enabled, each lap must set HTIF and
-pend DMA1 channel 1's IRQ, then complete with CNDTR reloaded to 2. It checks
-both result buffers, the channel remaining enabled, and EOC clearing after DMA
-reads DR. This covers HTIF/HTIE and circular reload for two-item buffers;
-continuous ADC operation, larger-buffer half-transfer timing, and other DMA
-routes remain unclaimed.
+The smoke also runs software-started two-rank scans with DMA1 channel 1 in
+circular mode. With TCIE disabled and HTIE enabled, two laps must set HTIF and
+pend DMA1 channel 1's IRQ, then complete with CNDTR reloaded to 2. A third lap
+enables both interrupt sources and checks the combined GIF/HTIF/TCIF state,
+independent HTIF and TCIF clears, CGIF clearing all channel flags, and NVIC
+pending clear behavior. It checks every result buffer, the channel remaining
+enabled, and EOC clearing after DMA reads DR. Continuous ADC operation,
+larger-buffer half-transfer timing, and other DMA routes remain unclaimed.
 
 The two earlier failed integration attempts for repeated NVIC pending during
 the CPU-serviced scan remain under
 `docs/coverage/renode-onboarding/attempt-history/stm32f103/`. The passing
 smoke claims the first-rank ADC pending bit only. It does not exercise
 continuous ADC scans, larger-buffer half-transfer timing, other DMA routes, or
-physical hardware behavior.
-
-Register behavior follows ST RM0008 Rev 21 §§11.3.8, 11.12.3, 11.12.9–11.12.11,
-and 13.3.1, 13.3.4: [STM32F1 reference manual](https://www.st.com/resource/en/reference_manual/rm0008-stm32f103xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf).
+physical hardware behavior. Register behavior follows ST RM0008 Rev 21
+§§11.3.8, 11.12.3, 11.12.9–11.12.11, 13.3.1, 13.3.4, and 13.4.1–13.4.2:
+[STM32F1 reference manual](https://www.st.com/resource/en/reference_manual/rm0008-stm32f103xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf).

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="87" failures="0" errors="0" time="1.116486">
+<testsuite name="labwired" tests="87" failures="0" errors="0" time="0.772957">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="080793cd4d49d06c15ba94eb744a4892e88d98b186dba3d12eef1144e2d52b4b"/>
+    <property name="firmware_hash" value="0939e4622c77410f42409a8a53eb4e13b0fa16718ef13091f80fd3bb572772e9"/>
   </properties>
-  <testcase classname="labwired" name="run" time="1.116486">
+  <testcase classname="labwired" name="run" time="0.772957">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
   </testcase>
@@ -73,7 +73,7 @@
   </testcase>
   <testcase classname="labwired" name="assertion 33: uart_contains: ADC1 F1 DMA_SCAN=13 COMPLETE=1 REM=00000000 SEQ=1 EOC_CLEAR=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 34: uart_contains: ADC1 F1 CIRCULAR HT LAPS=2 HT_IRQ=1 RELOAD=1 SEQ=1 ENABLED=1 EOC_CLEAR=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 34: uart_contains: ADC1 F1 CIRCULAR HT_LAPS=2 HT_IRQ=1 RELOAD=1 SEQ=1 ENABLED=1 EOC_CLEAR=1 IRQ_FLAGS=1 INDIVIDUAL_CLEAR=1 …" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 35: uart_contains: I2C_NACK_OK" time="0.000000">
   </testcase>
