@@ -406,6 +406,15 @@ pub trait Cpu: Send {
         None
     }
 
+    /// True when the loop the last [`Self::poll_loop_skip_budget`] proved
+    /// stores to memory on every iteration (writing back the bytes memory
+    /// already holds). Its intermediate values are then visible to anything
+    /// running beside it, so the machine skips it only while no other core
+    /// runs. Default `false`.
+    fn poll_loop_plan_stores(&self) -> bool {
+        false
+    }
+
     /// End-of-run diagnosis only. When the core sits in a loop that is a
     /// fixed point on plain memory (one iteration from the current PC comes
     /// back to it with the architectural state unchanged, loading only RAM or
@@ -416,10 +425,11 @@ pub trait Cpu: Send {
     }
 
     /// Skip `cycles` of the loop the last [`Self::poll_loop_skip_budget`]
-    /// proved (a multiple of its period, at most its cycles). `false`, having
-    /// changed nothing, when there is no such plan.
-    fn fast_forward_poll_loop(&mut self, _cycles: u64) -> bool {
-        false
+    /// proved (a multiple of its period, at most its cycles). Returns the
+    /// number of retired instructions represented by the skip, or `None` if
+    /// no skip was applied. On `None`, architectural CPU state is unchanged.
+    fn fast_forward_poll_loop(&mut self, _cycles: u64) -> Option<u64> {
+        None
     }
 
     /// While the machine defers this core's proven poll loop (the plan the
@@ -687,8 +697,11 @@ impl Cpu for Box<dyn Cpu> {
     fn stalled_loop_loads(&mut self, bus: &dyn Bus) -> Option<Vec<u64>> {
         (**self).stalled_loop_loads(bus)
     }
-    fn fast_forward_poll_loop(&mut self, cycles: u64) -> bool {
+    fn fast_forward_poll_loop(&mut self, cycles: u64) -> Option<u64> {
         (**self).fast_forward_poll_loop(cycles)
+    }
+    fn poll_loop_plan_stores(&self) -> bool {
+        (**self).poll_loop_plan_stores()
     }
     fn poll_loop_defer_changed(&self, bus: &dyn Bus) -> bool {
         (**self).poll_loop_defer_changed(bus)

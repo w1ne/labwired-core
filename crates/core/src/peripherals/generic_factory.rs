@@ -84,6 +84,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "fdcan",
     "sdmmc",
     "comp",
+    "analog_comparator",
     "tsc",
     "fmc",
     // RP2040 native peripherals (built here). `rp2040_adc` and `rp2040_rtc`
@@ -174,6 +175,13 @@ pub const MODEL_TYPES: &[&str] = &[
     // P4 UART0 uses the shared FIFO/status head with P4's 400 MHz core and
     // 90 MHz APB clock. Its chip descriptor exposes only FIFO and STATUS.
     "esp32p4_uart",
+    // Narrow GPIO data/enable/input heads (S2/P4 classic head, C5/C61 later
+    // head). Listed so a fuzzy "gpio" heuristic cannot coerce them onto an
+    // STM32 GPIO map.
+    "esp32s2_gpio",
+    "esp32p4_gpio",
+    "esp32c5_gpio",
+    "esp32c61_gpio",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
@@ -1385,6 +1393,55 @@ pub fn try_build(
         "fdcan" => Box::new(crate::peripherals::fdcan::Fdcan::new()),
         "sdmmc" => Box::new(crate::peripherals::sdmmc::Sdmmc::new()),
         "comp" => Box::new(crate::peripherals::comp::Comp::new()),
+        // Data-declared comparator: `profile` picks the register file, the
+        // `plus` / `minus` lists name what each selector value reaches.
+        "analog_comparator" => {
+            use crate::peripherals::analog_comparator::{AnalogComparator, ComparatorProfile};
+            let cfg = &p_cfg.config;
+            let profile = match cfg.get("profile").and_then(|v| v.as_str()) {
+                Some("at32f421") => ComparatorProfile::At32F421,
+                other => anyhow::bail!(
+                    "analog_comparator `{}`: unknown profile {other:?} (expected at32f421)",
+                    p_cfg.id
+                ),
+            };
+            let list = |key: &str| -> anyhow::Result<Vec<String>> {
+                cfg.get(key)
+                    .and_then(|v| v.as_sequence())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("analog_comparator `{}`: `{key}` list required", p_cfg.id)
+                    })?
+                    .iter()
+                    .map(|v| {
+                        v.as_str().map(str::to_string).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "analog_comparator `{}`: `{key}` entries are names",
+                                p_cfg.id
+                            )
+                        })
+                    })
+                    .collect()
+            };
+            let vrefint_mv = cfg
+                .get("vrefint_mv")
+                .and_then(|v| v.as_f64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!("analog_comparator `{}`: `vrefint_mv` required", p_cfg.id)
+                })?;
+            let exti_line = match cfg.get("exti_line") {
+                None => None,
+                Some(v) => Some(v.as_u64().and_then(|l| u8::try_from(l).ok()).ok_or_else(
+                    || anyhow::anyhow!("analog_comparator `{}`: bad exti_line", p_cfg.id),
+                )?),
+            };
+            Box::new(AnalogComparator::new(
+                profile,
+                &list("plus")?,
+                &list("minus")?,
+                vrefint_mv,
+                exti_line,
+            )?)
+        }
         "tsc" => Box::new(crate::peripherals::tsc::Tsc::new()),
         "fmc" => Box::new(crate::peripherals::fmc::Fmc::new()),
         "exti" => {
@@ -1414,9 +1471,23 @@ pub fn try_build(
                         anyhow::anyhow!("exti `{}`: line_mask must be a u32", p_cfg.id)
                     })?,
             };
-            Box::new(crate::peripherals::exti::Exti::new_with_layout_lines(
-                layout, line_mask,
-            ))
+            let mut exti = crate::peripherals::exti::Exti::new_with_layout_lines(layout, line_mask);
+            // `line_irqs: { 21: 12 }` wires internal lines to their vectors.
+            if let Some(map) = p_cfg.config.get("line_irqs") {
+                let map = map.as_mapping().ok_or_else(|| {
+                    anyhow::anyhow!("exti `{}`: line_irqs must map line -> irq", p_cfg.id)
+                })?;
+                let mut line_irqs = Vec::new();
+                for (line, irq) in map {
+                    let (Some(line), Some(irq)) = (line.as_u64(), irq.as_u64()) else {
+                        anyhow::bail!("exti `{}`: line_irqs entries are integers", p_cfg.id);
+                    };
+                    line_irqs.push((u8::try_from(line)?, u32::try_from(irq)?));
+                }
+                exti.set_line_irqs(line_irqs)
+                    .map_err(|e| anyhow::anyhow!("exti `{}`: {e}", p_cfg.id))?;
+            }
+            Box::new(exti)
         }
         "afio" => Box::new(crate::peripherals::afio::Afio::new()),
         // Channel-based DMA (F1/L0/L4/G0). `config: { requests: { spi1_tx: 3,
@@ -1656,6 +1727,11 @@ pub fn try_build(
         }
         // SYSCFG on STM32L0 (`profile: stm32l0`): the same EXTICR line-source
         // mux, among the L0's own configuration words (RM0367 §10).
+        // SCFG on AT32F421 (`profile: at32f421`): CFG1 and the EXINTC
+        // line-source mux at the STM32F0 SYSCFG offsets (RM_AT32F421 §7.2).
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("at32f421") => {
+            Box::new(crate::peripherals::syscfg::At32F421Scfg::new())
+        }
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32l0") => {
             Box::new(crate::peripherals::syscfg::Stm32L0Syscfg::new())
         }

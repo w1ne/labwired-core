@@ -56,9 +56,8 @@ pub const SRAM_START: u16 = 0x0100;
 /// OC4x = PH3..5, OC5x = PL3..5; see `avr/oc_pins.rs`). Timer1 gains its
 /// compare unit C and Timer3/4/5 run on the mega parts (`avr/timer345.rs`).
 /// INT0..7 and PCINT0..23 on the mega pins (`avr/mega_ext_int.rs`), the
-/// timed, auto-triggered ADC (`avr/mega_adc.rs`) and the timed SPI block
-/// (`avr/mega_spi.rs`) are the mega's own. Not modelled on the ATmega2560:
-/// USART1..3 (registers stored only).
+/// timed, auto-triggered ADC (`avr/mega_adc.rs`), the timed SPI block
+/// (`avr/mega_spi.rs`) and USART0..3 (`avr/usart.rs`) are the mega's own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AvrModel {
     #[default]
@@ -480,7 +479,7 @@ pub fn mega2560_vector(vec328: u32) -> u32 {
         23 => 31,              // EE READY
         24 => 29,              // ANALOG COMP
         25 => 40,              // TWI
-        26 => 58,              // SPM READY
+        26 => 41,              // SPM READY
         timer1::VEC_TIMER1_COMPC => 20,
         // INT2..INT7 (`avr/mega_ext_int.rs`) -> 4..9
         58..=63 => vec328 - mega_ext_int::NATIVE_BASE,
@@ -650,6 +649,9 @@ pub struct Avr {
     /// Data EEPROM and `EECR`/`EEDR`/`EEAR` (`avr/eeprom.rs`). Empty on the
     /// parts whose EEPROM is not modelled.
     eeprom: eeprom::Eeprom,
+    /// ATmega2560/1281 USART0..3 (`avr/usart.rs`). Behind a lock because a
+    /// `UDRn` read pops the receive FIFO from the `&self` read path.
+    musart: std::sync::Mutex<usart::MegaUsarts>,
     /// ATmega2560 family: INT0..7 / PCINT0..23 (`avr/mega_ext_int.rs`), the
     /// timed ADC (`avr/mega_adc.rs`) and the timed SPI (`avr/mega_spi.rs`).
     mx: mega_ext_int::MegaExt,
@@ -1003,6 +1005,7 @@ impl Avr {
             usb: usb::UsbDevice::default(),
             wdt: wdt::Wdt::new(model.has_wdtcsr()),
             eeprom: eeprom::Eeprom::new(model.eeprom_size()),
+            musart: std::sync::Mutex::new(usart::MegaUsarts::new(model)),
             mx: mega_ext_int::MegaExt::default(),
             madc: mega_adc::MegaAdc::default(),
             mspi: mega_spi::MegaSpi::default(),
@@ -1197,7 +1200,7 @@ impl Avr {
             let Some(high) = bus.read_gpio_output_by_label(device.cs_pin()) else {
                 continue;
             };
-            match (device.is_selected(), !high) {
+            match (device.is_selected(), device.cs_selected_at(high)) {
                 (false, true) => device.cs_select(),
                 (true, false) => {
                     device.cs_release();
@@ -1366,6 +1369,7 @@ impl Avr {
             a if self.is_32u4_own_reg(a) => {
                 Ok(self.usb_read(a).unwrap_or(self.io[usize::from(a - 0x20)]))
             }
+            a if self.is_mega_usart_reg(a) => self.mega_usart_read(a, bus),
             a if self.is_low_sram(a) => Ok(self.sram[(a - self.sram_start) as usize]),
             // PINB/PINC/PIND — the registers on this part whose value the
             // OUTSIDE WORLD moves, so they are the ones the IO shadow cannot
@@ -1510,8 +1514,8 @@ impl Avr {
             a if self.wdt.handles(a) => Ok(self.wdt.read(self.cycles)),
             a if self.eeprom.handles(a) => Ok(self.eeprom.read(a, self.cycles)),
             0x0020..=0x00FF => Ok(self.io[(addr - 0x20) as usize]),
-            // ATmega2560 extended I/O (ports H..L, Timer3/4/5, USART1..3):
-            // stored registers.
+            // ATmega2560 extended I/O (ports H..L, Timer3/4/5): stored
+            // registers.
             0x0100..=0x01FF if self.is_mega() => Ok(self.io[(addr - 0x20) as usize]),
             a if (self.sram_start..=self.ramend).contains(&a) => {
                 Ok(self.sram[(a - self.sram_start) as usize])
@@ -1532,6 +1536,7 @@ impl Avr {
                 self.r[addr as usize] = value;
                 Ok(())
             }
+            a if self.is_mega_usart_reg(a) => self.mega_usart_write(a, value, bus),
             a if self.is_32u4_own_reg(a) => {
                 if (0xC0..=0xC7).contains(&a) {
                     self.io[usize::from(a - 0x20)] = value;
@@ -2293,7 +2298,8 @@ impl Avr {
     /// pending. This is also what wakes a sleeping core.
     #[inline]
     fn wake_pending(&self) -> bool {
-        self.flag_i() && self.pending_irq & !1 != 0
+        let vectors = if self.is_mega() { !1 } else { 0xFFFF_FFFE };
+        self.flag_i() && self.pending_irq & vectors != 0
     }
 
     pub fn portb(&self) -> u8 {
@@ -2624,6 +2630,7 @@ impl Avr {
         }
         // ... and the INTn / PCIFn flag of an external or pin-change vector.
         self.ext_vector_entered(vec);
+        self.mega_usart_vector_entered(vec);
         if self.is_mega() {
             match vec {
                 mega_adc::VEC_ADC => self.mega_adc_vector_entered(),
@@ -2889,6 +2896,9 @@ impl Cpu for Avr {
         if self.ucsr0b & UCSRB_RXCIE != 0 && Self::usart_on_bus(bus) {
             return None;
         }
+        if self.mega_usart_keeps_awake() {
+            return None;
+        }
         Some(
             [
                 self.timer0_wake_cycles(),
@@ -2993,6 +3003,7 @@ impl Cpu for Avr {
         }
         self.wdt_after_reset();
         self.eeprom.reset();
+        self.mega_usart_reset();
         self.irq_shadow = false;
         // A reset drops the pull-up: the host sees a disconnect.
         self.usb = usb::UsbDevice::default();
@@ -3076,6 +3087,9 @@ impl Cpu for Avr {
         if self.eeprom.irq_watched() || self.pending_irq & (1u64 << eeprom::VEC_EE_READY) != 0 {
             self.sync_eeprom_irq();
         }
+
+        // ATmega2560/1281 USARTs: frames that end by now, host input, levels.
+        self.mega_usart_service(bus)?;
 
         // INT0/INT1 and PCINT: sample the pads at this boundary.
         if self.ext_watch != 0 {
@@ -3323,6 +3337,8 @@ mod oc_pins;
 mod timer1;
 #[path = "avr/timer345.rs"]
 mod timer345;
+#[path = "avr/usart.rs"]
+mod usart;
 /// ATmega32U4 USB device controller.
 mod usb;
 #[path = "avr/wdt.rs"]
@@ -5201,9 +5217,50 @@ mod tests {
             (21, 28), // USART0_TX
             (22, 30), // ADC
             (25, 40), // TWI
+            (26, 41), // SPM_READY
         ];
         for (v328, v2560) in table {
             assert_eq!(mega2560_vector(v328), v2560, "328P vector {v328}");
+        }
+    }
+
+    /// Every interrupt source of the ATmega2560 owns its own `pending_irq`
+    /// bits, and every pending bit enters its own Table 14-1 slot. Two sources
+    /// on one bit would enter each other's vector, and the recompute of one
+    /// would clear the request of the other.
+    #[test]
+    fn mega2560_interrupt_sources_never_share_a_pending_bit() {
+        let sources: &[(&str, u64)] = &[
+            // The peripherals shared with the 328P, at its 1-based numbers
+            // INT0 (2) .. SPM READY (26).
+            ("328P-numbered vectors", ((1u64 << 27) - 1) & !0b11),
+            ("TIMER1 COMPC", 1u64 << timer1::VEC_TIMER1_COMPC),
+            ("TIMER3/4/5", (0x1fu64 << 32) | (0x3ffu64 << 42)),
+            ("INT2..INT7", mega_ext_int::HIGH_MASK),
+            ("USART1..3", usart::MEGA_ONLY_MASK),
+        ];
+        for (i, (a, mask_a)) in sources.iter().enumerate() {
+            assert_ne!(*mask_a, 0, "{a} owns no pending bit");
+            for (b, mask_b) in &sources[i + 1..] {
+                let shared = mask_a & mask_b;
+                assert_eq!(shared, 0, "{a} and {b} share pending bits {shared:#x}");
+            }
+        }
+        let all = sources.iter().fold(0u64, |m, (_, mask)| m | mask);
+        let mut slots = HashMap::new();
+        for bit in (0..64).filter(|b| all & (1u64 << b) != 0) {
+            let slot = if mega_ext_int::HIGH_MASK & (1u64 << bit) != 0 {
+                bit - mega_ext_int::NATIVE_BASE
+            } else {
+                mega2560_vector(bit)
+            };
+            assert!(
+                (2..=57).contains(&slot),
+                "pending bit {bit} enters slot {slot}, outside the 2560 table"
+            );
+            if let Some(other) = slots.insert(slot, bit) {
+                panic!("pending bits {other} and {bit} both enter slot {slot}");
+            }
         }
     }
 
@@ -5270,6 +5327,72 @@ mod tests {
             vec![(true, 0xAA), (false, 0x55), (true, 0xFF)],
             "SPDR must sample D/C per byte, in order"
         );
+    }
+
+    /// A CPU-held SPI slave whose chip select is active HIGH (an ST7920 in
+    /// serial mode) is selected by its CS pin driven high, not low: the
+    /// GPIO-synced CS path asks the device for its polarity.
+    #[test]
+    fn cpu_held_spi_device_honours_active_high_cs() {
+        use crate::bus::SystemBus;
+        use labwired_config::{ChipDescriptor, SystemManifest};
+        struct HighCs {
+            selected: bool,
+            got: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+        }
+        impl SpiDevice for HighCs {
+            fn cs_pin(&self) -> &str {
+                "PB2"
+            }
+            fn cs_active_high(&self) -> bool {
+                true
+            }
+            fn cs_select(&mut self) {
+                self.selected = true;
+            }
+            fn cs_release(&mut self) {
+                self.selected = false;
+            }
+            fn is_selected(&self) -> bool {
+                self.selected
+            }
+            fn transfer(&mut self, mosi: u8) -> u8 {
+                self.got.lock().unwrap().push(mosi);
+                0
+            }
+        }
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip_path = root.join("configs/chips/atmega328p.yaml");
+        let chip = ChipDescriptor::from_file(&chip_path).expect("atmega328p");
+        let manifest = SystemManifest {
+            cosim_models: Vec::new(),
+            motor_models: Vec::new(),
+            walk_deleted: Some(false),
+            schema_version: "1.0".to_string(),
+            name: "cs-high".to_string(),
+            chip: chip_path.to_string_lossy().to_string(),
+            cpu_hz: Some(16_000_000),
+            external_devices: vec![],
+            board_io: vec![],
+            debug_uart: None,
+            wifi_ap: None,
+            peripherals: vec![],
+            parts: Default::default(),
+            memory_overrides: Default::default(),
+        };
+        let mut bus = SystemBus::from_config(&chip, &manifest).expect("bus");
+        let got = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut cpu = Avr::for_chip_name("atmega328p");
+        cpu.push_spi_device(Box::new(HighCs {
+            selected: false,
+            got: got.clone(),
+        }));
+        cpu.data_write(0x24, 1 << 2, &mut bus).unwrap(); // DDRB.2 output
+        cpu.data_write(0x25, 0, &mut bus).unwrap(); // CS low: inactive
+        cpu.data_write(0x4E, 0x11, &mut bus).unwrap();
+        cpu.data_write(0x25, 1 << 2, &mut bus).unwrap(); // CS high: selected
+        cpu.data_write(0x4E, 0x22, &mut bus).unwrap();
+        assert_eq!(*got.lock().unwrap(), vec![0x22]);
     }
 
     /// A bus with the real port models of `chip`, to watch the pads.

@@ -49,6 +49,8 @@ pub struct GenericSpiDevice {
 
     // Per-frame state.
     cmd_consumed: u8,
+    read_dummy_left: u8,
+    spi_activated: bool,
     is_read: Option<bool>,
     cur_addr: Option<u16>,
     /// The command byte selected a register. False only when
@@ -398,6 +400,8 @@ impl GenericSpiDevice {
                     .unwrap_or_default(),
             )?,
             cmd_consumed: 0,
+            read_dummy_left: 0,
+            spi_activated: !spec.framing.activate_on_first_cs_release,
             is_read: None,
             cur_addr: None,
             addressed: true,
@@ -1032,6 +1036,7 @@ impl SpiDevice for GenericSpiDevice {
             self.frame_closed = false;
         }
         self.cmd_consumed = 0;
+        self.read_dummy_left = 0;
         self.is_read = None;
         self.cur_addr = None;
         self.addressed = true;
@@ -1059,6 +1064,8 @@ impl SpiDevice for GenericSpiDevice {
         }
         self.cs_held = false;
         self.write_acc.clear();
+        // BMA400 powers up in I2C mode. The first CS rising edge selects SPI.
+        self.spi_activated = true;
         self.raise_and_settle(Event::CsRelease, 0);
         // CS↑ always closes a frame, the SPI twin of the I²C STOP: a short
         // message is delivered rather than swallowed.
@@ -1174,6 +1181,11 @@ impl GenericSpiDevice {
     /// The wire exchange itself, split out so the framing counter above can
     /// raise `frame` once the byte has been processed.
     fn transfer_inner(&mut self, mosi: u8) -> u8 {
+        // Until the first CS rising edge, an I2C/SPI auto-selecting device
+        // does not decode SPI commands or return register contents.
+        if !self.spi_activated {
+            return 0xFF;
+        }
         // Soft-CS / matrix path: when CS was never held (or has been released),
         // enter the read-only data phase and re-frame after a full word so a
         // CS-high dummy flush does not permanently desync multi-byte reads.
@@ -1198,6 +1210,11 @@ impl GenericSpiDevice {
             self.cmd_consumed += 1;
             if self.cmd_consumed == self.framing.command_bytes {
                 self.decode_command(mosi);
+                self.read_dummy_left = if self.is_read == Some(true) {
+                    self.framing.read_dummy_bytes
+                } else {
+                    0
+                };
             }
             // `command_response:` is the word a part clocks out WHILE the master
             // clocks the command in (nRF24L01+ §8.3.1). Absent ⇒ 0x00, which is
@@ -1211,6 +1228,10 @@ impl GenericSpiDevice {
         // writes: a payload burst must not land on the register file.
         if !self.addressed {
             return self.command_response_byte().unwrap_or(0xFF);
+        }
+        if self.is_read == Some(true) && self.read_dummy_left > 0 {
+            self.read_dummy_left -= 1;
+            return 0x00;
         }
         let addr = self.cur_addr.unwrap_or(0);
         // Writes require an explicit rw_bit in the framing; a part with rw_bit: None never leaves is_read == None, so every data byte is a read.
@@ -1486,6 +1507,14 @@ impl PeripheralKit for LazyLock<DeclarativeSpiKit> {
     }
 }
 
+/// Bosch BMA400 accelerometer (public declarative register model).
+pub static BMA400_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("bma400").expect("bma400 descriptor embedded"),
+    )
+    .expect("bma400.yaml is a valid declarative spi descriptor")
+});
+
 /// Analog Devices ADXL345 accelerometer (declarative `adxl345_spi.yaml`).
 pub static ADXL345_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
     DeclarativeSpiKit::from_yaml(
@@ -1585,6 +1614,68 @@ mod tests {
     use crate::peripherals::spi::SpiDevice;
 
     const FIXTURE: &str = include_str!("declarative_spi_fixture.yaml");
+
+    fn bma400_read(dev: &mut GenericSpiDevice, reg: u8, count: usize) -> Vec<u8> {
+        dev.cs_select();
+        assert_eq!(dev.transfer(0x80 | reg), 0);
+        assert_eq!(dev.transfer(0), 0, "BMA400 read must clock the dummy byte");
+        let data = (0..count).map(|_| dev.transfer(0)).collect();
+        dev.cs_release();
+        data
+    }
+
+    fn bma400_write(dev: &mut GenericSpiDevice, reg: u8, data: u8) {
+        dev.cs_select();
+        dev.transfer(reg & 0x7f);
+        dev.transfer(data);
+        dev.cs_release();
+    }
+
+    #[test]
+    fn bma400_id_requires_spi_activation_and_dummy_on_every_read() {
+        let mut d = GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("bma400").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+        d.cs_select();
+        assert_eq!(
+            d.transfer(0x80),
+            0xFF,
+            "first SPI command ignored after power-up"
+        );
+        assert_eq!(d.transfer(0), 0xFF, "first SPI read data invalid");
+        d.cs_release(); // CS rising edge changes I2C to SPI mode
+        assert_eq!(bma400_read(&mut d, 0, 1), vec![0x90]);
+        assert_eq!(bma400_read(&mut d, 0, 2), vec![0x90, 0x88]);
+    }
+
+    #[test]
+    fn bma400_spi_real_12bit_axes_and_range_stimulus() {
+        let mut d = GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("bma400").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+        d.cs_select();
+        d.cs_release(); // activate SPI
+        d.set_input("accel_x", 1.0).unwrap();
+        d.set_input("accel_y", -1.0).unwrap();
+        d.set_input("accel_z", 0.5).unwrap();
+        // default 0x49 selects +-4 g; 512 counts/g.
+        assert_eq!(
+            bma400_read(&mut d, 0x04, 6),
+            vec![0x00, 0x02, 0x00, 0x0E, 0x00, 0x01]
+        );
+        // +-2g: 1024 counts/g, zero-filled upper nibble for negative X.
+        bma400_write(&mut d, 0x1A, 0x09);
+        assert_eq!(
+            bma400_read(&mut d, 0x04, 6),
+            vec![0x00, 0x04, 0x00, 0x0C, 0x00, 0x02]
+        );
+        bma400_write(&mut d, 0x19, 0x02);
+        assert_eq!(bma400_read(&mut d, 0x03, 1), vec![0x04]);
+    }
 
     const EXACT_FAULT_FIXTURE: &str = r#"
 type: exact_spi_fault

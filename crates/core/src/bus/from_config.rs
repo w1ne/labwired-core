@@ -470,6 +470,7 @@ impl SystemBus {
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             scheduler_driver_indices: Vec::new(),
+            exti_line_driver_indices: Vec::new(),
             matrix_source_scratch: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
@@ -481,6 +482,7 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: Cell::new(0),
             timer_poll_carry: Cell::new(0),
             side_effecting_mmio: Cell::new(0),
@@ -623,6 +625,7 @@ impl SystemBus {
                 .or_else(|| crate::peripherals::esp32s3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c6::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32_gpio_head::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c5::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c61::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32h2::try_build(&canonical_type, p_cfg))
@@ -859,6 +862,14 @@ impl SystemBus {
                             .set_full_featured(full)
                             .set_stm32_lpuart(stm32_lpuart)
                             .set_u5_features(u5_features);
+                    // AVR: `cpu_console: false` marks a USART the CPU does not
+                    // write to its console (the mega's USART1..3); its window
+                    // then carries the host TX capture itself.
+                    if matches!(layout, crate::peripherals::uart::UartRegisterLayout::Avr)
+                        && p_cfg.config.get("cpu_console").and_then(|v| v.as_bool()) == Some(false)
+                    {
+                        uart = uart.with_avr_host_sink(true);
+                    }
                     // Renesas SCI_B and classic SCI: `elc_event` is the
                     // channel's RXI event (TXI/TEI follow); the events reach
                     // the NVIC through the RA ICU. `clock_hz` is the rate the

@@ -73,6 +73,29 @@ pub(crate) use motors::CircuitMotorLookup;
 pub use motors::{MotorCoupling, MotorSnapshot, STEPPER_SNAPSHOT_KIND};
 
 impl SystemBus {
+    /// Exception entry consumed the pend of NVIC line `irq`: re-arm every
+    /// chain parked on it for the next cycle, where its per-cycle re-pend
+    /// would have landed.
+    fn unpark_level_events(&mut self, irq: u32) {
+        if self.parked_level_events.is_empty() {
+            return;
+        }
+        let mut woken = Vec::new();
+        self.parked_level_events.retain(|&(idx, token, line)| {
+            if line == irq {
+                woken.push((idx, token));
+                false
+            } else {
+                true
+            }
+        });
+        for (idx, token) in woken {
+            self.parked_level_events.retain(|&(p, _, _)| p != idx);
+            let deadline = self.current_cycle + 1;
+            self.pending_schedule.push((idx, deadline, token));
+        }
+    }
+
     /// Cycles until the earliest event an MMIO write armed in the running CPU
     /// batch (still in `pending_schedule`, not yet on the scheduler heap), or
     /// `None` when nothing is pending. A batch loop ends at `Some(0)` and
@@ -362,6 +385,16 @@ impl BatchStop {
     }
 
     #[inline]
+    /// Would a store of `len` bytes at `addr` hit the armed watch?
+    pub(crate) fn would_hit(&self, addr: u64, len: u64) -> bool {
+        self.armed.get()
+            && self
+                .watch
+                .borrow()
+                .iter()
+                .any(|&(lo, hi)| addr < hi && addr + len > lo)
+    }
+
     pub(crate) fn note_store(&self, addr: u64, len: u64) {
         if self.armed.get()
             && self
@@ -527,6 +560,10 @@ pub struct SystemBus {
     /// `rebuild_peripheral_ranges` so IRQ-level re-derivation on MMIO write
     /// can poll only those models (not the full bus).
     scheduler_driver_indices: Vec<usize>,
+    /// Indices of peripherals that drive internal EXTI lines
+    /// ([`crate::Peripheral::drives_exti_lines`]). Empty on most chips, which
+    /// keeps the per-write delivery check to one length test.
+    exti_line_driver_indices: Vec<usize>,
     /// Retained scratch for `poll_scheduler_matrix_sources`: each scheduler-driven
     /// peripheral fills this buffer via `Peripheral::matrix_irq_sources_into`
     /// instead of returning a freshly-allocated `Vec` per poll. Cleared before
@@ -948,6 +985,10 @@ pub struct SystemBus {
     pub external_device_decls: Vec<ExternalDeviceDecl>,
     /// Semihosting byte stream. Not UART, RTT, or ITM: `bkpt #0xAB` is the only writer.
     semihost: SemihostState,
+    /// Level-hold event chains parked while their NVIC pend stands:
+    /// `(peripheral, event token, NVIC line)`. See
+    /// [`Self::park_level_event`].
+    pub(crate) parked_level_events: Vec<(usize, u32, u32)>,
 }
 
 /// One `write_semihosting_input` is capped so a stuck UI cannot grow the
