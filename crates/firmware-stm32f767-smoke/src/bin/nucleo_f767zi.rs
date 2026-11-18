@@ -16,7 +16,8 @@
 //! clock gate and the F767 APB1/APB2 masks, the 512 KiB / 2 MiB geometry,
 //! all eight U(S)ART lines, GPIO reset state, SYSCFG (SWP_FB), EXTI software
 //! triggers and line 24, TIM1..14, SPI4/5/6 interrupt lines, DMA2
-//! memory-to-memory, I2C1..4 NACK lines, ADC1_IN1 on a test fixture, CRC and RNG. The board IO adds
+//! memory-to-memory, I2C1..4 NACK lines, ADC1_IN1/IN2 regular and continuous
+//! scans on test fixtures, CRC and RNG. The board IO adds
 //! the three LEDs and B1 (rising edge through SYSCFG EXTICR4 into
 //! EXTI15_10). SPI frames, SPI DMA and the TMP102 need slaves the board does
 //! not have and are proven by the stm32f777 fixture smoke instead.
@@ -1097,7 +1098,7 @@ fn main() -> ! {
     }
     mark(14, check_crc());
     mark(15, check_rng());
-    mark(23, check_adc1());
+    mark(23, check_adc1() && check_adc1_scan());
     mark(16, check_pendsv_m7());
     mark(17, check_systick_pendsv_tailchain_m7());
     mark(18, check_systick_pendsv_psp_tailchain_m7());
