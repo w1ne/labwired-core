@@ -13,17 +13,19 @@ when CR2.DMA is set. The imported chip profile routes `adc1_rx` to DMA1 channel
 the imported-system smoke checks the request-to-memory path.
 
 The smoke also runs two software-started two-rank scans with DMA1 channel 1 in
-circular mode. It checks both buffer laps, CNDTR reload to 2 at transfer
-complete, the channel remaining enabled, and EOC clearing after DMA reads DR.
-This verifies DMA circular reload between scans; continuous ADC operation,
-circular half-transfer behavior, and other DMA routes remain unclaimed.
+circular mode. With TCIE disabled and HTIE enabled, each lap must set HTIF and
+pend DMA1 channel 1's IRQ, then complete with CNDTR reloaded to 2. It checks
+both result buffers, the channel remaining enabled, and EOC clearing after DMA
+reads DR. This covers HTIF/HTIE and circular reload for two-item buffers;
+continuous ADC operation, larger-buffer half-transfer timing, and other DMA
+routes remain unclaimed.
 
 The two earlier failed integration attempts for repeated NVIC pending during
 the CPU-serviced scan remain under
 `docs/coverage/renode-onboarding/attempt-history/stm32f103/`. The passing
-smoke claims the first-rank pending bit only. It does not exercise continuous
-ADC scans, circular half-transfer behavior, other DMA routes, or physical
-hardware behavior.
+smoke claims the first-rank ADC pending bit only. It does not exercise
+continuous ADC scans, larger-buffer half-transfer timing, other DMA routes, or
+physical hardware behavior.
 
 Register behavior follows ST RM0008 Rev 21 §§11.3.8, 11.12.3, 11.12.9–11.12.11,
 and 13.3.1, 13.3.4: [STM32F1 reference manual](https://www.st.com/resource/en/reference_manual/rm0008-stm32f103xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf).

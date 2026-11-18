@@ -150,8 +150,11 @@ const DMA1_CNDTR1: u32 = DMA1_BASE + 0x0C;
 const DMA1_CPAR1: u32 = DMA1_BASE + 0x10;
 const DMA1_CMAR1: u32 = DMA1_BASE + 0x14;
 const DMA1_TCIF1: u32 = 1 << 1;
+const DMA1_HTIF1: u32 = 1 << 2;
+const DMA1_IRQ_BIT: u32 = 1 << 11;
 const DMA1_CCR1_EN: u32 = 1;
 const DMA1_CCR1_TCIE: u32 = 1 << 1;
+const DMA1_CCR1_HTIE: u32 = 1 << 2;
 const DMA1_CCR1_CIRC: u32 = 1 << 5;
 const DMA1_CCR1_MINC: u32 = 1 << 7;
 const DMA1_CCR1_PSIZE_HALFWORD: u32 = 1 << 8;
@@ -3937,8 +3940,8 @@ fn smoke_adc1_dma_scan_rank_boundaries() {
 }
 
 /// Run two software-started two-rank scans through DMA1 channel 1 in circular
-/// mode. Each completed lap must reload CNDTR and the memory pointer while
-/// keeping the channel enabled for the next peripheral requests.
+/// mode. Check HTIF and its IRQ with TCIE disabled, then verify each completed
+/// lap reloads CNDTR and the memory pointer while keeping the channel enabled.
 fn smoke_adc1_dma_circular_two_laps() {
     let read = |address: u32| unsafe { read_volatile(address as *const u32) };
     let write = |address: u32, value: u32| unsafe { write_volatile(address as *mut u32, value) };
@@ -3951,10 +3954,11 @@ fn smoke_adc1_dma_circular_two_laps() {
     write(DMA1_CPAR1, ADC1_DR);
     let results = core::ptr::addr_of_mut!(ADC1_DMA_CIRCULAR_RESULTS).cast::<u16>();
     write(DMA1_CMAR1, results as u32);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
     write(
         DMA1_CCR1,
         DMA1_CCR1_EN
-            | DMA1_CCR1_TCIE
+            | DMA1_CCR1_HTIE
             | DMA1_CCR1_CIRC
             | DMA1_CCR1_MINC
             | DMA1_CCR1_PSIZE_HALFWORD
@@ -3967,10 +3971,18 @@ fn smoke_adc1_dma_circular_two_laps() {
     write(ADC1_SQR1, 1 << 20); // L=1 -> two ranks
 
     let run_lap = || {
+        unsafe {
+            write_volatile(results, 0);
+            write_volatile(results.add(1), 0);
+        }
         write(ADC1_CR2, scan_base);
         write(ADC1_CR2, scan_base | ADC1_SWSTART);
         for _ in 0..100_000 {
-            if read(DMA1_ISR) & DMA1_TCIF1 != 0 {
+            let second_rank_written = unsafe { read_volatile(results.add(1)) } == expected[1];
+            if second_rank_written
+                && read(DMA1_CNDTR1) == expected.len() as u32
+                && read(DMA1_ISR) & DMA1_TCIF1 != 0
+            {
                 return true;
             }
             core::hint::spin_loop();
@@ -3980,6 +3992,8 @@ fn smoke_adc1_dma_circular_two_laps() {
 
     let first_complete = run_lap();
     let first_reloaded = read(DMA1_CNDTR1) == expected.len() as u32;
+    let first_half_irq =
+        read(DMA1_ISR) & DMA1_HTIF1 != 0 && unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
     let mut first_matches = first_complete;
     for (rank, expected_value) in expected.iter().enumerate() {
         first_matches &= unsafe { read_volatile(results.add(rank)) } == *expected_value;
@@ -3988,8 +4002,11 @@ fn smoke_adc1_dma_circular_two_laps() {
     // Stop between scans so the second TCIF belongs to a distinct circular
     // lap; the DMA channel itself stays enabled with its reloaded count.
     write(DMA1_IFCR, 0xF);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
     let second_complete = run_lap();
     let second_reloaded = read(DMA1_CNDTR1) == expected.len() as u32;
+    let second_half_irq =
+        read(DMA1_ISR) & DMA1_HTIF1 != 0 && unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
     let mut second_matches = second_complete;
     for (rank, expected_value) in expected.iter().enumerate() {
         second_matches &= unsafe { read_volatile(results.add(rank)) } == *expected_value;
@@ -4000,16 +4017,21 @@ fn smoke_adc1_dma_circular_two_laps() {
     write(ADC1_CR2, 0);
     write(DMA1_CCR1, 0);
     write(DMA1_IFCR, 0xF);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
 
     let count_reloaded = first_reloaded && second_reloaded;
+    let half_transfer_irq = first_half_irq && second_half_irq;
     let sequence_matches = first_matches && second_matches;
     let passed = first_complete
         && second_complete
         && count_reloaded
+        && half_transfer_irq
         && sequence_matches
         && enabled
         && eoc_cleared;
-    putbytes(b"ADC1 F1 CIRCULAR LAPS=2 RELOAD=");
+    putbytes(b"ADC1 F1 CIRCULAR HT LAPS=2 HT_IRQ=");
+    put_flag(half_transfer_irq);
+    putbytes(b" RELOAD=");
     put_flag(count_reloaded);
     putbytes(b" SEQ=");
     put_flag(sequence_matches);
