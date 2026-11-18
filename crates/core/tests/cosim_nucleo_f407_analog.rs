@@ -625,6 +625,139 @@ fn nucleo_f407_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
 }
 
 #[test]
+fn nucleo_f407_resistor_temperature_coefficients_reach_adc1() {
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    let unrelated =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let resistor = SystemManifest::from_file(root(
+        "examples/nucleo-f407/analog-resistor-temperature.yaml",
+    ))
+    .expect("load generic TC1/TC2 resistor netlist");
+    profile.cosim_models = unrelated.cosim_models;
+    profile.cosim_models.extend(resistor.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries an NTC, diode, and temperature-dependent resistor");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the generic resistor branches must resolve through PA2..PA5 to ADC1 channels 2..5"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold unrelated Beta NTC at nominal temperature");
+    let mut cycles = 0;
+    let mut full_samples = Vec::new();
+    for temperature_c in [25.0_f64, 75.0, 125.0] {
+        session
+            .set_signal_number("ui.resistor.full_temperature_c", temperature_c)
+            .expect("drive full TC1/TC2 resistor temperature");
+        session
+            .set_signal_number("ui.resistor.first_order_temperature_c", temperature_c)
+            .expect("drive first-order TC1 resistor temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the unrelated devices and resistor branches");
+        assert_eq!(
+            steps.len(),
+            3,
+            "the NTC, diode, and resistor netlists solve"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "the unrelated NTC remains isolated"
+        );
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode remains on its load line"
+        );
+
+        let delta_c = temperature_c - 25.0;
+        let full_resistance = 1_000.0 * (1.0 + 4e-3 * delta_c + 1e-6 * delta_c * delta_c);
+        let first_order_resistance = 1_000.0 * (1.0 + 4e-3 * delta_c);
+        let expected_full_v = 3.3 * 1_000.0 / (full_resistance + 1_000.0);
+        let expected_first_order_v = 3.3 * 1_000.0 / (first_order_resistance + 1_000.0);
+        let expected_explicit_hot_v = 3.3 * 1_000.0 / (1_410.0 + 1_000.0);
+        let expected_nominal_v = 1.65;
+        let voltages = [
+            signal_voltage(&session, "board.analog.pa2_volts"),
+            signal_voltage(&session, "board.analog.pa3_volts"),
+            signal_voltage(&session, "board.analog.pa4_volts"),
+            signal_voltage(&session, "board.analog.pa5_volts"),
+        ];
+        for (label, actual, expected) in [
+            ("TC1+TC2", voltages[0], expected_full_v),
+            ("TC1 only", voltages[1], expected_first_order_v),
+            (
+                "explicit hot resistor",
+                voltages[2],
+                expected_explicit_hot_v,
+            ),
+            ("nominal resistor", voltages[3], expected_nominal_v),
+        ] {
+            assert!(
+                (actual - expected).abs() < 1e-9,
+                "at {temperature_c} °C {label} divider should be {expected} V, got {actual} V"
+            );
+        }
+
+        for (channel, volts) in (2..=5).zip(voltages) {
+            let expected_count = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "the solved resistor voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 conversion must report resistor channel {channel}"
+            );
+        }
+        full_samples.push((temperature_c, voltages[0], adc_channel_count(&mut bus, 2)));
+    }
+
+    assert_eq!(full_samples[0].1, 1.65, "TC1/TC2 vanish at TNOM");
+    assert!(
+        full_samples[0].1 > full_samples[1].1 && full_samples[1].1 > full_samples[2].1,
+        "positive TC1/TC2 raise the series resistance and lower the divider voltage: {full_samples:?}"
+    );
+    assert_ne!(
+        full_samples[2].2,
+        expected_adc_count(3.3 * 1_000.0 / (1_400.0 + 1_000.0)),
+        "the quadratic TC2 contribution must change the 125 °C ADC code"
+    );
+    assert_eq!(
+        full_samples[2].2,
+        adc_channel_count(&mut bus, 4),
+        "at 125 °C the full polynomial matches the explicit 1.41 kΩ branch"
+    );
+}
+
+#[test]
 fn nucleo_f407_diode_depletion_and_transit_charge_reach_adc1_end_to_end() {
     let system_path = root("configs/systems/nucleo-f407.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
