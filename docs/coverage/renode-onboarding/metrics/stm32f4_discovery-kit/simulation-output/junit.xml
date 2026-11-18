@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="10" failures="0" errors="0" time="0.942857">
+<testsuite name="labwired" tests="12" failures="0" errors="0" time="1.005063">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="fefd493198932fb2a51b4eaa0aa771e2fde95b99b14f0de803ef16baed06d0f1"/>
+    <property name="firmware_hash" value="9e4761f9ec06875e2f28dc205499968edf2ccf10e2acf2a5bf014e0477adabec"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.942857">
+  <testcase classname="labwired" name="run" time="1.005063">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: F4-DISCO SMOKE" time="0.000000">
   </testcase>
@@ -17,12 +17,16 @@
   </testcase>
   <testcase classname="labwired" name="assertion 5: uart_contains: ADC1 IN1=000003FF EOC=1 OK" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 6: uart_contains: SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 6: uart_contains: ADC1 SCAN IN1=000003FF IN9=000007FF IRQ=1 RELEASED=1 END=1 OK" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 7: uart_contains: SysTick PendSV PSP tailchain frame=1 r0=1 pending=1 ipsr=14 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 7: uart_contains: ADC1 SCAN CONT=000007FF,000007FF,000007FF GROUPS=3 IRQ=1 OVR=0 STOP=1 OK" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 8: uart_ordered: [&quot;hb=0 ld4=on odr=00001000&quot;, &quot;hb=1 ld4=off odr=00000000&quot;, &quot;hb=2 ld3=on odr=00002000&quot;, &quot;hb=3 ld3=off odr=0…" time="0.000000">
+  <testcase classname="labwired" name="assertion 8: uart_contains: SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 9: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 9: uart_contains: SysTick PendSV PSP tailchain frame=1 r0=1 pending=1 ipsr=14 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: uart_ordered: [&quot;hb=0 ld4=on odr=00001000&quot;, &quot;hb=1 ld4=off odr=00000000&quot;, &quot;hb=2 ld3=on odr=00002000&quot;, &quot;hb=3 ld3=off odr=0…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

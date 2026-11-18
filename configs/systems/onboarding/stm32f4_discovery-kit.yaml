@@ -13,6 +13,12 @@ external_devices:
     connection: adc
     config:
       channel: 1
+  # External smoke fixture, not an on-board STM32F4DISCOVERY component.
+  - id: pot_adc1_in9
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 9
   - id: tc_spi1
     type: max31855
     connection: spi1

@@ -5,6 +5,8 @@ SPI1 CHECKS=1
 SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok
 SysTick PendSV PSP tailchain frame=1 r0=1 pending=1 ipsr=14 ok
 ADC1 IN1=000003FF EOC=1 OK
+ADC1 SCAN IN1=000003FF IN9=000007FF IRQ=1 RELEASED=1 END=1 OK
+ADC1 SCAN CONT=000007FF,000007FF,000007FF GROUPS=3 IRQ=1 OVR=0 STOP=1 OK
 hb=0 ld4=on odr=00001000
 hb=1 ld4=off odr=00000000
 hb=2 ld3=on odr=00002000
