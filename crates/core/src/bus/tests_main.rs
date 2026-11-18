@@ -1396,7 +1396,7 @@ board_io: []
         assert_eq!(pins.cs, 15);
         assert_eq!(pins.rs, 2);
         assert_eq!(pins.wr, 4);
-        assert_eq!(pins.rd, 5);
+        assert_eq!(pins.rd, Some(5));
         assert_eq!(pins.rst, 33);
         assert_eq!(pins.db[0], 12);
         assert_eq!(pins.db[15], 35);
