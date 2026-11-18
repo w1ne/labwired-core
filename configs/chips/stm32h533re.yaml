@@ -5,9 +5,9 @@
 # STM32H533RE (LQFP64), the MCU fitted to NUCLEO-H533RE.
 # Sources: ST STM32H533RE datasheet, RM0481, CMSIS stm32h533xx.h, and the
 # NUCLEO-H533RE MB1814-C-02 schematic. The H5 RCC/GPIO/USART models are shared
-# with the existing STM32H563 profile. This first board slice exposes only the
-# blocks used by its PA5 LED and USART2 VCP smoke; all other addresses remain
-# unmapped.
+# with the existing STM32H563 profile. This board slice exposes the blocks
+# used by LD2, USART2 VCP, and the Arduino-header I2C1 route; all other
+# addresses remain unmapped.
 
 name: "stm32h533re"
 arch: "arm"
@@ -41,6 +41,18 @@ peripherals:
       reset_ospeedr: 0x0C000000
       reset_pupdr: 0x64000000
     clock: { reg: "ahb2enr", bit: 0 }
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x42020400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32h563/gpiob.yaml"
+      profile: "stm32v2"
+      reset_moder: 0xFFFFFEBF
+      reset_seccfgr: 0x0000FFFF
+      reset_ospeedr: 0x000000C0
+      reset_pupdr: 0x00000100
+    clock: { reg: "ahb2enr", bit: 1 }
   - id: "usart2"
     type: "uart"
     base_address: 0x40004400
@@ -49,10 +61,21 @@ peripherals:
       debug_schema: "../peripherals/stm32h563/usart2.yaml"
       profile: "stm32v2"
     clock: { reg: "apb1lenr", bit: 17 }
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 51
+    config:
+      debug_schema: "../peripherals/stm32h563/i2c1.yaml"
+      profile: "h5"
+    clock: { reg: "apb1lenr", bit: 21 }
 
 # This is an intentionally narrow authoritative pin map: the board smoke uses
-# PA2/PA3 for USART2 and PA5 for LD2. Other H533 pads are not advertised here.
+# PA2/PA3 for USART2, PA5 for LD2, and PB6/PB7 for I2C1 SCL/SDA.
 pins:
   PA2: { gpio: gpioa, bit: 2 }
   PA3: { gpio: gpioa, bit: 3 }
   PA5: { gpio: gpioa, bit: 5 }
+  PB6: { gpio: gpiob, bit: 6 }
+  PB7: { gpio: gpiob, bit: 7 }
