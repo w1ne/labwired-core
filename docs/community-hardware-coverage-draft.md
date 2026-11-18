@@ -108,13 +108,13 @@ void loop() {}
 ### ESP32-C3-DevKitM-1-N4X + onboard RGB
 
 ESP32 is demand rank 1 (38% of reported MCU use); C3-specific use is not
-separately measured. Espressif's current guide lists the N4X order code with
-4 MB flash and marks only the older unsuffixed order code EOL. DigiKey lists
-the exact N4X board as Active and in stock. The local bare-RISC-V smoke sends
-UART0 output and a red WS2812 frame through GPIO8; the observer must decode one
-lit pixel. This adds a current, official C3 board profile to the existing C3
-chip model. It does not claim ROM boot, USB-UART bridge, IO_MUX, or timed RMT
-playback.
+separately measured. Checked 2026-11-18, Espressif's current guide lists the
+N4X order code with 4 MB flash and marks only the older unsuffixed order code
+EOL. DigiKey lists the exact N4X board as Active and in stock. The local
+bare-RISC-V smoke sends UART0 output and bit-bangs one red WS2812 frame through
+GPIO8; the observer must decode one lit pixel. This adds a current, official
+C3 board profile to the existing C3 chip model. It does not claim ROM boot,
+USB-UART bridge, IO_MUX, or timed RMT playback.
 
 - [Board scope, copy-paste Arduino sketch, and smoke command](../examples/esp32c3-devkitm-1-n4x/README.md)
 - [Live Espressif lifecycle and DigiKey stock receipt](../examples/esp32c3-devkitm-1-n4x/evidence/vendor-status.md)

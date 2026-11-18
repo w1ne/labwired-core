@@ -1,4 +1,4 @@
-# Vendor status — 2026-11-17
+# Vendor status — 2026-11-18
 
 Target order code: **ESP32-C3-DevKitM-1-N4X**.
 
@@ -12,5 +12,5 @@ Target order code: **ESP32-C3-DevKitM-1-N4X**.
   reports **Part Status: Active**, **499 in stock**, a quantity-one price of
   **$8.00**, and an eight-week standard lead time.
 
-The current N4X variant was checked live on 2026-11-17. Stock and pricing can
+The current N4X variant was checked live on 2026-11-18. Stock and pricing can
 change. The EOL unsuffixed variant is not the profile being onboarded.
