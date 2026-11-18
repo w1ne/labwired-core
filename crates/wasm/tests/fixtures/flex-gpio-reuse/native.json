@@ -92,6 +92,10 @@
           },
           {
             "initial": false,
+            "signal": "source.D2.logic_state"
+          },
+          {
+            "initial": false,
             "signal": "source.U1.PD6"
           }
         ],
@@ -111,6 +115,10 @@
           },
           {
             "initial": false,
+            "signal": "source.D2.logic_state"
+          },
+          {
+            "initial": false,
             "signal": "source.U1.PD6"
           }
         ],
@@ -127,12 +135,22 @@
             "value": 1
           },
           {
+            "signal": "source.D2.logic_state",
+            "time_ns": 1000,
+            "value": 1
+          },
+          {
             "signal": "source.U1.PD6",
             "time_ns": 1000,
             "value": 0
           },
           {
             "signal": "source.D1.logic_state",
+            "time_ns": 2000,
+            "value": 0
+          },
+          {
+            "signal": "source.D2.logic_state",
             "time_ns": 2000,
             "value": 0
           },
@@ -147,12 +165,22 @@
             "value": 1
           },
           {
+            "signal": "source.D2.logic_state",
+            "time_ns": 3000,
+            "value": 1
+          },
+          {
             "signal": "source.U1.PD6",
             "time_ns": 4000,
             "value": 0
           },
           {
             "signal": "source.D1.logic_state",
+            "time_ns": 5000,
+            "value": 0
+          },
+          {
+            "signal": "source.D2.logic_state",
             "time_ns": 5000,
             "value": 0
           }
