@@ -9,18 +9,18 @@
       4294867296,
       4294867296,
       1,
-      1023,
+      0,
       537395184,
-      3633459,
       1,
-      1,
+      9437183,
+      2047,
       1073811484,
       70,
-      537395088,
+      537395080,
       70,
-      134250722
+      134254352
     ],
-    "pc": 134250722,
+    "pc": 134254352,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "006cee56e47ff9b1d4465a0523a49ca20f06e850be47c588155bff779ade92cc",
+  "firmware_hash": "10c8b798c6f3c97f2ef55f511906aed855f7ccf38f1d38c2794b2c1908fce2d3",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f767-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f777.yaml",

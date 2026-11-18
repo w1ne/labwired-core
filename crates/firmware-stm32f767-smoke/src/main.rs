@@ -11,10 +11,10 @@
 //! F76x changes (`f767_checks`: RCC APB1/APB2 masks, SYSCFG SWP_FB, EXTI
 //! line 24, 2 MiB / 512 KiB, SPI4/5/6). RM0410 and `stm32f767xx.h`.
 //!
-//! The fixture system is the stm32f746 one with ADC1_IN1 on a test potentiometer
-//! and a MAX31855 added on each of SPI4/5/6. Interrupts stay disabled in the NVIC: each check reads the
-//! line's ISPR bit. Every check prints one line and sets one bit of the
-//! summary word at `SUMMARY`.
+//! The fixture system is the stm32f746 one with ADC1_IN1/IN2 test
+//! potentiometers and a MAX31855 on each of SPI4/5/6. Interrupts stay disabled
+//! in the NVIC: each check reads the line's ISPR bit. Every check prints one
+//! line and sets one bit in the summary word at `SUMMARY`.
 
 use core::arch::asm;
 use cortex_m_rt::entry;
@@ -103,7 +103,7 @@ fn main() -> ! {
     }
     mark(18, check_crc());
     mark(19, check_rng());
-    mark(23, check_adc1());
+    mark(23, check_adc1() && check_adc1_scan());
     let summary = summary | 0x7670_0000;
     wr(SUMMARY, summary);
     puts("summary ");
