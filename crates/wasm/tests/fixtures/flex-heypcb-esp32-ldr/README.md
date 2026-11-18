@@ -18,6 +18,14 @@ The oscilloscope samples show the catalog lookup output. They do not model a GL5
 
 `WasmFlexRuntime.run_report()` returns the model name, named ports, model IDs/types, complete validated model configurations, signal bindings and resolutions, declared assumptions and unsupported checks, and the selected `flex_portable_wasm` path with `target_cpu_emulated: false` and `time_unit: ns`. Older manifests without both scope lists report `scope_notes_complete: false`; an empty list is not presented as evidence that there are no gaps. The browser evidence records the Core commit, pinned source revision and license, source-file blob IDs, and SHA-256 digests for the model manifest and portable firmware source/artifact so the observed run can be reproduced from the checked-in inputs.
 
+## Existing Playground instrument handoff
+
+The Library lane owns source import, project selection, and browser launch. It can use the existing Core Wasm surface without another importer or runtime: create `WasmFlexRuntime` with `new_from_yaml(system)`, instantiate the selected portable firmware with `labwired.read`, `labwired.write`, and `labwired.advance_ns`, then read `ports()` and `run_report()` for project scope. The report identifies `flex_portable_wasm`, `target_cpu_emulated: false`, nanosecond time, named read/write ports, the validated model configs, assumptions, and unsupported checks.
+
+The existing instruments can poll `digital_trace_snapshot(cursor)` and `analog_trace_snapshot(cursor)` using their native safe-integer `Number` cursors. Digital batches expose `time_unit`, named signal channels, timestamped edges, `cursor`, and `dropped`; analog batches expose `time_unit`, named channels with units, timestamped samples, `next_cursor`, and `dropped`. Flex caps simulated time at the largest safe JavaScript integer, and the Wasm boundary rejects negative, fractional, nonfinite, and unsafe cursors. The browser regression checks this fixture's timestamps and cursors and verifies polling from a returned cursor neither repeats nor loses observations. Convert the batch field names to the existing instrument DTO at the Playground boundary.
+
+The current browser proof still uses the checked-in fixture harness rather than a Library/Playground launch. The handoff exposes the functional portable behavior slice only; it does not upgrade the imported source to a full-board or chip-fidelity claim.
+
 This proves the functional portable behavior program against the existing generic Flex runtime in the local ephemeral browser harness. It is not a public Library/Playground launch. It does **not** execute original ESP32 firmware, emulate ESP32-S3 instructions or ADC peripherals, prove chip parity, cover the full board, or provide physical hardware evidence. The source project had no board firmware to run.
 
 ## Reproduce

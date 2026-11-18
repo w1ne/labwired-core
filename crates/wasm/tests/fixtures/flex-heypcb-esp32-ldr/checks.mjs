@@ -18,6 +18,16 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
   const run = (lux) => {
     const runtime = WasmFlexRuntime.new_from_yaml(system);
     try {
+      for (const invalidCursor of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, NaN]) {
+        for (const snapshot of [
+          () => runtime.digital_trace_snapshot(invalidCursor),
+          () => runtime.analog_trace_snapshot(invalidCursor),
+        ]) {
+          let rejected = false;
+          try { snapshot(); } catch { rejected = true; }
+          check(rejected, `trace cursor ${String(invalidCursor)} must be rejected`);
+        }
+      }
       const report = canonical(runtime.run_report());
       check(report.execution_path === 'flex_portable_wasm'
         && report.target_cpu_emulated === false
@@ -55,8 +65,24 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
       const adcCode = instance.exports.run(
         ports.lux, ports.sensor_mv, ports.user_led_drive, ports.user_led_state, lux,
       );
-      const batch = canonical(runtime.digital_trace_snapshot(0n));
-      const analogBatch = canonical(runtime.analog_trace_snapshot(0n));
+      const batch = canonical(runtime.digital_trace_snapshot(0));
+      const analogBatch = canonical(runtime.analog_trace_snapshot(0));
+      check(Number.isSafeInteger(runtime.time_ns()),
+        'the project virtual clock must use the existing instrument safe-Number contract');
+      check(Number.isSafeInteger(batch.cursor)
+        && batch.edges.every((edge) => Number.isSafeInteger(edge.time_ns)),
+      'logic-analyzer cursors and nanosecond timestamps must fit the existing instrument Number contract');
+      check(Number.isSafeInteger(analogBatch.next_cursor)
+        && analogBatch.samples.every((sample) => Number.isSafeInteger(sample.time_ns)),
+      'oscilloscope cursors and nanosecond timestamps must fit the existing instrument Number contract');
+      const digitalTail = canonical(runtime.digital_trace_snapshot(batch.cursor));
+      const analogTail = canonical(runtime.analog_trace_snapshot(analogBatch.next_cursor));
+      check(digitalTail.edges.length === 0 && digitalTail.cursor === batch.cursor
+        && digitalTail.dropped === 0,
+      'logic-analyzer cursor polling must not replay or drop already-read edges');
+      check(analogTail.samples.length === 0 && analogTail.next_cursor === analogBatch.next_cursor
+        && analogTail.dropped === 0,
+      'oscilloscope cursor polling must not replay or drop already-read samples');
       check(analogBatch.time_unit === 'ns'
         && analogBatch.channels.length === 1
         && analogBatch.channels[0].name === 'source-u4-gl5528.voltage_mv'

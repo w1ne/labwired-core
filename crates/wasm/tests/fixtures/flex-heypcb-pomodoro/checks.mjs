@@ -12,7 +12,7 @@ export function runPomodoroPd6Checks(WasmFlexRuntime, system, firmwareBytes, exp
     ['labwired.advance_ns', 'labwired.read', 'labwired.write'], 'unexpected portable firmware imports');
 
   const trace = (runtime) => {
-    const batch = canonical(runtime.digital_trace_snapshot(0n));
+    const batch = canonical(runtime.digital_trace_snapshot(0));
     const signalById = new Map(batch.channels.map((channel) => [channel.id, channel.signal]));
     return {
       time_unit: batch.time_unit,

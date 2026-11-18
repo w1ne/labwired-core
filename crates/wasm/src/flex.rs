@@ -13,6 +13,21 @@ use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use wasm_bindgen::prelude::*;
 
+/// The core runtime caps virtual time at JavaScript's largest exact integer;
+/// trace cursors share that Number-based contract with the existing browser
+/// instruments.
+const MAX_SAFE_JS_INTEGER: f64 = 9_007_199_254_740_991.0;
+
+fn js_trace_cursor(cursor: f64) -> Result<u64, JsValue> {
+    if !cursor.is_finite() || cursor < 0.0 || cursor.fract() != 0.0 || cursor > MAX_SAFE_JS_INTEGER
+    {
+        return Err(JsValue::from_str(
+            "trace cursor must be a nonnegative safe integer Number",
+        ));
+    }
+    Ok(cursor as u64)
+}
+
 #[derive(Serialize)]
 struct BrowserSignalBinding {
     name: String,
@@ -122,8 +137,9 @@ impl WasmFlexRuntime {
             .map_err(js_error)
     }
 
-    pub fn time_ns(&self) -> Result<u64, JsValue> {
-        Ok(self.runtime.time_ns())
+    pub fn time_ns(&self) -> f64 {
+        // FlexRuntime enforces the JavaScript safe-integer time ceiling.
+        self.runtime.time_ns() as f64
     }
 
     pub fn ports(&self) -> Result<JsValue, JsValue> {
@@ -155,11 +171,13 @@ impl WasmFlexRuntime {
         report.serialize(&serializer).map_err(js_error)
     }
 
-    pub fn digital_trace_snapshot(&mut self, cursor: u64) -> Result<JsValue, JsValue> {
+    pub fn digital_trace_snapshot(&mut self, cursor: f64) -> Result<JsValue, JsValue> {
+        let cursor = js_trace_cursor(cursor)?;
         serde_wasm_bindgen::to_value(&self.runtime.digital_trace_snapshot(cursor)).map_err(js_error)
     }
 
-    pub fn analog_trace_snapshot(&self, cursor: u64) -> Result<JsValue, JsValue> {
+    pub fn analog_trace_snapshot(&self, cursor: f64) -> Result<JsValue, JsValue> {
+        let cursor = js_trace_cursor(cursor)?;
         let batch = self.runtime.analog_trace_snapshot(cursor);
         let batch = BrowserAnalogTraceBatch {
             time_unit: "ns",

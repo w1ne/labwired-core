@@ -40,7 +40,7 @@ export function runPortableChecks(WasmFlexRuntime, system, firmwareBytes, expect
     'missing scope notes must be reported as incomplete rather than as no unsupported checks');
   } finally { reportProbe.free(); }
   const digital = (runtime, driven) => {
-    const batch = canonical(runtime.digital_trace_snapshot(0n));
+    const batch = canonical(runtime.digital_trace_snapshot(0));
     check(batch.time_unit === 'ns' && batch.dropped === 0, 'digital trace time unit or loss');
     equal(batch.channels.map((c) => c.signal), ['control.enable', 'device.ready'], 'stable digital channel names');
     check(batch.channels.every((c) => c.initial === false), 'initial digital levels');
@@ -51,7 +51,7 @@ export function runPortableChecks(WasmFlexRuntime, system, firmwareBytes, expect
     return batch;
   };
   const observations = (runtime, tau_us, timeConstantNs) => {
-    const batch = runtime.analog_trace_snapshot(0n);
+    const batch = runtime.analog_trace_snapshot(0);
     check(batch.samples.length >= 35, 'empty/truncated analog trace');
     check(batch.samples.every((s) => {
       const analytic = 3.3 * (1 - Math.exp(-Math.max(Number(s.time_ns) - 25000, 0) / timeConstantNs));
@@ -77,7 +77,7 @@ export function runPortableChecks(WasmFlexRuntime, system, firmwareBytes, expect
     check(wrong.instance.exports.run(wrong.runtime.port_id('command'), wrong.runtime.port_id('voltage'), 1) === 0, 'incorrect firmware must time out');
     check(Number(wrong.runtime.time_ns()) === 4_000_000, 'incorrect firmware timeout must be bounded');
     digital(wrong.runtime, false);
-    check(wrong.runtime.analog_trace_snapshot(0n).samples.every((s) => s.values[0] === 0), 'wrong command fabricated an analog response');
+    check(wrong.runtime.analog_trace_snapshot(0).samples.every((s) => s.values[0] === 0), 'wrong command fabricated an analog response');
   } finally { wrong.runtime.free(); }
   const invalid = build();
   try {
