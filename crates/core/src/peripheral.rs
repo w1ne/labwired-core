@@ -206,6 +206,16 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
 
+    /// Subscribe an off-chip device to ESP-family GPIO pad-source and output
+    /// changes. GPIO models report whether a pad is driven by its latch, LEDC,
+    /// or another peripheral signal. Other peripheral families decline.
+    fn register_esp_gpio_observer(
+        &mut self,
+        _observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) -> bool {
+        false
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8>;
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()>;
 

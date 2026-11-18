@@ -37,7 +37,8 @@ Full matrix: **16 boards × 9 sketches (L0–L8) = 144 cells** — report as
 | G474 PWM | ~~PA5 DAC fault~~ | **Fixed** — L6 uses PA0 (TIM2), not LED/DAC |
 | ESP32-S3 ADC | ~~L5 skip~~ | **Fixed** — `sar_adc_s3` programmatic model + chip yaml; `analogRead` green |
 | WBA ADC | L5 skip | ADC4 undeclared (SmartRun AHB4 clock domain not in stm32v2 RCC) |
-| CAN (no-controller chips) | L8 skip | Honest: nRF/RP2040/AVR/L0/F401/G474/WB/WBA/C3 (C3 TWAI declarative-only) |
+| CAN (no-controller chips) | L8 skip | Honest: nRF/RP2040/AVR/L0/F401/WB/WBA/C3 (C3 TWAI declarative-only) |
+| G474 FDCAN | ~~L8 skip~~ | **Fixed** 2026-11-16 — FDCAN1 on the shared `fdcan` model + SRAMCAN mirror (G0B1 pattern); evidence `evidence/nucleo-g474re/` |
 
 ## BRD2709A (Silicon Labs xG26 Explorer Kit, EFR32MG26)
 

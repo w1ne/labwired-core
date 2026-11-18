@@ -1,0 +1,11 @@
+# Raspberry Pi Pico 2 (RP2350) with a BME280 breakout on I2C0 / GP4-GP5.
+# Header pin 6 is GP4/SDA and pin 7 is GP5/SCL; wireless hardware is absent.
+name: "pico2-bme280"
+chip: "../chips/rp2350.yaml"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x77
+board_io: []

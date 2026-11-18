@@ -349,6 +349,7 @@ fn an_unknown_clock_register_name_fails_the_build_loudly() {
                     reg: "apb1enr2".to_string(),
                     bit: 1,
                     controller: "rcc".into(),
+                    active_low: false,
                 },
             ));
         }

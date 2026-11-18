@@ -1,0 +1,16 @@
+# Espressif ESP32-C3-DevKitM-1-N4X: UART0 plus the onboard GPIO8 WS2812 RGB LED.
+# The stock board variant is an active 4 MiB ESP32-C3-MINI-1 evaluation board.
+# Board reference: https://documentation.espressif.com/esp-dev-kits/en/latest/esp32c3/esp32-c3-devkitm-1/index.html
+name: "esp32c3-devkitm-1-n4x"
+chip: "../chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 1
+      cpu_hz: 160000000
+board_io: []

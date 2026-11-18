@@ -19,6 +19,7 @@ pub mod debug;
 pub mod decoder;
 pub mod fault_verdict;
 pub mod fidelity;
+pub mod flex;
 pub mod hashers;
 pub mod host_time;
 pub mod inspect;

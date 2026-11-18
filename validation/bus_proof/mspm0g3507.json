@@ -1,0 +1,21 @@
+{
+  "id": "mspm0g3507",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "examples/lp-mspm0g3507-launchpad/io-smoke.yaml",
+    "test": "LP_MSPM0G3507_UART0_OK",
+    "signal": "source-built firmware boots on the LP-MSPM0G3507 LaunchPad profile and writes LP_MSPM0G3507_UART0_OK through UART0 TXDATA; the smoke captures the marker on the UART output.",
+    "lane": "core-board-ci pull-request matrix: lp-mspm0g3507-launchpad (configs/ci/boards.yml)"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "The narrow MSPM0G3507 descriptor declares no SPI controller; SPI behavior is outside this LaunchPad profile.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "The narrow MSPM0G3507 descriptor declares no I2C controller; I2C behavior is outside this LaunchPad profile.",
+    "lane": "none"
+  }
+}
