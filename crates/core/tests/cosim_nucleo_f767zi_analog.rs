@@ -3323,3 +3323,144 @@ fn nucleo_f767zi_pmos_gate_drain_overlap_charge_reaches_adc1_with_ntc_and_diode(
         "CGDO changes the transient but settles back to the same PMOS DC point"
     );
 }
+
+#[test]
+fn nucleo_f767zi_mosfet_gate_source_overlap_charge_reaches_adc1_with_ntc_and_diode() {
+    const RESISTANCE_OHMS: f64 = 1_000.0;
+    const CGSO_F_PER_M: f64 = 10e-6;
+    const WIDTH_M: f64 = 100e-6;
+    const STEP_S: f64 = 1e-6;
+    const GATE_INITIAL_V: f64 = 0.0;
+    const GATE_DRIVE_V: f64 = 3.3;
+
+    let system_path = root("configs/systems/nucleo-f767zi.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F767ZI");
+    let generic =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let cgso =
+        SystemManifest::from_file(root("examples/nucleo-f767zi/analog-mosfet-cgso-adc.yaml"))
+            .expect("load matched generic NMOS CGSO and control branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(cgso.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F767 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F767ZI bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries an NTC, diode, and matched MOSFET CGSO branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "NTC, diode, and MOSFET source branches must route to ADC1 channels 0–3"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.mosfet_cgso.gate_v", GATE_INITIAL_V)
+        .expect("initialize matched NMOS gate drives");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC, diode, and MOSFET branches before the gate edge");
+    assert_eq!(initial_steps.len(), 4, "all four analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert!(signal_voltage(&session, "board.analog.pa2_volts").abs() < 1e-12);
+    assert!(signal_voltage(&session, "board.analog.pa3_volts").abs() < 1e-12);
+
+    session
+        .set_signal_number("ui.mosfet_cgso.gate_v", GATE_DRIVE_V)
+        .expect("step the generic NMOS gate");
+
+    // CGSO·W = 1 nF and R·C = 1 us. The independent backward-Euler
+    // source-node equation gives half the gate step on the first sample,
+    // then halves the stored source voltage on each held-input sample.
+    let capacitance_f = CGSO_F_PER_M * WIDTH_M;
+    let conductance_ratio = RESISTANCE_OHMS * capacitance_f / STEP_S;
+    let mut previous_gate_v = GATE_INITIAL_V;
+    let mut expected_source_v = 0.0;
+    let mut final_source_v = f64::INFINITY;
+    for step in 0..12 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the MOSFET gate-source overlap transient");
+        assert_eq!(
+            steps.len(),
+            4,
+            "all four analog branches solve at each step"
+        );
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        expected_source_v = (conductance_ratio
+            * (expected_source_v + GATE_DRIVE_V - previous_gate_v))
+            / (1.0 + conductance_ratio);
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let control_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let charged_v = signal_voltage(&session, "board.analog.pa3_volts");
+
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode remains at its DC load line"
+        );
+        assert!(
+            control_v.abs() < 1e-12,
+            "zero-CGSO matched control stays at ground"
+        );
+        assert!(
+            (charged_v - expected_source_v).abs() < 2e-8,
+            "CGSO RC recurrence at step {step}: expected {expected_source_v} V, got {charged_v} V"
+        );
+        if step == 0 {
+            assert!((charged_v - 1.65).abs() < 2e-8);
+        }
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (2, control_v), (3, charged_v)] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage seeds ADC1_IN{channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion reports the routed voltage"
+            );
+        }
+        assert_eq!(
+            [4, 5].map(|channel| adc_channel_count(&mut bus, channel)),
+            [u16::MAX; 2],
+            "neighboring ADC1 channels remain undriven"
+        );
+        final_source_v = charged_v;
+        previous_gate_v = GATE_DRIVE_V;
+    }
+
+    assert!(
+        final_source_v < 1e-3,
+        "CGSO changes the transient, then discharges to the same DC operating point"
+    );
+}

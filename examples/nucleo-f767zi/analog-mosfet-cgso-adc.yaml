@@ -1,0 +1,46 @@
+# Matched generic level-1 NMOS branches isolate gate-source overlap charge on
+# ADC1. The control omits CGSO; both branches stay below threshold so the
+# transient is the source response to the gate edge.
+name: "nucleo-f767zi-mosfet-cgso"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_cgso_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_drive: "ui.mosfet_cgso.gate_v"
+    outputs:
+      source_voltage: "board.analog.pa2_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Rsource sense 0 1k
+        M1 0 gate sense 0 MOS_CONTROL W=100u L=10u
+        .model MOS_CONTROL NMOS(VTO=5 KP=20u LAMBDA=0 IS=1e-30)
+      probes:
+        source_voltage: "v(sense)"
+      sources:
+        gate_drive: "Vgate"
+      vdd: 3.3
+  - id: "mosfet_cgso"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_drive: "ui.mosfet_cgso.gate_v"
+    outputs:
+      source_voltage: "board.analog.pa3_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Rsource sense 0 1k
+        M1 0 gate sense 0 MOS_CGSO W=100u L=10u
+        .model MOS_CGSO NMOS(VTO=5 KP=20u LAMBDA=0 IS=1e-30 CGSO=10u)
+      probes:
+        source_voltage: "v(sense)"
+      sources:
+        gate_drive: "Vgate"
+      vdd: 3.3
