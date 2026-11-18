@@ -74,7 +74,7 @@ fn unchanged_hal_image_wakes_through_ol_exti_and_answers_a_real_type0_request() 
         "/../../configs/chips/stm32l476.yaml"
     ))
     .unwrap();
-    let manifest:SystemManifest=serde_yaml::from_str("name: physical-iod-probe\nchip: stm32l476\ncpu_hz: 80000000\nexternal_devices:\n- id: phy\n  type: l6362a\n  connection: uart1\n  config: {en: PC7, in1: low, in2: PA9, outiq: PA10, diag: PA4, ol: PA6}\n").unwrap();
+    let manifest:SystemManifest=serde_yaml::from_str("name: physical-iod-probe\nchip: stm32l476\ncpu_hz: 80000000\nexternal_devices:\n- id: phy\n  type: l6362a\n  connection: uart1\n  config: {en: PC7, in1: low, in2: PA9, outiq: PA10, diag: PA4, ol: PA6}\n- id: di8\n  type: sn74hc165_gpio\n  connection: gpio\n  config: {clock_pin: PB13, data_pin: PB14, latch_pin: PC6, inputs: 165}\n").unwrap();
     let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
     bus.config.peripheral_tick_interval = 1;
     let net = TimedUartNet::new();
@@ -96,8 +96,30 @@ fn unchanged_hal_image_wakes_through_ol_exti_and_answers_a_real_type0_request() 
     let mut stages = vec![json!({"stage":"boot","state":state(&m,&bytes)})];
     save(&stages, &[], &sha);
     assert_eq!(value(&m, &bytes, "g_startup_error"), 0);
+    assert_eq!(
+        value(&m, &bytes, "g_device_pd") & 255,
+        0xa5,
+        "native DI8 H-first GPIO scan"
+    );
     assert_eq!(value(&m, &bytes, "SystemCoreClock"), HZ as u32);
     assert_eq!(value(&m, &bytes, "g_device_state") & 255, 0);
+    for pattern in [0x00u8, 0xff, 0xa5, 0x3c] {
+        for i in 0..8 {
+            m.bus
+                .set_input(
+                    Some("di8"),
+                    &format!("ch{i}"),
+                    f64::from((pattern >> i) & 1),
+                )
+                .unwrap();
+        }
+        let end = m.total_cycles + 2000 * 80;
+        step_to(&mut m, end);
+        let sampled = value(&m, &bytes, "g_device_pd") & 255;
+        stages.push(json!({"stage":"di8-gpio-scan","requested":pattern,"sampled":sampled,"cycle":m.total_cycles}));
+        save(&stages, &[], &sha);
+        assert_eq!(sampled, u32::from(pattern));
+    }
     let wake_start = m.total_cycles + 1;
     peer.drive_digital(wake_start, DigitalDrive::High).unwrap();
     peer.drive_digital(wake_start + 80 * 80, DigitalDrive::HighImpedance)
@@ -132,6 +154,9 @@ fn unchanged_hal_image_wakes_through_ol_exti_and_answers_a_real_type0_request() 
     for (i, byte) in request.into_iter().enumerate() {
         peer.transmit(start + i as u64 * 2083 * 11, u16::from(byte), fmt);
     }
+    // World calls this at each synchronization round. A manually driven peer
+    // must use the same seam to expose new timed frames to the scheduler.
+    m.timed_uart_sync();
     let mut reply = Vec::new();
     let end = start + 4000 * 80;
     while m.total_cycles < end {
@@ -148,7 +173,7 @@ fn unchanged_hal_image_wakes_through_ol_exti_and_answers_a_real_type0_request() 
     assert_eq!(reply.len(), 2, "TYPE0 data plus checksum");
     assert_eq!(
         reply[0], 0x49,
-        "the pinned physical station's10ms MinCycleTime"
+        "the pinned physical station's 10 ms MinCycleTime"
     );
     assert_eq!(reply[1] & 0x3f, checksum(&[reply[0], reply[1] & 0xc0]));
     assert_eq!(value(&m, &bytes, "g_uart_errors"), 0);
