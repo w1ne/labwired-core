@@ -2180,7 +2180,14 @@ impl<C: Cpu> Machine<C> {
         // table at `flash_base` (no stage-2 boot2). Prefer flash-base vectors
         // when they are valid; only then fall back to post-boot2 relocation.
         let flash_base = self.bus.flash.base_addr;
-        if self.bus.vector_pair_valid(flash_base) {
+        if let Some(rom) = self.bus.boot_rom_base {
+            // Boot ROM handoff: reset into the ROM's own vectors; its code
+            // finds the image and branches to it (RP2350 datasheet 5.2).
+            let sp = self.bus.read_u32(rom)?;
+            let pc = self.bus.read_u32(rom + 4)? & !1;
+            self.cpu.set_sp(sp);
+            self.cpu.set_pc(pc);
+        } else if self.bus.vector_pair_valid(flash_base) {
             let sp = self.bus.read_u32(flash_base)?;
             let pc = self.bus.read_u32(flash_base + 4)? & !1;
             // If address 0 does not already present the same SP (bootrom or

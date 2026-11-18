@@ -505,6 +505,10 @@ pub struct SystemBus {
     /// descriptor so `Machine::load_firmware` can relocate the reset vector
     /// past the stage-2 blob. See `ChipDescriptor::reset_vector_offset`.
     pub reset_vector_offset: u64,
+    /// Base of a boot ROM the core resets into (`boots_core` memory region
+    /// holding an image). `Machine::load_firmware` then leaves SP/PC at the
+    /// ROM's vectors, so the ROM's own code performs the image handoff.
+    pub boot_rom_base: Option<u64>,
     /// Whether address `0x0` mirrors the flash image (the STM32-style boot
     /// alias). `true` for every chip that does not say otherwise. A chip whose
     /// low addresses are their own memory (i.MX RT: ITCM at `0x0`) sets

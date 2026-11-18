@@ -29,6 +29,15 @@
 use cortex_m_rt::entry;
 use panic_halt as _;
 
+/// RP2350 IMAGE_DEF block (datasheet 5.9.3; words per pico-sdk
+/// boot/picobin.h): marker, IMAGE_TYPE = EXE | Secure | Arm | RP2350, LAST
+/// item, link 0 (a one-block loop), end marker. The RP2350/RP2354B boot ROM
+/// only enters an image that carries one; on every other chip these 20 bytes
+/// are inert flash data after the vector table.
+#[link_section = ".start_block"]
+#[used]
+static IMAGE_DEF: [u32; 5] = [0xffff_ded3, 0x1021_0142, 0x0000_01ff, 0, 0xab12_3579];
+
 #[entry]
 fn main() -> ! {
     let mut acc: u32 = 0;

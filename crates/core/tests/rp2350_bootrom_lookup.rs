@@ -125,6 +125,8 @@ const BOOT_FUNCS: &[(u32, &str)] = &[
     (code(b'R', b'B'), "reboot"),
     (code(b'I', b'F'), "connect_internal_flash"),
     (code(b'E', b'X'), "flash_exit_xip"),
+    (code(b'R', b'E'), "flash_range_erase"),
+    (code(b'R', b'P'), "flash_range_program"),
     (code(b'F', b'C'), "flash_flush_cache"),
     (code(b'C', b'X'), "flash_enter_cmd_xip"),
 ];
@@ -171,8 +173,15 @@ fn boot_lookups_return_rom_functions_and_unknown_is_null() {
         0,
         "unknown code must be NULL"
     );
-    // flash_range_erase is not modelled: NULL, not a silent no-op.
-    assert_eq!(lookup(&mut m, code(b'R', b'E')), 0);
+    // flash_op is not modelled: NULL, not a silent no-op. (flash_range_erase
+    // and flash_range_program are modelled through the QMI since
+    // rp2350_qmi_rom; they are in BOOT_FUNCS above.)
+    assert_eq!(lookup(&mut m, code(b'F', b'O')), 0);
+    assert_eq!(
+        lookup(&mut m, code(b'X', b'M')),
+        0,
+        "flash_select_xip_read_mode"
+    );
 }
 
 #[test]

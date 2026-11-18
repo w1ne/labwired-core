@@ -5,7 +5,7 @@ MEMORY {
 }
 _stack_top = ORIGIN(RAM) + LENGTH(RAM);
 SECTIONS {
-  .vectors : { KEEP(*(.vectors)) } > FLASH
+  .vectors : { KEEP(*(.vectors)) KEEP(*(.image_def)) } > FLASH
   .text : { *(.text*) *(.rodata*) . = ALIGN(4); } > FLASH
   .ARM.exidx : { *(.ARM.exidx*) } > FLASH
   _sidata = LOADADDR(.data);

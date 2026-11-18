@@ -43,7 +43,12 @@ fn main() {
          {{\n  \
          FLASH : ORIGIN = {flash}, LENGTH = {FLASH_LENGTH}\n  \
          RAM : ORIGIN = {ram}, LENGTH = {RAM_LENGTH}\n\
-         }}\n"
+         }}\n\
+         /* RP2350 IMAGE_DEF right after the vector table (see main.rs). */\n\
+         SECTIONS {{\n  \
+         .start_block : ALIGN(4) {{ KEEP(*(.start_block)); }} > FLASH\n\
+         }} INSERT AFTER .vector_table;\n\
+         _stext = ADDR(.start_block) + SIZEOF(.start_block);\n"
     );
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());

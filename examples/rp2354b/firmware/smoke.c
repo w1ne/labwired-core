@@ -25,6 +25,17 @@ static const uintptr_t vectors[16] = {
     (uintptr_t)Default_Handler, (uintptr_t)Default_Handler, 0,
     (uintptr_t)Default_Handler, (uintptr_t)Default_Handler
 };
+// RP2350 IMAGE_DEF block (datasheet 5.9.3; word layout from pico-sdk
+// boot/picobin.h): the boot ROM only enters an image it finds one for.
+//   0xffffded3  PICOBIN_BLOCK_MARKER_START
+//   0x10210142  IMAGE_TYPE item: EXE | security S | CPU Arm | chip RP2350
+//   0x000001ff  LAST item, 1 word of items
+//   0x00000000  link: this block is its own loop
+//   0xab123579  PICOBIN_BLOCK_MARKER_END
+__attribute__((used, section(".image_def")))
+static const uint32_t image_def[5] = {
+    0xffffded3u, 0x10210142u, 0x000001ffu, 0x00000000u, 0xab123579u
+};
 static void Default_Handler(void) {
     for (;;) __asm volatile("wfi");
 }

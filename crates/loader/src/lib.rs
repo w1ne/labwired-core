@@ -23,6 +23,7 @@ pub mod lcov;
 pub mod multi_image;
 pub mod source_map;
 pub mod source_step;
+pub mod uf2;
 pub mod unwind;
 pub mod variables;
 
@@ -31,6 +32,8 @@ pub use variables::{FrameContext, RegisterSet, TargetMemory, VariableValue};
 
 pub use footprint::{elf_section_totals_v1, ElfSectionTotals, FOOTPRINT_METHOD};
 
+/// Load a firmware file: an ELF, or a UF2 container (detected by its block
+/// magic, see [`uf2`]).
 pub fn load_elf(path: &Path) -> Result<ProgramImage> {
     let buffer = fs::read(path).with_context(|| format!("Failed to read ELF file: {:?}", path))?;
     load_elf_bytes(&buffer)
@@ -80,6 +83,9 @@ pub fn extract_arduino_esp32_thunks(buffer: &[u8]) -> HashMap<&'static str, u32>
 }
 
 pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
+    if uf2::is_uf2(buffer) {
+        return uf2::load_uf2_bytes(buffer);
+    }
     let elf = Elf::parse(buffer).context("Failed to parse ELF binary")?;
 
     info!("ELF Entry Point: {:#x}", elf.entry);
