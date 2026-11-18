@@ -231,6 +231,12 @@ pub struct GenericI2cDevice {
     /// PCA9685 LED register bytes currently committed to its outputs.
     /// Register reads still see the live file while OCH=0 stages changes.
     pca9685_led_output: Option<Box<[u8; 64]>>,
+    // Global channel writes have effects that this output model does not yet emulate.
+    pca9685_global_output_unknown: bool,
+    // EXTCLK cannot switch back to the internal oscillator without reset.
+    pca9685_external_clock_unknown: bool,
+    // Invalid prescaler writes are not modeled; a later legal write restores it.
+    pca9685_prescale_unknown: bool,
     /// LED bytes written since the previous OCH=1 channel update. The
     /// datasheet does not specify whether partial writes survive START/STOP;
     /// this model retains them until the channel updates or OCH=0 STOP.
@@ -455,6 +461,9 @@ impl GenericI2cDevice {
             reg_unmapped_byte: spec.unmapped_byte.unwrap_or(0xFF),
             file,
             pca9685_led_output,
+            pca9685_global_output_unknown: false,
+            pca9685_external_clock_unknown: false,
+            pca9685_prescale_unknown: false,
             pca9685_ack_written: [0; 16],
             file_pointer: 0,
             file_writes_since_frame: 0,
@@ -1638,6 +1647,17 @@ impl GenericI2cDevice {
             } else if !regs.is_empty() {
                 let idx = self.file_pointer as usize % regs.len();
                 regs[idx] = data;
+                if self.pca9685_led_output.is_some() {
+                    if (0xfa..=0xfd).contains(&idx) {
+                        self.pca9685_global_output_unknown = true;
+                    }
+                    if idx == 0xfe {
+                        self.pca9685_prescale_unknown = regs[0] & 0x10 == 0 || data < 3;
+                    }
+                    if idx == 0 && data & 0x40 != 0 {
+                        self.pca9685_external_clock_unknown = true;
+                    }
+                }
                 // OCH=1 commits a channel only after all four PWM bytes
                 // have been written, on the final acknowledged byte.
                 if (0x06..0x46).contains(&idx) && regs.get(1).is_some_and(|mode2| mode2 & 0x08 != 0)
@@ -1767,45 +1787,39 @@ impl GenericI2cDevice {
 }
 
 impl I2cDevice for GenericI2cDevice {
-    /// PCA9685-shaped parts (a `servo_angle` observable over the LEDn block):
+    /// Exact built-in PCA9685 output latch:
     /// `((OFF - ON) mod 4096)` counts of a `4096 * (PRE_SCALE + 1) / 25 MHz`
-    /// frame (datasheet Rev. 4 §7.3.1). `None` while MODE1.SLEEP is set, for a
-    /// channel never written, and for LEDn full-OFF. Full-ON drives the whole frame.
+    /// frame (datasheet Rev. 4 §7.3.1). `None` covers sleep, static levels,
+    /// and unsupported output configurations. `None` also covers
+    /// unknown output, so callers must not interpret it as evidence of silence.
     fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
-        if channel >= 16 || !self.observables.iter().any(|o| o.name == "servo_angle") {
+        if channel >= 16
+            || self.pca9685_global_output_unknown
+            || self.pca9685_external_clock_unknown
+            || self.pca9685_prescale_unknown
+        {
             return None;
         }
         let file = self.file.as_ref()?;
-        if file.first()? & 0x10 != 0 {
+        // Open-drain has no modeled pull-up; INVRT is not modeled.
+        let mode2 = *file.get(1)?;
+        if file.first()? & 0x50 != 0 || mode2 & 0x10 != 0 || mode2 & 0x04 == 0 {
             return None;
         }
         let frame_us = 4096.0 * (f64::from(*file.get(0xFE)?) + 1.0) / 25.0;
-        let base = 0x06usize + usize::from(channel) * 4;
-        let (on_l, on_h, off_l, off_h) = if let Some(output) = &self.pca9685_led_output {
-            let i = usize::from(channel) * 4;
-            (
-                *output.get(i)?,
-                *output.get(i + 1)?,
-                *output.get(i + 2)?,
-                *output.get(i + 3)?,
-            )
-        } else {
-            (
-                *file.get(base)?,
-                *file.get(base + 1)?,
-                *file.get(base + 2)?,
-                *file.get(base + 3)?,
-            )
-        };
+        // This latch is populated only for the exact built-in PCA descriptor.
+        let output = self.pca9685_led_output.as_ref()?;
+        let i = usize::from(channel) * 4;
+        let (on_l, on_h, off_l, off_h) = (output[i], output[i + 1], output[i + 2], output[i + 3]);
         if off_h & 0x10 != 0 {
             return None;
         }
         if on_h & 0x10 != 0 {
-            return Some(frame_us);
+            return None; // FULL_ON is a static level, not a pulse.
         }
         let on = u32::from(on_l) | (u32::from(on_h & 0x0F) << 8);
         let off = u32::from(off_l) | (u32::from(off_h & 0x0F) << 8);
-        if on == 0 && off == 0 {
+        if on == off {
             return None;
         }
         let counts = (off + 4096 - on) % 4096;
