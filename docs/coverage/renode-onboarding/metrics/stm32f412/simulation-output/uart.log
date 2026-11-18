@@ -1,4 +1,6 @@
 STM32F4 shared profile smoke
 systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok
 STM32F429 PSP tailchain PASS
-adc1 in1=000003FF gated=1 clock=1 eoc=1 ok
+adc1 in1=000003FF gated=1 clock=1 eoc=1 irq=1 clear=1 ok
+adc1 scan=000003FF,000007FF irq=1 pending=1 end=1 released=1 ok
+adc1 scan_cont_groups=000007FF,000007FF,000007FF groups=3 irq=1 ovr=0 stop=1 ok

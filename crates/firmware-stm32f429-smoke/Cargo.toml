@@ -15,6 +15,7 @@ stm32f429-spi1 = []
 stm32f429-i2c1 = []
 stm32f429-usart2-rx = []
 stm32f412-adc1 = []
+stm32f412-adc-scan = []
 
 [dependencies]
 cortex-m-rt = "0.7"

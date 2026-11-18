@@ -12,3 +12,8 @@ external_devices:
     connection: adc
     config:
       channel: 1
+  - id: pot_adc1_in2
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 2

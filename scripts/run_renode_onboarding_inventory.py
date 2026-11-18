@@ -933,7 +933,7 @@ SMOKE_MAPPINGS = {
     "stm32f412": {
         "crate": "firmware-stm32f429-smoke",
         "target": "thumbv7em-none-eabi",
-        "features": "stm32f412-adc1",
+        "features": "stm32f412-adc1,stm32f412-adc-scan",
         "script": "examples/renode-onboarding/stm32f412-smoke.yaml",
     },
     "nucleo_f767zi": {

@@ -60,3 +60,4 @@ peripherals:
       profile: stm32f4
 analog_pins:
   PA1: { peripheral: adc1, channel: 1 }
+  PA2: { peripheral: adc1, channel: 2 }

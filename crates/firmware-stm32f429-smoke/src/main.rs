@@ -791,11 +791,11 @@ fn smoke_adc1_overrun() -> bool {
     }
 }
 
-/// RM0090 regular scan smoke: convert PA1/IN1 then PA2/IN2 from SQR3, with
+/// RM0090/RM0402 regular scan smoke: convert PA1/IN1 then PA2/IN2 from SQR3, with
 /// EOCS set so firmware can observe EOC at each rank. It checks one-shot stop
 /// and CONT restarting the two-channel group. NVIC pending is checked without
 /// servicing the IRQ in this bounded smoke.
-#[cfg(feature = "stm32f429-adc-scan")]
+#[cfg(any(feature = "stm32f429-adc-scan", feature = "stm32f412-adc-scan"))]
 fn smoke_adc1_scan() -> bool {
     const ADC1: u32 = 0x4001_2000;
     const ADC_SR: *const u32 = ADC1 as *const u32;
@@ -1292,7 +1292,7 @@ fn main() -> ! {
     #[cfg(feature = "stm32f429-adc-ovr")]
     let _adc1_overrun_ok = smoke_adc1_overrun();
 
-    #[cfg(feature = "stm32f429-adc-scan")]
+    #[cfg(any(feature = "stm32f429-adc-scan", feature = "stm32f412-adc-scan"))]
     let _adc1_scan_ok = smoke_adc1_scan();
 
     #[cfg(feature = "stm32f429-spi1")]
