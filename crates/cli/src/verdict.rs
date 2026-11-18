@@ -108,6 +108,9 @@ pub struct RunFacts {
     /// "fail" from a run whose inputs never arrived is not a trustworthy fail
     /// either.
     pub stimuli_rejected: bool,
+    /// A declared UART input was not delivered. Like a refused stimulus, this
+    /// invalidates the run even when every firmware assertion passed.
+    pub uart_injections_rejected: bool,
     /// The firmware ended its own run with a non-zero code through `simctl`.
     pub firmware_declared_failure: bool,
     /// At least one script assertion did not hold.
@@ -126,7 +129,7 @@ pub struct RunFacts {
 impl RunFacts {
     /// The single decision. Order is precedence, highest first.
     pub fn verdict(&self) -> Verdict {
-        if self.stimuli_rejected {
+        if self.stimuli_rejected || self.uart_injections_rejected {
             Verdict::ConfigError
         } else if self.firmware_declared_failure
             || self.assertions_failed
@@ -157,13 +160,14 @@ mod tests {
     /// | 3    | `EXIT_RUNTIME_ERROR` | `"error"` |
     #[test]
     fn the_two_views_agree_for_every_reachable_run() {
-        // Exhaustive over the fact space: 2^6 = 64 runs, every combination of
+        // Exhaustive over the fact space: 2^7 = 128 runs, every combination of
         // reasons a run might not be a pass. No sampling, no representative
         // cases — if any combination could produce a status and an exit code
         // that tell different stories, it is in here.
-        for bits in 0u8..64 {
+        for bits in 0u8..128 {
             let facts = RunFacts {
                 stimuli_rejected: bits & 1 != 0,
+                uart_injections_rejected: bits & 64 != 0,
                 firmware_declared_failure: bits & 2 != 0,
                 assertions_failed: bits & 4 != 0,
                 fault_gate_failed: bits & 8 != 0,
@@ -186,6 +190,17 @@ mod tests {
             );
             assert_eq!(verdict.banner_label(), verdict.status().to_uppercase());
         }
+    }
+
+    #[test]
+    fn a_refused_uart_input_invalidates_otherwise_passing_assertions() {
+        let facts = RunFacts {
+            uart_injections_rejected: true,
+            ..RunFacts::default()
+        };
+        assert_eq!(facts.verdict(), Verdict::ConfigError);
+        assert_eq!(facts.verdict().status(), "error");
+        assert_eq!(facts.verdict().exit_status(), 2);
     }
 
     #[test]
