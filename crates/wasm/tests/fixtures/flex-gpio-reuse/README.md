@@ -7,20 +7,22 @@ the same portable Wasm module against both bindings.
 
 | Binding | Hardware path | Workload |
 |---|---|---|
-| HeyPCB Pomodoro Pal | U1.PD6 to D1.logic_state | Asymmetric 1 µs + 2 µs pulses, held out from the single-pulse proof |
+| HeyPCB Pomodoro Pal | U1.PD6 to D1.logic_state and D2.logic_state | Asymmetric 1 µs + 2 µs pulses, held out from the single-pulse proof |
 | Arduino Uno LabWired model | portb.pb5 to status_led.logic_state | Same held-out pulse pattern |
 
 The Pomodoro identity, immutable source revision
 HeyPCB/pomodoro-pal@1d6e50ff9998978e6f4521895042ae240fff7c42, declared
 CERN-OHL-S-2.0 license, and generic MCP import evidence remain pinned in
 ../flex-heypcb-pomodoro/{README.md,source-map.json,mcp-import.json}. The
-single-output contract here is a narrower view of that source graph; the
-existing Pomodoro fixture separately checks both D1 and D2 logic outputs.
+contract here is a narrower view of that source graph. It instantiates the
+same data-driven `gpio_device` behavior twice, once for each imported LED logic
+output, so the portable firmware must observe both source-mapped outputs.
 The source import counted 36 mapped / 41 schematic references (51 wire
 edges, 5 ignored, 0 dropped) and 35 mapped / 41 PCB components (5 ignored,
 BZ1 dropped/design-only; source file 42 nets). This fixture binds one drive
-port to one LED logic output. BZ1, LED electrical/optical behavior, the whole
-board, original HEX execution, and CH32V003 fidelity remain uncovered.
+port to both source-mapped LED logic outputs. BZ1, LED electrical/optical
+behavior, the whole board, original HEX execution, and CH32V003 fidelity remain
+uncovered.
 
 The second binding uses the existing LabWired system description in
 configs/systems/arduino-uno.yaml, which maps status_led to portb bit 5.
@@ -34,8 +36,9 @@ AVR firmware was not executed in Flex.
 The portable firmware imports only labwired.read, labwired.write, and
 labwired.advance_ns. Its asymmetric pulse workload runs on both contracts; the
 positive result is compared to native FlexRuntime evidence, and a low-drive
-run lasting 5 µs must leave the output inactive. Both positive runs emit 8
-trace edges, both negative controls emit zero edges, and the tests require
+run lasting 5 µs must leave all mapped outputs inactive. Pomodoro produces 12
+edges: four each on PD6, D1 and D2. The single-output Uno contract produces 8
+edges. Both negative controls emit zero edges, and both positive traces require
 zero dropped events. Each adapter samples at its declared 1,000 ns step; those
 timestamps are model scheduler boundaries, not a silicon latency claim.
 

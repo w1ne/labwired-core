@@ -16,36 +16,49 @@ fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
 
 /// Run a one-microsecond pulse followed by a two-microsecond pulse. Nonzero
 /// mode is the negative control: it holds the drive low and requires no LED
-/// response.
+/// response. `u32::MAX` marks a contract with no second indicator output.
 #[no_mangle]
-pub extern "C" fn run(drive_port: u32, led_port: u32, mode: u32) -> u32 {
+pub extern "C" fn run(
+    drive_port: u32,
+    led_port: u32,
+    second_led_port: u32,
+    mode: u32,
+) -> u32 {
     unsafe {
         if mode != 0 {
             write(drive_port, 0.0);
             advance_ns(5_000);
-            return if read(led_port) == 0.0 { 0 } else { 2 };
+            return if outputs_are(led_port, second_led_port, 0.0) {
+                0
+            } else {
+                2
+            };
         }
 
         write(drive_port, 1.0);
         advance_ns(1_000);
-        if read(led_port) != 1.0 {
+        if !outputs_are(led_port, second_led_port, 1.0) {
             return 2;
         }
         write(drive_port, 0.0);
         advance_ns(1_000);
-        if read(led_port) != 0.0 {
+        if !outputs_are(led_port, second_led_port, 0.0) {
             return 2;
         }
         write(drive_port, 1.0);
         advance_ns(2_000);
-        if read(led_port) != 1.0 {
+        if !outputs_are(led_port, second_led_port, 1.0) {
             return 2;
         }
         write(drive_port, 0.0);
         advance_ns(1_000);
-        if read(led_port) != 0.0 {
+        if !outputs_are(led_port, second_led_port, 0.0) {
             return 2;
         }
     }
     1
+}
+
+unsafe fn outputs_are(first: u32, second: u32, value: f64) -> bool {
+    read(first) == value && (second == u32::MAX || read(second) == value)
 }
