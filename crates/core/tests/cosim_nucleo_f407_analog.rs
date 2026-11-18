@@ -562,6 +562,29 @@ fn expected_jfet_gate_voltage(previous_v: f64, drive_v: f64, step_s: f64) -> f64
     0.5 * (low + high)
 }
 
+/// Independent backward-Euler update for two PJF gate junctions tied to
+/// ground. The sign mirrors the normalized junction charge back into the
+/// physical gate terminal charge.
+fn expected_pjfet_gate_voltage(previous_v: f64, drive_v: f64, step_s: f64) -> f64 {
+    const DRIVE_OHMS: f64 = 1_000.0;
+    const POLARITY: f64 = -1.0;
+    let total_charge = |gate_v: f64| 2.0 * POLARITY * jfet_gate_junction_charge(POLARITY * gate_v);
+    let previous_charge = total_charge(previous_v);
+    let residual = |gate_v: f64| {
+        (gate_v - drive_v) / DRIVE_OHMS + (total_charge(gate_v) - previous_charge) / step_s
+    };
+    let (mut low, mut high) = (previous_v.min(drive_v), previous_v.max(drive_v));
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
 #[test]
 fn nucleo_f407_ntc_and_diode_netlists_reach_pa0_pa1_adc1_end_to_end() {
     let system_path = root("configs/systems/nucleo-f407.yaml");
@@ -2181,6 +2204,138 @@ fn nucleo_f407_jfet_gate_depletion_charge_reaches_adc1_with_ntc_and_diode() {
         adc_channel_count(&mut bus, 4),
         u16::MAX,
         "neighboring ADC1_IN4 remains undriven"
+    );
+}
+
+#[test]
+fn nucleo_f407_pjfet_gate_depletion_charge_reaches_adc1_with_ntc_and_diode() {
+    const STEP_S: f64 = 1e-6;
+    const SUBSTEPS: usize = 10;
+
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    let base = SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+        .expect("load unrelated generic NTC and Shockley diode netlists");
+    let pjfet = SystemManifest::from_file(root(
+        "examples/nucleo-f407/analog-pjfet-gate-charge-adc.yaml",
+    ))
+    .expect("load matched generic PJF gate-charge branches");
+    profile.cosim_models = base.cosim_models;
+    profile.cosim_models.extend(pjfet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA4", 4), ("PA5", 5)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries PJF, NTC, and diode netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic netlists must resolve PA0/PA1 and PA4/PA5 to ADC1"
+    );
+    for channel in 0..=6 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    let expected_diode_v = diode_load_line_voltage();
+    session
+        .set_signal_number("ui.pjfet_gate.drive_v", 0.0)
+        .expect("precharge both PJF gates at their drain/source reference");
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set the unrelated NTC temperature");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("settle NTC, diode, and both PJF branches");
+    assert_eq!(initial_steps.len(), 4, "all four analog netlists solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+    assert!(
+        signal_voltage(&session, "board.analog.pa4_volts").abs() < 1e-9,
+        "the precharged PJF gate starts at the drain/source reference"
+    );
+
+    session
+        .set_signal_number("ui.pjfet_gate.drive_v", 3.3)
+        .expect("step both PJF gate drives high");
+    session
+        .set_signal_number("ui.ntc.temperature_c", 80.0)
+        .expect("heat the unrelated NTC while the PJF gates charge");
+    let resistance = ntc_resistance_ohms(80.0);
+    let expected_ntc_v = 3.3 * 10_000.0 / (resistance + 10_000.0);
+    let mut expected_gate_v = 0.0;
+    for step in 0..8 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route PJF charge alongside NTC and diode");
+        assert_eq!(steps.len(), 4, "all four netlists solve at every step");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        for _ in 0..SUBSTEPS {
+            expected_gate_v =
+                expected_pjfet_gate_voltage(expected_gate_v, 3.3, STEP_S / SUBSTEPS as f64);
+        }
+        let gate_v = signal_voltage(&session, "board.analog.pa4_volts");
+        let control_v = signal_voltage(&session, "board.analog.pa5_volts");
+        assert!(
+            (gate_v - expected_gate_v).abs() < 2e-8,
+            "PJF CGS/CGD depletion charge at step {step}: expected {expected_gate_v} V, got {gate_v} V"
+        );
+        assert!(
+            (control_v - 3.3).abs() < 1e-8,
+            "zero-charge PJF control follows the high drive within the leakage floor, got {control_v} V"
+        );
+        assert!(
+            gate_v < control_v,
+            "PJF depletion charge must delay the gate edge relative to its zero-charge control"
+        );
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "the unrelated NTC stays at its 80 °C divider voltage"
+        );
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode stays at its DC load line"
+        );
+
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v), (4, gate_v), (5, control_v)] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved voltage seeds ADC1_IN{channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion reports the routed voltage"
+            );
+        }
+    }
+    assert!(
+        signal_voltage(&session, "board.analog.pa4_volts") > 2.5,
+        "PJF depletion charge delays the edge but eventually follows the high drive"
+    );
+    assert_eq!(
+        adc_channel_count(&mut bus, 6),
+        u16::MAX,
+        "neighboring ADC1_IN6 remains undriven"
     );
 }
 
