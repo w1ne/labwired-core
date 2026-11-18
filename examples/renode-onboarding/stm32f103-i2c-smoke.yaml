@@ -57,6 +57,7 @@ assertions:
   - uart_contains: "GPIOB F1 LCKR SINGLE=0 LCKK=1 LOCKED=1 UNLOCKED=1 ODR=1 ok"
   - uart_contains: "ADC1 F1 GATED=1 EOC=1 DR=000003FF ok"
   - uart_contains: "ADC1 F1 SCAN=000003FF,000007FF IRQ1=1 CLEAR=1 ok"
+  - uart_contains: "ADC1 F1 DMA_SCAN=13 COMPLETE=1 REM=00000000 SEQ=1 EOC_CLEAR=1 ok"
   - uart_contains: "I2C_NACK_OK"
   - uart_contains: "I2C_IDLE_OK"
   - uart_contains: "TMP102=00001900"

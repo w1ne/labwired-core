@@ -126,6 +126,7 @@ const GPIOA_BSRR: u32 = GPIOA_BASE + 0x10;
 
 const ADC1_BASE: u32 = 0x4001_2400;
 const ADC1_SR: u32 = ADC1_BASE;
+const ADC1_CR1: u32 = ADC1_BASE + 0x04;
 const ADC1_CR2: u32 = ADC1_BASE + 0x08;
 const ADC1_SMPR2: u32 = ADC1_BASE + 0x10;
 const ADC1_SQR1: u32 = ADC1_BASE + 0x2C;
@@ -137,8 +138,25 @@ const ADC1_SOFTWARE_TRIGGER: u32 = 0b111 << 17;
 const ADC1_EOC: u32 = 1 << 1;
 const ADC1_SCAN: u32 = 1 << 8;
 const ADC1_EOCIE: u32 = 1 << 5;
+const ADC1_DMA: u32 = 1 << 8;
 const ADC1_IRQ: u32 = 18;
 const ADC1_IRQ_BIT: u32 = 1 << (ADC1_IRQ % 32);
+
+const DMA1_BASE: u32 = 0x4002_0000;
+const DMA1_ISR: u32 = DMA1_BASE;
+const DMA1_IFCR: u32 = DMA1_BASE + 0x04;
+const DMA1_CCR1: u32 = DMA1_BASE + 0x08;
+const DMA1_CNDTR1: u32 = DMA1_BASE + 0x0C;
+const DMA1_CPAR1: u32 = DMA1_BASE + 0x10;
+const DMA1_CMAR1: u32 = DMA1_BASE + 0x14;
+const DMA1_TCIF1: u32 = 1 << 1;
+const DMA1_CCR1_EN: u32 = 1;
+const DMA1_CCR1_TCIE: u32 = 1 << 1;
+const DMA1_CCR1_MINC: u32 = 1 << 7;
+const DMA1_CCR1_PSIZE_HALFWORD: u32 = 1 << 8;
+const DMA1_CCR1_MSIZE_HALFWORD: u32 = 1 << 10;
+
+static mut ADC1_DMA_SCAN_RESULTS: [u16; 13] = [0; 13];
 
 const I2C1_BASE: u32 = 0x4000_5400;
 const I2C1_CR1: u32 = I2C1_BASE + 0x00;
@@ -302,6 +320,7 @@ fn main() -> ! {
     putline(b"F103 I2C");
     smoke_rcc_clock_gates(rcc_reset);
     smoke_adc1_channel0();
+    smoke_adc1_dma_scan_rank_boundaries();
     unsafe { smoke_systick_exception_state() };
     unsafe { smoke_systick_external_pause_resume() };
     unsafe { smoke_systick_handler_delivery() };
@@ -3840,6 +3859,78 @@ fn smoke_adc1_channel0() {
     putbytes(b" CLEAR=");
     put_flag(first_cleared);
     putline(if scan_passed { b" ok" } else { b" FAIL" });
+}
+
+/// Drain a 13-rank STM32F103 regular scan through DMA1 channel 1. The
+/// alternating PA0/PA1 sequence crosses the SQR3→SQR2 boundary at rank 7 and
+/// reaches SQR1 at rank 13, checking that DMA reads every DR result before the
+/// following conversion completes.
+fn smoke_adc1_dma_scan_rank_boundaries() {
+    let read = |address: u32| unsafe { read_volatile(address as *const u32) };
+    let write = |address: u32, value: u32| unsafe { write_volatile(address as *mut u32, value) };
+    let rank_channels = (1 << 5) | (1 << 15) | (1 << 25); // IN0, IN1, IN0, IN1, IN0, IN1
+    let expected = [
+        0x03FFu16, 0x07FF, 0x03FF, 0x07FF, 0x03FF, 0x07FF, 0x03FF, 0x07FF, 0x03FF, 0x07FF, 0x03FF,
+        0x07FF, 0x03FF,
+    ];
+
+    // Both external analog fixtures are already configured on PA0/PA1 by the
+    // single-channel and two-rank checks above.
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, 0xF);
+    write(DMA1_CNDTR1, expected.len() as u32);
+    write(DMA1_CPAR1, ADC1_DR);
+    let results = core::ptr::addr_of_mut!(ADC1_DMA_SCAN_RESULTS).cast::<u16>();
+    write(DMA1_CMAR1, results as u32);
+    write(
+        DMA1_CCR1,
+        DMA1_CCR1_EN
+            | DMA1_CCR1_TCIE
+            | DMA1_CCR1_MINC
+            | DMA1_CCR1_PSIZE_HALFWORD
+            | DMA1_CCR1_MSIZE_HALFWORD,
+    );
+
+    let scan_base = ADC1_ADON | ADC1_DMA | ADC1_SOFTWARE_TRIGGER;
+    write(ADC1_CR1, ADC1_SCAN);
+    write(ADC1_SQR3, rank_channels);
+    write(ADC1_BASE + 0x30, rank_channels); // SQ7..SQ12 in SQR2
+    write(ADC1_SQR1, 12 << 20); // L=12 -> 13 ranks; SQ13=IN0
+    write(ADC1_CR2, scan_base);
+    write(ADC1_CR2, scan_base | ADC1_SWSTART);
+
+    let mut complete = false;
+    for _ in 0..1_000_000 {
+        if read(DMA1_ISR) & DMA1_TCIF1 != 0 {
+            complete = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+
+    let mut sequence_matches = complete && read(DMA1_CNDTR1) == 0;
+    for (rank, expected_value) in expected.iter().enumerate() {
+        let actual = unsafe { read_volatile(results.add(rank)) };
+        sequence_matches &= actual == *expected_value;
+    }
+    let eoc_cleared = read(ADC1_SR) & ADC1_EOC == 0;
+    write(ADC1_CR2, 0);
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, 0xF);
+
+    putbytes(b"ADC1 F1 DMA_SCAN=13 COMPLETE=");
+    put_flag(complete);
+    putbytes(b" REM=");
+    put_hex32(read(DMA1_CNDTR1));
+    putbytes(b" SEQ=");
+    put_flag(sequence_matches);
+    putbytes(b" EOC_CLEAR=");
+    put_flag(eoc_cleared);
+    putline(if complete && sequence_matches && eoc_cleared {
+        b" ok"
+    } else {
+        b" FAIL"
+    });
 }
 
 fn smoke_usart2_txe_irq() {

@@ -123,6 +123,7 @@ const F1_CR2_RSTCAL: u32 = 1 << 3;
 const F1_CR2_EXTSEL: u32 = 0b111 << 17;
 const F1_CR2_EXTTRIG: u32 = 1 << 20;
 const F1_CR2_SWSTART: u32 = 1 << 22;
+const F1_CR2_DMA: u32 = 1 << 8;
 const F1_CR1_EOCIE: u32 = 1 << 5;
 const F1_CR1_SCAN: u32 = 1 << 8;
 const F1_SQR1_LENGTH: u32 = 0xF << 20;
@@ -634,11 +635,12 @@ impl Adc {
     }
 
     /// One cycle of the F1 conversion countdown. Returns whether an EOC IRQ
-    /// should be raised this cycle. Shared verbatim by the legacy walk `tick()`
-    /// and the scheduler `on_event`, so the two routes are identical by
-    /// construction.
-    fn advance_conversion(&mut self) -> bool {
+    /// and/or DMA request should be raised this cycle. Shared verbatim by the
+    /// legacy walk `tick()` and the scheduler `on_event`, so the two routes are
+    /// identical by construction.
+    fn advance_conversion(&mut self) -> (bool, bool) {
         let mut irq = false;
+        let mut dma_request = false;
         if self.converting {
             if self.cycles_remaining > 0 {
                 self.cycles_remaining -= 1;
@@ -673,7 +675,7 @@ impl Adc {
                         self.f4_injected_sequence_rank += 1;
                         self.start_conversion();
                     }
-                    return irq;
+                    return (irq, false);
                 }
                 let f4_scan = is_f4 && (cr1 & F4_CR1_SCAN) != 0;
                 let f4_last_rank =
@@ -704,6 +706,11 @@ impl Adc {
                     self.sr |= F4_SR_EOC;
                     self.dr_read_since_eoc.set(false);
                 }
+                // RM0008 §11.12.3: when DMA is enabled, every regular
+                // conversion result raises ADC1's DMA request line. F1 scan
+                // mode needs the DMA controller to drain DR between ranks;
+                // do not send this request for the separate F4 profile.
+                dma_request = eoc && !is_f4 && (cr2 & F1_CR2_DMA) != 0;
                 if f4_overrun {
                     self.sr |= F4_SR_OVR;
                 }
@@ -744,7 +751,7 @@ impl Adc {
                 }
             }
         }
-        irq
+        (irq, dma_request)
     }
 
     /// Read back the injected 12-bit count for a channel (`0xFFFF` = nothing
@@ -1677,7 +1684,7 @@ impl Peripheral for Adc {
             return PeripheralTickResult::default();
         }
         self.advance_f1_calibration();
-        let irq = self.advance_conversion();
+        let (irq, dma_request) = self.advance_conversion();
         // Tick-cost normalization (mirrors SysTick B1): the legacy model charged
         // `cycles: 1` per converting tick into `total_cycles` — a sim artifact (a
         // real ADC conversion runs on the ADC clock and consumes zero *core*
@@ -1687,6 +1694,7 @@ impl Peripheral for Adc {
         // cycle-for-cycle.
         PeripheralTickResult {
             irq,
+            dma_signals: dma_request.then(|| vec![crate::DMA_SIGNAL_RX]),
             cycles: 0,
             ..Default::default()
         }
@@ -1763,10 +1771,14 @@ impl Peripheral for Adc {
             }
             _ => {
                 // Conversion countdown (token 0) — same engine as the walk.
-                let irq = self.advance_conversion();
+                let (irq, dma_request) = self.advance_conversion();
                 self.chain_live = self.converting;
                 crate::sched::EventResult {
                     raise_own_irq: irq,
+                    dma_signals: dma_request
+                        .then_some(crate::DMA_SIGNAL_RX)
+                        .into_iter()
+                        .collect(),
                     reschedule_delay: self.converting.then_some(1),
                     ..Default::default()
                 }
@@ -1889,6 +1901,33 @@ mod tests {
         assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
         assert!(!adc.converting, "single-shot scan stops at the last rank");
         assert_eq!(adc.f1_sequence_rank, 0);
+    }
+
+    /// RM0008 §11.12.3: DMA requests are generated on each completed F1
+    /// regular conversion, allowing DMA1 to read DR before the next scan rank
+    /// overwrites it.
+    #[test]
+    fn f1_scan_emits_dma_request_for_each_completed_rank() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(0, 825);
+        adc.set_channel_input(1, 1650);
+        adc.write_u32(0x04, F1_CR1_SCAN).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap(); // L=1 -> two ranks
+        adc.write_u32(0x34, 1 << 5).unwrap(); // SQ1=IN0, SQ2=IN1
+
+        f1_software_start_with(&mut adc, F1_CR2_DMA);
+        for _ in 0..14 {
+            assert!(adc.tick().dma_signals.is_none());
+        }
+        assert_eq!(adc.tick().dma_signals, Some(vec![crate::DMA_SIGNAL_RX]));
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 1023);
+
+        for _ in 0..14 {
+            assert!(adc.tick().dma_signals.is_none());
+        }
+        assert_eq!(adc.tick().dma_signals, Some(vec![crate::DMA_SIGNAL_RX]));
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
+        assert!(!adc.converting);
     }
 
     /// The F1 ADC samples the selected input and VREF+ when SWSTART begins

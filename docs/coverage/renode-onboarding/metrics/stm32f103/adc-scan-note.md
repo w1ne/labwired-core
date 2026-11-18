@@ -1,15 +1,22 @@
 # STM32F103 ADC scan scope
 
-The smoke verifies a two-rank PA0/PA1 regular conversion sequence, each EOC,
-the first ADC IRQ pending bit, and EOC clearing after the first DR read. The
-peripheral unit test observes the EOC interrupt result for both ranks. The
-imported-system runs did not show NVIC ISPR pending for the second rank, even
-when sampled before reading its DR, so repeated NVIC pending is not claimed by
-this smoke. The two failed integration attempts are retained under
-`docs/coverage/renode-onboarding/attempt-history/stm32f103/`.
+The exact-import smoke checks a two-rank PA0/PA1 regular scan with EOC on each
+rank, first-rank ADC IRQ pending, and EOC clear after the CPU reads DR. A
+13-rank one-shot scan then enables ADC1 DMA and drains results through DMA1
+channel 1 into SRAM. The alternating IN0/IN1 values cover ranks 1–6 in SQR3,
+ranks 7–12 in SQR2, and rank 13 in SQR1; the smoke checks all 13 values, DMA
+transfer complete, CNDTR reaching zero, and DMA clearing EOC by reading DR.
 
-This evidence covers scan ordering and per-rank EOC in the bounded model. It
-tests a two-rank one-shot group using SQR3; ranks in SQR2/SQR1 and continuous
-scan are implemented but not exercised by this round. It does not model F1 ADC
-DMA transfer behavior, which RM0008 requires to preserve multiple regular
-results without software servicing ADC_DR between ranks.
+The bounded model emits ADC1's DMA request on each completed regular rank only
+when CR2.DMA is set. The imported chip profile routes `adc1_rx` to DMA1 channel
+1, the STM32F1 fixed mapping. The unit regression checks the per-rank request;
+the imported-system smoke checks the request-to-memory path.
+
+The two earlier failed integration attempts for repeated NVIC pending during
+the CPU-serviced scan remain under
+`docs/coverage/renode-onboarding/attempt-history/stm32f103/`. The passing
+smoke claims the first-rank pending bit only. It does not exercise continuous
+ADC scans, circular DMA, other DMA routes, or physical hardware behavior.
+
+Register behavior follows ST RM0008 Rev 21 §§11.3.8, 11.12.3, 11.12.9–11.12.11,
+and 13.3.4: [STM32F1 reference manual](https://www.st.com/resource/en/reference_manual/rm0008-stm32f103xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf).

@@ -1,9 +1,9 @@
 # Bounded Cortex-M3 profile for the imported STM32F103 platform. The memory
 # windows match the common F103C8 density; this profile makes no claim about
 # the wider STM32F1 family. The declared RCC, GPIOA/GPIOB, USART2, SPI1, I2C1,
-# ADC1 and core SysTick models are exercised by the exact-import smoke,
-# including regular ADC scans, RCC reset/enables/reserved-bit masking and the
-# ADC1/GPIOB APB2 gates.
+# ADC1, DMA1 and core SysTick models are exercised by the exact-import smoke,
+# including DMA-drained regular ADC scans, RCC reset/enables/reserved-bit
+# masking and the ADC1/GPIOB APB2 gates.
 name: stm32f103
 arch: arm
 core: cortex-m3
@@ -67,6 +67,16 @@ peripherals:
   clock: { reg: apb2enr, bit: 9 }
   config:
     profile: stm32f1
+- id: dma1
+  type: dma
+  bus: sysbus
+  base_address: 0x40020000
+  size: 1KB
+  # RM0008 hard-wires ADC1 to DMA1 channel 1.
+  irq: 11
+  config:
+    requests:
+      adc1_rx: 1
 - id: i2c1
   type: i2c
   bus: sysbus
