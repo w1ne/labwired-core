@@ -380,7 +380,22 @@ impl Esp32c3Gpio {
         match self.matrix_signal(pin) {
             None => PadSource::Latch,
             Some(sig) if sig == self.layout.gpio_out => PadSource::Latch,
-            Some(_) => PadSource::Peripheral,
+            Some(sig) => self
+                .layout
+                .ledc_ls_out0
+                .and_then(|first| {
+                    (first..first + 6)
+                        .contains(&sig)
+                        .then(|| PadSource::Ledc((sig - first) as u8))
+                })
+                .unwrap_or(PadSource::Peripheral),
+        }
+    }
+
+    fn notify_pad_source(&self, pin: u8) {
+        let source = self.pad_source(pin);
+        for observer in &self.observers {
+            observer.on_pad_source(pin, source);
         }
     }
 
@@ -934,6 +949,8 @@ impl Esp32c3Gpio {
 
     fn write_word(&mut self, word_off: u64, value: u32) {
         let value = value & self.pin_mask();
+        let old_enable = self.enable;
+        let out_sel_pin = self.out_sel_index(word_off).map(|idx| idx as u8);
         match word_off {
             BT_SELECT => self.bt_select = value,
             OUT => self.apply_out(value),
@@ -956,6 +973,15 @@ impl Esp32c3Gpio {
                 } else if let Some(idx) = self.pin_cfg_index(off) {
                     self.pin_cfg[idx] = value;
                 }
+            }
+        }
+        if let Some(pin) = out_sel_pin {
+            self.notify_pad_source(pin);
+        }
+        let changed_enable = old_enable ^ self.enable;
+        for pin in 0..self.pin_count {
+            if changed_enable & (1u32 << pin) != 0 {
+                self.notify_pad_source(pin);
             }
         }
         self.after_matrix_write();
@@ -1148,6 +1174,14 @@ impl PinPort for Esp32c3Gpio {
 }
 
 impl Peripheral for Esp32c3Gpio {
+    fn register_esp_gpio_observer(
+        &mut self,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) -> bool {
+        self.add_observer(observer);
+        true
+    }
+
     /// Classify the input-data register (`IN`, 0x3C) and the boot-strap latch
     /// (`STRAP`) as pure freerunning samples: reading them observes pad levels
     /// without mutating any peripheral or world state. This lets the idle

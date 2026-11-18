@@ -1310,9 +1310,14 @@ board_io: []
     let mut bus = SystemBus::from_config(&chip, &manifest).expect("build C3 bus with servo");
 
     const LEDC: u64 = 0x6001_9000;
+    const GPIO: u64 = 0x6000_4000;
     // ledcSetup(ch 2, 50 Hz, 14 bit) on timer 1, channel bound to timer 1.
     bus.write_u32(LEDC + 0xA0 + 8, 14).unwrap();
     bus.write_u32(LEDC + 2 * 0x14, 1).unwrap();
+    // Route LEDC low-speed channel 2 to GPIO7 and enable its output driver.
+    // The servo was attached before firmware configured this matrix route.
+    bus.write_u32(GPIO + 0x24, 1 << 7).unwrap();
+    bus.write_u32(GPIO + 0x554 + 4 * 7, 45 + 2).unwrap();
     // ESP32Servo write(angle) on a 500..2400 us attach: ticks = us * 2^14 / 20000.
     for angle in [155u32, 46, 25] {
         let us = 500 + angle * 1900 / 180;
@@ -1335,8 +1340,7 @@ board_io: []
 #[test]
 fn test_from_config_attaches_ili9341_16bit_parallel_panel() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // Classic ESP32: `install_gpio_observer` wires Esp32Gpio (C3 has no
-    // observer path for this model yet).
+    // Classic ESP32: `install_gpio_observer` wires its GPIO output observer.
     let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32.yaml"))
         .expect("read ESP32 chip descriptor");
 

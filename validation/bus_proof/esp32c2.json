@@ -1,0 +1,21 @@
+{
+  "id": "esp32c2",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "examples/esp8684-devkitm-1-h4x/io-smoke.yaml",
+    "test": "C2_H4X_GPIO0_UART_OK",
+    "signal": "source-built firmware boots on the ESP8684-DevKitM-1-H4X profile, emits C2_H4X_GPIO0_UART_OK through UART0, and produces GPIO0 transitions for the onboard red LED; the smoke captures UART bytes and GPIO edges.",
+    "lane": "core-board-ci pull-request matrix: esp8684-devkitm-1-h4x (configs/ci/boards.yml)"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "The narrow ESP32-C2 descriptor declares no SPI controller; SPI behavior is outside this board profile.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "The narrow ESP32-C2 descriptor declares no I2C controller; I2C behavior is outside this board profile.",
+    "lane": "none"
+  }
+}

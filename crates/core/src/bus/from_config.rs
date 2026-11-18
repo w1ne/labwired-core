@@ -1708,34 +1708,12 @@ impl SystemBus {
     where
         T: crate::peripherals::device::GpioObserver + 'static,
     {
+        let observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver> = observer;
         if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
-            let any = bus.peripherals[idx].dev.as_any_mut();
-            if let Some(gpio) =
-                any.and_then(|a| a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
-            {
-                gpio.add_observer(observer);
-                return true;
-            }
-        }
-        // Classic ESP32 GPIO (separate type).
-        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
-            if let Some(gpio) = bus.peripherals[idx]
+            if bus.peripherals[idx]
                 .dev
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::gpio::Esp32Gpio>())
+                .register_esp_gpio_observer(observer.clone())
             {
-                gpio.add_observer(observer);
-                return true;
-            }
-        }
-        // The shared C3 GPIO adapter also backs the C5, C6 and C61 maps.
-        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
-            if let Some(gpio) = bus.peripherals[idx]
-                .dev
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32c3::gpio::Esp32c3Gpio>())
-            {
-                gpio.add_observer(observer);
                 return true;
             }
         }
