@@ -15,5 +15,6 @@ external_devices:
     type: "max31855"
     connection: "spi"
     config:
-      cs_pin: "D17"
+      # The engine resolves silicon pads, not Arduino's board-number aliases.
+      cs_pin: "PB0"
 board_io: []
