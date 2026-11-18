@@ -25,6 +25,7 @@ fn h563_machine() -> Machine<labwired_core::cpu::CortexM> {
         .join("../../configs/chips/stm32h563.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load stm32h563.yaml");
     let manifest = labwired_config::SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),

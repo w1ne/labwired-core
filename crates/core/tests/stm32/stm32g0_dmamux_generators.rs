@@ -36,6 +36,7 @@ fn g071_bus() -> SystemBus {
         .join("../../configs/chips/stm32g071.yaml");
     let chip = ChipDescriptor::from_file(&path).expect("load stm32g071.yaml");
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
