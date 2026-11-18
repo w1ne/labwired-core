@@ -4460,6 +4460,7 @@ mod tests {
         let chip_path = root.join("configs/chips/atmega328pb.yaml");
         let chip = ChipDescriptor::from_file(&chip_path).expect("atmega328pb config");
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
             walk_deleted: Some(false),
@@ -5368,6 +5369,7 @@ mod tests {
         let chip_path = root.join("configs/chips/atmega328p.yaml");
         let chip = ChipDescriptor::from_file(&chip_path).expect("atmega328p");
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
             walk_deleted: Some(false),
@@ -5497,6 +5499,7 @@ mod tests {
         cfg.insert("cs_pin".into(), serde_yaml::Value::String("PB2".into()));
         cfg.insert("dc_pin".into(), serde_yaml::Value::String("PB1".into()));
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
             walk_deleted: Some(false),
@@ -5584,6 +5587,7 @@ mod tests {
         let mut cfg = std::collections::HashMap::new();
         cfg.insert("cs_pin".into(), serde_yaml::Value::String("PB2".into()));
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
             walk_deleted: Some(false),

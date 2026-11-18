@@ -2431,3 +2431,74 @@ fn newly_waiting_zero_retirement_can_advance_only_configured_idle_time() {
         assert_eq!(report.cpu_batches, 0);
     }
 }
+
+/// A manifest cap constrains both authoritative advance APIs even when a
+/// native caller bypasses the setter and writes mismatched public configs.
+/// Check executed tick cadence, not only the stored field.
+#[test]
+fn manifest_tick_cap_applies_before_native_and_custom_windows() {
+    for (cap, requested, effective) in [
+        (None, 64, 64),
+        (NonZeroU32::new(32), 1024, 32),
+        (NonZeroU32::new(32), 8, 8),
+        (NonZeroU32::new(32), 0, 1),
+    ] {
+        let mut native = Machine::new(CountingCpu::default(), SystemBus::new());
+        let mut custom = Machine::new(CountingCpu::default(), SystemBus::new());
+        for machine in [&mut native, &mut custom] {
+            machine.bus.max_peripheral_tick_interval = cap;
+            machine.bus.add_peripheral(
+                "every-tick-irq",
+                0x5100_0000,
+                0x100,
+                Some(7),
+                Box::new(EveryTickIrq),
+            );
+            machine.config.peripheral_tick_interval = requested;
+            // Capped systems must synchronize this stale host-side setting.
+            machine.bus.config.peripheral_tick_interval =
+                if cap.is_some() { 999 } else { requested };
+        }
+        let expected = native.advance(AdvanceRequest::run(Some(97))).unwrap();
+        let mut runner_calls = 0;
+        let actual = custom
+            .advance_with_window_runner(
+                AdvanceRequest::run(Some(97)),
+                |cpu, bus, observers, config, count| {
+                    runner_calls += 1;
+                    assert_eq!(config.peripheral_tick_interval, effective);
+                    assert_eq!(bus.config.peripheral_tick_interval, effective);
+                    assert!(count <= effective);
+                    cpu.step_batch(bus, observers, config, count)
+                },
+            )
+            .unwrap();
+        assert_eq!(actual, expected);
+        for machine in [&native, &custom] {
+            assert_eq!(machine.cpu.steps, 97);
+            assert_eq!(machine.config.peripheral_tick_interval, effective);
+            assert_eq!(machine.bus.config.peripheral_tick_interval, effective);
+            assert_eq!(
+                machine.step_profile().peripheral_ticks,
+                u64::from(97 / effective),
+            );
+        }
+        if effective > 1 {
+            assert!(runner_calls > 0, "custom execution path was not exercised");
+        }
+    }
+}
+
+#[test]
+fn manifest_tick_cap_setter_reports_effective_interval_and_preserves_uncapped_requests() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::empty());
+    assert_eq!(machine.set_peripheral_tick_interval(2048), 2048);
+    assert_eq!(machine.config.peripheral_tick_interval, 2048);
+    assert_eq!(machine.bus.config.peripheral_tick_interval, 2048);
+    machine.bus.max_peripheral_tick_interval = NonZeroU32::new(32);
+    for (requested, effective) in [(2048, 32), (8, 8), (0, 1)] {
+        assert_eq!(machine.set_peripheral_tick_interval(requested), effective);
+        assert_eq!(machine.config.peripheral_tick_interval, effective);
+        assert_eq!(machine.bus.config.peripheral_tick_interval, effective);
+    }
+}

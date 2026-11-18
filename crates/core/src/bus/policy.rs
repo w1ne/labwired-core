@@ -131,11 +131,20 @@ impl SystemBus {
         {
             return 1;
         }
-        if cfg!(feature = "event-scheduler") && self.legacy_walk_disabled {
+        let recommended = if cfg!(feature = "event-scheduler") && self.legacy_walk_disabled {
             RECOMMENDED_TICK_INTERVAL
         } else {
             1
-        }
+        };
+        self.clamp_peripheral_tick_interval(recommended)
+    }
+
+    /// Apply only the explicit manifest bound. Uncapped systems retain their
+    /// deliberate diagnostic intervals as well as their production defaults.
+    pub fn clamp_peripheral_tick_interval(&self, requested: u32) -> u32 {
+        let requested = requested.max(1);
+        self.max_peripheral_tick_interval
+            .map_or(requested, |cap| requested.min(cap.get()))
     }
 
     /// True when the per-cycle tick (`tick_peripherals_fully`) has no orchestration

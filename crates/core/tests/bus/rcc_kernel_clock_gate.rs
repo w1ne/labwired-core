@@ -110,6 +110,7 @@ fn bus_for(chip_rel: &str) -> labwired_core::bus::SystemBus {
 
 fn manifest_for(chip_rel: &str) -> labwired_config::SystemManifest {
     labwired_config::SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
