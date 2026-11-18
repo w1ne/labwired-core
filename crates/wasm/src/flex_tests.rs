@@ -881,20 +881,25 @@ fn flex_heypcb_ldr_runtime_ports_match_the_pinned_generic_import() {
 
     let schematic = &imported["generic_import"]["schematic"];
     assert_eq!(schematic["mode"], "twin_ready");
-    assert_eq!(schematic["mapped"], 19);
+    assert_eq!(schematic["mapped"], 18);
     assert_eq!(schematic["ignored"], 1);
-    assert_eq!(schematic["dropped"], 2);
-    assert_eq!(schematic["diagram_wire_edges"], 29);
+    assert_eq!(schematic["dropped"], 3);
+    assert_eq!(schematic["diagram_parts"], 18);
+    assert_eq!(schematic["diagram_wire_edges"], 27);
     let mapping = schematic["selected_mapping"].as_array().unwrap();
-    assert_eq!(
-        mapping.iter().find(|item| item["ref"] == "U4").unwrap()["catalog_type"],
-        "resistor",
-        "the fixture must expose the generic import's LDR mapping gap"
-    );
+    let ldr = mapping.iter().find(|item| item["ref"] == "U4").unwrap();
+    assert_eq!(ldr["status"], "dropped");
+    assert!(ldr["reason"]
+        .as_str()
+        .unwrap()
+        .contains("2-terminal conductance not modeled"));
+    assert!(ldr["reason"]
+        .as_str()
+        .unwrap()
+        .contains("not electrically equivalent"));
     let imported_edges = schematic["relevant_import_wires"].as_array().unwrap();
     for edge in [
         serde_json::json!(["C7.1", "U3.GPIO1"]),
-        serde_json::json!(["C7.1", "U4.2"]),
         serde_json::json!(["C7.1", "R6.1"]),
         serde_json::json!(["R4.1", "U3.GPIO48"]),
         serde_json::json!(["D1.A", "R4.2"]),
@@ -904,9 +909,25 @@ fn flex_heypcb_ldr_runtime_ports_match_the_pinned_generic_import() {
             "import snapshot omits {edge}"
         );
     }
+    assert!(imported_edges
+        .iter()
+        .all(|edge| !edge.to_string().contains("U4")));
     assert_eq!(imported["generic_import"]["pcb"]["mapped"], 17);
     assert_eq!(imported["generic_import"]["pcb"]["ignored"], 1);
     assert_eq!(imported["generic_import"]["pcb"]["dropped"], 4);
+    let pcb = &imported["generic_import"]["pcb"];
+    let pcb_ldr = pcb["selected_mapping"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["ref"] == "U4")
+        .unwrap();
+    assert_eq!(pcb_ldr["status"], "mapped");
+    assert_eq!(pcb_ldr["catalog_type"], "resistor");
+    assert!(pcb["import_gap"]
+        .as_str()
+        .unwrap()
+        .contains("not electrically equivalent"));
     assert!(source["original_board_firmware"]
         .as_str()
         .unwrap()

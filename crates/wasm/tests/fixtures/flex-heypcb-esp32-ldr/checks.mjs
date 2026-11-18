@@ -38,7 +38,10 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
         && report.assumptions.length === 4
         && report.assumptions.some((assumption) => assumption.includes('Part Knowledge')
           && assumption.includes('GL5528'))
-        && report.unsupported_checks.length === 3,
+        && report.unsupported_checks.length === 5
+        && report.unsupported_checks.some((check) => check.includes('two-terminal photoconductive device'))
+        && report.unsupported_checks.some((check) => check.includes('R6 divider')
+          && check.includes('C7 transient behavior')),
       'the project run report omitted its model assumptions or unsupported checks');
       const sensorModel = report.models.find((model) => model.id === 'source-u4-gl5528');
       check(sensorModel?.adapter === 'behavior' && sensorModel.step_ns === 1000

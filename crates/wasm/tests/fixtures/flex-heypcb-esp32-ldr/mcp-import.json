@@ -5,7 +5,7 @@
     "import": "LabWired labwired_import",
     "board_hint": "esp32-s3-devkitc-1-n16r8",
     "observed_at": "2026-11-18",
-    "parallel_fetch_discovery_and_import_seconds": 3.541
+    "saved_project_query": "HeyPCB ESP32-S3 LDR"
   },
   "source": {
     "repository": "HeyPCB/esp32-sensors-1",
@@ -20,7 +20,7 @@
   "discovery": {
     "mcu_list_filter": "esp32-s3",
     "source_mcu_catalog_id": "esp32-s3-devkitc-1-n16r8",
-    "generic_import_mcu_mapping": "esp32-s3-devkitc-1",
+    "schematic_mcu_mapping": "esp32-s3-devkitc-1",
     "listed_mcu_variants": ["esp32-s3-devkitc-1-n16r8", "esp32-s3-devkitc-1", "esp32-s3-zero"],
     "mcu_pin_count": 48,
     "mcu_runnable": true,
@@ -35,29 +35,32 @@
       "mode": "twin_ready",
       "board": "esp32-s3-devkitc-1-n16r8",
       "source_references": 22,
-      "mapped": 19,
+      "mapped": 18,
       "ignored": 1,
-      "dropped": 2,
-      "diagram_parts": 19,
-      "diagram_wire_edges": 29,
+      "dropped": 3,
+      "diagram_parts": 18,
+      "diagram_wire_edges": 27,
       "ignored_refs": ["J1"],
-      "dropped_refs": ["U1: USBLC6-2SC6", "U2: AP2112K-3.3"],
+      "dropped_refs": ["U1: USBLC6-2SC6", "U2: AP2112K-3.3", "U4: GL5528(10-20)"],
       "selected_mapping": [
         { "ref": "U3", "source_value": "ESP32-S3-WROOM-1-N16R8", "catalog_type": "esp32-s3-devkitc-1", "status": "mapped" },
-        { "ref": "U4", "source_value": "GL5528(10-20)", "imported_value": "220", "catalog_type": "resistor", "status": "mapped" },
+        { "ref": "U4", "source_value": "GL5528(10-20)", "status": "dropped", "reason": "Photoresistor (GL5528(10-20)): physical lux-dependent 2-terminal conductance not modeled. Fixed resistor and LDR ADC kit are not electrically equivalent; add a pin-to-pin analog model before verifying this board" },
         { "ref": "D1", "source_value": "Blue (IO48)", "catalog_type": "led", "status": "mapped" },
         { "ref": "U1", "source_value": "USBLC6-2SC6", "status": "dropped" },
-        { "ref": "U2", "source_value": "AP2112K-3.3", "status": "dropped" }
+        { "ref": "U2", "source_value": "AP2112K-3.3", "status": "dropped" },
+        { "ref": "SW1", "source_value": "BOOT", "catalog_type": "button", "status": "mapped" },
+        { "ref": "SW2", "source_value": "RESET", "catalog_type": "button", "status": "mapped" }
       ],
       "relevant_import_wires": [
-        ["C7.1", "U3.GPIO1"],
-        ["C7.1", "U4.2"],
         ["C7.1", "R6.1"],
+        ["C7.1", "U3.GPIO1"],
         ["R4.1", "U3.GPIO48"],
         ["D1.A", "R4.2"]
       ],
-      "import_gap": "The source connection graph includes SNS_AN1, but U4 is mapped as a generic resistor rather than the existing ldr behavior model; the imported resistor value 220 does not preserve GL5528 lux-to-voltage behavior.",
-      "twin_buildable": true
+      "import_gap": "The schematic import drops source U4 GL5528 as unsupported. The source SNS_AN1 includes U4.2, but the imported graph has no U4 pin or edge.",
+      "coverage_design_only_refs": ["U1", "U2", "U4"],
+      "twin_buildable": true,
+      "detail": "pins not declared by the catalog, left unwired: U3.EN, U3.USB_D-, U3.USB_D+"
     },
     "pcb": {
       "source_kind": "kicad_pcb",
@@ -70,15 +73,41 @@
       "diagram_parts": 17,
       "diagram_wire_edges": 22,
       "ignored_refs": ["J1"],
-      "dropped_refs": ["SW1", "SW2", "U1", "U2"],
+      "dropped_refs": ["SW1: BOOT", "SW2: RESET", "U1: USBLC6-2SC6", "U2: AP2112K-3.3"],
       "selected_mapping": [
         { "ref": "U3", "source_value": "ESP32-S3-WROOM-1-N16R8", "catalog_type": "esp32-s3-devkitc-1", "status": "mapped" },
         { "ref": "U4", "source_value": "GL5528(10-20)", "catalog_type": "resistor", "status": "mapped" },
-        { "ref": "D1", "source_value": "Blue (IO48)", "catalog_type": "led", "status": "mapped" }
+        { "ref": "D1", "source_value": "Blue (IO48)", "catalog_type": "led", "status": "mapped" },
+        { "ref": "U1", "source_value": "USBLC6-2SC6", "status": "dropped" },
+        { "ref": "U2", "source_value": "AP2112K-3.3", "status": "dropped" },
+        { "ref": "SW1", "source_value": "BOOT", "status": "dropped" },
+        { "ref": "SW2", "source_value": "RESET", "status": "dropped" }
       ],
-      "twin_buildable": true
+      "relevant_import_wires": [
+        ["C3.1", "U4.1"],
+        ["C3.2", "R6.2"],
+        ["C3.2", "C7.2"],
+        ["R4.2", "D1.A"],
+        ["U4.2", "R6.1"],
+        ["U4.2", "C7.1"]
+      ],
+      "import_gap": "The PCB import maps U4 GL5528(10-20) as a fixed resistor and does not report it as a coverage gap. This mapping is not electrically equivalent to the source photoresistor's lux-dependent two-terminal behavior.",
+      "coverage_design_only_refs": ["SW1", "SW2", "U1", "U2"],
+      "twin_buildable": true,
+      "detail": "10 U3 pads are left unwired because the catalog does not declare those pins."
     }
   },
   "saved_project_query": { "query": "HeyPCB ESP32-S3 LDR", "saved_projects": 0 },
-  "source_firmware": { "for_this_board": false, "original_firmware_execution": "not available" }
+  "source_firmware": { "for_this_board": false, "original_firmware_execution": "not available" },
+  "flex_scope": {
+    "runtime_manifest": "system.yaml",
+    "execution": "portable WebAssembly behavior source using the existing generic LDR kit; no target MCU execution",
+    "source_alignment": "U4 environment.lux and U3.GPIO1 signal names come from the pinned source map; the runtime is not the imported full-board diagram",
+    "negative_control": "0 lx yields ADC 0 and no LED transitions",
+    "unsupported": [
+      "U4 is not modeled as a two-terminal photoresistor in generic import; the PCB resistor mapping is not physically equivalent.",
+      "The Flex behavior slice injects the catalog LDR millivolt output at GPIO1 and omits U4 resistance, the R6 divider, and C7 transients.",
+      "No original firmware, ESP32-S3 instruction/ADC fidelity, complete board, or physical hardware evidence."
+    ]
+  }
 }

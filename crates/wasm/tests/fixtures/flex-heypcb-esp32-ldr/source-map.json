@@ -50,7 +50,8 @@
   "catalog_model_gaps": [
     "Public verified Part Knowledge returned NOT_FOUND for GL5528; the generic LDR curve is not verified for the source part.",
     "The existing ldr kit uses a typical 10 kohm-at-10-lux power-law model; it does not encode the GL5528 part's manufacturing spread.",
-    "The source's C7 100 nF smoothing capacitor and analog transient behavior are omitted by the static analog_source model.",
+    "The live generic schematic import drops U4 because a two-terminal photoresistor model is unavailable; the PCB import maps U4 as a fixed resistor, which is not equivalent to GL5528 behavior.",
+    "The Flex LDR kit emits a direct millivolt output at the source-mapped GPIO1 endpoint; it does not model the source's U4 resistance, R6 divider, or C7 transient response.",
     "The generic led model exposes logic state only; LED current, optical output, and the complete board circuit are not simulated."
   ]
 }
