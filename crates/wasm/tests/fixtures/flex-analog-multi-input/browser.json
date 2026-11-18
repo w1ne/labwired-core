@@ -190,10 +190,10 @@
     "charging-negative-control",
     "state-of-charge-control"
   ],
-  "measured_browser_ms": 537.2,
+  "measured_browser_ms": 459.1,
   "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
   "browser_driver": "Chrome DevTools",
-  "core_commit": "63b97190bd976d17ad02b5a4f6129a4c6d22668e",
+  "core_commit": "bcaa486937ae1acdb34fffe882fc5aa64ae64bc2",
   "firmware_sha256": "94261c15ae0e4650dad0c971cd117fe1b818c6988c14be42bbc41d921b356dd3",
   "firmware_source_sha256": "789ab49b475787252887531e3465aff35a466dda2f75285ecb902da8cde807c2",
   "system_sha256": "336ee4bebea2c50e3d3d75651a7688775af4439a85287e48276c28651fe054d0"
