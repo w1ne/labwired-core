@@ -24,6 +24,11 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+// The include expander the crate itself uses, so a built-in chip flattened
+// here is exactly what `ChipDescriptor::from_file` builds from the same file.
+#[path = "src/chip_merge.rs"]
+mod chip_merge;
+
 /// Descriptors that exist only to drive tests. Never advertised as built-ins.
 const FIXTURE_PREFIX: &str = "ci-fixture-";
 
@@ -81,13 +86,45 @@ fn main() {
     );
     for name in &names {
         let path = chips_dir.join(format!("{name}.yaml"));
-        out.push_str(&format!(
-            "        {name:?} => include_str!({:?}),\n",
-            path.to_str().expect("utf8 chip path")
-        ));
+        match flattened_chip_yaml(&path) {
+            // A variant that `include:`s its base: embed the merged text, the
+            // descriptor `from_file` would build. A bare name has no
+            // directory to resolve the include against at run time.
+            Some(text) => out.push_str(&format!("        {name:?} => {text:?},\n")),
+            None => out.push_str(&format!(
+                "        {name:?} => include_str!({:?}),\n",
+                path.to_str().expect("utf8 chip path")
+            )),
+        }
     }
     out.push_str("        _ => return None,\n    })\n}\n");
 
     let dest = Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("builtin_chips.rs");
     std::fs::write(&dest, out).expect("write builtin_chips.rs");
+}
+
+/// The merged YAML of a chip file that has a top-level `include:`, or `None`
+/// for a self-contained one (embedded verbatim, comments and all). Included
+/// files are watched too: editing a base re-flattens its variants.
+fn flattened_chip_yaml(path: &Path) -> Option<String> {
+    let content =
+        std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let doc: serde_yaml::Value =
+        serde_yaml::from_str(&content).unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
+    let includes = doc.as_mapping()?.get(chip_merge::yaml_str_key("include"))?;
+    let dir = path.parent().expect("chip file has a directory");
+    let rels: Vec<String> = match includes {
+        serde_yaml::Value::String(rel) => vec![rel.clone()],
+        serde_yaml::Value::Sequence(items) => items
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect(),
+        _ => Vec::new(),
+    };
+    for rel in rels {
+        println!("cargo:rerun-if-changed={}", dir.join(rel).display());
+    }
+    let merged = chip_merge::expand_chip_includes(path, &content, &mut Vec::new())
+        .unwrap_or_else(|e| panic!("expand includes of {}: {e:#}", path.display()));
+    Some(serde_yaml::to_string(&merged).expect("serialize flattened chip"))
 }

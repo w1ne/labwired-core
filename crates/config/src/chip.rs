@@ -5,6 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 #![allow(dead_code)]
+use crate::chip_merge::{coerce_yaml_size_numbers, expand_chip_includes, yaml_str_key};
 use crate::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -689,20 +690,13 @@ pub enum ChipInclude {
     Many(Vec<String>),
 }
 
-impl ChipInclude {
-    fn paths(&self) -> &[String] {
-        match self {
-            Self::One(path) => std::slice::from_ref(path),
-            Self::Many(paths) => paths.as_slice(),
-        }
-    }
-}
-
 /// Chip silicon descriptor (`chips/<name>.yaml`).
 ///
-/// Path-loaded YAML may `include:` another file (or a list). Paths are relative
-/// to the including file. Built-in `from_str` and bundled chips do **not**
-/// expand includes — there is no filesystem.
+/// A descriptor may `include:` another file (or a list). Paths are relative
+/// to the including file. [`ChipDescriptor::from_file`] expands them, and so
+/// do built-in chips: `build.rs` flattens an including `configs/chips/*.yaml`
+/// before embedding it, so `chip: "<name>"` and the file path load the same
+/// descriptor. A bare `serde_yaml::from_str` of an including text does not.
 ///
 /// ```yaml
 /// include: nrf52-common.yaml
@@ -867,8 +861,8 @@ pub struct ChipDescriptor {
     /// reset by its supply, and such a route is refused rather than guessed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supply_monitor: Option<SupplyMonitor>,
-    /// Path-loaded YAML only (`include: common.yaml` or a list). Built-in
-    /// `from_str` does not expand includes.
+    /// `include: common.yaml` or a list; see [`ChipDescriptor`]. Consumed by
+    /// expansion, so a loaded descriptor never carries it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub include: Option<ChipInclude>,
 }
@@ -1158,171 +1152,6 @@ pub(crate) fn optional_nonempty_interconnect_string<'a>(
     Ok(Some(value))
 }
 
-pub(crate) fn yaml_str_key(key: &str) -> serde_yaml::Value {
-    serde_yaml::Value::String(key.to_string())
-}
-
-/// `from_str` accepts `size: 1024` as a string field; `from_value` does not.
-/// Walk mappings and stringify numeric `size` so include-merge can deserialize
-/// without a YAML text round-trip.
-pub(crate) fn coerce_yaml_size_numbers(value: &mut serde_yaml::Value) {
-    match value {
-        serde_yaml::Value::Mapping(map) => {
-            let size_key = yaml_str_key("size");
-            if let Some(serde_yaml::Value::Number(n)) = map.get(&size_key) {
-                let s = n.to_string();
-                map.insert(size_key, serde_yaml::Value::String(s));
-            }
-            for (_, v) in map.iter_mut() {
-                coerce_yaml_size_numbers(v);
-            }
-        }
-        serde_yaml::Value::Sequence(seq) => {
-            for v in seq {
-                coerce_yaml_size_numbers(v);
-            }
-        }
-        _ => {}
-    }
-}
-
-pub(crate) fn mapping_field<'a>(value: &'a serde_yaml::Value, key: &str) -> Option<&'a str> {
-    value.as_mapping()?.get(yaml_str_key(key))?.as_str()
-}
-
-pub(crate) fn take_includes(doc: &mut serde_yaml::Value) -> Result<Vec<String>> {
-    let Some(map) = doc.as_mapping_mut() else {
-        return Ok(Vec::new());
-    };
-    let Some(value) = map.remove(yaml_str_key("include")) else {
-        return Ok(Vec::new());
-    };
-    if matches!(value, serde_yaml::Value::Null) {
-        return Ok(Vec::new());
-    }
-    let include: ChipInclude =
-        serde_yaml::from_value(value).context("include must be a string or a list of strings")?;
-    Ok(include.paths().to_vec())
-}
-
-pub(crate) fn merge_seq_by(
-    base: serde_yaml::Value,
-    overlay: serde_yaml::Value,
-    field: &str,
-) -> Result<serde_yaml::Value> {
-    let mut items = match base {
-        serde_yaml::Value::Null => Vec::new(),
-        serde_yaml::Value::Sequence(seq) => seq,
-        other => anyhow::bail!("expected a sequence while merging {field}, got {other:?}"),
-    };
-    let overlay = match overlay {
-        serde_yaml::Value::Null => return Ok(serde_yaml::Value::Sequence(items)),
-        serde_yaml::Value::Sequence(seq) => seq,
-        other => anyhow::bail!("expected a sequence while merging {field}, got {other:?}"),
-    };
-    for item in overlay {
-        if let Some(id) = mapping_field(&item, field).map(str::to_string) {
-            if let Some(existing) = items
-                .iter_mut()
-                .find(|entry| mapping_field(entry, field) == Some(id.as_str()))
-            {
-                *existing = item;
-                continue;
-            }
-        }
-        items.push(item);
-    }
-    Ok(serde_yaml::Value::Sequence(items))
-}
-
-pub(crate) fn merge_yaml_maps(
-    base: serde_yaml::Value,
-    overlay: serde_yaml::Value,
-) -> serde_yaml::Value {
-    let mut map = match base {
-        serde_yaml::Value::Mapping(map) => map,
-        _ => serde_yaml::Mapping::new(),
-    };
-    if let serde_yaml::Value::Mapping(overlay) = overlay {
-        for (key, value) in overlay {
-            map.insert(key, value);
-        }
-    }
-    serde_yaml::Value::Mapping(map)
-}
-
-pub(crate) fn merge_chip_yaml(
-    base: serde_yaml::Value,
-    overlay: serde_yaml::Value,
-) -> Result<serde_yaml::Value> {
-    let mut base_map = match base {
-        serde_yaml::Value::Mapping(map) => map,
-        serde_yaml::Value::Null => serde_yaml::Mapping::new(),
-        other => anyhow::bail!("chip YAML must be a mapping, got {other:?}"),
-    };
-    let overlay_map = match overlay {
-        serde_yaml::Value::Mapping(map) => map,
-        serde_yaml::Value::Null => return Ok(serde_yaml::Value::Mapping(base_map)),
-        other => anyhow::bail!("chip YAML must be a mapping, got {other:?}"),
-    };
-    for (key, value) in overlay_map {
-        let key_name = key.as_str().unwrap_or("");
-        let merged = match key_name {
-            "include" => continue,
-            "peripherals" => merge_seq_by(
-                base_map.remove(&key).unwrap_or(serde_yaml::Value::Null),
-                value,
-                "id",
-            )?,
-            "memory_regions" => merge_seq_by(
-                base_map.remove(&key).unwrap_or(serde_yaml::Value::Null),
-                value,
-                "name",
-            )?,
-            "pins" | "analog_pins" => merge_yaml_maps(
-                base_map.remove(&key).unwrap_or(serde_yaml::Value::Null),
-                value,
-            ),
-            _ => value,
-        };
-        base_map.insert(key, merged);
-    }
-    Ok(serde_yaml::Value::Mapping(base_map))
-}
-
-pub(crate) fn expand_chip_includes(
-    path: &Path,
-    content: &str,
-    stack: &mut Vec<PathBuf>,
-) -> Result<serde_yaml::Value> {
-    let canon = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    if stack.contains(&canon) {
-        anyhow::bail!("cycle detected in chip YAML include of {}", path.display());
-    }
-    stack.push(canon);
-    let result = (|| {
-        let mut doc: serde_yaml::Value =
-            serde_yaml::from_str(content).context("Failed to parse Chip Descriptor YAML")?;
-        let includes = take_includes(&mut doc)?;
-        let dir = path.parent().unwrap_or_else(|| Path::new("."));
-        let mut merged = serde_yaml::Value::Mapping(serde_yaml::Mapping::new());
-        for rel in includes {
-            let inc_path = dir.join(&rel);
-            if !inc_path.is_file() {
-                anyhow::bail!("chip YAML include not found: {}", inc_path.display());
-            }
-            let inc_content = std::fs::read_to_string(&inc_path).with_context(|| {
-                format!("Failed to read chip YAML include {}", inc_path.display())
-            })?;
-            let included = expand_chip_includes(&inc_path, &inc_content, stack)?;
-            merged = merge_chip_yaml(merged, included)?;
-        }
-        merge_chip_yaml(merged, doc)
-    })();
-    stack.pop();
-    result
-}
-
 impl ChipDescriptor {
     /// Is this an ESP32-S2 (Xtensa LX7) part?
     ///
@@ -1347,6 +1176,27 @@ impl ChipDescriptor {
     /// covered by a CLI gate at all.
     pub fn is_esp32s3(&self) -> bool {
         self.arch == Arch::Xtensa && self.name.starts_with("esp32s3")
+    }
+
+    /// The YAML text of a chip file with its `include:`s expanded: the file
+    /// verbatim when it has none, otherwise the merged descriptor (what
+    /// [`Self::from_file`] parses). For callers that consume chip YAML as
+    /// text (the CLI's arch dispatch, a text-taking runner) so a package
+    /// variant reaches them as the whole chip, not as its overlay.
+    pub fn flattened_yaml<P: AsRef<Path>>(path: P) -> Result<String> {
+        let path = path.as_ref();
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read chip YAML {}", path.display()))?;
+        let parsed: serde_yaml::Value =
+            serde_yaml::from_str(&content).context("Failed to parse Chip Descriptor YAML")?;
+        if !parsed
+            .as_mapping()
+            .is_some_and(|m| m.contains_key(yaml_str_key("include")))
+        {
+            return Ok(content);
+        }
+        let value = expand_chip_includes(path, &content, &mut Vec::new())?;
+        serde_yaml::to_string(&value).context("Failed to serialize flattened chip YAML")
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {

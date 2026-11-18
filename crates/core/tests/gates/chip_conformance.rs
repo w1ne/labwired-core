@@ -1388,6 +1388,14 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    // RP2354B: the rp2350 die in the QFN80 package with stacked flash. Its
+    // committed smoke ELF runs as a Rust test (and as a CLI script).
+    ChipConf {
+        name: "rp2354b",
+        yaml: "configs/chips/rp2354b.yaml",
+        reset_oracle: None,
+        behavior_gate: Some("rp2354b_contract::smoke_firmware_prints_and_toggles_gpio47"),
+    },
     // NUCLEO-H723ZG slice (RCC, SysTick, GPIO B/C/D/E, USART3). SIM-DERIVED:
     // no silicon capture. Its LD1 + USART3 smoke runs as a CLI script in
     // core-onboarding-smoke, not as a Rust test, so no behavior_gate resolves.

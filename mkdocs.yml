@@ -135,6 +135,7 @@ nav:
     - RP2040: boards/rp2040.md
     - RP2350: boards/rp2350.md
     - RP2350-Zero: boards/rp2350-zero.md
+    - RP2354B: boards/rp2354b.md
     - STM32F103: boards/stm32f103.md
     - STM32F401: boards/stm32f401.md
     - STM32F405: boards/stm32f405.md

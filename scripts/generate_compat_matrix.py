@@ -13,6 +13,9 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import chip_yaml  # noqa: E402  (include-expanding chip loader)
+
 try:
     import yaml
 except ImportError:
@@ -192,7 +195,8 @@ def main() -> int:
         if chip_file.name.startswith("ci-fixture"):
             continue  # Skip CI test fixtures
 
-        config = parse_yaml_simple(chip_file)
+        # `include:` expanded: a package variant names only what differs.
+        config = chip_yaml.load_chip(chip_file, read=parse_yaml_simple)
         name = config.get("name", chip_file.stem)
         arch = config.get("arch", "unknown")
         peripherals = config.get("peripherals", [])

@@ -32,15 +32,22 @@
 //! GPIO array and FUNCSEL numbering for SPI/UART/I2C/PWM/SIO, the interrupt
 //! block moved to 0x230 with six words per group, and `IRQSUMMARY_*` at 0x200.
 //! The pad count stays 30 — the RP2350A that the Pico 2 carries
-//! (`NUM_BANK0_GPIOS`); GPIO30..47 CTRL words of the RP2350B are inert.
+//! (`NUM_BANK0_GPIOS`); GPIO30..47 CTRL words of the RP2350A are inert.
+//! [`IoBankLayout::Rp2350B`] is the QFN80 package (RP2350B, RP2354B): the
+//! same register map with all 48 pads live (pico-sdk rp2350
+//! `platform_defs.h`: `NUM_BANK0_GPIOS` = 48 when `PICO_RP2350B`), so
+//! GPIO30..47 CTRL select functions and their edges reach `INTR3..5`.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::{Peripheral, PeripheralTickResult, SimResult};
 
-/// Number of pads IO_BANK0 controls (GP0..GP29).
+/// Number of pads IO_BANK0 controls on the RP2040 and RP2350A (GP0..GP29).
 pub const PAD_COUNT: u8 = 30;
+
+/// Number of bank-0 pads on the RP2350 QFN80 package (GPIO0..GPIO47).
+pub const PAD_COUNT_QFN80: u8 = 48;
 
 /// `CTRL.FUNCSEL` reset value: 31 == NULL, no peripheral connected.
 const FUNCSEL_NULL: u32 = 31;
@@ -72,10 +79,13 @@ impl Default for PadFunctions {
 
 impl PadFunctions {
     pub fn new() -> Self {
+        Self::with_pad_count(PAD_COUNT)
+    }
+
+    /// One `GPIOn_CTRL` word per pad, all reset to NULL.
+    pub fn with_pad_count(pads: u8) -> Self {
         Self {
-            ctrl: (0..PAD_COUNT)
-                .map(|_| AtomicU32::new(FUNCSEL_NULL))
-                .collect(),
+            ctrl: (0..pads).map(|_| AtomicU32::new(FUNCSEL_NULL)).collect(),
         }
     }
 
@@ -117,22 +127,40 @@ pub const GPIO_FUNC_SIO: u32 = 5;
 pub enum IoBankLayout {
     #[default]
     Rp2040,
+    /// RP2350 QFN60 (RP2350A): the RP2350 map with GP0..GP29 live.
     Rp2350,
+    /// RP2350 QFN80 (RP2350B, RP2354B): the RP2350 map with GPIO0..GPIO47
+    /// live.
+    Rp2350B,
 }
 
 impl IoBankLayout {
+    /// Bank-0 pads the layout serves.
+    pub const fn pad_count(self) -> u8 {
+        match self {
+            IoBankLayout::Rp2040 | IoBankLayout::Rp2350 => PAD_COUNT,
+            IoBankLayout::Rp2350B => PAD_COUNT_QFN80,
+        }
+    }
+
+    const fn is_rp2350(self) -> bool {
+        matches!(self, IoBankLayout::Rp2350 | IoBankLayout::Rp2350B)
+    }
+
     /// Words per interrupt group (`INTRn`, `PROC0_INTEn`, ...).
     const fn words(self) -> usize {
-        match self {
-            IoBankLayout::Rp2040 => 4,
-            IoBankLayout::Rp2350 => 6,
+        if self.is_rp2350() {
+            6
+        } else {
+            4
         }
     }
 
     const fn intr0(self) -> u64 {
-        match self {
-            IoBankLayout::Rp2040 => 0x0F0,
-            IoBankLayout::Rp2350 => 0x230,
+        if self.is_rp2350() {
+            0x230
+        } else {
+            0x0F0
         }
     }
 
@@ -146,9 +174,10 @@ impl IoBankLayout {
     /// `GPIOn_CTRL` writable bits: FUNCSEL plus the four OVER fields
     /// (RP2040 SVD: OUTOVER [9:8], OEOVER [13:12]; RP2350: [13:12], [15:14]).
     const fn ctrl_mask(self) -> u32 {
-        match self {
-            IoBankLayout::Rp2040 => 0x3003_331F,
-            IoBankLayout::Rp2350 => 0x3003_F01F,
+        if self.is_rp2350() {
+            0x3003_F01F
+        } else {
+            0x3003_331F
         }
     }
 }
@@ -162,23 +191,39 @@ const IRQSUMMARY_PROC0_SECURE0: u64 = 0x200;
 /// The pad levels and raw edge latches the GPIO interrupts read, shared
 /// between the SIO (which owns `GPIO_IN` and sees every change of it) and
 /// IO_BANK0 (which owns the interrupt registers).
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct BankIrq {
     state: Mutex<BankIrqState>,
+    /// Pads the interrupt words cover.
+    pads: u8,
+}
+
+impl Default for BankIrq {
+    fn default() -> Self {
+        Self::with_pad_count(PAD_COUNT)
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
 struct BankIrqState {
-    /// `GPIO_IN` as last reported.
-    level: u32,
+    /// `GPIO_IN` as last reported (bit `n` = GPIOn).
+    level: u64,
     /// Latched `EDGE_LOW` / `EDGE_HIGH` per pad (bit `n` = GPIOn).
-    edge_low: u32,
-    edge_high: u32,
+    edge_low: u64,
+    edge_high: u64,
 }
 
 impl BankIrq {
+    /// Interrupt state for `pads` bank-0 pads.
+    pub fn with_pad_count(pads: u8) -> Self {
+        Self {
+            state: Mutex::default(),
+            pads,
+        }
+    }
+
     /// Report the pads' input levels; every change latches its edge.
-    pub fn set_levels(&self, level: u32) {
+    pub fn set_levels(&self, level: u64) {
         let mut s = self.state.lock().expect("RP2040 bank irq poisoned");
         let rose = !s.level & level;
         let fell = s.level & !level;
@@ -188,7 +233,7 @@ impl BankIrq {
     }
 
     /// Seed the levels without latching anything (wiring time).
-    pub fn seed_levels(&self, level: u32) {
+    pub fn seed_levels(&self, level: u64) {
         self.state.lock().expect("RP2040 bank irq poisoned").level = level;
     }
 
@@ -203,10 +248,10 @@ impl BankIrq {
         let mut word = 0;
         for k in 0..8 {
             let pin = w * 8 + k;
-            if pin >= PAD_COUNT as usize {
+            if pin >= self.pads as usize {
                 break;
             }
-            let bit = |v: u32| (v >> pin) & 1;
+            let bit = |v: u64| ((v >> pin) & 1) as u32;
             let nib = (bit(!s.level))
                 | (bit(s.level) << 1)
                 | (bit(s.edge_low) << 2)
@@ -221,7 +266,7 @@ impl BankIrq {
         let mut s = self.state.lock().expect("RP2040 bank irq poisoned");
         for k in 0..8 {
             let pin = w * 8 + k;
-            if pin >= PAD_COUNT as usize {
+            if pin >= self.pads as usize {
                 break;
             }
             let nib = (value >> (4 * k)) & 0xF;
@@ -277,6 +322,8 @@ impl Rp2040IoBank0 {
     /// `8n` / `8n + 4` shape on both; the interrupt block moves).
     pub fn with_layout(mut self, layout: IoBankLayout) -> Self {
         self.layout = layout;
+        self.pads = Arc::new(PadFunctions::with_pad_count(layout.pad_count()));
+        self.irq = Arc::new(BankIrq::with_pad_count(layout.pad_count()));
         self
     }
 
@@ -328,12 +375,12 @@ impl Rp2040IoBank0 {
     }
 
     /// `(pin, is_ctrl)` for a register offset inside the GPIO array.
-    fn decode(offset: u64) -> Option<(u8, bool)> {
-        let pin = (offset / 8) as u8;
-        if pin >= PAD_COUNT {
+    fn decode(&self, offset: u64) -> Option<(u8, bool)> {
+        let pin = offset / 8;
+        if pin >= u64::from(self.layout.pad_count()) {
             return None;
         }
-        Some((pin, offset % 8 == 4))
+        Some((pin as u8, offset % 8 == 4))
     }
 
     fn read_u32(&self, offset: u64) -> u32 {
@@ -347,12 +394,12 @@ impl Rp2040IoBank0 {
                 g => self.other[(g as usize - 4) * words + w],
             };
         }
-        if self.layout == IoBankLayout::Rp2350
+        if self.layout.is_rp2350()
             && (IRQSUMMARY_PROC0_SECURE0..IRQSUMMARY_PROC0_SECURE0 + 8).contains(&offset)
         {
             return self.proc0_summary(((offset - IRQSUMMARY_PROC0_SECURE0) / 4) as usize);
         }
-        match Self::decode(offset) {
+        match self.decode(offset) {
             Some((pin, true)) => self.pads.ctrl(pin),
             // GPIOn_STATUS: not modelled, reads zero.
             Some((_, false)) => 0,
@@ -373,7 +420,7 @@ impl Rp2040IoBank0 {
             }
             return;
         }
-        if let Some((pin, true)) = Self::decode(offset) {
+        if let Some((pin, true)) = self.decode(offset) {
             // Writable bits per the SVD: FUNCSEL [4:0] and the four OVER
             // fields. Everything else reads back zero.
             self.pads.set_ctrl(pin, value & self.layout.ctrl_mask());
@@ -638,5 +685,41 @@ mod tests {
         Rp2040IoBank0::write_u32(&mut bank, 0x114, edge_high(1));
         assert_eq!(bank.read_u32(INTS0), 0);
         assert_eq!(bank.read_u32(INTS0 + 4), edge_high(1), "GP9 is word 1");
+    }
+
+    /// RP2350 QFN80: all 48 CTRL words select functions, and a GPIO40 edge
+    /// reaches `INTR5`, `PROC0_INTS5` and `IRQSUMMARY_PROC0_SECURE1`.
+    #[test]
+    fn rp2350b_layout_serves_48_pads() {
+        use crate::peripherals::rp2040::sio::{Rp2040Sio, SioLayout};
+        let mut bank = Rp2040IoBank0::new().with_layout(IoBankLayout::Rp2350B);
+        let mut sio = Rp2040Sio::new().with_layout(SioLayout::Rp2350B);
+        sio.attach_io_bank0(bank.pad_functions(), bank.bank_irq(), 0);
+        Rp2040IoBank0::write_u32(&mut bank, ctrl_offset(47), GPIO_FUNC_SIO);
+        assert_eq!(bank.read_u32(ctrl_offset(47)), GPIO_FUNC_SIO);
+        assert_eq!(bank.pad_functions().function(47), Some(GPIO_FUNC_SIO));
+        // 0x180 is past GPIO47_CTRL (0x17C) and before IRQSUMMARY (0x200).
+        Rp2040IoBank0::write_u32(&mut bank, 0x184, GPIO_FUNC_SIO);
+        assert_eq!(bank.read_u32(0x184), 0);
+        // GPIO40 rising edge: INTR5 (0x244) nibble 0, PROC0_INTE5 (0x25C).
+        let edge_high = 1u32 << 3;
+        Rp2040IoBank0::write_u32(&mut bank, 0x25C, edge_high);
+        sio.set_gpio_input(40, true);
+        assert_ne!(bank.read_u32(0x244) & edge_high, 0, "INTR5");
+        assert_eq!(bank.read_u32(0x28C), edge_high, "PROC0_INTS5");
+        assert_eq!(bank.read_u32(0x200), 0, "IRQSUMMARY_PROC0_SECURE0");
+        assert_eq!(bank.read_u32(0x204), 1 << 8, "IRQSUMMARY_PROC0_SECURE1");
+        assert_eq!(bank.irq_line_level(), Some(true));
+        Rp2040IoBank0::write_u32(&mut bank, 0x244, edge_high);
+        assert_eq!(bank.irq_line_level(), Some(false));
+    }
+
+    /// The RP2350A layout keeps GPIO30..47 inert.
+    #[test]
+    fn rp2350a_layout_keeps_gpio30_and_up_inert() {
+        let mut bank = Rp2040IoBank0::new().with_layout(IoBankLayout::Rp2350);
+        Rp2040IoBank0::write_u32(&mut bank, ctrl_offset(47), GPIO_FUNC_SIO);
+        assert_eq!(bank.read_u32(ctrl_offset(47)), 0);
+        assert_eq!(bank.pad_functions().function(47), None);
     }
 }

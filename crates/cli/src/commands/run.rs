@@ -869,11 +869,12 @@ pub(crate) fn run_firmware(
 
     let chip_path = args.chip_path().to_path_buf();
 
-    // Read the chip YAML to validate the chip family.
-    let chip_yaml = match std::fs::read_to_string(&chip_path) {
+    // Read the chip YAML to validate the chip family. `include:` expanded, so
+    // a package variant (rp2354b on rp2350) dispatches on its base's arch.
+    let chip_yaml = match labwired_config::ChipDescriptor::flattened_yaml(&chip_path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("error: cannot read chip YAML at {:?}: {e}", chip_path);
+            eprintln!("error: cannot read chip YAML at {:?}: {e:#}", chip_path);
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
     };

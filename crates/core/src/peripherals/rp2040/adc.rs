@@ -64,6 +64,16 @@
 //! * **`FCS.DREQ_EN`.** Stored and read back, but no DREQ is raised — the DMA
 //!   model has no paced-transfer (DREQ) path yet, so a channel wired to
 //!   `DREQ_ADC` would not move. Draining the FIFO from the CPU works.
+//!
+//! ## RP2350 QFN80 package
+//!
+//! [`AdcLayout::Rp2350B`] is the same converter on the RP2350B/RP2354B: nine
+//! inputs, 0..7 on GPIO40..47 and the temperature sensor on input 8
+//! (pico-sdk rp2350 `platform_defs.h`: `NUM_ADC_CHANNELS` = 9,
+//! `ADC_BASE_PIN` = 40 under `PICO_RP2350B`), so `CS.AINSEL` is four bits
+//! [15:12] and `CS.RROBIN` nine bits [24:16] (rp2350 `adc.h`:
+//! `ADC_CS_AINSEL_BITS` 0x0000f000, `ADC_CS_RROBIN_BITS` 0x01ff0000), and
+//! `ADC_IRQ_FIFO` is NVIC 35 (rp2350 `intctrl.h`).
 
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
@@ -112,10 +122,57 @@ const FCS_THRESH_MASK: u32 = 0xF;
 /// descriptor names no line. The RP2350 line is 35 (RP2350 datasheet 3.2,
 /// interrupt table) and arrives through [`Rp2040Adc::with_irq`].
 const ADC_IRQ_FIFO: u32 = 22;
+/// RP2350 `ADC_IRQ_FIFO` (pico-sdk rp2350 `intctrl.h`).
+const ADC_IRQ_FIFO_RP2350: u32 = 35;
 
-/// Inputs 0..3 (GPIO26..29) plus the on-die temperature sensor on input 4.
-const INPUTS: usize = 5;
-const TEMP_SENSOR_INPUT: usize = 4;
+/// The most inputs any layout has (RP2350 QFN80: eight pads plus the sensor).
+const MAX_INPUTS: usize = 9;
+
+/// Which converter instance: the input count, where the temperature sensor
+/// sits, and the `CS` field widths that follow from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AdcLayout {
+    /// RP2040: inputs 0..3 on GPIO26..29, temperature sensor on input 4.
+    #[default]
+    Rp2040,
+    /// RP2350 QFN80 (RP2350B, RP2354B): inputs 0..7 on GPIO40..47,
+    /// temperature sensor on input 8.
+    Rp2350B,
+}
+
+impl AdcLayout {
+    const fn inputs(self) -> usize {
+        match self {
+            AdcLayout::Rp2040 => 5,
+            AdcLayout::Rp2350B => MAX_INPUTS,
+        }
+    }
+
+    const fn temp_sensor_input(self) -> usize {
+        self.inputs() - 1
+    }
+
+    const fn ainsel_mask(self) -> u32 {
+        match self {
+            AdcLayout::Rp2040 => CS_AINSEL_MASK,
+            AdcLayout::Rp2350B => 0xF,
+        }
+    }
+
+    const fn rrobin_mask(self) -> u32 {
+        match self {
+            AdcLayout::Rp2040 => CS_RROBIN_MASK,
+            AdcLayout::Rp2350B => 0x1FF,
+        }
+    }
+
+    const fn fifo_irq(self) -> u32 {
+        match self {
+            AdcLayout::Rp2040 => ADC_IRQ_FIFO,
+            AdcLayout::Rp2350B => ADC_IRQ_FIFO_RP2350,
+        }
+    }
+}
 /// Sample FIFO depth (datasheet §4.9.2.5).
 const FIFO_DEPTH: usize = 8;
 
@@ -154,6 +211,7 @@ fn code_from_microvolts(uv: i64) -> u16 {
 
 #[derive(Debug)]
 pub struct Rp2040Adc {
+    layout: AdcLayout,
     /// `CS` writable bits: EN, TS_EN, START_MANY, AINSEL, RROBIN.
     /// READY/ERR are derived; START_ONCE and ERR_STICKY are handled on write.
     cs: u32,
@@ -173,9 +231,10 @@ pub struct Rp2040Adc {
     div_acc: u32,
     inte: u32,
     intf: u32,
-    /// Per-input level in microvolts. Input 4 starts at the temperature
-    /// sensor's output for [`TS_DIE_MILLI_C`]; inputs 0..3 start unbiased.
-    inputs_uv: [i64; INPUTS],
+    /// Per-input level in microvolts. The temperature-sensor input starts at
+    /// the sensor's output for [`TS_DIE_MILLI_C`]; the pad inputs start
+    /// unbiased. Entries past the layout's input count are unused.
+    inputs_uv: [i64; MAX_INPUTS],
     /// Bus-published cycle clock (event-scheduler). When present the model is
     /// walk-independent: free-running START_MANY rides scheduled events.
     clock: Option<CycleClock>,
@@ -193,9 +252,15 @@ impl Default for Rp2040Adc {
 
 impl Rp2040Adc {
     pub fn new() -> Self {
-        let mut inputs_uv = [0i64; INPUTS];
-        inputs_uv[TEMP_SENSOR_INPUT] = temp_sensor_microvolts(TS_DIE_MILLI_C);
+        Self::with_layout(AdcLayout::Rp2040)
+    }
+
+    /// The converter instance `layout` describes.
+    pub fn with_layout(layout: AdcLayout) -> Self {
+        let mut inputs_uv = [0i64; MAX_INPUTS];
+        inputs_uv[layout.temp_sensor_input()] = temp_sensor_microvolts(TS_DIE_MILLI_C);
         Self {
+            layout,
             cs: 0,
             err_sticky: false,
             result: 0,
@@ -210,7 +275,7 @@ impl Rp2040Adc {
             inputs_uv,
             clock: None,
             arm_seq: 0,
-            irq: ADC_IRQ_FIFO,
+            irq: layout.fifo_irq(),
         }
     }
 
@@ -249,13 +314,14 @@ impl Rp2040Adc {
         }
     }
 
-    /// Drive `channel` (0..3 = GPIO26..29, 4 = the temperature-sensor input)
-    /// with an analog level. This is the seam
+    /// Drive `channel` (RP2040: 0..3 = GPIO26..29, 4 = the temperature-sensor
+    /// input; RP2350 QFN80: 0..7 = GPIO40..47, 8 = the sensor) with an analog
+    /// level. This is the seam
     /// [`crate::bus::SystemBus::seed_adc_channel`] uses, so a component in
     /// `system.yaml`, an MCP `set_input` and a unit test all reach the same
     /// state.
     pub fn set_channel_input(&mut self, channel: u8, millivolts: u16) {
-        if (channel as usize) < INPUTS {
+        if (channel as usize) < self.layout.inputs() {
             self.inputs_uv[channel as usize] = millivolts as i64 * 1_000;
         }
     }
@@ -266,11 +332,11 @@ impl Rp2040Adc {
     }
 
     fn ainsel(&self) -> usize {
-        ((self.cs >> CS_AINSEL_SHIFT) & CS_AINSEL_MASK) as usize
+        ((self.cs >> CS_AINSEL_SHIFT) & self.layout.ainsel_mask()) as usize
     }
 
     fn rrobin(&self) -> u32 {
-        (self.cs >> CS_RROBIN_SHIFT) & CS_RROBIN_MASK
+        (self.cs >> CS_RROBIN_SHIFT) & self.layout.rrobin_mask()
     }
 
     fn thresh(&self) -> u32 {
@@ -280,10 +346,10 @@ impl Rp2040Adc {
     /// Convert one input. An input above the implemented set, or the
     /// temperature sensor with `TS_EN` clear (unpowered), converts 0.
     fn sample(&self, input: usize) -> u16 {
-        if input >= INPUTS {
+        if input >= self.layout.inputs() {
             return 0;
         }
-        if input == TEMP_SENSOR_INPUT && self.cs & CS_TS_EN == 0 {
+        if input == self.layout.temp_sensor_input() && self.cs & CS_TS_EN == 0 {
             return 0;
         }
         code_from_microvolts(self.inputs_uv[input])
@@ -296,10 +362,11 @@ impl Rp2040Adc {
             return;
         }
         let start = self.ainsel();
-        for step in 1..=INPUTS {
-            let next = (start + step) % INPUTS;
+        let inputs = self.layout.inputs();
+        for step in 1..=inputs {
+            let next = (start + step) % inputs;
             if mask & (1 << next) != 0 {
-                self.cs = (self.cs & !(CS_AINSEL_MASK << CS_AINSEL_SHIFT))
+                self.cs = (self.cs & !(self.layout.ainsel_mask() << CS_AINSEL_SHIFT))
                     | ((next as u32) << CS_AINSEL_SHIFT);
                 return;
             }
@@ -378,9 +445,10 @@ impl Rp2040Adc {
 }
 
 impl Peripheral for Rp2040Adc {
-    /// AINSEL 0..=4: GPIO26..GPIO29 and the on-die temperature sensor.
+    /// RP2040 AINSEL 0..=4: GPIO26..GPIO29 and the on-die temperature
+    /// sensor; RP2350 QFN80 0..=8: GPIO40..GPIO47 and the sensor.
     fn adc_channel_count(&self) -> Option<u8> {
-        Some(INPUTS as u8)
+        Some(self.layout.inputs() as u8)
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
@@ -414,8 +482,8 @@ impl Peripheral for Rp2040Adc {
                     & (CS_EN
                         | CS_TS_EN
                         | CS_START_MANY
-                        | (CS_AINSEL_MASK << CS_AINSEL_SHIFT)
-                        | (CS_RROBIN_MASK << CS_RROBIN_SHIFT));
+                        | (self.layout.ainsel_mask() << CS_AINSEL_SHIFT)
+                        | (self.layout.rrobin_mask() << CS_RROBIN_SHIFT));
                 if value & CS_START_ONCE != 0 && self.cs & CS_EN != 0 {
                     self.convert();
                 }
@@ -780,5 +848,62 @@ mod tests {
         }
         assert_eq!(a.read_u32(CS).unwrap() & CS_ERR_STICKY, 0);
         assert_eq!(a.read_u32(FCS).unwrap() & FCS_ERR, 0);
+    }
+
+    /// RP2350 QFN80: inputs 0..7 are GPIO40..47 and the temperature sensor
+    /// moves to input 8, so AINSEL is four bits and RROBIN nine.
+    #[test]
+    fn rp2350b_layout_has_eight_pad_inputs_and_the_sensor_on_input_8() {
+        let mut a = Rp2040Adc::with_layout(AdcLayout::Rp2350B);
+        assert_eq!(a.adc_channel_count(), Some(9));
+        a.set_channel_input(7, 3300);
+        a.write_u32(CS, CS_EN | (7 << CS_AINSEL_SHIFT) | CS_START_ONCE)
+            .unwrap();
+        assert_eq!(a.read_u32(RESULT).unwrap(), 4095, "GPIO47 is input 7");
+
+        let sensor = u32::from(code_from_microvolts(temp_sensor_microvolts(TS_DIE_MILLI_C)));
+        a.write_u32(CS, CS_EN | (8 << CS_AINSEL_SHIFT) | CS_START_ONCE)
+            .unwrap();
+        assert_eq!(a.read_u32(RESULT).unwrap(), 0, "sensor needs TS_EN");
+        a.write_u32(
+            CS,
+            CS_EN | CS_TS_EN | (8 << CS_AINSEL_SHIFT) | CS_START_ONCE,
+        )
+        .unwrap();
+        assert_eq!(a.read_u32(RESULT).unwrap(), sensor, "sensor is input 8");
+
+        // RROBIN bits 7 and 8: the sequencer steps 7 -> 8 -> 7.
+        let ainsel = |a: &Rp2040Adc| (a.read_u32(CS).unwrap() >> CS_AINSEL_SHIFT) & 0xF;
+        a.write_u32(
+            CS,
+            CS_EN | CS_TS_EN | (7 << CS_AINSEL_SHIFT) | (0x180 << CS_RROBIN_SHIFT) | CS_START_ONCE,
+        )
+        .unwrap();
+        assert_eq!(ainsel(&a), 8);
+        a.write_u32(CS, a.read_u32(CS).unwrap() | CS_START_ONCE)
+            .unwrap();
+        assert_eq!(ainsel(&a), 7);
+        assert_eq!(a.read_u32(CS).unwrap() >> CS_RROBIN_SHIFT & 0x1FF, 0x180);
+
+        // The FIFO interrupt is the RP2350's ADC_IRQ_FIFO.
+        a.write_u32(FCS, FCS_EN | (1 << FCS_THRESH_SHIFT)).unwrap();
+        a.write_u32(INTE, 1).unwrap();
+        a.write_u32(CS, CS_EN | (7 << CS_AINSEL_SHIFT) | CS_START_ONCE)
+            .unwrap();
+        assert_eq!(a.tick().explicit_irqs, Some(vec![ADC_IRQ_FIFO_RP2350]));
+    }
+
+    /// The RP2040 converter keeps its 3-bit AINSEL: input 8 does not exist.
+    #[test]
+    fn rp2040_layout_does_not_grow_rp2350b_inputs() {
+        let mut a = Rp2040Adc::new();
+        assert_eq!(a.adc_channel_count(), Some(5));
+        a.write_u32(
+            CS,
+            CS_EN | (0xF << CS_AINSEL_SHIFT) | (0x1FF << CS_RROBIN_SHIFT),
+        )
+        .unwrap();
+        assert_eq!(a.read_u32(CS).unwrap() >> CS_AINSEL_SHIFT & 0xF, 0x7);
+        assert_eq!(a.read_u32(CS).unwrap() >> CS_RROBIN_SHIFT & 0x1FF, 0x1F);
     }
 }

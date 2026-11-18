@@ -165,6 +165,10 @@ from typing import NamedTuple
 
 import yaml
 
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import chip_yaml  # noqa: E402  (include-expanding chip loader)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE_PATH = Path(__file__).resolve().parent / "baselines.json"
 CHIP_DIR = REPO_ROOT / "configs/chips"
@@ -642,7 +646,8 @@ def discover_chips() -> dict[str, dict]:
             continue
         if path.stem.startswith(CHIP_EXCLUDE_PREFIX):
             continue
-        chips[path.stem] = yaml.safe_load(path.read_text()) or {}
+        # `include:` expanded: a package variant names only what differs.
+        chips[path.stem] = chip_yaml.load_chip(path)
     return chips
 
 

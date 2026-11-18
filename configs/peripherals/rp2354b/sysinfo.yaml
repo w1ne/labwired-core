@@ -1,0 +1,103 @@
+peripheral: SYSINFO
+version: 0.2.0
+# RP2354B: the RP2350 die in the QFN80 package with stacked flash. Same SYSINFO
+# block as configs/peripherals/rp2350/sysinfo.yaml except PACKAGE_SEL.
+# RP2350 datasheet 12.15.1.2, Table 1306 (base 0x40000000):
+#   0x00 CHIP_ID, 0x04 PACKAGE_SEL, 0x08 PLATFORM, 0x14 GITREF_RP2350.
+# (Until 2026-11-01 this file used the RP2040 layout: PLATFORM at 0x04, so
+# PACKAGE_SEL read the PLATFORM value and PLATFORM read nothing.)
+registers:
+- id: CHIP_ID
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  # REVISION[31:28]|PART[27:12]|MANUFACTURER[11:1]|STOP_BIT[0] (Table 1307).
+  # reset_value 805329191 = 0x30005927 (revision 3 = A3, Raspberry Pi 0x927
+  # with the stop bit) is the rp2350 descriptor value, unchanged: same die;
+  # the datasheet does not list the PART value, so it is not re-derived here.
+  # The pico-sdk USB errata-E5 workaround asserts the manufacturer id; a zero
+  # CHIP_ID trips that assert inside the USB ISR.
+  reset_value: 805329191
+  fields:
+  - name: STOP_BIT
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: MANUFACTURER
+    bit_range:
+    - 11
+    - 1
+    description: null
+  - name: PART
+    bit_range:
+    - 27
+    - 12
+    description: null
+  - name: REVISION
+    bit_range:
+    - 31
+    - 28
+    description: null
+  side_effects: null
+- id: PACKAGE_SEL
+  address_offset: 4
+  size: 32
+  access: READ_ONLY
+  # Table 1308: 0 = QFN80 (RP2350B, RP2354B), 1 = QFN60 (RP2350A, RP2354A).
+  # pico-sdk rp2350 sysinfo.h: "Package selection indicator, 0 = QFN80".
+  reset_value: 0
+  fields:
+  - name: PACKAGE_SEL
+    bit_range:
+    - 0
+    - 0
+    description: null
+  side_effects: null
+- id: PLATFORM
+  address_offset: 8
+  size: 32
+  access: READ_ONLY
+  # Table 1309: post-production always ASIC (bit 1), non-SIM.
+  reset_value: 2
+  fields:
+  - name: FPGA
+    bit_range:
+    - 0
+    - 0
+    description: null
+  - name: ASIC
+    bit_range:
+    - 1
+    - 1
+    description: null
+  - name: HDLSIM
+    bit_range:
+    - 2
+    - 2
+    description: null
+  - name: BATCHSIM
+    bit_range:
+    - 3
+    - 3
+    description: null
+  - name: GATESIM
+    bit_range:
+    - 4
+    - 4
+    description: null
+  side_effects: null
+- id: GITREF_RP2350
+  address_offset: 20
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: GITREF_RP2350
+    bit_range:
+    - 31
+    - 0
+    description: null
+  side_effects: null
+interrupts: null
+timing: null

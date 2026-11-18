@@ -1,0 +1,20 @@
+{
+  "id": "rp2354b",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/rp/rp2354b_contract.rs",
+    "test": "smoke_firmware_prints_and_toggles_gpio47",
+    "signal": "committed bare-metal firmware (tests/fixtures/rp2354b-smoke.elf, source examples/rp2354b/firmware/smoke.c) brings up XOSC/PLL_SYS/CLK_PERI on configs/chips/rp2354b.yaml and its PL011 UART0 bytes RP2354B UART OK and GPIO47 OK reach the bus UART TX sink",
+    "lane": "core-ci / pr-workspace-tests shards (push to main): cargo test -p labwired-core --test rp rp2354b_contract::; also examples/rp2354b/ci/test.sh (labwired test --script examples/rp2354b/io-smoke.yaml)",
+    "note": "UART0 TX only; RX, flow control and UART1 are not exercised by this fixture"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "no fixture loads configs/chips/rp2354b.yaml and moves SPI bytes; the package reuses the rp2350 SPI model (RP2040 PL022 behaviour on RP2350 bases) and that evidence does not transfer - an RP2354B SPI fixture is follow-up work"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "no fixture loads configs/chips/rp2354b.yaml and completes an I2C transaction; the package reuses the rp2350 I2C model and per-chip evidence does not transfer - an RP2354B I2C fixture is follow-up work"
+  }
+}

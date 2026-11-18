@@ -282,6 +282,10 @@ _Board variant of the rp2040 die with the Feather's 133 MHz clock and 8 MiB flas
 
 _Board variant of the rp2350 die with the Feather's 8 MiB flash; it reuses the rp2350 behavioural models. No beyond-rubric peripheral is exercised under this name: the Feather smoke toggles red D13 (GPIO7) through SIO and writes UART0; both are rubric classes, not beyond-rubric content. PIO, USB, PSRAM and the onboard NeoPixel are not exercised on this board._
 
+### `rp2354b`
+
+_Package variant of the rp2350 die (QFN80, 48 GPIO, 2 MiB stacked flash): the yaml includes rp2350.yaml and overlays only the flash size, the 48 pad labels, SYSINFO.PACKAGE_SEL and the rp2350b profiles of IO_BANK0, SIO and ADC. No beyond-rubric peripheral is exercised under this name: the smoke (tests/fixtures/rp2354b-smoke.elf) brings up XOSC/PLL_SYS, writes UART0 and toggles GPIO47 through SIO GPIO_HI_OUT_XOR; all rubric classes. PIO, USB, DMA and the QMI/stacked flash are not exercised on this chip._
+
 ### `esp32c6fh4`
 
 _Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml copies esp32c6.yaml and changes only the flash size to 4 MB, so it reuses the esp32c6 models and shims. No beyond-rubric peripheral is exercised under this name: the XIAO smoke toggles the active-low user LED on GPIO15 through the C6 GPIO block, a rubric class. The radio, RF switch, USB-Serial/JTAG console and LP core are not exercised on this board._

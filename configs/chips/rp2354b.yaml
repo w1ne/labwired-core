@@ -1,0 +1,116 @@
+# LabWired - RP2354B Chip Descriptor
+# The RP2350 die in the QFN80 package with 2 MiB of flash stacked in the
+# package (RP2350 datasheet, Chapter 1 "Introduction", Table 1: RP2354B =
+# QFN80, 48 GPIO, 8 ADC inputs, 2 MB internal flash).
+#
+# A package variant, not a copy: it includes configs/chips/rp2350.yaml (the
+# same die: every register block, the boot ROM window, the coprocessors) and
+# overlays only what the package changes. Includes merge first and the keys
+# here win; `peripherals` replace by `id`, `pins` merge by label.
+#   * 48 bank-0 GPIOs: IO_BANK0, SIO and ADC on their `rp2350b` profiles
+#     (pico-sdk rp2350 platform_defs.h under PICO_RP2350B: NUM_BANK0_GPIOS 48,
+#     NUM_ADC_CHANNELS 9, ADC_BASE_PIN 40). GPIO32..47 are the SIO GPIO_HI_*
+#     words; ADC inputs 0..7 are GPIO40..47, the temperature sensor input 8.
+#   * SYSINFO.PACKAGE_SEL reads 0 (QFN80).
+#   * Flash: the 2 MiB in-package device on QSPI CS0.
+# Scope limits: those of rp2350.yaml, plus the RP2350 PIO extensions
+# (GPIOBASE, so PIO cannot reach GPIO32..47); see docs/boards/rp2354b.md.
+# Labels GPIO32..47 resolve through the pad interface; a device bound by
+# register address/bit to them is refused (one 32-bit port word).
+include: "rp2350.yaml"
+name: "rp2354b"
+
+flash:
+  base: 0x10000000
+  # 2 MiB stacked in the package (datasheet Table 1), spelled in KB because
+  # `parse_size` reads MB as 10^6.
+  size: "2048KB"
+
+# QFN80 (datasheet Chapter 1, Table 1; 80 pins plus the exposed ground pad).
+package: "QFN80"
+pin_count: 80
+# Bank-0 pads GPIO0..GPIO47 (datasheet pin names). `bit` is the pad number on
+# the SIO pad interface.
+pins:
+  GPIO0: { gpio: sio, bit: 0 }
+  GPIO1: { gpio: sio, bit: 1 }
+  GPIO2: { gpio: sio, bit: 2 }
+  GPIO3: { gpio: sio, bit: 3 }
+  GPIO4: { gpio: sio, bit: 4 }
+  GPIO5: { gpio: sio, bit: 5 }
+  GPIO6: { gpio: sio, bit: 6 }
+  GPIO7: { gpio: sio, bit: 7 }
+  GPIO8: { gpio: sio, bit: 8 }
+  GPIO9: { gpio: sio, bit: 9 }
+  GPIO10: { gpio: sio, bit: 10 }
+  GPIO11: { gpio: sio, bit: 11 }
+  GPIO12: { gpio: sio, bit: 12 }
+  GPIO13: { gpio: sio, bit: 13 }
+  GPIO14: { gpio: sio, bit: 14 }
+  GPIO15: { gpio: sio, bit: 15 }
+  GPIO16: { gpio: sio, bit: 16 }
+  GPIO17: { gpio: sio, bit: 17 }
+  GPIO18: { gpio: sio, bit: 18 }
+  GPIO19: { gpio: sio, bit: 19 }
+  GPIO20: { gpio: sio, bit: 20 }
+  GPIO21: { gpio: sio, bit: 21 }
+  GPIO22: { gpio: sio, bit: 22 }
+  GPIO23: { gpio: sio, bit: 23 }
+  GPIO24: { gpio: sio, bit: 24 }
+  GPIO25: { gpio: sio, bit: 25 }
+  GPIO26: { gpio: sio, bit: 26 }
+  GPIO27: { gpio: sio, bit: 27 }
+  GPIO28: { gpio: sio, bit: 28 }
+  GPIO29: { gpio: sio, bit: 29 }
+  GPIO30: { gpio: sio, bit: 30 }
+  GPIO31: { gpio: sio, bit: 31 }
+  GPIO32: { gpio: sio, bit: 32 }
+  GPIO33: { gpio: sio, bit: 33 }
+  GPIO34: { gpio: sio, bit: 34 }
+  GPIO35: { gpio: sio, bit: 35 }
+  GPIO36: { gpio: sio, bit: 36 }
+  GPIO37: { gpio: sio, bit: 37 }
+  GPIO38: { gpio: sio, bit: 38 }
+  GPIO39: { gpio: sio, bit: 39 }
+  GPIO40: { gpio: sio, bit: 40 }
+  GPIO41: { gpio: sio, bit: 41 }
+  GPIO42: { gpio: sio, bit: 42 }
+  GPIO43: { gpio: sio, bit: 43 }
+  GPIO44: { gpio: sio, bit: 44 }
+  GPIO45: { gpio: sio, bit: 45 }
+  GPIO46: { gpio: sio, bit: 46 }
+  GPIO47: { gpio: sio, bit: 47 }
+
+peripherals:
+  # SYSINFO: the rp2350 CHIP_ID (same die) and PACKAGE_SEL = 0, QFN80.
+  - id: "sysinfo"
+    type: "declarative"
+    base_address: 0x40000000
+    size: "4KB"
+    config:
+      path: "../peripherals/rp2354b/sysinfo.yaml"
+  # IO_BANK0: all 48 GPIOn_CTRL words and INTR0..5 live.
+  - id: "io_bank0"
+    type: "rp2040_io_bank0"
+    base_address: 0x40028000
+    size: "4KB"
+    irq: 21
+    config:
+      profile: "rp2350b"
+  # ADC: inputs 0..7 = GPIO40..47, temperature sensor = input 8, FIFO IRQ 35.
+  - id: "adc"
+    type: "rp2040_adc"
+    base_address: 0x400A0000
+    size: "4KB"
+    irq: 35
+    config:
+      debug_schema: "../peripherals/rp2350/adc.yaml"
+      profile: "rp2350b"
+  # SIO: GPIO32..47 in the GPIO_HI_* words.
+  - id: "sio"
+    type: "rp2040_sio"
+    base_address: 0xD0000000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2350/sio.yaml"
+      profile: "rp2350b"

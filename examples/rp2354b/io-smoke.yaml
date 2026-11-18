@@ -1,0 +1,19 @@
+# RP2354B UART0 + GPIO47 smoke (CLI proof for configs/chips/rp2354b.yaml).
+#
+# The committed fixture brings up XOSC, PLL_SYS (150 MHz) and CLK_PERI,
+# prints on UART0 (GPIO0), then toggles GPIO47 sixteen times through the SIO
+# GPIO_HI_OUT_XOR word: a pad the 30-GPIO rp2350 profile does not have.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/rp2354b-smoke.elf"
+  system: "../../configs/systems/rp2354b.yaml"
+limits:
+  max_steps: 1000000
+  stop_when_assertions_pass: true
+  stop_when_assertions_pass_settle_steps: 1000
+assertions:
+  - uart_contains: "RP2354B UART OK"
+  - uart_contains: "GPIO47 OK"
+  - gpio_edges:
+      pin: "sio:47"
+      min_edges: 16

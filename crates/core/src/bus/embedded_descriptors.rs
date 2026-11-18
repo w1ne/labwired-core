@@ -433,6 +433,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("rp2350/uart0.yaml", packed!("rp2350/uart0.yaml")),
     ("rp2350/watchdog.yaml", packed!("rp2350/watchdog.yaml")),
     ("rp2350/xip_ctrl.yaml", packed!("rp2350/xip_ctrl.yaml")),
+    ("rp2354b/sysinfo.yaml", packed!("rp2354b/sysinfo.yaml")),
     ("same70q21b/chipid.yaml", packed!("same70q21b/chipid.yaml")),
     ("stm32f103/adc1.yaml", packed!("stm32f103/adc1.yaml")),
     ("stm32f103/adc2.yaml", packed!("stm32f103/adc2.yaml")),

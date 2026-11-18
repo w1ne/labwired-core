@@ -157,6 +157,7 @@ This page covers the public models. For every chip we model — public and priva
 | esp32s2 | **L0** | ✓ | 2 | — | — | — |
 | rp2040-feather | **L0** | ✓ | 24 | — | — | — |
 | rp2350-feather | **L0** | ✓ | 27 | — | — | — |
+| rp2354b | **L1** | ✓ | 27 | — | — | rp2354b_contract::smoke_firmware_prints_and_toggles_gpio47 |
 | stm32h723zg | **L0** | ✓ | 7 | — | — | — |
 | esp32c6fh4 | **L0** | ✓ | 69 | — | — | — |
 

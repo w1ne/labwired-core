@@ -36,6 +36,9 @@ import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import chip_yaml  # noqa: E402  (include-expanding chip loader)
+
 try:
     import yaml
 except ImportError:  # pragma: no cover
@@ -218,7 +221,8 @@ def build(
         stem = path.stem
         if stem in EXCLUDED_STEMS:
             continue
-        desc = load_yaml(path)
+        # `include:` expanded: a package variant names only what differs.
+        desc = chip_yaml.load_chip(path)
         name = str(desc.get("name") or stem)
         arch = str(desc.get("arch") or "")
         row = conf.get(name)
@@ -263,7 +267,7 @@ def build(
             stem = path.stem
             if stem in EXCLUDED_STEMS:
                 continue
-            desc = load_yaml(path)
+            desc = chip_yaml.load_chip(path)
             name = str(desc.get("name") or stem)
             # A private descriptor for a part the public catalogue already
             # models is the same chip: keep the public row, note the alias.

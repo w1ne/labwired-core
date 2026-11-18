@@ -1327,6 +1327,8 @@ pub fn try_build(
         "rp2040_io_bank0" => {
             let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 Some("rp2350") => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2350,
+                // RP2350 QFN80 package (RP2350B / RP2354B): 48 bank-0 pads.
+                Some("rp2350b") => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2350B,
                 // Absent/anything else: the RP2040 map.
                 _ => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2040,
             };
@@ -1335,6 +1337,8 @@ pub fn try_build(
         "rp2040_sio" => {
             let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
                 Some("rp2350") => crate::peripherals::rp2040::sio::SioLayout::Rp2350,
+                // RP2350 QFN80 package: GPIO32..47 in the GPIO_HI_* words.
+                Some("rp2350b") => crate::peripherals::rp2040::sio::SioLayout::Rp2350B,
                 // Absent/anything else: the RP2040 map.
                 _ => crate::peripherals::rp2040::sio::SioLayout::Rp2040,
             };
@@ -1350,9 +1354,21 @@ pub fn try_build(
             };
             Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new().with_layout(layout))
         }
-        "rp2040_adc" => Box::new(
-            crate::peripherals::rp2040::adc::Rp2040Adc::new().with_irq(p_cfg.irq.unwrap_or(22)),
-        ),
+        "rp2040_adc" => {
+            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+                // RP2350 QFN80 package: GPIO40..47 inputs, sensor on input 8.
+                Some("rp2350b") => crate::peripherals::rp2040::adc::AdcLayout::Rp2350B,
+                // Absent/anything else: the RP2040 converter.
+                _ => crate::peripherals::rp2040::adc::AdcLayout::Rp2040,
+            };
+            // The descriptor `irq:` is ADC_IRQ_FIFO (22 on the RP2040, 35 on
+            // the RP2350); without one, the layout's own line.
+            let adc = crate::peripherals::rp2040::adc::Rp2040Adc::with_layout(layout);
+            Box::new(match p_cfg.irq {
+                Some(irq) => adc.with_irq(irq),
+                None => adc,
+            })
+        }
         "rp2040_rtc" => Box::new(crate::peripherals::rp2040::rtc::Rp2040Rtc::new()),
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),

@@ -137,6 +137,10 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: rp2350 die (Feather variant): from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 die (Feather variant): from_config bus not yet edge-gated (no line cells)
   * UART: rp2350 die (Feather variant): from_config bus not yet edge-gated (no line cells)
+* **rp2354b**
+  * I2C: rp2350 die (QFN80 package variant): from_config bus not yet edge-gated (no line cells)
+  * SPI: rp2350 die (QFN80 package variant): from_config bus not yet edge-gated (no line cells)
+  * UART: rp2350 die (QFN80 package variant): from_config bus not yet edge-gated (no line cells)
 * **s32k388**
   * UART: no LPUART2 bring-up in this harness; bytes are proven by the s32k388-evb survival smoke
 * **sam4s16c**
@@ -241,6 +245,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | rp2040-feather | ✓ | ✓ | ✓ |
 | rp2350 | — | — | — |
 | rp2350-feather | — | — | — |
+| rp2354b | — | — | — |
 | rv1103 | — | — | — |
 | s32k388 | — | — | — |
 | sam4s16c | — | — | — |

@@ -1,0 +1,9 @@
+# LabWired - bare RP2354B
+#
+# The RP2354B chip with nothing attached: the system the committed smoke
+# fixture (tests/fixtures/rp2354b-smoke.elf, built by
+# examples/rp2354b/firmware/build.sh) runs against. No carrier board is
+# implied; a board profile adds its own system file.
+name: "rp2354b"
+chip: "../chips/rp2354b.yaml"
+external_devices: []
