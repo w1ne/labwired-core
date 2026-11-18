@@ -93,6 +93,10 @@
       "firmware": "tests/fixtures/tier1/esp32c3.elf",
       "expect": "TIER1 gpio PASS"
     },
+    "esp32c2": {
+      "how": "needs-build",
+      "why": "ESP32-C2/ESP8684 descriptor and UART/GPIO adapters are newer than the installed CLI this gate checks. The source-tree board smoke passes in examples/esp8684-devkitm-1-h4x; switch this row after a release carries C2 support."
+    },
     "esp32c6": {
       "how": "committed",
       "firmware": "tests/fixtures/esp32c6-demo.elf",

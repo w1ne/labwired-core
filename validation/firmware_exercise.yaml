@@ -56,6 +56,14 @@ chips:
       - {p: "SYSCFG", ev: "configs/chips/stm32l476.yaml:421 (type: stub; configs/peripherals/stm32l476/syscfg.yaml; docs/coverage/silent-path-census.md:403)", note: "CLOSABLE: author-declared stub — read 0, writes dropped, so EXTI source-select (the block's main job) is not modelled and nothing reads the window back: r12 gates its clock because COMP shares the window (crates/firmware-l476-demo/src/r12.rs:130), and the silent-path census records it as the live stub of examples/ci/l476-bldc-stall.yaml."}
       - {p: "WWDG", ev: "crates/core/src/peripherals/wwdg.rs:63 (configs/chips/stm32l476.yaml:396; configs/peripherals/stm32l476/wwdg.yaml)", note: "CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; the PR-gated nucleo_l476rg_misc fingerprint reads CR/CFR/SR off it (crates/core/tests/gates/firmware_survival.rs:623), but that exercises storage only, not watchdog behaviour."}
 
+  - id: esp32c2
+    arch: riscv32imac
+    headline: "No beyond-rubric content is claimed. The ESP8684-DevKitM-1-H4X smoke fast-loads firmware that checks UART0 output and the GPIO0 red LED latch; this profile does not exercise mask-ROM boot, electrical pad routing, or radio behavior."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: esp32c3
     arch: riscv32imc
     headline: "Leo air-quality is the sensor-depth proof: the nightly example e2e asserts it explicitly, and the advisory PR workspace shards also exercise it. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass."

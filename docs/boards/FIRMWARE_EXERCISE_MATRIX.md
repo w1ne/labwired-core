@@ -57,6 +57,10 @@ _Richest ARM coverage: drives 11 rubric classes via real firmware, plus the gate
 - `SYSCFG` (configs/chips/stm32l476.yaml:421 (type: stub; configs/peripherals/stm32l476/syscfg.yaml; docs/coverage/silent-path-census.md:403)) — CLOSABLE: author-declared stub — read 0, writes dropped, so EXTI source-select (the block's main job) is not modelled and nothing reads the window back: r12 gates its clock because COMP shares the window (crates/firmware-l476-demo/src/r12.rs:130), and the silent-path census records it as the live stub of examples/ci/l476-bldc-stall.yaml.
 - `WWDG` (crates/core/src/peripherals/wwdg.rs:63 (configs/chips/stm32l476.yaml:396; configs/peripherals/stm32l476/wwdg.yaml)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; the PR-gated nucleo_l476rg_misc fingerprint reads CR/CFR/SR off it (crates/core/tests/gates/firmware_survival.rs:623), but that exercises storage only, not watchdog behaviour.
 
+### `esp32c2`
+
+_No beyond-rubric content is claimed. The ESP8684-DevKitM-1-H4X smoke fast-loads firmware that checks UART0 output and the GPIO0 red LED latch; this profile does not exercise mask-ROM boot, electrical pad routing, or radio behavior._
+
 ### `esp32c3`
 
 _Leo air-quality is the sensor-depth proof: the nightly example e2e asserts it explicitly, and the advisory PR workspace shards also exercise it. clock/dma stay unrecorded by design — esp32c3 wires system/rtc_cntl/dma as declarative register files with no behavioural engine, so a PASS would overclaim. The non-rubric declarative wall (crypto, USB device, I2S, UHCI, radio) is not yet swept into this entry — tracked for a later ledger pass._
@@ -329,7 +333,7 @@ _Exact low-density x4/x6 geometry slice for stm32f103r4h; it reuses the shared m
 
 ### `stm32f103r6`
 
-_Exact low-density x4/x6 geometry slice for stm32f103r6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+_Exact low-density x4/x6 geometry for stm32f103r6 (32 KB flash, 10 KB SRAM, LQFP64, 51 GPIOs, 16 ADC channels), with only the low-density SPI1, I2C1, USART1/2, TIM1-3, ADC1/2 and DMA1 instances exposed. Its dedicated smoke runs USART2 output and PA5 edges; USB and backup-register windows remain explicit untouched stubs. Exact geometry is asserted by `stm32_variant_geometry`. This is local simulator evidence, not a physical R6 capture._
 
 ### `stm32f103r6h`
 
