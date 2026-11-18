@@ -2477,6 +2477,163 @@ fn nucleo_g071rb_bjt_junction_and_transit_charge_reach_adc1_alongside_ntc_and_di
     }
 }
 
+#[test]
+fn nucleo_g071rb_pnp_junction_and_transit_charge_reach_adc1_with_ntc_and_diode() {
+    let system_path = root("configs/systems/nucleo-g071rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-G071RB profile");
+    let generic = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-ntc-diode-adc-system.yaml",
+    ))
+    .expect("load unrelated generic NTC divider and Shockley diode");
+    let charge = SystemManifest::from_file(root(
+        "examples/nucleo-g071rb/analog-pnp-charge-adc-system.yaml",
+    ))
+    .expect("load mirrored generic Gummel–Poon PNP charge branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(charge.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32G071 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-G071RB bus");
+
+    const ADCEN: u32 = 1 << 20;
+    bus.write_u32(RCC_APBENR2, ADCEN)
+        .expect("enable ADC1 clock");
+    bus.write_u32(ADC1_CR, 0)
+        .expect("leave ADC deep power-down");
+    bus.write_u32(ADC1_CR, 1 << 28)
+        .expect("enable ADC voltage regulator");
+    bus.write_u32(ADC1_CR, (1 << 28) | 1).expect("enable ADC1");
+    assert_ne!(bus.read_u32(ADC1_ISR).unwrap() & 1, 0, "ADC1 reports ADRDY");
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and five mirrored PNP charge cases");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic models bind to independent ADC1 channels"
+    );
+    for channel in 4..=10 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            u16::MAX,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated Beta NTC temperature");
+    session
+        .set_signal_number("ui.bjt_pnp_charge.base_drop_v", 0.0)
+        .expect("initialize all mirrored PNP branches at cutoff");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize the unrelated devices and PNP charge states");
+    assert_eq!(initial_steps.len(), 7, "all seven analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected initial ADC route errors: {initial_errors:?}"
+    );
+
+    const BASE_DROP_V: f64 = 0.8;
+    session
+        .set_signal_number("ui.bjt_pnp_charge.base_drop_v", BASE_DROP_V)
+        .expect("step the mirrored PNP base drive below its emitter");
+    let mut samples = Vec::new();
+    for step in 0..8_000 {
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC, diode, and PNP charge branches");
+        assert_eq!(steps.len(), 7, "all seven branches solve at each 1 us step");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "adc.adc1.4_volts");
+        let diode_v = signal_voltage(&session, "adc.adc1.5_volts");
+        let pnp_voltages = [
+            signal_voltage(&session, "adc.adc1.6_volts"),
+            signal_voltage(&session, "adc.adc1.7_volts"),
+            signal_voltage(&session, "adc.adc1.8_volts"),
+            signal_voltage(&session, "adc.adc1.9_volts"),
+            signal_voltage(&session, "adc.adc1.10_volts"),
+        ];
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "the unrelated 25 °C Beta NTC stays isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "the unrelated Shockley diode stays on its independent load line"
+        );
+
+        let expected_dc = 3.3 - bjt_collector_voltage(BASE_DROP_V, Some(50.0));
+        assert!(
+            (pnp_voltages[0] - expected_dc).abs() < 5e-5,
+            "the uncharged PNP must match the mirrored independent Gummel–Poon load line {expected_dc} V, got {} V",
+            pnp_voltages[0]
+        );
+        for (label, channel, voltage) in [
+            ("NTC", 4, ntc_v),
+            ("diode", 5, diode_v),
+            ("uncharged PNP", 6, pnp_voltages[0]),
+            ("CJE PNP", 7, pnp_voltages[1]),
+            ("CJC PNP", 8, pnp_voltages[2]),
+            ("TF PNP", 9, pnp_voltages[3]),
+            ("combined-charge PNP", 10, pnp_voltages[4]),
+        ] {
+            let expected = expected_adc_count(voltage);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "the solved {label} voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32g0_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 conversion must report the {label} voltage"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 11),
+            u16::MAX,
+            "the neighboring ADC1 channel remains undriven"
+        );
+
+        if step == 0 {
+            for (label, voltage) in [
+                ("CJE base-emitter depletion", pnp_voltages[1]),
+                ("CJC base-collector depletion", pnp_voltages[2]),
+                ("TF forward transit", pnp_voltages[3]),
+                ("combined junction and transit charge", pnp_voltages[4]),
+            ] {
+                assert!(
+                    (voltage - pnp_voltages[0]).abs() > 0.01,
+                    "{label} must change the first routed transient: reference={} V, charged={voltage} V",
+                    pnp_voltages[0]
+                );
+            }
+        }
+        samples.push(pnp_voltages);
+    }
+
+    let settled = samples.last().expect("transient samples exist");
+    for (label, voltage) in [
+        ("CJE base-emitter depletion", settled[1]),
+        ("CJC base-collector depletion", settled[2]),
+        ("TF forward transit", settled[3]),
+        ("combined junction and transit", settled[4]),
+    ] {
+        assert!(
+            (voltage - settled[0]).abs() < 2e-4,
+            "{label} must settle to the same mirrored Gummel–Poon load line, got {voltage} V vs {} V",
+            settled[0]
+        );
+    }
+}
+
 /// Independent Weil second-order recurrence for the forward transport current
 /// after a direct base-voltage step. The base-collector junction remains
 /// reverse-biased, so its diffusion and GMIN currents are negligible here.
