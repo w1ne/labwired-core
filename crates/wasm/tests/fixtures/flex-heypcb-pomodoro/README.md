@@ -10,7 +10,7 @@ The observation is limited to digital logic state. The LabWired catalog describe
 
 The source import is not currently a saved LabWired project. `labwired_project_list(q: "Pomodoro")` returned no projects. The browser Library owner retains the paired-source importer and browser launch flow.
 
-`browser.json` records the actual Chromium run: portable Wasm returned `status=passed`, emitted six positive logic edges and zero negative-control edges in Chromium 156.0.8078.79. The test completed by matching the browser observations to `native.json`.
+`browser.json` records the actual Chromium run: portable Wasm returned `status=passed`, emitted six positive logic edges and zero negative-control edges in Chromium 149.0.7827.55. The test completed by matching the browser observations to `native.json`.
 
 ## Reproduce
 
