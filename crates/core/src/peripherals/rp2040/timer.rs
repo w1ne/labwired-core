@@ -120,8 +120,9 @@ pub struct Rp2040Timer {
     anchor: Cell<u64>,
     /// Bumped each arm so stale compare events die on arrival.
     arm_seq: u32,
-    /// True while a compare / level-IRQ event is live in the scheduler.
-    scheduled: bool,
+    /// Absolute deadline of the current compare / level-IRQ wake. Reuse an
+    /// equal or earlier wake instead of accumulating tokens on MMIO harvest.
+    scheduled_at: Option<u64>,
 }
 
 impl Default for Rp2040Timer {
@@ -149,7 +150,7 @@ impl Rp2040Timer {
             clock: None,
             anchor: Cell::new(0),
             arm_seq: 0,
-            scheduled: false,
+            scheduled_at: None,
         }
     }
 
@@ -439,7 +440,7 @@ impl Peripheral for Rp2040Timer {
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if !self.scheduler_mode() {
-            self.scheduled = false;
+            self.scheduled_at = None;
             return Vec::new();
         }
         // Arm for: (a) next alarm match, and/or (b) held level-IRQ re-pend.
@@ -453,11 +454,17 @@ impl Peripheral for Rp2040Timer {
             (None, None) => None,
         };
         let Some(d) = delay else {
-            self.scheduled = false;
+            // Keep an already queued wake: it will observe the disarm/pause
+            // and retire. Forgetting it here permits duplicate later re-arms.
             return Vec::new();
         };
+        let now = self.clock.as_ref().map_or(0, CycleClock::now);
+        let deadline = now.saturating_add(1).saturating_add(d);
+        if self.scheduled_at.is_some_and(|queued| queued <= deadline) {
+            return Vec::new();
+        }
         self.arm_seq = self.arm_seq.wrapping_add(1);
-        self.scheduled = true;
+        self.scheduled_at = Some(deadline);
         vec![(d, self.arm_seq)]
     }
 
@@ -470,8 +477,11 @@ impl Peripheral for Rp2040Timer {
         if !self.scheduler_mode() || event_token != self.arm_seq {
             return crate::sched::EventResult::default();
         }
+        self.scheduled_at = None;
         let res = self.advance_to(sched.now());
-        let next_alarm = self.cycles_until_next_alarm().map(|d| d.saturating_sub(1));
+        // EventResult delays are from now, unlike the write-harvest path's
+        // now+1+delay convention. Preserve the exact next compare deadline.
+        let next_alarm = self.cycles_until_next_alarm();
         let next_level = (self.ints() != 0).then_some(1u64);
         let reschedule = match (next_alarm, next_level) {
             (Some(a), Some(l)) => Some(a.min(l)),
@@ -479,7 +489,7 @@ impl Peripheral for Rp2040Timer {
             (None, Some(l)) => Some(l),
             (None, None) => None,
         };
-        self.scheduled = reschedule.is_some();
+        self.scheduled_at = reschedule.map(|delay| sched.now().saturating_add(delay));
         crate::sched::EventResult {
             explicit_irqs: res.explicit_irqs.unwrap_or_default(),
             reschedule_delay: reschedule,
@@ -793,5 +803,107 @@ mod tests {
         // 0xFFFF_FFFE + 2 = 0x1_0000_0000.
         assert_eq!(t.read_u32(TIMERAWL).unwrap(), 0);
         assert_eq!(t.read_u32(TIMERAWH).unwrap(), 1);
+    }
+}
+
+#[cfg(all(test, feature = "event-scheduler"))]
+mod scheduled_wake_tests {
+    use super::*;
+    use crate::{bus::SystemBus, sched::EventScheduler};
+
+    fn timer(layout: TimerLayout) -> (Rp2040Timer, CycleClock) {
+        let clock = CycleClock::default();
+        let mut timer = Rp2040Timer::new().with_layout(layout);
+        timer.attach_cpu_hz(150_000_000);
+        timer.attach_cycle_clock(clock.clone());
+        (timer, clock)
+    }
+    fn int_offset(layout: TimerLayout, rp2040: u64) -> u64 {
+        rp2040 + if layout == TimerLayout::Rp2350 { 8 } else { 0 }
+    }
+
+    #[test]
+    fn repeated_mmio_harvest_keeps_one_compare_wake_and_exact_microseconds() {
+        for layout in [TimerLayout::Rp2040, TimerLayout::Rp2350] {
+            let (mut timer, clock) = timer(layout);
+            let mut scheduler = EventScheduler::new();
+            timer.write_u32(ALARM0, 100).unwrap();
+            for cycle in 0..10_000 {
+                clock.publish(cycle);
+                timer.write_u32(int_offset(layout, INTE), 1).unwrap();
+                for (delay, token) in timer.take_scheduled_events() {
+                    scheduler.schedule(cycle + 1 + delay, 0, token);
+                }
+                assert_eq!(scheduler.next_event_deadline(), Some(15_000));
+            }
+            clock.publish(15_000);
+            scheduler.advance_to(15_000);
+            let due = scheduler.drain_due();
+            assert_eq!(due.len(), 1, "MMIO harvest must not multiply wakes");
+            let res = timer.on_event(due[0].event_token, &mut scheduler, &mut SystemBus::new());
+            assert_eq!(res.explicit_irqs, vec![0]);
+            assert_eq!(timer.read_u32(TIMERAWL).unwrap(), 100);
+        }
+    }
+
+    #[test]
+    fn later_rearm_reuses_old_wake_without_early_irq_and_disarm_retires_it() {
+        for layout in [TimerLayout::Rp2040, TimerLayout::Rp2350] {
+            let (mut timer, clock) = timer(layout);
+            timer.write_u32(int_offset(layout, INTE), 1).unwrap();
+            timer.write_u32(ALARM0, 10).unwrap();
+            let original = timer.take_scheduled_events()[0];
+            timer.write_u32(ALARM0, 20).unwrap();
+            assert!(timer.take_scheduled_events().is_empty());
+            let mut scheduler = EventScheduler::new();
+            clock.publish(1_500);
+            scheduler.advance_to(1_500);
+            let res = timer.on_event(original.1, &mut scheduler, &mut SystemBus::new());
+            assert!(res.explicit_irqs.is_empty());
+            assert_eq!(res.reschedule_delay, Some(1_500));
+            timer.write_u32(ARMED, 1).unwrap();
+            assert!(timer.take_scheduled_events().is_empty());
+            clock.publish(3_000);
+            scheduler.advance_to(3_000);
+            let res = timer.on_event(original.1, &mut scheduler, &mut SystemBus::new());
+            assert!(res.explicit_irqs.is_empty());
+            assert_eq!(res.reschedule_delay, None);
+        }
+    }
+
+    #[test]
+    fn earlier_compare_supersedes_old_token_and_held_irq_is_not_rearmed_twice() {
+        for layout in [TimerLayout::Rp2040, TimerLayout::Rp2350] {
+            let (mut timer, clock) = timer(layout);
+            timer.write_u32(int_offset(layout, INTE), 1).unwrap();
+            timer.write_u32(ALARM0, 100).unwrap();
+            let old = timer.take_scheduled_events()[0];
+            timer.write_u32(ALARM0, 10).unwrap();
+            let new = timer.take_scheduled_events()[0];
+            assert_ne!(old.1, new.1);
+            let mut scheduler = EventScheduler::new();
+            clock.publish(1_500);
+            scheduler.advance_to(1_500);
+            let res = timer.on_event(new.1, &mut scheduler, &mut SystemBus::new());
+            assert_eq!(res.explicit_irqs, vec![0]);
+            assert_eq!(res.reschedule_delay, Some(1));
+            for _ in 0..100 {
+                assert!(timer.take_scheduled_events().is_empty());
+            }
+            timer.write_u32(int_offset(layout, INTR), 1).unwrap();
+            clock.publish(1_501);
+            scheduler.advance_to(1_501);
+            assert_eq!(
+                timer
+                    .on_event(new.1, &mut scheduler, &mut SystemBus::new())
+                    .reschedule_delay,
+                None
+            );
+            clock.publish(15_000);
+            scheduler.advance_to(15_000);
+            let res = timer.on_event(old.1, &mut scheduler, &mut SystemBus::new());
+            assert!(res.explicit_irqs.is_empty());
+            assert_eq!(res.reschedule_delay, None);
+        }
     }
 }

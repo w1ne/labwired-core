@@ -72,7 +72,16 @@ fn load_zero() -> (ChipDescriptor, SystemManifest) {
 }
 
 fn machine() -> Machine<CortexM> {
-    let (chip, manifest) = load_zero();
+    machine_for("rp2350")
+}
+
+fn machine_for(chip_name: &str) -> Machine<CortexM> {
+    let (mut chip, mut manifest) = load_zero();
+    if chip_name != "rp2350" {
+        let path = root(&format!("configs/chips/{chip_name}.yaml"));
+        chip = ChipDescriptor::from_file(&path).expect("RP2350 variant chip");
+        manifest.chip = path.to_str().unwrap().to_string();
+    }
     let mut bus = labwired_core::bus::SystemBus::from_config(&chip, &manifest).expect("rp2350 bus");
     let (cpu, _nvic) = configure_cortex_m(&mut bus);
     let mut m = Machine::new(cpu, bus);
@@ -91,13 +100,17 @@ fn machine() -> Machine<CortexM> {
 /// Run from `pc` with r0..r2 until the sentinel. Panics on a fault, on
 /// entering the flash alias target, or on no return.
 fn call(m: &mut Machine<CortexM>, pc: u32, args: [u32; 3]) -> u32 {
+    call_with_budget(m, pc, args, 2000)
+}
+
+fn call_with_budget(m: &mut Machine<CortexM>, pc: u32, args: [u32; 3], steps: u32) -> u32 {
     m.cpu.set_pc(pc & !1);
     m.cpu.set_sp(STACK);
     m.cpu.lr = SENTINEL | 1;
     m.cpu.r0 = args[0];
     m.cpu.r1 = args[1];
     m.cpu.r2 = args[2];
-    for step in 0..2000 {
+    for step in 0..steps {
         let pc = m.cpu.get_pc();
         assert!(
             !(FLASH_ALIAS_TARGET..FLASH_ALIAS_TARGET + 0x100).contains(&pc),
@@ -127,6 +140,8 @@ const BOOT_FUNCS: &[(u32, &str)] = &[
     (code(b'E', b'X'), "flash_exit_xip"),
     (code(b'F', b'C'), "flash_flush_cache"),
     (code(b'C', b'X'), "flash_enter_cmd_xip"),
+    (code(b'R', b'E'), "flash_range_erase"),
+    (code(b'R', b'P'), "flash_range_program"),
 ];
 
 #[test]
@@ -171,8 +186,11 @@ fn boot_lookups_return_rom_functions_and_unknown_is_null() {
         0,
         "unknown code must be NULL"
     );
-    // flash_range_erase is not modelled: NULL, not a silent no-op.
-    assert_eq!(lookup(&mut m, code(b'R', b'E')), 0);
+    // Checked/partition-aware flash_op remains unsupported, not a silent no-op.
+    assert_eq!(lookup(&mut m, code(b'F', b'O')), 0);
+    let table = u32::from(m.bus.read_u16(0x16).unwrap());
+    assert_eq!(call(&mut m, table, [code(b'R', b'E'), 0x40, 0]), 0);
+    assert_eq!(call(&mut m, table, [code(b'R', b'P'), 0x01, 0]), 0);
 }
 
 #[test]
@@ -241,4 +259,104 @@ fn empty_bootrom_env_restores_the_flash_alias_fault_path() {
         let _ = m.step();
     }
     panic!("lookup did not reach 0x1000 (pc {:#x})", m.cpu.get_pc());
+}
+
+#[test]
+fn chip_info_package_matches_actual_a_and_b_variants() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    std::env::remove_var(ENV_BOOTROM);
+    for (chip, expected) in [("rp2350", 1), ("rp2350-feather", 1), ("rp2354b", 0)] {
+        let mut m = machine_for(chip);
+        let gs = lookup(&mut m, code(b'G', b'S'));
+        assert_eq!(call(&mut m, gs, [BUF, 4, 1]), 4);
+        assert_eq!(
+            m.bus.read_u32(u64::from(BUF + 4)).unwrap(),
+            expected,
+            "{chip}"
+        );
+        assert_eq!(m.bus.read_u32(0x4000_0004).unwrap() & 1, expected);
+    }
+}
+
+#[test]
+fn legal_sector_erase_and_page_program_have_nor_semantics() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    std::env::remove_var(ENV_BOOTROM);
+    for chip in ["rp2350", "rp2354b"] {
+        let mut m = machine_for(chip);
+        let erase = lookup(&mut m, code(b'R', b'E'));
+        let program = lookup(&mut m, code(b'R', b'P'));
+        let off = 0x1_0000usize;
+        m.bus.flash.data[off - 1..off + 4097].fill(0x22);
+        call_with_budget(&mut m, erase, [off as u32, 4096, 65536], 70_000);
+        assert!(m.bus.flash.data[off..off + 4096].iter().all(|b| *b == 0xff));
+        assert_eq!(m.bus.flash.data[off - 1], 0x22);
+        assert_eq!(m.bus.flash.data[off + 4096], 0x22);
+        for i in 0..256u64 {
+            m.bus.write_u8(u64::from(BUF) + i, i as u8).unwrap();
+        }
+        call_with_budget(&mut m, program, [off as u32, BUF, 256], 10_000);
+        assert_eq!(
+            &m.bus.flash.data[off..off + 256],
+            &(0..=255u8).collect::<Vec<_>>()
+        );
+        for i in 0..256u64 {
+            m.bus.write_u8(u64::from(BUF) + i, 0xf0).unwrap();
+        }
+        call_with_budget(&mut m, program, [off as u32, BUF, 256], 10_000);
+        for i in 0..256 {
+            assert_eq!(m.bus.flash.data[off + i], i as u8 & 0xf0);
+        }
+        for i in 0..256u64 {
+            m.bus.write_u8(u64::from(BUF) + i, 0xff).unwrap();
+        }
+        call_with_budget(&mut m, program, [off as u32, BUF, 256], 10_000);
+        for i in 0..256 {
+            assert_eq!(m.bus.flash.data[off + i], i as u8 & 0xf0);
+        }
+        assert!(m.bus.flash.data[off + 256..off + 4096]
+            .iter()
+            .all(|b| *b == 0xff));
+        call(&mut m, erase, [off as u32, 0, 65536]);
+        assert_eq!(m.bus.flash.data[off], 0);
+        call_with_budget(&mut m, erase, [off as u32, 4096, 65536], 70_000);
+        assert!(m.bus.flash.data[off..off + 4096].iter().all(|b| *b == 0xff));
+    }
+}
+
+#[test]
+fn clean_room_post_boot_helper_is_relocatable_and_devinfo_is_writable() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    std::env::remove_var(ENV_BOOTROM);
+    let mut m = machine_for("rp2354b");
+    // Run the actual SDK copy-out/call contract, without changing firmware RAM.
+    for i in 0..256u64 {
+        let b = m.bus.read_u8(0x400e_0000 + i).unwrap();
+        m.bus.write_u8(u64::from(BUF) + i, b).unwrap();
+    }
+    assert_eq!(call(&mut m, BUF, [0x12345678, 0, 0]), 0x12345678);
+    let table = u32::from(m.bus.read_u16(0x16).unwrap());
+    let pointer = call(&mut m, table, [code(b'F', b'D'), 0x40, 0]);
+    let devinfo = m.bus.read_u32(u64::from(pointer)).unwrap();
+    assert_eq!(devinfo, 0x400e_0100);
+    m.bus.write_u16(u64::from(devinfo), 0x0b00).unwrap();
+    assert_eq!(m.bus.read_u16(u64::from(devinfo)).unwrap(), 0x0b00);
+}
+
+#[test]
+fn caller_supplied_rom_does_not_receive_clean_room_post_boot_state() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    std::env::remove_var(ENV_BOOTROM);
+    let (chip, manifest) = load_zero();
+    let supplied = std::collections::HashMap::from([("bootrom".into(), vec![0x5a; 0x8000])]);
+    let bus = labwired_core::bus::SystemBus::from_config_with_region_images(
+        &chip,
+        &manifest,
+        &[],
+        &supplied,
+    )
+    .unwrap();
+    assert_eq!(bus.read_u8(0).unwrap(), 0x5a);
+    assert_eq!(bus.read_u16(0x400e_0000).unwrap(), 0);
+    assert_eq!(bus.read_u16(0x400e_0100).unwrap(), 0);
 }

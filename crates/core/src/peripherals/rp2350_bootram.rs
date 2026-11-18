@@ -146,6 +146,20 @@ impl Peripheral for Rp2350BootRam {
     }
 }
 
+/// Post-ROM state for the bundled clean-room fast-boot path only.
+///
+/// Silicon's ROM leaves a relocatable XIP-restore function in the first 256
+/// bytes of BOOTRAM. The SDK copies and executes it after erase/program.
+/// Coherent identity-mapped flash needs no controller reconfiguration, so the
+/// clean-room helper is Thumb `bx lr` (not a replacement for user firmware).
+/// The remaining helper bytes are zero. FD is the documented no-OTP default,
+/// stored after the helper so firmware can update it through the ROM data API.
+/// Physical reset RAM and caller-supplied ROMs remain untouched.
+pub(crate) fn install_clean_room_rom_state(bus: &mut impl crate::Bus, base: u64) -> SimResult<()> {
+    bus.write_u16(base, 0x4770)?;
+    bus.write_u16(base + 0x100, 0x0c00)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

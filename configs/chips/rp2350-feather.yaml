@@ -197,6 +197,17 @@ peripherals:
     config:
       profile: "rp2350"
   # XIP_CTRL (flash cache control) — declarative storage, as on RP2040.
+  # Coherent/cacheless XIP: real clean/invalidate addresses, explicit errors
+  # for cache pinning and unsupported direct QMI operations.
+  - id: "xip_maintenance"
+    type: "rp2350_xip_maintenance"
+    base_address: 0x18000000
+    # parse_size uses decimal MB; this architectural window is 64 MiB.
+    size: "65536KB"
+  - id: "qmi"
+    type: "rp2350_qmi"
+    base_address: 0x400D0000
+    size: "4KB"
   - id: "xip_ctrl"
     type: "declarative"
     base_address: 0x400C8000

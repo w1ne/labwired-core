@@ -121,6 +121,7 @@ pub mod rng;
 pub mod rp2040;
 pub mod rp2040_clocks;
 pub mod rp2350_bootram;
+pub mod rp2350_xip;
 pub mod rs485;
 pub mod rsim;
 pub mod rtc;
