@@ -11,19 +11,12 @@ SysTick), with the F7-modern-I2C instances on the `stm32l4` profile.
 ## Quick Run
 
 ```bash
-cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
-cargo run -q -p labwired-cli -- test --script examples/nucleo-f767zi/uart-smoke.yaml --output-dir out/nucleo-f767zi/uart-smoke --no-uart-stdout
+cargo run -q -p labwired-cli -- test --script examples/nucleo-f767zi/io-smoke.yaml --output-dir out/nucleo-f767zi/io-smoke --no-uart-stdout
 ```
 
-Expected result:
-1. smoke test passes
-2. UART contains `OK`
-
-## Firmware reuse note
-
-The smoke firmware is `firmware-f401-demo`, reused unchanged: Thumb-2/v7em
-runs on the M7, and flash/SRAM bases and the USART2 mapping are identical
-across F4/F7. What this proves and what it cannot: VALIDATION.md.
+The pinned STM32duino fixture prints `F767_OK` and toggles PB0 in simulation.
+Its source and build provenance are in `tests/fixtures/stm32f767-stock-arduino/`.
+This does not establish physical-board behavior.
 
 ## Files
 

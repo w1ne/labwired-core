@@ -20,6 +20,7 @@ mod common;
 
 mod cortex_m_event_sleep;
 mod exti_handler_once_per_edge;
+mod f767_stock_arduino;
 mod fdcan;
 mod fdcan_attach_seam;
 mod flash_h5_ops;
