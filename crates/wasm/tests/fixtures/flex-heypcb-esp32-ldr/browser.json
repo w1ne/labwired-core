@@ -81,7 +81,7 @@
   "run_report": {
     "assumptions": [
       "Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.",
-      "The registered LDR kit uses a typical 10 kΩ-at-10-lux curve and samples a static divider value at model boundaries.",
+      "The registered LDR kit uses a typical 10 kΩ-at-10-lux curve and samples a static millivolt output at model boundaries.",
       "Public verified Part Knowledge returned NOT_FOUND for GL5528; this generic curve is not verified for the source part.",
       "The IO48 user LED is represented by digital logic state only."
     ],
@@ -211,7 +211,9 @@
     "unsupported_checks": [
       "Original ESP32-S3 firmware execution and target instruction or ADC peripheral fidelity; the pinned source contains no board firmware.",
       "Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.",
-      "GL5528 production spread, C7 transient smoothing, and physical optical or electrical behavior."
+      "The generic importer does not model U4 as a two-terminal photoconductive device: the schematic import drops it, and the PCB import maps it as a fixed resistor.",
+      "This behavior slice injects the generic LDR kit's modeled millivolts at the source-mapped GPIO1 endpoint. It does not model the GL5528 resistance, R6 divider, or C7 transient behavior.",
+      "GL5528 production spread and physical optical or electrical behavior."
     ]
   },
   "checks": [
@@ -225,14 +227,14 @@
     "oscilloscope-samples",
     "oscilloscope-nanosecond-time-unit"
   ],
-  "measured_browser_ms": 880.3,
-  "browser": "145.0.7632.6",
+  "measured_browser_ms": 1714.2,
+  "browser": "149.0.7827.55",
   "browser_driver": "Playwright",
-  "core_commit": "df4dd154b668526aa0fbd33d93cf7908282d4431",
+  "core_commit": "02eb942c4801905da2535a76b244cb1e19d9c393",
   "firmware_sha256": "366f562ab8a19449a479e3b5e4b2d783f108fdaceb6e61948a0f6b559c314294",
   "firmware_source_sha256": "04cdc152150ed1ca85924081f124438698370c12af6535aaff934c1ddd539402",
-  "system_sha256": "5203d8f5b0e69b5bff01bc7da953ffe6881cfc8cd17b8a2b132ddf2db8a3cdef",
-  "source_map_sha256": "081ebf13e10b03595ce00c1a732df8d59c959d17acfeb8188603a7828772f8c2",
+  "system_sha256": "9c78f66d7564bfb8027fea1515141b6e1273ca8918b168280915c82fdf1dacd8",
+  "source_map_sha256": "a056b1a8be17496938e78206d5581fdc6f4e74e5ab63bfcea4afe827192fb831",
   "source": {
     "repository": "HeyPCB/esp32-sensors-1",
     "revision": "57a2122a19ac1aa9c092e43fb5b123c461508752",
