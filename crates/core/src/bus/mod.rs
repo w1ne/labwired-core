@@ -767,6 +767,8 @@ pub struct SystemBus {
     /// `walk_deleted: false` from the system manifest is a hard opt-out from
     /// automatic walk deletion, retained across dynamic activity changes.
     pub(crate) legacy_walk_pinned_on: bool,
+    /// Optional system-manifest fidelity bound, enforced by Machine::advance.
+    pub(crate) max_peripheral_tick_interval: Option<std::num::NonZeroU32>,
     /// Peripherals eligible for the legacy index at range rebuild, including
     /// scheduler fallbacks when the feature is off. Indexed by slot to reject
     /// unrelated MMIO writes before calling activity predicates.

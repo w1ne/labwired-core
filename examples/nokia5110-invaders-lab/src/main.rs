@@ -3,23 +3,26 @@
 //
 // This software is released under the MIT License.
 
-//! Space Invaders on a Nokia 5110 (PCD8544), steered by an HC-SR04 — for the
-//! NUCLEO-L476RG. The same .elf runs on real silicon and in the LabWired
-//! simulator (digital twin).
+//! Breakout on a Joy-IT SBC-LCD84x48 REV2 (PCD8544), steered by an
+//! Adafruit 3942 HC-SR04, on the NUCLEO-L476RG.
 //!
-//! Default 4 MHz MSI clock (no PLL), matching `firmware-l476-demo`.
+//! Reset clock: 4 MHz MSI, AHB/APB divisors 1. TIM2 runs at 1 MHz and
+//! measures ECHO in microseconds. No instruction-loop calibration is used.
+//! GPIO polling adds edge-detection latency; model verification does not
+//! establish physical distance accuracy or oscillator tolerance.
 //!
-//! Wiring (Nokia 5110 → Nucleo Arduino headers; 3V3 logic, no level shift):
-//!   CLK  → PA5  (SPI1_SCK, AF5)      DIN → PA7 (SPI1_MOSI, AF5)
-//!   DC   → PC7                       CE  → PB6        RST → PA9
-//!   VCC  → 3V3   BL → 3V3            GND → GND
-//! HC-SR04 (5V module; ECHO needs a divider to 3V3 on real hardware):
-//!   TRIG → PA8 (output)              ECHO → PB10 (input)
+//! LCD REV2 pads, front view left to right: GND, LIGHT -> GND; VCC -> 3V3;
+//! CLK -> PA5/D13; DIN -> PA7/D11; DC -> PC7/D9; CE -> PB6/D10; RST -> PA9/D8.
+//! Match pad labels: the module square pad is RST, not the carrier J4.1 GND.
+//! REV1 has a different pinout and must not be substituted.
+//! HC-SR04: VCC -> Nucleo +5V, GND -> GND, TRIG -> PA8/D7.
+//! ECHO -> 10k series resistor -> PB10/D6, with 18k from PB10 to GND.
+//! The selected sensor accepts 3.3 V TRIG and returns 5 V ECHO.
+//! Nucleo USB powers both rails; keep the normal ST-LINK/debug jumpers.
 //!
-//! HC-SR04 distance → ship X: the firmware counts loop iterations while ECHO is
-//! high. Because the echo pulse is a fixed number of CPU cycles (sim and HW
-//! both run 4 MHz), the count — and therefore the ship position — is identical
-//! on silicon and in the simulator.
+//! The 10..50 cm hand-control span maps right to left; 30 cm is center.
+//! Missing, stuck-high, and invalid echoes return the paddle toward center.
+//! Ranging starts no more often than every 70 ms.
 
 #![no_std]
 #![no_main]
@@ -31,6 +34,7 @@ use panic_halt as _;
 
 // ── Register map (RM0351) ──────────────────────────────────────────────────
 const RCC_AHB2ENR: *mut u32 = 0x4002_104C as *mut u32;
+const RCC_APB1ENR1: *mut u32 = 0x4002_1058 as *mut u32;
 const RCC_APB2ENR: *mut u32 = 0x4002_1060 as *mut u32;
 
 const GPIOA_MODER: *mut u32 = 0x4800_0000 as *mut u32;
@@ -46,6 +50,13 @@ const GPIOB_BRR: *mut u32 = (0x4800_0400 + 0x28) as *mut u32;
 const GPIOC_MODER: *mut u32 = 0x4800_0800 as *mut u32;
 const GPIOC_BSRR: *mut u32 = (0x4800_0800 + 0x18) as *mut u32;
 const GPIOC_BRR: *mut u32 = (0x4800_0800 + 0x28) as *mut u32;
+
+// TIM2, 32-bit free-running timer (RM0351). APB1 reset clock is 4 MHz.
+const TIM2_CR1: *mut u32 = 0x4000_0000 as *mut u32;
+const TIM2_EGR: *mut u32 = 0x4000_0014 as *mut u32;
+const TIM2_CNT: *const u32 = 0x4000_0024 as *const u32;
+const TIM2_PSC: *mut u32 = 0x4000_0028 as *mut u32;
+const TIM2_ARR: *mut u32 = 0x4000_002C as *mut u32;
 
 const SPI1_CR1: *mut u16 = 0x4001_3000 as *mut u16;
 const SPI1_CR2: *mut u16 = (0x4001_3000 + 0x04) as *mut u16;
@@ -69,8 +80,8 @@ const W: usize = 84;
 const H: usize = 48;
 const BANKS: usize = H / 8; // 6
 
-/// Framebuffer at a fixed RAM address (static, not stack) so it can be read
-/// back over SWD for bit-exact HW-vs-sim verification.
+/// Static framebuffer. Resolve its linked symbol in the exact ELF before
+/// reading it through SWD; its address is not a public fixed-address contract.
 static mut FB: [u8; W * BANKS] = [0u8; W * BANKS];
 
 // ── Low-level helpers ───────────────────────────────────────────────────────
@@ -82,10 +93,28 @@ fn rmw(ptr: *mut u32, clear: u32, set: u32) {
     }
 }
 
+fn timer_init() {
+    rmw(RCC_APB1ENR1, 0, 1); // TIM2EN
+                             // Readback completes the peripheral-clock enable before TIM2 access.
+    unsafe {
+        let _ = read_volatile(RCC_APB1ENR1);
+        write_volatile(TIM2_CR1, 0);
+        write_volatile(TIM2_PSC, 3); // 4 MHz / (3 + 1) = 1 MHz
+        write_volatile(TIM2_ARR, u32::MAX);
+        write_volatile(TIM2_EGR, 1); // UG loads the buffered prescaler on silicon
+        write_volatile(TIM2_CR1, 1); // CEN; no interrupt
+    }
+}
+
 #[inline(always)]
-fn delay(n: u32) {
-    for _ in 0..n {
-        unsafe { core::arch::asm!("nop") }
+fn micros() -> u32 {
+    unsafe { read_volatile(TIM2_CNT) }
+}
+
+fn delay_us(us: u32) {
+    let start = micros();
+    while micros().wrapping_sub(start) < us {
+        core::hint::spin_loop();
     }
 }
 
@@ -93,7 +122,7 @@ fn gpio_init() {
     // Clock GPIOA/B/C + SPI1.
     rmw(RCC_AHB2ENR, 0, (1 << 0) | (1 << 1) | (1 << 2));
     rmw(RCC_APB2ENR, 0, 1 << 12);
-    delay(50);
+    delay_us(10);
 
     // GPIOA: PA5/PA7 = AF (0b10), PA8/PA9 = output (0b01).
     rmw(
@@ -174,9 +203,9 @@ fn lcd_data(d: u8) {
 fn lcd_init() {
     // Reset pulse.
     clr(GPIOA_BRR, RST);
-    delay(2000);
+    delay_us(1000);
     set(GPIOA_BSRR, RST);
-    delay(2000);
+    delay_us(1000);
     clr(GPIOB_BRR, CS); // CS held low (single device on the bus)
 
     lcd_cmd(0x21); // function set: extended instruction set (H=1)
@@ -212,38 +241,46 @@ fn lcd_set_vop(vop: u8) {
     lcd_cmd(0x20);
 }
 
-// ── HC-SR04: count loop iterations while ECHO is high ───────────────────────
+// ── HC-SR04: time ECHO with the 1 MHz TIM2 counter ────────────────────────
 fn echo_high() -> bool {
     unsafe { read_volatile(GPIOB_IDR) & (1 << ECHO) != 0 }
 }
 
-/// Trigger a ranging and return a distance proxy: the number of poll
-/// iterations ECHO stays high. Larger = farther. Bounded so a missing sensor
-/// can't hang the game.
-fn measure() -> u32 {
-    // 10 µs trigger pulse (well over spec at 4 MHz).
+/// Return pulse width in microseconds. Every wait has a real-time bound.
+/// The external 18k resistor holds ECHO low when the sensor is disconnected.
+fn measure() -> Option<u32> {
+    let idle = micros();
+    while echo_high() {
+        if micros().wrapping_sub(idle) >= 30_000 {
+            return None; // stuck-high or previous echo did not finish
+        }
+    }
+    clr(GPIOA_BRR, TRIG);
+    delay_us(2);
     set(GPIOA_BSRR, TRIG);
-    delay(60);
+    delay_us(12); // at least the sensor's 10 us trigger minimum
     clr(GPIOA_BRR, TRIG);
 
-    // Wait for ECHO to rise — short timeout so a missing/idle sensor doesn't
-    // stall the animation (returns 0 = "no reading").
-    let mut guard = 0u32;
+    let waiting = micros();
     while !echo_high() {
-        guard += 1;
-        if guard > 30_000 {
-            return 0;
+        if micros().wrapping_sub(waiting) >= 30_000 {
+            return None; // missing sensor or no echo
         }
     }
-    // Count while high (bounded).
-    let mut count = 0u32;
+    let rising = micros();
     while echo_high() {
-        count += 1;
-        if count > 80_000 {
-            break;
+        if micros().wrapping_sub(rising) >= 30_000 {
+            return None;
         }
     }
-    count
+    let width = micros().wrapping_sub(rising);
+    // 2..400 cm corresponds to 116..23200 us nominally. Allow polling
+    // latency at the near edge; reject a glitch rather than calling it near.
+    if (80..=25_000).contains(&width) {
+        Some(width)
+    } else {
+        None
+    }
 }
 
 // ── Framebuffer drawing ─────────────────────────────────────────────────────
@@ -406,16 +443,13 @@ impl Game {
     }
 }
 
-/// Map the echo-pulse count to a paddle X position (clamped in `step`).
-fn count_to_paddle_x(count: u32) -> i32 {
-    let span = (W as i32 - PADDLE_W).max(1);
-    // The polling loop has a fixed overhead before it starts counting ECHO high
-    // time. Subtract that floor, scale the remaining pulse width across the
-    // playable range, and invert the result so the demo's maximum distance
-    // reaches the left edge.
-    let raw = (count / 16) as i32;
-    let v = span - (((raw - span / 2) * 13) / 4);
-    v.clamp(0, span)
+/// Map 10..50 cm hand travel to the full paddle span; clamp valid end zones.
+fn echo_us_to_paddle_x(width_us: u32) -> i32 {
+    let span = W as i32 - PADDLE_W;
+    let near_us = 10 * 58;
+    let far_us = 50 * 58;
+    let width = width_us.clamp(near_us, far_us);
+    span - (((width - near_us) * span as u32) / (far_us - near_us)) as i32
 }
 
 /// Median of three — rejects a single spurious HC-SR04 reading (the spikes
@@ -436,21 +470,21 @@ fn diagnostic() -> ! {
         for &vop in &[0x20u8, 0x28, 0x30, 0x38, 0x3F, 0x48, 0x50, 0x60] {
             lcd_set_vop(vop);
             lcd_fill(0xFF); // all pixels dark
-            delay(2_000_000);
+            delay_us(500_000);
             lcd_fill(0x00); // all pixels clear
-            delay(2_000_000);
+            delay_us(500_000);
         }
     }
 }
 
 /// Live sensor meter for HW bring-up: a 6×6 "alive" square top-left (proves the
 /// display + loop run), and a horizontal bar whose length grows with the
-/// HC-SR04 echo count (distance). Bar stays empty ⇒ no echo (wiring/power).
+/// HC-SR04 echo width (distance). Bar stays empty ⇒ no echo (wiring/power).
 #[allow(dead_code)]
 fn sensor_debug() -> ! {
     loop {
-        let count = measure();
-        let len = ((count >> 6) as i32).clamp(0, W as i32);
+        let width_us = measure().unwrap_or(0);
+        let len = ((width_us / 138) as i32).clamp(0, W as i32);
         unsafe {
             for b in FB.iter_mut() {
                 *b = 0;
@@ -459,48 +493,49 @@ fn sensor_debug() -> ! {
             rect(&mut FB, 0, 20, len, 12); // echo bar
             lcd_frame(&FB);
         }
-        delay(50_000);
+        delay_us(70_000);
     }
 }
 
 #[entry]
 fn main() -> ! {
+    timer_init();
     gpio_init();
     spi_init();
     lcd_init();
 
     let mut game = Game::new();
 
-    // Deterministic splash frame 0 (centered ship + full invader grid) — also
-    // the bit-exact HW/sim verification frame (static FB @ 0x20000000).
+    // Deterministic splash: centered paddle, full brick grid and ball.
+    // FB has a stable symbol address in this exact ELF; consult its map.
     unsafe {
         game.render(&mut FB);
         lcd_frame(&FB);
     }
-    delay(1_000_000);
+    delay_us(500_000);
 
-    // Paddle control: HC-SR04 distance, smoothed (median-of-3 to drop
-    // spikes + an exponential moving average to tame jitter). A missed echo is
-    // treated as "object is at the nearest edge" so the valid minimum distance
-    // remains visible even when the polling loop misses that very short pulse.
+    // Median-of-three rejects one spike. EMA smooths valid readings.
+    // Invalid readings reset the history and move toward the center.
     let center = (W as i32 - PADDLE_W) / 2;
-    let mut filt: i32 = center << 3; // paddle X in 1/8-px fixed point
+    let mut filt: i32 = center << 3;
     let mut c1 = 0u32;
     let mut c2 = 0u32;
     loop {
-        let count = measure();
-        let mut target = 0;
-        if count > 0 {
+        let frame_start = micros();
+        let target = if let Some(width_us) = measure() {
             if c1 == 0 {
-                c1 = count; // seed the window on the first reading
-                c2 = count;
+                c1 = width_us;
+                c2 = width_us;
             }
-            let m = median3(count, c1, c2);
+            let median = median3(width_us, c1, c2);
             c2 = c1;
-            c1 = count;
-            target = count_to_paddle_x(m);
-        }
-        // EMA, α = 1/4: filt += (target - filt) / 4, in 1/8-px units.
+            c1 = width_us;
+            echo_us_to_paddle_x(median)
+        } else {
+            c1 = 0;
+            c2 = 0;
+            center
+        };
         filt += ((target << 3) - filt) >> 2;
         let paddle = (filt >> 3).clamp(0, W as i32 - PADDLE_W);
         game.step(paddle);
@@ -508,6 +543,8 @@ fn main() -> ! {
             game.render(&mut FB);
             lcd_frame(&FB);
         }
-        delay(20_000); // frame pacing
+        while micros().wrapping_sub(frame_start) < 70_000 {
+            core::hint::spin_loop();
+        }
     }
 }

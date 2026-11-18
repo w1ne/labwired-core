@@ -2099,8 +2099,7 @@ impl WasmSimulator {
     pub fn set_peripheral_tick_interval(&mut self, interval: u32) {
         self.record(lab_tools::Op::SetTickInterval(interval));
         let machine = self.machine();
-        machine.config.peripheral_tick_interval = interval.max(1);
-        machine.bus.config.peripheral_tick_interval = interval.max(1);
+        machine.set_peripheral_tick_interval(interval);
     }
 
     /// The largest `peripheral_tick_interval` this machine's bus can run at
