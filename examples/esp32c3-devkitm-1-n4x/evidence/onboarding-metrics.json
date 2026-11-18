@@ -1,0 +1,28 @@
+{
+  "target_id": "esp32c3-devkitm-1-n4x",
+  "status": "pass",
+  "crate": "firmware-esp32c3-devkitm-1-n4x-smoke",
+  "target_triple": "riscv32imc-unknown-none-elf",
+  "script": "examples/esp32c3-devkitm-1-n4x/io-smoke.yaml",
+  "system": "configs/systems/esp32c3-devkitm-1-n4x.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-18T05:53:04Z",
+  "finished_at_utc": "2026-11-18T05:53:10Z",
+  "elapsed_seconds": 7,
+  "elapsed_ms": 6101,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.259,
+    "build_firmware": 4.673,
+    "run_smoke": 1.125
+  },
+  "stages_ms": {
+    "build_cli": 259,
+    "build_firmware": 4673,
+    "run_smoke": 1125
+  }
+}

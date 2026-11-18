@@ -2211,7 +2211,7 @@ pub(crate) fn run_test(
                 machine.bus.attach_itm_output(Some(itm_tx.clone()), false);
             }
             let fault_evidence = handle_faults(&mut machine.bus, &faults);
-            execute_test_loop(&mut TestExecutionContext {
+            let exit = execute_test_loop(&mut TestExecutionContext {
                 args: &args,
                 machine: &mut machine,
                 resolved_limits: &resolved_limits,
@@ -2237,7 +2237,12 @@ pub(crate) fn run_test(
                 chip_mem,
                 system: resolved_system.as_ref(),
                 semihost_capture,
-            })
+            });
+            // Test and Run must expose the same engine-owned bus trace.
+            // Emit after execution, from the actual machine that produced
+            // result.json, so the hosted lab cannot display canned SPI bytes.
+            super::run::export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+            exit
         }};
     }
 

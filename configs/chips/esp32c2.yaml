@@ -1,0 +1,58 @@
+# Narrow ESP32-C2 profile for the current ESP8684-DevKitM-1-H4X board.
+#
+# Only the UART0 FIFO and GPIO output latch are enabled here. The C2 register
+# heads match the shared C3 UART/GPIO behavior used by the family adapter;
+# clock pacing and UART interrupt source are C2-specific. This is a fast-boot
+# profile and does not execute mask ROM or the Espressif bootloader.
+#
+# Sources checked 2026-11-17:
+#   ESP8684 datasheet: https://documentation.espressif.com/esp8684_datasheet_en.html
+#   ESP-IDF C2 SoC definitions:
+#     https://github.com/espressif/esp-idf/tree/master/components/soc/esp32c2
+#   ESP8684-DevKitM-1 v1.1 guide:
+#     https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c2/esp8684-devkitm-1/user_guide.html
+
+name: "esp32c2"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 50
+cpu_hz: 120_000_000
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.25
+  vih: 0.75
+
+# The H4X module has 4 MiB in-package flash. ESP8684 has 256 KiB usable SRAM.
+flash:
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  base: 0x3FCA0000
+  size: "256KB"
+
+pins:
+  GPIO0: { gpio: "gpio", bit: 0 }
+  GPIO1: { gpio: "gpio", bit: 1 }
+  GPIO8: { gpio: "gpio", bit: 8 }
+  GPIO19: { gpio: "gpio", bit: 19 } # UART0 RXD default pad
+  GPIO20: { gpio: "gpio", bit: 20 } # UART0 TXD default pad
+
+peripherals:
+  # ESP8684 UART0. The profile captures shifted UART bytes at the host console;
+  # it does not claim USB-UART bridge or IO_MUX pad electrical behavior.
+  - id: "uart0"
+    type: "esp32c2_uart"
+    irq: 17
+    base_address: 0x60000000
+    size: "32B"
+    config:
+      echo_stdout: true
+      cpu_clock_hz: 120000000
+      uart_sclk_hz: 40000000
+
+  # C2 GPIO output latch and enable registers. The smoke exercises GPIO0, the
+  # board's red discrete RGB LED channel. Other GPIO functions are not claimed.
+  - id: "gpio"
+    type: "esp32c2_gpio"
+    base_address: 0x60004000
+    size: "4KB"

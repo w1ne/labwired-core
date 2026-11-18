@@ -161,6 +161,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | am6234 | — | — | — |
 | amap42kp | — | — | — |
 | arty-litex-vexriscv | — | — | — |
+| at32f421g8u7 | — | — | ✓ |
 | atmega1281 | — | — | — |
 | atmega2560 | — | — | — |
 | atmega2561 | — | — | — |

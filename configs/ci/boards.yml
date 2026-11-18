@@ -28,11 +28,48 @@ boards:
     path: examples/nucleo-h563zi
     rust_targets: [thumbv7m-none-eabi]
     gate: false
+  # Maintenance coverage for the already-onboarded NUCLEO-H723ZG. Its exact
+  # USART3 VCP + LD1 smoke is cheap and guards the board profile on main pushes.
+  - id: nucleo-h723zg
+    kind: sim-validate
+    path: examples/nucleo-h723zg
+    rust_targets: [thumbv7em-none-eabi]
+    gate: true
+  # Demand group #4/#4: other STM32 is 13% of MCU use; Nucleo/Discovery kits
+  # are 23%. The active H533RE Nucleo smoke covers USART2 VCP and PA5/LD2.
+  - id: nucleo-h533re
+    kind: sim-validate
+    path: examples/nucleo-h533re
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
+  # TI MSPM0G3507 LaunchPad strategic vendor coverage (TI LaunchPad kits: 7%;
+  # this MCU has no separately measured demand rank). The narrow UART0 smoke
+  # gates core boot and TXDATA capture on its exact memory map.
+  - id: lp-mspm0g3507-launchpad
+    kind: sim-validate
+    path: examples/lp-mspm0g3507-launchpad
+    rust_targets: [thumbv6m-none-eabi]
+    gate: true
   # Committed ELF, no cross-toolchain, runs in seconds — cheap enough to gate on
   # every PR. It went ungated long enough for its own assertions to stop passing.
   - id: esp32c3-blinky
     kind: sim-validate
     path: examples/esp32c3-blinky
+    gate: true
+  # Demand-rank 1 ESP32-family board: the active DevKitM-1-N4X UART0 and
+  # GPIO8 addressable RGB LED smoke uses a board-specific fixture and the
+  # decoded WS2812 observer, leaving the generic C3 reference firmware intact.
+  - id: esp32c3-devkitm-1-n4x
+    kind: sim-validate
+    path: examples/esp32c3-devkitm-1-n4x
+    rust_targets: [riscv32imc-unknown-none-elf]
+    gate: true
+  # Demand-rank 1 ESP32-family depth: current ESP8684-DevKitM-1-H4X UART0
+  # and onboard red LED output on GPIO0. C2 itself is not separately ranked.
+  - id: esp8684-devkitm-1-h4x
+    kind: sim-validate
+    path: examples/esp8684-devkitm-1-h4x
+    rust_targets: [riscv32imac-unknown-none-elf]
     gate: true
   # Demand-rank 1 ESP32-family addition: the current ESP32-S2-DevKitC-1-N8R2.
   # The committed LX7 ELF exercises UART0 through its host-console bridge.
@@ -40,17 +77,30 @@ boards:
     kind: sim-validate
     path: examples/esp32s2-devkitc-1-n8r2
     gate: true
-  # ESP32-H2-DevKitM-1-N4S: rebuild the RV32IMC UART fixture and verify its
-  # UART0 FIFO/console path through the H2-specific, window-limited model.
+  # ESP32-H2-DevKitM-1-N4S: rebuild the RV32IMC fixture and verify UART0 plus
+  # a decoded red frame on the onboard GPIO8 WS2812 LED.
   - id: esp32h2-devkitm-1-n4s
     kind: sim-validate
     path: examples/esp32h2-devkitm-1-n4s
     rust_targets: [riscv32imc-unknown-none-elf]
     gate: true
-  # Demand-rank 1 ESP32-family depth: current C61 DevKitC-1 N8R2 UART0 path.
+  # Demand-rank 1 ESP32-family depth: C61 DevKitC-1 N8R2 UART0 + GPIO4 output.
   - id: esp32c61-devkitc-1-n8r2
     kind: sim-validate
     path: examples/esp32c61-devkitc-1-n8r2
+    rust_targets: [riscv32imc-unknown-none-elf]
+    gate: true
+  # C61 I2C0 and BME280 sensor smoke on the live GPIO6/GPIO22 board route.
+  - id: esp32c61-devkitc-1-n8r2-bme280
+    kind: sim-validate
+    path: examples/esp32c61-devkitc-1-n8r2-bme280
+    rust_targets: [riscv32imc-unknown-none-elf]
+    gate: true
+  # Demand-rank 1 ESP32 family: C6-Zero-M with a BME280 on GPIO6/GPIO7.
+  # This board profile uses the conservative 4 MB C6FH4 stock listing.
+  - id: esp32c6-zero-m-bme280
+    kind: sim-validate
+    path: examples/esp32c6-zero-m-bme280
     rust_targets: [riscv32imc-unknown-none-elf]
     gate: true
   # Demand-rank 1 ESP32 family: current Arduino Nano ESP32 with a committed
@@ -77,6 +127,11 @@ boards:
     kind: sim-validate
     path: examples/adafruit-feather-esp32-v2
     gate: true
+  # Rank-1 ESP32 family depth: DevKitM-1 reads the BME280 chip ID on I2C0.
+  - id: esp32-devkitm-1-bme280
+    kind: sim-validate
+    path: examples/esp32-devkitm-1
+    gate: true
   # Demand group #2: current Adafruit Feather RP2350 with HSTX, no-PSRAM SKU.
   - id: adafruit-feather-rp2350
     kind: sim-validate
@@ -89,6 +144,24 @@ boards:
   - id: rp2354b
     kind: sim-validate
     path: examples/rp2354b
+  # Demand group #2: the exact Pico 2 W profile reads BME280 ID over I2C0.
+  - id: rpi-pico-2-w-bme280
+    kind: sim-validate
+    path: examples/rpi-pico-2-w-bme280
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
+  # Demand group #2: original Pico W/RP2040 reads a BME280 on I2C0 GP4/GP5;
+  # wireless/CYW43439 behavior is explicitly outside this profile.
+  - id: pico-w-bme280
+    kind: sim-validate
+    path: examples/pico-w-bme280
+    rust_targets: [thumbv6m-none-eabi]
+    gate: true
+  # Demand group #2: the non-wireless Pico 2 reads the BME280 ID on I2C0/GP4-GP5.
+  - id: pico2-bme280
+    kind: sim-validate
+    path: examples/pico2-bme280
+    rust_targets: [thumbv8m.main-none-eabi]
     gate: true
   # Narrow ESP32-DevKitC-32E onboarding profile. Committed TIER1 ELF, no
   # cross-toolchain, seconds to run. Proves the new chip descriptor through
@@ -136,6 +209,20 @@ boards:
     path: examples/nucleo-f103rb-bme280
     rust_targets: [thumbv7m-none-eabi]
     gate: true
+  # Demand-rank 3 STM32F103 exact C6 low-density profile. Boots the 32 KB /
+  # 10 KB part configuration and checks USART2 plus PA5 LED behavior.
+  - id: stm32f103c6-low-density
+    kind: sim-validate
+    path: examples/stm32f103c6-smoke
+    rust_targets: [thumbv7m-none-eabi]
+    gate: true
+  # Demand-rank 3 STM32F103 exact R6 low-density profile. Boots the 32 KB /
+  # 10 KB LQFP64 part configuration and checks USART2 plus PA5 LED behavior.
+  - id: stm32f103r6-low-density
+    kind: sim-validate
+    path: examples/stm32f103r6-smoke
+    rust_targets: [thumbv7m-none-eabi]
+    gate: true
   # atmega2560's only CLI proof. Committed ELF, no toolchain, seconds to run.
   - id: arduino-mega-2560-io
     kind: sim-validate
@@ -151,6 +238,14 @@ boards:
     kind: sim-validate
     path: examples/atmega328pb-usart1
     apt: [gcc-avr, binutils-avr, avr-libc]
+    gate: true
+  # Demand-rank 2 AVR maintenance (ATmega328: 30%). Microchip currently marks
+  # ATmega328P Not Recommended for new designs, so this protects the existing
+  # Uno R3 path without onboarding a new part. Both committed-fixture smokes
+  # exercise its Arduino UART/timer/LED and GPIO/ADC paths.
+  - id: arduino-uno-r3-existing
+    kind: sim-validate
+    path: examples/arduino-uno-blinky
     gate: true
   # PIC18F4520: the first PIC18 part. Committed SDCC 4.4.0 ELF (rebuilding
   # needs the upstream SDCC pic16 port, so CI checks the HEX->ELF wrap is

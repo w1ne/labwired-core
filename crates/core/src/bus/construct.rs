@@ -95,6 +95,7 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
             timer_poll_carry: std::cell::Cell::new(0),
             side_effecting_mmio: std::cell::Cell::new(0),
@@ -215,6 +216,7 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
             timer_poll_carry: std::cell::Cell::new(0),
             side_effecting_mmio: std::cell::Cell::new(0),
@@ -1467,6 +1469,7 @@ impl SystemBus {
                     controller_idx,
                     reg_offset,
                     bit: gate.bit,
+                    active_low: gate.active_low,
                 });
             }
             let gclk_id = p_cfg
@@ -1661,6 +1664,7 @@ mod tests {
                 controller_idx: 0,
                 reg_offset: 0x18,
                 bit: 3,
+                active_low: false,
             }],
             gclk_id: None,
             gclk_idx: None,

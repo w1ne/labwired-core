@@ -13,6 +13,7 @@ Run **real firmware** on a **digital twin** of the board — in the browser, fro
 | Door | You want to… | Start |
 |------|----------------|--------|
 | **Playground** | Try without installing | [Playground first run](tutorials/playground.md) · [app.labwired.com](https://app.labwired.com) |
+| **Circuit + PCB** | Explore firmware-controlled circuits, or check PCB import and simulation limits | [Circuit simulator](https://labwired.com/circuit-simulator/) · [KiCad PCB simulation](https://labwired.com/kicad-pcb-simulation/) |
 | **Agent (MCP)** | Let Claude / Codex / Cursor drive the twin | [Connect MCP](agent/mcp.md) · [First agent run](agent/first-run.md) |
 | **Python SDK** | Run firmware from Python and write pytest checks | [Install and run your first test](python-sdk.md) |
 | **CLI / CI** | Run locally or in a pipeline | [Run firmware](getting_started_firmware.md) · [CI](ci_integration.md) |

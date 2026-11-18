@@ -107,6 +107,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2350_bootram",
     "rp2350_qmi",
     "rp2350_xip_maintenance",
+    // ESP32-C2 DevKitM profile types. GPIO and UART behavior are shared with
+    // the register-compatible C3 models, with C2 clock/source values supplied
+    // by its family adapter.
+    "esp32c2_gpio",
+    "esp32c2_uart",
     // ESP32-C3 behavioral models (esp32 factory).
     // MUST be listed: without membership the fuzzy fallback would coerce the
     // BLE baseband window onto some unrelated register map instead of erroring.
@@ -170,13 +175,27 @@ pub const MODEL_TYPES: &[&str] = &[
     // C5 UART0 uses the shared Espressif UART head at its own 240 MHz pacing
     // rate and interrupt source 47. It is intentionally window-limited by the
     // C5 chip descriptor; do not route it through the fuzzy STM32 UART arm.
+    "esp32c5_gpio",
+    // C5 I2C0 is selected by the C5-aware C3-family attach path.
+    "esp32c5_i2c",
     "esp32c5_uart",
     // C61 UART0 uses the shared Espressif FIFO/status head at its 160 MHz
     // core rate and interrupt source 40; the descriptor limits the window.
+    // C61's GPIO path uses shifted registers plus the I2C0 matrix subset.
+    "esp32c61_gpio",
     "esp32c61_uart",
+    "esp32c61_pcr",
+    "esp32c61_i2c",
     // P4 UART0 uses the shared FIFO/status head with P4's 400 MHz core and
     // 90 MHz APB clock. Its chip descriptor exposes only FIFO and STATUS.
     "esp32p4_uart",
+    // Narrow GPIO data/enable/input heads (S2/P4 classic head, C5/C61 later
+    // head). Listed so a fuzzy "gpio" heuristic cannot coerce them onto an
+    // STM32 GPIO map.
+    "esp32s2_gpio",
+    "esp32p4_gpio",
+    "esp32c5_gpio",
+    "esp32c61_gpio",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
@@ -372,6 +391,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "ra8_sysc",
     "ra6_sysc",
     "ra4_sysc",
+    "ra_mstp",
     // Renesas RX SYSTEM (oscillator stable flags, clock-switch handshakes).
     "rx_sysc",
     // Renesas RX FLASH control registers (0xAA-keyed word writes).
@@ -1835,6 +1855,7 @@ pub fn try_build(
         "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra8()),
         "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
         "ra4_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra4()),
+        "ra_mstp" => Box::new(crate::peripherals::ra_mstp::RaMstp::new()),
         "rx_sysc" => Box::new(crate::peripherals::rx_sysc::RxSysc::new()),
         // `irq`: the EVIC vector; `timer_type`: "a" (Timer1) or "b";
         // `clock_hz`: SYSCLK; `pbclk_hz`: the timer's PBCLK3; `sosc_hz`.

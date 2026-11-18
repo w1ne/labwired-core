@@ -1837,12 +1837,17 @@ impl Solver {
         self.previous[..dim].fill(f64::NAN);
         self.limiter_clamped = true;
 
-        for _ in 1..=MAX_NEWTON_ITERATIONS {
+        for iteration in 1..=MAX_NEWTON_ITERATIONS {
             self.build(stamp);
             self.factorize()?;
             self.solve();
             if self.newton_converged() {
                 return Ok(());
+            }
+            // Preserve the previous iterate for the failure diagnostic. There
+            // is no next iteration to seed after the final failed solve.
+            if iteration == MAX_NEWTON_ITERATIONS {
+                break;
             }
             self.previous[..dim].copy_from_slice(&self.solution[..dim]);
             self.relinearise();

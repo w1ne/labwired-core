@@ -151,19 +151,23 @@ pub struct ClockGate {
     /// Symbolic enable-register name, e.g. "apb1enr" / "apb2enr" / "ahbenr" / "crrcr" / "APBCMASK".
     pub reg: String,
     /// Bit position within that register that must be **set** for the
-    /// peripheral to be clocked.
+    /// peripheral to be clocked, unless `active_low` is true.
     pub bit: u8,
     /// Clock controller peripheral id. Default `"rcc"` preserves STM32 configs.
     #[serde(default = "default_clock_controller")]
     pub controller: String,
+    /// Set when a cleared register bit enables the peripheral (RA module stop).
+    /// Defaults to the active-high convention used by existing configurations.
+    #[serde(default)]
+    pub active_low: bool,
 }
 
 pub(crate) fn default_clock_controller() -> String {
     "rcc".into()
 }
 
-/// A peripheral's `clock:` declaration: **every** listed RCC bit must be set for
-/// the peripheral to answer the CPU.
+/// A peripheral's `clock:` declaration: **every** listed clock bit must indicate
+/// an enabled clock for the peripheral to answer the CPU.
 ///
 /// One key, one mechanism. Silicon can withhold a peripheral's clock for more
 /// than one reason — the bus-enable bit in an `xxxENR` register is the common
@@ -321,10 +325,9 @@ pub struct PeripheralConfig {
     /// Controller id from `irq: nvic@2` sugar. `None` when YAML is a bare line.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub irq_controller: Option<String>,
-    /// Optional RCC clock-gate: the RCC bits that must ALL be set for this
-    /// peripheral to answer the CPU. `None` → the peripheral is never gated
-    /// (the safe default — existing configs and firmware that never enable a
-    /// clock keep working unchanged).
+    /// Optional clock-gate: the declared clock bits that must ALL indicate an
+    /// enabled peripheral clock. `None` → the peripheral is never gated (the
+    /// safe default — existing configs and firmware remain unchanged).
     #[serde(default)]
     pub clock: Option<ClockGates>,
     /// Instance knobs. Unknown top-level keys flatten here (`easyDMA: true`).

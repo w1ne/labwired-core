@@ -3,9 +3,10 @@
 # Fast-boot profile: the simulator loads a bare ELF at its entry point; it does
 # not execute mask ROM, the second-stage bootloader, clock startup, or launch
 # the second HP core. The modeled HP core uses the RV32IMAC subset exercised by
-# the smoke. Only UART0 FIFO/STATUS are exposed. USB Serial/JTAG, GPIO/IO_MUX,
-# the C5 radio module, display, camera, audio, Ethernet, USB, and MicroSD are
-# not modeled by this profile.
+# the smoke. UART0 FIFO/STATUS and the official GPIO data/enable/input head
+# through IN1 are exposed. USB Serial/JTAG, IO_MUX, GPIO matrix, the C5 radio
+# module, display, camera, audio, Ethernet, USB, and MicroSD are not modeled
+# by this profile.
 #
 # Sources checked 2026-11-12:
 #   ESP32-P4X-C5-Function-EV-Board guide:
@@ -29,6 +30,18 @@ ram:
   base: 0x4FF40000
   size: "512KB"
 
+# J1 pin 8 is GPIO37/U0TXD and J1 pin 10 is GPIO38/U0RXD per Espressif's
+# ESP32-P4X-C5-Function-EV-Board guide.
+pins:
+  GPIO37:
+    gpio: "gpio"
+    bit: 37
+    functions: [{ type: uart, peripheral: "uart0", role: tx }]
+  GPIO38:
+    gpio: "gpio"
+    bit: 38
+    functions: [{ type: uart, peripheral: "uart0", role: rx }]
+
 peripherals:
   # P4 UART0 FIFO@0x00 / STATUS@0x1C, at 0x500C_A000 (ESP-IDF hw_ver3).
   # IRQ 5, 400 MHz HP core and 90 MHz APB source clock. The 32-byte window
@@ -43,3 +56,11 @@ peripherals:
       echo_stdout: true
       cpu_clock_hz: 400000000
       uart_sclk_hz: 90000000
+  # GPIO data/enable/input head at DR_REG_GPIO_BASE = DR_REG_HPPERIPH1_BASE
+  # (0x500C_0000) + 0x20000 = 0x500E_0000 (esp-idf P4 hw_ver3 reg_base.h).
+  # OUT @0x04, ENABLE @0x20, IN @0x3C, IN1 @0x40. The 68-byte window ends at
+  # IN1; matrix routing, PIN_x, IO_MUX and IRQs are omitted.
+  - id: "gpio"
+    type: "esp32p4_gpio"
+    base_address: 0x500E0000
+    size: "68B"

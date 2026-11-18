@@ -45,6 +45,9 @@ impl SystemBus {
             if asserted {
                 self.peripherals[target].dev.on_node_reset();
                 self.peripherals[target].ticks_remaining = 0;
+                self.collect_scheduled_events(target);
+                self.refresh_bus_tick_index(target);
+                self.refresh_legacy_tick_index(target);
                 self.reconcile_irq_levels_after_write(target);
             }
         }
