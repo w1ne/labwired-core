@@ -1,0 +1,96 @@
+{
+  "source": {
+    "repository": "HeyPCB/pomodoro-pal",
+    "revision": "1d6e50ff9998978e6f4521895042ae240fff7c42",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "files": {
+      "schematic": {
+        "path": "kicad/pomodoro_pal.kicad_sch",
+        "git_blob": "330d113217e04ba5b15c1c5c6439909bce3bddfd"
+      },
+      "pcb": {
+        "path": "kicad/pomodoro_pal.kicad_pcb",
+        "git_blob": "561268221ce4d066582156a71ffc5ec3e071f047"
+      },
+      "original_firmware_hex": {
+        "path": "firmware/pomodoro.hex",
+        "git_blob": "be13b893def87531ac8f06468b81b1da3b93c963"
+      }
+    }
+  },
+  "generic_import": {
+    "discovery": {
+      "mcu_type": "ch32v003f4p6",
+      "mcu_pin_count": 22,
+      "led_type": {
+        "class": "board_io",
+        "simulation_backing": "netlist-only"
+      }
+    },
+    "schematic_import": {
+      "source_kind": "kicad_sch",
+      "board_hint": "ch32v003f4p6",
+      "twin_buildable": true,
+      "part_refs": 41,
+      "mapped_parts": 36,
+      "ignored_parts": 5,
+      "dropped_parts": 0,
+      "imported_connections": 51,
+      "design_only_parts": 0,
+      "ignored_refs": ["J1", "TP1", "TP2", "TP3", "TP4"]
+    },
+    "pcb_import": {
+      "source_kind": "kicad_pcb",
+      "board_hint": "ch32v003f4p6",
+      "twin_buildable": true,
+      "mapped_parts": 35,
+      "ignored_parts": 5,
+      "dropped_parts": 1,
+      "design_only": ["BZ1: PKMCS0909E4000 is not in the catalog"],
+      "board_file_components": 41,
+      "board_file_nets": 42,
+      "board_file_named_nets": 38,
+      "outline_mm": [69.6, 66.39],
+      "cutouts": 0,
+      "holes": 2,
+      "ignored_refs": ["J1", "TP1", "TP2", "TP3", "TP4"]
+    },
+    "validate": {
+      "status": "blocked_before_validation",
+      "reason": "The MCP input schema rejects diagram.board=ch32v003f4p6 because it is absent from the validator enum."
+    }
+  },
+  "source_grounded_behavior_slice": {
+    "mcu_ref": "U1",
+    "mcu_catalog_type": "ch32v003f4p6",
+    "gpio_pin": "PD6",
+    "pcb_net": "LEAF",
+    "pcb_footprint_pad": "U1.3",
+    "components": [
+      { "ref": "R5", "catalog_type": "resistor", "source_value": "1k" },
+      { "ref": "D1", "catalog_type": "led", "source_color": "Green" },
+      { "ref": "R6", "catalog_type": "resistor", "source_value": "1k" },
+      { "ref": "D2", "catalog_type": "led", "source_color": "Green" }
+    ],
+    "source_connections": [
+      ["U1.PD6", "R5.1"],
+      ["R5.2", "D1.A"],
+      ["U1.PD6", "R6.1"],
+      ["R6.2", "D2.A"]
+    ],
+    "observable_scope": "digital logic state only; LED current, optical output and the shared return path are not modeled"
+  },
+  "part_knowledge_gaps": {
+    "buzzer_mpn": {
+      "query": "PKMCS0909E4000",
+      "outcome": "NOT_FOUND",
+      "lanes": ["curated", "vendor-svd", "datasheet"]
+    },
+    "mcu_pins": {
+      "query": "CH32V003F4P6",
+      "outcome": "MODEL_ONLY",
+      "pin_count": 22,
+      "caveat": "LabWired catalog pin model, not a vendor-backed silicon pinout"
+    }
+  }
+}

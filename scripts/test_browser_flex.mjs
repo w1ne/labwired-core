@@ -13,11 +13,23 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dirname, resolve, extname, sep } from 'node:path';
-import { runPortableChecks } from '../crates/wasm/tests/fixtures/flex-mixed-signal/checks.mjs';
+import { dirname, resolve, extname, sep, relative } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const fixture = resolve(root, 'crates/wasm/tests/fixtures/flex-mixed-signal');
+const fixturesRoot = resolve(root, 'crates/wasm/tests/fixtures');
+const argValue = (flag, fallback) => {
+  const index = process.argv.indexOf(flag);
+  return index < 0 ? fallback : process.argv[index + 1];
+};
+const fixture = resolve(root, argValue('--fixture', 'crates/wasm/tests/fixtures/flex-mixed-signal'));
+assert(fixture.startsWith(fixturesRoot + sep), 'The fixture must stay under crates/wasm/tests/fixtures.');
+const checkName = argValue('--check', 'runPortableChecks');
+const checkModulePath = resolve(fixture, 'checks.mjs');
+assert(existsSync(checkModulePath), `Missing ${checkModulePath}.`);
+const checkModuleUrl = pathToFileURL(checkModulePath).href;
+const fixtureUrl = `/${relative(root, fixture).split(sep).join('/')}/`;
+const nodeChecks = await import(checkModuleUrl);
+assert(typeof nodeChecks[checkName] === 'function', `Missing ${checkName} in ${checkModulePath}.`);
 let result;
 if (process.argv.includes('--browser')) {
   const playwrightPath = process.env.LABWIRED_PLAYWRIGHT_MODULE;
@@ -25,6 +37,10 @@ if (process.argv.includes('--browser')) {
   const pkg = resolve(root, 'crates/wasm/pkg-flex-web');
   assert(existsSync(resolve(pkg, 'labwired_wasm.js')), 'Build crates/wasm with --target web --out-dir pkg-flex-web first.');
   const { chromium } = await import(pathToFileURL(resolve(playwrightPath)).href);
+  const launchOptions = { headless: true };
+  if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+  }
   const server = createServer((req, res) => {
     const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
     if (pathname === '/') { res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><title>LabWired Flex browser test</title>'); return; }
@@ -39,13 +55,12 @@ if (process.argv.includes('--browser')) {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch(launchOptions);
     const page = await browser.newPage();
     const url = `http://127.0.0.1:${server.address().port}`;
     await page.goto(url);
-    result = await page.evaluate(async () => {
-      const base = '/crates/wasm/tests/fixtures/flex-mixed-signal/';
-      const [{ default: init, WasmFlexRuntime }, { runPortableChecks }, yaml, firmware, expected] = await Promise.all([
+    result = await page.evaluate(async ({ base, checkName }) => {
+      const [{ default: init, WasmFlexRuntime }, checks, yaml, firmware, expected] = await Promise.all([
         import('/crates/wasm/pkg-flex-web/labwired_wasm.js'),
         import(base + 'checks.mjs'),
         fetch(base + 'system.yaml').then((r) => r.text()),
@@ -53,8 +68,8 @@ if (process.argv.includes('--browser')) {
         fetch(base + 'native.json').then((r) => r.json()),
       ]);
       await init();
-      return runPortableChecks(WasmFlexRuntime, yaml, new Uint8Array(firmware), expected);
-    });
+      return checks[checkName](WasmFlexRuntime, yaml, new Uint8Array(firmware), expected);
+    }, { base: fixtureUrl, checkName });
     result.browser = await browser.version();
   } finally {
     if (browser) await browser.close();
@@ -65,7 +80,7 @@ if (process.argv.includes('--browser')) {
   assert(existsSync(pkg), `Missing ${pkg}; build the nodejs Wasm package first, or use --browser.`);
   const { WasmFlexRuntime } = await import(pkg);
   const read = (name) => readFileSync(resolve(fixture, name));
-  result = runPortableChecks(WasmFlexRuntime, read('system.yaml').toString(), read('firmware.wasm'), JSON.parse(read('native.json').toString()));
+  result = nodeChecks[checkName](WasmFlexRuntime, read('system.yaml').toString(), read('firmware.wasm'), JSON.parse(read('native.json').toString()));
   result.host = 'Node';
 }
 console.log(JSON.stringify(result, null, 2));
