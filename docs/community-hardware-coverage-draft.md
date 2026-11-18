@@ -639,6 +639,20 @@ void loop() {
 
 ## STM32 Nucleo/Discovery — kit rank 4, 23% of main projects
 
+### NUCLEO-H533RE + STM32H533RE
+
+Other STM32 is MCU demand rank 4 (13%), and Nucleo/Discovery kits rank 4
+(23%). ST's live eStore lists the NUCLEO-H533RE as Active and in stock. The
+profile boots a minimal H533RE firmware smoke that sends `NUCLEO_H533RE_OK`
+over USART2 on PA2/PA3 and toggles the active-high LD2 on PA5. H533RE-specific
+usage was not measured. The model exposes only RCC, GPIOA, USART2, and those
+three pins; other peripherals remain unmapped. It is simulator evidence, with
+no H533RE silicon capture or physical board result.
+
+- [Wiring, scope, and copy-paste C example](../examples/nucleo-h533re/README.md)
+- [Live ST lifecycle and availability receipt](../examples/nucleo-h533re/vendor-status.md)
+- [Committed local smoke evidence](../examples/nucleo-h533re/evidence/run/)
+
 ### NUCLEO-U5A5ZJ-Q + STM32U5A5 secure AES
 
 Other STM32 parts were reported by 13% of respondents (MCU rank 4), and

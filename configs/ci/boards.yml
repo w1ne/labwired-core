@@ -35,6 +35,13 @@ boards:
     path: examples/nucleo-h723zg
     rust_targets: [thumbv7em-none-eabi]
     gate: true
+  # Demand group #4/#4: other STM32 is 13% of MCU use; Nucleo/Discovery kits
+  # are 23%. The active H533RE Nucleo smoke covers USART2 VCP and PA5/LD2.
+  - id: nucleo-h533re
+    kind: sim-validate
+    path: examples/nucleo-h533re
+    rust_targets: [thumbv8m.main-none-eabi]
+    gate: true
   # TI MSPM0G3507 LaunchPad strategic vendor coverage (TI LaunchPad kits: 7%;
   # this MCU has no separately measured demand rank). The narrow UART0 smoke
   # gates core boot and TXDATA capture on its exact memory map.
