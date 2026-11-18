@@ -463,6 +463,18 @@ impl RaCan {
 }
 
 impl Peripheral for RaCan {
+    // Mailbox service happens synchronously on CTLR/MCTL writes or receive().
+    // Neither tick path changes registers or emits IRQs, DMA, or events, even
+    // while a transmission waits for an ACK. Its presence must not pin the
+    // whole RA4M1 bus to one instruction per peripheral tick (#2005).
+    fn needs_legacy_walk(&self) -> bool {
+        false
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
     fn read(&self, o: u64) -> SimResult<u8> {
         match self.reg(o as usize) {
             Some(v) => Ok(v),
@@ -577,6 +589,115 @@ mod tests {
         for (i, b) in data.iter().enumerate() {
             w8(c, o + 6 + i, *b);
         }
+    }
+
+    /// Removing legacy callbacks must preserve every readable byte, the
+    /// inspection snapshot, and all tick output channels in active states too.
+    fn assert_ticks_are_inert(c: &mut RaCan) {
+        assert!(!c.needs_legacy_walk());
+        assert!(!c.legacy_tick_active());
+        assert!(
+            !c.uses_scheduler(),
+            "MMIO service does not need a scheduler"
+        );
+        let before = c.snapshot();
+        let bytes_before: Vec<_> = (0..SIZE).map(|o| c.peek(o as u64)).collect();
+        for result in [
+            c.tick(),
+            c.tick_elapsed(1),
+            c.tick_elapsed(1024),
+            c.tick_elapsed(1_000_000),
+        ] {
+            assert!(
+                matches!(
+                    &result,
+                    PeripheralTickResult {
+                        irq: false,
+                        cycles: 0,
+                        dma_requests: None,
+                        explicit_irqs: None,
+                        system_exception: None,
+                        dma_signals: None,
+                        ticks_until_next: None,
+                        mmio_writes,
+                        fired_events,
+                    } if mmio_writes.is_empty() && fired_events.is_empty()
+                ),
+                "a skipped CAN tick must have no output: {result:?}"
+            );
+        }
+        assert_eq!(c.snapshot(), before, "ticks changed CAN inspection state");
+        let bytes_after: Vec<_> = (0..SIZE).map(|o| c.peek(o as u64)).collect();
+        assert_eq!(bytes_after, bytes_before, "ticks changed CAN registers");
+    }
+
+    #[test]
+    fn skipped_ticks_preserve_loopback_receive_and_reset() {
+        let mut c = RaCan::new();
+        assert_ticks_are_inert(&mut c);
+        bring_up(&mut c, 0, 0x07);
+        load_tx(&mut c, 0, 0x123 << 18, &[0xA5, 0x5A]);
+        w32(&mut c, MB + 16, 0x123 << 18);
+        w8(&mut c, MCTL + 1, MCTL_RECREQ);
+        w8(&mut c, MCTL, MCTL_TRMREQ);
+        assert!(c.sent_frames().is_empty(), "a halted mailbox must wait");
+        assert_ticks_are_inert(&mut c);
+
+        // Leaving halt services the pending frame at this MMIO write; a tick
+        // must neither be needed to complete it nor send it a second time.
+        operate(&mut c, 0);
+        assert_eq!(c.sent_frames().len(), 1);
+        assert_eq!(r8(&c, MCTL), MCTL_TRMREQ | MCTL_DONE);
+        assert_eq!(r8(&c, MCTL + 1), MCTL_RECREQ | MCTL_DONE);
+        assert_eq!(r16(&c, MB + 16 + 6), 0x5AA5);
+        assert_ticks_are_inert(&mut c);
+
+        // A pushed receive also updates the mailbox without walk service.
+        let frame = RaCanFrame {
+            id: 0x123,
+            extended: false,
+            remote: false,
+            dlc: 1,
+            data: [0x33, 0, 0, 0, 0, 0, 0, 0],
+        };
+        assert!(c.receive(&frame));
+        assert_eq!(r8(&c, MB + 16 + 6), 0x33);
+        assert_eq!(r8(&c, MCTL + 1) & MCTL_LOST, MCTL_LOST);
+        assert_ticks_are_inert(&mut c);
+
+        w8(&mut c, MCTL, 0);
+        w8(&mut c, MCTL + 1, MCTL_RECREQ);
+        assert_eq!(r8(&c, MCTL), 0);
+        assert_eq!(r8(&c, MCTL + 1), MCTL_RECREQ);
+        assert_ticks_are_inert(&mut c);
+
+        w16(&mut c, CTLR, 0x0100);
+        assert_eq!(r8(&c, MCTL + 1), 0);
+        assert_eq!(r8(&c, TCR), 0);
+        assert_ticks_are_inert(&mut c);
+        c.on_node_reset();
+        assert_eq!(r16(&c, CTLR), CTLR_RESET);
+        assert_ticks_are_inert(&mut c);
+    }
+
+    #[test]
+    fn skipped_ticks_preserve_unacknowledged_transmission_and_abort() {
+        let mut c = RaCan::new();
+        bring_up(&mut c, 0, 0);
+        load_tx(&mut c, 0, 0x123 << 18, &[0xA5]);
+        operate(&mut c, 0);
+        w8(&mut c, MCTL, MCTL_TRMREQ);
+        assert_eq!(r8(&c, MCTL), MCTL_TRMREQ | MCTL_ACTIVE);
+        assert_eq!(r8(&c, ECSR) & ECSR_AEF, ECSR_AEF);
+        assert_eq!(r8(&c, EIFR) & EIFR_BEIF, EIFR_BEIF);
+        assert_eq!(r8(&c, RECR), 0);
+        assert_eq!(r8(&c, TECR), 0);
+        assert!(c.sent_frames().is_empty());
+        assert_ticks_are_inert(&mut c);
+
+        w8(&mut c, MCTL, 0);
+        assert_eq!(r8(&c, MCTL) & MCTL_LOST, MCTL_LOST);
+        assert_ticks_are_inert(&mut c);
     }
 
     #[test]

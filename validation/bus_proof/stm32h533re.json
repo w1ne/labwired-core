@@ -1,0 +1,21 @@
+{
+  "id": "stm32h533re",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/stm32h563_walk_differential.rs",
+    "test": "stm32h533re_boot_walk_vs_scheduler_is_byte_identical",
+    "signal": "The committed NUCLEO-H533RE firmware boots on the STM32H533RE profile, writes NUCLEO_H533RE_OK through USART2, and toggles PA5/LD2; the differential asserts identical UART output and execution snapshots in walk and scheduler modes.",
+    "lane": "pr-scheduler-observable (core-ci): cargo test -p labwired-core --features event-scheduler --test stm32h563_walk_differential"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No SPI controller is declared in configs/chips/stm32h533re.yaml; the profile exposes only RCC, GPIOA and USART2.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No I2C controller is declared in configs/chips/stm32h533re.yaml; the profile exposes only RCC, GPIOA and USART2.",
+    "lane": "none"
+  }
+}
