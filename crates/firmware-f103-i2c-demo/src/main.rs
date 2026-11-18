@@ -135,6 +135,10 @@ const ADC1_ADON: u32 = 1;
 const ADC1_SWSTART: u32 = 1 << 22;
 const ADC1_SOFTWARE_TRIGGER: u32 = 0b111 << 17;
 const ADC1_EOC: u32 = 1 << 1;
+const ADC1_SCAN: u32 = 1 << 8;
+const ADC1_EOCIE: u32 = 1 << 5;
+const ADC1_IRQ: u32 = 18;
+const ADC1_IRQ_BIT: u32 = 1 << (ADC1_IRQ % 32);
 
 const I2C1_BASE: u32 = 0x4000_5400;
 const I2C1_CR1: u32 = I2C1_BASE + 0x00;
@@ -3744,9 +3748,9 @@ fn smoke_adc1_channel0() {
     let write = |address: u32, value: u32| unsafe { write_volatile(address as *mut u32, value) };
 
     unsafe {
-        // PA0 analog input: MODE=00, CNF=00 in GPIOA_CRL[3:0].
+        // PA0/PA1 analog inputs: MODE=00, CNF=00 in GPIOA_CRL[7:0].
         let crl = read_volatile(GPIOA_CRL as *const u32);
-        write_volatile(GPIOA_CRL as *mut u32, crl & !0xF);
+        write_volatile(GPIOA_CRL as *mut u32, crl & !0xFF);
     }
 
     let adc_clock_was_off = read(RCC_APB2ENR) & ADC1EN == 0;
@@ -3780,6 +3784,62 @@ fn smoke_adc1_channel0() {
     putbytes(b" DR=");
     put_hex32(code);
     putline(if passed { b" ok" } else { b" FAIL" });
+
+    // Scan two regular ranks from the same external potentiometer fixture and
+    // a second fixture on PA1. F1 raises EOC for each rank; reading DR clears
+    // the flag while the ADC advances to the next rank.
+    let scan_base = ADC1_ADON | ADC1_SOFTWARE_TRIGGER;
+    let bank = (ADC1_IRQ / 32) as usize;
+    let smpr2 = read(ADC1_SMPR2) & !0x3F;
+    write(ADC1_SMPR2, smpr2 | 0b111 | (0b111 << 3));
+    write(ADC1_CR1, ADC1_SCAN | ADC1_EOCIE);
+    write(ADC1_SQR1, 1 << 20); // L=1 -> two conversions
+    write(ADC1_SQR3, 1 << 5); // SQ1=IN0, SQ2=IN1
+    write(ADC1_CR2, scan_base);
+    write(ADC1_CR2, scan_base | ADC1_SWSTART);
+
+    let mut first_eoc = false;
+    for _ in 0..100_000 {
+        if read(ADC1_SR) & ADC1_EOC != 0 {
+            first_eoc = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let first = read(ADC1_DR) & 0x0FFF;
+    let first_cleared = read(ADC1_SR) & ADC1_EOC == 0;
+    let first_irq = unsafe { read_volatile(NVIC_ISPR.add(bank)) } & ADC1_IRQ_BIT != 0;
+    unsafe { write_volatile(NVIC_ICPR.add(bank), ADC1_IRQ_BIT) };
+
+    let mut second_eoc = false;
+    for _ in 0..100_000 {
+        if read(ADC1_SR) & ADC1_EOC != 0 {
+            second_eoc = true;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let second = read(ADC1_DR) & 0x0FFF;
+    unsafe {
+        write_volatile(NVIC_ICPR.add(bank), ADC1_IRQ_BIT);
+        write(ADC1_CR2, 0);
+    }
+
+    let scan_passed = first_eoc
+        && second_eoc
+        && first_cleared
+        && first_irq
+        && first == 0x03FF
+        && second == 0x07FF;
+    putbytes(b"ADC1 F1 SCAN=");
+    put_hex32(first);
+    putbytes(b",");
+    put_hex32(second);
+    putbytes(b" IRQ1=");
+    put_flag(first_irq);
+    putbytes(b" CLEAR=");
+    put_flag(first_cleared);
+    putline(if scan_passed { b" ok" } else { b" FAIL" });
 }
 
 fn smoke_usart2_txe_irq() {

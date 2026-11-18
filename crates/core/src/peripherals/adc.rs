@@ -123,6 +123,9 @@ const F1_CR2_RSTCAL: u32 = 1 << 3;
 const F1_CR2_EXTSEL: u32 = 0b111 << 17;
 const F1_CR2_EXTTRIG: u32 = 1 << 20;
 const F1_CR2_SWSTART: u32 = 1 << 22;
+const F1_CR1_EOCIE: u32 = 1 << 5;
+const F1_CR1_SCAN: u32 = 1 << 8;
+const F1_SQR1_LENGTH: u32 = 0xF << 20;
 /// ADC_CR2.TSVREFE (bit 23, RM0008 §11.12.3): connects the temperature sensor
 /// to ADC1_IN16 and V_REFINT to ADC1_IN17. Clear (the reset state), both
 /// internal channels are disconnected.
@@ -253,8 +256,7 @@ pub struct F1AdcRegs {
     cr2: u32,  // 0x08
     sqr1: u32, // 0x2C on STM32F1/F4
     sqr2: u32, // 0x30 on STM32F1/F4
-    /// ADC_SQR3 @ 0x34. F1 consumes SQ1 only; the bounded F4 SCAN path also
-    /// reads its six regular-sequence ranks from this register.
+    /// ADC_SQR3 @ 0x34. Regular sequence ranks 1..=6 live here.
     sqr3: u32,
     /// ADC_JSQR @ 0x38 and ADC_JDR1..4 @ 0x3C..0x48. The bounded F4
     /// injected-sequence path uses these; F1 leaves them unmodelled.
@@ -401,9 +403,9 @@ pub struct Adc {
     pub sr: u32,
     /// Conversion data register — shared result path for both families.
     pub dr: u32,
-    /// STM32F4 clears EOC when ADC_DR is read. `Peripheral::read` takes `&self`,
-    /// so this records the acknowledgement until the next EOC event without
-    /// mutating the public bridge-visible status word.
+    /// STM32F1/F4 clear EOC when ADC_DR is read. `Peripheral::read` takes
+    /// `&self`, so this records the acknowledgement until the next EOC event
+    /// without mutating the public bridge-visible status word.
     #[serde(skip)]
     dr_read_since_eoc: Cell<bool>,
 
@@ -412,8 +414,11 @@ pub struct Adc {
     cycles_remaining: u32,
     conversion_time: u32,
     /// Current regular-sequence rank for the STM32F4 SCAN path. Rank is reset
-    /// on SWSTART and after the final conversion; other layouts leave it at 0.
+    /// on SWSTART and after the final conversion.
     f4_sequence_rank: u8,
+    /// Current regular-sequence rank for the STM32F1 SCAN path. Rank is reset
+    /// on SWSTART and after the final conversion.
+    f1_sequence_rank: u8,
     /// True while the bounded F4 injected group is converting. Injected
     /// conversions share the conversion countdown but write JDRx, not DR.
     f4_injected_active: bool,
@@ -525,6 +530,7 @@ impl Adc {
             cycles_remaining: 0,
             conversion_time: 14,
             f4_sequence_rank: 0,
+            f1_sequence_rank: 0,
             f4_injected_active: false,
             f4_injected_sequence_rank: 0,
             channel_inputs_mv: [None; MAX_CHANNELS],
@@ -690,10 +696,11 @@ impl Adc {
                     self.dr = (self.dr + 1) & 0xFFF;
                 }
 
-                // RM0090: EOCS selects each-conversion EOC. With EOCS clear,
-                // SCAN reports EOC only at the end of the regular sequence.
-                let f4_eoc = !f4_scan || (cr2 & F4_CR2_EOCS) != 0 || f4_last_rank;
-                if f4_eoc {
+                // F1 raises EOC after each rank in scan mode (RM0008 §11.3.8).
+                // F4's EOCS selects each-conversion EOC; with EOCS clear, SCAN
+                // reports EOC only at the end of the regular sequence.
+                let eoc = !f4_scan || (cr2 & F4_CR2_EOCS) != 0 || f4_last_rank;
+                if eoc {
                     self.sr |= F4_SR_EOC;
                     self.dr_read_since_eoc.set(false);
                 }
@@ -701,9 +708,12 @@ impl Adc {
                     self.sr |= F4_SR_OVR;
                 }
 
-                if (f4_eoc && (cr1 & F4_CR1_EOCIE) != 0)
-                    || (f4_overrun && (cr1 & F4_CR1_OVRIE) != 0)
-                {
+                let eoc_irq_enabled = if is_f4 {
+                    cr1 & F4_CR1_EOCIE != 0
+                } else {
+                    cr1 & F1_CR1_EOCIE != 0
+                };
+                if (eoc && eoc_irq_enabled) || (f4_overrun && (cr1 & F4_CR1_OVRIE) != 0) {
                     irq = true;
                 }
                 if is_f4 {
@@ -717,9 +727,20 @@ impl Adc {
                     } else {
                         self.f4_sequence_rank = 0;
                     }
-                } else if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
-                    // Existing F1 continuous single-channel behavior.
-                    self.start_conversion();
+                } else {
+                    let f1_scan = (cr1 & F1_CR1_SCAN) != 0;
+                    let f1_last_rank = !f1_scan
+                        || usize::from(self.f1_sequence_rank) + 1 >= self.f1_sequence_length();
+                    if f1_scan && !f1_last_rank {
+                        self.f1_sequence_rank += 1;
+                        self.start_conversion();
+                    } else if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
+                        // CONT restarts a full regular group after its last rank.
+                        self.f1_sequence_rank = 0;
+                        self.start_conversion();
+                    } else {
+                        self.f1_sequence_rank = 0;
+                    }
                 }
             }
         }
@@ -773,13 +794,9 @@ impl Adc {
         self.converting = true;
         self.cycles_remaining = self.conversion_time;
         self.sampled_input = self.sample_f1_input();
-        // F1's existing model clears EOC when conversion begins. RM0090's F4
-        // layout clears it by ADC_DR read or software write to ADC_SR; a new
-        // conversion leaves an unread result visible so EOCS overrun detection
-        // can distinguish a lost sample.
-        if matches!(self.regs, AdcRegs::Stm32F1(_)) {
-            self.sr &= !F4_SR_EOC;
-        }
+        // RM0008 clears F1 EOC by reading DR or writing zero to SR. F4 also
+        // keeps an unread result visible across conversion start, where it is
+        // used by the bounded EOCS overrun check.
     }
 
     /// (cr1, cr2) for the F1 control registers; (0, 0) on L4 (no conversion
@@ -789,6 +806,17 @@ impl Adc {
             AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.cr1, r.cr2),
             // Neither the L4, the H7 nor the U5 runs the F1 countdown engine.
             AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => (0, 0),
+        }
+    }
+
+    /// Number of F1 regular-sequence conversions. SCAN clear keeps the
+    /// single-channel path regardless of the programmed SQR1 length.
+    fn f1_sequence_length(&self) -> usize {
+        match &self.regs {
+            AdcRegs::Stm32F1(r) if r.cr1 & F1_CR1_SCAN != 0 => {
+                ((r.sqr1 & F1_SQR1_LENGTH) >> 20) as usize + 1
+            }
+            _ => 1,
         }
     }
 
@@ -824,11 +852,20 @@ impl Adc {
         }
     }
 
-    /// Regular channel being converted. F1 consumes SQR3.SQ1; the bounded F4
-    /// SCAN path reads ranks 1..=16 from SQR3/SQR2/SQR1 (RM0090 §13.3.8).
+    /// Regular channel being converted. F1 and the bounded F4 SCAN path read
+    /// ranks 1..=16 from SQR3/SQR2/SQR1 (RM0008 §11.3.8 / RM0090 §13.3.8).
     fn regular_channel(&self) -> usize {
         match &self.regs {
-            AdcRegs::Stm32F1(r) => (r.sqr3 & 0x1F) as usize,
+            AdcRegs::Stm32F1(r) => {
+                let rank = usize::from(self.f1_sequence_rank);
+                let (word, slot) = match rank {
+                    0..=5 => (r.sqr3, rank),
+                    6..=11 => (r.sqr2, rank - 6),
+                    12..=15 => (r.sqr1, rank - 12),
+                    _ => (0, 0),
+                };
+                ((word >> (slot * 5)) & 0x1F) as usize
+            }
             AdcRegs::Stm32F4(r) => {
                 let rank = usize::from(self.f4_sequence_rank);
                 let (word, slot) = match rank {
@@ -1268,6 +1305,7 @@ impl Adc {
     fn cancel_f1_pending(&mut self) {
         self.converting = false;
         self.cycles_remaining = 0;
+        self.f1_sequence_rank = 0;
         self.chain_live = false;
         self.f1_rstcal_remaining = None;
         self.f1_cal_remaining = None;
@@ -1460,13 +1498,22 @@ impl Peripheral for Adc {
     fn read(&self, offset: u64) -> SimResult<u8> {
         let val = match &self.regs {
             AdcRegs::Stm32F1(r) => match offset {
-                0x00..=0x03 => self.sr,
+                0x00..=0x03 => {
+                    if self.dr_read_since_eoc.get() {
+                        self.sr & !F4_SR_EOC
+                    } else {
+                        self.sr
+                    }
+                }
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
                 0x2C..=0x2F => r.sqr1,
                 0x30..=0x33 => r.sqr2,
                 0x34..=0x37 => r.sqr3,
-                0x4C..=0x4F => self.dr,
+                0x4C..=0x4F => {
+                    self.dr_read_since_eoc.set(true);
+                    self.dr
+                }
                 _ => {
                     crate::census_reg!("adc:Adc", offset, "read");
                     0
@@ -1515,12 +1562,11 @@ impl Peripheral for Adc {
         match self.regs {
             AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_) => match offset {
                 0x00..=0x03 => {
-                    if matches!(self.regs, AdcRegs::Stm32F4(_)) {
-                        // RM0090 ADC_SR flags are rc_w0: write zero to clear,
-                        // write one to leave the current flag unchanged.
-                        self.sr &= !(mask & !val_shifted);
-                    } else {
-                        self.sr = (self.sr & !mask) | val_shifted;
+                    // RM0008/RM0090 ADC_SR flags are rc_w0: write zero to
+                    // clear; writing one leaves the current flag unchanged.
+                    self.sr &= !(mask & !val_shifted);
+                    if mask & F4_SR_EOC != 0 && val_shifted & F4_SR_EOC == 0 {
+                        self.dr_read_since_eoc.set(false);
                     }
                 }
                 0x04..=0x07 => match &mut self.regs {
@@ -1556,6 +1602,9 @@ impl Peripheral for Adc {
                         self.apply_f4_cr2(old_cr2, merged)
                     };
                     if trigger {
+                        if is_f1 {
+                            self.f1_sequence_rank = 0;
+                        }
                         self.start_conversion();
                     }
                 }
@@ -1806,6 +1855,40 @@ mod tests {
         adc.write_u32(0x34, 0).unwrap();
         let ch0 = adc.channel_input_count(0) as u32;
         assert_eq!(convert(&mut adc), ch0, "SQR3 SQ1 = 0 converts channel 0");
+    }
+
+    /// RM0008 §§11.3.8, 11.12.1, 11.12.9-11: SCAN converts the configured
+    /// SQR3 ranks in order, raises EOC/EOCIE for each result, and reading DR
+    /// clears EOC while the next rank is already converting.
+    #[test]
+    fn f1_scan_converts_ranks_in_order_and_dr_read_clears_eoc() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(0, 825);
+        adc.set_channel_input(1, 1650);
+        adc.write_u32(0x04, F1_CR1_SCAN | F1_CR1_EOCIE).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap(); // L=1 -> two ranks
+        adc.write_u32(0x34, 1 << 5).unwrap(); // SQ1=IN0, SQ2=IN1
+
+        f1_software_start(&mut adc);
+        let first: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(first[..14].iter().all(|irq| !irq));
+        assert!(first[14], "EOCIE must report the first regular rank");
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 1023);
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.f1_sequence_rank, 1);
+        assert!(
+            adc.converting,
+            "the second sequence rank starts automatically"
+        );
+
+        let second: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(second[..14].iter().all(|irq| !irq));
+        assert!(second[14], "EOCIE must report the second regular rank");
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
+        assert!(!adc.converting, "single-shot scan stops at the last rank");
+        assert_eq!(adc.f1_sequence_rank, 0);
     }
 
     /// The F1 ADC samples the selected input and VREF+ when SWSTART begins
