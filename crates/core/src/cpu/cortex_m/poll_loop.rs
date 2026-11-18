@@ -295,6 +295,12 @@ impl ProbeBus<'_> {
 }
 
 impl Bus for ProbeBus<'_> {
+    // Decode the same GPIOC instruction as the real bus. The resulting SIO
+    // access still goes through plain_read/store and refuses MMIO, so probing
+    // cannot drive a pad or emit a false undecoded-instruction report.
+    fn rp2350_gpioc(&self) -> bool {
+        self.inner.rp2350_gpioc()
+    }
     fn read_u8(&self, addr: u64) -> SimResult<u8> {
         self.plain_read(addr, 1).map(|v| v as u8)
     }
@@ -613,6 +619,56 @@ mod tests {
             cpu.step(bus, &[], &config).unwrap();
         }
         assert_eq!(cpu.pc, 0x100);
+    }
+
+    #[test]
+    fn gpioc_probe_refuses_mmio_without_false_decode_or_gpio_side_effects() {
+        use crate::cpu::cortex_m::rp2350_gpioc::SIO_BASE;
+        use labwired_config::{ChipDescriptor, SystemManifest};
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for (chip_name, pin) in [("rp2350", 25u32), ("rp2354b", 40u32)] {
+            let chip =
+                ChipDescriptor::from_file(root.join(format!("configs/chips/{chip_name}.yaml")))
+                    .unwrap();
+            let system: SystemManifest =
+                serde_yaml::from_str(&format!("name: probe\nchip: {chip_name}\n")).unwrap();
+            let mut bus = SystemBus::from_config(&chip, &system).unwrap();
+            let mut cpu = CortexM::new();
+            cpu.pc = 0x1000_0100;
+            cpu.sp = 0x2000_0400;
+            cpu.r0 = pin;
+            cpu.r3 = 1;
+            // Native SDK gpioc_bit_oe_put(pin, true): MCRR p0,#4,r0,r3,c4.
+            assert!(bus.flash.write_u16(0x1000_0100, 0xec43));
+            assert!(bus.flash.write_u16(0x1000_0102, 0x0044));
+            let oe = u64::from(SIO_BASE + 0x30 + if pin >= 32 { 4 } else { 0 });
+            let before = bus.read_u32(oe).unwrap();
+            let core = snapshot(&cpu);
+            crate::fidelity::reset();
+            assert_eq!(cpu.probe_iteration(&bus, 0x1000_0100, None, true), None);
+            assert_eq!(snapshot(&cpu), core, "probe must restore the core");
+            assert_eq!(bus.read_u32(oe).unwrap(), before, "probe drove GPIO OE");
+            assert!(crate::fidelity::report().is_empty(), "GPIOC was misdecoded");
+            cpu.step(&mut bus, &[], &SimulationConfig::default())
+                .unwrap();
+            assert_eq!(bus.read_u32(oe).unwrap(), before | (1 << (pin & 31)));
+        }
+    }
+
+    #[test]
+    fn non_rp_gpio_coprocessor_remains_unavailable_during_probe() {
+        let (mut cpu, bus) = cpu_with(&[]);
+        assert!(!bus.rp2350_gpioc());
+        let mut probe = ProbeBus {
+            inner: &bus,
+            loads: None,
+            stores: Some(Vec::new()),
+        };
+        assert!(!probe.rp2350_gpioc());
+        // A missing silicon coprocessor must still refuse the same opcode.
+        let result = cpu.exec_unknown32(&mut probe, 0xec43, 0x0044);
+        assert!(matches!(result, Err(SimulationError::DecodeError(_))));
+        assert!(probe.stores.as_ref().unwrap().is_empty());
     }
 
     #[test]
