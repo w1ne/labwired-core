@@ -182,6 +182,12 @@
   },
   {
     "buses": [
+      "UART"
+    ],
+    "name": "esp32c2"
+  },
+  {
+    "buses": [
       "I2C",
       "SPI",
       "UART"
@@ -189,7 +195,9 @@
     "name": "esp32c3"
   },
   {
-    "buses": [],
+    "buses": [
+      "I2C"
+    ],
     "name": "esp32c5"
   },
   {
@@ -201,7 +209,9 @@
     "name": "esp32c6"
   },
   {
-    "buses": [],
+    "buses": [
+      "I2C"
+    ],
     "name": "esp32c61"
   },
   {
@@ -263,6 +273,10 @@
   {
     "buses": [],
     "name": "mpfs095t"
+  },
+  {
+    "buses": [],
+    "name": "mspm0g3507"
   },
   {
     "buses": [],
@@ -762,6 +776,12 @@
       "UART"
     ],
     "name": "stm32g474re"
+  },
+  {
+    "buses": [
+      "UART"
+    ],
+    "name": "stm32h533re"
   },
   {
     "buses": [

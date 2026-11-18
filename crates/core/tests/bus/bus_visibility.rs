@@ -55,6 +55,7 @@ use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::CortexM;
 use labwired_core::logic_capture::LogicEdge;
+use labwired_core::peripherals::gpio::{GpioPort, GpioRegisterLayout};
 use labwired_core::peripherals::i2c::I2cDevice;
 use labwired_core::peripherals::spi::SpiDevice;
 use labwired_core::{Bus, Machine};
@@ -675,6 +676,12 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Uart,
         "this profile exposes only USART2 (the NUCLEO VCP); the F1 harness          produces no analyzer edges on pad-gated USART2 (parent stm32f103          passes on USART3, which this YAML does not include). Bytes are          proven by the boards.yml nucleo-f103rb-bme280 cell          (NUCLEO_F103RB_BME280_OK over USART2)",
     ),
+    (
+        "mspm0g3507",
+        BusKind::Uart,
+        "custom model implements TXDATA/enable/status only; no modeled baud-divisor \
+         timing, so it cannot narrate a wire waveform",
+    ),
 ];
 
 fn is_excluded(chip: &str, kind: BusKind) -> Option<&'static str> {
@@ -725,8 +732,9 @@ fn fleet() -> Vec<String> {
 
 fn ram_base(chip: &str) -> u64 {
     match chip {
+        "esp32c2" => 0x3FCA_0000,
         "esp32c3" => 0x3FC8_0000,
-        "esp32c6" | "esp32c6fh4" => 0x4080_0000,
+        "esp32c5" | "esp32c6" | "esp32c6fh4" | "esp32c61" => 0x4080_0000,
         "esp32"
         | "esp32s3"
         | "esp32s3-zero"
@@ -824,36 +832,22 @@ fn enable_clock(machine: &mut Machine<CortexM>, peri_name: &str) {
     let Some(gate) = machine.bus.peripherals[idx].clock_gate.as_ref() else {
         return;
     };
-    // ⚠️ NOT just "rcc". The engine's own list is `CLOCK_CONTROLLER_IDS`
-    // (`bus/routing.rs`) — rcc / cmu / rcu — and a gate offset is relative to
-    // whichever of those a chip actually declares. Looking only for "rcc"
-    // silently returned here on a Silicon Labs part, so `enable_clock` was a
-    // no-op, the peripheral stayed gated and mute, and the ratchet reported
-    // "named line(s) produced no edges" — which reads as a broken narrator
-    // rather than a harness that never turned the clock on.
-    let Some(rcc_idx) = ["rcc", "cmu", "rcu"]
-        .iter()
-        .find_map(|id| machine.bus.find_peripheral_index_by_name(id))
-    else {
-        return;
-    };
-    let rcc_base = machine.bus.peripherals[rcc_idx].base;
-    // A gate carries a LIST of bits since core#922 — a bus-enable bit and a
-    // kernel-clock-source ready bit are both just bits the RCC must have set,
-    // and the peripheral answers only when ALL of them are. Setting the first
-    // one would leave the peripheral mute and read as a coverage hole here.
-    //
-    // Collected before the writes: `gate` borrows `machine.bus`, which the
-    // writes below take mutably.
-    let required: Vec<(u64, u8)> = gate
+    // Each requirement already identifies its actual clock controller. Resolve
+    // addresses before mutating the bus, without guessing a controller name.
+    let required: Vec<(u64, u8, bool)> = gate
         .requires
         .iter()
-        .map(|b| (b.reg_offset, b.bit))
+        .map(|bit| {
+            let controller_base = machine.bus.peripherals[bit.controller_idx].base;
+            (controller_base + bit.reg_offset, bit.bit, bit.active_low)
+        })
         .collect();
-    for (reg_offset, bit) in required {
-        let addr = rcc_base + reg_offset;
+    for (addr, bit, active_low) in required {
         let cur = machine.bus.read_u32(addr).unwrap_or(0);
-        let _ = machine.bus.write_u32(addr, cur | (1u32 << bit));
+        let mask = 1u32 << bit;
+        // Preserve unrelated enable/reset bits; module-stop gates enable low.
+        let enabled = if active_low { cur & !mask } else { cur | mask };
+        let _ = machine.bus.write_u32(addr, enabled);
     }
 }
 
@@ -1028,7 +1022,12 @@ enum Family {
     Stm32H5,
     Rp2040,
     Nrf52,
+    /// Narrow C2 profile: shared UART head, 120 MHz CPU and 40 MHz UART source.
+    Esp32c2,
     Esp32c3,
+    /// Narrow C5/C61 profiles share the C3 I2C command-list engine only here.
+    Esp32c5,
+    Esp32c61,
     /// ESP32-C6 HP core. Shares the C3/S3 Espressif UART IP (same head map and
     /// CLKDIV semantics), so only its own divisor constant is new — the C6's
     /// GPIO matrix exists but no SPI/I2C window is declared on this L1 target.
@@ -1056,8 +1055,14 @@ fn family_of(chip: &str) -> Family {
         Family::Rp2040
     } else if chip.starts_with("nrf52") {
         Family::Nrf52
+    } else if chip == "esp32c2" {
+        Family::Esp32c2
     } else if chip == "esp32c3" {
         Family::Esp32c3
+    } else if chip == "esp32c5" {
+        Family::Esp32c5
+    } else if chip == "esp32c61" {
+        Family::Esp32c61
     } else if chip == "esp32c6" || chip == "esp32c6fh4" {
         Family::Esp32c6
     } else if chip == "esp32"
@@ -1138,7 +1143,7 @@ fn measure_kind(chip: &str, kind: BusKind) -> KindResult {
                                 .find(|i| i.name == fresh.name)
                                 .map(|i| i.clone_name())
                                 .unwrap_or_else(|| fresh.clone_name());
-                            results.push(drive_uart_stm32(&mut m, &inst, layout));
+                            results.push(drive_uart_stm32(chip, &mut m, &inst, layout));
                         }
                         results
                     }
@@ -1200,7 +1205,7 @@ fn drive_uart(
     let bit_time = match family {
         Family::Stm32F1 | Family::Stm32V2 | Family::Stm32H5 => {
             // Handled by drive_uart_stm32 via the dual-map attempt above.
-            return drive_uart_stm32(machine, inst, Stm32UartMap::V2);
+            return drive_uart_stm32(chip, machine, inst, Stm32UartMap::V2);
         }
         Family::Rp2040 => {
             // PL011 IBRD/FBRD for ~115200 from 125 MHz
@@ -1217,6 +1222,13 @@ fn drive_uart(
             let _ = machine.bus.write_u32(inst.base + 0x524, 0x01D6_0000);
             let _ = machine.bus.write_u32(inst.base + 0x500, 8);
             557u64
+        }
+        Family::Esp32c2 => {
+            // Integer CLKDIV 347 from the 40 MHz UART source is approximately
+            // 115200 baud. The 120 MHz CPU advances 347 * 120 / 40 = 1041
+            // cycles per bit; the independent decoder uses that same interval.
+            let _ = machine.bus.write_u32(inst.base + 0x14, 347);
+            1041u64
         }
         Family::Esp32c3 | Family::Esp32c6 => {
             // CLKDIV 115200 from the 80 MHz UART source clock; both the C3 and
@@ -1251,7 +1263,7 @@ fn drive_uart(
                     .into(),
             };
         }
-        Family::Unknown => {
+        Family::Esp32c5 | Family::Esp32c61 | Family::Unknown => {
             return KindResult::Unsupported {
                 instance: inst.name.clone(),
                 reason: format!("no UART bring-up for family of chip '{chip}'"),
@@ -1312,7 +1324,66 @@ fn drive_uart(
     check_uart_edges(inst, &watched, &edges, bit_time)
 }
 
+// F1 UART1/2 are routed to PA9/PA2 and require alternate-function output.
+// Use the same descriptor as machine_for: its explicit profile selects the
+// constructed GPIO layout. Other layouts and shifted windows stay untouched.
+fn prepare_stm32f1_uart_tx(
+    chip: &str,
+    machine: &mut Machine<CortexM>,
+    inst: &BusInstance,
+) -> Result<(), String> {
+    let pin = match inst.name.as_str() {
+        "uart1" | "usart1" => 9u32,
+        "uart2" | "usart2" => 2u32,
+        _ => return Ok(()),
+    };
+    let descriptor = ChipDescriptor::from_file(root(&format!("configs/chips/{chip}.yaml")))
+        .map_err(|e| format!("{chip}: load GPIO profile: {e}"))?;
+    let Some(gpio) = descriptor.peripherals.iter().find(|p| p.id == "gpioa") else {
+        return Ok(());
+    };
+    let layout = gpio
+        .config
+        .get("profile")
+        .and_then(|v| v.as_str())
+        .and_then(|profile| profile.parse::<GpioRegisterLayout>().ok());
+    if layout != Some(GpioRegisterLayout::Stm32F1)
+        || gpio
+            .config
+            .get("reg_offset")
+            .is_some_and(|v| v.as_u64() != Some(0))
+    {
+        return Ok(());
+    }
+    let idx = machine
+        .bus
+        .find_peripheral_index_by_name(&gpio.id)
+        .ok_or_else(|| "configured STM32F1 GPIOA is absent from the live bus".to_string())?;
+    let live = &machine.bus.peripherals[idx];
+    if live.base != gpio.base_address
+        || live
+            .dev
+            .as_any()
+            .and_then(|dev| dev.downcast_ref::<GpioPort>())
+            .is_none()
+    {
+        return Err("configured STM32F1 GPIOA does not match the live GpioPort".into());
+    }
+    let addr = live.base + if pin < 8 { 0x00 } else { 0x04 };
+    let shift = (pin % 8) * 4;
+    enable_clock(machine, &gpio.id);
+    let cur = machine
+        .bus
+        .read_u32(addr)
+        .map_err(|e| format!("GPIOA TX pad read failed: {e:?}"))?;
+    machine
+        .bus
+        .write_u32(addr, (cur & !(0xF << shift)) | (0xB << shift))
+        .map_err(|e| format!("GPIOA TX pad write failed: {e:?}"))
+}
+
 fn drive_uart_stm32(
+    chip: &str,
     machine: &mut Machine<CortexM>,
     inst: &BusInstance,
     map: Stm32UartMap,
@@ -1327,6 +1398,12 @@ fn drive_uart_stm32(
     let brr = 69u32;
     match map {
         Stm32UartMap::F1 => {
+            if let Err(reason) = prepare_stm32f1_uart_tx(chip, machine, inst) {
+                return KindResult::Failed {
+                    instance: inst.name.clone(),
+                    reason,
+                };
+            }
             let _ = machine.bus.write_u32(inst.base + 0x08, brr); // BRR
             let _ = machine
                 .bus
@@ -1424,6 +1501,14 @@ fn transmit_uart(family: Family, machine: &mut Machine<CortexM>, inst: &BusInsta
             let _ = machine.bus.write_u32(inst.base + 0x008, 1); // TASKS_STARTTX
             true
         }
+        Family::Esp32c2 => {
+            // The narrow C2 descriptor exposes only the shared UART head.
+            // Send through FIFO @ 0x00; do not probe the STM32 TDR fallback.
+            for &b in &PAYLOAD {
+                let _ = machine.bus.write_u32(inst.base, u32::from(b));
+            }
+            true
+        }
         Family::Esp32c3 | Family::Esp32c6 | Family::Esp32 => {
             // FIFO @ 0x00 on EspUart / Esp32Uart. Also poke TDR for a generic
             // V2 UART that may share the same name on a stub yaml.
@@ -1433,7 +1518,7 @@ fn transmit_uart(family: Family, machine: &mut Machine<CortexM>, inst: &BusInsta
             }
             true
         }
-        Family::Unknown => false,
+        Family::Esp32c5 | Family::Esp32c61 | Family::Unknown => false,
     }
 }
 
@@ -1615,7 +1700,7 @@ fn drive_spi(
             let _ = machine.bus.write_u32(inst.base + 0x14, (1 << 4) | (1 << 2));
             // CMD
         }
-        Family::Unknown => {
+        Family::Esp32c2 | Family::Esp32c5 | Family::Esp32c61 | Family::Unknown => {
             return KindResult::Unsupported {
                 instance: inst.name.clone(),
                 reason: format!("no SPI bring-up for family of chip '{chip}'"),
@@ -1763,7 +1848,7 @@ fn transmit_spi(family: Family, machine: &mut Machine<CortexM>, inst: &BusInstan
             run(machine, PAYLOAD.len() as u64 * 10 * 160 + 256);
             true
         }
-        Family::Unknown => false,
+        Family::Esp32c2 | Family::Esp32c5 | Family::Esp32c61 | Family::Unknown => false,
     }
 }
 
@@ -1872,7 +1957,7 @@ fn drive_i2c(
             let _ = machine.bus.write_u32(inst.base + 0x4C, 199);
             let _ = machine.bus.write_u32(inst.base + 0x48, 199);
         }
-        Family::Esp32c3 => {
+        Family::Esp32c3 | Family::Esp32c5 | Family::Esp32c61 => {
             let _ = machine.bus.write_u32(inst.base, 199); // SCL_LOW
             let _ = machine.bus.write_u32(inst.base + 0x38, 180 | (19 << 9));
             let _ = machine.bus.write_u32(inst.base + 0x30, 29);
@@ -1893,7 +1978,7 @@ fn drive_i2c(
             // written, which is the difference between this and a pad probe.
             let _ = machine.bus.write_u32(inst.base + 0x04, 1); // EN
         }
-        Family::Unknown => {
+        Family::Esp32c2 | Family::Unknown => {
             return KindResult::Unsupported {
                 instance: inst.name.clone(),
                 reason: format!("no I2C bring-up for family of chip '{chip}'"),
@@ -2015,7 +2100,7 @@ fn transmit_i2c(family: Family, machine: &mut Machine<CortexM>, inst: &BusInstan
             let _ = machine.bus.write_u32(inst.base + 0x008, 1); // STARTTX
             true
         }
-        Family::Esp32c3 => {
+        Family::Esp32c3 | Family::Esp32c5 | Family::Esp32c61 => {
             let cmd = |opcode: u32, byte_num: u32| (opcode << 11) | byte_num;
             let reg_cmd0 = inst.base + 0x58;
             let reg_data = inst.base + 0x1C;
@@ -2066,7 +2151,7 @@ fn transmit_i2c(family: Family, machine: &mut Machine<CortexM>, inst: &BusInstan
             let _ = machine.bus.write_u32(reg_ctr, 1 << 5); // TRANS_START
             true
         }
-        Family::Unknown => false,
+        Family::Esp32c2 | Family::Unknown => false,
     }
 }
 

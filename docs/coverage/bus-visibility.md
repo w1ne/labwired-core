@@ -103,6 +103,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no edge bring-up path for Kinetis LPUART in this gate yet
 * **mpfs095t**
   * UART: no 16550 MMUART bring-up in this harness; bytes are proven by the mpfs_disco_kit_zephyr survival gate
+* **mspm0g3507**
+  * UART: custom model implements TXDATA/enable/status only; no modeled baud-divisor timing, so it cannot narrate a wire waveform
 * **nrf51822**
   * I2C: no nRF51 legacy-TWI bring-up in this harness (the nRF52 arm drives TWIM)
   * UART: no nRF51 legacy-UART bring-up in this harness (the nRF52 arm drives UARTE EasyDMA); bytes are proven by the microbit-v1 survival smoke
@@ -196,10 +198,11 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32 | ✓ | — | ✓ |
 | esp32-devkitc-32e-gpio-smoke | ✓ | — | ✓ |
 | esp32-devkitc-32e-uart1 | — | — | ✓ |
+| esp32c2 | — | — | ✓ |
 | esp32c3 | ✓ | ✓ | ✓ |
-| esp32c5 | — | — | — |
+| esp32c5 | ✓ | — | — |
 | esp32c6 | ✓ | ✓ | ✓ |
-| esp32c61 | — | — | — |
+| esp32c61 | ✓ | — | — |
 | esp32c6fh4 | ✓ | ✓ | ✓ |
 | esp32h2 | — | — | — |
 | esp32p4 | — | — | — |
@@ -214,6 +217,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | mk64f12 | — | — | — |
 | mkw41z4 | — | — | — |
 | mpfs095t | — | — | — |
+| mspm0g3507 | — | — | — |
 | nrf51822 | — | — | — |
 | nrf52832 | ✓ | ✓ | ✓ |
 | nrf52833 | ✓ | ✓ | ✓ |
@@ -290,6 +294,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32g0b1re | ✓ | ✓ | ✓ |
 | stm32g431rb | ✓ | ✓ | ✓ |
 | stm32g474re | ✓ | ✓ | ✓ |
+| stm32h533re | — | — | ✓ |
 | stm32h563 | ✓ | ✓ | ✓ |
 | stm32h723zg | — | — | ✓ |
 | stm32h735 | ✓ | ✓ | ✓ |
