@@ -1677,6 +1677,132 @@ fn nucleo_f407_mosfet_instance_multiplier_matches_parallel_devices_through_adc1(
 }
 
 #[test]
+fn nucleo_f407_mosfet_sheet_resistance_matches_explicit_terminal_networks_through_adc1() {
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    let unrelated =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let sheet = SystemManifest::from_file(root(
+        "examples/nucleo-f407/analog-mosfet-sheet-resistance.yaml",
+    ))
+    .expect("load generic MOSFET RSH and instance-square branches");
+    profile.cosim_models = unrelated.cosim_models;
+    profile.cosim_models.extend(sheet.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3), ("PA4", 4)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries NTC, diode, and MOSFET sheet-resistance netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "NTC, diode, and MOSFET drains must resolve to ADC1 channels 0 through 4"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without a routed analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+    let mut cycles = 0;
+    let mut samples = Vec::new();
+    for gate_v in [0.0_f64, 0.8, 1.5, 2.5, 3.3] {
+        session
+            .set_signal_number("ui.mosfet_sheet.gate_v", gate_v)
+            .expect("drive the generic MOSFET sheet-resistance branches");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the unrelated devices and MOSFET resistance deck");
+        assert_eq!(steps.len(), 3, "the NTC, diode, and MOSFET deck solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let sheet_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let explicit_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let control_v = signal_voltage(&session, "board.analog.pa4_volts");
+        let expected_sheet_v = mosfet_multiplier_drain_voltage(gate_v, 1.0);
+        let expected_control_v = mosfet_drain_voltage(gate_v);
+        assert!(
+            (sheet_v - expected_sheet_v).abs() < 5e-5,
+            "RSH·NRD/NRS at Vgs={gate_v} V should match the independent terminal-resistance load line {expected_sheet_v} V, got {sheet_v} V"
+        );
+        assert!(
+            (explicit_v - expected_sheet_v).abs() < 5e-5,
+            "explicit RD/RS at Vgs={gate_v} V should match the same independent load line {expected_sheet_v} V, got {explicit_v} V"
+        );
+        assert!(
+            (sheet_v - explicit_v).abs() < 1e-9,
+            "RSH=20 Ω/square with NRD=1 and NRS=4 must match RD=20 Ω and RS=80 Ω: {sheet_v} V vs {explicit_v} V"
+        );
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "the zero-resistance control at Vgs={gate_v} V should be {expected_control_v} V, got {control_v} V"
+        );
+        if gate_v >= 1.5 {
+            assert!(
+                sheet_v > control_v,
+                "terminal resistance must reduce channel current and raise the loaded drain voltage at Vgs={gate_v} V: sheet={sheet_v}, control={control_v}"
+            );
+        }
+
+        let ntc_v = 1.65;
+        let diode_v = diode_load_line_voltage();
+        for (channel, volts) in [
+            (0, ntc_v),
+            (1, diode_v),
+            (2, sheet_v),
+            (3, explicit_v),
+            (4, control_v),
+        ] {
+            let expected_count = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 conversion must report channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 5),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+        assert!(
+            (signal_voltage(&session, "board.analog.pa0_volts") - ntc_v).abs() < 1e-9,
+            "the unrelated Beta NTC remains isolated"
+        );
+        assert!(
+            (signal_voltage(&session, "board.analog.pa1_volts") - diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode remains isolated"
+        );
+        samples.push((gate_v, sheet_v, explicit_v, control_v));
+    }
+
+    assert!(
+        samples[2..]
+            .iter()
+            .all(|(_, sheet, explicit, control)| sheet == explicit && sheet > control),
+        "sheet resistance must match the explicit terminal network and differ from the zero-resistance control: {samples:?}"
+    );
+}
+
+#[test]
 fn nucleo_f407_mosfet_body_effect_reaches_pa2_pa3_adc1_end_to_end() {
     let system_path = root("configs/systems/nucleo-f407.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");

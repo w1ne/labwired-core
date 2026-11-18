@@ -1,0 +1,37 @@
+# Compare MOSFET sheet resistance and instance squares with explicit RD/RS on ADC1.
+name: "nucleo-f407-analog-mosfet-sheet-resistance"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_sheet_resistance"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.mosfet_sheet.gate_v"
+    outputs:
+      sheet_drain: "board.analog.pa2_volts"
+      explicit_drain: "board.analog.pa3_volts"
+      control_drain: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Vdd_sheet supply_sheet 0 dc 3.3
+        Rload_sheet supply_sheet drain_sheet 1k
+        Msheet drain_sheet gate 0 0 NMOS_SHEET nrd=1 nrs=4
+        Vdd_explicit supply_explicit 0 dc 3.3
+        Rload_explicit supply_explicit drain_explicit 1k
+        Mexplicit drain_explicit gate 0 0 NMOS_DIRECT
+        Vdd_control supply_control 0 dc 3.3
+        Rload_control supply_control drain_control 1k
+        Mcontrol drain_control gate 0 0 NMOS_CONTROL
+        .model NMOS_SHEET NMOS(VTO=1 KP=20u LAMBDA=0.02 RSH=20 W=100u L=10u)
+        .model NMOS_DIRECT NMOS(VTO=1 KP=20u LAMBDA=0.02 RD=20 RS=80 W=100u L=10u)
+        .model NMOS_CONTROL NMOS(VTO=1 KP=20u LAMBDA=0.02 W=100u L=10u)
+      probes:
+        sheet_drain: "v(drain_sheet)"
+        explicit_drain: "v(drain_explicit)"
+        control_drain: "v(drain_control)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
