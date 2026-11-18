@@ -250,10 +250,10 @@ fn s3_declared_uart_names_deliver_rx_to_the_matching_hardware_instance() {
         bus.write_u32(base + 0x0c, 1).unwrap(); // RXFIFO_FULL interrupt enabled
         let payload = [b'A' + instance as u8, b'0' + instance as u8];
         assert_eq!(bus.deliver_uart_rx_named(&declared, &payload), Ok(2));
-        #[cfg(feature = "event-scheduler")]
-        assert!(
+        assert_eq!(
             bus.pending_schedule.iter().any(|(idx, _, _)| *idx == index),
-            "delivery must wake the selected {native}, not another UART"
+            labwired_core::cycle_clock::event_scheduler_enabled(),
+            "delivery must wake the selected {native} exactly when its scheduler is enabled"
         );
         assert_ne!(bus.read_u32(base + 0x08).unwrap() & 1, 0);
         assert_eq!(bus.read_u32(base).unwrap(), u32::from(payload[0]));
