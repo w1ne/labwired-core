@@ -1,0 +1,215 @@
+{
+  "status": "passed",
+  "runtime": "compiled-wasm",
+  "firmware_bytes": 206,
+  "cpu_emulation": false,
+  "catalog_device_type": "tmp36",
+  "default_mv": 750,
+  "cold_mv": 100,
+  "zero_mv": 500,
+  "ambient_mv": 750,
+  "hot_mv": 1750,
+  "observations": {
+    "cold": {
+      "temperature_c": -40,
+      "default_mv": 750,
+      "result_mv": 100,
+      "time_ns": 1000,
+      "trace": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "tmp36-sensor.voltage_mv",
+            "unit": "mV"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              750
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 1000,
+            "values": [
+              100
+            ]
+          }
+        ]
+      }
+    },
+    "zero": {
+      "temperature_c": 0,
+      "default_mv": 750,
+      "result_mv": 500,
+      "time_ns": 1000,
+      "trace": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "tmp36-sensor.voltage_mv",
+            "unit": "mV"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              750
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 1000,
+            "values": [
+              500
+            ]
+          }
+        ]
+      }
+    },
+    "default": {
+      "temperature_c": 25,
+      "default_mv": 750,
+      "result_mv": 750,
+      "time_ns": 1000,
+      "trace": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "tmp36-sensor.voltage_mv",
+            "unit": "mV"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              750
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 1000,
+            "values": [
+              750
+            ]
+          }
+        ]
+      }
+    },
+    "hot": {
+      "temperature_c": 125,
+      "default_mv": 750,
+      "result_mv": 1750,
+      "time_ns": 1000,
+      "trace": {
+        "time_unit": "ns",
+        "channels": [
+          {
+            "name": "tmp36-sensor.voltage_mv",
+            "unit": "mV"
+          }
+        ],
+        "dropped": 0,
+        "samples": [
+          {
+            "cycle": 0,
+            "time_ns": 0,
+            "values": [
+              750
+            ]
+          },
+          {
+            "cycle": 1,
+            "time_ns": 1000,
+            "values": [
+              1750
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "native_model_equality": true,
+  "run_report": {
+    "assumptions": [
+      "The registered TMP36 catalog equation is used as a deterministic functional analog source.",
+      "The portable firmware writes temperature in degrees Celsius and reads the modeled millivolt output."
+    ],
+    "execution_path": "flex_portable_wasm",
+    "model_name": "Reusable TMP36 temperature-source check",
+    "models": [
+      {
+        "adapter": "behavior",
+        "config": {
+          "device_type": "tmp36"
+        },
+        "id": "tmp36-sensor",
+        "inputs": [
+          {
+            "name": "temperature",
+            "signal": "environment.temperature_c"
+          }
+        ],
+        "model_type": "tmp36",
+        "outputs": [
+          {
+            "name": "voltage_mv",
+            "signal": "sensor.output_mv"
+          }
+        ],
+        "step_ns": 1000
+      }
+    ],
+    "ports": [
+      {
+        "access": "write",
+        "initial": 25,
+        "kind": "number",
+        "name": "temperature_c",
+        "signal": "environment.temperature_c",
+        "unit": "°C"
+      },
+      {
+        "access": "read",
+        "kind": "number",
+        "name": "temperature_mv",
+        "signal": "sensor.output_mv",
+        "unit": "mV"
+      }
+    ],
+    "schema_version": 1,
+    "scope_notes_complete": true,
+    "target_cpu_emulated": false,
+    "time_unit": "ns",
+    "unsupported_checks": [
+      "Original target-MCU firmware execution, ADC peripheral fidelity, sensor tolerance, and physical measurement are not modeled."
+    ]
+  },
+  "checks": [
+    "portable-firmware-execution",
+    "registered-formula-model",
+    "temperature-unit",
+    "catalog-default",
+    "native-model-equality",
+    "analog-trace-nanoseconds",
+    "cold-negative-control",
+    "hot-positive-control"
+  ],
+  "measured_browser_ms": 78.9,
+  "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+  "browser_driver": "Chrome DevTools MCP",
+  "core_commit": "c51af6b6f1fdb9cf81176eeed9ec0888981c69f7",
+  "firmware_sha256": "aa7c012374afe061ae11c33441fde3942a1b861255e7a24fad8b190a396fa6ff",
+  "firmware_source_sha256": "3a4b21935f1920048e85efad41097d3c48e664d09d19e42602ab95cbc82dd759",
+  "system_sha256": "63d31adde73d199052d5835f453e22b1f75d1b23b74a1e3d85949418d056daf9"
+}

@@ -34,6 +34,13 @@ const LIPO_FIRMWARE_SOURCE: &[u8] =
     include_bytes!("../tests/fixtures/flex-analog-multi-input/firmware.rs");
 const LIPO_SYSTEM_BYTES: &[u8] =
     include_bytes!("../tests/fixtures/flex-analog-multi-input/system.yaml");
+const TMP36_SYSTEM: &str = include_str!("../tests/fixtures/flex-analog-tmp36/system.yaml");
+const TMP36_BROWSER: &str = include_str!("../tests/fixtures/flex-analog-tmp36/browser.json");
+const TMP36_NATIVE: &str = include_str!("../tests/fixtures/flex-analog-tmp36/native.json");
+const TMP36_FIRMWARE: &[u8] = include_bytes!("../tests/fixtures/flex-analog-tmp36/firmware.wasm");
+const TMP36_FIRMWARE_SOURCE: &[u8] =
+    include_bytes!("../tests/fixtures/flex-analog-tmp36/firmware.rs");
+const TMP36_SYSTEM_BYTES: &[u8] = include_bytes!("../tests/fixtures/flex-analog-tmp36/system.yaml");
 const GPIO_REUSE_POMODORO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/system.yaml");
 const GPIO_REUSE_UNO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/arduino-uno.yaml");
 
@@ -695,6 +702,124 @@ fn flex_lipo_browser_evidence_pins_firmware_and_manifest_inputs() {
             normalize_numbers(&browser["observations"][case]),
             normalize_numbers(&native[case]),
             "browser evidence for {case} must include the exact native-matched instrument samples"
+        );
+    }
+}
+
+fn tmp36_analog_reference(temperature_c: f64) -> serde_json::Value {
+    let mut runtime = FlexRuntime::from_yaml(TMP36_SYSTEM).expect("load registered TMP36 source");
+    let temperature = runtime.port_id("temperature_c").unwrap();
+    let voltage = runtime.port_id("temperature_mv").unwrap();
+    let default_mv = runtime.read(voltage).unwrap();
+    runtime.write(temperature, temperature_c).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    let result_mv = runtime.read(voltage).unwrap();
+    let batch = runtime.analog_trace_snapshot(0);
+    assert_eq!(
+        batch.channels,
+        [labwired_core::analog::AnalogChannel {
+            name: "tmp36-sensor.voltage_mv".to_owned(),
+            unit: "mV".to_owned(),
+        }]
+    );
+    assert_eq!(batch.samples.len(), 2);
+    serde_json::json!({
+        "temperature_c": temperature_c,
+        "default_mv": default_mv,
+        "result_mv": result_mv,
+        "time_ns": runtime.time_ns(),
+        "trace": {
+            "time_unit": "ns",
+            "channels": batch.channels,
+            "dropped": batch.dropped,
+            "samples": batch.samples.into_iter().map(|sample| serde_json::json!({
+                "cycle": sample.cycle,
+                "time_ns": sample.time_ns,
+                "values": sample.values,
+            })).collect::<Vec<_>>(),
+        },
+    })
+}
+
+#[test]
+fn flex_tmp36_reuses_formula_source_with_temperature_units_and_scope_trace() {
+    let yaml: serde_yaml::Value = serde_yaml::from_str(TMP36_SYSTEM).unwrap();
+    assert_eq!(yaml["ports"][0]["unit"], "°C");
+    assert_eq!(yaml["cosim_models"][0]["config"]["device_type"], "tmp36");
+
+    let cold = tmp36_analog_reference(-40.0);
+    let zero = tmp36_analog_reference(0.0);
+    let default = tmp36_analog_reference(25.0);
+    let hot = tmp36_analog_reference(125.0);
+    assert_eq!(cold["default_mv"], 750.0);
+    assert_eq!(cold["result_mv"], 100.0);
+    assert_eq!(zero["result_mv"], 500.0);
+    assert_eq!(default["result_mv"], 750.0);
+    assert_eq!(hot["result_mv"], 1_750.0);
+    assert!(hot["result_mv"].as_f64().unwrap() > default["result_mv"].as_f64().unwrap());
+    assert!(cold["result_mv"].as_f64().unwrap() < default["result_mv"].as_f64().unwrap());
+
+    let measured = serde_json::json!({"cold": cold, "zero": zero, "default": default, "hot": hot});
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/flex-analog-tmp36/native.json");
+    if std::env::var_os("LABWIRED_REGEN_FLEX_TMP36").is_some() {
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&measured).unwrap() + "\n",
+        )
+        .unwrap();
+    }
+    let expected: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        measured, expected,
+        "formula-backed analog observations changed"
+    );
+}
+
+#[test]
+fn flex_tmp36_browser_evidence_pins_firmware_and_manifest_inputs() {
+    use sha2::{Digest, Sha256};
+
+    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Number(number) => {
+                serde_json::json!(number.as_f64().expect("finite fixture number"))
+            }
+            serde_json::Value::Array(items) => {
+                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
+            }
+            serde_json::Value::Object(fields) => serde_json::Value::Object(
+                fields
+                    .iter()
+                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+
+    fn sha256(bytes: &[u8]) -> String {
+        format!("{:x}", Sha256::digest(bytes))
+    }
+
+    let browser: serde_json::Value = serde_json::from_str(TMP36_BROWSER).unwrap();
+    let native: serde_json::Value = serde_json::from_str(TMP36_NATIVE).unwrap();
+    let core_commit = browser["core_commit"].as_str().unwrap();
+    assert_eq!(core_commit.len(), 40);
+    assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(browser["native_model_equality"], true);
+    assert_eq!(browser["firmware_sha256"], sha256(TMP36_FIRMWARE));
+    assert_eq!(
+        browser["firmware_source_sha256"],
+        sha256(TMP36_FIRMWARE_SOURCE)
+    );
+    assert_eq!(browser["system_sha256"], sha256(TMP36_SYSTEM_BYTES));
+    for case in ["cold", "zero", "default", "hot"] {
+        assert_eq!(
+            normalize_numbers(&browser["observations"][case]),
+            normalize_numbers(&native[case]),
+            "browser evidence for {case} must match the native instrument trace"
         );
     }
 }
