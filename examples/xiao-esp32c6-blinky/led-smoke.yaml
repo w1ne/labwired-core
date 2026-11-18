@@ -1,0 +1,11 @@
+# Boot the XIAO ESP32-C6 C6 HP core and capture real GPIO15 pad transitions.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/xiao-esp32c6-led-smoke"
+  system: "../../configs/systems/seeed-xiao-esp32c6.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - gpio_edges:
+      pin: "gpio:15"
+      min_edges: 16

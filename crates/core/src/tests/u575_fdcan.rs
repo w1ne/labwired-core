@@ -58,6 +58,7 @@ mod u575_fdcan_tests {
 
     fn manifest_for(chip_path: &str) -> SystemManifest {
         SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -225,6 +226,7 @@ mod u575_fdcan_tests {
                     serde_yaml::Value::String("fdcan1".to_string()),
                 )]),
             }],
+            cosim_models: Vec::new(),
             rf: None,
         };
 

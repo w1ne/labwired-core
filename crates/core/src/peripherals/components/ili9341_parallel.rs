@@ -15,6 +15,7 @@
 //! - **WR falling edge** (high→low) while CS is low samples RS and DB[15:0]:
 //!   - RS low → command (low 8 bits of the bus)
 //!   - RS high → data / pixel stream
+//! - **RD** may be an MCU GPIO or physically tied high. Read-back is not modelled.
 //! - **RST low** clears the framebuffer and resets the addressing window
 //!   (hardware reset; distinct from SPI SWRESET which leaves frame memory).
 //!
@@ -41,7 +42,8 @@ pub struct ParallelPins {
     pub cs: u8,
     pub rs: u8,
     pub wr: u8,
-    pub rd: u8,
+    /// None means RD is physically tied high; no GPIO is reserved or observed.
+    pub rd: Option<u8>,
     pub rst: u8,
     /// Data bus pins, DB0..DB15 (DB0 is LSB).
     pub db: [u8; 16],
@@ -427,7 +429,7 @@ impl Ili9341Parallel {
             s.rs = to;
             return;
         }
-        if pin == p.rd {
+        if Some(pin) == p.rd {
             s.rd = to;
             return;
         }
@@ -515,7 +517,16 @@ static ILI9341_PARALLEL_METADATA: KitMetadata = KitMetadata {
             name: std::borrow::Cow::Borrowed("rd_pin"),
             ty: ConfigType::Str,
             doc: std::borrow::Cow::Borrowed(
-                "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5.",
+                "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5. \
+                 Omit when rd_tied_high is true.",
+            ),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("rd_tied_high"),
+            ty: ConfigType::Bool,
+            doc: std::borrow::Cow::Borrowed(
+                "True when RD is physically tied to the logic-high rail. No RD GPIO is \
+                 attached; rd_pin/RD must be absent. Defaults to false.",
             ),
         },
         ConfigKey {
@@ -548,7 +559,58 @@ impl PeripheralKit for Ili9341ParallelKit {
             .config_gpio_pin("rs_pin", "RS", "GPIO2")
             .or_else(|_| ctx.config_gpio_pin("dc_pin", "DC", "GPIO2"))?;
         let wr = ctx.config_gpio_pin("wr_pin", "WR", "GPIO4")?;
-        let rd = ctx.config_gpio_pin("rd_pin", "RD", "GPIO5")?;
+        // A fixed rail is not an MCU pin. Reject malformed values instead of
+        // silently falling back to the legacy GPIO5 default.
+        let rd_tied_high = match ctx.ext.config.get("rd_tied_high") {
+            None => false,
+            Some(value) => value.as_bool().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "{} '{}': rd_tied_high must be a boolean",
+                    ctx.device_type(),
+                    ctx.device_id()
+                )
+            })?,
+        };
+        let rd = if rd_tied_high {
+            anyhow::ensure!(
+                !ctx.ext.config.contains_key("rd_pin") && !ctx.ext.config.contains_key("RD"),
+                "{} '{}': rd_tied_high=true contradicts rd_pin/RD; omit the GPIO pin",
+                ctx.device_type(),
+                ctx.device_id()
+            );
+            None
+        } else {
+            let mut resolved = None;
+            for key in ["rd_pin", "RD"] {
+                if let Some(value) = ctx.ext.config.get(key) {
+                    let label = value.as_str().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "{} '{}': {key} must be a GPIO pad string",
+                            ctx.device_type(),
+                            ctx.device_id()
+                        )
+                    })?;
+                    let pin = ctx.parse_gpio_pin(label).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "{} '{}': {key} '{label}' is not a parseable GPIO pad label",
+                            ctx.device_type(),
+                            ctx.device_id()
+                        )
+                    })?;
+                    anyhow::ensure!(
+                        resolved.is_none_or(|previous| previous == pin),
+                        "{} '{}': rd_pin and RD disagree",
+                        ctx.device_type(),
+                        ctx.device_id()
+                    );
+                    resolved = Some(pin);
+                }
+            }
+            Some(match resolved {
+                Some(pin) => pin,
+                None => ctx.config_gpio_pin("rd_pin", "RD", "GPIO5")?,
+            })
+        };
         let rst = ctx.config_gpio_pin("rst_pin", "RST", "GPIO33")?;
         let mut db = [0u8; 16];
         for (i, pin) in db.iter_mut().enumerate() {
@@ -675,7 +737,7 @@ mod tests {
             cs: 0,
             rs: 1,
             wr: 2,
-            rd: 3,
+            rd: Some(3),
             rst: 4,
             // DB0..DB15 → GPIO 10..25
             db: [
@@ -751,6 +813,24 @@ mod tests {
         assert_eq!(fb.len(), FB_BYTES);
         assert_eq!(fb[0], 0xF8);
         assert_eq!(fb[1], 0x00);
+    }
+
+    #[test]
+    fn tied_high_rd_releases_the_former_gpio_for_data() {
+        let mut pins = test_pins();
+        pins.rd = None;
+        // GPIO3 used to be RD in this fixture. It is a valid DB0 when RD is
+        // tied high, so no sentinel/default GPIO may steal this edge.
+        pins.db[0] = 3;
+        let p = Ili9341Parallel::new("rd-tied-high", pins);
+        select(&p);
+        write_cmd(&p, 0x29);
+        write_cmd(&p, 0x2C);
+        write_data16(&p, 0xF801);
+        write_data16(&p, 0x07E0);
+        assert_eq!(&p.framebuffer()[..4], &[0xF8, 0x01, 0x07, 0xE0]);
+        assert!(p.display_on());
+        assert!(p.state.lock().unwrap().rd, "a fixed RD rail stays high");
     }
 
     #[test]

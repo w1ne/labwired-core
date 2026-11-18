@@ -1,0 +1,374 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 452430,
+  "cycles": 594567,
+  "instructions": 452346,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": 65536,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 1000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "LW_L2_OK"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      82,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      96,
+      141,
+      0,
+      0,
+      0,
+      0,
+      58,
+      149,
+      0,
+      0,
+      58,
+      36,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "pc": 924,
+    "sp": 2801,
+    "sreg": 128
+  },
+  "firmware_hash": "3badab4d7b8561e32b570350b8255aa18304bd4f24f725e94db613e52fecfb71",
+  "config": {
+    "firmware": "validation/arduino-matrix/out/arduino-leonardo/L2_blink_serial/firmware.elf",
+    "system": "validation/arduino-matrix/systems/arduino-leonardo.yaml",
+    "script": "validation/arduino-matrix/out/arduino-leonardo/L2_blink_serial/test.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "spi",
+        "kind": "native",
+        "base": 65536,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c",
+        "kind": "i2c",
+        "base": 65552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 65571,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 65574,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 65577,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porte",
+        "kind": "native",
+        "base": 65580,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 65583,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 66048,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "max31855",
+        "device_type": "max31855",
+        "declared": true,
+        "attachment": {
+          "transport": "spi",
+          "bus": "spi",
+          "cs_pin": "D17"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "ina219",
+        "device_type": "ina219",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c",
+          "address": 64
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "ina219",
+            "meta": {
+              "inputs": {
+                "bus_voltage": 3.3,
+                "current": 0.0
+              },
+              "powered": true,
+              "registers": {
+                "BUS_VOLTAGE": 6602,
+                "CALIBRATION": 4096,
+                "CONFIGURATION": 14751,
+                "CURRENT": 0,
+                "POWER": 0,
+                "SHUNT_VOLTAGE": 0
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (16000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 5 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 594903,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "portc",
+        "pin": 7,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 547487,
+            "value": 1
+          },
+          {
+            "cycle": 563648,
+            "value": 0
+          },
+          {
+            "cycle": 580363,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 17613,
+            "state": "0"
+          },
+          {
+            "cycle": 547487,
+            "state": "1"
+          },
+          {
+            "cycle": 563648,
+            "state": "0"
+          },
+          {
+            "cycle": 580363,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 3
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "portc",
+      "number": 7,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "LW_L2_BOOT",
+        "cycle_lo": 561597,
+        "cycle": 561599,
+        "end_cycle": 561599
+      },
+      {
+        "text": "LW_L2_OK",
+        "cycle_lo": 593597,
+        "cycle": 593599,
+        "end_cycle": 593599
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 4026,
+    "data_bytes": 60,
+    "bss_bytes": 111,
+    "flash_used_bytes": 4086,
+    "ram_static_bytes": 171,
+    "flash_total_bytes": 32768,
+    "ram_total_bytes": 2560,
+    "flash_used_pct": 12.47,
+    "ram_static_pct": 6.68,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 594567,
+    "instructions": 452346,
+    "steps_executed": 452430,
+    "memory_reads": 0,
+    "memory_writes": 23228,
+    "peripheral_accesses": 23,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 930,
+        "count": 90
+      },
+      {
+        "pc": 938,
+        "count": 87
+      },
+      {
+        "pc": 934,
+        "count": 85
+      },
+      {
+        "pc": 932,
+        "count": 72
+      },
+      {
+        "pc": 936,
+        "count": 66
+      },
+      {
+        "pc": 940,
+        "count": 64
+      },
+      {
+        "pc": 892,
+        "count": 54
+      },
+      {
+        "pc": 926,
+        "count": 54
+      },
+      {
+        "pc": 972,
+        "count": 54
+      },
+      {
+        "pc": 978,
+        "count": 54
+      },
+      {
+        "pc": 878,
+        "count": 51
+      },
+      {
+        "pc": 910,
+        "count": 51
+      },
+      {
+        "pc": 918,
+        "count": 50
+      },
+      {
+        "pc": 986,
+        "count": 50
+      },
+      {
+        "pc": 982,
+        "count": 37
+      },
+      {
+        "pc": 990,
+        "count": 37
+      }
+    ]
+  }
+}

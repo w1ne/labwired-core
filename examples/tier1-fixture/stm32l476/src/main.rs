@@ -406,6 +406,9 @@ fn main() -> ! {
     // offset 0x58) and is unclocked out of reset — enable it before the first
     // report() or the console UART silently drops every byte.
     wr32(RCC_BASE + 0x58, rd32(RCC_BASE + 0x58) | (1 << 17));
+    // USART2_CR1 UE | TE (RM0351 §40.8.1): the transmitter only shifts out
+    // when both are set, on silicon and in the simulated stm32v2 UART.
+    wr32(USART2_BASE, (1 << 0) | (1 << 3));
     CONSOLE.report(b"clock", check_clock());
     CONSOLE.report(b"gpio", check_gpio());
     CONSOLE.report(b"timer", check_timer());

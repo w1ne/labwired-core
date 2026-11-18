@@ -1,0 +1,408 @@
+diff --git a/crates/core/src/cpu/cortex_m.rs b/crates/core/src/cpu/cortex_m.rs
+index 8b5cec34c..45cf1d375 100644
+--- a/crates/core/src/cpu/cortex_m.rs
++++ b/crates/core/src/cpu/cortex_m.rs
+@@ -1853 +1853 @@ impl CortexM {
+-    /// atomic: `step_execute` clears sleep on every instruction.
++    /// atomic: `step_execute` clears sleep only when the core resumes.
+@@ -2283,0 +2284,54 @@ impl CortexM {
++    /// Shared-controller writes can precede import into `pending_exceptions`.
++    /// Check enabled external lines before sleep skips that import boundary.
++    /// WFI ignores PRIMASK for waking; WFE retains its masked-wake contract.
++    /// This scan is only reached from sleep admission/wake, never awake steps.
++    #[cold]
++    fn shared_irq_wake_pending(&self, honor_primask: bool) -> bool {
++        let Some(nvic) = &self.nvic_state else {
++            return false;
++        };
++        let active_priority = self.exception_priority(self.active_exception);
++        for (word, (pending, enabled)) in nvic.ispr.iter().zip(&nvic.iser).enumerate() {
++            let mut bits = pending.load(Ordering::Relaxed) & enabled.load(Ordering::Relaxed);
++            while bits != 0 {
++                let exc = 16 + word as u32 * 32 + bits.trailing_zeros();
++                bits &= bits - 1;
++                if exc >= (self.pending_exceptions.len() * 64) as u32 {
++                    continue;
++                }
++                let priority = self.exception_priority(exc);
++                if (!honor_primask || !self.masked_by_primask(exc))
++                    && priority < active_priority
++                    && !self.masked_by_basepri(priority)
++                    && !self.faultmask_blocks(exc)
++                {
++                    return true;
++                }
++            }
++        }
++        false
++    }
++
++    /// Bring the controller state that woke the core into the existing
++    /// exception dispatcher before fetching the post-sleep instruction.
++    /// Replace external bits so stale disabled/cleared lines cannot outrank
++    /// the live wake source. System exceptions remain CPU-owned.
++    #[cold]
++    fn sync_shared_irqs_on_wake(&mut self) {
++        let Some(nvic) = &self.nvic_state else {
++            return;
++        };
++        let mut pending = [self.pending_exceptions[0] & 0xFFFF, 0, 0, 0];
++        for (word, (ispr, iser)) in nvic.ispr.iter().zip(&nvic.iser).enumerate() {
++            let mut bits = ispr.load(Ordering::Relaxed) & iser.load(Ordering::Relaxed);
++            while bits != 0 {
++                let exc = 16 + word * 32 + bits.trailing_zeros() as usize;
++                bits &= bits - 1;
++                if exc < pending.len() * 64 {
++                    pending[exc / 64] |= 1u64 << (exc % 64);
++                }
++            }
++        }
++        self.pending_exceptions = pending;
++    }
++
+@@ -2293,9 +2347,8 @@ impl CortexM {
+-        if !self.any_exception_pending() {
+-            return false;
+-        }
+-        let Some(exc) = self.highest_priority_pending() else {
+-            return false;
+-        };
+-        let exc_prio = self.exception_priority(exc);
+-        let active_prio = self.exception_priority(self.active_exception);
+-        exc_prio < active_prio && !self.masked_by_basepri(exc_prio) && !self.faultmask_blocks(exc)
++        self.shared_irq_wake_pending(false) || self.local_exception_wake_pending(false)
++    }
++
++    /// Compiled blocks must not bypass an architectural sleep boundary.
++    /// WFI keeps its legacy spin behavior when idle fast-forward is disabled.
++    #[inline]
++    pub fn sleep_requires_interpretation(&self, config: &crate::SimulationConfig) -> bool {
++        self.waiting_for_event || (self.sleeping && config.idle_fast_forward_enabled)
+@@ -2328,3 +2381,9 @@ impl CortexM {
+-        if self.event_pending() {
+-            return true;
+-        }
++        self.event_pending()
++            || self.shared_irq_wake_pending(true)
++            || self.local_exception_wake_pending(true)
++    }
++
++    /// Pending bits imported into the CPU can outlive controller state.
++    /// Apply the same live-line filter to both architectural sleep hints.
++    #[cold]
++    fn local_exception_wake_pending(&self, honor_primask: bool) -> bool {
+@@ -2337 +2396 @@ impl CortexM {
+-                // disabled external line must not wake WFE (SEVONPEND events
++                // disabled external line must not wake the core (SEVONPEND events
+@@ -2354 +2413 @@ impl CortexM {
+-                if !self.masked_by_primask(exc)
++                if (!honor_primask || !self.masked_by_primask(exc))
+@@ -2673 +2732,4 @@ impl CortexM {
+-            } else if self.it_state != 0 || self.waiting_for_event || self.fp_context_pending() {
++            } else if self.it_state != 0
++                || self.sleep_requires_interpretation(config)
++                || self.fp_context_pending()
++            {
+@@ -3992,0 +4055 @@ impl CortexM {
++            self.sync_shared_irqs_on_wake();
+@@ -3996,3 +4059,12 @@ impl CortexM {
+-        // Leave WFI sleep before this step commits: the flag is re-armed only if
+-        // this instruction is itself a WFI with no wake event pending.
+-        self.set_core_sleeping(false);
++        // A bus that needs single-cycle service can refuse idle acceleration.
++        // Service those cycles without fetching past WFI until a wake arrives.
++        // The existing idle-disabled mode continues to treat WFI as a spin.
++        if self.sleeping {
++            if config.idle_fast_forward_enabled {
++                if !self.wfi_wake_pending() {
++                    return Ok(());
++                }
++                self.sync_shared_irqs_on_wake();
++            }
++            self.set_core_sleeping(false);
++        }
+diff --git a/crates/core/tests/cortex_m_event_sleep.rs b/crates/core/tests/cortex_m_event_sleep.rs
+index af16508d0..2e3abb09c 100644
+--- a/crates/core/tests/cortex_m_event_sleep.rs
++++ b/crates/core/tests/cortex_m_event_sleep.rs
+@@ -4 +4 @@
+-//! Architectural WFE/SEV behavior through the public CPU interface.
++//! Architectural WFI/WFE/SEV behavior through the public CPU interface.
+@@ -176,0 +177,270 @@ fn wfe_snapshot_preserves_sleep_and_unconsumed_event() {
++
++#[test]
++fn shared_nvic_wake_is_visible_before_cpu_pending_import() {
++    for opcode in [0xBF30, 0xBF20] {
++        for irq in [0_u32, 37] {
++            for (primask, basepri, faultmask, enabled, active, priority, expected_wake) in [
++                (false, 0, false, true, 0, 0x80, true),
++                (true, 0, false, true, 0, 0x80, opcode == 0xBF30),
++                (false, 0x40, false, true, 0, 0x80, false),
++                (false, 0, true, true, 0, 0x80, false),
++                (false, 0, false, false, 0, 0x80, false),
++                (false, 0, false, true, 17, 0x80, false),
++                (false, 0, false, true, 17, 0x20, true),
++            ] {
++                let mut bus = SystemBus::new();
++                let (mut cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
++                cpu.pc = 0x100;
++                cpu.primask = primask;
++                cpu.basepri = basepri;
++                cpu.faultmask = faultmask;
++                cpu.active_exception = active;
++                bus.write_u16(0x100, opcode).unwrap();
++                bus.write_u8(0xE000_E401, 0x40).unwrap(); // active IRQ1
++                bus.write_u8(0xE000_E400 + u64::from(irq), priority)
++                    .unwrap();
++                let mut cfg = bus.config.clone();
++                cfg.idle_fast_forward_enabled = true;
++                cpu.step(&mut bus, &[], &cfg).unwrap();
++                assert!(cpu.idle_fast_forward_budget(&bus).is_some());
++                let word_offset = u64::from(irq / 32) * 4;
++                let bit = 1 << (irq % 32);
++                if enabled {
++                    bus.write_u32(0xE000_E100 + word_offset, bit).unwrap();
++                }
++                // Host/controller writes occur before the next machine-boundary
++                // import. Do not manually fill the CPU pending bitmap here.
++                bus.write_u32(0xE000_E200 + word_offset, bit).unwrap();
++                assert_eq!(cpu.pending_exceptions, [0; 4]);
++                assert_eq!(
++                    cpu.idle_fast_forward_budget(&bus).is_none(),
++                    expected_wake,
++                    "opcode={opcode:x} irq={irq} primask={primask} basepri={basepri:x} faultmask={faultmask} enabled={enabled} active={active} priority={priority:x}"
++                );
++            }
++        }
++    }
++}
++
++#[test]
++fn shared_nvic_clears_and_disables_remove_sleep_wake_eligibility() {
++    for opcode in [0xBF30, 0xBF20] {
++        let mut bus = SystemBus::new();
++        let (mut cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
++        bus.write_u16(0, opcode).unwrap();
++        let mut cfg = bus.config.clone();
++        cfg.idle_fast_forward_enabled = true;
++        cpu.step(&mut bus, &[], &cfg).unwrap();
++        bus.write_u32(0xE000_E100, 1).unwrap();
++        bus.write_u32(0xE000_E200, 1).unwrap();
++        assert!(cpu.idle_fast_forward_budget(&bus).is_none());
++        bus.write_u32(0xE000_E280, 1).unwrap();
++        assert!(cpu.idle_fast_forward_budget(&bus).is_some());
++        bus.write_u32(0xE000_E200, 1).unwrap();
++        bus.write_u32(0xE000_E180, 1).unwrap();
++        assert!(cpu.idle_fast_forward_budget(&bus).is_some());
++        bus.write_u32(0xE000_E100, 1).unwrap();
++        assert!(cpu.idle_fast_forward_budget(&bus).is_none());
++        assert_eq!(cpu.pending_exceptions, [0; 4]);
++    }
++}
++
++#[derive(Debug)]
++struct ContinuousService(std::sync::Arc<std::sync::atomic::AtomicU64>);
++
++impl labwired_core::Peripheral for ContinuousService {
++    fn read(&self, _offset: u64) -> SimResult<u8> {
++        Ok(0)
++    }
++
++    fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
++        Ok(())
++    }
++
++    fn tick(&mut self) -> labwired_core::PeripheralTickResult {
++        self.0.fetch_add(1, Ordering::Relaxed);
++        labwired_core::PeripheralTickResult::default()
++    }
++}
++
++#[test]
++fn wfi_keeps_bus_service_running_without_fetching_the_next_instruction() {
++    use labwired_core::{AdvanceRequest, Machine};
++    use std::{
++        num::NonZeroU32,
++        sync::{atomic::AtomicU64, Arc},
++    };
++
++    for batch_cap in [1, 17] {
++        let mut bus = SystemBus::new();
++        let ticks = Arc::new(AtomicU64::new(0));
++        // The normal legacy-tick capability vetoes idle skipping. This device
++        // records service, without fabricating an interrupt to hold the core.
++        bus.add_peripheral(
++            "continuous-service",
++            0x5000_0000,
++            4,
++            None,
++            Box::new(ContinuousService(ticks.clone())),
++        );
++        let (mut cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
++        cpu.pc = 0x100;
++        cpu.sp = 0x2000_1000;
++        bus.write_u16(0x100, 0xBF30).unwrap(); // WFI
++        bus.write_u16(0x102, 0x205A).unwrap(); // MOVS r0, #0x5A: must stay unexecuted
++        bus.write_u16(0x104, 0xE7FE).unwrap(); // B .
++        bus.write_u32(16 * 4, 0x201).unwrap(); // IRQ0 handler
++        bus.write_u16(0x200, 0x215A).unwrap(); // MOVS r1, #0x5A
++        bus.write_u16(0x202, 0xE7FE).unwrap(); // B .
++        bus.write_u32(0xE000_E100, 1).unwrap();
++        let mut machine = Machine::new(cpu, bus);
++        machine.config.idle_fast_forward_enabled = true;
++        machine.config.peripheral_tick_interval = 1;
++        machine.advance(AdvanceRequest::single()).unwrap();
++        let before = ticks.load(Ordering::Relaxed);
++        let report = machine
++            .advance(
++                AdvanceRequest::run(Some(37)).with_batch_cap(NonZeroU32::new(batch_cap).unwrap()),
++            )
++            .unwrap();
++        assert_eq!(report.fuel_consumed, 37);
++        assert_eq!(report.idle_cycles, 0, "active service forbids a time skip");
++        assert_eq!(ticks.load(Ordering::Relaxed) - before, 37);
++        assert_eq!(machine.cpu.pc, 0x102);
++        assert_eq!(machine.cpu.r0, 0);
++        assert_eq!(machine.cpu.active_exception, 0);
++        // A subsequent controller pend must still reach ordinary exception
++        // dispatch. The handler marker distinguishes wake from false progress.
++        machine.bus.write_u32(0xE000_E200, 1).unwrap();
++        machine.advance(AdvanceRequest::run(Some(4))).unwrap();
++        assert_eq!(machine.cpu.active_exception, 16);
++        assert_eq!(machine.cpu.r1, 0x5A);
++        assert_eq!(machine.cpu.r0, 0);
++    }
++}
++
++#[test]
++fn wfi_preserves_spin_behavior_when_idle_fast_forward_is_disabled() {
++    let mut cpu = CortexM::new();
++    let mut bus = MockBus::new();
++    assert!(!bus.config.idle_fast_forward_enabled);
++    run_test_instr(&mut cpu, &mut bus, 0xBF30, false);
++    run_test_instr(&mut cpu, &mut bus, 0x205A, false);
++    assert_eq!(cpu.pc, 4);
++    assert_eq!(cpu.r0, 0x5A);
++}
++
++#[test]
++fn wfi_ignores_cleared_or_disabled_external_pending_bits() {
++    for irq in [0_u32, 37] {
++        let mut bus = SystemBus::new();
++        let (mut cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
++        let word_offset = u64::from(irq / 32) * 4;
++        let bit = 1 << (irq % 32);
++        bus.write_u16(0, 0xBF30).unwrap();
++        bus.write_u16(2, 0x205A).unwrap(); // MOVS r0, #0x5A
++        bus.write_u32(0xE000_E100 + word_offset, bit).unwrap();
++        let mut cfg = bus.config.clone();
++        cfg.idle_fast_forward_enabled = true;
++        cpu.step(&mut bus, &[], &cfg).unwrap();
++        bus.write_u32(0xE000_E200 + word_offset, bit).unwrap();
++        cpu.set_exception_pending(16 + irq);
++        assert!(cpu.idle_fast_forward_budget(&bus).is_none());
++        bus.write_u32(0xE000_E280 + word_offset, bit).unwrap();
++        assert!(cpu.idle_fast_forward_budget(&bus).is_some());
++        bus.write_u32(0xE000_E200 + word_offset, bit).unwrap();
++        bus.write_u32(0xE000_E180 + word_offset, bit).unwrap();
++        assert!(cpu.idle_fast_forward_budget(&bus).is_some());
++        // Keep the stale CPU bit in place: controller writes, not a CPU
++        // pending import, must govern wake eligibility.
++        assert_ne!(cpu.pending_exceptions, [0; 4]);
++        cpu.step(&mut bus, &[], &cfg).unwrap();
++        assert_eq!(cpu.pc, 2);
++        assert_eq!(cpu.r0, 0);
++    }
++}
++
++#[cfg(feature = "jit")]
++#[test]
++fn wfi_blocks_a_warmed_native_jit_cache_until_wake() {
++    for idle_enabled in [false, true] {
++        let mut bus = SystemBus::new();
++        let mut cpu = CortexM::new();
++        bus.write_u16(0, 0xBF30).unwrap(); // WFI
++        for offset in (2..42).step_by(2) {
++            bus.write_u16(offset, 0x3001).unwrap(); // ADDS r0, #1
++        }
++        bus.write_u16(42, 0xE7EA).unwrap(); // B 2
++        cpu.pc = 2;
++        let mut cfg = bus.config.clone();
++        cfg.idle_fast_forward_enabled = idle_enabled;
++        cfg.cortex_m_jit_enabled = true;
++        cfg.cortex_m_jit_min_block_instrs = 4;
++        cfg.peripheral_tick_interval = 64;
++        cpu.step_batch(&mut bus, &[], &cfg, 8192).unwrap();
++        let runs_before = cpu.jit_stats().expect("native JIT engine").block_runs;
++        assert!(runs_before > 0, "post-WFI loop must execute compiled code");
++        let r0_before = cpu.r0;
++        // Setting the PC does not flush the warmed cache. Interpret only WFI,
++        // then enter a normal multi-instruction compiled runner window.
++        cpu.pc = 0;
++        cpu.step(&mut bus, &[], &cfg).unwrap();
++        assert_eq!(cpu.pc, 2);
++        cpu.step_batch(&mut bus, &[], &cfg, 128).unwrap();
++        let runs_after = cpu.jit_stats().unwrap().block_runs;
++        if idle_enabled {
++            assert_eq!(cpu.pc, 2);
++            assert_eq!(cpu.r0, r0_before);
++            assert_eq!(runs_after, runs_before);
++            // WFI may wake under PRIMASK without taking the interrupt. The
++            // already compiled code must remain usable after this boundary.
++            cpu.primask = true;
++            cpu.set_exception_pending(15);
++            cpu.step_batch(&mut bus, &[], &cfg, 128).unwrap();
++            assert_eq!(cpu.active_exception, 0);
++            assert!(cpu.r0 > r0_before);
++            assert!(cpu.jit_stats().unwrap().block_runs > runs_before);
++        } else {
++            assert!(cpu.r0 > r0_before, "default WFI spin behavior must remain");
++            assert!(runs_after > runs_before);
++        }
++    }
++}
++
++#[test]
++fn shared_nvic_wake_dispatches_before_post_sleep_instruction() {
++    for opcode in [0xBF30, 0xBF20] {
++        for irq in [0_u32, 37] {
++            for stale_disabled_irq in [false, true] {
++                let mut bus = SystemBus::new();
++                let (mut cpu, _) = labwired_core::system::cortex_m::configure_cortex_m(&mut bus);
++                cpu.pc = 0x100;
++                cpu.sp = 0x2000_1000;
++                bus.write_u16(0x100, opcode).unwrap();
++                bus.write_u16(0x102, 0x205A).unwrap(); // post-sleep marker
++                bus.write_u32(u64::from(16 + irq) * 4, 0x201).unwrap();
++                bus.write_u16(0x200, 0x215A).unwrap(); // handler marker
++                bus.write_u8(0xE000_E400 + u64::from(irq), 0x80).unwrap();
++                let word_offset = u64::from(irq / 32) * 4;
++                let bit = 1 << (irq % 32);
++                bus.write_u32(0xE000_E100 + word_offset, bit).unwrap();
++                let mut cfg = bus.config.clone();
++                cfg.idle_fast_forward_enabled = true;
++                cpu.step(&mut bus, &[], &cfg).unwrap();
++                if stale_disabled_irq {
++                    // Disabled IRQ1 has higher priority than the live wake
++                    // source. Its stale CPU bit must not steal dispatch.
++                    bus.write_u32(0xE000_E200, 1 << 1).unwrap();
++                    cpu.set_exception_pending(17);
++                }
++                bus.write_u32(0xE000_E200 + word_offset, bit).unwrap();
++                cpu.step(&mut bus, &[], &cfg).unwrap();
++                assert_eq!(cpu.active_exception, 16 + irq);
++                assert_eq!(cpu.r0, 0);
++                cpu.step(&mut bus, &[], &cfg).unwrap();
++                assert_eq!(cpu.r1, 0x5A);
++                assert_eq!(cpu.r0, 0);
++            }
++        }
++    }
++}
+diff --git a/crates/wasm/src/jit_browser.rs b/crates/wasm/src/jit_browser.rs
+index 0611b1c7a..62f549496 100644
+--- a/crates/wasm/src/jit_browser.rs
++++ b/crates/wasm/src/jit_browser.rs
+@@ -1535 +1535 @@ pub(crate) fn run_browser_cortex_m_jit_window(
+-        } else if cpu.it_state != 0 || cpu.waiting_for_event() {
++        } else if cpu.it_state != 0 || cpu.sleep_requires_interpretation(config) {

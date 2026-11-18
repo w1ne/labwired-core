@@ -37,6 +37,7 @@ mod dispatch;
 /// `execute_test_loop` and the `TestExecutionContext` it takes.
 mod execute;
 mod gpio_observer;
+mod i2c_trace;
 mod inspect_export;
 /// `--log-timestamps` prefix state ([`log_ts::prefix`] / the `eventln!` macro).
 pub(crate) mod log_ts;
@@ -685,6 +686,12 @@ struct TestArgs {
     /// Output VCD trace to file
     #[arg(long)]
     vcd: Option<PathBuf>,
+
+    /// Export actual engine I2C/SPI byte events from the same test run.
+    /// .json preserves cycle-stamped events; other extensions export VCD.
+    /// This is a diagnostic capture, never a synthetic waveform or assertion.
+    #[arg(long = "bus-trace-out", value_name = "PATH")]
+    bus_trace_out: Option<PathBuf>,
 
     /// Optional path for the in-core analog engine's waveform trace (`.csv`
     /// writes `time_ns,<channel>...`, any other extension writes VCD `real`
@@ -1478,6 +1485,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         None,
         // Nor any UART line stamps.
         None,
+        // Nor any I²C bus-trace summary: no machine ran.
+        crate::i2c_trace::I2cTraceSummary::default(),
         // Load/reset failed before a machine existed: no motor evidence either.
         Vec::new(),
         None,
@@ -3040,6 +3049,8 @@ mod test_outcome_golden_tests {
             logic_edges: None,
             gpio_pins: None,
             uart_lines: None,
+            i2c_addresses: Vec::new(),
+            i2c_trace_evicted: false,
             motors: Vec::new(),
             analog_series: None,
             stimuli: Vec::new(),

@@ -1,0 +1,11 @@
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/board-smoke/nrf54l10.elf"
+  system: "./nrf54l10-system.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "NRF54L10_OK"
+  - uart_contains: "rram=1012K ram=192K"
+  - gpio_edges: { pin: "gpio2:9", min_edges: 4 }
+  - expected_stop_reason: max_steps

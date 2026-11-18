@@ -39,9 +39,9 @@
 //! They differ in exactly one respect, and the record shape carries it
 //! explicitly rather than hiding it:
 //!
-//! * A controller-hosted device is identified by WHERE it answers. It states
-//!   its address (or chip-select) and the controller states the bus; the
-//!   manifest name is joined on afterwards by matching that placement.
+//! * A controller-hosted device can state its stamped manifest id; this keeps
+//!   SPI cascade modules distinct when they share a chip-select. Without a
+//!   stamp, its address (or chip-select) and controller identify its placement.
 //! * A bus-resident device has no address to be identified by, so it carries
 //!   the `external_devices:` id it was stamped with when it was attached, and
 //!   the join matches on that. This is not a fallback or a guess: the id is the
@@ -88,6 +88,59 @@ impl SystemBus {
                 .for_each_attached_device(&mut |d| f(Some(d.bus.unwrap_or(name)), d));
         }
         self.for_each_bus_resident_device(f);
+    }
+
+    /// Modeled pulse width (µs) for an I2C controller at `address`. `None`
+    /// includes silent, absent, unsupported, and unknown outputs. This query
+    /// does not prove output-enable, servo power, or physical signal delivery.
+    /// Addresses can be ambiguous across buses; this query does not resolve them.
+    pub fn pwm_channel_pulse_us(&self, address: u8, channel: u8) -> Option<f64> {
+        let mut found = None;
+        self.for_each_attached_device(&mut |_, d| {
+            if found.is_none() && d.transport == "i2c" && d.address == Some(address) {
+                found = d.evidence.and_then(|e| e.pwm_channel_pulse_us(channel));
+            }
+        });
+        found
+    }
+
+    /// Bring every servo wired to a PWM-controller output up to date with the
+    /// pulse the firmware last wrote there. Cheap; call before reading servo
+    /// state. An absent or unknown pulse leaves the servo where it was.
+    pub fn sync_pwm_sourced_servos(&self) {
+        for servo in self.observed_of::<crate::peripherals::components::servo::Servo>() {
+            if let (Some((address, channel)), Some(bus_name)) =
+                (servo.source(), self.declared_connection(servo.id()))
+            {
+                // Match the servo's declared bus, not just the address: the
+                // same I2C address may exist on multiple controllers. A routed
+                // device needs mux/channel wiring evidence that this source
+                // declaration does not yet carry, so do not guess that route.
+                let mut matches = 0;
+                let mut pulse = None;
+                let mut nested_route_possible = false;
+                self.for_each_attached_device(&mut |bus, d| {
+                    if bus == Some(bus_name)
+                        && d.transport == "i2c"
+                        && d.mux_address.is_some()
+                        && d.evidence.is_some_and(|e| e.is_i2c_mux())
+                    {
+                        nested_route_possible = true;
+                    }
+                    if bus == Some(bus_name) && d.transport == "i2c" && d.address == Some(address) {
+                        matches += 1;
+                        if d.mux_address.is_none() {
+                            pulse = d.evidence.and_then(|e| e.pwm_channel_pulse_us(channel));
+                        }
+                    }
+                });
+                if matches == 1 && !nested_route_possible {
+                    if let Some(us) = pulse {
+                        servo.apply_pulse_us(us);
+                    }
+                }
+            }
+        }
     }
 
     /// The `external_devices:` connection recorded for `id`, when the manifest
@@ -395,9 +448,8 @@ impl SystemBus {
             if filter.is_some_and(|f| bus != Some(f)) {
                 return;
             }
-            // A device that states its own `external_devices:` id is joined by
-            // that id — it has no address to be identified by, and the id is
-            // the author's own text stamped onto the model at attach.
+            // Prefer the author's own id stamped onto the model at attach.
+            // Some devices have no address; SPI cascade modules share one CS.
             let matched = match d.declared_id {
                 // A declaration that fans out to several models (`instance_id`)
                 // is claimed by all of them: `used` exists to stop two DIFFERENT

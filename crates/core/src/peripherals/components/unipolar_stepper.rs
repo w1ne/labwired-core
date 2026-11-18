@@ -61,6 +61,11 @@ impl UnipolarStepper {
         self.half_steps() as f32 * self.deg_per_half
     }
 
+    /// Shaft angle without f32 rounding, for motor-snapshot evidence.
+    pub fn angle_degrees_f64(&self) -> f64 {
+        self.half_steps() as f64 * f64::from(self.deg_per_half)
+    }
+
     pub fn is_commanded(&self) -> bool {
         self.state.lock().unwrap().commanded
     }

@@ -1,0 +1,16 @@
+{
+  "id": "esp32s3-zero",
+  "in_boards": false,
+  "uart": {
+    "state": "none",
+    "gap": "no test loads configs/chips/esp32s3-zero.yaml and moves a byte. strict_onboarding.rs explicitly SKIPs the stem ('Xtensa covered by hw-oracle / e2e fixture tests'), and crates/cli/src/tier1.rs folds the board variant into the esp32s3 row ('one row per SILICON'). The esp32s3 evidence does not transfer: every one of those tests loads configs/chips/esp32s3.yaml."
+  },
+  "spi": {
+    "state": "none",
+    "gap": "same as uart: nothing loads this chip descriptor and drives a bus."
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "same as uart: nothing loads this chip descriptor and drives a bus."
+  }
+}

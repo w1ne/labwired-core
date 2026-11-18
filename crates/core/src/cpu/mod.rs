@@ -85,7 +85,7 @@ pub mod xtensa_jit_bytes;
 pub mod jit_framework;
 
 pub use aarch64::Aarch64;
-pub use avr::{Avr, AvrModel};
+pub use avr::{Avr, AvrGeometry, AvrModel};
 pub use cortex_m::CortexM;
 pub use mips::Mips32;
 pub use pic16::Pic16;

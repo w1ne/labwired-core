@@ -83,6 +83,7 @@ impl SystemBus {
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             scheduler_driver_indices: Vec::new(),
+            exti_line_driver_indices: Vec::new(),
             matrix_source_scratch: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
@@ -94,7 +95,9 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+            timer_poll_carry: std::cell::Cell::new(0),
             side_effecting_mmio: std::cell::Cell::new(0),
             batch_stop: Default::default(),
             memory_reads: std::cell::Cell::new(0),
@@ -103,6 +106,7 @@ impl SystemBus {
             poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
             legacy_walk_pinned_on: false,
+            max_peripheral_tick_interval: None,
             legacy_tick_candidate_mask: Vec::new(),
             legacy_tick_peer_write_indices: Vec::new(),
             reset_vector_offset: 0,
@@ -115,8 +119,10 @@ impl SystemBus {
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
+            device_open_drain_nets: Default::default(),
             observed: Vec::new(),
             motors: Vec::new(),
+            live_numeric: None,
             ina219_senses: Vec::new(),
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
@@ -132,7 +138,7 @@ impl SystemBus {
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
             flash_models_ops: false,
-            nordic_gpio_service: false,
+            gpio_edge_observers: false,
             timer_capture_wired: false,
             wire_inputs_live: false,
             resident_scheduling_disabled: false,
@@ -147,6 +153,7 @@ impl SystemBus {
             analog_pin_map: std::collections::HashMap::new(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: crate::reset_input::ResetInputState::default(),
             supply: crate::power::SupplySupervisor::default(),
             supply_domains: Default::default(),
             external_device_decls: Vec::new(),
@@ -197,6 +204,7 @@ impl SystemBus {
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             scheduler_driver_indices: Vec::new(),
+            exti_line_driver_indices: Vec::new(),
             matrix_source_scratch: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
@@ -208,7 +216,9 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
+            timer_poll_carry: std::cell::Cell::new(0),
             side_effecting_mmio: std::cell::Cell::new(0),
             batch_stop: Default::default(),
             memory_reads: std::cell::Cell::new(0),
@@ -217,6 +227,7 @@ impl SystemBus {
             poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
             legacy_walk_pinned_on: false,
+            max_peripheral_tick_interval: None,
             legacy_tick_candidate_mask: Vec::new(),
             legacy_tick_peer_write_indices: Vec::new(),
             reset_vector_offset: 0,
@@ -229,8 +240,10 @@ impl SystemBus {
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
+            device_open_drain_nets: Default::default(),
             observed: Vec::new(),
             motors: Vec::new(),
+            live_numeric: None,
             ina219_senses: Vec::new(),
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
@@ -246,7 +259,7 @@ impl SystemBus {
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
             flash_models_ops: false,
-            nordic_gpio_service: false,
+            gpio_edge_observers: false,
             timer_capture_wired: false,
             wire_inputs_live: false,
             resident_scheduling_disabled: false,
@@ -261,6 +274,7 @@ impl SystemBus {
             analog_pin_map: std::collections::HashMap::new(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: crate::reset_input::ResetInputState::default(),
             supply: crate::power::SupplySupervisor::default(),
             supply_domains: Default::default(),
             external_device_decls: Vec::new(),
@@ -525,11 +539,24 @@ impl SystemBus {
             .collect();
     }
 
+    /// Set or clear the TX capture sink on a classic ESP32 UART (`Esp32Uart`).
+    /// Shared by the named and unnamed console paths so they do not each add a
+    /// `downcast_mut` token — the downcast ratchet's ceiling must not rise.
+    fn try_set_esp32_uart_sink(
+        any: &mut dyn std::any::Any,
+        sink: Option<Arc<Mutex<Vec<u8>>>>,
+    ) -> bool {
+        if let Some(uart) = any.downcast_mut::<crate::peripherals::esp32::uart::Esp32Uart>() {
+            uart.set_sink(sink);
+            return true;
+        }
+        false
+    }
+
     /// Attach a UART TX capture sink to any UART peripherals on this bus.
     ///
     /// When `echo_stdout` is false, UART writes will no longer be printed to stdout.
     pub fn attach_uart_tx_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>, echo_stdout: bool) {
-        use crate::peripherals::esp32::uart::Esp32Uart;
         use crate::peripherals::esp_uart::EspUart;
         use crate::peripherals::nrf52::uarte::Nrf52Uarte;
         use crate::peripherals::nrf54l::uarte::Nrf54lUarte;
@@ -555,6 +582,11 @@ impl SystemBus {
             {
                 continue;
             }
+            // A USB device controller with a scripted host (ESP32-S3 USB-OTG,
+            // TinyUSB CDC `Serial`): the console is its bulk IN data.
+            if p.dev.attach_usb_cdc_console(Some(sink.clone())) {
+                continue;
+            }
             let Some(any) = p.dev.as_any_mut() else {
                 continue;
             };
@@ -570,8 +602,7 @@ impl SystemBus {
                 continue;
             }
             // Real ESP32-classic UART (echo is fixed at construction time).
-            if let Some(uart) = any.downcast_mut::<Esp32Uart>() {
-                uart.set_sink(Some(sink.clone()));
+            if Self::try_set_esp32_uart_sink(any, Some(sink.clone())) {
                 continue;
             }
             // nRF52 UARTE console (EasyDMA): captured/echoed the same way.
@@ -615,6 +646,12 @@ impl SystemBus {
             // USB CDC, so the console text arrives on the USB bulk-IN endpoint,
             // not UART0. Route it into the same capture sink.
             if let Some(usb) = any.downcast_mut::<crate::peripherals::rp2040::usb::Rp2040Usb>() {
+                usb.set_sink(Some(sink.clone()));
+                continue;
+            }
+            // i.MX RT USB1 device CDC (Teensy 4.x `Serial`): the console is
+            // the bulk IN endpoint once the scripted host has enumerated.
+            if let Some(usb) = any.downcast_mut::<crate::peripherals::imxrt::usb::ImxrtUsb>() {
                 usb.set_sink(Some(sink.clone()));
                 continue;
             }
@@ -983,6 +1020,8 @@ impl SystemBus {
         echo_stdout: bool,
     ) -> bool {
         for p in &mut self.peripherals {
+            // A named UART is the console: no USB CDC data joins it.
+            p.dev.attach_usb_cdc_console(None);
             if p.dev
                 .as_uart_stream_host()
                 .is_some_and(|u| u.attach_console_sink(None, false))
@@ -998,6 +1037,8 @@ impl SystemBus {
                 any.downcast_mut::<crate::peripherals::imxrt::lpuart::ImxrtLpuart>()
             {
                 uart.set_sink(None, false);
+            } else if Self::try_set_esp32_uart_sink(any, None) {
+                // YAML `type: esp32_uart` installs this model (classic ESP32).
             } else if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
                 uart.set_sink(None);
             } else if let Some(sercom) =
@@ -1038,6 +1079,15 @@ impl SystemBus {
             // The Espressif twin (S3 UART0/1/2, C3 UART0/1) decides at
             // construction whether it is a console, so `echo_stdout` can only
             // silence it here — same as the by-type `attach_uart_tx_sink` path.
+            // Real ESP32-classic UART (`type: esp32_uart`). The unnamed
+            // `attach_uart_tx_sink` path already knew this model; the named
+            // console path (Session `debug_uart: uart0`) did not, so a board
+            // whose YAML overlay replaced programmatic UART0 with Esp32Uart
+            // was reported as "no such UART". Shared helper so this arm does
+            // not add a second `downcast_mut` token.
+            if Self::try_set_esp32_uart_sink(any, Some(sink.clone())) {
+                return true;
+            }
             if let Some(uart) = any.downcast_mut::<crate::peripherals::esp_uart::EspUart>() {
                 uart.set_sink(Some(sink));
                 uart.silence_stdout_echo_if(echo_stdout);
@@ -1261,9 +1311,14 @@ impl SystemBus {
     /// its aliases too: pico-sdk's `pio_sm_init` clears EXECCTRL bits through
     /// the `+0x3000` alias, which used to BusFault on PIO2.
     #[inline]
+    ///
+    /// The RP2040's XIP_SSI (`0x1800_0000`, AHB-Lite) has the aliases too:
+    /// stock MicroPython's RAM-resident flash code clears SSIENR through
+    /// `0x1800_3008`, which used to BusFault. Nothing else maps there.
     pub fn atomic_alias_redirect(&self, addr: u64) -> Option<(u64, AtomicAliasOp)> {
         const PERIPHERAL_WINDOW: std::ops::Range<u64> = 0x4000_0000..0x5050_0000;
-        if !PERIPHERAL_WINDOW.contains(&addr) {
+        const XIP_SSI_WINDOW: std::ops::Range<u64> = 0x1800_0000..0x1800_4000;
+        if !PERIPHERAL_WINDOW.contains(&addr) && !XIP_SSI_WINDOW.contains(&addr) {
             return None;
         }
         let op = self
@@ -1414,6 +1469,7 @@ impl SystemBus {
                     controller_idx,
                     reg_offset,
                     bit: gate.bit,
+                    active_low: gate.active_low,
                 });
             }
             let gclk_id = p_cfg
@@ -1444,6 +1500,7 @@ impl SystemBus {
                 requires,
                 gclk_id,
                 gclk_idx,
+                reset_asserted: false,
             });
         }
         Ok(())
@@ -1607,9 +1664,11 @@ mod tests {
                 controller_idx: 0,
                 reg_offset: 0x18,
                 bit: 3,
+                active_low: false,
             }],
             gclk_id: None,
             gclk_idx: None,
+            reset_asserted: false,
         });
 
         // Gates are resolved before `configure_cortex_m` swaps the core-tied

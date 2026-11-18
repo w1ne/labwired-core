@@ -1,0 +1,26 @@
+{
+  "id": "stm32h735",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "examples/stm32h735-smoke/io-smoke.yaml",
+    "test": "uart_contains: \"TIER1 done\"",
+    "signal": "the committed tests/fixtures/tier1/stm32h735.elf runs against examples/stm32h735-smoke/system.yaml and the script runner's uart_contains oracles match the real TIER1 transcript lines on the captured UART - no cross-compile needed",
+    "lane": "core-ci / core-full (nightly 02:30 UTC): cargo test --workspace runs crates/core/tests/strict_onboarding.rs; also tier1_matrix in the same job",
+    "note": "this chip has NO firmware_survival case and is NOT in the arduino matrix."
+  },
+  "spi": {
+    "state": "shallow",
+    "file": "examples/tier1-fixture/stm32h735/src/main.rs",
+    "test": "check_spi",
+    "gap": "firmware-driven, but nothing is on the far end of the bus: the fixture writes the data register and then asserts BSY/TXE/EOT flags. No device receives a byte, so this cannot distinguish a working shift engine from one that only moves status bits.",
+    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+  },
+  "i2c": {
+    "state": "shallow",
+    "file": "examples/tier1-fixture/stm32h735/src/main.rs",
+    "test": "check_i2c",
+    "gap": "firmware-driven, but it only addresses an ABSENT slave and requires the NACK. That proves the arbitration path, not that any device ever received or returned data.",
+    "lane": "core-ci / core-full (nightly 02:30 UTC + workflow_dispatch + '[full-ci]') via tier1_matrix + tier1_matrix_ratchet"
+  }
+}

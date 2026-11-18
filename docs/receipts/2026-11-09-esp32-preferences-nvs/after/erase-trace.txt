@@ -1,0 +1,16 @@
+== esp32
+esp32_spi: USR write op=0x20 addr=0x00a000 wel=true mosi_bits=1
+esp32_spi: USR write op=0x20 addr=0x00b000 wel=true mosi_bits=1
+esp32_spi: USR write op=0x20 addr=0x00c000 wel=true mosi_bits=1
+== esp32c3
+spimem1: dedicated cmd CMD=0x01000000 ADDR=0x0000a000 status=0x0000 → complete
+spimem1: dedicated cmd CMD=0x01000000 ADDR=0x0000b000 status=0x0000 → complete
+spimem1: dedicated cmd CMD=0x01000000 ADDR=0x0000c000 status=0x0000 → complete
+== esp32s3
+spimem1: dedicated cmd CMD=0x01000000 ADDR=0x0000a000 status=0x0000 → complete
+spimem1: dedicated cmd CMD=0x01000000 ADDR=0x0000b000 status=0x0000 → complete
+spimem1: dedicated cmd CMD=0x01000000 ADDR=0x0000c000 status=0x0000 → complete
+== esp32c6
+spimem1: dedicated cmd CMD=0x01000000 ADDR=0x0000a000 status=0x0000 → complete
+spimem1: dedicated cmd CMD=0x01000000 ADDR=0x0000b000 status=0x0000 → complete
+spimem1: dedicated cmd CMD=0x01000000 ADDR=0x0000c000 status=0x0000 → complete

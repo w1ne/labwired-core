@@ -12,6 +12,7 @@ members = [
     "crates/codegen",
     "crates/config",
     "crates/core",
+    "crates/core/physics",
     "crates/nrf-softdevice-hle",
     "crates/dap",
     "crates/egress-relay",
@@ -27,7 +28,13 @@ members = [
     "crates/firmware-uart-echo-fixture",
     "crates/firmware-comparative-benchmark",
     "crates/firmware-esp32c3-demo",
+    "crates/firmware-esp32c3-devkitm-1-n4x-smoke",
+    "crates/firmware-esp8684-devkitm-1-h4x-smoke",
     "crates/firmware-esp32c6-demo",
+    "crates/firmware-esp32h2-demo",
+    "crates/firmware-esp32c6-devkitc-bme280-smoke",
+    "crates/firmware-esp32c5-devkitc-1-bme280-smoke",
+    "crates/firmware-esp32c61-bme280-smoke",
     "crates/firmware-f103-i2c-demo",
     "crates/firmware-f401-demo",
     "crates/firmware-f103-conformance",
@@ -76,6 +83,10 @@ members = [
     "crates/firmware-nucleo-f407-demo",
     "crates/firmware-f4-discovery-smoke",
     "crates/firmware-nucleo-f103rb-smoke",
+    "crates/firmware-nucleo-f103rb-bme280-smoke",
+    "crates/firmware-nucleo-h723zg-smoke",
+    "crates/firmware-nucleo-h533re-smoke",
+    "crates/firmware-stm32f103-bluepill-smoke",
     "crates/firmware-stm32f103-lowdensity-smoke",
     "crates/firmware-f401-lowram-smoke",
     "crates/firmware-arty-litex-smoke",
@@ -101,8 +112,13 @@ members = [
     "crates/firmware-perf-spin",
     "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
+    "crates/firmware-adafruit-feather-rp2350-smoke",
+    "crates/firmware-pico2w-bme280-smoke",
+    "crates/firmware-pico-w-bme280-smoke",
+    "crates/firmware-pico2-bme280-smoke",
     "crates/firmware-samd21-demo",
     "crates/firmware-samd21-lowram-smoke",
+    "crates/firmware-lp-mspm0g3507-smoke",
     "crates/firmware-arduino-zero-demo",
     "crates/firmware-rp2350-demo",
     "crates/firmware-kw41z-demo",
@@ -143,6 +159,9 @@ members = [
     "examples/ili9488-tft-lab",
     "examples/epaper-tricolor-lab",
     "examples/nokia5110-invaders-lab",
+    "examples/esp32c5-devkitc-1-n8r8/firmware",
+    "examples/esp32c61-devkitc-1-n8r2/firmware",
+    "examples/esp32p4x-c5-function-ev-board/firmware",
     "examples/tier1-fixture/nrf52832",
     "examples/tier1-fixture/nrf52840",
     "examples/tier1-fixture/rp2040",
@@ -167,10 +186,11 @@ exclude = [
     "examples/tier1-fixture/esp32",
     "crates/firmware-perf-spin-xtensa",
 ]
-default-members = ["crates/cli", "crates/core", "crates/dap", "crates/loader", "crates/labwired-fuzz"]
+# Keep extracted engine unit tests in the normal cargo test --lib / clippy lane.
+default-members = ["crates/cli", "crates/core", "crates/core/physics", "crates/dap", "crates/loader", "crates/labwired-fuzz"]
 
 [workspace.package]
-version = "0.25.0"
+version = "0.26.0"
 edition = "2021"
 authors = ["Andrii Shylenko"]
 license = "MIT"
@@ -263,6 +283,14 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-esp32c3-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp32c3-devkitm-1-n4x-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp8684-devkitm-1-h4x-smoke]
 codegen-units = 1
 opt-level = "s"
 
@@ -379,6 +407,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-rp2040-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-pico-w-bme280-smoke]
 codegen-units = 1
 opt-level = "s"
 

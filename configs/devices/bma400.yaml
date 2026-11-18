@@ -1,0 +1,82 @@
+# Bosch BMA400 3-axis digital accelerometer — SPI register model.
+# Primary reference: BST-BMA400-DS000-14, Rev 2.3, July 2025.
+# https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bma400-ds000.pdf
+#
+# Scope: chip ID, SPI activation, per-read dummy byte, 12-bit signed axes,
+# selectable +-2/4/8/16 g range, power/config register read-back, stimulus input.
+# No FIFO, interrupt pin, ODR/filter delay, autonomous sampling, or sleep gating
+# yet. Those are deliberately not claimed as working.
+type: bma400
+behavior:
+  primitive: spi_device
+  spi:
+    framing:
+      command_bytes: 1
+      rw_bit: 7
+      rw_read_high: true
+      addr_mask: 0x7F
+      auto_increment: true
+      read_dummy_bytes: 1
+      activate_on_first_cs_release: true
+    registers:
+      - { name: CHIP_ID, addr: 0x00, width: 1, endian: le, access: r, reset: 0x90 }
+      - { name: RESERVED01, addr: 0x01, width: 1, endian: le, access: r, reset: 0x88 }
+      - { name: ERR_REG, addr: 0x02, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: STATUS, addr: 0x03, width: 1, endian: le, access: r, reset: 0x00 }
+      # 12-bit two's complement, right aligned in each 16-bit axis pair.
+      # Bosch datasheet section 4.4: full-scale count = +-2048.
+      - name: ACC_X
+        addr: 0x04
+        width: 2
+        endian: le
+        access: r
+        fields:
+          - { source: accel_x, shift: 0, width_bits: 12, signed: true,
+              scale_from: { register: ACC_CONFIG1, mask: 0x03, shift: 6,
+                            map: { 0: 1024.0, 1: 512.0, 2: 256.0, 3: 128.0 } } }
+      - name: ACC_Y
+        addr: 0x06
+        width: 2
+        endian: le
+        access: r
+        fields:
+          - { source: accel_y, shift: 0, width_bits: 12, signed: true,
+              scale_from: { register: ACC_CONFIG1, mask: 0x03, shift: 6,
+                            map: { 0: 1024.0, 1: 512.0, 2: 256.0, 3: 128.0 } } }
+      - name: ACC_Z
+        addr: 0x08
+        width: 2
+        endian: le
+        access: r
+        fields:
+          - { source: accel_z, shift: 0, width_bits: 12, signed: true,
+              scale_from: { register: ACC_CONFIG1, mask: 0x03, shift: 6,
+                            map: { 0: 1024.0, 1: 512.0, 2: 256.0, 3: 128.0 } } }
+      - { name: SENSOR_TIME, addr: 0x0A, width: 3, endian: le, access: r, reset: 0x00 }
+      - { name: EVENT, addr: 0x0D, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: INT_STAT0, addr: 0x0E, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: INT_STAT1, addr: 0x0F, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: INT_STAT2, addr: 0x10, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: TEMP_DATA, addr: 0x11, width: 1, endian: le, access: r, reset: 0x00 }
+      - { name: ACC_CONFIG0, addr: 0x19, width: 1, endian: le, access: rw, reset: 0x00, write_mask: 0xE3 }
+      - { name: ACC_CONFIG1, addr: 0x1A, width: 1, endian: le, access: rw, reset: 0x49 }
+      - { name: ACC_CONFIG2, addr: 0x1B, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_CONFIG0, addr: 0x1F, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT_CONFIG1, addr: 0x20, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT1_MAP, addr: 0x21, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: INT2_MAP, addr: 0x22, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: IF_CONF, addr: 0x7C, width: 1, endian: le, access: rw, reset: 0x00 }
+      - { name: CMD, addr: 0x7E, width: 1, endian: le, access: rw, reset: 0x00 }
+  rules:
+    # STATUS.power_mode[2:1] reflects the programmed ACC_CONFIG0.power_mode.
+    - on: { write: ACC_CONFIG0 }
+      do:
+        - { write: { register: STATUS, value: "(reg(ACC_CONFIG0) & 0x03) << 1" } }
+metadata:
+  label: "Bosch BMA400"
+  summary: "3-axis 12-bit SPI accelerometer. Configurable full scale and stimulus inputs."
+  category: spi
+  inputs:
+    - { key: accel_x, label: "Accel X", unit: g, min: -16, max: 16, default: 0 }
+    - { key: accel_y, label: "Accel Y", unit: g, min: -16, max: 16, default: 0 }
+    - { key: accel_z, label: "Accel Z", unit: g, min: -16, max: 16, default: 1 }

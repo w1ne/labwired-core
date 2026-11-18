@@ -125,6 +125,15 @@ fn route_bank1_irqs(active1: u32, irqs: &mut Vec<u32>) {
     }
 }
 
+/// The declared internal-line vectors (`line_irqs:`) of the pending lines.
+fn push_line_irqs(active: u32, line_irqs: &[(u8, u32)], irqs: &mut Vec<u32>) {
+    for &(line, irq) in line_irqs {
+        if active & (1 << line) != 0 && !irqs.contains(&irq) {
+            irqs.push(irq);
+        }
+    }
+}
+
 /// The STM32L0 / G0 grouped GPIO vectors: lines 0..1 → IRQ 5 (EXTI0_1),
 /// 2..3 → 6 (EXTI2_3), 4..15 → 7 (EXTI4_15), per the RM0367 and RM0444
 /// vector tables.
@@ -150,6 +159,11 @@ fn report_bank1_levels(active1: u32, report: &mut dyn FnMut(u32, bool)) {
 pub struct F1Exti {
     bank1: ExtiBank,
     line_mask: u32,
+    /// Internal lines (16+) wired to an NVIC vector of their own, from the
+    /// chip descriptor's `line_irqs:`. Such a vector is usually shared with
+    /// another block (AT32F421 / STM32L0 EXINT21 on ADC1_CMP, IRQ 12), so
+    /// these lines are delivered as pulses, not reported as levels.
+    line_irqs: Vec<(u8, u32)>,
 
     /// Bus-published cycle clock (walk-free campaign). `Some` once attached →
     /// event-schedulable; `None` keeps the legacy walk.
@@ -163,6 +177,7 @@ pub struct F1Exti {
 impl Default for F1Exti {
     fn default() -> Self {
         Self {
+            line_irqs: Vec::new(),
             bank1: ExtiBank::default(),
             line_mask: 0x000F_FFFF, // 20 lines
             clock: None,
@@ -314,6 +329,54 @@ impl Exti {
         }
     }
 
+    /// Wire internal lines (16+) to NVIC vectors (`line_irqs:` in the chip
+    /// descriptor). Only the single-bank F1/L0 register file takes them;
+    /// any other layout refuses.
+    pub fn set_line_irqs(&mut self, line_irqs: Vec<(u8, u32)>) -> Result<(), String> {
+        match self {
+            Self::Stm32F1(e) | Self::Stm32L0(e) => {
+                if let Some((line, _)) = line_irqs
+                    .iter()
+                    .find(|(line, _)| *line < 16 || *line >= 32 || e.line_mask & (1 << line) == 0)
+                {
+                    return Err(format!(
+                        "line_irqs: line {line} is not an implemented internal line"
+                    ));
+                }
+                e.line_irqs = line_irqs;
+                Ok(())
+            }
+            _ => Err("line_irqs is supported on the stm32f1 / stm32l0 EXTI layouts only".into()),
+        }
+    }
+
+    /// An edge on an internal line (16..31) of the single-bank layouts: PR is
+    /// set when RTSR (rising) or FTSR (falling) selects the line, whatever
+    /// IMR says, as for a GPIO line (RM0008 §10.2.5). Returns true when PR
+    /// was set.
+    pub fn internal_line_edge(&mut self, line: u8, before: bool, after: bool) -> bool {
+        if !(16..32).contains(&line) || before == after {
+            return false;
+        }
+        let bit = 1u32 << line;
+        let bank = match self {
+            Self::Stm32F1(e) | Self::Stm32L0(e) => {
+                if e.line_mask & bit == 0 {
+                    return false;
+                }
+                &mut e.bank1
+            }
+            Self::Stm32L4(e) => &mut e.bank1,
+            Self::Stm32G0(_) | Self::Stm32U5(_) => return false,
+        };
+        let selected = if after { bank.rtsr } else { bank.ftsr };
+        if selected & bit == 0 {
+            return false;
+        }
+        bank.pr |= bit;
+        true
+    }
+
     /// Apply an actual GPIO edge, respecting the G0/U5 port mux and polarity.
     /// Returns true when this edge creates a pending GPIO interrupt flag.
     /// The F1/F4 and L4 layouts keep their port mux outside EXTI; see
@@ -444,12 +507,14 @@ impl Exti {
                         irqs.push(irq);
                     }
                 }
+                push_line_irqs(active, &e.line_irqs, &mut irqs);
             }
             Self::Stm32F1(e) => {
                 let active1 = e.bank1.pr & e.bank1.imr;
                 if active1 != 0 {
                     route_bank1_irqs(active1, &mut irqs);
                 }
+                push_line_irqs(active1, &e.line_irqs, &mut irqs);
             }
             Self::Stm32L4(e) => {
                 let active1 = e.bank1.pr & e.bank1.imr;
@@ -710,6 +775,10 @@ impl Peripheral for Exti {
         line_source: Option<u8>,
     ) -> bool {
         self.gpio_edge_with_source(port, pin, before, after, line_source)
+    }
+
+    fn exti_internal_line_edge(&mut self, line: u8, before: bool, after: bool) -> bool {
+        self.internal_line_edge(line, before, after)
     }
 
     /// The G0/U5 EXTI holds its own line-source mux (`EXTI_EXTICRx`): it

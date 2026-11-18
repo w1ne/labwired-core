@@ -1,0 +1,41 @@
+id: nucleo-g071rb
+doc: docs/boards/nucleo-g071rb.md
+chip: configs/chips/stm32g071.yaml
+tier: smoke-manual
+note: "NUCLEO-G071RB (STM32G071RB, Cortex-M0+). Bare-metal UART/LED smoke prints OK on USART2 (ST-LINK VCP) after the G0 RCC IOPENR/APBENR1 ungating and toggles LD4 PA5; register-vs-SVD coverage measured against the ST CMSIS-SVD. SIM-DERIVED — no silicon diff; no executing-fidelity differential; DBGMCU DEV_ID 0x460 is ST's published constant, not a bench read."
+offline_tests:
+  - "firmware_survival::test_nucleo_g071rb_smoke_survival"
+  - "board_config_gates::stm32g071_from_config_builds"
+models:
+  - crates/core/src/peripherals/esp_ledc_wave.rs
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/rcc.rs
+  - crates/core/src/peripherals/uart.rs
+  - tests/fixtures/real_world/stm32g071.svd
+  - configs/chips/stm32g071.yaml
+  - configs/systems/nucleo-g071rb.yaml
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/adc.rs
+  - crates/core/src/peripherals/crc.rs
+  - crates/core/src/peripherals/dac.rs
+  - crates/core/src/peripherals/dbgmcu.rs
+  - crates/core/src/peripherals/dma.rs
+  - crates/core/src/peripherals/dmamux.rs
+  - crates/core/src/peripherals/exti.rs
+  - crates/core/src/peripherals/flash.rs
+  - crates/core/src/peripherals/i2c.rs
+  - crates/core/src/peripherals/iwdg.rs
+  - crates/core/src/peripherals/lptim.rs
+  - crates/core/src/peripherals/pwr.rs
+  - crates/core/src/peripherals/rtc.rs
+  - crates/core/src/peripherals/spi.rs
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs
+  - crates/core/src/peripherals/timer.rs
+  - crates/core/src/peripherals/timer_output.rs
+  - crates/core/src/peripherals/wwdg.rs

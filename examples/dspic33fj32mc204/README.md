@@ -38,24 +38,24 @@ Five committed ELFs exercise the chip:
    transmits `HI`, then toggles LATB0 forever; it exercises the compiler's
    real startup (`__reset`/`__psv_init`/`__crt_start_mode`), call/return
    sequences, the IVT and the reset GOTO. Booted by
-   `crates/core/tests/pic24_xc16_elf_boot.rs`.
+   `crates/core/tests/pic/pic24_xc16_elf_boot.rs`.
 3. **Real XC16 DSP build** (`firmware/xc16-dsp-mac.c` →
    `dspic33fj32mc204-xc16-dsp-mac.elf`) — the same toolchain, a fixed
    MAC-class sequence taken from the DS70000157G worked examples
    (`LAC`/`MAC` with X/Y prefetch, `MPY`/`MSC` with write-back, `SAC`,
    `SAC.R`, normal-saturation clamp). Booted by
-   `crates/core/tests/pic24_xc16_dsp.rs`, which checks the accumulators,
+   `crates/core/tests/pic/pic24_xc16_dsp.rs`, which checks the accumulators,
    W13, the prefetch registers and the SR flags.
 4. **Real XC16 M2 build** (`firmware/xc16-m2-pwm-qei.c` →
    `dspic33fj32mc204-xc16-m2-pwm-qei.elf`) — configures an edge-aligned
    complementary PWM1 pair with a 2 TCY dead time and a x4 index-reset
-   QEI1. Booted by `crates/core/tests/pic24_xc16_m2.rs`, which checks the
+   QEI1. Booted by `crates/core/tests/pic/pic24_xc16_m2.rs`, which checks the
    register image, the PWM pads and injected quadrature edges.
 5. **Real XC16 M3 build** (`firmware/xc16-m3-adc-spi-i2c.c` →
    `dspic33fj32mc204-xc16-m3-adc-spi-i2c.elf`) — samples AN4, shifts 0xA5
    through SPI1 (the manifest's `loopback` device), reads the TMP102
    temperature over I2C1 and prints `M3 OK` on UART1. Booted by
-   `crates/core/tests/pic24_xc16_m3.rs`; `system-m3.yaml` declares the
+   `crates/core/tests/pic/pic24_xc16_m3.rs`; `system-m3.yaml` declares the
    TMP102 on `i2c1` and the SPI loopback on `spi1` for the session builder
    (the base `system.yaml` stays device-free for the CLI `test` path).
 

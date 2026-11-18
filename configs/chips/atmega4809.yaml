@@ -1,0 +1,210 @@
+name: "atmega4809"
+arch: "avr"
+core: "avr8"
+registers_count: 32
+# Arduino Nano Every uses the 16 MHz clock selected by the Arduino megaAVR
+# board package (OSCCFG fuse = 16 MHz, MCLKCTRLB prescaler off after init()).
+# The MCU itself is rated up to 20 MHz. Every timer and USART takes CLK_PER
+# as this clock: the CLKCTRL prescaler is a stored register, not applied.
+cpu_hz: 16000000
+io_voltage_v: 5.0
+
+flash:
+  base: 0x00000000
+  size: "48KB"
+ram:
+  # ATmega4808/4809 data-space map, SRAM section: 0x2800..=0x3FFF (6 KB).
+  base: 0x00002800
+  size: "6KB"
+
+# Data-space I/O address A is the bus address 0x10000 + A. The CPU core
+# answers CPU (SP, SREG, CCP) and CPUINT itself and aliases VPORTx onto the
+# PORTx blocks below. Every other I/O address firmware touches must be one of
+# these windows: on this part an unmapped I/O access faults instead of being
+# stored, so nothing below is claimed by accident.
+#
+# Offsets, sizes and vector numbers: Microchip ATmega4809 ATDF (ATmega DFP)
+# and data sheet DS40002173. The package is the 48-pin VQFN/TQFP the Nano
+# Every carries: PA0-7, PB0-5, PC0-7, PD0-7, PE0-3, PF0-6.
+# Official 48-pin VQFN/TQFP GPIO set, already cited above from Microchip
+# ATmega4809 data sheet DS40002173: PA0-7, PB0-5, PC0-7, PD0-7, PE0-3, PF0-6.
+pins:
+  PA0: { gpio: "porta", bit: 0 }
+  PA1: { gpio: "porta", bit: 1 }
+  PA2: { gpio: "porta", bit: 2 }
+  PA3: { gpio: "porta", bit: 3 }
+  PA4: { gpio: "porta", bit: 4 }
+  PA5: { gpio: "porta", bit: 5 }
+  PA6: { gpio: "porta", bit: 6 }
+  PA7: { gpio: "porta", bit: 7 }
+  PB0: { gpio: "portb", bit: 0 }
+  PB1: { gpio: "portb", bit: 1 }
+  PB2: { gpio: "portb", bit: 2 }
+  PB3: { gpio: "portb", bit: 3 }
+  PB4: { gpio: "portb", bit: 4 }
+  PB5: { gpio: "portb", bit: 5 }
+  PC0: { gpio: "portc", bit: 0 }
+  PC1: { gpio: "portc", bit: 1 }
+  PC2: { gpio: "portc", bit: 2 }
+  PC3: { gpio: "portc", bit: 3 }
+  PC4: { gpio: "portc", bit: 4 }
+  PC5: { gpio: "portc", bit: 5 }
+  PC6: { gpio: "portc", bit: 6 }
+  PC7: { gpio: "portc", bit: 7 }
+  PD0: { gpio: "portd", bit: 0 }
+  PD1: { gpio: "portd", bit: 1 }
+  PD2: { gpio: "portd", bit: 2 }
+  PD3: { gpio: "portd", bit: 3 }
+  PD4: { gpio: "portd", bit: 4 }
+  PD5: { gpio: "portd", bit: 5 }
+  PD6: { gpio: "portd", bit: 6 }
+  PD7: { gpio: "portd", bit: 7 }
+  PE0: { gpio: "porte", bit: 0 }
+  PE1: { gpio: "porte", bit: 1 }
+  PE2: { gpio: "porte", bit: 2 }
+  PE3: { gpio: "porte", bit: 3 }
+  PF0: { gpio: "portf", bit: 0 }
+  PF1: { gpio: "portf", bit: 1 }
+  PF2: { gpio: "portf", bit: 2 }
+  PF3: { gpio: "portf", bit: 3 }
+  PF4: { gpio: "portf", bit: 4 }
+  PF5: { gpio: "portf", bit: 5 }
+  PF6: { gpio: "portf", bit: 6 }
+
+peripherals:
+  # PORT blocks: DIR/OUT with SET/CLR/TGL strobes, IN, PINnCTRL pull-ups.
+  # Pin-change interrupts are not modelled (a PINnCTRL ISC edge setting is
+  # refused).
+  - id: "porta"
+    type: "avr_gpio"
+    base_address: 0x00010400
+    size: "32"
+    config:
+      layout: "megaavr_port"
+      pin_count: 8
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010420
+    size: "32"
+    config:
+      layout: "megaavr_port"
+      pin_count: 6
+  - id: "portc"
+    type: "avr_gpio"
+    base_address: 0x00010440
+    size: "32"
+    config:
+      layout: "megaavr_port"
+      pin_count: 8
+  - id: "portd"
+    type: "avr_gpio"
+    base_address: 0x00010460
+    size: "32"
+    config:
+      layout: "megaavr_port"
+      pin_count: 8
+  - id: "porte"
+    type: "avr_gpio"
+    base_address: 0x00010480
+    size: "32"
+    config:
+      layout: "megaavr_port"
+      pin_count: 4
+  - id: "portf"
+    type: "avr_gpio"
+    base_address: 0x000104A0
+    size: "32"
+    config:
+      layout: "megaavr_port"
+      pin_count: 7
+  # USART0..3: asynchronous 8-bit frames, instant TX, host RX queue, RXC /
+  # DRE / TXC vectors. Pads are not routed: TX bytes reach the console sink.
+  - id: "usart0"
+    type: "megaavr_usart"
+    base_address: 0x00010800
+    size: "15"
+    config:
+      irqs: [17, 18, 19]
+  - id: "usart1"
+    type: "megaavr_usart"
+    base_address: 0x00010820
+    size: "15"
+    config:
+      irqs: [26, 27, 28]
+  - id: "usart2"
+    type: "megaavr_usart"
+    base_address: 0x00010840
+    size: "15"
+    config:
+      irqs: [31, 32, 33]
+  # Nano Every: `Serial` (the USB bridge, PB4/PB5) is USART3.
+  - id: "usart3"
+    type: "megaavr_usart"
+    base_address: 0x00010860
+    size: "15"
+    config:
+      irqs: [37, 38, 39]
+  # TCA0 (normal / single-slope count, no pad output, no interrupts) and
+  # TCB0..3 (INT and PWM8 count modes, CAPT interrupt, no pad output).
+  - id: "timers"
+    type: "megaavr_tc"
+    base_address: 0x00010A00
+    size: "192"
+    config:
+      tcb_irqs: [12, 13, 25, 36]
+  # Register banks generated from the ATDF by scripts/atdf_to_declarative.py.
+  # They store what firmware writes and nothing more: no clock switching or
+  # prescaling, no sleep, no brown-out and no reset cause beyond the reset
+  # value. VREF.CTRLA is read by ADC0 for its internal reference.
+  - id: "rstctrl"
+    type: "declarative"
+    base_address: 0x00010040
+    size: "2"
+    config:
+      path: "../peripherals/atmega4809/rstctrl.yaml"
+  - id: "slpctrl"
+    type: "declarative"
+    base_address: 0x00010050
+    size: "1"
+    config:
+      path: "../peripherals/atmega4809/slpctrl.yaml"
+  - id: "clkctrl"
+    type: "declarative"
+    base_address: 0x00010060
+    size: "32"
+    config:
+      path: "../peripherals/atmega4809/clkctrl.yaml"
+  - id: "bod"
+    type: "declarative"
+    base_address: 0x00010080
+    size: "12"
+    config:
+      path: "../peripherals/atmega4809/bod.yaml"
+  - id: "vref"
+    type: "declarative"
+    base_address: 0x000100A0
+    size: "2"
+    config:
+      path: "../peripherals/atmega4809/vref.yaml"
+  - id: "portmux"
+    type: "declarative"
+    base_address: 0x000105E0
+    size: "6"
+    config:
+      path: "../peripherals/atmega4809/portmux.yaml"
+  # ADC0 converts (`megaavr_adc`): single-ended AIN0..15 against VDD or the
+  # VREF internal reference, 10/8-bit, SAMPNUM accumulation. VDD defaults to
+  # 5000 mV; a board sets `vdd_mv` and drives inputs with `input_mv`.
+  # Free-run, window compare, events and interrupts are refused.
+  - id: "adc0"
+    type: "megaavr_adc"
+    base_address: 0x00010600
+    size: "24"
+  # Signature row: DEVICEID 1E 96 51 (data sheet); serial number, oscillator
+  # calibration and error bytes read 0 (an ideal oscillator).
+  - id: "sigrow"
+    type: "declarative"
+    base_address: 0x00011100
+    size: "48"
+    config:
+      path: "../peripherals/atmega4809/sigrow.yaml"
