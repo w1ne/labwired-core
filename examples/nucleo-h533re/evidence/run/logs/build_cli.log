@@ -13,4 +13,12 @@ workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
 warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
 package:   /data/worktrees/legacy-migrated/labwired-hw-onboarding/examples/tier1-fixture/rp2040/Cargo.toml
 workspace: /data/worktrees/legacy-migrated/labwired-hw-onboarding/Cargo.toml
-    Finished `dev` profile [optimized + debuginfo] target(s) in 0.18s
+   Compiling labwired-config v0.26.0 (/data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/config)
+   Compiling labwired-core v0.26.0 (/data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/core)
+   Compiling labwired-physics v0.26.0 (/data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/core/physics)
+   Compiling labwired-loader v0.26.0 (/data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/loader)
+   Compiling svd-ingestor v0.26.0 (/data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/svd-ingestor)
+   Compiling labwired-gdbstub v0.26.0 (/data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/gdbstub)
+   Compiling labwired-fuzz v0.26.0 (/data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/labwired-fuzz)
+   Compiling labwired-cli v0.26.0 (/data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/cli)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 8m 59s
