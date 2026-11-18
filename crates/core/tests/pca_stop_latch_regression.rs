@@ -63,13 +63,16 @@ fn unrelated_descriptor_does_not_inherit_builtin_pca_latch() {
     write(&mut dev, 0xfe, &[121]);
     write(&mut dev, 0x00, &[0x20]);
     write(&mut dev, 0x06, &[0, 0, 0xcd, 0]);
-    let before = dev.pwm_channel_pulse_us(0).unwrap();
+    assert_eq!(dev.pwm_channel_pulse_us(0), None);
     dev.start();
     dev.write(0x06);
     for b in [0, 0, 0x33, 0x01] {
         dev.write(b);
     }
-    assert!(dev.pwm_channel_pulse_us(0).unwrap() > before + 400.0);
+    assert_eq!(dev.pwm_channel_pulse_us(0), None);
+    dev.start();
+    dev.write(0x08);
+    assert_eq!(dev.read(), 0x33);
 }
 
 #[test]
