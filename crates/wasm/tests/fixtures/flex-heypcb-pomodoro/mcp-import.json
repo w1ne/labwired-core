@@ -1,0 +1,143 @@
+{
+  "source": {
+    "repository": "HeyPCB/pomodoro-pal",
+    "revision": "1d6e50ff9998978e6f4521895042ae240fff7c42",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "files": {
+      "schematic": {
+        "path": "kicad/pomodoro_pal.kicad_sch",
+        "git_blob": "330d113217e04ba5b15c1c5c6439909bce3bddfd"
+      },
+      "pcb": {
+        "path": "kicad/pomodoro_pal.kicad_pcb",
+        "git_blob": "561268221ce4d066582156a71ffc5ec3e071f047"
+      },
+      "license": {
+        "path": "LICENSE",
+        "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1"
+      }
+    }
+  },
+  "discovery": {
+    "mcu": {
+      "tool": "labwired_list + labwired_describe",
+      "catalog_type": "ch32v003f4p6",
+      "listed_as_mcu": true,
+      "pin_count": 22,
+      "describe_runnable_flag": true,
+      "toolchains": [],
+      "pd6": { "gpio": 6, "functions": [] }
+    },
+    "led": {
+      "tool": "labwired_describe",
+      "catalog_type": "led",
+      "class": "board_io",
+      "simulation_backing": "netlist-only"
+    }
+  },
+  "generic_import": {
+    "tool": "labwired_import",
+    "schematic": {
+      "source_kind": "kicad_sch",
+      "mode": "twin_ready",
+      "board": "ch32v003f4p6",
+      "source_references": 41,
+      "mapped": 36,
+      "ignored": 5,
+      "dropped": 0,
+      "ignored_refs": ["J1", "TP1", "TP2", "TP3", "TP4"],
+      "diagram_parts": 36,
+      "diagram_wire_edges": 51,
+      "board_file": {
+        "components": 41,
+        "nets": 44,
+        "named_nets": 40,
+        "outline": null,
+        "holes": 0
+      },
+      "selected_mapping": [
+        { "ref": "U1", "value": "CH32V003F4P6", "status": "mapped", "catalog_type": "ch32v003f4p6" },
+        { "ref": "R5", "value": "1k", "status": "mapped", "catalog_type": "resistor" },
+        { "ref": "R6", "value": "1k", "status": "mapped", "catalog_type": "resistor" },
+        { "ref": "D1", "value": "Green", "status": "mapped", "catalog_type": "led" },
+        { "ref": "D2", "value": "Green", "status": "mapped", "catalog_type": "led" },
+        { "ref": "BZ1", "value": "PKMCS0909E4000", "status": "mapped", "catalog_type": "buzzer" }
+      ],
+      "source_slice_wire_edges": [
+        ["D1.A", "R5.2"],
+        ["D2.A", "R6.2"],
+        ["BZ1.-", "D1.K"],
+        ["BZ1.-", "D2.K"],
+        ["R5.1", "R6.1"],
+        ["R5.1", "U1.PD6"]
+      ]
+    },
+    "pcb": {
+      "source_kind": "kicad_pcb",
+      "mode": "twin_ready",
+      "board": "ch32v003f4p6",
+      "source_references": 41,
+      "mapped": 35,
+      "ignored": 5,
+      "dropped": 1,
+      "ignored_refs": ["J1", "TP1", "TP2", "TP3", "TP4"],
+      "dropped_refs": ["BZ1"],
+      "diagram_parts": 35,
+      "diagram_wire_edges": 50,
+      "board_file": {
+        "components": 41,
+        "nets": 42,
+        "named_nets": 38,
+        "outline_size_mm": [69.6, 66.39],
+        "cutouts": 0,
+        "holes": 2,
+        "shared_trace": {
+          "name": "LEAF",
+          "pads": ["R5.1", "R6.1", "U1.3"]
+        }
+      },
+      "design_only": [
+        {
+          "ref": "BZ1",
+          "value": "PKMCS0909E4000",
+          "reason": "symbol PKMCS0909E4000 is not in the catalog"
+        }
+      ],
+      "selected_mapping": [
+        { "ref": "U1", "value": "CH32V003F4P6", "status": "mapped", "catalog_type": "ch32v003f4p6" },
+        { "ref": "R5", "value": "1k", "status": "mapped", "catalog_type": "resistor" },
+        { "ref": "R6", "value": "1k", "status": "mapped", "catalog_type": "resistor" },
+        { "ref": "D1", "value": "Green", "status": "mapped", "catalog_type": "led" },
+        { "ref": "D2", "value": "Green", "status": "mapped", "catalog_type": "led" },
+        { "ref": "BZ1", "value": "PKMCS0909E4000", "status": "dropped" }
+      ]
+    }
+  },
+  "validation": {
+    "input": "generic kicad_sch import diagram",
+    "ok": false,
+    "error_count": 1,
+    "warning_count": 2,
+    "runnable": false,
+    "capability_mode": "design_only",
+    "diagnostic_codes": [
+      "BOARDIO_NOT_TO_MCU:D2",
+      "COMPONENT_DANGLING:D2",
+      "BOARD_NOT_RUNNABLE:ch32v003f4p6"
+    ]
+  },
+  "part_knowledge": {
+    "ch32v003f4p6": {
+      "outcome": "NOT_FOUND",
+      "meaning": "No matching public verified fact record; the catalog describe output is a separate model inventory."
+    },
+    "PKMCS0909E4000": {
+      "outcome": "NOT_FOUND",
+      "meaning": "No matching public verified fact record for the source buzzer MPN."
+    }
+  },
+  "saved_project_query": {
+    "query": "Pomodoro",
+    "saved_projects": 0
+  }
+}

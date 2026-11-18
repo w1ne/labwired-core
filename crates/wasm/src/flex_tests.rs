@@ -2,10 +2,14 @@
 //! No Cpu, Machine, target instructions, or MMIO mapping participates here.
 
 use labwired_core::flex::FlexRuntime;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 const SYSTEM: &str = include_str!("../tests/fixtures/flex-mixed-signal/system.yaml");
 const POMODORO_SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-pomodoro/system.yaml");
+const POMODORO_IMPORT: &str =
+    include_str!("../tests/fixtures/flex-heypcb-pomodoro/mcp-import.json");
+const POMODORO_SOURCE_MAP: &str =
+    include_str!("../tests/fixtures/flex-heypcb-pomodoro/source-map.json");
 
 fn run_model(yaml: &str, wrong_command: bool) -> (FlexRuntime, u32) {
     let mut runtime = FlexRuntime::from_yaml(yaml).expect("load portable Flex contract");
@@ -209,6 +213,140 @@ fn pomodoro_pd6_reference(runtime: &mut FlexRuntime, negative_control: bool) -> 
     } else {
         2
     }
+}
+
+#[test]
+fn flex_heypcb_pomodoro_behavior_ports_match_the_pinned_generic_import_graph() {
+    let imported: serde_json::Value = serde_json::from_str(POMODORO_IMPORT).unwrap();
+    let source_map: serde_json::Value = serde_json::from_str(POMODORO_SOURCE_MAP).unwrap();
+
+    assert_eq!(
+        imported["source"]["revision"], source_map["source"]["revision"],
+        "MCP import snapshot and behavior source map must use the same immutable project revision"
+    );
+    assert_eq!(
+        imported["source"]["files"]["schematic"]["git_blob"],
+        source_map["source"]["files"]["schematic"]["git_blob"]
+    );
+    assert_eq!(
+        imported["generic_import"]["schematic"]["mode"],
+        "twin_ready"
+    );
+    assert_eq!(imported["generic_import"]["schematic"]["mapped"], 36);
+    assert_eq!(imported["generic_import"]["schematic"]["ignored"], 5);
+    assert_eq!(imported["generic_import"]["schematic"]["dropped"], 0);
+    assert_eq!(imported["generic_import"]["pcb"]["dropped_refs"][0], "BZ1");
+    assert_eq!(
+        imported["generic_import"]["pcb"]["board_file"]["components"],
+        41
+    );
+    assert_eq!(imported["generic_import"]["pcb"]["board_file"]["nets"], 42);
+    assert_eq!(
+        imported["generic_import"]["pcb"]["board_file"]["shared_trace"]["name"],
+        "LEAF"
+    );
+    assert_eq!(
+        imported["generic_import"]["pcb"]["board_file"]["shared_trace"]["pads"],
+        serde_json::json!(["R5.1", "R6.1", "U1.3"])
+    );
+    assert_eq!(imported["discovery"]["mcu"]["pd6"]["gpio"], 6);
+    assert_eq!(imported["discovery"]["mcu"]["pin_count"], 22);
+    assert_eq!(
+        imported["discovery"]["led"]["simulation_backing"],
+        "netlist-only"
+    );
+    assert!(!imported["validation"]["ok"].as_bool().unwrap());
+    assert_eq!(imported["validation"]["error_count"], 1);
+    assert_eq!(imported["validation"]["warning_count"], 2);
+    assert_eq!(imported["saved_project_query"]["saved_projects"], 0);
+    assert_eq!(
+        imported["part_knowledge"]["ch32v003f4p6"]["outcome"],
+        "NOT_FOUND"
+    );
+    assert_eq!(
+        imported["part_knowledge"]["PKMCS0909E4000"]["outcome"],
+        "NOT_FOUND"
+    );
+
+    let wires = imported["generic_import"]["schematic"]["source_slice_wire_edges"]
+        .as_array()
+        .expect("source-slice wire edges from the generic import");
+    let canonical_edge = |left: &str, right: &str| {
+        if left <= right {
+            vec![left.to_owned(), right.to_owned()]
+        } else {
+            vec![right.to_owned(), left.to_owned()]
+        }
+    };
+    let mut actual_edges: BTreeSet<Vec<String>> = BTreeSet::new();
+    let mut adjacency: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for pair in wires {
+        let [left, right] = pair.as_array().expect("wire has two endpoints").as_slice() else {
+            panic!("wire must have exactly two endpoints: {pair}");
+        };
+        let left = left.as_str().unwrap().to_owned();
+        let right = right.as_str().unwrap().to_owned();
+        actual_edges.insert(canonical_edge(&left, &right));
+        adjacency
+            .entry(left.clone())
+            .or_default()
+            .push(right.clone());
+        adjacency.entry(right).or_default().push(left);
+    }
+
+    let expected_edges: BTreeSet<Vec<String>> = [
+        ["D1.A", "R5.2"],
+        ["D2.A", "R6.2"],
+        ["BZ1.-", "D1.K"],
+        ["BZ1.-", "D2.K"],
+        ["R5.1", "R6.1"],
+        ["R5.1", "U1.PD6"],
+    ]
+    .into_iter()
+    .map(|[left, right]| canonical_edge(left, right))
+    .collect();
+    assert_eq!(actual_edges, expected_edges);
+
+    let connected = |start: &str, end: &str| {
+        let mut seen = BTreeSet::new();
+        let mut queue = VecDeque::new();
+        queue.push_back(start.to_owned());
+        while let Some(node) = queue.pop_front() {
+            if node == end {
+                return true;
+            }
+            if seen.insert(node.clone()) {
+                if let Some(neighbors) = adjacency.get(&node) {
+                    queue.extend(neighbors.iter().cloned());
+                }
+            }
+        }
+        false
+    };
+    for pair in source_map["source_grounded_behavior_slice"]["source_connections"]
+        .as_array()
+        .unwrap()
+    {
+        let pair = pair.as_array().unwrap();
+        assert!(
+            connected(pair[0].as_str().unwrap(), pair[1].as_str().unwrap()),
+            "source connection {:?} is absent from the pinned generic import wire graph",
+            pair
+        );
+    }
+
+    for signal in [
+        "source.U1.PD6",
+        "source.D1.logic_state",
+        "source.D2.logic_state",
+    ] {
+        assert!(
+            POMODORO_SYSTEM.contains(signal),
+            "Flex contract omits {signal}"
+        );
+    }
+    assert!(POMODORO_SYSTEM.contains("adapter: behavior"));
+    assert!(POMODORO_SYSTEM.contains("primitive: gpio_device"));
 }
 
 fn pomodoro_digital_evidence(runtime: &mut FlexRuntime) -> serde_json::Value {

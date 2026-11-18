@@ -18,6 +18,7 @@
       }
     }
   },
+  "mcp_import_snapshot": "mcp-import.json",
   "generic_import": {
     "discovery": {
       "mcu_type": "ch32v003f4p6",
@@ -56,8 +57,16 @@
       "ignored_refs": ["J1", "TP1", "TP2", "TP3", "TP4"]
     },
     "validate": {
-      "status": "blocked_before_validation",
-      "reason": "The MCP input schema rejects diagram.board=ch32v003f4p6 because it is absent from the validator enum."
+      "status": "diagnostics_returned_not_ok",
+      "error_count": 1,
+      "warning_count": 2,
+      "runnable": false,
+      "diagnostics": [
+        "BOARDIO_NOT_TO_MCU for D2",
+        "COMPONENT_DANGLING for D2",
+        "BOARD_NOT_RUNNABLE for ch32v003f4p6"
+      ],
+      "capability_mode": "design_only"
     }
   },
   "source_grounded_behavior_slice": {
@@ -88,9 +97,9 @@
     },
     "mcu_pins": {
       "query": "CH32V003F4P6",
-      "outcome": "MODEL_ONLY",
+      "outcome": "NOT_FOUND",
       "pin_count": 22,
-      "caveat": "LabWired catalog pin model, not a vendor-backed silicon pinout"
+      "caveat": "The exact Part Knowledge query has no matching public verified fact. labwired_describe separately lists a 22-pin catalog configuration including PD6; that model inventory is not a Part Knowledge fact or a vendor-backed pinout."
     }
   }
 }
