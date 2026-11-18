@@ -135,10 +135,10 @@
     "positive-output",
     "negative-control"
   ],
-  "measured_browser_ms": 228.3,
+  "measured_browser_ms": 307.9,
   "browser": "156.0.8078.79",
   "browser_driver": "Playwright",
-  "core_commit": "9d092d6bdcfc924e80a5039c7054ae6a7a799a0f",
+  "core_commit": "d6ee8fffa73d9698f29fb753829b6bc4e496bac7",
   "firmware_sha256": "ab98dfec16e96f75e72f39bec6d98fc12fb9b92cf7439a45bbcb43811f137d5f",
   "firmware_source_sha256": "8685e3fa8cb7e546449db51ac3f59f3ca5ffae4d74eb9280ada239a1b7bad2d1",
   "system_sha256": "e5ead8f93681bcf92671f1d6c40490ef419d75c7fba20046a8196268c7e1ef12",
