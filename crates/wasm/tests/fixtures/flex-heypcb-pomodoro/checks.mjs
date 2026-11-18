@@ -25,9 +25,31 @@ export function runPomodoroPd6Checks(WasmFlexRuntime, system, firmwareBytes, exp
     };
   };
 
+  let runReport;
   const run = (mode) => {
     const runtime = WasmFlexRuntime.new_from_yaml(system);
     try {
+      const report = canonical(runtime.run_report());
+      check(report.execution_path === 'flex_portable_wasm'
+        && report.target_cpu_emulated === false
+        && report.time_unit === 'ns'
+        && report.scope_notes_complete === true,
+      'the project run report must identify portable execution and complete scope notes');
+      check(report.model_name === 'heypcb-pomodoro-u1-pd6-led-pair'
+        && report.assumptions.length === 3
+        && report.assumptions.some((note) => note.includes('does not execute the pinned CH32V003 HEX'))
+        && report.unsupported_checks.length === 3
+        && report.unsupported_checks.some((note) => note.includes('Original CH32V003 firmware execution')),
+      'the project run report omitted its model assumptions or unsupported checks');
+      equal(canonical(runtime.ports()), report.ports,
+        'the port discovery API must match the complete UI-facing run report');
+      equal(report.ports.map(({ name, signal, access, kind }) => ({ name, signal, access, kind })), [
+        { name: 'u1_pd6', signal: 'source.U1.PD6', access: 'write', kind: 'bool' },
+        { name: 'd1_state', signal: 'source.D1.logic_state', access: 'read', kind: 'bool' },
+        { name: 'd2_state', signal: 'source.D2.logic_state', access: 'read', kind: 'bool' },
+      ], 'the project run report omitted named firmware ports');
+      if (runReport === undefined) runReport = report;
+      else equal(report, runReport, 'run report changed between positive and negative controls');
       const instance = new WebAssembly.Instance(firmware, { labwired: {
         read: (port) => runtime.read(port),
         write: (port, value) => runtime.write(port, value),
@@ -57,6 +79,7 @@ export function runPomodoroPd6Checks(WasmFlexRuntime, system, firmwareBytes, exp
     observable: 'source.U1.PD6 drives D1/D2 logic-state outputs',
     positive_edges: positive.trace.edges.length,
     negative_edges: negative.trace.edges.length,
-    checks: ['portable-firmware-execution', 'native-model-equality', 'source-pin-mapping', 'positive-output', 'negative-control'],
+    run_report: runReport,
+    checks: ['portable-firmware-execution', 'native-model-equality', 'source-pin-mapping', 'named-port-discovery', 'run-scope-report', 'positive-output', 'negative-control'],
   };
 }

@@ -10,7 +10,7 @@ The observation is limited to digital logic state. The LabWired catalog describe
 
 The source import is not currently a saved LabWired project. `labwired_project_list(q: "Pomodoro")` returned no projects. The saved board-project flow uses a board, diagram and firmware, and invokes hosted-twin verification during creation. This fixture runs portable Wasm through Flex and supplies no target-board firmware to that flow, so no saved board project exists for this slice. The browser Library owner retains the paired-source importer and browser launch flow.
 
-`browser.json` records the actual Chromium run: portable Wasm returned `status=passed`, emitted six positive logic edges and zero negative-control edges in Chrome 156.0.8078.79. The test completed by matching the browser observations to `native.json`. The native test now checks the exact manifest port/model bindings against the pinned source map, so a YAML signal substitution cannot pass by merely leaving the expected signal strings elsewhere in the file.
+`browser.json` records the actual Chromium run: portable Wasm returned `status=passed`, emitted six positive logic edges and zero negative-control edges in Chrome 156.0.8078.79. The browser proof matches observations to `native.json` and checks that the existing `ports()` and `run_report()` APIs expose the same named-port contract, portable execution path, assumptions, and unsupported checks on both controls. The native test checks exact manifest port/model bindings against the pinned source map, so a YAML signal substitution cannot pass by merely leaving the expected signal strings elsewhere in the file.
 
 ## Reproduce
 
