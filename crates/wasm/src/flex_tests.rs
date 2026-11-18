@@ -2,10 +2,16 @@
 //! No Cpu, Machine, target instructions, or MMIO mapping participates here.
 
 use labwired_core::flex::FlexRuntime;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 const SYSTEM: &str = include_str!("../tests/fixtures/flex-mixed-signal/system.yaml");
 const POMODORO_SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-pomodoro/system.yaml");
+const POMODORO_IMPORT: &str =
+    include_str!("../tests/fixtures/flex-heypcb-pomodoro/mcp-import.json");
+const POMODORO_SOURCE_MAP: &str =
+    include_str!("../tests/fixtures/flex-heypcb-pomodoro/source-map.json");
+const GPIO_REUSE_POMODORO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/system.yaml");
+const GPIO_REUSE_UNO: &str = include_str!("../tests/fixtures/flex-gpio-reuse/arduino-uno.yaml");
 
 fn run_model(yaml: &str, wrong_command: bool) -> (FlexRuntime, u32) {
     let mut runtime = FlexRuntime::from_yaml(yaml).expect("load portable Flex contract");
@@ -211,6 +217,221 @@ fn pomodoro_pd6_reference(runtime: &mut FlexRuntime, negative_control: bool) -> 
     }
 }
 
+#[test]
+fn flex_heypcb_pomodoro_behavior_ports_match_the_pinned_generic_import_graph() {
+    let imported: serde_json::Value = serde_json::from_str(POMODORO_IMPORT).unwrap();
+    let source_map: serde_json::Value = serde_json::from_str(POMODORO_SOURCE_MAP).unwrap();
+
+    assert_eq!(imported["source"]["repository"], "HeyPCB/pomodoro-pal");
+    assert_eq!(source_map["source"]["repository"], "HeyPCB/pomodoro-pal");
+    assert_eq!(
+        imported["source"]["revision"], source_map["source"]["revision"],
+        "MCP import snapshot and behavior source map must use the same immutable project revision"
+    );
+    assert_eq!(
+        imported["source"]["revision"], "1d6e50ff9998978e6f4521895042ae240fff7c42",
+        "the source-backed demonstration must stay on its reviewed immutable revision"
+    );
+    assert_eq!(imported["source"]["license_spdx"], "CERN-OHL-S-2.0");
+    assert_eq!(source_map["source"]["license_spdx"], "CERN-OHL-S-2.0");
+    for artifact in ["schematic", "pcb", "license"] {
+        assert_eq!(
+            imported["source"]["files"][artifact], source_map["source"]["files"][artifact],
+            "MCP import and source map must pin the same {artifact} file"
+        );
+    }
+    assert_eq!(
+        source_map["source"]["files"]["original_firmware_hex"]["path"],
+        "firmware/pomodoro.hex"
+    );
+    assert_eq!(
+        source_map["source"]["files"]["original_firmware_hex"]["git_blob"],
+        "be13b893def87531ac8f06468b81b1da3b93c963",
+        "the original firmware reference must remain pinned even though it is not executed"
+    );
+    assert_eq!(
+        imported["generic_import"]["schematic"]["mode"],
+        "twin_ready"
+    );
+    assert_eq!(imported["generic_import"]["schematic"]["mapped"], 36);
+    assert_eq!(imported["generic_import"]["schematic"]["ignored"], 5);
+    assert_eq!(imported["generic_import"]["schematic"]["dropped"], 0);
+    assert_eq!(imported["generic_import"]["pcb"]["dropped_refs"][0], "BZ1");
+    assert_eq!(
+        imported["generic_import"]["pcb"]["board_file"]["components"],
+        41
+    );
+    assert_eq!(imported["generic_import"]["pcb"]["board_file"]["nets"], 42);
+    assert_eq!(
+        imported["generic_import"]["pcb"]["board_file"]["shared_trace"]["name"],
+        "LEAF"
+    );
+    assert_eq!(
+        imported["generic_import"]["pcb"]["board_file"]["shared_trace"]["pads"],
+        serde_json::json!(["R5.1", "R6.1", "U1.3"])
+    );
+    assert_eq!(imported["discovery"]["mcu"]["pd6"]["gpio"], 6);
+    assert_eq!(imported["discovery"]["mcu"]["pin_count"], 22);
+    assert_eq!(
+        imported["discovery"]["led"]["simulation_backing"],
+        "netlist-only"
+    );
+    assert!(!imported["validation"]["ok"].as_bool().unwrap());
+    assert_eq!(imported["validation"]["error_count"], 1);
+    assert_eq!(imported["validation"]["warning_count"], 2);
+    assert_eq!(imported["saved_project_query"]["saved_projects"], 0);
+    assert_eq!(
+        imported["part_knowledge"]["ch32v003f4p6"]["outcome"],
+        "NOT_FOUND"
+    );
+    assert_eq!(
+        imported["part_knowledge"]["PKMCS0909E4000"]["outcome"],
+        "NOT_FOUND"
+    );
+
+    let wires = imported["generic_import"]["schematic"]["source_slice_wire_edges"]
+        .as_array()
+        .expect("source-slice wire edges from the generic import");
+    let canonical_edge = |left: &str, right: &str| {
+        if left <= right {
+            vec![left.to_owned(), right.to_owned()]
+        } else {
+            vec![right.to_owned(), left.to_owned()]
+        }
+    };
+    let mut actual_edges: BTreeSet<Vec<String>> = BTreeSet::new();
+    let mut adjacency: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for pair in wires {
+        let [left, right] = pair.as_array().expect("wire has two endpoints").as_slice() else {
+            panic!("wire must have exactly two endpoints: {pair}");
+        };
+        let left = left.as_str().unwrap().to_owned();
+        let right = right.as_str().unwrap().to_owned();
+        actual_edges.insert(canonical_edge(&left, &right));
+        adjacency
+            .entry(left.clone())
+            .or_default()
+            .push(right.clone());
+        adjacency.entry(right).or_default().push(left);
+    }
+
+    let expected_edges: BTreeSet<Vec<String>> = [
+        ["D1.A", "R5.2"],
+        ["D2.A", "R6.2"],
+        ["BZ1.-", "D1.K"],
+        ["BZ1.-", "D2.K"],
+        ["R5.1", "R6.1"],
+        ["R5.1", "U1.PD6"],
+    ]
+    .into_iter()
+    .map(|[left, right]| canonical_edge(left, right))
+    .collect();
+    assert_eq!(actual_edges, expected_edges);
+
+    let connected = |start: &str, end: &str| {
+        let mut seen = BTreeSet::new();
+        let mut queue = VecDeque::new();
+        queue.push_back(start.to_owned());
+        while let Some(node) = queue.pop_front() {
+            if node == end {
+                return true;
+            }
+            if seen.insert(node.clone()) {
+                if let Some(neighbors) = adjacency.get(&node) {
+                    queue.extend(neighbors.iter().cloned());
+                }
+            }
+        }
+        false
+    };
+    for pair in source_map["source_grounded_behavior_slice"]["source_connections"]
+        .as_array()
+        .unwrap()
+    {
+        let pair = pair.as_array().unwrap();
+        assert!(
+            connected(pair[0].as_str().unwrap(), pair[1].as_str().unwrap()),
+            "source connection {:?} is absent from the pinned generic import wire graph",
+            pair
+        );
+    }
+
+    for signal in [
+        "source.U1.PD6",
+        "source.D1.logic_state",
+        "source.D2.logic_state",
+    ] {
+        assert!(
+            POMODORO_SYSTEM.contains(signal),
+            "Flex contract omits {signal}"
+        );
+    }
+
+    // Tie the runtime port names and model aliases back to the source map.
+    // Checking only that these strings occur in the YAML would allow a port
+    // to be wired to a different source signal while still passing this test.
+    let system: serde_yaml::Value = serde_yaml::from_str(POMODORO_SYSTEM).unwrap();
+    let ports = system["ports"].as_sequence().expect("Flex ports");
+    let port_for = |name: &str| {
+        ports
+            .iter()
+            .find(|port| port["name"].as_str() == Some(name))
+            .unwrap_or_else(|| panic!("Flex manifest is missing port '{name}'"))
+    };
+    let source_slice = &source_map["source_grounded_behavior_slice"];
+    let gpio_signal = format!(
+        "source.{}.{}",
+        source_slice["mcu_ref"].as_str().unwrap(),
+        source_slice["gpio_pin"].as_str().unwrap()
+    );
+    let gpio_port = port_for("u1_pd6");
+    assert_eq!(gpio_port["signal"].as_str(), Some(gpio_signal.as_str()));
+    assert_eq!(gpio_port["access"].as_str(), Some("write"));
+    assert_eq!(gpio_port["kind"].as_str(), Some("bool"));
+    assert_eq!(gpio_port["initial"].as_i64(), Some(0));
+
+    let models = system["cosim_models"]
+        .as_sequence()
+        .expect("Flex co-simulation models");
+    assert_eq!(
+        models.len(),
+        1,
+        "the source slice has one shared behavior model"
+    );
+    let model = &models[0];
+    assert_eq!(model["id"].as_str(), Some("source-pd6-green-indicators"));
+    assert_eq!(model["adapter"].as_str(), Some("behavior"));
+    assert_eq!(model["step_ns"].as_u64(), Some(1_000));
+    assert_eq!(
+        model["inputs"]["drive"].as_str(),
+        Some(gpio_signal.as_str())
+    );
+    let source_components = source_slice["components"]
+        .as_array()
+        .expect("source-slice components");
+    for (port_name, alias, component_ref) in [("d1_state", "d1", "D1"), ("d2_state", "d2", "D2")] {
+        assert!(
+            source_components
+                .iter()
+                .any(|component| component["ref"].as_str() == Some(component_ref)),
+            "source map omits indicator {component_ref}"
+        );
+        let expected_signal = format!("source.{component_ref}.logic_state");
+        assert_eq!(
+            model["outputs"][alias].as_str(),
+            Some(expected_signal.as_str())
+        );
+        let read_port = port_for(port_name);
+        assert_eq!(read_port["signal"].as_str(), Some(expected_signal.as_str()));
+        assert_eq!(read_port["access"].as_str(), Some("read"));
+        assert_eq!(read_port["kind"].as_str(), Some("bool"));
+    }
+    assert_eq!(
+        model["config"]["behavior"]["primitive"].as_str(),
+        Some("gpio_device")
+    );
+}
+
 fn pomodoro_digital_evidence(runtime: &mut FlexRuntime) -> serde_json::Value {
     let batch = runtime.digital_trace_snapshot(0);
     let mut channels: Vec<_> = batch
@@ -318,5 +539,160 @@ fn flex_heypcb_pomodoro_source_mapped_pd6_pair_has_native_reference_and_negative
     assert_eq!(
         measured, expected,
         "source-mapped native model observation changed"
+    );
+}
+
+fn run_gpio_reuse_reference(runtime: &mut FlexRuntime, positive: bool) -> u32 {
+    let drive = runtime.port_id("drive").unwrap();
+    let led = runtime.port_id("led_state").unwrap();
+    let second_led = runtime.port_id("led_state_2").ok();
+    let outputs_are = |runtime: &FlexRuntime, value: f64| {
+        runtime.read(led).unwrap() == value
+            && match second_led {
+                Some(port) => runtime.read(port).unwrap() == value,
+                None => true,
+            }
+    };
+    if !positive {
+        runtime.write(drive, 0.0).unwrap();
+        runtime.advance_ns(5_000).unwrap();
+        return if outputs_are(runtime, 0.0) { 0 } else { 2 };
+    }
+
+    runtime.write(drive, 1.0).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    if !outputs_are(runtime, 1.0) {
+        return 2;
+    }
+    runtime.write(drive, 0.0).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    if !outputs_are(runtime, 0.0) {
+        return 2;
+    }
+    runtime.write(drive, 1.0).unwrap();
+    runtime.advance_ns(2_000).unwrap();
+    if !outputs_are(runtime, 1.0) {
+        return 2;
+    }
+    runtime.write(drive, 0.0).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    if !outputs_are(runtime, 0.0) {
+        return 2;
+    }
+    1
+}
+
+fn gpio_reuse_evidence(yaml: &str, positive: bool) -> serde_json::Value {
+    let mut runtime = FlexRuntime::from_yaml(yaml).expect("load GPIO reuse contract");
+    let result = run_gpio_reuse_reference(&mut runtime, positive);
+    serde_json::json!({
+        "result": result,
+        "time_ns": runtime.time_ns(),
+        "trace": pomodoro_digital_evidence(&mut runtime),
+    })
+}
+
+#[test]
+fn flex_gpio_reuse_binds_shared_behavior_to_pomodoro_and_uno_with_held_out_workload() {
+    let pomodoro: serde_yaml::Value = serde_yaml::from_str(GPIO_REUSE_POMODORO).unwrap();
+    let uno: serde_yaml::Value = serde_yaml::from_str(GPIO_REUSE_UNO).unwrap();
+    assert_eq!(
+        pomodoro["cosim_models"][0]["config"]["behavior"],
+        uno["cosim_models"][0]["config"]["behavior"],
+        "both hardware descriptions must use the same reusable behavior block"
+    );
+    assert_eq!(
+        pomodoro["cosim_models"][1]["config"]["behavior"],
+        uno["cosim_models"][0]["config"]["behavior"],
+        "the second Pomodoro indicator must use the same reusable behavior block"
+    );
+    assert_eq!(
+        pomodoro["cosim_models"][0]["inputs"]["drive"].as_str(),
+        Some("source.U1.PD6")
+    );
+    assert_eq!(
+        pomodoro["cosim_models"][0]["outputs"]["led"].as_str(),
+        Some("source.D1.logic_state")
+    );
+    assert_eq!(
+        pomodoro["cosim_models"][1]["outputs"]["led"].as_str(),
+        Some("source.D2.logic_state")
+    );
+    assert_eq!(
+        uno["cosim_models"][0]["inputs"]["drive"].as_str(),
+        Some("arduino.portb.pb5")
+    );
+    assert_eq!(
+        uno["cosim_models"][0]["outputs"]["led"].as_str(),
+        Some("arduino.status_led.logic_state")
+    );
+
+    let measured = serde_json::json!({
+        "pomodoro": {
+            "positive": gpio_reuse_evidence(GPIO_REUSE_POMODORO, true),
+            "negative": gpio_reuse_evidence(GPIO_REUSE_POMODORO, false),
+        },
+        "arduino_uno": {
+            "positive": gpio_reuse_evidence(GPIO_REUSE_UNO, true),
+            "negative": gpio_reuse_evidence(GPIO_REUSE_UNO, false),
+        },
+    });
+    assert_eq!(measured["pomodoro"]["positive"]["result"], 1);
+    assert_eq!(measured["pomodoro"]["positive"]["time_ns"], 5_000);
+    assert_eq!(
+        measured["pomodoro"]["positive"]["trace"]["edges"]
+            .as_array()
+            .unwrap()
+            .len(),
+        12
+    );
+    for output in ["source.D1.logic_state", "source.D2.logic_state"] {
+        assert_eq!(
+            measured["pomodoro"]["positive"]["trace"]["edges"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|edge| edge["signal"] == output)
+                .count(),
+            4,
+            "both source-mapped indicators must follow the held-out pulse workload"
+        );
+    }
+    assert_eq!(measured["pomodoro"]["negative"]["result"], 0);
+    assert!(measured["pomodoro"]["negative"]["trace"]["edges"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert_eq!(measured["arduino_uno"]["positive"]["result"], 1);
+    assert_eq!(measured["arduino_uno"]["positive"]["time_ns"], 5_000);
+    assert_eq!(
+        measured["arduino_uno"]["positive"]["trace"]["edges"]
+            .as_array()
+            .unwrap()
+            .len(),
+        8
+    );
+    assert_eq!(measured["arduino_uno"]["negative"]["result"], 0);
+    assert!(measured["arduino_uno"]["negative"]["trace"]["edges"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert!(measured["pomodoro"]["positive"]["trace"]["dropped"].as_u64() == Some(0));
+    assert!(measured["arduino_uno"]["positive"]["trace"]["dropped"].as_u64() == Some(0));
+
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/flex-gpio-reuse/native.json");
+    if std::env::var_os("LABWIRED_REGEN_FLEX_GPIO_REUSE").is_some() {
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&measured).unwrap() + "\n",
+        )
+        .unwrap();
+    }
+    let expected: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        measured, expected,
+        "cross-hardware GPIO behavior evidence changed"
     );
 }

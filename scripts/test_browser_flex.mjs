@@ -80,7 +80,12 @@ if (process.argv.includes('--browser')) {
   assert(existsSync(pkg), `Missing ${pkg}; build the nodejs Wasm package first, or use --browser.`);
   const { WasmFlexRuntime } = await import(pkg);
   const read = (name) => readFileSync(resolve(fixture, name));
-  result = nodeChecks[checkName](WasmFlexRuntime, read('system.yaml').toString(), read('firmware.wasm'), JSON.parse(read('native.json').toString()));
+  result = await nodeChecks[checkName](
+    WasmFlexRuntime,
+    read('system.yaml').toString(),
+    read('firmware.wasm'),
+    JSON.parse(read('native.json').toString()),
+  );
   result.host = 'Node';
 }
 console.log(JSON.stringify(result, null, 2));

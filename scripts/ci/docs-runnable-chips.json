@@ -93,6 +93,10 @@
       "firmware": "tests/fixtures/tier1/esp32c3.elf",
       "expect": "TIER1 gpio PASS"
     },
+    "esp32c2": {
+      "how": "needs-build",
+      "why": "ESP32-C2/ESP8684 descriptor and UART/GPIO adapters are newer than the installed CLI this gate checks. The source-tree board smoke passes in examples/esp8684-devkitm-1-h4x; switch this row after a release carries C2 support."
+    },
     "esp32c6": {
       "how": "committed",
       "firmware": "tests/fixtures/esp32c6-demo.elf",
@@ -109,7 +113,7 @@
     },
     "esp32c61": {
       "how": "needs-build",
-      "why": "ESP32-C61 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32c61-devkitc-1-n8r2; switch this row after a release carries C61 support."
+      "why": "ESP32-C61 descriptor, UART0 model and narrow GPIO4 output model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32c61-devkitc-1-n8r2; switch this row after a release carries C61 support."
     },
     "esp32p4": {
       "how": "needs-build",
@@ -163,6 +167,10 @@
       "script": "examples/nrf54lm20a-snake/io-smoke.yaml",
       "expect": "map rram=ffffffff ram=54120000 p3cnf=00000003",
       "note": "Snake on an RM67162 AMOLED over SPIM22. Firmware is committed (tests/fixtures/nrf54lm20a-snake.elf), so a clone plus the CLI is the whole prerequisite. The expected map is read back from the model: each value reaches memory or GPIO3 outside the nRF54L15 sibling's map."
+    },
+    "mspm0g3507": {
+      "how": "needs-build",
+      "why": "The LP-MSPM0G3507 UART0 smoke is built from crates/firmware-lp-mspm0g3507-smoke; its passing source-tree evidence is under examples/lp-mspm0g3507-launchpad/evidence/. No firmware ELF is committed for a clean install, so this chip is not yet a released-CLI runnable entry."
     },
     "rp2040": {
       "how": "committed",
@@ -287,6 +295,10 @@
       "firmware": "tests/fixtures/tier1/stm32f411.elf",
       "expect": "TIER1 clock PASS",
       "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
+    },
+    "stm32h533re": {
+      "how": "needs-build",
+      "why": "NUCLEO-H533RE descriptor and USART2/GPIOA model are newer than the installed CLI this gate checks. The committed source-tree smoke boots and prints NUCLEO_H533RE_OK in examples/nucleo-h533re; clean-install release support starts with a release containing this chip model."
     },
     "stm32h563": {
       "how": "committed",

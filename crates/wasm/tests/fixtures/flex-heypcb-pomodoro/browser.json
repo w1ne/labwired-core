@@ -3,6 +3,7 @@
   "status": "passed",
   "runtime": "compiled-wasm",
   "firmware_bytes": 425,
+  "firmware_sha256": "ab98dfec16e96f75e72f39bec6d98fc12fb9b92cf7439a45bbcb43811f137d5f",
   "cpu_emulation": false,
   "source_board": "HeyPCB Pomodoro Pal / ch32v003f4p6",
   "observable": "source.U1.PD6 drives D1/D2 logic-state outputs",
@@ -16,5 +17,7 @@
     "positive-output",
     "negative-control"
   ],
-  "browser": "156.0.8078.79"
+  "browser": "156.0.8078.79",
+  "playwright": "1.58.2",
+  "elapsed_seconds": 3.79
 }

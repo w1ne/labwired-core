@@ -28,9 +28,13 @@ members = [
     "crates/firmware-uart-echo-fixture",
     "crates/firmware-comparative-benchmark",
     "crates/firmware-esp32c3-demo",
+    "crates/firmware-esp32c3-devkitm-1-n4x-smoke",
+    "crates/firmware-esp8684-devkitm-1-h4x-smoke",
     "crates/firmware-esp32c6-demo",
     "crates/firmware-esp32h2-demo",
     "crates/firmware-esp32c6-devkitc-bme280-smoke",
+    "crates/firmware-esp32c5-devkitc-1-bme280-smoke",
+    "crates/firmware-esp32c61-bme280-smoke",
     "crates/firmware-f103-i2c-demo",
     "crates/firmware-f401-demo",
     "crates/firmware-f103-conformance",
@@ -81,6 +85,7 @@ members = [
     "crates/firmware-nucleo-f103rb-smoke",
     "crates/firmware-nucleo-f103rb-bme280-smoke",
     "crates/firmware-nucleo-h723zg-smoke",
+    "crates/firmware-nucleo-h533re-smoke",
     "crates/firmware-stm32f103-bluepill-smoke",
     "crates/firmware-stm32f103-lowdensity-smoke",
     "crates/firmware-f401-lowram-smoke",
@@ -108,8 +113,12 @@ members = [
     "crates/firmware-perf-spin-riscv",
     "crates/firmware-rp2040-demo",
     "crates/firmware-adafruit-feather-rp2350-smoke",
+    "crates/firmware-pico2w-bme280-smoke",
+    "crates/firmware-pico-w-bme280-smoke",
+    "crates/firmware-pico2-bme280-smoke",
     "crates/firmware-samd21-demo",
     "crates/firmware-samd21-lowram-smoke",
+    "crates/firmware-lp-mspm0g3507-smoke",
     "crates/firmware-arduino-zero-demo",
     "crates/firmware-rp2350-demo",
     "crates/firmware-kw41z-demo",
@@ -277,6 +286,14 @@ opt-level = "s"
 codegen-units = 1
 opt-level = "s"
 
+[profile.release.package.firmware-esp32c3-devkitm-1-n4x-smoke]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-esp8684-devkitm-1-h4x-smoke]
+codegen-units = 1
+opt-level = "s"
+
 [profile.release.package.firmware-esp32c6-demo]
 codegen-units = 1
 opt-level = "s"
@@ -390,6 +407,10 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release.package.firmware-rp2040-demo]
+codegen-units = 1
+opt-level = "s"
+
+[profile.release.package.firmware-pico-w-bme280-smoke]
 codegen-units = 1
 opt-level = "s"
 

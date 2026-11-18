@@ -13,9 +13,9 @@
       0,
       1082458112,
       0,
-      1610612736,
       10,
       75,
+      1610612736,
       0,
       0,
       0,
@@ -36,7 +36,7 @@
       0,
       0
     ],
-    "pc": 1107296950,
+    "pc": 1107296960,
     "mstatus": 0,
     "mie": 0,
     "mip": 128,
@@ -98,10 +98,10 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "1a95635266aaa65fd85add0ec5defb9cebbd88d693367f5107bc0275297fa601",
+  "firmware_hash": "9149cd37ceb4b1d6872a92afe25e419b2bafed52994fefd6540c2104d4fb0aaa",
   "config": {
-    "firmware": "examples/esp32c61-devkitc-1-n8r2/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c61-demo",
+    "firmware": "examples/esp32c61-devkitc-1-n8r2/build/firmware.elf",
     "system": "examples/esp32c61-devkitc-1-n8r2/../../configs/systems/esp32c61-devkitc-1-n8r2.yaml",
-    "script": "examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml"
+    "script": "examples/esp32c61-devkitc-1-n8r2/gpio-smoke.yaml"
   }
 }

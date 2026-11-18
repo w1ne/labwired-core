@@ -134,7 +134,16 @@ pub const PCR_REGISTERS: &[(u32, &str, u32)] = &[
     (0xFFC, "DATE", 0x02206150),
 ];
 
-/// ESP32-C6 Peripheral Clock and Reset block (HP PCR).
+/// C61 PCR registers exercised by the DevKitC board profile. C61 places
+/// UART0_CONF/SCLK_CONF at 0x00/0x04 and I2C_CONF/SCLK_CONF at 0x2C/0x30.
+pub const PCR_C61_REGISTERS: &[(u32, &str, u32)] = &[
+    (0x000, "UART0_CONF", 0x00000001),
+    (0x004, "UART0_SCLK_CONF", 0x00400000),
+    (0x02C, "I2C_CONF", 0x00000001),
+    (0x030, "I2C_SCLK_CONF", 0x00400000),
+];
+
+/// ESP32-C6 Peripheral Clock and Reset block (HP PCR), with a narrow C61 map.
 #[derive(Debug)]
 pub struct Esp32c6Pcr {
     /// Word-aligned register backing store, seeded with the SVD reset values.
@@ -142,6 +151,8 @@ pub struct Esp32c6Pcr {
     /// Live mirrors handed out by `clock_select_cell` (offset, cell), refreshed
     /// on every write so a consumer reads the source select firmware set.
     mirrors: Vec<(u64, Arc<AtomicU32>)>,
+    /// Register table for the selected silicon map (C6 or the C61 subset).
+    register_map: &'static [(u32, &'static str, u32)],
 }
 
 impl Default for Esp32c6Pcr {
@@ -152,8 +163,17 @@ impl Default for Esp32c6Pcr {
 
 impl Esp32c6Pcr {
     pub fn new() -> Self {
+        Self::with_register_map(PCR_REGISTERS)
+    }
+
+    /// Build the C61 PCR subset used for UART0 and I2C0 clock gating.
+    pub fn new_esp32c61() -> Self {
+        Self::with_register_map(PCR_C61_REGISTERS)
+    }
+
+    fn with_register_map(register_map: &'static [(u32, &'static str, u32)]) -> Self {
         let mut regs = crate::FastMap::default();
-        for &(offset, _name, reset) in PCR_REGISTERS {
+        for &(offset, _name, reset) in register_map {
             if reset != 0 {
                 regs.insert(u64::from(offset), reset);
             }
@@ -161,6 +181,7 @@ impl Esp32c6Pcr {
         Self {
             regs,
             mirrors: Vec::new(),
+            register_map,
         }
     }
 
@@ -183,7 +204,11 @@ impl Esp32c6Pcr {
 
     /// Resolve an SVD register name (case-insensitive) to its byte offset.
     pub fn gate_reg_offset(name: &str) -> Option<u64> {
-        PCR_REGISTERS
+        Self::gate_reg_offset_in(PCR_REGISTERS, name)
+    }
+
+    fn gate_reg_offset_in(registers: &[(u32, &str, u32)], name: &str) -> Option<u64> {
+        registers
             .iter()
             .find(|(_, n, _)| n.eq_ignore_ascii_case(name))
             .map(|(o, _, _)| u64::from(*o))
@@ -231,13 +256,13 @@ impl Peripheral for Esp32c6Pcr {
     /// block's offset. The bus reads the live bit at access time, so a gate
     /// closed mid-run silences the peripheral immediately.
     fn clock_gate_reg_offset(&self, name: &str) -> Option<u64> {
-        Self::gate_reg_offset(name)
+        Self::gate_reg_offset_in(self.register_map, name)
     }
 
     /// A live mirror of a named PCR register: the C6 LEDC takes its source
     /// clock from `LEDC_SCLK_CONF.LEDC_SCLK_SEL` here, not from its own window.
     fn clock_select_cell(&mut self, name: &str) -> Option<Arc<AtomicU32>> {
-        let off = Self::gate_reg_offset(name)?;
+        let off = Self::gate_reg_offset_in(self.register_map, name)?;
         if let Some((_, cell)) = self.mirrors.iter().find(|(o, _)| *o == off) {
             return Some(Arc::clone(cell));
         }

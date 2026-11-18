@@ -1530,6 +1530,14 @@ impl PinPort for Esp32Gpio {
 }
 
 impl Peripheral for Esp32Gpio {
+    fn register_esp_gpio_observer(
+        &mut self,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) -> bool {
+        self.add_observer(observer);
+        true
+    }
+
     /// Name the output/enable banks so the universal inspect wall decodes them.
     ///
     /// Without this the block reported ZERO registers, which is why a final-state

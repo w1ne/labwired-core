@@ -1,0 +1,14 @@
+# Bare RISC-V UART0 + onboard WS2812 smoke for ESP32-C3-DevKitM-1-N4X.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c3-devkitm-1-n4x-smoke"
+  system: "../../configs/systems/esp32c3-devkitm-1-n4x.yaml"
+limits:
+  # 160 MHz C3 UART0 needs more simulated cycles per byte than the H2 smoke.
+  max_steps: 300000
+assertions:
+  - uart_contains: "C3_N4X_RGB_OK"
+  - gpio_edges:
+      pin: "gpio:8"
+      min_edges: 16
+  - expected_stop_reason: max_steps

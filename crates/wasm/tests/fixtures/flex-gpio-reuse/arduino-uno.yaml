@@ -1,0 +1,30 @@
+# Existing LabWired Arduino Uno board twin's status LED path, expressed as a
+# CPU-free Flex contract. See README.md for the precise evidence boundary.
+schema_version: 1
+name: flex-arduino-uno-status-led
+ports:
+  - { name: drive, signal: arduino.portb.pb5, access: write, kind: bool, initial: 0 }
+  - { name: led_state, signal: arduino.status_led.logic_state, access: read, kind: bool }
+cosim_models:
+  - id: indicator
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: arduino.portb.pb5 }
+    outputs: { led: arduino.status_led.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do:
+              - { goto: on }
+              - { pin: led, level: 1 }
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do:
+              - { goto: off }
+              - { pin: led, level: 0 }

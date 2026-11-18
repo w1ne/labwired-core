@@ -65,11 +65,10 @@ peripherals:
     type: "ra4_sysc"
     base_address: 0x4001E000
     size: "1792B"
-  # R_MSTP: MSTPCRB-D at 0x40047000-0x40047008 (R7FA4M1AB.h puts R_MSTP_BASE
-  # 4 bytes lower so MSTPCRB lands there). Declared stub: no module is held
-  # in stop.
+  # R_MSTP: MSTPCRB-D at 0x40047000-0x40047008. Reset value stops the
+  # modules; only IIC1 and SCI2 gates used by this profile are applied.
   - id: "mstp"
-    type: "stub"
+    type: "ra_mstp"
     base_address: 0x40047000
     size: "16B"
   # ICU @ 0x40006000 (R7FA4M1AB.h R_ICU_Type): IRQCRn +0x000, NMI +0x100,
@@ -174,6 +173,7 @@ peripherals:
     type: "uart"
     base_address: 0x40070040
     size: "32B"
+    clock: { reg: "mstpcrb", bit: 29, controller: "mstp", active_low: true }
     config:
       profile: "sci"
       elc_event: 163
@@ -223,6 +223,7 @@ peripherals:
     type: "ra_iic"
     base_address: 0x40053100
     size: "256B"
+    clock: { reg: "mstpcrb", bit: 8, controller: "mstp", active_low: true }
     config:
       elc_event: 58
       clock_hz: 48000000
