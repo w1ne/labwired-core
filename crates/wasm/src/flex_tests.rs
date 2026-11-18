@@ -2,8 +2,10 @@
 //! No Cpu, Machine, target instructions, or MMIO mapping participates here.
 
 use labwired_core::flex::FlexRuntime;
+use std::collections::BTreeMap;
 
 const SYSTEM: &str = include_str!("../tests/fixtures/flex-mixed-signal/system.yaml");
+const POMODORO_SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-pomodoro/system.yaml");
 
 fn run_model(yaml: &str, wrong_command: bool) -> (FlexRuntime, u32) {
     let mut runtime = FlexRuntime::from_yaml(yaml).expect("load portable Flex contract");
@@ -179,5 +181,142 @@ fn flex_portable_contract_rejects_invalid_access_and_missing_behavior() {
     assert!(
         FlexRuntime::from_yaml(&unsupported).is_err(),
         "unsupported behavior must not become a silent stub"
+    );
+}
+
+fn pomodoro_pd6_reference(runtime: &mut FlexRuntime, negative_control: bool) -> u32 {
+    let drive = runtime.port_id("u1_pd6").unwrap();
+    let d1 = runtime.port_id("d1_state").unwrap();
+    let d2 = runtime.port_id("d2_state").unwrap();
+    if negative_control {
+        runtime.write(drive, 0.0).unwrap();
+        runtime.advance_ns(2_000).unwrap();
+        return if runtime.read(d1).unwrap() == 0.0 && runtime.read(d2).unwrap() == 0.0 {
+            0
+        } else {
+            2
+        };
+    }
+
+    runtime.write(drive, 1.0).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    let asserted = runtime.read(d1).unwrap() == 1.0 && runtime.read(d2).unwrap() == 1.0;
+    runtime.write(drive, 0.0).unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    let cleared = runtime.read(d1).unwrap() == 0.0 && runtime.read(d2).unwrap() == 0.0;
+    if asserted && cleared {
+        1
+    } else {
+        2
+    }
+}
+
+fn pomodoro_digital_evidence(runtime: &mut FlexRuntime) -> serde_json::Value {
+    let batch = runtime.digital_trace_snapshot(0);
+    let mut channels: Vec<_> = batch
+        .channels
+        .iter()
+        .map(|channel| {
+            (
+                channel.id,
+                serde_json::json!({
+                    "signal": channel.signal,
+                    "initial": channel.initial,
+                }),
+            )
+        })
+        .collect();
+    channels.sort_by(|a, b| a.1["signal"].as_str().cmp(&b.1["signal"].as_str()));
+    let signal_by_id: BTreeMap<_, _> = batch
+        .channels
+        .iter()
+        .map(|channel| (channel.id, channel.signal.as_str()))
+        .collect();
+    let mut edges: Vec<_> = batch
+        .edges
+        .into_iter()
+        .map(|edge| {
+            let signal = signal_by_id
+                .get(&edge.ch)
+                .copied()
+                .expect("digital edge references a channel");
+            (edge.time_ns, signal, edge.value)
+        })
+        .collect();
+    edges.sort_unstable();
+    serde_json::json!({
+        "time_unit": batch.time_unit,
+        "dropped": batch.dropped,
+        "channels": channels.into_iter().map(|(_, channel)| channel).collect::<Vec<_>>(),
+        "edges": edges.into_iter().map(|(time_ns, signal, value)| serde_json::json!({
+            "signal": signal,
+            "time_ns": time_ns,
+            "value": value,
+        })).collect::<Vec<_>>(),
+    })
+}
+
+#[test]
+fn flex_heypcb_pomodoro_source_mapped_pd6_pair_has_native_reference_and_negative_control() {
+    let mut positive = FlexRuntime::from_yaml(POMODORO_SYSTEM).expect("Pomodoro Flex manifest");
+    let positive_result = pomodoro_pd6_reference(&mut positive, false);
+    let positive_evidence = serde_json::json!({
+        "result": positive_result,
+        "time_ns": positive.time_ns(),
+        "trace": pomodoro_digital_evidence(&mut positive),
+    });
+    assert_eq!(
+        positive_result, 1,
+        "source-mapped positive control must assert both LED logic outputs"
+    );
+    assert_eq!(positive.time_ns(), 2_000);
+    let positive_channels = positive_evidence["trace"]["channels"]
+        .as_array()
+        .expect("positive channels");
+    assert_eq!(positive_channels.len(), 3);
+    assert_eq!(
+        positive_evidence["trace"]["edges"]
+            .as_array()
+            .unwrap()
+            .len(),
+        6
+    );
+    assert_eq!(positive_evidence["trace"]["dropped"], 0);
+
+    let mut negative = FlexRuntime::from_yaml(POMODORO_SYSTEM).expect("Pomodoro Flex manifest");
+    let negative_result = pomodoro_pd6_reference(&mut negative, true);
+    let negative_evidence = serde_json::json!({
+        "result": negative_result,
+        "time_ns": negative.time_ns(),
+        "trace": pomodoro_digital_evidence(&mut negative),
+    });
+    assert_eq!(
+        negative_result, 0,
+        "negative control must leave both outputs inactive"
+    );
+    assert_eq!(negative.time_ns(), 2_000);
+    assert!(negative_evidence["trace"]["edges"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+
+    let measured = serde_json::json!({
+        "positive": positive_evidence,
+        "negative": negative_evidence,
+    });
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/flex-heypcb-pomodoro/native.json");
+    if std::env::var_os("LABWIRED_REGEN_FLEX_POMODORO").is_some() {
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&measured).unwrap() + "\n",
+        )
+        .unwrap();
+    }
+    let expected: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        measured, expected,
+        "source-mapped native model observation changed"
     );
 }
