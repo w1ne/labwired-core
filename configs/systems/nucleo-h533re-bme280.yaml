@@ -1,0 +1,20 @@
+# NUCLEO-H533RE with a BME280 breakout on Arduino I2C1 pins D15/D14.
+name: "nucleo-h533re-bme280"
+chip: "../chips/stm32h533re.yaml"
+debug_uart: "usart2"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c1"
+    route:
+      sda: "PB7"
+      scl: "PB6"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "led_ld2_green"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

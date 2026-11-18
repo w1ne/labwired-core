@@ -639,15 +639,32 @@ void loop() {
 
 ## STM32 Nucleo/Discovery — kit rank 4, 23% of main projects
 
-### NUCLEO-H533RE + STM32H533RE
+### NUCLEO-H533RE + STM32H533RE + BME280
 
 Other STM32 is MCU demand rank 4 (13%), and Nucleo/Discovery kits rank 4
 (23%). ST's live eStore lists the NUCLEO-H533RE as Active and in stock. The
-profile boots a minimal H533RE firmware smoke that sends `NUCLEO_H533RE_OK`
-over USART2 on PA2/PA3 and toggles the active-high LD2 on PA5. H533RE-specific
-usage was not measured. The model exposes only RCC, GPIOA, USART2, and those
-three pins; other peripherals remain unmapped. It is simulator evidence, with
-no H533RE silicon capture or physical board result.
+profile boots firmware that reads the BME280 `CHIP_ID` (`0x60`) on I2C1 over
+Arduino D15/D14 (PB6/PB7), prints a USART2 success marker, and toggles LD2 on
+PA5. H533RE-specific usage was not measured. The model exposes only RCC,
+GPIOA/GPIOB, USART2, I2C1, and those five pins; other peripherals remain
+unmapped. It is simulator evidence, with no H533RE silicon capture or physical
+board result.
+
+With I2C1 configured for PB6/PB7 (AF4), this HAL call checks the BME280 ID at
+its default address:
+
+```c
+#include "main.h"  // CubeMX-generated hi2c1 declaration
+#include <stdbool.h>
+#include <stdint.h>
+
+static bool bme280_connected(void) {
+  uint8_t id = 0;
+  return HAL_I2C_Mem_Read(&hi2c1, (uint16_t)(0x77u << 1), 0xD0u,
+                          I2C_MEMADD_SIZE_8BIT, &id, 1, 100u) == HAL_OK &&
+         id == 0x60u;
+}
+```
 
 - [Wiring, scope, and copy-paste C example](../examples/nucleo-h533re/README.md)
 - [Live ST lifecycle and availability receipt](../examples/nucleo-h533re/vendor-status.md)

@@ -2970,6 +2970,113 @@ mod tests {
             assert_eq!(res.reschedule_delay, None, "stale chain must not respawn");
         }
 
+        // These cases exercise Timer's scheduler lifecycle API directly.
+        // Keep them beside the existing scheduler-only unit harness. Shared
+        // timer capture/DMA/overflow behavior remains in integration tests
+        // that execute in both feature graphs.
+        mod dma_event_truth {
+            use super::*;
+            use crate::DMA_SIGNAL_TIMER_CH1;
+
+            fn w(t: &mut Timer, r: u64, v: u32) {
+                t.write_u32(r, v).unwrap();
+            }
+
+            #[test]
+            fn scheduled_dma_wakes_without_irq_and_rearms_while_sr_stays_set() {
+                use crate::{bus::SystemBus, sched::EventScheduler, CycleClock};
+                let clock = CycleClock::default();
+                let mut t = Timer::new();
+                t.attach_cycle_clock(clock.clone());
+                w(&mut t, 0x2c, 5);
+                w(&mut t, 0x34, 3);
+                w(&mut t, 0x0c, 1 << 9);
+                w(&mut t, 0, 1);
+                let armed = t.take_scheduled_events();
+                assert_eq!(armed.len(), 1);
+                assert_eq!(armed[0].0, 2);
+                let token = armed[0].1;
+                let mut sched = EventScheduler::new();
+                let mut bus = SystemBus::empty();
+                for cycle in [3, 9, 15] {
+                    sched.advance_to(cycle);
+                    clock.publish(cycle);
+                    let event = t.on_event(token, &mut sched, &mut bus);
+                    assert_eq!(event.dma_signals, [DMA_SIGNAL_TIMER_CH1]);
+                    assert!(!event.raise_own_irq);
+                    assert_eq!(event.reschedule_delay, Some(6));
+                }
+            }
+
+            #[test]
+            fn scheduled_filtered_capture_routes_one_request_at_the_acceptance_cycle() {
+                use crate::{bus::SystemBus, sched::EventScheduler, CycleClock};
+                let clock = CycleClock::default();
+                let mut t = Timer::new().ccer_np(true);
+                t.attach_cycle_clock(clock.clone());
+                w(&mut t, 0x18, 1 | (1 << 4));
+                w(&mut t, 0x20, 0xb);
+                w(&mut t, 0x0c, 1 << 9);
+                w(&mut t, 0, 1);
+                clock.publish(10);
+                t.sync_to(10);
+                t.input_edge(0, true, 10);
+                let armed = t.take_scheduled_events();
+                assert_eq!(armed.len(), 1);
+                let at = 11 + armed[0].0;
+                assert_eq!(at, 12, "two-sample filter");
+                let mut sched = EventScheduler::new();
+                sched.advance_to(at);
+                clock.publish(at);
+                let event = t.on_event(armed[0].1, &mut sched, &mut SystemBus::empty());
+                assert_eq!(event.dma_signals, [DMA_SIGNAL_TIMER_CH1]);
+                assert_eq!(t.read_u32(0x34).unwrap(), 12);
+                assert_eq!(event.reschedule_delay, None);
+            }
+
+            #[test]
+            fn scheduled_out_of_range_compare_rearms_with_sticky_sr() {
+                use crate::{bus::SystemBus, sched::EventScheduler, CycleClock};
+                let clock = CycleClock::default();
+                let mut t = Timer::new();
+                t.attach_cycle_clock(clock.clone());
+                w(&mut t, 0x2c, 5);
+                w(&mut t, 0x34, 9);
+                w(&mut t, 0x0c, 1 << 9);
+                w(&mut t, 0, 1);
+                let armed = t.take_scheduled_events();
+                assert_eq!(armed.len(), 1);
+                assert_eq!(armed[0].0, 5);
+                let mut sched = EventScheduler::new();
+                let mut bus = SystemBus::empty();
+                for cycle in [6, 12, 18] {
+                    sched.advance_to(cycle);
+                    clock.publish(cycle);
+                    let event = t.on_event(armed[0].1, &mut sched, &mut bus);
+                    assert_eq!(event.dma_signals, [DMA_SIGNAL_TIMER_CH1]);
+                    assert!(!event.raise_own_irq);
+                    assert_eq!(event.reschedule_delay, Some(6));
+                    assert_eq!(t.read_u32(0x10).unwrap() & 2, 2);
+                }
+            }
+
+            #[test]
+            fn scheduled_out_of_range_input_capture_has_no_synthetic_compare() {
+                use crate::CycleClock;
+                let clock = CycleClock::default();
+                let mut t = Timer::new();
+                t.attach_cycle_clock(clock.clone());
+                w(&mut t, 0x2c, 5);
+                w(&mut t, 0x34, 9);
+                w(&mut t, 0x18, 1);
+                w(&mut t, 0x0c, (1 << 1) | (1 << 9));
+                w(&mut t, 0, 1);
+                assert!(t.take_scheduled_events().is_empty());
+                clock.publish(30);
+                assert_eq!(t.read_u32(0x10).unwrap() & 2, 0);
+            }
+        }
+
         mod capture_scheduler {
             use super::super::*;
             use crate::CycleClock;
