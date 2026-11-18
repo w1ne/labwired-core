@@ -242,6 +242,51 @@ fn mosfet_drain_voltage(gate_v: f64) -> f64 {
     (low + high) / 2.0
 }
 
+/// Independent level-1 NMOS load line with model-card drain/source resistance
+/// and the SPICE instance multiplier. The multiplier makes `m` channel
+/// branches in parallel; each branch carries `I/m` through its terminal
+/// resistances.
+fn mosfet_multiplier_drain_voltage(gate_v: f64, multiplier: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = 1.0;
+    const KP_A_PER_V2: f64 = 20e-6;
+    const W_M: f64 = 100e-6;
+    const L_M: f64 = 10e-6;
+    const LAMBDA_PER_V: f64 = 0.02;
+    const RD_OHMS: f64 = 20.0;
+    const RS_OHMS: f64 = 80.0;
+
+    let beta = KP_A_PER_V2 * W_M / L_M;
+    let total_current = |current_a: f64| {
+        let branch_current = current_a / multiplier;
+        let external_drain_v = SUPPLY_V - current_a * LOAD_OHMS;
+        let intrinsic_drain_v = external_drain_v - branch_current * RD_OHMS;
+        let intrinsic_source_v = branch_current * RS_OHMS;
+        let overdrive = gate_v - intrinsic_source_v - VTO;
+        let vds = intrinsic_drain_v - intrinsic_source_v;
+        let branch_channel_current = if overdrive <= 0.0 || vds <= 0.0 {
+            0.0
+        } else if vds < overdrive {
+            beta * (1.0 + LAMBDA_PER_V * vds) * vds * (overdrive - 0.5 * vds)
+        } else {
+            0.5 * beta * (1.0 + LAMBDA_PER_V * vds) * overdrive * overdrive
+        };
+        multiplier * branch_channel_current
+    };
+    let residual = |current_a: f64| current_a - total_current(current_a);
+    let (mut low, mut high) = (0.0, SUPPLY_V / LOAD_OHMS);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+    SUPPLY_V - 0.5 * (low + high) * LOAD_OHMS
+}
+
 /// Independent level-1 NMOS body-effect load-line reference for the
 /// board-routed matched-pair test. `bulk_v` is VBS because the source is
 /// grounded; reverse body bias raises the threshold through GAMMA/PHI.
@@ -1508,6 +1553,126 @@ fn nucleo_f407_mosfet_load_line_reaches_pa2_adc1_alongside_ntc_and_diode() {
     assert!(
         drain_samples[4].1 < drain_samples[3].1 && drain_samples[3].1 < drain_samples[2].1,
         "drain voltage falls as the NMOS conducts more strongly: {drain_samples:?}"
+    );
+}
+
+#[test]
+fn nucleo_f407_mosfet_instance_multiplier_matches_parallel_devices_through_adc1() {
+    let system_path = root("configs/systems/nucleo-f407.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F407 profile");
+    let unrelated =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let multiplier =
+        SystemManifest::from_file(root("examples/nucleo-f407/analog-mosfet-multiplier.yaml"))
+            .expect("load generic MOSFET multiplier branches");
+    profile.cosim_models = unrelated.cosim_models;
+    profile.cosim_models.extend(multiplier.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F407 descriptor");
+    for (pad, channel) in [("PA0", 0), ("PA1", 1), ("PA2", 2), ("PA3", 3), ("PA4", 4)] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F407 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("profile carries NTC, diode, and MOSFET multiplier netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "NTC, diode, and MOSFET drains must resolve to ADC1 channels 0 through 4"
+    );
+    for channel in 0..=5 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without a routed analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+    let mut cycles = 0;
+    let mut samples = Vec::new();
+    for gate_v in [0.0_f64, 0.8, 1.5, 2.5, 3.3] {
+        session
+            .set_signal_number("ui.mosfet_multiplier.gate_v", gate_v)
+            .expect("drive all generic NMOS instances from the shared gate source");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and MOSFET multiplier branches");
+        assert_eq!(
+            steps.len(),
+            3,
+            "the two unrelated devices and MOSFET deck solve"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let multiplied_v = signal_voltage(&session, "board.analog.pa2_volts");
+        let explicit_parallel_v = signal_voltage(&session, "board.analog.pa3_volts");
+        let single_v = signal_voltage(&session, "board.analog.pa4_volts");
+        let expected_multiplied_v = mosfet_multiplier_drain_voltage(gate_v, 2.0);
+        let expected_single_v = mosfet_multiplier_drain_voltage(gate_v, 1.0);
+        assert!(
+            (multiplied_v - expected_multiplied_v).abs() < 5e-5,
+            "m=2 level-1 load line at Vgs={gate_v} V should be {expected_multiplied_v} V, got {multiplied_v} V"
+        );
+        assert!(
+            (single_v - expected_single_v).abs() < 5e-5,
+            "m=1 level-1 load line at Vgs={gate_v} V should be {expected_single_v} V, got {single_v} V"
+        );
+        assert!(
+            (multiplied_v - explicit_parallel_v).abs() < 1e-9,
+            "one m=2 device must match two explicit parallel devices at Vgs={gate_v} V: {multiplied_v} V vs {explicit_parallel_v} V"
+        );
+
+        for (channel, volts) in [
+            (0, 1.65),
+            (1, diode_load_line_voltage()),
+            (2, multiplied_v),
+            (3, explicit_parallel_v),
+            (4, single_v),
+        ] {
+            let expected_count = expected_adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f4_adc_convert(&mut bus, channel),
+                u32::from(expected_count),
+                "firmware-visible ADC1 conversion must report channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 5),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+        assert!(
+            (signal_voltage(&session, "board.analog.pa0_volts") - 1.65).abs() < 1e-9,
+            "the unrelated Beta NTC remains isolated"
+        );
+        assert!(
+            (signal_voltage(&session, "board.analog.pa1_volts") - diode_load_line_voltage()).abs()
+                < 2e-5,
+            "the unrelated Shockley diode remains isolated"
+        );
+        samples.push((gate_v, multiplied_v, explicit_parallel_v, single_v));
+    }
+
+    assert!(
+        samples[2..]
+            .iter()
+            .all(|(_, multiplied, parallel, single)| {
+                *multiplied < *single && *parallel < *single
+            }),
+        "doubling the channel count must increase current and lower the loaded drain: {samples:?}"
     );
 }
 
