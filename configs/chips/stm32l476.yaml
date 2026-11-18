@@ -41,6 +41,15 @@ ram:
   size: "96KB"
 
 peripherals:
+  # RM0351 / CMSIS UID_BASE: exactly 96 read-only bits. The descriptor
+  # documents its unspecified simulated identity; it is not a silicon UID.
+  - id: "uid"
+    type: "declarative"
+    base_address: 0x1FFF7590
+    size: "12B"
+    config:
+      path: "../peripherals/stm32l476/uid.yaml"
+
   - id: "rcc"
     type: "rcc"
     base_address: 0x40021000
