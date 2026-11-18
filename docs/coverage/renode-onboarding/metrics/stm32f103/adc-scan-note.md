@@ -28,6 +28,13 @@ overwrite the result buffer after normal-mode transfer complete. DMA1 channel
 1 remains enabled at TC; firmware must disable it before reloading CNDTR.
 See RM0008 Rev 21 §13.3.1: [STM32F1 reference manual](https://www.st.com/resource/en/reference_manual/rm0008-stm32f103xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf).
 
+A second continuous-mode run combines the two-rank scan with circular DMA.
+It checks two laps into the same two-item PA0/PA1 buffer, both HTIF and TCIF,
+DMA1 channel 1's pending IRQ, CNDTR reload, the enabled channel, and EOC
+clearing after DMA reads DR. This covers the combined continuous-request and
+circular-reload path; it does not measure sample timing or long-duration ADC
+throughput.
+
 The two earlier failed integration attempts for repeated NVIC pending during
 the CPU-serviced scan remain under
 `docs/coverage/renode-onboarding/attempt-history/stm32f103/`. The passing

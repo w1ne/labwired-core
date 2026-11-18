@@ -166,6 +166,7 @@ const DMA1_CCR1_MSIZE_HALFWORD: u32 = 1 << 10;
 static mut ADC1_DMA_SCAN_RESULTS: [u16; 13] = [0; 13];
 static mut ADC1_DMA_CIRCULAR_RESULTS: [u16; 2] = [0; 2];
 static mut ADC1_DMA_CONTINUOUS_RESULTS: [u16; 4] = [0; 4];
+static mut ADC1_DMA_CONTINUOUS_CIRCULAR_RESULTS: [u16; 2] = [0; 2];
 
 const I2C1_BASE: u32 = 0x4000_5400;
 const I2C1_CR1: u32 = I2C1_BASE + 0x00;
@@ -332,6 +333,7 @@ fn main() -> ! {
     smoke_adc1_dma_scan_rank_boundaries();
     smoke_adc1_dma_circular_two_laps();
     smoke_adc1_dma_continuous_two_groups();
+    smoke_adc1_dma_continuous_circular_two_laps();
     unsafe { smoke_systick_exception_state() };
     unsafe { smoke_systick_external_pause_resume() };
     unsafe { smoke_systick_handler_delivery() };
@@ -4172,6 +4174,103 @@ fn smoke_adc1_dma_continuous_two_groups() {
     put_flag(dma_enabled);
     putbytes(b" SEQ=");
     put_flag(sequence_matches);
+    putline(if passed { b" ok" } else { b" FAIL" });
+}
+
+/// Keep the two-rank ADC scan running while circular DMA wraps twice. Each
+/// lap must refill the buffer, reload CNDTR, and raise both half and complete
+/// transfer flags without leaving EOC set.
+fn smoke_adc1_dma_continuous_circular_two_laps() {
+    let read = |address: u32| unsafe { read_volatile(address as *const u32) };
+    let write = |address: u32, value: u32| unsafe { write_volatile(address as *mut u32, value) };
+    let expected = [0x03FFu16, 0x07FF];
+    let rank_channels = (1 << 5) | (1 << 15); // SQ1=IN0, SQ2=IN1
+    let transfer_flags = DMA1_HTIF1 | DMA1_TCIF1;
+
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
+    write(DMA1_CNDTR1, expected.len() as u32);
+    write(DMA1_CPAR1, ADC1_DR);
+    let results = core::ptr::addr_of_mut!(ADC1_DMA_CONTINUOUS_CIRCULAR_RESULTS).cast::<u16>();
+    unsafe {
+        write_volatile(results, 0);
+        write_volatile(results.add(1), 0);
+        write_volatile(NVIC_ICPR, DMA1_IRQ_BIT);
+    }
+    write(DMA1_CMAR1, results as u32);
+    write(
+        DMA1_CCR1,
+        DMA1_CCR1_EN
+            | DMA1_CCR1_HTIE
+            | DMA1_CCR1_TCIE
+            | DMA1_CCR1_CIRC
+            | DMA1_CCR1_MINC
+            | DMA1_CCR1_PSIZE_HALFWORD
+            | DMA1_CCR1_MSIZE_HALFWORD,
+    );
+
+    let scan_base = ADC1_ADON | ADC1_DMA | ADC1_CONT | ADC1_SOFTWARE_TRIGGER;
+    write(ADC1_CR1, ADC1_SCAN);
+    write(ADC1_SQR3, rank_channels);
+    write(ADC1_SQR1, 1 << 20); // L=1 -> two ranks
+    write(ADC1_CR2, scan_base);
+    write(ADC1_CR2, scan_base | ADC1_SWSTART);
+
+    let wait_for_lap = || {
+        for _ in 0..1_000_000 {
+            if read(DMA1_CNDTR1) == expected.len() as u32
+                && read(DMA1_ISR) & transfer_flags == transfer_flags
+            {
+                return true;
+            }
+            core::hint::spin_loop();
+        }
+        false
+    };
+
+    let first_lap = wait_for_lap();
+    let first_sequence_matches = expected.iter().enumerate().all(|(rank, expected_value)| {
+        (unsafe { read_volatile(results.add(rank)) }) == *expected_value
+    });
+    write(DMA1_IFCR, transfer_flags);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
+    let second_lap = wait_for_lap();
+    write(ADC1_CR2, 0);
+
+    let final_flags = read(DMA1_ISR) & transfer_flags == transfer_flags;
+    let irq_pending = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
+    let reloaded = read(DMA1_CNDTR1) == expected.len() as u32;
+    let channel_enabled = read(DMA1_CCR1) & DMA1_CCR1_EN != 0;
+    let sequence_matches = expected.iter().enumerate().all(|(rank, expected_value)| {
+        (unsafe { read_volatile(results.add(rank)) }) == *expected_value
+    });
+    let eoc_cleared = read(ADC1_SR) & ADC1_EOC == 0;
+
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, DMA1_CHANNEL1_FLAGS);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
+
+    let passed = first_lap
+        && first_sequence_matches
+        && second_lap
+        && final_flags
+        && irq_pending
+        && reloaded
+        && channel_enabled
+        && sequence_matches
+        && eoc_cleared;
+    putbytes(b"ADC1 F1 CONTINUOUS CIRCULAR LAPS=2 FLAGS=");
+    put_flag(final_flags);
+    putbytes(b" IRQ=");
+    put_flag(irq_pending);
+    putbytes(b" RELOAD=");
+    put_flag(reloaded);
+    putbytes(b" SEQ=");
+    put_flag(first_sequence_matches && sequence_matches);
+    putbytes(b" ENABLED=");
+    put_flag(channel_enabled);
+    putbytes(b" EOC_CLEAR=");
+    put_flag(eoc_cleared);
     putline(if passed { b" ok" } else { b" FAIL" });
 }
 
