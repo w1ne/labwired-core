@@ -44,8 +44,8 @@ impl WasmFlexRuntime {
             .map_err(js_error)
     }
 
-    pub fn time_ns(&self) -> u64 {
-        self.runtime.time_ns()
+    pub fn time_ns(&self) -> Result<u64, JsValue> {
+        Ok(self.runtime.time_ns())
     }
 
     pub fn ports(&self) -> Result<JsValue, JsValue> {
