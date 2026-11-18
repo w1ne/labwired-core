@@ -5915,6 +5915,11 @@ rather than guessed.</p>
 <td><code>cpu_hz: 4_000_000</code> (<code>configs/systems/nucleo-l476rg.yaml</code>)</td>
 </tr>
 <tr>
+<td><code>max_peripheral_tick_interval</code></td>
+<td>Optional positive integer cap, in CPU cycles, on the peripheral service grid. Both native and custom-runner advances clamp larger host requests before execution. Omit to preserve existing defaults. Zero, negative, fractional, and out-of-range values are invalid.</td>
+<td><code>max_peripheral_tick_interval: 32</code> (<code>examples/nokia5110-invaders-lab/system.yaml</code>)</td>
+</tr>
+<tr>
 <td><code>memory_overrides</code></td>
 <td>Parsed but <strong>not consulted by the engine today</strong> — region sizes come from the chip descriptor. The field exists so manifests may carry it; do not rely on it.</td>
 <td><code>memory_overrides: {flash: "512KB"}</code></td>
