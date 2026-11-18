@@ -1,12 +1,10 @@
 {
-  "date": "2026-11-18",
   "status": "passed",
   "runtime": "compiled-wasm",
   "firmware_bytes": 379,
-  "firmware_sha256": "366f562ab8a19449a479e3b5e4b2d783f108fdaceb6e61948a0f6b559c314294",
   "cpu_emulation": false,
   "source_board": "HeyPCB ESP32-S3 LDR / GL5528 / ESP32-S3-WROOM-1-N16R8",
-  "observable": "source.U3.GPIO1 returns 3294 mV / ADC 4087 at 100000 lx; source.U3.GPIO48 drives D1 on then off",
+  "observable": "source.U3.GPIO1 LDR voltage converted to 12-bit ADC count; source.U3.GPIO48 drives D1 logic state",
   "positive_adc_code": 4087,
   "positive_led_edges": 4,
   "negative_adc_code": 0,
@@ -63,17 +61,6 @@
       ]
     }
   },
-  "native_model_equality": true,
-  "checks": [
-    "portable-firmware-execution",
-    "native-model-equality",
-    "pinned-source-mapping",
-    "run-scope-report",
-    "bright-output",
-    "dark-negative-control",
-    "oscilloscope-samples"
-  ],
-  "browser": "156.0.8078.79",
   "run_report": {
     "assumptions": [
       "Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.",
@@ -85,6 +72,9 @@
     "models": [
       {
         "adapter": "behavior",
+        "config": {
+          "device_type": "ldr"
+        },
         "id": "source-u4-gl5528",
         "inputs": [
           {
@@ -103,6 +93,53 @@
       },
       {
         "adapter": "behavior",
+        "config": {
+          "behavior": {
+            "outputs": [
+              "led"
+            ],
+            "pin_defaults": {
+              "led": false
+            },
+            "primitive": "gpio_device",
+            "rules": [
+              {
+                "do": [
+                  {
+                    "goto": "on"
+                  },
+                  {
+                    "level": 1,
+                    "pin": "led"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) != 0"
+              },
+              {
+                "do": [
+                  {
+                    "goto": "off"
+                  },
+                  {
+                    "level": 0,
+                    "pin": "led"
+                  }
+                ],
+                "on": {
+                  "input": "drive"
+                },
+                "when": "input(drive) == 0"
+              }
+            ],
+            "states": [
+              "off",
+              "on"
+            ]
+          }
+        },
         "id": "source-d1-user-led",
         "inputs": [
           {
@@ -159,6 +196,16 @@
       "GL5528 production spread, C7 transient smoothing, and physical optical or electrical behavior."
     ]
   },
-  "browser_driver": "Chrome DevTools MCP",
-  "measured_browser_ms": 682.6
+  "checks": [
+    "portable-firmware-execution",
+    "native-model-equality",
+    "pinned-source-mapping",
+    "run-scope-report",
+    "bright-output",
+    "dark-negative-control",
+    "oscilloscope-samples"
+  ],
+  "measured_browser_ms": 427.9,
+  "browser": "156.0.8078.79",
+  "browser_driver": "Playwright"
 }

@@ -9,7 +9,7 @@
 use labwired_config::{CosimAdapter, CosimModelConfig, FlexPort};
 use labwired_core::flex::FlexRuntime;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use wasm_bindgen::prelude::*;
 
 #[derive(Serialize)]
@@ -26,6 +26,9 @@ struct BrowserModelSummary {
     step_ns: u64,
     inputs: Vec<BrowserSignalBinding>,
     outputs: Vec<BrowserSignalBinding>,
+    /// The validated data-driven model configuration, so project surfaces
+    /// can show the exact behavior behind a run without reinterpreting YAML.
+    config: BTreeMap<String, serde_yaml::Value>,
 }
 
 fn signal_bindings(bindings: &HashMap<String, String>) -> Vec<BrowserSignalBinding> {
@@ -52,6 +55,11 @@ fn model_summary(model: &CosimModelConfig) -> BrowserModelSummary {
         step_ns: model.step_ns,
         inputs: signal_bindings(&model.inputs),
         outputs: signal_bindings(&model.outputs),
+        config: model
+            .config
+            .iter()
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect(),
     }
 }
 
@@ -130,7 +138,11 @@ impl WasmFlexRuntime {
             ports: manifest.ports.clone(),
             models: manifest.cosim_models.iter().map(model_summary).collect(),
         };
-        serde_wasm_bindgen::to_value(&report).map_err(js_error)
+        // Config maps are part of the public JS report contract. Serialize
+        // them as ordinary objects so the existing project UI can render and
+        // persist the exact validated model settings.
+        let serializer = serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
+        report.serialize(&serializer).map_err(js_error)
     }
 
     pub fn digital_trace_snapshot(&mut self, cursor: u64) -> Result<JsValue, JsValue> {

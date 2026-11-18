@@ -60,6 +60,7 @@ if (process.argv.includes('--browser')) {
     const url = `http://127.0.0.1:${server.address().port}`;
     await page.goto(url);
     result = await page.evaluate(async ({ base, checkName }) => {
+      const startedAt = performance.now();
       const [{ default: init, WasmFlexRuntime }, checks, yaml, firmware, expected] = await Promise.all([
         import('/crates/wasm/pkg-flex-web/labwired_wasm.js'),
         import(base + 'checks.mjs'),
@@ -68,9 +69,14 @@ if (process.argv.includes('--browser')) {
         fetch(base + 'native.json').then((r) => r.json()),
       ]);
       await init();
-      return checks[checkName](WasmFlexRuntime, yaml, new Uint8Array(firmware), expected);
+      const proof = await checks[checkName](WasmFlexRuntime, yaml, new Uint8Array(firmware), expected);
+      return {
+        ...proof,
+        measured_browser_ms: Math.round((performance.now() - startedAt) * 10) / 10,
+      };
     }, { base: fixtureUrl, checkName });
     result.browser = await browser.version();
+    result.browser_driver = 'Playwright';
   } finally {
     if (browser) await browser.close();
     await new Promise((resolve) => server.close(resolve));

@@ -31,11 +31,16 @@ export function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes, expec
       const sensorModel = report.models.find((model) => model.id === 'source-u4-gl5528');
       check(sensorModel?.adapter === 'behavior' && sensorModel.step_ns === 1000
         && sensorModel.model_type === 'ldr'
+        && sensorModel.config?.device_type === 'ldr'
         && sensorModel.inputs.some((binding) => binding.name === 'lux'
           && binding.signal === 'environment.lux')
         && sensorModel.outputs.some((binding) => binding.name === 'voltage_mv'
           && binding.signal === 'source.U3.GPIO1'),
-      'the project run report omitted the registered LDR binding, model type, or time resolution');
+      `the project run report omitted the registered LDR configuration, binding, model type, or time resolution: ${JSON.stringify(sensorModel)}`);
+      const ledModel = report.models.find((model) => model.id === 'source-d1-user-led');
+      check(ledModel?.config?.behavior?.primitive === 'gpio_device'
+        && ledModel.config.behavior.rules.length === 2,
+      'the project run report omitted the complete data-driven LED behavior configuration');
       if (runReport === undefined) runReport = report;
       else equal(report, runReport, 'run report changed between positive and negative controls');
       const ports = Object.fromEntries(['lux', 'sensor_mv', 'user_led_drive', 'user_led_state']
