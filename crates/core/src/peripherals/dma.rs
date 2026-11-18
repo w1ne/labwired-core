@@ -34,6 +34,9 @@ struct DmaChannel {
     /// Initial CNDTR value. Used to fire HTIF when the transfer crosses
     /// half-way (CNDTR == cndtr_initial / 2).
     cndtr_initial: u32,
+    /// HT is an event at the halfway crossing, not a level condition. Keep
+    /// it one-shot even if firmware clears HTIF before transfer complete.
+    half_transfer_fired: bool,
 }
 
 impl DmaChannel {
@@ -464,6 +467,7 @@ impl Dma1 {
                                 chan.cpar_ptr = chan.cpar;
                                 chan.cmar_ptr = chan.cmar;
                                 chan.cndtr_initial = chan.cndtr;
+                                chan.half_transfer_fired = false;
                                 if self.g0_channel_irqs.is_some() {
                                     chan.requests = 0;
                                 }
@@ -566,14 +570,14 @@ impl Dma1 {
 
         // HTIF: set when transfer crosses the halfway mark. Matches what
         // real silicon does for any non-trivial CNDTR.
-        if cndtr_initial >= 2
-            && cndtr_after <= cndtr_initial / 2
-            && (self.isr & (1 << (i * 4 + 2))) == 0
-        {
-            self.isr |= 1 << (i * 4 + 2); // HTIF_x
-            self.isr |= 1 << (i * 4); // GIF_x
-            if htie {
-                irq = true;
+        if cndtr_initial >= 2 && cndtr_after <= cndtr_initial / 2 && !chan.half_transfer_fired {
+            chan.half_transfer_fired = true;
+            if (self.isr & (1 << (i * 4 + 2))) == 0 {
+                self.isr |= 1 << (i * 4 + 2); // HTIF_x
+                self.isr |= 1 << (i * 4); // GIF_x
+                if htie {
+                    irq = true;
+                }
             }
         }
 
@@ -591,6 +595,7 @@ impl Dma1 {
                 // pointers return to their configured base for the next lap.
                 // Any already-latched peripheral requests belong to that lap.
                 chan.cndtr = chan.cndtr_initial;
+                chan.half_transfer_fired = false;
                 chan.cpar_ptr = chan.cpar;
                 chan.cmar_ptr = chan.cmar;
                 chan.active = chan.requests > 0;
@@ -971,6 +976,44 @@ mod tests {
         assert!(!dma.channels[0].active);
         assert!(dma.tick().dma_requests.is_none());
         assert_eq!(dma.read_reg(0x0C), 0, "CNDTR stays at zero");
+    }
+
+    /// HTIF is a halfway event, not a level condition: clearing it must not
+    /// cause it to reassert on the remaining items of the same transfer.
+    #[test]
+    fn clearing_half_transfer_flag_does_not_reassert_before_completion() {
+        let mut dma = Dma1::new().with_channel_irqs([11, 12, 13, 14, 15, 16, 17]);
+        dma.write_reg(0x0C, 5); // Odd-length transfer: HT after the third item.
+        dma.write_reg(0x10, 0x4001_244C); // ADC1 DR
+        dma.write_reg(0x14, 0x2000_0100); // result buffer
+        dma.write_reg(0x08, 1 | (1 << 2) | (1 << 7)); // EN | HTIE | MINC
+
+        for item in 0..3 {
+            dma.dma_request(1);
+            let result = dma.tick();
+            if item == 2 {
+                assert_eq!(result.explicit_irqs, Some(vec![11]));
+                assert_eq!(dma.read_reg(0x0C), 2);
+                assert_ne!(dma.read_reg(0x00) & (1 << 2), 0, "HTIF is set");
+            } else {
+                assert!(result.explicit_irqs.is_none());
+            }
+        }
+
+        dma.write_reg(0x04, 1 << 2); // Clear HTIF while the transfer is active.
+        assert_eq!(dma.read_reg(0x00) & (1 << 2), 0);
+        dma.dma_request(1);
+        let after_clear = dma.tick();
+        assert!(after_clear.explicit_irqs.is_none());
+        assert_eq!(dma.read_reg(0x0C), 1);
+        assert_eq!(dma.read_reg(0x00) & (1 << 2), 0, "HTIF stays clear");
+
+        dma.dma_request(1);
+        let complete = dma.tick();
+        assert!(complete.explicit_irqs.is_none(), "TCIE is disabled");
+        assert_eq!(dma.read_reg(0x0C), 0);
+        assert_ne!(dma.read_reg(0x00) & (1 << 1), 0, "TCIF is set");
+        assert_eq!(dma.read_reg(0x00) & (1 << 2), 0, "HTIF stays clear");
     }
 
     /// RM0008 §13.3.1: peripheral circular mode reloads CNDTR and the

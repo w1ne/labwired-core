@@ -6,6 +6,13 @@ rank, first-rank ADC IRQ pending, and EOC clear after the CPU reads DR. A
 channel 1 into SRAM. The alternating IN0/IN1 values cover ranks 1–6 in SQR3,
 ranks 7–12 in SQR2, and rank 13 in SQR1; the smoke checks all 13 values, DMA
 transfer complete, CNDTR reaching zero, and DMA clearing EOC by reading DR.
+With an odd initial CNDTR of 13, it also observes HTIF and DMA1 channel 1's
+pending IRQ while transfers remain, clears the half-transfer flag, then checks
+that completion occurs without TCIE pending another IRQ. The DMA model now
+tracks that half-transfer event once per transfer, so clearing HTIF cannot
+retrigger it on later items; circular reload arms it for the next lap. The
+UART records the remaining count observed when HTIF is first seen; this check
+does not claim cycle-accurate interrupt latency.
 
 The bounded model emits ADC1's DMA request on each completed regular rank only
 when CR2.DMA is set. The imported chip profile routes `adc1_rx` to DMA1 channel
@@ -19,10 +26,10 @@ enables both interrupt sources and checks the combined GIF/HTIF/TCIF state,
 independent HTIF and TCIF clears, CGIF clearing all channel flags, and NVIC
 pending clear behavior. It checks every result buffer, the channel remaining
 enabled, and EOC clearing after DMA reads DR. A four-item circular buffer adds
-an explicit halfway boundary check: HTIF and its IRQ are observed at CNDTR=2,
-TCIF is absent at that point, the next two-rank scan wraps with both flags set,
-and a later lap raises HTIF at the same halfway count again. Other DMA routes
-remain unclaimed.
+an explicit halfway boundary check: HTIF and its IRQ are observed at CNDTR=2
+with TCIF absent. After firmware clears HTIF, the second two-rank scan completes
+the same transfer with TCIF set and HTIF still clear; the following circular
+lap raises HTIF again at CNDTR=2. Other DMA routes remain unclaimed.
 
 A separate continuous-mode run starts one two-rank scan with CONT set and
 drains two groups through a four-item normal-mode DMA transfer. The smoke
