@@ -233,6 +233,14 @@ boards:
     path: examples/atmega328pb-usart1
     apt: [gcc-avr, binutils-avr, avr-libc]
     gate: true
+  # Demand-rank 2 AVR maintenance (ATmega328: 30%). Microchip currently marks
+  # ATmega328P Not Recommended for new designs, so this protects the existing
+  # Uno R3 path without onboarding a new part. Both committed-fixture smokes
+  # exercise its Arduino UART/timer/LED and GPIO/ADC paths.
+  - id: arduino-uno-r3-existing
+    kind: sim-validate
+    path: examples/arduino-uno-blinky
+    gate: true
   # PIC18F4520: the first PIC18 part. Committed SDCC 4.4.0 ELF (rebuilding
   # needs the upstream SDCC pic16 port, so CI checks the HEX->ELF wrap is
   # byte-identical instead), the EUSART/LED io-smoke and a clean 200k-step run.
