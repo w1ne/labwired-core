@@ -1795,6 +1795,9 @@ impl Avr {
             }
             0x00BC => {
                 self.twi_write_cr(value);
+                if value & (TWEN | TWINT) == (TWEN | TWINT) {
+                    bus.cpu_i2c_pwm_event(&self.i2c_slaves);
+                }
                 Ok(())
             }
             0x0078 => {

@@ -474,6 +474,63 @@ impl SystemBus {
         }
     }
 
+    /// Observe CPU-owned AVR TWI slaves at the instant a TWI operation completes.
+    /// No callback escapes the CPU's publicly mutable slave collection.
+    pub(crate) fn sync_cpu_i2c_pwm_servos(
+        &self,
+        devices: &[Box<dyn crate::peripherals::i2c::I2cDevice>],
+    ) {
+        // CPU-owned mux routing is not qualified here; fail closed.
+        if devices.iter().any(|d| d.is_i2c_mux()) {
+            return;
+        }
+        for servo in self.observed_of::<crate::peripherals::components::servo::Servo>() {
+            let (Some((address, channel)), Some(bus_name)) =
+                (servo.source(), self.declared_connection(servo.id()))
+            else {
+                continue;
+            };
+            if !matches!(bus_name, "i2c" | "i2c0" | "twi") {
+                continue;
+            }
+            let mut actual: Vec<_> = devices.iter().collect();
+            let mut source_declared = false;
+            let mut complete = true;
+            for declared in self.external_device_decls.iter().filter(|d| {
+                d.connection == bus_name
+                    && !matches!(
+                        d.device_type.as_str(),
+                        "servo" | "sg90" | "mg995" | "mg996r" | "mg90s"
+                    )
+            }) {
+                if let Some(index) = actual.iter().position(|d| {
+                    d.i2c_component_id() == Some(declared.id.as_str())
+                        && declared.address.is_none_or(|a| a == d.address())
+                        && (declared.device_type != "tca9548a" || d.is_i2c_mux())
+                }) {
+                    source_declared |= actual[index].address() == address;
+                    actual.remove(index);
+                } else {
+                    complete = false;
+                    break;
+                }
+            }
+            if !complete || !source_declared {
+                continue;
+            }
+            let mut matching = devices.iter().filter(|d| d.address() == address);
+            let Some(source) = matching.next() else {
+                continue;
+            };
+            if matching.next().is_some() {
+                continue;
+            }
+            if let Some(pulse) = source.pwm_channel_pulse_us(channel) {
+                servo.apply_pulse_us(pulse);
+            }
+        }
+    }
+
     /// The `external_devices:` connection recorded for `id`, when the manifest
     /// declared one. This is the author's own text, not an inference.
     fn declared_connection(&self, id: &str) -> Option<&str> {

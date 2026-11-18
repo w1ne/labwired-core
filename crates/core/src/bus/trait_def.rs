@@ -34,6 +34,9 @@ pub enum FetchPermission {
 }
 
 pub trait Bus {
+    /// Reconcile CPU-owned I2C PWM outputs at a completed bus event. The
+    /// default keeps simple test buses and other CPUs unchanged.
+    fn cpu_i2c_pwm_event(&mut self, _devices: &[Box<dyn crate::peripherals::i2c::I2cDevice>]) {}
     /// The RP2350 double-precision coprocessor attached to this core, if the
     /// chip has one (`coprocessors: [rp2350_dcp]`). Called only when a p4/p5
     /// coprocessor instruction executes. `None` keeps it UNDEFINED.
