@@ -1,0 +1,30 @@
+# Single-output view of the source-mapped Pomodoro LED circuit.
+# See README.md and the sibling flex-heypcb-pomodoro source-map.json.
+schema_version: 1
+name: flex-heypcb-pomodoro-pd6-d1
+ports:
+  - { name: drive, signal: source.U1.PD6, access: write, kind: bool, initial: 0 }
+  - { name: led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  - id: indicator
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U1.PD6 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do:
+              - { goto: on }
+              - { pin: led, level: 1 }
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do:
+              - { goto: off }
+              - { pin: led, level: 0 }
