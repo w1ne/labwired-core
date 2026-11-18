@@ -245,6 +245,37 @@ fn esp32s3_rom_boot_flash_size(system: &labwired_config::ResolvedSystem) -> u32 
         .unwrap_or_else(|| labwired_core::system::xtensa::Esp32s3Opts::default().flash_size)
 }
 
+/// ROM boot has the same hardware whether an ELF is present for symbols or not.
+fn esp32s3_rom_boot_opts(
+    system: Option<&labwired_config::ResolvedSystem>,
+) -> labwired_core::system::xtensa::Esp32s3Opts {
+    use labwired_core::system::xtensa::Esp32s3Opts;
+    let defaults = Esp32s3Opts::default();
+    Esp32s3Opts {
+        real_reset_boot: true,
+        flash_size: system
+            .map(esp32s3_rom_boot_flash_size)
+            .unwrap_or(defaults.flash_size),
+        ..system
+            .and_then(|system| system.chip().ok())
+            .as_ref()
+            .map(Esp32s3Opts::for_chip)
+            .unwrap_or(defaults)
+    }
+}
+
+/// Keep APP_CPU held at its real reset vector until firmware releases it through
+/// SYSTEM_CORE_1_CONTROL_0. Machine owns that edge and schedules both cores.
+fn esp32s3_rom_boot_machine(
+    mut cpu: labwired_core::cpu::xtensa_lx7::XtensaLx7,
+    bus: labwired_core::bus::SystemBus,
+) -> labwired_core::Machine<labwired_core::cpu::xtensa_lx7::XtensaLx7> {
+    cpu.faithful_windows = true;
+    let mut app_cpu = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+    app_cpu.faithful_windows = true;
+    labwired_core::Machine::new(cpu, bus).with_secondary_cpu(app_cpu)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_s3_rom_boot_no_elf(
     args: &TestArgs,
@@ -261,7 +292,7 @@ fn run_s3_rom_boot_no_elf(
     semihost_capture: bool,
     itm_flag: bool,
 ) -> ExitCode {
-    use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3BootMode, Esp32s3Opts};
+    use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3BootMode};
 
     let fail = |msg: String| -> ExitCode {
         error!("{}", msg);
@@ -299,22 +330,7 @@ fn run_s3_rom_boot_no_elf(
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
 
     let mut bus = labwired_core::bus::SystemBus::new();
-    let opts = Esp32s3Opts {
-        real_reset_boot: true,
-        // The hosted path receives a merged flash image but no ELF. It still
-        // has the resolved chip descriptor, so use its physical capacity just
-        // like `labwired run` and the Wasm constructor do. Falling back to the
-        // 4 MiB default makes the ROM reject every N8/N16 image before app_main.
-        flash_size: esp32s3_rom_boot_flash_size(system),
-        // Core clock from the same resolved descriptor: `cpu_hz:` in the chip
-        // YAML is the one home for it, and it is what the SYSTIMER divides the
-        // CPU cycle stream by to keep `esp_timer` time.
-        ..system
-            .chip()
-            .as_ref()
-            .map(Esp32s3Opts::for_chip)
-            .unwrap_or_default()
-    };
+    let opts = esp32s3_rom_boot_opts(Some(system));
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
     // Wire matrix kits (INA219, OLED, …) the same way the ELF arm does.
     if let Err(e) =
@@ -331,8 +347,6 @@ fn run_s3_rom_boot_no_elf(
                 .to_string(),
         );
     }
-    let mut cpu = wiring.cpu;
-    cpu.faithful_windows = true;
     bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
     // The ESP32-S3 is a DUAL-core chip and an Arduino sketch's setup()/loop()
     // run on core 1. Booting it single-core does not merely lose the second
@@ -345,9 +359,7 @@ fn run_s3_rom_boot_no_elf(
     //
     // Halted at the ROM reset vector: PRO_CPU releases it by clearing
     // SYSTEM_CORE_1_RESETING, and `Machine` acts on that edge.
-    let mut app_cpu = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
-    app_cpu.faithful_windows = true;
-    let mut machine = labwired_core::Machine::new(cpu, bus).with_secondary_cpu(app_cpu);
+    let mut machine = esp32s3_rom_boot_machine(wiring.cpu, bus);
     crate::log_ts::set_hz(machine.bus.cpu_hz);
     // BOTH consoles, because the boot and the sketch do not share one. The mask
     // ROM and the 2nd-stage bootloader talk on UART0 (attached above); an
@@ -1350,10 +1362,7 @@ pub(crate) fn run_test(
                         return ExitCode::from(EXIT_CONFIG_ERROR);
                     }
                     let mut bus = labwired_core::bus::SystemBus::new();
-                    let opts = Esp32s3Opts {
-                        real_reset_boot: true,
-                        ..Esp32s3Opts::default()
-                    };
+                    let opts = esp32s3_rom_boot_opts(resolved_system.as_ref());
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     // Wire matrix kits (INA219, OLED, …) the same way classic ESP32 does.
                     if let Err(e) = labwired_core::system::xtensa::attach_esp32_external_devices(
@@ -1389,10 +1398,11 @@ pub(crate) fn run_test(
                         );
                         return ExitCode::from(EXIT_CONFIG_ERROR);
                     }
-                    let mut cpu = wiring.cpu;
-                    cpu.faithful_windows = true;
                     bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
-                    let mut machine = labwired_core::Machine::new(cpu, bus);
+                    // Supplying symbols must not turn a dual-core ROM boot into
+                    // a single-core run that stalls at `cpu_start: Multicore app`.
+                    let mut machine = esp32s3_rom_boot_machine(wiring.cpu, bus);
+                    machine.bus.attach_usb_serial_jtag_sink(uart_tx.clone());
                     crate::log_ts::set_hz(machine.bus.cpu_hz);
                     machine.add_observer(metrics.clone());
                     machine
@@ -3073,10 +3083,45 @@ mod esp32s3_rom_boot_tests {
     use super::*;
 
     #[test]
-    fn elf_less_s3_uses_the_descriptor_flash_capacity() {
+    fn s3_rom_boot_releases_and_executes_app_cpu_on_the_hardware_edge() {
+        use labwired_core::system::xtensa::configure_xtensa_esp32s3;
+        use labwired_core::{Bus, Cpu};
+
         let system = labwired_config::ResolvedSystem::from_builtin_chip("esp32s3")
             .expect("built-in ESP32-S3 descriptor");
-        assert_eq!(esp32s3_rom_boot_flash_size(&system), 16 * 1024 * 1024);
+        let mut bus = labwired_core::bus::SystemBus::new();
+        let wiring = configure_xtensa_esp32s3(&mut bus, &esp32s3_rom_boot_opts(Some(&system)));
+        let mut machine = esp32s3_rom_boot_machine(wiring.cpu, bus);
+        let reset_pc = machine.cpu_secondary.as_ref().expect("APP_CPU").get_pc();
+        assert!(machine.cpu_secondary.as_ref().unwrap().halted);
+        machine.step().expect("primary boot instruction");
+        assert_eq!(machine.cpu_secondary.as_ref().unwrap().get_pc(), reset_pc);
+        assert!(machine.cpu_secondary.as_ref().unwrap().halted);
+
+        // The same real MMIO sequence used by ESP-IDF, not a host-side unhalt.
+        machine.bus.write_u32(0x600c_0000, 0x6).unwrap();
+        machine.bus.write_u32(0x600c_0000, 0x2).unwrap();
+        for _ in 0..8 {
+            machine.step().expect("dual-core ROM instruction");
+        }
+        let app_cpu = machine.cpu_secondary.as_ref().unwrap();
+        assert!(
+            !app_cpu.halted,
+            "the reset falling edge must release APP_CPU"
+        );
+        assert_ne!(app_cpu.get_pc(), reset_pc, "APP_CPU must execute ROM code");
+        assert!(app_cpu.faithful_windows);
+        assert!(machine.cpu.faithful_windows);
+    }
+
+    #[test]
+    fn s3_rom_boot_uses_the_descriptor_flash_capacity() {
+        let system = labwired_config::ResolvedSystem::from_builtin_chip("esp32s3")
+            .expect("built-in ESP32-S3 descriptor");
+        let opts = esp32s3_rom_boot_opts(Some(&system));
+        assert_eq!(opts.flash_size, 16 * 1024 * 1024);
+        assert_eq!(opts.cpu_clock_hz as u64, system.chip().unwrap().cpu_hz);
+        assert!(opts.real_reset_boot);
         assert_ne!(
             esp32s3_rom_boot_flash_size(&system),
             labwired_core::system::xtensa::Esp32s3Opts::default().flash_size,
