@@ -22,6 +22,9 @@ impl DeviceDescriptor {
                 meta.inputs = meta.inputs.iter().flat_map(|i| i.expand()).collect();
             }
         }
+        if let Some(power) = &desc.behavior.power {
+            power.validate()?;
+        }
         Ok(desc)
     }
 
