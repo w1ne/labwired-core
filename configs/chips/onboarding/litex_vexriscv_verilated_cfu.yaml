@@ -1,13 +1,23 @@
+# Bounded local execution profile based on Renode's imported LiteX CFU REPL.
+# The local engine runs RV32IM and the mapped memories, LiteX UART, and timer.
+# Renode's external CoSimulatedCFU and the additional 256 MiB RAM window are
+# outside this smoke profile; firmware runs directly from the on-chip SRAM.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/verilated/litex_vexriscv_verilated_cfu.repl
 name: litex_vexriscv_verilated_cfu
-arch: arm
-flash:
-  base: 536870912
-  size: 1048576
-ram:
-  base: 268435456
-  size: 262144B
+arch: riscv
+core: rv32im
+cpu_hz: 100_000_000
+flash: { base: 0x00000000, size: 256KiB }
+ram: { base: 0x10000000, size: 256KiB }
+flash_boot_alias: false
 peripherals:
-- id: cfu0
-  type: cosimulatedcfu
-  bus: cpu
-  base_address: 0
+  - id: uart
+    type: litex_uart
+    base_address: 0xF0003000
+    size: 4KiB
+    irq: 0
+  - id: timer
+    type: litex_timer
+    base_address: 0xF0002800
+    size: 4KiB
+    irq: 1

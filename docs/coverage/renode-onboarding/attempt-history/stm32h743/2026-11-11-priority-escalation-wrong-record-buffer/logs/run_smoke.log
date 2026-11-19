@@ -1,0 +1,9 @@
+2026-11-11T03:06:56.615171Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32h743.yaml
+2026-11-11T03:06:56.625940Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-11T03:06:57.582959Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "cortex-m7 exception ok" }) (captured len=1894)
+2026-11-11T03:06:57.583000Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "cortex-m7 cpacr priority escalation=1 active_irq=00000015 ipsr=00000003 cfsr=00080000 hfsr=40000000" }) (captured len=1894)
+FAIL  22/24 checks · stm32h743-smoke · 4000000 steps · 0.95s
+FAULT  UsageFault: coprocessor (FPU) instruction while the coprocessor is disabled, at PC 0x0800_1862 in `firmware_stm32h743_smoke::attempt_privileged_fp` (main.rs:522), called from `firmware_stm32h743_smoke::check_cortex_m7_exception_frame`.
+       HFSR=0x00000000 CFSR=0x00080000 [NOCP]

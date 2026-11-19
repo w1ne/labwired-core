@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="3" failures="0" errors="0" time="1.234734">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="c65745e7fac1f9f708a87138de98797be20a07ae37b72dac132998a5e580e6be"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="1.234734">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: ZYNQ7000 A9 UART SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

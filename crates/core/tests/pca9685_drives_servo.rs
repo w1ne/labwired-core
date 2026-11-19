@@ -170,6 +170,11 @@ external_devices:
     }
     bus.sync_pwm_sourced_servos();
     let servo = bus.observed_of::<Servo>().next().unwrap();
+    assert_eq!(
+        bus.modeled_servo_source_status(servo).as_str(),
+        "unknown",
+        "missing OE declaration is not a proven enable"
+    );
     assert!(
         (servo.pulse_us() - 1996.0).abs() < 2.0,
         "i2c2 pulse was {}",
@@ -408,23 +413,45 @@ external_devices:
     );
     let commanded = |bus: &SystemBus| bus.observed_of::<Servo>().next().unwrap().is_commanded();
     let angle = |bus: &SystemBus| bus.observed_of::<Servo>().next().unwrap().angle_degrees();
+    let source = |bus: &SystemBus| {
+        bus.modeled_servo_source_status(bus.observed_of::<Servo>().next().unwrap())
+    };
+    let source_count = |bus: &SystemBus| {
+        let mut count = 0;
+        bus.for_each_attached_device(&mut |connection, device| {
+            if connection == Some("i2c0")
+                && device.transport == "i2c"
+                && device.address == Some(0x40)
+            {
+                count += 1;
+            }
+        });
+        count
+    };
+    assert_eq!(source_count(&bus), 1);
     // Input / unknown is not an enable, even if its output latch is low.
     bus.sync_pwm_sourced_servos();
     assert!(!commanded(&bus));
+    assert_eq!(source(&bus).as_str(), "unknown");
     const GPIO: u64 = 0x6000_4000;
     bus.write_u32(GPIO + 0x08, 1 << 4).unwrap(); // OUT_W1TS: high
     bus.write_u32(GPIO + 0x24, 1 << 4).unwrap(); // ENABLE_W1TS
     bus.sync_pwm_sourced_servos();
     assert!(!commanded(&bus));
+    assert_eq!(source(&bus).as_str(), "disabled");
     bus.write_u32(GPIO + 0x74 + 4 * 4, 1 << 2).unwrap(); // open drain, high releases
     bus.sync_pwm_sourced_servos();
     assert!(!commanded(&bus));
+    assert_eq!(source(&bus).as_str(), "unknown");
     bus.write_u32(GPIO + 0x0c, 1 << 4).unwrap(); // OUT_W1TC: low enables
     bus.sync_pwm_sourced_servos();
     assert!(commanded(&bus));
+    assert_eq!(source(&bus).as_str(), "modeled_pwm");
     let previous = angle(&bus);
     bus.write_u32(GPIO + 0x08, 1 << 4).unwrap(); // release open-drain output
     program(0x80);
+    // Status is computed from the current OE pad even before a sync call.
+    assert_eq!(source(&bus).as_str(), "unknown");
     bus.sync_pwm_sourced_servos();
     assert_eq!(angle(&bus), previous);
     bus.write_u32(GPIO + 0x28, 1 << 4).unwrap(); // input again; latch remains high
@@ -433,9 +460,71 @@ external_devices:
     bus.write_u32(GPIO + 0x0c, 1 << 4).unwrap();
     bus.sync_pwm_sourced_servos(); // low latch, still undriven
     assert_eq!(angle(&bus), previous);
+    assert_eq!(source(&bus).as_str(), "unknown");
     bus.write_u32(GPIO + 0x24, 1 << 4).unwrap();
     bus.sync_pwm_sourced_servos();
     assert_ne!(angle(&bus), previous);
+    assert_eq!(source(&bus).as_str(), "modeled_pwm");
+    // FULL_OFF is no PWM, not a new angle or a valid current source.
+    write_reg(&mut *pca.lock().unwrap(), 0x06, &[0, 0, 0, 0x10]);
+    assert_eq!(source(&bus).as_str(), "unknown");
+    assert!(
+        commanded(&bus),
+        "last command must remain backward compatible"
+    );
+    program(0x33);
+    write_reg(&mut *pca.lock().unwrap(), 0x00, &[0x10]); // oscillator asleep
+    assert_eq!(source(&bus).as_str(), "unknown");
+    program(0x33);
+    assert_eq!(source(&bus).as_str(), "modeled_pwm");
+    // A modeled supply gate that cannot power the PCA cannot report a PWM.
+    use labwired_core::peripherals::components::supply_domain::{GatedI2cDevice, SupplyGate};
+    // The C3 controller's slaves cannot be removed by `take_i2c_slaves`;
+    // use a fresh bus so no hidden second device affects this case.
+    let mut power_bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    power_bus.write_u32(GPIO + 0x24, 1 << 4).unwrap();
+    power_bus
+        .attach_i2c_slave_with_route(
+            "i2c0",
+            Box::new(GatedI2cDevice::new(
+                Box::new(SharedPca(pca.clone())),
+                SupplyGate::legacy(false),
+            )),
+            Some(&route),
+        )
+        .unwrap();
+    assert_eq!(source_count(&power_bus), 1);
+    assert_eq!(source(&power_bus).as_str(), "unknown");
+    // A same-address device behind a mux makes the source ambiguous.
+    use labwired_core::peripherals::components::tca9548a::Tca9548a;
+    let mut mux = Tca9548a::new(0x70);
+    mux.attach(0, Box::new(SharedPca(pca.clone()))).unwrap();
+    let mut mux_bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    mux_bus.write_u32(GPIO + 0x24, 1 << 4).unwrap();
+    mux_bus
+        .attach_i2c_slave_with_route("i2c0", Box::new(SharedPca(pca.clone())), Some(&route))
+        .unwrap();
+    mux_bus
+        .attach_i2c_slave_with_route("i2c0", Box::new(mux), Some(&route))
+        .unwrap();
+    assert_eq!(source_count(&mux_bus), 2);
+    assert_eq!(source(&mux_bus).as_str(), "unknown");
+    // CPU reset currently does not reset peripherals: status describes only
+    // modeled GPIO/PCA configuration, never a reset-fresh command or signal.
+    let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+    let mut machine = labwired_core::Machine::new(cpu, bus);
+    machine.reset().unwrap();
+    assert_eq!(source(&machine.bus).as_str(), "modeled_pwm");
+    machine
+        .bus
+        .attach_i2c_slave_with_route("i2c0", Box::new(SharedPca(pca.clone())), Some(&route))
+        .unwrap();
+    assert_eq!(source_count(&machine.bus), 2);
+    assert_eq!(
+        source(&machine.bus).as_str(),
+        "unknown",
+        "duplicate same-address source is ambiguous"
+    );
 }
 
 #[test]

@@ -1,0 +1,10 @@
+# Cortex-M4 UART0 smoke against the narrowed imported EFM32WG995 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-efm32wg995-smoke"
+  system: "../../configs/systems/onboarding/efm32wg995.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EFM32WG995 UART0 smoke"
+  - expected_stop_reason: max_steps

@@ -1,35 +1,27 @@
-# Validation Report: cortex-a53-gicv3
+# Cortex-A53 GICv3 imported profile
 
-**Architecture:** ARMv8-A (AArch64).
+## Measured profile
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+The imported target is narrowed to one Cortex-A53 processing element, the 2 GiB DDR window at
+`0x40000000`, and the PL011 UART0 at `0x09000000`, served by the generic UART
+engine with the PL011 register layout (polled TX through `UARTFR`/`UARTDR`).
+The inherited `gicv3` name does not mean this profile models a GIC: the generic timer, GICv3 and PL031 RTC from the imported descriptor are omitted.
 
-```text
-[2m2026-10-18T14:39:52.270357Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:39:52.270697Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/cortex-a53-gicv3.yaml
-[2m2026-10-18T14:39:52.426879Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:39:52.426970Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:39:52.426983Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:39:52.426987Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:39:52.427613Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:39:52.427662Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:39:52.427697Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:39:52.427809Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:39:52.427861Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:39:52.427892Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:39:52.427921Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:39:52.427948Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:39:52.427975Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2033.48
-```
+## Smoke evidence
 
+The exact imported system ran the committed AArch64 fixture
+(`tests/fixtures/virt-a53-pl011-smoke.elf`, built by
+[`scripts/build_virt_a53_pl011_smoke.sh`](../../scripts/build_virt_a53_pl011_smoke.sh)).
+It checks that `UARTFR` reads `TXFE|RXFE` after reset, enables the UART, writes
+`VIRT A53 PL011 SMOKE FR=OK` to `UARTDR` while polling `FR.TXFF`, then spins in
+an integer loop. The smoke asserts the banner in the captured UART output and
+the bounded `max_steps` stop after 100,000 instructions. A window answering
+zeros would print the `FR=BAD` banner instead; with UART0 removed from the
+descriptor the fixture faults on its first `UARTFR` read (0/2 checks).
 
-## Hardware Coverage Report
+This does not test interrupts, RX, baud timing, the GIC, generic timer,
+multicore boot, boot firmware, Renode, or physical hardware.
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `timer` | `0x0000000f` | `arm_generictimer` |
-| `uart0` | `0x09000000` | `pl011` |
-| `rtc` | `0x09010000` | `pl031` |
-
-**Total Peripherals:** 3
+Evidence: `docs/coverage/renode-onboarding/metrics/cortex-a53-gicv3/` contains the
+per-target metric, JUnit result, simulator result, UART log, snapshot, and run
+log.

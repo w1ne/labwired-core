@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="3" errors="0" time="0.021669">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="2fdc135aa9cde524e5ac6793bfefb7940f64bc9a15dfea38efb71232b8661634"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.021669">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: EFR32MG13 RENODE SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok&quot;, &quot;gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok…" time="0.000000">
+    <failure message="assertion failed">assertion 2: uart_ordered: [&quot;gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok&quot;, &quot;gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=200000
+stop_reason_details.observed.steps_executed=200000
+steps_executed=200000
+cycles=200000
+instructions=200000
+limits:
+  - max_steps=200000
+firmware_hash=2fdc135aa9cde524e5ac6793bfefb7940f64bc9a15dfea38efb71232b8661634
+firmware=/tmp/renode-r391/neg/examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efr32mg13-smoke
+system=/tmp/renode-r391/neg/examples/renode-onboarding/../../configs/systems/onboarding/efr32mg13.yaml
+script=/tmp/renode-r391/neg/examples/renode-onboarding/efr32mg13-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;EFR32MG13 RENODE SMOKE&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok&quot;, &quot;gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok&quot;, &quot;gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok&quot;, &quot;gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok&quot;, &quot;gpio pa pinlockn reset=ffff after=fffe ok&quot;, &quot;gpio pa ctrl=00500050 ovtdis=ffff ok&quot;, &quot;tim0 up of=1 masked=1 pend=1 released=1 running=1 ok&quot;, &quot;tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok&quot;, &quot;tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok&quot;, &quot;EFR32MG13 PASS&quot;] }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpiof:4&quot;, min_edges: 4 } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536935424, expected_value: 4012966399, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpiof:4 &gt;= 4 edges" time="0.000000">
+    <failure message="assertion failed">assertion 3: gpio_edges: gpiof:4 &gt;= 4 edges
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=200000
+stop_reason_details.observed.steps_executed=200000
+steps_executed=200000
+cycles=200000
+instructions=200000
+limits:
+  - max_steps=200000
+firmware_hash=2fdc135aa9cde524e5ac6793bfefb7940f64bc9a15dfea38efb71232b8661634
+firmware=/tmp/renode-r391/neg/examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efr32mg13-smoke
+system=/tmp/renode-r391/neg/examples/renode-onboarding/../../configs/systems/onboarding/efr32mg13.yaml
+script=/tmp/renode-r391/neg/examples/renode-onboarding/efr32mg13-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;EFR32MG13 RENODE SMOKE&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok&quot;, &quot;gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok&quot;, &quot;gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok&quot;, &quot;gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok&quot;, &quot;gpio pa pinlockn reset=ffff after=fffe ok&quot;, &quot;gpio pa ctrl=00500050 ovtdis=ffff ok&quot;, &quot;tim0 up of=1 masked=1 pend=1 released=1 running=1 ok&quot;, &quot;tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok&quot;, &quot;tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok&quot;, &quot;EFR32MG13 PASS&quot;] }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpiof:4&quot;, min_edges: 4 } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536935424, expected_value: 4012966399, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x2000fc00=0xef3101ff" time="0.000000">
+    <failure message="assertion failed">assertion 4: memory_value: @0x2000fc00=0xef3101ff
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=200000
+stop_reason_details.observed.steps_executed=200000
+steps_executed=200000
+cycles=200000
+instructions=200000
+limits:
+  - max_steps=200000
+firmware_hash=2fdc135aa9cde524e5ac6793bfefb7940f64bc9a15dfea38efb71232b8661634
+firmware=/tmp/renode-r391/neg/examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efr32mg13-smoke
+system=/tmp/renode-r391/neg/examples/renode-onboarding/../../configs/systems/onboarding/efr32mg13.yaml
+script=/tmp/renode-r391/neg/examples/renode-onboarding/efr32mg13-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;EFR32MG13 RENODE SMOKE&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok&quot;, &quot;gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok&quot;, &quot;gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok&quot;, &quot;gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok&quot;, &quot;gpio pa pinlockn reset=ffff after=fffe ok&quot;, &quot;gpio pa ctrl=00500050 ovtdis=ffff ok&quot;, &quot;tim0 up of=1 masked=1 pend=1 released=1 running=1 ok&quot;, &quot;tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok&quot;, &quot;tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok&quot;, &quot;EFR32MG13 PASS&quot;] }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpiof:4&quot;, min_edges: 4 } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536935424, expected_value: 4012966399, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

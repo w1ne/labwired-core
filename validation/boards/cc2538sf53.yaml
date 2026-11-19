@@ -61,3 +61,10 @@ models:
   - crates/firmware-cc2538dk-contiki
   - configs/chips/cc2538sf53.yaml
   - configs/systems/cc2538dk.yaml
+  - crates/core/src/peripherals/cc2538/ana_regs.rs
+  - crates/core/src/peripherals/cc2538/cctest.rs
+  - crates/core/src/peripherals/cc2538/gptimer.rs
+  - crates/core/src/peripherals/cc2538/i2cm.rs
+  - crates/core/src/peripherals/cc2538/ioc.rs
+  - crates/core/src/peripherals/cc2538/soc_adc.rs
+  - crates/core/src/peripherals/cc2538/ssi.rs

@@ -1476,6 +1476,9 @@ jobs:
         if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: wasm-pack build --target nodejs --dev --out-dir pkg
         working-directory: crates/wasm
+      - name: Servo modeled source status WASM serialization
+        if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
+        run: node scripts/test_wasm_servo_source_status.mjs
       - name: Browser Cortex-M JIT end-to-end (JIT off vs on)
         if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
         run: node scripts/test_browser_cortex_m_jit.mjs

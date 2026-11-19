@@ -1,0 +1,27 @@
+SAM E70 RENODE SMOKE
+chipid cidr=a1020e00 exid=00000002 ok
+eefc fmr=00000600 ok
+eefc getd size=00200000 page=0200 locks=0080 region=00004000 ok
+eefc glb3=10 clb=0 gpnvm=002 set8=102 ok
+eefc fsr gpnvm9=3 badkey=3 after=1 ok
+rstc sr=00010000 wdt mr=3fff2fff ok
+rstc software reset
+SAM E70 RENODE SMOKE
+rstc rsttyp=3 ok
+wdt arm wdv=2
+SAM E70 RENODE SMOKE
+wdt rsttyp=2 mr=3fff2fff ok
+wdt window sr=2 pended released ok
+wdt mr once=00801100 ok
+pmc pcsr0=0003fd80 pcsr1=00007000 ok
+pio ports=5 ok
+pioa pa11 change up=0 isr=11 pend=1 released=1 FAIL
+usart0 tx
+usart2 tx
+uart0 tx
+uart1 tx
+uart2 tx
+uart3 tx
+uart4 tx
+uarts=7 ok
+SAM E70 FAIL

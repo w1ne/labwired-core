@@ -1,0 +1,37 @@
+{
+  "target_id": "litex_ibex",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-litex-ibex-smoke",
+  "target_triple": "riscv32imc-unknown-none-elf",
+  "script": "examples/renode-onboarding/litex_ibex-smoke.yaml",
+  "system": "configs/systems/onboarding/litex_ibex.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-08T06:40:02Z",
+  "finished_at_utc": "2026-11-08T06:40:03Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 965,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-08T06:40:03.031953Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"cpu=rv32imc uart=litex\", \"mul=00000143\", \"timer=cleared\", \"load=00004e20\", \"timer=counting\", \"timer=running\", \"tim",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.289,
+    "build_firmware": 0.392,
+    "run_smoke": 0.247
+  },
+  "stages_ms": {
+    "build_cli": 289,
+    "build_firmware": 392,
+    "run_smoke": 247
+  }
+}

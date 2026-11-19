@@ -1,0 +1,823 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 156976,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 112,
+          "expected_value": 63,
+          "mask": null,
+          "size": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "portb:0",
+          "min_edges": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      16,
+      0,
+      165,
+      170,
+      170,
+      0,
+      164,
+      1,
+      113,
+      0,
+      154,
+      0,
+      111,
+      0
+    ],
+    "pc": 212,
+    "sp": 154,
+    "sreg": 21
+  },
+  "firmware_hash": "b4c624aeb481a42e8d04229733a5f0a14b0834b6570ba164425d5ca9bbaf4c0b",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/attiny13-io-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-attiny13.yaml",
+    "script": "examples/renode-onboarding/simavr-attiny13-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 65590,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 156976,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "portb",
+        "pin": 0,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 138,
+            "value": 1
+          },
+          {
+            "cycle": 151,
+            "value": 0
+          },
+          {
+            "cycle": 159,
+            "value": 1
+          },
+          {
+            "cycle": 164,
+            "value": 0
+          },
+          {
+            "cycle": 607,
+            "value": 1
+          },
+          {
+            "cycle": 2815,
+            "value": 0
+          },
+          {
+            "cycle": 5023,
+            "value": 1
+          },
+          {
+            "cycle": 7231,
+            "value": 0
+          },
+          {
+            "cycle": 9439,
+            "value": 1
+          },
+          {
+            "cycle": 11647,
+            "value": 0
+          },
+          {
+            "cycle": 13855,
+            "value": 1
+          },
+          {
+            "cycle": 16063,
+            "value": 0
+          },
+          {
+            "cycle": 18271,
+            "value": 1
+          },
+          {
+            "cycle": 20479,
+            "value": 0
+          },
+          {
+            "cycle": 22687,
+            "value": 1
+          },
+          {
+            "cycle": 24895,
+            "value": 0
+          },
+          {
+            "cycle": 27103,
+            "value": 1
+          },
+          {
+            "cycle": 29311,
+            "value": 0
+          },
+          {
+            "cycle": 31519,
+            "value": 1
+          },
+          {
+            "cycle": 33727,
+            "value": 0
+          },
+          {
+            "cycle": 35935,
+            "value": 1
+          },
+          {
+            "cycle": 38143,
+            "value": 0
+          },
+          {
+            "cycle": 40351,
+            "value": 1
+          },
+          {
+            "cycle": 42559,
+            "value": 0
+          },
+          {
+            "cycle": 44767,
+            "value": 1
+          },
+          {
+            "cycle": 46975,
+            "value": 0
+          },
+          {
+            "cycle": 49183,
+            "value": 1
+          },
+          {
+            "cycle": 51391,
+            "value": 0
+          },
+          {
+            "cycle": 53599,
+            "value": 1
+          },
+          {
+            "cycle": 55807,
+            "value": 0
+          },
+          {
+            "cycle": 58015,
+            "value": 1
+          },
+          {
+            "cycle": 60223,
+            "value": 0
+          },
+          {
+            "cycle": 62431,
+            "value": 1
+          },
+          {
+            "cycle": 64639,
+            "value": 0
+          },
+          {
+            "cycle": 66847,
+            "value": 1
+          },
+          {
+            "cycle": 69055,
+            "value": 0
+          },
+          {
+            "cycle": 71263,
+            "value": 1
+          },
+          {
+            "cycle": 73471,
+            "value": 0
+          },
+          {
+            "cycle": 75679,
+            "value": 1
+          },
+          {
+            "cycle": 77887,
+            "value": 0
+          },
+          {
+            "cycle": 80095,
+            "value": 1
+          },
+          {
+            "cycle": 82303,
+            "value": 0
+          },
+          {
+            "cycle": 84511,
+            "value": 1
+          },
+          {
+            "cycle": 86719,
+            "value": 0
+          },
+          {
+            "cycle": 88927,
+            "value": 1
+          },
+          {
+            "cycle": 91135,
+            "value": 0
+          },
+          {
+            "cycle": 93343,
+            "value": 1
+          },
+          {
+            "cycle": 95551,
+            "value": 0
+          },
+          {
+            "cycle": 97759,
+            "value": 1
+          },
+          {
+            "cycle": 99967,
+            "value": 0
+          },
+          {
+            "cycle": 102175,
+            "value": 1
+          },
+          {
+            "cycle": 104383,
+            "value": 0
+          },
+          {
+            "cycle": 106591,
+            "value": 1
+          },
+          {
+            "cycle": 108799,
+            "value": 0
+          },
+          {
+            "cycle": 111007,
+            "value": 1
+          },
+          {
+            "cycle": 113215,
+            "value": 0
+          },
+          {
+            "cycle": 115423,
+            "value": 1
+          },
+          {
+            "cycle": 117631,
+            "value": 0
+          },
+          {
+            "cycle": 119839,
+            "value": 1
+          },
+          {
+            "cycle": 122047,
+            "value": 0
+          },
+          {
+            "cycle": 124255,
+            "value": 1
+          },
+          {
+            "cycle": 126463,
+            "value": 0
+          },
+          {
+            "cycle": 128671,
+            "value": 1
+          },
+          {
+            "cycle": 130879,
+            "value": 0
+          },
+          {
+            "cycle": 133087,
+            "value": 1
+          },
+          {
+            "cycle": 135295,
+            "value": 0
+          },
+          {
+            "cycle": 137503,
+            "value": 1
+          },
+          {
+            "cycle": 139711,
+            "value": 0
+          },
+          {
+            "cycle": 141919,
+            "value": 1
+          },
+          {
+            "cycle": 144127,
+            "value": 0
+          },
+          {
+            "cycle": 146335,
+            "value": 1
+          },
+          {
+            "cycle": 148543,
+            "value": 0
+          },
+          {
+            "cycle": 150751,
+            "value": 1
+          },
+          {
+            "cycle": 152959,
+            "value": 0
+          },
+          {
+            "cycle": 155167,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 129,
+            "state": "0"
+          },
+          {
+            "cycle": 138,
+            "state": "1"
+          },
+          {
+            "cycle": 151,
+            "state": "0"
+          },
+          {
+            "cycle": 159,
+            "state": "1"
+          },
+          {
+            "cycle": 164,
+            "state": "0"
+          },
+          {
+            "cycle": 607,
+            "state": "1"
+          },
+          {
+            "cycle": 2815,
+            "state": "0"
+          },
+          {
+            "cycle": 5023,
+            "state": "1"
+          },
+          {
+            "cycle": 7231,
+            "state": "0"
+          },
+          {
+            "cycle": 9439,
+            "state": "1"
+          },
+          {
+            "cycle": 11647,
+            "state": "0"
+          },
+          {
+            "cycle": 13855,
+            "state": "1"
+          },
+          {
+            "cycle": 16063,
+            "state": "0"
+          },
+          {
+            "cycle": 18271,
+            "state": "1"
+          },
+          {
+            "cycle": 20479,
+            "state": "0"
+          },
+          {
+            "cycle": 22687,
+            "state": "1"
+          },
+          {
+            "cycle": 24895,
+            "state": "0"
+          },
+          {
+            "cycle": 27103,
+            "state": "1"
+          },
+          {
+            "cycle": 29311,
+            "state": "0"
+          },
+          {
+            "cycle": 31519,
+            "state": "1"
+          },
+          {
+            "cycle": 33727,
+            "state": "0"
+          },
+          {
+            "cycle": 35935,
+            "state": "1"
+          },
+          {
+            "cycle": 38143,
+            "state": "0"
+          },
+          {
+            "cycle": 40351,
+            "state": "1"
+          },
+          {
+            "cycle": 42559,
+            "state": "0"
+          },
+          {
+            "cycle": 44767,
+            "state": "1"
+          },
+          {
+            "cycle": 46975,
+            "state": "0"
+          },
+          {
+            "cycle": 49183,
+            "state": "1"
+          },
+          {
+            "cycle": 51391,
+            "state": "0"
+          },
+          {
+            "cycle": 53599,
+            "state": "1"
+          },
+          {
+            "cycle": 55807,
+            "state": "0"
+          },
+          {
+            "cycle": 58015,
+            "state": "1"
+          },
+          {
+            "cycle": 60223,
+            "state": "0"
+          },
+          {
+            "cycle": 62431,
+            "state": "1"
+          },
+          {
+            "cycle": 64639,
+            "state": "0"
+          },
+          {
+            "cycle": 66847,
+            "state": "1"
+          },
+          {
+            "cycle": 69055,
+            "state": "0"
+          },
+          {
+            "cycle": 71263,
+            "state": "1"
+          },
+          {
+            "cycle": 73471,
+            "state": "0"
+          },
+          {
+            "cycle": 75679,
+            "state": "1"
+          },
+          {
+            "cycle": 77887,
+            "state": "0"
+          },
+          {
+            "cycle": 80095,
+            "state": "1"
+          },
+          {
+            "cycle": 82303,
+            "state": "0"
+          },
+          {
+            "cycle": 84511,
+            "state": "1"
+          },
+          {
+            "cycle": 86719,
+            "state": "0"
+          },
+          {
+            "cycle": 88927,
+            "state": "1"
+          },
+          {
+            "cycle": 91135,
+            "state": "0"
+          },
+          {
+            "cycle": 93343,
+            "state": "1"
+          },
+          {
+            "cycle": 95551,
+            "state": "0"
+          },
+          {
+            "cycle": 97759,
+            "state": "1"
+          },
+          {
+            "cycle": 99967,
+            "state": "0"
+          },
+          {
+            "cycle": 102175,
+            "state": "1"
+          },
+          {
+            "cycle": 104383,
+            "state": "0"
+          },
+          {
+            "cycle": 106591,
+            "state": "1"
+          },
+          {
+            "cycle": 108799,
+            "state": "0"
+          },
+          {
+            "cycle": 111007,
+            "state": "1"
+          },
+          {
+            "cycle": 113215,
+            "state": "0"
+          },
+          {
+            "cycle": 115423,
+            "state": "1"
+          },
+          {
+            "cycle": 117631,
+            "state": "0"
+          },
+          {
+            "cycle": 119839,
+            "state": "1"
+          },
+          {
+            "cycle": 122047,
+            "state": "0"
+          },
+          {
+            "cycle": 124255,
+            "state": "1"
+          },
+          {
+            "cycle": 126463,
+            "state": "0"
+          },
+          {
+            "cycle": 128671,
+            "state": "1"
+          },
+          {
+            "cycle": 130879,
+            "state": "0"
+          },
+          {
+            "cycle": 133087,
+            "state": "1"
+          },
+          {
+            "cycle": 135295,
+            "state": "0"
+          },
+          {
+            "cycle": 137503,
+            "state": "1"
+          },
+          {
+            "cycle": 139711,
+            "state": "0"
+          },
+          {
+            "cycle": 141919,
+            "state": "1"
+          },
+          {
+            "cycle": 144127,
+            "state": "0"
+          },
+          {
+            "cycle": 146335,
+            "state": "1"
+          },
+          {
+            "cycle": 148543,
+            "state": "0"
+          },
+          {
+            "cycle": 150751,
+            "state": "1"
+          },
+          {
+            "cycle": 152959,
+            "state": "0"
+          },
+          {
+            "cycle": 155167,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 75
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "portb",
+      "number": 0,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 226,
+    "data_bytes": 0,
+    "bss_bytes": 17,
+    "flash_used_bytes": 226,
+    "ram_static_bytes": 17,
+    "flash_total_bytes": 1024,
+    "ram_total_bytes": 64,
+    "flash_used_pct": 22.07,
+    "ram_static_pct": 26.56,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 156976,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 0,
+    "memory_writes": 14274,
+    "peripheral_accesses": 81,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 208,
+        "count": 78
+      },
+      {
+        "pc": 214,
+        "count": 78
+      },
+      {
+        "pc": 220,
+        "count": 78
+      },
+      {
+        "pc": 210,
+        "count": 39
+      },
+      {
+        "pc": 212,
+        "count": 39
+      },
+      {
+        "pc": 216,
+        "count": 39
+      },
+      {
+        "pc": 218,
+        "count": 39
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+2026-11-08T18:35:01.228502Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/efm32pg12-negctl-chip.yaml
+2026-11-08T18:35:01.230936Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-08T18:35:01.236214Z  WARN labwired_core::peripherals::gpio: EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
+2026-11-08T18:35:01.292070Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok", "gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok", "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok", "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok", "gpio pa pinlockn reset=ffff after=fffe ok", "gpio pa ctrl=00500050 ovtdis=ffff ok", "tim0 up of=1 masked=1 pend=1 released=1 running=1 ok", "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok", "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok", "EFM32PG12 PASS"] }) (captured len=301)
+2026-11-08T18:35:01.292125Z ERROR labwired_cli::execute: Memory assertion failed at 0x2003fc00 (size 4): expected 0xef3101ff, got 0x0 (mask 0xffffffff)
+2026-11-08T18:35:01.292131Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537132032, expected_value: 4012966399, mask: None, size: Some(4), node: None } }) (captured len=301)
+FAIL  3/5 checks · smoke · 200000 steps · 0.06s

@@ -1,0 +1,10 @@
+# Direct A32 fixture against the bounded imported zynq-7000 profile: one Cortex-A9 PE, a 64 KiB DDR aperture at 0x00100000, and polled PS UART1 TX only.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/zynq7000-a9-uart-smoke.elf"
+  system: "../../configs/systems/onboarding/zynq-7000.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "ZYNQ7000 A9 UART SMOKE"
+  - expected_stop_reason: max_steps

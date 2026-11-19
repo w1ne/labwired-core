@@ -128,8 +128,9 @@ hb=0 podr6=0001 s1=1 s2=1
   from the oscillator stop bits and answers the xxxCKCR handshakes, but the
   oscillators settle at once and no rate is derived: `cpu_hz` stays 8 MHz
   after Zephyr switches ICLK to the 480 MHz PLL1P, and `PRCR` gates nothing.
-- **Module stop.** `MSTP` is a stub: SCI9 runs whether or not `MSTPB22` is
-  cleared.
+- **Module stop.** The SVD-derived MSTP register file reads reset values and
+  stores writes; the exact-system smoke checks `MSTPCRB.MSTPB22` readback.
+  Module gating is not modelled, so SCI9 also runs while the bit is set.
 - **ICU / IELSR.** Both ICU windows are stubs, so no peripheral event reaches
   the NVIC; the smoke polls `CSR.TDRE` and the Zephyr console is polled too.
 - **SCI_B beyond polled async.** FIFO mode, `CCR0` interrupt enables, error

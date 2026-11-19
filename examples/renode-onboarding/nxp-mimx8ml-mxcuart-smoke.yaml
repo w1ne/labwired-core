@@ -1,0 +1,12 @@
+# AArch64 i.MX UART smoke against the bounded imported nxp-mimx8ml profile: one
+# Cortex-A53 PE checks the UART2 USR1 reset value, writes a banner through
+# UTXD and spins. No GIC, timer, clock or pin-mux block is exercised.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/imx8mp-a53-uart2-smoke.elf"
+  system: "../../configs/systems/onboarding/nxp-mimx8ml.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "IMX8MP A53 MXCUART SMOKE USR1=OK"
+  - expected_stop_reason: max_steps

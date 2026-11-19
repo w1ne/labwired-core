@@ -1,0 +1,37 @@
+{
+  "target_id": "focaltech_ft9001",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "config_error"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-ft9001-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/focaltech_ft9001-smoke.yaml",
+  "system": "configs/systems/onboarding/focaltech_ft9001.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-15T20:46:31Z",
+  "finished_at_utc": "2026-11-15T20:51:15Z",
+  "elapsed_seconds": 285,
+  "elapsed_ms": 284107,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "Failed to read firmware \"examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-ft9001-smoke\": No such file or directory (os error 2)",
+  "failure_hint": "Path mismatch. Verify script/system paths in workflow matrix and repository layout.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 275.413,
+    "build_firmware": 6.713,
+    "run_smoke": 1.918
+  },
+  "stages_ms": {
+    "build_cli": 275413,
+    "build_firmware": 6713,
+    "run_smoke": 1918
+  }
+}

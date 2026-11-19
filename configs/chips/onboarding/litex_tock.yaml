@@ -1,69 +1,24 @@
+# Narrowed from Renode's platforms/cpus/litex_tock.repl.
+# This profile covers the RV32IMAC CPU, flash/RAM windows, and LiteX UART used
+# by the direct-ELF smoke. It omits the unexercised Ethernet, timer, SPI flash,
+# GPIO, and button surfaces.
 name: litex_tock
-arch: arm
+arch: riscv
+core: rv32imac
+cpu_hz: 100_000_000
 flash:
-  base: 536870912
-  size: 1048576
+  base: 0x20000000
+  size: "32MB"
 ram:
-  base: 16777216
-  size: 8192B
+  base: 0x01000000
+  size: "8KB"
+memory_regions:
+  - name: rom
+    base: 0x00000000
+    size: "44KB"
+flash_boot_alias: false
 peripherals:
-- id: uart
-  type: litex_uart
-  bus: sysbus
-  base_address: 2181046272
-- id: phy
-  type: ethernetphysicallayer
-  bus: eth
-  base_address: 0
-- id: timer0
-  type: litex_timer_csr32
-  bus: sysbus
-  base_address: 2181048320
-- id: led0
-  type: led
-  bus: cas
-  base_address: 0
-- id: led1
-  type: led
-  bus: cas
-  base_address: 1
-- id: led2
-  type: led
-  bus: cas
-  base_address: 2
-- id: led3
-  type: led
-  bus: cas
-  base_address: 3
-- id: switch0
-  type: button
-  bus: cas
-  base_address: 32
-- id: switch1
-  type: button
-  bus: cas
-  base_address: 33
-- id: switch2
-  type: button
-  bus: cas
-  base_address: 34
-- id: switch3
-  type: button
-  bus: cas
-  base_address: 35
-- id: button0
-  type: button
-  bus: cas
-  base_address: 64
-- id: button1
-  type: button
-  bus: cas
-  base_address: 65
-- id: button2
-  type: button
-  bus: cas
-  base_address: 66
-- id: button3
-  type: button
-  bus: cas
-  base_address: 67
+  - id: uart
+    type: litex_uart
+    base_address: 0x82002000
+    size: "2KB"

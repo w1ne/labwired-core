@@ -6,3 +6,34 @@
 
 name: stm32f103
 chip: ../../chips/onboarding/stm32f103.yaml
+external_devices:
+  # Smoke input fixture; the STM32F103 board itself has no mounted potentiometer.
+  - id: pot_adc1_in0
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 0
+  # Second external smoke fixture for the two-rank regular ADC scan.
+  - id: pot_adc1_in1
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 1
+  - id: tc_spi1
+    type: max31855
+    connection: spi1
+    config:
+      cs_pin: PA4
+  - id: tmp102
+    type: tmp102
+    connection: i2c1
+    config:
+      i2c_address: 0x48
+  - id: bme280
+    type: bme280
+    connection: i2c1
+    config:
+      i2c_address: 0x76
+      temperature: 40.0
+      humidity: 80.0
+      pressure: 950.0

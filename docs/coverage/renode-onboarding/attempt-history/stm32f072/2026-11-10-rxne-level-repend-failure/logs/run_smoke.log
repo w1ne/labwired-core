@@ -1,0 +1,18 @@
+2026-11-10T15:30:12.871147Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f072.yaml
+2026-11-10T15:30:12.943203Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T15:30:12.948409Z  INFO labwired_cli::execute: stimulus: position = 25 applied
+2026-11-10T15:30:12.948435Z  INFO labwired_cli::execute: stimulus: temperature = 100 applied
+2026-11-10T15:30:12.948442Z  INFO labwired_cli::execute: stimulus: temperature = 50 applied
+2026-11-10T15:30:13.105782Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:30:13.122724Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T15:30:13.158145Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:30:13.234379Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+2026-11-10T15:30:13.269722Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
+2026-11-10T15:30:13.346427Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
+labwired-cli test: idle_ff skipped 1018992 of 4000000 device cycles (2981008 interpreted)
+2026-11-10T15:30:13.386411Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["rcc reset=1 gate=1 ok", "usart irq u2=1 u3=1 u4=1 ok", "gpio pa=1 reset=1 pf=1 de=1 ok", "exti swier masked=1 routed=1 ok", "tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim15 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim16 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok", "exti pads idle=1 presses=1 pa_quiet=1 pf1=1 pc13=1 ok", "spi1 frame=0x01901600 ds=1 data=1 pend=1 alone=1 released=1 ok", "spi1 TXEIE pend=1 released=1 ok", "spi1 RXNEIE asserted=1 repended=1 masked=1 unmasked=1 released=1 ok", "spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok", "spi2 TXEIE pend=1 released=1 ok", "spi2 RXNEIE asserted=1 repended=1 masked=1 unmasked=1 released=1 ok", "dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok", "i2c1 tmp102=0x00001900 oar=1 data=1 rx_pend=1 nack=1 nack_pend=1 stop=1 released=1 ok", "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok", "crc word=0xDF8A8A2B seed=1 std=1 init=1 ok", "adc in1=0x000007FF ts=0x00000709 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 dma=1 ovr=1 awd=1 off=1 ok", "summary 0x073FFFFF", "DONE"] }) (captured len=1639)
+2026-11-10T15:30:13.386435Z ERROR labwired_cli::execute: Memory assertion failed at 0x20003000 (size 4): expected 0x73fffff, got 0x73f3fff (mask 0xffffffff)
+2026-11-10T15:30:13.386439Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536883200, expected_value: 121634815, mask: None, size: Some(4), node: None } }) (captured len=1639)
+FAIL  6/8 checks · stm32f072-smoke · 4000000 steps · 0.44s

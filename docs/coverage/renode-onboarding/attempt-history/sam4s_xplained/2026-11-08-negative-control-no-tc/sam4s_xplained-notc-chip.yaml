@@ -1,0 +1,57 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: sam4s_xplained_notc
+arch: arm
+flash:
+  base: 4194304
+  size: 1048576B
+ram:
+  base: 536870912
+  size: 131072B
+peripherals:
+# Narrowed to the blocks this engine models: PMC, the SAM UART/USART and
+# PIOA-C. Renode's LED (pioC pin 10) and Button (pioA pin 5) are GPIO pin
+# connections, not bus peripherals; imported they became 4 KiB zero windows
+# at sysbus 0xA and 0x5. Board I/O is modelled through board_io. DWT is
+# installed by the Cortex-M core and bit-banding by the bus, so their entries
+# were inert. Renode's two SAM_TC blocks (TC0-2, TC3-5) map to `sam4s_tc`
+# (UP/UP_RC waveform and capture-as-counter; see tc4s.rs for what it
+# refuses). ADC, DACC, EEFC, RSTC, WDT, CRCCU, SPI and TWI0/1 have no model
+# here and only answered reads with zeros, so they are not declared.
+- id: usart0
+  type: sam_usart
+  bus: sysbus
+  base_address: 1073889280
+- id: usart1
+  type: sam_usart
+  bus: sysbus
+  base_address: 1073905664
+- id: pmc
+  type: sam4s_pmc
+  bus: sysbus
+  base_address: 1074660352
+  size: 512
+- id: uart0
+  type: sam_usart
+  bus: sysbus
+  base_address: 1074660864
+- id: uart1
+  type: sam_usart
+  bus: sysbus
+  base_address: 1074661376
+- id: pioA
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 1074662912
+- id: pioB
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 1074663424
+- id: pioC
+  type: sam4s_pio
+  bus: sysbus
+  base_address: 1074663936

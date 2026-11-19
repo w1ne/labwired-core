@@ -4,117 +4,25 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# Imported Renode target `zynq-7000` (AMD Xilinx Zynq-7000 base platform), narrowed to what the engine executes and
+# the UART smoke exercises: one Cortex-A9 PE on the native Cortex-A9 model, a
+# 64 KiB aperture at the DDR base 0x00100000 (UG585 address map), and PS UART1
+# (Cadence, polled TX) at 0xE0001000. The aperture is a simulator limit, not
+# the board's DDR size. OCM and the BootROM, the second A9, SCU, GIC, L2C-310,
+# global/private timers, TTCs, UART0, GEMs, USB, SD, QSPI, SPI, I2C, GPIO,
+# DMA, XADC and SLCR are not modeled here and are intentionally omitted; the
+# import answered most of them with zero-reading stubs.
 name: zynq-7000
 arch: arm
-flash:
-  base: 134217728
-  size: 1073741824B
+core: cortex-a9
+flash: { base: 0, size: 0 }
 ram:
-  base: 536870912
-  size: 1073741824B
+  base: 0x00100000
+  size: 64KB
+flash_boot_alias: false
 peripherals:
-- id: usbEhci2
-  type: ehcihostcontroller
-  bus: sysbus
-  base_address: 3758108672
-- id: usbEhci
-  type: ehcihostcontroller
-  bus: sysbus
-  base_address: 3758104576
-- id: pl310
-  type: pl310
-  bus: sysbus
-  base_address: 4176486400
-- id: gem0
-  type: cadencegem
-  bus: sysbus
-  base_address: 3758141440
-- id: gem1
-  type: cadencegem
-  bus: sysbus
-  base_address: 3758145536
-- id: uart0
-  type: cadence_uart
-  bus: sysbus
-  base_address: 3758096384
 - id: uart1
   type: cadence_uart
   bus: sysbus
-  base_address: 3758100480
-- id: i2c1
-  type: stub
-  renode_type: cadence_i2c
-  bus: sysbus
-  base_address: 3758116864
-- id: i2c0
-  type: stub
-  renode_type: cadence_i2c
-  bus: sysbus
-  base_address: 3758112768
-- id: spi0
-  type: stub
-  renode_type: cadence_spi
-  bus: sysbus
-  base_address: 3758120960
-- id: spi1
-  type: stub
-  renode_type: cadence_spi
-  bus: sysbus
-  base_address: 3758125056
-- id: sdhci0
-  type: stub
-  renode_type: sdhci
-  bus: sysbus
-  base_address: 3759144960
-- id: sdhci1
-  type: stub
-  renode_type: sdhci
-  bus: sysbus
-  base_address: 3759149056
-- id: ttc0
-  type: cadence_ttc
-  bus: sysbus
-  base_address: 4160753664
-- id: ttc1
-  type: cadence_ttc
-  bus: sysbus
-  base_address: 4160757760
-- id: watchdog0
-  type: stub
-  renode_type: cadence_wdt
-  bus: sysbus
-  base_address: 4160770048
-- id: globalTimer
-  type: arm_globaltimer
-  bus: sysbus
-  base_address: 4176478720
-- id: scu
-  type: armsnoopcontrolunit
-  bus: sysbus
-  base_address: 4176478208
-- id: qspi
-  type: xilinxqspi
-  bus: sysbus
-  base_address: 3758149632
-- id: gpio
-  type: xilinxgpiops
-  bus: sysbus
-  base_address: 3758137344
-- id: xadc
-  type: stub
-  renode_type: xilinx_xadc
-  bus: sysbus
-  base_address: 4160778496
-- id: slcr
-  type: stub
-  renode_type: zynq7000_systemlevelcontrolregisters
-  bus: sysbus
-  base_address: 4160749568
-- id: nand
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 3758153728
-- id: dma_pl330
-  type: pl330_dma
-  bus: sysbus
-  base_address: 4160761856
+  base_address: 0xE0001000
+  size: 4096

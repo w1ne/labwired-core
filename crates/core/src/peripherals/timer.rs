@@ -83,8 +83,13 @@ pub(crate) use output::{output_pair, OutputPulse};
 ///   phase across a PSC rewrite, including `psc_cnt > PSC` (next tick
 ///   increments).
 /// - **ARR/CCRx are applied immediately** (no ARPE preload modeling); CR1
-///   bits other than CEN (DIR/CMS/OPM/…) are stored but do not affect
-///   counting — the model always up-counts, exactly like the walk.
+///   DIR/CMS are stored but do not affect counting — the model always
+///   up-counts, exactly like the walk.
+/// - **One-pulse mode (CR1.OPM)**: the counter overflow that sets UIF also
+///   clears CEN, so the counter stops at 0 (RM0433 Rev 8 §39.4.1: "Counter
+///   stops counting at the next update event (clearing the bit CEN)"). Only
+///   the overflow update event stops the counter here; a software EGR.UG
+///   leaves CEN alone, and the repetition counter (RCR) is not modelled.
 /// - **32-bit `ARR == 0xFFFF_FFFF` never wraps**: the walk's `cnt > arr`
 ///   check can never fire (u32 wrapping_add), so the counter free-runs
 ///   mod 2^32 with no UIF — reproduced exactly.
@@ -102,7 +107,9 @@ pub(crate) use output::{output_pair, OutputPulse};
 /// cycle-for-cycle (the same normalization B1 applied to SysTick).
 #[derive(Debug, Default, serde::Serialize)]
 pub struct Timer {
-    cr1: u32,
+    /// `Cell` so the scheduler-mode `&self` replay can clear CEN at a
+    /// one-pulse (OPM) update event.
+    cr1: Cell<u32>,
     cr2: u32,
     smcr: u32,
     dier: u32,
@@ -169,6 +176,10 @@ pub struct Timer {
     phase_revision: u64,
     #[serde(skip)]
     freeze_revision: Cell<u64>,
+    /// A one-pulse stop happened in a `&self` replay: the channel outputs
+    /// still follow the running phase until a `&mut` path re-derives them.
+    #[serde(skip)]
+    opm_redrive: Cell<bool>,
     /// Bus-published cycle clock (walk-free plan Part 1). `Some` once the bus
     /// registration choke attaches it; `None` keeps the model on the legacy
     /// walk path.
@@ -366,7 +377,7 @@ impl Timer {
     pub fn new_with_layout(width: u8, advanced: bool) -> Self {
         let arr_reset = if width >= 32 { 0xFFFF_FFFF } else { 0xFFFF };
         Self {
-            cr1: 0,
+            cr1: Cell::new(0),
             cr2: 0,
             smcr: 0,
             dier: 0,
@@ -402,6 +413,7 @@ impl Timer {
             arm_seq: 0,
             phase_revision: 0,
             freeze_revision: Cell::new(0),
+            opm_redrive: Cell::new(false),
             clock: None,
             kernel_div: 1,
             ccer_np: false,
@@ -537,7 +549,7 @@ impl Timer {
             // CCxE allow. Reporting `false` for TIM2-class timers would gate
             // every Arduino `analogWrite` PWM plant off forever.
             main_output_enabled: !self.advanced || (self.bdtr & (1 << 15)) != 0,
-            counter_enabled: (self.cr1 & 1) != 0,
+            counter_enabled: (self.cr1.get() & 1) != 0,
             period_ticks: period,
             counter_ticks: self.cnt.get(),
             prescaler_divisor: u64::from(self.count_psc()) + 1,
@@ -577,7 +589,7 @@ impl Timer {
         if !self.advanced {
             return 0;
         }
-        let dts_divisor = match (self.cr1 >> 8) & 3 {
+        let dts_divisor = match (self.cr1.get() >> 8) & 3 {
             1 => 2,
             2 => 4,
             _ => 1, // CKD=11 is reserved.
@@ -779,7 +791,7 @@ impl Timer {
                 duty: pulse.width,
             };
         }
-        if (self.cr1 & 1) == 0 || self.counter_frozen() {
+        if (self.cr1.get() & 1) == 0 || self.counter_frozen() {
             let after = output_pair(reference, enabled, active_low, 0)[side]
                 .expect("enabled output")
                 .level_at(elapsed);
@@ -925,7 +937,7 @@ impl Timer {
             return 0;
         }
         let f = (self.ic_lane(ch) >> 4) & 0xF;
-        let dts: u64 = match (self.cr1 >> 8) & 0x3 {
+        let dts: u64 = match (self.cr1.get() >> 8) & 0x3 {
             1 => 2,
             2 => 4,
             _ => 1,
@@ -967,7 +979,7 @@ impl Timer {
     fn request_update_dma(&self, counter_overflow: bool) {
         // UDIS suppresses update events; URS excludes UG and slave reset
         // from update interrupt/DMA requests, but not natural overflow.
-        if self.cr1 & (1 << 1) != 0 || (!counter_overflow && self.cr1 & (1 << 2) != 0) {
+        if self.cr1.get() & (1 << 1) != 0 || (!counter_overflow && self.cr1.get() & (1 << 2) != 0) {
             return;
         }
         self.request_dma(0);
@@ -991,14 +1003,14 @@ impl Timer {
     /// Next counter event that must reach DMA. DMA does not use the IRQ
     /// model's held-flag freeze and does not require SR to be cleared first.
     fn first_dma_event(&self) -> Option<u64> {
-        if self.cr1 & 1 == 0 || self.counter_frozen() {
+        if self.cr1.get() & 1 == 0 || self.counter_frozen() {
             return None;
         }
         let v = self.cnt.get();
         let channel_on_update = self.cr2 & (1 << 3) != 0;
         let update_enabled = self.dier & (1 << 8) != 0
             || (!self.basic && channel_on_update && self.dier & (0xf << 9) != 0);
-        let mut best = if update_enabled && self.cr1 & (1 << 1) == 0 {
+        let mut best = if update_enabled && self.cr1.get() & (1 << 1) == 0 {
             self.increments_to_wrap(v)
         } else {
             None
@@ -1087,7 +1099,7 @@ impl Timer {
             if self.smcr & 0x7 == 0b100 {
                 self.cnt.set(0);
                 self.psc_cnt.set(0);
-                if (self.cr1 >> 2) & 1 == 0 {
+                if (self.cr1.get() >> 2) & 1 == 0 {
                     self.sr.set(self.sr.get() | 1);
                 }
                 self.request_update_dma(false);
@@ -1290,12 +1302,21 @@ impl Timer {
         }
     }
 
+    /// The increment index of the overflow that ends a one-pulse run, or
+    /// `None` when CEN or OPM is clear or ARR never wraps.
+    fn opm_stop_increment(&self) -> Option<u64> {
+        if self.cr1.get() & 0x9 != 0x9 {
+            return None;
+        }
+        self.increments_to_wrap(self.cnt.get())
+    }
+
     /// The increment index of the first latch of an *enabled* flag. The walk
     /// freezes counting from that increment on, and the bus pends the NVIC
     /// line on the same tick (`irq_line_level` — a level tracks its flag), so
     /// this one number serves the freeze and the event chain alike.
     fn first_enabled_event(&self) -> Option<u64> {
-        if (self.cr1 & 0x1) == 0 {
+        if (self.cr1.get() & 0x1) == 0 {
             return None;
         }
         let v = self.cnt.get();
@@ -1340,7 +1361,7 @@ impl Timer {
             return;
         }
         self.anchor.set(now);
-        if self.counter_frozen() || (self.cr1 & 0x1) == 0 {
+        if self.counter_frozen() || (self.cr1.get() & 0x1) == 0 {
             // Frozen (held IRQ level) or not enabled: the window elapses with
             // no counting — exactly the walk's early returns.
             return;
@@ -1357,11 +1378,20 @@ impl Timer {
         let freeze_j = self.first_enabled_event();
         // Increments actually applied: the walk stops counting after the
         // increment that latches an enabled flag.
-        let m = match freeze_j {
+        let mut m = match freeze_j {
             Some(j) if j <= n => j,
             _ => n,
         };
         let v = self.cnt.get();
+        // One-pulse mode: the overflow increment clears CEN, so nothing
+        // counts after it.
+        let opm_stop = match self.opm_stop_increment() {
+            Some(j) if j <= m => {
+                m = j;
+                true
+            }
+            _ => false,
+        };
         // Latch every flag whose first occurrence lies within the applied
         // window — disabled flags accumulate lazily without freezing, exactly
         // like the walk.
@@ -1403,7 +1433,11 @@ impl Timer {
             }
         }
         self.sr.set(sr);
-        if frozen_before != self.counter_frozen() {
+        if opm_stop {
+            self.cr1.set(self.cr1.get() & !0x1);
+            self.opm_redrive.set(true);
+        }
+        if opm_stop || frozen_before != self.counter_frozen() {
             self.freeze_revision
                 .set(self.freeze_revision.get().wrapping_add(1));
         }
@@ -1411,7 +1445,7 @@ impl Timer {
         // Prescaler phase: an increment tick resets it to 0; if the walk
         // froze at increment `m` it stays 0 for the rest of the window,
         // otherwise the post-increment remainder ticks accumulate.
-        let frozen = matches!(freeze_j, Some(j) if j <= n);
+        let frozen = opm_stop || matches!(freeze_j, Some(j) if j <= n);
         self.psc_cnt.set(if frozen {
             0
         } else {
@@ -1453,10 +1487,13 @@ impl Timer {
             .ic_pending
             .first()
             .map(|p| p.accept.saturating_sub(anchor).max(1));
-        let next_event = match (self.first_enabled_event(), self.first_dma_event()) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        };
+        // A wired channel output needs a wake at the one-pulse stop as well,
+        // or its pad would keep the running waveform past the stopped counter.
+        let stop = self.opm_stop_increment().filter(|_| self.wave.wired);
+        let next_event = [self.first_enabled_event(), self.first_dma_event(), stop]
+            .into_iter()
+            .flatten()
+            .min();
         let counter = next_event
             .map(|j| self.ticks_to_first_increment() + (j - 1) * (self.count_psc() as u64 + 1));
         match (counter, filter) {
@@ -1467,7 +1504,7 @@ impl Timer {
 
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
-            0x00 => self.cr1,
+            0x00 => self.cr1.get(),
             0x04 => self.cr2,
             0x08 => self.smcr,
             0x0C => self.dier,
@@ -1503,7 +1540,7 @@ impl Timer {
         let previous_output = self.advanced.then(|| self.output_snapshot());
         let frozen_before = self.counter_frozen();
         let phase_mapping_before = (
-            self.cr1 & 1,
+            self.cr1.get() & 1,
             self.ccmr1,
             self.ccmr2,
             self.cnt.get(),
@@ -1512,7 +1549,7 @@ impl Timer {
         );
         let explicit_update = offset == 0x14 && (value & 1) != 0;
         match offset {
-            0x00 => self.cr1 = value & 0x3FF,
+            0x00 => self.cr1.set(value & 0x3FF),
             // CR2 writable bits differ by layout. General-purpose (TIM2-5):
             // CCDS(3)+MMS(6:4)+TI1S(7) = 0xF8, silicon-confirmed on F103 TIM2.
             // Advanced (TIM1) adds CCPC/CCUS/OISx — left at the wider mask
@@ -1648,7 +1685,7 @@ impl Timer {
             }
         }
         let phase_mapping_after = (
-            self.cr1 & 1,
+            self.cr1.get() & 1,
             self.ccmr1,
             self.ccmr2,
             self.cnt.get(),
@@ -1738,7 +1775,7 @@ impl Timer {
         }
 
         // Counter Enable (bit 0)
-        if (self.cr1 & 0x1) == 0 {
+        if (self.cr1.get() & 0x1) == 0 {
             return crate::PeripheralTickResult {
                 irq: self.capture_irq_held(),
                 cycles: 0,
@@ -1758,9 +1795,14 @@ impl Timer {
                 if !self.basic {
                     self.latch_compare_match_flags(true);
                 }
+                // One-pulse mode: this update event stops the counter.
+                let opm_stop = self.cr1.get() & 0x8 != 0;
+                if opm_stop {
+                    self.cr1.set(self.cr1.get() & !0x1);
+                }
 
                 // Return true if Update Interrupt Enable (UIE) is set
-                if frozen_before != self.counter_frozen() {
+                if opm_stop || frozen_before != self.counter_frozen() {
                     self.freeze_revision
                         .set(self.freeze_revision.get().wrapping_add(1));
                 }
@@ -1913,7 +1955,11 @@ impl crate::Peripheral for Timer {
             self.advance_to(now_cycle);
             if self.wave.wired {
                 let now = self.wave_now();
-                self.wave.pads.advance_to(now);
+                if self.opm_redrive.take() {
+                    self.redrive_outputs(now);
+                } else {
+                    self.wave.pads.advance_to(now);
+                }
             }
         }
     }
@@ -2026,6 +2072,11 @@ impl crate::Peripheral for Timer {
         // materialises the update/compare latch this event was scheduled for.
         self.process_pending_edges(sched.now());
         self.advance_to(sched.now());
+        if self.opm_redrive.take() {
+            // The one-pulse stop landed on this cycle: the outputs hold the
+            // level of the stopped counter from here.
+            self.redrive_outputs(sched.now());
+        }
         let dma_signals = self.take_dma_signals().unwrap_or_default();
         if self.irq_level_held() {
             // The walk would return `irq: true` on this tick (overflow with
@@ -2435,6 +2486,53 @@ mod tests {
         }
     }
 
+    /// RM0008 §15.4.1 OPM: "Counter stops counting at the next update event
+    /// (clearing the bit CEN)". The counter runs one period, stops at 0 with
+    /// UIF set, and a new CEN write runs one more period.
+    #[test]
+    fn one_pulse_mode_stops_the_counter_at_the_update_event() {
+        let mut t = Timer::new();
+        t.write_reg(0x2C, 9); // ARR
+        t.write_reg(0x00, 0x9); // OPM | CEN
+        walk(&mut t, 9);
+        assert_eq!(
+            (t.read_reg(0x24), t.read_reg(0x00), t.read_reg(0x10) & 1),
+            (9, 0x9, 0)
+        );
+        walk(&mut t, 1);
+        assert_eq!(
+            (t.read_reg(0x24), t.read_reg(0x00), t.read_reg(0x10) & 1),
+            (0, 0x8, 1)
+        );
+        walk(&mut t, 50);
+        assert_eq!((t.read_reg(0x24), t.read_reg(0x00)), (0, 0x8));
+        t.write_reg(0x10, 0);
+        t.write_reg(0x00, 0x9);
+        walk(&mut t, 10);
+        assert_eq!(
+            (t.read_reg(0x24), t.read_reg(0x00), t.read_reg(0x10) & 1),
+            (0, 0x8, 1)
+        );
+        // Without OPM the same configuration keeps counting.
+        t.write_reg(0x00, 0x1);
+        walk(&mut t, 13);
+        assert_eq!((t.read_reg(0x24), t.read_reg(0x00)), (3, 0x1));
+    }
+
+    /// PWM mode 2 in one-pulse mode is a single delayed pulse (RM0008
+    /// §15.3.10): low for CCR1 counts, high to the update event, then the
+    /// stopped counter (CNT = 0 < CCR1) holds OC1 inactive.
+    #[test]
+    fn one_pulse_pwm2_output_is_a_single_pulse() {
+        let mut t = output_timer(0b111, 3, 0b01);
+        t.write_u32(0x00, 0).unwrap();
+        t.write_u32(0x24, 0).unwrap();
+        t.write_u32(0x00, 0x9).unwrap(); // OPM | CEN
+        let s = sample_oc1(&mut t, 40);
+        let high: Vec<usize> = (0..s.len()).filter(|&i| s[i]).collect();
+        assert_eq!(high, (2..9).collect::<Vec<_>>(), "{s:?}");
+    }
+
     /// CCR1 = 0 in PWM1 is never active, CCR1 > ARR always active (§15.3.9).
     #[test]
     fn pwm1_edge_duties_are_flat() {
@@ -2692,13 +2790,14 @@ mod tests {
                 pended
             }
 
-            fn state(&self) -> (u32, u32, u32) {
+            fn state(&self) -> (u32, u32, u32, u32) {
                 // Reads sync lazily, exactly like the MMIO read path.
                 self.tim.sync_from_clock();
                 (
                     self.tim.cnt.get(),
                     self.tim.sr.get(),
                     self.tim.psc_cnt.get(),
+                    self.tim.cr1.get(),
                 )
             }
         }
@@ -2738,10 +2837,14 @@ mod tests {
                 if sched.step() {
                     sched_pends.push(c);
                 }
-                let (s_cnt, s_sr, s_psc) = sched.state();
                 assert_eq!(
-                    (walk.cnt.get(), walk.sr.get(), walk.psc_cnt.get()),
-                    (s_cnt, s_sr, s_psc),
+                    (
+                        walk.cnt.get(),
+                        walk.sr.get(),
+                        walk.psc_cnt.get(),
+                        walk.cr1.get()
+                    ),
+                    sched.state(),
                     "{what}: state diverged at cycle {c}"
                 );
             }
@@ -2784,6 +2887,77 @@ mod tests {
                         &format!("UIE psc={psc} arr={arr}"),
                     );
                 }
+            }
+        }
+
+        /// One-pulse mode: the overflow clears CEN in both drive modes on the
+        /// same cycle, with and without UIE, and a second CEN write runs a
+        /// second single period.
+        #[test]
+        fn one_pulse_walk_identity_across_psc_arr_grid() {
+            for psc in [0u32, 1, 2, 7] {
+                for arr in [1u32, 3, 10, 50] {
+                    for dier in [0u32, 1, 2] {
+                        let period = (psc as u64 + 1) * (arr as u64 + 1);
+                        let script = [
+                            (1u64, 0x28u64, psc),     // PSC
+                            (1, 0x2C, arr),           // ARR
+                            (1, 0x34, 1),             // CCR1
+                            (1, 0x0C, dier),          // DIER = none / UIE / CC1IE
+                            (1, 0x00, 0x9),           // CR1 = OPM | CEN
+                            (period + 8, 0x10, 0),    // ISR-style SR clear
+                            (period + 20, 0x00, 0x9), // second pulse
+                            (2 * period + 30, 0x10, 0),
+                        ];
+                        assert_walk_identical(
+                            Timer::new,
+                            &script,
+                            3 * period + 60,
+                            &format!("OPM psc={psc} arr={arr} dier={dier}"),
+                        );
+                    }
+                }
+            }
+        }
+
+        /// The wired OC1 pad follows the one-pulse stop on the same cycle in
+        /// both drive modes: with no enabled interrupt the scheduler path has
+        /// only the stop wake to end the PWM waveform.
+        #[test]
+        fn one_pulse_output_pad_walk_identity() {
+            for dier in [0u32, 1] {
+                let script = [
+                    (0x2Cu64, 9u32),    // ARR
+                    (0x34, 3),          // CCR1
+                    (0x18, 0b111 << 4), // OC1M = PWM2
+                    (0x20, 1),          // CC1E
+                    (0x0C, dier),
+                    (0x00, 0x9), // OPM | CEN
+                ];
+                let mut walk = Timer::new();
+                walk.output_lines_arc();
+                let mut sched = SchedHarness::new(Timer::new());
+                sched.tim.output_lines_arc();
+                for (off, val) in script {
+                    walk.write_u32(off, val).unwrap();
+                    sched.tim.sync_to(sched.now);
+                    sched.tim.write_u32(off, val).unwrap();
+                    for (delay, token) in sched.tim.take_scheduled_events() {
+                        sched.events.push((sched.now + 1 + delay, token));
+                    }
+                }
+                let mut walk_levels = Vec::new();
+                let mut sched_levels = Vec::new();
+                for _ in 0..40 {
+                    walk.tick();
+                    walk_levels.push(walk.output_level(0));
+                    // No `sync_to` here: only the event chain may move the pad.
+                    sched.step();
+                    sched_levels.push(sched.tim.output_level(0));
+                }
+                let high: Vec<usize> = (0..40).filter(|&i| walk_levels[i]).collect();
+                assert_eq!(high, (2..9).collect::<Vec<_>>(), "dier={dier}");
+                assert_eq!(walk_levels, sched_levels, "dier={dier}");
             }
         }
 

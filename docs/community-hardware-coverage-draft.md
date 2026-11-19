@@ -653,6 +653,7 @@ physical-hardware claim.
 - [Wiring, scope, copy-paste Arduino example, and smoke command](../examples/stm32f103-blue-pill/README.md)
 - [Dated ST lifecycle and board availability receipt](../examples/stm32f103-blue-pill/vendor-status.md)
 - [Committed local simulator evidence](../examples/stm32f103-blue-pill/evidence/)
+- [BME280 on I2C1 PB6/PB7: wiring, Arduino example, CHIP_ID smoke and evidence](../examples/stm32f103-blue-pill-bme280/README.md)
 
 ```cpp
 #include <Arduino.h>

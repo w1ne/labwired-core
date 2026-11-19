@@ -18,7 +18,8 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical UART streams (`diff` clean) |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | Button press → pending/IRQ path under stimulus | **not exercised by the CLI smoke** | modelled and unit-tested (`active_low` press edge latches; `ButtonsEnabled` gates the level); a session-driven stimulus is a follow-up |
-| SPI-flash controller / Ethernet MAC / MMCM | **not modelled** | declared `type: stub` |
+| LiteX SPI-flash bitbang CSRs + MT25Q READ ID / READ STATUS / WREN / WRDI | smoke-exercised on the SoC fixture | `examples/litex-vexriscv/io-smoke.yaml`; the Arty smoke does not touch SPI |
+| SPI-flash array read / program / erase / SFDP; Ethernet MAC; MMCM | **not modelled** | array opcodes are outside `litex_spi_flash`; Ethernet/MMCM are declared stubs |
 | Main RAM (DDR, 0x40000000, 256 MiB) | **not mapped** | dense allocation; not needed by the smoke |
 | LiteX BIOS + flash-load boot flow | **not modelled** | fast boot loads the ELF directly |
 | Silicon / bitstream capture | **none** | SIM-DERIVED; no executing-fidelity differential |

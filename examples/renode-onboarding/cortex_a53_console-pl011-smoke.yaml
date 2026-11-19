@@ -1,0 +1,12 @@
+# AArch64 PL011 smoke against the bounded imported Cortex-A53 console profile: one PE
+# checks the UARTFR reset value, writes a banner to UART0 and spins.
+# No GIC, generic timer or other imported device is exercised.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/virt-a53-pl011-smoke.elf"
+  system: "../../configs/systems/onboarding/cortex_a53_console.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "VIRT A53 PL011 SMOKE FR=OK"
+  - expected_stop_reason: max_steps

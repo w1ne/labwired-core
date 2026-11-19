@@ -23,25 +23,33 @@ fn main() {
     );
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let src = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
-    run(Command::new("cmake")
-        .arg("-S")
-        .arg(src.join("native"))
-        .arg("-B")
-        .arg(&out)
-        .args([
-            "-DHOST_ARCH=i386",
-            "-DHOST_WORD_SIZE=64",
-            "-DTARGET_ARCH=arm",
-            "-DTARGET_WORD_SIZE=32",
-            "-DCMAKE_BUILD_TYPE=Release",
-            "-DTLIB_COMMIT_SHA=167decf9129758829762e582939128c0694e90d6",
-        ]));
-    run(Command::new("cmake")
-        .arg("--build")
-        .arg(&out)
-        .args(["--parallel", "1"]));
-    println!(
-        "cargo:rustc-env=LABWIRED_ARM_SYSTEM_LIBRARY={}",
-        out.join("tlib/libtlib.so").display()
-    );
+    // arm32 hosts Cortex-A7/R5F/ARM7TDMI; the AArch32 Cortex-R52 exists only
+    // in tlib's arm64 target, which must be built with a 64-bit word.
+    for (dir, arch, word, env_name) in [
+        ("arm", "arm", "32", "LABWIRED_ARM_SYSTEM_LIBRARY"),
+        ("arm64", "arm64", "64", "LABWIRED_ARM64_SYSTEM_LIBRARY"),
+    ] {
+        let build = out.join(dir);
+        run(Command::new("cmake")
+            .arg("-S")
+            .arg(src.join("native"))
+            .arg("-B")
+            .arg(&build)
+            .args([
+                "-DHOST_ARCH=i386",
+                "-DHOST_WORD_SIZE=64",
+                &format!("-DTARGET_ARCH={arch}"),
+                &format!("-DTARGET_WORD_SIZE={word}"),
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DTLIB_COMMIT_SHA=167decf9129758829762e582939128c0694e90d6",
+            ]));
+        run(Command::new("cmake")
+            .arg("--build")
+            .arg(&build)
+            .args(["--parallel", "1"]));
+        println!(
+            "cargo:rustc-env={env_name}={}",
+            build.join("tlib/libtlib.so").display()
+        );
+    }
 }

@@ -1,0 +1,2 @@
+# UART logs are byte captures; a trailing CR is the serial CRLF line ending.
+docs/coverage/renode-onboarding/**/uart.log whitespace=cr-at-eol

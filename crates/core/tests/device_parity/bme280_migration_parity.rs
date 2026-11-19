@@ -1,5 +1,5 @@
-//! Byte-level BME280 parity against the unchanged Rust model, including its
-//! integer inverse selection and its ignored soft-reset write.
+//! Byte-level BME280 parity against the legacy Rust model, including integer
+//! inverse selection, oversampling skip codes, and its ignored soft-reset write.
 use labwired_core::peripherals::components::bme280::Bme280;
 use labwired_core::peripherals::components::declarative_i2c::GenericI2cDevice;
 use labwired_core::peripherals::components::i2c_factory::build_i2c_device;
@@ -37,6 +37,11 @@ fn write(device: &mut dyn I2cDevice, register: u8, bytes: &[u8]) {
         device.write(*byte);
     }
     device.stop();
+}
+
+fn enable_measurements(device: &mut dyn I2cDevice) {
+    write(device, 0xf2, &[0x01]);
+    write(device, 0xf4, &[0x27]);
 }
 
 fn assert_measurements(old: &mut Bme280, new: &mut GenericI2cDevice, context: &str) {
@@ -190,6 +195,7 @@ fn nan_is_rejected_explicitly_instead_of_silently_becoming_an_adc_endpoint() {
 #[test]
 fn each_inverse_is_live_not_a_constant_register_or_rust_thunk() {
     let mut old = Bme280::new(0x76);
+    enable_measurements(&mut old);
     let expected = read(&mut old, 0xf7, 8);
     for (from, to) in [
         ("temperature * 100", "temperature * 90"),
@@ -199,6 +205,7 @@ fn each_inverse_is_live_not_a_constant_register_or_rust_thunk() {
         let source = yaml();
         assert!(source.contains(from));
         let mut changed = GenericI2cDevice::from_yaml(&source.replace(from, to), 0x76).unwrap();
+        enable_measurements(&mut changed);
         assert_ne!(read(&mut changed, 0xf7, 8), expected, "sabotage {from}");
     }
 }

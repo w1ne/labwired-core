@@ -10,7 +10,7 @@ use crate::peripherals::dwt::Dwt;
 use crate::peripherals::itm::Itm;
 use crate::peripherals::nvic::{Nvic, NvicState};
 use crate::peripherals::scb::{Scb, ScbFaultState, SharedScbState};
-use std::sync::atomic::{AtomicBool, AtomicU32};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 /// Process-wide default for ARMv7-M fault escalation, read once from
@@ -50,6 +50,9 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     let shpr1 = Arc::new(AtomicU32::new(0));
     let shpr2 = Arc::new(AtomicU32::new(0));
     let shpr3 = Arc::new(AtomicU32::new(0));
+    let systick_pending_live = Arc::new(AtomicBool::new(false));
+    let pendsv_pending_live = Arc::new(AtomicBool::new(false));
+    let priority_group = Arc::new(AtomicU32::new(0));
     let nvic_state = Arc::new(NvicState::default());
     // Shared SYSRESETREQ latch: the SCB sets it on an AIRCR write, the CPU's
     // batch loop stops on it, and `Machine::drain_scb_reset_request` clears it.
@@ -62,23 +65,34 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
     // not serve those offsets at all and the core keeps #880's abort contract.
     // `CortexM::set_faults_enabled` is the per-core override.
     let faults = Arc::new(ScbFaultState::new(faults_enabled_default()));
+    faults.armv6m.store(bus.armv6m, Ordering::Relaxed);
+    faults
+        .priority_group_supported
+        .store(!bus.armv6m && !bus.armv8m_baseline, Ordering::Relaxed);
 
     let mut cpu = CortexM::default();
     cpu.set_shared_vtor(vtor.clone());
     cpu.set_shared_vectactive(vectactive.clone());
     cpu.set_shared_shpr(shpr1.clone(), shpr2.clone(), shpr3.clone());
+    cpu.set_shared_systick_pending(systick_pending_live.clone());
+    cpu.set_shared_pendsv_pending(pendsv_pending_live.clone());
+    cpu.set_shared_priority_group(priority_group.clone());
     cpu.set_shared_nvic_state(nvic_state.clone());
     cpu.set_shared_sysreset_signal(sysreset_signal.clone());
     cpu.set_shared_faults(faults.clone());
     // A core with the FP extension (`cortex_m_fpu` at 0xE000_EF30) tracks
     // CONTROL.FPCA and stacks extended frames; every other core keeps the
     // basic frame.
-    if let Some(fp) = bus
+    let fp_context = bus
         .peripherals
         .iter()
-        .find_map(|p| p.dev.fp_context_state())
-    {
+        .find_map(|p| p.dev.fp_context_state());
+    let cpacr = fp_context.as_ref().map(|_| Arc::new(AtomicU32::new(0)));
+    if let Some(fp) = fp_context {
         cpu.set_shared_fp_context(fp);
+    }
+    if let Some(cpacr) = &cpacr {
+        cpu.set_shared_cpacr(cpacr.clone());
     }
     // An Armv8-M chip that declares the PMSAv8 MPU (`armv8m_mpu` at
     // 0xE000_ED90) serves the MPU offsets from it; the SCB window then ends
@@ -101,8 +115,12 @@ pub fn configure_cortex_m(bus: &mut SystemBus) -> (CortexM, Arc<NvicState>) {
         shpr1,
         shpr2,
         shpr3,
+        systick_pending_live,
+        pendsv_pending_live,
+        priority_group,
         sysreset_signal,
         faults,
+        cpacr,
     });
     scb.event_state = Some(nvic_state.clone());
     // A Cortex-M7 chip that declares its L1 caches (`cortex_m7_cache` at

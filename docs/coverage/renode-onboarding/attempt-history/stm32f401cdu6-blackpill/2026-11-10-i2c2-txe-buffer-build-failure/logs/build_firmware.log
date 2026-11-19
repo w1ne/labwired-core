@@ -1,0 +1,30 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-f401cdu6-blackpill-demo v0.25.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-f401cdu6-blackpill-demo)
+error[E0308]: mismatched types
+   --> crates/firmware-f401cdu6-blackpill-demo/src/renode_smoke.rs:807:16
+    |
+714 | fn smoke_i2c2() -> (u16, bool, bool, bool, bool, bool, bool) {
+    |                    ----------------------------------------- expected `(u16, bool, bool, bool, bool, bool, bool)` because of return type
+...
+807 |         return (0xFFFF, sb_irq, addr_irq, txe_isolated, btf_irq);
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected a tuple with 7 elements, found one with 5 elements
+    |
+    = note: expected tuple `(u16, bool, bool, bool, bool, bool, bool)`
+               found tuple `(u16, bool, bool, bool, bool)`
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `firmware-f401cdu6-blackpill-demo` (bin "firmware-f401cdu6-blackpill-renode-smoke") due to 1 previous error

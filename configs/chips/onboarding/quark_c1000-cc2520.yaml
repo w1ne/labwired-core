@@ -5,7 +5,9 @@
 # See the LICENSE file in the project root for full license information.
 
 name: quark_c1000-cc2520
-arch: arm
+# Renode models this as an Intel Quark C1000 (IA-32 Lakemont) platform. The engine has no core for it,
+# so the chip is refused rather than run as a Cortex-M.
+arch: unknown
 flash:
   base: 4294959104
   size: 8192B
