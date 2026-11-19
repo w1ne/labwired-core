@@ -18,6 +18,9 @@
 //! what a scope shows — a channel holds its level between updates — and it is
 //! the only way one `u64` cursor can index samples from models running at
 //! different `step_ns`.
+//! During graph initialization, multiple models can publish their initial
+//! values at 0 ns without advancing time. Those writes merge into one resolved
+//! initial row so an uninitialized channel is not displayed as a zero sample.
 //!
 //! ## Overflow
 //!
@@ -253,7 +256,8 @@ impl AnalogTrace {
     }
 
     /// Append one row: `values` fill the block starting at `base`, every other
-    /// channel carries its last value forward.
+    /// channel carries its last value forward. Writes at 0 ns merge into one
+    /// initial row because model initialization does not advance simulated time.
     pub fn push(&mut self, base: usize, cycle: u64, time_ns: u64, values: &[f64]) {
         for (offset, value) in values.iter().enumerate() {
             if let Some(slot) = self.last_values.get_mut(base + offset) {
@@ -264,6 +268,16 @@ impl AnalogTrace {
             }
         }
         self.end_time_ns = self.end_time_ns.max(time_ns);
+        if time_ns == 0 {
+            if let Some((_, sample)) = self
+                .samples
+                .back_mut()
+                .filter(|(_, sample)| sample.time_ns == 0)
+            {
+                sample.values.clone_from(&self.last_values);
+                return;
+            }
+        }
         let sample = AnalogSample {
             cycle,
             time_ns,
@@ -389,6 +403,24 @@ impl AnalogTraceRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn initial_values_from_several_models_share_one_resolved_sample() {
+        let mut trace = AnalogTrace::new(8);
+        let left = trace.register_channels(&[AnalogChannel::volts("left.voltage")]);
+        let right = trace.register_channels(&[AnalogChannel::volts("right.voltage")]);
+
+        trace.push(left, 0, 0, &[2.3]);
+        trace.push(right, 0, 0, &[0.4]);
+
+        let batch = trace.snapshot(0);
+        assert_eq!(batch.channels.len(), 2);
+        assert_eq!(batch.samples.len(), 1);
+        assert_eq!(batch.samples[0].time_ns, 0);
+        assert_eq!(batch.samples[0].values, [2.3, 0.4]);
+        assert_eq!(batch.next_cursor, 1);
+        assert_eq!(batch.dropped, 0);
+    }
 
     #[test]
     fn the_series_outlives_the_ring() {

@@ -49,6 +49,9 @@ const GP2Y_FIRMWARE_SOURCE: &[u8] =
     include_bytes!("../tests/fixtures/flex-analog-gp2y0a21/firmware.rs");
 const GP2Y_SYSTEM_BYTES: &[u8] =
     include_bytes!("../tests/fixtures/flex-analog-gp2y0a21/system.yaml");
+const DUAL_GP2Y_SYSTEM: &str = include_str!("../tests/fixtures/flex-dual-gp2y0a21/system.yaml");
+const DUAL_GP2Y_SYSTEM_BYTES: &[u8] =
+    include_bytes!("../tests/fixtures/flex-dual-gp2y0a21/system.yaml");
 const NTC_SYSTEM: &str = include_str!("../tests/fixtures/flex-analog-ntc/system.yaml");
 const NTC_BROWSER: &str = include_str!("../tests/fixtures/flex-analog-ntc/browser.json");
 const NTC_NATIVE: &str = include_str!("../tests/fixtures/flex-analog-ntc/native.json");
@@ -1030,6 +1033,151 @@ fn flex_gp2y0a21_browser_proof_pins_firmware_and_model_inputs() {
             "browser {browser_trace} must match the native instrument capture"
         );
     }
+}
+
+fn dual_gp2y0a21_reference() -> serde_json::Value {
+    use sha2::{Digest, Sha256};
+
+    let mut runtime =
+        FlexRuntime::from_yaml(DUAL_GP2Y_SYSTEM).expect("load two instances of the Sharp source");
+    let left_distance = runtime.port_id("left_distance_mm").unwrap();
+    let left_voltage = runtime.port_id("left_distance_mv").unwrap();
+    let left_drive = runtime.port_id("left_near_drive").unwrap();
+    let left_led = runtime.port_id("left_near_led").unwrap();
+    let right_distance = runtime.port_id("right_distance_mm").unwrap();
+    let right_voltage = runtime.port_id("right_distance_mv").unwrap();
+    let right_drive = runtime.port_id("right_near_drive").unwrap();
+    let right_led = runtime.port_id("right_near_led").unwrap();
+
+    let points = [(100u32, 800u32), (800, 100), (700, 200)];
+    let mut observations = Vec::new();
+    for (left_mm, right_mm) in points {
+        runtime.write(left_distance, f64::from(left_mm)).unwrap();
+        runtime.write(right_distance, f64::from(right_mm)).unwrap();
+        runtime.advance_ns(1_000).unwrap();
+        let left_mv = runtime.read(left_voltage).unwrap() as u16;
+        let right_mv = runtime.read(right_voltage).unwrap() as u16;
+        runtime
+            .write(left_drive, f64::from(left_mv >= 1_500))
+            .unwrap();
+        runtime
+            .write(right_drive, f64::from(right_mv >= 1_500))
+            .unwrap();
+        runtime.advance_ns(1_000).unwrap();
+        observations.push(serde_json::json!({
+            "left_distance_mm": left_mm,
+            "left_distance_mv": left_mv,
+            "left_near_led": runtime.read(left_led).unwrap() != 0.0,
+            "right_distance_mm": right_mm,
+            "right_distance_mv": right_mv,
+            "right_near_led": runtime.read(right_led).unwrap() != 0.0,
+        }));
+    }
+
+    let analog = runtime.analog_trace_snapshot(0);
+    assert_eq!(analog.time_unit, "ns");
+    assert_eq!(analog.dropped, 0);
+    assert_eq!(analog.channels.len(), 2);
+    assert_eq!(analog.channels[0].name, "left-sensor.voltage_mv");
+    assert_eq!(analog.channels[0].port_names, ["left_distance_mv"]);
+    assert_eq!(analog.channels[1].name, "right-sensor.voltage_mv");
+    assert_eq!(analog.channels[1].port_names, ["right_distance_mv"]);
+    assert_eq!(analog.samples.len(), 13);
+    assert_eq!(analog.samples[0].time_ns, 0);
+    assert_eq!(analog.samples[0].values, [2_300.0, 400.0]);
+
+    let digital = runtime.digital_trace_snapshot(0);
+    assert_eq!(digital.time_unit, "ns");
+    assert_eq!(digital.dropped, 0);
+    assert!(digital
+        .channels
+        .iter()
+        .any(|channel| { channel.port_names == ["left_near_led"] }));
+    assert!(digital
+        .channels
+        .iter()
+        .any(|channel| { channel.port_names == ["right_near_led"] }));
+    for (port, edges) in [
+        ("left_near_led", vec![(2_000, 1), (4_000, 0)]),
+        ("right_near_led", vec![(4_000, 1), (6_000, 0)]),
+    ] {
+        let channel_id = digital
+            .channels
+            .iter()
+            .find(|channel| channel.port_names == [port])
+            .unwrap()
+            .id;
+        assert_eq!(
+            digital
+                .edges
+                .iter()
+                .filter(|edge| edge.ch == channel_id)
+                .map(|edge| (edge.time_ns, edge.value))
+                .collect::<Vec<_>>(),
+            edges,
+            "independent indicator transitions for {port}"
+        );
+    }
+    assert_eq!(runtime.time_ns(), 6_000);
+
+    serde_json::json!({
+        "observations": observations,
+        "time_ns": runtime.time_ns(),
+        "analog_trace": {
+            "time_unit": analog.time_unit,
+            "channels": analog.channels,
+            "dropped": analog.dropped,
+            "samples": analog.samples.into_iter().map(|sample| serde_json::json!({
+                "cycle": sample.cycle,
+                "time_ns": sample.time_ns,
+                "values": sample.values,
+            })).collect::<Vec<_>>(),
+        },
+        "digital_trace": {
+            "time_unit": digital.time_unit,
+            "channels": digital.channels,
+            "dropped": digital.dropped,
+            "edges": digital.edges,
+        },
+        "run_report": {
+            "manifest_sha256": format!("{:x}", Sha256::digest(DUAL_GP2Y_SYSTEM_BYTES)),
+        },
+    })
+}
+
+#[test]
+fn flex_dual_sensor_reuses_one_catalog_model_for_independent_instances() {
+    let measured = dual_gp2y0a21_reference();
+    assert_eq!(measured["observations"][0]["left_distance_mv"], 2300);
+    assert_eq!(measured["observations"][0]["right_distance_mv"], 400);
+    assert_eq!(measured["observations"][0]["left_near_led"], true);
+    assert_eq!(measured["observations"][0]["right_near_led"], false);
+    assert_eq!(measured["observations"][1]["left_distance_mv"], 400);
+    assert_eq!(measured["observations"][1]["right_distance_mv"], 2300);
+    assert_eq!(measured["observations"][1]["left_near_led"], false);
+    assert_eq!(measured["observations"][1]["right_near_led"], true);
+    assert_eq!(measured["observations"][2]["left_distance_mv"], 440);
+    assert_eq!(measured["observations"][2]["right_distance_mv"], 1300);
+    assert_eq!(measured["observations"][2]["left_near_led"], false);
+    assert_eq!(measured["observations"][2]["right_near_led"], false);
+
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/flex-dual-gp2y0a21/native.json");
+    if std::env::var_os("LABWIRED_REGEN_FLEX_DUAL_GP2Y0A21").is_some() {
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&measured).unwrap() + "\n",
+        )
+        .unwrap();
+    }
+    let expected: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&path).expect("read native dual-sensor evidence"),
+    )
+    .unwrap();
+    assert_eq!(
+        measured, expected,
+        "independent instances must share one source-backed catalog model"
+    );
 }
 
 #[test]
