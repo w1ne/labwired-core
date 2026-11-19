@@ -14,6 +14,54 @@ use crate::lab_tools;
 use crate::*;
 use wasm_bindgen::prelude::*;
 
+/// Conservative prototype for a future C3-only opt-in input reservation.
+/// This checks manifest aliases only; it does not establish machine identity,
+/// runtime GPIO ownership, electrical drive, or safe stepping.
+#[allow(dead_code)]
+fn resolve_owned_pad_preflight(
+    bus: &SystemBus,
+    bindings: &[BoardIoBinding],
+    target: &str,
+) -> Result<(usize, u8), String> {
+    use std::collections::HashSet;
+
+    if target.is_empty() || bus.peripherals.iter().filter(|p| p.name == "gpio").count() != 1 {
+        return Err("missing or ambiguous C3 GPIO peripheral".into());
+    }
+    let gpio = bus
+        .find_peripheral_index_by_name("gpio")
+        .ok_or("missing GPIO")?;
+    let mut ids = HashSet::new();
+    let mut pads = HashSet::new();
+    let mut selected = None;
+    for binding in bindings {
+        if binding.id.is_empty() || !ids.insert(binding.id.as_str()) {
+            return Err("empty or duplicate board IO id".into());
+        }
+        // Until non-C3 ports have proven disjoint physical identity, do not
+        // infer it from different peripheral strings.
+        if binding.peripheral != "gpio" {
+            return Err("unsupported board IO peripheral".into());
+        }
+        let idx = bus
+            .find_peripheral_index_by_name(&binding.peripheral)
+            .ok_or("missing GPIO")?;
+        if idx != gpio || bus.peripherals[idx].dev.gpio_routing(binding.pin).is_none() {
+            return Err("invalid or unresolved GPIO pin".into());
+        }
+        if !pads.insert((idx, binding.pin)) {
+            return Err("board IO bindings share a GPIO pad".into());
+        }
+        if binding.id == target {
+            if binding.signal != BoardIoSignal::Input {
+                return Err("requested binding is not an input".into());
+            }
+            selected = Some((idx, binding.pin));
+        }
+    }
+    selected.ok_or_else(|| "requested input not found".into())
+}
+
 // Keep the native routing logic independent of JsValue so invalid requests can
 // be tested on the host without calling a wasm-only exception constructor.
 fn drive_adc_input(
@@ -1061,6 +1109,21 @@ mod tests {
         output.signal = BoardIoSignal::Output;
         assert!(resolve_owned_pad_preflight(bus, &[output], "left").is_err());
         assert!(resolve_owned_pad_preflight(bus, &[left], "missing").is_err());
+    }
+
+    #[test]
+    fn c3_owned_pad_preflight_rejects_duplicate_peripheral_names() {
+        let mut sim = c3_button_sim();
+        let binding = sim.board_io[0].clone();
+        let bus = &mut sim.machine.as_mut().unwrap().bus;
+        bus.add_peripheral(
+            "gpio",
+            0x7000_0000,
+            0x1000,
+            None,
+            Box::new(labwired_core::peripherals::esp32c3::gpio::Esp32c3Gpio::new()),
+        );
+        assert!(resolve_owned_pad_preflight(bus, &[binding], "left").is_err());
     }
 
     fn c3_button_sim() -> WasmSimulator {
