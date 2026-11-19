@@ -356,10 +356,10 @@
     "cold-negative-control",
     "hot-positive-control"
   ],
-  "measured_browser_ms": 680.6,
+  "measured_browser_ms": 770.7,
   "browser": "156.0.8078.79",
   "browser_driver": "Playwright",
-  "core_commit": "a65c60c6cf4c9fd8a30814bc1b40a3d1af6d79d2",
+  "core_commit": "d7baa419220aadd0ec30b0ca4ed02221fccc62dd",
   "firmware_sha256": "3ebee4a49c9f4d5d35496e4275bb8b9eda8742a1114abcede18bcdf08d727768",
   "firmware_source_sha256": "ca88ab2e7f22794a8929caa67791161f64eb4bcb359e4fe2b8927c05408d0204",
   "system_sha256": "0b30434b802e8fbb68d5d4ff5a9dd8ac1de186cbb3e5b9f4aba0c16fabfca48f"
