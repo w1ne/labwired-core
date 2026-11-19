@@ -43,6 +43,10 @@ sha2 = { workspace = true }
 vcd = "0.7"
 ureq = { workspace = true }
 goblin = { workspace = true }
+# Portable Flex firmware (`inputs.flex` test scripts) is a WebAssembly module.
+# An interpreter keeps the default CLI free of a native code generator; the
+# optional `jit-core` wasmtime path is unrelated.
+wasmi = { version = "2.0.2", default-features = false, features = ["std", "validate"] }
 
 [features]
 default = ["event-scheduler"]

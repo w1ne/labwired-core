@@ -403,9 +403,334 @@ fn check_analog_routes(
     Ok(())
 }
 
+/// A `labwired test` script that explicitly selects portable Flex execution.
+///
+/// `inputs.flex` names the Flex manifest and `inputs.firmware` the portable
+/// WebAssembly module. Nothing here selects or implies an MCU model; a script
+/// that wants target instructions names `inputs.system` or `inputs.chip`
+/// instead and takes the detailed machine path.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FlexTestScript {
+    pub schema_version: String,
+    pub inputs: FlexTestInputs,
+    #[serde(default)]
+    pub entry: FlexEntry,
+    pub limits: FlexTestLimits,
+    #[serde(default)]
+    pub assertions: Vec<FlexAssertion>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FlexTestInputs {
+    /// Flex manifest path, relative to the script.
+    pub flex: String,
+    /// Portable firmware WebAssembly module path, relative to the script.
+    pub firmware: String,
+}
+
+/// The firmware export the runner calls once, and its arguments in order.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FlexEntry {
+    #[serde(default = "default_flex_entry_export")]
+    pub export: String,
+    #[serde(default)]
+    pub args: Vec<FlexEntryArg>,
+}
+
+impl Default for FlexEntry {
+    fn default() -> Self {
+        Self {
+            export: default_flex_entry_export(),
+            args: Vec::new(),
+        }
+    }
+}
+
+fn default_flex_entry_export() -> String {
+    "run".to_owned()
+}
+
+/// One entry argument: the id of a named manifest port, or a plain number.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum FlexEntryArg {
+    Port(FlexEntryPortArg),
+    Number(FlexEntryNumberArg),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexEntryPortArg {
+    pub port: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexEntryNumberArg {
+    pub number: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FlexTestLimits {
+    /// WebAssembly fuel for the firmware call. A run that exhausts it stops
+    /// with `max_steps` and cannot pass.
+    pub max_steps: u64,
+    /// Virtual-time ceiling in nanoseconds. A firmware `advance_ns` past it
+    /// stops the run with `max_time_ns` before any model steps.
+    pub max_time_ns: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum FlexAssertion {
+    EntryResult(FlexEntryResultAssertion),
+    PortValue(FlexPortValueAssertion),
+    DigitalEdges(FlexDigitalEdgesAssertion),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexEntryResultAssertion {
+    pub entry_result: FlexEntryResultDetails,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexEntryResultDetails {
+    /// The entry export's single i32 result, read as unsigned.
+    pub equals: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexPortValueAssertion {
+    pub port_value: FlexPortValueDetails,
+}
+
+/// The value of a read port after the firmware call returns, in the port's
+/// declared unit. At least one bound is required.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexPortValueDetails {
+    pub port: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub equals: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexDigitalEdgesAssertion {
+    pub digital_edges: FlexDigitalEdgesDetails,
+}
+
+/// The exact number of captured edges on a Boolean port's signal.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexDigitalEdgesDetails {
+    pub port: String,
+    pub count: u64,
+}
+
+impl FlexTestScript {
+    pub fn validate(&self) -> Result<()> {
+        ensure!(
+            self.schema_version == "1.0",
+            "Unsupported schema_version '{}' for a Flex test script. Supported version: '1.0'",
+            self.schema_version
+        );
+        for (field, value) in [
+            ("inputs.flex", &self.inputs.flex),
+            ("inputs.firmware", &self.inputs.firmware),
+        ] {
+            ensure!(!value.trim().is_empty(), "{field} must not be empty");
+        }
+        token(&self.entry.export, "entry.export")?;
+        for (index, arg) in self.entry.args.iter().enumerate() {
+            match arg {
+                FlexEntryArg::Port(arg) => token(&arg.port, &format!("entry.args[{index}].port"))?,
+                FlexEntryArg::Number(arg) => ensure!(
+                    arg.number.is_finite(),
+                    "entry.args[{index}].number must be finite"
+                ),
+            }
+        }
+        ensure!(self.limits.max_steps > 0, "limits.max_steps must be > 0");
+        ensure!(
+            self.limits.max_time_ns > 0 && self.limits.max_time_ns <= FLEX_MAX_TIME_NS,
+            "limits.max_time_ns must be within 1..={FLEX_MAX_TIME_NS}"
+        );
+        for (index, assertion) in self.assertions.iter().enumerate() {
+            match assertion {
+                FlexAssertion::EntryResult(_) => {}
+                FlexAssertion::PortValue(assertion) => {
+                    let details = &assertion.port_value;
+                    token(
+                        &details.port,
+                        &format!("assertions[{index}].port_value.port"),
+                    )?;
+                    let bounds = [details.equals, details.min, details.max];
+                    ensure!(
+                        bounds.iter().any(Option::is_some),
+                        "assertions[{index}].port_value requires equals, min, or max"
+                    );
+                    ensure!(
+                        bounds.iter().flatten().all(|bound| bound.is_finite()),
+                        "assertions[{index}].port_value bounds must be finite"
+                    );
+                    ensure!(
+                        details.equals.is_none()
+                            || (details.min.is_none() && details.max.is_none()),
+                        "assertions[{index}].port_value cannot combine equals with min or max"
+                    );
+                    if let (Some(min), Some(max)) = (details.min, details.max) {
+                        ensure!(
+                            min <= max,
+                            "assertions[{index}].port_value min must not exceed max"
+                        );
+                    }
+                }
+                FlexAssertion::DigitalEdges(assertion) => token(
+                    &assertion.digital_edges.port,
+                    &format!("assertions[{index}].digital_edges.port"),
+                )?,
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Largest virtual time a Flex run can reach: instrument timestamps must stay
+/// exact JavaScript integers.
+pub const FLEX_MAX_TIME_NS: u64 = (1 << 53) - 1;
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TEST_SCRIPT: &str = r#"
+schema_version: "1.0"
+inputs: { flex: system.yaml, firmware: firmware.wasm }
+entry:
+  args:
+    - { port: lux }
+    - { number: 100 }
+limits: { max_steps: 1000, max_time_ns: 5000000 }
+assertions:
+  - entry_result: { equals: 2974 }
+  - port_value: { port: sensor_v, min: 2.39, max: 2.40 }
+  - digital_edges: { port: user_led_state, count: 2 }
+"#;
+
+    fn load_script(yaml: &str) -> Result<crate::LoadedTestScript> {
+        let dir = std::env::temp_dir().join(format!(
+            "labwired-flex-script-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("script.yaml");
+        std::fs::write(&path, yaml).unwrap();
+        let loaded = crate::load_test_script(&path);
+        let _ = std::fs::remove_dir_all(dir);
+        loaded
+    }
+
+    #[test]
+    fn test_script_selects_flex_only_through_inputs_flex() {
+        let Ok(crate::LoadedTestScript::Flex(script)) = load_script(TEST_SCRIPT) else {
+            panic!("inputs.flex must load as a Flex test script");
+        };
+        assert_eq!(script.entry.export, "run");
+        assert_eq!(
+            script.entry.args,
+            [
+                FlexEntryArg::Port(FlexEntryPortArg { port: "lux".into() }),
+                FlexEntryArg::Number(FlexEntryNumberArg { number: 100.0 }),
+            ]
+        );
+        assert_eq!(script.assertions.len(), 3);
+
+        // The same script without `inputs.flex` is a detailed-target script
+        // and must name its target; Flex is never the silent fallback.
+        let detailed = TEST_SCRIPT.replace("flex: system.yaml, ", "");
+        assert!(!matches!(
+            load_script(&detailed),
+            Ok(crate::LoadedTestScript::Flex(_))
+        ));
+    }
+
+    #[test]
+    fn test_script_rejects_mixed_targets_and_unchecked_values() {
+        let cases = [
+            (
+                "inputs: { flex: system.yaml,",
+                "inputs: { system: board.yaml, flex: system.yaml,",
+                "unknown field",
+            ),
+            (
+                "inputs: { flex: system.yaml,",
+                "inputs: { chip: stm32f103, flex: system.yaml,",
+                "unknown field",
+            ),
+            (
+                "schema_version: \"1.0\"",
+                "schema_version: \"1.2\"",
+                "Unsupported schema_version",
+            ),
+            ("max_steps: 1000", "max_steps: 0", "max_steps must be > 0"),
+            (
+                "max_time_ns: 5000000",
+                "max_time_ns: 0",
+                "max_time_ns must be within",
+            ),
+            (
+                "max_time_ns: 5000000",
+                "max_time_ns: 9007199254740992",
+                "max_time_ns must be within",
+            ),
+            ("{ number: 100 }", "{ number: .nan }", "must be finite"),
+            (
+                "{ number: 100 }",
+                "{ number: 100, port: lux }",
+                "Failed to parse Flex Test Script",
+            ),
+            (
+                "min: 2.39, max: 2.40",
+                "min: 2.40, max: 2.39",
+                "min must not exceed max",
+            ),
+            (
+                "port: sensor_v, min: 2.39, max: 2.40",
+                "port: sensor_v",
+                "requires equals, min, or max",
+            ),
+            (
+                "min: 2.39, max: 2.40",
+                "equals: 2.39, max: 2.40",
+                "cannot combine equals",
+            ),
+            (
+                "count: 2",
+                "min_edges: 2",
+                "Failed to parse Flex Test Script",
+            ),
+        ];
+        for (from, to, expected) in cases {
+            assert!(TEST_SCRIPT.contains(from), "fixture lost '{from}'");
+            let error = load_script(&TEST_SCRIPT.replace(from, to))
+                .expect_err(&format!("'{to}' must be rejected"));
+            let message = format!("{error:#}");
+            assert!(message.contains(expected), "'{to}': {message}");
+        }
+    }
 
     const RC: &str = r#"
 schema_version: 1

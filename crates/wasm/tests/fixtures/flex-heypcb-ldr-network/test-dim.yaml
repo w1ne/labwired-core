@@ -1,0 +1,23 @@
+# Negative control for test-bright.yaml: at 1 lx the same firmware must leave
+# the user LED off, with no edge on either LED signal.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: lux }
+    - { port: sensor_v }
+    - { port: user_led_drive }
+    - { port: user_led_state }
+    - { number: 1 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000000
+assertions:
+  - entry_result: { equals: 597 }
+  - port_value: { port: sensor_v, min: 0.481, max: 0.483 }
+  - port_value: { port: user_led_state, equals: 0 }
+  - digital_edges: { port: user_led_drive, count: 0 }
+  - digital_edges: { port: user_led_state, count: 0 }

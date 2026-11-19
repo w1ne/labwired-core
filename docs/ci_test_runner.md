@@ -6,8 +6,9 @@ LabWired provides a CI-friendly runner mode driven by a YAML test script:
 labwired test --script test.yaml
 ```
 
-Every v1.0 script selects exactly one run shape: a single machine or an
-environment world. The two `inputs` forms are mutually exclusive.
+Every v1.0 script selects exactly one run shape: a single machine, an
+environment world, or a portable Flex project. The `inputs` forms are mutually
+exclusive.
 
 ### Single-machine script
 
@@ -138,6 +139,64 @@ regression restarts that window. A runtime failure or a same-round
 allowed world round reports `assertions_passed`; otherwise the result has
 `stop_reason: assertions_passed`. The three fields are respectively a boolean
 and non-negative integers; explicit YAML `null` is rejected.
+
+### Portable Flex script
+
+Use `inputs.flex` to run portable firmware against a Flex manifest. The
+firmware is a WebAssembly module that imports `labwired.read(i32) -> f64`,
+`labwired.write(i32, f64)` and `labwired.advance_ns(i32)`. The runner calls one
+export once. This path does not emulate a target CPU, and it never falls back
+to one. A script that needs target instructions, MMIO or interrupts names
+`inputs.system` or `inputs.chip` instead; a script that names both is rejected.
+
+```yaml
+# test-bright.yaml
+schema_version: "1.0"
+inputs:
+  flex: system.yaml        # Flex manifest (ports, models, assumptions)
+  firmware: firmware.wasm  # portable firmware module
+entry:
+  export: run              # default: run
+  args:                    # in the export's parameter order
+    - { port: lux }        # the id of a named manifest port (i32)
+    - { port: sensor_v }
+    - { port: user_led_drive }
+    - { port: user_led_state }
+    - { number: 100 }      # a plain number, exact in the parameter's type
+limits:
+  max_steps: 100000        # WebAssembly fuel for the firmware call
+  max_time_ns: 10000000    # virtual-time ceiling
+assertions:
+  - entry_result: { equals: 2974 }                        # the export's i32 result
+  - port_value: { port: sensor_v, min: 2.396, max: 2.398 } # final read-port value
+  - digital_edges: { port: user_led_state, count: 2 }     # exact captured edges
+```
+
+| Stop reason | Status | Exit code | Meaning |
+|---|---|---:|---|
+| `completed` | `pass` or `fail` | `0` or `1` | The export returned. The assertions decide. |
+| `max_steps` | `fail` | `1` | The firmware used all its fuel. |
+| `max_time_ns` | `fail` | `1` | The firmware asked to advance past the ceiling. |
+| `model_error` | `error` | `3` | A port or model rejected a host call, for example an input outside a modeled range. |
+| `firmware_trap` | `error` | `3` | The firmware module trapped. |
+| `config_error` | `error` | `2` | The script, manifest or module was rejected before the firmware ran. |
+
+`--output-dir` receives `result.json`, `junit.xml` and `flex-trace.json`.
+`result.json` carries the final value of each read port, each assertion with
+its observed value, and `run_report`: the execution path
+(`flex_portable_wasm`), `target_cpu_emulated: false`, the manifest SHA-256, the
+named ports, the model configuration, and the manifest's `assumptions` and
+`unsupported_checks`. `config.firmware_sha256` pins the firmware bytes.
+`flex-trace.json` holds the logic-analyzer edges and oscilloscope samples in
+nanoseconds with their port names. `--vcd` writes the digital edges and
+`--analog-trace` writes the analog samples (`.csv` or `.vcd`), both in
+nanoseconds. Options that need a target machine, such as `--system`,
+`--breakpoint`, `--max-cycles` and `--trace`, are rejected with a
+configuration error.
+
+A pass shows that this firmware module satisfied the assertions against the
+declared model. It is not evidence for original target firmware, MCU
+instruction or peripheral fidelity, full-board coverage, or chip parity.
 
 ## Exit Codes
 

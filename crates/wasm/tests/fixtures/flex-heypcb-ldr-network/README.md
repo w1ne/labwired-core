@@ -49,6 +49,8 @@ Native reference ([native.json](native.json)), 50 µs analog step, 4 ms settle:
 
 Browser run ([browser.json](browser.json)): Chromium 156.0.8078.79 with Playwright ran the compiled `firmware.wasm` against the web Wasm runtime built from Core commit `3c3d63480`. Both cases equal the native reference sample for sample, the 63.2 % crossing is at 350,000 ns, and 0 lx and 100,000 lx stop the run with the range error. Page-side Wasm initialization and checks took 276.2 ms. This time excludes compilation and onboarding.
 
+Command-line run: `labwired test --script test-bright.yaml` and `test-dim.yaml` run the same `system.yaml` and the same `firmware.wasm` bytes through the existing test runner, with `inputs.flex` as the explicit choice of portable execution. `crates/cli/tests/flex_test_runner.rs` checks that the digital edges and the 81 analog samples of both cases equal the native reference, and that the dim case fails the bright assertions.
+
 ## Scope
 
 This is functional portable behavior against a source-pinned analog sub-network. It does not execute ESP32-S3 firmware, emulate target instructions or the ADC peripheral, cover the full board, establish chip parity, or provide physical-hardware evidence. It is not a Library or Playground launch.
@@ -59,6 +61,11 @@ This is functional portable behavior against a source-pinned analog sub-network.
 cargo test -p labwired-core --test analog -- photoresistor
 cargo test -p labwired-config --lib flex
 cargo test -p labwired-wasm --lib flex_heypcb_ldr_network -- --nocapture
+cargo test -p labwired-cli --test flex_test_runner
+cargo run -p labwired-cli --bin labwired -- test --no-key \
+  --script crates/wasm/tests/fixtures/flex-heypcb-ldr-network/test-bright.yaml \
+  --output-dir /tmp/flex-ldr-bright --vcd /tmp/flex-ldr-bright/digital.vcd \
+  --analog-trace /tmp/flex-ldr-bright/analog.csv
 crates/wasm/tests/fixtures/flex-heypcb-ldr-network/build.sh
 wasm-pack build crates/wasm --target web --dev --out-dir pkg-flex-web
 LABWIRED_PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs \

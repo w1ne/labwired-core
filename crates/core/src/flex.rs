@@ -13,15 +13,18 @@ use crate::analog::{AnalogSample, AnalogTraceBatch};
 use crate::cosim::{CosimRunner, CosimSignalValue, CosimSignals};
 use crate::logic_capture::{LogicCapture, PadEvent};
 use crate::{SimResult, SimulationError};
-use labwired_config::{CosimAdapter, FlexManifest, FlexPort, FlexPortAccess, FlexPortKind};
+use labwired_config::{
+    CosimAdapter, CosimModelConfig, FlexManifest, FlexPort, FlexPortAccess, FlexPortKind,
+};
 use serde::Serialize;
-use std::collections::BTreeMap;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, HashMap};
 
 /// Bound the amount of synchronous work in a host call. Portable firmware
 /// should advance cooperatively; this is not an instruction-fuel mechanism.
 const MAX_MODEL_STEPS_PER_ADVANCE: u64 = 100_000;
 /// Serialized instrument timestamps must remain exact JavaScript integers.
-const MAX_TIME_NS: u64 = (1 << 53) - 1;
+const MAX_TIME_NS: u64 = labwired_config::FLEX_MAX_TIME_NS;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FlexDigitalChannel {
@@ -78,6 +81,90 @@ pub struct FlexAnalogTraceBatch {
     /// Cumulative samples lost to ring-buffer overflow since this runtime
     /// started. Non-zero means the oldest part of the trace has a gap.
     pub dropped: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FlexSignalBinding {
+    pub name: String,
+    pub signal: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FlexModelSummary {
+    pub id: String,
+    pub adapter: CosimAdapter,
+    pub model_type: Option<String>,
+    pub step_ns: u64,
+    pub inputs: Vec<FlexSignalBinding>,
+    pub outputs: Vec<FlexSignalBinding>,
+    /// The validated data-driven model configuration, so project surfaces
+    /// can show the exact behavior behind a run without reinterpreting YAML.
+    pub config: BTreeMap<String, serde_yaml::Value>,
+}
+
+/// Explicitly separate a portable behavior run from target-firmware evidence.
+/// Flex cannot infer complete-board coverage or parity from a manifest, so
+/// those claims stay unestablished in this runtime's report.
+#[derive(Debug, Clone, Serialize)]
+pub struct FlexExecutionScope {
+    pub firmware: &'static str,
+    pub original_target_firmware_executed: bool,
+    pub detailed_target_execution_selected: bool,
+    pub full_board_coverage: &'static str,
+    pub chip_parity: &'static str,
+}
+
+/// Compact execution context plus the validated, reproducible model contract.
+/// The browser binding and `labwired test` both emit this one report. Empty
+/// scope notes remain visible through `scope_notes_complete` instead of being
+/// treated as "no gaps".
+#[derive(Debug, Clone, Serialize)]
+pub struct FlexRunReport {
+    pub execution_path: &'static str,
+    pub target_cpu_emulated: bool,
+    pub execution_scope: FlexExecutionScope,
+    pub time_unit: &'static str,
+    pub scope_notes_complete: bool,
+    pub schema_version: u32,
+    pub model_name: String,
+    /// SHA-256 of the exact manifest bytes this runtime was built from.
+    pub manifest_sha256: String,
+    pub assumptions: Vec<String>,
+    pub unsupported_checks: Vec<String>,
+    pub ports: Vec<FlexPort>,
+    pub models: Vec<FlexModelSummary>,
+}
+
+fn signal_bindings(bindings: &HashMap<String, String>) -> Vec<FlexSignalBinding> {
+    let mut result: Vec<_> = bindings
+        .iter()
+        .map(|(name, signal)| FlexSignalBinding {
+            name: name.clone(),
+            signal: signal.clone(),
+        })
+        .collect();
+    result.sort_by(|left, right| left.name.cmp(&right.name));
+    result
+}
+
+fn model_summary(model: &CosimModelConfig) -> FlexModelSummary {
+    FlexModelSummary {
+        id: model.id.clone(),
+        adapter: model.adapter,
+        model_type: model
+            .config
+            .get("device_type")
+            .and_then(serde_yaml::Value::as_str)
+            .map(str::to_owned),
+        step_ns: model.step_ns,
+        inputs: signal_bindings(&model.inputs),
+        outputs: signal_bindings(&model.outputs),
+        config: model
+            .config
+            .iter()
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect(),
+    }
 }
 
 struct DigitalCapture {
@@ -174,6 +261,7 @@ impl DigitalCapture {
 
 pub struct FlexRuntime {
     manifest: FlexManifest,
+    manifest_sha256: String,
     ports: BTreeMap<String, u32>,
     runner: CosimRunner,
     signals: CosimSignals,
@@ -257,6 +345,7 @@ impl FlexRuntime {
         let digital = DigitalCapture::new(&signals, &manifest.ports)?;
         let runtime = Self {
             manifest,
+            manifest_sha256: format!("{:x}", Sha256::digest(yaml.as_bytes())),
             ports,
             runner,
             signals,
@@ -274,6 +363,31 @@ impl FlexRuntime {
 
     pub fn time_ns(&self) -> u64 {
         self.time_ns
+    }
+
+    pub fn run_report(&self) -> FlexRunReport {
+        let manifest = &self.manifest;
+        FlexRunReport {
+            execution_path: "flex_portable_wasm",
+            target_cpu_emulated: false,
+            execution_scope: FlexExecutionScope {
+                firmware: "portable_behavior",
+                original_target_firmware_executed: false,
+                detailed_target_execution_selected: false,
+                full_board_coverage: "not_established",
+                chip_parity: "not_established",
+            },
+            time_unit: "ns",
+            scope_notes_complete: !manifest.assumptions.is_empty()
+                && !manifest.unsupported_checks.is_empty(),
+            schema_version: manifest.schema_version,
+            model_name: manifest.name.clone(),
+            manifest_sha256: self.manifest_sha256.clone(),
+            assumptions: manifest.assumptions.clone(),
+            unsupported_checks: manifest.unsupported_checks.clone(),
+            ports: manifest.ports.clone(),
+            models: manifest.cosim_models.iter().map(model_summary).collect(),
+        }
     }
 
     pub fn port_id(&self, name: &str) -> SimResult<u32> {
@@ -413,6 +527,12 @@ impl FlexRuntime {
 
     pub fn digital_trace_snapshot(&mut self, cursor: u64) -> FlexDigitalTraceBatch {
         self.digital.snapshot(cursor)
+    }
+
+    /// The unannotated analog engine batch, for the exporters that already
+    /// write `Machine::analog_trace_snapshot` (CSV and VCD).
+    pub fn analog_engine_trace(&self, cursor: u64) -> AnalogTraceBatch {
+        self.runner.analog_trace_snapshot(cursor)
     }
 
     pub fn analog_trace_snapshot(&self, cursor: u64) -> FlexAnalogTraceBatch {
