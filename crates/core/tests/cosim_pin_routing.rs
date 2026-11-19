@@ -2288,6 +2288,255 @@ fn adxl345_sensor_lab_diode_netlist_reaches_pa6_adc1_end_to_end() {
     );
 }
 
+/// The ADXL345 lab's STM32F103 profile carries generic level-1 MOSFET body
+/// effect through ADC1 while its unrelated NTC and Shockley diode remain on
+/// independent channels. The load-line references are evaluated separately
+/// from the MNA implementation.
+#[test]
+fn adxl345_sensor_lab_mosfet_body_effect_reaches_adc1_with_ntc_and_diode() {
+    let system_path = root("configs/systems/adxl345-sensor-lab.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load ADXL345 lab profile");
+    let ntc = SystemManifest::from_file(root("examples/nucleo-f103rb/analog-ntc-system.yaml"))
+        .expect("load generic Beta NTC divider");
+    let diode =
+        SystemManifest::from_file(root("examples/adxl345-sensor-lab/analog-diode-system.yaml"))
+            .expect("load generic Shockley diode");
+    let body_effect = SystemManifest::from_file(root(
+        "examples/nucleo-f401re/analog-mosfet-body-effect.yaml",
+    ))
+    .expect("load generic NMOS and PMOS body-bias branches");
+    profile.cosim_models = ntc.cosim_models;
+    profile.cosim_models.extend(diode.cosim_models);
+    profile.cosim_models.extend(body_effect.cosim_models);
+    for model in &mut profile.cosim_models {
+        model.step_ns = 1_000;
+    }
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+    ] {
+        assert_eq!(
+            chip.analog_pins
+                .get(pad)
+                .map(|route| (route.peripheral.as_str(), route.channel)),
+            Some(("adc1", channel)),
+            "{pad} must resolve to STM32F103 ADC1_IN{channel}"
+        );
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build ADXL345 lab bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal co-simulation")
+        .expect("profile carries the NTC, diode, and MOSFET netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all generic device outputs must resolve through PA0..PA6 ADC1 routes"
+    );
+
+    for channel in 0..=7 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at its nominal temperature");
+    session
+        .set_signal_number("ui.mosfet_body.bulk_v", 0.0)
+        .expect("initialize matched NMOS bulk voltage");
+    session
+        .set_signal_number("ui.pmos_body.bulk_v", 3.3)
+        .expect("initialize PMOS bulk at its source voltage");
+
+    let voltage = |session: &CosimSession, path: &str| match session.signals().get(path) {
+        Some(CosimSignalValue::F64(volts)) => *volts,
+        other => panic!("expected solved voltage at {path}, got {other:?}"),
+    };
+    let diode_load_line_voltage = || {
+        const SUPPLY_V: f64 = 3.3;
+        const LOAD_OHMS: f64 = 1_000.0;
+        const IS_A: f64 = 2.52e-9;
+        const N: f64 = 1.752;
+        const RS_OHMS: f64 = 0.568;
+        const VT: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+        let current = |junction_v: f64| IS_A * ((junction_v / (N * VT)).exp() - 1.0);
+        let residual = |junction_v: f64| {
+            (SUPPLY_V - junction_v - current(junction_v) * RS_OHMS) / LOAD_OHMS
+                - current(junction_v)
+        };
+        let (mut low, mut high) = (0.0, 1.2);
+        for _ in 0..100 {
+            let mid = (low + high) / 2.0;
+            if residual(mid) > 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        let junction_v = (low + high) / 2.0;
+        junction_v + current(junction_v) * RS_OHMS
+    };
+    let nmos_drain_voltage = |gate_v: f64, bulk_v: f64| {
+        const SUPPLY_V: f64 = 3.3;
+        const LOAD_OHMS: f64 = 1_000.0;
+        const VTO: f64 = 1.0;
+        const KP: f64 = 20e-6;
+        const WIDTH_M: f64 = 100e-6;
+        const LENGTH_M: f64 = 10e-6;
+        const LAMBDA: f64 = 0.02;
+        const GAMMA: f64 = 0.4;
+        const PHI: f64 = 0.7;
+        let threshold = VTO + GAMMA * ((PHI - bulk_v).sqrt() - PHI.sqrt());
+        let overdrive = gate_v - threshold;
+        if overdrive <= 0.0 {
+            return SUPPLY_V;
+        }
+        let beta = KP * WIDTH_M / LENGTH_M;
+        let current = |vds: f64| {
+            if vds < overdrive {
+                beta * (1.0 + LAMBDA * vds) * vds * (overdrive - 0.5 * vds)
+            } else {
+                0.5 * beta * (1.0 + LAMBDA * vds) * overdrive * overdrive
+            }
+        };
+        let residual = |vds: f64| SUPPLY_V - vds - LOAD_OHMS * current(vds);
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let mid = (low + high) / 2.0;
+            if residual(mid) > 0.0 {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+        (low + high) / 2.0
+    };
+    let pmos_drain_voltage =
+        |gate_v: f64, bulk_bias_v: f64| 3.3 - nmos_drain_voltage(3.3 - gate_v, -bulk_bias_v);
+    let adc_count = |volts: f64| {
+        let millivolts = (volts * 1_000.0).round() as u32;
+        (millivolts * 4_095 / 3_300).min(4_095) as u16
+    };
+    let diode_expected_v = diode_load_line_voltage();
+    let expected_nmos_reference_v = nmos_drain_voltage(2.5, 0.0);
+    let expected_pmos_reference_v = pmos_drain_voltage(0.8, 0.0);
+    let mut cycles = 0;
+    let mut nmos_samples = Vec::new();
+    let mut pmos_samples = Vec::new();
+    for bulk_v in [0.0_f64, -0.5, -1.0, -1.5] {
+        session
+            .set_signal_number("ui.mosfet_body.bulk_v", bulk_v)
+            .expect("set generic NMOS reverse body bias");
+        let pmos_bulk_bias_v = -bulk_v;
+        session
+            .set_signal_number("ui.pmos_body.bulk_v", 3.3 + pmos_bulk_bias_v)
+            .expect("set generic PMOS reverse body bias above its source");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC, diode, NMOS, and PMOS branches");
+        assert_eq!(steps.len(), 3, "all three analog netlists solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = voltage(&session, "board.analog.pa0_volts");
+        let diode_v = voltage(&session, "board.analog.pa6_volts");
+        let nmos_reference_v = voltage(&session, "board.analog.pa2_volts");
+        let nmos_body_v = voltage(&session, "board.analog.pa3_volts");
+        let pmos_reference_v = voltage(&session, "board.analog.pa4_volts");
+        let pmos_body_v = voltage(&session, "board.analog.pa5_volts");
+        let expected_nmos_v = nmos_drain_voltage(2.5, bulk_v);
+        let expected_pmos_v = pmos_drain_voltage(0.8, pmos_bulk_bias_v);
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated NTC remains at 1.65 V"
+        );
+        assert!(
+            (diode_v - diode_expected_v).abs() < 2e-5,
+            "unrelated diode remains on its independent load line"
+        );
+        assert!(
+            (nmos_reference_v - expected_nmos_reference_v).abs() < 5e-5,
+            "zero-bias NMOS load line should be {expected_nmos_reference_v} V, got {nmos_reference_v} V"
+        );
+        assert!(
+            (nmos_body_v - expected_nmos_v).abs() < 5e-5,
+            "NMOS at VBS={bulk_v} V should settle at {expected_nmos_v} V, got {nmos_body_v} V"
+        );
+        assert!(
+            (pmos_reference_v - expected_pmos_reference_v).abs() < 5e-5,
+            "zero-bias PMOS load line should be {expected_pmos_reference_v} V, got {pmos_reference_v} V"
+        );
+        assert!(
+            (pmos_body_v - expected_pmos_v).abs() < 5e-5,
+            "PMOS with VSB={pmos_bulk_bias_v} V should settle at {expected_pmos_v} V, got {pmos_body_v} V"
+        );
+        if bulk_v == 0.0 {
+            assert!((nmos_body_v - nmos_reference_v).abs() < 1e-9);
+            assert!((pmos_body_v - pmos_reference_v).abs() < 1e-9);
+        } else {
+            assert!(nmos_body_v > nmos_reference_v);
+            assert!(pmos_body_v < pmos_reference_v);
+        }
+
+        for (channel, volts) in [
+            (0, ntc_v),
+            (2, nmos_reference_v),
+            (3, nmos_body_v),
+            (4, pmos_reference_v),
+            (5, pmos_body_v),
+            (6, diode_v),
+        ] {
+            let expected = adc_count(volts);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved voltage must seed ADC1_IN{channel}"
+            );
+            assert_eq!(
+                f103_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion follows {volts} V"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 1),
+            0xFFFF,
+            "unused ADC1_IN1 stays undriven between unrelated circuits"
+        );
+        assert_eq!(
+            adc_channel_count(&mut bus, 7),
+            0xFFFF,
+            "neighboring ADC1_IN7 stays undriven"
+        );
+        nmos_samples.push(nmos_body_v);
+        pmos_samples.push(pmos_body_v);
+    }
+    assert!(
+        nmos_samples[3] > nmos_samples[2]
+            && nmos_samples[2] > nmos_samples[1]
+            && nmos_samples[1] > nmos_samples[0],
+        "reverse NMOS body bias raises the threshold and drain voltage: {nmos_samples:?}"
+    );
+    assert!(
+        pmos_samples[3] < pmos_samples[2]
+            && pmos_samples[2] < pmos_samples[1]
+            && pmos_samples[1] < pmos_samples[0],
+        "reverse PMOS body bias raises |Vto| and lowers the drain voltage: {pmos_samples:?}"
+    );
+    assert_eq!(adc_count(1.65), 2_047, "the 25 °C NTC remains half scale");
+}
+
 /// The NUCLEO-F401RE board profile also carries a solved nonlinear device
 /// through the descriptor's PA0 → ADC1_IN0 route and into a real conversion.
 /// The independent load-line reference rejects a linearized or missing diode.
