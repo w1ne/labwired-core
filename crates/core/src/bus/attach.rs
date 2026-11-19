@@ -3501,6 +3501,37 @@ impl SystemBus {
         }
     }
 
+    /// Route the megaAVR 0-series TCA0 / TCB waveform outputs onto the pads
+    /// the timer model tables (`megaavr_tc`), so a pad whose compare output
+    /// is enabled reads, and the logic analyzer records, the PWM instead of
+    /// its PORTx.OUT bit. A pad the package does not bond is skipped.
+    pub(crate) fn wire_megaavr_timer_output_pads(&mut self) {
+        use crate::peripherals::megaavr::tc::LINE_NAMES;
+        for t_idx in 0..self.peripherals.len() {
+            if self.peripherals[t_idx].dev.timer_output_family() != Some("megaavr_tc") {
+                continue;
+            }
+            let pads = self.peripherals[t_idx].dev.timer_output_pads();
+            for (line, port, pin) in pads {
+                let Some(gpio_idx) = self.find_peripheral_index_by_name(&port) else {
+                    continue;
+                };
+                let Some(lines) = self.peripherals[t_idx].dev.timer_output_lines(false) else {
+                    continue;
+                };
+                if self.peripherals[gpio_idx].dev.bind_timer_output_pad(
+                    &lines,
+                    pin,
+                    None,
+                    line,
+                    LINE_NAMES[line],
+                ) {
+                    self.peripherals[t_idx].dev.timer_output_lines(true);
+                }
+            }
+        }
+    }
+
     /// Bind each ADC channel a board wires to an analog output (the ADC's
     /// `analog_links`, e.g. a jumper from a DAC pin to an ADC input) to a
     /// live probe of that output, so a conversion reads what the source

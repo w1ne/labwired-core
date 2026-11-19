@@ -321,8 +321,8 @@ Nano form factor. This adds a TWI0 host model to the ATmega4809, so stock
 
 The sketch uses the stock Adafruit BME280 library on A4/A5 and prints
 compensated readings on USB `Serial`: `T=25.00 C`, `P=1013.25 hPa`,
-`RH=50.00 %` with the sensor model at its defaults. Timer pad outputs and
-the TWI0 pads are not modelled. No physical board test was run.
+`RH=50.00 %` with the sensor model at its defaults. The TWI0 pads are not
+modelled. No physical board test was run.
 
 ```cpp
 #include <Arduino.h>
@@ -370,8 +370,8 @@ runs.
 The sketch uses the stock Adafruit MAX31855 library on D13 / D12 with CS on
 D10 and prints both junction temperatures on USB `Serial`: `TC=25.00 C`,
 `CJ=22.0000 C` with the converter model at its defaults. SPI0 Buffer mode
-and client mode are refused; the SPI clock phase and polarity and timer pad
-outputs are not modelled. No physical board test was run.
+and client mode are refused; the SPI clock phase and polarity are not
+modelled. No physical board test was run.
 
 ```cpp
 #include <Arduino.h>
@@ -398,6 +398,44 @@ void setup() {
   Serial.print("CJ=");
   Serial.print(thermocouple.readInternal(), 4);
   Serial.println(" C");
+}
+
+void loop() {}
+```
+
+### Arduino Nano Every PWM (`analogWrite`)
+
+Same board and the same live checks on 2026-11-19: Nano Every SKU ABX00028
+orderable, ATMEGA4809 In Production. This adds the TCA0 and TCB waveform
+outputs to the ATmega4809 timer model, so stock `analogWrite()` puts a
+waveform on all five PWM pins (D3, D5, D6, D9, D10).
+
+- [Pins, scope, copy-paste sketch, and smoke instructions](../examples/arduino-nano-every-pwm/README.md)
+- [Live vendor status receipt](../examples/arduino-nano-every-pwm/vendor-status.md)
+- [Committed local smoke evidence and controls](../examples/arduino-nano-every-pwm/evidence/)
+
+The sketch drives D9 (TCA0) at 25 % and then 50 % duty and D3 (TCB1) at 75 %,
+then stops D3. The test measures a 976.6 Hz period and the exact high time on
+both pads. TCA0 split mode, FRQ and dual-slope are refused. Pad voltage and
+drive strength are not modelled. No physical board test was run.
+
+```cpp
+#include <Arduino.h>
+
+static const uint8_t kTcaPin = 9;
+static const uint8_t kTcbPin = 3;
+
+void setup() {
+  Serial.begin(115200);
+  analogWrite(kTcaPin, 64);   // 25 % duty
+  analogWrite(kTcbPin, 192);  // 75 % duty
+  Serial.println("NANO_EVERY_PWM");
+  delay(20);
+  analogWrite(kTcaPin, 128);  // 50 % duty, taken at the next period
+  Serial.println("PWM_HALF");
+  delay(20);
+  digitalWrite(kTcbPin, LOW);  // stops the PWM on D3
+  Serial.println("PWM_D3_OFF");
 }
 
 void loop() {}

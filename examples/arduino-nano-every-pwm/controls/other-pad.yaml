@@ -1,0 +1,13 @@
+# Control for pwm-smoke.yaml: D10 (PB1, TCA0 WO1) is never passed to
+# analogWrite(), so CTRLB.CMP1EN stays clear and the pad carries no waveform.
+# The assertion asks for one edge there, so this script must FAIL.
+schema_version: "1.2"
+inputs:
+  firmware: ../../../tests/fixtures/avr/arduino-nano-every-pwm.elf
+  system: ../../../configs/systems/arduino-nano-every.yaml
+limits:
+  max_steps: 2000000
+assertions:
+  - gpio_edges:
+      pin: "portb:1"
+      min_edges: 1

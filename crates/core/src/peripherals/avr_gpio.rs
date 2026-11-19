@@ -71,6 +71,9 @@ pub struct AvrGpioPort {
     /// megaAVR `PINnCTRL` and `PORTCTRL` (unused by the other layouts).
     pinctrl: [u8; 8],
     portctrl: u8,
+    /// megaAVR: timer waveform outputs that can take a pad over
+    /// ([`Peripheral::bind_timer_output_pad`]).
+    routes: crate::peripherals::pad_routing::PadRoutes,
 }
 
 impl Default for AvrGpioPort {
@@ -114,7 +117,44 @@ impl AvrGpioPort {
             cells: Vec::new(),
             pinctrl: [0; 8],
             portctrl: 0,
+            routes: Default::default(),
         }
+    }
+
+    /// The `PORTx` latch as the output drivers see it: on the megaAVR a
+    /// timer waveform output that is enabled overrides the pad's OUT bit
+    /// (DS40002173 §20.3.3.4 "the port pin direction must be set as output").
+    #[inline]
+    fn out_bits(&self) -> u8 {
+        if self.routes.is_empty() {
+            return self.port;
+        }
+        let mut out = self.port;
+        for pin in 0..self.pin_count {
+            if let Some(level) = self.routes.level(pin, |pin| self.line_selector(pin)) {
+                out = (out & !(1 << pin)) | (u8::from(level) << pin);
+            }
+        }
+        out
+    }
+
+    /// A waveform output can own a pad only while its DIR bit is set.
+    fn line_selector(&self, pin: u8) -> Option<u32> {
+        (self.ddr & (1 << pin) != 0).then_some(0)
+    }
+
+    /// Register the watched pads with the waveform lines that can drive them.
+    fn sync_line_taps(&mut self) {
+        if self.routes.is_empty() {
+            return;
+        }
+        let Some(watch) = self.watch.take() else {
+            return;
+        };
+        let mut routes = std::mem::take(&mut self.routes);
+        routes.sync_taps(watch.tap(), watch.pairs(), |pin| self.line_selector(pin));
+        self.routes = routes;
+        self.watch = Some(watch);
     }
 
     /// Bits of the bonded pads.
@@ -232,7 +272,7 @@ impl AvrGpioPort {
     #[inline]
     fn pad_bits(&self) -> u8 {
         let from_pull = self.pull_ups() & !self.ext_mask;
-        (self.port & self.ddr) | (self.pin & !self.ddr & !from_pull) | from_pull
+        (self.out_bits() & self.ddr) | (self.pin & !self.ddr & !from_pull) | from_pull
     }
 
     /// Publish the pad level into every watching cell.
@@ -275,7 +315,7 @@ impl PinPort for AvrGpioPort {
         }
         let bit = 1u8 << pin;
         Some(if self.ddr & bit != 0 {
-            PadDriver::drive(self.port & bit != 0)
+            PadDriver::drive(self.out_bits() & bit != 0)
         } else if self.pull_ups() & bit != 0 {
             PadDriver::released(Pull::Up)
         } else {
@@ -340,8 +380,22 @@ impl PinPort for AvrGpioPort {
     }
 
     fn install_watch(&mut self, watch: Option<crate::pins::PadWatch>) -> bool {
-        self.watch = watch;
+        match watch {
+            None => {
+                self.watch = None;
+                self.routes.clear_taps();
+            }
+            Some(watch) => {
+                self.watch = Some(watch);
+                self.routes.invalidate_registrations();
+                self.sync_line_taps();
+            }
+        }
         true
+    }
+
+    fn routes_changed(&mut self) {
+        self.sync_line_taps();
     }
 
     fn take_watch(&mut self) -> Option<crate::pins::PadWatch> {
@@ -414,7 +468,27 @@ impl Peripheral for AvrGpioPort {
         if self.ddr & bit == 0 {
             return None;
         }
-        Some(self.port & bit != 0)
+        Some(self.out_bits() & bit != 0)
+    }
+
+    /// megaAVR: a TCA0 / TCB waveform output owns the pad while the timer
+    /// drives the line and the pad is an output.
+    fn bind_timer_output_pad(
+        &mut self,
+        cell: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+        pin: u8,
+        af: Option<u8>,
+        line: usize,
+        func: &'static str,
+    ) -> bool {
+        if self.layout != AvrGpioRegisterLayout::MegaAvrPort
+            || af.is_some()
+            || pin >= self.pin_count
+        {
+            return false;
+        }
+        self.routes.bind_when_driving(cell, pin, None, line, func);
+        true
     }
 
     fn gpio_port_offsets(&self) -> Option<crate::peripherals::gpio::GpioPortOffsets> {
@@ -462,7 +536,9 @@ impl Peripheral for AvrGpioPort {
         pin: u8,
         cell: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) -> bool {
-        if pin >= self.pin_count {
+        // A cell is refreshed by this port's own writes only, so a pad a
+        // timer line can move is refused.
+        if pin >= self.pin_count || !self.routes.pin_routes(pin).is_empty() {
             return false;
         }
         cell.store(
@@ -696,6 +772,36 @@ mod tests {
         p.write(0x13, PINCTRL_PULLUPEN | PINCTRL_ISC_INPUT_DISABLE)
             .unwrap();
         assert_eq!(p.read(0x08).unwrap() & (1 << 3), 0);
+    }
+
+    #[test]
+    fn megaavr_timer_output_overrides_out_while_it_drives_an_output_pad() {
+        use crate::peripherals::pad_lines::{LineDrive, PadLines};
+        let lines = std::sync::Arc::new(PadLines::new(&["WO0"], &[false]));
+        lines.set_mode(0, LineDrive::Input);
+        let mut p = AvrGpioPort::new_megaavr_port(6);
+        assert!(p.bind_timer_output_pad(&lines, 0, None, 0, "TCA0_WO0"));
+        assert!(!p.bind_timer_output_pad(&lines, 6, None, 0, "TCA0_WO0"));
+        assert!(!AvrGpioPort::new().bind_timer_output_pad(&lines, 0, None, 0, "x"));
+        p.write(MP_DIR, 0x01).unwrap();
+        assert_eq!(p.read(MP_IN).unwrap() & 1, 0, "released line: OUT = 0");
+        lines.drive_line(0, LineDrive::PushPull, true);
+        assert_eq!(p.read(MP_IN).unwrap() & 1, 1, "the waveform level");
+        assert_eq!(p.read(MP_OUT).unwrap() & 1, 0, "the latch is untouched");
+        assert_eq!(p.read_gpio_output(0), Some(true));
+        assert_eq!(PinPort::level(&p, 0), Some(true));
+        p.write(MP_OUT, 0x01).unwrap();
+        lines.drive_line(0, LineDrive::PushPull, false);
+        assert_eq!(p.read(MP_IN).unwrap() & 1, 0, "OUT does not reach the pad");
+        p.write(MP_DIR, 0x00).unwrap();
+        assert_eq!(
+            p.read_gpio_output(0),
+            None,
+            "DIR clear: the pad is an input"
+        );
+        p.write(MP_DIR, 0x01).unwrap();
+        lines.set_mode(0, LineDrive::Input);
+        assert_eq!(p.read(MP_IN).unwrap() & 1, 1, "back on the OUT bit");
     }
 
     #[test]

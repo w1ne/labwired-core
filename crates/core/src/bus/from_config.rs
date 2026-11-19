@@ -1549,6 +1549,8 @@ impl SystemBus {
         bus.wire_samd21_tcc_output_pads();
         // RA GPT GTIOCnA/B onto the pads the chip YAML names (PSEL 00011).
         bus.wire_ra_gpt_output_pads();
+        // megaAVR 0-series TCA0 / TCB waveform outputs onto their pads.
+        bus.wire_megaavr_timer_output_pads();
         // Board wires from an analog output (a DAC pin) to an ADC input.
         bus.wire_analog_links();
         // nRF52: bind every TWIM/SPIM/UARTE wire to every pad its PSEL can

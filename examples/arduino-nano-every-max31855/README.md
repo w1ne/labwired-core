@@ -124,5 +124,4 @@ the converter answers in every mode), SCK / MOSI / MISO levels on the pads,
 the multi-host SS input, MAX31855 conversion time and its fault bits (the
 model is always fault-free), and thermocouple linearity. With interrupts
 enabled the model clears IF when it raises the vector, not when the vector
-executes. The TCA0 / TCB waveform outputs are still not modelled on this
-chip. The run assumes an ideal 5 V rail.
+executes. The run assumes an ideal 5 V rail.

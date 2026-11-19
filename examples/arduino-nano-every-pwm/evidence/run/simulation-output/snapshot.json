@@ -1,0 +1,75 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      22,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3,
+      0,
+      2,
+      0,
+      10,
+      76,
+      12,
+      0,
+      100,
+      8,
+      0,
+      0,
+      96,
+      8
+    ],
+    "pc": 2678,
+    "sp": 16381,
+    "sreg": 130
+  },
+  "steps_executed": 2000000,
+  "cycles": 3884943,
+  "instructions": 2000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000000
+    }
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "ef2f21eb696c0daf72016ccf3f74957f2089188432b506b8bec54a7dd0513092",
+  "config": {
+    "firmware": "examples/arduino-nano-every-pwm/../../tests/fixtures/avr/arduino-nano-every-pwm.elf",
+    "system": "examples/arduino-nano-every-pwm/../../configs/systems/arduino-nano-every.yaml",
+    "script": "examples/arduino-nano-every-pwm/pwm-smoke.yaml"
+  }
+}

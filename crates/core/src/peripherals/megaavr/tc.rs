@@ -16,22 +16,93 @@
 //! INTFLAGS.OVF), CNT / PER / CMPn and their buffers. PERBUF / CMPnBUF set
 //! the CTRLFSET valid bits and are copied at the next wrap (UPDATE). Not
 //! modelled, and refused when firmware asks for them: split mode, FRQ and the
-//! dual-slope modes, compare outputs onto pads (CTRLB.CMPnEN), TCA interrupts
-//! and the event input. CTRLESET commands are refused too.
+//! dual-slope modes, TCA interrupts and the event input. CTRLESET commands
+//! are refused too.
 //!
 //! TCB, periodic interrupt (CNTMODE INT) and 8-bit PWM (CNTMODE PWM8): the
 //! counter runs 0..TOP and wraps, setting INTFLAGS.CAPT, where TOP is CCMP in
 //! INT mode and CCMPL in PWM8 mode. CLKSEL DIV1, DIV2 and CLKTCA (which stops
 //! while TCA0 is disabled). INTCTRL.CAPT raises the instance's vector once per
-//! wrap. The other count modes, the waveform output (CTRLB.CCMPEN) and the
-//! event input are refused.
+//! wrap. The other count modes and the event input are refused.
+//!
+//! Waveform outputs (what `analogWrite` drives). TCA0 single-slope PWM with
+//! CTRLB.CMPnEN puts WOn on pin n of the port PORTMUX.TCAROUTEA selects: set
+//! at BOTTOM, cleared at the compare match, so high while CNT < CMPn (§20.3.3.4.3);
+//! CMPn = 0 holds it low and CMPn > PER high. A stopped TCA0 drives
+//! CTRLC.CMPnOV. TCBn in PWM8 with CTRLB.CCMPEN drives its WO pad (default or
+//! the PORTMUX.TCBROUTEA alternate): high while CNT < CCMPH (§21.3.3.1.8); a
+//! stopped TCBn drives CTRLB.CCMPINIT. The override needs the pad's PORTx.DIR
+//! bit, as on silicon. The levels go out on a [`PadLines`] wire with one line
+//! per (route, output) pair, and only the routed line of an enabled output
+//! drives; see [`OUTPUT_PADS`]. Limits:
+//! - CMPnEN outside single-slope mode and CCMPEN outside PWM8 are refused, and
+//!   so is either one on a bus with no port to carry it.
+//! - Edges are published from the scheduler wake of the match or wrap, stamped
+//!   with that cycle. A pulse shorter than one CPU instruction can merge.
+//! - PORTMUX is another block: an enable or duty write reaches the pad one
+//!   CPU cycle later, and a PORTMUX route write on its own at the next edge
+//!   of a running waveform.
+//! - After an output is disabled the pad reads its PORTx.OUT bit again at
+//!   once, but a four-state logic trace keeps showing the pad as released
+//!   until PORTx next moves it.
 //!
 //! 16-bit registers go through the instance's TEMP byte as on silicon: a low
 //! byte write lands in TEMP and the high byte write commits both; a low byte
 //! read latches the high byte into TEMP for the following high byte read.
 
-use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult, SimulationError};
-use std::sync::Mutex;
+use crate::peripherals::pad_lines::{LineDrive, PadLines};
+use crate::{Bus, CycleClock, Peripheral, PeripheralTickResult, SimResult, SimulationError};
+use std::sync::{Arc, Mutex};
+
+/// PORTMUX.TCAROUTEA / TCBROUTEA on the bus (data space 0x05E4 / 0x05E5).
+const PORTMUX_TCAROUTEA: u64 = 0x0001_05E4;
+const PORTMUX_TCBROUTEA: u64 = 0x0001_05E5;
+/// PORTx on the bus: 0x0400 + 0x20 * port; OUT is offset 4.
+const PORT_BASE: u64 = 0x0001_0400;
+const PORT_OUT: u64 = 0x04;
+
+/// Lines of the output wire: TCA0 WO0..WO2 on each PORTMUX.TCAROUTEA port
+/// (line `3 * port + n`), then each TCB's WO on its default and its alternate
+/// pad (line `18 + 2 * tcb + alt`).
+pub const LINE_NAMES: [&str; 26] = [
+    "TCA0_WO0", "TCA0_WO1", "TCA0_WO2", "TCA0_WO0", "TCA0_WO1", "TCA0_WO2", "TCA0_WO0", "TCA0_WO1",
+    "TCA0_WO2", "TCA0_WO0", "TCA0_WO1", "TCA0_WO2", "TCA0_WO0", "TCA0_WO1", "TCA0_WO2", "TCA0_WO0",
+    "TCA0_WO1", "TCA0_WO2", "TCB0_WO", "TCB0_WO", "TCB1_WO", "TCB1_WO", "TCB2_WO", "TCB2_WO",
+    "TCB3_WO", "TCB3_WO",
+];
+const TCB_LINE0: usize = 18;
+
+/// The pad of each line, as `(port index, pin)` with PORTA = 0 (DS40002173
+/// §4.1 "I/O Multiplexing", 48-pin column): TCA0 WOn is pin n of the routed
+/// port; TCB0 PA2 / PF4, TCB1 PA3 / PF5, TCB2 PC0 / PB4, TCB3 PB5 / PC1.
+pub const OUTPUT_PADS: [(u8, u8); 26] = [
+    (0, 0),
+    (0, 1),
+    (0, 2),
+    (1, 0),
+    (1, 1),
+    (1, 2),
+    (2, 0),
+    (2, 1),
+    (2, 2),
+    (3, 0),
+    (3, 1),
+    (3, 2),
+    (4, 0),
+    (4, 1),
+    (4, 2),
+    (5, 0),
+    (5, 1),
+    (5, 2),
+    (0, 2),
+    (5, 4),
+    (0, 3),
+    (5, 5),
+    (2, 0),
+    (1, 4),
+    (1, 5),
+    (2, 1),
+];
 
 /// Window offset of TCB n.
 const TCB_BASE: [u64; 4] = [0x80, 0x90, 0xA0, 0xB0];
@@ -80,6 +151,7 @@ const TCB_CNTMODE: u8 = 0x07;
 const TCB_MODE_INT: u8 = 0;
 const TCB_MODE_PWM8: u8 = 7;
 const TCB_CCMPEN: u8 = 1 << 4;
+const TCB_CCMPINIT: u8 = 1 << 5;
 const TCB_CLKSEL_TCA: u8 = 2;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -129,6 +201,8 @@ struct State {
     pending_events: Vec<(u64, u32)>,
     /// Vectors of wraps a register write settled, not yet delivered.
     raised: Vec<u32>,
+    /// A register write may have moved a waveform output; publish it.
+    outputs_dirty: bool,
 }
 
 /// TCA0 + TCB0..3.
@@ -138,6 +212,10 @@ pub struct MegaAvrTimers {
     /// TCB0..3 vector numbers (12, 13, 25, 36 on the ATmega4809).
     tcb_irqs: [u32; 4],
     clock: Option<CycleClock>,
+    /// The output wire, once the bus asked for it.
+    lines: Option<Arc<PadLines>>,
+    /// A port carries at least one line: outputs are generated.
+    armed: bool,
 }
 
 /// CLK_PER cycles per TCA0 prescaled tick.
@@ -208,6 +286,8 @@ impl MegaAvrTimers {
             state: Mutex::new(State::default()),
             tcb_irqs,
             clock: None,
+            lines: None,
+            armed: false,
         }
     }
 
@@ -287,30 +367,111 @@ impl MegaAvrTimers {
         rose
     }
 
-    /// CPU cycle of the next CAPT wrap of every TCB whose interrupt is on.
-    fn next_irq_cycle(s: &State) -> Option<u64> {
-        (0..4)
-            .filter(|&i| s.tcb[i].intctrl & TCB_CAPT != 0)
-            .filter_map(|i| {
-                let t = &s.tcb[i];
-                let div = Self::tcb_div(s, t)?;
-                let start = u64::from(t.anchor_count);
-                let top = t.top();
-                let to_wrap = if start <= top {
-                    top + 1 - start
+    /// CPU cycle of the next CAPT wrap of every TCB whose interrupt is on,
+    /// and of the next edge of every waveform output while a port carries it.
+    fn next_wake_cycle(&self, s: &State) -> Option<u64> {
+        let to_wrap = |start: u64, top: u64| {
+            if start <= top {
+                top + 1 - start
+            } else {
+                0x1_0000 - start
+            }
+        };
+        let mut next: Option<u64> = None;
+        let mut take = |cycle: u64| next = Some(next.map_or(cycle, |n: u64| n.min(cycle)));
+        for t in &s.tcb {
+            let Some(div) = Self::tcb_div(s, t) else {
+                continue;
+            };
+            let (start, top) = (u64::from(t.anchor_count), t.top());
+            let output = self.armed && t.ctrlb & TCB_CCMPEN != 0;
+            if t.intctrl & TCB_CAPT != 0 || output {
+                take((t.anchor_tick + to_wrap(start, top)) * div);
+            }
+            let duty = u64::from(t.ccmp >> 8);
+            if output && start < duty && duty <= top {
+                take((t.anchor_tick + duty - start) * div);
+            }
+        }
+        let tca = &s.tca;
+        if self.armed && tca.running() && tca.ctrlb & TCA_CMPEN != 0 {
+            let div = tca_div(tca.ctrla);
+            let (start, top) = (u64::from(tca.anchor_count), tca.top());
+            take((tca.anchor_tick + to_wrap(start, top)) * div);
+            for n in 0..3 {
+                let cmp = u64::from(tca.cmp[n]);
+                if tca.ctrlb & (0x10 << n) != 0 && start < cmp && cmp <= top {
+                    take((tca.anchor_tick + cmp - start) * div);
+                }
+            }
+        }
+        next
+    }
+
+    /// The cycle to stamp edges published at `now` with: that of the wrap or
+    /// match that is due, which an instruction boundary can overshoot.
+    fn due_cycle(&self, s: &State, now: u64) -> u64 {
+        self.next_wake_cycle(s).map_or(now, |at| at.min(now))
+    }
+
+    /// Whether any waveform output is enabled onto a pad.
+    fn outputs_enabled(s: &State) -> bool {
+        s.tca.ctrlb & TCA_CMPEN != 0 || s.tcb.iter().any(|t| t.ctrlb & TCB_CCMPEN != 0)
+    }
+
+    /// Put the level of every output on its routed line and release the
+    /// others. `s` is settled at `now`; `at` stamps the edges.
+    fn publish(&self, s: &mut State, bus: &dyn Bus, at: u64) {
+        s.outputs_dirty = false;
+        let Some(lines) = self.lines.as_ref().filter(|_| self.armed) else {
+            return;
+        };
+        let route_a = usize::from(bus.read_u8(PORTMUX_TCAROUTEA).unwrap_or(0) & 0x07);
+        let route_b = bus.read_u8(PORTMUX_TCBROUTEA).unwrap_or(0);
+        let mut drive = [None; 26];
+        let tca = &s.tca;
+        for n in 0..3 {
+            if tca.ctrlb & (0x10 << n) != 0 && route_a < 6 {
+                drive[3 * route_a + n] = Some(if tca.running() {
+                    tca.anchor_count < tca.cmp[n]
                 } else {
-                    0x1_0000 - start
-                };
-                Some((t.anchor_tick + to_wrap) * div)
-            })
-            .min()
+                    tca.ctrlc & (1 << n) != 0
+                });
+            }
+        }
+        for (i, t) in s.tcb.iter().enumerate() {
+            if t.ctrlb & TCB_CCMPEN != 0 {
+                let alt = usize::from(route_b >> i & 1);
+                drive[TCB_LINE0 + 2 * i + alt] = Some(if t.running() {
+                    t.anchor_count < t.ccmp >> 8
+                } else {
+                    t.ctrlb & TCB_CCMPINIT != 0
+                });
+            }
+        }
+        lines.set_stamp(Some(at));
+        for (line, level) in drive.into_iter().enumerate() {
+            match level {
+                Some(level) => lines.drive_line(line, LineDrive::PushPull, level),
+                None if lines.drives(line) => {
+                    // The pad goes back to its PORTx.OUT bit.
+                    let (port, pin) = OUTPUT_PADS[line];
+                    let out = bus
+                        .read_u8(PORT_BASE + 0x20 * u64::from(port) + PORT_OUT)
+                        .unwrap_or(0);
+                    lines.drive_line(line, LineDrive::Input, out & (1 << pin) != 0);
+                }
+                None => {}
+            }
+        }
+        lines.set_stamp(None);
     }
 
     fn rearm(&self, s: &mut State) {
         if !self.scheduler_mode() {
             return;
         }
-        let Some(fire) = Self::next_irq_cycle(s) else {
+        let Some(fire) = self.next_wake_cycle(s) else {
             return;
         };
         let now = self.now();
@@ -440,17 +601,20 @@ impl MegaAvrTimers {
         let rose = Self::settle(s, now);
         let irqs = self.irqs_for(s, &rose);
         if o < 0x40 {
-            Self::tca_write(s, o, v, now)?;
+            self.tca_write(s, o, v, now)?;
         } else if let Some(i) = TCB_BASE.iter().position(|&b| (b..b + 0x10).contains(&o)) {
-            Self::tcb_write(s, i, o - TCB_BASE[i], v, now)?;
+            self.tcb_write(s, i, o - TCB_BASE[i], v, now)?;
         }
         // A configuration change re-anchors every counter at `now`.
         Self::settle(s, now);
+        if self.armed && (Self::outputs_enabled(s) || self.lines.as_ref().is_some_and(any_drives)) {
+            s.outputs_dirty = true;
+        }
         self.rearm(s);
         Ok(irqs)
     }
 
-    fn tca_write(s: &mut State, o: u64, v: u8, now: u64) -> SimResult<()> {
+    fn tca_write(&self, s: &mut State, o: u64, v: u8, now: u64) -> SimResult<()> {
         let tca = &mut s.tca;
         let commit = |tca: &mut Tca| (u16::from(v) << 8) | u16::from(tca.temp);
         match o {
@@ -465,16 +629,16 @@ impl MegaAvrTimers {
                         t.anchor_tick = now / div;
                     }
                 }
-                Self::tca_check(&tca)?;
+                self.tca_check(&tca)?;
             }
             TCA_CTRLB => {
                 tca.ctrlb = v & 0x7F;
-                Self::tca_check(tca)?;
+                self.tca_check(tca)?;
             }
             TCA_CTRLC => tca.ctrlc = v & 0x07,
             TCA_CTRLD => {
                 tca.ctrld = v & 0x01;
-                Self::tca_check(tca)?;
+                self.tca_check(tca)?;
             }
             TCA_CTRLECLR => tca.ctrle &= !v,
             TCA_CTRLESET => {
@@ -518,7 +682,7 @@ impl MegaAvrTimers {
         Ok(())
     }
 
-    fn tca_check(tca: &Tca) -> SimResult<()> {
+    fn tca_check(&self, tca: &Tca) -> SimResult<()> {
         if !tca.running() {
             return Ok(());
         }
@@ -529,23 +693,30 @@ impl MegaAvrTimers {
             return Self::refuse(format!("TCA0 WGMODE {}", tca.ctrlb & TCA_WGMODE));
         }
         if tca.ctrlb & TCA_CMPEN != 0 {
-            return Self::refuse("TCA0 compare outputs on pads (CTRLB.CMPnEN)".into());
+            if tca.ctrlb & TCA_WGMODE != 3 {
+                return Self::refuse("TCA0 compare outputs (CTRLB.CMPnEN) in NORMAL mode".into());
+            }
+            if !self.armed {
+                return Self::refuse(
+                    "TCA0 compare outputs (CTRLB.CMPnEN) with no port to carry them".into(),
+                );
+            }
         }
         Ok(())
     }
 
-    fn tcb_write(s: &mut State, i: usize, r: u64, v: u8, now: u64) -> SimResult<()> {
+    fn tcb_write(&self, s: &mut State, i: usize, r: u64, v: u8, now: u64) -> SimResult<()> {
         let tca = s.tca;
         let t = &mut s.tcb[i];
         match r {
             TCB_CTRLA => {
                 t.ctrla = v & 0x57;
                 t.anchor_tick = now / Self::tcb_div_static(&tca, t).unwrap_or(1);
-                Self::tcb_check(i, t)?;
+                self.tcb_check(i, t)?;
             }
             TCB_CTRLB => {
                 t.ctrlb = v & 0x77;
-                Self::tcb_check(i, t)?;
+                self.tcb_check(i, t)?;
             }
             TCB_EVCTRL => {
                 if v & 0x01 != 0 {
@@ -564,7 +735,7 @@ impl MegaAvrTimers {
         Ok(())
     }
 
-    fn tcb_check(i: usize, t: &Tcb) -> SimResult<()> {
+    fn tcb_check(&self, i: usize, t: &Tcb) -> SimResult<()> {
         if !t.running() {
             return Ok(());
         }
@@ -572,7 +743,14 @@ impl MegaAvrTimers {
             return Self::refuse(format!("TCB{i} CNTMODE {}", t.ctrlb & TCB_CNTMODE));
         }
         if t.ctrlb & TCB_CCMPEN != 0 {
-            return Self::refuse(format!("TCB{i} waveform output (CTRLB.CCMPEN)"));
+            if t.ctrlb & TCB_CNTMODE != TCB_MODE_PWM8 {
+                return Self::refuse(format!("TCB{i} output (CTRLB.CCMPEN) outside PWM8 mode"));
+            }
+            if !self.armed {
+                return Self::refuse(format!(
+                    "TCB{i} waveform output (CTRLB.CCMPEN) with no port to carry it"
+                ));
+            }
         }
         if (t.ctrla >> 1) & 3 == 3 {
             return Self::refuse(format!("TCB{i} CLKSEL 3 (reserved)"));
@@ -585,12 +763,16 @@ impl MegaAvrTimers {
         let mut guard = self.state.lock().unwrap();
         let s = &mut *guard;
         let mut irqs = std::mem::take(&mut s.raised);
-        if Self::next_irq_cycle(s).is_some_and(|at| now >= at) {
+        if self.next_wake_cycle(s).is_some_and(|at| now >= at) {
             let rose = Self::settle(s, now);
             irqs.extend(self.irqs_for(s, &rose));
         }
         irqs
     }
+}
+
+fn any_drives(lines: &Arc<PadLines>) -> bool {
+    (0..LINE_NAMES.len()).any(|line| lines.drives(line))
 }
 
 impl Peripheral for MegaAvrTimers {
@@ -620,8 +802,8 @@ impl Peripheral for MegaAvrTimers {
         // Writes that settle a wrap raise its vector on the next tick/event;
         // the latched INTFLAGS keeps it visible meanwhile.
         let irqs = self.write_reg(o, v)?;
-        if !irqs.is_empty() {
-            let mut s = self.state.lock().unwrap();
+        let mut s = self.state.lock().unwrap();
+        if !irqs.is_empty() || s.outputs_dirty {
             s.raised.extend(irqs);
             if self.scheduler_mode() {
                 // Deliver at once through a one-cycle wake; it supersedes
@@ -637,7 +819,31 @@ impl Peripheral for MegaAvrTimers {
 
     fn legacy_tick_active(&self) -> bool {
         let s = self.state.lock().unwrap();
-        !self.scheduler_mode() && (!s.raised.is_empty() || Self::next_irq_cycle(&s).is_some())
+        !self.scheduler_mode()
+            && (!s.raised.is_empty() || s.outputs_dirty || self.next_wake_cycle(&s).is_some())
+    }
+
+    fn needs_bus_tick(&self) -> bool {
+        if self.scheduler_mode() || !self.armed {
+            return false;
+        }
+        let s = self.state.lock().unwrap();
+        s.outputs_dirty || Self::outputs_enabled(&s)
+    }
+
+    /// Without the scheduler the outputs follow the counters at every tick.
+    fn tick_with_bus(&mut self, bus: &mut dyn Bus) {
+        if self.scheduler_mode() {
+            return;
+        }
+        let now = self.now();
+        let mut guard = self.state.lock().unwrap();
+        let s = &mut *guard;
+        let due = self.due_cycle(s, now);
+        let rose = Self::settle(s, now);
+        let irqs = self.irqs_for(s, &rose);
+        s.raised.extend(irqs);
+        self.publish(s, bus, due);
     }
 
     fn legacy_tick_dynamic(&self) -> bool {
@@ -667,7 +873,7 @@ impl Peripheral for MegaAvrTimers {
         &mut self,
         event_token: u32,
         _sched: &mut crate::sched::EventScheduler,
-        _bus: &mut dyn crate::Bus,
+        bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
         let now = self.now();
         let mut guard = self.state.lock().unwrap();
@@ -676,9 +882,11 @@ impl Peripheral for MegaAvrTimers {
             return crate::sched::EventResult::default();
         }
         s.live_at = None;
+        let due = self.due_cycle(s, now);
         let rose = Self::settle(s, now);
         let mut irqs = std::mem::take(&mut s.raised);
         irqs.extend(self.irqs_for(s, &rose));
+        self.publish(s, bus, due);
         self.rearm(s);
         let reschedule_delay = s.pending_events.pop().map(|(delay, _)| {
             s.generation = event_token;
@@ -698,6 +906,38 @@ impl Peripheral for MegaAvrTimers {
 
     fn on_node_reset(&mut self) {
         *self.state.lock().unwrap() = State::default();
+        if let Some(lines) = &self.lines {
+            for line in 0..LINE_NAMES.len() {
+                lines.drive_line(line, LineDrive::Input, false);
+            }
+        }
+    }
+
+    fn timer_output_lines(&mut self, arm: bool) -> Option<Arc<PadLines>> {
+        let lines = self.lines.get_or_insert_with(|| {
+            let lines = PadLines::new(&LINE_NAMES, &[false; 26]);
+            for line in 0..LINE_NAMES.len() {
+                lines.set_mode(line, LineDrive::Input);
+            }
+            Arc::new(lines)
+        });
+        self.armed |= arm;
+        Some(lines.clone())
+    }
+
+    fn timer_output_family(&self) -> Option<&'static str> {
+        Some("megaavr_tc")
+    }
+
+    fn timer_output_pads(&self) -> Vec<(usize, String, u8)> {
+        OUTPUT_PADS
+            .iter()
+            .enumerate()
+            .map(|(line, &(port, pin))| {
+                let letter = char::from(b'a' + port);
+                (line, format!("port{letter}"), pin)
+            })
+            .collect()
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -807,6 +1047,183 @@ mod tests {
         t.write(0xBD, 0x12).unwrap();
         assert_eq!(t.read(0xBC).unwrap(), 0x34);
         assert_eq!(t.read(0xBD).unwrap(), 0x12, "high byte comes from TEMP");
+    }
+
+    /// PORTMUX and the PORTx.OUT latches, as the timers read them.
+    struct Mux {
+        tca: u8,
+        tcb: u8,
+        out: [u8; 6],
+        config: crate::SimulationConfig,
+    }
+
+    impl Mux {
+        /// ArduinoCore-megaavr on the Nano Every: TCA0 on PORTB, TCB0 and
+        /// TCB1 on their alternate pads (PF4, PF5).
+        fn nano_every() -> Self {
+            Self {
+                tca: 1,
+                tcb: 0x03,
+                out: [0; 6],
+                config: crate::SimulationConfig::default(),
+            }
+        }
+    }
+
+    impl Bus for Mux {
+        fn read_u8(&self, addr: u64) -> SimResult<u8> {
+            Ok(match addr {
+                PORTMUX_TCAROUTEA => self.tca,
+                PORTMUX_TCBROUTEA => self.tcb,
+                a if a >= PORT_BASE && (a - PORT_BASE) % 0x20 == PORT_OUT => {
+                    self.out[((a - PORT_BASE) / 0x20) as usize]
+                }
+                _ => 0,
+            })
+        }
+        fn write_u8(&mut self, _addr: u64, _value: u8) -> SimResult<()> {
+            Ok(())
+        }
+        fn tick_peripherals(&mut self) -> Vec<u32> {
+            Vec::new()
+        }
+        fn execute_dma(&mut self, _requests: &[crate::DmaRequest]) -> SimResult<()> {
+            Ok(())
+        }
+        fn config(&self) -> &crate::SimulationConfig {
+            &self.config
+        }
+    }
+
+    /// Settle at `cycle` and publish, as the scheduler wake and the legacy
+    /// bus tick both do.
+    fn publish_at(t: &mut MegaAvrTimers, clock: &CycleClock, bus: &Mux, cycle: u64) {
+        clock.publish(cycle);
+        let mut guard = t.state.lock().unwrap();
+        let s = &mut *guard;
+        MegaAvrTimers::settle(s, cycle);
+        t.publish(s, bus, cycle);
+    }
+
+    fn next_wake(t: &MegaAvrTimers) -> Option<u64> {
+        t.next_wake_cycle(&t.state.lock().unwrap())
+    }
+
+    /// The lines that drive a pad, with their levels.
+    fn driven(lines: &PadLines) -> Vec<(usize, bool)> {
+        (0..LINE_NAMES.len())
+            .filter(|&line| lines.drives(line))
+            .map(|line| (line, lines.level(line)))
+            .collect()
+    }
+
+    /// `analogWrite(9, 128)` on the Nano Every: D9 = PB0 = TCA0 WO0.
+    #[test]
+    fn tca0_single_slope_output_is_high_below_cmp_on_the_routed_port() {
+        let (mut t, clock) = at(0);
+        let lines = t.timer_output_lines(true).unwrap();
+        let bus = Mux::nano_every();
+        arduino_millis(&mut t);
+        w16(&mut t, TCA_CMP0BUF, 0x80);
+        t.write(TCA_CTRLB, 0x13).unwrap(); // SINGLESLOPE | CMP0EN
+        publish_at(&mut t, &clock, &bus, 1);
+        // CMP0 is still 0 until the buffer is taken at the wrap.
+        assert_eq!(driven(&lines), vec![(3, false)], "PB0 only, low");
+        assert_eq!(next_wake(&t), Some(16384), "the wrap");
+        publish_at(&mut t, &clock, &bus, 16384);
+        assert_eq!(driven(&lines), vec![(3, true)], "set at BOTTOM");
+        assert_eq!(next_wake(&t), Some(16384 + 64 * 0x80), "the compare match");
+        publish_at(&mut t, &clock, &bus, 16384 + 64 * 0x80 - 1);
+        assert!(lines.level(3), "CNT = 0x7F");
+        publish_at(&mut t, &clock, &bus, 16384 + 64 * 0x80);
+        assert_eq!(driven(&lines), vec![(3, false)], "cleared at CNT = CMP0");
+        assert_eq!(next_wake(&t), Some(2 * 16384));
+    }
+
+    #[test]
+    fn tca0_output_follows_the_portmux_route_and_cmp_limits() {
+        let (mut t, clock) = at(0);
+        let lines = t.timer_output_lines(true).unwrap();
+        let mut bus = Mux::nano_every();
+        t.write(TCA_CTRLB, 0x73).unwrap(); // all three outputs
+        w16(&mut t, TCA_PER, 99);
+        w16(&mut t, TCA_CMP0, 0); // never high
+        w16(&mut t, TCA_CMP0 + 2, 100); // above PER: always high
+        w16(&mut t, TCA_CMP0 + 4, 50);
+        t.write(TCA_CTRLC, 0x01).unwrap();
+        publish_at(&mut t, &clock, &bus, 0);
+        assert_eq!(
+            driven(&lines),
+            vec![(3, true), (4, false), (5, false)],
+            "stopped: CTRLC.CMPnOV"
+        );
+        t.write(TCA_CTRLA, 0x01).unwrap(); // DIV1 | ENABLE
+        bus.tca = 5; // PORTF
+        publish_at(&mut t, &clock, &bus, 10);
+        assert_eq!(driven(&lines), vec![(15, false), (16, true), (17, true)]);
+        // Only WO2 has an edge inside the period.
+        assert_eq!(next_wake(&t), Some(50));
+        publish_at(&mut t, &clock, &bus, 50);
+        assert_eq!(driven(&lines), vec![(15, false), (16, true), (17, false)]);
+        assert_eq!(next_wake(&t), Some(100));
+    }
+
+    /// `analogWrite(3, 64)` on the Nano Every: D3 = PF5 = TCB1 WO (alternate).
+    #[test]
+    fn tcb_pwm8_output_is_high_below_ccmph_on_its_routed_pad() {
+        let (mut t, clock) = at(0);
+        let lines = t.timer_output_lines(true).unwrap();
+        let mut bus = Mux::nano_every();
+        arduino_millis(&mut t);
+        t.write(0x91, 0x07).unwrap(); // TCB1.CTRLB = PWM8
+        t.write(0x9C, 0xFF).unwrap(); // CCMPL through TEMP
+        t.write(0x9D, 0x40).unwrap(); // CCMPH = 64
+        t.write(0x90, 0x05).unwrap(); // CLKTCA | ENABLE
+        t.write(0x91, 0x17).unwrap(); // | CCMPEN
+        publish_at(&mut t, &clock, &bus, 64);
+        assert_eq!(driven(&lines), vec![(21, true)], "PF5, CNT = 1");
+        assert_eq!(next_wake(&t), Some(64 * 0x40));
+        publish_at(&mut t, &clock, &bus, 64 * 0x40);
+        assert_eq!(driven(&lines), vec![(21, false)]);
+        // TCB1 is level with TCB3, whose CAPT wrap is the next wake too.
+        assert_eq!(next_wake(&t), Some(16384));
+        bus.tcb = 0x01; // TCB1 back on its default pad PA3
+        publish_at(&mut t, &clock, &bus, 16384);
+        assert_eq!(driven(&lines), vec![(20, true)]);
+    }
+
+    #[test]
+    fn a_disabled_output_hands_the_pad_back_at_its_port_latch_level() {
+        let (mut t, clock) = at(0);
+        let lines = t.timer_output_lines(true).unwrap();
+        let mut bus = Mux::nano_every();
+        arduino_millis(&mut t);
+        t.write(TCA_CTRLB, 0x13).unwrap();
+        publish_at(&mut t, &clock, &bus, 1);
+        assert!(lines.drives(3));
+        bus.out[1] = 0x01; // PORTB.OUT bit 0
+        t.write(TCA_CTRLB, 0x03).unwrap(); // turnOffPWM
+        assert!(t.state.lock().unwrap().outputs_dirty);
+        publish_at(&mut t, &clock, &bus, 2);
+        assert_eq!(driven(&lines), vec![]);
+        assert!(lines.level(3), "the released line reports PORTB.OUT");
+        assert_eq!(next_wake(&t), Some(16384), "only the millis() wrap is left");
+    }
+
+    #[test]
+    fn outputs_need_a_port_and_a_pwm_mode() {
+        let (mut t, _clock) = at(0);
+        t.timer_output_lines(true).unwrap();
+        t.write(TCA_CTRLB, 0x10).unwrap(); // NORMAL | CMP0EN
+        assert!(t.write(TCA_CTRLA, 0x01).is_err(), "CMP0EN in NORMAL mode");
+        let (mut t, _clock) = at(0);
+        t.timer_output_lines(true).unwrap();
+        t.write(0x81, 0x10).unwrap(); // TCB0 INT mode | CCMPEN
+        assert!(t.write(0x80, 0x01).is_err(), "CCMPEN outside PWM8");
+        let (mut t, _clock) = at(0);
+        t.timer_output_lines(false).unwrap(); // the wire exists, no pad took it
+        t.write(0x81, 0x17).unwrap();
+        assert!(t.write(0x80, 0x01).is_err(), "CCMPEN with no port");
     }
 
     #[test]

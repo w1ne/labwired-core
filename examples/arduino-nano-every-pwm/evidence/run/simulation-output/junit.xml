@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.084117">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="ef2f21eb696c0daf72016ccf3f74957f2089188432b506b8bec54a7dd0513092"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.084117">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NANO_EVERY_PWM" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: PWM_HALF" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: PWM_D3_OFF" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: portb:0 &gt;= 70 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: portf:5 &gt;= 70 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

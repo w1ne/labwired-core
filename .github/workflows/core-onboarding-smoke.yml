@@ -238,6 +238,12 @@ jobs:
             script: examples/arduino-nano-every-max31855/max31855-smoke.yaml
             system: configs/systems/arduino-nano-every-max31855.yaml
             firmware_build_script: examples/arduino-nano-every-max31855/firmware/build.sh
+          # Same kit rank: stock analogWrite() on the Nano Every drives a
+          # TCA0 pad (D9) and a TCB pad (D3) with a waveform.
+          - id: arduino-nano-every-pwm
+            script: examples/arduino-nano-every-pwm/pwm-smoke.yaml
+            system: configs/systems/arduino-nano-every.yaml
+            firmware_build_script: examples/arduino-nano-every-pwm/firmware/build.sh
           # Demand group #2 (RP2040): Adafruit Feather RP2040 reads a BME280
           # over I2C1 on the STEMMA QT pads GP2/GP3 and raises D13 on chip-ID success.
           - id: adafruit-feather-rp2040-bme280

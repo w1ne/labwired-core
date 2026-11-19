@@ -1,0 +1,13 @@
+# Control for pwm-smoke.yaml: digitalWrite(3, LOW) stops the D3 waveform
+# after 40 ms (about 78 edges). 2 000 000 steps are more than 120 ms, so a
+# pad that kept running would pass 200 edges. This script must FAIL.
+schema_version: "1.2"
+inputs:
+  firmware: ../../../tests/fixtures/avr/arduino-nano-every-pwm.elf
+  system: ../../../configs/systems/arduino-nano-every.yaml
+limits:
+  max_steps: 2000000
+assertions:
+  - gpio_edges:
+      pin: "portf:5"
+      min_edges: 200

@@ -144,8 +144,11 @@ peripherals:
     size: "15"
     config:
       irqs: [37, 38, 39]
-  # TCA0 (normal / single-slope count, no pad output, no interrupts) and
-  # TCB0..3 (INT and PWM8 count modes, CAPT interrupt, no pad output).
+  # TCA0 (normal / single-slope count, no interrupts) and TCB0..3 (INT and
+  # PWM8 count modes, CAPT interrupt). Waveform outputs: TCA0 WO0..2 in
+  # single-slope mode on the PORTMUX.TCAROUTEA port, and each TCB's WO in PWM8
+  # mode on its default or PORTMUX.TCBROUTEA alternate pad; the pad needs its
+  # PORTx.DIR bit. Split mode, FRQ and dual-slope are refused.
   - id: "timers"
     type: "megaavr_tc"
     base_address: 0x00010A00

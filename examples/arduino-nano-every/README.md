@@ -31,12 +31,15 @@ The chip descriptor (`configs/chips/atmega4809.yaml`) now models more than
 this example uses. Stock ArduinoCore-megaavr sketches run on it in the Arduino
 matrix (`validation/arduino-matrix`, row `arduino-nano-every`): L0/L1 serial
 through USART3, L2 blink, L3 `Wire` through TWI0 (INA219, exact registers), L4
-`SPI` through SPI0 (MAX31855, exact frame), L5 `analogRead()` through ADC0 and
-L7 `millis()`/`micros()` through TCB3 pass. Timer pad outputs are not modelled
-yet, so L6 is skipped with that reason. A sensor example on `Wire` is in
-[`../arduino-nano-every-bme280/`](../arduino-nano-every-bme280/README.md) and
-one on `SPI` in
-[`../arduino-nano-every-max31855/`](../arduino-nano-every-max31855/README.md).
+`SPI` through SPI0 (MAX31855, exact frame), L5 `analogRead()` through ADC0, L6
+`analogWrite()` through TCA0 (20 edges on D9) and L7 `millis()`/`micros()`
+through TCB3 pass. Only L8 is skipped: the chip has no CAN controller. A
+sensor example on `Wire` is in
+[`../arduino-nano-every-bme280/`](../arduino-nano-every-bme280/README.md), one
+on `SPI` in
+[`../arduino-nano-every-max31855/`](../arduino-nano-every-max31855/README.md)
+and `analogWrite()` in
+[`../arduino-nano-every-pwm/`](../arduino-nano-every-pwm/README.md).
 An I/O access to anything the descriptor does not
 declare faults instead of reading zero.
 

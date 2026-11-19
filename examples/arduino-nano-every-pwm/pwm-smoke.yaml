@@ -1,0 +1,21 @@
+# Arduino Nano Every: stock analogWrite() on D9 (PB0, TCA0 WO0) and on D3
+# (PF5, TCB1 WO). Both pads carry a 976.6 Hz waveform for the 40 ms the sketch
+# keeps them running, about 39 periods and 78 edges each; D3 stops at
+# digitalWrite(3, LOW). The sketch prints its three lines on Serial (USART3).
+schema_version: "1.2"
+inputs:
+  firmware: ../../tests/fixtures/avr/arduino-nano-every-pwm.elf
+  system: ../../configs/systems/arduino-nano-every.yaml
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "NANO_EVERY_PWM"
+  - uart_contains: "PWM_HALF"
+  - uart_contains: "PWM_D3_OFF"
+  - gpio_edges:
+      pin: "portb:0"
+      min_edges: 70
+  - gpio_edges:
+      pin: "portf:5"
+      min_edges: 70
+  - expected_stop_reason: max_steps

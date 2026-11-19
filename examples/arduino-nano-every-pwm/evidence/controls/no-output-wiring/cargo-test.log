@@ -1,0 +1,35 @@
+   Compiling labwired-core v0.26.0 (/data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/core)
+warning: method `wire_megaavr_timer_output_pads` is never used
+    --> crates/core/src/bus/attach.rs:3508:19
+     |
+ 474 | impl SystemBus {
+     | -------------- method in this implementation
+...
+3508 |     pub(crate) fn wire_megaavr_timer_output_pads(&mut self) {
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `labwired-core` (lib) generated 1 warning
+   Compiling labwired-loader v0.26.0 (/data/worktrees/legacy-migrated/labwired-hw-onboarding/crates/loader)
+    Finished `test` profile [optimized] target(s) in 3m 45s
+     Running tests/avr/main.rs (/data/cargo-pool/labwired-core/lanes/hw-onboarding/debug/deps/avr-286316642eeb8d15)
+
+running 1 test
+test avr_nano_every_pwm::nano_every_analog_write_drives_tca0_and_tcb_waveforms_on_their_pads ... FAILED
+
+failures:
+
+---- avr_nano_every_pwm::nano_every_analog_write_drives_tca0_and_tcb_waveforms_on_their_pads stdout ----
+
+thread 'avr_nano_every_pwm::nano_every_analog_write_drives_tca0_and_tcb_waveforms_on_their_pads' (1065565) panicked at crates/core/tests/avr/avr_nano_every_pwm.rs:79:14:
+called `Result::unwrap()` on an `Err` value: NotImplemented("megaAVR timers: TCA0 compare outputs (CTRLB.CMPnEN) with no port to carry them is not modelled")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    avr_nano_every_pwm::nano_every_analog_write_drives_tca0_and_tcb_waveforms_on_their_pads
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 106 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p labwired-core --test avr`

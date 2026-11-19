@@ -118,6 +118,5 @@ mode, quick command and the inactive-bus time-out.
 Not modelled: the TWI0 pads (the sensor answers on any
 `PORTMUX.TWISPIROUTEA` route, and SDA / SCL levels are not visible on PA2 /
 PA3), pull-up voltage, arbitration loss, bus errors, a device NACK of a data
-byte, device clock stretching, and BME280 conversion time. The TCA0 / TCB
-waveform outputs are still not modelled on this chip. The run assumes an
-ideal 5 V rail.
+byte, device clock stretching, and BME280 conversion time. The run assumes
+an ideal 5 V rail.
