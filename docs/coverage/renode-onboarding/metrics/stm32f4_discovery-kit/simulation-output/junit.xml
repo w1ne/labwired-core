@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="13" failures="0" errors="0" time="0.576374">
+<testsuite name="labwired" tests="13" failures="0" errors="0" time="0.523814">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="ca97021e67ef1751e189ece95a66c67f6d315856e1d8c117fa866fb05f2ca571"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.576374">
+  <testcase classname="labwired" name="run" time="0.523814">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: F4-DISCO SMOKE" time="0.000000">
   </testcase>

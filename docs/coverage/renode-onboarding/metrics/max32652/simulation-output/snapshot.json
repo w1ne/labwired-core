@@ -33,9 +33,9 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 100000,
-  "cycles": 100000,
-  "instructions": 100000,
+  "steps_executed": 100785,
+  "cycles": 50790,
+  "instructions": 100785,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -45,7 +45,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 100000
+      "value": 100785
     }
   },
   "limits": {
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "d5eb4184d539e8df4142e3f1f50efaa92767ab39d0e2f40b77f719b819d9d3fd",
+  "firmware_hash": "3a1ec8200b950e1d5d75c85b4b4b722e463de30df05a19e1955ba8fff3c455b0",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-max32652-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/max32652.yaml",

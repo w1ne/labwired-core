@@ -131,9 +131,10 @@
       "divider": 1,
       "residue": 0
     },
+    "plic": null,
     "reservation": null
   },
-  "firmware_hash": "c965f967e7c997888ae4edc3ab49f4156eb03f6e41837b476e5b374afdfb56c4",
+  "firmware_hash": "e903bc01a90b0314af2bee0f57f7893d7454b282e38072a96f2b40f977d3ff6d",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-starfive-jh7100-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/starfive-jh7100.yaml",

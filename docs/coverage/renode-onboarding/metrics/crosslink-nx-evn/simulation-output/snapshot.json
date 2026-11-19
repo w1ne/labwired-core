@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 400000,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "3acdecb47b3a7d9abf4c7cff381bc38bacdedcb324057fa30d9d171a8937e04b",
+  "firmware_hash": "18d58b8c0649a3b2181a500e1db05d2097f6b700a0d48e56521e066a617cadf2",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-andes-ae350-n25-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/crosslink-nx-evn.yaml",

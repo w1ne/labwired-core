@@ -88,6 +88,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "fdcan",
     "sdmmc",
     "comp",
+    "analog_comparator",
     "tsc",
     "fmc",
     // RP2040 native peripherals (built here). `rp2040_adc` and `rp2040_rtc`
@@ -108,6 +109,11 @@ pub const MODEL_TYPES: &[&str] = &[
     "rp2040_xip_ssi",
     "rp2040_usb",
     "rp2350_bootram",
+    // ESP32-C2 DevKitM profile types. GPIO and UART behavior are shared with
+    // the register-compatible C3 models, with C2 clock/source values supplied
+    // by its family adapter.
+    "esp32c2_gpio",
+    "esp32c2_uart",
     // ESP32-C3 behavioral models (esp32 factory).
     // MUST be listed: without membership the fuzzy fallback would coerce the
     // BLE baseband window onto some unrelated register map instead of erroring.
@@ -171,13 +177,28 @@ pub const MODEL_TYPES: &[&str] = &[
     // C5 UART0 uses the shared Espressif UART head at its own 240 MHz pacing
     // rate and interrupt source 47. It is intentionally window-limited by the
     // C5 chip descriptor; do not route it through the fuzzy STM32 UART arm.
+    "esp32c5_gpio",
+    // C5 I2C0 is selected by the C5-aware C3-family attach path.
+    "esp32c5_i2c",
     "esp32c5_uart",
     // C61 UART0 uses the shared Espressif FIFO/status head at its 160 MHz
     // core rate and interrupt source 40; the descriptor limits the window.
+    // C61's GPIO path uses shifted registers plus the I2C0 matrix subset.
+    "esp32c61_gpio",
     "esp32c61_uart",
-    // P4 UART0 uses the shared FIFO/status head with P4's 400 MHz core and
-    // 90 MHz APB clock. Its chip descriptor exposes only FIFO and STATUS.
+    "esp32c61_pcr",
+    "esp32c61_i2c",
+    // P4 HP I2C0 and UART0 are family-wrapped shared Espressif models; the P4
+    // descriptor selects their bases and wires the tested GPIO matrix route.
+    "esp32p4_i2c",
     "esp32p4_uart",
+    // Narrow GPIO data/enable/input heads (S2/P4 classic head, C5/C61 later
+    // head). Listed so a fuzzy "gpio" heuristic cannot coerce them onto an
+    // STM32 GPIO map.
+    "esp32s2_gpio",
+    "esp32p4_gpio",
+    "esp32c5_gpio",
+    "esp32c61_gpio",
     // nRF52 behavioral models (nrf52 factory).
     "nrf52840_twim",
     "nrf52_saadc",
@@ -412,10 +433,12 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_mclk",
     // Renesas RA SYSTEM (HOCO / OSCSF).
     "ra_sysc",
-    // Renesas RA8 / RA6 SYSTEM, full R_SYSTEM register file (adds the
+    // Renesas RA8 / RA6 / RA4 SYSTEM, full R_SYSTEM register file (adds the
     // xxxCKCR handshake).
     "ra8_sysc",
     "ra6_sysc",
+    "ra4_sysc",
+    "ra_mstp",
     // Renesas RX SYSTEM (oscillator stable flags, clock-switch handshakes).
     "rx_sysc",
     // Renesas RX FLASH control registers (0xAA-keyed word writes).
@@ -429,17 +452,23 @@ pub const MODEL_TYPES: &[&str] = &[
     "pic32_uart",
     // Microchip PIC32MZ 16-bit timer (TxCON/TMRx/PRx, Type A or B).
     "pic32_timer",
+    // Microchip megaAVR 0-series USART, the TCA0 + TCB0..3 timer block and ADC0.
+    "megaavr_usart",
+    "megaavr_tc",
+    "megaavr_adc",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
     "ra8_pfs",
     // Renesas RA ICU event-link registers (IELSRn), the 16-bit AGT, the
-    // 12-bit ADC and DAC, the IIC (RIIC) master and the GPT (saw-wave PWM).
+    // 12-bit ADC and DAC, the IIC (RIIC) master, the CAN module (normal
+    // mailbox mode) and the GPT (saw-wave PWM).
     "ra_icu",
     "ra_agt",
     "ra_adc12",
     "ra_dac12",
     "ra_iic",
+    "ra_can",
     "ra_gpt",
     // NXP i.MX RT CCM / IOMUXC.
     "imx_ccm",
@@ -1070,11 +1099,16 @@ pub fn try_build(
                     calib,
                     external_clock_divider,
                 );
-            Box::new(if no_reference_tickint_reset {
+            let systick = if no_reference_tickint_reset {
                 systick.with_no_reference_tickint_reset()
             } else {
                 systick
-            })
+            };
+            // `external_ref_hz`: the reference clock CLKSOURCE = 0 selects.
+            match p_cfg.config.get("external_ref_hz").and_then(|v| v.as_u64()) {
+                Some(hz) => Box::new(systick.with_external_ref_hz(hz)),
+                None => Box::new(systick),
+            }
         }
         "arm_sp804_timer" => Box::new(crate::peripherals::arm_sp804::ArmSp804Timer::new()),
         "lpc2294_timer" => Box::new(crate::peripherals::lpc::timer::LpcTimer::new()),
@@ -1184,6 +1218,21 @@ pub fn try_build(
             {
                 rcc.set_f4_ahb1enr_reset(v as u32);
             }
+            // F1 ENR writable masks are per-density. YAML: `config: {
+            // rcc_ahbenr_mask, rcc_apb1enr_mask, rcc_apb2enr_mask }`; an
+            // absent key keeps the medium-density default.
+            let f1 = |k: &str| -> Option<u32> {
+                p_cfg
+                    .config
+                    .get(k)
+                    .and_then(|v| v.as_u64())
+                    .map(|n| n as u32)
+            };
+            rcc.set_f1_enr_masks(
+                f1("rcc_ahbenr_mask"),
+                f1("rcc_apb1enr_mask"),
+                f1("rcc_apb2enr_mask"),
+            );
             // F42x/F446 PLLSAI + DCKCFGR/DCKCFGR2 (`pllsai: true`).
             if p_cfg.config.get("pllsai").and_then(|v| v.as_bool()) == Some(true) {
                 rcc.set_f4_pllsai(true);
@@ -1282,7 +1331,9 @@ pub fn try_build(
                 // `input_capture: stm32f4`).
                 let pad_map = match p_cfg.config.get("pad_map").and_then(|v| v.as_str()) {
                     None => None,
+                    Some("at32f421") => Some("at32f421"),
                     Some("stm32g0") => Some("stm32g0"),
+                    Some("stm32c0") => Some("stm32c0"),
                     Some("stm32g4") => Some("stm32g4"),
                     Some("stm32l0") => Some("stm32l0"),
                     Some("stm32l4") => Some("stm32l4"),
@@ -1292,15 +1343,33 @@ pub fn try_build(
                     Some("stm32h5") => Some("stm32h5"),
                     Some(other) => {
                         return Err(anyhow::anyhow!(
-                            "timer '{}': unknown pad_map '{other}' (supported: stm32g0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
+                            "timer '{}': unknown pad_map '{other}' (supported: at32f421, stm32g0, stm32c0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
                             p_cfg.id
                         ))
                     }
                 };
+                // `capture_compare_irq: N` — a separate CC vector (AT32F421
+                // TMR1: overflow/trigger/hall IRQ13, channel IRQ14).
+                let capture_compare_irq = p_cfg
+                    .config
+                    .get("capture_compare_irq")
+                    .map(|value| {
+                        value
+                            .as_u64()
+                            .and_then(|v| u32::try_from(v).ok())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "timer '{}': capture_compare_irq must be a u32",
+                                    p_cfg.id
+                                )
+                            })
+                    })
+                    .transpose()?;
                 Box::new(
                     crate::peripherals::timer::Timer::new_with_layout(width, advanced)
                         .basic(basic)
                         .ccer_np(ccer_np)
+                        .capture_compare_irq(capture_compare_irq)
                         .pad_map(pad_map),
                 )
             }
@@ -1329,8 +1398,11 @@ pub fn try_build(
                         pin_count as u8,
                     ),
                 ),
+                Some("megaavr_port") => Box::new(
+                    crate::peripherals::avr_gpio::AvrGpioPort::new_megaavr_port(pin_count as u8),
+                ),
                 Some(other) => anyhow::bail!(
-                    "avr_gpio '{}': unknown config.layout '{other}' (supported: atmega, avrxt_vport)",
+                    "avr_gpio '{}': unknown config.layout '{other}' (supported: atmega, avrxt_vport, megaavr_port)",
                     p_cfg.id
                 ),
             }
@@ -1701,7 +1773,9 @@ pub fn try_build(
             };
             Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new().with_layout(layout))
         }
-        "rp2040_adc" => Box::new(crate::peripherals::rp2040::adc::Rp2040Adc::new()),
+        "rp2040_adc" => Box::new(
+            crate::peripherals::rp2040::adc::Rp2040Adc::new().with_irq(p_cfg.irq.unwrap_or(22)),
+        ),
         "rp2040_rtc" => Box::new(crate::peripherals::rp2040::rtc::Rp2040Rtc::new()),
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),
@@ -1724,7 +1798,27 @@ pub fn try_build(
         "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
         "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
         "rtc_v3" => Box::new(crate::peripherals::rtc_v3::RtcV3::new()),
-        "iwdg" => Box::new(crate::peripherals::iwdg::Iwdg::new()),
+        "iwdg" => {
+            let iwdg = crate::peripherals::iwdg::Iwdg::new();
+            // `reset_on_expiry: { lsi_hz: N }` opts in to a counting IWDG
+            // that resets the machine; absent keeps the latch-only model.
+            match p_cfg.config.get("reset_on_expiry") {
+                None => Box::new(iwdg),
+                Some(v) => {
+                    let lsi_hz = v
+                        .get("lsi_hz")
+                        .and_then(|hz| hz.as_u64())
+                        .filter(|hz| *hz > 0)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "iwdg '{}': reset_on_expiry needs a positive lsi_hz",
+                                p_cfg.id
+                            )
+                        })?;
+                    Box::new(iwdg.with_reset_on_expiry(lsi_hz))
+                }
+            }
+        }
         "wwdg" => Box::new(crate::peripherals::wwdg::Wwdg::new()),
         "dac" => Box::new(crate::peripherals::dac::Dac::new()),
         "lptim" => Box::new(crate::peripherals::lptim::Lptim::new()),
@@ -1735,8 +1829,62 @@ pub fn try_build(
         "fdcan" => Box::new(crate::peripherals::fdcan::Fdcan::new()),
         "sdmmc" => Box::new(crate::peripherals::sdmmc::Sdmmc::new()),
         "comp" => Box::new(crate::peripherals::comp::Comp::new()),
+        // Data-declared comparator: `profile` picks the register file, the
+        // `plus` / `minus` lists name what each selector value reaches.
+        "analog_comparator" => {
+            use crate::peripherals::analog_comparator::{AnalogComparator, ComparatorProfile};
+            let cfg = &p_cfg.config;
+            let profile = match cfg.get("profile").and_then(|v| v.as_str()) {
+                Some("at32f421") => ComparatorProfile::At32F421,
+                other => anyhow::bail!(
+                    "analog_comparator `{}`: unknown profile {other:?} (expected at32f421)",
+                    p_cfg.id
+                ),
+            };
+            let list = |key: &str| -> anyhow::Result<Vec<String>> {
+                cfg.get(key)
+                    .and_then(|v| v.as_sequence())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("analog_comparator `{}`: `{key}` list required", p_cfg.id)
+                    })?
+                    .iter()
+                    .map(|v| {
+                        v.as_str().map(str::to_string).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "analog_comparator `{}`: `{key}` entries are names",
+                                p_cfg.id
+                            )
+                        })
+                    })
+                    .collect()
+            };
+            let vrefint_mv = cfg
+                .get("vrefint_mv")
+                .and_then(|v| v.as_f64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!("analog_comparator `{}`: `vrefint_mv` required", p_cfg.id)
+                })?;
+            let exti_line = match cfg.get("exti_line") {
+                None => None,
+                Some(v) => Some(v.as_u64().and_then(|l| u8::try_from(l).ok()).ok_or_else(
+                    || anyhow::anyhow!("analog_comparator `{}`: bad exti_line", p_cfg.id),
+                )?),
+            };
+            Box::new(AnalogComparator::new(
+                profile,
+                &list("plus")?,
+                &list("minus")?,
+                vrefint_mv,
+                exti_line,
+            )?)
+        }
         "tsc" => Box::new(crate::peripherals::tsc::Tsc::new()),
-        "fmc" => Box::new(crate::peripherals::fmc::Fmc::new()),
+        "fmc" => match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
+            Some("stm32h7_boot_disable") => {
+                Box::new(crate::peripherals::fmc::H7BootDisable::default())
+            }
+            _ => Box::new(crate::peripherals::fmc::Fmc::new()),
+        },
         "exti" => {
             let layout: crate::peripherals::exti::ExtiRegisterLayout =
                 SystemBus::parse_profile_or_default(p_cfg, "EXTI")?;
@@ -1753,9 +1901,34 @@ pub fn try_build(
             } else {
                 (1u32 << lines) - 1
             };
-            Box::new(crate::peripherals::exti::Exti::new_with_layout_lines(
-                layout, line_mask,
-            ))
+            // `line_mask: 0x2bffff` names the implemented lines exactly when
+            // they are not contiguous (AT32F421: 0..17, 19, 21).
+            let line_mask = match p_cfg.config.get("line_mask") {
+                None => line_mask,
+                Some(v) => v
+                    .as_u64()
+                    .and_then(|m| u32::try_from(m).ok())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("exti `{}`: line_mask must be a u32", p_cfg.id)
+                    })?,
+            };
+            let mut exti = crate::peripherals::exti::Exti::new_with_layout_lines(layout, line_mask);
+            // `line_irqs: { 21: 12 }` wires internal lines to their vectors.
+            if let Some(map) = p_cfg.config.get("line_irqs") {
+                let map = map.as_mapping().ok_or_else(|| {
+                    anyhow::anyhow!("exti `{}`: line_irqs must map line -> irq", p_cfg.id)
+                })?;
+                let mut line_irqs = Vec::new();
+                for (line, irq) in map {
+                    let (Some(line), Some(irq)) = (line.as_u64(), irq.as_u64()) else {
+                        anyhow::bail!("exti `{}`: line_irqs entries are integers", p_cfg.id);
+                    };
+                    line_irqs.push((u8::try_from(line)?, u32::try_from(irq)?));
+                }
+                exti.set_line_irqs(line_irqs)
+                    .map_err(|e| anyhow::anyhow!("exti `{}`: {e}", p_cfg.id))?;
+            }
+            Box::new(exti)
         }
         "afio" => Box::new(crate::peripherals::afio::Afio::new()),
         // Channel-based DMA (F1/L0/L4/G0). `config: { channel_irqs: [11, ...,
@@ -1771,14 +1944,23 @@ pub fn try_build(
                     anyhow::bail!("dma `{}`: unsupported profile `{profile}`", p_cfg.id)
                 }
             };
-            // `channels: 5` for the F03x/F04x/F05x DMA1 (RM0091 §10.3.2).
-            let channels = match p_cfg.config.get("channels").map(|v| v.as_u64()) {
-                None => 7,
-                Some(Some(n @ 1..=7)) => n as usize,
-                Some(_) => anyhow::bail!("dma `{}`: channels must be 1..7", p_cfg.id),
-            };
-            if channels < 7 {
-                dma = dma.with_channels(channels);
+            // `channels: N` declares a controller with fewer than seven
+            // channels (STM32F030 / AT32F421 DMA1 have five).
+            let mut channels = 7usize;
+            if let Some(n) = p_cfg.config.get("channels") {
+                let n = n
+                    .as_u64()
+                    .filter(|n| (1..=7).contains(n))
+                    .ok_or_else(|| anyhow::anyhow!("dma `{}`: channels must be 1..=7", p_cfg.id))?;
+                channels = n as usize;
+                dma = dma.with_channel_count(channels);
+            }
+            // `absent_channels: reserved`: the missing channel blocks read
+            // zero and ignore writes (F03x/F04x/F05x DMA1, RM0091 §10.3.2).
+            match p_cfg.config.get("absent_channels").map(|v| v.as_str()) {
+                None => {}
+                Some(Some("reserved")) => dma = dma.with_reserved_absent_channels(),
+                Some(_) => anyhow::bail!("dma `{}`: absent_channels must be `reserved`", p_cfg.id),
             }
             if let Some(irqs) = p_cfg.config.get("channel_irqs") {
                 let mut irqs: Vec<u32> = irqs
@@ -1955,7 +2137,23 @@ pub fn try_build(
                 _ => {
                     let layout: crate::peripherals::adc::AdcRegisterLayout =
                         SystemBus::parse_profile_or_default(p_cfg, "ADC")?;
-                    Box::new(crate::peripherals::adc::Adc::new_with_layout(layout))
+                    let mut adc = crate::peripherals::adc::Adc::new_with_layout(layout);
+                    // Board-level static channel voltages: `input_mv: { <ch>: <mV> }`.
+                    if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                        for (k, v) in map {
+                            match (k.as_u64(), v.as_u64()) {
+                                (Some(ch), Some(mv)) if ch < u64::from(adc.channel_count()) => {
+                                    adc.set_channel_input(ch as u8, mv as u16)
+                                }
+                                _ => anyhow::bail!(
+                                    "adc '{}': input_mv wants {{ <channel 0..{}>: <mV> }}",
+                                    p_cfg.id,
+                                    adc.channel_count() - 1
+                                ),
+                            }
+                        }
+                    }
+                    Box::new(adc)
                 }
             }
         }
@@ -2021,6 +2219,11 @@ pub fn try_build(
         }
         // SYSCFG on STM32L0 (`profile: stm32l0`): the same EXTICR line-source
         // mux, among the L0's own configuration words (RM0367 §10).
+        // SCFG on AT32F421 (`profile: at32f421`): CFG1 and the EXINTC
+        // line-source mux at the STM32F0 SYSCFG offsets (RM_AT32F421 §7.2).
+        "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("at32f421") => {
+            Box::new(crate::peripherals::syscfg::At32F421Scfg::new())
+        }
         "syscfg" if p_cfg.config.get("profile").and_then(|v| v.as_str()) == Some("stm32l0") => {
             Box::new(crate::peripherals::syscfg::Stm32L0Syscfg::new())
         }
@@ -2077,6 +2280,8 @@ pub fn try_build(
         "ra_sysc" => Box::new(crate::peripherals::ra_clock::RaSysc::new()),
         "ra8_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra8()),
         "ra6_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra6()),
+        "ra4_sysc" => Box::new(crate::peripherals::ra_clock::RaSyscRegs::ra4()),
+        "ra_mstp" => Box::new(crate::peripherals::ra_mstp::RaMstp::new()),
         "rx_sysc" => Box::new(crate::peripherals::rx_sysc::RxSysc::new()),
         // `irq`: the EVIC vector; `timer_type`: "a" (Timer1) or "b";
         // `clock_hz`: SYSCLK; `pbclk_hz`: the timer's PBCLK3; `sosc_hz`.
@@ -2129,6 +2334,70 @@ pub fn try_build(
                 get("clock_hz").unwrap_or(u::DEFAULT_CLOCK_HZ),
                 get("pbclk_hz").unwrap_or(u::DEFAULT_PBCLK_HZ),
             ))
+        }
+        // `irqs`: the part's vector numbers [rxc, dre, txc].
+        "megaavr_usart" => {
+            let irqs = u32_list(p_cfg, "irqs", 3).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "megaavr_usart '{}' needs `irqs: [rxc, dre, txc]` (vector numbers)",
+                    p_cfg.id
+                )
+            })?;
+            Box::new(crate::peripherals::megaavr::usart::MegaAvrUsart::new([
+                irqs[0], irqs[1], irqs[2],
+            ]))
+        }
+        // `tcb_irqs`: the TCB0..3 vector numbers.
+        "megaavr_tc" => {
+            let irqs = u32_list(p_cfg, "tcb_irqs", 4).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "megaavr_tc '{}' needs `tcb_irqs: [tcb0, tcb1, tcb2, tcb3]` (vector numbers)",
+                    p_cfg.id
+                )
+            })?;
+            Box::new(crate::peripherals::megaavr::tc::MegaAvrTimers::new([
+                irqs[0], irqs[1], irqs[2], irqs[3],
+            ]))
+        }
+        // `vdd_mv`: the board's VDD (the VDDREF reference, default 5000);
+        // `input_mv: { <ain>: <mV> }`: static levels on AIN0..AIN15.
+        "megaavr_adc" => {
+            use crate::peripherals::megaavr::adc::MegaAvrAdc;
+            if let Some(k) = p_cfg
+                .config
+                .keys()
+                .find(|k| !matches!(k.as_str(), "vdd_mv" | "input_mv"))
+            {
+                anyhow::bail!("megaavr_adc '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            if p_cfg.irq.is_some() {
+                anyhow::bail!(
+                    "megaavr_adc '{}': ADC0 interrupts are not modelled",
+                    p_cfg.id
+                );
+            }
+            let vdd_mv = p_cfg
+                .config
+                .get("vdd_mv")
+                .map_or(Some(5000), |v| v.as_u64());
+            let Some(vdd_mv @ 1..) = vdd_mv else {
+                anyhow::bail!(
+                    "megaavr_adc '{}': vdd_mv wants a positive millivolt count",
+                    p_cfg.id
+                );
+            };
+            let mut adc = MegaAvrAdc::new(vdd_mv as u32);
+            if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                for (k, v) in map {
+                    match (k.as_u64(), v.as_u64()) {
+                        (Some(ain), Some(mv)) if ain < 16 => {
+                            adc.set_input_millivolts(ain as usize, mv as u32)
+                        }
+                        _ => anyhow::bail!("megaavr_adc input_mv wants {{ <ain 0..15>: <mV> }}"),
+                    }
+                }
+            }
+            Box::new(adc)
         }
         "rx_flash" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::new()),
         "rx_rtc" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::rtc()),
@@ -2196,7 +2465,8 @@ pub fn try_build(
             ))
         }
         // `clock_hz`: the rate the bus cycles run at; `elc_event`: the unit's
-        // scan-end event; `vref_mv`: the reference; `input_mv: { <ch>: <mV> }`:
+        // scan-end event; `vref_mv`: the reference; `adc14`: a 14-bit ADC14
+        // unit (ADPRC = 3 is 14-bit); `input_mv: { <ch>: <mV> }`:
         // board-level static channel levels.
         // `clock_hz`: the rate the bus cycles run at; `pclkb_hz`: PCLKB, the
         // RIIC's clock; `elc_event`: the channel's RXI event (TXI/TEI/ERI
@@ -2210,9 +2480,20 @@ pub fn try_build(
                 get("elc_event").map_or(iic::DEFAULT_ELC_EVENT, |v| v as u32),
             ))
         }
+        // Normal mailbox mode; interrupts are refused, so there is no `irq`.
+        "ra_can" => {
+            if p_cfg.irq.is_some() {
+                anyhow::bail!("ra_can '{}' models no interrupt (drop `irq`)", p_cfg.id);
+            }
+            if let Some(k) = p_cfg.config.keys().next() {
+                anyhow::bail!("ra_can '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            Box::new(crate::peripherals::ra_can::RaCan::new())
+        }
         // `channels`: GPT channel count; `clock_hz`: the rate the bus cycles
         // run at; `pclkd_hz`: PCLKD, the count clock before GTCR.TPCS;
-        // `elc_event`: GPT0's capture/compare A event (nine per channel);
+        // `elc_event`: GPT0's capture/compare A event; `events_per_channel`:
+        // the ELC event stride (default nine; eight on the RA4M1);
         // `wide_channels`: mask of the 32-bit channels; `gtioc_pads`:
         // `{ GTIOCnA: Pmnn, ... }`, the pads that carry each GTIOC line.
         "ra_gpt" => {
@@ -2241,6 +2522,9 @@ pub fn try_build(
                     get("elc_event").map_or(gpt::DEFAULT_ELC_EVENT, |v| v as u32),
                     get("wide_channels").map_or(0xFF, |v| v as u32),
                 )
+                .with_events_per_channel(
+                    get("events_per_channel").map_or(gpt::DEFAULT_EVENTS_PER_CHANNEL, |v| v as u32),
+                )
                 .with_output_pads(pads),
             )
         }
@@ -2251,6 +2535,13 @@ pub fn try_build(
                 get("clock_hz").unwrap_or(adc::DEFAULT_CLOCK_HZ),
                 get("elc_event").map_or(adc::DEFAULT_ELC_EVENT, |v| v as u32),
                 get("vref_mv").map_or(adc::DEFAULT_VREF_MV, |v| v as u16),
+            )
+            .with_adc14(
+                p_cfg
+                    .config
+                    .get("adc14")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
             );
             if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
                 for (k, v) in map {
@@ -2314,6 +2605,14 @@ pub fn try_build(
             // `host: false` leaves the port unplugged (no enumeration).
             if p_cfg.config.get("host").and_then(|v| v.as_bool()) == Some(false) {
                 usb.set_host_enabled(false);
+            }
+            // `host_steps:` run after enumeration (usb_host::parse_host_steps),
+            // e.g. the CDC SET_LINE_CODING / SET_CONTROL_LINE_STATE a terminal
+            // sends when it opens the port.
+            if let Some(steps) = p_cfg.config.get("host_steps") {
+                let steps = crate::peripherals::usb_host::parse_host_steps(steps)
+                    .map_err(|e| anyhow::anyhow!("imxrt_usb host_steps: {e}"))?;
+                usb.queue_host_steps(steps);
             }
             Box::new(usb)
         }
@@ -2630,6 +2929,21 @@ pub fn try_build(
         _ => return Ok(None),
     };
     Ok(Some(dev))
+}
+
+/// `config.<key>`: exactly `len` unsigned integers, or `None`.
+fn u32_list(p_cfg: &PeripheralConfig, key: &str, len: usize) -> Option<Vec<u32>> {
+    p_cfg
+        .config
+        .get(key)
+        .and_then(|v| v.as_sequence())
+        .map(|s| {
+            s.iter()
+                .filter_map(|v| v.as_u64())
+                .map(|v| v as u32)
+                .collect::<Vec<_>>()
+        })
+        .filter(|v| v.len() == len)
 }
 
 #[cfg(test)]

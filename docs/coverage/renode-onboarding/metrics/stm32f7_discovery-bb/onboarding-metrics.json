@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 6000000,
+    "instructions": 6002828,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml",
   "system": "configs/systems/onboarding/stm32f7_discovery-bb.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-18T02:47:58Z",
-  "finished_at_utc": "2026-11-18T02:48:05Z",
-  "elapsed_seconds": 8,
-  "elapsed_ms": 7131,
+  "started_at_utc": "2026-11-19T16:17:51Z",
+  "finished_at_utc": "2026-11-19T16:17:52Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1294,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 4.225,
-    "build_firmware": 1.517,
-    "run_smoke": 1.341
+    "build_cli": 0.34,
+    "build_firmware": 0.33,
+    "run_smoke": 0.582
   },
   "stages_ms": {
-    "build_cli": 4225,
-    "build_firmware": 1517,
-    "run_smoke": 1341
+    "build_cli": 340,
+    "build_firmware": 330,
+    "run_smoke": 582
   }
 }

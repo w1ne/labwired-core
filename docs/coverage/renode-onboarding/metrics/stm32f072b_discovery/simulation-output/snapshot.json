@@ -33,9 +33,9 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "steps_executed": 4000000,
-  "cycles": 4000000,
-  "instructions": 4000000,
+  "steps_executed": 4005254,
+  "cycles": 2640000,
+  "instructions": 4005254,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -45,7 +45,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 4000000
+      "value": 4005254
     }
   },
   "limits": {
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "53a903592dc8c6d9d81eeebbc842620f0b8247c07bc69774caa679f4f3d17ae3",
+  "firmware_hash": "be2fdace97470b6823d586bd7de890f1e3a880906913729cd6100365ee735f25",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml",

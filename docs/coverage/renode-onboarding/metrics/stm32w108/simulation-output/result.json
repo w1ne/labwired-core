@@ -96,7 +96,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "fb9ce5ec06c50a83203a11a5d6bc3a357f0c6bc88e31d85eb7605138bf9be171",
+  "firmware_hash": "7a2527b9520e1f7754ca26a1735cc71368e70b81ad833a8939b3340f77503ad9",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32w108-boot-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32w108.yaml",
@@ -136,6 +136,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },

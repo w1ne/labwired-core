@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
-  "status": "pass",
-  "steps_executed": 200000,
-  "cycles": 200000,
-  "instructions": 200000,
+  "status": "fail",
+  "steps_executed": 207985,
+  "cycles": 111000,
+  "instructions": 207985,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 200000
+      "value": 207985
     }
   },
   "limits": {
@@ -38,7 +38,7 @@
       "assertion": {
         "uart_contains": "UT32 checks PPPPPPPPPPPP DONE"
       },
-      "passed": true
+      "passed": false
     },
     {
       "assertion": {
@@ -55,7 +55,7 @@
           "size": 4
         }
       },
-      "passed": true
+      "passed": false
     },
     {
       "assertion": {
@@ -97,9 +97,9 @@
       0,
       536968840,
       16781481,
-      16781430
+      16781428
     ],
-    "pc": 16781430,
+    "pc": 16781428,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -112,7 +112,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "7e3dc775132951f3efc43ebb69a083014c479341777a12df213c1106cfc7b3f1",
+  "firmware_hash": "c7a9af07d67f420b9117696a043f7235465dcdc2cb71a363fb84f34a7ee65c4d",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-ut32m0r500-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ut32m0r500.yaml",
@@ -184,6 +184,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -221,7 +228,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 200000,
+    "now_cycle": 111000,
     "channels": [
       {
         "ch": 0,
@@ -235,31 +242,31 @@
             "value": 1
           },
           {
-            "cycle": 1363,
+            "cycle": 1354,
             "value": 0
           },
           {
-            "cycle": 1365,
+            "cycle": 1356,
             "value": 1
           },
           {
-            "cycle": 3451,
+            "cycle": 3442,
             "value": 0
           },
           {
-            "cycle": 5534,
+            "cycle": 5525,
             "value": 1
           },
           {
-            "cycle": 7616,
+            "cycle": 7607,
             "value": 0
           },
           {
-            "cycle": 9699,
+            "cycle": 9690,
             "value": 1
           },
           {
-            "cycle": 11781,
+            "cycle": 11772,
             "value": 0
           }
         ],
@@ -271,31 +278,31 @@
             "state": "1"
           },
           {
-            "cycle": 1363,
+            "cycle": 1354,
             "state": "x"
           },
           {
-            "cycle": 1365,
+            "cycle": 1356,
             "state": "1"
           },
           {
-            "cycle": 3451,
+            "cycle": 3442,
             "state": "x"
           },
           {
-            "cycle": 5534,
+            "cycle": 5525,
             "state": "1"
           },
           {
-            "cycle": 7616,
+            "cycle": 7607,
             "state": "x"
           },
           {
-            "cycle": 9699,
+            "cycle": 9690,
             "state": "1"
           },
           {
-            "cycle": 11781,
+            "cycle": 11772,
             "state": "x"
           }
         ],
@@ -326,7 +333,7 @@
         "end_cycle": 1000
       },
       {
-        "text": "UT32 checks PPPPPPPPPPPP DONE",
+        "text": "UT32 checks PPPPPPPPPPFP DONE",
         "cycle_lo": 1000,
         "cycle": 11000,
         "end_cycle": 11000
@@ -386,28 +393,28 @@
     "heap_top": 536968960
   },
   "metrics": {
-    "cycles": 200000,
-    "instructions": 200000,
-    "steps_executed": 200000,
-    "memory_reads": 1316,
-    "memory_writes": 58,
-    "peripheral_accesses": 326,
+    "cycles": 111000,
+    "instructions": 207985,
+    "steps_executed": 207985,
+    "memory_reads": 1255,
+    "memory_writes": 61,
+    "peripheral_accesses": 325,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 16780522,
+        "pc": 16781428,
+        "count": 391,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 16780540,
         "count": 39,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       },
       {
-        "pc": 16781430,
-        "count": 12,
-        "symbol": "core::core_arch::arm_shared::hints::__yield"
-      },
-      {
-        "pc": 16778224,
+        "pc": 16778146,
         "count": 3,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+        "symbol": "core::ptr::read_volatile"
       }
     ]
   }

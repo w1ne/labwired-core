@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "6a60da6978eccb41898151d33f7531a4a99ebfaf7d85d019c1fe5200b2387f91",
+  "firmware_hash": "2cb31dd612e5f95a703ce295c49204c42ca80f251c3b15d9b12ef720fa940a27",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-l552ze-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l552.yaml",

@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 600000,
-  "cycles": 600000,
-  "instructions": 600000,
+  "steps_executed": 604635,
+  "cycles": 390000,
+  "instructions": 604635,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 600000
+      "value": 604635
     }
   },
   "limits": {
@@ -170,6 +170,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -197,7 +204,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 600000,
+    "now_cycle": 390000,
     "channels": [
       {
         "ch": 0,
@@ -370,14 +377,19 @@
     "heap_top": 537394944
   },
   "metrics": {
-    "cycles": 600000,
-    "instructions": 600000,
-    "steps_executed": 600000,
+    "cycles": 390000,
+    "instructions": 604635,
+    "steps_executed": 604635,
     "memory_reads": 4389,
     "memory_writes": 95,
     "peripheral_accesses": 25444,
     "exceptions": 0,
     "pc_samples": [
+      {
+        "pc": 4896,
+        "count": 859,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
       {
         "pc": 2468,
         "count": 234,
@@ -411,11 +423,6 @@
       {
         "pc": 2662,
         "count": 39,
-        "symbol": "core::core_arch::arm_shared::hints::__yield"
-      },
-      {
-        "pc": 4896,
-        "count": 21,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       }
     ]

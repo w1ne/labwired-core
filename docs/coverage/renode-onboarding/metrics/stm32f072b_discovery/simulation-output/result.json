@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 4000000,
-  "cycles": 4000000,
-  "instructions": 4000000,
+  "steps_executed": 4005254,
+  "cycles": 2640000,
+  "instructions": 4005254,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 4000000
+      "value": 4005254
     }
   },
   "limits": {
@@ -147,7 +147,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "53a903592dc8c6d9d81eeebbc842620f0b8247c07bc69774caa679f4f3d17ae3",
+  "firmware_hash": "be2fdace97470b6823d586bd7de890f1e3a880906913729cd6100365ee735f25",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32f072b-disco-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f072b_discovery.yaml",
@@ -373,6 +373,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -421,7 +428,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 4000000,
+    "now_cycle": 2640000,
     "channels": [
       {
         "ch": 0,
@@ -851,14 +858,19 @@
     "heap_top": 536887296
   },
   "metrics": {
-    "cycles": 4000000,
-    "instructions": 4000000,
-    "steps_executed": 4000000,
-    "memory_reads": 200728,
+    "cycles": 2640000,
+    "instructions": 4005254,
+    "steps_executed": 4005254,
+    "memory_reads": 200691,
     "memory_writes": 4600,
     "peripheral_accesses": 178874,
     "exceptions": 0,
     "pc_samples": [
+      {
+        "pc": 134237286,
+        "count": 5352,
+        "symbol": "firmware_stm32f072b_disco_smoke::__cortex_m_rt_main"
+      },
       {
         "pc": 134220810,
         "count": 1559,
@@ -931,11 +943,6 @@
       },
       {
         "pc": 134220826,
-        "count": 79,
-        "symbol": "<i32>::overflowing_add"
-      },
-      {
-        "pc": 134221044,
         "count": 79,
         "symbol": "<i32>::overflowing_add"
       }

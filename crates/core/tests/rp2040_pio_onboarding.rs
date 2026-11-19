@@ -60,6 +60,7 @@ fn rp2040_chip() -> (ChipDescriptor, SystemManifest) {
     let chip = ChipDescriptor::from_file(&chip_path)
         .unwrap_or_else(|e| panic!("load rp2040 chip {chip_path:?}: {e}"));
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

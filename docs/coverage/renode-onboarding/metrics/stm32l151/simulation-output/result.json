@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 4000000,
-  "cycles": 4000000,
-  "instructions": 4000000,
+  "steps_executed": 4007542,
+  "cycles": 3460000,
+  "instructions": 4007542,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 4000000
+      "value": 4007542
     }
   },
   "limits": {
@@ -143,7 +143,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "7c24833cafbf6978c5ba01035db42dbe1d01da0056ad47bd418c4ecbe06ad40a",
+  "firmware_hash": "4e06684526756a9ead7b1d8f9816d937d43e2efeb5b507f9c843c63b1e92e498",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l151.yaml",
@@ -371,6 +371,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -495,7 +502,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 4000000,
+    "now_cycle": 3460000,
     "channels": [
       {
         "ch": 0,
@@ -730,6 +737,9 @@
     ],
     "dropped_lines": 0
   },
+  "i2c_addresses": [
+    72
+  ],
   "stimuli": [
     {
       "channel": "temperature",
@@ -872,14 +882,19 @@
     "heap_top": 536920064
   },
   "metrics": {
-    "cycles": 4000000,
-    "instructions": 4000000,
-    "steps_executed": 4000000,
+    "cycles": 3460000,
+    "instructions": 4007542,
+    "steps_executed": 4007542,
     "memory_reads": 8197,
     "memory_writes": 864,
     "peripheral_accesses": 757101,
     "exceptions": 0,
     "pc_samples": [
+      {
+        "pc": 134241632,
+        "count": 2148,
+        "symbol": "firmware_stm32l151_smoke::__cortex_m_rt_main"
+      },
       {
         "pc": 134232278,
         "count": 547,
@@ -934,11 +949,6 @@
         "pc": 134232296,
         "count": 508,
         "symbol": "firmware_stm32l151_smoke::wait_level"
-      },
-      {
-        "pc": 134241632,
-        "count": 239,
-        "symbol": "firmware_stm32l151_smoke::__cortex_m_rt_main"
       },
       {
         "pc": 134232422,

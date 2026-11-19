@@ -128,7 +128,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "1cda994a01eb7ed31e7f9616553b15937e299ad6583645b7bd169c35cd1c7d6c",
+  "firmware_hash": "cfa0b945d234de3972b7fc3cab6cde95780a158f4b3385b89d74d90be11c0763",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-arduino-nano-33-ble-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/arduino_nano_33_ble.yaml",
@@ -136,6 +136,13 @@
   },
   "inspect": {
     "peripherals": [
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
       {
         "name": "uart0",
         "kind": "native",
@@ -490,6 +497,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },

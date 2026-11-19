@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 569374,
+  "steps_executed": 291705,
   "cycles": 100000000,
-  "instructions": 569374,
+  "instructions": 291705,
   "stop_reason": "max_cycles",
   "stop_reason_details": {
     "triggered_stop_condition": "max_cycles",
@@ -521,6 +521,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -706,13 +713,18 @@
   },
   "metrics": {
     "cycles": 100000000,
-    "instructions": 569374,
-    "steps_executed": 569374,
-    "memory_reads": 10199,
-    "memory_writes": 1586,
+    "instructions": 291705,
+    "steps_executed": 291705,
+    "memory_reads": 10200,
+    "memory_writes": 1594,
     "peripheral_accesses": 2682,
     "exceptions": 0,
     "pc_samples": [
+      {
+        "pc": 7100,
+        "count": 540,
+        "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
+      },
       {
         "pc": 9382,
         "count": 39,
@@ -722,11 +734,6 @@
         "pc": 15792,
         "count": 39,
         "symbol": "core::ptr::write_volatile"
-      },
-      {
-        "pc": 7100,
-        "count": 26,
-        "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
       },
       {
         "pc": 16570,

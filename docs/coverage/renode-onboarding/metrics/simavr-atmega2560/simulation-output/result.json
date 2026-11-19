@@ -2,8 +2,8 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 15000000,
-  "cycles": 23229638,
-  "instructions": 14998582,
+  "cycles": 23252728,
+  "instructions": 15000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -79,22 +79,22 @@
       2,
       0,
       0,
-      52,
+      53,
       0,
       0,
       0,
-      0,
-      0,
+      120,
+      5,
       0,
       0,
       12,
       0,
-      192,
+      193,
       0
     ],
-    "pc": 1390,
+    "pc": 1384,
     "sp": 8697,
-    "sreg": 131
+    "sreg": 149
   },
   "firmware_hash": "c8f01ff63cacb6ca376d21730c724ff59e3cb6902832b0eff53c8e3425149fe9",
   "config": {
@@ -190,7 +190,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 23236728,
+    "now_cycle": 23252728,
     "channels": [
       {
         "ch": 0,
@@ -200,11 +200,11 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 11208843,
+            "cycle": 11208844,
             "value": 1
           },
           {
-            "cycle": 12814481,
+            "cycle": 12814529,
             "value": 0
           }
         ],
@@ -216,11 +216,11 @@
             "state": "0"
           },
           {
-            "cycle": 11208843,
+            "cycle": 11208844,
             "state": "1"
           },
           {
-            "cycle": 12814481,
+            "cycle": 12814529,
             "state": "0"
           }
         ],
@@ -246,93 +246,93 @@
     "lines": [
       {
         "text": "MEGA READY",
-        "cycle_lo": 0,
-        "cycle": 15602,
-        "end_cycle": 15602
+        "cycle_lo": 15551,
+        "cycle": 31097,
+        "end_cycle": 202045
       },
       {
-        "text": "k=0 a8=512 a9=512 a0=512 ms=100 f=2",
-        "cycle_lo": 1598483,
-        "cycle": 1613059,
-        "end_cycle": 1626844
+        "text": "k=0 a8=512 a9=512 a0=512 ms=101 f=2",
+        "cycle_lo": 1627557,
+        "cycle": 1642892,
+        "end_cycle": 2233476
       },
       {
         "text": "k=1 a8=512 a9=512 a0=512 ms=200 f=6",
-        "cycle_lo": 3209708,
-        "cycle": 3223302,
-        "end_cycle": 3238065
+        "cycle_lo": 3225526,
+        "cycle": 3239690,
+        "end_cycle": 3845788
       },
       {
         "text": "k=2 a8=512 a9=512 a0=512 ms=300 f=6",
-        "cycle_lo": 4789908,
-        "cycle": 4805112,
-        "end_cycle": 4818235
+        "cycle_lo": 4821159,
+        "cycle": 4836500,
+        "end_cycle": 5427082
       },
       {
         "text": "k=3 a8=512 a9=512 a0=512 ms=400 f=12",
-        "cycle_lo": 6401121,
-        "cycle": 6415259,
-        "end_cycle": 6429273
+        "cycle_lo": 6419437,
+        "cycle": 6433086,
+        "end_cycle": 7054734
       },
       {
         "text": "k=4 a8=512 a9=512 a0=512 ms=500 f=10",
-        "cycle_lo": 8012135,
-        "cycle": 8025273,
-        "end_cycle": 8040286
+        "cycle_lo": 8030454,
+        "cycle": 8045213,
+        "end_cycle": 8666855
       },
       {
         "text": "k=5 a8=512 a9=512 a0=512 ms=600 f=18",
-        "cycle_lo": 9592130,
-        "cycle": 9606889,
-        "end_cycle": 9620270
+        "cycle_lo": 9613002,
+        "cycle": 9626316,
+        "end_cycle": 10247960
       },
       {
         "text": "k=6 a8=512 a9=512 a0=512 ms=700 f=14",
-        "cycle_lo": 11203133,
-        "cycle": 11217017,
-        "end_cycle": 11231281
+        "cycle_lo": 11223892,
+        "cycle": 11238442,
+        "end_cycle": 11860090
       },
       {
         "text": "k=7 a8=512 a9=512 a0=512 ms=800 f=24",
-        "cycle_lo": 12814144,
-        "cycle": 12827150,
-        "end_cycle": 12842299
+        "cycle_lo": 12835045,
+        "cycle": 12850592,
+        "end_cycle": 13456720
       },
       {
         "text": "k=8 a8=512 a9=512 a0=512 ms=900 f=18",
-        "cycle_lo": 14394139,
-        "cycle": 14408788,
-        "end_cycle": 14422287
+        "cycle_lo": 14417469,
+        "cycle": 14431676,
+        "end_cycle": 15053323
       },
       {
         "text": "k=9 a8=512 a9=512 a0=512 ms=1000 f=30",
-        "cycle_lo": 16005151,
-        "cycle": 16018690,
-        "end_cycle": 16033090
+        "cycle_lo": 16028493,
+        "cycle": 16043609,
+        "end_cycle": 16665279
       },
       {
-        "text": "k=10 a8=512 a9=512 a0=512 ms=1100 f=22",
-        "cycle_lo": 17600454,
-        "cycle": 17615907,
-        "end_cycle": 17643685
+        "text": "k=10 a8=512 a9=512 a0=512 ms=1101 f=22",
+        "cycle_lo": 17626501,
+        "cycle": 17639817,
+        "end_cycle": 18292554
       },
       {
-        "text": "k=11 a8=512 a9=512 a0=512 ms=1200 f=36",
-        "cycle_lo": 19195526,
-        "cycle": 19209972,
-        "end_cycle": 19223261
+        "text": "k=11 a8=512 a9=512 a0=512 ms=1201 f=36",
+        "cycle_lo": 19221484,
+        "cycle": 19236044,
+        "end_cycle": 19888779
       },
       {
         "text": "k=0 a8=512 a9=512 a0=512 ms=1300 f=2",
-        "cycle_lo": 20806123,
-        "cycle": 20819716,
-        "end_cycle": 20834271
+        "cycle_lo": 20819387,
+        "cycle": 20832728,
+        "end_cycle": 21454373
       },
       {
         "text": "k=1 a8=512 a9=512 a0=512 ms=1400 f=6",
-        "cycle_lo": 22401634,
-        "cycle": 22416906,
-        "end_cycle": 22429790
+        "cycle_lo": 22430298,
+        "cycle": 22444844,
+        "end_cycle": 23066495
       }
     ],
     "dropped_lines": 0
@@ -359,99 +359,94 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 23229638,
-    "instructions": 14998582,
+    "cycles": 23252728,
+    "instructions": 15000000,
     "steps_executed": 15000000,
     "memory_reads": 0,
-    "memory_writes": 1147413,
-    "peripheral_accesses": 471718,
+    "memory_writes": 1153545,
+    "peripheral_accesses": 476073,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 2504,
-        "count": 1837,
+        "pc": 2522,
+        "count": 2033,
         "symbol": "millis"
       },
       {
         "pc": 2554,
-        "count": 1799,
+        "count": 2029,
         "symbol": "loop"
       },
       {
-        "pc": 2506,
-        "count": 1759,
-        "symbol": "millis"
+        "pc": 2546,
+        "count": 1916,
+        "symbol": "loop"
       },
       {
-        "pc": 2958,
-        "count": 1759,
-        "symbol": "main"
+        "pc": 2536,
+        "count": 1914,
+        "symbol": "loop"
       },
       {
-        "pc": 1390,
-        "count": 1758,
-        "symbol": "serialEventRun"
-      },
-      {
-        "pc": 2522,
-        "count": 1757,
-        "symbol": "millis"
-      },
-      {
-        "pc": 1460,
-        "count": 1756,
+        "pc": 1384,
+        "count": 1876,
         "symbol": "serialEventRun"
       },
       {
         "pc": 1428,
+        "count": 1835,
+        "symbol": "serialEventRun"
+      },
+      {
+        "pc": 1480,
+        "count": 1758,
+        "symbol": "serialEventRun"
+      },
+      {
+        "pc": 1402,
         "count": 1720,
         "symbol": "serialEventRun"
       },
       {
-        "pc": 2544,
-        "count": 1720,
-        "symbol": "loop"
-      },
-      {
-        "pc": 1454,
+        "pc": 2958,
         "count": 1718,
-        "symbol": "serialEventRun"
+        "symbol": "main"
       },
       {
-        "pc": 2552,
-        "count": 1679,
-        "symbol": "loop"
-      },
-      {
-        "pc": 2518,
-        "count": 1678,
+        "pc": 2506,
+        "count": 1641,
         "symbol": "millis"
       },
       {
         "pc": 2532,
-        "count": 1678,
+        "count": 1604,
         "symbol": "loop"
       },
       {
-        "pc": 1408,
-        "count": 1677,
+        "pc": 1454,
+        "count": 1601,
         "symbol": "serialEventRun"
       },
       {
-        "pc": 1434,
-        "count": 1641,
+        "pc": 2518,
+        "count": 1563,
+        "symbol": "millis"
+      },
+      {
+        "pc": 1390,
+        "count": 1561,
         "symbol": "serialEventRun"
       },
       {
-        "pc": 2536,
-        "count": 1641,
+        "pc": 2544,
+        "count": 1561,
+        "symbol": "loop"
+      },
+      {
+        "pc": 2542,
+        "count": 1484,
         "symbol": "loop"
       }
-    ],
-    "stalled_poll": {
-      "peripheral": "usart0",
-      "offset": 0,
-      "accesses": 16252
-    }
+    ]
   }
 }

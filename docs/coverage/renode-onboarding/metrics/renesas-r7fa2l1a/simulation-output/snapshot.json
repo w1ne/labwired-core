@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "69d337feffe9be6c76302e37aafe412bfce2d8e5d9aa529de3488a601ca80470",
+  "firmware_hash": "f8b89c574e6d0ae4bb5b9eb63b6239b3e60d4aaec6aa23c9dc6071e320850093",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.base-none-eabi/release/firmware-renesas-r7fa2l1a-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-r7fa2l1a.yaml",

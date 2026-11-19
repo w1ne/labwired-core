@@ -1,0 +1,29 @@
+# STM32L476 96-bit unique device identifier.
+# Address and access provenance:
+# https://github.com/STMicroelectronics/cmsis_device_l4/blob/dc04e41afbd7c204cd09f2fa5dd29658efbaff6c/Include/stm32l476xx.h
+# UID_BASE = 0x1FFF7590; pinned ST HAL HAL_GetUIDw0/w1/w2 reads +0/+4/+8.
+# https://github.com/STMicroelectronics/stm32l4xx_hal_driver/blob/047a8610c7dc0dcfdb4cd63b86cd3a2cbd3e5899/Src/stm32l4xx_hal.c
+#
+# Zero is an explicitly unspecified SIMULATED identity, not a factory reset
+# value and not a reading from a physical die. For per-node identity tests,
+# override peripheral id uid with a source-pinned declarative descriptor
+# containing that node's explicit synthetic 96-bit fixture. Do not claim
+# uniqueness from the shared default.
+peripheral: "STM32L476_UID"
+version: "1.0"
+registers:
+  - id: "UID0"
+    address_offset: 0x00
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+  - id: "UID1"
+    address_offset: 0x04
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000
+  - id: "UID2"
+    address_offset: 0x08
+    size: 32
+    access: "RO"
+    reset_value: 0x00000000

@@ -82,7 +82,7 @@
     "type": "arm",
     "registers": [
       16,
-      436,
+      1189,
       2147483648,
       4294867296,
       200000,
@@ -96,9 +96,9 @@
       4294867296,
       536902600,
       18321,
-      19442
+      19450
     ],
-    "pc": 19442,
+    "pc": 19450,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -111,7 +111,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "b615af303d1e1fd26cb0d48397db4f475dc09c206fb5f254b16b014b4788e6b5",
+  "firmware_hash": "7599b5d20c05db68a5c2600bb70998b0e00a1f5a582d95144a165a7edce8476e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32jg1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32jg1.yaml",
@@ -197,6 +197,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -250,63 +257,63 @@
             "value": 0
           },
           {
-            "cycle": 22273,
+            "cycle": 17570,
             "value": 1
           },
           {
-            "cycle": 34773,
+            "cycle": 30070,
             "value": 0
           },
           {
-            "cycle": 47273,
+            "cycle": 42570,
             "value": 1
           },
           {
-            "cycle": 59773,
+            "cycle": 55070,
             "value": 0
           },
           {
-            "cycle": 72273,
+            "cycle": 67570,
             "value": 1
           },
           {
-            "cycle": 84773,
+            "cycle": 80070,
             "value": 0
           },
           {
-            "cycle": 97273,
+            "cycle": 92570,
             "value": 1
           },
           {
-            "cycle": 109773,
+            "cycle": 105070,
             "value": 0
           },
           {
-            "cycle": 122273,
+            "cycle": 117570,
             "value": 1
           },
           {
-            "cycle": 134773,
+            "cycle": 130070,
             "value": 0
           },
           {
-            "cycle": 147273,
+            "cycle": 142570,
             "value": 1
           },
           {
-            "cycle": 159773,
+            "cycle": 155070,
             "value": 0
           },
           {
-            "cycle": 172273,
+            "cycle": 167570,
             "value": 1
           },
           {
-            "cycle": 184773,
+            "cycle": 180070,
             "value": 0
           },
           {
-            "cycle": 197273,
+            "cycle": 192570,
             "value": 1
           }
         ],
@@ -334,63 +341,63 @@
             "state": "0"
           },
           {
-            "cycle": 22273,
+            "cycle": 17570,
             "state": "1"
           },
           {
-            "cycle": 34773,
+            "cycle": 30070,
             "state": "0"
           },
           {
-            "cycle": 47273,
+            "cycle": 42570,
             "state": "1"
           },
           {
-            "cycle": 59773,
+            "cycle": 55070,
             "state": "0"
           },
           {
-            "cycle": 72273,
+            "cycle": 67570,
             "state": "1"
           },
           {
-            "cycle": 84773,
+            "cycle": 80070,
             "state": "0"
           },
           {
-            "cycle": 97273,
+            "cycle": 92570,
             "state": "1"
           },
           {
-            "cycle": 109773,
+            "cycle": 105070,
             "state": "0"
           },
           {
-            "cycle": 122273,
+            "cycle": 117570,
             "state": "1"
           },
           {
-            "cycle": 134773,
+            "cycle": 130070,
             "state": "0"
           },
           {
-            "cycle": 147273,
+            "cycle": 142570,
             "state": "1"
           },
           {
-            "cycle": 159773,
+            "cycle": 155070,
             "state": "0"
           },
           {
-            "cycle": 172273,
+            "cycle": 167570,
             "state": "1"
           },
           {
-            "cycle": 184773,
+            "cycle": 180070,
             "state": "0"
           },
           {
-            "cycle": 197273,
+            "cycle": 192570,
             "state": "1"
           }
         ],
@@ -518,15 +525,15 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 3877,
+    "memory_reads": 3882,
     "memory_writes": 35,
-    "peripheral_accesses": 2450,
+    "peripheral_accesses": 1363,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 19442,
+        "pc": 19450,
         "count": 781,
-        "symbol": "<u32>::unchecked_add"
+        "symbol": "core::ptr::write_volatile"
       }
     ]
   }

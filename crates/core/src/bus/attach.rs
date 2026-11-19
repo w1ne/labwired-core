@@ -21,6 +21,23 @@ pub(crate) const ESP32S3_UART_INSTANCE_NAMES: [[&str; 2]; 3] = [
 /// func)`.
 type TimerAfPad = (&'static str, char, u8, u8, u8, &'static str);
 
+/// AT32F421 timer channel pads (RM_AT32F421 V2.05 Tables 6-1 and 6-2,
+/// GPIOx_MUX* multiplexed functions): TMR1 CH1..3 on PA8..PA10 (MUX2), TMR3
+/// CH1..4 on PA6/PA7/PB0/PB1 and CH1/CH2 on PB4/PB5 (MUX1). Only pads bonded
+/// on the QFN28 package are listed; TMR14..17 and complementary CHxN pads
+/// are not routed yet. Selected by `pad_map: at32f421`.
+const AT32F421_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 8, 2, 0, "TMR1_CH1"),
+    ("tim1", 'a', 9, 2, 1, "TMR1_CH2"),
+    ("tim1", 'a', 10, 2, 2, "TMR1_CH3"),
+    ("tim3", 'a', 6, 1, 0, "TMR3_CH1"),
+    ("tim3", 'a', 7, 1, 1, "TMR3_CH2"),
+    ("tim3", 'b', 0, 1, 2, "TMR3_CH3"),
+    ("tim3", 'b', 1, 1, 3, "TMR3_CH4"),
+    ("tim3", 'b', 4, 1, 0, "TMR3_CH1"),
+    ("tim3", 'b', 5, 1, 1, "TMR3_CH2"),
+];
+
 /// F4 timer channel pads (STM32F401 DS9716 / F411 DS10314 / F405-7 DS8626
 /// "Alternate function mapping": AF1 = TIM1/TIM2, AF2 = TIM3/TIM4/TIM5, AF3 =
 /// TIM9/TIM10/TIM11), for timers declaring `input_capture: stm32f4`. Shared by
@@ -101,6 +118,67 @@ const STM32G0_TIMER_PADS: &[TimerAfPad] = &[
     ("tim3", 'c', 8, 1, 2, "TIM3_CH3"),
     ("tim3", 'b', 1, 1, 3, "TIM3_CH4"),
     ("tim3", 'c', 9, 1, 3, "TIM3_CH4"),
+];
+
+/// STM32C0 timer channel pads, selected by the timer's `pad_map: stm32c0`.
+/// Read off stm32duino's `PinMap_TIM` for the C031C variant
+/// (`variants/STM32C0xx/C031C(4-6)(T-U)/PeripheralPins.c`, generated from
+/// ST's open pin data), complementary (CHxN) and remapped `_R` pads omitted.
+/// The C0 moves TIM1 off the F4/G0 AF numbers (PA5 = TIM1_CH1 on AF5), so no
+/// other family's table may be reused here.
+const STM32C0_TIMER_PADS: &[TimerAfPad] = &[
+    ("tim1", 'a', 0, 5, 0, "TIM1_CH1"),
+    ("tim16", 'a', 0, 2, 0, "TIM16_CH1"),
+    ("tim1", 'a', 1, 5, 1, "TIM1_CH2"),
+    ("tim17", 'a', 1, 2, 0, "TIM17_CH1"),
+    ("tim1", 'a', 2, 5, 2, "TIM1_CH3"),
+    ("tim1", 'a', 3, 5, 3, "TIM1_CH4"),
+    ("tim14", 'a', 4, 4, 0, "TIM14_CH1"),
+    ("tim1", 'a', 5, 5, 0, "TIM1_CH1"),
+    ("tim3", 'a', 6, 1, 0, "TIM3_CH1"),
+    ("tim16", 'a', 6, 5, 0, "TIM16_CH1"),
+    ("tim3", 'a', 7, 1, 1, "TIM3_CH2"),
+    ("tim14", 'a', 7, 4, 0, "TIM14_CH1"),
+    ("tim17", 'a', 7, 5, 0, "TIM17_CH1"),
+    ("tim1", 'a', 8, 2, 0, "TIM1_CH1"),
+    ("tim3", 'a', 8, 11, 2, "TIM3_CH3"),
+    ("tim3", 'a', 8, 12, 3, "TIM3_CH4"),
+    ("tim14", 'a', 8, 13, 0, "TIM14_CH1"),
+    ("tim1", 'a', 9, 2, 1, "TIM1_CH2"),
+    ("tim1", 'a', 10, 2, 2, "TIM1_CH3"),
+    ("tim1", 'a', 11, 2, 3, "TIM1_CH4"),
+    ("tim1", 'a', 14, 10, 0, "TIM1_CH1"),
+    ("tim1", 'a', 15, 2, 0, "TIM1_CH1"),
+    ("tim3", 'b', 0, 1, 2, "TIM3_CH3"),
+    ("tim3", 'b', 1, 1, 3, "TIM3_CH4"),
+    ("tim14", 'b', 1, 0, 0, "TIM14_CH1"),
+    ("tim1", 'b', 3, 1, 1, "TIM1_CH2"),
+    ("tim3", 'b', 3, 3, 1, "TIM3_CH2"),
+    ("tim3", 'b', 4, 1, 0, "TIM3_CH1"),
+    ("tim3", 'b', 5, 1, 1, "TIM3_CH2"),
+    ("tim3", 'b', 5, 3, 2, "TIM3_CH3"),
+    ("tim1", 'b', 6, 11, 1, "TIM1_CH2"),
+    ("tim1", 'b', 6, 1, 2, "TIM1_CH3"),
+    ("tim3", 'b', 6, 12, 0, "TIM3_CH1"),
+    ("tim3", 'b', 6, 13, 1, "TIM3_CH2"),
+    ("tim3", 'b', 6, 3, 2, "TIM3_CH3"),
+    ("tim1", 'b', 7, 1, 3, "TIM1_CH4"),
+    ("tim3", 'b', 7, 11, 0, "TIM3_CH1"),
+    ("tim3", 'b', 7, 3, 3, "TIM3_CH4"),
+    ("tim16", 'b', 7, 10, 0, "TIM16_CH1"),
+    ("tim3", 'b', 8, 3, 0, "TIM3_CH1"),
+    ("tim16", 'b', 8, 2, 0, "TIM16_CH1"),
+    ("tim3", 'b', 9, 3, 1, "TIM3_CH2"),
+    ("tim17", 'b', 9, 2, 0, "TIM17_CH1"),
+    ("tim3", 'c', 6, 1, 0, "TIM3_CH1"),
+    ("tim3", 'c', 7, 1, 1, "TIM3_CH2"),
+    ("tim3", 'c', 14, 11, 1, "TIM3_CH2"),
+    ("tim17", 'c', 14, 10, 0, "TIM17_CH1"),
+    ("tim3", 'c', 15, 3, 2, "TIM3_CH3"),
+    ("tim16", 'd', 0, 2, 0, "TIM16_CH1"),
+    ("tim17", 'd', 1, 2, 0, "TIM17_CH1"),
+    ("tim14", 'f', 0, 2, 0, "TIM14_CH1"),
+    ("tim1", 'f', 2, 1, 3, "TIM1_CH4"),
 ];
 
 /// STM32G4 timer channel pads, selected by the timer's `pad_map: stm32g4`.
@@ -374,6 +452,25 @@ const STM32H5_TIMER_PADS: &[TimerAfPad] = &[
     ("tim5", 'a', 3, 2, 3, "TIM5_CH4"),
 ];
 
+/// Every V2 timer AF table with the `pad_map` that selects it (`None`: the
+/// F4 table, for a timer declaring `input_capture: stm32f4` and no map).
+/// One list for the capture (input) and output passes, so a timer's inputs
+/// and outputs always come from the same table.
+const V2_TIMER_PAD_TABLES: &[(&[TimerAfPad], Option<&str>)] = &[
+    (STM32F4_TIMER_PADS, None),
+    (AT32F421_TIMER_PADS, Some("at32f421")),
+    (STM32G0_TIMER_PADS, Some("stm32g0")),
+    (STM32C0_TIMER_PADS, Some("stm32c0")),
+    (STM32G4_TIMER_PADS, Some("stm32g4")),
+    (STM32L0_TIMER_PADS, Some("stm32l0")),
+    (STM32L4_TIMER_PADS, Some("stm32l4")),
+    (STM32L4_COMPLEMENTARY_PADS, Some("stm32l4")),
+    (STM32WB_TIMER_PADS, Some("stm32wb")),
+    (STM32WBA_TIMER_PADS, Some("stm32wba")),
+    (STM32U5_TIMER_PADS, Some("stm32u5")),
+    (STM32H5_TIMER_PADS, Some("stm32h5")),
+];
+
 impl SystemBus {
     /// Attach an I²C slave without a physical route. This remains suitable for
     /// fixed-pin controllers and low-level test fixtures; ESP32-C3 rejects it
@@ -463,10 +560,10 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Wire the ESP32-C3 I²C0 bit engine to C3 GPIO in both directions: GPIO
+    /// Wire the ESP32 C3/C5/C61 I²C0 bit engine to the shared GPIO model: GPIO
     /// reads the live SDA/SCL waveform, while I²C reads GPIO's live input/output
     /// matrix state before allowing a physically routed slave to acknowledge.
-    /// No-op unless both C3 models are on the bus.
+    /// No-op unless both compatible controller and GPIO models are on the bus.
     pub(crate) fn wire_esp32c3_i2c_pads(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
@@ -508,6 +605,44 @@ impl SystemBus {
                 .and_then(|a| a.downcast_mut::<Esp32c3Gpio>()),
         ) {
             gpio.set_i2c_lines(lines);
+        }
+    }
+
+    /// Share the P4 GPIO7/8 matrix selections with its HP I2C0 controller.
+    /// The P4 uses the same command-list register engine as C3/C5/C61, but has
+    /// its own signal IDs (SCL=68, SDA=69) and GPIO selector addresses. The
+    /// P4 GPIO head lowers those selectors into the shared route-state shape.
+    pub(crate) fn wire_esp32p4_i2c_pads(&mut self) {
+        use crate::peripherals::esp32_gpio_head::EspGpioHead;
+        use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
+
+        let i2c_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|a| a.is::<Esp32c3I2c>()));
+        let gpio_idx = self.peripherals.iter().position(|p| {
+            p.dev.as_any().is_some_and(|a| {
+                a.downcast_ref::<EspGpioHead>()
+                    .and_then(|g| g.i2c_matrix_route_state())
+                    .is_some()
+            })
+        });
+        let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, gpio_idx) else {
+            return;
+        };
+        let route = self.peripherals[gpio_idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<EspGpioHead>())
+            .and_then(|g| g.i2c_matrix_route_state());
+        if let (Some(route), Some(i2c)) = (
+            route,
+            self.peripherals[i2c_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32c3I2c>()),
+        ) {
+            i2c.set_matrix_route_state(route);
         }
     }
 
@@ -2832,6 +2967,18 @@ impl SystemBus {
         // The remap pads need AFIO_PCFR1, which nothing decodes, so they are
         // left unbound.
         const WCH: &[(u8, char, u8, usize, &str)] = &[(1, 'd', 5, LINE_TX, "USART1_TX")];
+        // WCH CH32X035 (`pad_map: wch_x035` on the UART): F1-style CFGLR/CFGHR,
+        // but the default TX pads differ from the STM32F1. CH32X035/X033
+        // Datasheet V2.3 Table 2-1, "Default alternate function" column:
+        // PB10 = `TX1/T1C2`, PA2 = `TX2/T2C3/O2O1/C3N0/A2`, PB3 = `TX3/C3O/O2P1`.
+        // None of these pads carries an I2C or SPI default function. The
+        // remap pads need AFIO_PCFR1, which nothing decodes, so they stay
+        // unbound.
+        const WCH_X035: &[(u8, char, u8, usize, &str)] = &[
+            (1, 'b', 10, LINE_TX, "USART1_TX"),
+            (2, 'a', 2, LINE_TX, "USART2_TX"),
+            (3, 'b', 3, LINE_TX, "USART3_TX"),
+        ];
 
         for instance in 1u8..=3 {
             // Chip configs name these both ways — `uart2` on the L4/F1 configs,
@@ -2849,6 +2996,7 @@ impl SystemBus {
             // nothing reads. A chip with no row for this instance therefore
             // must not reach `pad_lines_arc` at all.
             let mut plan: Vec<(char, u8, Option<u8>, usize, &'static str)> = Vec::new();
+            let wch_x035 = self.peripherals[uart_idx].dev.uart_pad_map_wch_x035();
             for port in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] {
                 let Some(gpio_idx) = self.find_peripheral_index_by_name(&format!("gpio{port}"))
                 else {
@@ -2884,7 +3032,9 @@ impl SystemBus {
                         }
                     }
                     GpioRegisterLayout::Stm32F1 | GpioRegisterLayout::Wch => {
-                        let table = if gpio_layout == GpioRegisterLayout::Wch {
+                        let table = if wch_x035 {
+                            WCH_X035
+                        } else if gpio_layout == GpioRegisterLayout::Wch {
                             WCH
                         } else {
                             F1
@@ -2968,7 +3118,9 @@ impl SystemBus {
     ///   DS8626 "Alternate function mapping": AF1 = TIM1/TIM2, AF2 =
     ///   TIM3/TIM4/TIM5, AF3 = TIM9/TIM10/TIM11). V2 GPIO registers alone do
     ///   NOT imply this map — L4/G4/H5/U5 move several of these pads — so a
-    ///   V2 part without the declaration is routed nowhere, fail-closed.
+    ///   V2 part without the declaration is routed nowhere, fail-closed. A
+    ///   timer that also names a `pad_map` captures through that family's
+    ///   table instead ([`V2_TIMER_PAD_TABLES`]), the same rows its outputs use.
     pub(crate) fn wire_stm32_timer_capture_pads(&mut self) {
         // (timer, port, pin, channel 0-based, func)
         const F1: &[(&str, char, u8, u8, &str)] = &[
@@ -3015,10 +3167,17 @@ impl SystemBus {
                     }
                 }
             }
-            for &(tim, p, pin, af, ch, func) in STM32F4_TIMER_PADS {
-                if p == port {
-                    if let Some((t_idx, TimerInputStage::F4)) = timer(self, tim) {
-                        routes.push((t_idx, pin, Some(af), ch, func));
+            // An F4-stage timer takes its capture rows from the same AF table
+            // its outputs use: the one its `pad_map` names, the F4 table when
+            // it names none. A table for another family never applies.
+            for &(table, family) in V2_TIMER_PAD_TABLES {
+                for &(tim, p, pin, af, ch, func) in table {
+                    if p == port {
+                        if let Some((t_idx, TimerInputStage::F4)) = timer(self, tim) {
+                            if self.peripherals[t_idx].dev.timer_output_family() == family {
+                                routes.push((t_idx, pin, Some(af), ch, func));
+                            }
+                        }
                     }
                 }
             }
@@ -3099,18 +3258,7 @@ impl SystemBus {
                 self.bind_stm32_timer_output_row(t_idx, port, pin, None, ch, func);
             }
         }
-        for (table, family) in [
-            (STM32F4_TIMER_PADS, None),
-            (STM32G0_TIMER_PADS, Some("stm32g0")),
-            (STM32G4_TIMER_PADS, Some("stm32g4")),
-            (STM32L0_TIMER_PADS, Some("stm32l0")),
-            (STM32L4_TIMER_PADS, Some("stm32l4")),
-            (STM32L4_COMPLEMENTARY_PADS, Some("stm32l4")),
-            (STM32WB_TIMER_PADS, Some("stm32wb")),
-            (STM32WBA_TIMER_PADS, Some("stm32wba")),
-            (STM32U5_TIMER_PADS, Some("stm32u5")),
-            (STM32H5_TIMER_PADS, Some("stm32h5")),
-        ] {
+        for &(table, family) in V2_TIMER_PAD_TABLES {
             for &(tim, port, pin, af, ch, func) in table {
                 let Some(t_idx) = timer(self, tim) else {
                     continue;
@@ -4327,7 +4475,8 @@ impl SystemBus {
         miso
     }
 
-    /// Sync parking-SPI chip-selects from live GPIO levels (active-low).
+    /// Sync parking-SPI chip-selects from live GPIO levels, honouring each
+    /// device's CS polarity (active-low unless it declares otherwise).
     ///
     /// Soft-SPI and bit-banged CS on AVR never touch a controller's NSS, so the
     /// parking kits only see CS through this walk, after every PORT mirror
@@ -4366,7 +4515,7 @@ impl SystemBus {
             if let Some(devs) = self.peripherals[idx].dev.spi_attached_devices_mut() {
                 for (device, level) in devs.iter_mut().zip(levels) {
                     let Some(high) = level else { continue };
-                    let selected = !high; // active-low CS
+                    let selected = device.cs_selected_at(high);
                     match (device.is_selected(), selected) {
                         (false, true) => device.cs_select(),
                         (true, false) => {

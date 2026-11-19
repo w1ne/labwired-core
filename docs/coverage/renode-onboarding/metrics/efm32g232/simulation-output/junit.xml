@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.042798">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.145859">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="5b8efa90825b4c9d1b5da98be09172a83e8e9deb3485abee593f52bf49a6e425"/>
+    <property name="firmware_hash" value="5e7fcb97bad271c9a7f77b053579ec6a6a2ad650344941ce883744ec96017dc1"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.042798">
+  <testcase classname="labwired" name="run" time="0.145859">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: EFM32G232 RENODE SMOKE" time="0.000000">
   </testcase>

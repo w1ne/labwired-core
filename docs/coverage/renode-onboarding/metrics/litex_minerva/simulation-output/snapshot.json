@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 400000,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "5abce54f701d95fc021b5f80b77958c3af7762169a6244b055eb9e58a4552d3a",
+  "firmware_hash": "4c42b1c536e597843d77ed6d43b4a27093096af2ed8e23fa75747fb09dfd62b1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32i-unknown-none-elf/release/firmware-litex-minerva-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_minerva.yaml",

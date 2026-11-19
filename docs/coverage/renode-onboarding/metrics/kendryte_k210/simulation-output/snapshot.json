@@ -90,6 +90,7 @@
       "divider": 1,
       "residue": 0
     },
+    "plic": null,
     "reservation": null
   },
   "steps_executed": 100000,
@@ -118,7 +119,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "2502fdbb706cf56df078ec0ed40355db04262f8fac9392a0f21608cd9f2c0dcb",
+  "firmware_hash": "c4b4b38b1297a4871769c306cc3ea47e19f7b69cbde0fb32f09879b7b274fa65",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-kendryte-k210-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/kendryte_k210.yaml",

@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "3739856ab444a147b21d426564f44520a2176702773f586214d95136df0f3562",
+  "firmware_hash": "9be774ccc05b979defc5632ef7ad31e7f2127e163ae7a8b83daeb908431fc2a1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam-e70-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam_e70.yaml",

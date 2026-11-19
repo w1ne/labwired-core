@@ -37,7 +37,7 @@
 //! deterministic — no wall-clock timeouts). Register offsets follow the
 //! simulator's models: rcc.rs (`stm32f4` profile), gpio.rs (the yaml wires
 //! `stm32f4_gpio`, i.e. the stm32v2 MODER/ODR layout) and uart.rs
-//! (`stm32f1` layout: SR @ 0x00, DR @ 0x04 — matches F4 silicon).
+//! (`stm32v2`: CR1 @ 0x00, ISR @ 0x1C, TDR @ 0x28 — RM0410 §34.8).
 
 #![no_std]
 #![no_main]
@@ -58,12 +58,12 @@ const ADC1_BASE: u32 = 0x4001_2000; // type adc, stm32f1 layout (default)
 const IWDG_BASE: u32 = 0x4000_3000; // type iwdg (LSI-clocked, ungated)
 const RTC_BASE: u32 = 0x4000_2800; // type rtc, L4-style calendar (ungated)
 
-// USART2, stm32f1 layout: SR @ 0x00 (TXE = bit 7), DR @ 0x04.
+// USART2, stm32v2 layout: ISR @ 0x1C (TXE = bit 7), TDR @ 0x28.
 // Read the full SR word and bit-test TXE: a sign-bit test on a byte
 // load compiles to LDRSB reg-offset, which the simulator's 16-bit
 // Thumb decoder does not implement (decoder/arm.rs only matches
 // even-op 0101-family encodings).
-const CONSOLE: Console = Console::new(UART2_BASE, UART2_BASE + 0x04, 1 << 7);
+const CONSOLE: Console = Console::new(UART2_BASE + 0x1C, UART2_BASE + 0x28, 1 << 7);
 
 // ── Checks ──────────────────────────────────────────────────────────────────
 
@@ -313,6 +313,8 @@ fn check_rtc() -> Result<(), &'static [u8]> {
 
 #[entry]
 fn main() -> ! {
+    // RM0410 §34.8: enable USART and transmitter before sending.
+    wr32(UART2_BASE, (1 << 0) | (1 << 3));
     CONSOLE.report(b"clock", check_clock());
     CONSOLE.report(b"gpio", check_gpio());
     CONSOLE.report(b"timer", check_timer());

@@ -1,0 +1,22 @@
+# Test fixture: ATtiny10 (AVRrc) memory geometry and PORTB, from the
+# ATtiny4/5/9/10 datasheet (Atmel-8127H) Figure 6-1 and Register Summary.
+# Not a released chip descriptor.
+name: "attiny10"
+arch: "avr"
+core: "avr8"
+registers_count: 16
+cpu_hz: 8_000_000
+flash:
+  base: 0x00000000
+  size: "1KB"
+ram:
+  base: 0x00000040
+  size: "32B"
+peripherals:
+  # PINB/DDRB/PORTB at I/O 0x00..0x02 (mirrored at 0x10000 + address).
+  - id: "portb"
+    type: "avr_gpio"
+    base_address: 0x00010000
+    size: "3"
+    config:
+      pin_count: 4

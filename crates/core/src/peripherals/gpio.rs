@@ -2484,6 +2484,9 @@ pub struct TimerInputEdge {
 #[derive(Debug)]
 pub struct GpioPort {
     family: GpioFamily,
+    /// Opt-in reset image (MODER/OSPEEDR/PUPDR/SECCFGR) for the common V2
+    /// register subset; `None` keeps the historical no-reset behaviour.
+    v2_reset: Option<[u32; 4]>,
     /// `Some` while the logic analyzer watches pads on this port in push mode
     /// (installed through [`crate::pins::PinPort::install_watch`]). Every
     /// register write and external input is bracketed with
@@ -2896,6 +2899,7 @@ impl GpioPort {
     fn from_family(family: GpioFamily) -> Self {
         Self {
             family,
+            v2_reset: None,
             watch: None,
             pin_cells: Vec::new(),
             pad_routes: crate::peripherals::pad_routing::PadRoutes::new(),
@@ -2917,6 +2921,16 @@ impl GpioPort {
             stm32_af_selectors: Vec::new(),
             stm32_af_routes_built: 0,
         }
+    }
+
+    /// Return a V2 port to its configured power-on register values on node,
+    /// supply and system reset (chip yaml `reset_registers: true`). External
+    /// levels, pin probes and peripheral routes survive.
+    pub fn with_v2_register_reset(mut self) -> Self {
+        if let GpioFamily::Stm32V2(g) = &self.family {
+            self.v2_reset = Some([g.moder, g.ospeedr, g.pupdr, g.seccfgr]);
+        }
+        self
     }
 
     /// Name the block that keeps this port's pulls (see
@@ -4023,9 +4037,37 @@ impl crate::Peripheral for GpioPort {
         self.add_stm32_observer(port_index, observer, clock)
     }
 
+    fn on_node_reset(&mut self) {
+        if self.v2_reset.is_some() {
+            self.on_system_reset();
+        }
+    }
+
+    fn on_supply_reset(&mut self, _cause: crate::power::SupplyResetCause) {
+        self.on_node_reset();
+    }
+
     fn on_system_reset(&mut self) {
+        let v2_reset = self.v2_reset;
         // Restore the register file while retaining levels held by the world.
         match &mut self.family {
+            GpioFamily::Stm32V2(g) => {
+                let Some([moder, ospeedr, pupdr, seccfgr]) = v2_reset else {
+                    return;
+                };
+                let (idr, external) = (g.idr & g.external, g.external);
+                *g = V2Gpio {
+                    moder,
+                    ospeedr,
+                    pupdr,
+                    seccfgr,
+                    idr,
+                    external,
+                    ..Default::default()
+                };
+                self.timer_edges.clear();
+                self.wire_edges.clear();
+            }
             GpioFamily::SamPort(g) => {
                 let (external, in_latch) = (g.external, g.in_latch);
                 *g = SamGpio::default();
@@ -4040,6 +4082,7 @@ impl crate::Peripheral for GpioPort {
             }
             _ => return,
         }
+        self.sync_pad_line_taps();
         self.sync_pin_cells();
         self.sync_stm32_af_observers();
     }

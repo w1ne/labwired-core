@@ -5,9 +5,9 @@
     "registers": [
       1,
       4,
-      0,
       2147483648,
-      35,
+      2147483648,
+      0,
       200000,
       1,
       536899560,
@@ -18,10 +18,10 @@
       536870912,
       536899520,
       1073790976,
-      18326
+      18332
     ],
-    "pc": 18326,
-    "xpsr": 1090519040,
+    "pc": 18332,
+    "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "53bdaa63049a9c57a9470ec7a04a7d62808aa197c35717e2ee004e310f0d0100",
+  "firmware_hash": "4aebdcd947020bc29a904a227c04334b527ef51592ab0e91a6bfb3ead7d7505a",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32lg995-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stk3600.yaml",

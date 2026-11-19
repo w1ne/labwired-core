@@ -228,6 +228,19 @@ pub struct Rp2040Rtc {
     clock: Option<CycleClock>,
     /// Bumped each arm so stale calendar events die on arrival.
     arm_seq: u32,
+    /// Bus cycle the stored `now` and `div_count` are exact at (scheduler
+    /// mode). The calendar changes once per second, so nothing wakes between
+    /// the second boundaries: the ticks since `anchor` are applied by
+    /// [`Self::advanced`] when a write or a boundary wake needs the state,
+    /// and projected for a `&self` read by [`Self::projected`].
+    anchor: u64,
+}
+
+/// The calendar state that moves with time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Live {
+    now: Calendar,
+    div_count: u32,
 }
 
 impl Default for Rp2040Rtc {
@@ -253,13 +266,81 @@ impl Rp2040Rtc {
             latch: Cell::new((0, 0)),
             clock: None,
             arm_seq: 0,
+            anchor: 0,
         }
     }
 
     crate::cycle_clock::scheduler_mode!();
 
-    fn needs_scheduler_wake(&self) -> bool {
-        self.enabled || self.ints() != 0
+    fn live(&self) -> Live {
+        Live {
+            now: self.now,
+            div_count: self.div_count,
+        }
+    }
+
+    /// Ticks until the next second boundary from the stored divider phase: the
+    /// tick that finds `div_count >= CLKDIV_M1` advances the calendar.
+    fn ticks_to_second(&self) -> u64 {
+        let (phase, top) = (u64::from(self.div_count), u64::from(self.clkdiv_m1));
+        if phase >= top {
+            1
+        } else {
+            top - phase + 1
+        }
+    }
+
+    /// The state `n` more ticks on: exactly what `n` calls of the enabled arm
+    /// of [`Self::step_one`] leave behind, without the loop.
+    fn advanced(&self, n: u64) -> Live {
+        let mut live = self.live();
+        if n == 0 || !self.enabled {
+            return live;
+        }
+        let first = self.ticks_to_second();
+        if n < first {
+            live.div_count = (u64::from(self.div_count) + n) as u32;
+            return live;
+        }
+        let period = u64::from(self.clkdiv_m1) + 1;
+        let seconds = 1 + (n - first) / period;
+        for _ in 0..seconds {
+            live.now.advance_second(self.force_notleapyear);
+        }
+        live.div_count = ((n - first) % period) as u32;
+        live
+    }
+
+    /// Bring the stored state to bus cycle `now`.
+    fn settle(&mut self, now: u64) {
+        if now <= self.anchor {
+            return;
+        }
+        let live = self.advanced(now - self.anchor);
+        self.now = live.now;
+        self.div_count = live.div_count;
+        self.anchor = now;
+    }
+
+    /// The state at the bus-published cycle, for a `&self` read.
+    fn projected(&self) -> Live {
+        match (&self.clock, self.scheduler_mode()) {
+            (Some(clock), true) => self.advanced(clock.now().saturating_sub(self.anchor)),
+            _ => self.live(),
+        }
+    }
+
+    /// Cycles to the next wake: every cycle while the interrupt level is held
+    /// (each cycle re-pends the line), else the next second boundary while
+    /// counting, else none.
+    fn next_wake(&self) -> Option<u64> {
+        if self.ints() != 0 {
+            Some(1)
+        } else if self.enabled {
+            Some(self.ticks_to_second())
+        } else {
+            None
+        }
     }
 
     /// One peripheral-tick of calendar advance + level IRQ vector.
@@ -281,46 +362,26 @@ impl Rp2040Rtc {
 
     /// `MATCH_ACTIVE` / `INTR.RTC`: every *enabled* alarm field matches.
     fn match_active(&self) -> bool {
+        self.match_active_at(&self.now)
+    }
+
+    fn match_active_at(&self, now: &Calendar) -> bool {
         if self.irq_setup_0 & MATCH_ENA == 0 {
             return false;
         }
         let target_date = Calendar::from_words(self.irq_setup_0, self.irq_setup_1);
         let checks = [
-            (
-                self.irq_setup_0 & DAY_ENA != 0,
-                target_date.day,
-                self.now.day,
-            ),
+            (self.irq_setup_0 & DAY_ENA != 0, target_date.day, now.day),
             (
                 self.irq_setup_0 & MONTH_ENA != 0,
                 target_date.month,
-                self.now.month,
+                now.month,
             ),
-            (
-                self.irq_setup_0 & YEAR_ENA != 0,
-                target_date.year,
-                self.now.year,
-            ),
-            (
-                self.irq_setup_1 & SEC_ENA != 0,
-                target_date.sec,
-                self.now.sec,
-            ),
-            (
-                self.irq_setup_1 & MIN_ENA != 0,
-                target_date.min,
-                self.now.min,
-            ),
-            (
-                self.irq_setup_1 & HOUR_ENA != 0,
-                target_date.hour,
-                self.now.hour,
-            ),
-            (
-                self.irq_setup_1 & DOTW_ENA != 0,
-                target_date.dotw,
-                self.now.dotw,
-            ),
+            (self.irq_setup_0 & YEAR_ENA != 0, target_date.year, now.year),
+            (self.irq_setup_1 & SEC_ENA != 0, target_date.sec, now.sec),
+            (self.irq_setup_1 & MIN_ENA != 0, target_date.min, now.min),
+            (self.irq_setup_1 & HOUR_ENA != 0, target_date.hour, now.hour),
+            (self.irq_setup_1 & DOTW_ENA != 0, target_date.dotw, now.dotw),
         ];
         checks
             .iter()
@@ -333,6 +394,11 @@ impl Rp2040Rtc {
 
     fn ints(&self) -> u32 {
         (self.intr() | self.intf) & self.inte & 0x1
+    }
+
+    /// `INTR` / `INTS` / `MATCH_ACTIVE` at a projected calendar.
+    fn intr_at(&self, now: &Calendar) -> u32 {
+        u32::from(self.match_active_at(now))
     }
 }
 
@@ -351,20 +417,28 @@ impl Peripheral for Rp2040Rtc {
                         0
                     })
             }
-            IRQ_SETUP_0 => self.irq_setup_0 | if self.match_active() { MATCH_ACTIVE } else { 0 },
+            IRQ_SETUP_0 => {
+                self.irq_setup_0
+                    | if self.match_active_at(&self.projected().now) {
+                        MATCH_ACTIVE
+                    } else {
+                        0
+                    }
+            }
             IRQ_SETUP_1 => self.irq_setup_1,
             // Reading RTC_1 latches the whole date+time pair; RTC_0 then reads
             // the latched time. Reading RTC_0 first returns the previous latch.
             RTC_1 => {
-                let pair = (self.now.date_word(), self.now.time_word());
+                let now = self.projected().now;
+                let pair = (now.date_word(), now.time_word());
                 self.latch.set(pair);
                 pair.0
             }
             RTC_0 => self.latch.get().1,
-            INTR => self.intr(),
+            INTR => self.intr_at(&self.projected().now),
             INTE => self.inte,
             INTF => self.intf,
-            INTS => self.ints(),
+            INTS => (self.intr_at(&self.projected().now) | self.intf) & self.inte & 0x1,
             _ => {
                 crate::census_reg!("rp2040.rtc:Rp2040Rtc", offset, "read");
                 0
@@ -451,27 +525,47 @@ impl Peripheral for Rp2040Rtc {
         self.clock = Some(clock);
     }
 
+    /// Bring the calendar to the write's cycle before the write can change
+    /// the divider, the enable or the load.
+    fn sync_to(&mut self, now_cycle: u64) {
+        if self.scheduler_mode() {
+            self.settle(now_cycle);
+        }
+    }
+
+    /// Wake at the next second boundary (or every cycle while the alarm level
+    /// is held). Every write re-arms from the freshly settled state, which
+    /// supersedes whatever wake was pending.
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
-        if !self.scheduler_mode() || !self.needs_scheduler_wake() {
+        if !self.scheduler_mode() {
             return Vec::new();
         }
         self.arm_seq = self.arm_seq.wrapping_add(1);
-        vec![(0, self.arm_seq)]
+        match self.next_wake() {
+            // delay-0 -> the next cycle, so a wake `k` cycles out is delay `k - 1`.
+            Some(k) => vec![(k - 1, self.arm_seq)],
+            None => Vec::new(),
+        }
     }
 
     fn on_event(
         &mut self,
         event_token: u32,
-        _sched: &mut crate::sched::EventScheduler,
+        sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
         if !self.scheduler_mode() || event_token != self.arm_seq {
             return crate::sched::EventResult::default();
         }
-        let res = self.step_one();
+        self.settle(sched.now());
+        let explicit_irqs = if self.ints() != 0 {
+            vec![RTC_IRQ]
+        } else {
+            Vec::new()
+        };
         crate::sched::EventResult {
-            explicit_irqs: res.explicit_irqs.unwrap_or_default(),
-            reschedule_delay: self.needs_scheduler_wake().then_some(1),
+            explicit_irqs,
+            reschedule_delay: self.next_wake(),
             ..Default::default()
         }
     }
@@ -699,5 +793,159 @@ mod tests {
         let mut r = running(date(2026, 7, 27), time(6, 23, 59, 59));
         r.tick();
         assert_eq!((read_pair(&r).1 >> DOTW_SHIFT) & DOTW_MASK, 0);
+    }
+
+    /// The closed-form projection is `n` enabled `step_one` calls, for every
+    /// divider ratio and phase, across a minute/day/year carry.
+    #[test]
+    fn advanced_equals_stepping_cycle_by_cycle() {
+        for m1 in [0u32, 1, 3, 5] {
+            for phase in 0..=m1.min(3) {
+                let mut base = running(date(2026, 12, 31), time(4, 23, 59, 58));
+                base.clkdiv_m1 = m1;
+                base.div_count = phase;
+                let mut stepped = running(date(2026, 12, 31), time(4, 23, 59, 58));
+                stepped.clkdiv_m1 = m1;
+                stepped.div_count = phase;
+                for n in 0..=(m1 as u64 * 4 + 12) {
+                    assert_eq!(
+                        base.advanced(n),
+                        stepped.live(),
+                        "m1={m1} phase={phase} n={n}"
+                    );
+                    stepped.step_one();
+                }
+            }
+        }
+    }
+
+    /// Drive an RTC on a bus clock the way `Machine` does.
+    struct Drive {
+        rtc: Rp2040Rtc,
+        clock: CycleClock,
+        events: Vec<(u64, u32)>,
+        now: u64,
+        fired: u64,
+        irq_cycles: Vec<u64>,
+    }
+
+    impl Drive {
+        fn new() -> Self {
+            let clock = CycleClock::default();
+            let mut rtc = Rp2040Rtc::new();
+            rtc.attach_cycle_clock(clock.clone());
+            Self {
+                rtc,
+                clock,
+                events: Vec::new(),
+                now: 0,
+                fired: 0,
+                irq_cycles: Vec::new(),
+            }
+        }
+
+        fn write(&mut self, off: u64, value: u32) {
+            self.rtc.sync_to(self.now);
+            self.rtc.write_u32(off, value).unwrap();
+            for (delay, token) in self.rtc.take_scheduled_events() {
+                self.events.push((self.now + 1 + delay, token));
+            }
+        }
+
+        fn step(&mut self) {
+            self.now += 1;
+            self.clock.publish(self.now);
+            let mut sched = crate::sched::EventScheduler::new();
+            sched.advance_to(self.now);
+            let due: Vec<_> = self
+                .events
+                .iter()
+                .copied()
+                .filter(|(d, _)| *d <= self.now)
+                .collect();
+            self.events.retain(|(d, _)| *d > self.now);
+            for (_, token) in due {
+                self.fired += 1;
+                let mut bus = crate::bus::SystemBus::new();
+                let res = self.rtc.on_event(token, &mut sched, &mut bus);
+                if !res.explicit_irqs.is_empty() {
+                    self.irq_cycles.push(self.now);
+                }
+                if let Some(delay) = res.reschedule_delay {
+                    self.events.push((self.now + delay, token));
+                }
+            }
+        }
+    }
+
+    /// A running RTC wakes once per second boundary, not once per tick, reads
+    /// the exact calendar in between, and the alarm level pends on exactly the
+    /// cycles the per-tick walk pends it.
+    #[test]
+    fn a_running_rtc_wakes_at_second_boundaries_and_matches_the_walk() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let script: Vec<(u64, u64, u32)> = vec![
+            (1, CLKDIV_M1, 4), // 5 ticks per second
+            (1, SETUP_0, date(2026, 7, 27)),
+            (1, SETUP_1, time(1, 12, 0, 56)),
+            (1, CTRL, CTRL_LOAD),
+            (1, CTRL, CTRL_RTC_ENABLE),
+            (1, INTE, 1),
+            (1, IRQ_SETUP_1, SEC_ENA | 3), // alarm on :03 of the next minute
+            (1, IRQ_SETUP_0, MATCH_ENA),
+            (333, INTF, 1), // forced level, then released
+            (341, INTF, 0),
+            (777, CLKDIV_M1, 2), // rate change mid-count
+        ];
+        let cycles = 1200;
+        let mut walk = Rp2040Rtc::new();
+        let mut ev = Drive::new();
+        let mut walk_irq = Vec::new();
+        for c in 1..=cycles {
+            for &(at, off, value) in &script {
+                if at == c {
+                    walk.write_u32(off, value).unwrap();
+                    ev.now = c - 1;
+                    ev.write(off, value);
+                }
+            }
+            ev.now = c - 1;
+            if walk.tick().explicit_irqs.is_some() {
+                walk_irq.push(c);
+            }
+            ev.step();
+            for reg in [RTC_1, RTC_0, INTR, INTS, IRQ_SETUP_0, CTRL] {
+                assert_eq!(
+                    walk.read_u32(reg).unwrap(),
+                    ev.rtc.read_u32(reg).unwrap(),
+                    "reg 0x{reg:02x} diverged at cycle {c}"
+                );
+            }
+        }
+        assert_eq!(walk_irq, ev.irq_cycles, "RTC_IRQ pend cycles");
+        assert!(!walk_irq.is_empty());
+        assert!(
+            ev.fired < 400,
+            "boundary wakes plus the held-level runs only, fired {}",
+            ev.fired
+        );
+    }
+
+    /// An enabled RTC with no alarm costs one wake per second, so a long
+    /// idle stretch is a handful of events.
+    #[test]
+    fn an_idle_enabled_rtc_is_one_wake_per_second() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let mut d = Drive::new();
+        d.write(CLKDIV_M1, 999);
+        d.write(CTRL, CTRL_RTC_ENABLE);
+        for _ in 0..10_000 {
+            d.step();
+        }
+        assert_eq!(d.fired, 10);
     }
 }

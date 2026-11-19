@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1074004000,
-      2048,
-      10,
+      1073864758,
+      42242,
+      1260,
       0,
       0,
       0,
       0,
-      536903664,
+      536903624,
       0,
       0,
       0,
       0,
       0,
-      536903664,
-      1223,
-      1212
+      536903624,
+      4294967289,
+      1258
     ],
-    "pc": 1212,
-    "xpsr": 16777216,
+    "pc": 1258,
+    "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "8b4d75338dc7e434f802d0e13c9885f18dff5b3542e1dec2432731a617773d7a",
+  "firmware_hash": "4bf7aa7d36ff9f17dcf5c6dbb7637c892b825a58f6553a78569a6533cf21a103",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-ra4m1-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-r7fa4m1a.yaml",

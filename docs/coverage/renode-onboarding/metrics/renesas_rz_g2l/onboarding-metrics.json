@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.yaml",
   "system": "configs/systems/onboarding/renesas_rz_g2l.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-07T09:43:00Z",
-  "finished_at_utc": "2026-11-07T09:44:36Z",
-  "elapsed_seconds": 96,
-  "elapsed_ms": 95819,
+  "started_at_utc": "2026-11-19T16:12:20Z",
+  "finished_at_utc": "2026-11-19T16:12:21Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1070,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 95.517,
+    "build_cli": 0.573,
     "build_firmware": null,
-    "run_smoke": 0.292
+    "run_smoke": 0.457
   },
   "stages_ms": {
-    "build_cli": 95517,
+    "build_cli": 573,
     "build_firmware": null,
-    "run_smoke": 292
+    "run_smoke": 457
   },
   "prebuilt_firmware": "tests/fixtures/rzg2l-cm33-cpu-smoke.elf"
 }

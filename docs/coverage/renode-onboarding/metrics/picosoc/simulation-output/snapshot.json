@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 200226,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "bdcb0dc5041ac44de73c8b4df20bcd36ba6d91afd65678a853042a707bd2df74",
+  "firmware_hash": "8fb161e54cd3d8bd97200c46a5868b51f10ea5ac5bdb19042aa88c82724f4ee3",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-picosoc-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/picosoc.yaml",

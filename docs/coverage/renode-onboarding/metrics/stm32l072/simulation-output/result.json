@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 4000000,
-  "cycles": 4000000,
-  "instructions": 4000000,
+  "steps_executed": 4006420,
+  "cycles": 3570000,
+  "instructions": 4006420,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 4000000
+      "value": 4006420
     }
   },
   "limits": {
@@ -134,7 +134,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "c76fd4ee138e0cc3de5c6d8d2f14ea29eb2a927d2c03fc2319cb64beb01e5836",
+  "firmware_hash": "dc4f5cc0b3e5be8fac3eb4a0f88f771ebd837fa6ca02b45f107f32ba7b8048ae",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32l072-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l072.yaml",
@@ -415,6 +415,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -604,7 +611,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 4000000,
+    "now_cycle": 3570000,
     "channels": [
       {
         "ch": 0,
@@ -996,14 +1003,19 @@
     "heap_top": 536891392
   },
   "metrics": {
-    "cycles": 4000000,
-    "instructions": 4000000,
-    "steps_executed": 4000000,
-    "memory_reads": 145951,
+    "cycles": 3570000,
+    "instructions": 4006420,
+    "steps_executed": 4006420,
+    "memory_reads": 145932,
     "memory_writes": 1550,
     "peripheral_accesses": 791962,
     "exceptions": 0,
     "pc_samples": [
+      {
+        "pc": 134236586,
+        "count": 1758,
+        "symbol": "firmware_stm32l072_smoke::l0_smoke::run"
+      },
       {
         "pc": 134225532,
         "count": 547,
@@ -1078,11 +1090,6 @@
         "pc": 134225748,
         "count": 508,
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
-      },
-      {
-        "pc": 134225886,
-        "count": 508,
-        "symbol": "firmware_stm32l072_smoke::l0_smoke::wait_level"
       }
     ]
   }

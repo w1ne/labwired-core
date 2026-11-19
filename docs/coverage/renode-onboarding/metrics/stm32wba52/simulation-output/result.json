@@ -103,7 +103,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "0cc4ec6e86dc52b12a5811309161a9d3feb7c5ab8caeba25b2216e1ec2cead69",
+  "firmware_hash": "f652849df63385eaea409d8761db567734986a1d2f179836d43bba1052e2268b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-wba52cg-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32wba52.yaml",
@@ -150,6 +150,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },

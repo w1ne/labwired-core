@@ -191,7 +191,8 @@ peripherals:
     profile: stm32l4
 # --- DMA1 (5 channels on the F04x, RM0091 §10.3.2) -------------------------
 # Lines DMA1_Channel1 = 9, DMA1_Channel2_3 = 10, DMA1_Channel4_5 = 11.
-# CCR6/CCR7 are reserved (`channels: 5`).
+# CCR6/CCR7 are reserved and read zero (`channels: 5`,
+# `absent_channels: reserved`).
 # Default (CFGR1 remap bits clear) requests from RM0091 Table 30: SPI1_RX
 # ch2, SPI1_TX ch3, SPI2_RX ch4, SPI2_TX ch5.
 - id: dma1
@@ -201,6 +202,7 @@ peripherals:
   clock: { reg: ahbenr, bit: 0 }
   config:
     channels: 5
+    absent_channels: reserved
     channel_irqs: [9, 10, 10, 11, 11]
     requests:
       adc_rx: 1

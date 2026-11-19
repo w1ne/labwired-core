@@ -1,0 +1,11 @@
+# STM32F411 Black Pill with a microSD card on SPI1 (SCK PA5, MISO PA6,
+# MOSI PA7, CS PA4). Fixture for crates/cli/tests/stm32_microsd_sdfat.rs.
+name: "stm32f411-microsd-fixture"
+chip: "../../../../../configs/chips/stm32f411ceu6.yaml"
+external_devices:
+  - id: "sd0"
+    type: "microsd"
+    connection: "spi1"
+    config:
+      cs_pin: "PA4"
+board_io: []

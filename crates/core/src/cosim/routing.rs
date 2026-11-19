@@ -775,6 +775,11 @@ enum WriteBinding {
         connection: String,
         channel: u8,
     },
+    /// A pad level by label: its `analog_pins:` ADC channel and every
+    /// comparator sampling the pad (`SystemBus::set_analog_pad_mv`).
+    AnalogPad {
+        pad: String,
+    },
     /// The chip's VDD, fed to its supply supervisor.
     SupplyVdd,
     /// Collected and published once as an atomic device-rail batch.
@@ -1120,9 +1125,8 @@ impl SignalRouter {
                         pad: pad.clone(),
                     })?;
                 check_adc_channel(bus, path, &connection, channel)?;
-                Ok(WriteBinding::AdcChannel {
-                    connection,
-                    channel,
+                Ok(WriteBinding::AnalogPad {
+                    pad: pad.to_ascii_uppercase(),
                 })
             }
             SignalPath::AdcChannel {
@@ -1316,20 +1320,20 @@ impl SignalRouter {
                     } else {
                         0.0
                     };
-                    signals.insert(path.clone(), CosimSignalValue::F64(volts));
+                    put_signal(signals, path, CosimSignalValue::F64(volts));
                 }
                 continue;
             }
             if let ReadBinding::MotorPhaseBackEmf { motor, phase } = *binding {
                 if let Some(volts) = bus.circuit_bldc_phase_back_emf_v(motor, phase) {
-                    signals.insert(path.clone(), CosimSignalValue::F64(volts));
+                    put_signal(signals, path, CosimSignalValue::F64(volts));
                 }
                 continue;
             }
             if let ReadBinding::MotorBackEmf { motor } = *binding {
                 // Absent, not 0 V, if the motor cannot answer.
                 if let Some(volts) = bus.circuit_motor_back_emf_v(motor) {
-                    signals.insert(path.clone(), CosimSignalValue::F64(volts));
+                    put_signal(signals, path, CosimSignalValue::F64(volts));
                 }
                 continue;
             }
@@ -1364,7 +1368,7 @@ impl SignalRouter {
                 | ReadBinding::PadVolts { .. } => None,
             };
             if let Some(level) = level {
-                signals.insert(path.clone(), CosimSignalValue::Bool(level));
+                put_signal(signals, path, CosimSignalValue::Bool(level));
             }
         }
     }
@@ -1463,6 +1467,23 @@ impl SignalRouter {
                         errors.push(RoutingError::AdcUnavailable {
                             path: path.clone(),
                             channel: *channel,
+                        });
+                    }
+                }
+                WriteBinding::AnalogPad { pad } => {
+                    let Some(volts) = signal_as_f64(value) else {
+                        errors.push(RoutingError::TypeMismatch {
+                            path: path.clone(),
+                            value: value.clone(),
+                        });
+                        continue;
+                    };
+                    let millivolts = volts_to_millivolts(volts);
+                    if !bus.set_analog_pad_mv(pad, millivolts) {
+                        let channel = bus.analog_pin_map.get(pad).map_or(0, |(_, c)| *c);
+                        errors.push(RoutingError::AdcUnavailable {
+                            path: path.clone(),
+                            channel,
                         });
                     }
                 }
@@ -1581,6 +1602,16 @@ impl SignalRouter {
         }
         bus.flush_ina219_circuit(time_ns);
         errors
+    }
+}
+
+/// Store `value` under `path`, allocating the key only the first time.
+fn put_signal(signals: &mut CosimSignals, path: &str, value: CosimSignalValue) {
+    match signals.get_mut(path) {
+        Some(slot) => *slot = value,
+        None => {
+            signals.insert(path.to_string(), value);
+        }
     }
 }
 
@@ -1718,7 +1749,8 @@ fn output_carries_volts(config: &CosimModelConfig, model_signal: &str) -> bool {
             Some(serde_yaml::Value::Number(number))
                 if number.as_i64().is_none() && number.as_f64().is_some()
         ),
-        ManifestCosimAdapter::ExternalProcess
+        ManifestCosimAdapter::Behavior
+        | ManifestCosimAdapter::ExternalProcess
         | ManifestCosimAdapter::Fmi
         | ManifestCosimAdapter::Ngspice => false,
     }
@@ -2120,6 +2152,14 @@ impl CosimSession {
     /// The lockstep granularity, in nanoseconds (the finest model `step_ns`).
     pub fn step_ns(&self) -> u64 {
         self.step_ns
+    }
+
+    /// Whether [`CosimAdvance::routed`] is filled in. On by default; a caller
+    /// that never reads it (the CLI run loop without debug logging) turns it
+    /// off to take the per-step report off the hot path. The signal store and
+    /// every routed pin are unaffected.
+    pub fn set_record_routed(&mut self, record: bool) {
+        self.runner.set_record_routed(record);
     }
 
     /// The signal store, for inspection after a step.

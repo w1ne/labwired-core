@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 100000,
-  "cycles": 400000,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -117,7 +117,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "7a19013074c32786c5f79d83276269fa274eb920b4f249d4747c982a856b60ac",
+  "firmware_hash": "5e0466b50adebdb971433bae28928cbf007c043e16252522e6f64ef41a96a6ec",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smp-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_vexriscv_smp.yaml",
@@ -203,7 +203,7 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 400000,
+    "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 100000,

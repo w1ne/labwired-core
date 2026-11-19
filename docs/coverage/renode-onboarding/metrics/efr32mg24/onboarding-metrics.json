@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 400000,
+    "instructions": 403470,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/efr32mg24-smoke.yaml",
   "system": "configs/systems/onboarding/efr32mg24.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-13T18:30:16Z",
-  "finished_at_utc": "2026-11-13T18:34:25Z",
-  "elapsed_seconds": 249,
-  "elapsed_ms": 248744,
+  "started_at_utc": "2026-11-19T16:06:45Z",
+  "finished_at_utc": "2026-11-19T16:06:47Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1318,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 226.107,
-    "build_firmware": 8.353,
-    "run_smoke": 14.22
+    "build_cli": 0.468,
+    "build_firmware": 0.304,
+    "run_smoke": 0.492
   },
   "stages_ms": {
-    "build_cli": 226107,
-    "build_firmware": 8353,
-    "run_smoke": 14220
+    "build_cli": 468,
+    "build_firmware": 304,
+    "run_smoke": 492
   }
 }

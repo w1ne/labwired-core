@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 100000,
-  "cycles": 200260,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -124,7 +124,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "d8d12e9559481bb1dbf18d92cacfe62605b4a3d77353c4f543ab669f7411bf16",
+  "firmware_hash": "e2e58a5253232539dd9f57163fa6dd579f7ca0132e37b1277f0568889f57f67b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-riscv-virt-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/riscv_virt.yaml",
@@ -198,7 +198,7 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 200260,
+    "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 100000,

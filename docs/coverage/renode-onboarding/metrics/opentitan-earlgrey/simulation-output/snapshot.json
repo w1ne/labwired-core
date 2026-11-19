@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 200314,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "592d37ec727e62ca70f6be1ffb4416bb332259f5306b182761b4d0bca8cacb42",
+  "firmware_hash": "2a1d9f415d5d293c7fd05d92ab0ae985f56b03a38aec332f0d7e52fd64934265",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-opentitan-earlgrey-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/opentitan-earlgrey.yaml",

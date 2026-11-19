@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/litex_nexys_video_vexriscv_linux-smoke.yaml",
   "system": "configs/systems/onboarding/litex_nexys_video_vexriscv_linux.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-13T11:52:07Z",
-  "finished_at_utc": "2026-11-13T11:52:10Z",
-  "elapsed_seconds": 3,
-  "elapsed_ms": 2988,
+  "started_at_utc": "2026-11-19T16:08:23Z",
+  "finished_at_utc": "2026-11-19T16:08:27Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3740,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.302,
-    "build_firmware": 1.477,
-    "run_smoke": 1.164
+    "build_cli": 0.766,
+    "build_firmware": 1.292,
+    "run_smoke": 1.605
   },
   "stages_ms": {
-    "build_cli": 302,
-    "build_firmware": 1477,
-    "run_smoke": 1164
+    "build_cli": 766,
+    "build_firmware": 1292,
+    "run_smoke": 1605
   }
 }

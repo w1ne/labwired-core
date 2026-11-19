@@ -200,9 +200,11 @@ pub struct AdvanceReport {
     pub stop: AdvanceStop,
     /// Fuel units consumed by primary scheduling quanta and idle skips.
     pub fuel_consumed: u64,
-    /// Number of primary CPU scheduling quanta completed.
+    /// Number of primary CPU instructions retired or represented by a proven
+    /// poll-loop fast-forward.
     pub primary_steps: u64,
-    /// Number of secondary CPU steps completed.
+    /// Number of secondary CPU instructions retired or represented by a proven
+    /// poll-loop fast-forward.
     pub secondary_steps: u64,
     /// Simulated machine cycles elapsed, including peripheral tick costs.
     pub elapsed_cycles: u64,

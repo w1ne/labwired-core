@@ -1,6 +1,9 @@
-[2m2026-11-09T16:43:03.120563Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stk3200.yaml
-[2m2026-11-09T16:43:03.122917Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0xc1
+[2m2026-11-19T16:16:09.735188Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stk3200.yaml
+[2m2026-11-19T16:16:09.738088Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0xc1
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-[2m2026-11-09T16:43:03.124992Z[0m [33m WARN[0m [2mlabwired_core::peripherals::gpio[0m[2m:[0m EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
-PASS  5/5 checks · stk3200-smoke · 400000 steps · 0.10s
+[2m2026-11-19T16:16:09.739695Z[0m [33m WARN[0m [2mlabwired_core::peripherals::gpio[0m[2m:[0m EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
+[2m2026-11-19T16:16:09.872396Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["EFM32ZG222 RENODE SMOKE", "gpio pc10/pc11 pushpull set=1 tgl=1 clr=1 wo=1 ok", "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok", "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok", "gpio pa pinlockn reset=ffff after=fffe ok", "tim0 up of=1 pend=1 released=1 running=1 ok", "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok", "EFM32ZG PASS"] }) (captured len=325)
+[2m2026-11-19T16:16:09.872435Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x20000f00 (size 4): expected 0xef32003f, got 0xef32002f (mask 0xffffffff)
+[2m2026-11-19T16:16:09.872439Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536874752, expected_value: 4013031487, mask: None, size: Some(4), node: None } }) (captured len=325)
+FAIL  3/5 checks · stk3200-smoke · 400000 steps · 0.13s

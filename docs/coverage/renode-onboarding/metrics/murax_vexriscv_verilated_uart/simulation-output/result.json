@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 100000,
-  "cycles": 400000,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -119,7 +119,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "0b0edab473176be40136579f01ceaf345d54e9cbbf63fabe57ffb5c351271850",
+  "firmware_hash": "8420308e87372775da519bbd66c25a212d302573978589bfdf57ff1eadbdf88f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-murax-vexriscv-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/murax_vexriscv_verilated_uart.yaml",
@@ -191,7 +191,7 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 400000,
+    "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 0,

@@ -18,9 +18,9 @@
       536870912,
       536873936,
       1073790976,
-      10874
+      10918
     ],
-    "pc": 10874,
+    "pc": 10918,
     "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "6bab0b9a9a5cdcc4744d0b49dff88477cfa57aa21f7fc689f768571be7101125",
+  "firmware_hash": "a950198f2d50bd648744ad6f59fd09a630242a94d1136dcb061824c6d7ef7fdf",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32tg840-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32tg840.yaml",

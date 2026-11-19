@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/nxp-mimx8ml-mxcuart-smoke.yaml",
   "system": "configs/systems/onboarding/nxp-mimx8ml.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-07T17:41:55Z",
-  "finished_at_utc": "2026-11-07T17:42:03Z",
-  "elapsed_seconds": 8,
-  "elapsed_ms": 7206,
+  "started_at_utc": "2026-11-19T16:11:04Z",
+  "finished_at_utc": "2026-11-19T16:11:05Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 816,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 6.934,
+    "build_cli": 0.346,
     "build_firmware": null,
-    "run_smoke": 0.263
+    "run_smoke": 0.424
   },
   "stages_ms": {
-    "build_cli": 6934,
+    "build_cli": 346,
     "build_firmware": null,
-    "run_smoke": 263
+    "run_smoke": 424
   },
   "prebuilt_firmware": "tests/fixtures/imx8mp-a53-uart2-smoke.elf"
 }

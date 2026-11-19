@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/renesas-ek_ra2e1-smoke.yaml",
   "system": "configs/systems/onboarding/renesas-ek_ra2e1.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-08T03:59:16Z",
-  "finished_at_utc": "2026-11-08T03:59:24Z",
-  "elapsed_seconds": 8,
-  "elapsed_ms": 7311,
+  "started_at_utc": "2026-11-19T16:11:47Z",
+  "finished_at_utc": "2026-11-19T16:11:49Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1281,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 6.629,
-    "build_firmware": 0.386,
-    "run_smoke": 0.286
+    "build_cli": 0.335,
+    "build_firmware": 0.571,
+    "run_smoke": 0.337
   },
   "stages_ms": {
-    "build_cli": 6629,
-    "build_firmware": 386,
-    "run_smoke": 286
+    "build_cli": 335,
+    "build_firmware": 571,
+    "run_smoke": 337
   }
 }

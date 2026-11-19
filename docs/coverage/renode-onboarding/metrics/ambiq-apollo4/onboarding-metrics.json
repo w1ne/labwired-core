@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/ambiq-apollo4-smoke.yaml",
   "system": "configs/systems/onboarding/ambiq-apollo4.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-15T22:19:07Z",
-  "finished_at_utc": "2026-11-15T22:25:38Z",
-  "elapsed_seconds": 391,
-  "elapsed_ms": 390619,
+  "started_at_utc": "2026-11-19T16:01:34Z",
+  "finished_at_utc": "2026-11-19T16:01:38Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3581,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 242.118,
-    "build_firmware": 1.418,
-    "run_smoke": 147.019
+    "build_cli": 0.36,
+    "build_firmware": 1.457,
+    "run_smoke": 1.72
   },
   "stages_ms": {
-    "build_cli": 242118,
-    "build_firmware": 1418,
-    "run_smoke": 147019
+    "build_cli": 360,
+    "build_firmware": 1457,
+    "run_smoke": 1720
   }
 }

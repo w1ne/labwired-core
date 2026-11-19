@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/beaglev_starlight-smoke.yaml",
   "system": "configs/systems/onboarding/beaglev_starlight.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-05T22:25:34Z",
-  "finished_at_utc": "2026-11-05T22:25:42Z",
-  "elapsed_seconds": 8,
-  "elapsed_ms": 7993,
+  "started_at_utc": "2026-11-19T16:02:24Z",
+  "finished_at_utc": "2026-11-19T16:02:27Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2791,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 7.517,
-    "build_firmware": 0.186,
-    "run_smoke": 0.279
+    "build_cli": 0.382,
+    "build_firmware": 0.728,
+    "run_smoke": 1.613
   },
   "stages_ms": {
-    "build_cli": 7517,
-    "build_firmware": 186,
-    "run_smoke": 279
+    "build_cli": 382,
+    "build_firmware": 728,
+    "run_smoke": 1613
   }
 }

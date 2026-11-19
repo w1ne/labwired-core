@@ -1936,6 +1936,7 @@ mod tests {
         peripherals: Vec<labwired_config::PeripheralConfig>,
     ) -> labwired_config::SystemManifest {
         labwired_config::SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),

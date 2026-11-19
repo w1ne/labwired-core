@@ -3,7 +3,7 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      0,
+      1,
       1073807372,
       1073766496,
       4294867296,
@@ -18,10 +18,10 @@
       0,
       536873800,
       9385,
-      10280
+      10282
     ],
-    "pc": 10280,
-    "xpsr": 1090519040,
+    "pc": 10282,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "9558d0ed308541a6103d471dc55b0c62fcd1cd20aa1cc3538c8a2c199004fabf",
+  "firmware_hash": "c455eb3b7de0db57a63531a1052b6e7b883724e3303767718aabd8d9d8a50940",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-efm32zg222-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stk3200.yaml",

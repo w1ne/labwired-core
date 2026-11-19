@@ -33,9 +33,9 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "steps_executed": 800000,
-  "cycles": 800000,
-  "instructions": 800000,
+  "steps_executed": 806938,
+  "cycles": 450000,
+  "instructions": 806938,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -45,7 +45,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 800000
+      "value": 806938
     }
   },
   "limits": {
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "f43f8e559e5f98ae639cb92060761c1268dadc34004133047cc24a65ceba6e96",
+  "firmware_hash": "5ec494f0e5a7fbf933d94959a3f571f6c9bf7537fdb4ad3584d528fd71c262e4",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-imxrt1064-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt1064_evk.yaml",

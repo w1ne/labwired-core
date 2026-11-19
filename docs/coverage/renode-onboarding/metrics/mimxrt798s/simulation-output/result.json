@@ -92,9 +92,9 @@
       1075867676,
       542638032,
       134226743,
-      134226870
+      134226868
     ],
-    "pc": 134226870,
+    "pc": 134226868,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -140,6 +140,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },
@@ -199,7 +206,7 @@
         "text": "pass=0000001f",
         "cycle_lo": 130000,
         "cycle": 140000,
-        "end_cycle": 140000
+        "end_cycle": 150000
       }
     ],
     "dropped_lines": 0
@@ -239,14 +246,14 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 5210,
+    "memory_reads": 5189,
     "memory_writes": 81,
-    "peripheral_accesses": 23580,
+    "peripheral_accesses": 24073,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134226870,
-        "count": 15118,
+        "pc": 134226868,
+        "count": 15079,
         "symbol": "firmware_mimxrt798s_smoke::__cortex_m_rt_main"
       },
       {
@@ -265,37 +272,42 @@
         "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
       },
       {
-        "pc": 134220618,
-        "count": 39,
-        "symbol": "firmware_mimxrt798s_smoke::putc"
-      },
-      {
-        "pc": 134222452,
-        "count": 39,
-        "symbol": "firmware_mimxrt798s_smoke::putc"
-      },
-      {
-        "pc": 134223624,
-        "count": 39,
-        "symbol": "firmware_mimxrt798s_smoke::__cortex_m_rt_main"
-      },
-      {
-        "pc": 134223790,
+        "pc": 134220620,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134226042,
-        "count": 39,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134226992,
+        "pc": 134221590,
         "count": 39,
         "symbol": "firmware_mimxrt798s_smoke::putc"
       },
       {
-        "pc": 134227184,
+        "pc": 134223606,
+        "count": 39,
+        "symbol": "core::sync::atomic::atomic_load"
+      },
+      {
+        "pc": 134223782,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134226902,
+        "count": 39,
+        "symbol": "firmware_mimxrt798s_smoke::putc"
+      },
+      {
+        "pc": 134227074,
+        "count": 39,
+        "symbol": "firmware_mimxrt798s_smoke::putc"
+      },
+      {
+        "pc": 134227086,
+        "count": 39,
+        "symbol": "firmware_mimxrt798s_smoke::putc"
+      },
+      {
+        "pc": 134227214,
         "count": 39,
         "symbol": "firmware_mimxrt798s_smoke::putc"
       }

@@ -4,7 +4,7 @@
     "type": "arm",
     "registers": [
       16,
-      436,
+      1189,
       2147483648,
       4294867296,
       200000,
@@ -18,9 +18,9 @@
       4294867296,
       536902600,
       18321,
-      19442
+      19450
     ],
-    "pc": 19442,
+    "pc": 19450,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "d4820f461e0af61bdc788fee66fd0628d7ffd604def663a771bb7851741ffd60",
+  "firmware_hash": "42c28434ff98bda0373131a667a71e6a6e83ecca718c7f46a8f66e13848503e7",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efm32pg1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32pg1.yaml",

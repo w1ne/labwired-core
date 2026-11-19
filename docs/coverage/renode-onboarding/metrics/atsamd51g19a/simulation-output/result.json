@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 800000,
-  "cycles": 800000,
+  "cycles": 400082,
   "instructions": 800000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -83,7 +83,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "a4e9a2f83c609b1a8cf735f5a3a0e0ebab5dca8b3812df1ba93671da3f1e074d",
+  "firmware_hash": "6e8c2a056c5e34dc21f27b99bee871fa663cfaff8f8c759ba00c61cce339b62f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-atsamd51-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/atsamd51g19a.yaml",
@@ -134,6 +134,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -161,7 +168,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 800000,
+    "now_cycle": 400082,
     "channels": [
       {
         "ch": 0,
@@ -248,12 +255,19 @@
     "heap_top": 537067520
   },
   "metrics": {
-    "cycles": 800000,
+    "cycles": 400082,
     "instructions": 800000,
     "steps_executed": 800000,
     "memory_reads": 62,
     "memory_writes": 6,
     "peripheral_accesses": 7,
-    "exceptions": 0
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1162,
+        "count": 1562,
+        "symbol": "firmware_atsamd51_demo::__cortex_m_rt_main"
+      }
+    ]
   }
 }

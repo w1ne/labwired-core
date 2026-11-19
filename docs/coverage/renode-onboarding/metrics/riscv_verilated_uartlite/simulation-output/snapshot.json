@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 400000,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "737c4273656667341beb9b6d5dc638b2fce9484f6e5fff5279d91c6f2405d96e",
+  "firmware_hash": "538d296b788137303b9b83dfb7a7a22ec4ae284117cd597145944ce43aaf25f0",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-riscv-verilated-uartlite-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/riscv_verilated_uartlite.yaml",

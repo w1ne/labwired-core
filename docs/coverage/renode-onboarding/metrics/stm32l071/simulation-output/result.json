@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 4000000,
-  "cycles": 4000000,
-  "instructions": 4000000,
+  "steps_executed": 4002792,
+  "cycles": 3670000,
+  "instructions": 4002792,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 4000000
+      "value": 4002792
     }
   },
   "limits": {
@@ -137,7 +137,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "87310a1bc570b6b75eb6b2b8e0e3c7fe006f6dc30579202e3691d4df9eed846a",
+  "firmware_hash": "281c6501451ae60d75329b1b4a93491099002c0049bc9c23f8047da0b787d649",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-stm32l071-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l071.yaml",
@@ -404,6 +404,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -593,7 +600,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 4000000,
+    "now_cycle": 3670000,
     "channels": [
       {
         "ch": 0,
@@ -1003,17 +1010,17 @@
     "heap_top": 536891392
   },
   "metrics": {
-    "cycles": 4000000,
-    "instructions": 4000000,
-    "steps_executed": 4000000,
-    "memory_reads": 126161,
-    "memory_writes": 1691,
-    "peripheral_accesses": 851966,
+    "cycles": 3670000,
+    "instructions": 4002792,
+    "steps_executed": 4002792,
+    "memory_reads": 126158,
+    "memory_writes": 1694,
+    "peripheral_accesses": 851980,
     "exceptions": 0,
     "pc_samples": [
       {
         "pc": 134237938,
-        "count": 2618,
+        "count": 1328,
         "symbol": "firmware_stm32l071_smoke::l0_smoke::run"
       },
       {

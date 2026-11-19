@@ -20,6 +20,7 @@ mod common;
 
 mod cortex_m_event_sleep;
 mod exti_handler_once_per_edge;
+mod f767_stock_arduino;
 mod fdcan;
 mod fdcan_attach_seam;
 mod flash_h5_ops;
@@ -49,6 +50,7 @@ mod stm32u5_exec_oracle;
 mod stm32u5_reset_conformance;
 mod timer_input_capture;
 mod timer_level_deassert_unpends;
+mod timer_masked_level_batches;
 mod u545_u575_drift_guard;
 mod u5_exti;
 mod u5_reference_firmware;

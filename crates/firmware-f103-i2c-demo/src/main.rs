@@ -3842,8 +3842,10 @@ fn smoke_adc1_channel0() {
     putline(if passed { b" ok" } else { b" FAIL" });
 
     // Scan two regular ranks from the same external potentiometer fixture and
-    // a second fixture on PA1. F1 raises EOC for each rank; reading DR clears
-    // the flag while the ADC advances to the next rank.
+    // a second fixture on PA1. F1 raises EOC once, at the end of the regular
+    // group (RM0008 ADC_SR.EOC; the F1 HAL replaces per-rank polling with a
+    // timed wait for this reason). Without DMA the first rank is overwritten,
+    // so DR holds the last rank when EOC rises. Reading DR clears the flag.
     let scan_base = ADC1_ADON | ADC1_SOFTWARE_TRIGGER;
     let bank = (ADC1_IRQ / 32) as usize;
     let smpr2 = read(ADC1_SMPR2) & !0x3F;
@@ -3854,47 +3856,44 @@ fn smoke_adc1_channel0() {
     write(ADC1_CR2, scan_base);
     write(ADC1_CR2, scan_base | ADC1_SWSTART);
 
-    let mut first_eoc = false;
+    let mut group_eoc = false;
     for _ in 0..100_000 {
         if read(ADC1_SR) & ADC1_EOC != 0 {
-            first_eoc = true;
+            group_eoc = true;
             break;
         }
         core::hint::spin_loop();
     }
-    let first = read(ADC1_DR) & 0x0FFF;
-    let first_cleared = read(ADC1_SR) & ADC1_EOC == 0;
-    let first_irq = unsafe { read_volatile(NVIC_ISPR.add(bank)) } & ADC1_IRQ_BIT != 0;
+    let group_irq = unsafe { read_volatile(NVIC_ISPR.add(bank)) } & ADC1_IRQ_BIT != 0;
+    let last = read(ADC1_DR) & 0x0FFF;
+    let cleared = read(ADC1_SR) & ADC1_EOC == 0;
     unsafe { write_volatile(NVIC_ICPR.add(bank), ADC1_IRQ_BIT) };
 
-    let mut second_eoc = false;
-    for _ in 0..100_000 {
+    // A single-shot group stops after its last rank: no further EOC or IRQ.
+    let mut extra_eoc = false;
+    for _ in 0..1_000 {
         if read(ADC1_SR) & ADC1_EOC != 0 {
-            second_eoc = true;
+            extra_eoc = true;
             break;
         }
         core::hint::spin_loop();
     }
-    let second = read(ADC1_DR) & 0x0FFF;
+    let extra_irq = unsafe { read_volatile(NVIC_ISPR.add(bank)) } & ADC1_IRQ_BIT != 0;
     unsafe {
         write_volatile(NVIC_ICPR.add(bank), ADC1_IRQ_BIT);
         write(ADC1_CR2, 0);
     }
 
-    let scan_passed = first_eoc
-        && second_eoc
-        && first_cleared
-        && first_irq
-        && first == 0x03FF
-        && second == 0x07FF;
-    putbytes(b"ADC1 F1 SCAN=");
-    put_hex32(first);
-    putbytes(b",");
-    put_hex32(second);
-    putbytes(b" IRQ1=");
-    put_flag(first_irq);
+    let single_group = !extra_eoc && !extra_irq;
+    let scan_passed = group_eoc && group_irq && cleared && single_group && last == 0x07FF;
+    putbytes(b"ADC1 F1 SCAN GROUP_DR=");
+    put_hex32(last);
+    putbytes(b" IRQ=");
+    put_flag(group_irq);
     putbytes(b" CLEAR=");
-    put_flag(first_cleared);
+    put_flag(cleared);
+    putbytes(b" SINGLE=");
+    put_flag(single_group);
     putline(if scan_passed { b" ok" } else { b" FAIL" });
 }
 

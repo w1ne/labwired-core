@@ -167,6 +167,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -594,7 +601,7 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 3276,
+    "memory_reads": 3264,
     "memory_writes": 88,
     "peripheral_accesses": 3872571,
     "exceptions": 0,

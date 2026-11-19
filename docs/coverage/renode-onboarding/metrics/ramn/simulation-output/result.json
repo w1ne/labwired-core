@@ -117,7 +117,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "9e084e7a4d1a89b391f14357cc323590137c2d3a077268a2a735eb11081302e7",
+  "firmware_hash": "c75e0f967e8d79fb953c936860f353b68b8b1b460d5706c046e7c73c48897410",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-ramn-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ramn.yaml",
@@ -164,6 +164,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },

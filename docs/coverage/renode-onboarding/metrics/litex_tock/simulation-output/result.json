@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 100000,
-  "cycles": 200272,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -113,7 +113,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "5945da98e5237392e20d5a568b68ce58a8fc783e6446777a3bfaf927476579bb",
+  "firmware_hash": "381ac0e5d3a08aaefe13af879a3d8b7e8590e135961eff34703cc36ae4c450b7",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imac-unknown-none-elf/release/firmware-litex-tock-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_tock.yaml",
@@ -173,7 +173,7 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 200272,
+    "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 41,

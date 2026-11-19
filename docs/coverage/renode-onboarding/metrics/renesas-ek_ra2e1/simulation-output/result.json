@@ -147,7 +147,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "46245f3357cef7a272f7c8748a9857588550a6c158a363e31445d49e4817eaab",
+  "firmware_hash": "7dd6160fc00808edca3e3e219d9d002aa10a0d653d50bc5098898bec0c2c7fc2",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.base-none-eabi/release/firmware-renesas-ek-ra2e1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-ek_ra2e1.yaml",
@@ -194,6 +194,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },

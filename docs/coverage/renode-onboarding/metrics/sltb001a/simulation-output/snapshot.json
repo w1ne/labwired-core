@@ -4,7 +4,7 @@
     "type": "arm",
     "registers": [
       16,
-      436,
+      1417,
       2147483648,
       4294867296,
       200000,
@@ -18,10 +18,10 @@
       4294867296,
       536902600,
       18321,
-      19442
+      19446
     ],
-    "pc": 19442,
-    "xpsr": 2164260864,
+    "pc": 19446,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "37d8d8576140d3ec677e1737211425f2e2fa8be65766fdd8955d7c950edb319d",
+  "firmware_hash": "f83eae1608282df3435f8723be6765fdfe8a03e49f2eba9243b978ed4024908e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efr32mg1-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sltb001a.yaml",

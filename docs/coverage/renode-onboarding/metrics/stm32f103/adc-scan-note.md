@@ -1,7 +1,15 @@
 # STM32F103 ADC scan scope
 
-The exact-import smoke checks a two-rank PA0/PA1 regular scan with EOC on each
-rank, first-rank ADC IRQ pending, and EOC clear after the CPU reads DR. A
+The exact-import smoke checks a two-rank PA0/PA1 regular scan without DMA: EOC
+and the ADC IRQ rise once, at the end of the regular group, DR then holds the
+last rank (`0x07FF`), the CPU DR read clears EOC, and no second EOC or IRQ
+follows the single-shot group. Until 2026-11-19 this model raised EOC after
+each F1 rank. That was wrong: RM0008 ADC_SR.EOC is set "at the end of a group
+channel conversion", and ST's F1 HAL replaces per-rank polling with a timed
+wait when the sequencer has more than one rank
+([`HAL_ADC_PollForConversion`](https://github.com/STMicroelectronics/stm32f1xx-hal-driver/blob/master/Src/stm32f1xx_hal_adc.c)).
+The correction came with the merge of `main`, whose F1 sequencer already
+followed the group-end rule. A
 13-rank one-shot scan then enables ADC1 DMA and drains results through DMA1
 channel 1 into SRAM. The alternating IN0/IN1 values cover ranks 1–6 in SQR3,
 ranks 7–12 in SQR2, and rank 13 in SQR1; the smoke checks all 13 values, DMA
@@ -20,8 +28,8 @@ to raise TCIF and its IRQ. The UART records the remaining count observed when
 HTIF is first seen; this check does not claim cycle-accurate interrupt latency.
 
 The bounded model emits ADC1's DMA request on each completed regular rank only
-when CR2.DMA is set. The imported chip profile routes `adc1_rx` to DMA1 channel
-1, the STM32F1 fixed mapping. The unit regression checks the per-rank request;
+when CR2.DMA is set. The imported chip profile routes the `adc1` data request
+to DMA1 channel 1, the STM32F1 fixed mapping. The unit regression checks the per-rank request;
 the imported-system smoke checks the request-to-memory path.
 
 The imported chip profile routes DMA1 channels 1–7 to their STM32F1 IRQ lines
@@ -74,7 +82,7 @@ The initial final-count assertion failure is preserved under
 The two earlier failed integration attempts for repeated NVIC pending during
 the CPU-serviced scan remain under
 `docs/coverage/renode-onboarding/attempt-history/stm32f103/`. The passing
-smoke claims the first-rank ADC pending bit only. It does not exercise
+smoke claims the group-end ADC pending bit only. It does not exercise
 long-duration continuous ADC operation, larger DMA buffer sizes, other DMA
 routes, or physical hardware behavior. Register behavior follows ST RM0008 Rev 21
 §§11.3.8, 11.12.3, 11.12.9–11.12.11, 13.3.1, 13.3.4, and 13.4.1–13.4.2:

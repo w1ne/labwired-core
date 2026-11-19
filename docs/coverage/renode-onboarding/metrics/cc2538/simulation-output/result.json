@@ -106,7 +106,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "08e5fb681b9dcb8a48d5c819840ccccd8734e1233b3e1ef9adb6988d864635c4",
+  "firmware_hash": "6e9caf0d96196d1c66fb69079836a0553cef38cbd111f056bd0b4a022dec5992",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/cc2538.yaml",
@@ -293,6 +293,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },
@@ -548,6 +555,9 @@
     ],
     "dropped_lines": 0
   },
+  "i2c_addresses": [
+    72
+  ],
   "footprint": {
     "method": "elf_section_totals_v1",
     "text_bytes": 35720,

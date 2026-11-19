@@ -1,13 +1,13 @@
-2026-11-18T02:34:30.744005Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nucleo_f767zi.yaml
-2026-11-18T02:34:30.808855Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+[2m2026-11-19T16:10:36.089641Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/nucleo_f767zi.yaml
+[2m2026-11-19T16:10:36.193992Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-18T02:34:30.814415Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart3'
-2026-11-18T02:34:30.814553Z  INFO labwired_cli::execute: stimulus: position = 25 applied
-2026-11-18T02:34:30.814587Z  INFO labwired_cli::execute: stimulus: position = 50 applied
-2026-11-18T02:34:30.832647Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-18T02:34:30.843411Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-2026-11-18T02:34:30.867260Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-18T02:34:30.906878Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-labwired-cli test: idle_ff skipped 5010126 of 6000000 device cycles (989874 interpreted)
-PASS  9/9 checks · nucleo_f767zi-smoke · 6000000 steps · 0.14s
+[2m2026-11-19T16:10:36.201665Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'usart3'
+[2m2026-11-19T16:10:36.201822Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 25 applied
+[2m2026-11-19T16:10:36.201835Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 50 applied
+[2m2026-11-19T16:10:36.221014Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
+[2m2026-11-19T16:10:36.230828Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
+[2m2026-11-19T16:10:36.254307Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
+[2m2026-11-19T16:10:36.294285Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
+labwired-cli test: idle_ff skipped 2509998 of 3499336 device cycles (989338 interpreted)
+PASS  9/9 checks · nucleo_f767zi-smoke · 6009334 steps · 0.14s

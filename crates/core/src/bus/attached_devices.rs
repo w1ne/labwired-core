@@ -90,6 +90,59 @@ impl SystemBus {
         self.for_each_bus_resident_device(f);
     }
 
+    /// Modeled pulse width (µs) for an I2C controller at `address`. `None`
+    /// includes silent, absent, unsupported, and unknown outputs. This query
+    /// does not prove output-enable, servo power, or physical signal delivery.
+    /// Addresses can be ambiguous across buses; this query does not resolve them.
+    pub fn pwm_channel_pulse_us(&self, address: u8, channel: u8) -> Option<f64> {
+        let mut found = None;
+        self.for_each_attached_device(&mut |_, d| {
+            if found.is_none() && d.transport == "i2c" && d.address == Some(address) {
+                found = d.evidence.and_then(|e| e.pwm_channel_pulse_us(channel));
+            }
+        });
+        found
+    }
+
+    /// Bring every servo wired to a PWM-controller output up to date with the
+    /// pulse the firmware last wrote there. Cheap; call before reading servo
+    /// state. An absent or unknown pulse leaves the servo where it was.
+    pub fn sync_pwm_sourced_servos(&self) {
+        for servo in self.observed_of::<crate::peripherals::components::servo::Servo>() {
+            if let (Some((address, channel)), Some(bus_name)) =
+                (servo.source(), self.declared_connection(servo.id()))
+            {
+                // Match the servo's declared bus, not just the address: the
+                // same I2C address may exist on multiple controllers. A routed
+                // device needs mux/channel wiring evidence that this source
+                // declaration does not yet carry, so do not guess that route.
+                let mut matches = 0;
+                let mut pulse = None;
+                let mut nested_route_possible = false;
+                self.for_each_attached_device(&mut |bus, d| {
+                    if bus == Some(bus_name)
+                        && d.transport == "i2c"
+                        && d.mux_address.is_some()
+                        && d.evidence.is_some_and(|e| e.is_i2c_mux())
+                    {
+                        nested_route_possible = true;
+                    }
+                    if bus == Some(bus_name) && d.transport == "i2c" && d.address == Some(address) {
+                        matches += 1;
+                        if d.mux_address.is_none() {
+                            pulse = d.evidence.and_then(|e| e.pwm_channel_pulse_us(channel));
+                        }
+                    }
+                });
+                if matches == 1 && !nested_route_possible {
+                    if let Some(us) = pulse {
+                        servo.apply_pulse_us(us);
+                    }
+                }
+            }
+        }
+    }
+
     /// The `external_devices:` connection recorded for `id`, when the manifest
     /// declared one. This is the author's own text, not an inference.
     fn declared_connection(&self, id: &str) -> Option<&str> {

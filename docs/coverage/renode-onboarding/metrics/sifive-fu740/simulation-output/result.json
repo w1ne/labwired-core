@@ -131,9 +131,10 @@
       "divider": 1,
       "residue": 0
     },
+    "plic": null,
     "reservation": null
   },
-  "firmware_hash": "9ae802a43315e06faa12d6e6736ebd9b6eda987716272140c055a1757fc28788",
+  "firmware_hash": "cbfbef332882af6d2107bd8af0d4072770df6792059a656a76530306bc224077",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-sifive-fu740-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sifive-fu740.yaml",

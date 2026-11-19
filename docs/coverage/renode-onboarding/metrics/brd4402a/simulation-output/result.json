@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 400000,
-  "cycles": 400000,
-  "instructions": 400000,
+  "steps_executed": 403595,
+  "cycles": 210000,
+  "instructions": 403595,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 400000
+      "value": 403595
     }
   },
   "limits": {
@@ -153,6 +153,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -180,7 +187,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 400000,
+    "now_cycle": 210000,
     "channels": [
       {
         "ch": 0,
@@ -303,23 +310,23 @@
     "heap_top": 536903680
   },
   "metrics": {
-    "cycles": 400000,
-    "instructions": 400000,
-    "steps_executed": 400000,
+    "cycles": 210000,
+    "instructions": 403595,
+    "steps_executed": 403595,
     "memory_reads": 3849,
     "memory_writes": 168,
     "peripheral_accesses": 578,
     "exceptions": 0,
     "pc_samples": [
       {
+        "pc": 4844,
+        "count": 781,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
         "pc": 3590,
         "count": 39,
         "symbol": "firmware_efr32xg22_smoke::__cortex_m_rt_main"
-      },
-      {
-        "pc": 4844,
-        "count": 25,
-        "symbol": "core::core_arch::arm_shared::hints::__yield"
       }
     ]
   }

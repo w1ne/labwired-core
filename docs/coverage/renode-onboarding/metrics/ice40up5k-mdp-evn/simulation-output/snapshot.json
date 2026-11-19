@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 400000,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "d78a5c3d66893499859e54eed59763e6810e2f4c6af719fb5ddeef8880845156",
+  "firmware_hash": "362c92d8d35d438c975b00473087988b8a1df73dc4c85068baae9afe4afff8f1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-fomu-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ice40up5k-mdp-evn.yaml",

@@ -119,11 +119,17 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     "stm32f405",
     "stm32f407",
     "stm32f411ceu6",
+    // NUCLEO-F411RE: same die as stm32f411ceu6, LQFP64. PA0/PC13-style labels
+    // parse directly onto gpio<port>/bit, the same reasoning as the CEU6.
+    "stm32f411re",
     "stm32f767",
     // Pin labels are PA2/PA3/PA5-style, the same STM32 form the parse maps
     // directly onto gpio<port>/bit; no alternate package-label scheme exists
     // to transcribe a `pins:` override from (same reasoning as the peers above).
     "stm32g071",
+    // The C031C6 uses the same PA5/PB6 STM32 labels (DS13867); the parse maps
+    // them onto gpio<port>/bit exactly, as for the G0 it shares IP blocks with.
+    "stm32c031c6",
     "stm32h563",
     "stm32h735",
     "stm32l073",

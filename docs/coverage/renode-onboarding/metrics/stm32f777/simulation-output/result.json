@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 8000000,
-  "cycles": 8000000,
-  "instructions": 8000000,
+  "steps_executed": 8004340,
+  "cycles": 6090000,
+  "instructions": 8004340,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 8000000
+      "value": 8004340
     }
   },
   "limits": {
@@ -597,6 +597,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -776,7 +783,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 8000000,
+    "now_cycle": 6090000,
     "channels": [
       {
         "ch": 0,
@@ -1366,14 +1373,19 @@
     "heap_top": 537395200
   },
   "metrics": {
-    "cycles": 8000000,
-    "instructions": 8000000,
-    "steps_executed": 8000000,
+    "cycles": 6090000,
+    "instructions": 8004340,
+    "steps_executed": 8004340,
     "memory_reads": 14317,
     "memory_writes": 1572,
     "peripheral_accesses": 1085399,
     "exceptions": 0,
     "pc_samples": [
+      {
+        "pc": 134254352,
+        "count": 7500,
+        "symbol": "firmware_stm32f767_smoke::__cortex_m_rt_main"
+      },
       {
         "pc": 134221468,
         "count": 586,
@@ -1446,11 +1458,6 @@
       },
       {
         "pc": 134232848,
-        "count": 508,
-        "symbol": "firmware_stm32f767_smoke::f746_checks::wait_level"
-      },
-      {
-        "pc": 134232850,
         "count": 508,
         "symbol": "firmware_stm32f767_smoke::f746_checks::wait_level"
       }

@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 4000000,
-  "cycles": 8000674,
+  "cycles": 4000000,
   "instructions": 4000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "111b7dbc4830f6b062ba5e32fd44b998533b257917582396635ad54bc0c9d7b9",
+  "firmware_hash": "a490f89ec33e9b4faeba3b525c16123c3700f1680fe3e51b6f610184e077330a",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-litex-picorv32-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_picorv32.yaml",

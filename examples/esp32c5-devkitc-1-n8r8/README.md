@@ -41,13 +41,16 @@ examples/esp32c5-devkitc-1-n8r8/ci/test.sh
 ## Verified scope
 
 The chip descriptor maps the C5 HP RISC-V core, 8 MiB flash window, 384 KiB HP
-SRAM, and the UART0 FIFO/status register head. The smoke checks that firmware
+SRAM, UART0 FIFO/status register head, direct GPIO output, and the C5 I2C0
+subset used by the sensor example. This UART-only smoke checks that firmware
 boots at its ELF entry and that UART0 transmits `C5_N8R8_OK` to the simulator
-console.
+console. The stronger sensor smoke reads the BME280 ID and raw temperature and
+observes GPIO5 edges; see
+[`examples/esp32c5-devkitc-1-bme280-smoke`](../esp32c5-devkitc-1-bme280-smoke/README.md).
 
 The board pin map comes from Espressif's v1.2 guide. The simulator does not
-model the C5 mask ROM, Espressif bootloader, GPIO/PCR, UART IO_MUX routing, the
-physical USB-to-UART bridge, the 8 MiB PSRAM, the addressable RGB LED on GPIO27,
-USB, Wi-Fi, Bluetooth, 802.15.4, or the LP core. The UART smoke verifies the
-UART peripheral model and host capture. It does not prove the physical bridge
-or pad route.
+model the C5 mask ROM, Espressif bootloader, PCR clock gating, UART IO_MUX
+routing, the physical USB-to-UART bridge, the 8 MiB PSRAM, the addressable RGB
+LED on GPIO27, USB, Wi-Fi, Bluetooth, 802.15.4, or the LP core. The UART smoke
+checks the UART peripheral model and host capture. It does not prove the
+physical bridge or pad route.

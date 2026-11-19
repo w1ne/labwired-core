@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 400000,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "9ff9c827a50c8ce83506003d87d270807cc73a643dbfa096ca3a4d8f2ad1e042",
+  "firmware_hash": "d7f9c7ef0a569ff99a6e7f72a5434f64af32e2148b02b3d7a6fc41d07458504a",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-linux-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_linux_vexriscv_sdcard.yaml",

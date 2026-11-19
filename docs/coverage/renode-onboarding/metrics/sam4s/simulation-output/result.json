@@ -106,7 +106,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "4a43c0eaf81a712becdd6055025532ba37353e53263ee45138ec9f755f60aae4",
+  "firmware_hash": "b7cf1fa7ef8761dfc6bc4ac9eed41c26237e85339adf19d598a6c285e72dd8e9",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s.yaml",
@@ -216,6 +216,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },
@@ -414,7 +421,7 @@
     "steps_executed": 1500000,
     "memory_reads": 3775,
     "memory_writes": 100,
-    "peripheral_accesses": 6410,
+    "peripheral_accesses": 6412,
     "exceptions": 0,
     "pc_samples": [
       {

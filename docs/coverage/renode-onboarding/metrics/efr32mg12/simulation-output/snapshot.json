@@ -4,24 +4,24 @@
     "type": "arm",
     "registers": [
       16,
-      920,
+      1075,
       1073783036,
-      4012969983,
+      4012967615,
       1,
-      98316,
+      131088,
       4012969983,
       537132008,
       1,
       1073807376,
       4294867296,
-      1725,
+      1,
       4294867296,
       537131944,
       27191,
-      28340
+      28336
     ],
-    "pc": 28340,
-    "xpsr": 16777216,
+    "pc": 28336,
+    "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "3d80733d5907a839de4cb8fff92daa264788881f84f209e4dcd46a85e2b90e91",
+  "firmware_hash": "7c028e60c96ba1bbd7310f3f4c3de57f11ffcfa6c795fd2dc4b039aae00cb62b",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efr32mg12-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efr32mg12.yaml",

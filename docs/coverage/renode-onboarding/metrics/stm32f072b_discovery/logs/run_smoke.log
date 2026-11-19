@@ -1,12 +1,12 @@
-2026-11-17T03:51:41.747120Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f072b_discovery.yaml
-2026-11-17T03:51:41.806709Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
+[2m2026-11-19T16:17:06.776996Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f072b_discovery.yaml
+[2m2026-11-19T16:17:06.875736Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x80000c1
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-17T03:51:41.808932Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
-2026-11-17T03:51:41.809193Z  INFO labwired_cli::execute: stimulus: position = 25 applied
-2026-11-17T03:51:41.849295Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-17T03:51:41.864709Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-2026-11-17T03:51:41.891165Z  INFO labwired_cli::execute: stimulus: pressed = 1 applied
-2026-11-17T03:51:42.149497Z  INFO labwired_cli::execute: stimulus: pressed = 0 applied
-labwired-cli test: idle_ff skipped 2724982 of 4000000 device cycles (1275018 interpreted)
-PASS  5/5 checks · stm32f072b_discovery-smoke · 4000000 steps · 0.35s
+[2m2026-11-19T16:17:06.878086Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'usart2'
+[2m2026-11-19T16:17:06.878359Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 25 applied
+[2m2026-11-19T16:17:06.919626Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
+[2m2026-11-19T16:17:06.939754Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
+[2m2026-11-19T16:17:06.980428Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 1 applied
+[2m2026-11-19T16:17:07.044617Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressed = 0 applied
+labwired-cli test: idle_ff skipped 1365254 of 2640000 device cycles (1274746 interpreted)
+PASS  5/5 checks · stm32f072b_discovery-smoke · 4005254 steps · 0.18s

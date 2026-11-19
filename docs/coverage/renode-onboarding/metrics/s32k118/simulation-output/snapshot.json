@@ -3,8 +3,8 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      323170,
-      3112697856,
+      498873,
+      1927544832,
       536870912,
       10,
       8388608,
@@ -18,10 +18,10 @@
       0,
       536893320,
       6297,
-      6262
+      6266
     ],
-    "pc": 6262,
-    "xpsr": 2701131776,
+    "pc": 6266,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "602c7dba34ca7cf7c96d79882b124d8bb607e121b4276d554b86196240ef9686",
+  "firmware_hash": "eac0014aac359c8657a0af1878ff4c60c9c0e02fbc8be2d96ebb4bb0dd313548",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-s32k118-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/s32k118.yaml",

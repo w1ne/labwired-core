@@ -80,7 +80,7 @@ peripherals:
     # USART2_RX on channel 6 reaches IRQ 16; USART2_TX on channel 7 IRQ 17.
     channel_irqs: [11, 12, 13, 14, 15, 16, 17]
     requests:
-      adc1_rx: 1
+      adc1: 1
       usart2_rx: 6
       usart2_tx: 7
 - id: i2c1

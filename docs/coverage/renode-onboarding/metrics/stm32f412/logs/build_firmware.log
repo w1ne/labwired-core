@@ -22,4 +22,4 @@ warning: constant `GPIOB` is never used
    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 warning: `firmware-stm32f429-smoke` (bin "firmware-stm32f429-smoke") generated 1 warning
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.13s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.30s

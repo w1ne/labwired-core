@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 200096,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "3d96a8687ad39511215eb6873d510d4e302e7d1cf417d658932506f309581a56",
+  "firmware_hash": "6057d7d2f1e291decc03474662bffe90f4c701d4ac3ceeee6b0e4467dff368b3",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-cv32e40p-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/A2_CV32E40P.yaml",

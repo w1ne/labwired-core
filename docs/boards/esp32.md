@@ -48,6 +48,11 @@ with a disarmed-timer negative control. These checks establish the simulator's
 core-timer contract; they do not establish silicon timing or additional
 peripheral coverage.
 
+The [ESP32-DevKitM-1 + BME280 profile](../../examples/esp32-devkitm-1/README.md#bme280-profile)
+also uses the classic I2C0 model on GPIO21/22 to read BME280 `CHIP_ID` and
+asserts GPIO23 high only on `0x60`. Its local smoke does not use the hosted
+generic-ESP32 catalog board or claim hosted verification of the exact board.
+
 ## Sources
 
 - ESP32 Technical Reference Manual v4.6 §1.3 (Memory Map), Table 1-2, as cited

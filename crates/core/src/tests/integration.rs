@@ -84,6 +84,7 @@ pub mod integration_tests {
     /// name with `chip` → `system`; `chip` points at the descriptor name.
     fn manifest_for(chip_name: &str) -> SystemManifest {
         SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -530,6 +531,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -751,6 +753,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -832,6 +835,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -1054,6 +1058,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -2189,14 +2194,20 @@ pub mod integration_tests {
         let dr_addr = adc_base + 0x4C;
         let sr_addr = adc_base;
 
-        let dr = machine.bus.read_u32(dr_addr).unwrap();
+        // RM0008 §11.12.1: reading ADC_DR clears EOC, so sample SR first.
         let sr = machine.bus.read_u32(sr_addr).unwrap();
+        let dr = machine.bus.read_u32(dr_addr).unwrap();
 
         assert_ne!(dr, 0, "Data Register should have updated value");
         assert_eq!(
             sr & (1 << 1),
             (1 << 1),
             "EOC bit should be set in Status Register"
+        );
+        assert_eq!(
+            machine.bus.read_u32(sr_addr).unwrap() & (1 << 1),
+            0,
+            "reading DR clears EOC"
         );
     }
 
@@ -2377,6 +2388,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -2483,6 +2495,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -2574,6 +2587,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -3003,6 +3017,7 @@ pub mod integration_tests {
             serde_yaml::Value::Number(0x3C.into()),
         );
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -3133,6 +3148,7 @@ pub mod integration_tests {
                 include: None,
             };
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),
@@ -3216,6 +3232,7 @@ pub mod integration_tests {
                 include: None,
             };
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),
@@ -3338,6 +3355,7 @@ pub mod integration_tests {
                 serde_yaml::Value::Number(0x3C.into()),
             );
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),

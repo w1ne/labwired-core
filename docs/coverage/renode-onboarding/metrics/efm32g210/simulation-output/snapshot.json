@@ -18,9 +18,9 @@
       536870912,
       536886224,
       1073790976,
-      11612
+      11608
     ],
-    "pc": 11612,
+    "pc": 11608,
     "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "fdb223bbf5bf0b9c58977965ca56a71606e2e086f22a4c2e8416408f7e4ef67d",
+  "firmware_hash": "a268a06e8622d7eed041847ff77492247a7c8ddddf40fdbf77a3882a8c6485c1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32g210-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32g210.yaml",

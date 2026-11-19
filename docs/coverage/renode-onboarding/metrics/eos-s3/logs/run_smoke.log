@@ -1,7 +1,7 @@
-[2m2026-11-16T06:31:15.708635Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/eos-s3.yaml
-[2m2026-11-16T06:31:15.709882Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
+[2m2026-11-19T16:07:02.680297Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/eos-s3.yaml
+[2m2026-11-19T16:07:02.681546Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-[2m2026-11-16T06:31:15.711728Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'uart'
-labwired-cli test: idle_ff skipped 424530 of 600000 device cycles (175470 interpreted)
-PASS  7/7 checks · eos-s3-smoke · 600000 steps · 0.01s
+[2m2026-11-19T16:07:02.683513Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'uart'
+labwired-cli test: idle_ff skipped 214635 of 390000 device cycles (175365 interpreted)
+PASS  7/7 checks · eos-s3-smoke · 604635 steps · 0.01s

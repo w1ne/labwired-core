@@ -33,9 +33,9 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 569374,
+  "steps_executed": 291705,
   "cycles": 100000000,
-  "instructions": 569374,
+  "instructions": 291705,
   "stop_reason": "max_cycles",
   "stop_reason_details": {
     "triggered_stop_condition": "max_cycles",

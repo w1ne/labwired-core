@@ -127,7 +127,7 @@
     "registers": [
       4096,
       268435456,
-      35712,
+      34688,
       0,
       21075,
       0,
@@ -140,9 +140,9 @@
       134265995,
       537001840,
       134263759,
-      134265096
+      134264996
     ],
-    "pc": 134265096,
+    "pc": 134264996,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -298,6 +298,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -423,83 +430,83 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 11782,
+            "cycle": 10776,
             "value": 1
           },
           {
-            "cycle": 53034,
+            "cycle": 52028,
             "value": 0
           },
           {
-            "cycle": 94287,
+            "cycle": 93281,
             "value": 1
           },
           {
-            "cycle": 135539,
+            "cycle": 134533,
             "value": 0
           },
           {
-            "cycle": 176792,
+            "cycle": 175786,
             "value": 1
           },
           {
-            "cycle": 218044,
+            "cycle": 217038,
             "value": 0
           },
           {
-            "cycle": 259297,
+            "cycle": 258291,
             "value": 1
           },
           {
-            "cycle": 300549,
+            "cycle": 299543,
             "value": 0
           },
           {
-            "cycle": 341802,
+            "cycle": 340796,
             "value": 1
           },
           {
-            "cycle": 383054,
+            "cycle": 382048,
             "value": 0
           },
           {
-            "cycle": 424307,
+            "cycle": 423301,
             "value": 1
           },
           {
-            "cycle": 465559,
+            "cycle": 464553,
             "value": 0
           },
           {
-            "cycle": 506812,
+            "cycle": 505806,
             "value": 1
           },
           {
-            "cycle": 548064,
+            "cycle": 547058,
             "value": 0
           },
           {
-            "cycle": 589317,
+            "cycle": 588311,
             "value": 1
           },
           {
-            "cycle": 630569,
+            "cycle": 629563,
             "value": 0
           },
           {
-            "cycle": 671822,
+            "cycle": 670816,
             "value": 1
           },
           {
-            "cycle": 713074,
+            "cycle": 712068,
             "value": 0
           },
           {
-            "cycle": 754327,
+            "cycle": 753321,
             "value": 1
           },
           {
-            "cycle": 795579,
+            "cycle": 794573,
             "value": 0
           }
         ],
@@ -511,83 +518,83 @@
             "state": "0"
           },
           {
-            "cycle": 11782,
+            "cycle": 10776,
             "state": "1"
           },
           {
-            "cycle": 53034,
+            "cycle": 52028,
             "state": "0"
           },
           {
-            "cycle": 94287,
+            "cycle": 93281,
             "state": "1"
           },
           {
-            "cycle": 135539,
+            "cycle": 134533,
             "state": "0"
           },
           {
-            "cycle": 176792,
+            "cycle": 175786,
             "state": "1"
           },
           {
-            "cycle": 218044,
+            "cycle": 217038,
             "state": "0"
           },
           {
-            "cycle": 259297,
+            "cycle": 258291,
             "state": "1"
           },
           {
-            "cycle": 300549,
+            "cycle": 299543,
             "state": "0"
           },
           {
-            "cycle": 341802,
+            "cycle": 340796,
             "state": "1"
           },
           {
-            "cycle": 383054,
+            "cycle": 382048,
             "state": "0"
           },
           {
-            "cycle": 424307,
+            "cycle": 423301,
             "state": "1"
           },
           {
-            "cycle": 465559,
+            "cycle": 464553,
             "state": "0"
           },
           {
-            "cycle": 506812,
+            "cycle": 505806,
             "state": "1"
           },
           {
-            "cycle": 548064,
+            "cycle": 547058,
             "state": "0"
           },
           {
-            "cycle": 589317,
+            "cycle": 588311,
             "state": "1"
           },
           {
-            "cycle": 630569,
+            "cycle": 629563,
             "state": "0"
           },
           {
-            "cycle": 671822,
+            "cycle": 670816,
             "state": "1"
           },
           {
-            "cycle": 713074,
+            "cycle": 712068,
             "state": "0"
           },
           {
-            "cycle": 754327,
+            "cycle": 753321,
             "state": "1"
           },
           {
-            "cycle": 795579,
+            "cycle": 794573,
             "state": "0"
           }
         ],
@@ -685,9 +692,9 @@
       },
       {
         "text": "usart2 rxne=1 isolated=1 irq=1 data=00005253 released=1 ok",
-        "cycle_lo": 11000,
-        "cycle": 21000,
-        "end_cycle": 21000
+        "cycle_lo": 1000,
+        "cycle": 11000,
+        "end_cycle": 11000
       }
     ],
     "dropped_lines": 0
@@ -756,48 +763,38 @@
     "cycles": 800000,
     "instructions": 800000,
     "steps_executed": 800000,
-    "memory_reads": 8988,
+    "memory_reads": 8922,
     "memory_writes": 248,
-    "peripheral_accesses": 769088,
+    "peripheral_accesses": 769817,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134265096,
+        "pc": 134264996,
         "count": 76,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
-      },
-      {
-        "pc": 134264916,
-        "count": 40,
         "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134264928,
-        "count": 40,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134264976,
-        "count": 40,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134265084,
-        "count": 40,
-        "symbol": "core::ptr::read_volatile"
-      },
-      {
-        "pc": 134262034,
-        "count": 39,
-        "symbol": "firmware_stm32f429_smoke::smoke_usart2_rx"
       },
       {
         "pc": 134264828,
-        "count": 39,
+        "count": 40,
         "symbol": "<i32 as core::cmp::PartialOrd>::lt"
       },
       {
-        "pc": 134264830,
+        "pc": 134264840,
+        "count": 40,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134264948,
+        "count": 40,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134265008,
+        "count": 40,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134264832,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
@@ -807,27 +804,27 @@
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134264836,
+        "pc": 134264838,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134264840,
+        "pc": 134264844,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134264842,
+        "pc": 134264848,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134264846,
+        "pc": 134264850,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134264852,
+        "pc": 134264854,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       },
@@ -837,7 +834,17 @@
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134264858,
+        "pc": 134264860,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134264862,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134264866,
         "count": 39,
         "symbol": "core::ptr::read_volatile"
       }
@@ -845,7 +852,7 @@
     "stalled_poll": {
       "peripheral": "gpioPortD",
       "offset": 20,
-      "accesses": 4288
+      "accesses": 5262
     }
   }
 }

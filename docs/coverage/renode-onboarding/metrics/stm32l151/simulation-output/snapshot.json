@@ -33,9 +33,9 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 4000000,
-  "cycles": 4000000,
-  "instructions": 4000000,
+  "steps_executed": 4007542,
+  "cycles": 3460000,
+  "instructions": 4007542,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -45,7 +45,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 4000000
+      "value": 4007542
     }
   },
   "limits": {
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "7c24833cafbf6978c5ba01035db42dbe1d01da0056ad47bd418c4ecbe06ad40a",
+  "firmware_hash": "4e06684526756a9ead7b1d8f9816d937d43e2efeb5b507f9c843c63b1e92e498",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32l151.yaml",

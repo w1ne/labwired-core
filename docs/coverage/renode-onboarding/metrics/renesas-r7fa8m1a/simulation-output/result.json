@@ -138,7 +138,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "4f1bf1897c472cc68a8ee0811b4f6875587702d22ebf8d2ea85be0bd9823a172",
+  "firmware_hash": "16dd4466d7f803dcdcca78980b200fcfdd0c5ed14a3d712e1a4782b9f7e36635",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-renesas-r7fa8m1a-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas-r7fa8m1a.yaml",
@@ -774,6 +774,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },

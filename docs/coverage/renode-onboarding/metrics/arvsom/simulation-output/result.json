@@ -156,7 +156,7 @@
     "plic": null,
     "reservation": null
   },
-  "firmware_hash": "baa7bc8768701bd0761ff2d2a0cbb6f74029e427dd07a8c1fc96cfe9bf9305b0",
+  "firmware_hash": "ea198efbfefe63a8dd9dbdc41906b34a948cff1a325a4e2726941afbc3e8fe37",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv64imac-unknown-none-elf/release/firmware-arvsom-rv64-cpu-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/arvsom.yaml",

@@ -537,9 +537,9 @@ fn max31855_frame(base: u32, port: u32, pin: u32) -> Option<u32> {
     idle.then_some(word)
 }
 
-/// Each SPI reads its own device's frame twice — polled, then with RXNEIE,
-/// which must pend the SPI's own NVIC line and no other SPI's. Afterwards
-/// the RX FIFO is empty (FRLVL = 0).
+/// Each SPI reads its own device's frame twice — polled, then with RXNEIE.
+/// A further frame held in the RX FIFO must pend the SPI's own NVIC line and
+/// no other SPI's. Afterwards the RX FIFO is empty (FRLVL = 0).
 fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) -> bool {
     cs_output(port, pin);
     spi_enable(base);
@@ -551,10 +551,17 @@ fn check_spi(name: &str, base: u32, irq: u32, port: u32, pin: u32, want: u32) ->
     wr(base + S_CR2, SPI_CR2_8BIT | (1 << 6)); // RXNEIE
     let again = max31855_frame(base, port, pin);
     let data = frame == want && again == Some(want);
-    let pend = quiet && pending(irq);
+    // RXNE & RXNEIE is a level: sample the NVIC line while one more frame
+    // waits in the RX FIFO, then read it out.
+    let held = wait(base + S_SR, SPI_SR_TXE, SPI_SR_TXE) && {
+        wr8(base + S_DR, 0);
+        wait(base + S_SR, SPI_SR_RXNE, SPI_SR_RXNE)
+    };
+    let pend = quiet && held && pending(irq);
     let alone = SPIS
         .iter()
         .all(|&(_, _, other, _, _, _)| other == irq || !pending(other));
+    let _ = rd8(base + S_DR);
     wr(base + S_CR2, SPI_CR2_8BIT);
     unpend(irq);
     let released = !pending(irq) && rd(base + S_SR) & (SPI_SR_RXNE | SPI_SR_FRLVL) == 0;

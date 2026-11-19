@@ -229,3 +229,95 @@ fn esp32c6_host_console_accepts_usb_serial_jtag() {
     bus.attach_host_console(&HostConsole::UsbSerialJtag, sink())
         .expect("C6 chip yaml carries usb_serial_jtag");
 }
+
+/// RX uses the same declared instance names as debug_uart, including the
+/// scheduler wake required by an interrupt-driven ESP-IDF UART reader.
+#[test]
+fn s3_declared_uart_names_deliver_rx_to_the_matching_hardware_instance() {
+    use labwired_core::Bus;
+
+    let mut bus = s3_firmware_bus();
+    for instance in 0..3 {
+        let declared = format!("uart{instance}");
+        let native = format!("uart{instance}_s3");
+        let index = bus.find_peripheral_index_by_name(&native).unwrap();
+        let base = bus.peripherals[index].base;
+        let declared_rx = bus.attach_uart_rx_source_named(&declared).unwrap();
+        let native_rx = bus.attach_uart_rx_source_named(&native).unwrap();
+        assert!(Arc::ptr_eq(&declared_rx, &native_rx));
+
+        bus.write_u32(base + 0x24, 1).unwrap(); // RXFIFO_FULL threshold: 1
+        bus.write_u32(base + 0x0c, 1).unwrap(); // RXFIFO_FULL interrupt enabled
+        let payload = [b'A' + instance as u8, b'0' + instance as u8];
+        assert_eq!(bus.deliver_uart_rx_named(&declared, &payload), Ok(2));
+        assert_eq!(
+            bus.pending_schedule.iter().any(|(idx, _, _)| *idx == index),
+            labwired_core::cycle_clock::event_scheduler_enabled(),
+            "delivery must wake the selected {native} exactly when its scheduler is enabled"
+        );
+        assert_ne!(bus.read_u32(base + 0x08).unwrap() & 1, 0);
+        assert_eq!(bus.read_u32(base).unwrap(), u32::from(payload[0]));
+        assert_eq!(bus.read_u32(base).unwrap(), u32::from(payload[1]));
+        assert_eq!(bus.read_u32(base + 0x08).unwrap() & 1, 0);
+
+        assert_eq!(bus.deliver_uart_rx_named(&native, b"N"), Ok(1));
+        assert_eq!(bus.read_u32(base).unwrap(), u32::from(b'N'));
+    }
+    assert!(bus.deliver_uart_rx_named("uart9", b"X").is_err());
+}
+
+/// A descriptor-built bus uses the opposite spelling. Both spellings must
+/// resolve to its declared instance without installing a second peripheral.
+#[test]
+fn s3_descriptor_bus_accepts_native_uart_names_for_rx() {
+    let mut bus = bus_for("esp32s3.yaml", "name: t\nchip: ../chips/esp32s3.yaml\n");
+    // The descriptor currently declares only uart0, through the generic UART
+    // model. This test checks name routing; the ROM-bus test above checks the
+    // actual S3 FIFO and interrupt behavior.
+    assert!(bus.find_peripheral_index_by_name("uart0_s3").is_none());
+    assert!(bus.find_peripheral_index_by_name("uart0").is_some());
+    let declared_rx = bus.attach_uart_rx_source_named("uart0").unwrap();
+    let native_rx = bus.attach_uart_rx_source_named("uart0_s3").unwrap();
+    assert!(Arc::ptr_eq(&declared_rx, &native_rx));
+    assert_eq!(bus.deliver_uart_rx_named("uart0_s3", b"RX"), Ok(2));
+    assert_eq!(
+        declared_rx
+            .lock()
+            .unwrap()
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        b"RX"
+    );
+    assert!(bus.deliver_uart_rx_named("uart1_s3", b"X").is_err());
+}
+
+/// Aliases are a fallback only. A bus with two explicitly registered names
+/// must never send a declared input to the other entry.
+#[test]
+fn an_exact_uart_name_wins_over_the_alias() {
+    use labwired_core::peripherals::uart::Uart;
+
+    let mut bus = SystemBus::new();
+    for (name, base) in [("uart0_s3", 0x4000_0000), ("uart0", 0x4000_1000)] {
+        bus.add_peripheral(name, base, 0x100, None, Box::new(Uart::new()));
+    }
+    let declared = bus.attach_uart_rx_source_named("uart0").unwrap();
+    let native = bus.attach_uart_rx_source_named("uart0_s3").unwrap();
+    assert!(!Arc::ptr_eq(&declared, &native));
+    bus.deliver_uart_rx_named("uart0", b"D").unwrap();
+    assert_eq!(
+        declared.lock().unwrap().iter().copied().collect::<Vec<_>>(),
+        b"D"
+    );
+    assert!(native.lock().unwrap().is_empty());
+    bus.deliver_uart_rx_named("uart0_s3", b"N").unwrap();
+    assert_eq!(
+        native.lock().unwrap().iter().copied().collect::<Vec<_>>(),
+        b"N"
+    );
+    assert_eq!(
+        declared.lock().unwrap().iter().copied().collect::<Vec<_>>(),
+        b"D"
+    );
+}

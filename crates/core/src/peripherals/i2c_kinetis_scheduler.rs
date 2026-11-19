@@ -414,3 +414,65 @@ fn iicie_disabled_never_pends_walk_identity() {
     ];
     assert_walk_identical(&script, 12, "kinetis IICIE-off no pend");
 }
+
+/// IICIE set on a bus with no read transfer in flight and IICIF clear: nothing
+/// can change until the next write, so the level chain must stop instead of
+/// re-polling every cycle; a write re-arms it, and a read transfer keeps it
+/// polling because a `&self` `D` read can latch IICIF.
+#[test]
+fn idle_bus_with_iicie_stops_the_chain_and_a_write_rearms_it() {
+    let mut h = SchedHarness::new(&kinetis);
+    // IICIE with nothing latched: the first (armed) poll finds nothing to do.
+    h.write(0x02, KI_C1_IICIE);
+    assert_eq!(h.events.len(), 1, "an IICIE write arms the chain");
+    h.step();
+    assert!(h.events.is_empty(), "idle chain must not re-arm itself");
+    for _ in 0..1000 {
+        h.step();
+    }
+    assert!(h.events.is_empty(), "no wake while the bus is idle");
+    assert!(h.pends.is_empty());
+
+    // A write-only transfer: address byte latches IICIF -> level pends each
+    // cycle, then clearing IICIF lets the chain stop again.
+    h.write(0x02, KI_C1_IICIE | KI_C1_MST | KI_C1_TX);
+    h.write(0x04, 0x1E << 1);
+    for _ in 0..3 {
+        h.step();
+    }
+    assert_eq!(
+        h.pends.len(),
+        3,
+        "held level pends every cycle: {:?}",
+        h.pends
+    );
+    h.write(0x03, KI_S_IICIF);
+    h.step();
+    h.step();
+    assert!(h.events.is_empty(), "chain stops once IICIF is cleared");
+
+    // A read transfer keeps the chain polling (a D read latches IICIF).
+    h.write(0x02, KI_C1_IICIE | KI_C1_MST | KI_C1_TX | KI_C1_RSTA);
+    h.write(0x04, (0x1E << 1) | 1);
+    h.write(0x03, KI_S_IICIF);
+    h.step();
+    assert_eq!(h.events.len(), 1, "is_reading keeps the poll alive");
+}
+
+#[test]
+fn idle_iicie_then_late_write_transfer_walk_identity() {
+    // Long idle with IICIE set (chain stopped), then a full write transfer:
+    // pend cycles and registers must match the per-cycle walk.
+    let script = [
+        (1u64, Op::Write(0x02, KI_C1_IICIE)),
+        (300, Op::Write(0x02, KI_C1_IICIE | KI_C1_MST | KI_C1_TX)),
+        (300, Op::Write(0x04, 0x1E << 1)),
+        (306, Op::Write(0x03, KI_S_IICIF)),
+        (306, Op::Write(0x04, 0xAA)),
+        (311, Op::Write(0x03, KI_S_IICIF)),
+        (700, Op::Write(0x04, 0xBB)),
+        (704, Op::Write(0x03, KI_S_IICIF)),
+        (705, Op::Write(0x02, KI_C1_IICIE)),
+    ];
+    assert_walk_identical(&script, 720, "kinetis idle IICIE then write transfer");
+}

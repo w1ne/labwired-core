@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 4000000,
-  "cycles": 8001028,
+  "cycles": 4000000,
   "instructions": 4000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -125,7 +125,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "6934bdb740b2a45c7b101076751d9d51f9fc6f417cd37e45e1e43f47644f2500",
+  "firmware_hash": "6659558da275018dcbe32448edaf43998be0ae98bf9600b5c51564436712da2e",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-vegaboard-ri5cy-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/vegaboard_ri5cy.yaml",
@@ -221,7 +221,7 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 8001028,
+    "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
     "memory_reads": 4000004,

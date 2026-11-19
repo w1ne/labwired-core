@@ -1,6 +1,6 @@
-2026-11-15T22:25:38.067777Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/ambiq-apollo4.yaml
-2026-11-15T22:25:38.071082Z  INFO labwired_loader: ELF Entry Point: 0x18401
+[2m2026-11-19T16:01:37.219061Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/ambiq-apollo4.yaml
+[2m2026-11-19T16:01:37.221474Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x18401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-2026-11-15T22:25:38.072893Z  INFO labwired_cli::execute: uart_injection: 1 byte(s) delivered to 'uart0'
+[2m2026-11-19T16:01:37.223124Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'uart0'
 PASS  3/3 checks · ambiq-apollo4-smoke · 4000000 steps · 0.02s

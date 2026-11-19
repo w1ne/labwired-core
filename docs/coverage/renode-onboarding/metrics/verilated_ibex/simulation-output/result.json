@@ -2,7 +2,7 @@
   "result_schema_version": "1.0",
   "status": "pass",
   "steps_executed": 100000,
-  "cycles": 213962,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -127,7 +127,7 @@
       "tcontrol": 0
     }
   },
-  "firmware_hash": "98817f0092bbc5e4d57e04443e6d30dfc982f23f78e26493f340b0ec0455b078",
+  "firmware_hash": "34aeb43910437262a0e172083b8044c39041e4089f9b5dd478ad5895b1bbf002",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-litex-ibex-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/verilated_ibex.yaml",
@@ -236,7 +236,7 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 213962,
+    "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
     "memory_reads": 4,

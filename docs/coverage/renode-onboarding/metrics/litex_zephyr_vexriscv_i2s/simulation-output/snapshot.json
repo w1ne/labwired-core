@@ -73,7 +73,7 @@
     }
   },
   "steps_executed": 100000,
-  "cycles": 200450,
+  "cycles": 100000,
   "instructions": 100000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -98,7 +98,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "16fea689c090cfa01720c41a6cf4da5a8e52344bb32758e23379f5fb30d4ace2",
+  "firmware_hash": "12629428f9e8824409954bf32206f309ea0a005c16578cd25710dcb89f82bdb7",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/riscv32imac-unknown-none-elf/release/firmware-litex-zephyr-i2s-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/litex_zephyr_vexriscv_i2s.yaml",

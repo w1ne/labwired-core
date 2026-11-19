@@ -203,6 +203,31 @@ pub fn fast_boot(
     })
 }
 
+/// Switch a fast-booted core to the real window machinery and give it the
+/// caller frame a ROM `callx4` would have left.
+///
+/// `faithful_windows` makes window overflow vector to the firmware's own
+/// `_WindowOverflow{4,8,12}` handlers. Those handlers need a save chain:
+/// `_WindowOverflow8` reads the caller's SP from `[a1 - 12]`, which the
+/// caller's own spill wrote. A core that starts at the app entry with
+/// `PS.CALLINC = 0` has no caller frame, so the first spill of the entry
+/// function reads 0 there and stores to `0xffff_ffe0`.
+///
+/// Setting `PS.CALLINC = 1` makes the entry's `ENTRY` rotate into a new
+/// window above a root frame (window 0, `a1` = the boot SP, return address
+/// 0). That root frame is spilled first, by `_WindowOverflow4`, and its
+/// spill writes the boot SP to `[entry_sp - 12]`, which is the chain the
+/// later `_WindowOverflow8` reads. The entry function never returns, so the
+/// root frame is never restored. Call it after the SP is set, on a core that
+/// is about to run its app entry (`call_start_cpu0` / `call_start_cpu1`).
+pub fn prime_faithful_windows(cpu: &mut XtensaLx7) {
+    cpu.faithful_windows = true;
+    // WOE=1, EXCM=0, INTLEVEL=0, as `fast_boot` sets, plus the call width.
+    let mut ps = crate::cpu::xtensa_regs::Ps::from_raw(1 << 18);
+    ps.set_callinc(1);
+    cpu.ps = ps;
+}
+
 /// Seed the ESP32-S3 flash-cache MMU so `spi_flash_cache2phys` / OTA
 /// `esp_ota_get_running_partition` see the factory app (flash `0x10000`).
 ///

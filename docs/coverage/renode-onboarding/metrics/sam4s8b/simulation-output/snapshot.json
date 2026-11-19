@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "0d3a65e44cc8b3b67777ff171f304367cac608592cdd33337f7be2d5390cb728",
+  "firmware_hash": "a3071ffb17771a032fab43f96fbb842257bc6c7fdee05489c93468ad55537f63",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s8b-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s8b.yaml",

@@ -18,9 +18,9 @@
       0,
       536968840,
       16781481,
-      16781430
+      16781428
     ],
-    "pc": 16781430,
+    "pc": 16781428,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,9 +33,9 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 200000,
-  "cycles": 200000,
-  "instructions": 200000,
+  "steps_executed": 207985,
+  "cycles": 111000,
+  "instructions": 207985,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -45,7 +45,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 200000
+      "value": 207985
     }
   },
   "limits": {
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "7e3dc775132951f3efc43ebb69a083014c479341777a12df213c1106cfc7b3f1",
+  "firmware_hash": "c7a9af07d67f420b9117696a043f7235465dcdc2cb71a363fb84f34a7ee65c4d",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-ut32m0r500-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ut32m0r500.yaml",

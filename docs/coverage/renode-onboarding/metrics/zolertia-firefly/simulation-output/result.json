@@ -112,7 +112,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "8b83e804aa9c2160fa5a979e609a3726a5e5e92df0e6f63226ece4c11713f228",
+  "firmware_hash": "5df9e9bfd11e9ef860ca19b8d3e6f5060be37c3e4e6d438209174b5e8ac0bf35",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-zolertia-firefly-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/zolertia-firefly.yaml",
@@ -299,6 +299,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },

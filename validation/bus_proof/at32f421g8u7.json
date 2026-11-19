@@ -1,0 +1,21 @@
+{
+  "id": "at32f421g8u7",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/vendor/at32f421_contract.rs",
+    "test": "vendor_sdk_smoke_runs_flash_dma_and_timer_irq_paths",
+    "signal": "the committed Artery BSP 2.1.9 smoke ELF (tests/fixtures/at32f421g8u7-smoke.elf, built by examples/at32f421g8u7/firmware/build.sh) clocks USART2 from CRM APB1EN bit 17, routes PA2 to USART2_TX on MUX1, polls STS.TDBE and writes through DT; the test asserts the TX sink receives AT32 START, FLASH OK, DMA OK, TIMER IRQ OK and AT32F421G8U7 IO OK and no FAIL. examples/at32f421g8u7/io-smoke.yaml asserts the same lines through the CLI. Polled TX only",
+    "lane": "pr-workspace-tests shards - cargo test -p labwired-core --test vendor at32f421_contract::; core-coverage-matrix-smoke: examples/at32f421g8u7/io-smoke.yaml"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "SPI1/I2S1 (0x40013000) and SPI2/I2S2 (0x40003800) are not modelled; they are not in the at32f421g8u7 descriptor peripherals list.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "I2C1 (0x40005400) and I2C2 (0x40005800) are not modelled; they are not in the at32f421g8u7 descriptor peripherals list.",
+    "lane": "none"
+  }
+}

@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 800000,
-  "cycles": 800000,
-  "instructions": 800000,
+  "steps_executed": 806938,
+  "cycles": 450000,
+  "instructions": 806938,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 800000
+      "value": 806938
     }
   },
   "limits": {
@@ -89,7 +89,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "f43f8e559e5f98ae639cb92060761c1268dadc34004133047cc24a65ceba6e96",
+  "firmware_hash": "5ec494f0e5a7fbf933d94959a3f571f6c9bf7537fdb4ad3584d528fd71c262e4",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-imxrt1064-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt1064_evk.yaml",
@@ -140,6 +140,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -181,7 +188,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 800000,
+    "now_cycle": 450000,
     "channels": [
       {
         "ch": 0,
@@ -274,43 +281,43 @@
     "heap_top": 537001984
   },
   "metrics": {
-    "cycles": 800000,
-    "instructions": 800000,
-    "steps_executed": 800000,
-    "memory_reads": 25133,
+    "cycles": 450000,
+    "instructions": 806938,
+    "steps_executed": 806938,
+    "memory_reads": 25131,
     "memory_writes": 53,
-    "peripheral_accesses": 1101,
+    "peripheral_accesses": 1106,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 536873342,
+        "pc": 536875048,
+        "count": 1406,
+        "symbol": "firmware_imxrt1064_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 536873326,
         "count": 117,
         "symbol": "firmware_imxrt1064_smoke::wait"
       },
       {
-        "pc": 536873314,
+        "pc": 536873322,
         "count": 78,
         "symbol": "core::sync::atomic::atomic_load"
       },
       {
-        "pc": 536873340,
+        "pc": 536873328,
         "count": 78,
         "symbol": "firmware_imxrt1064_smoke::wait"
       },
       {
-        "pc": 536873318,
-        "count": 39,
-        "symbol": "firmware_imxrt1064_smoke::wait"
-      },
-      {
-        "pc": 536873336,
+        "pc": 536873320,
         "count": 39,
         "symbol": "core::sync::atomic::atomic_load"
       },
       {
-        "pc": 536875048,
-        "count": 12,
-        "symbol": "firmware_imxrt1064_smoke::__cortex_m_rt_main"
+        "pc": 536873330,
+        "count": 39,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
       }
     ]
   }

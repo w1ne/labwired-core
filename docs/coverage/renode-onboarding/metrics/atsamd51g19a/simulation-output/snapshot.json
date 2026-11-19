@@ -34,7 +34,7 @@
     "event_register": false
   },
   "steps_executed": 800000,
-  "cycles": 800000,
+  "cycles": 400082,
   "instructions": 800000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "a4e9a2f83c609b1a8cf735f5a3a0e0ebab5dca8b3812df1ba93671da3f1e074d",
+  "firmware_hash": "6e8c2a056c5e34dc21f27b99bee871fa663cfaff8f8c759ba00c61cce339b62f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-atsamd51-demo",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/atsamd51g19a.yaml",

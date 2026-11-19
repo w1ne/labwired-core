@@ -133,7 +133,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "9e4761f9ec06875e2f28dc205499968edf2ccf10e2acf2a5bf014e0477adabec",
+  "firmware_hash": "32ad54c1b4af5dc08b44264be365fe8bde2ac4a7c80683e37cae26110b804d71",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f4_discovery.yaml",
@@ -208,6 +208,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },

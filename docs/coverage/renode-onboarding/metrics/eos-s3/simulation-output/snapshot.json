@@ -33,9 +33,9 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "steps_executed": 600000,
-  "cycles": 600000,
-  "instructions": 600000,
+  "steps_executed": 604635,
+  "cycles": 390000,
+  "instructions": 604635,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -45,7 +45,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 600000
+      "value": 604635
     }
   },
   "limits": {

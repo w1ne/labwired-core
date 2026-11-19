@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/arvsom-rv64-cpu-smoke.yaml",
   "system": "configs/systems/onboarding/arvsom.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-08T08:30:34Z",
-  "finished_at_utc": "2026-11-08T08:30:43Z",
-  "elapsed_seconds": 9,
-  "elapsed_ms": 8775,
+  "started_at_utc": "2026-11-19T16:02:01Z",
+  "finished_at_utc": "2026-11-19T16:02:08Z",
+  "elapsed_seconds": 7,
+  "elapsed_ms": 6431,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 8.3,
-    "build_firmware": 0.184,
-    "run_smoke": 0.28
+    "build_cli": 1.793,
+    "build_firmware": 4.045,
+    "run_smoke": 0.544
   },
   "stages_ms": {
-    "build_cli": 8300,
-    "build_firmware": 184,
-    "run_smoke": 280
+    "build_cli": 1793,
+    "build_firmware": 4045,
+    "run_smoke": 544
   }
 }

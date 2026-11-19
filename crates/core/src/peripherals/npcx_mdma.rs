@@ -78,9 +78,7 @@ impl NpcxMdma {
         }
     }
 
-    fn scheduler_mode(&self) -> bool {
-        cfg!(feature = "event-scheduler") && self.clock.is_some()
-    }
+    crate::cycle_clock::scheduler_mode!();
 
     fn control(&self) -> u32 {
         (u32::from(self.enabled) * MDMAEN)

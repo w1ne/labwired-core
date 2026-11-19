@@ -57,6 +57,37 @@ Arduino sketch above was separately model-verified on the hosted twin, which
 booted the application and observed its serial output and GPIO state. Logs and
 structured result are under `evidence/run/`.
 
+## Stock Arduino matrix row (TinyUSB CDC on USB-OTG)
+
+The section above runs a patched fast entry and the USB-Serial-JTAG console.
+Stock Arduino code on this board does not use that console. The board JSON
+leaves `ARDUINO_USB_MODE` unset, so `Serial` is TinyUSB CDC on the USB-OTG
+controller. It drops writes until a host opens the port (DTR). The JSON also
+sets `BOARD_HAS_PIN_REMAP`, so sketches use Arduino pin numbers (D13 =
+GPIO48, D2 = GPIO5, A4/A5 = GPIO11/12).
+
+The matrix row builds the nine unmodified-core sketches with PlatformIO and
+boots each through the full Arduino startup on both cores. The twin's
+scripted USB host enumerates the device, sends SET_CONFIGURATION, opens the
+first CDC-ACM port and reads its bulk IN data. L0–L2 print only on `Serial`,
+so their markers arrive over USB CDC. L3–L8 also mirror each line to
+`Serial0` (UART0).
+
+```sh
+python3 validation/arduino-matrix/run_matrix.py --boards arduino_nano_esp32
+```
+
+Result on 2026-11-16: 9 pass / 0 skip / 0 fail. L2 sees 3 edges on GPIO48
+(`LED_BUILTIN`); L6 sees 59 LEDC edges on GPIO5. Each cell costs about 213M
+steps, because the stock variant runs `boot_double_tap_logic()` (an RGB fade
+of about 1 s) before `setup()`. Per-cell files are in
+`evidence/arduino-matrix/`.
+
+The matrix row uses its own system file
+(`validation/arduino-matrix/systems/arduino_nano_esp32.yaml`, with the L3–L5
+sensors). This board profile is unchanged. PSRAM is not modelled: the probe
+reports "PSRAM chip is not connected" and the firmware continues.
+
 ## Scope
 
 This profile covers S3 GPIO, the GPIO48 D13 status LED, and native
@@ -65,3 +96,9 @@ behavior, or the separate RGB LED on GPIO46/GPIO0/GPIO45. The hosted run
 reported the engine's existing approximation that assumes an ideal supply
 rail; it does not simulate power-on or brown-out reset. No physical board was
 tested.
+
+## External I²C sensor example
+
+The matching [BME280 example](../arduino-nano-esp32-bme280/README.md) uses the
+board's A4/SDA and A5/SCL pins (GPIO11/GPIO12) and checks the sensor's 0x60 chip
+ID through the modelled I²C0 path.

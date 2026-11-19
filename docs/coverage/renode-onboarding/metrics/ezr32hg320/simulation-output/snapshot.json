@@ -3,7 +3,7 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      0,
+      1,
       2147483648,
       1073766604,
       1073807372,
@@ -18,10 +18,10 @@
       0,
       536877888,
       11337,
-      12246
+      12306
     ],
-    "pc": 12246,
-    "xpsr": 1090519040,
+    "pc": 12306,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "4bf2e8672086c1245369ac58331fca6a8b95705c1d16be42d9899ece99984234",
+  "firmware_hash": "a64798337e9fac322ade1b02c33b83f6245bcd70f0bed171da54257974ff5496",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-ezr32hg320-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/ezr32hg320.yaml",

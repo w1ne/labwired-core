@@ -33,7 +33,7 @@
 //! | `ldr` | 20 001 over 0..100 000 lx | 1 mV | 2 | **0 mV** |
 //! | `ldr` | 20 001 over 0..100 lx (the steep end) | 0 mV | 0 | **0 mV** |
 //! | `potentiometer` | 10 001 over 0..100 % | 1 mV | 3 | **0 mV** |
-//! | `ntc-thermistor` | 20 501 over -55..150 °C | 1 mV | 3 | **0 mV** |
+//! | `ntc-thermistor` | 20 501 over -55..150 °C, plus 150..300 °C | 1 mV | 3 | **0 mV** |
 //! | `mq-6` | 20 001 over 0..10 000 ppm | 1 mV | 7 | **0 mV** |
 //! | `soil-moisture` | 10 001 over 0..100 % | 1 mV | 23 | **0 mV** |
 //! | `lipo_charger` | 20 002 (both charger states) | **0 mV** | 0 | — |
@@ -287,6 +287,24 @@ fn ntc_thermistor_matches_the_model_across_its_whole_temperature_range() {
     assert!(exact <= 1, "vs the beta equation itself: {exact} mV");
 }
 
+/// A 3D-printer hotend runs at 200-300 C. The beta equation holds there, so the
+/// part's declared input range must reach it instead of stopping at 150 C.
+#[test]
+fn ntc_thermistor_covers_printer_hotend_temperatures() {
+    println!("analog plant parity:");
+    let (worst, _, exact) = sweep(
+        "ntc-thermistor",
+        "temperature",
+        150.0,
+        300.0,
+        15_000,
+        ntc_model,
+        ntc_exact,
+    );
+    assert!(worst <= 1, "vs the beta model: {worst} mV");
+    assert!(exact <= 1, "vs the beta equation itself: {exact} mV");
+}
+
 #[test]
 fn mq6_matches_the_model_across_its_whole_detection_band() {
     println!("analog plant parity:");
@@ -390,7 +408,7 @@ fn no_analog_plant_silently_gained_or_lost_a_channel() {
         ),
         (
             "ntc-thermistor",
-            &[("temperature", "Temperature", "°C", -55.0, 150.0)],
+            &[("temperature", "Temperature", "°C", -55.0, 300.0)],
         ),
         (
             "mq-6",

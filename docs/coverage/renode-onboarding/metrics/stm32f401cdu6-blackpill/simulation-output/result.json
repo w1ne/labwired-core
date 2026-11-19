@@ -126,7 +126,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "f9fcd6f72b4785a50e07e409489047ad22fbdaf322043dc8c61b3885c9186ed8",
+  "firmware_hash": "1a9e5a56e210a3f887668816718afe0101999d6f47017e28d655146a54fe6fb0",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-f401cdu6-blackpill-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f401cdu6-blackpill.yaml",
@@ -380,6 +380,13 @@
         "name": "nvic",
         "kind": "native",
         "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
         "registers": [],
         "artifacts": []
       },
@@ -817,9 +824,9 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 18966,
+    "memory_reads": 18961,
     "memory_writes": 1190,
-    "peripheral_accesses": 8545,
+    "peripheral_accesses": 8269,
     "exceptions": 0,
     "pc_samples": [
       {

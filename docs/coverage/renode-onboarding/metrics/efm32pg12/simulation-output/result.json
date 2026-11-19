@@ -84,7 +84,7 @@
     "type": "arm",
     "registers": [
       16,
-      1261,
+      1658,
       1073783036,
       4294867296,
       4294867296,
@@ -98,9 +98,9 @@
       4294867296,
       537131952,
       18561,
-      23998
+      24016
     ],
-    "pc": 23998,
+    "pc": 24016,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -113,7 +113,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "c4901778b933f4d2b12ff5380e28313977025b361d7d8daa5c41aca29c7b3954",
+  "firmware_hash": "58cc7b4d7df1b9935d19cac6cff6fffd6c9e4d912b7b8ca66ebb05905a7a5ae0",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-efm32pg12-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/efm32pg12.yaml",
@@ -213,6 +213,13 @@
         "artifacts": []
       },
       {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
         "name": "dwt",
         "kind": "native",
         "base": 3758100480,
@@ -266,51 +273,59 @@
             "value": 0
           },
           {
-            "cycle": 54620,
+            "cycle": 27137,
             "value": 1
           },
           {
-            "cycle": 67120,
+            "cycle": 39637,
             "value": 0
           },
           {
-            "cycle": 79620,
+            "cycle": 52137,
             "value": 1
           },
           {
-            "cycle": 92120,
+            "cycle": 64637,
             "value": 0
           },
           {
-            "cycle": 104620,
+            "cycle": 77137,
             "value": 1
           },
           {
-            "cycle": 117120,
+            "cycle": 89637,
             "value": 0
           },
           {
-            "cycle": 129620,
+            "cycle": 102137,
             "value": 1
           },
           {
-            "cycle": 142120,
+            "cycle": 114637,
             "value": 0
           },
           {
-            "cycle": 154620,
+            "cycle": 127137,
             "value": 1
           },
           {
-            "cycle": 167120,
+            "cycle": 139637,
             "value": 0
           },
           {
-            "cycle": 179620,
+            "cycle": 152137,
             "value": 1
           },
           {
-            "cycle": 192120,
+            "cycle": 164637,
+            "value": 0
+          },
+          {
+            "cycle": 177137,
+            "value": 1
+          },
+          {
+            "cycle": 189637,
             "value": 0
           }
         ],
@@ -338,56 +353,64 @@
             "state": "0"
           },
           {
-            "cycle": 54620,
+            "cycle": 27137,
             "state": "1"
           },
           {
-            "cycle": 67120,
+            "cycle": 39637,
             "state": "0"
           },
           {
-            "cycle": 79620,
+            "cycle": 52137,
             "state": "1"
           },
           {
-            "cycle": 92120,
+            "cycle": 64637,
             "state": "0"
           },
           {
-            "cycle": 104620,
+            "cycle": 77137,
             "state": "1"
           },
           {
-            "cycle": 117120,
+            "cycle": 89637,
             "state": "0"
           },
           {
-            "cycle": 129620,
+            "cycle": 102137,
             "state": "1"
           },
           {
-            "cycle": 142120,
+            "cycle": 114637,
             "state": "0"
           },
           {
-            "cycle": 154620,
+            "cycle": 127137,
             "state": "1"
           },
           {
-            "cycle": 167120,
+            "cycle": 139637,
             "state": "0"
           },
           {
-            "cycle": 179620,
+            "cycle": 152137,
             "state": "1"
           },
           {
-            "cycle": 192120,
+            "cycle": 164637,
+            "state": "0"
+          },
+          {
+            "cycle": 177137,
+            "state": "1"
+          },
+          {
+            "cycle": 189637,
             "state": "0"
           }
         ],
         "mode": "output",
-        "edge_count": 16
+        "edge_count": 18
       }
     ]
   },
@@ -462,27 +485,27 @@
       },
       {
         "text": "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "wtim1 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok",
         "cycle_lo": 10000,
         "cycle": 20000,
         "end_cycle": 20000
       },
       {
-        "text": "wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
-      },
-      {
-        "text": "wtim1 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
-      },
-      {
         "text": "EFM32PG12 PASS",
-        "cycle_lo": 40000,
-        "cycle": 50000,
-        "end_cycle": 50000
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       }
     ],
     "dropped_lines": 0
@@ -522,35 +545,20 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 4873,
+    "memory_reads": 4870,
     "memory_writes": 70,
-    "peripheral_accesses": 11035,
+    "peripheral_accesses": 3950,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 23998,
-        "count": 625,
+        "pc": 24016,
+        "count": 742,
         "symbol": "core::ptr::write_volatile"
       },
       {
-        "pc": 16284,
+        "pc": 18758,
         "count": 39,
-        "symbol": "firmware_efm32pg12_smoke::s1::wait"
-      },
-      {
-        "pc": 18754,
-        "count": 39,
-        "symbol": "firmware_efm32pg12_smoke::s1::wait"
-      },
-      {
-        "pc": 18766,
-        "count": 39,
-        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 18768,
-        "count": 39,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+        "symbol": "core::ptr::read_volatile"
       }
     ]
   }
