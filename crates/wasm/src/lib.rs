@@ -3326,7 +3326,9 @@ mod romboot_tests {
         let ops_ptr = sim.read_memory(0x3fcd_fffc, 4).unwrap();
         assert_ne!(cache_ptr, vec![0; 4], "ROM cache pointer must be initialized");
         assert_ne!(ops_ptr, vec![0; 4], "ROM ops pointer must be initialized");
-        assert!(sim.step_batch(100_000).expect("bootloader executes") > 0);
+        // A machine error after partial progress is returned as the elapsed
+        // count; require the entire budget, allowing cycle-count overshoot.
+        assert!(sim.step_batch(100_000).expect("bootloader executes") >= 100_000);
         assert_eq!(sim.read_memory(0x3fcd_ffd4, 4).unwrap(), cache_ptr);
         assert_eq!(sim.read_memory(0x3fcd_fffc, 4).unwrap(), ops_ptr);
     }
