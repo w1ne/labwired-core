@@ -46,4 +46,4 @@ help: first cast to a pointer `as *const ()`
      |                                                             ++++++++++++
 
 warning: `firmware-mimxrt700-evk-smoke` (bin "firmware-mimxrt700-evk-smoke") generated 4 warnings (run `cargo fix --bin "firmware-mimxrt700-evk-smoke" -p firmware-mimxrt700-evk-smoke` to apply 4 suggestions)
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.22s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.47s

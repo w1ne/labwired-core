@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/mimxrt700_evk-smoke.yaml",
   "system": "configs/systems/onboarding/mimxrt700_evk.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T18:03:39Z",
-  "finished_at_utc": "2026-11-19T18:03:47Z",
+  "started_at_utc": "2026-11-19T19:03:16Z",
+  "finished_at_utc": "2026-11-19T19:03:23Z",
   "elapsed_seconds": 8,
-  "elapsed_ms": 7573,
+  "elapsed_ms": 7586,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.668,
-    "build_firmware": 0.3,
-    "run_smoke": 6.567
+    "build_cli": 0.34,
+    "build_firmware": 0.536,
+    "run_smoke": 6.667
   },
   "stages_ms": {
-    "build_cli": 668,
-    "build_firmware": 300,
-    "run_smoke": 6567
+    "build_cli": 340,
+    "build_firmware": 536,
+    "run_smoke": 6667
   }
 }

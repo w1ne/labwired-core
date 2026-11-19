@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/efr32mg12-smoke.yaml",
   "system": "configs/systems/onboarding/efr32mg12.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T17:54:02Z",
-  "finished_at_utc": "2026-11-19T17:54:03Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1290,
+  "started_at_utc": "2026-11-19T19:01:57Z",
+  "finished_at_utc": "2026-11-19T19:02:01Z",
+  "elapsed_seconds": 5,
+  "elapsed_ms": 4119,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.404,
-    "build_firmware": 0.322,
-    "run_smoke": 0.514
+    "build_cli": 0.842,
+    "build_firmware": 1.591,
+    "run_smoke": 1.646
   },
   "stages_ms": {
-    "build_cli": 404,
-    "build_firmware": 322,
-    "run_smoke": 514
+    "build_cli": 842,
+    "build_firmware": 1591,
+    "run_smoke": 1646
   }
 }

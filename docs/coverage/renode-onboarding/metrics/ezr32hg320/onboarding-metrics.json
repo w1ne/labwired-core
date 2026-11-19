@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/ezr32hg320-smoke.yaml",
   "system": "configs/systems/onboarding/ezr32hg320.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T17:54:19Z",
-  "finished_at_utc": "2026-11-19T17:54:20Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1240,
+  "started_at_utc": "2026-11-19T19:02:10Z",
+  "finished_at_utc": "2026-11-19T19:02:13Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3234,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.341,
-    "build_firmware": 0.352,
-    "run_smoke": 0.496
+    "build_cli": 0.411,
+    "build_firmware": 0.586,
+    "run_smoke": 2.182
   },
   "stages_ms": {
-    "build_cli": 341,
-    "build_firmware": 352,
-    "run_smoke": 496
+    "build_cli": 411,
+    "build_firmware": 586,
+    "run_smoke": 2182
   }
 }
