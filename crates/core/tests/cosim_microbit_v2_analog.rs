@@ -605,3 +605,173 @@ fn microbit_v2_bjt_junction_and_transit_charge_reach_saadc_with_ntc_and_diode() 
         );
     }
 }
+
+/// Generic Gummel–Poon high-injection rolloff resolves through the
+/// micro:bit V2 SAADC. The matched control omits IKF/IKR/NKF while the
+/// unrelated NTC and Shockley diode remain on their own pads.
+fn bjt_high_injection_collector_voltage(base_drive_v: f64, high_injection: bool) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BOARD_PULLUP_OHMS: f64 = 10_000_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAF: f64 = 50.0;
+    const VAR: f64 = 75.0;
+    const IKF_A: f64 = 50e-6;
+    const IKR_A: f64 = 500e-6;
+    const NKF: f64 = 0.8;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - vbc / VAF - vbe / VAR;
+        let q2 = if high_injection {
+            IS_A * (forward - 1.0) / IKF_A + IS_A * (reverse - 1.0) / IKR_A
+        } else {
+            0.0
+        };
+        let qb = (1.0 + (1.0 + 4.0 * q2).max(0.0).powf(NKF)) / (2.0 * base_width);
+        let transport = IS_A * (forward - reverse) / qb;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let load_current = (SUPPLY_V - collector_v) / COLLECTOR_OHMS
+                + (SUPPLY_V - collector_v) / BOARD_PULLUP_OHMS;
+            if load_current > collector_current {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        if (base_drive_v - vbe) / BASE_OHMS > base_current {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
+#[test]
+fn microbit_v2_bjt_high_injection_reaches_saadc_with_ntc_and_diode() {
+    let system_path = root("configs/systems/microbit-v2.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load micro:bit V2 profile");
+    let generic =
+        SystemManifest::from_file(root("examples/microbit-v2/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC and diode netlists");
+    let high_injection = SystemManifest::from_file(root(
+        "examples/microbit-v2/analog-bjt-high-injection-system.yaml",
+    ))
+    .expect("load matched generic BJT high-injection branches");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(high_injection.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF52833 descriptor");
+    for (pin, channel) in [("P0.04", 2), ("P0.05", 3)] {
+        assert_eq!(
+            chip.analog_pins
+                .get(pin)
+                .map(|route| (route.peripheral.as_str(), route.channel)),
+            Some(("saadc", channel)),
+            "{pin} must resolve to SAADC AIN{channel}"
+        );
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build micro:bit V2 bus");
+    configure_saadc(&mut bus);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile carries NTC, diode, and matched BJT netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the NTC, diode, and both BJT branches must bind to SAADC pads"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+    session
+        .set_signal_number("ui.bjt_high_injection.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+
+    let ntc_resistance = ntc_resistance_ohms(25.0);
+    let effective_ntc_pullup = 1.0 / (1.0 / 10_000.0 + 1.0 / BOARD_PULLUP_OHMS);
+    let expected_ntc_v = 3.3 * ntc_resistance / (ntc_resistance + effective_ntc_pullup);
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    let mut high_drive_voltages = None;
+    for base_drive_v in [0.8_f64, 1.5, 3.3] {
+        session
+            .set_signal_number("ui.bjt_high_injection.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and matched BJT branches");
+        assert_eq!(steps.len(), 4, "all four generic analog branches solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected analog route errors: {errors:?}"
+        );
+
+        let ntc_v = voltage(&session, "board.analog.p0.02_volts");
+        let diode_v = voltage(&session, "board.analog.p0.03_volts");
+        let rolloff_v = voltage(&session, "board.analog.p0.04_volts");
+        let control_v = voltage(&session, "board.analog.p0.05_volts");
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "the unrelated NTC remains at {expected_ntc_v} V, got {ntc_v} V"
+        );
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the unrelated Shockley diode remains at {expected_diode_v} V, got {diode_v} V"
+        );
+        assert!(
+            (rolloff_v - bjt_high_injection_collector_voltage(base_drive_v, true)).abs() < 5e-5,
+            "IKF/IKR/NKF load line at {base_drive_v} V must match the independent reference, got {rolloff_v} V"
+        );
+        assert!(
+            (control_v - bjt_high_injection_collector_voltage(base_drive_v, false)).abs() < 5e-5,
+            "matched no-rolloff load line at {base_drive_v} V must match the independent reference, got {control_v} V"
+        );
+
+        let codes = scan_all(&mut bus);
+        for (channel, volts) in [(0, ntc_v), (1, diode_v), (2, rolloff_v), (3, control_v)] {
+            assert_eq!(
+                codes[channel],
+                expected_saadc_code(volts),
+                "SAADC AIN{channel} converts its solved voltage"
+            );
+        }
+        assert_eq!(codes[4], 0, "the neighboring undriven AIN4 stays at ground");
+        if base_drive_v == 3.3 {
+            high_drive_voltages = Some((rolloff_v, control_v));
+        }
+    }
+
+    let (rolloff_v, control_v) = high_drive_voltages.expect("recorded high-drive sample");
+    assert!(
+        rolloff_v - control_v > 0.05,
+        "high-injection rolloff lowers collector current and raises collector voltage: {rolloff_v} V vs {control_v} V"
+    );
+}
