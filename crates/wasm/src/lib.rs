@@ -934,8 +934,12 @@ impl WasmSimulator {
         load_program_segments_without_reset(&mut machine, &bootloader_image)
             .map_err(|e| JsValue::from_str(&format!("C3 flash fast-start load: {e}")))?;
 
-        let sp_top = (chip.ram.base + chip.ram.size) as u32;
-        machine.cpu.set_sp(sp_top & !0xF);
+        // This path skips ROM reset: reproduce the ESP32-C3 rev3 ROM's SP
+        // initialization at 0x4000_1edc. The chip descriptor's full RAM top
+        // includes ROM-reserved memory and can lie outside ESP-IDF's valid
+        // stack range. IDF reserves the area above app DRAM for ROM data/stack;
+        // arbitrary custom ROM or bootloader layouts are not qualified here.
+        machine.cpu.set_sp(0x3fcd_e710);
         machine.cpu.set_pc(bootloader_image.entry_point as u32);
 
         // Attach the per-lab virtual-WiFi AP if the diagram declares one. This is
@@ -3307,6 +3311,26 @@ mod romboot_tests {
             "C3 must parse the stats and repaint the panel — the device is only \
              'working' once the panel shows the numbers; serial:\n{out}"
         );
+    }
+
+    #[test]
+    fn c3_flash_fast_start_uses_rom_reset_stack() {
+        // Reset ROM at 0x4000_1edc: auipc sp, 0xffcdd; addi sp, sp, -0x7cc.
+        // Lock the provenance to the actual vendored ROM, not a guessed RAM top.
+        let rom = std::fs::read(root().join("../core/roms/esp32c3/esp32c3_rom.bin"))
+            .expect("read vendored C3 ROM");
+        assert_eq!(&rom[0x1edc..0x1ee4], &[0x17, 0xd1, 0xcd, 0xff, 0x13, 0x01, 0x41, 0x83]);
+        let (mut sim, _) = c3_browser_fast_start_sim();
+        assert_eq!(sim.get_register(2).unwrap(), 0x3fcd_e710);
+        let cache_ptr = sim.read_memory(0x3fcd_ffd4, 4).unwrap();
+        let ops_ptr = sim.read_memory(0x3fcd_fffc, 4).unwrap();
+        assert_ne!(cache_ptr, vec![0; 4], "ROM cache pointer must be initialized");
+        assert_ne!(ops_ptr, vec![0; 4], "ROM ops pointer must be initialized");
+        // A machine error after partial progress is returned as the elapsed
+        // count; require the entire budget, allowing cycle-count overshoot.
+        assert!(sim.step_batch(100_000).expect("bootloader executes") >= 100_000);
+        assert_eq!(sim.read_memory(0x3fcd_ffd4, 4).unwrap(), cache_ptr);
+        assert_eq!(sim.read_memory(0x3fcd_fffc, 4).unwrap(), ops_ptr);
     }
 
     fn c3_browser_fast_start_sim() -> (WasmSimulator, u32) {
