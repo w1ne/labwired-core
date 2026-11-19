@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 3442,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 3.442
+  },
+  "targets": [
+    {
+      "target_id": "stm32f103-blue-pill-bme280",
+      "status": "pass",
+      "crate": "firmware-stm32f103-bluepill-bme280-smoke",
+      "target_triple": "thumbv7m-none-eabi",
+      "script": "examples/stm32f103-blue-pill-bme280/io-smoke.yaml",
+      "system": "configs/systems/stm32f103-blue-pill-bme280.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-19T01:07:28Z",
+      "finished_at_utc": "2026-11-19T01:07:32Z",
+      "elapsed_seconds": 4,
+      "elapsed_ms": 3442,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.915,
+        "build_firmware": 1.109,
+        "run_smoke": 1.331
+      },
+      "stages_ms": {
+        "build_cli": 915,
+        "build_firmware": 1109,
+        "run_smoke": 1331
+      },
+      "_artifact_path": "examples/stm32f103-blue-pill-bme280/evidence"
+    }
+  ]
+}

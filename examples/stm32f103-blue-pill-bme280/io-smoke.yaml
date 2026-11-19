@@ -1,0 +1,13 @@
+# Read BME280.CHIP_ID over I2C1/PB6-PB7, then pulse Blue Pill LED PC13.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32f103-bluepill-bme280-smoke"
+  system: "../../configs/systems/stm32f103-blue-pill-bme280.yaml"
+limits:
+  max_steps: 600000
+assertions:
+  - uart_contains: "BLUEPILL_F103C8_BME280_OK ID=0x60 I2C1=PB6/PB7"
+  - gpio_edges:
+      pin: "gpioc:13"
+      min_edges: 32
+  - expected_stop_reason: max_steps
