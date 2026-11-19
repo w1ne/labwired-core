@@ -42,6 +42,8 @@
 //! | Current source | `I<name> n+ n- <source>` |
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
+//! | SPICE voltage switch | `S<name> n+ n- nc+ nc- <model> [on\|off]` with `.model <model> SW(VT= VH= RON= ROFF=)` |
+//! | SPICE current switch | `W<name> n+ n- <element> <model> [on\|off]` with `.model <model> CSW(IT= IH= RON= ROFF=)` |
 //! | Diode | `D<name> n+ n- <model> [<area>] [pj=<perimeter>] [off]` |
 //! | BJT | `Q<name> nc nb ne [ns] <model> [temp=<°C>] [off]` |
 //! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [off]` |
@@ -143,6 +145,25 @@
 //! calls a subcircuit the deck does not define and is refused with the pointer to ngspice. The
 //! element is lowered, at parse time, into the primitives above; see
 //! [`OpAmpModel`] and [`ComparatorModel`] for exactly what it becomes.
+//!
+//! `S<name> n+ n- nc+ nc- <model> [on|off]` and `W<name> n+ n- <element>
+//! <model> [on|off]` are SPICE's voltage- and current-controlled switches.
+//! The `SW` card takes `VT`, `VH`, `RON`, `ROFF` and the `CSW` card `IT`,
+//! `IH`, `RON`, `ROFF`, with ngspice's defaults (0, 0, 1 Ω, 1e12 Ω). The
+//! switch closes when the signed control voltage `V(nc+) − V(nc-)`, or the
+//! signed branch current of `<element>` (a `V`, `L`, `E` or `H`; ngspice
+//! takes only a `V`), rises above threshold + hysteresis, opens below
+//! threshold − hysteresis, and keeps its state in between; `on` sets the
+//! state the operating point starts from. The state is read from the last
+//! accepted solution: the operating point repeats until no switch moves, and
+//! in a transient run an edge takes effect one step after the control
+//! crosses. Two differences from ngspice-42 are deliberate. Negative
+//! hysteresis is refused. `W ... on` holds closed inside the band, as `S`
+//! does there; ngspice's `cswload.c` reads the band state from the previous
+//! time point, which an operating point has not set, and reports it open.
+//! Any other card parameter (LTspice's `LSER`, `VSER`, `ILIMIT`) is an error.
+//! The `S` forms with `ron=`/`roff=` on the element line are this engine's
+//! own and take no model.
 //!
 //! `<source>` is `[dc] <value>`, `SIN(vo va freq [td [theta]])`,
 //! `SFFM(vo va fc mdi fs)`, `EXP(v1 v2 td1 tau1 td2 tau2)`,
@@ -2284,6 +2305,8 @@ pub enum ModelCard {
     Comparator(ComparatorModel),
     /// An `LDO`, `LDOADJ` or `BUCK` card (this engine's types).
     Regulator(RegulatorModel),
+    /// An `SW` or `CSW` card.
+    Switch(SwitchModel),
 }
 
 impl ModelCard {
@@ -2298,6 +2321,13 @@ impl ModelCard {
                 RegulatorKind::Buck => "BUCK",
             },
             Self::Diode(_) => "D",
+            Self::Switch(model) => {
+                if model.current {
+                    "CSW"
+                } else {
+                    "SW"
+                }
+            }
             Self::Bjt(model) => match model.polarity {
                 Polarity::N => "NPN",
                 Polarity::P => "PNP",
@@ -3057,6 +3087,69 @@ pub struct VoltageSwitchControl {
     pub invert: bool,
 }
 
+/// What a SPICE `SW` or `CSW` switch compares to its threshold.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SwitchSense {
+    /// `S`: the signed voltage `V(pos) − V(neg)`.
+    Voltage {
+        /// Positive control node.
+        pos: NodeRef,
+        /// Negative control node.
+        neg: NodeRef,
+    },
+    /// `W`: the signed branch current of the named element.
+    Current {
+        /// Controlling element as written (a `V`, `L`, `E` or `H`).
+        control: String,
+        /// Its branch-current index, bound after the last line.
+        branch: usize,
+    },
+}
+
+/// SPICE's `SW`/`CSW` control: the switch closes when the sensed quantity
+/// rises above `threshold + hysteresis`, opens when it falls below
+/// `threshold − hysteresis`, and keeps its state in between. The quantity is
+/// signed, as in ngspice's `swload.c`, unlike [`VoltageSwitchControl`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct ThresholdSwitchControl {
+    /// The sensed voltage or current.
+    pub sense: SwitchSense,
+    /// `VT` in volts or `IT` in amperes.
+    pub threshold: f64,
+    /// `VH` in volts or `IH` in amperes; never negative.
+    pub hysteresis: f64,
+    /// The instance `on` flag: the state the operating point starts from,
+    /// which is the state it keeps inside the hysteresis band.
+    pub initially_closed: bool,
+}
+
+/// A `.model <name> SW(...)` or `CSW(...)` card, with ngspice's defaults.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SwitchModel {
+    /// True for `CSW` (current controlled), false for `SW`.
+    pub current: bool,
+    /// `VT` or `IT`; default 0.
+    pub threshold: f64,
+    /// `VH` or `IH`; default 0.
+    pub hysteresis: f64,
+    /// `RON` in ohms; default 1.
+    pub ron: f64,
+    /// `ROFF` in ohms; default 1e12 (ngspice's `1/GMIN`).
+    pub roff: f64,
+}
+
+impl SwitchModel {
+    fn defaults(current: bool) -> Self {
+        Self {
+            current,
+            threshold: 0.0,
+            hysteresis: 0.0,
+            ron: 1.0,
+            roff: 1e12,
+        }
+    }
+}
+
 /// `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` — an ideal switch whose control is a
 /// routed boolean input name, not a circuit node.
 ///
@@ -3064,6 +3157,10 @@ pub struct VoltageSwitchControl {
 /// the same switch closed by the absolute voltage between `nc+` and `nc-`.
 /// When `voltage` is `Some`, `ctrl` is empty and the adapter does not expose a
 /// routed input for this element.
+///
+/// Or SPICE's own `S<name> n+ n- nc+ nc- <model> [on|off]` and
+/// `W<name> n+ n- <element> <model> [on|off]`, whose `SW`/`CSW` card gives the
+/// resistances and [`Self::threshold`] the control; `ctrl` is empty there too.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Switch {
     /// Element name as written.
@@ -3081,6 +3178,15 @@ pub struct Switch {
     pub roff: f64,
     /// Voltage-threshold control, when the switch is not digitally routed.
     pub voltage: Option<VoltageSwitchControl>,
+    /// SPICE `SW`/`CSW` control, for an `S` or `W` element that names a model.
+    pub threshold: Option<ThresholdSwitchControl>,
+}
+
+impl Switch {
+    /// True when a routed boolean input, not the circuit, sets the state.
+    pub fn is_routed(&self) -> bool {
+        self.voltage.is_none() && self.threshold.is_none()
+    }
 }
 
 /// A parsed netlist: elements in file order plus the node table.
@@ -3431,6 +3537,101 @@ struct PendingDevice {
     off: bool,
     /// SPICE instance `ic=`, comma-separated volts; empty when not given.
     ic: Vec<f64>,
+}
+
+/// A SPICE `S`/`W` line held until its `SW`/`CSW` card and, for `W`, the
+/// controlling element's branch are known.
+struct PendingSwitch {
+    line: usize,
+    text: String,
+    /// Position of the placeholder in [`Circuit::switches`].
+    index: usize,
+    model_name: String,
+}
+
+/// True when the tokens after an `S` name are SPICE's `n+ n- nc+ nc- <model>
+/// [on|off]`: this engine's two other `S` forms always carry `key=value`.
+fn names_switch_model(rest: &[&str]) -> bool {
+    (5..=6).contains(&rest.len()) && !rest.iter().any(|token| token.contains('='))
+}
+
+/// The optional trailing `on`/`off` of a SPICE switch line whose fixed part
+/// is `fixed` tokens long: `Some(true)` for `on`, `Some(false)` for `off` or
+/// nothing, `None` when the line has any other shape.
+fn switch_flag(rest: &[&str], fixed: usize) -> Option<bool> {
+    match rest.len().checked_sub(fixed)? {
+        0 => Some(false),
+        1 if rest[fixed].eq_ignore_ascii_case("on") => Some(true),
+        1 if rest[fixed].eq_ignore_ascii_case("off") => Some(false),
+        _ => None,
+    }
+}
+
+/// Give every SPICE `S`/`W` switch its card and bind a `W`'s controlling
+/// branch, once every model and every branch-carrying element exists.
+fn bind_switches(
+    circuit: &mut Circuit,
+    models: &BTreeMap<String, ModelCard>,
+    pending: Vec<PendingSwitch>,
+) -> Result<(), AnalogError> {
+    for entry in pending {
+        let ctx = LineCtx {
+            number: entry.line,
+            text: &entry.text,
+        };
+        let name = circuit.switches[entry.index].name.clone();
+        let current = matches!(
+            circuit.switches[entry.index].threshold,
+            Some(ThresholdSwitchControl {
+                sense: SwitchSense::Current { .. },
+                ..
+            })
+        );
+        let (letter, wanted) = if current { ('W', "CSW") } else { ('S', "SW") };
+        let model = match models.get(&entry.model_name.to_ascii_lowercase()) {
+            Some(ModelCard::Switch(model)) if model.current == current => *model,
+            Some(card) => {
+                return Err(ctx.parse_err(format!(
+                "`{name}` is a {letter} element and needs a {wanted} model, but `{}` is a {} model",
+                entry.model_name,
+                card.kind()
+            )))
+            }
+            None => {
+                return Err(ctx.parse_err(format!(
+                    "no `.model {} {wanted}(...)` line for `{name}`",
+                    entry.model_name
+                )))
+            }
+        };
+        let branch = match &circuit.switches[entry.index].threshold {
+            Some(ThresholdSwitchControl {
+                sense: SwitchSense::Current { control, .. },
+                ..
+            }) => Some(circuit.branch_index(control).ok_or_else(|| {
+                ctx.parse_err(format!(
+                    "`{control}` carries no branch current; a W element must name a \
+                     V, L, E or H element"
+                ))
+            })?),
+            _ => None,
+        };
+        let switch = &mut circuit.switches[entry.index];
+        switch.ron = model.ron;
+        switch.roff = model.roff;
+        let control = switch
+            .threshold
+            .as_mut()
+            .expect("placeholder has a control");
+        control.threshold = model.threshold;
+        control.hysteresis = model.hysteresis;
+        if let (SwitchSense::Current { branch: slot, .. }, Some(branch)) =
+            (&mut control.sense, branch)
+        {
+            *slot = branch;
+        }
+    }
+    Ok(())
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -4348,7 +4549,9 @@ fn expand_call(
         let (node_count, element_refs, model_at): (usize, &[usize], Option<usize>) = match letter {
             'R' | 'C' | 'L' | 'V' | 'I' => (2, &[], None),
             'S' if voltage_switch => (4, &[], None),
+            'S' if names_switch_model(rest) => (4, &[], Some(4)),
             'S' => (2, &[], None),
+            'W' => (2, &[2], Some(3)),
             'E' | 'G' => (4, &[], None),
             'F' | 'H' => (2, &[2], None),
             'K' => (0, &[0, 1], None),
@@ -4582,6 +4785,7 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
     let mut models: BTreeMap<String, ModelCard> = BTreeMap::new();
     let mut pending: Vec<PendingDevice> = Vec::new();
     let mut pending_mutuals: Vec<PendingMutualInductor> = Vec::new();
+    let mut pending_switches: Vec<PendingSwitch> = Vec::new();
     let mut in_control = false;
     // Line of every `F`/`H`, in the order they were pushed, for the error when
     // the element they name carries no branch current.
@@ -4676,6 +4880,7 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                 | 'V'
                 | 'I'
                 | 'S'
+                | 'W'
                 | 'D'
                 | 'Q'
                 | 'M'
@@ -5313,6 +5518,71 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                     ic: Vec::new(),
                 });
             }
+            'W' => {
+                let rest = &tokens[1..];
+                let Some(initially_closed) = switch_flag(rest, 4) else {
+                    return Err(
+                        ctx.parse_err("expected `W<name> n+ n- <element> <model> [on|off]`")
+                    );
+                };
+                let a = circuit.intern(rest[0]);
+                let b = circuit.intern(rest[1]);
+                pending_switches.push(PendingSwitch {
+                    line: ctx.number,
+                    text: line.to_string(),
+                    index: circuit.switches.len(),
+                    model_name: rest[3].to_string(),
+                });
+                circuit.switches.push(Switch {
+                    name: head.to_string(),
+                    a,
+                    b,
+                    ctrl: String::new(),
+                    ron: 1.0,
+                    roff: 1.0,
+                    voltage: None,
+                    threshold: Some(ThresholdSwitchControl {
+                        sense: SwitchSense::Current {
+                            control: rest[2].to_string(),
+                            branch: usize::MAX,
+                        },
+                        threshold: 0.0,
+                        hysteresis: 0.0,
+                        initially_closed,
+                    }),
+                });
+            }
+            'S' if names_switch_model(&tokens[1..]) => {
+                let rest = &tokens[1..];
+                let Some(initially_closed) = switch_flag(rest, 5) else {
+                    return Err(ctx.parse_err("expected `S<name> n+ n- nc+ nc- <model> [on|off]`"));
+                };
+                let a = circuit.intern(rest[0]);
+                let b = circuit.intern(rest[1]);
+                let pos = circuit.intern(rest[2]);
+                let neg = circuit.intern(rest[3]);
+                pending_switches.push(PendingSwitch {
+                    line: ctx.number,
+                    text: line.to_string(),
+                    index: circuit.switches.len(),
+                    model_name: rest[4].to_string(),
+                });
+                circuit.switches.push(Switch {
+                    name: head.to_string(),
+                    a,
+                    b,
+                    ctrl: String::new(),
+                    ron: 1.0,
+                    roff: 1.0,
+                    voltage: None,
+                    threshold: Some(ThresholdSwitchControl {
+                        sense: SwitchSense::Voltage { pos, neg },
+                        threshold: 0.0,
+                        hysteresis: 0.0,
+                        initially_closed,
+                    }),
+                });
+            }
             'S' => {
                 let digital = "S<name> n1 n2 <ctrl> ron=<r> roff=<r>";
                 let voltage = "S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>";
@@ -5385,6 +5655,7 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                             vh,
                             invert,
                         }),
+                        threshold: None,
                     });
                 } else {
                     if rest.len() != 5 {
@@ -5422,6 +5693,7 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                         ron,
                         roff,
                         voltage: None,
+                        threshold: None,
                     });
                 }
             }
@@ -5431,6 +5703,7 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
 
     bind_mutual_inductors(&mut circuit, pending_mutuals)?;
     bind_models(&mut circuit, &models, pending)?;
+    bind_switches(&mut circuit, &models, pending_switches)?;
     bind_controls(&mut circuit, &controls)?;
     bind_behavioural(&mut circuit, &behavioural_lines)?;
     Ok(circuit)
@@ -7295,10 +7568,12 @@ fn parse_model(
         "LDO" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Linear)),
         "LDOADJ" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::LinearAdjustable)),
         "BUCK" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Buck)),
+        "SW" => ModelCard::Switch(SwitchModel::defaults(false)),
+        "CSW" => ModelCard::Switch(SwitchModel::defaults(true)),
         other => {
             return Err(ctx.parse_err(format!(
                 "`.model` type `{other}` is not one of `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `NJF`, `PJF`, \
-                 `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
+                 `SW`, `CSW`, `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
             )))
         }
     };
@@ -7471,6 +7746,25 @@ fn parse_model(
                     "`{other}` is not a COMP parameter; expected AOL, GBW, ROUT, VOS, IBIAS, IOS, CINCM, CIND, RIN, RINCM, IQ, CMRR, VHYS, \
                      OUTPUT"
                 )))
+            }
+            (ModelCard::Switch(model), "RON") => model.ron = value,
+            (ModelCard::Switch(model), "ROFF") => model.roff = value,
+            (ModelCard::Switch(model), "VT") if !model.current => model.threshold = value,
+            (ModelCard::Switch(model), "VH") if !model.current => model.hysteresis = value,
+            (ModelCard::Switch(model), "IT") if model.current => model.threshold = value,
+            (ModelCard::Switch(model), "IH") if model.current => model.hysteresis = value,
+            // A switch card has four parameters; a fifth is another
+            // simulator's extension (LTspice `LSER`, `VSER`, `ILIMIT`) that
+            // would change the answer if it were dropped.
+            (ModelCard::Switch(model), other) => {
+                let (kind, expected) = if model.current {
+                    ("CSW", "IT, IH, RON, ROFF")
+                } else {
+                    ("SW", "VT, VH, RON, ROFF")
+                };
+                return Err(ctx.parse_err(format!(
+                    "`{other}` is not a {kind} parameter; expected {expected}"
+                )));
             }
             (ModelCard::Bjt(model), "IS") => model.is = value,
             (ModelCard::Bjt(model), "IBE") => model.ibe = Some(value),
@@ -7715,6 +8009,18 @@ fn parse_model(
         }
     }
 
+    if let ModelCard::Switch(model) = &card {
+        if model.ron <= 0.0 || model.roff <= 0.0 {
+            return Err(ctx.parse_err("RON and ROFF must be positive"));
+        }
+        if model.hysteresis < 0.0 {
+            // ngspice gives a negative value a second, time-dependent
+            // meaning; it is not the band described here.
+            return Err(
+                ctx.parse_err("negative switch hysteresis is not modelled; use `VH`/`IH` >= 0")
+            );
+        }
+    }
     models.insert(key, card);
     Ok(())
 }

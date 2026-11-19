@@ -57,7 +57,7 @@ use super::behavioural::Control as BehaviouralControl;
 use super::device;
 use super::netlist::{
     AnalogError, BjtModel, Circuit, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
-    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
+    SwitchSense, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
 };
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
@@ -677,7 +677,18 @@ impl Solver {
         let branches = circuit.branch_count();
         let voltage_source_values = circuit.voltage_sources.iter().map(|s| s.dc).collect();
         let current_source_values = circuit.current_sources.iter().map(|s| s.dc).collect();
-        let switch_closed = vec![false; circuit.switches.len()];
+        // A SPICE switch starts from its `on`/`off` flag; every other switch
+        // starts open.
+        let switch_closed = circuit
+            .switches
+            .iter()
+            .map(|switch| {
+                switch
+                    .threshold
+                    .as_ref()
+                    .is_some_and(|control| control.initially_closed)
+            })
+            .collect();
         let capacitors = circuit.capacitors.len();
         let inductors = circuit.inductors.len();
         let nonlinear = circuit.is_nonlinear();
@@ -914,7 +925,7 @@ impl Solver {
             .switches
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.voltage.is_none() && s.ctrl.to_ascii_lowercase() == key)
+            .filter(|(_, s)| s.is_routed() && s.ctrl.to_ascii_lowercase() == key)
             .map(|(index, _)| index)
             .collect()
     }
@@ -952,10 +963,10 @@ impl Solver {
 
     /// Open or close a switch. Takes effect on the next [`Self::advance`].
     ///
-    /// Voltage-controlled switches ignore this: their state is refreshed from
-    /// the sensed nodes at the start of every step.
+    /// Voltage- and current-controlled switches ignore this: their state is
+    /// refreshed from the sensed quantity at the start of every step.
     pub fn set_switch(&mut self, index: usize, closed: bool) {
-        if self.circuit.switches[index].voltage.is_some() {
+        if !self.circuit.switches[index].is_routed() {
             return;
         }
         if self.switch_closed[index] != closed {
@@ -979,6 +990,27 @@ impl Solver {
     fn update_voltage_switches(&mut self) -> bool {
         let mut changed = false;
         for index in 0..self.circuit.switches.len() {
+            if let Some(control) = &self.circuit.switches[index].threshold {
+                // SPICE `SW`/`CSW`: signed, with the band centred on the
+                // threshold, and the state held inside the band.
+                let sensed = match control.sense {
+                    SwitchSense::Voltage { pos, neg } => node_diff(&self.node_v, pos, neg),
+                    SwitchSense::Current { branch, .. } => self.branch_i[branch],
+                };
+                let closed_now = self.switch_closed[index];
+                let desired = if sensed > control.threshold + control.hysteresis {
+                    true
+                } else if sensed < control.threshold - control.hysteresis {
+                    false
+                } else {
+                    closed_now
+                };
+                if desired != closed_now {
+                    self.switch_closed[index] = desired;
+                    changed = true;
+                }
+                continue;
+            }
             let Some(control) = self.circuit.switches[index].voltage.clone() else {
                 continue;
             };

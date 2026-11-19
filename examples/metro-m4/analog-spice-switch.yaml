@@ -1,0 +1,37 @@
+# SPICE-standard switches, written as any vendor deck writes them: an `S`
+# element with an `SW` card is an undervoltage-lockout load switch (closes
+# above 2.25 V, opens below 1.75 V), and a `W` element with a `CSW` card is an
+# open-drain over-current flag that senses the load current through `Vsns`
+# (closes above 19 mA, opens below 17 mA).
+# The load node reaches Metro M4 ADC0 AIN4 on PA04 and the flag AIN5 on PA05;
+# the unrelated NTC and Shockley diode remain on PA02 and PB08.
+name: "metro-m4-spice-switch"
+chip: "../../configs/chips/atsamd51.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "spice_switch"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      input_v: "ui.spice_switch.input_v"
+    outputs:
+      load_v: "board.analog.pa04_volts"
+      flag_v: "board.analog.pa05_volts"
+    config:
+      netlist_text: |
+        Vin vin 0 dc 0
+        S1 vin load vin 0 UVLO
+        Rload load sns 150
+        Vsns sns 0 dc 0
+        .model UVLO SW(VT=2 VH=0.25 RON=0.5 ROFF=10meg)
+        Vcc vcc 0 dc 3.3
+        Rpull vcc flag 10k
+        W1 flag 0 Vsns TRIP
+        .model TRIP CSW(IT=18m IH=1m RON=10 ROFF=100meg)
+      probes:
+        load_v: "v(load)"
+        flag_v: "v(flag)"
+      sources:
+        input_v: "Vin"
+      vdd: 3.3

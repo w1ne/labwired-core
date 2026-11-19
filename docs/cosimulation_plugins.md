@@ -391,11 +391,20 @@ the same circuit and the same routing as `system.yaml`.
 | Voltage source | `V<name> n+ n- <source>` |
 | Current source | `I<name> n+ n- <source>` |
 | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` |
+| SPICE voltage switch | `S<name> n+ n- nc+ nc- <model> [on\|off]` with `.model <model> SW(VT= VH= RON= ROFF=)` |
+| SPICE current switch | `W<name> n+ n- <element> <model> [on\|off]` with `.model <model> CSW(IT= IH= RON= ROFF=)` |
 | Diode | `D<name> n+ n- <model> [<area>] [m=<count>] [temp=<°C>]` |
 | BJT | `Q<name> nc nb ne <model> [<area>] [m=<count>] [temp=<°C>]` |
 | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]` |
 | JFET | `J<name> nd ng ns <model> [<area>] [m=<count>] [temp=<°C>]` |
 | Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
+
+The two SPICE switches close when the signed control voltage, or the signed
+branch current of the named `V`, `L`, `E` or `H` element, rises above
+threshold + hysteresis and open below threshold − hysteresis; in between they
+keep their state, and `on` sets the state the operating point starts from.
+Card defaults are ngspice's (`VT`/`IT` 0, `VH`/`IH` 0, `RON` 1 Ω, `ROFF`
+1e12 Ω). Negative hysteresis and parameters from other simulators are refused.
 
 `m=<count>` is the SPICE instance multiplier: the element acts as that many
 identical devices in parallel. Every current, conductance and stored charge it

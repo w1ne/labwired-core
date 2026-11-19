@@ -281,7 +281,7 @@ impl AnalogCosimAdapter {
         // Voltage-controlled switches have an empty ctrl and are driven by the
         // MNA engine from their sense nodes, so they are not routed inputs.
         for switch in &solver.circuit().switches {
-            if switch.voltage.is_some() || switch.ctrl.is_empty() {
+            if !switch.is_routed() || switch.ctrl.is_empty() {
                 continue;
             }
             let indices = solver.switches_controlled_by(&switch.ctrl);

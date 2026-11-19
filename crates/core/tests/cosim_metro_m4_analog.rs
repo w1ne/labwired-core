@@ -544,3 +544,142 @@ fn metro_m4_diode_depletion_and_transit_charge_reach_adc0_with_unrelated_devices
         );
     }
 }
+
+/// The path through the `SW`/`CSW` fixture: input volts, then whether the
+/// undervoltage-lockout `S1` and the over-current `W1` are closed there.
+/// 2.0 V and 2.7 V each appear twice with opposite states: both lie inside a
+/// hysteresis band (1.75 V..2.25 V for `S1`; 17 mA..19 mA, which is 2.56 V..
+/// 2.86 V across the 150.5 Ω load path, for `W1`), so the state is the one
+/// the path arrived with.
+const SPICE_SWITCH_SWEEP: [(f64, bool, bool); 10] = [
+    (0.0, false, false),
+    (2.2, false, false),
+    (2.4, true, false),
+    (2.7, true, false),
+    (3.0, true, true),
+    (2.7, true, true),
+    (2.5, true, false),
+    (2.0, true, false),
+    (1.7, false, false),
+    (2.0, false, false),
+];
+
+/// Closed-form node voltages of the fixture for a given pair of states:
+/// `S1` is `RON` 0.5 Ω or `ROFF` 10 MΩ in series with the 150 Ω load, and
+/// `W1` is `RON` 10 Ω or `ROFF` 100 MΩ under the 10 kΩ pull-up to 3.3 V.
+fn spice_switch_voltages(input_v: f64, load_closed: bool, trip_closed: bool) -> (f64, f64) {
+    let series_ohms = if load_closed { 0.5 } else { 10e6 };
+    let shunt_ohms = if trip_closed { 10.0 } else { 100e6 };
+    (
+        input_v * 150.0 / (series_ohms + 150.0),
+        3.3 * shunt_ohms / (shunt_ohms + 10_000.0),
+    )
+}
+
+#[test]
+fn metro_m4_spice_sw_and_csw_switches_reach_adc0_with_unrelated_devices() {
+    let system_path = root("configs/systems/metro-m4.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load Metro M4 profile");
+    let generic = SystemManifest::from_file(root("examples/metro-m4/analog-ntc-diode-system.yaml"))
+        .expect("load unrelated generic NTC and Shockley diode");
+    let switches = SystemManifest::from_file(root("examples/metro-m4/analog-spice-switch.yaml"))
+        .expect("load SPICE SW/CSW load-switch netlist");
+    profile.cosim_models = generic.cosim_models;
+    profile.cosim_models.extend(switches.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load ATSAMD51J19A descriptor");
+    for (pad, channel) in [("PA02", 0), ("PB08", 2), ("PA04", 4), ("PA05", 5)] {
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc0");
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build Metro M4 system bus");
+    bus.write_u32(MCLK_APBDMASK, 1 << 7)
+        .expect("enable ADC0 APB clock");
+    bus.write_u32(GCLK_PCHCTRL40, 1 << 6)
+        .expect("enable ADC0 generic clock");
+    bus.write_u8(ADC0 + 0x08, 3)
+        .expect("select VDDANA reference");
+    bus.write_u8(ADC0, 1 << 1).expect("enable ADC0");
+    for (port, pin) in [(PORTA, 2), (PORTB, 8), (PORTA, 4), (PORTA, 5)] {
+        enable_function_b(&mut bus, port, pin);
+    }
+
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("fixture carries NTC, diode, and switch netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all four outputs must bind through the SAMD51 analog pad map"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated Beta NTC at nominal temperature");
+    let expected_ntc_v = 3.3 * 2_200.0 / (ntc_resistance_ohms(25.0) + 2_200.0);
+    let mut cycles = 0;
+    let mut codes_at = Vec::new();
+    for (input_v, load_closed, trip_closed) in SPICE_SWITCH_SWEEP {
+        session
+            .set_signal_number("ui.spice_switch.input_v", input_v)
+            .expect("set the load-switch input voltage");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and switch netlists");
+        assert_eq!(steps.len(), 3, "NTC, diode, and switch models solve");
+        assert!(errors.is_empty(), "unexpected ADC route errors: {errors:?}");
+
+        let load_v = voltage(&session, "board.analog.pa04_volts");
+        let flag_v = voltage(&session, "board.analog.pa05_volts");
+        let (expected_load_v, expected_flag_v) =
+            spice_switch_voltages(input_v, load_closed, trip_closed);
+        assert!(
+            (load_v - expected_load_v).abs() < 1e-9,
+            "S1 closed={load_closed} at {input_v} V: expected {expected_load_v} V, got {load_v} V"
+        );
+        assert!(
+            (flag_v - expected_flag_v).abs() < 1e-9,
+            "W1 closed={trip_closed} at {input_v} V: expected {expected_flag_v} V, got {flag_v} V"
+        );
+
+        let ntc_v = voltage(&session, "board.analog.pa02_volts");
+        let diode_v = voltage(&session, "board.analog.pb08_volts");
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode stays at its DC load line"
+        );
+
+        let mut codes = [0u16; 2];
+        for (ain, volts) in [(0, ntc_v), (2, diode_v), (4, load_v), (5, flag_v)] {
+            let code = convert_adc0(&mut bus, ain);
+            assert_eq!(
+                code,
+                expected_code(volts),
+                "ADC0 AIN{ain} must convert the routed voltage at {input_v} V"
+            );
+            if ain >= 4 {
+                codes[usize::from(ain) - 4] = code;
+            }
+        }
+        codes_at.push((input_v, codes[0], codes[1]));
+    }
+
+    // Same input, opposite state: firmware reads the hysteresis, not a level.
+    assert_eq!(codes_at[3].0, codes_at[5].0);
+    assert!(
+        codes_at[3].2 > codes_at[5].2 + 3000,
+        "2.7 V rising leaves the flag high, falling leaves it low: {codes_at:?}"
+    );
+    assert_eq!(codes_at[7].0, codes_at[9].0);
+    assert!(
+        codes_at[7].1 > codes_at[9].1 + 2000,
+        "2.0 V falling keeps the load powered, rising keeps it off: {codes_at:?}"
+    );
+}
