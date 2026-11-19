@@ -117,7 +117,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | atmega328pb | open | L1 | 8 | 1026.4 | 7.6 | ≥1× (CI) | — |
 | atmega2560 | open | L1 | 18 | — | — | ≥1× (CI) | — |
 | atmega2561 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega2561.md) |
-| atmega4809 | open | L0 | 19 | — | — | ≥1× (CI) | — |
+| atmega4809 | open | L1 | 21 | — | — | ≥1× (CI) | — |
 | atmega32u4 | open | L0 | 8 | 1020.0 | 7.7 | ≥1× (CI) | — |
 | mimxrt1062-teensy41 | open | L0 | 50 | — | — | ≥1× (CI) | — |
 | atmega1281 | open | L1 | 11 | — | — | ≥1× (CI) | [doc](docs/boards/atmega1281.md) |

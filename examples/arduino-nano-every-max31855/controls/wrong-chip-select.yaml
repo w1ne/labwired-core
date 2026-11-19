@@ -1,0 +1,10 @@
+# Control for max31855-smoke.yaml: CS on the wrong pad. The assertion is the
+# passing run's reading, so this script must FAIL.
+schema_version: "1.2"
+inputs:
+  firmware: ../../../tests/fixtures/avr/arduino-nano-every-max31855.elf
+  system: ./system-wrong-chip-select.yaml
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "TC=25.00 C"
