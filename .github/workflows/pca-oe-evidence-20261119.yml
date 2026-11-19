@@ -1,0 +1,19 @@
+name: PCA OE focused evidence
+on:
+  push:
+    branches: [test/pca-oe-ratchet-evidence-20261119]
+permissions:
+  contents: read
+jobs:
+  pca-oe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run targeted servo OE regression
+        run: cargo test --locked -p labwired-core --test pca9685_drives_servo -- --nocapture
+      - name: Verify peripheral metadata snapshot
+        run: cargo test --locked -p labwired-core --test bus peripheral_kit_gate::manifest_json_matches_registry -- --exact --nocapture
+      - name: Verify downcast ratchet
+        run: cargo test --locked -p labwired-core --lib tests::downcast_ratchet::the_downcast_count_only_shrinks -- --exact --nocapture
