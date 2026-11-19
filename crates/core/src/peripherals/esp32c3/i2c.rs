@@ -658,6 +658,20 @@ impl Esp32c3I2c {
         self.core.slaves()
     }
 
+    pub(crate) fn direct_pwm_pulse_us(&self, address: u8, channel: u8) -> Option<f64> {
+        self.core.direct_pwm_pulse_us(address, channel)
+    }
+    pub(crate) fn clear_pwm_subscribers(&self) {
+        self.core.clear_pwm_subscribers();
+    }
+    pub(crate) fn subscribe_direct_pwm_output(
+        &self,
+        address: u8,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        self.core.subscribe_direct_pwm_output(address, observer)
+    }
+
     /// Mutable counterpart of [`Self::attached_slaves`], for callers that must
     /// drive a slave's device protocol (register reads) rather than just
     /// inspect it. Production stimulus does NOT use this — it goes through

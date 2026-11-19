@@ -120,6 +120,7 @@ pub fn attach_esp32_external_devices(
     // `SystemBus::from_config` makes after its attach loop. Without it, Xtensa
     // playground/WASM builds would claim the motor and never install it.
     bus.install_motor_models(manifest)?;
+    bus.bind_direct_pwm_servos();
     Ok(())
 }
 

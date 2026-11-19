@@ -130,6 +130,12 @@ impl UnpoweredI2cDevice {
 }
 
 impl I2cDevice for UnpoweredI2cDevice {
+    fn i2c_component_id(&self) -> Option<&str> {
+        self.inner.i2c_component_id()
+    }
+    fn is_i2c_mux(&self) -> bool {
+        self.inner.is_i2c_mux()
+    }
     fn address(&self) -> u8 {
         // The address it WOULD answer to. Forwarded so listings and the bus
         // trace still name the part; `claims_address` is what decides whether

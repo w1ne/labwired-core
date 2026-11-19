@@ -230,6 +230,8 @@ pub struct Nrf52Twim {
     /// I2C devices attached to this master bus.  Keyed by 7-bit address.
     #[allow(dead_code)]
     attached_devices: Vec<RefCell<Box<dyn I2cDevice>>>,
+    pwm_topology_epoch: Arc<std::sync::atomic::AtomicU64>,
+    pwm_legacy_view_escaped: std::sync::atomic::AtomicBool,
 
     /// Wire levels published to the pads `PSEL.SCL`/`PSEL.SDA` select, so a
     /// logic analyzer clipped to this bus measures a real waveform instead of
@@ -293,6 +295,8 @@ impl Default for Nrf52Twim {
             pending: PENDING_NONE,
             busy_cycles: 0,
             attached_devices: Vec::new(),
+            pwm_topology_epoch: Default::default(),
+            pwm_legacy_view_escaped: Default::default(),
             lines: None,
             claim_scl: NrfPinClaim::default(),
             claim_sda: NrfPinClaim::default(),
@@ -314,13 +318,105 @@ impl Nrf52Twim {
     /// mux, both of which wrap first. The device is matched by its 7-bit address
     /// when `ADDRESS` is set and a STARTTX/STARTRX task fires.
     pub(crate) fn push_slave(&mut self, device: Box<dyn I2cDevice>) {
+        self.invalidate_pwm_epoch();
+        self.clear_pwm_subscribers();
         self.attached_devices.push(RefCell::new(device));
+    }
+    pub(crate) fn invalidate_pwm_epoch(&self) {
+        let _ = self.pwm_topology_epoch.fetch_update(
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+            |x| Some(x.saturating_add(1)),
+        );
+    }
+    pub(crate) fn clear_pwm_subscribers(&self) {
+        for cell in &self.attached_devices {
+            cell.borrow().clear_servo_pwm_observers();
+        }
+    }
+    pub(crate) fn legacy_view_escaped(&self) -> bool {
+        self.pwm_legacy_view_escaped
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+    pub(crate) fn attached_devices_internal(&self) -> &[RefCell<Box<dyn I2cDevice>>] {
+        &self.attached_devices
+    }
+    pub fn visit_attached_devices(&self, f: &mut dyn FnMut(&dyn I2cDevice)) {
+        for cell in &self.attached_devices {
+            f(cell.borrow().as_ref());
+        }
+    }
+    pub(crate) fn subscribe_direct_pwm_output(
+        &self,
+        address: u8,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        if self.legacy_view_escaped() {
+            return false;
+        }
+        if self.attached_devices.iter().any(|cell| {
+            let d = cell.borrow();
+            d.is_i2c_mux()
+                && crate::peripherals::device::pwm_mux_may_contend(d.as_ref(), address, 0)
+        }) {
+            return false;
+        }
+        let matching: Vec<_> = self
+            .attached_devices
+            .iter()
+            .filter(|cell| {
+                let d = cell.borrow();
+                !d.is_i2c_mux() && (d.address() == address || d.claims_address(address))
+            })
+            .collect();
+        let [cell] = matching.as_slice() else {
+            return false;
+        };
+        let epoch = self.pwm_topology_epoch.clone();
+        let generation = epoch.load(std::sync::atomic::Ordering::SeqCst);
+        if generation == u64::MAX {
+            return false;
+        }
+        cell.borrow()
+            .subscribe_servo_pwm_output(Arc::new(move |ch, us| {
+                if epoch.load(std::sync::atomic::Ordering::SeqCst) == generation {
+                    observer(ch, us);
+                }
+            }))
+    }
+    pub(crate) fn direct_pwm_pulse_us(&self, address: u8, channel: u8) -> Option<f64> {
+        if self.legacy_view_escaped() {
+            return None;
+        }
+        if self.attached_devices.iter().any(|cell| {
+            let d = cell.borrow();
+            d.is_i2c_mux()
+                && crate::peripherals::device::pwm_mux_may_contend(d.as_ref(), address, 0)
+        }) {
+            return None;
+        }
+        let matching: Vec<_> = self
+            .attached_devices
+            .iter()
+            .filter(|cell| {
+                let d = cell.borrow();
+                !d.is_i2c_mux() && (d.address() == address || d.claims_address(address))
+            })
+            .collect();
+        let [cell] = matching.as_slice() else {
+            return None;
+        };
+        let value = cell.borrow().pwm_channel_pulse_us(channel);
+        value
     }
 
     /// The attached I²C slaves, in attach order. Mirrors
     /// [`crate::peripherals::i2c::I2c::attached_devices`] so callers can reach
     /// a device by a path independent of the sim-input walk.
     pub fn attached_devices(&self) -> &[RefCell<Box<dyn I2cDevice>>] {
+        self.pwm_legacy_view_escaped
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        self.invalidate_pwm_epoch();
         &self.attached_devices
     }
 

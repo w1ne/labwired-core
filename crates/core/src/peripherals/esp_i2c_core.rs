@@ -167,6 +167,7 @@ impl RouteGate<'_> {
 /// duplicated code.
 pub(crate) struct EspI2cCore {
     slaves: Vec<Box<dyn I2cDevice>>,
+    pwm_topology_epoch: std::sync::Arc<std::sync::atomic::AtomicU64>,
     rx_fifo: RefCell<VecDeque<u8>>,
 }
 
@@ -174,6 +175,7 @@ impl EspI2cCore {
     pub(crate) fn new() -> Self {
         Self {
             slaves: Vec::new(),
+            pwm_topology_epoch: Default::default(),
             rx_fifo: RefCell::new(VecDeque::with_capacity(FIFO_CAPACITY)),
         }
     }
@@ -183,7 +185,51 @@ impl EspI2cCore {
     /// wraps first. Slaves are matched by address at transaction time; later
     /// additions take precedence on duplicate addresses.
     pub(crate) fn push_slave(&mut self, slave: Box<dyn I2cDevice>) {
+        self.invalidate_pwm_topology();
         self.slaves.push(slave);
+    }
+    fn invalidate_pwm_topology(&self) {
+        let _ = self.pwm_topology_epoch.fetch_update(
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+            |x| Some(x.saturating_add(1)),
+        );
+        self.clear_pwm_subscribers();
+    }
+    pub(crate) fn clear_pwm_subscribers(&self) {
+        for slave in &self.slaves {
+            slave.clear_servo_pwm_observers();
+        }
+    }
+    pub(crate) fn subscribe_direct_pwm_output(
+        &self,
+        address: u8,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        if self.slaves.iter().any(|s| {
+            s.is_i2c_mux()
+                && crate::peripherals::device::pwm_mux_may_contend(s.as_ref(), address, 0)
+        }) {
+            return false;
+        }
+        let matches: Vec<_> = self
+            .slaves
+            .iter()
+            .filter(|s| !s.is_i2c_mux() && (s.address() == address || s.claims_address(address)))
+            .collect();
+        let [slave] = matches.as_slice() else {
+            return false;
+        };
+        let epoch = self.pwm_topology_epoch.clone();
+        let generation = epoch.load(std::sync::atomic::Ordering::SeqCst);
+        if generation == u64::MAX {
+            return false;
+        }
+        slave.subscribe_servo_pwm_output(std::sync::Arc::new(move |channel, us| {
+            if epoch.load(std::sync::atomic::Ordering::SeqCst) == generation {
+                observer(channel, us);
+            }
+        }))
     }
 
     pub(crate) fn slaves(&self) -> &[Box<dyn I2cDevice>] {
@@ -191,7 +237,26 @@ impl EspI2cCore {
     }
 
     pub(crate) fn slaves_mut(&mut self) -> &mut [Box<dyn I2cDevice>] {
+        self.invalidate_pwm_topology();
         &mut self.slaves
+    }
+
+    pub(crate) fn direct_pwm_pulse_us(&self, address: u8, channel: u8) -> Option<f64> {
+        if self.slaves.iter().any(|s| {
+            s.is_i2c_mux()
+                && crate::peripherals::device::pwm_mux_may_contend(s.as_ref(), address, 0)
+        }) {
+            return None;
+        }
+        let matching: Vec<_> = self
+            .slaves
+            .iter()
+            .filter(|s| !s.is_i2c_mux() && (s.address() == address || s.claims_address(address)))
+            .collect();
+        let [slave] = matching.as_slice() else {
+            return None;
+        };
+        slave.pwm_channel_pulse_us(channel)
     }
 
     pub(crate) fn slave_count(&self) -> usize {

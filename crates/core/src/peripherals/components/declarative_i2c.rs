@@ -231,6 +231,7 @@ pub struct GenericI2cDevice {
     /// PCA9685 LED register bytes currently committed to its outputs.
     /// Register reads still see the live file while OCH=0 stages changes.
     pca9685_led_output: Option<Box<[u8; 64]>>,
+    pca9685_reset_file: Option<Vec<u8>>,
     // Global channel writes have effects that this output model does not yet emulate.
     pca9685_global_output_unknown: bool,
     // EXTCLK cannot switch back to the internal oscillator without reset.
@@ -241,6 +242,8 @@ pub struct GenericI2cDevice {
     /// datasheet does not specify whether partial writes survive START/STOP;
     /// this model retains them until the channel updates or OCH=0 STOP.
     pca9685_ack_written: [u8; 16],
+    pca_pwm_observers: std::cell::RefCell<Vec<crate::peripherals::device::PwmOutputObserver>>,
+    pca_servo_pwm_observers: std::cell::RefCell<Vec<crate::peripherals::device::PwmOutputObserver>>,
     file_pointer: u16,
     file_writes_since_frame: u32,
     file_pointer_mask: u16,
@@ -410,6 +413,7 @@ impl GenericI2cDevice {
         } else {
             None
         };
+        let pca9685_reset_file = pca9685_led_output.as_ref().and_then(|_| file.clone());
         let mut device = Self {
             address,
             registers: spec.registers.clone(),
@@ -461,10 +465,13 @@ impl GenericI2cDevice {
             reg_unmapped_byte: spec.unmapped_byte.unwrap_or(0xFF),
             file,
             pca9685_led_output,
+            pca9685_reset_file,
             pca9685_global_output_unknown: false,
             pca9685_external_clock_unknown: false,
             pca9685_prescale_unknown: false,
             pca9685_ack_written: [0; 16],
+            pca_pwm_observers: std::cell::RefCell::new(Vec::new()),
+            pca_servo_pwm_observers: std::cell::RefCell::new(Vec::new()),
             file_pointer: 0,
             file_writes_since_frame: 0,
             file_pointer_mask,
@@ -1786,12 +1793,93 @@ impl GenericI2cDevice {
     }
 }
 
+impl GenericI2cDevice {
+    fn pwm_before(&self) -> Option<[Option<f64>; 16]> {
+        if self.pca_pwm_observers.borrow().is_empty()
+            && self.pca_servo_pwm_observers.borrow().is_empty()
+        {
+            return None;
+        }
+        Some(std::array::from_fn(|ch| {
+            self.pwm_channel_pulse_us(ch as u8)
+        }))
+    }
+    fn publish_pwm_changes(&self, before: Option<[Option<f64>; 16]>) {
+        let Some(before) = before else {
+            return;
+        };
+        for (channel, old) in before.into_iter().enumerate() {
+            let new = self.pwm_channel_pulse_us(channel as u8);
+            if new != old {
+                if let Some(us) = new {
+                    let mut observers = self.pca_pwm_observers.borrow().clone();
+                    observers.extend(self.pca_servo_pwm_observers.borrow().iter().cloned());
+                    for observer in observers {
+                        observer(channel as u8, us);
+                    }
+                }
+            }
+        }
+    }
+}
+
 impl I2cDevice for GenericI2cDevice {
+    fn i2c_component_id(&self) -> Option<&str> {
+        self.component_id.as_deref()
+    }
     /// Exact built-in PCA9685 output latch:
     /// `((OFF - ON) mod 4096)` counts of a `4096 * (PRE_SCALE + 1) / 25 MHz`
     /// frame (datasheet Rev. 4 §7.3.1). `None` covers sleep, static levels,
     /// and unsupported output configurations. `None` also covers
     /// unknown output, so callers must not interpret it as evidence of silence.
+    fn reset_pwm_controller(&mut self) {
+        let Some(reset) = self.pca9685_reset_file.as_ref() else {
+            return;
+        };
+        if let Some(file) = self.file.as_mut() {
+            file.clone_from(reset);
+        }
+        if let (Some(output), Some(leds)) =
+            (self.pca9685_led_output.as_mut(), reset.get(0x06..0x46))
+        {
+            output.copy_from_slice(leds);
+        }
+        self.pca9685_global_output_unknown = false;
+        self.pca9685_external_clock_unknown = false;
+        self.pca9685_prescale_unknown = false;
+        self.pca9685_ack_written = [0; 16];
+        self.file_pointer = 0;
+        self.file_writes_since_frame = 0;
+        self.write_buf.clear();
+        self.read_idx = 0;
+        self.latched = false;
+    }
+
+    fn clear_servo_pwm_observers(&self) {
+        self.pca_servo_pwm_observers.borrow_mut().clear();
+    }
+    fn subscribe_servo_pwm_output(
+        &self,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        if self.pca9685_led_output.is_none() {
+            return false;
+        }
+        self.pca_servo_pwm_observers.borrow_mut().push(observer);
+        true
+    }
+
+    fn subscribe_pwm_output(
+        &self,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        if self.pca9685_led_output.is_none() {
+            return false;
+        }
+        self.pca_pwm_observers.borrow_mut().push(observer);
+        true
+    }
+
     fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
         if channel >= 16
             || self.pca9685_global_output_unknown
@@ -1946,6 +2034,7 @@ impl I2cDevice for GenericI2cDevice {
     }
 
     fn stop(&mut self) {
+        let pwm_before = self.pwm_before();
         // STOP commits staged output only in OCH=0. OCH=1 waits for
         // all four bytes of each channel, including across repeated STARTs.
         if let (Some(output), Some(file)) = (&mut self.pca9685_led_output, &self.file) {
@@ -1956,6 +2045,7 @@ impl I2cDevice for GenericI2cDevice {
                 }
             }
         }
+        self.publish_pwm_changes(pwm_before);
         // End of transaction: clear the write accumulator so the next command /
         // pointer starts fresh (the C3 controller only calls start() on a
         // repeated START, so the real reset happens here — same as veml7700 /
@@ -1989,6 +2079,7 @@ impl I2cDevice for GenericI2cDevice {
     }
 
     fn write(&mut self, data: u8) {
+        let pwm_before = self.pwm_before();
         // Framing, if the part declares any: count the bytes the master put on
         // the wire and close the frame the moment the declared length is
         // reached, WITHOUT waiting for a STOP. A fixed-length command shell is
@@ -2012,11 +2103,13 @@ impl I2cDevice for GenericI2cDevice {
                     // borrow is released by the time `raise` runs.
                     self.write_inner(data);
                     self.close_frame(i64::from(data));
+                    self.publish_pwm_changes(pwm_before);
                     return;
                 }
             }
         }
         self.write_inner(data);
+        self.publish_pwm_changes(pwm_before);
     }
 
     fn read(&mut self) -> u8 {

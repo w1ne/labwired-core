@@ -84,6 +84,13 @@ impl Nrf52SerialInstance {
         self.twim.attached_devices()
     }
 
+    pub(crate) fn twim_pwm_host(&self) -> &Nrf52Twim {
+        &self.twim
+    }
+    pub fn visit_attached_i2c_devices(&self, f: &mut dyn FnMut(&dyn I2cDevice)) {
+        self.twim.visit_attached_devices(f);
+    }
+
     /// The SPIM sub-peripheral's attached SPI devices, in attach order.
     pub fn attached_spi_devices_mut(&mut self) -> &mut [Box<dyn SpiDevice>] {
         &mut self.spim.attached_devices
@@ -212,7 +219,7 @@ impl Peripheral for Nrf52SerialInstance {
         if us == 0 {
             return;
         }
-        for cell in self.twim.attached_devices() {
+        for cell in self.twim.attached_devices_internal() {
             cell.borrow_mut().advance_time_us(us);
         }
         for dev in &mut self.spim.attached_devices {
@@ -222,7 +229,7 @@ impl Peripheral for Nrf52SerialInstance {
 
     /// Tier 2: collect this controller's attached devices' pin drives.
     fn drain_attached_pin_drives(&mut self, out: &mut Vec<(String, String, bool)>) {
-        for cell in self.twim.attached_devices() {
+        for cell in self.twim.attached_devices_internal() {
             crate::peripherals::device::drain_i2c_pin_drives(&mut **cell.borrow_mut(), out);
         }
         for dev in &mut self.spim.attached_devices {

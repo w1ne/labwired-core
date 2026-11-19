@@ -880,7 +880,7 @@ impl WasmSimulator {
         };
         let mut states: Vec<serde_json::Value> = Vec::new();
 
-        machine.bus.sync_pwm_sourced_servos();
+        machine.bus.sync_legacy_pwm_servos();
         for servo in machine
             .bus
             .observed_of::<labwired_core::peripherals::components::servo::Servo>()

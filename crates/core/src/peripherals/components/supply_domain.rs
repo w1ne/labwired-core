@@ -334,7 +334,9 @@ impl crate::bus::SystemBus {
             .legacy
             .get(name)
             .ok_or_else(|| anyhow::anyhow!("unknown supply domain '{name}'"))?
-            .update(voltage_v)
+            .update(voltage_v)?;
+        self.bind_direct_pwm_servos();
+        Ok(())
     }
     pub fn validate_device_supply_route(&self, device: &str, rail: &str) -> anyhow::Result<()> {
         let domain = self
@@ -382,6 +384,7 @@ impl crate::bus::SystemBus {
         for (domain, state) in prepared {
             *domain.state.lock().unwrap() = state;
         }
+        self.bind_direct_pwm_servos();
         // Publish through the existing mutable SPI-device capability before
         // inspection or CPU execution. No elapsed time or bus frame is added.
         for peripheral in &mut self.peripherals {
@@ -398,13 +401,44 @@ impl crate::bus::SystemBus {
 pub struct GatedI2cDevice {
     inner: Box<dyn I2cDevice>,
     gate: SupplyGate,
+    observed_supply_generation: Option<u64>,
+    attachment_id: Option<String>,
 }
 impl GatedI2cDevice {
     pub fn new(inner: Box<dyn I2cDevice>, gate: SupplyGate) -> Self {
-        Self { inner, gate }
+        let observed_supply_generation = gate.generation();
+        Self {
+            inner,
+            gate,
+            observed_supply_generation,
+            attachment_id: None,
+        }
+    }
+    pub fn with_attachment_id(inner: Box<dyn I2cDevice>, gate: SupplyGate, id: String) -> Self {
+        let mut result = Self::new(inner, gate);
+        result.attachment_id = Some(id);
+        result
+    }
+    fn synchronize_pwm_power(&mut self) {
+        let generation = self.gate.generation();
+        if self.gate.powered()
+            && generation.is_some()
+            && generation != self.observed_supply_generation
+        {
+            self.inner.reset_pwm_controller();
+            self.observed_supply_generation = generation;
+        }
     }
 }
 impl I2cDevice for GatedI2cDevice {
+    fn reset_pwm_controller(&mut self) {
+        self.inner.reset_pwm_controller();
+    }
+    fn i2c_component_id(&self) -> Option<&str> {
+        self.attachment_id
+            .as_deref()
+            .or_else(|| self.inner.i2c_component_id())
+    }
     fn is_i2c_mux(&self) -> bool {
         self.inner.is_i2c_mux()
     }
@@ -429,11 +463,13 @@ impl I2cDevice for GatedI2cDevice {
     }
     fn select_address(&mut self, a: u8) {
         if self.gate.powered() {
+            self.synchronize_pwm_power();
             self.inner.select_address(a)
         }
     }
     fn read(&mut self) -> u8 {
         if self.gate.powered() {
+            self.synchronize_pwm_power();
             self.inner.read()
         } else {
             0xff
@@ -441,16 +477,19 @@ impl I2cDevice for GatedI2cDevice {
     }
     fn write(&mut self, b: u8) {
         if self.gate.powered() {
+            self.synchronize_pwm_power();
             self.inner.write(b)
         }
     }
     fn start(&mut self) {
         if self.gate.powered() {
+            self.synchronize_pwm_power();
             self.inner.start()
         }
     }
     fn stop(&mut self) {
         if self.gate.powered() {
+            self.synchronize_pwm_power();
             self.inner.stop()
         }
     }
@@ -476,10 +515,38 @@ impl I2cDevice for GatedI2cDevice {
     fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
         self.inner.logs()
     }
+    fn clear_servo_pwm_observers(&self) {
+        self.inner.clear_servo_pwm_observers();
+    }
+    fn subscribe_servo_pwm_output(
+        &self,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        let gate = self.gate.clone();
+        let generation = gate.generation();
+        self.inner
+            .subscribe_servo_pwm_output(Arc::new(move |channel, us| {
+                if gate.powered() && gate.generation() == generation {
+                    observer(channel, us);
+                }
+            }))
+    }
+    fn subscribe_pwm_output(
+        &self,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        let gate = self.gate.clone();
+        self.inner
+            .subscribe_pwm_output(Arc::new(move |channel, us| {
+                if gate.powered() {
+                    observer(channel, us);
+                }
+            }))
+    }
     /// Forward the controller pulse query only while its supply is powered.
     /// Output-enable wiring is not modeled by this query.
     fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
-        if self.gate.powered() {
+        if self.gate.powered() && self.gate.generation() == self.observed_supply_generation {
             self.inner.pwm_channel_pulse_us(channel)
         } else {
             None

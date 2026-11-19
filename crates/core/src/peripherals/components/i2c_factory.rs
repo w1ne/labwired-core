@@ -243,6 +243,7 @@ pub fn build_i2c_tree(
             .as_any_mut()
             .and_then(|a| a.downcast_mut::<crate::peripherals::components::tca9548a::Tca9548a>())
             .expect("checked above that this device is a Tca9548a");
+        mux.set_attachment_id(&ext.id);
         for (channel, dev) in built {
             mux.attach(channel, dev)?;
         }
@@ -283,11 +284,17 @@ fn with_supply(
     device: Box<dyn I2cDevice>,
     ext: &labwired_config::ExternalDevice,
 ) -> Box<dyn I2cDevice> {
-    if super::supply::powered_from_placement(ext) {
+    let powered = super::supply::powered_from_placement(ext);
+    let device: Box<dyn I2cDevice> = if powered {
         device
     } else {
         Box::new(super::supply::UnpoweredI2cDevice::new(device))
-    }
+    };
+    Box::new(super::supply_domain::GatedI2cDevice::with_attachment_id(
+        device,
+        super::supply_domain::SupplyGate::legacy(powered),
+        ext.id.clone(),
+    ))
 }
 
 /// Resolve embedded descriptors before the remaining Rust-only construct arms.

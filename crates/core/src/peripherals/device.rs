@@ -73,12 +73,44 @@ pub trait I2cSlaveHost {
     }
 }
 
+/// Subscriber for modeled PWM pulse changes. No callback denotes an unknown or static output.
+pub type PwmOutputObserver = std::sync::Arc<dyn Fn(u8, f64) + Send + Sync>;
+
+/// Conservatively inspect all modeled mux descendants, even disabled channels.
+/// Unknown mux implementations and excessive nesting fail closed.
+pub(crate) fn pwm_mux_may_contend(dev: &dyn I2cDevice, address: u8, depth: usize) -> bool {
+    if dev.address() == address {
+        return true;
+    }
+    if !dev.is_i2c_mux() {
+        return dev.claims_address(address);
+    }
+    if depth >= 16 {
+        return true;
+    }
+    let Some(mux) = dev
+        .as_any()
+        .and_then(|a| a.downcast_ref::<crate::peripherals::components::tca9548a::Tca9548a>())
+    else {
+        return true;
+    };
+    (0..crate::peripherals::components::tca9548a::TCA9548A_CHANNELS as u8).any(|ch| {
+        mux.channel_devices(ch)
+            .iter()
+            .any(|child| pwm_mux_may_contend(child.as_ref(), address, depth + 1))
+    })
+}
+
 pub trait I2cDevice: Send {
     /// Optional transaction epoch. A change invalidates a controller selection.
     fn transaction_generation(&self) -> Option<u64> {
         None
     }
     fn address(&self) -> u8;
+    /// Manifest identity, when the attachment path stamped one.
+    fn i2c_component_id(&self) -> Option<&str> {
+        None
+    }
     fn read(&mut self) -> u8;
     fn write(&mut self, data: u8);
     fn start(&mut self) {}
@@ -98,6 +130,22 @@ pub trait I2cDevice: Send {
     fn pwm_channel_pulse_us(&self, _channel: u8) -> Option<f64> {
         None
     }
+
+    /// Subscribe to committed PWM output changes. Returns false if unsupported.
+    fn subscribe_pwm_output(&self, _observer: PwmOutputObserver) -> bool {
+        false
+    }
+
+    /// Subscribe to a bus-owned servo binding, separate from independent observers.
+    fn subscribe_servo_pwm_output(&self, _observer: PwmOutputObserver) -> bool {
+        false
+    }
+
+    /// Remove only bus-owned servo bindings prior to rebinding.
+    fn clear_servo_pwm_observers(&self) {}
+
+    /// Reset a modeled PWM controller following a supply transition.
+    fn reset_pwm_controller(&mut self) {}
 
     /// Nanoseconds this device holds SCL low after acknowledging each byte it
     /// receives and before each byte it sends (clock stretching). Default: none.

@@ -306,6 +306,20 @@ impl Esp32s3I2c {
         self.core.slaves()
     }
 
+    pub(crate) fn direct_pwm_pulse_us(&self, address: u8, channel: u8) -> Option<f64> {
+        self.core.direct_pwm_pulse_us(address, channel)
+    }
+    pub(crate) fn clear_pwm_subscribers(&self) {
+        self.core.clear_pwm_subscribers();
+    }
+    pub(crate) fn subscribe_direct_pwm_output(
+        &self,
+        address: u8,
+        observer: crate::peripherals::device::PwmOutputObserver,
+    ) -> bool {
+        self.core.subscribe_direct_pwm_output(address, observer)
+    }
+
     /// Mutable counterpart of [`Self::attached_slaves`] — see
     /// `Esp32c3I2c::attached_slaves_mut` for why this exists.
     pub fn attached_slaves_mut(&mut self) -> &mut [Box<dyn I2cDevice>] {

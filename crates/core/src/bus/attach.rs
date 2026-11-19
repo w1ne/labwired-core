@@ -517,6 +517,7 @@ impl SystemBus {
             .ok_or_else(|| anyhow::anyhow!("attach_i2c_slave: no peripheral '{controller}'"))?;
         if let Some(host) = self.peripherals[idx].dev.i2c_slave_host() {
             host.attach_slave(wrapped);
+            self.bind_direct_pwm_servos();
             return Ok(());
         }
         let any = self.peripherals[idx].dev.as_any_mut().ok_or_else(|| {
@@ -557,7 +558,113 @@ impl SystemBus {
         } else {
             anyhow::bail!("attach_i2c_slave: '{controller}' is not an I2C controller");
         }
+        self.bind_direct_pwm_servos();
         Ok(())
+    }
+
+    /// Mutate one unique direct I²C slave, then restore supported servo bindings.
+    /// A mux, duplicate address or unsupported host is rejected without mutation.
+    pub fn with_i2c_slave_mut<T>(
+        &mut self,
+        controller: &str,
+        address: u8,
+        f: impl FnOnce(&mut dyn crate::peripherals::i2c::I2cDevice) -> T,
+    ) -> anyhow::Result<T> {
+        let idx = self
+            .find_peripheral_index_by_name(controller)
+            .ok_or_else(|| anyhow::anyhow!("no I2C host '{controller}'"))?;
+        let host = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .ok_or_else(|| anyhow::anyhow!("I2C host is not downcastable"))?;
+        let mut f = Some(f);
+        let result = if let Some(host) = host.downcast_mut::<crate::peripherals::i2c::I2c>() {
+            let devices = host.attached_devices_internal();
+            anyhow::ensure!(
+                !devices.iter().any(|d| d.borrow().is_i2c_mux()),
+                "I2C mux route is ambiguous"
+            );
+            let matching: Vec<_> = devices
+                .iter()
+                .filter(|d| d.borrow().address() == address)
+                .collect();
+            let [cell] = matching.as_slice() else {
+                anyhow::bail!("I2C source must be unique");
+            };
+            let mut device = cell.borrow_mut();
+            f.take().unwrap()(device.as_mut())
+        } else if let Some(host) =
+            host.downcast_mut::<crate::peripherals::esp32s3::i2c::Esp32s3I2c>()
+        {
+            let devices = host.attached_slaves();
+            anyhow::ensure!(
+                !devices.iter().any(|d| d.is_i2c_mux()),
+                "I2C mux route is ambiguous"
+            );
+            let matching: Vec<_> = devices
+                .iter()
+                .enumerate()
+                .filter_map(|(i, d)| (d.address() == address).then_some(i))
+                .collect();
+            let [index] = matching.as_slice() else {
+                anyhow::bail!("I2C source must be unique");
+            };
+            f.take().unwrap()(host.attached_slaves_mut()[*index].as_mut())
+        } else if let Some(host) =
+            host.downcast_mut::<crate::peripherals::esp32c3::i2c::Esp32c3I2c>()
+        {
+            let devices = host.attached_slaves();
+            anyhow::ensure!(
+                !devices.iter().any(|d| d.is_i2c_mux()),
+                "I2C mux route is ambiguous"
+            );
+            let matching: Vec<_> = devices
+                .iter()
+                .enumerate()
+                .filter_map(|(i, d)| (d.address() == address).then_some(i))
+                .collect();
+            let [index] = matching.as_slice() else {
+                anyhow::bail!("I2C source must be unique");
+            };
+            f.take().unwrap()(host.attached_slaves_mut()[*index].as_mut())
+        } else if let Some(host) = host.downcast_mut::<crate::peripherals::nrf52::twim::Nrf52Twim>()
+        {
+            let devices = host.attached_devices_internal();
+            anyhow::ensure!(
+                !devices.iter().any(|d| d.borrow().is_i2c_mux()),
+                "I2C mux route is ambiguous"
+            );
+            let matching: Vec<_> = devices
+                .iter()
+                .filter(|d| d.borrow().address() == address)
+                .collect();
+            let [cell] = matching.as_slice() else {
+                anyhow::bail!("I2C source must be unique");
+            };
+            let mut device = cell.borrow_mut();
+            f.take().unwrap()(device.as_mut())
+        } else if let Some(host) =
+            host.downcast_mut::<crate::peripherals::nrf52::serial_instance::Nrf52SerialInstance>()
+        {
+            let devices = host.twim_pwm_host().attached_devices_internal();
+            anyhow::ensure!(
+                !devices.iter().any(|d| d.borrow().is_i2c_mux()),
+                "I2C mux route is ambiguous"
+            );
+            let matching: Vec<_> = devices
+                .iter()
+                .filter(|d| d.borrow().address() == address)
+                .collect();
+            let [cell] = matching.as_slice() else {
+                anyhow::bail!("I2C source must be unique");
+            };
+            let mut device = cell.borrow_mut();
+            f.take().unwrap()(device.as_mut())
+        } else {
+            anyhow::bail!("I2C host does not support scoped slave access")
+        };
+        self.bind_direct_pwm_servos();
+        Ok(result)
     }
 
     /// Wire the ESP32 C3/C5/C61 I²C0 bit engine to the shared GPIO model: GPIO
