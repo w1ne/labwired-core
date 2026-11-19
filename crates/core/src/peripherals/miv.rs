@@ -30,6 +30,32 @@
 //! The block reports one OR'd interrupt line, which is how the reference
 //! design routes it to the interrupt controller.
 //!
+//! ## PolarFire SoC MSS GPIO (`mpfs_gpio`, 0xA8 bytes)
+//!
+//! The MSS GPIO_0..2 banks are the same block with a different register map
+//! (Microchip `mss_gpio.h` `GPIO_TypeDef`, polarfire-soc/platform; Renode
+//! `MPFS_GPIO`). Per-pin config bits, the INTTYPE encoding, the W1C
+//! interrupt register at 0x80 and the pad rules are CoreGPIO's.
+//!
+//! | Offset | Name | Access | Meaning |
+//! | --- | --- | --- | --- |
+//! | 0x00 + 4·n | GPIO_CFG[n] | R/W | per-pin config, as CoreGPIO |
+//! | 0x80 | GPIO_IRQ | R/W1C | interrupt status / clear |
+//! | 0x84 | GPIO_IN | R | levels on pins configured as inputs |
+//! | 0x88 | GPIO_OUT | R/W | output levels |
+//! | 0x8C | GPIO_CFG_ALL | W | writes the value to every port's GPIO_CFG |
+//! | 0x90 + 4·b | GPIO_CFG_BYTE[b] | W | writes the value to GPIO_CFG of ports 8b..8b+7 |
+//! | 0xA0 | GPIO_CLR_BITS | W | clears the GPIO_OUT bits written as 1 |
+//! | 0xA4 | GPIO_SET_BITS | W | sets the GPIO_OUT bits written as 1 |
+//!
+//! A bank has 14 (GPIO_0), 24 (GPIO_1) or 32 (GPIO_2) ports
+//! (`NB_OF_GPIO_GPIO*` in `mss_gpio.c`); the `ports` config narrows the
+//! model to that width, so ports past it neither store nor drive. The write-only
+//! registers read 0 here (the driver never reads them). Not modelled: the
+//! GPIO_x_HI aliases at 0x2812_x000 (not mapped in these profiles) and the
+//! per-pin and non-direct PLIC interrupt lines. The block reports one OR'd
+//! line, and the RV64 core has no PLIC yet, so nothing is delivered.
+//!
 //! ## CoreTimer (0x1C bytes)
 //!
 //! | Offset | Name | Access | Meaning |
@@ -61,6 +87,52 @@ const GPIO_IRQ_CLEAR: u64 = 0x80;
 const GPIO_INPUT: u64 = 0x90;
 const GPIO_OUTPUT: u64 = 0xA0;
 
+const MPFS_GPIO_INPUT: u64 = 0x84;
+const MPFS_GPIO_OUTPUT: u64 = 0x88;
+const MPFS_GPIO_CFG_ALL: u64 = 0x8C;
+const MPFS_GPIO_CFG_BYTE: u64 = 0x90;
+const MPFS_GPIO_CLR_BITS: u64 = 0xA0;
+const MPFS_GPIO_SET_BITS: u64 = 0xA4;
+
+/// Which register map the CoreGPIO-family block decodes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum CoreGpioLayout {
+    /// Mi-V `CoreGPIO`: input @0x90, output @0xA0.
+    #[default]
+    MiV,
+    /// PolarFire SoC MSS GPIO: input @0x84, output @0x88, plus
+    /// CFG_ALL / CFG_BYTE / CLR_BITS / SET_BITS.
+    Mpfs,
+}
+
+impl CoreGpioLayout {
+    fn input(self) -> u64 {
+        match self {
+            Self::MiV => GPIO_INPUT,
+            Self::Mpfs => MPFS_GPIO_INPUT,
+        }
+    }
+
+    fn output(self) -> u64 {
+        match self {
+            Self::MiV => GPIO_OUTPUT,
+            Self::Mpfs => MPFS_GPIO_OUTPUT,
+        }
+    }
+
+    #[cfg(feature = "silent-census")]
+    fn census_name(self) -> &'static str {
+        match self {
+            Self::MiV => "miv:CoreGPIO",
+            Self::Mpfs => "mpfs:MSS_GPIO",
+        }
+    }
+}
+
+fn all_ports() -> u32 {
+    u32::MAX
+}
+
 /// Per-pin writable bits: OUTREG(0), INREG(1), OUTBUFF(2), INTENABLE(3),
 /// INTTYPE(7:5). Bit 4 is reserved.
 const CFG_WRITABLE_MASK: u32 = 0x0000_00EF;
@@ -85,6 +157,13 @@ pub struct MivCoreGpio {
     /// evaluated from the pad level; both are cleared by InterruptClear.
     #[serde(default)]
     irq_latched: u32,
+    /// Register map this instance decodes.
+    #[serde(default)]
+    layout: CoreGpioLayout,
+    /// Ports that exist on this bank (bit n = port n). CoreGPIO is built
+    /// 32 wide here; an MSS bank is 14, 24 or 32 wide.
+    #[serde(default = "all_ports")]
+    port_mask: u32,
 }
 
 impl MivCoreGpio {
@@ -94,6 +173,60 @@ impl MivCoreGpio {
             output: 0,
             external: [None; GPIO_PINS],
             irq_latched: 0,
+            layout: CoreGpioLayout::MiV,
+            port_mask: all_ports(),
+        }
+    }
+
+    /// A PolarFire SoC MSS GPIO bank with `ports` ports (14, 24 or 32 on
+    /// silicon; clamped to 1..=32).
+    pub fn mpfs(ports: u32) -> Self {
+        let ports = ports.clamp(1, GPIO_PINS as u32);
+        Self {
+            layout: CoreGpioLayout::Mpfs,
+            port_mask: if ports == 32 {
+                u32::MAX
+            } else {
+                (1 << ports) - 1
+            },
+            ..Self::new()
+        }
+    }
+
+    fn port_exists(&self, pin: usize) -> bool {
+        bit(self.port_mask, pin)
+    }
+
+    /// Write one port's GPIO_CFG, latching any edge the new config causes.
+    fn write_cfg(&mut self, index: usize, value: u32) {
+        if !self.port_exists(index) {
+            return;
+        }
+        let before = self.pad_level(index);
+        self.cfg[index] = value & CFG_WRITABLE_MASK;
+        let after = self.pad_level(index);
+        // Enabling OUTBUFF/OUTREG can move the pad: that is an
+        // edge like any other, evaluated under the new config.
+        if before != after {
+            self.update_irq(index, before, after);
+        }
+    }
+
+    /// Store a new OutputRegister value for the output pins.
+    fn write_output(&mut self, value: u32) {
+        let mask = self.out_mask();
+        let before = self.output;
+        self.output = (self.output & !mask) | (value & mask);
+        // A bidirectional pin's pad moves with the output stage, so
+        // edge interrupts must see that transition too.
+        for pin in 0..GPIO_PINS {
+            if bit(self.cfg[pin], 2) && bit(mask, pin) {
+                let now = bit(self.output, pin);
+                let was = bit(before, pin);
+                if now != was {
+                    self.update_irq(pin, was, now);
+                }
+            }
         }
     }
 
@@ -196,11 +329,13 @@ impl MivCoreGpio {
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
+        let input = self.layout.input();
+        let output = self.layout.output();
         match offset {
             // 0x80 reads the interrupt-status bitmap and writes it as W1C
             // (Microchip release note for issue 26094).
             GPIO_IRQ_CLEAR => self.irq_status(),
-            GPIO_INPUT => {
+            _ if offset == input => {
                 let mut v = 0u32;
                 for pin in 0..GPIO_PINS {
                     if bit(self.in_mask(), pin) && self.input_level(pin) {
@@ -209,61 +344,58 @@ impl MivCoreGpio {
                 }
                 v
             }
-            GPIO_OUTPUT => self.output & self.out_mask(),
+            _ if offset == output => self.output & self.out_mask(),
+            // Write-only MSS registers (CFG_ALL, CFG_BYTE[0..3], CLR_BITS,
+            // SET_BITS); `mss_gpio.c` never reads them.
+            MPFS_GPIO_CFG_ALL..=MPFS_GPIO_SET_BITS if self.layout == CoreGpioLayout::Mpfs => 0,
             _ if (GPIO_CFG_BASE..GPIO_IRQ_CLEAR).contains(&offset) && offset % 4 == 0 => {
                 let index = (offset / 4) as usize;
                 if index < GPIO_PINS {
                     self.cfg[index]
                 } else {
-                    crate::census_reg!("miv:CoreGPIO", offset, "read");
+                    crate::census_reg!(self.layout.census_name(), offset, "read");
                     0
                 }
             }
             _ => {
-                crate::census_reg!("miv:CoreGPIO", offset, "read");
+                crate::census_reg!(self.layout.census_name(), offset, "read");
                 0
             }
         }
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        let input = self.layout.input();
+        let output = self.layout.output();
+        let mpfs = self.layout == CoreGpioLayout::Mpfs;
         match offset {
             // InterruptClear: write 1 to each bit to clear its latch.
             GPIO_IRQ_CLEAR => self.irq_latched &= !value,
-            GPIO_INPUT => {} // read-only
-            GPIO_OUTPUT => {
-                let mask = self.out_mask();
-                let before = self.output;
-                self.output = (self.output & !mask) | (value & mask);
-                // A bidirectional pin's pad moves with the output stage, so
-                // edge interrupts must see that transition too.
-                for pin in 0..GPIO_PINS {
-                    if bit(self.cfg[pin], 2) && bit(mask, pin) {
-                        let now = bit(self.output, pin);
-                        let was = bit(before, pin);
-                        if now != was {
-                            self.update_irq(pin, was, now);
-                        }
-                    }
+            _ if offset == input => {} // read-only
+            _ if offset == output => self.write_output(value),
+            MPFS_GPIO_CFG_ALL if mpfs => {
+                for index in 0..GPIO_PINS {
+                    self.write_cfg(index, value);
                 }
             }
+            MPFS_GPIO_CFG_BYTE..MPFS_GPIO_CLR_BITS if mpfs && offset % 4 == 0 => {
+                let first = ((offset - MPFS_GPIO_CFG_BYTE) / 4 * 8) as usize;
+                for index in first..first + 8 {
+                    self.write_cfg(index, value);
+                }
+            }
+            MPFS_GPIO_CLR_BITS if mpfs => self.write_output(self.output & !value),
+            MPFS_GPIO_SET_BITS if mpfs => self.write_output(self.output | value),
             _ if (GPIO_CFG_BASE..GPIO_IRQ_CLEAR).contains(&offset) && offset % 4 == 0 => {
                 let index = (offset / 4) as usize;
                 if index < GPIO_PINS {
-                    let before = self.pad_level(index);
-                    self.cfg[index] = value & CFG_WRITABLE_MASK;
-                    let after = self.pad_level(index);
-                    // Enabling OUTBUFF/OUTREG can move the pad: that is an
-                    // edge like any other, evaluated under the new config.
-                    if before != after {
-                        self.update_irq(index, before, after);
-                    }
+                    self.write_cfg(index, value);
                 } else {
-                    crate::census_reg!("miv:CoreGPIO", offset, "write");
+                    crate::census_reg!(self.layout.census_name(), offset, "write");
                 }
             }
             _ => {
-                crate::census_reg!("miv:CoreGPIO", offset, "write");
+                crate::census_reg!(self.layout.census_name(), offset, "write");
             }
         }
     }
@@ -287,7 +419,17 @@ impl crate::Peripheral for MivCoreGpio {
         let byte = (offset % 4) as u32;
         // 0x80 is W1C on write and status on read: a read-modify-write would
         // feed the pending bits back and clear the ones this byte never wrote.
-        if reg == GPIO_IRQ_CLEAR {
+        // The MSS write-only strobes (CFG_ALL..SET_BITS) read 0, so the same
+        // goes for them: a sub-word store writes only its own byte lane.
+        let strobe = self.layout == CoreGpioLayout::Mpfs
+            && (MPFS_GPIO_CFG_ALL..=MPFS_GPIO_SET_BITS).contains(&reg);
+        // CFG_ALL / CFG_BYTE carry a GPIO_CFG value, whose bits all live in
+        // byte 0: a word store arrives as four byte writes, and the upper
+        // (zero) lanes must not rewrite every port's config with 0.
+        if strobe && reg < MPFS_GPIO_CLR_BITS && byte != 0 {
+            return Ok(());
+        }
+        if reg == GPIO_IRQ_CLEAR || strobe {
             self.write_reg(reg, (value as u32) << (byte * 8));
             return Ok(());
         }
@@ -303,8 +445,11 @@ impl crate::Peripheral for MivCoreGpio {
     /// (a button holds its level), not register state.
     fn on_node_reset(&mut self) {
         let external = self.external;
+        let (layout, port_mask) = (self.layout, self.port_mask);
         *self = Self::new();
         self.external = external;
+        self.layout = layout;
+        self.port_mask = port_mask;
     }
 
     /// The block's interrupt line is an OR of the enabled pins (the reference
@@ -318,6 +463,15 @@ impl crate::Peripheral for MivCoreGpio {
             irq: self.any_irq_active(),
             ..Default::default()
         }
+    }
+
+    /// The tick only reports the OR'd interrupt line, and with no INTENABLE
+    /// bit set `irq_status()` is 0 whatever the pads do. INTENABLE changes
+    /// only through this block's own MMIO, after which the bus re-checks this
+    /// predicate, so an unarmed bank can leave the per-cycle walk (and let
+    /// an idle core fast-forward) without dropping an interrupt.
+    fn legacy_tick_active(&self) -> bool {
+        self.int_enable_mask() != 0
     }
 
     fn pins(&self) -> Option<&dyn PinPort> {
@@ -374,8 +528,8 @@ impl crate::Peripheral for MivCoreGpio {
     /// chip-declared pin labels resolve without a GpioPort downcast.
     fn gpio_port_offsets(&self) -> Option<crate::peripherals::gpio::GpioPortOffsets> {
         Some(crate::peripherals::gpio::GpioPortOffsets {
-            output: GPIO_OUTPUT,
-            input: GPIO_INPUT,
+            output: self.layout.output(),
+            input: self.layout.input(),
         })
     }
 
@@ -723,6 +877,113 @@ impl crate::Peripheral for MivCoreTimer {
 mod tests {
     use super::*;
     use crate::Peripheral;
+
+    // MSS_GPIO_OUTPUT_MODE / INPUT_MODE / INOUT_MODE (mss_gpio.h).
+    const MSS_OUTPUT_MODE: u32 = 0x5;
+    const MSS_INPUT_MODE: u32 = 0x2;
+    const MSS_INOUT_MODE: u32 = 0x3;
+
+    #[test]
+    fn mpfs_gpio_uses_the_mss_register_map() {
+        let mut gpio = MivCoreGpio::mpfs(32);
+        gpio.write_u32(0x04, MSS_OUTPUT_MODE).unwrap(); // port 1 output
+        gpio.write_u32(MPFS_GPIO_OUTPUT, 0b10).unwrap();
+        assert_eq!(gpio.read_u32(MPFS_GPIO_OUTPUT).unwrap(), 0b10);
+        assert_eq!(gpio.driver(1).unwrap().out, crate::pins::Out::High);
+        // The CoreGPIO offsets mean nothing here: 0xA0 is CLR_BITS.
+        gpio.write_u32(0xA0, 0b10).unwrap();
+        assert_eq!(gpio.read_u32(MPFS_GPIO_OUTPUT).unwrap(), 0);
+        assert_eq!(gpio.driver(1).unwrap().out, crate::pins::Out::Low);
+        assert_eq!(gpio.read_u32(0xA0).unwrap(), 0, "CLR_BITS is write-only");
+    }
+
+    #[test]
+    fn mpfs_gpio_set_and_clear_bits_touch_only_their_ports() {
+        // MSS_GPIO_set_output(): SET_BITS sets, CLR_BITS clears, one port each.
+        let mut gpio = MivCoreGpio::mpfs(32);
+        gpio.write_u32(MPFS_GPIO_CFG_ALL, MSS_OUTPUT_MODE).unwrap();
+        gpio.write_u32(MPFS_GPIO_OUTPUT, 0x0000_00F0).unwrap();
+        gpio.write_u32(MPFS_GPIO_SET_BITS, 1 << 2).unwrap();
+        assert_eq!(gpio.read_u32(MPFS_GPIO_OUTPUT).unwrap(), 0xF4);
+        gpio.write_u32(MPFS_GPIO_CLR_BITS, 1 << 5).unwrap();
+        assert_eq!(gpio.read_u32(MPFS_GPIO_OUTPUT).unwrap(), 0xD4);
+        // A byte store to SET_BITS sets only that lane's bits.
+        gpio.write(MPFS_GPIO_SET_BITS + 1, 0x01).unwrap();
+        assert_eq!(gpio.read_u32(MPFS_GPIO_OUTPUT).unwrap(), 0x1D4);
+    }
+
+    #[test]
+    fn mpfs_gpio_cfg_all_and_cfg_byte_fan_out() {
+        let mut gpio = MivCoreGpio::mpfs(32);
+        gpio.write_u32(MPFS_GPIO_CFG_ALL, MSS_INPUT_MODE).unwrap();
+        for port in 0..32 {
+            assert_eq!(gpio.read_u32(4 * port).unwrap(), MSS_INPUT_MODE);
+        }
+        // CFG_BYTE[2] configures ports 16..23 only.
+        gpio.write_u32(MPFS_GPIO_CFG_BYTE + 8, MSS_INOUT_MODE)
+            .unwrap();
+        for port in 0..32u64 {
+            let want = if (16..24).contains(&port) {
+                MSS_INOUT_MODE
+            } else {
+                MSS_INPUT_MODE
+            };
+            assert_eq!(gpio.read_u32(4 * port).unwrap(), want, "port {port}");
+        }
+    }
+
+    #[test]
+    fn mpfs_gpio_input_register_reads_the_pad() {
+        let mut gpio = MivCoreGpio::mpfs(32);
+        gpio.write_u32(4 * 7, MSS_INPUT_MODE).unwrap();
+        gpio.set_external(7, External::Level(true));
+        assert_eq!(gpio.read_u32(MPFS_GPIO_INPUT).unwrap(), 1 << 7);
+        assert_eq!(gpio.read_u32(GPIO_INPUT).unwrap(), 0, "0x90 is CFG_BYTE[0]");
+    }
+
+    #[test]
+    fn mpfs_gpio_narrow_bank_drops_missing_ports() {
+        // GPIO_0 has 14 ports (NB_OF_GPIO_GPIO0).
+        let mut gpio = MivCoreGpio::mpfs(14);
+        gpio.write_u32(MPFS_GPIO_CFG_ALL, MSS_OUTPUT_MODE).unwrap();
+        assert_eq!(gpio.read_u32(4 * 13).unwrap(), MSS_OUTPUT_MODE);
+        assert_eq!(gpio.read_u32(4 * 14).unwrap(), 0, "port 14 does not exist");
+        gpio.write_u32(MPFS_GPIO_OUTPUT, u32::MAX).unwrap();
+        assert_eq!(gpio.read_u32(MPFS_GPIO_OUTPUT).unwrap(), 0x3FFF);
+    }
+
+    #[test]
+    fn mpfs_gpio_edge_irq_latches_and_clears_w1c() {
+        // MSS_GPIO_IRQ_EDGE_POSITIVE (0x40) | interrupt enable (bit 3).
+        let mut gpio = MivCoreGpio::mpfs(32);
+        gpio.write_u32(4 * 3, MSS_INPUT_MODE | 0x40 | 0x8).unwrap();
+        gpio.set_external(3, External::Level(true));
+        assert_eq!(gpio.read_u32(GPIO_IRQ_CLEAR).unwrap(), 1 << 3);
+        assert_eq!(gpio.irq_line_level(), Some(true));
+        gpio.write_u32(GPIO_IRQ_CLEAR, 1 << 3).unwrap();
+        assert_eq!(gpio.read_u32(GPIO_IRQ_CLEAR).unwrap(), 0);
+    }
+
+    #[test]
+    fn gpio_leaves_the_tick_walk_until_an_interrupt_is_enabled() {
+        let mut gpio = MivCoreGpio::mpfs(32);
+        assert!(!gpio.legacy_tick_active());
+        gpio.write_u32(MPFS_GPIO_CFG_ALL, MSS_OUTPUT_MODE).unwrap();
+        assert!(!gpio.legacy_tick_active(), "outputs alone never interrupt");
+        gpio.write_u32(4 * 9, MSS_INPUT_MODE | 0x8).unwrap();
+        assert!(gpio.legacy_tick_active(), "INTENABLE arms the walk");
+    }
+
+    #[test]
+    fn mpfs_gpio_node_reset_keeps_the_layout() {
+        let mut gpio = MivCoreGpio::mpfs(24);
+        gpio.write_u32(4, MSS_OUTPUT_MODE).unwrap();
+        gpio.on_node_reset();
+        assert_eq!(gpio.read_u32(4).unwrap(), 0);
+        gpio.write_u32(MPFS_GPIO_CFG_ALL, MSS_OUTPUT_MODE).unwrap();
+        gpio.write_u32(MPFS_GPIO_OUTPUT, u32::MAX).unwrap();
+        assert_eq!(gpio.read_u32(MPFS_GPIO_OUTPUT).unwrap(), 0x00FF_FFFF);
+    }
 
     #[test]
     fn gpio_config_writable_bits_match_the_block() {

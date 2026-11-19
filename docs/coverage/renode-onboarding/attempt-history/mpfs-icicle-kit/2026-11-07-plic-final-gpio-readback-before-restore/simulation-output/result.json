@@ -1,0 +1,634 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "MPFS MSS GPIO SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "gpio2.out=0001a5a4 gpio0.in=00003fff gpio1.out=0000ff00"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 538058888,
+          "expected_value": 107940,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 538050692,
+          "expected_value": 16383,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 538054804,
+          "expected_value": 0,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 538054716,
+          "expected_value": 5,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "plic prio=00000007 claim0=00000000 id=00000033 mcause=800000000000000b pending=00000000"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 538050688,
+          "expected_value": 0,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v64",
+    "x": [
+      0,
+      2147484034,
+      2155872256,
+      0,
+      0,
+      1000,
+      0,
+      32,
+      538058752,
+      538050560,
+      2147484200,
+      18446744073709551612,
+      10,
+      0,
+      0,
+      0,
+      0,
+      0,
+      538054656,
+      7,
+      0,
+      0,
+      537919488,
+      51,
+      9223372036854775819,
+      201326592,
+      203427840,
+      0,
+      2147484034,
+      1,
+      201330688,
+      0
+    ],
+    "pc": 2147484038,
+    "mstatus": 6272,
+    "mie": 2048,
+    "mtvec": 2147484040,
+    "mscratch": 0,
+    "mepc": 2147483902,
+    "mcause": 9223372036854775819,
+    "mtval": 0,
+    "mcycle": 100000,
+    "minstret": 100000,
+    "pmpcfg": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pmpaddr": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "clint": {
+      "base": 33554432,
+      "msip": false,
+      "mtimecmp": 18446744073709551615,
+      "mtime": 166,
+      "divider": 600,
+      "residue": 400
+    },
+    "plic": {
+      "base": 201326592,
+      "num_sources": 187,
+      "priority_mask": 7,
+      "context": 1,
+      "priority": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "pending": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "in_service": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "enable": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          524288,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "threshold": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "reservation": null
+  },
+  "firmware_hash": "327a82ee681188dffa7c7a24bd04c19f8fd6e2c13e661f48801a6824091fe2d3",
+  "config": {
+    "firmware": "docs/coverage/renode-onboarding/attempt-history/mpfs-icicle-kit/2026-11-07-plic-final-gpio-readback-before-restore/firmware.elf",
+    "system": "docs/coverage/renode-onboarding/attempt-history/mpfs-icicle-kit/2026-11-07-plic-final-gpio-readback-before-restore/../../../../../../configs/systems/onboarding/mpfs-icicle-kit.yaml",
+    "script": "docs/coverage/renode-onboarding/attempt-history/mpfs-icicle-kit/2026-11-07-plic-final-gpio-readback-before-restore/smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "mss_gpio0",
+        "kind": "native",
+        "base": 538050560,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mss_gpio1",
+        "kind": "native",
+        "base": 538054656,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mss_gpio2",
+        "kind": "native",
+        "base": 538058752,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c0",
+        "kind": "native",
+        "base": 537960448,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "native",
+        "base": 537964544,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 537956352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mmuart0",
+        "kind": "native",
+        "base": 536870912,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mmuart1",
+        "kind": "native",
+        "base": 537919488,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "MPFS MSS GPIO SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "gpio2.out=0001a5a4 gpio0.in=00003fff gpio1.out=0000ff00",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "plic prio=00000007 claim0=00000000 id=00000033 mcause=800000000000000b pending=00000000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 597,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 597,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 131072,
+    "ram_total_bytes": 8388608,
+    "flash_used_pct": 0.46,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 100000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 150562,
+    "memory_writes": 0,
+    "peripheral_accesses": 349,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 2147484038,
+        "count": 390
+      }
+    ]
+  }
+}

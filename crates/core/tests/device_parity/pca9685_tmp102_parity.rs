@@ -26,6 +26,7 @@ use labwired_core::peripherals::i2c::I2cDevice;
 #[derive(Clone)]
 enum Op {
     Start,
+    Stop,
     Write(u8),
     Read,
 }
@@ -47,6 +48,10 @@ fn drive_both(oracle: &mut dyn I2cDevice, decl: &mut dyn I2cDevice, ops: &[Op]) 
             Op::Start => {
                 oracle.start();
                 decl.start();
+            }
+            Op::Stop => {
+                oracle.stop();
+                decl.stop();
             }
             Op::Write(b) => {
                 oracle.write(*b);
@@ -399,6 +404,7 @@ fn pca9685_artifacts_expose_prescale_period_off_counts_and_angles() {
     for op in &ops {
         match op {
             Op::Start => decl.start(),
+            Op::Stop => decl.stop(),
             Op::Write(b) => decl.write(*b),
             Op::Read => {
                 let _ = decl.read();
@@ -460,28 +466,40 @@ fn tmp102_config_tlow_thigh_read_back_identically() {
 }
 
 #[test]
-fn tmp102_short_config_write_is_absorbed_identically() {
-    // Write pointer 0x01 (config), then ONE data byte (0x55).
-    //
-    // KNOWN GAP, pinned here rather than hidden: the datasheet's "Data
-    // Transfer" note says the TMP102 "can also be used for single byte
-    // updates. To update only the MS byte, terminate the communication by
-    // issuing a START or STOP", so on silicon this WOULD land 0x55 in
-    // config byte 1. Neither model implements it — the declarative engine
-    // stores a register write only when the master supplies the register's
-    // full width, and the oracle likewise waits for both bytes. This test
-    // asserts only that the two models agree; closing the gap needs a
-    // partial-width write in the shared engine, which is a separate change.
+fn tmp102_short_msb_write_commits_on_stop_and_repeated_start() {
+    // A STOP terminates a TLOW write after its MSB; the lower byte must keep
+    // its reset value. A repeated START terminates a THIGH write the same way.
     let ops = vec![
         Op::Start,
-        Op::Write(0x01), // pointer → config
-        Op::Write(0x55), // half a word: absorbed by both
+        Op::Write(0x02), // pointer → TLOW
+        Op::Write(0x22), // MSB-only update
+        Op::Stop,
         Op::Start,
-        Op::Write(0x01),
-        Op::Read, // config MSB
-        Op::Read, // config LSB
+        Op::Write(0x02),
+        Op::Start,
+        Op::Read,
+        Op::Read, // TLOW = 0x2200
+        Op::Start,
+        Op::Write(0x03), // pointer → THIGH
+        Op::Write(0x33),
+        Op::Start, // repeated START commits the partial write
+        Op::Read,
+        Op::Read, // THIGH = 0x3300
     ];
-    drive_both(&mut Tmp102::new(), &mut declarative("tmp102"), &ops);
+    let mut oracle = Tmp102::new();
+    let mut decl = declarative("tmp102");
+    drive_both(&mut oracle, &mut decl, &ops);
+
+    let read_word = |device: &mut dyn I2cDevice, pointer: u8| {
+        device.start();
+        device.write(pointer);
+        device.start();
+        u16::from_be_bytes([device.read(), device.read()])
+    };
+    assert_eq!(read_word(&mut oracle, 0x02), 0x2200);
+    assert_eq!(read_word(&mut decl, 0x02), 0x2200);
+    assert_eq!(read_word(&mut oracle, 0x03), 0x3300);
+    assert_eq!(read_word(&mut decl, 0x03), 0x3300);
 }
 
 #[test]

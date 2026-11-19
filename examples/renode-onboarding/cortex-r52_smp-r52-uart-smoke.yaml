@@ -1,0 +1,10 @@
+# Direct A32 fixture against the bounded imported cortex-r52_smp profile: one Cortex-R52 PE (Hyp-mode reset entry), a 64 KiB DRAM aperture at 0x0, and polled PL011 UART0 TX only. The banner prints only if MIDR reports Cortex-R52.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/cortex-r52-uart-smoke.elf"
+  system: "../../configs/systems/onboarding/cortex-r52_smp.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "CORTEX-R52 PL011 UART SMOKE"
+  - expected_stop_reason: max_steps

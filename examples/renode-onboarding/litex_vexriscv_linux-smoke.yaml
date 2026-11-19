@@ -1,0 +1,16 @@
+# Bounded bare-metal smoke for the imported LiteX VexRiscv Linux platform.
+# It exercises the RV32IM instruction path, ROM/SRAM load, UART, and LiteX timer;
+# it does not claim Linux boot, DRAM, CPU timer, or SPI behavior.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-linux-smoke"
+  system: "../../configs/systems/onboarding/litex_vexriscv_linux.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_ordered:
+      - "LITEX VEXRISCV LINUX PROFILE RV32IM"
+      - "boot=direct-elf memory=rom+sram"
+      - "timer=running"
+      - "timer=zero"
+  - expected_stop_reason: max_steps

@@ -1,0 +1,9 @@
+[2m2026-11-15T19:55:26.897050Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/nuvoton_npcx9.yaml
+[2m2026-11-15T19:55:26.898174Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+NPCX9 UART1 smoke
+[2m2026-11-15T19:55:26.900262Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartContains(UartContainsAssertion { uart_contains: "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok" }) (captured len=19)
+FAIL  2/3 checks · nuvoton_npcx9-smoke · 400000 steps · 0.00s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x400B_0001 (BFAR valid), at PC 0x0000_0902 in `core::ptr::write_volatile` (mod.rs:2178).
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x400B0001

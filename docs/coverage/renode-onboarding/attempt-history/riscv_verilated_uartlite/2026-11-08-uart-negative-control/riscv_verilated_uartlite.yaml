@@ -1,0 +1,31 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# Bounded local execution profile for Renode's imported RISC-V UARTLite target.
+# The upstream REPL declares RV32G, PLIC, CLINT, 100 MiB RAM at 0x60000000,
+# and an external CoSimulatedUART at 0x70000000. This engine smoke exercises
+# its RV32IM CPU path, the imported RAM window, and the UART register map of
+# the co-simulated RTL. It does not claim the full ISA, PLIC/CLINT, UART
+# interrupts, RX framing errors, or baud timing.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/verilated/riscv_verilated_uartlite.repl
+#
+# UART register map follows the Verilated RTL Renode co-simulates
+# (antmicro/renode-verilator-integration samples/uartlite/top.v), which is
+# NOT the Xilinx AXI UARTLite map: word index addr[3:2]
+#   0x0 read  RX data          0x4 write TX data
+#   0x8 write CTRL (reads 0)   0xC read  STAT (writes ignored)
+# STAT bit0 rx valid, bit1 rx full (both set while a byte is held), bit2 tx
+# empty (!tx_busy), bit3 tx full (tx_busy), bit4 irq enabled (CTRL bit4).
+# LabWired's custom map holds STAT at its idle value 0x04 (tx empty) and sets
+# 0x03 while RX data is queued; CTRL is not stored, so STAT bit4 stays 0.
+name: riscv_verilated_uartlite
+arch: riscv
+core: rv32im
+flash: { base: 0x00000000, size: 0 }
+ram: { base: 0x60000000, size: "100MiB" }
+flash_boot_alias: false
+# Negative control: uart removed.
+peripherals: []

@@ -1,0 +1,1 @@
+2026-11-12T07:39:29.012727Z ERROR labwired_cli::commands::test: Failed to read firmware "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nucleo-f767zi-smoke": No such file or directory (os error 2)

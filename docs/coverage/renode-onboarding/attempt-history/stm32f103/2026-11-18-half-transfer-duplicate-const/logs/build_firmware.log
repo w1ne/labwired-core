@@ -1,0 +1,29 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+   Compiling firmware-f103-i2c-demo v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/firmware-f103-i2c-demo)
+error[E0428]: the name `NVIC_ICPR` is defined multiple times
+   --> crates/firmware-f103-i2c-demo/src/main.rs:162:1
+    |
+ 59 | const NVIC_ICPR: *mut u32 = 0xE000_E280 as *mut u32;
+    | ---------------------------------------------------- previous definition of the value `NVIC_ICPR` here
+...
+162 | const NVIC_ICPR: *mut u32 = 0xE000_E280 as *mut u32;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `NVIC_ICPR` redefined here
+    |
+    = note: `NVIC_ICPR` must be defined only once in the value namespace of this module
+
+For more information about this error, try `rustc --explain E0428`.
+error: could not compile `firmware-f103-i2c-demo` (bin "firmware-f103-i2c-demo") due to 1 previous error

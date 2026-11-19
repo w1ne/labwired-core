@@ -1,0 +1,1 @@
+The one-target run booted the imported system and passed the new equal/lower-priority IRQ UART and memory assertions. It failed only because the existing PASS word expected 0x70000fff; adding the deferred-priority check correctly changed it to 0x70001fff. The archived JUnit, result, UART output, and logs preserve this intermediate failed assertion.

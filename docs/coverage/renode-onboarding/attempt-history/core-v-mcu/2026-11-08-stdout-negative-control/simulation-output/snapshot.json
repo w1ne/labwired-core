@@ -1,0 +1,101 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      0,
+      470286336,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      23122,
+      323,
+      23107,
+      23072,
+      23119,
+      437321728,
+      469762048,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 436207676,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 0,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 17,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 0,
+  "cycles": 60,
+  "instructions": 18,
+  "stop_reason": "memory_violation",
+  "stop_reason_details": {
+    "triggered_stop_condition": "memory_violation",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "3d96a8687ad39511215eb6873d510d4e302e7d1cf417d658932506f309581a56",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-cv32e40p-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/core-v-mcu.yaml",
+    "script": "examples/renode-onboarding/core-v-mcu-smoke.yaml"
+  }
+}

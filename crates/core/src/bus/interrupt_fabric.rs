@@ -54,6 +54,12 @@
 pub struct InterruptFabric {
     /// Optional single-CPU ARMv7 GIC and architectural timer.
     pub armv7: Option<crate::peripherals::armv7::Armv7Fabric>,
+    /// Registered output controller for the bounded ARM7 LPC2294 profile.
+    /// The PL190 itself is a bus peripheral; this index lets the CPU sample
+    /// its IRQ/FIQ outputs without walking unrelated devices each instruction.
+    pub lpc2294_vic: Option<usize>,
+    /// Registered LPC peripheral level outputs as (peripheral index, VIC input).
+    pub lpc2294_irq_sources: Vec<(usize, usize)>,
     /// ESP32-C3 (RISC-V `INTERRUPT_CORE0` matrix).
     pub esp32c3: Esp32c3Fabric,
     /// ESP32-S3 (dual-core Xtensa interrupt matrix).

@@ -1,0 +1,4 @@
+VF61 M4 SMOKE
+uart0 c2=0c
+gpio1 pdor=00000041
+pass=1f

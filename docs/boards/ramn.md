@@ -1,75 +1,70 @@
-# Validation Report: ramn
+# RAMN (Toyota Resistant Automotive Miniature Network) imported profile
 
-**Architecture:** ARM Cortex-M.
+## Measured profile
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+LabWired's onboarding profile for the imported Renode `ramn` target models
+one RAMN ECU, narrowed to what the engine executes and the smoke exercises.
+It follows Renode's
+[`boards/ramn.repl`](https://github.com/renode/renode/blob/master/platforms/boards/ramn.repl),
+which includes
+[`cpus/stm32l552.repl`](https://github.com/renode/renode/blob/master/platforms/cpus/stm32l552.repl),
+and the RAMN firmware's own bring-up
+([`firmware/RAMNV1/Core/Src/main.c`](https://github.com/ToyotaInfoTech/RAMN/blob/main/firmware/RAMNV1/Core/Src/main.c),
+`stm32l5xx_hal_msp.c`):
 
-```text
-[2m2026-10-18T14:40:20.145693Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:40:20.148539Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/ramn.yaml
-[2m2026-10-18T14:40:20.151065Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:40:20.151147Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:40:20.151156Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:40:20.151161Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:40:20.155959Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:40:20.159447Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:40:20.159474Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:40:20.163809Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 791430.33
-[2m2026-10-18T14:40:20.177057Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:40:20.177140Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x466
-[2m2026-10-18T14:40:20.180447Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 19999
-[2m2026-10-18T14:40:20.180463Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20002
-[2m2026-10-18T14:40:20.180468Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 682616.81
-```
+- **CPU:** Cortex-M33 (STM32L552).
+- **Memory:** 512 KiB flash at `0x08000000` and 256 KiB SRAM at `0x20000000`
+  (SRAM1 + SRAM2 as one contiguous region, as in the RAMN memory layout).
+- **RCC** at `0x40021000` on the `stm32l5` profile (RM0438 map, MSI 4 MHz
+  reset clock).
+- **LPUART1** at `0x40008000` on the `stm32v2` USART profile. This is the
+  RAMN console: PA2/PA3 AF8, 115200 8N1, FIFO off. Gated by
+  `RCC_APB1ENR2.LPUART1EN`.
+- **GPIOA / GPIOB** at `0x42020000` / `0x42020400` on the `stm32v2` GPIO
+  profile, with the per-port MODER/OSPEEDR/PUPDR reset values from the repl
+  (`0xABFFFFFF` / `0xFFFFFEBF` MODER). The smoke uses PA9 (`HW_TYPE`, input
+  with pull-up) and PB6 (`FDCAN1_STB`, push-pull output), as the RAMN
+  firmware configures them. Gated by `RCC_AHB2ENR`.
 
+The descriptor uses the same entries as `configs/chips/stm32l552.yaml`.
 
-## Hardware Coverage Report
+Not claimed and not mapped: FDCAN1, ADC1, SPI1-3, I2C1, USART1-3, UART4/5,
+GPIOC-H, DMA/DMAMUX, EXTI, RTC, timers, IWDG, RNG, USB, the flash controller,
+PWR and the OTP/unique-ID window (Renode fakes PWR and OTP with Python
+peripherals). Board wiring (LCD, ECU enables, BOOT0 lines) and the four-ECU
+CAN network are not claimed either.
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `pwr` | `0x40007000` | `pythonperipheral` |
-| `otp` | `0x0bfa0000` | `pythonperipheral` |
-| `spi1` | `0x40013000` | `stm32spi` |
-| `spi2` | `0x40003800` | `stm32spi` |
-| `spi3` | `0x40003c00` | `stm32spi` |
-| `usart1` | `0x40013800` | `stm32f7_usart` |
-| `usart2` | `0x40004400` | `stm32f7_usart` |
-| `usart3` | `0x40004800` | `stm32f7_usart` |
-| `uart4` | `0x40004c00` | `stm32f7_usart` |
-| `uart5` | `0x40005000` | `stm32f7_usart` |
-| `lpuart1` | `0x40008000` | `stm32f7_usart` |
-| `gpioPortA` | `0x42020000` | `stm32_gpioport` |
-| `gpioPortB` | `0x42020400` | `stm32_gpioport` |
-| `gpioPortC` | `0x42020800` | `stm32_gpioport` |
-| `gpioPortD` | `0x42020c00` | `stm32_gpioport` |
-| `gpioPortE` | `0x42021000` | `stm32_gpioport` |
-| `gpioPortF` | `0x42021400` | `stm32_gpioport` |
-| `gpioPortG` | `0x42021800` | `stm32_gpioport` |
-| `gpioPortH` | `0x42021c00` | `stm32_gpioport` |
-| `dma1` | `0x40020000` | `stm32ldma` |
-| `dma2` | `0x40020400` | `stm32ldma` |
-| `dmamux` | `0x40020800` | `stm32_dmamux` |
-| `i2c1` | `0x40005400` | `stm32f1_i2c` |
-| `fdcanRAM` | `0x4000ac00` | `arraymemory` |
-| `fdcan1` | `0x4000a400` | `stm32_fdcan` |
-| `timer1` | `0x40012c00` | `stm32_timer` |
-| `timer2` | `0x40000000` | `stm32_timer` |
-| `timer3` | `0x40000400` | `stm32_timer` |
-| `timer4` | `0x40000800` | `stm32_timer` |
-| `timer5` | `0x40000c00` | `stm32_timer` |
-| `timer6` | `0x40001000` | `stm32_timer` |
-| `timer7` | `0x40001400` | `stm32_timer` |
-| `timer8` | `0x40013400` | `stm32_timer` |
-| `timer15` | `0x40014000` | `stm32_timer` |
-| `timer16` | `0x40014400` | `stm32_timer` |
-| `timer17` | `0x40014800` | `stm32_timer` |
-| `rcc` | `0x40021000` | `stm32l5_rcc` |
-| `flashController` | `0x40022000` | `stm32wba_flashcontroller` |
-| `rng` | `0x420c0800` | `stm32_rng` |
-| `adc1` | `0x42028000` | `stm32l5_adc` |
-| `iwdg` | `0x40003000` | `stm32_independentwatchdog` |
-| `usb` | `0x4000d400` | `stm32_usb` |
-| `usb_sram` | `0x4000d800` | `arraymemory` |
+The earlier report on this page described a 2026-10-18 run of a generic
+`uart-ok-thumbv7m.elf` fixture that only showed the CPU stepping, and listed
+the Renode peripherals as coverage. It never touched a RAMN peripheral and is
+withdrawn.
 
-**Total Peripherals:** 43
+## Smoke evidence
+
+The firmware crate `crates/firmware-ramn-smoke` (`thumbv8m.main-none-eabi`)
+enables the GPIOA/GPIOB and LPUART1 clocks, sets PA2/PA3 to AF8 and PA9 to an
+input with pull-up, programs LPUART1 `BRR` = 8888 (115200 from MSI 4 MHz) and
+`CR1` = UE | RE | TE, drives PB6 through `BSRR`, prints its readbacks polled
+on `ISR.TXE`, waits for `ISR.TC`, then toggles PB6 as a heartbeat.
+
+It ran **400,000 instructions** and passed 6/6 checks: the banner
+`RAMN LPUART1 SMOKE`, the ordered readback lines (`brr=000022b8`,
+PA `MODER` `0xABF3FFAF` / `AFRL` `0x00008800`, `hw_type=1`, PB6 set 1 /
+clear 0, `pass=3f`), at least 3 PB6 edges, the MUL word `0x143` at
+`0x20001000`, the result word `0x5A4E003F` at `0x20001004`, and `max_steps`.
+The idle `ISR` reads `0x006000C0` (REACK | TEACK | TXE | TC), as RM0438
+describes.
+
+With LPUART1 removed from the descriptor, the same firmware takes a precise
+BusFault (BFAR `0x4000800C`) on its first LPUART1 access and passes 2/6
+(`docs/coverage/renode-onboarding/attempt-history/ramn/2026-11-08-lpuart1-negative-control/`).
+
+The exact system manifest is `configs/systems/onboarding/ramn.yaml` and the
+smoke script is `examples/renode-onboarding/ramn-smoke.yaml`. Per-target
+metrics, JUnit, UART output, simulator result, snapshot and logs are under
+`docs/coverage/renode-onboarding/metrics/ramn/`.
+
+This is local CLI simulation evidence for the smoke assertions. It does not
+show whole-SoC coverage, Renode equivalence or hardware behaviour. See the
+[generated scoreboard](../coverage/renode-onboarding-scoreboard.md) for the
+current global totals.

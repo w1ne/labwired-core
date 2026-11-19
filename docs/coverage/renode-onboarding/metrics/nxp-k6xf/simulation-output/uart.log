@@ -1,0 +1,15 @@
+FRDM-K64F SMOKE
+cpu=cortex-m4 uart=uart0
+led=red on pin=0
+led=red off pin=1
+led=green on pin=0
+led=green off pin=1
+led=blue on pin=0
+led=blue off pin=1
+hb=0 red=0 green=1 blue=1
+hb=1 red=0 green=1 blue=1
+hb=2 red=0 green=1 blue=1
+hb=3 red=0 green=1 blue=1
+hb=4 red=0 green=1 blue=1
+hb=5 red=0 green=1 blue=1
+hb=6 red=0 green=1 blue=1

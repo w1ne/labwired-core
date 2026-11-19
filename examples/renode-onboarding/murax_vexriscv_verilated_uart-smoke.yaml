@@ -1,0 +1,12 @@
+# RV32IM and modeled Murax UART smoke against the narrowed local profile.
+# The external Verilated CPU/UART co-simulation is not exercised.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-murax-vexriscv-smoke"
+  system: "../../configs/systems/onboarding/murax_vexriscv_verilated_uart.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "MURAX RV32IM SMOKE"
+  - uart_contains: "mul=00000143"
+  - expected_stop_reason: max_steps

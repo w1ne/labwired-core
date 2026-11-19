@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="3" errors="0" time="0.000464">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MemoryViolation"/>
+    <property name="firmware_hash" value="07cd23f275ba0706553328b083c1a2c7ae5fe070a4c5cc0cf3db9857c0959658"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000464">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x20600000=0x143" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x20600010=0x7e3ee120" time="0.000000">
+    <failure message="assertion failed">assertion 2: memory_value: @0x20600010=0x7e3ee120
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=42
+instructions=13
+limits:
+  - max_steps=100000
+firmware_hash=07cd23f275ba0706553328b083c1a2c7ae5fe070a4c5cc0cf3db9857c0959658
+firmware=examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-tock-veer-el2-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/tock_veer_el2_sim.yaml
+script=examples/renode-onboarding/tock_veer_el2_sim-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 543162368, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 543162384, expected_value: 2118050080, mask: None, size: Some(4), node: None } }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;VeeR EL2 htif ok&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: VeeR EL2 htif ok" time="0.000000">
+    <failure message="assertion failed">assertion 3: uart_contains: VeeR EL2 htif ok
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=42
+instructions=13
+limits:
+  - max_steps=100000
+firmware_hash=07cd23f275ba0706553328b083c1a2c7ae5fe070a4c5cc0cf3db9857c0959658
+firmware=examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-tock-veer-el2-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/tock_veer_el2_sim.yaml
+script=examples/renode-onboarding/tock_veer_el2_sim-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 543162368, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 543162384, expected_value: 2118050080, mask: None, size: Some(4), node: None } }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;VeeR EL2 htif ok&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+    <failure message="assertion failed">assertion 4: expected_stop_reason: MaxSteps
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=42
+instructions=13
+limits:
+  - max_steps=100000
+firmware_hash=07cd23f275ba0706553328b083c1a2c7ae5fe070a4c5cc0cf3db9857c0959658
+firmware=examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-tock-veer-el2-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/tock_veer_el2_sim.yaml
+script=examples/renode-onboarding/tock_veer_el2_sim-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 543162368, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 543162384, expected_value: 2118050080, mask: None, size: Some(4), node: None } }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;VeeR EL2 htif ok&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+</testsuite>

@@ -19,6 +19,11 @@ instruction decoding or launch a separate QEMU machine to bypass LabWired.
   MMU-enabled execution, Thumb IT blocks, WFE/WFI, and architectural exceptions explicitly fail until
   modeled. Never identify Cortex-A state as Cortex-M state.
 - Instruction steps are not silicon cycle counts.
+- The same adapter also runs Unicorn's Cortex-A9 model for chips that declare
+  `core: cortex-a9` (`CortexA7::with_core`). The model follows the declared
+  core and survives `reset`; one is never substituted for the other, and no
+  other Cortex-A core is accepted. The A9 has the same limits as the A7 above;
+  its SCU, GIC, private timers and L2C-310 are not modeled.
 
 Unicorn is GPL-2.0; enabling this feature links that dependency. It is not
 linked by default builds. Distribution of an enabled

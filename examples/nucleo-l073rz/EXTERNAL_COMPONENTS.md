@@ -25,6 +25,6 @@ already present in `configs/chips/stm32l073.yaml`:
   LD2; pick SPI2 or remap if the LED is also used).
 - **USART1** (`0x40013800`) — spare UART for a second serial device.
 
-Note the I2C/SPI/ADC register models are reused from the L4 family and are
-not L0-tuned (see `VALIDATION.md`), so a new external-device lab should
+Note the I2C/SPI register models are reused from the L4 family and are
+not L0-tuned (the ADC is the L0 CHSELR model, `stm32f0_adc.rs`) (see `VALIDATION.md`), so a new external-device lab should
 re-validate the relevant bus before being marked silicon-accurate.

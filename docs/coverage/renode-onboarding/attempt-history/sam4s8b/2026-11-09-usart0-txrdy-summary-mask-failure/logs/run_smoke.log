@@ -1,0 +1,5 @@
+2026-11-09T21:57:32.888956Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/sam4s8b.yaml
+2026-11-09T21:57:32.891066Z  INFO labwired_loader: ELF Entry Point: 0x400401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-09T21:57:33.676470Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["SAM4S8B RENODE SMOKE", "eefc fmr=00000500 ok", "eefc getd size=", "eefc gpnvm=2 set=3 glb=2 clb=0 ok", "eefc fsr badkey=3 after=1 ok", "rstc sr=00010000 wdt mr=3fff2fff ok", "rstc software reset", "SAM4S8B RENODE SMOKE", "rstc rsttyp=3 ok", "wdt arm wdv=2", "SAM4S8B RENODE SMOKE", "wdt rsttyp=2 mr=3fff2fff ok", "wdt window sr=2 pended released ok", "wdt mr once=00801100 ok", "pmc pcsr0=", "pio ports=2 ok", "tc0 rc pend=1 ok", "usart0 txrdy imr=2 pend=1 released=1 ok", "SAM4S8B PASS"] }) (captured len=476)
+FAIL  2/3 checks · sam4s8b-smoke · 1500000 steps · 0.78s

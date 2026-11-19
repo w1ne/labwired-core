@@ -1,0 +1,220 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 100000,
+  "cycles": 200018,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "PB_USART1_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "portb:5",
+          "min_edges": 1
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      255,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      10,
+      98,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 134,
+    "sp": 2303,
+    "sreg": 0
+  },
+  "firmware_hash": "8bd65d7654b4fe14024ce7dbed199d31f158148d98bcceeb0c4a5bd88ff28cf8",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega328pb-usart1.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-atmega328pb.yaml",
+    "script": "examples/renode-onboarding/simavr-atmega328pb-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 65571,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 65736,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 200018,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "portb",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 10,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 8,
+            "state": "0"
+          },
+          {
+            "cycle": 10,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 1
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "portb",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "PB_USART1_OK",
+        "cycle_lo": 0,
+        "cycle": 20018,
+        "end_cycle": 20018
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 136,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 136,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 32768,
+    "ram_total_bytes": 2048,
+    "flash_used_pct": 0.42,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 200018,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 0,
+    "memory_writes": 39,
+    "peripheral_accesses": 46,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134,
+        "count": 390
+      }
+    ]
+  }
+}

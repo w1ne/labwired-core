@@ -6,84 +6,11 @@
 
 name: eos-s3-qomu
 arch: arm
-flash:
-  base: 134217728
-  size: 524288B
-ram:
-  base: 1073803264
-  size: 4096B
-peripherals:
-- id: ledB
-  type: led
-  bus: intrCtrl
-  base_address: 3
-- id: ledG
-  type: led
-  bus: intrCtrl
-  base_address: 1
-- id: ledR
-  type: led
-  bus: intrCtrl
-  base_address: 0
-- id: uart
-  type: pl011
-  bus: sysbus
-  base_address: 1073807360
-- id: dwt
-  type: dwt
-  bus: sysbus
-  base_address: 3758100480
-- id: spt
-  type: eoss3_simpleperiodictimer
-  bus: sysbus
-  base_address: 1073765376
-- id: adc
-  type: stub
-  renode_type: eoss3_adc
-  bus: sysbus
-  base_address: 1073764864
-- id: spi
-  type: stub
-  renode_type: designware_spi
-  bus: sysbus
-  base_address: 1073770496
-- id: dmaSpi
-  type: stub
-  renode_type: eoss3_spi_dma
-  bus: sysbus
-  base_address: 1073771520
-- id: packetFifo
-  type: stub
-  renode_type: eoss3_packetfifo
-  bus: sysbus
-  base_address: 1073750016
-- id: systemDma
-  type: udma
-  bus: sysbus
-  base_address: 1073790976
-- id: systemDmaBridge
-  type: eoss3_systemdmabridge
-  bus: sysbus
-  base_address: 1073795072
-- id: ffe
-  type: stub
-  renode_type: eoss3_flexiblefusionengine
-  bus: sysbus
-  base_address: 1074044928
-- id: i2cMaster0
-  type: opencoresi2c
-  bus: ffe
-  base_address: 0
-- id: i2cMaster1
-  type: opencoresi2c
-  bus: ffe
-  base_address: 1
-- id: voice
-  type: stub
-  renode_type: eoss3_voice
-  bus: sysbus
-  base_address: 1073827840
-- id: powerMgmt
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073759232
+# QuickLogic Qomu. Renode platforms/boards/eos-s3-qomu.repl is cpus/eos-s3.repl
+# plus three LEDs and a USB serial port in the FPGA fabric (0x40020000), and it
+# detaches the PL011 (`uart: @ none`) because the board routes no UART pins.
+# The silicon PL011 is still present, so the eos-s3 chip surface is included
+# whole; a Qomu user cannot see that UART on the board. Not declared: the
+# fabric USB serial port (no model) and the LEDs (GPIO 0/1/3 per Renode only;
+# no second source).
+include: eos-s3.yaml

@@ -1,0 +1,7 @@
+2026-11-09T23:41:48.407749Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f4_discovery.yaml
+2026-11-09T23:41:48.466813Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T23:41:49.189556Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "SPI1 MAX31855=01901600 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1" }) (captured len=578)
+2026-11-09T23:41:49.189582Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "SPI1 CHECKS=1" }) (captured len=578)
+FAIL  3/5 checks · stm32f4_discovery-smoke · 4000000 steps · 0.72s

@@ -1,23 +1,33 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
+# LabWired - narrowed profile for Renode's LiteX/VexRiscv MicroPython alias.
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# Renode's litex_vexriscv_micropython.repl includes litex_vexriscv.repl and
+# therefore shares its RV32IM core, memory map, LiteX UART, and timer. The
+# imported metadata advertised RV32IMAC, but Renode's CPU configuration is
+# rv32im_zicsr_zifencei (no compressed instructions). This profile follows the
+# executable Renode CPU configuration and keeps only modeled surfaces.
+#
+# The smoke loads a small bare-metal ELF directly; it does not run the
+# MicroPython interpreter or LiteX BIOS. Ethernet, SPI flash control, and MMCM
+# remain outside this execution profile.
 
-name: litex_vexriscv_micropython
-arch: arm
-flash:
-  base: 536870912
-  size: 33554432B
-ram:
-  base: 268435456
-  size: 262144B
+name: "litex_vexriscv_micropython"
+arch: "riscv"
+core: "rv32im"
+cpu_hz: 100_000_000
+
+flash: { base: 0x20000000, size: "32MiB" }
+ram: { base: 0x10000000, size: "256KB" }
+flash_boot_alias: false
+memory_regions:
+  - { name: "rom", base: 0x0, size: "256KB" }
 peripherals:
-- id: clock0
-  type: litex_mmcm_csr32
-  bus: sysbus
-  base_address: 3758114816
-- id: phy
-  type: ethernetphysicallayer
-  bus: eth
-  base_address: 0
+  - id: "uart"
+    type: "litex_uart"
+    base_address: 0x60001800
+    size: "2KB"
+    irq: 2
+  - id: "timer"
+    type: "litex_timer"
+    base_address: 0x60002800
+    size: "2KB"
+    irq: 1

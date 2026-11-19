@@ -1,0 +1,10 @@
+2026-11-10T17:44:07.844298Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/mimxrt700_evk.yaml
+2026-11-10T17:44:07.923551Z  INFO labwired_loader: ELF Entry Point: 0x38000801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T17:44:07.937040Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'flexcomm0'
+2026-11-10T17:44:08.840468Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8 ok" }) (captured len=552)
+2026-11-10T17:44:08.840497Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "unaligned_context=0000001f unaligned_xpsr=01000000 unaligned_sp=200000dc ok" }) (captured len=552)
+2026-11-10T17:44:08.840505Z ERROR labwired_cli::execute: Memory assertion failed at 0x20000038 (size 4): expected 0x1000000, got 0x21000000 (mask 0xffffffff)
+2026-11-10T17:44:08.840509Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: None, size: Some(4), node: None } }) (captured len=552)
+FAIL  17/20 checks · mimxrt700_evk-smoke · 7000000 steps · 0.90s

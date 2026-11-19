@@ -116,6 +116,33 @@ impl SystemBus {
         self.reconcile_multi_irq_levels(idx, LevelSync::Both);
     }
 
+    /// Route a peripheral IRQ level to any interrupt concentrator that accepts
+    /// the source number. A claimed input suppresses direct delivery of that
+    /// source line; the concentrator reports its CPU outputs through
+    /// `irq_line_levels`.
+    #[inline]
+    pub(crate) fn route_irq_input_level(
+        &self,
+        source_idx: usize,
+        source: u32,
+        level: bool,
+    ) -> bool {
+        let mut claimed = false;
+        for &idx in &self.irq_input_receiver_indices {
+            if idx == source_idx {
+                continue;
+            }
+            let changed = self.peripherals[idx].dev.set_irq_input_level(source, level);
+            if let Some(changed) = changed {
+                claimed = true;
+                if changed {
+                    self.reconcile_multi_irq_levels(idx, LevelSync::Both);
+                }
+            }
+        }
+        claimed
+    }
+
     /// Hand interrupt EVENT numbers (from a model whose
     /// [`Peripheral::explicit_irqs_are_link_events`] is true) to the chip's
     /// event-link controller (the RA ICU, [`Peripheral::link_event`]) and
@@ -151,7 +178,9 @@ impl SystemBus {
     pub(crate) fn reconcile_irq_levels_after_write(&self, idx: usize) {
         if let Some(irq_line) = self.peripherals[idx].irq {
             if let Some(level) = self.peripherals[idx].dev.irq_line_level() {
-                reconcile_nvic_level(&self.nvic, irq_line, level);
+                if !self.route_irq_input_level(idx, irq_line, level) {
+                    reconcile_nvic_level(&self.nvic, irq_line, level);
+                }
             }
         }
         self.reconcile_multi_irq_levels(idx, LevelSync::DropOnly);
@@ -992,8 +1021,11 @@ impl SystemBus {
             // held). Everything else keeps pulse semantics unchanged.
             match (self.peripherals[peripheral_index].dev.irq_line_level(), irq) {
                 (Some(level), Some(irq)) => {
-                    reconcile_nvic_level(&self.nvic, irq, level);
-                    if res.irq && self.nvic.is_none() {
+                    let routed = self.route_irq_input_level(peripheral_index, irq, level);
+                    if !routed {
+                        reconcile_nvic_level(&self.nvic, irq, level);
+                    }
+                    if res.irq && self.nvic.is_none() && !routed {
                         interrupts.push(irq);
                     }
                 }

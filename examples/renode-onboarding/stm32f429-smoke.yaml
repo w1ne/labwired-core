@@ -1,0 +1,36 @@
+# Cortex-M4 smoke against the imported STM32F429 system, including ADC1_IN1
+# (25%) and ADC1_IN2 (50%) potentiometer test fixtures (not board parts).
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabihf/release/firmware-stm32f429-smoke"
+  system: "../../configs/systems/onboarding/stm32f429.yaml"
+limits:
+  max_steps: 800000
+uart_injections:
+  - uart: "usart2"
+    bytes: "RS"
+stimuli:
+  - target: { component: "pot_adc1_in1", channel: "position" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 25.0
+  - target: { component: "pot_adc1_in2", channel: "position" }
+    trigger: !after_cycles { cycles: 1000 }
+    value: 50.0
+assertions:
+  - uart_contains: "STM32F4 shared profile smoke"
+  - uart_contains: "systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok"
+  - uart_contains: "STM32F429 PSP tailchain PASS"
+  - uart_contains: "tim2 gated=1 arr_reset=1 w32=1 ug=1 uif_clr=1 run=1 masked=1 irq=2 stop=1 rel=1 ok"
+  - uart_contains: "spi1 max31855=01901600 gated=1 clock=1 txeirq=1 rearm=0 rxneirq=1 released=1 ok"
+  - uart_contains: "i2c1 bme280_id=00000060 gated=1 clock=1 ok"
+  - uart_contains: "usart2 rxne=1 isolated=1 irq=1 data=00005253 released=1 ok"
+  - uart_contains: "fpu m4f cpacr=1 mvfr=1 add=1 ok"
+  - uart_contains: "adc1 in1=000003FF gated=1 clock=1 eoc=1 irq=1 clear=1 ok"
+  - uart_contains: "adc1 ovr=eocs:1 flag=1 irq=1 clear=1 released=1 resume=1 ok"
+  - uart_contains: "adc1 scan=000003FF,000007FF irq=1 pending=1 end=1 released=1 ok"
+  - uart_contains: "adc1 scan_cont_groups=000007FF,000007FF,000007FF groups=3 irq=1 ovr=0 stop=1 ok"
+  - uart_contains: "adc1 injected jdr=000003FF,000007FF jeoc=1 irq=1 clear=1 ok"
+  - gpio_edges:
+      pin: "gpioPortD:12"
+      min_edges: 1
+  - expected_stop_reason: max_steps

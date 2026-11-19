@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="2" errors="0" time="0.123536">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="cdf55539aaf59d6b24055360929488a5dd85dbf71683e0c753232f9ade9ac954"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.123536">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: OK" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_contains: OK
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=800000
+stop_reason_details.observed.steps_executed=800000
+steps_executed=800000
+cycles=800000
+instructions=800000
+limits:
+  - max_steps=800000
+firmware_hash=cdf55539aaf59d6b24055360929488a5dd85dbf71683e0c753232f9ade9ac954
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746-demo
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f429.yaml
+script=examples/renode-onboarding/stm32f429-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;OK&quot; }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioPortI:1&quot;, min_edges: 1 } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpioPortI:1 &gt;= 1 edges" time="0.000000">
+    <failure message="assertion failed">assertion 2: gpio_edges: gpioPortI:1 &gt;= 1 edges
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=800000
+stop_reason_details.observed.steps_executed=800000
+steps_executed=800000
+cycles=800000
+instructions=800000
+limits:
+  - max_steps=800000
+firmware_hash=cdf55539aaf59d6b24055360929488a5dd85dbf71683e0c753232f9ade9ac954
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746-demo
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f429.yaml
+script=examples/renode-onboarding/stm32f429-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;OK&quot; }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioPortI:1&quot;, min_edges: 1 } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

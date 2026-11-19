@@ -1,5 +1,7 @@
 name: gr716-devboard
-arch: arm
+# Renode models this as a SPARC V8 (LEON3FT) platform. The engine has no core for it,
+# so the chip is refused rather than run as a Cortex-M.
+arch: unknown
 flash:
   base: 536870912
   size: 1048576
@@ -48,7 +50,8 @@ peripherals:
   bus: sysbus
   base_address: 2150649856
 - id: timer0
-  type: gaisler_gptimer
+  type: stub
+  renode_type: gaisler_gptimer
   bus: sysbus
   base_address: 2147495936
 - id: gpio0

@@ -123,6 +123,62 @@ fn gpiote_owns_its_pad_over_the_ports_registers() {
     assert_eq!(pad(&m, "gpio0", 28), Some(true), "released back to OUT = 1");
 }
 
+/// IN samples the pad, so a GPIOTE Task pin left as a GPIO output with its
+/// input buffer connected reads the GPIOTE level there, not OUT. With the
+/// buffer disconnected the port keeps its old answer (OUT); that path is not
+/// modelled further.
+#[test]
+fn gpio_in_reads_the_gpiote_level_on_an_output_pin() {
+    const IN: u64 = 0x510;
+    const PIN_CNF: u64 = 0x700;
+    let mut m = microbit_v2();
+    // P0.28: DIR = output, INPUT = Connect, OUT = 0.
+    m.bus.write_u32(P0 + PIN_CNF + 4 * 28, 1).unwrap();
+    m.bus.write_u32(P0 + OUTCLR, 1 << 28).unwrap();
+    run(&mut m, 8);
+    assert_eq!(
+        m.bus.read_u32(P0 + IN).unwrap() >> 28 & 1,
+        0,
+        "OUT drives low"
+    );
+
+    m.bus
+        .write_u32(GPIOTE + GPIOTE_CONFIG + 4, task_config(28, true))
+        .unwrap();
+    run(&mut m, 8);
+    assert_eq!(m.bus.read_u32(P0 + IN).unwrap() >> 28 & 1, 1, "OUTINIT = 1");
+    assert_eq!(
+        m.bus.read_u32(P0 + 0x504).unwrap() >> 28 & 1,
+        0,
+        "OUT untouched"
+    );
+
+    m.bus.write_u32(GPIOTE + GPIOTE_TASKS_OUT + 4, 1).unwrap();
+    run(&mut m, 8);
+    assert_eq!(m.bus.read_u32(P0 + IN).unwrap() >> 28 & 1, 0, "toggled low");
+    m.bus.write_u32(GPIOTE + GPIOTE_TASKS_OUT + 4, 1).unwrap();
+    run(&mut m, 8);
+    assert_eq!(
+        m.bus.read_u32(P0 + IN).unwrap() >> 28 & 1,
+        1,
+        "toggled high"
+    );
+
+    // INPUT = Disconnect: unchanged behaviour, IN reads OUT.
+    m.bus.write_u32(P0 + PIN_CNF + 4 * 28, 0b11).unwrap();
+    assert_eq!(m.bus.read_u32(P0 + IN).unwrap() >> 28 & 1, 0);
+
+    // Released from Task mode, the port owns the pin again.
+    m.bus.write_u32(P0 + PIN_CNF + 4 * 28, 1).unwrap();
+    m.bus.write_u32(GPIOTE + GPIOTE_CONFIG + 4, 0).unwrap();
+    run(&mut m, 8);
+    assert_eq!(
+        m.bus.read_u32(P0 + IN).unwrap() >> 28 & 1,
+        0,
+        "back to OUT = 0"
+    );
+}
+
 #[test]
 fn a_gpiote_drive_leaves_the_buttons_released() {
     let mut m = microbit_v2();
