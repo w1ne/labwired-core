@@ -1483,6 +1483,10 @@ impl SystemBus {
         // with the GPIO model so matrix-routed pads carry the real waveform.
         // No-op for every other chip.
         bus.wire_esp32c3_i2c_pads();
+        // ESP32-P4 HP I2C0 uses GPIO-matrix selectors 68/69 on GPIO7/8.
+        // Share those pad selections with the command-list engine so attached
+        // devices only acknowledge the route configured by firmware.
+        bus.wire_esp32p4_i2c_pads();
         // And GP-SPI2's SCK/MOSI/CS plus each UART's TX, so those buses are
         // measurable on the C3 too rather than reading as a flat line. MISO/RX
         // are deliberately unbound — nothing drives them.

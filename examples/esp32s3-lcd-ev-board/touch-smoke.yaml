@@ -1,0 +1,9 @@
+# Read one posed FT5x06 touch point from the ESP32-S3-LCD-EV-Board I2C bus.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/esp32s3-lcd-ev-ft5x06.elf"
+  system: "../../configs/systems/esp32s3-lcd-ev-board-v1-5-touch.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "LCD_EV_TOUCH_OK COUNT=1 ID=0 X=301 Y=77"

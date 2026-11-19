@@ -88,7 +88,7 @@ class HistoryControls(unittest.TestCase):
     def sha(self):
         return self.run_git("rev-parse", "HEAD")
 
-    def test_docs_branch_behind_main_does_not_include_foreign_runtime_change(self):
+    def test_stale_event_base_with_newer_first_parent_excludes_foreign_runtime_change(self):
         self.run_git("checkout", "-b", "docs")
         self.write("README.md", "documentation\n")
         self.run_git("add", ".")
@@ -97,13 +97,12 @@ class HistoryControls(unittest.TestCase):
         self.run_git("checkout", "main")
         self.write("crates/core/src/lib.rs", "new main runtime\n")
         self.run_git("commit", "-am", "main runtime")
-        base = self.sha()
         self.run_git("merge", "--no-ff", "docs", "-m", "tested merge")
-        paths = gate.changed_paths(self.sha(), base, head)
+        paths = gate.changed_paths(self.sha(), self.initial, head)
         self.assertEqual(paths, ["README.md"])
         self.assertFalse(any(map(gate.hotpath, paths)))
 
-    def test_runtime_rename_out_of_scope_still_selects_and_wrong_parents_refuse(self):
+    def test_runtime_rename_out_of_scope_still_selects_and_wrong_parent_or_head_refuses(self):
         self.run_git("checkout", "-b", "move")
         self.run_git("mv", "crates/core/src/lib.rs", "README.md")
         self.run_git("commit", "-m", "rename")
@@ -112,14 +111,38 @@ class HistoryControls(unittest.TestCase):
         self.run_git("merge", "--no-ff", "move", "-m", "tested merge")
         tested = self.sha()
         self.assertTrue(any(map(gate.hotpath, gate.changed_paths(tested, self.initial, head))))
-        for args in [(tested, head, self.initial), (self.initial, self.initial, head), (tested, "bad", head)]:
-            with self.subTest(args=args), self.assertRaises(ValueError):
-                gate.changed_paths(*args)
+        # The second parent must be the exact event PR head.
+        with self.assertRaises(ValueError):
+            gate.changed_paths(tested, self.initial, self.initial)
+        # A valid but unrelated event base must not pass ancestry admission.
+        with self.assertRaises(ValueError):
+            gate.changed_paths(tested, head, head)
+        # The tested commit must still be a two-parent merge, and all identities
+        # must be full commit IDs.
+        with self.assertRaises(ValueError):
+            gate.changed_paths(self.initial, self.initial, head)
+        with self.assertRaises(ValueError):
+            gate.changed_paths(tested, "bad", head)
 
     def test_git_failure_is_not_a_false_skip(self):
-        with patch.object(gate, "git", side_effect=subprocess.CalledProcessError(1, "git")):
+        self.run_git("checkout", "-b", "pr")
+        self.write("README.md", "docs\n")
+        self.run_git("add", ".")
+        self.run_git("commit", "-m", "PR docs")
+        head = self.sha()
+        self.run_git("checkout", "main")
+        self.run_git("merge", "--no-ff", "pr", "-m", "tested merge")
+        tested = self.sha()
+        real_git = gate.git
+
+        def fail_ancestry_check(*args):
+            if args[:2] == ("merge-base", "--is-ancestor"):
+                raise subprocess.CalledProcessError(128, ["git", *args])
+            return real_git(*args)
+
+        with patch.object(gate, "git", side_effect=fail_ancestry_check):
             with self.assertRaises(subprocess.CalledProcessError):
-                gate.changed_paths(self.initial, self.initial, self.initial)
+                gate.changed_paths(tested, self.initial, head)
 
 
 if __name__ == "__main__":

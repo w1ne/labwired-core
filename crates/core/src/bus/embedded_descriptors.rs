@@ -632,6 +632,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("stm32f411/usart6.yaml", packed!("stm32f411/usart6.yaml")),
     ("stm32f411/wwdg.yaml", packed!("stm32f411/wwdg.yaml")),
     ("stm32f767/adc1.yaml", packed!("stm32f767/adc1.yaml")),
+    ("stm32f767/crc.yaml", packed!("stm32f767/crc.yaml")),
     ("stm32f767/dbg.yaml", packed!("stm32f767/dbg.yaml")),
     ("stm32f767/dma1.yaml", packed!("stm32f767/dma1.yaml")),
     ("stm32f767/dma2.yaml", packed!("stm32f767/dma2.yaml")),
@@ -650,6 +651,8 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("stm32f767/tim2.yaml", packed!("stm32f767/tim2.yaml")),
     ("stm32f767/usart1.yaml", packed!("stm32f767/usart1.yaml")),
     ("stm32f767/usart2.yaml", packed!("stm32f767/usart2.yaml")),
+    ("stm32f767/usart3.yaml", packed!("stm32f767/usart3.yaml")),
+    ("stm32f767/usart6.yaml", packed!("stm32f767/usart6.yaml")),
     ("stm32g474re/adc1.yaml", packed!("stm32g474re/adc1.yaml")),
     ("stm32g474re/crc.yaml", packed!("stm32g474re/crc.yaml")),
     (
