@@ -77,6 +77,124 @@ pub struct AnalogSeries {
     pub channels: Vec<AnalogSeriesChannel>,
 }
 
+/// Exact running record of one channel inside one time window.
+///
+/// The ring keeps the newest rows and drops the oldest. A tally sees every
+/// value when it is written, so its answers stay exact for a run of any
+/// length. The channel is sample-and-hold: the value it holds at `from_ns`
+/// is part of the window.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct AnalogWindowTally {
+    pub channel: usize,
+    /// The window is `from_ns <= time_ns <= to_ns`.
+    pub from_ns: u64,
+    pub to_ns: u64,
+    /// `[time_ns, value]` of the lowest value in the window, first occurrence.
+    /// A value held from before the window has the time `from_ns`.
+    pub min: Option<(u64, f32)>,
+    /// `[time_ns, value]` of the highest value in the window.
+    pub max: Option<(u64, f32)>,
+    /// The newest sample written at or before `to_ns`, with its own time.
+    pub last: Option<(u64, f32)>,
+    /// Level crossings inside the window, when a level was requested.
+    pub crossings: u64,
+    /// The first crossing times, at most the requested number. A crossing has
+    /// the time of the first sample at or past the level; nothing is
+    /// interpolated between samples.
+    pub crossing_times_ns: Vec<u64>,
+    #[serde(skip)]
+    level: Option<(f32, AnalogCrossing)>,
+    #[serde(skip)]
+    max_times: usize,
+    /// The value before `newest`.
+    #[serde(skip)]
+    previous: Option<f32>,
+    /// The newest value. Writes at 0 ns replace each other, as in the ring.
+    #[serde(skip)]
+    newest: Option<(u64, f32)>,
+    #[serde(skip)]
+    entered: bool,
+}
+
+/// The direction of a level crossing an [`AnalogWindowTally`] counts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnalogCrossing {
+    /// From below the level to at or above it.
+    Rising,
+    /// From above the level to at or below it.
+    Falling,
+}
+
+impl AnalogWindowTally {
+    fn note(&mut self, time_ns: u64, value: f32) {
+        if self.min.is_none_or(|(_, min)| value < min) {
+            self.min = Some((time_ns, value));
+        }
+        if self.max.is_none_or(|(_, max)| value > max) {
+            self.max = Some((time_ns, value));
+        }
+    }
+
+    /// The window starts with the value the channel already holds.
+    fn enter(&mut self, time_ns: u64) {
+        if !self.entered {
+            self.entered = true;
+            if let Some(held) = self.previous.filter(|_| time_ns > self.from_ns) {
+                self.note(self.from_ns, held);
+            }
+        }
+    }
+
+    /// Account for `newest`; no later write can replace it.
+    fn commit(&mut self) {
+        let Some((time_ns, value)) = self.newest.take() else {
+            return;
+        };
+        if time_ns <= self.to_ns {
+            self.last = Some((time_ns, value));
+        }
+        if time_ns > self.to_ns {
+            self.enter(time_ns);
+        } else if time_ns >= self.from_ns {
+            self.enter(time_ns);
+            self.note(time_ns, value);
+            let crossed = match (self.previous, self.level) {
+                (Some(before), Some((level, AnalogCrossing::Rising))) => {
+                    before < level && value >= level
+                }
+                (Some(before), Some((level, AnalogCrossing::Falling))) => {
+                    before > level && value <= level
+                }
+                _ => false,
+            };
+            if crossed {
+                self.crossings += 1;
+                if self.crossing_times_ns.len() < self.max_times {
+                    self.crossing_times_ns.push(time_ns);
+                }
+            }
+        }
+        self.previous = Some(value);
+    }
+
+    fn write(&mut self, time_ns: u64, value: f32) {
+        if !matches!(self.newest, Some((0, _)) if time_ns == 0) {
+            self.commit();
+        }
+        self.newest = Some((time_ns, value));
+    }
+
+    /// The tally as it stands when the run has reached `end_ns`.
+    fn at(&self, end_ns: u64) -> Self {
+        let mut tally = self.clone();
+        tally.commit();
+        if end_ns >= tally.from_ns {
+            tally.enter(u64::MAX);
+        }
+        tally
+    }
+}
+
 /// One column of the trace.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AnalogChannel {
@@ -174,6 +292,7 @@ pub struct AnalogTrace {
     series: Vec<AnalogSeriesChannel>,
     series_cap: usize,
     end_time_ns: u64,
+    tallies: Vec<AnalogWindowTally>,
 }
 
 impl Default for AnalogTrace {
@@ -195,7 +314,57 @@ impl AnalogTrace {
             series: Vec::new(),
             series_cap: DEFAULT_SERIES_POINTS,
             end_time_ns: 0,
+            tallies: Vec::new(),
         }
+    }
+
+    /// Start an exact tally of `channel` with `from_ns <= time_ns <= to_ns`.
+    /// With `level`, it also counts the crossings of that level in one
+    /// direction and keeps at most `max_times` crossing times. Returns the
+    /// tally id. A tally cannot see the past, so it must start before
+    /// simulated time advances.
+    pub fn tally_window(
+        &mut self,
+        channel: usize,
+        from_ns: u64,
+        to_ns: u64,
+        level: Option<(f32, AnalogCrossing)>,
+        max_times: usize,
+    ) -> Result<usize, String> {
+        if self.end_time_ns != 0 || self.dropped != 0 {
+            return Err("an analog tally must start before simulated time advances".to_owned());
+        }
+        if channel >= self.channels.len() {
+            return Err(format!("unknown analog channel index {channel}"));
+        }
+        if from_ns > to_ns {
+            return Err("analog tally window is empty".to_owned());
+        }
+        if level.is_some_and(|(level, _)| !level.is_finite()) {
+            return Err("analog tally level must be finite".to_owned());
+        }
+        self.tallies.push(AnalogWindowTally {
+            channel,
+            from_ns,
+            to_ns,
+            min: None,
+            max: None,
+            last: None,
+            crossings: 0,
+            crossing_times_ns: Vec::new(),
+            level,
+            max_times,
+            previous: None,
+            // The resolved initial row, when the models already wrote it.
+            newest: (!self.samples.is_empty()).then(|| (0, self.last_values[channel])),
+            entered: false,
+        });
+        Ok(self.tallies.len() - 1)
+    }
+
+    /// Tally `id` as it stands when the run has reached `end_ns`.
+    pub fn window_tally(&self, id: usize, end_ns: u64) -> Option<AnalogWindowTally> {
+        self.tallies.get(id).map(|tally| tally.at(end_ns))
     }
 
     /// Cap the run-long series at `points` per channel (at least two).
@@ -265,6 +434,15 @@ impl AnalogTrace {
             }
             if let Some(channel) = self.series.get_mut(base + offset) {
                 record_change(channel, self.series_cap, time_ns, *value);
+            }
+        }
+        for tally in &mut self.tallies {
+            if let Some(value) = tally
+                .channel
+                .checked_sub(base)
+                .and_then(|offset| values.get(offset))
+            {
+                tally.write(time_ns, *value as f32);
             }
         }
         self.end_time_ns = self.end_time_ns.max(time_ns);
@@ -391,6 +569,31 @@ impl AnalogTraceRegistry {
         }
     }
 
+    /// See [`AnalogTrace::tally_window`].
+    pub fn tally_window(
+        &self,
+        channel: usize,
+        from_ns: u64,
+        to_ns: u64,
+        level: Option<(f32, AnalogCrossing)>,
+        max_times: usize,
+    ) -> Result<usize, String> {
+        match self.trace.lock() {
+            Ok(mut trace) => trace.tally_window(channel, from_ns, to_ns, level, max_times),
+            Err(poisoned) => poisoned
+                .into_inner()
+                .tally_window(channel, from_ns, to_ns, level, max_times),
+        }
+    }
+
+    /// See [`AnalogTrace::window_tally`].
+    pub fn window_tally(&self, id: usize, end_ns: u64) -> Option<AnalogWindowTally> {
+        match self.trace.lock() {
+            Ok(trace) => trace.window_tally(id, end_ns),
+            Err(poisoned) => poisoned.into_inner().window_tally(id, end_ns),
+        }
+    }
+
     /// The run-long change-point series of every channel.
     pub fn series(&self) -> AnalogSeries {
         match self.trace.lock() {
@@ -420,6 +623,92 @@ mod tests {
         assert_eq!(batch.samples[0].values, [2.3, 0.4]);
         assert_eq!(batch.next_cursor, 1);
         assert_eq!(batch.dropped, 0);
+    }
+
+    #[test]
+    fn a_window_tally_stays_exact_after_the_ring_overflows() {
+        let mut trace = AnalogTrace::new(4);
+        let other = trace.register_channels(&[AnalogChannel::volts("other.v")]);
+        let ramp = trace.register_channels(&[AnalogChannel::volts("ramp.v")]);
+        // Initialization writes the 0 ns row twice; the second value stands.
+        trace.push(ramp, 0, 0, &[9.0]);
+        trace.push(ramp, 0, 0, &[0.0]);
+        trace.push(other, 0, 0, &[5.0]);
+
+        let whole = trace.tally_window(ramp, 0, u64::MAX, None, 0).unwrap();
+        let rising = trace
+            .tally_window(ramp, 0, u64::MAX, Some((2.0, AnalogCrossing::Rising)), 2)
+            .unwrap();
+        let falling = trace
+            .tally_window(ramp, 0, u64::MAX, Some((2.0, AnalogCrossing::Falling)), 8)
+            .unwrap();
+        // 250..=450 ns starts between two samples and ends between two.
+        let window = trace
+            .tally_window(ramp, 250, 450, Some((2.0, AnalogCrossing::Rising)), 8)
+            .unwrap();
+        let at = trace.tally_window(ramp, 250, 250, None, 0).unwrap();
+        assert!(trace.tally_window(7, 0, 1, None, 0).is_err());
+        assert!(trace.tally_window(ramp, 2, 1, None, 0).is_err());
+        assert!(trace
+            .tally_window(ramp, 0, 1, Some((f32::NAN, AnalogCrossing::Rising)), 0)
+            .is_err());
+
+        // A late 0 ns write replaces the initial value and is not a sample.
+        trace.push(ramp, 0, 0, &[7.0]);
+        trace.push(ramp, 0, 0, &[0.0]);
+        // A triangle 0,1,2,3,2,1,0,1,... V, one sample per 100 ns, while the
+        // other model writes rows that carry this channel forward.
+        let triangle = |step: u64| match step % 6 {
+            phase @ 0..=3 => phase as f64,
+            phase => (6 - phase) as f64,
+        };
+        for step in 1..=600u64 {
+            trace.push(ramp, step, step * 100, &[triangle(step)]);
+            trace.push(other, step, step * 100 + 50, &[5.0]);
+        }
+        assert_eq!(trace.len(), 4);
+        assert!(trace.snapshot(0).dropped > 1_000);
+
+        let end = 600 * 100 + 50;
+        let tally = trace.window_tally(whole, end).unwrap();
+        assert_eq!((tally.min, tally.max), (Some((0, 0.0)), Some((300, 3.0))));
+        assert_eq!(tally.last, Some((60_000, 0.0)));
+        // One period is 600 ns: up through 2 V at 200 ns, down through it at 400 ns.
+        let tally = trace.window_tally(rising, end).unwrap();
+        assert_eq!(
+            (tally.crossings, tally.crossing_times_ns),
+            (100, vec![200, 800])
+        );
+        let tally = trace.window_tally(falling, end).unwrap();
+        assert_eq!(tally.crossings, 100);
+        assert_eq!(tally.crossing_times_ns[..3], [400, 1000, 1600]);
+
+        // The window holds 2 V from the 200 ns sample, then 3 V and 2 V.
+        let tally = trace.window_tally(window, end).unwrap();
+        assert_eq!((tally.min, tally.max), (Some((250, 2.0)), Some((300, 3.0))));
+        assert_eq!(tally.crossings, 0, "2 V was reached before the window");
+        assert_eq!(tally.last, Some((400, 2.0)));
+        let tally = trace.window_tally(at, end).unwrap();
+        assert_eq!((tally.min, tally.max), (Some((250, 2.0)), Some((250, 2.0))));
+        assert_eq!(tally.last, Some((200, 2.0)), "the sample has its own time");
+
+        // A tally cannot see the past.
+        assert!(trace.tally_window(ramp, 0, 1, None, 0).is_err());
+    }
+
+    #[test]
+    fn a_window_the_run_has_not_reached_has_no_observation() {
+        let mut trace = AnalogTrace::new(4);
+        let channel = trace.register_channels(&[AnalogChannel::volts("v")]);
+        trace.push(channel, 0, 0, &[1.5]);
+        let later = trace.tally_window(channel, 1_000, 2_000, None, 0).unwrap();
+        trace.push(channel, 1, 100, &[2.5]);
+        let early = trace.window_tally(later, 999).unwrap();
+        assert_eq!((early.min, early.max), (None, None));
+        assert_eq!(early.last, Some((100, 2.5)));
+        let reached = trace.window_tally(later, 1_000).unwrap();
+        assert_eq!(reached.min, Some((1_000, 2.5)));
+        assert_eq!(reached.max, Some((1_000, 2.5)));
     }
 
     #[test]

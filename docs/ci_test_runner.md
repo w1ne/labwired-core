@@ -174,6 +174,8 @@ assertions:
   - digital_edges: { port: user_led_state, times_ns: [4001000, 4002000] }
   - digital_edges: { port: user_led_state, count: 1, from_ns: 4001500, to_ns: 4002000 }
   - analog_sample: { port: sensor_v, at_ns: 350000, min: 2.033, max: 2.034 }
+  - analog_window: { port: sensor_v, from_ns: 2000000, min: 2.395, max: 2.398 }
+  - analog_crossings: { port: sensor_v, level: 2.001, direction: rising, times_ns: [350000] }
   - final_time_ns: { equals: 4002000 }
 ```
 
@@ -183,13 +185,23 @@ assertions:
 | `port_value` | A read port after the last step | It is `equals`, or inside `min`..`max`. |
 | `digital_edges` | One logic-analyzer channel: `port` (a Boolean port) or `signal` (a traced model signal with no port). `from_ns` and `to_ns` limit it to the edges with `from_ns <= time <= to_ns`; the default is the whole run. | The edge `count` matches, every edge time matches `times_ns` in order, or both. |
 | `analog_sample` | One oscilloscope channel: `port` (a numeric read port) or `channel` (a channel name with no port) | The last sample at or before `at_ns` is `equals`, or inside `min`..`max`, in the channel's unit. |
+| `analog_window` | Every value of one oscilloscope channel with `from_ns <= time <= to_ns`, and the value the channel holds at `from_ns`. The default is the whole run. | The lowest value is at or above `min` and the highest is at or below `max`. |
+| `analog_crossings` | The times one oscilloscope channel crosses `level` in one `direction`: `rising` (from below to at or above) or `falling` (from above to at or below). `from_ns` and `to_ns` limit it as for `digital_edges`. | The crossing `count` matches, every crossing time matches `times_ns` in order, or both. |
 | `final_time_ns` | The virtual time at the end of the run | It is `equals`, or inside `min`..`max`. |
 
 A port or channel that the instrument does not have is a `config_error`
 before the firmware runs. An `at_ns` or a `to_ns` after the end of the run was
 not observed: the assertion fails with `observed: null`. `result.json` gives
-each `digital_edges` assertion its edge times, and each `analog_sample`
-assertion the time of the sample it read, in `observed_times_ns`.
+each `digital_edges` assertion its edge times, each `analog_crossings`
+assertion its crossing times, and each `analog_sample` assertion the time of
+the sample it read, in `observed_times_ns`. For an `analog_window`, `observed`
+is the lowest value, `observed_max` is the highest, and `observed_times_ns`
+holds the times of the two. A value held from before the window has the time
+`from_ns`.
+
+A crossing has the time of the first sample at or past the level. The runner
+does not interpolate between samples, so the time is a multiple of the model
+`step_ns`. A channel that starts at or past the level has not crossed it.
 
 The runner counts the edges of each `digital_edges` assertion when the logic
 analyzer records them. The count and the `times_ns` comparison are exact for a
@@ -198,9 +210,14 @@ channels: after a longer run, `flex-trace.json` and `--vcd` hold those edges,
 and `traces.digital_dropped` in `result.json` is the number of older edges
 they do not hold. `observed_times_ns` lists at most the first 4,096 edge times
 of a window, or one more than `times_ns` expects if that is larger;
-`observed_times_truncated: true` marks a shortened list. An `analog_sample`
-reads the oscilloscope capture: if that capture dropped samples, the assertion
-fails with `observed: null`.
+`observed_times_truncated: true` marks a shortened list.
+
+The analog assertions use the same method. The runner reads each sample when
+the oscilloscope records it, so `analog_sample`, `analog_window` and
+`analog_crossings` are exact for a run of any length. The oscilloscope capture
+keeps the newest 20,000 samples (or the model's `trace_samples`);
+`traces.analog_dropped` is the number of older samples that `flex-trace.json`
+and `--analog-trace` do not hold.
 
 A `sequence` replaces `entry` when the firmware has more than one entry
 point, for example `setup` and `loop`, or when the environment changes during

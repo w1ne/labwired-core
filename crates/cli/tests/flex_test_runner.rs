@@ -1065,3 +1065,196 @@ fn edge_assertions_stay_exact_after_the_logic_capture_overflows() {
     assert_eq!(trace["digital"]["edges"].as_array().unwrap().len(), 65_536);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn analog_windows_and_crossings_read_every_sample() {
+    // Bright light: SNS_AN1 rises from 1.32 V to 2.397 V through C7.
+    let dir = unique_dir("analog-window");
+    let assertions = concat!(
+        "  - analog_crossings: { port: sensor_v, level: 2.001, direction: rising, times_ns: [350000] }\n",
+        "  - analog_crossings: { port: sensor_v, level: 2.001, direction: rising, count: 1, times_ns: [300000] }\n",
+        "  - analog_crossings: { channel: source-sns-an1.voltage, level: 2.001, direction: falling, count: 0 }\n",
+        "  - analog_window: { port: sensor_v, from_ns: 2000000, min: 2.395, max: 2.398 }\n",
+        "  - analog_window: { port: sensor_v, max: 2.39 }\n",
+        "  - analog_window: { port: sensor_v, from_ns: 325000, to_ns: 349999, min: 1.961, max: 1.962 }\n",
+        "  - analog_window: { port: sensor_v, to_ns: 5000000, min: 0 }\n",
+        "  - analog_crossings: { port: sensor_v, level: 2.001, direction: rising, count: 0, from_ns: 350001 }\n",
+    );
+    let script = ldr_script(&dir, "window.yaml", "100", LIMITS, assertions);
+    let output = run(&script, &dir, &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = read_result(&dir);
+    assert_eq!(result["stop_reason"], "completed");
+    let assertions = result["assertions"].as_array().unwrap();
+    let passed: Vec<bool> = assertions
+        .iter()
+        .map(|assertion| assertion["passed"].as_bool().unwrap())
+        .collect();
+    assert_eq!(passed, [true, false, true, true, false, true, false, true]);
+    // A wrong crossing time fails with the observed time reported.
+    assert_eq!(assertions[1]["observed"], 1.0);
+    assert_eq!(
+        assertions[1]["observed_times_ns"],
+        serde_json::json!([350000])
+    );
+    // A window that fails reports its lowest and highest value and their
+    // times: the 1.32 V start and the settled end.
+    assert_eq!(
+        (assertions[4]["observed"].as_f64().unwrap() as f32).to_bits(),
+        1.32_f32.to_bits()
+    );
+    let highest = assertions[4]["observed_max"].as_f64().unwrap();
+    assert!((2.396..2.398).contains(&highest), "{highest}");
+    assert_eq!(assertions[4]["observed_times_ns"][0], 0);
+    // A window between two samples holds the earlier sample from its start.
+    assert_eq!(
+        assertions[5]["observed_times_ns"],
+        serde_json::json!([325000, 325000])
+    );
+    assert_eq!(
+        (assertions[5]["observed"].as_f64().unwrap() as f32).to_bits(),
+        1.961_360_5_f32.to_bits()
+    );
+    assert_eq!(assertions[5]["observed"], assertions[5]["observed_max"]);
+    // The run ended before 5,000,000 ns: the window was not observed.
+    assert_eq!(assertions[6]["observed"], Value::Null);
+    assert!(assertions[6].get("observed_max").is_none());
+    let junit = std::fs::read_to_string(dir.join("junit.xml")).expect("junit.xml");
+    assert!(junit.contains("tests=\"9\" failures=\"3\" errors=\"0\""));
+    assert!(junit.contains("analog_crossings sensor_v Rising 2.001"));
+    let _ = std::fs::remove_dir_all(dir);
+
+    // Negative control: in dim light the same node falls and never crosses.
+    let dir = unique_dir("analog-window-dim");
+    let script = ldr_script(
+        &dir,
+        "dim.yaml",
+        "1",
+        LIMITS,
+        "  - analog_crossings: { port: sensor_v, level: 2.001, direction: rising, times_ns: [350000] }\n",
+    );
+    let output = run(&script, &dir, &[]);
+    assert_eq!(output.status.code(), Some(1));
+    let result = read_result(&dir);
+    assert_eq!(result["assertions"][0]["observed"], 0.0);
+    assert_eq!(
+        result["assertions"][0]["observed_times_ns"],
+        serde_json::json!([])
+    );
+    let _ = std::fs::remove_dir_all(dir);
+
+    for (assertion, expected) in [
+        (
+            "analog_window: { port: user_led_state, min: 0 }",
+            "assertions[0].analog_window needs a numeric read port; 'user_led_state' is not one",
+        ),
+        (
+            "analog_window: { port: nope, min: 0 }",
+            "assertions[0].analog_window names unknown Flex port 'nope'",
+        ),
+        (
+            "analog_crossings: { channel: nope.v, level: 1, direction: rising, count: 0 }",
+            "assertions[0].analog_crossings: the oscilloscope has no channel for 'nope.v'; its channels are [source-sns-an1.voltage]",
+        ),
+    ] {
+        let dir = unique_dir("analog-window-config");
+        let script = ldr_script(
+            &dir,
+            "config.yaml",
+            "100",
+            LIMITS,
+            &format!("  - {assertion}\n"),
+        );
+        let output = run(&script, &dir, &[]);
+        assert_eq!(output.status.code(), Some(2), "{assertion}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(expected), "{assertion}: {stderr}");
+        assert_eq!(read_result(&dir)["stop_reason"], "config_error");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+#[test]
+fn analog_assertions_stay_exact_after_the_oscilloscope_capture_overflows() {
+    // 30,004 thermostat passes of 1,000 ns each: the oscilloscope records
+    // more samples than its 20,000-sample capture holds. The heat arrives at
+    // 2,000 ns and leaves at 15,004,000 ns.
+    let fixture = thermostat();
+    let dir = unique_dir("analog-overflow");
+    let script = dir.join("overflow.yaml");
+    std::fs::write(
+        &script,
+        format!(
+            concat!(
+                "schema_version: \"1.0\"\n",
+                "inputs:\n  flex: \"{}\"\n  firmware: \"{}\"\n",
+                "sequence:\n",
+                "  - call: {{ export: setup, args: [{{ port: temperature_mv }}, {{ port: fan_drive }}] }}\n",
+                "  - call: {{ export: loop, repeat: 2 }}\n",
+                "  - set: {{ port: temperature_c, value: 50 }}\n",
+                "  - call: {{ export: loop, repeat: 15000 }}\n",
+                "  - set: {{ port: temperature_c, value: 33 }}\n",
+                "  - call: {{ export: loop, repeat: 2 }}\n",
+                "  - set: {{ port: temperature_c, value: 25 }}\n",
+                "  - call: {{ export: loop, repeat: 15000 }}\n",
+                "limits: {{ max_steps: 1000000000, max_time_ns: 40000000 }}\n",
+                "assertions:\n",
+                "  - entry_result: {{ equals: 0 }}\n",
+                // The capture no longer holds the samples of the first 10 ms.
+                "  - analog_sample: {{ port: temperature_mv, at_ns: 3000, equals: 2428 }}\n",
+                "  - analog_crossings: {{ port: temperature_mv, level: 2000, direction: rising, times_ns: [3000] }}\n",
+                "  - analog_crossings: {{ port: temperature_mv, level: 1800, direction: falling, times_ns: [15005000] }}\n",
+                "  - analog_window: {{ port: temperature_mv, from_ns: 3000, to_ns: 15002000, min: 2428, max: 2428 }}\n",
+                // Wrong by 1 mV: fails with the exact extremes, not with `null`.
+                "  - analog_window: {{ port: temperature_mv, max: 2427 }}\n",
+                "  - digital_edges: {{ port: fan_drive, times_ns: [3000, 15005000] }}\n",
+                "  - final_time_ns: {{ equals: 30004000 }}\n",
+            ),
+            fixture.join("system.yaml").display(),
+            fixture.join("firmware.wasm").display(),
+        ),
+    )
+    .expect("write script");
+    let output = run(&script, &dir, &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = read_result(&dir);
+    assert_eq!(result["stop_reason"], "completed");
+    let assertions = result["assertions"].as_array().unwrap();
+    let passed: Vec<bool> = assertions
+        .iter()
+        .map(|assertion| assertion["passed"].as_bool().unwrap())
+        .collect();
+    assert_eq!(passed, [true, true, true, true, true, false, true, true]);
+    assert_eq!(assertions[5]["observed"], 1650.0);
+    assert_eq!(assertions[5]["observed_max"], 2428.0);
+    assert_eq!(
+        assertions[5]["observed_times_ns"],
+        serde_json::json!([0, 3000])
+    );
+
+    // The capture's own counters show that it no longer holds those samples.
+    let dropped = result["traces"]["analog_dropped"].as_u64().unwrap();
+    let kept = result["traces"]["analog_samples"].as_u64().unwrap();
+    assert_eq!(kept, 20_000);
+    assert_eq!(
+        dropped + kept,
+        30_005,
+        "one sample per pass and the 0 ns row"
+    );
+    let trace = json(&dir.join("flex-trace.json"));
+    let oldest = trace["analog"]["samples"][0]["time_ns"].as_u64().unwrap();
+    // The newest 20,000 samples start after the heat arrived at 3,000 ns.
+    assert_eq!(oldest, 10_005_000);
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -51,6 +51,8 @@ Browser run ([browser.json](browser.json)): Chromium 156.0.8078.79 with Playwrig
 
 Command-line run: `labwired test --script test-bright.yaml` and `test-dim.yaml` run the same `system.yaml` and the same `firmware.wasm` bytes through the existing test runner, with `inputs.flex` as the explicit choice of portable execution. `crates/cli/tests/flex_test_runner.rs` checks that the digital edges and the 81 analog samples of both cases equal the native reference, and that the dim case fails the bright assertions.
 
+Time-constant check (2026-11-19): the scripts assert the time at which SNS_AN1 passes 63.2 % of its step with `analog_crossings`. Both times were calculated from the pinned values before the run. Bright: U4 is 3.77 kΩ at 100 lx, the time constant with R6 and C7 is 274 µs, and with the 50 µs input latch the first sample at or above 2.001 V is at 350,000 ns. Dim: U4 is 59.7 kΩ at 1 lx, the time constant is 857 µs, and the first sample at or below 0.785 V is at 950,000 ns. The run gave both times. A crossing time is a sample time (50 µs step); the runner does not interpolate. `analog_window` asserts that the node stays between 2.395 V and 2.398 V after 2 ms in bright light.
+
 ## Scope
 
 This is functional portable behavior against a source-pinned analog sub-network. It does not execute ESP32-S3 firmware, emulate target instructions or the ADC peripheral, cover the full board, establish chip parity, or provide physical-hardware evidence. It is not a Library or Playground launch.

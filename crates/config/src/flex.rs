@@ -533,6 +533,8 @@ pub enum FlexAssertion {
     PortValue(FlexPortValueAssertion),
     DigitalEdges(FlexDigitalEdgesAssertion),
     AnalogSample(FlexAnalogSampleAssertion),
+    AnalogWindow(FlexAnalogWindowAssertion),
+    AnalogCrossings(FlexAnalogCrossingsAssertion),
     FinalTime(FlexFinalTimeAssertion),
 }
 
@@ -654,6 +656,98 @@ impl FlexAnalogSampleDetails {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
+pub struct FlexAnalogWindowAssertion {
+    pub analog_window: FlexAnalogWindowDetails,
+}
+
+/// Every oscilloscope value of one channel with `from_ns <= time <= to_ns`,
+/// in the channel's unit. The channel holds a value until its next sample, so
+/// the value it holds at `from_ns` is part of the window. `min` and `max`
+/// bound every value. At least one bound is required.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexAnalogWindowDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<String>,
+    /// Oscilloscope channel name, as in `flex-trace.json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+    /// First nanosecond of the window. Default: the start of the run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_ns: Option<u64>,
+    /// Last nanosecond of the window. Default: the end of the run. A run that
+    /// ends before `to_ns` did not observe the whole window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_ns: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+}
+
+impl FlexAnalogWindowDetails {
+    /// The port or channel the assertion names, for messages.
+    pub fn target(&self) -> &str {
+        self.port
+            .as_deref()
+            .or(self.channel.as_deref())
+            .unwrap_or("")
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexAnalogCrossingsAssertion {
+    pub analog_crossings: FlexAnalogCrossingsDetails,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FlexCrossingDirection {
+    /// From below `level` to at or above it.
+    Rising,
+    /// From above `level` to at or below it.
+    Falling,
+}
+
+/// The times one oscilloscope channel crosses `level` in one direction: their
+/// exact number, their exact times, or both. A crossing has the time of the
+/// first sample at or past the level; nothing is interpolated between
+/// samples. `from_ns` and `to_ns` limit the assertion as for `digital_edges`.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexAnalogCrossingsDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<String>,
+    /// Oscilloscope channel name, as in `flex-trace.json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+    /// The level, in the channel's unit.
+    pub level: f64,
+    pub direction: FlexCrossingDirection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub count: Option<u64>,
+    /// Every crossing time in order, in nanoseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub times_ns: Option<Vec<u64>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_ns: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_ns: Option<u64>,
+}
+
+impl FlexAnalogCrossingsDetails {
+    /// The port or channel the assertion names, for messages.
+    pub fn target(&self) -> &str {
+        self.port
+            .as_deref()
+            .or(self.channel.as_deref())
+            .unwrap_or("")
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct FlexFinalTimeAssertion {
     pub final_time_ns: FlexFinalTimeDetails,
 }
@@ -668,6 +762,33 @@ pub struct FlexFinalTimeDetails {
     pub min: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max: Option<u64>,
+}
+
+/// A time window inside the exact trace range, and event times inside it.
+fn window(
+    from_ns: Option<u64>,
+    to_ns: Option<u64>,
+    times_ns: &Option<Vec<u64>>,
+    path: &str,
+) -> Result<()> {
+    let from = from_ns.unwrap_or(0);
+    let to = to_ns.unwrap_or(FLEX_MAX_TIME_NS);
+    ensure!(from <= to, "{path}.from_ns must not exceed to_ns");
+    ensure!(
+        to <= FLEX_MAX_TIME_NS,
+        "{path}.to_ns must be within 0..={FLEX_MAX_TIME_NS}"
+    );
+    if let Some(times) = times_ns {
+        ensure!(
+            times.windows(2).all(|pair| pair[0] <= pair[1]),
+            "{path}.times_ns must be in time order"
+        );
+        ensure!(
+            times.iter().all(|time| (from..=to).contains(time)),
+            "{path}.times_ns must be inside from_ns..=to_ns"
+        );
+    }
+    Ok(())
 }
 
 /// One of two names selects the instrument channel; `equals` excludes a range.
@@ -815,23 +936,7 @@ impl FlexTestScript {
                         details.count.is_some() || details.times_ns.is_some(),
                         "{path} requires count or times_ns"
                     );
-                    let from = details.from_ns.unwrap_or(0);
-                    let to = details.to_ns.unwrap_or(FLEX_MAX_TIME_NS);
-                    ensure!(from <= to, "{path}.from_ns must not exceed to_ns");
-                    ensure!(
-                        to <= FLEX_MAX_TIME_NS,
-                        "{path}.to_ns must be within 0..={FLEX_MAX_TIME_NS}"
-                    );
-                    if let Some(times) = &details.times_ns {
-                        ensure!(
-                            times.windows(2).all(|pair| pair[0] <= pair[1]),
-                            "{path}.times_ns must be in time order"
-                        );
-                        ensure!(
-                            times.iter().all(|time| (from..=to).contains(time)),
-                            "{path}.times_ns must be inside from_ns..=to_ns"
-                        );
-                    }
+                    window(details.from_ns, details.to_ns, &details.times_ns, &path)?;
                 }
                 FlexAssertion::AnalogSample(assertion) => {
                     let details = &assertion.analog_sample;
@@ -845,6 +950,35 @@ impl FlexTestScript {
                         "{path} bounds must be finite"
                     );
                     bounds(details.equals, details.min, details.max, &path)?;
+                }
+                FlexAssertion::AnalogWindow(assertion) => {
+                    let details = &assertion.analog_window;
+                    let path = format!("assertions[{index}].analog_window");
+                    one_name(&details.port, &details.channel, &path, "port or channel")?;
+                    ensure!(
+                        [details.min, details.max]
+                            .iter()
+                            .flatten()
+                            .all(|bound| bound.is_finite()),
+                        "{path} bounds must be finite"
+                    );
+                    ensure!(
+                        details.min.is_some() || details.max.is_some(),
+                        "{path} requires min or max"
+                    );
+                    bounds(None, details.min, details.max, &path)?;
+                    window(details.from_ns, details.to_ns, &None, &path)?;
+                }
+                FlexAssertion::AnalogCrossings(assertion) => {
+                    let details = &assertion.analog_crossings;
+                    let path = format!("assertions[{index}].analog_crossings");
+                    one_name(&details.port, &details.channel, &path, "port or channel")?;
+                    ensure!(details.level.is_finite(), "{path}.level must be finite");
+                    ensure!(
+                        details.count.is_some() || details.times_ns.is_some(),
+                        "{path} requires count or times_ns"
+                    );
+                    window(details.from_ns, details.to_ns, &details.times_ns, &path)?;
                 }
                 FlexAssertion::FinalTime(assertion) => {
                     let details = &assertion.final_time_ns;
@@ -992,13 +1126,28 @@ assertions:
     fn test_script_instrument_assertions_name_one_channel_and_one_expectation() {
         let edges = "  - digital_edges: { port: user_led_state, count: 2 }\n";
         assert!(TEST_SCRIPT.contains(edges), "fixture lost its edge count");
-        let instruments = "  - digital_edges: { port: user_led_state, times_ns: [1000, 2000] }\n  - digital_edges: { signal: comparator.out, count: 1, from_ns: 500, to_ns: 1500 }\n  - analog_sample: { port: sensor_v, at_ns: 350000, min: 1.4, max: 1.6 }\n  - analog_sample: { channel: divider.v, at_ns: 0, equals: 0 }\n  - final_time_ns: { equals: 4050000 }\n";
+        let instruments = "  - digital_edges: { port: user_led_state, times_ns: [1000, 2000] }\n  - digital_edges: { signal: comparator.out, count: 1, from_ns: 500, to_ns: 1500 }\n  - analog_sample: { port: sensor_v, at_ns: 350000, min: 1.4, max: 1.6 }\n  - analog_sample: { channel: divider.v, at_ns: 0, equals: 0 }\n  - final_time_ns: { equals: 4050000 }\n  - analog_window: { port: sensor_v, from_ns: 1000000, min: 2.3, max: 2.5 }\n  - analog_crossings: { channel: divider.v, level: 2.001, direction: rising, times_ns: [350000] }\n";
         let Ok(crate::LoadedTestScript::Flex(script)) =
             load_script(&TEST_SCRIPT.replace(edges, instruments))
         else {
             panic!("instrument assertions must load");
         };
-        assert_eq!(script.assertions.len(), 7);
+        assert_eq!(script.assertions.len(), 9);
+        let FlexAssertion::AnalogWindow(held) = &script.assertions[7] else {
+            panic!("assertion 7 is analog_window");
+        };
+        assert_eq!(
+            (held.analog_window.from_ns, held.analog_window.to_ns),
+            (Some(1_000_000), None)
+        );
+        let FlexAssertion::AnalogCrossings(crossing) = &script.assertions[8] else {
+            panic!("assertion 8 is analog_crossings");
+        };
+        assert_eq!(
+            crossing.analog_crossings.direction,
+            FlexCrossingDirection::Rising
+        );
+        assert_eq!(crossing.analog_crossings.target(), "divider.v");
         let FlexAssertion::DigitalEdges(timed) = &script.assertions[2] else {
             panic!("assertion 2 is digital_edges");
         };
@@ -1075,6 +1224,51 @@ assertions:
                 "digital_edges: { port: user_led_state, count: 2 }",
                 "analog_sample: { port: sensor_v, at_ns: 0, min: .inf }",
                 "bounds must be finite",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_window: { port: sensor_v, from_ns: 0, to_ns: 10 }",
+                "requires min or max",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_window: { port: sensor_v, equals: 1 }",
+                "Failed to parse Flex Test Script",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_window: { port: sensor_v, min: 2, max: 1 }",
+                "min must not exceed max",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_window: { channel: divider.v, max: 1, from_ns: 11, to_ns: 10 }",
+                "from_ns must not exceed to_ns",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_crossings: { port: sensor_v, level: 2, direction: rising }",
+                "requires count or times_ns",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_crossings: { port: sensor_v, level: 2, direction: up, count: 1 }",
+                "Failed to parse Flex Test Script",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_crossings: { port: sensor_v, level: .nan, direction: rising, count: 1 }",
+                "level must be finite",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_crossings: { level: 2, direction: falling, times_ns: [5] }",
+                "exactly one of port or channel",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_crossings: { port: sensor_v, level: 2, direction: falling, times_ns: [5], to_ns: 4 }",
+                "times_ns must be inside from_ns..=to_ns",
             ),
             (
                 "digital_edges: { port: user_led_state, count: 2 }",

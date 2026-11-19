@@ -15,9 +15,10 @@
 
 use crate::{TestArgs, EXIT_ASSERT_FAIL, EXIT_CONFIG_ERROR, EXIT_PASS, EXIT_RUNTIME_ERROR};
 use labwired_config::{
-    FlexAnalogSampleDetails, FlexAssertion, FlexDigitalEdgesDetails, FlexEntryArg, FlexPortAccess,
-    FlexPortKind, FlexStep, FlexTestLimits, FlexTestScript,
+    FlexAssertion, FlexCrossingDirection, FlexDigitalEdgesDetails, FlexEntryArg, FlexPort,
+    FlexPortAccess, FlexPortKind, FlexStep, FlexTestLimits, FlexTestScript,
 };
+use labwired_core::analog::{AnalogCrossing, AnalogWindowTally};
 use labwired_core::flex::{
     FlexAnalogTraceBatch, FlexDigitalChannel, FlexDigitalEdgeTally, FlexDigitalTraceBatch,
     FlexRunReport, FlexRuntime,
@@ -105,12 +106,16 @@ struct FlexAssertionResult {
     /// What the run produced for this assertion; `None` means nothing was
     /// observed, which never passes.
     observed: Option<f64>,
-    /// The edge times of a `digital_edges` window, or the time of the sample
-    /// an `analog_sample` read.
+    /// The highest value of an `analog_window`; `observed` is its lowest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    observed_max: Option<f64>,
+    /// The edge times of a `digital_edges` window, the crossing times of
+    /// `analog_crossings`, the time of the sample an `analog_sample` read, or
+    /// the times of the lowest and highest value of an `analog_window`.
     #[serde(skip_serializing_if = "Option::is_none")]
     observed_times_ns: Option<Vec<u64>>,
-    /// `observed_times_ns` holds only the first edge times of the window;
-    /// `observed` is still the exact number of edges.
+    /// `observed_times_ns` holds only the first times of the window;
+    /// `observed` is still the exact number of edges or crossings.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     observed_times_truncated: bool,
 }
@@ -156,7 +161,7 @@ struct FlexTraceFile {
 }
 
 /// A checked run: the runtime, the firmware bytes, and per assertion the id
-/// of the edge tally a `digital_edges` assertion reads.
+/// of the tally an instrument assertion reads.
 type Loaded = (FlexRuntime, Vec<u8>, Vec<Option<usize>>);
 
 struct Host {
@@ -594,17 +599,45 @@ fn digital_channel<'a>(
     })
 }
 
-/// The oscilloscope column an `analog_sample` assertion names.
+/// The oscilloscope column an analog assertion names, by port or by channel.
 fn analog_channel(
+    index: usize,
+    kind: &str,
+    port: &Option<String>,
+    channel: &Option<String>,
+    ports: &[FlexPort],
     analog: &FlexAnalogTraceBatch,
-    details: &FlexAnalogSampleDetails,
-) -> Option<usize> {
+) -> Result<usize, String> {
+    let name = port.as_deref().or(channel.as_deref()).unwrap_or("");
+    if let Some(port) = port {
+        let Some(port) = ports.iter().find(|candidate| &candidate.name == port) else {
+            return Err(format!(
+                "assertions[{index}].{kind} names unknown Flex port '{name}'"
+            ));
+        };
+        if port.kind != FlexPortKind::Number || port.access != FlexPortAccess::Read {
+            return Err(format!(
+                "assertions[{index}].{kind} needs a numeric read port; '{name}' is not one"
+            ));
+        }
+    }
     analog
         .channels
         .iter()
-        .position(|channel| match &details.port {
-            Some(port) => channel.port_names.contains(port),
-            None => details.channel.as_ref() == Some(&channel.name),
+        .position(|candidate| match port {
+            Some(port) => candidate.port_names.contains(port),
+            None => channel.as_ref() == Some(&candidate.name),
+        })
+        .ok_or_else(|| {
+            format!(
+                "assertions[{index}].{kind}: the oscilloscope has no channel for '{name}'; its channels are [{}]",
+                analog
+                    .channels
+                    .iter()
+                    .map(|channel| channel.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         })
 }
 
@@ -622,9 +655,10 @@ fn within<T: PartialOrd + Copy>(
 fn evaluate(
     assertion: &FlexAssertion,
     run: &FlexTestResult,
-    traces: &FlexTraceFile,
     tally: Option<&FlexDigitalEdgeTally>,
+    analog: Option<&AnalogWindowTally>,
 ) -> FlexAssertionResult {
+    let mut observed_max = None;
     let mut observed_times_ns = None;
     let mut observed_times_truncated = false;
     let (observed, passed) = match assertion {
@@ -672,20 +706,13 @@ fn evaluate(
         }
         FlexAssertion::AnalogSample(assertion) => {
             let details = &assertion.analog_sample;
-            let analog = &traces.analog;
-            // The oscilloscope holds a value until its next sample. A time the
-            // run never reached, or one before the retained ring, has none.
-            let sample = (analog.dropped == 0 && details.at_ns <= run.time_ns)
-                .then(|| analog_channel(analog, details))
-                .flatten()
-                .and_then(|column| {
-                    analog
-                        .samples
-                        .iter()
-                        .rev()
-                        .find(|sample| sample.time_ns <= details.at_ns)
-                        .and_then(|sample| Some((sample.time_ns, *sample.values.get(column)?)))
-                });
+            // The oscilloscope holds a value until its next sample. The tally
+            // kept the sample when it was written, so a long run that
+            // overflows the ring still has it. A time the run never reached
+            // has none.
+            let sample = analog
+                .filter(|_| details.at_ns <= run.time_ns)
+                .and_then(|tally| tally.last);
             observed_times_ns = sample.map(|(time_ns, _)| vec![time_ns]);
             // Samples are f32; compare in f32 so `equals: 2.4` means the
             // value the oscilloscope shows.
@@ -699,6 +726,35 @@ fn evaluate(
             });
             (sample.map(|(_, value)| f64::from(value)), passed)
         }
+        FlexAssertion::AnalogWindow(assertion) => {
+            let details = &assertion.analog_window;
+            // A window the run did not reach the end of was not observed.
+            let range = analog
+                .filter(|_| details.to_ns.is_none_or(|to_ns| to_ns <= run.time_ns))
+                .and_then(|tally| tally.min.zip(tally.max));
+            observed_max = range.map(|(_, (_, max))| f64::from(max));
+            observed_times_ns = range.map(|((min_ns, _), (max_ns, _))| vec![min_ns, max_ns]);
+            let passed = range.is_some_and(|((_, min), (_, max))| {
+                details.min.is_none_or(|bound| min >= bound as f32)
+                    && details.max.is_none_or(|bound| max <= bound as f32)
+            });
+            (range.map(|((_, min), _)| f64::from(min)), passed)
+        }
+        FlexAssertion::AnalogCrossings(assertion) => {
+            let details = &assertion.analog_crossings;
+            let tally = analog.filter(|_| details.to_ns.is_none_or(|to_ns| to_ns <= run.time_ns));
+            let passed = tally.is_some_and(|tally| {
+                details.count.is_none_or(|count| tally.crossings == count)
+                    && details.times_ns.as_ref().is_none_or(|expected| {
+                        tally.crossings == expected.len() as u64
+                            && &tally.crossing_times_ns == expected
+                    })
+            });
+            observed_times_truncated =
+                tally.is_some_and(|tally| tally.crossings > tally.crossing_times_ns.len() as u64);
+            observed_times_ns = tally.map(|tally| tally.crossing_times_ns.clone());
+            (tally.map(|tally| tally.crossings as f64), passed)
+        }
         FlexAssertion::FinalTime(assertion) => {
             let details = &assertion.final_time_ns;
             (
@@ -711,6 +767,7 @@ fn evaluate(
         assertion: assertion.clone(),
         passed,
         observed,
+        observed_max,
         observed_times_ns,
         observed_times_truncated,
     }
@@ -718,8 +775,8 @@ fn evaluate(
 
 /// Every assertion must name a port or channel the run can observe that way.
 /// Checked before the firmware runs so a typo is a configuration error, not a
-/// silently failing assertion. Returns, per assertion, the id of the edge
-/// tally a `digital_edges` assertion reads.
+/// silently failing assertion. Returns, per assertion, the id of the tally an
+/// instrument assertion reads.
 fn validate_assertion_ports(
     runtime: &mut FlexRuntime,
     script: &FlexTestScript,
@@ -789,30 +846,70 @@ fn validate_assertion_ports(
             }
             FlexAssertion::AnalogSample(assertion) => {
                 let details = &assertion.analog_sample;
-                let name = details.target();
-                if let Some(port) = &details.port {
-                    let Some(port) = ports.iter().find(|candidate| &candidate.name == port) else {
-                        return Err(format!(
-                            "assertions[{index}].analog_sample names unknown Flex port '{name}'"
-                        ));
-                    };
-                    if port.kind != FlexPortKind::Number || port.access != FlexPortAccess::Read {
-                        return Err(format!(
-                            "assertions[{index}].analog_sample needs a numeric read port; '{name}' is not one"
-                        ));
-                    }
-                }
-                if analog_channel(&analog, details).is_none() {
-                    return Err(format!(
-                        "assertions[{index}].analog_sample: the oscilloscope has no channel for '{name}'; its channels are [{}]",
-                        analog
-                            .channels
-                            .iter()
-                            .map(|channel| channel.name.as_str())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ));
-                }
+                let column = analog_channel(
+                    index,
+                    "analog_sample",
+                    &details.port,
+                    &details.channel,
+                    &ports,
+                    &analog,
+                )?;
+                let tally = runtime
+                    .tally_analog_window(column, details.at_ns, details.at_ns, None, 0)
+                    .map_err(|error| format!("assertions[{index}].analog_sample: {error}"))?;
+                tallies[index] = Some(tally);
+            }
+            FlexAssertion::AnalogWindow(assertion) => {
+                let details = &assertion.analog_window;
+                let column = analog_channel(
+                    index,
+                    "analog_window",
+                    &details.port,
+                    &details.channel,
+                    &ports,
+                    &analog,
+                )?;
+                let tally = runtime
+                    .tally_analog_window(
+                        column,
+                        details.from_ns.unwrap_or(0),
+                        details.to_ns.unwrap_or(u64::MAX),
+                        None,
+                        0,
+                    )
+                    .map_err(|error| format!("assertions[{index}].analog_window: {error}"))?;
+                tallies[index] = Some(tally);
+            }
+            FlexAssertion::AnalogCrossings(assertion) => {
+                let details = &assertion.analog_crossings;
+                let column = analog_channel(
+                    index,
+                    "analog_crossings",
+                    &details.port,
+                    &details.channel,
+                    &ports,
+                    &analog,
+                )?;
+                let direction = match details.direction {
+                    FlexCrossingDirection::Rising => AnalogCrossing::Rising,
+                    FlexCrossingDirection::Falling => AnalogCrossing::Falling,
+                };
+                // One time more than expected shows an extra crossing.
+                let max_times = details
+                    .times_ns
+                    .as_ref()
+                    .map_or(0, |times| times.len() + 1)
+                    .max(MAX_REPORTED_EDGE_TIMES);
+                let tally = runtime
+                    .tally_analog_window(
+                        column,
+                        details.from_ns.unwrap_or(0),
+                        details.to_ns.unwrap_or(u64::MAX),
+                        Some((details.level as f32, direction)),
+                        max_times,
+                    )
+                    .map_err(|error| format!("assertions[{index}].analog_crossings: {error}"))?;
+                tallies[index] = Some(tally);
             }
         }
     }
@@ -913,6 +1010,14 @@ fn write_junit(path: &Path, result: &FlexTestResult, duration: Duration) -> std:
                     a.analog_sample.target(),
                     a.analog_sample.at_ns
                 ),
+                FlexAssertion::AnalogWindow(a) =>
+                    format!("analog_window {}", a.analog_window.target()),
+                FlexAssertion::AnalogCrossings(a) => format!(
+                    "analog_crossings {} {:?} {}",
+                    a.analog_crossings.target(),
+                    a.analog_crossings.direction,
+                    a.analog_crossings.level
+                ),
                 FlexAssertion::FinalTime(_) => "final_time_ns".to_owned(),
             }
         );
@@ -925,8 +1030,8 @@ fn write_junit(path: &Path, result: &FlexTestResult, duration: Duration) -> std:
             cases.push_str(&format!(
                 "    <failure message=\"assertion failed\">{}</failure>\n",
                 crate::xml_escape(&format!(
-                    "{name}\nobserved={:?}\nobserved_times_ns={:?}\n\n{details}",
-                    assertion.observed, assertion.observed_times_ns
+                    "{name}\nobserved={:?}\nobserved_max={:?}\nobserved_times_ns={:?}\n\n{details}",
+                    assertion.observed, assertion.observed_max, assertion.observed_times_ns
                 ))
             ));
         }
@@ -1087,9 +1192,15 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
             .assertions
             .iter()
             .zip(&tallies)
-            .map(|(assertion, tally)| {
-                let tally = tally.and_then(|id| runtime.digital_edge_tally(id));
-                evaluate(assertion, &result, &traces, tally)
+            .map(|(assertion, tally)| match assertion {
+                FlexAssertion::DigitalEdges(_) => {
+                    let tally = tally.and_then(|id| runtime.digital_edge_tally(id));
+                    evaluate(assertion, &result, tally, None)
+                }
+                _ => {
+                    let tally = tally.and_then(|id| runtime.analog_window_tally(id));
+                    evaluate(assertion, &result, None, tally.as_ref())
+                }
             })
             .collect();
         result.assertions = assertions;

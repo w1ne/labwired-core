@@ -25,4 +25,6 @@ assertions:
   - digital_edges: { port: fan_drive, count: 0 }
   - digital_edges: { port: fan_state, count: 0 }
   - analog_sample: { port: temperature_mv, at_ns: 3000, equals: 1932 }
+  - analog_crossings: { port: temperature_mv, level: 2000, direction: rising, count: 0 }
+  - analog_window: { port: temperature_mv, min: 1650, max: 1932 }
   - final_time_ns: { equals: 6000 }

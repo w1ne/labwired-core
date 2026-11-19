@@ -9,7 +9,7 @@
 //! No `Cpu`, `Machine`, MMIO address map, second rule engine, or analog solver
 //! is constructed here. Target binaries keep the separate machine path.
 
-use crate::analog::{AnalogSample, AnalogTraceBatch};
+use crate::analog::{AnalogCrossing, AnalogSample, AnalogTraceBatch, AnalogWindowTally};
 use crate::cosim::{CosimRunner, CosimSignalValue, CosimSignals};
 use crate::logic_capture::{LogicCapture, PadEvent};
 use crate::{SimResult, SimulationError};
@@ -609,6 +609,34 @@ impl FlexRuntime {
 
     pub fn digital_edge_tally(&self, id: usize) -> Option<&FlexDigitalEdgeTally> {
         self.digital.tallies.get(id)
+    }
+
+    /// Start an exact tally of oscilloscope channel `channel` (its index in
+    /// [`FlexAnalogTraceBatch::channels`]) with `from_ns <= time_ns <= to_ns`:
+    /// lowest and highest value, the newest sample, and with `level` the
+    /// crossings of that level. Returns the tally id. Must start at 0 ns.
+    pub fn tally_analog_window(
+        &mut self,
+        channel: usize,
+        from_ns: u64,
+        to_ns: u64,
+        level: Option<(f32, AnalogCrossing)>,
+        max_times: usize,
+    ) -> SimResult<usize> {
+        if self.time_ns != 0 {
+            return Err(error("an analog tally must start at 0 ns"));
+        }
+        self.runner
+            .analog_trace_registry()
+            .tally_window(channel, from_ns, to_ns, level, max_times)
+            .map_err(error)
+    }
+
+    /// The analog tally `id` as it stands at the current time.
+    pub fn analog_window_tally(&self, id: usize) -> Option<AnalogWindowTally> {
+        self.runner
+            .analog_trace_registry()
+            .window_tally(id, self.time_ns)
     }
 
     /// The unannotated analog engine batch, for the exporters that already
