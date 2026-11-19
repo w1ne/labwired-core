@@ -782,17 +782,17 @@ behavior:
     }
 
     #[test]
-    fn datasheet_table_points_are_exact() {
+    fn datasheet_typical_curve_readoffs_are_pinned() {
         for (d, v) in [
-            (100.0, 3100),
-            (150.0, 2300),
-            (200.0, 1900),
-            (300.0, 1300),
-            (400.0, 1000),
-            (500.0, 800),
-            (600.0, 650),
-            (700.0, 550),
-            (800.0, 500),
+            (100.0, 2300),
+            (150.0, 1650),
+            (200.0, 1300),
+            (300.0, 930),
+            (400.0, 730),
+            (500.0, 600),
+            (600.0, 510),
+            (700.0, 440),
+            (800.0, 400),
         ] {
             let mut s = device();
             s.set_input("distance", d).unwrap();
@@ -816,7 +816,7 @@ behavior:
     fn interpolation_lies_between_table_points() {
         let mut s = device();
         s.set_input("distance", 250.0).unwrap();
-        assert_eq!(s.output_mv(), 1600);
+        assert_eq!(s.output_mv(), 1115);
     }
 
     #[test]
@@ -824,7 +824,7 @@ behavior:
         let mut s = device();
         s.set_input("distance", 5000.0).unwrap_err();
         s.set_input("distance", 800.0).unwrap();
-        assert_eq!(s.output_mv(), 500);
+        assert_eq!(s.output_mv(), 400);
         // The channel max is 800, so the floor path is exercised via the
         // descriptor's own out-of-band rule check below.
         let mut s2 = device();
@@ -834,12 +834,12 @@ behavior:
     }
 
     #[test]
-    fn below_10cm_clamps_to_the_near_value() {
+    fn below_10cm_clamps_to_the_10cm_model_endpoint() {
         let mut s = device();
         s.set_input("distance", 60.0).unwrap();
-        assert_eq!(s.output_mv(), 3100);
+        assert_eq!(s.output_mv(), 2300);
         s.set_input("distance", 0.0).unwrap();
-        assert_eq!(s.output_mv(), 3100);
+        assert_eq!(s.output_mv(), 2300);
     }
 
     fn analog_ref(stem: &str) -> Option<f32> {
@@ -916,9 +916,9 @@ behavior:
     fn adc_count_scales_with_voltage() {
         let mut s = device();
         s.set_input("distance", 100.0).unwrap();
-        assert_eq!(s.adc_count(3300, 12), (3100u32 * 4095 / 3300) as u16);
-        // Same 3.1 V on a 5 V, 10-bit converter; and clamped to its range.
-        assert_eq!(s.adc_count(5000, 10), (3100u32 * 1023 / 5000) as u16);
+        assert_eq!(s.adc_count(3300, 12), (2300u32 * 4095 / 3300) as u16);
+        // Same 2.3 V on a 5 V, 10-bit converter; and clamped to its range.
+        assert_eq!(s.adc_count(5000, 10), (2300u32 * 1023 / 5000) as u16);
         assert_eq!(s.adc_count(1000, 10), 1023);
     }
 
@@ -991,6 +991,9 @@ behavior:
         assert!(matches!(m.transport, Transport::Analog));
         assert_eq!(m.inputs.len(), 1);
         assert_eq!(m.inputs[0].key, "distance");
+        assert_eq!(m.inputs[0].min, 100.0);
+        assert_eq!(m.inputs[0].max, 800.0);
+        assert_eq!(m.inputs[0].default, Some(100.0));
         assert_eq!(m.config_keys[0].name, "channel");
     }
 
@@ -1000,7 +1003,7 @@ behavior:
     #[test]
     fn every_analog_descriptor_seeds_its_documented_default() {
         for (stem, want_mv) in [
-            ("gp2y0a21", 3100u16),    // no default ⇒ 0 mm ⇒ clamped near value
+            ("gp2y0a21", 2300u16),    // explicit 100 mm / 10 cm model default
             ("ldr", 2751),            // 100 lx
             ("potentiometer", 1650),  // 50 %
             ("ntc-thermistor", 1650), // 25 °C ⇒ exactly Vref/2

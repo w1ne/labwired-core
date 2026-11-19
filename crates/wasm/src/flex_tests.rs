@@ -41,6 +41,14 @@ const TMP36_FIRMWARE: &[u8] = include_bytes!("../tests/fixtures/flex-analog-tmp3
 const TMP36_FIRMWARE_SOURCE: &[u8] =
     include_bytes!("../tests/fixtures/flex-analog-tmp36/firmware.rs");
 const TMP36_SYSTEM_BYTES: &[u8] = include_bytes!("../tests/fixtures/flex-analog-tmp36/system.yaml");
+const GP2Y_SYSTEM: &str = include_str!("../tests/fixtures/flex-analog-gp2y0a21/system.yaml");
+const GP2Y_BROWSER: &str = include_str!("../tests/fixtures/flex-analog-gp2y0a21/browser.json");
+const GP2Y_NATIVE: &str = include_str!("../tests/fixtures/flex-analog-gp2y0a21/native.json");
+const GP2Y_FIRMWARE: &[u8] = include_bytes!("../tests/fixtures/flex-analog-gp2y0a21/firmware.wasm");
+const GP2Y_FIRMWARE_SOURCE: &[u8] =
+    include_bytes!("../tests/fixtures/flex-analog-gp2y0a21/firmware.rs");
+const GP2Y_SYSTEM_BYTES: &[u8] =
+    include_bytes!("../tests/fixtures/flex-analog-gp2y0a21/system.yaml");
 const NTC_SYSTEM: &str = include_str!("../tests/fixtures/flex-analog-ntc/system.yaml");
 const NTC_BROWSER: &str = include_str!("../tests/fixtures/flex-analog-ntc/browser.json");
 const NTC_NATIVE: &str = include_str!("../tests/fixtures/flex-analog-ntc/native.json");
@@ -834,6 +842,192 @@ fn flex_tmp36_browser_evidence_pins_firmware_and_manifest_inputs() {
             normalize_numbers(&browser["observations"][case]),
             normalize_numbers(&native[case]),
             "browser evidence for {case} must match the native instrument trace"
+        );
+    }
+}
+
+fn gp2y0a21_reference() -> serde_json::Value {
+    let mut runtime = FlexRuntime::from_yaml(GP2Y_SYSTEM).expect("load registered Sharp source");
+    let distance = runtime.port_id("distance_mm").unwrap();
+    let voltage = runtime.port_id("distance_mv").unwrap();
+    let drive = runtime.port_id("near_drive").unwrap();
+    let led = runtime.port_id("near_led").unwrap();
+    let points = [
+        (100u32, 2300u16),
+        (150, 1650),
+        (200, 1300),
+        (300, 930),
+        (400, 730),
+        (500, 600),
+        (600, 510),
+        (700, 440),
+        (800, 400),
+    ];
+    assert_eq!(runtime.read(voltage).unwrap(), 2300.0);
+
+    let mut observations = Vec::new();
+    for (distance_mm, expected_mv) in points {
+        runtime.write(distance, f64::from(distance_mm)).unwrap();
+        runtime.advance_ns(1_000).unwrap();
+        let sensor_mv = runtime.read(voltage).unwrap() as u16;
+        assert_eq!(sensor_mv, expected_mv, "distance {distance_mm} mm");
+        runtime
+            .write(drive, if sensor_mv >= 1_500 { 1.0 } else { 0.0 })
+            .unwrap();
+        runtime.advance_ns(1_000).unwrap();
+        observations.push(serde_json::json!({
+            "distance_mm": distance_mm,
+            "sensor_mv": sensor_mv,
+            "near_led": runtime.read(led).unwrap() != 0.0,
+        }));
+    }
+
+    let analog = runtime.analog_trace_snapshot(0);
+    assert_eq!(analog.time_unit, "ns");
+    assert_eq!(analog.dropped, 0);
+    assert_eq!(analog.channels.len(), 1);
+    assert_eq!(analog.channels[0].name, "gp2y0a21-sensor.voltage_mv");
+    assert_eq!(analog.channels[0].unit, "mV");
+    assert_eq!(analog.channels[0].port_names, ["distance_mv"]);
+    assert_eq!(analog.samples.len(), 19);
+
+    let digital = runtime.digital_trace_snapshot(0);
+    assert_eq!(digital.time_unit, "ns");
+    assert_eq!(digital.dropped, 0);
+    assert!(digital
+        .channels
+        .iter()
+        .any(|channel| channel.port_names == ["near_led"]));
+    assert_eq!(
+        digital
+            .edges
+            .iter()
+            .map(|edge| (edge.time_ns, edge.value))
+            .collect::<Vec<_>>(),
+        [(1_000, 1), (2_000, 1), (5_000, 0), (6_000, 0)]
+    );
+    assert_eq!(runtime.time_ns(), 18_000);
+
+    use sha2::{Digest, Sha256};
+    serde_json::json!({
+        "observations": observations,
+        "time_ns": runtime.time_ns(),
+        "analog_trace": {
+            "time_unit": analog.time_unit,
+            "channels": analog.channels,
+            "dropped": analog.dropped,
+            "samples": analog.samples.into_iter().map(|sample| serde_json::json!({
+                "cycle": sample.cycle,
+                "time_ns": sample.time_ns,
+                "values": sample.values,
+            })).collect::<Vec<_>>(),
+        },
+        "digital_trace": {
+            "time_unit": digital.time_unit,
+            "channels": digital.channels,
+            "dropped": digital.dropped,
+            "edges": digital.edges,
+        },
+        "run_report": {
+            "manifest_sha256": format!("{:x}", Sha256::digest(GP2Y_SYSTEM_BYTES)),
+        },
+    })
+}
+
+#[test]
+fn flex_gp2y0a21_reuses_the_corrected_catalog_curve_in_both_instruments() {
+    let measured = gp2y0a21_reference();
+    assert_eq!(measured["observations"][0]["sensor_mv"], 2300);
+    assert_eq!(measured["observations"][1]["sensor_mv"], 1650);
+    assert_eq!(measured["observations"][2]["sensor_mv"], 1300);
+    assert_eq!(measured["observations"][8]["sensor_mv"], 400);
+    let near_channel = measured["digital_trace"]["channels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|channel| channel["port_names"][0] == "near_led")
+        .unwrap()["id"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(
+        measured["digital_trace"]["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|edge| edge["ch"].as_u64() == Some(near_channel))
+            .map(|edge| (
+                edge["time_ns"].as_u64().unwrap(),
+                edge["value"].as_u64().unwrap()
+            ))
+            .collect::<Vec<_>>(),
+        [(2_000, 1), (6_000, 0)]
+    );
+
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/flex-analog-gp2y0a21/native.json");
+    if std::env::var_os("LABWIRED_REGEN_FLEX_GP2Y0A21").is_some() {
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&measured).unwrap() + "\n",
+        )
+        .unwrap();
+    }
+    let expected: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(measured, expected, "Sharp source model reference changed");
+}
+
+#[test]
+fn flex_gp2y0a21_browser_proof_pins_firmware_and_model_inputs() {
+    use sha2::{Digest, Sha256};
+
+    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Number(number) => {
+                serde_json::json!(number.as_f64().expect("finite fixture number"))
+            }
+            serde_json::Value::Array(items) => {
+                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
+            }
+            serde_json::Value::Object(fields) => serde_json::Value::Object(
+                fields
+                    .iter()
+                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+    fn sha256(bytes: &[u8]) -> String {
+        format!("{:x}", Sha256::digest(bytes))
+    }
+
+    let browser: serde_json::Value = serde_json::from_str(GP2Y_BROWSER).unwrap();
+    let native: serde_json::Value = serde_json::from_str(GP2Y_NATIVE).unwrap();
+    let core_commit = browser["core_commit"].as_str().unwrap();
+    assert_eq!(core_commit.len(), 40);
+    assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(browser["native_model_equality"], true);
+    assert_eq!(browser["firmware_sha256"], sha256(GP2Y_FIRMWARE));
+    assert_eq!(
+        browser["firmware_source_sha256"],
+        sha256(GP2Y_FIRMWARE_SOURCE)
+    );
+    assert_eq!(browser["system_sha256"], sha256(GP2Y_SYSTEM_BYTES));
+    assert_eq!(
+        browser["run_report"]["manifest_sha256"],
+        sha256(GP2Y_SYSTEM_BYTES)
+    );
+    assert_eq!(
+        normalize_numbers(&browser["observations"]),
+        normalize_numbers(&native["observations"])
+    );
+    for (browser_trace, native_trace) in [("analog", "analog_trace"), ("digital", "digital_trace")]
+    {
+        assert_eq!(
+            normalize_numbers(&browser["traces"][browser_trace]),
+            normalize_numbers(&native[native_trace]),
+            "browser {browser_trace} must match the native instrument capture"
         );
     }
 }

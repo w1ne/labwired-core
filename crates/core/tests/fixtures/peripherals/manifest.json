@@ -1382,7 +1382,12 @@
         {
           "name": "rd_pin",
           "ty": "str",
-          "doc": "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5."
+          "doc": "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5. Omit when rd_tied_high is true."
+        },
+        {
+          "name": "rd_tied_high",
+          "ty": "bool",
+          "doc": "True when RD is physically tied to the logic-high rail. No RD GPIO is attached; rd_pin/RD must be absent. Defaults to false."
         },
         {
           "name": "rst_pin",
@@ -2101,7 +2106,7 @@
       "device_type": "gp2y0a21",
       "label": "Sharp GP2Y0A21 IR Distance Sensor",
       "summary": "Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC).",
-      "detail": "Triangulation IR ranger: Vo falls with distance over the specified 10–80 cm band, following the datasheet typical-output curve (3.1 V at 10 cm down to 0.5 V at 80 cm). Drive the `distance` channel (mm) at runtime and the ADC channel follows. Beyond 80 cm the output holds a ~0.4 V floor (far is NOT zero); below 10 cm the real part's output falls again (mirror region) and this model clamps to the 10 cm value instead.",
+      "detail": "Triangulation IR ranger: Vo follows a rounded read-off of Sharp's typical white-paper graph over 10–80 cm (about 2.3 V at 10 cm and 0.4 V at 80 cm). Drive `distance` in mm and the ADC channel follows. The model holds 0.4 V beyond 80 cm and clamps below 10 cm to the 10 cm endpoint; neither rule claims the physical out-of-range response. The roughly 38 ms measurement cadence, up-to-5 ms output delay, reflectance/angle variation, noise, and target-MCU ADC behavior are not modeled.",
       "transport": "analog",
       "category": "analog",
       "config_keys": [
@@ -2117,9 +2122,9 @@
           "key": "distance",
           "label": "Distance",
           "unit": "mm",
-          "min": 0.0,
+          "min": 100.0,
           "max": 800.0,
-          "default": 0.0
+          "default": 100.0
         }
       ]
     },
