@@ -94,6 +94,13 @@ use crate::{CycleClock, MmioAccessClass, Peripheral, PeripheralTickResult, SimRe
 
 const SYSTIMER_CLOCK_HZ: u64 = 16_000_000;
 
+fn gcd(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    a
+}
+
 /// SYSTIMER interrupt-matrix source ID for TARGET0 (per esp32s3-pac
 /// `Interrupt::SYSTIMER_TARGET0 = 57`).  TARGET1/2 follow at +1/+2.
 const SYSTIMER_TARGET0_SOURCE: u32 = 57;
@@ -173,8 +180,10 @@ pub struct Systimer {
     unit0: UnitState,
     unit1: UnitState,
     cpu_clock_hz: u32,
-    /// Accumulated CPU cycles since last counter update; flushed when ≥ 1
-    /// SYSTIMER tick worth of CPU cycles have elapsed.
+    /// CPU cycles since the last counter update not yet worth one SYSTIMER
+    /// tick, scaled by the tick-ratio numerator (see [`Self::tick_ratio`]).
+    /// For a core clock that is a whole multiple of 16 MHz (C3 160, S3 240)
+    /// the numerator is 1, so this is a plain cycle count.
     cpu_cycle_accum: u64,
     /// Three alarm comparators. Each may be configured to compare against
     /// UNIT0 or UNIT1 via TARGETx_CONF bit 31.
@@ -398,8 +407,9 @@ impl Systimer {
             if let Some(clock) = &self.clock {
                 let now = clock.now();
                 if now > self.last_tick {
-                    let pending = self.cpu_cycle_accum + (now - self.last_tick);
-                    counter = counter.wrapping_add(pending / self.cpu_per_systimer());
+                    let (num, den) = self.tick_ratio();
+                    let pending = self.cpu_cycle_accum + (now - self.last_tick) * num;
+                    counter = counter.wrapping_add(pending / den);
                 }
             }
         }
@@ -443,23 +453,32 @@ impl Systimer {
         self.conf & (1 << 29) != 0
     }
 
-    fn cpu_per_systimer(&self) -> u64 {
-        (self.cpu_clock_hz as u64)
-            .saturating_div(SYSTIMER_CLOCK_HZ)
-            .max(1)
+    /// SYSTIMER ticks per CPU cycle as a reduced fraction `num / den`.
+    /// 160 MHz gives 1/10; the ESP32-C2's 120 MHz gives 2/15 (7.5 cycles per
+    /// tick), which a whole-cycle divisor would truncate to 7 and run the
+    /// counter 7% fast. A core clock below 16 MHz keeps one tick per cycle.
+    fn tick_ratio(&self) -> (u64, u64) {
+        let cpu = self.cpu_clock_hz as u64;
+        if cpu <= SYSTIMER_CLOCK_HZ {
+            return (1, 1);
+        }
+        let g = gcd(cpu, SYSTIMER_CLOCK_HZ);
+        (SYSTIMER_CLOCK_HZ / g, cpu / g)
     }
 
     fn advance_cycles(&mut self, cycles: u64) {
         if cycles == 0 {
             return;
         }
-        self.cpu_cycle_accum = self.cpu_cycle_accum.saturating_add(cycles);
-        let cpu_per_systimer = self.cpu_per_systimer();
-        if self.cpu_cycle_accum < cpu_per_systimer {
+        let (num, den) = self.tick_ratio();
+        self.cpu_cycle_accum = self
+            .cpu_cycle_accum
+            .saturating_add(cycles.saturating_mul(num));
+        if self.cpu_cycle_accum < den {
             return;
         }
-        let ticks = self.cpu_cycle_accum / cpu_per_systimer;
-        self.cpu_cycle_accum %= cpu_per_systimer;
+        let ticks = self.cpu_cycle_accum / den;
+        self.cpu_cycle_accum %= den;
         if self.unit0_running() {
             self.unit0.counter = self.unit0.counter.wrapping_add(ticks);
         }
@@ -511,7 +530,7 @@ impl Systimer {
     }
 
     fn next_alarm_delay_cycles(&self) -> Option<u64> {
-        let cpu_per_systimer = self.cpu_per_systimer();
+        let (num, den) = self.tick_ratio();
         let mut best: Option<u64> = None;
         for (i, alarm) in self.unit0_alarms.iter().enumerate() {
             if alarm.pending && (self.int_ena & (1 << i) != 0) {
@@ -537,9 +556,12 @@ impl Systimer {
             let cycles = if systimer_ticks == 0 {
                 0
             } else {
+                // First cycle at which accum + cycles * num reaches
+                // systimer_ticks * den (ceiling division).
                 systimer_ticks
-                    .saturating_mul(cpu_per_systimer)
-                    .saturating_sub(self.cpu_cycle_accum.min(cpu_per_systimer - 1))
+                    .saturating_mul(den)
+                    .saturating_sub(self.cpu_cycle_accum.min(den - 1))
+                    .div_ceil(num)
             };
             best = Some(best.map_or(cycles, |cur| cur.min(cycles)));
         }
@@ -973,6 +995,37 @@ mod tests {
             0x4600_0000,
             "CONF reset must match SVD/silicon value"
         );
+    }
+
+    /// ESP32-C2: 120 MHz core, 16 MHz SYSTIMER = 7.5 cycles per tick. A
+    /// whole-cycle divisor (7) ran the counter 7% fast.
+    #[test]
+    fn a_120mhz_core_counts_two_ticks_per_fifteen_cycles() {
+        let mut s = Systimer::new(120_000_000);
+        for _ in 0..7 {
+            s.tick();
+        }
+        assert_eq!(s.unit0.counter, 0, "7 cycles is less than one tick");
+        s.tick();
+        assert_eq!(s.unit0.counter, 1, "8th cycle completes tick 1 (7.5)");
+        for _ in 8..120_000 {
+            s.tick();
+        }
+        assert_eq!(
+            s.unit0.counter, 16_000,
+            "1 ms = 120000 cycles = 16000 ticks"
+        );
+
+        // An alarm 3 ticks ahead lands 22.5 cycles away: 23 whole cycles.
+        s.unit0_alarms[0].enabled = true;
+        s.unit0_alarms[0].target = s.unit0.counter + 3;
+        assert_eq!(s.next_alarm_delay_cycles(), Some(23));
+        for _ in 0..22 {
+            s.tick();
+        }
+        assert_eq!(s.unit0.counter, 16_002);
+        s.tick();
+        assert_eq!(s.unit0.counter, 16_003, "the predicted cycle reaches it");
     }
 
     #[test]

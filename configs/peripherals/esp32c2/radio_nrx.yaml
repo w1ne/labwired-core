@@ -1,0 +1,14 @@
+# ESP32-C2 NRX (Wi-Fi RX) power-up control: only the register esp-hal 1.2 writes
+# (src/rtc_cntl/sleep/esp32c2.rs: NRXPD_CTRL = DR_REG_NRX_BASE + 0x00d4, RMW of the
+# FORCE_PU bits in rtc_sleep_pu). No SVD covers the radio blocks. The bits
+# store and read back; nothing behind them is modelled.
+peripheral: RADIO_NRX
+version: 0.1.0
+registers:
+- id: NRXPD_CTRL
+  address_offset: 0xd4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields: []
+  side_effects: null

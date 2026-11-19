@@ -8,8 +8,8 @@ This page covers the public models. For every chip we model — public and priva
 
 | Chip | Level | Estate | Peripherals | Reg match (verifiable) | Excluded | Behavior gate |
 |------|-------|--------|-------------|------------------------|----------|---------------|
-| esp32c2 | **L0** | ✓ | 2 | — | — | — |
 | esp32c3 | **L2** | ✓ | 40 | 380/402 (94%) | 190 | firmware_survival::test_esp32c3_demo_survival |
+| esp32c2 | **L1** | ✓ | 22 | — | — | esp32c2_compiled_firmware::esp32c2_compiled_rv32imc_firmware_prints_on_uart0_and_toggles_gpio10 |
 | esp32c6 | **L1** | ✓ | 69 | — | — | firmware_survival::test_esp32c6_demo_survival |
 | litex-vexriscv | **L1** | ✓ | 5 | — | — | firmware_survival::test_litex_vexriscv_smoke_survival |
 | arty-litex-vexriscv | **L1** | ✓ | 6 | — | — | firmware_survival::test_arty_litex_smoke_survival |

@@ -94,6 +94,15 @@ const PAYLOAD: [u8; 3] = [0x53, 0x1C, 0xE1];
 /// drive to decodable edges, with the reason. Adding a silent `continue` instead
 /// of a row here is the same failure as the binding-only gate this replaced.
 const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
+    // ESP32-C2 (ESP8684H4X): the harness UART bring-up is per family and has
+    // none for the C2. UART0 bytes are proven by
+    // esp32c2_compiled_firmware::esp32c2_compiled_rv32imc_firmware_prints_on_uart0_and_toggles_gpio10.
+    (
+        "esp32c2",
+        BusKind::Uart,
+        "no UART bring-up for the ESP32-C2 family in this harness yet; UART0 \
+         bytes are proven by esp32c2_compiled_firmware",
+    ),
     // ESP32-H2: UART0 has no bring-up arm for the H2 family in this harness.
     // Bytes are proven by the esp32h2-devkitm-1-n4s board smoke (uart_contains).
     (

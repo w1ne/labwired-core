@@ -67,6 +67,9 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
         // Arduino-ESP32 3.x calls ROM routines from its first instructions
         // (`esp_rom_get_reset_reason` at step 21), so a zero window wedges.
         "LABWIRED_ESP32C6_ROM" => "roms/esp32c6/esp32c6_rom.bin",
+        // Flattened esp32c2_rev200_rom.elf (roms/esp32c2/README.md). esp-hal
+        // links memcpy and the regi2c clock helpers to ROM addresses.
+        "LABWIRED_ESP32C2_ROM" => "roms/esp32c2/esp32c2_rom.bin",
         // Same image as `embedded_region_image`; kept so an operator can
         // still point the env var at a replacement file. Bare-metal ELFs
         // that need the Cortex-M flash boot alias at 0 (PIO onboarding) set
