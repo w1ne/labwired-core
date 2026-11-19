@@ -29,6 +29,14 @@ const LDR_NETWORK_SYSTEM: &str =
     include_str!("../tests/fixtures/flex-heypcb-ldr-network/system.yaml");
 const LDR_NETWORK_SOURCE_MAP: &str =
     include_str!("../tests/fixtures/flex-heypcb-ldr-network/source-map.json");
+const LDR_NETWORK_BROWSER: &str =
+    include_str!("../tests/fixtures/flex-heypcb-ldr-network/browser.json");
+const LDR_NETWORK_NATIVE: &str =
+    include_str!("../tests/fixtures/flex-heypcb-ldr-network/native.json");
+const LDR_NETWORK_FIRMWARE: &[u8] =
+    include_bytes!("../tests/fixtures/flex-heypcb-ldr-network/firmware.wasm");
+const LDR_NETWORK_FIRMWARE_SOURCE: &[u8] =
+    include_bytes!("../tests/fixtures/flex-heypcb-ldr-network/firmware.rs");
 const LIPO_SYSTEM: &str = include_str!("../tests/fixtures/flex-analog-multi-input/system.yaml");
 const LIPO_BROWSER: &str = include_str!("../tests/fixtures/flex-analog-multi-input/browser.json");
 const LIPO_NATIVE: &str = include_str!("../tests/fixtures/flex-analog-multi-input/native.json");
@@ -1727,6 +1735,89 @@ fn flex_heypcb_ldr_network_refuses_illuminance_outside_the_data_sheet_range() {
             .contains("Flex runtime stopped"));
         assert_eq!(runtime.time_ns(), 0);
     }
+}
+
+#[test]
+fn flex_heypcb_ldr_network_browser_evidence_pins_source_and_exact_runtime_inputs() {
+    use sha2::{Digest, Sha256};
+
+    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Number(number) => {
+                serde_json::json!(number.as_f64().expect("finite fixture number"))
+            }
+            serde_json::Value::Array(items) => {
+                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
+            }
+            serde_json::Value::Object(fields) => serde_json::Value::Object(
+                fields
+                    .iter()
+                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+
+    fn sha256(bytes: &[u8]) -> String {
+        format!("{:x}", Sha256::digest(bytes))
+    }
+
+    let browser: serde_json::Value = serde_json::from_str(LDR_NETWORK_BROWSER).unwrap();
+    let native: serde_json::Value = serde_json::from_str(LDR_NETWORK_NATIVE).unwrap();
+    let source_map: serde_json::Value = serde_json::from_str(LDR_NETWORK_SOURCE_MAP).unwrap();
+    let core_commit = browser["core_commit"].as_str().unwrap();
+    assert_eq!(core_commit.len(), 40);
+    assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(browser["status"], "passed");
+    assert_eq!(browser["cpu_emulation"], false);
+    assert_eq!(browser["native_model_equality"], true);
+    assert_eq!(browser["firmware_sha256"], sha256(LDR_NETWORK_FIRMWARE));
+    assert_eq!(
+        browser["firmware_source_sha256"],
+        sha256(LDR_NETWORK_FIRMWARE_SOURCE)
+    );
+    assert_eq!(
+        browser["system_sha256"],
+        sha256(LDR_NETWORK_SYSTEM.as_bytes())
+    );
+    assert_eq!(
+        browser["run_report"]["manifest_sha256"],
+        browser["system_sha256"]
+    );
+    assert_eq!(
+        browser["source_map_sha256"],
+        sha256(LDR_NETWORK_SOURCE_MAP.as_bytes())
+    );
+    for key in ["repository", "revision", "asset", "license_spdx", "files"] {
+        assert_eq!(browser["source"][key], source_map["source"][key], "{key}");
+    }
+    for case in ["bright", "dim"] {
+        assert_eq!(
+            normalize_numbers(&browser["observations"][case]),
+            normalize_numbers(&native[case]),
+            "browser evidence for {case} must match the native instrument traces"
+        );
+    }
+    assert_eq!(browser["c7_transient_63pct_crossing_ns"], 350_000);
+    let refusals = browser["out_of_range_refusals"].as_array().unwrap();
+    assert_eq!(refusals.len(), 2);
+    for refusal in refusals {
+        assert!(refusal["error"]
+            .as_str()
+            .unwrap()
+            .contains("photoresistor illuminance must be within 1..100 lx"));
+        assert!(refusal["read_after"]
+            .as_str()
+            .unwrap()
+            .contains("Flex runtime stopped"));
+        assert_eq!(refusal["time_ns"], 0);
+        assert_eq!(refusal["led_edges"], 0);
+    }
+    let scope = &browser["run_report"]["execution_scope"];
+    assert_eq!(scope["original_target_firmware_executed"], false);
+    assert_eq!(scope["full_board_coverage"], "not_established");
+    assert_eq!(scope["chip_parity"], "not_established");
 }
 
 #[test]

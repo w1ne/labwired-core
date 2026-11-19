@@ -20,6 +20,9 @@
         "channels": [
           {
             "name": "tmp36-sensor.voltage_mv",
+            "port_names": [
+              "temperature_mv"
+            ],
             "unit": "mV"
           }
         ],
@@ -52,6 +55,9 @@
         "channels": [
           {
             "name": "tmp36-sensor.voltage_mv",
+            "port_names": [
+              "temperature_mv"
+            ],
             "unit": "mV"
           }
         ],
@@ -84,6 +90,9 @@
         "channels": [
           {
             "name": "tmp36-sensor.voltage_mv",
+            "port_names": [
+              "temperature_mv"
+            ],
             "unit": "mV"
           }
         ],
@@ -116,6 +125,9 @@
         "channels": [
           {
             "name": "tmp36-sensor.voltage_mv",
+            "port_names": [
+              "temperature_mv"
+            ],
             "unit": "mV"
           }
         ],
@@ -146,6 +158,14 @@
       "The portable firmware writes temperature in degrees Celsius and reads the modeled millivolt output."
     ],
     "execution_path": "flex_portable_wasm",
+    "execution_scope": {
+      "chip_parity": "not_established",
+      "detailed_target_execution_selected": false,
+      "firmware": "portable_behavior",
+      "full_board_coverage": "not_established",
+      "original_target_firmware_executed": false
+    },
+    "manifest_sha256": "63d31adde73d199052d5835f453e22b1f75d1b23b74a1e3d85949418d056daf9",
     "model_name": "Reusable TMP36 temperature-source check",
     "models": [
       {
@@ -205,10 +225,10 @@
     "cold-negative-control",
     "hot-positive-control"
   ],
-  "measured_browser_ms": 78.9,
-  "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
-  "browser_driver": "Chrome DevTools MCP",
-  "core_commit": "c51af6b6f1fdb9cf81176eeed9ec0888981c69f7",
+  "measured_browser_ms": 477.3,
+  "browser": "156.0.8078.79",
+  "browser_driver": "Playwright",
+  "core_commit": "3c3d634807daf29b91a195f6b8d9f5a7f58c4a9a",
   "firmware_sha256": "aa7c012374afe061ae11c33441fde3942a1b861255e7a24fad8b190a396fa6ff",
   "firmware_source_sha256": "3a4b21935f1920048e85efad41097d3c48e664d09d19e42602ab95cbc82dd759",
   "system_sha256": "63d31adde73d199052d5835f453e22b1f75d1b23b74a1e3d85949418d056daf9"

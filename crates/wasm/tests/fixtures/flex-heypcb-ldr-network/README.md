@@ -47,7 +47,7 @@ Native reference ([native.json](native.json)), 50 µs analog step, 4 ms settle:
 - At the 10 kΩ and 20 kΩ corners the bright case stays above half scale and the dim case stays below it.
 - 0 lx, 0.5 lx, and 100,000 lx stop the run at time 0 with the range error. A stopped run answers no further read or advance.
 
-Browser evidence, when present, is in [browser.json](browser.json).
+Browser run ([browser.json](browser.json)): Chromium 156.0.8078.79 with Playwright ran the compiled `firmware.wasm` against the web Wasm runtime built from Core commit `3c3d63480`. Both cases equal the native reference sample for sample, the 63.2 % crossing is at 350,000 ns, and 0 lx and 100,000 lx stop the run with the range error. Page-side Wasm initialization and checks took 276.2 ms. This time excludes compilation and onboarding.
 
 ## Scope
 
