@@ -19,7 +19,8 @@ use labwired_config::{
     FlexPortKind, FlexStep, FlexTestLimits, FlexTestScript,
 };
 use labwired_core::flex::{
-    FlexAnalogTraceBatch, FlexDigitalChannel, FlexDigitalTraceBatch, FlexRunReport, FlexRuntime,
+    FlexAnalogTraceBatch, FlexDigitalChannel, FlexDigitalEdgeTally, FlexDigitalTraceBatch,
+    FlexRunReport, FlexRuntime,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -34,6 +35,9 @@ use wasmi::{
 /// Portable firmware holds state in a few pages; this only stops a runaway
 /// `memory.grow` from taking the host down.
 const MAX_FIRMWARE_MEMORY_BYTES: usize = 64 << 20;
+/// Edge times `result.json` lists for one `digital_edges` assertion. The edge
+/// count is exact beyond this; only the list of times stops.
+const MAX_REPORTED_EDGE_TIMES: usize = 4096;
 
 pub(crate) struct FlexRunOutcome {
     pub exit_code: ExitCode,
@@ -101,10 +105,14 @@ struct FlexAssertionResult {
     /// What the run produced for this assertion; `None` means nothing was
     /// observed, which never passes.
     observed: Option<f64>,
-    /// Every captured edge time of a `digital_edges` channel, or the time of
-    /// the sample an `analog_sample` read.
+    /// The edge times of a `digital_edges` window, or the time of the sample
+    /// an `analog_sample` read.
     #[serde(skip_serializing_if = "Option::is_none")]
     observed_times_ns: Option<Vec<u64>>,
+    /// `observed_times_ns` holds only the first edge times of the window;
+    /// `observed` is still the exact number of edges.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    observed_times_truncated: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -146,6 +154,10 @@ struct FlexTraceFile {
     digital: FlexDigitalTraceBatch,
     analog: FlexAnalogTraceBatch,
 }
+
+/// A checked run: the runtime, the firmware bytes, and per assertion the id
+/// of the edge tally a `digital_edges` assertion reads.
+type Loaded = (FlexRuntime, Vec<u8>, Vec<Option<usize>>);
 
 struct Host {
     runtime: FlexRuntime,
@@ -611,8 +623,10 @@ fn evaluate(
     assertion: &FlexAssertion,
     run: &FlexTestResult,
     traces: &FlexTraceFile,
+    tally: Option<&FlexDigitalEdgeTally>,
 ) -> FlexAssertionResult {
     let mut observed_times_ns = None;
+    let mut observed_times_truncated = false;
     let (observed, passed) = match assertion {
         FlexAssertion::EntryResult(assertion) => {
             let observed = match assertion.entry_result.step {
@@ -641,31 +655,20 @@ fn evaluate(
         }
         FlexAssertion::DigitalEdges(assertion) => {
             let details = &assertion.digital_edges;
-            let digital = &traces.digital;
-            // A gap in the ring buffer makes any exact count unknowable.
-            let times = (digital.dropped == 0)
-                .then(|| digital_channel(digital, details))
-                .flatten()
-                .map(|channel| {
-                    digital
-                        .edges
-                        .iter()
-                        .filter(|edge| edge.ch == channel.id)
-                        .map(|edge| edge.time_ns)
-                        .collect::<Vec<_>>()
-                });
-            let passed = times.as_ref().is_some_and(|times| {
-                details
-                    .count
-                    .is_none_or(|count| times.len() as u64 == count)
-                    && details
-                        .times_ns
-                        .as_ref()
-                        .is_none_or(|expected| times == expected)
+            // The tally saw every edge when it was recorded, so the count is
+            // exact after the capture ring drops its oldest edges. A window
+            // the run did not reach the end of was not observed.
+            let tally = tally.filter(|_| details.to_ns.is_none_or(|to_ns| to_ns <= run.time_ns));
+            let passed = tally.is_some_and(|tally| {
+                details.count.is_none_or(|count| tally.count == count)
+                    && details.times_ns.as_ref().is_none_or(|expected| {
+                        tally.count == expected.len() as u64 && &tally.times_ns == expected
+                    })
             });
-            let observed = times.as_ref().map(|times| times.len() as f64);
-            observed_times_ns = times;
-            (observed, passed)
+            observed_times_truncated =
+                tally.is_some_and(|tally| tally.count > tally.times_ns.len() as u64);
+            observed_times_ns = tally.map(|tally| tally.times_ns.clone());
+            (tally.map(|tally| tally.count as f64), passed)
         }
         FlexAssertion::AnalogSample(assertion) => {
             let details = &assertion.analog_sample;
@@ -709,20 +712,23 @@ fn evaluate(
         passed,
         observed,
         observed_times_ns,
+        observed_times_truncated,
     }
 }
 
 /// Every assertion must name a port or channel the run can observe that way.
 /// Checked before the firmware runs so a typo is a configuration error, not a
-/// silently failing assertion.
+/// silently failing assertion. Returns, per assertion, the id of the edge
+/// tally a `digital_edges` assertion reads.
 fn validate_assertion_ports(
     runtime: &mut FlexRuntime,
     script: &FlexTestScript,
-) -> Result<(), String> {
+) -> Result<Vec<Option<usize>>, String> {
+    let mut tallies = vec![None; script.assertions.len()];
     // Instrument channels are fixed by the manifest, so they are known at 0 ns.
     let digital = runtime.digital_trace_snapshot(0);
     let analog = runtime.analog_trace_snapshot(0);
-    let ports = &runtime.manifest().ports;
+    let ports = runtime.manifest().ports.clone();
     for (index, assertion) in script.assertions.iter().enumerate() {
         match assertion {
             FlexAssertion::EntryResult(_) | FlexAssertion::FinalTime(_) => {}
@@ -754,7 +760,7 @@ fn validate_assertion_ports(
                         ));
                     }
                 }
-                if digital_channel(&digital, details).is_none() {
+                let Some(channel) = digital_channel(&digital, details) else {
                     return Err(format!(
                         "assertions[{index}].digital_edges: the logic analyzer has no channel for '{name}'; its channels are [{}]",
                         digital
@@ -764,7 +770,22 @@ fn validate_assertion_ports(
                             .collect::<Vec<_>>()
                             .join(", ")
                     ));
-                }
+                };
+                // One time more than expected shows an extra edge.
+                let max_times = details
+                    .times_ns
+                    .as_ref()
+                    .map_or(0, |times| times.len() + 1)
+                    .max(MAX_REPORTED_EDGE_TIMES);
+                let tally = runtime
+                    .tally_digital_edges(
+                        channel.id,
+                        details.from_ns.unwrap_or(0),
+                        details.to_ns.unwrap_or(u64::MAX),
+                        max_times,
+                    )
+                    .map_err(|error| format!("assertions[{index}].digital_edges: {error}"))?;
+                tallies[index] = Some(tally);
             }
             FlexAssertion::AnalogSample(assertion) => {
                 let details = &assertion.analog_sample;
@@ -795,7 +816,7 @@ fn validate_assertion_ports(
             }
         }
     }
-    Ok(())
+    Ok(tallies)
 }
 
 fn write_digital_vcd(batch: &FlexDigitalTraceBatch, path: &Path) -> std::io::Result<()> {
@@ -1014,7 +1035,7 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
 
     // Load everything before running anything; each failure here is a
     // configuration error with its own message.
-    let loaded = (|| -> Result<(FlexRuntime, Vec<u8>), String> {
+    let loaded = (|| -> Result<Loaded, String> {
         if let Some(message) = unsupported_option_message(args) {
             return Err(message);
         }
@@ -1028,10 +1049,12 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
             .map_err(|error| format!("failed to read Flex manifest {flex_path:?}: {error}"))?;
         let mut runtime = FlexRuntime::from_yaml(&manifest)
             .map_err(|error| format!("failed to load Flex manifest {flex_path:?}: {error}"))?;
-        validate_assertion_ports(&mut runtime, &script)?;
-        Ok((runtime, firmware))
+        let tallies = validate_assertion_ports(&mut runtime, &script)?;
+        Ok((runtime, firmware, tallies))
     })();
-    let executed = loaded.and_then(|(runtime, firmware)| {
+    let mut tallies = Vec::new();
+    let executed = loaded.and_then(|(runtime, firmware, ids)| {
+        tallies = ids;
         result.run_report = Some(runtime.run_report());
         execute(runtime, &firmware, &script, max_steps)
     });
@@ -1063,7 +1086,11 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
         let assertions = script
             .assertions
             .iter()
-            .map(|assertion| evaluate(assertion, &result, &traces))
+            .zip(&tallies)
+            .map(|(assertion, tally)| {
+                let tally = tally.and_then(|id| runtime.digital_edge_tally(id));
+                evaluate(assertion, &result, &traces, tally)
+            })
             .collect();
         result.assertions = assertions;
         result.traces = Some(FlexTraceSummary {
@@ -1132,7 +1159,16 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
             assertion
                 .observed_times_ns
                 .as_ref()
-                .map(|times| format!(" at_ns={times:?}"))
+                .map(|times| {
+                    // A long run can list thousands of edge times; result.json has them.
+                    let shown = &times[..times.len().min(16)];
+                    let more = if shown.len() < times.len() || assertion.observed_times_truncated {
+                        " ..."
+                    } else {
+                        ""
+                    };
+                    format!(" at_ns={shown:?}{more}")
+                })
                 .unwrap_or_default()
         );
     }

@@ -1,0 +1,223 @@
+{
+  "source": {
+    "repository": "HeyPCB/pomodoro-pal",
+    "revision": "1d6e50ff9998978e6f4521895042ae240fff7c42",
+    "hardware_license_spdx": "CERN-OHL-S-2.0",
+    "firmware_license_spdx": "MIT",
+    "files": {
+      "pcb": {
+        "path": "kicad/pomodoro_pal.kicad_pcb",
+        "git_blob": "561268221ce4d066582156a71ffc5ec3e071f047"
+      },
+      "schematic": {
+        "path": "kicad/pomodoro_pal.kicad_sch",
+        "git_blob": "330d113217e04ba5b15c1c5c6439909bce3bddfd"
+      },
+      "license": {
+        "path": "LICENSE",
+        "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1"
+      },
+      "original_firmware_source": {
+        "path": "firmware/pomodoro.c",
+        "git_blob": "0ece2a82608ad5925bbc9c03fa8efd83903af878"
+      },
+      "original_firmware_license": {
+        "path": "firmware/LICENSE",
+        "git_blob": "fafa07eb7a4d778cb580b235b4457e2a1eefe999"
+      },
+      "original_firmware_hex": {
+        "path": "firmware/pomodoro.hex",
+        "git_blob": "be13b893def87531ac8f06468b81b1da3b93c963"
+      }
+    }
+  },
+  "derivation": {
+    "pad_nets": "Read from the `(net ...)` entry of each pad in the pinned PCB blob.",
+    "mcu_pin_names": "The pin table in the pinned firmware/pomodoro.c. The PCB nets `unconnected-(U1-PD5-Pad2)` and `unconnected-(U1-PD7-Pad4)` agree with it for pads 2 and 4.",
+    "firmware": "firmware.rs is a port of firmware/pomodoro.c to the portable Flex ABI. It is not the original binary."
+  },
+  "minute_leds": [
+    {
+      "port": "min0",
+      "net": "MIN0",
+      "mcu_pad": "U1.20",
+      "mcu_pin": "PD3",
+      "series_resistor": "R7",
+      "led": "D3",
+      "led_anode_net": "D3_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d3"
+    },
+    {
+      "port": "min1",
+      "net": "MIN1",
+      "mcu_pad": "U1.19",
+      "mcu_pin": "PD2",
+      "series_resistor": "R8",
+      "led": "D4",
+      "led_anode_net": "D4_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d4"
+    },
+    {
+      "port": "min2",
+      "net": "MIN2",
+      "mcu_pad": "U1.17",
+      "mcu_pin": "PC7",
+      "series_resistor": "R9",
+      "led": "D5",
+      "led_anode_net": "D5_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d5"
+    },
+    {
+      "port": "min3",
+      "net": "MIN3",
+      "mcu_pad": "U1.16",
+      "mcu_pin": "PC6",
+      "series_resistor": "R10",
+      "led": "D6",
+      "led_anode_net": "D6_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d6"
+    },
+    {
+      "port": "min4",
+      "net": "MIN4",
+      "mcu_pad": "U1.15",
+      "mcu_pin": "PC5",
+      "series_resistor": "R11",
+      "led": "D7",
+      "led_anode_net": "D7_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d7"
+    },
+    {
+      "port": "min5",
+      "net": "MIN5",
+      "mcu_pad": "U1.14",
+      "mcu_pin": "PC4",
+      "series_resistor": "R12",
+      "led": "D8",
+      "led_anode_net": "D8_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d8"
+    },
+    {
+      "port": "min6",
+      "net": "MIN6",
+      "mcu_pad": "U1.13",
+      "mcu_pin": "PC3",
+      "series_resistor": "R13",
+      "led": "D9",
+      "led_anode_net": "D9_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d9"
+    },
+    {
+      "port": "min7",
+      "net": "MIN7",
+      "mcu_pad": "U1.12",
+      "mcu_pin": "PC2",
+      "series_resistor": "R14",
+      "led": "D10",
+      "led_anode_net": "D10_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d10"
+    },
+    {
+      "port": "min8",
+      "net": "MIN8",
+      "mcu_pad": "U1.11",
+      "mcu_pin": "PC1",
+      "series_resistor": "R15",
+      "led": "D11",
+      "led_anode_net": "D11_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d11"
+    },
+    {
+      "port": "min9",
+      "net": "MIN9",
+      "mcu_pad": "U1.10",
+      "mcu_pin": "PC0",
+      "series_resistor": "R16",
+      "led": "D12",
+      "led_anode_net": "D12_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d12"
+    },
+    {
+      "port": "min10",
+      "net": "MIN10",
+      "mcu_pad": "U1.8",
+      "mcu_pin": "PD0",
+      "series_resistor": "R17",
+      "led": "D13",
+      "led_anode_net": "D13_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d13"
+    },
+    {
+      "port": "min11",
+      "net": "MIN11",
+      "mcu_pad": "U1.1",
+      "mcu_pin": "PD4",
+      "series_resistor": "R18",
+      "led": "D14",
+      "led_anode_net": "D14_LED_A",
+      "led_cathode_net": "GND",
+      "read_port": "d14"
+    }
+  ],
+  "leaf": {
+    "port": "leaf",
+    "net": "LEAF",
+    "mcu_pad": "U1.3",
+    "mcu_pin": "PD6",
+    "branches": [
+      {
+        "series_resistor": "R5",
+        "led": "D1",
+        "led_anode_net": "D1_LED_A",
+        "led_cathode_net": "GND",
+        "read_port": "d1"
+      },
+      {
+        "series_resistor": "R6",
+        "led": "D2",
+        "led_anode_net": "D2_LED_A",
+        "led_cathode_net": "GND",
+        "read_port": "d2"
+      }
+    ]
+  },
+  "piezo": {
+    "port": "buzz",
+    "net": "BUZZ",
+    "mcu_pad": "U1.5",
+    "mcu_pin": "PA1",
+    "series_resistor": "R4",
+    "part": "BZ1",
+    "part_net": "BZ1_BZ_P",
+    "return_net": "GND",
+    "read_port": "bz1"
+  },
+  "touch": {
+    "read_port": "touch",
+    "bench_port": "touch_contact",
+    "net": "TOUCH",
+    "mcu_pad": "U1.6",
+    "mcu_pin": "PA2",
+    "series_resistor": "R3",
+    "pad": "TP4",
+    "pad_net": "TP4_PAD"
+  },
+  "not_modeled": [
+    "J1 USB-C and R1, R2 (CC pull-downs)",
+    "C1, C2 (supply decoupling)",
+    "TP1, TP2, TP3",
+    "U1.18 SWIO",
+    "U1.2 PD5 and U1.4 PD7 (not connected)"
+  ]
+}

@@ -579,9 +579,10 @@ pub struct FlexDigitalEdgesAssertion {
     pub digital_edges: FlexDigitalEdgesDetails,
 }
 
-/// The captured edges of one logic-analyzer channel: their exact number,
-/// their exact times, or both. The channel is a Boolean port, or a traced
-/// model signal that has no port.
+/// The edges of one logic-analyzer channel: their exact number, their exact
+/// times, or both. The channel is a Boolean port, or a traced model signal
+/// that has no port. `from_ns` and `to_ns` limit the assertion to the edges
+/// with `from_ns <= time <= to_ns`; without them it covers the whole run.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FlexDigitalEdgesDetails {
@@ -592,9 +593,16 @@ pub struct FlexDigitalEdgesDetails {
     pub signal: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub count: Option<u64>,
-    /// Every captured edge time in order, in nanoseconds.
+    /// Every edge time in order, in nanoseconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub times_ns: Option<Vec<u64>>,
+    /// First nanosecond of the window. Default: the start of the run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_ns: Option<u64>,
+    /// Last nanosecond of the window. Default: the end of the run. A run that
+    /// ends before `to_ns` did not observe the whole window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_ns: Option<u64>,
 }
 
 impl FlexDigitalEdgesDetails {
@@ -807,10 +815,21 @@ impl FlexTestScript {
                         details.count.is_some() || details.times_ns.is_some(),
                         "{path} requires count or times_ns"
                     );
+                    let from = details.from_ns.unwrap_or(0);
+                    let to = details.to_ns.unwrap_or(FLEX_MAX_TIME_NS);
+                    ensure!(from <= to, "{path}.from_ns must not exceed to_ns");
+                    ensure!(
+                        to <= FLEX_MAX_TIME_NS,
+                        "{path}.to_ns must be within 0..={FLEX_MAX_TIME_NS}"
+                    );
                     if let Some(times) = &details.times_ns {
                         ensure!(
                             times.windows(2).all(|pair| pair[0] <= pair[1]),
                             "{path}.times_ns must be in time order"
+                        );
+                        ensure!(
+                            times.iter().all(|time| (from..=to).contains(time)),
+                            "{path}.times_ns must be inside from_ns..=to_ns"
                         );
                     }
                 }
@@ -973,7 +992,7 @@ assertions:
     fn test_script_instrument_assertions_name_one_channel_and_one_expectation() {
         let edges = "  - digital_edges: { port: user_led_state, count: 2 }\n";
         assert!(TEST_SCRIPT.contains(edges), "fixture lost its edge count");
-        let instruments = "  - digital_edges: { port: user_led_state, times_ns: [1000, 2000] }\n  - digital_edges: { signal: comparator.out, count: 1 }\n  - analog_sample: { port: sensor_v, at_ns: 350000, min: 1.4, max: 1.6 }\n  - analog_sample: { channel: divider.v, at_ns: 0, equals: 0 }\n  - final_time_ns: { equals: 4050000 }\n";
+        let instruments = "  - digital_edges: { port: user_led_state, times_ns: [1000, 2000] }\n  - digital_edges: { signal: comparator.out, count: 1, from_ns: 500, to_ns: 1500 }\n  - analog_sample: { port: sensor_v, at_ns: 350000, min: 1.4, max: 1.6 }\n  - analog_sample: { channel: divider.v, at_ns: 0, equals: 0 }\n  - final_time_ns: { equals: 4050000 }\n";
         let Ok(crate::LoadedTestScript::Flex(script)) =
             load_script(&TEST_SCRIPT.replace(edges, instruments))
         else {
@@ -984,6 +1003,17 @@ assertions:
             panic!("assertion 2 is digital_edges");
         };
         assert_eq!(timed.digital_edges.times_ns, Some(vec![1000, 2000]));
+        assert_eq!(
+            (timed.digital_edges.from_ns, timed.digital_edges.to_ns),
+            (None, None)
+        );
+        let FlexAssertion::DigitalEdges(windowed) = &script.assertions[3] else {
+            panic!("assertion 3 is digital_edges");
+        };
+        assert_eq!(
+            (windowed.digital_edges.from_ns, windowed.digital_edges.to_ns),
+            (Some(500), Some(1500))
+        );
         assert_eq!(timed.digital_edges.count, None);
         let FlexAssertion::AnalogSample(sample) = &script.assertions[5] else {
             panic!("assertion 5 is analog_sample");
@@ -1010,6 +1040,21 @@ assertions:
                 "{ port: user_led_state, count: 2 }",
                 "{ port: user_led_state, times_ns: [2000, 1000] }",
                 "times_ns must be in time order",
+            ),
+            (
+                "{ port: user_led_state, count: 2 }",
+                "{ port: user_led_state, count: 2, from_ns: 2001, to_ns: 2000 }",
+                "from_ns must not exceed to_ns",
+            ),
+            (
+                "{ port: user_led_state, count: 2 }",
+                "{ port: user_led_state, times_ns: [1000, 2001], from_ns: 1000, to_ns: 2000 }",
+                "times_ns must be inside from_ns..=to_ns",
+            ),
+            (
+                "{ port: user_led_state, count: 2 }",
+                "{ port: user_led_state, count: 2, to_ns: 9007199254740992 }",
+                "to_ns must be within",
             ),
             (
                 "digital_edges: { port: user_led_state, count: 2 }",

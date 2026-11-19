@@ -595,7 +595,7 @@ fn script_value<'a>(text: &'a str, key: &str) -> &'a str {
 #[test]
 fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
     let fixtures = committed_scripts();
-    assert!(fixtures.len() >= 11, "Flex fixtures went missing");
+    assert!(fixtures.len() >= 12, "Flex fixtures went missing");
     let mut scripts_run = 0;
     for (fixture, scripts) in fixtures {
         // A positive case alone proves nothing about the model.
@@ -673,7 +673,7 @@ fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
             scripts_run += 1;
         }
     }
-    assert!(scripts_run >= 26, "only {scripts_run} Flex scripts ran");
+    assert!(scripts_run >= 29, "only {scripts_run} Flex scripts ran");
 }
 
 fn thermostat() -> PathBuf {
@@ -934,5 +934,134 @@ fn sequence_errors_and_limits_are_explicit() {
     assert_eq!(assertions[1]["passed"], true);
     assert_eq!(assertions[2]["passed"], false);
     assert_eq!(assertions[2]["observed"], Value::Null);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn edge_windows_include_both_ends_and_need_the_whole_window() {
+    // Bright light: `user_led_state` has edges at 4,001,000 and 4,002,000 ns
+    // and the run ends at 4,002,000 ns.
+    let dir = unique_dir("edge-windows");
+    let assertions = concat!(
+        "  - digital_edges: { port: user_led_state, count: 2, from_ns: 4001000, to_ns: 4002000 }\n",
+        "  - digital_edges: { port: user_led_state, times_ns: [4001000], from_ns: 4001000, to_ns: 4001000 }\n",
+        "  - digital_edges: { port: user_led_state, times_ns: [4002000], from_ns: 4001001 }\n",
+        "  - digital_edges: { port: user_led_state, count: 0, to_ns: 4000999 }\n",
+        "  - digital_edges: { port: user_led_state, count: 0, from_ns: 4001001, to_ns: 4001999 }\n",
+        "  - digital_edges: { port: user_led_state, count: 2, from_ns: 4001001 }\n",
+        "  - digital_edges: { port: user_led_state, count: 2, to_ns: 4002001 }\n",
+    );
+    let script = ldr_script(&dir, "windows.yaml", "100", LIMITS, assertions);
+    let output = run(&script, &dir, &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = read_result(&dir);
+    let assertions = result["assertions"].as_array().unwrap();
+    let passed: Vec<bool> = assertions
+        .iter()
+        .map(|assertion| assertion["passed"].as_bool().unwrap())
+        .collect();
+    assert_eq!(passed, [true, true, true, true, true, false, false]);
+    // A wrong count reports the edges of the window, not of the run.
+    assert_eq!(assertions[5]["observed"], 1.0);
+    assert_eq!(
+        assertions[5]["observed_times_ns"],
+        serde_json::json!([4002000])
+    );
+    // The run ended 1 ns before the end of this window: it was not observed.
+    assert_eq!(assertions[6]["observed"], Value::Null);
+    assert!(assertions[6].get("observed_times_ns").is_none());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Edges of `min0` in 12 s of the idle face. With the 474 edges each of
+/// `buzz` and BZ1 and the equal count of D3, the run records 71,244 edges.
+const IDLE_12S_MIN0_EDGES: u64 = 35_148;
+
+fn pomodoro_timer() -> PathBuf {
+    fixtures_root().join("flex-heypcb-pomodoro-timer")
+}
+
+#[test]
+fn edge_assertions_stay_exact_after_the_logic_capture_overflows() {
+    // 12 s of the idle face: minute LED 0 breathes through a soft PWM, and
+    // the logic analyzer records more edges than its 65,536-edge capture
+    // holds. Only four channels move: `min0`, the D3 model that follows it,
+    // `buzz` and the BZ1 model (start-up chirp).
+    let fixture = pomodoro_timer();
+    let dir = unique_dir("overflow");
+    let script = dir.join("overflow.yaml");
+    std::fs::write(
+        &script,
+        format!(
+            concat!(
+                "schema_version: \"1.0\"\n",
+                "inputs:\n  flex: \"{}\"\n  firmware: \"{}\"\n",
+                "sequence:\n",
+                "  - call: {{ export: setup, args: [{{ port: min0 }}, {{ port: leaf }}, {{ port: buzz }}, {{ port: touch }}] }}\n",
+                "  - call: {{ export: loop, repeat: 562500 }}\n",
+                "limits: {{ max_steps: 1000000000, max_time_ns: 13000000000 }}\n",
+                "assertions:\n",
+                "  - entry_result: {{ equals: 0 }}\n",
+                "  - digital_edges: {{ port: min0, count: {min0} }}\n",
+                "  - digital_edges: {{ port: d3, count: {min0} }}\n",
+                "  - digital_edges: {{ port: buzz, count: 474 }}\n",
+                "  - digital_edges: {{ port: bz1, count: 474 }}\n",
+                // The first edges of the run left the capture long ago.
+                "  - digital_edges: {{ port: buzz, times_ns: [0, 189000, 378000], to_ns: 378000 }}\n",
+                "  - digital_edges: {{ port: min0, count: 0, to_ns: 149585999 }}\n",
+                // Wrong by one: fails with the exact count, not with `null`.
+                "  - digital_edges: {{ port: min0, count: {wrong} }}\n",
+                "  - final_time_ns: {{ equals: 12149398500 }}\n",
+            ),
+            fixture.join("system.yaml").display(),
+            fixture.join("firmware.wasm").display(),
+            min0 = IDLE_12S_MIN0_EDGES,
+            wrong = IDLE_12S_MIN0_EDGES + 1,
+        ),
+    )
+    .expect("write script");
+    let output = run(&script, &dir, &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = read_result(&dir);
+    assert_eq!(result["stop_reason"], "completed");
+    let assertions = result["assertions"].as_array().unwrap();
+    let passed: Vec<bool> = assertions
+        .iter()
+        .map(|assertion| assertion["passed"].as_bool().unwrap())
+        .collect();
+    assert_eq!(
+        passed,
+        [true, true, true, true, true, true, true, false, true]
+    );
+    assert_eq!(assertions[7]["observed"], IDLE_12S_MIN0_EDGES as f64);
+    // The list of times stops at 4,096; the count does not.
+    assert_eq!(assertions[1]["observed_times_truncated"], true);
+    assert_eq!(
+        assertions[1]["observed_times_ns"].as_array().unwrap().len(),
+        4096
+    );
+    assert!(assertions[5].get("observed_times_truncated").is_none());
+
+    // The capture's own drop counter agrees with the tallies: every recorded
+    // edge is either among the newest 65,536 or counted as dropped.
+    let recorded = 2 * IDLE_12S_MIN0_EDGES + 2 * 474;
+    assert!(recorded > 65_536, "the run must overflow the capture");
+    let dropped = result["traces"]["digital_dropped"].as_u64().unwrap();
+    assert_eq!(result["traces"]["digital_edges"], 65_536);
+    assert_eq!(dropped + 65_536, recorded);
+    let trace = json(&dir.join("flex-trace.json"));
+    assert_eq!(trace["digital"]["dropped"], dropped);
+    assert_eq!(trace["digital"]["edges"].as_array().unwrap().len(), 65_536);
     let _ = std::fs::remove_dir_all(dir);
 }

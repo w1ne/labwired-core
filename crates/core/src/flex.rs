@@ -167,11 +167,32 @@ fn model_summary(model: &CosimModelConfig) -> FlexModelSummary {
     }
 }
 
+/// Exact running record of the edges of one logic-analyzer channel inside one
+/// time window. The capture ring keeps the newest edges and drops the oldest;
+/// a tally sees every edge at the moment it is recorded, so a long run does
+/// not make its count unknowable.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FlexDigitalEdgeTally {
+    pub channel: u32,
+    /// The window is `from_ns <= time_ns <= to_ns`.
+    pub from_ns: u64,
+    pub to_ns: u64,
+    /// Every edge of the channel inside the window.
+    pub count: u64,
+    /// The first edge times inside the window, at most the requested number.
+    pub times_ns: Vec<u64>,
+    #[serde(skip)]
+    max_times: usize,
+}
+
 struct DigitalCapture {
     capture: LogicCapture,
     channels: Vec<FlexDigitalChannel>,
     levels: Vec<bool>,
     events: Vec<PadEvent>,
+    tallies: Vec<FlexDigitalEdgeTally>,
+    /// Edges recorded since the start, including those the ring dropped.
+    recorded: u64,
 }
 
 impl DigitalCapture {
@@ -216,6 +237,8 @@ impl DigitalCapture {
             channels,
             levels,
             events,
+            tallies: Vec::new(),
+            recorded: 0,
         })
     }
 
@@ -231,6 +254,18 @@ impl DigitalCapture {
                         drive: None,
                     });
                     *previous = *value;
+                }
+            }
+        }
+        self.recorded += self.events.len() as u64;
+        for tally in &mut self.tallies {
+            if time_ns < tally.from_ns || time_ns > tally.to_ns {
+                continue;
+            }
+            for event in self.events.iter().filter(|event| event.ch == tally.channel) {
+                tally.count += 1;
+                if tally.times_ns.len() < tally.max_times {
+                    tally.times_ns.push(event.cycle);
                 }
             }
         }
@@ -442,6 +477,11 @@ impl FlexRuntime {
     pub fn write(&mut self, port_id: u32, value: f64) -> SimResult<()> {
         let port = self.port(port_id, FlexPortAccess::Write)?;
         let value = Self::port_value(port, value)?;
+        // Firmware that refreshes every pin on every pass writes mostly
+        // unchanged levels. No signal changes, so there is no edge to record.
+        if self.signals.get(&port.signal) == Some(&value) {
+            return Ok(());
+        }
         self.signals.insert(port.signal.clone(), value);
         self.digital.sample(self.time_ns, &self.signals);
         Ok(())
@@ -527,6 +567,48 @@ impl FlexRuntime {
 
     pub fn digital_trace_snapshot(&mut self, cursor: u64) -> FlexDigitalTraceBatch {
         self.digital.snapshot(cursor)
+    }
+
+    /// Start an exact tally of the edges of logic-analyzer channel `channel`
+    /// with `from_ns <= time_ns <= to_ns`, keeping at most `max_times` edge
+    /// times. Returns the tally id. A tally cannot see the past, so it must
+    /// start before the first edge is recorded.
+    pub fn tally_digital_edges(
+        &mut self,
+        channel: u32,
+        from_ns: u64,
+        to_ns: u64,
+        max_times: usize,
+    ) -> SimResult<usize> {
+        if self.digital.recorded != 0 {
+            return Err(error(
+                "a digital edge tally must start before the first edge is recorded",
+            ));
+        }
+        if !self
+            .digital
+            .channels
+            .iter()
+            .any(|known| known.id == channel)
+        {
+            return Err(error(format!("unknown Flex digital channel id {channel}")));
+        }
+        if from_ns > to_ns {
+            return Err(error("digital edge tally window is empty"));
+        }
+        self.digital.tallies.push(FlexDigitalEdgeTally {
+            channel,
+            from_ns,
+            to_ns,
+            count: 0,
+            times_ns: Vec::new(),
+            max_times,
+        });
+        Ok(self.digital.tallies.len() - 1)
+    }
+
+    pub fn digital_edge_tally(&self, id: usize) -> Option<&FlexDigitalEdgeTally> {
+        self.digital.tallies.get(id)
     }
 
     /// The unannotated analog engine batch, for the exporters that already
@@ -659,6 +741,88 @@ cosim_models:
             .digital_trace_snapshot(trace.cursor)
             .edges
             .is_empty());
+    }
+
+    #[test]
+    fn edge_tally_stays_exact_after_the_capture_ring_overflows() {
+        use crate::logic_capture::LOGIC_RING_CAPACITY;
+
+        let mut runtime = FlexRuntime::from_yaml(PULSE).unwrap();
+        let command = runtime.port_id("command").unwrap();
+        let channel = |runtime: &mut FlexRuntime, signal: &str| {
+            let trace = runtime.digital_trace_snapshot(0);
+            trace
+                .channels
+                .iter()
+                .find(|channel| channel.signal == signal)
+                .unwrap()
+                .id
+        };
+        let command_channel = channel(&mut runtime, "command");
+        let ready_channel = channel(&mut runtime, "ready");
+        let whole = runtime
+            .tally_digital_edges(command_channel, 0, MAX_TIME_NS, 4)
+            .unwrap();
+        // `ready` follows `command` one 1000 ns model step later.
+        let window = runtime
+            .tally_digital_edges(ready_channel, 3_000, 5_000, 8)
+            .unwrap();
+        assert!(runtime.tally_digital_edges(u32::MAX, 0, 1, 1).is_err());
+        assert!(runtime
+            .tally_digital_edges(command_channel, 2, 1, 1)
+            .is_err());
+
+        // Short run: the tally and the ring hold the same edges.
+        for level in [1.0, 0.0, 1.0, 0.0, 1.0, 0.0] {
+            runtime.write(command, level).unwrap();
+            runtime.advance_ns(1_000).unwrap();
+        }
+        let trace = runtime.digital_trace_snapshot(0);
+        assert_eq!(trace.dropped, 0);
+        let ring_times = |ch: u32| -> Vec<u64> {
+            trace
+                .edges
+                .iter()
+                .filter(|edge| edge.ch == ch)
+                .map(|edge| edge.time_ns)
+                .collect()
+        };
+        let tally = runtime.digital_edge_tally(whole).unwrap();
+        assert_eq!(tally.count, 6);
+        assert_eq!(
+            ring_times(command_channel),
+            [0, 1_000, 2_000, 3_000, 4_000, 5_000]
+        );
+        // Only the first four times were requested.
+        assert_eq!(tally.times_ns, [0, 1_000, 2_000, 3_000]);
+        // Both window ends are inside the window.
+        let tally = runtime.digital_edge_tally(window).unwrap();
+        assert_eq!(
+            ring_times(ready_channel),
+            [1_000, 2_000, 3_000, 4_000, 5_000, 6_000]
+        );
+        assert_eq!(
+            (tally.count, tally.times_ns.as_slice()),
+            (3, &[3_000, 4_000, 5_000][..])
+        );
+
+        // Long run: the ring drops its oldest edges; the tally does not.
+        let toggles = LOGIC_RING_CAPACITY as u64;
+        for index in 0..toggles {
+            runtime.write(command, f64::from(index % 2 == 0)).unwrap();
+            runtime.advance_ns(1_000).unwrap();
+        }
+        let trace = runtime.digital_trace_snapshot(0);
+        assert!(trace.dropped > 0);
+        assert_eq!(trace.edges.len(), LOGIC_RING_CAPACITY);
+        let tally = runtime.digital_edge_tally(whole).unwrap();
+        assert_eq!(tally.count, 6 + toggles);
+        assert_eq!(tally.times_ns.len(), 4);
+        assert_eq!(runtime.digital_edge_tally(window).unwrap().count, 3);
+        // A tally cannot see the past.
+        assert!(runtime
+            .tally_digital_edges(command_channel, 0, MAX_TIME_NS, 1)
+            .is_err());
     }
 
     #[test]
