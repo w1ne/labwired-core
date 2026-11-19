@@ -105,7 +105,7 @@ Reg match = verifiable cold-reset registers reproduced. "Excluded" = registers a
 | atsamd51 | **L1** | ✓ | 27 | — | — | firmware_survival::test_atsamd51_metro_m4_smoke_survival |
 | atsamd51-pybadge | **L0** | ✓ | 28 | — | — | — |
 | ra4m1 | **L1** | ✓ | 8 | — | — | firmware_survival::test_ra4m1_uno_r4_smoke_survival |
-| imxrt1064 | **L1** | ✓ | 7 | — | — | firmware_survival::test_imxrt1064_teensy41_smoke_survival |
+| imxrt1064 | **L1** | ✓ | 9 | — | — | firmware_survival::test_imxrt1064_teensy41_smoke_survival |
 | stm32f746 | **L1** | ✓ | 18 | — | — | firmware_survival::test_stm32f746_discovery_smoke_survival |
 | stm32g071 | **L1** | ✓ | 41 | — | — | firmware_survival::test_nucleo_g071rb_smoke_survival |
 | dspic33fj32mc204 | **L1** | ✓ | 4 | — | — | pic24_m0_smoke::pic24_fixture_boots_and_writes_h_to_uart |
@@ -126,5 +126,5 @@ These descriptors carry declarations only. They receive no estate checkmark, con
 
 | Chip | State | Evidence boundary |
 |------|-------|-------------------|
-| rv1103 | Declared only | Normal descriptor is CPU/memory plus a simulation-only `input_pin_bank` analog co-sim seam (no RV1103 register model). Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate. |
+| rv1103 | Declared only | Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate. |
 | xck26-rpu | Declared only | Generic descriptor is CPU/memory plus a simulation-only `input_pin_bank` analog co-sim seam (no ZynqMP register model). The native Cortex-R5F (qemu-arm-system) installs the descriptor's native_rpu_peripherals (RPU GIC, Cadence UART0/1, TTC0) and runs stock Zephyr v4.1.0 kv260_r5 hello_world, synchronization and tests/kernel/common (crates/core/tests/kv260_r5_zephyr.rs, examples/kv260-r5). No APU, PMU/CSU/FSBL boot, PL or other PS peripherals; no physical qualification. |

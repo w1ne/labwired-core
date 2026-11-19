@@ -126,6 +126,7 @@ pub mod renesas_adc_c;
 pub mod renesas_da14_gpadc;
 pub mod rf_medium;
 pub mod rng;
+pub mod rockchip_saradc;
 pub mod rp2040;
 pub mod rp2040_clocks;
 pub mod rp2350_bootram;

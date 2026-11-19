@@ -62,7 +62,7 @@ struct ChipConf {
 const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[
     (
         "rv1103",
-        "Normal descriptor is CPU/memory plus a simulation-only `input_pin_bank` analog co-sim seam (no RV1103 register model). Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate.",
+        "Normal descriptor is CPU/memory only. Optional native reduced Linux direct boot and joint I2C3/UART4 basket acceptance pass separately with functional timing and a persistent reduced plant; this does not establish full board L0/L1, vendor BSP/SD/ROM boot or physical qualification. The older generic Cortex-A7 CPU subset is separate.",
     ),
     (
         "xck26-rpu",
@@ -2001,8 +2001,8 @@ fn level(r: &Record) -> u8 {
 
 /// No peripheral beyond simulation-only `input_pin_bank` seams. Those carry
 /// routed analog levels into the generic co-simulation path
-/// (`cosim_luckfox_pico_mini_a_analog.rs`, `cosim_kv260_r5_analog.rs`); they
-/// are not a register model of the part, so they claim no conformance.
+/// (`cosim_kv260_r5_analog.rs`); they are not a register model of the part,
+/// so they claim no conformance. `rv1103` declares no peripheral at all.
 fn only_cosim_seams(chip: &ChipDescriptor) -> bool {
     chip.peripherals
         .iter()

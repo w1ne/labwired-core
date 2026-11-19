@@ -94,8 +94,7 @@ fn datasheet_transcriptions() {
 /// voltage route to its pads a build error instead of a guess.
 #[test]
 fn an_untranscribed_chip_declares_nothing() {
-    // rv1103 now has explicit test-only thresholds for its generic input bank.
-    for chip in ["nrf52832", "nrf54l15"] {
+    for chip in ["nrf52832", "nrf54l15", "rv1103"] {
         let desc = load(chip);
         assert_eq!(desc.io_voltage_v, None, "{chip}");
         assert_eq!(desc.gpio_input_thresholds, None, "{chip}");

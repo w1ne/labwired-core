@@ -465,6 +465,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "lpc2000_adc",
     // Allwinner sunxi LRADC, CTRL/INTC/INTS/DATA0/1 (Linux sun4i-lradc-keys.c).
     "sunxi_lradc",
+    // Rockchip SARADC v2, CONV_CON/END_INT_*/DATAn (Linux rockchip_saradc.c).
+    "rockchip_saradc_v2",
     // OpenTitan adc_ctrl + AST ADC (lowRISC adc_ctrl.hjson, adc_ctrl_fsm.sv).
     "opentitan_adc_ctrl",
     // Renesas RZ ADC_C, ADM0..3/ADINT/ADSTS/ADCRn (RZ/G FSP adc_c_iodefine.h).
@@ -2172,6 +2174,20 @@ pub fn try_build(
                 get("supply_mv", 3000),
                 get("vref_num", 2),
                 get("vref_den", 3),
+            ))
+        }
+        "rockchip_saradc_v2" => {
+            let get = |key: &str, default: u32| {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .map_or(default, |v| v as u32)
+            };
+            Box::new(crate::peripherals::rockchip_saradc::RockchipSaradcV2::new(
+                get("channels", 2) as u8,
+                get("bits", 10) as u8,
+                get("vref_mv", 1800),
             ))
         }
         "stm32w108_adc" => Box::new(crate::peripherals::stm32w108_adc::Stm32w108Adc::new(
