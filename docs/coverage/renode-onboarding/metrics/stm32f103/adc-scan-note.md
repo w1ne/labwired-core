@@ -25,12 +25,17 @@ when CR2.DMA is set. The imported chip profile routes `adc1_rx` to DMA1 channel
 the imported-system smoke checks the request-to-memory path.
 
 The imported chip profile routes DMA1 channels 1–7 to their STM32F1 IRQ lines
-11–17 and routes `usart2_rx` to channel 6. The smoke leaves two injected
-USART2 bytes queued after its CPU-read RX gate, enables DMA1 channel 6 with
-DMAR clear, and checks that CNDTR, RXNE, TCIF6, and IRQ16 do not change. It
+11–17 and routes `usart2_rx` to channel 6 and `usart2_tx` to channel 7. The
+smoke leaves two injected USART2 bytes queued after its CPU-read RX gate,
+enables DMA1 channel 6 with DMAR clear, and checks that CNDTR, RXNE, TCIF6,
+and IRQ16 do not change. It
 then enables CR3.DMAR and checks the two bytes in SRAM, CNDTR zero, TCIF6,
 IRQ16 pending, RXNE clear, and that clearing the DMA flags deasserts the
-channel-6 line. It does not exercise USART2 TX DMA.
+channel-6 line. It also sends the three-byte `DMA` payload from SRAM through
+USART2's `CR3.DMAT` request on channel 7. It checks the bytes on the USART2 TX
+stream, CNDTR zero, TCIF7 and IRQ17 asserted, and IRQ17 deasserted after
+clearing the channel flags. This is a single three-byte transfer; it does not
+claim repeated-transfer or baud-timing coverage.
 
 The smoke also runs software-started two-rank scans with DMA1 channel 1 in
 circular mode. With TCIE disabled and HTIE enabled, two laps must set HTIF and
