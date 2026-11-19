@@ -416,6 +416,19 @@ external_devices:
     let source = |bus: &SystemBus| {
         bus.modeled_servo_source_status(bus.observed_of::<Servo>().next().unwrap())
     };
+    let source_count = |bus: &SystemBus| {
+        let mut count = 0;
+        bus.for_each_attached_device(&mut |connection, device| {
+            if connection == Some("i2c0")
+                && device.transport == "i2c"
+                && device.address == Some(0x40)
+            {
+                count += 1;
+            }
+        });
+        count
+    };
+    assert_eq!(source_count(&bus), 1);
     // Input / unknown is not an enable, even if its output latch is low.
     bus.sync_pwm_sourced_servos();
     assert!(!commanded(&bus));
@@ -466,31 +479,36 @@ external_devices:
     assert_eq!(source(&bus).as_str(), "modeled_pwm");
     // A modeled supply gate that cannot power the PCA cannot report a PWM.
     use labwired_core::peripherals::components::supply_domain::{GatedI2cDevice, SupplyGate};
-    bus.take_i2c_slaves("i2c0");
-    bus.attach_i2c_slave_with_route(
-        "i2c0",
-        Box::new(GatedI2cDevice::new(
-            Box::new(SharedPca(pca.clone())),
-            SupplyGate::legacy(false),
-        )),
-        Some(&route),
-    )
-    .unwrap();
-    assert_eq!(source(&bus).as_str(), "unknown");
-    bus.take_i2c_slaves("i2c0");
-    bus.attach_i2c_slave_with_route("i2c0", Box::new(SharedPca(pca.clone())), Some(&route))
+    // The C3 controller's slaves cannot be removed by `take_i2c_slaves`;
+    // use a fresh bus so no hidden second device affects this case.
+    let mut power_bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    power_bus.write_u32(GPIO + 0x24, 1 << 4).unwrap();
+    power_bus
+        .attach_i2c_slave_with_route(
+            "i2c0",
+            Box::new(GatedI2cDevice::new(
+                Box::new(SharedPca(pca.clone())),
+                SupplyGate::legacy(false),
+            )),
+            Some(&route),
+        )
         .unwrap();
-    assert_eq!(source(&bus).as_str(), "modeled_pwm");
+    assert_eq!(source_count(&power_bus), 1);
+    assert_eq!(source(&power_bus).as_str(), "unknown");
     // A same-address device behind a mux makes the source ambiguous.
     use labwired_core::peripherals::components::tca9548a::Tca9548a;
     let mut mux = Tca9548a::new(0x70);
     mux.attach(0, Box::new(SharedPca(pca.clone()))).unwrap();
-    bus.attach_i2c_slave_with_route("i2c0", Box::new(mux), Some(&route))
+    let mut mux_bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    mux_bus.write_u32(GPIO + 0x24, 1 << 4).unwrap();
+    mux_bus
+        .attach_i2c_slave_with_route("i2c0", Box::new(SharedPca(pca.clone())), Some(&route))
         .unwrap();
-    assert_eq!(source(&bus).as_str(), "unknown");
-    bus.take_i2c_slaves("i2c0");
-    bus.attach_i2c_slave_with_route("i2c0", Box::new(SharedPca(pca.clone())), Some(&route))
+    mux_bus
+        .attach_i2c_slave_with_route("i2c0", Box::new(mux), Some(&route))
         .unwrap();
+    assert_eq!(source_count(&mux_bus), 2);
+    assert_eq!(source(&mux_bus).as_str(), "unknown");
     // CPU reset currently does not reset peripherals: status describes only
     // modeled GPIO/PCA configuration, never a reset-fresh command or signal.
     let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
@@ -501,6 +519,7 @@ external_devices:
         .bus
         .attach_i2c_slave_with_route("i2c0", Box::new(SharedPca(pca.clone())), Some(&route))
         .unwrap();
+    assert_eq!(source_count(&machine.bus), 2);
     assert_eq!(
         source(&machine.bus).as_str(),
         "unknown",
