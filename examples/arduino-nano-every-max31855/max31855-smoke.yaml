@@ -1,0 +1,17 @@
+# Arduino Nano Every + MAX31855: the stock Adafruit MAX31855 library reads the
+# converter over SPI (SPI0) and prints both junction temperatures on Serial
+# (USART3). CS (D10 / PB1) falls and rises once per 32-bit frame.
+schema_version: "1.2"
+inputs:
+  firmware: ../../tests/fixtures/avr/arduino-nano-every-max31855.elf
+  system: ../../configs/systems/arduino-nano-every-max31855.yaml
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "NANO_EVERY_MAX31855"
+  - uart_contains: "TC=25.00 C"
+  - uart_contains: "CJ=22.0000 C"
+  - gpio_edges:
+      pin: "portb:1"
+      min_edges: 4
+  - expected_stop_reason: max_steps
