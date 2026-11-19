@@ -161,7 +161,8 @@ impl SystemBus {
             return;
         }
         if let Some(irq) = p.irq {
-            if p.dev.irq_line_level() == Some(false) {
+            if p.dev.irq_line_level() == Some(false) && !self.route_irq_input_level(idx, irq, false)
+            {
                 super::reconcile_nvic_level(&self.nvic, irq, false);
             }
         }
@@ -229,6 +230,14 @@ impl SystemBus {
         }
         self.observe_gpio_edges_if_live();
         self.deliver_wire_input_edges(idx);
+        // A GPIO pad transition may latch a peripheral-local level interrupt
+        // (CMSDK AHB GPIO INTSTATUS is the current user). Unlike a timer event,
+        // this source is fully determined by the new pad state, so reconcile
+        // it at the same boundary as an MMIO write instead of waiting for a
+        // per-cycle peripheral walk.
+        if change.is_some() {
+            self.reconcile_irq_levels_after_write(idx);
+        }
         change
     }
 
@@ -414,6 +423,9 @@ impl SystemBus {
         // A select pad of an analog mux may have moved: re-route before the
         // next instruction can start a conversion.
         self.route_analog_muxes_on_write(idx);
+        // A chip-select pad may have moved: deliver the CS edge before the
+        // next SPI frame.
+        self.route_spi_cs_on_write(idx);
         // A write into a GPIO port can move its input word (OUT/DIR/PIN_CNF):
         // raise the edge for the pad now, not at the next tick.
         if self.gpio_edge_observers && self.is_edge_watched_gpio_port(idx) {

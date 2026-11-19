@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.001158">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="1c99bead4e5d3ea1b271b01b29bac1388982e87ec323012fb6035f43bb02be4d"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.001158">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: EOS S3 Cortex-M4F PL011 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: EOS S3 checks PPPPPPPPPP DONE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x2007ff00=0xe05303ff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpio:4 &gt;= 6 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

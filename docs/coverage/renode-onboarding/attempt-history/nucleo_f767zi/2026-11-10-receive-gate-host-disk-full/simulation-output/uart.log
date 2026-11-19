@@ -1,0 +1,37 @@
+NUCLEO-F767ZI SMOKE
+usart3 vcp ok
+rcc reset=1 gate=1 mask=1 ok
+geometry flash_last=0xFFFFFFFF sram2=1 ok
+usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok
+usart3 rxne isolated=1 asserted=1 reasserted=1 released=1 data=1 ok
+usart3 tx_irq txe=1 tc=1 both=1 ok
+leds ld1=1 ld2=1 ld3=1 ok
+syscfg memrmp=0x00000D00 pmc=0x008700FF fields=1 cmpcr=1 ok
+exti swier masked=1 routed=1 ok
+exti lines imr=0x01FFFFFF line24=1 ok
+b1 idle=1 presses=1 pa_quiet=1 pc13=1 cleared=1 ok
+tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim4 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim8 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim9 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim12 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim13 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+spi456 irq spi4=1 spi5=1 spi6=1 ok
+spi456 TXEIE idle_pend=1 idle_release=1 ok
+dma m2m dma1_refused=1 dma2_copied=1 ok
+i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok
+i2c2 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok
+i2c3 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok
+i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok
+crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok
+rng off=1 ready=1 draws=1 stopped=1 ok
+summary 0x7670FFFF
+DONE

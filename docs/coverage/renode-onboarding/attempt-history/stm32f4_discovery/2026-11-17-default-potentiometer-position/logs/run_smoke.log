@@ -1,0 +1,7 @@
+2026-11-17T03:20:03.771158Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f4_discovery.yaml
+2026-11-17T03:20:03.837330Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-17T03:20:03.838477Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-17T03:20:04.654312Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "ADC1 IN1=000003FF EOC=1 OK" }) (captured len=849)
+FAIL  8/9 checks · stm32f4_discovery-smoke · 4000000 steps · 0.82s

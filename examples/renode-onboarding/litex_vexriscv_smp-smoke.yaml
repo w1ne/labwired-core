@@ -1,0 +1,14 @@
+# Single-hart RV32IM smoke against the imported LiteX VexRiscv SMP system.
+# This checks direct ELF execution and model-backed LiteX UART only.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-smp-smoke"
+  system: "../../configs/systems/onboarding/litex_vexriscv_smp.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_ordered:
+      - "LITEX VEXRISCV SMP SINGLE-HART SMOKE"
+      - "cpu=rv32im hart=0 uart=litex"
+      - "mul=000000d1"
+  - expected_stop_reason: max_steps

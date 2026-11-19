@@ -5,14 +5,16 @@
 // See the LICENSE file in the project root for full license information.
 //
 // ── Architectural separation ────────────────────────────────────────────────
-// The family-specific CONTROL registers live in the `AdcRegs` enum: an F1 ADC
-// carries only CR1/CR2, an L4 ADC carries only ISR/IER/CR/CFGR/…/CCR — neither
-// holds the other's. The data register `dr`, the legacy status `sr` (both poked
-// directly by the WASM value-injection bridge), the conversion engine and the
-// per-channel injected inputs are architecture-independent and stay shared.
+// Family-specific register files live in the `AdcRegs` enum. F1/F4 share the
+// legacy CR/SQR storage, while only F4 currently models JSQR/JDR injected
+// sequences; L4/H7/U5 have distinct ISR/IER/CR/CFGR/… register files. The data
+// register `dr`, legacy status `sr` (also poked by the WASM injection bridge),
+// conversion engine and per-channel analog inputs are shared where semantics
+// match.
 
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 use std::any::Any;
+use std::cell::Cell;
 use std::str::FromStr;
 
 // ── Modeled internal source (L4/V2 path) ────────────────────────────────────
@@ -132,6 +134,7 @@ const F1_CR2_RSTCAL: u32 = 1 << 3;
 const F1_CR2_EXTSEL: u32 = 0b111 << 17;
 const F1_CR2_EXTTRIG: u32 = 1 << 20;
 const F1_CR2_SWSTART: u32 = 1 << 22;
+const F1_CR1_EOCIE: u32 = 1 << 5;
 /// ADC_CR2.TSVREFE (bit 23, RM0008 §11.12.3): connects the temperature sensor
 /// to ADC1_IN16 and V_REFINT to ADC1_IN17. Clear (the reset state), both
 /// internal channels are disconnected.
@@ -157,6 +160,21 @@ pub const DEFAULT_AMBIENT_TEMPERATURE_C: f64 = 25.0;
 /// STM32F2/F4 ADC_CR2.SWSTART (RM0090) — same legacy register *block* as F1,
 /// different bit. Kept so F4 board bindings are not silently retargeted to F1.
 const F4_CR2_SWSTART: u32 = 1 << 30;
+/// F4 `ADC_CR2.JSWSTART`: software-start the injected group.
+const F4_CR2_JSWSTART: u32 = 1 << 22;
+/// F4 `ADC_CR2.EOCS`: regular overrun detection is enabled when set.
+const F4_CR2_EOCS: u32 = 1 << 10;
+/// F4 `ADC_CR1.SCAN`: advance through the regular sequence after each conversion.
+const F4_CR1_SCAN: u32 = 1 << 8;
+/// F4 `ADC_CR1.JAUTO`: automatic injected conversion after a regular group.
+const F4_CR1_JAUTO: u32 = 1 << 10;
+const F4_SR_EOC: u32 = 1 << 1;
+const F4_SR_OVR: u32 = 1 << 5;
+#[cfg(test)]
+const F4_CR1_EOCIE: u32 = 1 << 5;
+const F4_CR1_JEOCIE: u32 = 1 << 7;
+const F4_CR1_OVRIE: u32 = 1 << 26;
+const F4_SR_JEOC: u32 = 1 << 2;
 
 /// Approximate F1 RSTCAL completion latency in model cycles (not host time).
 /// Silicon clears RSTCAL after a short internal reset; a fixed 2-cycle delay is
@@ -242,7 +260,8 @@ impl FromStr for AdcRegisterLayout {
     }
 }
 
-/// STM32F1 ADC control registers (status `sr` + data `dr` are shared on `Adc`).
+/// STM32F1/F4 legacy ADC registers (status `sr` + regular data `dr` are shared
+/// on `Adc`; JSQR/JDR semantics are implemented only for F4).
 #[derive(Debug, Default, serde::Serialize)]
 pub struct F1AdcRegs {
     cr1: u32, // 0x04
@@ -263,6 +282,10 @@ pub struct F1AdcRegs {
     /// ADC_SQR2 @ 0x30: SQ7..SQ12.
     #[serde(default)]
     sqr2: u32,
+    /// ADC_JSQR @ 0x38 and ADC_JDR1..4 @ 0x3C..0x48. The bounded F4
+    /// injected-sequence path uses these; F1 leaves them unmodelled.
+    jsqr: u32,
+    jdr: [u32; 4],
 }
 
 /// ADC_CR1.SCAN (RM0008 §11.12.2; AT32 ADC_CTRL1.SQEN): convert the whole
@@ -411,11 +434,20 @@ pub struct Adc {
     pub sr: u32,
     /// Conversion data register — shared result path for both families.
     pub dr: u32,
+    /// STM32F1/F4 clear EOC when ADC_DR is read. `Peripheral::read` takes
+    /// `&self`, so this records the acknowledgement until the next EOC event
+    /// without mutating the public bridge-visible status word.
+    #[serde(skip)]
+    dr_read_since_eoc: Cell<bool>,
 
     // Shared conversion engine.
     converting: bool,
     cycles_remaining: u32,
     conversion_time: u32,
+    /// True while the bounded F4 injected group is converting. Injected
+    /// conversions share the conversion countdown but write JDRx, not DR.
+    f4_injected_active: bool,
+    f4_injected_sequence_rank: u8,
     /// Per-channel injected levels, held in millivolts. `None` means no
     /// external input; conversion waits until the ADC samples the mux.
     channel_inputs_mv: [Option<u16>; MAX_CHANNELS],
@@ -539,9 +571,12 @@ impl Adc {
             regs,
             sr: 0,
             dr: 0,
+            dr_read_since_eoc: Cell::new(false),
             converting: false,
             cycles_remaining: 0,
             conversion_time: 14,
+            f4_injected_active: false,
+            f4_injected_sequence_rank: 0,
             channel_inputs_mv: [None; MAX_CHANNELS],
             reference_millivolts: ADC_VREF_MV,
             sampled_input: None,
@@ -619,7 +654,11 @@ impl Adc {
     }
 
     fn sample_f1_input(&self) -> Option<HeldAdcInput> {
-        let channel = self.f1_regular_channel();
+        let channel = if matches!(self.regs, AdcRegs::Stm32F4(_)) && self.f4_injected_active {
+            self.f4_injected_channel()
+        } else {
+            self.f1_regular_channel()
+        };
         let injected = self
             .channel_inputs_mv
             .get(channel)
@@ -643,9 +682,9 @@ impl Adc {
     }
 
     /// One cycle of the F1 conversion countdown. Returns whether an EOC IRQ
-    /// should be raised this cycle. Shared verbatim by the legacy walk `tick()`
-    /// and the scheduler `on_event`, so the two routes are identical by
-    /// construction.
+    /// and/or DMA request should be raised this cycle. Shared verbatim by the
+    /// legacy walk `tick()` and the scheduler `on_event`, so the two routes are
+    /// identical by construction.
     fn advance_conversion(&mut self) -> bool {
         let mut irq = false;
         if self.converting {
@@ -654,6 +693,44 @@ impl Adc {
             } else {
                 self.converting = false;
                 let (cr1, cr2) = self.f1_ctrl();
+                let is_f4 = matches!(self.regs, AdcRegs::Stm32F4(_));
+                if is_f4 && self.f4_injected_active {
+                    // RM0090 §13.3.9: injected results go to JDRx and JEOC
+                    // is raised only after the last channel in the group.
+                    let rank = usize::from(self.f4_injected_sequence_rank);
+                    let previous = match &self.regs {
+                        AdcRegs::Stm32F4(r) => r.jdr[rank],
+                        _ => 0,
+                    };
+                    let result = self
+                        .sampled_input
+                        .take()
+                        .map(|sample| {
+                            Self::code_for_mv(sample.millivolts, sample.reference_millivolts)
+                        })
+                        .unwrap_or_else(|| (previous + 1) & 0x0FFF);
+                    if let AdcRegs::Stm32F4(r) = &mut self.regs {
+                        r.jdr[rank] = result;
+                    }
+                    if rank + 1 >= self.f4_injected_sequence_length() {
+                        self.sr |= F4_SR_JEOC;
+                        irq = (cr1 & F4_CR1_JEOCIE) != 0;
+                        self.f4_injected_active = false;
+                        self.f4_injected_sequence_rank = 0;
+                    } else {
+                        self.f4_injected_sequence_rank += 1;
+                        // In-chain continuation: the running wake carries on.
+                        self.begin_conversion();
+                    }
+                    return irq;
+                }
+                let last_rank = self.seq_index + 1 >= self.f1_sequence_len();
+                // The F4 raises OVR when EOCS is set and the previous result
+                // was not read before this one arrives (RM0090 §13.8.2).
+                let f4_overrun = is_f4
+                    && (cr2 & F4_CR2_EOCS) != 0
+                    && (self.sr & F4_SR_EOC) != 0
+                    && !self.dr_read_since_eoc.get();
 
                 // The selected SQR3 channel, its input voltage and VREF+ were
                 // latched at SWSTART. Changes while SAR conversion is running
@@ -674,28 +751,34 @@ impl Adc {
                 if cr2 & F1_CR2_DMA != 0 {
                     self.dma_pending = true;
                 }
-                // Scan mode: the next channel of the sequence follows at once;
-                // EOC marks the end of the group (RM0008 §11.12.1 / AT32
-                // ADC_STS.OCCE).
-                if self.seq_index + 1 < self.f1_sequence_len() {
+                // EOC marks the end of the regular group (RM0008 §11.12.1 /
+                // AT32 ADC_STS.OCCE). F4 `CR2.EOCS` raises it after each
+                // conversion instead (RM0090 §13.13.3).
+                let eoc = last_rank || (is_f4 && (cr2 & F4_CR2_EOCS) != 0);
+                if eoc {
+                    self.sr |= F4_SR_EOC;
+                    self.dr_read_since_eoc.set(false);
+                }
+                if f4_overrun {
+                    self.sr |= F4_SR_OVR;
+                }
+                if (eoc && (cr1 & F1_CR1_EOCIE) != 0) || (f4_overrun && (cr1 & F4_CR1_OVRIE) != 0) {
+                    irq = true;
+                }
+                if !last_rank {
+                    // Scan mode: the next channel of the sequence follows at
+                    // once. In-chain continuation, like CONT: the running
+                    // wake carries on (no new generation).
                     self.seq_index += 1;
-                    // In-chain continuation, like CONT: the running wake
-                    // carries on (no new generation).
                     self.begin_conversion();
-                    return irq;
-                }
-                self.seq_index = 0;
-
-                self.sr |= 1 << 1; // EOC
-
-                if (cr1 & (1 << 5)) != 0 {
-                    irq = true; // EOCIE
-                }
-                // Continuous mode (CONT + ADON).
-                if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
-                    // The chain that is running this restarts itself: same
-                    // wake, same generation.
-                    self.begin_conversion();
+                } else {
+                    self.seq_index = 0;
+                    // Continuous mode (CONT + ADON) repeats the full group.
+                    if (cr2 & F1_CR2_CONT) != 0 && (cr2 & F1_CR2_ADON) != 0 {
+                        // The chain that is running this restarts itself:
+                        // same wake, same generation.
+                        self.begin_conversion();
+                    }
                 }
             }
         }
@@ -775,7 +858,9 @@ impl Adc {
         self.converting = true;
         self.cycles_remaining = self.conversion_time;
         self.sampled_input = self.sample_f1_input();
-        self.sr &= !0x2; // clear EOC on start
+        // RM0008 clears F1 EOC by reading DR or writing zero to SR. F4 also
+        // keeps an unread result visible across conversion start, where it is
+        // used by the bounded EOCS overrun check.
     }
 
     /// (cr1, cr2) for the F1 control registers; (0, 0) on L4 (no conversion
@@ -785,6 +870,27 @@ impl Adc {
             AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => (r.cr1, r.cr2),
             // Neither the L4, the H7 nor the U5 runs the F1 countdown engine.
             AdcRegs::Stm32L4(_) | AdcRegs::Stm32H7(_) | AdcRegs::Stm32U5(_) => (0, 0),
+        }
+    }
+
+    /// Number of F4 injected conversions. JSQR.JL stores the count minus one.
+    fn f4_injected_sequence_length(&self) -> usize {
+        match &self.regs {
+            AdcRegs::Stm32F4(r) => ((r.jsqr >> 20) & 0x3) as usize + 1,
+            _ => 1,
+        }
+    }
+
+    /// Injected rank channel from JSQR. F4 right-aligns short sequences in
+    /// JSQ3/JSQ4 (two ranks) or JSQ2..JSQ4 (three ranks).
+    fn f4_injected_channel(&self) -> usize {
+        match &self.regs {
+            AdcRegs::Stm32F4(r) => {
+                let first_slot = 4 - self.f4_injected_sequence_length();
+                let slot = first_slot + usize::from(self.f4_injected_sequence_rank);
+                ((r.jsqr >> (slot * 5)) & 0x1F) as usize
+            }
+            _ => 0,
         }
     }
 
@@ -1275,6 +1381,7 @@ impl Adc {
     fn cancel_f1_pending(&mut self) {
         self.converting = false;
         self.cycles_remaining = 0;
+        self.seq_index = 0;
         self.chain_live = false;
         self.conv_gen = self.conv_gen.wrapping_add(1) & F1_EVT_GEN_MASK;
         self.conv_sleep = None;
@@ -1349,13 +1456,19 @@ impl Adc {
         trigger
     }
 
-    /// F2/F4 CR2 write: SWSTART at bit 30, rising edge + ADON starts conversion.
+    /// F2/F4 CR2 writes: SWSTART (regular) at bit 30, JSWSTART (injected) at
+    /// bit 22. Injected start is supported only while idle and with JAUTO
+    /// clear; external injected triggers and regular-group preemption remain
+    /// outside this bounded model.
     fn apply_f4_cr2(&mut self, old_cr2: u32, new_cr2: u32) -> bool {
         let mut cr2 = new_cr2;
         let adon = (cr2 & F1_CR2_ADON) != 0;
         if !adon {
             self.cancel_f1_pending();
-            cr2 &= !F4_CR2_SWSTART;
+            self.seq_index = 0;
+            self.f4_injected_active = false;
+            self.f4_injected_sequence_rank = 0;
+            cr2 &= !(F4_CR2_SWSTART | F4_CR2_JSWSTART);
             if let AdcRegs::Stm32F4(r) = &mut self.regs {
                 r.cr2 = cr2;
             }
@@ -1363,9 +1476,30 @@ impl Adc {
         }
         let swstart = (cr2 & F4_CR2_SWSTART) != 0;
         let old_swstart = (old_cr2 & F4_CR2_SWSTART) != 0;
-        let mut trigger = false;
-        if swstart && !old_swstart {
+        let jswstart = (cr2 & F4_CR2_JSWSTART) != 0;
+        let old_jswstart = (old_cr2 & F4_CR2_JSWSTART) != 0;
+        let swstart_rise = swstart && !old_swstart;
+        let jswstart_rise = jswstart && !old_jswstart;
+        if swstart_rise {
             cr2 &= !F4_CR2_SWSTART;
+        }
+        if jswstart_rise {
+            cr2 &= !F4_CR2_JSWSTART;
+        }
+        let both_started = swstart_rise && jswstart_rise;
+        let mut trigger = false;
+        if !both_started && swstart_rise && !self.converting {
+            self.f4_injected_active = false;
+            self.f4_injected_sequence_rank = 0;
+            self.seq_index = 0;
+            trigger = true;
+        } else if !both_started
+            && jswstart_rise
+            && !self.converting
+            && matches!(&self.regs, AdcRegs::Stm32F4(r) if r.cr1 & (F4_CR1_JAUTO | F4_CR1_SCAN) == F4_CR1_SCAN)
+        {
+            self.f4_injected_active = true;
+            self.f4_injected_sequence_rank = 0;
             trigger = true;
         }
         if let AdcRegs::Stm32F4(r) = &mut self.regs {
@@ -1441,8 +1575,14 @@ impl Peripheral for Adc {
 
     fn read(&self, offset: u64) -> SimResult<u8> {
         let val = match &self.regs {
-            AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => match offset {
-                0x00..=0x03 => self.sr,
+            AdcRegs::Stm32F1(r) => match offset {
+                0x00..=0x03 => {
+                    if self.dr_read_since_eoc.get() {
+                        self.sr & !F4_SR_EOC
+                    } else {
+                        self.sr
+                    }
+                }
                 0x04..=0x07 => r.cr1,
                 0x08..=0x0B => r.cr2,
                 0x0C..=0x0F => r.smpr1,
@@ -1450,7 +1590,39 @@ impl Peripheral for Adc {
                 0x2C..=0x2F => r.sqr1,
                 0x30..=0x33 => r.sqr2,
                 0x34..=0x37 => r.sqr3,
-                0x4C..=0x4F => self.dr,
+                0x4C..=0x4F => {
+                    self.dr_read_since_eoc.set(true);
+                    self.dr
+                }
+                _ => {
+                    crate::census_reg!("adc:Adc", offset, "read");
+                    0
+                }
+            },
+            AdcRegs::Stm32F4(r) => match offset {
+                0x00..=0x03 => {
+                    if self.dr_read_since_eoc.get() {
+                        self.sr & !F4_SR_EOC
+                    } else {
+                        self.sr
+                    }
+                }
+                0x04..=0x07 => r.cr1,
+                0x08..=0x0B => r.cr2,
+                0x0C..=0x0F => r.smpr1,
+                0x10..=0x13 => r.smpr2,
+                0x2C..=0x2F => r.sqr1,
+                0x30..=0x33 => r.sqr2,
+                0x34..=0x37 => r.sqr3,
+                0x38..=0x3B => r.jsqr,
+                0x3C..=0x3F => r.jdr[0],
+                0x40..=0x43 => r.jdr[1],
+                0x44..=0x47 => r.jdr[2],
+                0x48..=0x4B => r.jdr[3],
+                0x4C..=0x4F => {
+                    self.dr_read_since_eoc.set(true);
+                    self.dr
+                }
                 _ => {
                     crate::census_reg!("adc:Adc", offset, "read");
                     0
@@ -1471,7 +1643,14 @@ impl Peripheral for Adc {
 
         match self.regs {
             AdcRegs::Stm32F1(_) | AdcRegs::Stm32F4(_) => match offset {
-                0x00..=0x03 => self.sr = (self.sr & !mask) | val_shifted,
+                0x00..=0x03 => {
+                    // RM0008/RM0090 ADC_SR flags are rc_w0: write zero to
+                    // clear; writing one leaves the current flag unchanged.
+                    self.sr &= !(mask & !val_shifted);
+                    if mask & F4_SR_EOC != 0 && val_shifted & F4_SR_EOC == 0 {
+                        self.dr_read_since_eoc.set(false);
+                    }
+                }
                 0x04..=0x07 => match &mut self.regs {
                     AdcRegs::Stm32F1(r) | AdcRegs::Stm32F4(r) => {
                         r.cr1 = (r.cr1 & !mask) | val_shifted;
@@ -1511,6 +1690,14 @@ impl Peripheral for Adc {
                         *reg = ((*reg & !mask) | val_shifted) & writable;
                     }
                 }
+                0x38..=0x3B => match &mut self.regs {
+                    AdcRegs::Stm32F4(r) => {
+                        r.jsqr = (r.jsqr & !mask) | val_shifted;
+                    }
+                    _ => {
+                        crate::census_reg!("adc:Adc", offset, "write");
+                    }
+                },
                 _ => {
                     crate::census_reg!("adc:Adc", offset, "write");
                 }
@@ -1785,6 +1972,67 @@ mod tests {
         adc.write_u32(0x34, 0).unwrap();
         let ch0 = adc.channel_input_count(0) as u32;
         assert_eq!(convert(&mut adc), ch0, "SQR3 SQ1 = 0 converts channel 0");
+    }
+
+    /// RM0008 §§11.3.8, 11.12.1: SCAN converts the configured SQR3 ranks in
+    /// order. EOC/EOCIE mark the end of the regular group, not each rank (the
+    /// F1 HAL replaces per-rank polling with a timed wait for this reason),
+    /// and reading DR clears EOC.
+    #[test]
+    fn f1_scan_converts_ranks_in_order_and_dr_read_clears_group_eoc() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(0, 825);
+        adc.set_channel_input(1, 1650);
+        adc.write_u32(0x04, F1_CR1_SCAN | F1_CR1_EOCIE).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap(); // L=1 -> two ranks
+        adc.write_u32(0x34, 1 << 5).unwrap(); // SQ1=IN0, SQ2=IN1
+
+        f1_software_start(&mut adc);
+        let first: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(first.iter().all(|irq| !irq), "no EOC IRQ inside the group");
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.dr, 1023, "rank 1 result is in DR");
+        assert_eq!(adc.seq_index, 1);
+        assert!(
+            adc.converting,
+            "the second sequence rank starts automatically"
+        );
+
+        let second: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(second[..14].iter().all(|irq| !irq));
+        assert!(second[14], "EOCIE reports the end of the regular group");
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert!(!adc.converting, "single-shot scan stops at the last rank");
+        assert_eq!(adc.seq_index, 0);
+    }
+
+    /// RM0008 §11.12.3: DMA requests are generated on each completed F1
+    /// regular conversion, allowing DMA1 to read DR before the next scan rank
+    /// overwrites it.
+    #[test]
+    fn f1_scan_emits_dma_request_for_each_completed_rank() {
+        let mut adc = Adc::new();
+        adc.set_channel_input(0, 825);
+        adc.set_channel_input(1, 1650);
+        adc.write_u32(0x04, F1_CR1_SCAN).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap(); // L=1 -> two ranks
+        adc.write_u32(0x34, 1 << 5).unwrap(); // SQ1=IN0, SQ2=IN1
+
+        f1_software_start_with(&mut adc, F1_CR2_DMA);
+        for _ in 0..14 {
+            assert!(adc.tick().dma_signals.is_none());
+        }
+        assert_eq!(adc.tick().dma_signals, Some(vec![crate::DMA_SIGNAL_DATA]));
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 1023);
+
+        for _ in 0..14 {
+            assert!(adc.tick().dma_signals.is_none());
+        }
+        assert_eq!(adc.tick().dma_signals, Some(vec![crate::DMA_SIGNAL_DATA]));
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
+        assert!(!adc.converting);
     }
 
     /// The F1 ADC samples the selected input and VREF+ when SWSTART begins
@@ -2499,6 +2747,214 @@ mod tests {
             !adc.converting,
             "F4 layout must not treat bit 22 as SWSTART"
         );
+    }
+
+    /// RM0090 §13.8.2/§13.13: with EOCS set, an unread result at the next
+    /// conversion raises OVR; OVRIE shares the ADC interrupt line. Reading DR
+    /// clears EOC, and ADC_SR is rc_w0 for these flags.
+    #[test]
+    fn f4_eocs_overrun_sets_flag_irq_and_recovers() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        let cr2 = F1_CR2_ADON | F4_CR2_EOCS;
+        adc.write_u32(0x04, F4_CR1_OVRIE).unwrap();
+        adc.write_u32(0x08, cr2).unwrap();
+        adc.write_u32(0x08, cr2 | F4_CR2_SWSTART).unwrap();
+        let first: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(adc.read_u32(0x00).unwrap() & F4_SR_EOC != 0);
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_OVR, 0);
+        assert!(first.iter().all(|irq| !irq), "OVRIE alone ignores EOC");
+
+        // EOC remains pending across SWSTART until DR is read or ADC_SR is
+        // explicitly cleared, so this second completion loses the old result.
+        adc.write_u32(0x08, cr2 | F4_CR2_SWSTART).unwrap();
+        let second: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert_eq!(
+            adc.read_u32(0x00).unwrap() & (F4_SR_EOC | F4_SR_OVR),
+            F4_SR_EOC | F4_SR_OVR
+        );
+        assert!(second.last().copied().unwrap_or(false), "OVRIE raises IRQ");
+
+        // Writing one preserves EOC and zero clears OVR (rc_w0).
+        adc.write_u32(0x00, !F4_SR_OVR).unwrap();
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_OVR, 0);
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        let _ = adc.read_u32(0x4C).unwrap();
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+
+        // Reading DR before the next completion acknowledges the prior result,
+        // so the resumed single conversion must not raise another overrun.
+        adc.write_u32(0x08, cr2 | F4_CR2_SWSTART).unwrap();
+        let third: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_OVR, 0);
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert!(!third.last().copied().unwrap_or(true));
+    }
+
+    /// RM0090 §13.3.8: SCAN consumes the programmed regular ranks in order;
+    /// EOCS raises EOC/IRQ for each conversion, and DR reads acknowledge each
+    /// result before the next one arrives.
+    #[test]
+    fn f4_scan_sequence_converts_selected_ranks_with_per_conversion_eoc() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(1, 825);
+        adc.set_channel_input(2, 1650);
+        adc.write_u32(0x04, F4_CR1_SCAN | F4_CR1_EOCIE).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap(); // L=1 → two conversions
+        adc.write_u32(0x34, 1 | (2 << 5)).unwrap(); // SQ1=IN1, SQ2=IN2
+        adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_EOCS).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_EOCS | F4_CR2_SWSTART)
+            .unwrap();
+
+        let first: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(first[..14].iter().all(|irq| !irq));
+        assert!(first[14], "EOCIE must report the first converted rank");
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 1023);
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.seq_index, 1);
+        assert!(
+            adc.converting,
+            "the second sequence rank starts automatically"
+        );
+
+        let second: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(second[..14].iter().all(|irq| !irq));
+        assert!(second[14], "EOCIE must report the second converted rank");
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
+        assert!(!adc.converting, "single-shot scan stops at the last rank");
+        assert_eq!(adc.seq_index, 0);
+    }
+
+    /// With SCAN set and EOCS clear, RM0090 reports completion only at the end
+    /// of the regular group, not after each channel.
+    #[test]
+    fn f4_scan_without_eocs_interrupts_only_after_the_group() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(1, 825);
+        adc.set_channel_input(2, 1650);
+        adc.write_u32(0x04, F4_CR1_SCAN | F4_CR1_EOCIE).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap();
+        adc.write_u32(0x34, 1 | (2 << 5)).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_SWSTART).unwrap();
+
+        let first: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(first.iter().all(|irq| !irq));
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert!(adc.converting);
+
+        let second: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(second[..14].iter().all(|irq| !irq));
+        assert!(second[14], "EOCIE is raised at regular-group completion");
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
+        assert!(!adc.converting);
+    }
+
+    /// RM0090 §13.3.5/§13.3.8: CONT keeps a scanned regular group running and
+    /// restarts it at rank 1 after the last selected channel.
+    #[test]
+    fn f4_continuous_scan_restarts_at_first_rank() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(1, 825);
+        adc.set_channel_input(2, 1650);
+        adc.write_u32(0x04, F4_CR1_SCAN | F4_CR1_EOCIE).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap(); // L=1 → two conversions
+        adc.write_u32(0x34, 1 | (2 << 5)).unwrap(); // SQ1=IN1, SQ2=IN2
+        let cr2 = F1_CR2_ADON | F1_CR2_CONT | F4_CR2_EOCS;
+        adc.write_u32(0x08, cr2).unwrap();
+        adc.write_u32(0x08, cr2 | F4_CR2_SWSTART).unwrap();
+
+        for (index, expected) in [1023, 2047, 1023, 2047].into_iter().enumerate() {
+            let irq: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+            assert!(irq[..14].iter().all(|pending| !pending));
+            assert!(irq[14], "EOCIE must report conversion {}", index + 1);
+            assert_eq!(adc.read_u32(0x4C).unwrap(), expected);
+            assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+            assert!(adc.converting, "CONT must keep the scan active");
+            assert_eq!(adc.seq_index, (index as u8 + 1) % 2);
+        }
+    }
+
+    /// With EOCS clear, reading DR clears group-end EOC through the next
+    /// non-final rank; it must not reappear before the following group ends.
+    #[test]
+    fn f4_group_eoc_read_stays_clear_until_next_group_end() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(1, 825);
+        adc.set_channel_input(2, 1650);
+        adc.write_u32(0x04, F4_CR1_SCAN | F4_CR1_EOCIE).unwrap();
+        adc.write_u32(0x2C, 1 << 20).unwrap();
+        adc.write_u32(0x34, 1 | (2 << 5)).unwrap();
+        let cr2 = F1_CR2_ADON | F1_CR2_CONT;
+        adc.write_u32(0x08, cr2).unwrap();
+        adc.write_u32(0x08, cr2 | F4_CR2_SWSTART).unwrap();
+
+        let first_rank: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(first_rank.iter().all(|irq| !irq));
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+
+        let first_group_end: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(first_group_end[14]);
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+
+        let next_first_rank: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(next_first_rank.iter().all(|irq| !irq));
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+
+        let next_group_end: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(next_group_end[14]);
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(adc.read_u32(0x4C).unwrap(), 2047);
+    }
+
+    /// RM0090 §§13.3.9, 13.13.12: a two-rank software-started injected scan
+    /// uses JSQ3/JSQ4, stores each result in JDR1/JDR2, and raises JEOC/JEOCIE
+    /// only when the final injected channel completes.
+    #[test]
+    fn f4_injected_scan_writes_jdr_and_raises_group_end_jeoc() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32F4);
+        adc.set_channel_input(1, 825);
+        adc.set_channel_input(9, 1650);
+        adc.write_u32(0x04, F4_CR1_SCAN | F4_CR1_JEOCIE).unwrap();
+        // JL=1 selects two ranks; for two ranks, JSQ3 then JSQ4 are active.
+        adc.write_u32(0x38, (1 << 20) | (1 << 10) | (9 << 15))
+            .unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON).unwrap();
+        adc.write_u32(0x08, F1_CR2_ADON | F4_CR2_JSWSTART).unwrap();
+        assert_eq!(adc.read_u32(0x08).unwrap() & F4_CR2_JSWSTART, 0);
+
+        let first_rank: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(first_rank.iter().all(|pending| !pending));
+        assert_eq!(adc.read_u32(0x3C).unwrap(), 1023);
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_JEOC, 0);
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert_eq!(
+            adc.read_u32(0x4C).unwrap(),
+            0,
+            "injected data must not overwrite DR"
+        );
+        assert!(
+            adc.converting,
+            "the second injected rank starts automatically"
+        );
+
+        let second_rank: Vec<_> = (0..15).map(|_| adc.tick().irq).collect();
+        assert!(second_rank[..14].iter().all(|pending| !pending));
+        assert!(
+            second_rank[14],
+            "JEOCIE is raised at injected group completion"
+        );
+        assert_eq!(adc.read_u32(0x40).unwrap(), 2047);
+        assert_ne!(adc.read_u32(0x00).unwrap() & F4_SR_JEOC, 0);
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_EOC, 0);
+        assert!(!adc.converting);
+
+        adc.write_u32(0x00, !F4_SR_JEOC).unwrap();
+        assert_eq!(adc.read_u32(0x00).unwrap() & F4_SR_JEOC, 0);
     }
 }
 

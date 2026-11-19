@@ -1,41 +1,14 @@
-# Validation Report: crosslink-nx-evn
+# CrossLink-NX EVN onboarding scope
 
-**Architecture:** Soft RISC-V / FPGA.
+The imported platform is a LiteX system with a VexRiscv core. Renode's board
+description gives it a `rv32im_zicsr_zifencei` CPU, a 32 KiB ROM at `0x0`, and
+8 MiB SRAM at `0x40000000` ([upstream board REPL](https://github.com/renode/renode/blob/master/platforms/boards/crosslink-nx-evn.repl)).
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Structural Check Passed (structural-ok)
+LabWired's measured profile claims only its generic RV32IM integer subset and
+those memory windows. The exact imported-system direct-ELF smoke executes
+100,000 instructions, stores `17 * 19` at `0x40001000`, and checks the SRAM
+readback. It does not validate the reset flow, Zicsr or Zifencei instructions,
+UART, timer, LED controller, or any other board peripheral. The complete board
+remains unverified.
 
-```json
-{
-  "system_manifest": true,
-  "chip_descriptor": true,
-  "flash_base_present": true,
-  "ram_base_present": true
-}
-```
-
-
-## Hardware Coverage Report
-
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `ctrl` | `0xf0000000` | `litex_soc_controller` |
-| `uart` | `0xf0002000` | `litex_uart` |
-| `timer0` | `0xf0002800` | `litex_timer` |
-| `leds` | `0xf0003000` | `litex_controlandstatus` |
-| `led0` | `0x00000000` | `led` |
-| `led1` | `0x00000001` | `led` |
-| `led2` | `0x00000002` | `led` |
-| `led3` | `0x00000003` | `led` |
-| `led4` | `0x00000004` | `led` |
-| `led5` | `0x00000005` | `led` |
-| `led6` | `0x00000006` | `led` |
-| `led7` | `0x00000007` | `led` |
-| `led8` | `0x00000008` | `led` |
-| `led9` | `0x00000009` | `led` |
-| `led10` | `0x0000000a` | `led` |
-| `led11` | `0x0000000b` | `led` |
-| `led12` | `0x0000000c` | `led` |
-| `led13` | `0x0000000d` | `led` |
-
-**Total Peripherals:** 18
+Run evidence: `docs/coverage/renode-onboarding/metrics/crosslink-nx-evn/`.

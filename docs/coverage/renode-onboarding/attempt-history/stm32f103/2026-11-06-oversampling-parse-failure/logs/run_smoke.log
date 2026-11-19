@@ -1,0 +1,8 @@
+2026-11-06T15:01:34.516669Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+
+thread 'main' (4106913) panicked at crates/core/src/peripherals/components/declarative_i2c.rs:3179:6:
+bme280.yaml is a valid declarative i2c descriptor: Failed to parse Device Descriptor
+
+Caused by:
+    did not find expected ',' or '}' at line 103 column 7, while parsing a flow mapping at line 102 column 9
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

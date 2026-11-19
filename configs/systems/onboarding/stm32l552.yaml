@@ -6,3 +6,30 @@
 
 name: stm32l552
 chip: ../../chips/onboarding/stm32l552.yaml
+cpu_hz: 4000000
+external_devices: []
+board_io:
+  - id: led_ld1
+    kind: led
+    peripheral: gpioc
+    pin: 7
+    signal: output
+    active_high: true
+  - id: led_ld2
+    kind: led
+    peripheral: gpiob
+    pin: 7
+    signal: output
+    active_high: true
+  - id: led_ld3
+    kind: led
+    peripheral: gpioa
+    pin: 9
+    signal: output
+    active_high: true
+  - id: button_b1
+    kind: button
+    peripheral: gpioc
+    pin: 13
+    signal: input
+    active_high: true

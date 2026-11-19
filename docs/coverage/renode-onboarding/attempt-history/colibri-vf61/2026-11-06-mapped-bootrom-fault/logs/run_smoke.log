@@ -1,0 +1,7 @@
+2026-11-06T01:39:21.860456Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/colibri-vf61.yaml
+2026-11-06T01:39:21.861248Z  INFO labwired_loader: ELF Entry Point: 0x3f000001
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-06T01:39:21.861831Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0xfffffffe
+2026-11-06T01:39:21.861905Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }) (captured len=0)
+FAIL  0/1 checks · colibri-vf61-cortex-m4-smoke · 0 steps · 0.00s

@@ -6,6 +6,13 @@
 
 name: efr32mg26
 arch: arm
+core: cortex-m33
+# EFR32MG26 maximum CPU frequency, as in configs/chips/efr32mg26.yaml. Without
+# it the TIMER model has no CPU clock to scale its 19 MHz peripheral_hz to.
+cpu_hz: 78000000
+# Series-2 SET/CLR/TGL aliases at +0x1000/+0x2000/+0x3000, as in
+# configs/chips/efr32mg26.yaml. The TIMER smoke clears IF.OF through CLR.
+atomic_register_aliases: efr32s2
 flash:
   base: 134217728
   size: 3268608B
@@ -13,7 +20,36 @@ ram:
   base: 536870912
   size: 524288B
 peripherals:
-- id: DCDC_IF
-  type: pythonperipheral
+- id: cmu
+  type: efr32s2_cmu
   bus: sysbus
-  base_address: 1342799912
+  base_address: 1073774592
+  size: 4KB
+- id: usart1
+  type: efr32s2_usart
+  bus: sysbus
+  base_address: 1074413568
+  size: 4KB
+  clock: { reg: clken2, bit: 7 }
+  irq: 17
+# TIMER0/TIMER1: TIMER0_S_BASE/TIMER1_S_BASE, TIMER0_IRQn = 4 /
+# TIMER1_IRQn = 5 and TIMERn_CNTWIDTH = 0x20 from efr32mg26b510f3200im48.h;
+# CMU_CLKEN0 bits 4/5 from efr32mg26_cmu.h (simplicity_sdk sisdk-2025.6).
+# Same values as configs/chips/efr32mg26.yaml. The timebase is the 19 MHz
+# HFRCODPLL startup clock; rate is not timed. TIMER2..9 are not claimed.
+- id: timer0
+  type: efr32s2_timer
+  bus: sysbus
+  base_address: 0x40048000
+  size: 4KB
+  clock: { reg: clken0, bit: 4 }
+  config: { counter_bits: 32, peripheral_hz: 19000000 }
+  irq: 4
+- id: timer1
+  type: efr32s2_timer
+  bus: sysbus
+  base_address: 0x4004C000
+  size: 4KB
+  clock: { reg: clken0, bit: 5 }
+  config: { counter_bits: 32, peripheral_hz: 19000000 }
+  irq: 5

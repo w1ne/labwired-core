@@ -1705,6 +1705,14 @@ fn gpio_offsets_for_peripheral(
             odr_offset: 0x10,
             ra_output_packed: false,
         }),
+        // Silicon Labs Series-0/1 EFM32 port struct: DOUT at 0x0C, DIN at 0x1C
+        // (efm32gg_gpio_p.h / efm32pg1b_gpio_p.h, GPIO_P_TypeDef).
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Efm32s0
+        | labwired_core::peripherals::gpio::GpioRegisterLayout::Efm32s1 => Some(GpioOffsets {
+            idr_offset: 0x1C,
+            odr_offset: 0x0C,
+            ra_output_packed: false,
+        }),
         // Renesas RA PORT: PCNTR1 @0x00 (PODR in [31:16]), PCNTR2 PIDR @0x04.
         labwired_core::peripherals::gpio::GpioRegisterLayout::RaPort => Some(GpioOffsets {
             idr_offset: 0x04,
@@ -1717,6 +1725,28 @@ fn gpio_offsets_for_peripheral(
             odr_offset: 0x00,
             ra_output_packed: false,
         }),
+        // NXP LPC21xx/LPC22xx legacy GPIO: IOSET (reads the output latch)
+        // @0x4, IOPIN @0x0 (lpc22xx.h).
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Lpc2xxx => Some(GpioOffsets {
+            idr_offset: 0x00,
+            odr_offset: 0x04,
+            ra_output_packed: false,
+        }),
+        // QuickLogic EOS S3 MISC IO: IO_INPUT @0x0, IO_OUTPUT @0x4.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::EosS3 => Some(GpioOffsets {
+            idr_offset: 0x00,
+            odr_offset: 0x04,
+            ra_output_packed: false,
+        }),
+        // MAX32650 GPIO: IN @0x24, OUT @0x18.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Max32650 => Some(GpioOffsets {
+            idr_offset: 0x24,
+            odr_offset: 0x18,
+            ra_output_packed: false,
+        }),
+        // DA14 P0 and P1 data sit in two words of one block; a single
+        // offset pair cannot address both ports, so skip the binding.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Da14 => None,
         // nRF52 GPIO register layout isn't mapped for DAP board-IO bindings;
         // skip it gracefully (callers use `?`, so None drops the binding).
         labwired_core::peripherals::gpio::GpioRegisterLayout::Nrf52 => None,
@@ -1758,6 +1788,14 @@ fn gpio_offsets_for_peripheral(
         // numbers `GpioPort::odr_offset()` / `idr_offset()` return for this
         // layout; keep the three in step.
         labwired_core::peripherals::gpio::GpioRegisterLayout::Wch => Some(default_offsets),
+        // Arm CMSDK AHB GPIO: DATA (pad input) @0x00, DATAOUT @0x04. These
+        // are the same two numbers `GpioPort::odr_offset()` /
+        // `idr_offset()` return for this layout; keep the three in step.
+        labwired_core::peripherals::gpio::GpioRegisterLayout::Cmsdk => Some(GpioOffsets {
+            idr_offset: 0x00,
+            odr_offset: 0x04,
+            ra_output_packed: false,
+        }),
     }
 }
 

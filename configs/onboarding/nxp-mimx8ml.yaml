@@ -1,23 +1,26 @@
 name: nxp-mimx8ml
-description: 'nxp-mimx8ml (fragment platform, Generic). Architecture: ARM multicore
-  cluster.'
-family: Generic
-code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
-  \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 100
-verified: true
+description: >-
+  Imported NXP i.MX 8M Plus fragment, narrowed to one Cortex-A53 processing
+  element, the imported DDR window and the UART2 console (polled TX). Other
+  cores, other peripherals, and boot flow are not covered by this measurement.
+family: NXP i.MX 8M Plus (imported fragment)
+url: https://www.nxp.com/part/MIMX8ML8CVNKZAB
+verified: false
 system: systems/onboarding/nxp-mimx8ml.yaml
 provenance:
   generated_by: scripts/onboard_hw_targets.py
-  parse_fallbacks:
-  - flash=memory_ddr
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-aarch64-mxcuart-smoke
+  reason: bounded AArch64 + i.MX UART (UART2) polled-TX smoke; whole platform, other cores and other imported peripherals are unverified
   checks:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-10-18T14:40:19.079163+00:00'
+    uart2_polled_tx: true
+    other_cores: false
+    other_peripherals: false
+    reset_vector_boot: false
+    whole_platform: false
+  timestamp_utc: '2026-11-07T17:42:37+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/nxp-mimx8ml.md

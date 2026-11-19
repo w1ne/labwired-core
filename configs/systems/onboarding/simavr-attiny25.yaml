@@ -6,3 +6,10 @@
 
 name: simavr-attiny25
 chip: ../../chips/onboarding/simavr-attiny25.yaml
+board_io:
+  - id: status_led
+    kind: led
+    peripheral: portb
+    pin: 0
+    signal: output
+    active_high: true

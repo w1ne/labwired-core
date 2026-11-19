@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 //
-//! Apollo4 Plus EVB (AMAP42KP-KBR, Cortex-M4F) L1 smoke: UART0 console, a walk
-//! over the three user LEDs with RD readback, the two buttons' pad levels and
-//! a heartbeat, in bare registers.
+//! Apollo4 Plus EVB (AMAP42KP-KBR, Cortex-M4F) L1 smoke: PL011 UART0 RX
+//! interrupt status and console, a walk over the three user LEDs with RD
+//! readback, the two buttons' pad levels and a heartbeat, in bare registers.
 //!
 //! Board facts (Zephyr `boards/ambiq/apollo4p_evb`, apollo4p_evb.dts and
 //! apollo4p_evb-pinctrl.dtsi):
@@ -75,6 +75,10 @@ const UART_IBRD: u32 = UART0 + 0x24;
 const UART_FBRD: u32 = UART0 + 0x28;
 const UART_LCRH: u32 = UART0 + 0x2C;
 const UART_CR: u32 = UART0 + 0x30;
+const UART_IMSC: u32 = UART0 + 0x38;
+const UART_RIS: u32 = UART0 + 0x3C;
+const UART_MIS: u32 = UART0 + 0x40;
+const NVIC_ISPR0: u32 = 0xE000_E200;
 /// FR.TXFF (bit 5).
 const UART_FR_TXFF: u32 = 1 << 5;
 /// LCRH.WLEN [6:5] = 3 (8 bits), no parity, one stop, FIFOs off.
@@ -86,6 +90,8 @@ const UART_CR_CLKSEL_SHIFT: u32 = 4;
 const UART_CR_CLKSEL_24MHZ: u32 = 1;
 const UART_CR_TXE: u32 = 1 << 8;
 const UART_CR_RXE: u32 = 1 << 9;
+const UART_INT_RX: u32 = 1 << 4;
+const UART0_IRQ_BIT: u32 = 1 << 15;
 
 const BAUD: u32 = 115_200;
 
@@ -214,9 +220,7 @@ fn main() -> ! {
         UART_CR,
         UART_CR_CLKEN | (UART_CR_CLKSEL_24MHZ << UART_CR_CLKSEL_SHIFT),
     );
-    // The divisor follows the CLKSEL the firmware selected. (It is not read
-    // back from CR: on silicon it would be, but the simulator's PL011 model
-    // does not store CR — see examples/apollo4p-evb/VALIDATION.md.)
+    // The divisor follows the CLKSEL the firmware selected.
     let clksel = UART_CR_CLKSEL_24MHZ;
     let clk = uart_clock_hz(clksel);
     let brd64 = (clk * 8 / BAUD).div_ceil(2); // round(64 × clk / (16 × baud))
@@ -232,8 +236,36 @@ fn main() -> ! {
             | UART_CR_RXE,
     );
 
+    // The test script injects one byte before firmware starts. Unmask RXIM,
+    // inspect raw/masked status and NVIC pending, then read DR to deassert the
+    // level. NVIC line 15 stays disabled, so the observation cannot enter an
+    // unconfigured handler.
+    wr(UART_IMSC, UART_INT_RX);
+    let irq_ris = rd(UART_RIS);
+    let irq_mis = rd(UART_MIS);
+    let irq_pending = u32::from(rd(NVIC_ISPR0) & UART0_IRQ_BIT != 0);
+    let irq_rx = rd(UART_DR) as u8;
+    let irq_ris_after = rd(UART_RIS);
+    let irq_mis_after = rd(UART_MIS);
+    let irq_pending_after = u32::from(rd(NVIC_ISPR0) & UART0_IRQ_BIT != 0);
+    wr(UART_IMSC, 0);
+    let pl011_irq_pass = irq_ris == 0x30
+        && irq_mis == UART_INT_RX
+        && irq_pending == 1
+        && irq_rx == b'R'
+        && irq_ris_after == (1 << 5)
+        && irq_mis_after == 0
+        && irq_pending_after == 0;
+
     puts(b"APOLLO4P EVB SMOKE\n");
     puts(b"cpu=cortex-m4f uart=uart0\n");
+    if irq_rx == b'R' {
+        puts(if pl011_irq_pass {
+            b"pl011 irq=pass ris=48 mis=16 nvic=1 rx=82 ris_after=32 mis_after=0 nvic_after=0\n"
+        } else {
+            b"pl011 irq=fail\n"
+        });
+    }
     puts(b"pwr perf=");
     puts(
         match (rd(PWRCTRL_MCUPERFREQ) >> MCUPERFSTATUS_SHIFT) & 0x3 {

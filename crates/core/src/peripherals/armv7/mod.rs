@@ -4,6 +4,7 @@
 pub mod cadence_uart;
 pub mod dw_uart;
 pub mod gic;
+pub mod pl190_vic;
 pub mod rk3x_i2c;
 pub mod timer;
 pub mod ttc;

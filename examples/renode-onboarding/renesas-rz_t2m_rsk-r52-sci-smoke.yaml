@@ -1,0 +1,10 @@
+# Direct A32 fixture against the bounded imported renesas-rz_t2m_rsk profile: one Cortex-R52 PE (Hyp-mode reset entry), System RAM at 0x10000000, and polled SCI0 TX only. The banner prints only if MIDR reports Cortex-R52.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/rz-t2m-r52-sci-smoke.elf"
+  system: "../../configs/systems/onboarding/renesas-rz_t2m_rsk.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "RZ/T2M R52 SCI0 SMOKE"
+  - expected_stop_reason: max_steps

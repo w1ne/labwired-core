@@ -20,17 +20,18 @@
 #
 # Modelled: CPU + memory + the LiteX UART (polled console path — the engine
 # polls txfull @ +0x04, writes rxtx @ +0x00) + the LiteX countdown timer
-# (load/reload/en/update_value/value + the zero-event status/pending CSRs).
+# (load/reload/en/update_value/value + the zero-event status/pending CSRs)
+# + the LiteX SPI-flash bitbang controller with an MT25Q ID/status responder.
 # Declared, not modelled (`type: stub` — reads answer zeros, writes are
-# absorbed): the LiteX SPI-flash / Ethernet / MMCM CSRs. The integrated ROM
+# absorbed): the LiteX Ethernet / MMCM CSRs. The integrated ROM
 # window is mapped but its contents (the LiteX BIOS) are not: the example
 # boots its ELF directly (fast boot), skipping BIOS + flash load.
 # Main RAM (0x40000000, 256 MB on the SoC) is declared here but not mapped —
 # the engine allocates memory regions densely and a 256 MB window is not
 # useful to the smoke; see examples/litex-vexriscv/VALIDATION.md.
 #
-# Tier: L1 smoke — boot + UART byte path + timer one-shot on the modelled
-# CSR map.
+# Tier: L1 smoke — boot + UART byte path + SPI-flash READ ID / status +
+# timer one-shot on the modelled CSR map.
 
 name: "litex-vexriscv"
 arch: "riscv"
@@ -64,8 +65,11 @@ peripherals:
     base_address: 0x60002800
     size: "2KB"
     irq: 1
+  # LiteX SPI-flash bitbang CSRs + Micron MT25Q READ ID / status responder
+  # (Renode litex_common.repl `spi` + `flash`). Array reads, program and
+  # erase are not modelled; the XIP window above is plain flash memory.
   - id: "spi_flash_ctrl"
-    type: "stub"
+    type: "litex_spi_flash"
     base_address: 0x60005000
     size: "2KB"
     irq: 9

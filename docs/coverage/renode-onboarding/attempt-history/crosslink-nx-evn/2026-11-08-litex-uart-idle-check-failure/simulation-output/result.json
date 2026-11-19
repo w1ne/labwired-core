@@ -1,0 +1,249 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 100000,
+  "cycles": 400000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073745920,
+          "expected_value": 323,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "CrossLink-NX litex ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073745924,
+          "expected_value": 74565,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073745932,
+          "expected_value": 10837,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073745940,
+          "expected_value": 3255107711,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      0,
+      1082130432,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3134193790,
+      3134193664,
+      1073745920,
+      10837,
+      1,
+      100000,
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1084,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 0,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 100000,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "916fa42c0a78ab74ec718f6797dd43242b8c367d21dd4ac74d87eac69d5fb00b",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-andes-ae350-n25-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/crosslink-nx-evn.yaml",
+    "script": "examples/renode-onboarding/crosslink-nx-evn-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart",
+        "kind": "native",
+        "base": 4026540032,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "timer0",
+        "kind": "native",
+        "base": 4026542080,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "leds",
+        "kind": "native",
+        "base": 4026544128,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "CrossLink-NX litex ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1088,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 1088,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 32768,
+    "ram_total_bytes": 8388608,
+    "flash_used_pct": 3.32,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 400000,
+    "instructions": 100000,
+    "steps_executed": 100000,
+    "memory_reads": 100000,
+    "memory_writes": 6,
+    "peripheral_accesses": 415,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 1084,
+        "count": 390,
+        "symbol": "smoke_main"
+      }
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-stm32f072b-disco-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-stm32f072b-disco-smoke)
+error: <inline asm>:10:1: instruction requires: armv8m.base
+movw r0, #0x3008
+^
+
+error: could not compile `firmware-stm32f072b-disco-smoke` (bin "firmware-stm32f072b-disco-smoke")
+
+Caused by:
+  process didn't exit successfully: `/home/andrii/.local/bin/sccache /home/andrii/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustc --crate-name firmware_stm32f072b_disco_smoke --edition=2021 crates/firmware-stm32f072b-disco-smoke/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C panic=abort -C lto=thin -C debuginfo=2 -C overflow-checks=on --cfg 'feature="onboarding-rx-gate"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("onboarding-rx-gate"))' -C metadata=88cab999f8f0024f -C extra-filename=-d8d83fc4df937c1d --out-dir /home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv6m-none-eabi/release/deps --target thumbv6m-none-eabi -L dependency=/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv6m-none-eabi/release/deps -L dependency=/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/release/deps --extern cortex_m_rt=/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv6m-none-eabi/release/deps/libcortex_m_rt-cd3d98e9ab90f214.rlib --extern panic_halt=/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv6m-none-eabi/release/deps/libpanic_halt-9d050df563181084.rlib -L /home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv6m-none-eabi/release/build/firmware-stm32f072b-disco-smoke-8d4a7d2b680fa1d3/out -L /home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/thumbv6m-none-eabi/release/build/cortex-m-rt-d6999261687f14f2/out -C link-arg=-Tlink.x` (exit status: 1)

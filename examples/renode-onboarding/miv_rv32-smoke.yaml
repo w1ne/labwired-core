@@ -1,0 +1,23 @@
+# Smoke against the imported Mi-V RV32 Renode system descriptor.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-miv-rv32-smoke"
+  system: "../../configs/systems/onboarding/miv_rv32.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "MIV RV32 SMOKE"
+  - uart_ordered:
+      - "cpu=rv32im uart=coreuart"
+      - "mul=00000143"
+      - "clint mtimecmp=ffffffffffffffff cpu_clock_rate=1 mtip_low=1 ok"
+      - "clint mtip mcause=80000007 count=00000001 armed_low=1 wfi_wake=1 disarmed=1 ok"
+      - "clint msip mcause=80000003 count=00000001 mepc_next=1 cleared=1 ok"
+      - "clint msip masked pending=1 released=1 traps=00000000 ok"
+      - "plic timer0 prio_fixed=1 threshold_fixed=1 raw=1 pending=1 disabled_low=1 meip=1 traps=00000000 ok"
+      - "plic timer0 mcause=8000000b count=00000001 claim=0000001e timer_cleared=1 pending_clear=1 reclaim=00000000 meip_low=1 ok"
+      - "plic timer1 raw=1 meip=1 claim=0000001f claimed_low=1 reclaim=00000000 traps=00000000 ok"
+      - "plic timer1 level claim=0000001f repend=1 claim2=0000001f low_no_repend=1 reclaim=00000000 ok"
+      - "gpio outputs out=00000001 irq=00000001 plic_pending=00000000 ok"
+      - "plic gpio_in in=00000008 irq=00000008 pending=1 disabled_low=1 meip=1 claim=0000001d latch_cleared=1 meip_low=1 reclaim=00000000 traps=00000000 ok"
+  - expected_stop_reason: max_steps

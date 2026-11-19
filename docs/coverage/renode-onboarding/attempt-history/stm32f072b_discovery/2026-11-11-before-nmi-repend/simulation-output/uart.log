@@ -1,0 +1,28 @@
+STM32F072B-DISCO SMOKE
+cpu=cortex-m0 uart=usart1
+rcc reset=1 gate=1 ok
+aircr prigroup=0 reserved=writes_ignored=1 ok
+usart irq u2=1 u3=1 u4=1 ok
+usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 released=1 ok
+led=ld3 odr=0x00000040
+led=ld4 odr=0x00000140
+led=ld5 odr=0x00000340
+led=ld6 odr=0x000003C0
+leds walk=1 blink=1 off=1 ok
+b1 idle=1 presses=1 pc_quiet=1 pa0=1 cleared=1 ok
+tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim15 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim16 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+tim17 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok
+dma1 m2m tc=1 data=1 pend=1 alone=1 released=1 ok
+crc word=0xDF8A8A2B seed=1 std=1 ok
+adc ts=0x00000709 vref=0x000005F6 cal=1 ready=1 seq=1 eos=1 pend=1 released=1 gated=1 off=1 ok
+irq exception hit=1 ipsr=0x00000015 active=0x00000020 pending=0x00000000 frame=1 regs=0x00000011,0x00000022,0x00000033,0x00000044,0x00000055 lr=0x08002C5D pc=0x08000246 xpsr=0x21000000 exc_return=0xFFFFFFF9 sp=0x20003EE8 expected_sp=0x20003EE8 restored_msp=0x20003F10 returned=1 ok
+nmi primask entered=1 irq=0x00000015 nmi=0x00000002 resumed=0x00000015 icsr=0x00000002 irq_active=0x00000020 primask=0x00000001 restored=0x00000001 cleanup=ok=1 ok
+summary 0x0DCFFFFF
+DONE

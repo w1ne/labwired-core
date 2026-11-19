@@ -1,0 +1,395 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+   Compiling labwired-cli v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/cli)
+error: linking with `cc` failed: exit status: 1
+  |
+  = note:  "cc" "-m64" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/rustcnBPjzv/symbols.o" "<21 object files omitted>" "-Wl,--as-needed" "-Wl,-Bstatic" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/libpanic_abort-*.rlib" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/{liblabwired_core-20c46046bad32a98,libpio_parser-2361d994b7297b87,liblalrpop_util-d01daefbab5d5e95,libpio-3ea947f07e81290a,libnum_enum-bb012f4dbed96f58,libarrayvec-2d935f317b79b99a,libbincode-6ddca8dcf9696935,liblabwired_hw_trace-2716c2696c7f5f36,libminiz_oxide-6199bb2ee0547a48,libsimd_adler32-258726914b9e8881,liblibm-6a74768837bb515a,libnrf_softdevice_hle-25cff47c50b71bad,libnum_bigint-dca604a3ac3cbc9c,libnum_integer-c885e0e51a66e78b,libnum_traits-68f8d6df658b76e9,libsha1-16f91d6651af5d97,libmd5-ca9ed0d3ee1bd2c3,libp256-747f632f46e93313,libsha2-c71247bdb3746be8,libecdsa-e6a1397767ffb192,librfc6979-7e73de84fce03989,libhmac-09fc8ff347debbc8,libsignature-d42118329a1da7fd,libdigest-15b9d242243d81ad,libblock_buffer-46e19e3c49a6aaa2,libprimeorder-c3f896baaa7551e9,libelliptic_curve-068bf4e96afcddd5,libsec1-7e9fe6fc0e009782,libder-666b8fb2116ef269,libconst_oid-c79b3aa46171ffb4,libcrypto_bigint-6c007fc5ee4cf699,libbase16ct-a486ea28e3683f02,libgroup-811036ba7c5b201c,libff-fd71874fff9fca33,librand_core-0967b8d0ed8541a3,libsubtle-2a996a9e11ea34f0,libaes-0656502f7212a797,libcpufeatures-bec57e2bf31bb2ac,libcfg_if-8a939ee9a7688dff,libcipher-e62c3ac343ab736d,libinout-1331c53c394c7d08,libcrypto_common-606f052781265d65,libgeneric_array-a4edb72fda617279,libtypenum-610a6bbba9a3e578,libzeroize-1e97a41e90c36efd,libmemmap2-2b05e2285cda7196,liblibc-33ab2dddae27a1bd,liblabwired_config-a3e6ec3aa2b2caa9,liblabwired_ir-b7201838a163a363,libserde_json-e2c2c0c5d5462d2e,libzmij-a20f8329345b2781,libsvd_parser-310b1c281d866df0,libroxmltree-d2501a033376346d,libsvd_rs-9a2e0f49bc96d5c0,libthiserror-95e61d881c08e928,libregex-7ea7c627d2c24cb7,libregex_automata-2b94e32047d4b994,libaho_corasick-efac20f3d02c36ec,libmemchr-9e2e8e1969dfdc1d,libregex_syntax-926deed6b873edd0,libtracing-ab7540d9fade4b93,libpin_project_lite-b0def22f760d4135,libtracing_core-5e13a26cb69eeeea,libonce_cell-fb4128a0dce177c1,libhuman_size-3ccc9cc2e6840345,libgoblin-0beb48b5a447c65c,libplain-79ae652d3482702c,liblog-6780ae4e3b902e68,libscroll-7bb2cd5be915644e,libserde_yaml-358d368516b9fa51,libryu-9db692307f7302c0,libitoa-4d8b0fb9789aec67,libindexmap-eee181c81a472537,libequivalent-492dc91cbb85e3fd,libhashbrown-9bd2944ca3a951d5,libunsafe_libyaml-290fe8c081b9f677,libserde-33ff4bb8559e3b6c,libserde_core-d590d16c0c70f6b5,libanyhow-482429525a41b0dd}.rlib" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libstd-*,libobject-*,libmemchr-*,libaddr2line-*,libgimli-*,libcfg_if-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libminiz_oxide-*,libadler2-*,libunwind-*,liblibc-*,librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "-Wl,-Bdynamic" "-lgcc_s" "-lutil" "-lrt" "-lpthread" "-lm" "-ldl" "-lc" "-L" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/rustcnBPjzv/raw-dylibs" "-B<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" "-fuse-ld=lld" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "/home/andrii/worktrees/labwired-core/renode/target/debug/build/ring-2918807ff517eef3/out" "-L" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-o" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/gen_peripherals_manifest-69dc40f4d722dede" "-Wl,--gc-sections" "-pie" "-Wl,-z,relro,-z,now" "-nodefaultlibs"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: rust-lld: error: undefined hidden symbol: anon.2e22163d6a438b64ec2edf111afc95d4.63.llvm.12359184697529948132
+          >>> referenced by de.rs:3382 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:3382)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..TaggedContentVisitor$LT$T$GT$$u20$as$u20$serde_core..de..Visitor$GT$::visit_map::h4ecd6508c01d615e) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by de.rs:3382 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:3382)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..TaggedContentVisitor$LT$T$GT$$u20$as$u20$serde_core..de..Visitor$GT$::visit_map::h4ecd6508c01d615e) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.240a119fde93e8e2d6c69e376103c50e.4.llvm.10776087543723660427
+          >>> referenced by mod.rs:1530 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_core-1.0.228/src/de/mod.rs:1530)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_any::h638189bec735edb3) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by de.rs:0 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:0)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_any::h638189bec735edb3) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.240a119fde93e8e2d6c69e376103c50e.5.llvm.10776087543723660427
+          >>> referenced by mod.rs:1530 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_core-1.0.228/src/de/mod.rs:1530)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_any::h9563feada053c462) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by de.rs:0 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:0)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_any::h9563feada053c462) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.624d8046ca2f6edcfbd931213706e1c3.56.llvm.3499215586953069142
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h02742e7c43185796) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h02742e7c43185796) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.240a119fde93e8e2d6c69e376103c50e.6.llvm.10776087543723660427
+          >>> referenced by mod.rs:1530 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_core-1.0.228/src/de/mod.rs:1530)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_any::hac322ae53c0067a2) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by de.rs:0 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:0)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_any::hac322ae53c0067a2) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.624d8046ca2f6edcfbd931213706e1c3.57.llvm.3499215586953069142
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h02742e7c43185796) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h02742e7c43185796) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.624d8046ca2f6edcfbd931213706e1c3.58.llvm.3499215586953069142
+          >>> referenced by can_bridge.rs:80 (crates/core/src/network/can_bridge.rs:80)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h02742e7c43185796) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.624d8046ca2f6edcfbd931213706e1c3.43.llvm.3499215586953069142
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h0ea8208765c0945a) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.624d8046ca2f6edcfbd931213706e1c3.44.llvm.3499215586953069142
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h0ea8208765c0945a) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h0ea8208765c0945a) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.624d8046ca2f6edcfbd931213706e1c3.45.llvm.3499215586953069142
+          >>> referenced by can_bridge.rs:169 (crates/core/src/network/can_bridge.rs:169)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h0ea8208765c0945a) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.624d8046ca2f6edcfbd931213706e1c3.32.llvm.3499215586953069142
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h1ddf5efc10bec10d) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.624d8046ca2f6edcfbd931213706e1c3.33.llvm.3499215586953069142
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h1ddf5efc10bec10d) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h1ddf5efc10bec10d) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.624d8046ca2f6edcfbd931213706e1c3.34.llvm.3499215586953069142
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h1ddf5efc10bec10d) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h1ddf5efc10bec10d) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.624d8046ca2f6edcfbd931213706e1c3.35.llvm.3499215586953069142
+          >>> referenced by can_bridge.rs:60 (crates/core/src/network/can_bridge.rs:60)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(_$LT$serde_json..value..de..EnumDeserializer$u20$as$u20$serde_core..de..EnumAccess$GT$::variant_seed::h1ddf5efc10bec10d) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.240a119fde93e8e2d6c69e376103c50e.3.llvm.10776087543723660427
+          >>> referenced by mod.rs:1530 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_core-1.0.228/src/de/mod.rs:1530)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_any::hbf1da5c2c9f14360) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by de.rs:0 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:0)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_any::hbf1da5c2c9f14360) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.240a119fde93e8e2d6c69e376103c50e.2.llvm.10776087543723660427
+          >>> referenced by mod.rs:1530 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_core-1.0.228/src/de/mod.rs:1530)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_any::hcf16111054dab3d1) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by de.rs:0 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:0)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_any::hcf16111054dab3d1) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.529748272027b31e84c2bbcaf90349aa.56.llvm.311255631289607848
+          >>> referenced by impls.rs:622 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_core-1.0.228/src/de/impls.rs:622)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_string::hdd551a934c24af14) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.240a119fde93e8e2d6c69e376103c50e.153.llvm.10776087543723660427
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_identifier::h8f99077cc5c29b85) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by cmp.rs:154 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/cmp.rs:154)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_identifier::h8f99077cc5c29b85) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.240a119fde93e8e2d6c69e376103c50e.154.llvm.10776087543723660427
+          >>> referenced by lockstep.rs:181 (crates/core/src/vfi/lockstep.rs:181)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_identifier::h8f99077cc5c29b85) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by lockstep.rs:181 (crates/core/src/vfi/lockstep.rs:181)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_identifier::h8f99077cc5c29b85) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.240a119fde93e8e2d6c69e376103c50e.159.llvm.10776087543723660427
+          >>> referenced by de.rs:0 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:0)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_identifier::h8f99077cc5c29b85) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by de.rs:0 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:0)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_identifier::hb260df3836493b2e) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by de.rs:0 (/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:0)
+          >>>               labwired_core-20c46046bad32a98.1hc5ihuqb4s5jc4ry7h3p6p8m.17yv4b0.rcgu.o:(_$LT$serde..private..de..content..ContentDeserializer$LT$E$GT$$u20$as$u20$serde_core..de..Deserializer$GT$::deserialize_identifier::hf4c6a0a4fe241e97) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: too many errors emitted, stopping now (use --error-limit=0 to see all errors)
+          collect2: error: ld returned 1 exit status
+          
+
+error: could not compile `labwired-cli` (bin "gen-peripherals-manifest") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: linking with `cc` failed: exit status: 1
+  |
+  = note:  "cc" "-m64" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/rustccsiGpf/symbols.o" "<5 object files omitted>" "-Wl,--as-needed" "-Wl,-Bstatic" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/libpanic_abort-*.rlib" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/{libtracing_subscriber-7e04a6675cf767b9,libsmallvec-4e7463a76f09508b,libsharded_slab-253ebb7bc30dcfb0,liblazy_static-3b035110db09937e,libmatchers-1f60bd1d41fe5323,libnu_ansi_term-fd47cf62da721722,libthread_local-909896137df98701,libtracing_log-939e1be1a45e3af4,liblabwired_core-20c46046bad32a98,libpio_parser-2361d994b7297b87,liblalrpop_util-d01daefbab5d5e95,libpio-3ea947f07e81290a,libnum_enum-bb012f4dbed96f58,libarrayvec-2d935f317b79b99a,libbincode-6ddca8dcf9696935,liblabwired_hw_trace-2716c2696c7f5f36,libminiz_oxide-6199bb2ee0547a48,libsimd_adler32-258726914b9e8881,liblibm-6a74768837bb515a,libnrf_softdevice_hle-25cff47c50b71bad,libnum_bigint-dca604a3ac3cbc9c,libnum_integer-c885e0e51a66e78b,libnum_traits-68f8d6df658b76e9,libsha1-16f91d6651af5d97,libmd5-ca9ed0d3ee1bd2c3,libp256-747f632f46e93313,libsha2-c71247bdb3746be8,libecdsa-e6a1397767ffb192,librfc6979-7e73de84fce03989,libhmac-09fc8ff347debbc8,libsignature-d42118329a1da7fd,libdigest-15b9d242243d81ad,libblock_buffer-46e19e3c49a6aaa2,libprimeorder-c3f896baaa7551e9,libelliptic_curve-068bf4e96afcddd5,libsec1-7e9fe6fc0e009782,libder-666b8fb2116ef269,libconst_oid-c79b3aa46171ffb4,libcrypto_bigint-6c007fc5ee4cf699,libbase16ct-a486ea28e3683f02,libgroup-811036ba7c5b201c,libff-fd71874fff9fca33,librand_core-0967b8d0ed8541a3,libsubtle-2a996a9e11ea34f0,libaes-0656502f7212a797,libcpufeatures-bec57e2bf31bb2ac,libcfg_if-8a939ee9a7688dff,libcipher-e62c3ac343ab736d,libinout-1331c53c394c7d08,libcrypto_common-606f052781265d65,libgeneric_array-a4edb72fda617279,libtypenum-610a6bbba9a3e578,libzeroize-1e97a41e90c36efd,libmemmap2-2b05e2285cda7196,liblibc-33ab2dddae27a1bd,liblabwired_config-a3e6ec3aa2b2caa9,liblabwired_ir-b7201838a163a363,libserde_json-e2c2c0c5d5462d2e,libzmij-a20f8329345b2781,libsvd_parser-310b1c281d866df0,libroxmltree-d2501a033376346d,libsvd_rs-9a2e0f49bc96d5c0,libthiserror-95e61d881c08e928,libregex-7ea7c627d2c24cb7,libregex_automata-2b94e32047d4b994,libaho_corasick-efac20f3d02c36ec,libmemchr-9e2e8e1969dfdc1d,libregex_syntax-926deed6b873edd0,libtracing-ab7540d9fade4b93,libpin_project_lite-b0def22f760d4135,libtracing_core-5e13a26cb69eeeea,libonce_cell-fb4128a0dce177c1,libhuman_size-3ccc9cc2e6840345,libanyhow-482429525a41b0dd,libgoblin-0beb48b5a447c65c,libplain-79ae652d3482702c,liblog-6780ae4e3b902e68,libscroll-7bb2cd5be915644e,libserde_yaml-358d368516b9fa51,libryu-9db692307f7302c0,libitoa-4d8b0fb9789aec67,libindexmap-eee181c81a472537,libequivalent-492dc91cbb85e3fd,libhashbrown-9bd2944ca3a951d5,libunsafe_libyaml-290fe8c081b9f677,libserde-33ff4bb8559e3b6c,libserde_core-d590d16c0c70f6b5}.rlib" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libstd-*,libobject-*,libmemchr-*,libaddr2line-*,libgimli-*,libcfg_if-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libminiz_oxide-*,libadler2-*,libunwind-*,liblibc-*,librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "-Wl,-Bdynamic" "-lgcc_s" "-lutil" "-lrt" "-lpthread" "-lm" "-ldl" "-lc" "-L" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/rustccsiGpf/raw-dylibs" "-B<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" "-fuse-ld=lld" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "/home/andrii/worktrees/labwired-core/renode/target/debug/build/ring-2918807ff517eef3/out" "-L" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-o" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/demo_multi_node-911bb0c47b0e1a1d" "-Wl,--gc-sections" "-pie" "-Wl,-z,relro,-z,now" "-nodefaultlibs"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: rust-lld: error: undefined hidden symbol: anon.1390eb45e3cb77a4f342f27bfa6f879f.5.llvm.17778884499458295713
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.4v0elencaqa8z49q9rwvd0y4o.17yv4b0.rcgu.o:(core::slice::sort::shared::smallsort::insert_tail::h7be29ed635752201) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.4v0elencaqa8z49q9rwvd0y4o.17yv4b0.rcgu.o:(core::slice::sort::shared::smallsort::insert_tail::h7f6a61cef787355f) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.4v0elencaqa8z49q9rwvd0y4o.17yv4b0.rcgu.o:(core::slice::sort::shared::smallsort::insert_tail::h83bd069179cc9f0b) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced 15 more times
+          
+          rust-lld: error: undefined hidden symbol: anon.1390eb45e3cb77a4f342f27bfa6f879f.15.llvm.17778884499458295713
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.4v0elencaqa8z49q9rwvd0y4o.17yv4b0.rcgu.o:(core::slice::sort::shared::smallsort::insert_tail::h7be29ed635752201) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.4v0elencaqa8z49q9rwvd0y4o.17yv4b0.rcgu.o:(core::slice::sort::shared::smallsort::insert_tail::h7f6a61cef787355f) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.4v0elencaqa8z49q9rwvd0y4o.17yv4b0.rcgu.o:(core::slice::sort::shared::smallsort::insert_tail::h83bd069179cc9f0b) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced 15 more times
+          
+          rust-lld: error: undefined hidden symbol: anon.d5ee1774c7c8939a016cda7ff3f91140.11.llvm.10747278890235337624
+          >>> referenced by timed_uart.rs:103 (crates/core/src/network/timed_uart.rs:103)
+          >>>               labwired_core-20c46046bad32a98.2dh7p1cwsrwydms947ewyaxna.17yv4b0.rcgu.o:(alloc::collections::vec_deque::VecDeque$LT$T$C$A$GT$::retain_mut::hc59e5ff6e4a5041d) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by timed_uart.rs:103 (crates/core/src/network/timed_uart.rs:103)
+          >>>               labwired_core-20c46046bad32a98.2dh7p1cwsrwydms947ewyaxna.17yv4b0.rcgu.o:(alloc::collections::vec_deque::VecDeque$LT$T$C$A$GT$::retain_mut::hc59e5ff6e4a5041d) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.d5ee1774c7c8939a016cda7ff3f91140.12.llvm.10747278890235337624
+          >>> referenced by timed_uart.rs:103 (crates/core/src/network/timed_uart.rs:103)
+          >>>               labwired_core-20c46046bad32a98.2dh7p1cwsrwydms947ewyaxna.17yv4b0.rcgu.o:(alloc::collections::vec_deque::VecDeque$LT$T$C$A$GT$::retain_mut::hc59e5ff6e4a5041d) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.2bf31a952f4769990dc8661470c31d2e.96.llvm.557304462070187551
+          >>> referenced by mod.rs:2937 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/alloc/src/vec/mod.rs:2937)
+          >>>               labwired_core-20c46046bad32a98.05jwo3h2s6dis7r3ncsxbfwp7.17yv4b0.rcgu.o:(<std::sync::mpmc::waker::SyncWaker>::disconnect (.llvm.9686576696647383454)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by mod.rs:2937 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/alloc/src/vec/mod.rs:2937)
+          >>>               labwired_core-20c46046bad32a98.8th05aie8yon7dxhaxop0dx5g.17yv4b0.rcgu.o:(<std::sync::mpmc::waker::SyncWaker>::disconnect (.llvm.5408022842669178943)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.2bf31a952f4769990dc8661470c31d2e.11.llvm.557304462070187551
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.05jwo3h2s6dis7r3ncsxbfwp7.17yv4b0.rcgu.o:(<std::sync::mpmc::waker::SyncWaker>::disconnect (.llvm.9686576696647383454)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.8th05aie8yon7dxhaxop0dx5g.17yv4b0.rcgu.o:(<std::sync::mpmc::waker::SyncWaker>::disconnect (.llvm.5408022842669178943)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.2bf31a952f4769990dc8661470c31d2e.97.llvm.557304462070187551
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.05jwo3h2s6dis7r3ncsxbfwp7.17yv4b0.rcgu.o:(<std::sync::mpmc::waker::SyncWaker>::disconnect (.llvm.9686576696647383454)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.8th05aie8yon7dxhaxop0dx5g.17yv4b0.rcgu.o:(<std::sync::mpmc::waker::SyncWaker>::disconnect (.llvm.5408022842669178943)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.2bf31a952f4769990dc8661470c31d2e.4.llvm.557304462070187551
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.05jwo3h2s6dis7r3ncsxbfwp7.17yv4b0.rcgu.o:(<std::sync::mpmc::waker::SyncWaker>::disconnect (.llvm.9686576696647383454)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.8th05aie8yon7dxhaxop0dx5g.17yv4b0.rcgu.o:(<std::sync::mpmc::waker::SyncWaker>::disconnect (.llvm.5408022842669178943)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.2bf31a952f4769990dc8661470c31d2e.39.llvm.557304462070187551
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.05jwo3h2s6dis7r3ncsxbfwp7.17yv4b0.rcgu.o:(<std::sync::mpmc::waker::SyncWaker>::disconnect (.llvm.9686576696647383454)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.8th05aie8yon7dxhaxop0dx5g.17yv4b0.rcgu.o:(<std::sync::mpmc::waker::SyncWaker>::disconnect (.llvm.5408022842669178943)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.60bef53bf65521d5b8618ec300e41024.18.llvm.9786115660381090417
+          >>> referenced by pad_claims.rs:63 (crates/core/src/peripherals/pad_claims.rs:63)
+          >>>               labwired_core-20c46046bad32a98.1hz8zwc8eiwr6clpfjl7x8c2m.17yv4b0.rcgu.o:(labwired_core::peripherals::gpio::GpioPort::selected_function::ha3419e4cce09f8f5) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by pad_claims.rs:63 (crates/core/src/peripherals/pad_claims.rs:63)
+          >>>               labwired_core-20c46046bad32a98.1hz8zwc8eiwr6clpfjl7x8c2m.17yv4b0.rcgu.o:(labwired_core::peripherals::gpio::GpioPort::selected_function::ha3419e4cce09f8f5) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by pad_claims.rs:63 (crates/core/src/peripherals/pad_claims.rs:63)
+          >>>               labwired_core-20c46046bad32a98.1hz8zwc8eiwr6clpfjl7x8c2m.17yv4b0.rcgu.o:(_$LT$labwired_core..peripherals..gpio..GpioPort$u20$as$u20$labwired_core..pins..PinPort$GT$::join_wire::h18a938e734e75ba1) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced 1 more times
+          
+          rust-lld: error: undefined hidden symbol: anon.981aa563d92d4ff39cc97795eee59f0b.70.llvm.14144365415058043929
+          >>> referenced by gpio_net.rs:370 (crates/core/src/network/gpio_net.rs:370)
+          >>>               labwired_core-20c46046bad32a98.64tzhe22v2wujtzc8mh8jd4fx.17yv4b0.rcgu.o:(labwired_core::world::gpio_nets::WorldGpio::earliest_due::hd812740f88199443) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by gpio_net.rs:370 (crates/core/src/network/gpio_net.rs:370)
+          >>>               labwired_core-20c46046bad32a98.64tzhe22v2wujtzc8mh8jd4fx.17yv4b0.rcgu.o:(labwired_core::world::gpio_nets::WorldGpio::run_to::h12dc9fc641c74e77) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by gpio_net.rs:370 (crates/core/src/network/gpio_net.rs:370)
+          >>>               labwired_core-20c46046bad32a98.64tzhe22v2wujtzc8mh8jd4fx.17yv4b0.rcgu.o:(labwired_core::world::gpio_nets::WorldGpio::run_node::he352efaa7f5aec0d (.llvm.10302584423710082445)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.981aa563d92d4ff39cc97795eee59f0b.69.llvm.14144365415058043929
+          >>> referenced by index.rs:272 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/index.rs:272)
+          >>>               labwired_core-20c46046bad32a98.64tzhe22v2wujtzc8mh8jd4fx.17yv4b0.rcgu.o:(labwired_core::world::gpio_nets::WorldGpio::earliest_due::hd812740f88199443) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by index.rs:272 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/index.rs:272)
+          >>>               labwired_core-20c46046bad32a98.64tzhe22v2wujtzc8mh8jd4fx.17yv4b0.rcgu.o:(labwired_core::world::gpio_nets::WorldGpio::run_to::h12dc9fc641c74e77) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by index.rs:272 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/index.rs:272)
+          >>>               labwired_core-20c46046bad32a98.64tzhe22v2wujtzc8mh8jd4fx.17yv4b0.rcgu.o:(labwired_core::world::gpio_nets::WorldGpio::run_node::he352efaa7f5aec0d (.llvm.10302584423710082445)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.916a881e24e79fbabbed7d86adb4bf4a.2.llvm.10037283001277815005
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.64tzhe22v2wujtzc8mh8jd4fx.17yv4b0.rcgu.o:(labwired_core::world::gpio_nets::WorldGpio::collect_edges::hc48659c73c3ea559) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.e76a1gzr0r4mylhj75fht7xwh.17yv4b0.rcgu.o:(labwired_core::peripherals::ble_central::ScriptedCentral::advance_to::hff7a4d07688e9bd5) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.916a881e24e79fbabbed7d86adb4bf4a.10.llvm.10037283001277815005
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.64tzhe22v2wujtzc8mh8jd4fx.17yv4b0.rcgu.o:(labwired_core::world::gpio_nets::WorldGpio::collect_edges::hc48659c73c3ea559) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.e76a1gzr0r4mylhj75fht7xwh.17yv4b0.rcgu.o:(labwired_core::peripherals::ble_central::ScriptedCentral::advance_to::hff7a4d07688e9bd5) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.9a8ea79da6dfc88928f070eab95e574b.242.llvm.5057267117636917975
+          >>> referenced by index.rs:272 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/index.rs:272)
+          >>>               labwired_core-20c46046bad32a98.64tzhe22v2wujtzc8mh8jd4fx.17yv4b0.rcgu.o:(labwired_core::world::gpio_nets::WorldGpio::run_to::h12dc9fc641c74e77) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.9a8ea79da6dfc88928f070eab95e574b.243.llvm.5057267117636917975
+          >>> referenced by index.rs:272 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/index.rs:272)
+          >>>               labwired_core-20c46046bad32a98.64tzhe22v2wujtzc8mh8jd4fx.17yv4b0.rcgu.o:(labwired_core::world::gpio_nets::WorldGpio::run_to::h12dc9fc641c74e77) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.37e5312d926e2c90a4166eb9bffe6ca8.84.llvm.7602137767438309656
+          >>> referenced by iterator.rs:3127 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/iter/traits/iterator.rs:3127)
+          >>>               labwired_core-20c46046bad32a98.98tsjlmermnboozfj9gqqdl2r.17yv4b0.rcgu.o:(_$LT$alloc..collections..vec_deque..iter..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::try_fold::h024b84df65c98883) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.e452ec9959256289d77d4068f5b41fda.80.llvm.11897400738759043169
+          >>> referenced by index.rs:272 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/slice/index.rs:272)
+          >>>               labwired_core-20c46046bad32a98.64tzhe22v2wujtzc8mh8jd4fx.17yv4b0.rcgu.o:(labwired_core::world::gpio_nets::WorldGpio::run_to::h12dc9fc641c74e77) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.1390eb45e3cb77a4f342f27bfa6f879f.1.llvm.17778884499458295713
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.8v6b66fuqyslvd2sklwnstew0.17yv4b0.rcgu.o:(core::slice::sort::stable::merge::merge::h4af68a3c328b3650) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.8v6b66fuqyslvd2sklwnstew0.17yv4b0.rcgu.o:(core::slice::sort::stable::merge::merge::h639686dfba7d1f28) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.8v6b66fuqyslvd2sklwnstew0.17yv4b0.rcgu.o:(core::slice::sort::stable::merge::merge::h7572fdc9a7f324f8) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced 4 more times
+          
+          rust-lld: error: undefined hidden symbol: anon.1390eb45e3cb77a4f342f27bfa6f879f.37.llvm.17778884499458295713
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.8v6b66fuqyslvd2sklwnstew0.17yv4b0.rcgu.o:(core::slice::sort::stable::merge::merge::h4af68a3c328b3650) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.8v6b66fuqyslvd2sklwnstew0.17yv4b0.rcgu.o:(core::slice::sort::stable::merge::merge::h639686dfba7d1f28) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.8v6b66fuqyslvd2sklwnstew0.17yv4b0.rcgu.o:(core::slice::sort::stable::merge::merge::h7572fdc9a7f324f8) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced 4 more times
+          
+          rust-lld: error: too many errors emitted, stopping now (use --error-limit=0 to see all errors)
+          collect2: error: ld returned 1 exit status
+          
+
+error: could not compile `labwired-cli` (bin "demo_multi_node") due to 1 previous error
+error: linking with `cc` failed: exit status: 1
+  |
+  = note:  "cc" "-m64" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/rustczE4RNn/symbols.o" "<4 object files omitted>" "-Wl,--as-needed" "-Wl,-Bstatic" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/libpanic_abort-*.rlib" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/{liblabwired_cli-21d856aaa4f9a099,libtracing_subscriber-7e04a6675cf767b9,libsharded_slab-253ebb7bc30dcfb0,liblazy_static-3b035110db09937e,libmatchers-1f60bd1d41fe5323,libnu_ansi_term-fd47cf62da721722,libthread_local-909896137df98701,libtracing_log-939e1be1a45e3af4,liblabwired_gdbstub-48e014c94779114c,libgdbstub_arch-1f8fa0e203dea91d,libgdbstub-6adffe3f91881f0e,libbitflags-b7c3fff41feb3a31,libmanaged-5176de130bb6d6bd,liblabwired_codegen-979d6172be3c838a,libquote-5c3ab839100be54a,libproc_macro2-03db198d61e71eab,libunicode_ident-e0389ba96b20ff43}.rlib" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libproc_macro-*,librustc_literal_escaper-*}.rlib" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/{libureq-5e7dc9ec12ef8653,libwebpki_roots-1a625ac490076aaf,libwebpki_roots-bb149c58f6eeb21e,libbase64-62c2d518de316060,liburl-454b898c81269438,libidna-48e30d016eb76fc5,libidna_adapter-a624b18c7b88b50c,libicu_properties-33d37b61fabc73ca,libicu_properties_data-7678b39c00bc66b2,libicu_normalizer-92dd7de1c33c4b41,libicu_normalizer_data-a38358f10010e6bf,libicu_collections-967ff4e7484b72ef,libutf8_iter-f4d7dfb52f50dff0,libpotential_utf-135fbb9286338ccf,libicu_provider-de5f290e31a563da,libicu_locale_core-cb22e9d06356bacc,libtinystr-f497b16f615afcb6,liblitemap-b17df2c84120fdef,libwriteable-0a7d25f7adc47a0b,libzerovec-599257932d289c92,libzerotrie-649031c2b53db050,libyoke-66b4b45a5cc8a6bd,libzerofrom-ae8d40721040b54d,libform_urlencoded-557f5a839e9f8035,libpercent_encoding-396c44165df21d3d,librustls-142cb1dc43a34499,libwebpki-56beff099c57ee18,libring-6d5f93c1ec8fd19a,libgetrandom-ceb0db32233bf11f,libuntrusted-8fd47cc45f86b0dc,librustls_pki_types-542141021315d188,libsvd_ingestor-cc11762139023586,liblabwired_fuzz-776e7b69aafe2ab1,libclap-4d6a24687d3cc32c,libclap_builder-e1cd9d05b43f1cdc,libstrsim-08e7581412d36284,libanstream-4183f5089b8c62c4,libanstyle_query-51efa246b6540a34,libis_terminal_polyfill-0b9f8ffed51cdb41,libcolorchoice-cc918bfa43c5460b,libanstyle_parse-cc0136146fc0defd,libutf8parse-f5371fc16b8e5247,libclap_lex-ed917197ac54d680,libanstyle-67dc30aa97a74520,liblabwired_loader-386ab41bf0282eac,libaddr2line-1a33faa9f1cfa1dc,libcpp_demangle-5a4934971e99d860,librustc_demangle-cd47ccd95635aea5,libmemmap2-0423973e20a2424b,libsmallvec-4e7463a76f09508b,libobject-e784a0920eb7a857,libruzstd-781c5bfc18a03a98,libtwox_hash-aeca2518cf1cef99,libstatic_assertions-c337dcd67fbdd7f6,libbyteorder-adcffb0b9bb37c5d,libflate2-e1703e83ec788477,libcrc32fast-9f00b25d35acc545,libgimli-1fc8b258a20f12ac,libstable_deref_trait-e8ae0c1c3dc31a35,libfallible_iterator-b0968376a0db7586,libvcd-4fcbdfe3db9172a6,liblabwired_core-20c46046bad32a98,libpio_parser-2361d994b7297b87,liblalrpop_util-d01daefbab5d5e95,libpio-3ea947f07e81290a,libnum_enum-bb012f4dbed96f58,libarrayvec-2d935f317b79b99a,libbincode-6ddca8dcf9696935,liblabwired_hw_trace-2716c2696c7f5f36,libminiz_oxide-6199bb2ee0547a48,libsimd_adler32-258726914b9e8881,liblibm-6a74768837bb515a,libnrf_softdevice_hle-25cff47c50b71bad,libnum_bigint-dca604a3ac3cbc9c,libnum_integer-c885e0e51a66e78b,libnum_traits-68f8d6df658b76e9,libsha1-16f91d6651af5d97,libmd5-ca9ed0d3ee1bd2c3,libp256-747f632f46e93313,libsha2-c71247bdb3746be8,libecdsa-e6a1397767ffb192,librfc6979-7e73de84fce03989,libhmac-09fc8ff347debbc8,libsignature-d42118329a1da7fd,libdigest-15b9d242243d81ad,libblock_buffer-46e19e3c49a6aaa2,libprimeorder-c3f896baaa7551e9,libelliptic_curve-068bf4e96afcddd5,libsec1-7e9fe6fc0e009782,libder-666b8fb2116ef269,libconst_oid-c79b3aa46171ffb4,libcrypto_bigint-6c007fc5ee4cf699,libbase16ct-a486ea28e3683f02,libgroup-811036ba7c5b201c,libff-fd71874fff9fca33,librand_core-0967b8d0ed8541a3,libsubtle-2a996a9e11ea34f0,libaes-0656502f7212a797,libcpufeatures-bec57e2bf31bb2ac,libcfg_if-8a939ee9a7688dff,libcipher-e62c3ac343ab736d,libinout-1331c53c394c7d08,libcrypto_common-606f052781265d65,libgeneric_array-a4edb72fda617279,libtypenum-610a6bbba9a3e578,libzeroize-1e97a41e90c36efd,libmemmap2-2b05e2285cda7196,liblibc-33ab2dddae27a1bd,liblabwired_config-a3e6ec3aa2b2caa9,liblabwired_ir-b7201838a163a363,libserde_json-e2c2c0c5d5462d2e,libzmij-a20f8329345b2781,libsvd_parser-310b1c281d866df0,libroxmltree-d2501a033376346d,libsvd_rs-9a2e0f49bc96d5c0,libthiserror-95e61d881c08e928,libregex-7ea7c627d2c24cb7,libregex_automata-2b94e32047d4b994,libaho_corasick-efac20f3d02c36ec,libmemchr-9e2e8e1969dfdc1d,libregex_syntax-926deed6b873edd0,libtracing-ab7540d9fade4b93,libpin_project_lite-b0def22f760d4135,libtracing_core-5e13a26cb69eeeea,libonce_cell-fb4128a0dce177c1,libhuman_size-3ccc9cc2e6840345,libanyhow-482429525a41b0dd,libgoblin-0beb48b5a447c65c,libplain-79ae652d3482702c,liblog-6780ae4e3b902e68,libscroll-7bb2cd5be915644e,libserde_yaml-358d368516b9fa51,libryu-9db692307f7302c0,libitoa-4d8b0fb9789aec67,libindexmap-eee181c81a472537,libequivalent-492dc91cbb85e3fd,libhashbrown-9bd2944ca3a951d5,libunsafe_libyaml-290fe8c081b9f677,libserde-33ff4bb8559e3b6c,libserde_core-d590d16c0c70f6b5}.rlib" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libstd-*,libobject-*,libmemchr-*,libaddr2line-*,libgimli-*,libcfg_if-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libminiz_oxide-*,libadler2-*,libunwind-*,liblibc-*,librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "-Wl,-Bdynamic" "-lgcc_s" "-lutil" "-lrt" "-lpthread" "-lm" "-ldl" "-lc" "-L" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/rustczE4RNn/raw-dylibs" "-B<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld" "-fuse-ld=lld" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "/home/andrii/worktrees/labwired-core/renode/target/debug/build/ring-2918807ff517eef3/out" "-L" "<sysroot>/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-o" "/home/andrii/worktrees/labwired-core/renode/target/debug/deps/labwired-ae6ff403a4d8e3fb" "-Wl,--gc-sections" "-pie" "-Wl,-z,relro,-z,now" "-nodefaultlibs"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: rust-lld: error: undefined hidden symbol: anon.a8bc54e06d7a7d30059c4bed93fe1671.112.llvm.18155481956621703121
+          >>> referenced by debug_probe.rs:64 (crates/cli/src/commands/debug_probe.rs:64)
+          >>>               labwired_cli-21d856aaa4f9a099.9j3g9apnk9sqthgiq462zrcne.1s858uj.rcgu.o:(_$LT$T$u20$as$u20$serde_core..de..Expected$GT$::fmt::h007d39e16a6f0290) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_cli-21d856aaa4f9a099.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.a8bc54e06d7a7d30059c4bed93fe1671.110.llvm.18155481956621703121
+          >>> referenced by debug_probe.rs:64 (crates/cli/src/commands/debug_probe.rs:64)
+          >>>               labwired_cli-21d856aaa4f9a099.9j3g9apnk9sqthgiq462zrcne.1s858uj.rcgu.o:(_$LT$T$u20$as$u20$serde_core..de..Expected$GT$::fmt::h12a77df31730c937) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_cli-21d856aaa4f9a099.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.a8bc54e06d7a7d30059c4bed93fe1671.111.llvm.18155481956621703121
+          >>> referenced by debug_probe.rs:64 (crates/cli/src/commands/debug_probe.rs:64)
+          >>>               labwired_cli-21d856aaa4f9a099.9j3g9apnk9sqthgiq462zrcne.1s858uj.rcgu.o:(_$LT$T$u20$as$u20$serde_core..de..Expected$GT$::fmt::h18c9a6bdca841aa1) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_cli-21d856aaa4f9a099.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.a8bc54e06d7a7d30059c4bed93fe1671.113.llvm.18155481956621703121
+          >>> referenced by debug_probe.rs:64 (crates/cli/src/commands/debug_probe.rs:64)
+          >>>               labwired_cli-21d856aaa4f9a099.9j3g9apnk9sqthgiq462zrcne.1s858uj.rcgu.o:(_$LT$T$u20$as$u20$serde_core..de..Expected$GT$::fmt::h435659b7495db0a5) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_cli-21d856aaa4f9a099.rlib
+          >>> referenced by debug_probe.rs:64 (crates/cli/src/commands/debug_probe.rs:64)
+          >>>               labwired_cli-21d856aaa4f9a099.9j3g9apnk9sqthgiq462zrcne.1s858uj.rcgu.o:(_$LT$T$u20$as$u20$serde_core..de..Expected$GT$::fmt::h4b8940b1a33bece5) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_cli-21d856aaa4f9a099.rlib
+          >>> referenced by debug_probe.rs:64 (crates/cli/src/commands/debug_probe.rs:64)
+          >>>               labwired_cli-21d856aaa4f9a099.9j3g9apnk9sqthgiq462zrcne.1s858uj.rcgu.o:(_$LT$T$u20$as$u20$serde_core..de..Expected$GT$::fmt::h4cb4827b82b0f196) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_cli-21d856aaa4f9a099.rlib
+          
+          rust-lld: error: undefined hidden symbol: <alloc::string::String as core::fmt::Display>::fmt (.llvm.595576803518184523)
+          >>> referenced by sim.rs:88 (crates/core/src/network/sim.rs:88)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(_$LT$labwired_core..peripherals..esp32c3..virtual_wifi..LabwiredStatsServer$u20$as$u20$labwired_core..network..sim..SimServer$GT$::on_data::h00b4532113d3d84f) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by sim.rs:88 (crates/core/src/network/sim.rs:88)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::serve_or_proxy_http::h31043fe8e11e5910) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.9d64d9c8afda32b90b008073b96e1cbd.46.llvm.595576803518184523
+          >>> referenced by sim.rs:88 (crates/core/src/network/sim.rs:88)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(_$LT$labwired_core..peripherals..esp32c3..virtual_wifi..LabwiredStatsServer$u20$as$u20$labwired_core..network..sim..SimServer$GT$::on_data::h00b4532113d3d84f) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by sim.rs:88 (crates/core/src/network/sim.rs:88)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::serve_or_proxy_http::h31043fe8e11e5910) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: alloc::fmt::format (.llvm.595576803518184523)
+          >>> referenced by sim.rs:88 (crates/core/src/network/sim.rs:88)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(_$LT$labwired_core..peripherals..esp32c3..virtual_wifi..LabwiredStatsServer$u20$as$u20$labwired_core..network..sim..SimServer$GT$::on_data::h00b4532113d3d84f) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by sim.rs:88 (crates/core/src/network/sim.rs:88)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::serve_or_proxy_http::h31043fe8e11e5910) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.916a881e24e79fbabbed7d86adb4bf4a.2.llvm.10037283001277815005
+          >>> referenced by virtual_wifi.rs:0 (crates/core/src/peripherals/esp32c3/virtual_wifi.rs:0)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::VirtualWifi::poll_egress::hec280e1b8ffc422b) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.e76a1gzr0r4mylhj75fht7xwh.17yv4b0.rcgu.o:(labwired_core::peripherals::ble_central::ScriptedCentral::advance_to::hff7a4d07688e9bd5) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.e86xhni548fj6sfv1jseicirs.17yv4b0.rcgu.o:(_$LT$labwired_core..peripherals..components..declarative_i2c..GenericI2cDevice$u20$as$u20$labwired_core..peripherals..device..I2cDevice$GT$::advance_time_us::h60de9e7e372325bd) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced 15 more times
+          
+          rust-lld: error: undefined hidden symbol: anon.916a881e24e79fbabbed7d86adb4bf4a.10.llvm.10037283001277815005
+          >>> referenced by virtual_wifi.rs:0 (crates/core/src/peripherals/esp32c3/virtual_wifi.rs:0)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::VirtualWifi::poll_egress::hec280e1b8ffc422b) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.e76a1gzr0r4mylhj75fht7xwh.17yv4b0.rcgu.o:(labwired_core::peripherals::ble_central::ScriptedCentral::advance_to::hff7a4d07688e9bd5) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ub_checks.rs:73 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ub_checks.rs:73)
+          >>>               labwired_core-20c46046bad32a98.e86xhni548fj6sfv1jseicirs.17yv4b0.rcgu.o:(_$LT$labwired_core..peripherals..components..declarative_i2c..GenericI2cDevice$u20$as$u20$labwired_core..peripherals..device..I2cDevice$GT$::advance_time_us::h60de9e7e372325bd) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced 15 more times
+          
+          rust-lld: error: undefined hidden symbol: anon.9d64d9c8afda32b90b008073b96e1cbd.11.llvm.595576803518184523
+          >>> referenced by random.rs:71 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/std/src/hash/random.rs:71)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::VirtualWifi::with_config::h54c5bceb29640c27 (.llvm.11021181721713097926)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.9d64d9c8afda32b90b008073b96e1cbd.52.llvm.595576803518184523
+          >>> referenced by sim.rs:104 (crates/core/src/network/sim.rs:104)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::VirtualWifi::with_config::h54c5bceb29640c27 (.llvm.11021181721713097926)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by sim.rs:104 (crates/core/src/network/sim.rs:104)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::VirtualWifi::with_config::h54c5bceb29640c27 (.llvm.11021181721713097926)) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.cffc7fa852937411a1ea60e954e1e73e.47.llvm.2239020510048633777
+          >>> referenced by ra_agt.rs:79 (crates/core/src/peripherals/ra_agt.rs:79)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(serde_json::value::de::visit_array::h1e842b3b5a646f19) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.cffc7fa852937411a1ea60e954e1e73e.51.llvm.2239020510048633777
+          >>> referenced by ra_agt.rs:79 (crates/core/src/peripherals/ra_agt.rs:79)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(serde_json::value::de::visit_array::h1e842b3b5a646f19) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.390c1864a1a5681fdcec7186f94a429a.39.llvm.17509582768055193597
+          >>> referenced by rfcore.rs:221 (crates/core/src/peripherals/cc2538/rfcore.rs:221)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(serde_json::value::de::visit_array::h1e8af5a3fbfc7dae) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by rfcore.rs:221 (crates/core/src/peripherals/cc2538/rfcore.rs:221)
+          >>>               labwired_core-20c46046bad32a98.7tq056gsq38c6nvhwmhduixap.17yv4b0.rcgu.o:(serde_json::value::de::_$LT$impl$u20$serde_core..de..Deserializer$u20$for$u20$serde_json..map..Map$LT$alloc..string..String$C$serde_json..value..Value$GT$$GT$::deserialize_any::h298592967f1fe5e6) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.390c1864a1a5681fdcec7186f94a429a.42.llvm.17509582768055193597
+          >>> referenced by rfcore.rs:221 (crates/core/src/peripherals/cc2538/rfcore.rs:221)
+          >>>               labwired_core-20c46046bad32a98.376aiz9dfgnwrj7tcb40wgwt3.17yv4b0.rcgu.o:(serde_json::value::de::visit_array::h1e8af5a3fbfc7dae) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by rfcore.rs:221 (crates/core/src/peripherals/cc2538/rfcore.rs:221)
+          >>>               labwired_core-20c46046bad32a98.7tq056gsq38c6nvhwmhduixap.17yv4b0.rcgu.o:(serde_json::value::de::_$LT$impl$u20$serde_core..de..Deserializer$u20$for$u20$serde_json..map..Map$LT$alloc..string..String$C$serde_json..value..Value$GT$$GT$::deserialize_any::h298592967f1fe5e6) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: labwired_core::peripherals::esp32c3::virtual_wifi_host_net::BRIDGE_ON::h1f5730483183272b (.0.llvm.9012797984871204694)
+          >>> referenced by atomic.rs:3892 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/sync/atomic.rs:3892)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::build_dns_reply::hbea737cf96c1e370) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by atomic.rs:3892 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/sync/atomic.rs:3892)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::serve_or_proxy_http::h31043fe8e11e5910) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.3a25b28eb71c97f7e7c8abfe1ed44c48.22.llvm.2607529909036161649
+          >>> referenced by ble_central.rs:1378 (crates/core/src/peripherals/ble_central.rs:1378)
+          >>>               labwired_core-20c46046bad32a98.e76a1gzr0r4mylhj75fht7xwh.17yv4b0.rcgu.o:(labwired_core::peripherals::ble_central::show_value::h9bb50063270aadb8) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ble_central.rs:1351 (crates/core/src/peripherals/ble_central.rs:1351)
+          >>>               labwired_core-20c46046bad32a98.e76a1gzr0r4mylhj75fht7xwh.17yv4b0.rcgu.o:(labwired_core::peripherals::ble_central::uuid_to_string::h5b4090b1ade7a0d7) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: alloc::fmt::format (.llvm.2607529909036161649)
+          >>> referenced by ble_central.rs:1378 (crates/core/src/peripherals/ble_central.rs:1378)
+          >>>               labwired_core-20c46046bad32a98.e76a1gzr0r4mylhj75fht7xwh.17yv4b0.rcgu.o:(labwired_core::peripherals::ble_central::show_value::h9bb50063270aadb8) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          >>> referenced by ble_central.rs:1351 (crates/core/src/peripherals/ble_central.rs:1351)
+          >>>               labwired_core-20c46046bad32a98.e76a1gzr0r4mylhj75fht7xwh.17yv4b0.rcgu.o:(labwired_core::peripherals::ble_central::uuid_to_string::h5b4090b1ade7a0d7) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.154e9a0be62dea3141761fe869532b98.30.llvm.5038615849481663070
+          >>> referenced by env.rs:260 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/std/src/env.rs:260)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::serve_or_proxy_http::h31043fe8e11e5910) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: undefined hidden symbol: anon.154e9a0be62dea3141761fe869532b98.31.llvm.5038615849481663070
+          >>> referenced by env.rs:260 (/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/std/src/env.rs:260)
+          >>>               labwired_core-20c46046bad32a98.36wzilyyldpj94mn2oki02kw2.17yv4b0.rcgu.o:(labwired_core::peripherals::esp32c3::virtual_wifi::serve_or_proxy_http::h31043fe8e11e5910) in archive /home/andrii/worktrees/labwired-core/renode/target/debug/deps/liblabwired_core-20c46046bad32a98.rlib
+          
+          rust-lld: error: too many errors emitted, stopping now (use --error-limit=0 to see all errors)
+          collect2: error: ld returned 1 exit status
+          
+
+error: could not compile `labwired-cli` (bin "labwired") due to 1 previous error

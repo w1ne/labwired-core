@@ -30,3 +30,6 @@ models:
   - crates/firmware-mpfs-zephyr
   - configs/chips/mpfs095t.yaml
   - configs/systems/mpfs-disco-kit.yaml
+  - crates/core/src/peripherals/miv.rs
+  - crates/core/src/peripherals/mpfs_i2c.rs
+  - crates/core/src/peripherals/mpfs_spi.rs

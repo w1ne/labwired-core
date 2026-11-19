@@ -1,0 +1,36 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees-legacy-20261109/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees-legacy-20261109/labwired-core/renode/Cargo.toml
+   Compiling firmware-sifive-fu540-smoke v0.1.0 (/home/andrii/worktrees-legacy-20261109/labwired-core/renode/crates/firmware-sifive-fu540-smoke)
+error[E0308]: mismatched types
+   --> crates/firmware-sifive-fu540-smoke/src/main.rs:335:15
+    |
+335 |     put_hex64(pending);
+    |     --------- ^^^^^^^ expected `u64`, found `u32`
+    |     |
+    |     arguments to this function are incorrect
+    |
+note: function defined here
+   --> crates/firmware-sifive-fu540-smoke/src/main.rs:144:4
+    |
+144 | fn put_hex64(value: u64) {
+    |    ^^^^^^^^^ ----------
+help: you can convert a `u32` to a `u64`
+    |
+335 |     put_hex64(pending.into());
+    |                      +++++++
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `firmware-sifive-fu540-smoke` (bin "firmware-sifive-fu540-smoke") due to 1 previous error
