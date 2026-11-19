@@ -171,7 +171,26 @@ assertions:
   - entry_result: { equals: 2974 }                        # the export's i32 result
   - port_value: { port: sensor_v, min: 2.396, max: 2.398 } # final read-port value
   - digital_edges: { port: user_led_state, count: 2 }     # exact captured edges
+  - digital_edges: { port: user_led_state, times_ns: [4001000, 4002000] }
+  - analog_sample: { port: sensor_v, at_ns: 350000, min: 2.033, max: 2.034 }
+  - final_time_ns: { equals: 4002000 }
 ```
+
+| Assertion | Reads | Passes when |
+|---|---|---|
+| `entry_result` | The i32 result of a firmware call | It equals `equals`. |
+| `port_value` | A read port after the last step | It is `equals`, or inside `min`..`max`. |
+| `digital_edges` | One logic-analyzer channel: `port` (a Boolean port) or `signal` (a traced model signal with no port) | The edge `count` matches, every edge time matches `times_ns` in order, or both. |
+| `analog_sample` | One oscilloscope channel: `port` (a numeric read port) or `channel` (a channel name with no port) | The last sample at or before `at_ns` is `equals`, or inside `min`..`max`, in the channel's unit. |
+| `final_time_ns` | The virtual time at the end of the run | It is `equals`, or inside `min`..`max`. |
+
+The instrument assertions read the same captures that `flex-trace.json`
+holds. A port or channel that the instrument does not have is a
+`config_error` before the firmware runs. An `at_ns` after the end of the run
+has no sample, and a capture that dropped data has no exact answer: such an
+assertion fails with `observed: null`. `result.json` gives each
+`digital_edges` assertion every captured edge time, and each `analog_sample`
+assertion the time of the sample it read, in `observed_times_ns`.
 
 A `sequence` replaces `entry` when the firmware has more than one entry
 point, for example `setup` and `loop`, or when the environment changes during

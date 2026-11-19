@@ -15,11 +15,11 @@
 
 use crate::{TestArgs, EXIT_ASSERT_FAIL, EXIT_CONFIG_ERROR, EXIT_PASS, EXIT_RUNTIME_ERROR};
 use labwired_config::{
-    FlexAssertion, FlexEntryArg, FlexPortAccess, FlexPortKind, FlexStep, FlexTestLimits,
-    FlexTestScript,
+    FlexAnalogSampleDetails, FlexAssertion, FlexDigitalEdgesDetails, FlexEntryArg, FlexPortAccess,
+    FlexPortKind, FlexStep, FlexTestLimits, FlexTestScript,
 };
 use labwired_core::flex::{
-    FlexAnalogTraceBatch, FlexDigitalTraceBatch, FlexRunReport, FlexRuntime,
+    FlexAnalogTraceBatch, FlexDigitalChannel, FlexDigitalTraceBatch, FlexRunReport, FlexRuntime,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -101,6 +101,10 @@ struct FlexAssertionResult {
     /// What the run produced for this assertion; `None` means nothing was
     /// observed, which never passes.
     observed: Option<f64>,
+    /// Every captured edge time of a `digital_edges` channel, or the time of
+    /// the sample an `analog_sample` read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    observed_times_ns: Option<Vec<u64>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -567,19 +571,54 @@ fn port_observations(runtime: &FlexRuntime) -> Vec<FlexPortObservation> {
         .collect()
 }
 
+/// The logic-analyzer channel a `digital_edges` assertion names.
+fn digital_channel<'a>(
+    digital: &'a FlexDigitalTraceBatch,
+    details: &FlexDigitalEdgesDetails,
+) -> Option<&'a FlexDigitalChannel> {
+    digital.channels.iter().find(|channel| match &details.port {
+        Some(port) => channel.port_names.contains(port),
+        None => details.signal.as_ref() == Some(&channel.signal),
+    })
+}
+
+/// The oscilloscope column an `analog_sample` assertion names.
+fn analog_channel(
+    analog: &FlexAnalogTraceBatch,
+    details: &FlexAnalogSampleDetails,
+) -> Option<usize> {
+    analog
+        .channels
+        .iter()
+        .position(|channel| match &details.port {
+            Some(port) => channel.port_names.contains(port),
+            None => details.channel.as_ref() == Some(&channel.name),
+        })
+}
+
+fn within<T: PartialOrd + Copy>(
+    value: T,
+    equals: Option<T>,
+    min: Option<T>,
+    max: Option<T>,
+) -> bool {
+    equals.is_none_or(|equals| value == equals)
+        && min.is_none_or(|min| value >= min)
+        && max.is_none_or(|max| value <= max)
+}
+
 fn evaluate(
     assertion: &FlexAssertion,
-    entry_result: Option<u32>,
-    steps: &[FlexStepResult],
-    ports: &[FlexPortObservation],
-    digital: &FlexDigitalTraceBatch,
+    run: &FlexTestResult,
+    traces: &FlexTraceFile,
 ) -> FlexAssertionResult {
+    let mut observed_times_ns = None;
     let (observed, passed) = match assertion {
         FlexAssertion::EntryResult(assertion) => {
             let observed = match assertion.entry_result.step {
-                None => entry_result,
+                None => run.entry_result,
                 // A call step that did not return every repeat has no result.
-                Some(index) => steps.get(index).and_then(|step| match &step.step {
+                Some(index) => run.steps.get(index).and_then(|step| match &step.step {
                     FlexStep::Call(call) if step.completed == call.call.repeat => step.result,
                     _ => None,
                 }),
@@ -591,38 +630,77 @@ fn evaluate(
         }
         FlexAssertion::PortValue(assertion) => {
             let details = &assertion.port_value;
-            let observed = ports
+            let observed = run
+                .ports
                 .iter()
                 .find(|port| port.name == details.port)
                 .and_then(|port| port.value);
-            let passed = observed.is_some_and(|value| {
-                details.equals.is_none_or(|equals| value == equals)
-                    && details.min.is_none_or(|min| value >= min)
-                    && details.max.is_none_or(|max| value <= max)
-            });
+            let passed = observed
+                .is_some_and(|value| within(value, details.equals, details.min, details.max));
             (observed, passed)
         }
         FlexAssertion::DigitalEdges(assertion) => {
             let details = &assertion.digital_edges;
+            let digital = &traces.digital;
             // A gap in the ring buffer makes any exact count unknowable.
-            let observed = (digital.dropped == 0)
-                .then(|| {
-                    digital
-                        .channels
-                        .iter()
-                        .find(|channel| channel.port_names.contains(&details.port))
-                })
+            let times = (digital.dropped == 0)
+                .then(|| digital_channel(digital, details))
                 .flatten()
                 .map(|channel| {
                     digital
                         .edges
                         .iter()
                         .filter(|edge| edge.ch == channel.id)
-                        .count() as u64
+                        .map(|edge| edge.time_ns)
+                        .collect::<Vec<_>>()
                 });
+            let passed = times.as_ref().is_some_and(|times| {
+                details
+                    .count
+                    .is_none_or(|count| times.len() as u64 == count)
+                    && details
+                        .times_ns
+                        .as_ref()
+                        .is_none_or(|expected| times == expected)
+            });
+            let observed = times.as_ref().map(|times| times.len() as f64);
+            observed_times_ns = times;
+            (observed, passed)
+        }
+        FlexAssertion::AnalogSample(assertion) => {
+            let details = &assertion.analog_sample;
+            let analog = &traces.analog;
+            // The oscilloscope holds a value until its next sample. A time the
+            // run never reached, or one before the retained ring, has none.
+            let sample = (analog.dropped == 0 && details.at_ns <= run.time_ns)
+                .then(|| analog_channel(analog, details))
+                .flatten()
+                .and_then(|column| {
+                    analog
+                        .samples
+                        .iter()
+                        .rev()
+                        .find(|sample| sample.time_ns <= details.at_ns)
+                        .and_then(|sample| Some((sample.time_ns, *sample.values.get(column)?)))
+                });
+            observed_times_ns = sample.map(|(time_ns, _)| vec![time_ns]);
+            // Samples are f32; compare in f32 so `equals: 2.4` means the
+            // value the oscilloscope shows.
+            let passed = sample.is_some_and(|(_, value)| {
+                within(
+                    value,
+                    details.equals.map(|bound| bound as f32),
+                    details.min.map(|bound| bound as f32),
+                    details.max.map(|bound| bound as f32),
+                )
+            });
+            (sample.map(|(_, value)| f64::from(value)), passed)
+        }
+        FlexAssertion::FinalTime(assertion) => {
+            let details = &assertion.final_time_ns;
             (
-                observed.map(|count| count as f64),
-                observed == Some(details.count),
+                Some(run.time_ns as f64),
+                within(run.time_ns, details.equals, details.min, details.max),
             )
         }
     };
@@ -630,38 +708,91 @@ fn evaluate(
         assertion: assertion.clone(),
         passed,
         observed,
+        observed_times_ns,
     }
 }
 
-/// Every assertion must name a port the run can observe that way. Checked
-/// before the firmware runs so a typo is a configuration error, not a
+/// Every assertion must name a port or channel the run can observe that way.
+/// Checked before the firmware runs so a typo is a configuration error, not a
 /// silently failing assertion.
-fn validate_assertion_ports(runtime: &FlexRuntime, script: &FlexTestScript) -> Result<(), String> {
+fn validate_assertion_ports(
+    runtime: &mut FlexRuntime,
+    script: &FlexTestScript,
+) -> Result<(), String> {
+    // Instrument channels are fixed by the manifest, so they are known at 0 ns.
+    let digital = runtime.digital_trace_snapshot(0);
+    let analog = runtime.analog_trace_snapshot(0);
     let ports = &runtime.manifest().ports;
     for (index, assertion) in script.assertions.iter().enumerate() {
-        let (name, kind, field) = match assertion {
-            FlexAssertion::EntryResult(_) => continue,
-            FlexAssertion::PortValue(assertion) => (&assertion.port_value.port, None, "port_value"),
-            FlexAssertion::DigitalEdges(assertion) => (
-                &assertion.digital_edges.port,
-                Some(FlexPortKind::Bool),
-                "digital_edges",
-            ),
-        };
-        let Some(port) = ports.iter().find(|port| &port.name == name) else {
-            return Err(format!(
-                "assertions[{index}].{field} names unknown Flex port '{name}'"
-            ));
-        };
-        if field == "port_value" && port.access != FlexPortAccess::Read {
-            return Err(format!(
-                "assertions[{index}].port_value needs a read port; '{name}' is a write port"
-            ));
-        }
-        if kind.is_some_and(|kind| kind != port.kind) {
-            return Err(format!(
-                "assertions[{index}].digital_edges needs a bool port; '{name}' is numeric"
-            ));
+        match assertion {
+            FlexAssertion::EntryResult(_) | FlexAssertion::FinalTime(_) => {}
+            FlexAssertion::PortValue(assertion) => {
+                let name = &assertion.port_value.port;
+                let Some(port) = ports.iter().find(|port| &port.name == name) else {
+                    return Err(format!(
+                        "assertions[{index}].port_value names unknown Flex port '{name}'"
+                    ));
+                };
+                if port.access != FlexPortAccess::Read {
+                    return Err(format!(
+                        "assertions[{index}].port_value needs a read port; '{name}' is a write port"
+                    ));
+                }
+            }
+            FlexAssertion::DigitalEdges(assertion) => {
+                let details = &assertion.digital_edges;
+                let name = details.target();
+                if let Some(port) = &details.port {
+                    let Some(port) = ports.iter().find(|candidate| &candidate.name == port) else {
+                        return Err(format!(
+                            "assertions[{index}].digital_edges names unknown Flex port '{name}'"
+                        ));
+                    };
+                    if port.kind != FlexPortKind::Bool {
+                        return Err(format!(
+                            "assertions[{index}].digital_edges needs a bool port; '{name}' is numeric"
+                        ));
+                    }
+                }
+                if digital_channel(&digital, details).is_none() {
+                    return Err(format!(
+                        "assertions[{index}].digital_edges: the logic analyzer has no channel for '{name}'; its channels are [{}]",
+                        digital
+                            .channels
+                            .iter()
+                            .map(|channel| channel.signal.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+            }
+            FlexAssertion::AnalogSample(assertion) => {
+                let details = &assertion.analog_sample;
+                let name = details.target();
+                if let Some(port) = &details.port {
+                    let Some(port) = ports.iter().find(|candidate| &candidate.name == port) else {
+                        return Err(format!(
+                            "assertions[{index}].analog_sample names unknown Flex port '{name}'"
+                        ));
+                    };
+                    if port.kind != FlexPortKind::Number || port.access != FlexPortAccess::Read {
+                        return Err(format!(
+                            "assertions[{index}].analog_sample needs a numeric read port; '{name}' is not one"
+                        ));
+                    }
+                }
+                if analog_channel(&analog, details).is_none() {
+                    return Err(format!(
+                        "assertions[{index}].analog_sample: the oscilloscope has no channel for '{name}'; its channels are [{}]",
+                        analog
+                            .channels
+                            .iter()
+                            .map(|channel| channel.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+            }
         }
     }
     Ok(())
@@ -754,7 +885,14 @@ fn write_junit(path: &Path, result: &FlexTestResult, duration: Duration) -> std:
             match &assertion.assertion {
                 FlexAssertion::EntryResult(_) => "entry_result".to_owned(),
                 FlexAssertion::PortValue(a) => format!("port_value {}", a.port_value.port),
-                FlexAssertion::DigitalEdges(a) => format!("digital_edges {}", a.digital_edges.port),
+                FlexAssertion::DigitalEdges(a) =>
+                    format!("digital_edges {}", a.digital_edges.target()),
+                FlexAssertion::AnalogSample(a) => format!(
+                    "analog_sample {} at {} ns",
+                    a.analog_sample.target(),
+                    a.analog_sample.at_ns
+                ),
+                FlexAssertion::FinalTime(_) => "final_time_ns".to_owned(),
             }
         );
         cases.push_str(&format!(
@@ -766,8 +904,8 @@ fn write_junit(path: &Path, result: &FlexTestResult, duration: Duration) -> std:
             cases.push_str(&format!(
                 "    <failure message=\"assertion failed\">{}</failure>\n",
                 crate::xml_escape(&format!(
-                    "{name}\nobserved={:?}\n\n{details}",
-                    assertion.observed
+                    "{name}\nobserved={:?}\nobserved_times_ns={:?}\n\n{details}",
+                    assertion.observed, assertion.observed_times_ns
                 ))
             ));
         }
@@ -888,9 +1026,9 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
         result.config.firmware_sha256 = Some(format!("{:x}", Sha256::digest(&firmware)));
         let manifest = std::fs::read_to_string(&flex_path)
             .map_err(|error| format!("failed to read Flex manifest {flex_path:?}: {error}"))?;
-        let runtime = FlexRuntime::from_yaml(&manifest)
+        let mut runtime = FlexRuntime::from_yaml(&manifest)
             .map_err(|error| format!("failed to load Flex manifest {flex_path:?}: {error}"))?;
-        validate_assertion_ports(&runtime, &script)?;
+        validate_assertion_ports(&mut runtime, &script)?;
         Ok((runtime, firmware))
     })();
     let executed = loaded.and_then(|(runtime, firmware)| {
@@ -918,29 +1056,24 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
         result.ports = port_observations(runtime);
         // Cursor 0 re-reads the whole retained ring; the artifact writer
         // takes the same snapshot again.
-        let digital = runtime.digital_trace_snapshot(0);
-        let analog = runtime.analog_trace_snapshot(0);
-        result.assertions = script
+        let traces = FlexTraceFile {
+            digital: runtime.digital_trace_snapshot(0),
+            analog: runtime.analog_trace_snapshot(0),
+        };
+        let assertions = script
             .assertions
             .iter()
-            .map(|assertion| {
-                evaluate(
-                    assertion,
-                    result.entry_result,
-                    &result.steps,
-                    &result.ports,
-                    &digital,
-                )
-            })
+            .map(|assertion| evaluate(assertion, &result, &traces))
             .collect();
+        result.assertions = assertions;
         result.traces = Some(FlexTraceSummary {
             time_unit: "ns",
-            digital_channels: digital.channels.len(),
-            digital_edges: digital.edges.len(),
-            digital_dropped: digital.dropped,
-            analog_channels: analog.channels.len(),
-            analog_samples: analog.samples.len(),
-            analog_dropped: analog.dropped,
+            digital_channels: traces.digital.channels.len(),
+            digital_edges: traces.digital.edges.len(),
+            digital_dropped: traces.digital.dropped,
+            analog_channels: traces.analog.channels.len(),
+            analog_samples: traces.analog.samples.len(),
+            analog_dropped: traces.analog.dropped,
         });
     }
 
@@ -992,10 +1125,15 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
     }
     for assertion in &result.assertions {
         println!(
-            "  [{}] {} observed={:?}",
+            "  [{}] {} observed={:?}{}",
             if assertion.passed { "PASS" } else { "FAIL" },
             serde_json::to_string(&assertion.assertion).unwrap_or_default(),
-            assertion.observed
+            assertion.observed,
+            assertion
+                .observed_times_ns
+                .as_ref()
+                .map(|times| format!(" at_ns={times:?}"))
+                .unwrap_or_default()
         );
     }
     if let Some(report) = &result.run_report {

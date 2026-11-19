@@ -532,6 +532,8 @@ pub enum FlexAssertion {
     EntryResult(FlexEntryResultAssertion),
     PortValue(FlexPortValueAssertion),
     DigitalEdges(FlexDigitalEdgesAssertion),
+    AnalogSample(FlexAnalogSampleAssertion),
+    FinalTime(FlexFinalTimeAssertion),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -577,12 +579,121 @@ pub struct FlexDigitalEdgesAssertion {
     pub digital_edges: FlexDigitalEdgesDetails,
 }
 
-/// The exact number of captured edges on a Boolean port's signal.
+/// The captured edges of one logic-analyzer channel: their exact number,
+/// their exact times, or both. The channel is a Boolean port, or a traced
+/// model signal that has no port.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FlexDigitalEdgesDetails {
-    pub port: String,
-    pub count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<String>,
+    /// Signal path of a logic-analyzer channel, as in `flex-trace.json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signal: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub count: Option<u64>,
+    /// Every captured edge time in order, in nanoseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub times_ns: Option<Vec<u64>>,
+}
+
+impl FlexDigitalEdgesDetails {
+    /// The port or signal the assertion names, for messages.
+    pub fn target(&self) -> &str {
+        self.port
+            .as_deref()
+            .or(self.signal.as_deref())
+            .unwrap_or("")
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexAnalogSampleAssertion {
+    pub analog_sample: FlexAnalogSampleDetails,
+}
+
+/// The oscilloscope value of one channel at `at_ns`: the last captured sample
+/// at or before that time, in the channel's unit. The channel is a numeric
+/// read port, or an oscilloscope channel name that has no port. A time after
+/// the end of the run has no sample. At least one bound is required.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexAnalogSampleDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<String>,
+    /// Oscilloscope channel name, as in `flex-trace.json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+    pub at_ns: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub equals: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+}
+
+impl FlexAnalogSampleDetails {
+    /// The port or channel the assertion names, for messages.
+    pub fn target(&self) -> &str {
+        self.port
+            .as_deref()
+            .or(self.channel.as_deref())
+            .unwrap_or("")
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexFinalTimeAssertion {
+    pub final_time_ns: FlexFinalTimeDetails,
+}
+
+/// The virtual time when the run ended. At least one bound is required.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexFinalTimeDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub equals: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<u64>,
+}
+
+/// One of two names selects the instrument channel; `equals` excludes a range.
+fn one_name(
+    first: &Option<String>,
+    second: &Option<String>,
+    path: &str,
+    names: &str,
+) -> Result<()> {
+    ensure!(
+        first.is_some() != second.is_some(),
+        "{path} names exactly one of {names}"
+    );
+    token(first.as_deref().or(second.as_deref()).unwrap_or(""), path)
+}
+
+fn bounds<T: PartialOrd>(
+    equals: Option<T>,
+    min: Option<T>,
+    max: Option<T>,
+    path: &str,
+) -> Result<()> {
+    ensure!(
+        equals.is_some() || min.is_some() || max.is_some(),
+        "{path} requires equals, min, or max"
+    );
+    ensure!(
+        equals.is_none() || (min.is_none() && max.is_none()),
+        "{path} cannot combine equals with min or max"
+    );
+    if let (Some(min), Some(max)) = (min, max) {
+        ensure!(min <= max, "{path} min must not exceed max");
+    }
+    Ok(())
 }
 
 impl FlexTestScript {
@@ -678,31 +789,53 @@ impl FlexTestScript {
                         &details.port,
                         &format!("assertions[{index}].port_value.port"),
                     )?;
-                    let bounds = [details.equals, details.min, details.max];
+                    let path = format!("assertions[{index}].port_value");
                     ensure!(
-                        bounds.iter().any(Option::is_some),
-                        "assertions[{index}].port_value requires equals, min, or max"
+                        [details.equals, details.min, details.max]
+                            .iter()
+                            .flatten()
+                            .all(|bound| bound.is_finite()),
+                        "{path} bounds must be finite"
                     );
+                    bounds(details.equals, details.min, details.max, &path)?;
+                }
+                FlexAssertion::DigitalEdges(assertion) => {
+                    let details = &assertion.digital_edges;
+                    let path = format!("assertions[{index}].digital_edges");
+                    one_name(&details.port, &details.signal, &path, "port or signal")?;
                     ensure!(
-                        bounds.iter().flatten().all(|bound| bound.is_finite()),
-                        "assertions[{index}].port_value bounds must be finite"
+                        details.count.is_some() || details.times_ns.is_some(),
+                        "{path} requires count or times_ns"
                     );
-                    ensure!(
-                        details.equals.is_none()
-                            || (details.min.is_none() && details.max.is_none()),
-                        "assertions[{index}].port_value cannot combine equals with min or max"
-                    );
-                    if let (Some(min), Some(max)) = (details.min, details.max) {
+                    if let Some(times) = &details.times_ns {
                         ensure!(
-                            min <= max,
-                            "assertions[{index}].port_value min must not exceed max"
+                            times.windows(2).all(|pair| pair[0] <= pair[1]),
+                            "{path}.times_ns must be in time order"
                         );
                     }
                 }
-                FlexAssertion::DigitalEdges(assertion) => token(
-                    &assertion.digital_edges.port,
-                    &format!("assertions[{index}].digital_edges.port"),
-                )?,
+                FlexAssertion::AnalogSample(assertion) => {
+                    let details = &assertion.analog_sample;
+                    let path = format!("assertions[{index}].analog_sample");
+                    one_name(&details.port, &details.channel, &path, "port or channel")?;
+                    ensure!(
+                        [details.equals, details.min, details.max]
+                            .iter()
+                            .flatten()
+                            .all(|bound| bound.is_finite()),
+                        "{path} bounds must be finite"
+                    );
+                    bounds(details.equals, details.min, details.max, &path)?;
+                }
+                FlexAssertion::FinalTime(assertion) => {
+                    let details = &assertion.final_time_ns;
+                    bounds(
+                        details.equals,
+                        details.min,
+                        details.max,
+                        &format!("assertions[{index}].final_time_ns"),
+                    )?;
+                }
             }
         }
         Ok(())
@@ -824,6 +957,93 @@ assertions:
             (
                 "count: 2",
                 "min_edges: 2",
+                "Failed to parse Flex Test Script",
+            ),
+        ];
+        for (from, to, expected) in cases {
+            assert!(TEST_SCRIPT.contains(from), "fixture lost '{from}'");
+            let error = load_script(&TEST_SCRIPT.replace(from, to))
+                .expect_err(&format!("'{to}' must be rejected"));
+            let message = format!("{error:#}");
+            assert!(message.contains(expected), "'{to}': {message}");
+        }
+    }
+
+    #[test]
+    fn test_script_instrument_assertions_name_one_channel_and_one_expectation() {
+        let edges = "  - digital_edges: { port: user_led_state, count: 2 }\n";
+        assert!(TEST_SCRIPT.contains(edges), "fixture lost its edge count");
+        let instruments = "  - digital_edges: { port: user_led_state, times_ns: [1000, 2000] }\n  - digital_edges: { signal: comparator.out, count: 1 }\n  - analog_sample: { port: sensor_v, at_ns: 350000, min: 1.4, max: 1.6 }\n  - analog_sample: { channel: divider.v, at_ns: 0, equals: 0 }\n  - final_time_ns: { equals: 4050000 }\n";
+        let Ok(crate::LoadedTestScript::Flex(script)) =
+            load_script(&TEST_SCRIPT.replace(edges, instruments))
+        else {
+            panic!("instrument assertions must load");
+        };
+        assert_eq!(script.assertions.len(), 7);
+        let FlexAssertion::DigitalEdges(timed) = &script.assertions[2] else {
+            panic!("assertion 2 is digital_edges");
+        };
+        assert_eq!(timed.digital_edges.times_ns, Some(vec![1000, 2000]));
+        assert_eq!(timed.digital_edges.count, None);
+        let FlexAssertion::AnalogSample(sample) = &script.assertions[5] else {
+            panic!("assertion 5 is analog_sample");
+        };
+        assert_eq!(sample.analog_sample.target(), "divider.v");
+
+        let cases = [
+            (
+                "{ port: user_led_state, count: 2 }",
+                "{ port: user_led_state, signal: comparator.out, count: 2 }",
+                "exactly one of port or signal",
+            ),
+            (
+                "{ port: user_led_state, count: 2 }",
+                "{ count: 2 }",
+                "exactly one of port or signal",
+            ),
+            (
+                "{ port: user_led_state, count: 2 }",
+                "{ port: user_led_state }",
+                "requires count or times_ns",
+            ),
+            (
+                "{ port: user_led_state, count: 2 }",
+                "{ port: user_led_state, times_ns: [2000, 1000] }",
+                "times_ns must be in time order",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_sample: { port: sensor_v, channel: divider.v, at_ns: 0, min: 1 }",
+                "exactly one of port or channel",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_sample: { port: sensor_v, at_ns: 0 }",
+                "requires equals, min, or max",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_sample: { port: sensor_v, min: 1 }",
+                "Failed to parse Flex Test Script",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "analog_sample: { port: sensor_v, at_ns: 0, min: .inf }",
+                "bounds must be finite",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "final_time_ns: { min: 2, max: 1 }",
+                "min must not exceed max",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "final_time_ns: {}",
+                "requires equals, min, or max",
+            ),
+            (
+                "digital_edges: { port: user_led_state, count: 2 }",
+                "final_time_ns: { equals: -1 }",
                 "Failed to parse Flex Test Script",
             ),
         ];

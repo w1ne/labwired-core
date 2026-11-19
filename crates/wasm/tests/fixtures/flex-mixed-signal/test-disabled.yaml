@@ -17,3 +17,6 @@ assertions:
   - entry_result: { equals: 0 }
   - port_value: { port: voltage, equals: 0 }
   - digital_edges: { port: command, count: 0 }
+  - digital_edges: { signal: device.ready, count: 0 }
+  - analog_sample: { channel: rc.v_out, at_ns: 4000000, equals: 0 }
+  - final_time_ns: { equals: 4000000 }

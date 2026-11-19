@@ -21,3 +21,6 @@ assertions:
   - port_value: { port: user_led_state, equals: 0 }
   - digital_edges: { port: user_led_drive, count: 0 }
   - digital_edges: { port: user_led_state, count: 0 }
+  # Oscilloscope: the same node falls from 1.32 V toward 0.482 V.
+  - analog_sample: { port: sensor_v, at_ns: 350000, min: 1.070, max: 1.071 }
+  - final_time_ns: { equals: 4001000 }

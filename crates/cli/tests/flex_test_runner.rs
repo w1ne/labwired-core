@@ -414,6 +414,141 @@ fn flex_never_mixes_with_a_detailed_target() {
     }
 }
 
+#[test]
+fn instrument_assertions_read_the_captured_traces() {
+    // Bright light. Each assertion is wrong in one way, or names a time the
+    // trace answers in a specific way.
+    let dir = unique_dir("instruments");
+    let assertions = concat!(
+        "  - digital_edges: { port: user_led_drive, times_ns: [4000000, 4001000] }\n",
+        "  - digital_edges: { port: user_led_drive, count: 2, times_ns: [4000000, 4001001] }\n",
+        "  - digital_edges: { signal: source.D1.logic_state, times_ns: [4001000] }\n",
+        "  - analog_sample: { port: sensor_v, at_ns: 325000, min: 1.961, max: 1.962 }\n",
+        "  - analog_sample: { channel: source-sns-an1.voltage, at_ns: 350000, max: 2.0 }\n",
+        "  - analog_sample: { port: sensor_v, at_ns: 5000000, min: 0 }\n",
+        "  - final_time_ns: { equals: 4002000 }\n",
+        "  - final_time_ns: { max: 4001999 }\n",
+    );
+    let script = ldr_script(&dir, "instruments.yaml", "100", LIMITS, assertions);
+    let output = run(&script, &dir, &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = read_result(&dir);
+    assert_eq!(result["stop_reason"], "completed");
+    let assertions = result["assertions"].as_array().unwrap();
+    let passed: Vec<bool> = assertions
+        .iter()
+        .map(|assertion| assertion["passed"].as_bool().unwrap())
+        .collect();
+    assert_eq!(
+        passed,
+        [true, false, false, true, false, false, true, false]
+    );
+    // A wrong edge time fails with every captured time reported.
+    assert_eq!(
+        assertions[1]["observed_times_ns"],
+        serde_json::json!([4000000, 4001000])
+    );
+    assert_eq!(assertions[1]["observed"], 2.0);
+    // A signal path selects the same channel as its port.
+    assert_eq!(
+        assertions[2]["observed_times_ns"],
+        serde_json::json!([4001000, 4002000])
+    );
+    // Between two samples the oscilloscope holds the earlier one.
+    assert_eq!(
+        assertions[3]["observed_times_ns"],
+        serde_json::json!([300000])
+    );
+    assert_eq!(
+        (assertions[3]["observed"].as_f64().unwrap() as f32).to_bits(),
+        1.961_360_5_f32.to_bits()
+    );
+    assert_eq!(
+        (assertions[4]["observed"].as_f64().unwrap() as f32).to_bits(),
+        2.033_488_5_f32.to_bits()
+    );
+    // The run ended at 4,002,000 ns; a later time has no sample and cannot
+    // pass, whatever the bound.
+    assert_eq!(assertions[5]["observed"], Value::Null);
+    assert!(assertions[5].get("observed_times_ns").is_none());
+    assert_eq!(assertions[7]["observed"], 4002000.0);
+    let junit = std::fs::read_to_string(dir.join("junit.xml")).expect("junit.xml");
+    assert!(junit.contains("tests=\"9\" failures=\"5\" errors=\"0\""));
+    assert!(junit.contains("analog_sample sensor_v at 5000000 ns"));
+    assert!(junit.contains("observed_times_ns=Some([4000000, 4001000])"));
+    let _ = std::fs::remove_dir_all(dir);
+
+    // Negative control: the bright transient expectation fails in dim light
+    // on the same node.
+    let dir = unique_dir("instruments-dim");
+    let script = ldr_script(
+        &dir,
+        "dim.yaml",
+        "1",
+        LIMITS,
+        "  - analog_sample: { port: sensor_v, at_ns: 350000, min: 2.033, max: 2.034 }\n",
+    );
+    let output = run(&script, &dir, &[]);
+    assert_eq!(output.status.code(), Some(1));
+    let result = read_result(&dir);
+    assert_eq!(
+        (result["assertions"][0]["observed"].as_f64().unwrap() as f32).to_bits(),
+        1.070_439_6_f32.to_bits()
+    );
+    let _ = std::fs::remove_dir_all(dir);
+
+    // A channel the instruments do not have is a configuration error before
+    // the firmware runs, not an assertion that silently fails.
+    for (assertion, expected) in [
+        (
+            "analog_sample: { port: user_led_state, at_ns: 0, min: 0 }",
+            "assertions[0].analog_sample needs a numeric read port; 'user_led_state' is not one",
+        ),
+        (
+            "analog_sample: { port: lux, at_ns: 0, min: 0 }",
+            "assertions[0].analog_sample needs a numeric read port; 'lux' is not one",
+        ),
+        (
+            "analog_sample: { port: nope, at_ns: 0, min: 0 }",
+            "assertions[0].analog_sample names unknown Flex port 'nope'",
+        ),
+        (
+            "analog_sample: { channel: nope.v, at_ns: 0, min: 0 }",
+            "the oscilloscope has no channel for 'nope.v'; its channels are [source-sns-an1.voltage]",
+        ),
+        (
+            "digital_edges: { signal: nope.out, count: 0 }",
+            "the logic analyzer has no channel for 'nope.out'; its channels are [source.D1.logic_state, source.U3.GPIO48]",
+        ),
+        (
+            "digital_edges: { port: sensor_v, times_ns: [] }",
+            "assertions[0].digital_edges needs a bool port; 'sensor_v' is numeric",
+        ),
+    ] {
+        let dir = unique_dir("instruments-config");
+        let script = ldr_script(
+            &dir,
+            "config.yaml",
+            "100",
+            LIMITS,
+            &format!("  - {assertion}\n"),
+        );
+        let output = run(&script, &dir, &[]);
+        assert_eq!(output.status.code(), Some(2), "{assertion}");
+        let result = read_result(&dir);
+        assert_eq!(result["stop_reason"], "config_error", "{assertion}");
+        assert_eq!(result["steps_executed"], 0, "{assertion}");
+        let message = result["message"].as_str().unwrap();
+        assert!(message.contains(expected), "{assertion}: {message}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
 fn fixtures_root() -> PathBuf {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     std::fs::canonicalize(root.join("../wasm/tests/fixtures")).expect("Flex fixtures")

@@ -26,5 +26,9 @@ assertions:
   - entry_result: { equals: 0 }
   - port_value: { port: temperature_mv, equals: 1650 }
   - port_value: { port: fan_state, equals: 0 }
-  - digital_edges: { port: fan_drive, count: 2 }
-  - digital_edges: { port: fan_state, count: 2 }
+  - digital_edges: { port: fan_drive, times_ns: [3000, 7000] }
+  - digital_edges: { port: fan_state, times_ns: [4000, 8000] }
+  # Oscilloscope: the sensor voltage the firmware saw during each phase.
+  - analog_sample: { port: temperature_mv, at_ns: 3000, equals: 2428 }
+  - analog_sample: { port: temperature_mv, at_ns: 5000, equals: 1932 }
+  - final_time_ns: { equals: 8000 }

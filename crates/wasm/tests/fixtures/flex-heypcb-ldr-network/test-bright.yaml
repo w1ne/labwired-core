@@ -20,5 +20,10 @@ assertions:
   - entry_result: { equals: 2974 }
   - port_value: { port: sensor_v, min: 2.396, max: 2.398 }
   - port_value: { port: user_led_state, equals: 0 }
-  - digital_edges: { port: user_led_drive, count: 2 }
-  - digital_edges: { port: user_led_state, count: 2 }
+  - digital_edges: { port: user_led_drive, count: 2, times_ns: [4000000, 4001000] }
+  - digital_edges: { port: user_led_state, count: 2, times_ns: [4001000, 4002000] }
+  # Oscilloscope: SNS_AN1 starts at 1.32 V and settles at 2.397 V through C7.
+  # 63.2 % of that step is 2.001 V; the trace crosses it between these samples.
+  - analog_sample: { port: sensor_v, at_ns: 300000, min: 1.961, max: 1.962 }
+  - analog_sample: { port: sensor_v, at_ns: 350000, min: 2.033, max: 2.034 }
+  - final_time_ns: { equals: 4002000 }
