@@ -52,6 +52,19 @@ models. To look before installing anything, open a lab:
 [BME280 weather](https://app.labwired.com/?lab=bme280-weather-lab), or
 [IO-Link DI/DO](https://app.labwired.com/?lab=iolink-dido).
 
+For firmware connected to circuits, use the
+[online circuit simulator guide](https://labwired.com/circuit-simulator/).
+It links to a browser RC/touch demo with GPIO and oscilloscope signals.
+The browser analog adapter models linear R/L/C, sources, and switches.
+Native ngspice co-simulation is a separate path for supported nonlinear
+or vendor models.
+
+For original designs, the
+[KiCad PCB import and simulation guide](https://labwired.com/kicad-pcb-simulation/)
+shows pinned source-board acceptance and model gaps. Importing a PCB is not
+proof that its full electrical system runs. Both guides distinguish model
+behavior from physical hardware acceptance.
+
 ## Why use LabWired Core?
 
 Testing firmware on real boards is slow. You wait for hardware, you flash it, and when

@@ -313,6 +313,13 @@ impl SystemBus {
         let line = match request_id {
             crate::DMA_SIGNAL_TX => "tx",
             crate::DMA_SIGNAL_RX => "rx",
+            crate::DMA_SIGNAL_TIMER_UPDATE => "up",
+            crate::DMA_SIGNAL_TIMER_CH1 => "ch1",
+            crate::DMA_SIGNAL_TIMER_CH2 => "ch2",
+            crate::DMA_SIGNAL_TIMER_CH3 => "ch3",
+            crate::DMA_SIGNAL_TIMER_CH4 => "ch4",
+            crate::DMA_SIGNAL_TIMER_COMMUTATION => "com",
+            crate::DMA_SIGNAL_TIMER_TRIGGER => "trig",
             _ => return,
         };
         self.route_named_dma_request(format!("{source_name}_{line}"));

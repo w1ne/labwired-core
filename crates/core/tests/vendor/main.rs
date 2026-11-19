@@ -18,6 +18,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod at32_am32_bidir;
+mod at32_am32_protocol;
 mod at32f421_contract;
 mod cc2538_rom;
 mod cc2538_sleep_timer_irq;

@@ -37,6 +37,7 @@ use crate::peripherals::gpio::{GpioMode, GpioRouting};
 use crate::pins::{External, InputChange, PinPort};
 use crate::{Peripheral, SimResult};
 use labwired_config::PeripheralConfig;
+use std::sync::{Arc, Mutex};
 
 /// Official data/enable/input offsets and pin-count / bank-1 field width.
 #[derive(Debug, Clone, Copy)]
@@ -171,6 +172,14 @@ pub struct EspGpioHead {
     ext1: u32,
     ext_mask0: u32,
     ext_mask1: u32,
+    // P4 exposes just the four GPIO-matrix registers used to route HP I2C0
+    // through GPIO7/8 in the board onboarding profile. Values and signal IDs
+    // come from P4 hw_ver3/gpio_reg.h and include/soc/gpio_sig_map.h.
+    p4_i2c_scl_in: u32,
+    p4_i2c_sda_in: u32,
+    p4_i2c_gpio7_out: u32,
+    p4_i2c_gpio8_out: u32,
+    p4_i2c_route: Option<crate::peripherals::esp32c3::i2c::C3I2cMatrixRoute>,
 }
 
 impl EspGpioHead {
@@ -185,6 +194,15 @@ impl EspGpioHead {
             ext1: 0,
             ext_mask0: 0,
             ext_mask1: 0,
+            p4_i2c_scl_in: 0x3F,
+            p4_i2c_sda_in: 0x3F,
+            p4_i2c_gpio7_out: 256,
+            p4_i2c_gpio8_out: 256,
+            p4_i2c_route: (layout.name == "esp32p4").then(|| {
+                Arc::new(Mutex::new(
+                    crate::peripherals::esp32c3::i2c::C3I2cMatrixRouteState::default(),
+                ))
+            }),
         }
     }
 
@@ -202,6 +220,49 @@ impl EspGpioHead {
 
     pub fn esp32c61() -> Self {
         Self::new(C61)
+    }
+
+    /// P4 HP I2C0's matrix state, shared with its command-list controller.
+    pub(crate) fn i2c_matrix_route_state(
+        &self,
+    ) -> Option<crate::peripherals::esp32c3::i2c::C3I2cMatrixRoute> {
+        self.p4_i2c_route.clone()
+    }
+
+    fn refresh_p4_i2c_route(&mut self) {
+        let Some(route) = &self.p4_i2c_route else {
+            return;
+        };
+        let sda_out = (if self.p4_i2c_gpio7_out & 0x1FF == 69 {
+            1 << 7
+        } else {
+            0
+        }) | (if self.p4_i2c_gpio8_out & 0x1FF == 69 {
+            1 << 8
+        } else {
+            0
+        });
+        let scl_out = (if self.p4_i2c_gpio7_out & 0x1FF == 68 {
+            1 << 7
+        } else {
+            0
+        }) | (if self.p4_i2c_gpio8_out & 0x1FF == 68 {
+            1 << 8
+        } else {
+            0
+        });
+        let input_pad = |word: u32| match word & 0x3F {
+            7 => Some(7),
+            8 => Some(8),
+            _ => None,
+        };
+        let mut route = route.lock().expect("ESP32-P4 I2C matrix route poisoned");
+        route.set(
+            sda_out,
+            scl_out,
+            input_pad(self.p4_i2c_sda_in),
+            input_pad(self.p4_i2c_scl_in),
+        );
     }
 
     fn out_word(&self, bank1: bool) -> u32 {
@@ -253,6 +314,15 @@ impl EspGpioHead {
 
     fn read_word(&self, off: u64) -> u32 {
         let l = self.layout;
+        if l.name == "esp32p4" {
+            match off {
+                0x268 => return self.p4_i2c_scl_in,
+                0x26C => return self.p4_i2c_sda_in,
+                0x574 => return self.p4_i2c_gpio7_out,
+                0x578 => return self.p4_i2c_gpio8_out,
+                _ => {}
+            }
+        }
         if off == l.out {
             self.out_word(false)
         } else if off == l.out1 {
@@ -274,6 +344,33 @@ impl EspGpioHead {
 
     fn write_word(&mut self, off: u64, value: u32) {
         let l = self.layout;
+        if l.name == "esp32p4" {
+            let matrix_write = match off {
+                // GPIO_FUNC68/69_IN_SEL_CFG: selection, inversion, and bypass.
+                0x268 => {
+                    self.p4_i2c_scl_in = value & 0xFF;
+                    true
+                }
+                0x26C => {
+                    self.p4_i2c_sda_in = value & 0xFF;
+                    true
+                }
+                // GPIO_FUNC7/8_OUT_SEL_CFG: signal plus output/OEN selection.
+                0x574 => {
+                    self.p4_i2c_gpio7_out = value & 0xFFF;
+                    true
+                }
+                0x578 => {
+                    self.p4_i2c_gpio8_out = value & 0xFFF;
+                    true
+                }
+                _ => false,
+            };
+            if matrix_write {
+                self.refresh_p4_i2c_route();
+                return;
+            }
+        }
         if off == l.out {
             self.write_out(false, value);
         } else if off == l.out_w1ts {
@@ -421,6 +518,14 @@ impl Peripheral for EspGpioHead {
             "in0": self.input_word(false),
             "in1": self.input_word(true),
         })
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
     }
 
     fn read_gpio_input(&self, pin: u8) -> Option<bool> {
