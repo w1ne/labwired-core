@@ -90,4 +90,4 @@ warning: constant `EOC_EOS` is never used
     |           ^^^^^^^
 
 warning: `firmware-stm32h743-smoke` (bin "firmware-stm32h743-smoke") generated 12 warnings
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.33s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.34s

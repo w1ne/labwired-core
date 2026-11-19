@@ -18,9 +18,9 @@
       1075867676,
       542638000,
       939578861,
-      939578990
+      939578988
     ],
-    "pc": 939578990,
+    "pc": 939578988,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,23 +33,23 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "steps_executed": 25000000,
-  "cycles": 25000000,
-  "instructions": 25000000,
+  "steps_executed": 40000000,
+  "cycles": 40000000,
+  "instructions": 40000000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
     "triggered_limit": {
       "name": "max_steps",
-      "value": 25000000
+      "value": 40000000
     },
     "observed": {
       "name": "steps_executed",
-      "value": 25000000
+      "value": 40000000
     }
   },
   "limits": {
-    "max_steps": 25000000,
+    "max_steps": 40000000,
     "max_cycles": null,
     "max_uart_bytes": null,
     "no_progress_steps": null,

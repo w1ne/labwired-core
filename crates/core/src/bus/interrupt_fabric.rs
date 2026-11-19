@@ -199,6 +199,10 @@ pub struct Esp32c3Fabric {
     /// `recompute_esp32c3_irq_lines`. Same level semantics, so delivery matches
     /// the legacy walk cycle-for-cycle at a given tick interval.
     pub(crate) sched_sources: [u64; 2],
+    /// The two `INTR_STATUS_REG_n` words last written into the single-bank
+    /// matrix (C2, C3): one bit per asserted source, mapped or not. Kept so
+    /// the mirror is only rewritten when a level changes.
+    pub(crate) intr_status: [u32; 2],
 }
 
 /// Classic ESP32 DPORT interrupt-matrix state.
@@ -273,6 +277,9 @@ pub struct Esp32c3IntcCache {
     /// (esp-idf `ETS_FROM_CPU_INTR0_SOURCE`). The four doorbells occupy the
     /// next three IDs.
     pub from_cpu_source_base: u32,
+    /// Where the control registers sit in the single-bank layout (C2, C3).
+    /// Unused on the C6, whose gates live in the PLIC.
+    pub ctrl: MatrixCtrlOffsets,
 }
 
 impl Default for Esp32c3IntcCache {
@@ -284,7 +291,72 @@ impl Default for Esp32c3IntcCache {
             line_pri: [0; 32],
             from_cpu_pending: 0,
             from_cpu_source_base: 50,
+            ctrl: MatrixCtrlOffsets::default(),
         }
+    }
+}
+
+/// Offsets of the control registers in a single-bank `INTERRUPT_CORE0` (the
+/// MAPs at `src*4`, then the controls). The bank grows with the source count,
+/// so the controls move: C3 `CPU_INT_ENABLE` 0x104, ESP32-C2 0xB8. The values
+/// are read from the chip's own register descriptor by register ID, so a part
+/// with a different source count needs no code (see [`Self::from_descriptor`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MatrixCtrlOffsets {
+    /// `CPU_INT_ENABLE`.
+    pub enable: u64,
+    /// `CPU_INT_PRI_0`; line `n` is at `pri0 + 4n`.
+    pub pri0: u64,
+    /// `CPU_INT_THRESH`.
+    pub thresh: u64,
+    /// `INTR_STATUS_REG_0`; the bus mirrors asserted source levels here and in
+    /// the next word (esp-hal reads them to find the source that fired).
+    pub status0: u64,
+    /// Matrix source ID of `CPU_INTR_FROM_CPU_0` (its MAP offset / 4).
+    pub from_cpu_source: u32,
+}
+
+impl Default for MatrixCtrlOffsets {
+    /// The ESP32-C3 layout (`esp32c3/interrupt_core0.yaml`).
+    fn default() -> Self {
+        Self {
+            enable: 0x104,
+            pri0: 0x114,
+            thresh: 0x194,
+            status0: 0xF8,
+            from_cpu_source: 50,
+        }
+    }
+}
+
+impl MatrixCtrlOffsets {
+    /// Read the offsets from a single-bank `INTERRUPT_CORE0` descriptor by
+    /// register ID. Falls back to the C3 offset for any ID the descriptor
+    /// does not declare.
+    pub fn from_descriptor(desc: &labwired_config::PeripheralDescriptor) -> Self {
+        let at = |id: &str| {
+            desc.registers
+                .iter()
+                .find(|r| r.id == id)
+                .map(|r| r.address_offset)
+        };
+        let d = Self::default();
+        Self {
+            enable: at("CPU_INT_ENABLE").unwrap_or(d.enable),
+            pri0: at("CPU_INT_PRI_0").unwrap_or(d.pri0),
+            thresh: at("CPU_INT_THRESH").unwrap_or(d.thresh),
+            status0: at("INTR_STATUS_REG_0").unwrap_or(d.status0),
+            from_cpu_source: at("CPU_INTR_FROM_CPU_0_MAP")
+                .map(|off| (off / 4) as u32)
+                .unwrap_or(d.from_cpu_source),
+        }
+    }
+
+    /// The CPU line whose `CPU_INT_PRI_n` register is at `offset`, if any.
+    pub fn pri_line(&self, offset: u64) -> Option<usize> {
+        let span = self.pri0..self.pri0 + 32 * 4;
+        (span.contains(&offset) && (offset - self.pri0) % 4 == 0)
+            .then(|| ((offset - self.pri0) / 4) as usize)
     }
 }
 

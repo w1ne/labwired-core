@@ -19,7 +19,8 @@ inputs:
   firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke"
   system: "../../configs/systems/onboarding/mimxrt700_evk.yaml"
 limits:
-  max_steps: 25000000
+  # OSTIMER and LPUART run in device time; the transcript completes within 32M steps.
+  max_steps: 40000000
 uart_injections:
   - uart: "flexcomm0"
     bytes: "RS"

@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/vybrid-cortex-m4-smoke.yaml",
   "system": "configs/systems/onboarding/vybrid.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:18:55Z",
-  "finished_at_utc": "2026-11-19T16:18:56Z",
+  "started_at_utc": "2026-11-19T18:00:44Z",
+  "finished_at_utc": "2026-11-19T18:00:45Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1391,
+  "elapsed_ms": 1497,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.573,
+    "build_cli": 0.587,
     "build_firmware": null,
-    "run_smoke": 0.782
+    "run_smoke": 0.85
   },
   "stages_ms": {
-    "build_cli": 573,
+    "build_cli": 587,
     "build_firmware": null,
-    "run_smoke": 782
+    "run_smoke": 850
   },
   "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf"
 }

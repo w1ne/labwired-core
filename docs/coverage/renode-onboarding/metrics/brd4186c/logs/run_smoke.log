@@ -1,5 +1,5 @@
-[2m2026-11-19T16:03:03.001397Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/brd4186c.yaml
-[2m2026-11-19T16:03:03.003813Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000801
+[2m2026-11-19T17:37:38.046096Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/brd4186c.yaml
+[2m2026-11-19T17:37:38.048452Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000801
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
 labwired-cli test: idle_ff skipped 193470 of 210000 device cycles (16530 interpreted)

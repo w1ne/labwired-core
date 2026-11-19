@@ -1,7 +1,7 @@
-[2m2026-11-19T16:02:21.939854Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/beaglev-fire.yaml
-[2m2026-11-19T16:02:21.941389Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x80000000
+[2m2026-11-19T17:37:13.741460Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/beaglev-fire.yaml
+[2m2026-11-19T17:37:13.742924Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x80000000
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-[2m2026-11-19T16:02:21.944094Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m core parked with no wake source at cycle 105481; ending at max_steps
+[2m2026-11-19T17:37:13.744437Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m core parked with no wake source at cycle 105481; ending at max_steps
 labwired-cli test: idle_ff skipped 100962 of 105481 device cycles (4519 interpreted)
 PASS  13/13 checks · beaglev-fire-mss-gpio-smoke · 100000 steps · 0.00s

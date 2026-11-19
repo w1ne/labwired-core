@@ -3,25 +3,25 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1073864758,
-      42242,
-      1260,
+      1074004000,
+      2048,
+      10,
       0,
       0,
       0,
       0,
-      536903624,
+      536903664,
       0,
       0,
       0,
       0,
       0,
-      536903624,
-      4294967289,
-      1258
+      536903664,
+      1255,
+      1244
     ],
-    "pc": 1258,
-    "xpsr": 1627389952,
+    "pc": 1244,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -34,7 +34,7 @@
     "event_register": false
   },
   "steps_executed": 800000,
-  "cycles": 800000,
+  "cycles": 400092,
   "instructions": 800000,
   "stop_reason": "max_steps",
   "stop_reason_details": {

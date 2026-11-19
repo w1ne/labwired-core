@@ -1,0 +1,127 @@
+peripheral: MODEM_CLKRST
+version: 0.1.0
+registers:
+- id: CLK_CONF
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLK_EN
+    bit_range:
+    - 0
+    - 0
+    description: .
+  side_effects: null
+- id: MODEM_LP_TIMER_CONF
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LP_TIMER_SEL_RTC_SLOW
+    bit_range:
+    - 0
+    - 0
+    description: .
+  - name: LP_TIMER_SEL_8M
+    bit_range:
+    - 1
+    - 1
+    description: .
+  - name: LP_TIMER_SEL_XTAL
+    bit_range:
+    - 2
+    - 2
+    description: .
+  - name: LP_TIMER_SEL_XTAL32K
+    bit_range:
+    - 3
+    - 3
+    description: .
+  - name: LP_TIMER_CLK_DIV_NUM
+    bit_range:
+    - 11
+    - 4
+    description: .
+  side_effects: null
+- id: COEX_LP_CLK_CONF
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: COEX_LPCLK_SEL_RTC_SLOW
+    bit_range:
+    - 0
+    - 0
+    description: .
+  - name: COEX_LPCLK_SEL_8M
+    bit_range:
+    - 1
+    - 1
+    description: .
+  - name: COEX_LPCLK_SEL_XTAL
+    bit_range:
+    - 2
+    - 2
+    description: .
+  - name: COEX_LPCLK_SEL_XTAL32K
+    bit_range:
+    - 3
+    - 3
+    description: .
+  - name: COEX_LPCLK_DIV_NUM
+    bit_range:
+    - 11
+    - 4
+    description: .
+  side_effects: null
+- id: BLE_TIMER_CLK_CONF
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 3
+  fields:
+  - name: BLETIMER_USE_XTAL
+    bit_range:
+    - 0
+    - 0
+    description: .
+  - name: BLETIMER_CLK_IS_ACTIVE
+    bit_range:
+    - 1
+    - 1
+    description: .
+  side_effects: null
+- id: DATE
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 34632304
+  fields:
+  - name: DATE
+    bit_range:
+    - 27
+    - 0
+    description: .
+  side_effects: null
+- id: ETM_CLK_CONF
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ETM_CLK_SEL
+    bit_range:
+    - 0
+    - 0
+    description: .
+  - name: ETM_CLK_ACTIVE
+    bit_range:
+    - 1
+    - 1
+    description: .
+  side_effects: null
+interrupts: null
+timing: null

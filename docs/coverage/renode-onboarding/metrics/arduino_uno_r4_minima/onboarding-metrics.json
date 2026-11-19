@@ -1,6 +1,6 @@
 {
   "target_id": "arduino_uno_r4_minima",
-  "status": "fail",
+  "status": "pass",
   "measurement_mode": "smoke",
   "run_attempted": true,
   "booted": true,
@@ -9,29 +9,29 @@
     "instructions": 800000,
     "stop_reason": "max_steps"
   },
-  "smoke_passed": false,
+  "smoke_passed": true,
   "crate": "firmware-ra4m1-demo",
   "target_triple": "thumbv7em-none-eabi",
   "script": "examples/renode-onboarding/arduino_uno_r4_minima-smoke.yaml",
   "system": "configs/systems/onboarding/arduino_uno_r4_minima.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:26:25Z",
-  "finished_at_utc": "2026-11-19T16:26:30Z",
-  "elapsed_seconds": 6,
-  "elapsed_ms": 5277,
-  "failure_stage": "run_smoke",
-  "first_error_signature": "2026-11-19T16:26:29.970500Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: \"OK\" }) (captured len=0)",
-  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "started_at_utc": "2026-11-19T18:59:08Z",
+  "finished_at_utc": "2026-11-19T19:01:38Z",
+  "elapsed_seconds": 150,
+  "elapsed_ms": 149953,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 2.301,
-    "build_firmware": 1.131,
-    "run_smoke": 1.798
+    "build_cli": 148.426,
+    "build_firmware": 1.098,
+    "run_smoke": 0.386
   },
   "stages_ms": {
-    "build_cli": 2301,
-    "build_firmware": 1131,
-    "run_smoke": 1798
+    "build_cli": 148426,
+    "build_firmware": 1098,
+    "run_smoke": 386
   }
 }

@@ -976,6 +976,11 @@ fn every_shipped_descriptor_is_ratcheted() {
         // silicon oracle, or executing-fidelity differential.
         "esp32h2",
         "esp32c5",
+        // ESP32-C2 (ESP8684H4X) bare-ELF slice: UART0, GPIO, SYSTIMER and
+        // TIMG0 on the C3 engines (offset-identical in esp-idf v5.3). Booted
+        // by a committed ELF. No catalog board, no silicon oracle, no
+        // differential.
+        "esp32c2",
         "esp32c61",
         "esp32p4",
         "esp32s2",

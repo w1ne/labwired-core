@@ -1,0 +1,20 @@
+[package]
+name = "esp32c2-esp-hal-gpio-irq"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[workspace]
+
+[dependencies]
+esp-hal       = { version = "1.2", features = ["esp32c2", "unstable"] }
+esp-println   = { version = "0.17", default-features = false, features = ["esp32c2", "uart", "critical-section"] }
+esp-backtrace = { version = "0.19", features = ["esp32c2", "panic-handler", "println"] }
+critical-section = "1.2"
+
+[profile.release]
+opt-level     = "s"
+lto           = "thin"
+codegen-units = 1
+debug         = false

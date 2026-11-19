@@ -22,4 +22,4 @@ warning: constant `USART_RECEIVER_ENABLE` is never used
     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 warning: `firmware-stm32h743-smoke` (bin "firmware-stm32h743-smoke") generated 1 warning
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.26s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.59s
