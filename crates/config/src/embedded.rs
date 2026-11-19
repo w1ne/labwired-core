@@ -280,6 +280,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/gc9a01.yaml"),
     ),
     (
+        &["ft5x06"],
+        include_str!("../../../configs/devices/ft5x06.yaml"),
+    ),
+    (
         &["oled-ssd1309"],
         include_str!("../../../configs/devices/ssd1309.yaml"),
     ),

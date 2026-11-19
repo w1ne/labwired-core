@@ -225,6 +225,10 @@ jobs:
           - id: esp32s3-devkitc-1-n16r8-bme280
             script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml
             system: configs/systems/esp32s3-devkitc-1-n16r8-bme280.yaml
+          # LCD-EV v1.5 SUB2 + FT5x06 one-point I2C touch profile.
+          - id: esp32s3-lcd-ev-board-v1-5-touch
+            script: examples/esp32s3-lcd-ev-board/touch-smoke.yaml
+            system: configs/systems/esp32s3-lcd-ev-board-v1-5-touch.yaml
           # XIAO ESP32C3 with a BME280 breakout; the stock Arduino build boots in
           # full and prints the compensated temperature on the USB console.
           - id: seeed-xiao-esp32c3-bme280
@@ -740,6 +744,10 @@ jobs:
       - name: Verify DevKitC-1 N16R8 BME280 fixture
         if: matrix.id == 'esp32s3-devkitc-1-n16r8-bme280'
         run: examples/esp32s3-devkitc-1-n16r8-bme280/verify-fixture.sh
+
+      - name: Verify LCD-EV FT5x06 fixture
+        if: matrix.id == 'esp32s3-lcd-ev-board-v1-5-touch'
+        run: examples/esp32s3-lcd-ev-board/ci/verify-fixture.sh
 
       - name: Verify XIAO ESP32C3 BME280 fixture
         if: matrix.id == 'seeed-xiao-esp32c3-bme280'

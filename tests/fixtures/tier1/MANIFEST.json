@@ -154,5 +154,9 @@
   "arduino-uno-r4-minima-bme280.elf": {
     "sha256": "04bd8c84c636cba2f772ed7fc02f5b6909c0c110f364075f3b1bcb1500b92ee5",
     "source_rev": "0fe44b1a8b0a47ed611ada3de72d618655e9d441"
+  },
+  "esp32s3-lcd-ev-ft5x06.elf": {
+    "sha256": "7ba63d2245aae0513b22f77fcb8a23650e847ca933ee3009fe19a94952038e32",
+    "source_rev": "3c304d84b3f4847bb6fa8dc0c87bd74978438c27"
   }
 }
