@@ -773,6 +773,10 @@ mod tests {
         twi.write(MBAUD, 67).unwrap();
         twi.write(MADDR, 0x80).unwrap();
         // START + 9 bits at 10 + 2 * 67 cycles a bit.
+        if twi.scheduler_mode() {
+            assert_eq!(twi.take_scheduled_events(), [(1440, twi.generation)]);
+            return;
+        }
         clock.publish(1439);
         assert!(twi.tick().explicit_irqs.is_none());
         assert_eq!(twi.read(MSTATUS).unwrap() & MSTATUS_WIF, 0);

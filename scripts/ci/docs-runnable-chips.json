@@ -485,7 +485,7 @@
     },
     "atmega4809": {
       "how": "needs-build",
-      "why": "The ATmega4809 (Arduino Nano Every) model and its AVRxt core are newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix arduino-nano-every row (L0/L1/L2/L3/L5/L7) passes from source on stock ArduinoCore-megaavr; switch this row after a release carries the atmega4809 descriptor."
+      "why": "The ATmega4809 (Arduino Nano Every) model and its AVRxt core are newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix arduino-nano-every row (L0/L1/L2/L3/L4/L5/L7) passes from source on stock ArduinoCore-megaavr; switch this row after a release carries the atmega4809 descriptor."
     },
     "atmega328pb": {
       "how": "needs-build",

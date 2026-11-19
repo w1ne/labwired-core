@@ -7,6 +7,7 @@
 //! is the `megaavr_port` layout of `avr_gpio`.
 
 pub mod adc;
+pub mod spi;
 pub mod tc;
 pub mod twi;
 pub mod usart;
