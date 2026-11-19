@@ -1028,6 +1028,11 @@ impl WasmSimulator {
                         let _ = bus.write_u8(dst as u64 + i as u64, *b);
                     }
                 }
+                // The ROM's `g_uart_print`, set by its print init and not
+                // by the copy above: esp-println's `uart` path prints
+                // through ROM `uart_tx_one_char`, which drops every byte
+                // while it is zero.
+                labwired_core::boot::esp32c3_rom::seed_rom_console(&mut bus);
                 // With the real ROM present, esp-hal's clock bring-up runs the
                 // genuine `rom_i2c_*Reg` helpers, which drive the analog I²C
                 // master / ANA_CONFIG block (0x6000_E000) for the PLL. That
@@ -1052,6 +1057,10 @@ impl WasmSimulator {
                 // rather than rely on that. (Cheap: one pass over the roster,
                 // once per simulator construction.)
                 bus.recompute_walk_deletable();
+                // Interrupts route through the matrix, as on the native
+                // fast boot (`install_fast_boot_rom`).
+                bus.irq_fabric.esp32c3.routing = true;
+                bus.refresh_peripheral_index();
                 true
             } else {
                 false
@@ -1127,7 +1136,10 @@ impl WasmSimulator {
         }
         let uart_rx_bufs = bus.attach_uart_rx_source();
 
-        let cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+        let mut cpu = labwired_core::system::riscv::configure_riscv(&mut bus);
+        if faithful_c3_rom {
+            labwired_core::boot::esp32c3_rom::prepare_fast_boot_cpu(&mut cpu);
+        }
         let boxed: Box<dyn Cpu> = Box::new(cpu);
         let mut machine = Machine::new(boxed, bus);
 

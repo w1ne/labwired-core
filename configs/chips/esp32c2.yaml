@@ -1,35 +1,48 @@
-# Narrow ESP32-C2 profile for the current ESP8684-DevKitM-1-H4X board.
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
 #
-# Only the UART0 FIFO and GPIO output latch are enabled here. The C2 register
-# heads match the shared C3 UART/GPIO behavior used by the family adapter;
-# clock pacing and UART interrupt source are C2-specific. This is a fast-boot
-# profile and does not execute mask ROM or the Espressif bootloader.
-#
-# Sources checked 2026-11-17:
-#   ESP8684 datasheet: https://documentation.espressif.com/esp8684_datasheet_en.html
-#   ESP-IDF C2 SoC definitions:
-#     https://github.com/espressif/esp-idf/tree/master/components/soc/esp32c2
-#   ESP8684-DevKitM-1 v1.1 guide:
-#     https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c2/esp8684-devkitm-1/user_guide.html
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
 
+# ESP32-C2 die, as the ESP8684H4X SoC (4 MB in-package flash, chip revision
+# v2.x, QFN24 4x4). Espressif product selector (products.espressif.com,
+# read 2026-11-16): ESP8684H4X "Mass Production", 120 MHz, 272 KB SRAM,
+# 576 KB ROM, 4 MB flash, 14 GPIO. Espressif lists the ESP8684 as the
+# replacement for the NRND ESP8266EX / ESP8285.
+#
+# Memory map and peripheral bases: esp-idf v5.3
+# components/soc/esp32c2/include/soc/{soc.h,reg_base.h}.
+#
+# Scope: bare-ELF fast boot, for plain C (examples/esp32c2/main.c) and
+# esp-hal 1.2 (examples/esp32c2/esp-hal). It reuses the ESP32-C3 peripheral
+# engines only where the esp-idf v5.3 register headers are offset-identical
+# between C2 and C3 (uart_reg.h, gpio_reg.h, systimer_reg.h,
+# timer_group_reg.h). The vendored mask ROM is mapped and its `.data` unpack
+# is replayed at fast boot (crates/core/src/boot/esp32c2_rom.rs); the ROM
+# boot itself is not run. SYSTEM, RTC_CNTL, EFUSE, interrupt matrix, cache
+# and MSPI blocks are declarative register files from the C2 SVD (store and
+# read back, no behaviour). The interrupt matrix routes: the bus reads the
+# CPU_INT_* control offsets from interrupt_core0.yaml by register ID and
+# mirrors source levels into INTR_STATUS_REG_0/1. Not modelled: IO_MUX pad
+# routing (C2 pad offsets differ from C3 above GPIO18: U0RXD/U0TXD are
+# GPIO19/GPIO20 at +0x50/+0x54), edge-type CPU lines, clock trees, I2C,
+# SPI, LEDC, ADC, GDMA, crypto, Wi-Fi and Bluetooth LE.
 name: "esp32c2"
 arch: "riscv"
+# The die is RV32IMC, the same Espressif core as the C3. The declared core is
+# RV32IMAC because the ESP8684-DevKitM-1-H4X board smoke
+# (examples/esp8684-devkitm-1-h4x) is built for riscv32imac-unknown-none-elf.
 core: "rv32imac"
 registers_count: 50
+# 120 MHz maximum CPU clock (product selector "Freq. (MHz)" = 120).
 cpu_hz: 120_000_000
 io_voltage_v: 3.3
 gpio_input_thresholds:
   vil: 0.25
   vih: 0.75
 
-# The H4X module has 4 MiB in-package flash. ESP8684 has 256 KiB usable SRAM.
-flash:
-  base: 0x42000000
-  size: "4096KB"
-ram:
-  base: 0x3FCA0000
-  size: "256KB"
-
+# Pads the ESP8684-DevKitM-1-H4X profile binds (v1.1 user guide): GPIO0 is the
+# red RGB LED channel, GPIO19/GPIO20 are the UART0 default pads.
 pins:
   GPIO0: { gpio: "gpio", bit: 0 }
   GPIO1: { gpio: "gpio", bit: 1 }
@@ -37,22 +50,194 @@ pins:
   GPIO19: { gpio: "gpio", bit: 19 } # UART0 RXD default pad
   GPIO20: { gpio: "gpio", bit: 20 } # UART0 TXD default pad
 
+flash:
+  # IROM cache window: soc.h SOC_IROM_LOW/HIGH = 0x42000000/0x42400000, 4 MiB.
+  # The H4X carries 4 MiB of in-package flash, so the window and the part
+  # agree. Spelled in KB because `parse_size` reads MB as 10^6.
+  base: 0x42000000
+  size: "4096KB"
+ram:
+  # DRAM view of internal SRAM: soc.h SOC_DRAM_LOW/HIGH =
+  # 0x3FCA0000/0x3FCE0000, 256 KiB. The other 16 KiB of the 272 KB SRAM is
+  # the fixed ICache (soc.h ICACHE_SIZE = 0x4000).
+  base: 0x3FCA0000
+  size: "256KB"
+memory_regions:
+  # IRAM view: soc.h SOC_IRAM_LOW/HIGH = 0x4037C000/0x403C0000 (272 KiB,
+  # the first 16 KiB being the ICache). Modelled as its own window, as for the
+  # C3; the D/I aliasing of the same SRAM is not modelled.
+  - name: "iram"
+    base: 0x4037C000
+    size: "272KB"
+  # DROM cache window: soc.h SOC_DROM_LOW/HIGH = 0x3C000000/0x3C400000.
+  - name: "drom"
+    base: 0x3C000000
+    size: "4096KB"
+  # Mask ROM: soc.h SOC_IROM_MASK_LOW/HIGH = 0x40000000/0x40090000 (576 KiB,
+  # matches the selector's "ROM (KB)" = 576). The image is Espressif's
+  # esp32c2_rev200_rom.elf flattened by load address
+  # (scripts/make_esp32c2_rom_bin.py, crates/core/roms/esp32c2/README.md):
+  # code, the `.data_*` initialisers that `_rom_store_table` unpacks, and
+  # `.rodata`. LABWIRED_ESP32C2_ROM overrides the vendored copy. esp-hal links
+  # memcpy, the regi2c helpers and the cache calls to these ROM addresses.
+  - name: "rom"
+    base: 0x40000000
+    size: "576KB"
+    image_env: "LABWIRED_ESP32C2_ROM"
+  # ROM data bus: soc.h SOC_DROM_MASK_LOW/HIGH = 0x3FF00000/0x3FF50000
+  # (320 KiB). The same mask ROM as IROM 0x40040000..0x40090000: the ROM ELF
+  # links `.rodata` at VMA 0x3FF42C00 with LMA 0x40082C00 (offset 0x40040000).
+  - name: "rom_data"
+    base: 0x3FF00000
+    size: "320KB"
+    alias_of: 0x40040000
 peripherals:
-  # ESP8684 UART0. The profile captures shifted UART bytes at the host console;
-  # it does not claim USB-UART bridge or IO_MUX pad electrical behavior.
+  # Espressif UART IP. esp-idf v5.3 esp32c2 and esp32c3 uart_reg.h declare
+  # the same 33 registers at the same offsets. Interrupt sources from
+  # esp32c2 interrupts.h: ETS_UART0_INTR_SOURCE = 17, ETS_UART1 = 18.
+  # Clocks: 120 MHz core; UART source PLL_F40M = 40 MHz (esp-hal 1.2
+  # uart/clocks/v1.rs selects UartFunctionClockSclk::PllF40m on esp32c2),
+  # not the C3's 80 MHz APB.
   - id: "uart0"
-    type: "esp32c2_uart"
-    irq: 17
+    type: "esp32c3_uart"
+    irq: 17 # ETS_UART0_INTR_SOURCE (C2)
     base_address: 0x60000000
-    size: "32B"
+    size: "512B"
     config:
-      echo_stdout: true
+      debug_schema: "../peripherals/esp32c3/uart0.yaml"
       cpu_clock_hz: 120000000
       uart_sclk_hz: 40000000
-
-  # C2 GPIO output latch and enable registers. The smoke exercises GPIO0, the
-  # board's red discrete RGB LED channel. Other GPIO functions are not claimed.
+  - id: "uart1"
+    type: "esp32c3_uart"
+    irq: 18 # ETS_UART1_INTR_SOURCE (C2)
+    base_address: 0x60010000
+    size: "512B"
+    config:
+      debug_schema: "../peripherals/esp32c3/uart1.yaml"
+      cpu_clock_hz: 120000000
+      uart_sclk_hz: 40000000
+  # GPIO: the C2 gpio_reg.h is the C3 register set less the GPIO21 pin and
+  # GPIO_FUNC21 output-select registers (same offsets for every register both
+  # declare). The C3 model carries 22 pads; the ESP8684 bonds GPIO0..10 and
+  # GPIO18..20 (14 GPIO), and GPIO11..17 are the in-package flash pins.
   - id: "gpio"
-    type: "esp32c2_gpio"
+    type: "esp32c3_gpio"
+    irq: 13 # ETS_GPIO_INTR_SOURCE (C2; GPIO_INTERRUPT_PRO_MAP at +0x34)
     base_address: 0x60004000
     size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32c3/gpio.yaml"
+  # SYSTIMER and TIMG0: systimer_reg.h and timer_group_reg.h are identical
+  # between C2 and C3. The C2 has one timer group (reg_base.h has no
+  # DR_REG_TIMERGROUP1_BASE).
+  - id: "systimer"
+    type: "esp32c3_systimer"
+    irq: 26 # ETS_SYSTIMER_TARGET0_EDGE_INTR_SOURCE (C2; TARGET1/2 = 27/28)
+    base_address: 0x60023000
+    config:
+      path: "../peripherals/esp32c3/systimer.yaml"
+      debug_schema: "../peripherals/esp32c3/systimer.yaml"
+      # 16 MHz counter on a 120 MHz core: 7.5 cycles per tick.
+      cpu_clock_hz: 120000000
+  - id: "timg0"
+    type: "esp32_timg"
+    base_address: 0x6001F000
+    config:
+      debug_schema: "../peripherals/esp32c3/timg0.yaml"
+  # --- Register files generated by crates/svd-ingestor from Espressif's
+  # --- esp32c2.svd version 10 (github.com/espressif/svd, commit 104da3c8,
+  # --- sha256 96677765...c623). Bases from the same SVD. Declarative: registers store and
+  # --- read back their reset values; nothing behind them is modelled.
+  - id: "interrupt_core0"
+    type: "declarative"
+    base_address: 0x600C2000
+    config:
+      path: "../peripherals/esp32c2/interrupt_core0.yaml"
+  - id: "system"
+    type: "declarative"
+    base_address: 0x600C0000
+    config:
+      path: "../peripherals/esp32c2/system.yaml"
+  - id: "sensitive"
+    type: "declarative"
+    base_address: 0x600C1000
+    config:
+      path: "../peripherals/esp32c2/sensitive.yaml"
+  - id: "extmem"
+    type: "declarative"
+    base_address: 0x600C4000
+    config:
+      path: "../peripherals/esp32c2/extmem.yaml"
+  - id: "assist_debug"
+    type: "declarative"
+    base_address: 0x600CE000
+    config:
+      path: "../peripherals/esp32c2/assist_debug.yaml"
+  - id: "rtc_cntl"
+    type: "declarative"
+    base_address: 0x60008000
+    config:
+      path: "../peripherals/esp32c2/rtc_cntl.yaml"
+  - id: "efuse"
+    type: "declarative"
+    base_address: 0x60008800
+    config:
+      path: "../peripherals/esp32c2/efuse.yaml"
+  - id: "io_mux"
+    type: "declarative"
+    base_address: 0x60009000
+    config:
+      path: "../peripherals/esp32c2/io_mux.yaml"
+  - id: "bb"
+    type: "declarative"
+    base_address: 0x6001D000
+    config:
+      path: "../peripherals/esp32c2/bb.yaml"
+  - id: "modem_clkrst"
+    type: "declarative"
+    base_address: 0x6004D800
+    config:
+      path: "../peripherals/esp32c2/modem_clkrst.yaml"
+  - id: "apb_ctrl"
+    type: "declarative"
+    base_address: 0x60026000
+    config:
+      path: "../peripherals/esp32c2/apb_ctrl.yaml"
+  - id: "spi1"
+    type: "declarative"
+    base_address: 0x60002000
+    config:
+      path: "../peripherals/esp32c2/spi1.yaml"
+  - id: "spi0"
+    type: "declarative"
+    base_address: 0x60003000
+    config:
+      path: "../peripherals/esp32c2/spi0.yaml"
+  # Analog I2C master (regi2c: BBPLL, BIAS, DIG_REG). The C6 model, with
+  # ANA_CONF0 at +0x40: the esp32c2 PAC 0.30 maps I2C_ANA_MST (ANA_CONF0,
+  # ANA_CONFIG, ANA_CONFIG2) at 0x6004E840; the ROM regi2c helpers use the
+  # same block. BUSY clears and BBPLL_CAL_DONE reads set at once.
+  - id: "i2c_ana_mst"
+    type: "esp32c6_i2c_ana_mst"
+    base_address: 0x6004E800
+    size: "1KB"
+    config:
+      ana_conf0_offset: 0x40
+  # Radio power-up controls esp-hal's rtc_sleep_pu writes at init (bases
+  # from esp-hal 1.2 src/rtc_cntl/sleep/esp32c2.rs: DR_REG_NRX_BASE,
+  # DR_REG_FE_BASE, DR_REG_FE2_BASE). One register each; no radio model.
+  - id: "radio_fe2"
+    type: "declarative"
+    base_address: 0x60005000
+    config:
+      path: "../peripherals/esp32c2/radio_fe2.yaml"
+  - id: "radio_fe"
+    type: "declarative"
+    base_address: 0x60006000
+    config:
+      path: "../peripherals/esp32c2/radio_fe.yaml"
+  - id: "radio_nrx"
+    type: "declarative"
+    base_address: 0x6001CC00
+    config:
+      path: "../peripherals/esp32c2/radio_nrx.yaml"

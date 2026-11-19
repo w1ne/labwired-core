@@ -72,19 +72,21 @@ const DECLARED_ONLY_CHIPS: &[(&str, &str)] = &[
 /// validated declaration table (enforced below), so new chips cannot disappear.
 const CHIPS: &[ChipConf] = &[
     ChipConf {
-        // Narrow ESP8684/C2 DevKit profile. The board's CLI smoke is in the
-        // onboarding matrix, but there is no in-crate behavior gate or silicon
-        // reset capture for this exact descriptor yet.
-        name: "esp32c2",
-        yaml: "configs/chips/esp32c2.yaml",
-        reset_oracle: None,
-        behavior_gate: None,
-    },
-    ChipConf {
         name: "esp32c3",
         yaml: "configs/chips/esp32c3.yaml",
         reset_oracle: Some("scripts/hw-oracle/captures/esp32c3/20260611T161223Z/reg_oracle.json"),
         behavior_gate: Some("firmware_survival::test_esp32c3_demo_survival"),
+    },
+    // ESP32-C2 (ESP8684H4X). SIM-DERIVED: no silicon capture, so no
+    // reset_oracle. The gate boots a committed RV32IMC ELF that prints on
+    // UART0 and toggles GPIO10.
+    ChipConf {
+        name: "esp32c2",
+        yaml: "configs/chips/esp32c2.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "esp32c2_compiled_firmware::esp32c2_compiled_rv32imc_firmware_prints_on_uart0_and_toggles_gpio10",
+        ),
     },
     ChipConf {
         // ESP32-C6 HP core (RV32IMAC). SIM-DERIVED: nothing here has been

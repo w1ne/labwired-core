@@ -100,8 +100,21 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32c6_lp_rtc" => Box::new(super::lp_timer::Esp32c6LpTimer::new()),
         // MODEM_LPCON — sticky regs; seed clk_i2c_mst_en for fast-boot.
         "esp32c6_modem_lpcon" => Box::new(super::modem_lpcon::Esp32c6ModemLpcon::new()),
-        // Analog I2C master — sticky + instant-complete BUSY/cal bits.
-        "esp32c6_i2c_ana_mst" => Box::new(super::i2c_ana_mst::Esp32c6I2cAnaMst::new()),
+        // Analog I2C master — sticky + instant-complete BUSY/cal bits. The C2
+        // reuses it with `ana_conf0_offset: 0x40` (see the model docs).
+        "esp32c6_i2c_ana_mst" => {
+            let dev = super::i2c_ana_mst::Esp32c6I2cAnaMst::new();
+            Box::new(
+                match p_cfg
+                    .config
+                    .get("ana_conf0_offset")
+                    .and_then(|v| v.as_u64())
+                {
+                    Some(offset) => dev.with_ana_conf0_offset(offset),
+                    None => dev,
+                },
+            )
+        }
         // USB Serial/JTAG — same EP1/INT_* IP as C3/S3 (`UsbSerialJtag`), with
         // the C6 matrix source (48) and 160 MHz clock. Base is owned by the
         // chip yaml (`0x6000_F000`); see the model module docs.
