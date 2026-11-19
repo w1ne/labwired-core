@@ -153,7 +153,7 @@ This page covers the public models. For every chip we model — public and priva
 | esp32c61 | **L0** | ✓ | 5 | — | — | — |
 | nrf54l05 | **L0** | ✓ | 6 | — | — | — |
 | nrf54l10 | **L0** | ✓ | 6 | — | — | — |
-| esp32p4 | **L0** | ✓ | 2 | — | — | — |
+| esp32p4 | **L0** | ✓ | 4 | — | — | — |
 | esp32s2 | **L0** | ✓ | 2 | — | — | — |
 | rp2040-feather | **L0** | ✓ | 24 | — | — | — |
 | rp2350-feather | **L0** | ✓ | 27 | — | — | — |
