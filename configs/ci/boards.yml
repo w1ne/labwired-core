@@ -121,6 +121,12 @@ boards:
     kind: sim-validate
     path: examples/esp32s3-devkitc-1-n16r8-bme280
     gate: true
+  # Demand-rank 1 ESP32 family: LCD-EV v1.5's SUB2 touch controller returns
+  # one FT5x06 point over GPIO47/GPIO48 I2C; unrelated display/audio remain out.
+  - id: esp32s3-lcd-ev-board-v1-5-touch
+    kind: sim-validate
+    path: examples/esp32s3-lcd-ev-board
+    gate: true
   # Demand-rank 1 ESP32 family: the Feather V2's on-board red GPIO13 LED.
   # The committed fast-boot fixture keeps this board smoke quick on every PR.
   - id: adafruit-feather-esp32-v2-gpio
