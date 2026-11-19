@@ -1,74 +1,57 @@
-# LabWired board validation manifest — the source of truth for what is actually
-# validated, and against which silicon, on what date.
+# LabWired board validation manifest — the source of truth for recorded
+# validation evidence, the source it covers, and its date.
 #
 # WHY THIS FILE EXISTS
-#   The board docs (docs/boards/*.md) used to be hand-written and drifted out of
-#   sync with the models and tests (some claimed less than was true, some more).
-#   This manifest is the machine-checkable record. `scripts/generate_validation_status.py`
-#   renders docs/boards/VALIDATION_STATUS.md from it on every CI run and fails the
-#   build if (a) the generated doc is stale, or (b) a peripheral model changed
-#   since the board's last silicon capture without an explicit drift_ack.
+#   scripts/generate_validation_status.py renders docs/boards/VALIDATION_STATUS.md.
+#   CI enforces a current generated report, complete source watch lists, valid
+#   capture metadata, and full git history. Source-only differences from saved
+#   captures are informational; no human source-review ACK or renewal is needed
+#   to commit, push, or pass CI.
 #
-# THE HONESTY RULE
-#   CI runners have no hardware, so the only thing CI can re-prove each run is the
-#   OFFLINE oracle suite (sim vs the silicon values frozen into the test sources).
-#   A `silicon.last_capture` is a HUMAN ASSERTION that a live `--ignored` diff was
-#   run on that date with that result. When you re-run a live diff (board plugged
-#   in, `--features hw-oracle-* -- --ignored`), update last_capture + result here.
+# CAPTURE EVIDENCE
+#   CI runners have no hardware. Their offline oracle suites compare simulations
+#   with silicon values saved in test sources; they do not perform a new capture.
+#   A silicon record describes an actual physical live diff and its result.
+#   Only after a new live run (board plugged in,
+#   `--features hw-oracle-* -- --ignored`) update silicon.last_capture, result,
+#   and silicon.models_digest to the source used for that capture.
 #
-# DRIFT
-#   `models` lists the source paths whose change can invalidate the capture. The
-#   generator hashes their CONTENT into a digest. If that digest differs from
-#   `silicon.models_digest` — the digest recorded when the capture was taken —
-#   the board has DRIFTED, and its "silicon-verified" claim is stale until
-#   re-captured. `drift_ack_digest` names the exact content a human looked at and
-#   accepted ("yes, the model changed, re-capture is tracked"), with `drift_ack`
-#   recording when; that keeps CI green. Any later model change moves the digest
-#   and re-fails the gate. No silent decay.
+# SOURCE/CAPTURE STATUS (informational)
+#   `models` lists paths whose content can invalidate a captured source match.
+#   The generator hashes watched paths and bytes and compares that digest with
+#   `silicon.models_digest`, recorded with the physical capture. A matching
+#   digest establishes only that source match; the recorded result and tier
+#   still define the scope of the historical hardware evidence.
 #
-#   AN ACK LAPSES. `drift_ack` covers a drifted board for 30 days
-#   (ACK_TTL_DAYS in the generator), after which `--drift` fails again. The
-#   digest rule made acks precise and, in doing so, permanent: while the models
-#   held still, an ack from any date kept a board green forever, and every acked
-#   board here read "re-capture pending" with nothing making the pending part
-#   come due. An ack is a promise to re-capture; a promise with no date is a
-#   waiver.
+#   A changed digest is reported as changed source. A capture without a saved
+#   digest is reported as source match unverified. Neither blocks source
+#   integration, and neither supports a claim of current silicon validation.
+#   A new physical capture is needed before making that current hardware claim.
+#   Simulation tests and their automated gates remain separate evidence.
 #
-#   When it lapses you have three honest moves, in order of preference:
-#     1. re-capture (bump silicon.last_capture + silicon.models_digest),
-#     2. renew the ack (new drift_ack date, then --write-ack-digests),
-#     3. set `drift_ack_expires: YYYY-MM-DD` with a note saying why a
-#        re-capture is blocked (no probe, board on order). An explicit later
-#        date is reviewable. Widening ACK_TTL_DAYS to clear a red gate is not —
-#        it silences every board at once.
+#   Commit dates cannot establish a match: rebase/squash can re-date identical
+#   content, while same-day or uncommitted edits can change content immediately.
+#   The generated document is calendar-stable.
 #
-#   The expiry never appears in a VERDICT in the generated doc, only as the
-#   `expires` date in the status column. A doc that changed with the calendar
-#   would go stale on a day nobody committed, which is the #834 defect.
+#   Legacy `drift_ack`, `drift_ack_digest` and `drift_ack_expires` fields and
+#   dated comments below remain historical source-review metadata. They are
+#   optional and have no effect on capture freshness or CI verdicts. No ACK
+#   expiry or source-review renewal gate remains. The legacy explicit
+#   `--write-ack-digests` flags only maintain that optional metadata; normal
+#   generation and CI never stamp ACKs or physical capture evidence.
 #
-#   Print the current digests with:
+#   Inspect the current and recorded digests with:
 #     python3 scripts/generate_validation_status.py --digests
-#
-#   WHY CONTENT AND NOT DATES. This gate used to compare the newest git committer
-#   date across `models` against last_capture. Squash-merging rewrites those
-#   dates to the merge commit's, so a PR could pass pr-gate under a covering ack
-#   and then red main on byte-identical content, poisoning every branch cut
-#   afterwards (#834). The merge commit does not exist at review time, so the
-#   author was being gated on a value they could not see. A digest is the same
-#   before and after a squash, and you can compute it locally.
-#
-#   Boards captured before digests existed carry no `silicon.models_digest`. That
-#   is not treated as "fresh" — freshness it cannot prove is exactly the answer
-#   this gate must never give — so they read as drifted and their drift_ack_digest
-#   carries them until the next live re-capture records a digest.
+#   Check the report and source watches, with informational drift output:
+#     python3 scripts/generate_validation_status.py --check --drift
 #
 # DRIFT-WATCH COMPLETENESS (enforced)
-#   A drift gate is only as honest as its watch list, and an INCOMPLETE `models`
+#   Source provenance is only as complete as its watch list. An INCOMPLETE `models`
 #   list fails silently — the board just reads "fresh" forever. That is exactly
 #   what happened to esp32c3: its tier is a reset-state oracle asserted against
 #   the declarative descriptors in configs/peripherals/esp32c3/, and not one of
 #   those 29 files was listed, so the only files its silicon claim rests on were
-#   invisible to the gate. The generator now audits this: every `path:` a board's
+#   invisible to the report. The generator audits this: every `path:` a board's
 #   chip yaml wires must be covered by that board's `models`, and every listed
 #   path must exist. Add the path, don't drop the reference.
 #

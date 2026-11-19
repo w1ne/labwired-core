@@ -2968,6 +2968,53 @@
       ]
     },
     {
+      "device_type": "bma400",
+      "label": "Bosch BMA400",
+      "summary": "3-axis 12-bit SPI accelerometer. Configurable full scale and stimulus inputs.",
+      "detail": "3-axis 12-bit SPI accelerometer. Configurable full scale and stimulus inputs.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\")."
+        },
+        {
+          "name": "spi_mode",
+          "ty": "int",
+          "doc": "Opt in to edge-accurate (bit-level) slave sampling in this SPI mode (0..=3). Omit for the default byte-level frame exchange."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 1.0
+        }
+      ]
+    },
+    {
       "device_type": "max31855",
       "label": "MAX31855 thermocouple",
       "summary": "K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame).",
