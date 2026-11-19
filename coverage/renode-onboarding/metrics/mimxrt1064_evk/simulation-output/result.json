@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 806938,
-  "cycles": 450000,
-  "instructions": 806938,
+  "steps_executed": 801897,
+  "cycles": 451898,
+  "instructions": 801897,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 806938
+      "value": 801897
     }
   },
   "limits": {
@@ -188,7 +188,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 450000,
+    "now_cycle": 451898,
     "channels": [
       {
         "ch": 0,
@@ -244,7 +244,7 @@
         "text": "gpt1 swr=1 cnt=1 irq=3 of1=1 of2=1 ok",
         "cycle_lo": 0,
         "cycle": 10000,
-        "end_cycle": 100000
+        "end_cycle": 110000
       }
     ],
     "dropped_lines": 0
@@ -281,43 +281,48 @@
     "heap_top": 537001984
   },
   "metrics": {
-    "cycles": 450000,
-    "instructions": 806938,
-    "steps_executed": 806938,
-    "memory_reads": 25131,
+    "cycles": 451898,
+    "instructions": 801897,
+    "steps_executed": 801897,
+    "memory_reads": 24894,
     "memory_writes": 53,
-    "peripheral_accesses": 1106,
+    "peripheral_accesses": 4137,
     "exceptions": 0,
     "pc_samples": [
       {
         "pc": 536875048,
-        "count": 1406,
+        "count": 1375,
         "symbol": "firmware_imxrt1064_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 536873326,
+        "pc": 536873340,
         "count": 117,
         "symbol": "firmware_imxrt1064_smoke::wait"
       },
       {
-        "pc": 536873322,
+        "pc": 536873336,
         "count": 78,
         "symbol": "core::sync::atomic::atomic_load"
       },
       {
-        "pc": 536873328,
+        "pc": 536873342,
         "count": 78,
         "symbol": "firmware_imxrt1064_smoke::wait"
       },
       {
-        "pc": 536873320,
+        "pc": 536873314,
         "count": 39,
         "symbol": "core::sync::atomic::atomic_load"
       },
       {
-        "pc": 536873330,
+        "pc": 536874094,
         "count": 39,
-        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+        "symbol": "firmware_imxrt1064_smoke::wait"
+      },
+      {
+        "pc": 536874126,
+        "count": 39,
+        "symbol": "firmware_imxrt1064_smoke::wait"
       }
     ]
   }

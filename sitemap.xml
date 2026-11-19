@@ -1258,6 +1258,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/arduino_nano_33_ble/2026-11-09-negative-control-narrow-descriptor/NOTE/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/arduino_uno_r4_minima/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/arvsom/2026-11-06-missing-flash-window/onboarding-summary/</loc>
     </url>
     <url>
@@ -1283,6 +1286,9 @@
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/atsamd21j17d-aft/2026-11-11-psp-trampoline-build-failure/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/atsamd21j17d-aft/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/beaglev-fire/2026-11-07-stale-max-cycles/onboarding-summary/</loc>
@@ -1534,6 +1540,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/efr32mg1/2026-11-08-before-series1-gpio-timer/onboarding-summary/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/efr32mg1/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/efr32mg1/attempt-01/</loc>
     </url>
     <url>
@@ -1547,6 +1556,9 @@
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/efr32mg12/2026-11-08-before-series1-wtimer/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/efr32mg12/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/efr32mg13/2026-11-08-before-series1-gpio-timer/onboarding-summary/</loc>
@@ -1565,6 +1577,9 @@
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/efr32mg13/2026-11-08-negative-control-rtcc-zero-stub/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/efr32mg13/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/efr32mg24/attempt-01/</loc>
@@ -1639,7 +1654,16 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/ezr32hg320/2026-11-09-negative-control-old-descriptor-flash-at-0/NOTE/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/ezr32hg320/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/ezr32lg330/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/ezr32wg330/2026-11-09-negative-control-old-descriptor/NOTE/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/ezr32wg330/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/focaltech_ft9001/</loc>
@@ -2359,6 +2383,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/renesas-r7fa2l1a/2026-11-08-sci3-negative-control/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/renesas-r7fa4m1a/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/renesas-r7fa4m1a/attempt-01/onboarding-summary/</loc>
     </url>
     <url>
@@ -2512,6 +2539,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/sltb001a/2026-11-08-before-series1-gpio-timer/onboarding-summary/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/sltb001a/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/sltb004a/2026-11-08-before-series1-gpio-timer/onboarding-summary/</loc>
     </url>
     <url>
@@ -2521,7 +2551,25 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/sltb004a/2026-11-08-before-series1-wtimer/onboarding-summary/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/sltb004a/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/slwstk6220a/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/starfive-jh7100/attempt-01/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stk3200/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stk3600/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stk3700/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stk3800/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stk3800/attempt-01/onboarding-summary/</loc>
@@ -3650,6 +3698,9 @@
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/ut32m0r500/2026-11-09-stimulus-schema-preflight/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/ut32m0r500/2026-11-19-post-main-merge-regression/onboarding-summary/</loc>
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/verilated_ibex/2026-11-08-before-litex-timer-model/</loc>

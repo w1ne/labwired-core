@@ -34,4 +34,4 @@ warning: constant `ADC_JDR2` is never used
    |       ^^^^^^^^
 
 warning: `firmware-f4-discovery-smoke` (bin "firmware-f4-discovery-smoke") generated 3 warnings
-    Finished `release` profile [optimized + debuginfo] target(s) in 0.37s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.28s
