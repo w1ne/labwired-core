@@ -595,7 +595,7 @@ fn script_value<'a>(text: &'a str, key: &str) -> &'a str {
 #[test]
 fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
     let fixtures = committed_scripts();
-    assert!(fixtures.len() >= 12, "Flex fixtures went missing");
+    assert!(fixtures.len() >= 13, "Flex fixtures went missing");
     let mut scripts_run = 0;
     for (fixture, scripts) in fixtures {
         // A positive case alone proves nothing about the model.
@@ -673,7 +673,7 @@ fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
             scripts_run += 1;
         }
     }
-    assert!(scripts_run >= 29, "only {scripts_run} Flex scripts ran");
+    assert!(scripts_run >= 32, "only {scripts_run} Flex scripts ran");
 }
 
 fn thermostat() -> PathBuf {
@@ -1256,5 +1256,216 @@ fn analog_assertions_stay_exact_after_the_oscilloscope_capture_overflows() {
     let oldest = trace["analog"]["samples"][0]["time_ns"].as_u64().unwrap();
     // The newest 20,000 samples start after the heat arrived at 3,000 ns.
     assert_eq!(oldest, 10_005_000);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The NTC alarm firmware (`run`: write, 1000 ns, write, 1000 ns, return the
+/// sensor millivolts) with `steps` as its sequence, outside the fixture.
+fn ntc_sequence(dir: &Path, steps: &str, limits: &str) -> PathBuf {
+    let fixture = fixtures_root().join("flex-analog-ntc");
+    let text = format!(
+        "schema_version: \"1.0\"\ninputs:\n  flex: \"{}\"\n  firmware: \"{}\"\nsequence:\n{}limits: {limits}\nassertions:\n  - digital_edges: {{ port: hot_alarm_drive, times_ns: [1000] }}\n",
+        fixture.join("system.yaml").display(),
+        fixture.join("firmware.wasm").display(),
+        steps.replace(
+            "RUN",
+            "export: run, args: [{ port: temperature_c }, { port: temperature_mv }, { port: hot_alarm_drive }, { number: 50 }]"
+        ),
+    );
+    let path = dir.join("ntc.yaml");
+    std::fs::write(&path, text).expect("write script");
+    path
+}
+
+fn suspended(result: &Value) -> Vec<bool> {
+    result["steps"]
+        .as_array()
+        .expect("steps")
+        .iter()
+        .map(|step| step["suspended"] == true)
+        .collect()
+}
+
+const NTC_LIMITS: &str = "{ max_steps: 100000, max_time_ns: 10000 }";
+
+#[test]
+fn until_ns_suspends_a_call_for_the_test_bench_and_resume_continues_it() {
+    // The second `advance_ns(1000)` of `run` starts at 1000 ns. The call is
+    // suspended inside it at 1500 ns, again at 1800 ns, and returns at 2000 ns.
+    // The bench cools the sensor while the firmware is suspended: the firmware
+    // then returns the 0 degC reading, with the alarm it set at 50 degC.
+    let dir = unique_dir("until");
+    let script = ntc_sequence(
+        &dir,
+        "  - call: { RUN, until_ns: 1500 }\n  - set: { port: temperature_c, value: 0 }\n  - resume: { until_ns: 1800 }\n  - resume: { until_ns: 9000 }\n",
+        NTC_LIMITS,
+    );
+    let output = run(&script, &dir, &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = read_result(&dir);
+    assert_eq!(result["stop_reason"], "completed");
+    assert_eq!(
+        step_summary(&result),
+        [
+            (0, None, Some(1500)),
+            (1, None, Some(1500)),
+            (0, None, Some(1800)),
+            (1, Some(756), Some(2000)),
+        ]
+    );
+    assert_eq!(suspended(&result), [true, false, true, false]);
+    assert_eq!(result["entry_result"], 756);
+    assert_eq!(result["time_ns"], 2000);
+    let port = |name: &str| {
+        result["ports"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|port| port["name"] == name)
+            .unwrap()["value"]
+            .clone()
+    };
+    assert_eq!(port("temperature_mv"), 756.0);
+    assert_eq!(port("hot_alarm_state"), 1.0);
+    let _ = std::fs::remove_dir_all(dir);
+
+    // A run can end with the firmware suspended: the last step has no result.
+    let dir = unique_dir("until-end");
+    let script = ntc_sequence(&dir, "  - call: { RUN, until_ns: 1500 }\n", NTC_LIMITS);
+    assert_eq!(run(&script, &dir, &[]).status.code(), Some(0));
+    let result = read_result(&dir);
+    assert_eq!(result["stop_reason"], "completed");
+    assert_eq!(step_summary(&result), [(0, None, Some(1500))]);
+    assert_eq!(result["entry_result"], Value::Null);
+    let _ = std::fs::remove_dir_all(dir);
+
+    // A call that returns before its `until_ns` is an ordinary call.
+    let dir = unique_dir("until-returned");
+    let script = ntc_sequence(&dir, "  - call: { RUN, until_ns: 9000 }\n", NTC_LIMITS);
+    assert_eq!(run(&script, &dir, &[]).status.code(), Some(0));
+    let result = read_result(&dir);
+    assert_eq!(step_summary(&result), [(1, Some(2428), Some(2000))]);
+    assert_eq!(suspended(&result), [false]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn until_ns_and_resume_errors_are_explicit() {
+    for (steps, limits, code, stop_reason, message, summary) in [
+        // The firmware returned at 2000 ns; nothing is left to resume.
+        (
+            "  - call: { RUN, until_ns: 9000 }\n  - resume: { until_ns: 9500 }\n",
+            NTC_LIMITS,
+            3,
+            "sequence_error",
+            "sequence[1].resume has no suspended call: the firmware returned before 2000 ns",
+            vec![(1, Some(2428), Some(2000)), (0, None, Some(2000))],
+        ),
+        // The first call ends at 2000 ns.
+        (
+            "  - call: { RUN }\n  - call: { RUN, until_ns: 1500 }\n",
+            NTC_LIMITS,
+            3,
+            "sequence_error",
+            "sequence[1].call.until_ns (1500 ns) is not after the current time (2000 ns)",
+            vec![(1, Some(2428), Some(2000)), (0, None, Some(2000))],
+        ),
+        // A model error inside a call with `until_ns` stops the run; it is
+        // not a suspension.
+        (
+            "  - set: { port: temperature_c, value: 25 }\n  - call: { export: run, args: [{ port: temperature_c }, { port: temperature_mv }, { port: hot_alarm_drive }, { number: 100000 }], until_ns: 1500 }\n  - resume: { until_ns: 9000 }\n",
+            NTC_LIMITS,
+            3,
+            "model_error",
+            "out of range [-55, 300]",
+            vec![(1, None, Some(0)), (0, None, Some(0)), (0, None, None)],
+        ),
+        // The step budget still ends a call that never returns.
+        (
+            "  - call: { RUN, until_ns: 1500 }\n  - resume: { until_ns: 9000 }\n",
+            "{ max_steps: 3, max_time_ns: 10000 }",
+            1,
+            "max_steps",
+            "firmware used all limits.max_steps (3) WebAssembly fuel",
+            vec![(0, None, Some(0)), (0, None, None)],
+        ),
+    ] {
+        let dir = unique_dir("until-error");
+        let output = run(&ntc_sequence(&dir, steps, limits), &dir, &[]);
+        let result = read_result(&dir);
+        assert_eq!(output.status.code(), Some(code), "{steps}: {result}");
+        assert_eq!(result["stop_reason"], stop_reason, "{steps}");
+        assert!(
+            result["message"].as_str().unwrap().contains(message),
+            "{steps}: {}",
+            result["message"]
+        );
+        assert_eq!(step_summary(&result), summary, "{steps}");
+        assert!(suspended(&result).iter().all(|suspended| !suspended));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+fn pomodoro_c() -> PathBuf {
+    fixtures_root().join("flex-heypcb-pomodoro-c")
+}
+
+#[test]
+fn the_pinned_c_firmware_source_is_unchanged_and_its_main_never_returns() {
+    // The compiled source is byte for byte the file the source map pins.
+    let fixture = pomodoro_c();
+    let map = json(&fixture.join("source-map.json"));
+    for (key, file) in [
+        ("original_firmware_source", "firmware/pomodoro.c"),
+        ("original_firmware_config", "firmware/funconfig.h"),
+        ("original_firmware_license", "firmware/LICENSE"),
+    ] {
+        let pinned = &map["source"]["files"][key];
+        assert_eq!(pinned["path"], file);
+        assert_eq!(pinned["sha256"], sha256(&fixture.join(file)), "{file}");
+    }
+    assert_eq!(
+        map["firmware_wasm"]["sha256"],
+        sha256(&fixture.join("firmware.wasm"))
+    );
+
+    // `main` is an endless loop: with no `until_ns` only a limit ends it, and
+    // a limit cannot pass.
+    let text = std::fs::read_to_string(fixture.join("test-untouched-stays-idle.yaml"))
+        .expect("script")
+        .replace(
+            "  flex: system.yaml",
+            &format!("  flex: \"{}\"", fixture.join("system.yaml").display()),
+        )
+        .replace(
+            "  firmware: firmware.wasm",
+            &format!(
+                "  firmware: \"{}\"",
+                fixture.join("firmware.wasm").display()
+            ),
+        );
+    let from = "  - call: { export: __main_void, until_ns: 200000000 }\n  - resume: { until_ns: 250000000 }\n  - resume: { until_ns: 300000000 }\n";
+    assert!(text.contains(from), "script lost its main call");
+    let dir = unique_dir("pomodoro-c-endless");
+    let script = dir.join("endless.yaml");
+    std::fs::write(
+        &script,
+        text.replace(from, "  - call: { export: __main_void }\n"),
+    )
+    .expect("write script");
+    let output = run(&script, &dir, &[]);
+    assert_eq!(output.status.code(), Some(1));
+    let result = read_result(&dir);
+    assert_eq!(result["status"], "fail");
+    assert_eq!(result["stop_reason"], "max_time_ns");
+    // The idle loop starts at 149,606,000 ns and takes 5,000 ns for each
+    // pass: 30,078 whole passes end before the limit.
+    assert_eq!(result["time_ns"], 299_996_000u64);
     let _ = std::fs::remove_dir_all(dir);
 }

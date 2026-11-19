@@ -446,6 +446,12 @@ pub struct FlexEntry {
     pub args: Vec<FlexEntryArg>,
     #[serde(default = "default_flex_entry_repeat")]
     pub repeat: u32,
+    /// Virtual time at which the runner suspends this call. The call does not
+    /// need to return: this runs firmware whose `main` is an endless loop.
+    /// The firmware stays suspended inside the `advance_ns` that reaches this
+    /// time, at exactly this time, until a `resume` step.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until_ns: Option<u64>,
 }
 
 impl Default for FlexEntry {
@@ -454,6 +460,7 @@ impl Default for FlexEntry {
             export: default_flex_entry_export(),
             args: Vec::new(),
             repeat: default_flex_entry_repeat(),
+            until_ns: None,
         }
     }
 }
@@ -466,13 +473,28 @@ fn default_flex_entry_repeat() -> u32 {
     1
 }
 
-/// One step of a `sequence`: a firmware call, or a value the test bench
-/// writes to a write port before the next call (a changed environment).
+/// One step of a `sequence`: a firmware call, a value the test bench writes
+/// to a write port before the firmware runs again (a changed environment), or
+/// the continuation of a call that an `until_ns` suspended.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum FlexStep {
     Call(FlexCallStep),
     Set(FlexSetStep),
+    Resume(FlexResumeStep),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexResumeStep {
+    pub resume: FlexResumeDetails,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexResumeDetails {
+    /// Virtual time at which the runner suspends the call again.
+    pub until_ns: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -844,6 +866,7 @@ impl FlexTestScript {
             None => "entry".to_owned(),
             Some(FlexStep::Call(_)) => format!("sequence[{index}].call"),
             Some(FlexStep::Set(_)) => format!("sequence[{index}].set"),
+            Some(FlexStep::Resume(_)) => format!("sequence[{index}].resume"),
         }
     }
 
@@ -868,6 +891,8 @@ impl FlexTestScript {
             steps.iter().any(|step| matches!(step, FlexStep::Call(_))),
             "sequence must contain at least one call step"
         );
+        // The `until_ns` of the call that the steps so far leave suspended.
+        let mut suspended_at: Option<u64> = None;
         for (index, step) in steps.iter().enumerate() {
             let path = self.step_path(index);
             match step {
@@ -875,6 +900,21 @@ impl FlexTestScript {
                     let call = &step.call;
                     token(&call.export, &format!("{path}.export"))?;
                     ensure!(call.repeat > 0, "{path}.repeat must be > 0");
+                    ensure!(
+                        suspended_at.is_none(),
+                        "{path} follows a call that until_ns suspended; only set and resume steps can follow it"
+                    );
+                    if let Some(until_ns) = call.until_ns {
+                        ensure!(
+                            call.repeat == 1,
+                            "{path} names until_ns or repeat, not both"
+                        );
+                        ensure!(
+                            until_ns > 0 && until_ns <= self.limits.max_time_ns,
+                            "{path}.until_ns must be within 1..=limits.max_time_ns"
+                        );
+                        suspended_at = Some(until_ns);
+                    }
                     for (index, arg) in call.args.iter().enumerate() {
                         match arg {
                             FlexEntryArg::Port(arg) => {
@@ -890,6 +930,17 @@ impl FlexTestScript {
                 FlexStep::Set(step) => {
                     token(&step.set.port, &format!("{path}.port"))?;
                     ensure!(step.set.value.is_finite(), "{path}.value must be finite");
+                }
+                FlexStep::Resume(step) => {
+                    let until_ns = step.resume.until_ns;
+                    let Some(previous) = suspended_at else {
+                        bail!("{path} needs an earlier call step with until_ns");
+                    };
+                    ensure!(
+                        until_ns > previous && until_ns <= self.limits.max_time_ns,
+                        "{path}.until_ns must be after {previous} ns and at most limits.max_time_ns"
+                    );
+                    suspended_at = Some(until_ns);
                 }
             }
         }
@@ -907,8 +958,11 @@ impl FlexTestScript {
                             "assertions[{index}].entry_result.step needs a sequence"
                         );
                         ensure!(
-                            matches!(self.sequence.get(step), Some(FlexStep::Call(_))),
-                            "assertions[{index}].entry_result.step {step} is not a call step of the sequence"
+                            matches!(
+                                self.sequence.get(step),
+                                Some(FlexStep::Call(_) | FlexStep::Resume(_))
+                            ),
+                            "assertions[{index}].entry_result.step {step} is not a call or resume step of the sequence"
                         );
                     }
                 }
@@ -1357,17 +1411,48 @@ assertions:
             (
                 "entry_result: { equals: 2974 }",
                 "entry_result: { equals: 2974, step: 1 }",
-                "entry_result.step 1 is not a call step",
+                "entry_result.step 1 is not a call or resume step",
             ),
             (
                 "entry_result: { equals: 2974 }",
                 "entry_result: { equals: 2974, step: 3 }",
-                "entry_result.step 3 is not a call step",
+                "entry_result.step 3 is not a call or resume step",
             ),
             (
                 "  - call: { export: loop, repeat: 3 }\n",
                 "  - call: { export: loop, repeat: 3, until: 1 }\n",
                 "Failed to parse Flex Test Script",
+            ),
+            // A call that `until_ns` suspends, and its continuation.
+            (
+                "  - call: { export: loop, repeat: 3 }\n",
+                "  - call: { export: loop, until_ns: 1000 }\n  - set: { port: lux, value: 1 }\n  - resume: { until_ns: 2000 }\n",
+                "",
+            ),
+            (
+                "  - call: { export: loop, repeat: 3 }\n",
+                "  - call: { export: loop, repeat: 3, until_ns: 1000 }\n",
+                "sequence[2].call names until_ns or repeat, not both",
+            ),
+            (
+                "  - call: { export: loop, repeat: 3 }\n",
+                "  - call: { export: loop, until_ns: 5000001 }\n",
+                "sequence[2].call.until_ns must be within 1..=limits.max_time_ns",
+            ),
+            (
+                "  - call: { export: loop, repeat: 3 }\n",
+                "  - call: { export: loop, until_ns: 1000 }\n  - resume: { until_ns: 1000 }\n",
+                "sequence[3].resume.until_ns must be after 1000 ns",
+            ),
+            (
+                "  - call: { export: loop, repeat: 3 }\n",
+                "  - resume: { until_ns: 1000 }\n",
+                "sequence[2].resume needs an earlier call step with until_ns",
+            ),
+            (
+                "  - call: { export: loop, repeat: 3 }\n",
+                "  - call: { export: loop, until_ns: 1000 }\n  - call: { export: loop }\n",
+                "sequence[3].call follows a call that until_ns suspended",
             ),
         ];
         for (from, to, expected) in cases {

@@ -29,8 +29,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 use wasmi::{
-    Caller, Config, Engine, Func, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, TrapCode,
-    Val, ValType,
+    Caller, Config, Engine, Func, Linker, Module, ResumableCall, ResumableCallHostTrap, Store,
+    StoreLimits, StoreLimitsBuilder, TrapCode, Val, ValType,
 };
 
 /// Portable firmware holds state in a few pages; this only stops a runaway
@@ -51,7 +51,7 @@ enum FlexStopReason {
     /// The script, manifest, or firmware module was rejected before any
     /// firmware instruction ran.
     ConfigError,
-    /// The entry export returned.
+    /// Every step ran: each call returned or was suspended at its `until_ns`.
     Completed,
     /// The firmware call used all `limits.max_steps` WebAssembly fuel.
     MaxSteps,
@@ -59,6 +59,9 @@ enum FlexStopReason {
     MaxTimeNs,
     /// A port or model rejected a firmware host call.
     ModelError,
+    /// A step could not run in the state the earlier steps left: a `resume`
+    /// after the firmware returned, or an `until_ns` that is not in the future.
+    SequenceError,
     /// The firmware module trapped by itself.
     FirmwareTrap,
 }
@@ -78,8 +81,12 @@ struct FlexResultConfig {
 #[derive(Debug, Clone, Serialize)]
 struct FlexStepResult {
     step: FlexStep,
-    /// Calls that returned (of `repeat`), or 1 for an applied `set`.
+    /// Calls that returned (of `repeat`), or 1 for an applied `set`. A
+    /// `resume` counts the return of the call it continued.
     completed: u32,
+    /// The step ended at its `until_ns` with the firmware suspended in the call.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    suspended: bool,
     /// The last returned i32 result of a call step, read as unsigned.
     result: Option<u32>,
     /// Virtual time when the step ended or the run stopped inside it; `None`
@@ -143,7 +150,8 @@ struct FlexTestResult {
     /// WebAssembly fuel the firmware call consumed. Not CPU cycles: no target
     /// CPU is emulated on this path.
     steps_executed: u64,
-    /// Result of the last call step; `None` unless every step completed.
+    /// Result of the last call or resume step; `None` unless every step
+    /// completed and that step saw the firmware return.
     entry_result: Option<u32>,
     steps: Vec<FlexStepResult>,
     ports: Vec<FlexPortObservation>,
@@ -168,6 +176,13 @@ struct Host {
     runtime: FlexRuntime,
     max_time_ns: u64,
     stop: Option<(FlexStopReason, String)>,
+    /// The `until_ns` of the running step.
+    until_ns: Option<u64>,
+    /// Set by the `advance_ns` that reached `until_ns`; the host error it
+    /// returns then suspends the call and is not a stop.
+    suspended: bool,
+    /// What the suspended `advance_ns` still has to advance after `until_ns`.
+    pending_ns: u64,
     limits: StoreLimits,
 }
 
@@ -180,6 +195,39 @@ impl Host {
 
     fn model<T>(&mut self, result: labwired_core::SimResult<T>) -> Result<T, wasmi::Error> {
         result.map_err(|error| self.stop(FlexStopReason::ModelError, error.to_string()))
+    }
+
+    /// Advance to the step's `until_ns` if `delta` reaches it, and keep the
+    /// rest of `delta` for the `resume`. `Ok(false)`: `until_ns` is further.
+    fn advance_to_until(&mut self, delta: u64) -> Result<bool, wasmi::Error> {
+        let now = self.runtime.time_ns();
+        let Some(until) = self
+            .until_ns
+            .filter(|until| now.saturating_add(delta) >= *until)
+        else {
+            return Ok(false);
+        };
+        let result = self.runtime.advance_ns(until - now);
+        self.model(result)?;
+        self.pending_ns = delta - (until - now);
+        self.suspended = true;
+        Ok(true)
+    }
+}
+
+/// Settle a resumable call: `Ok(Some(trap))` is the firmware suspended at the
+/// step's `until_ns`, `Ok(None)` a call that returned.
+fn settle(
+    store: &mut Store<Host>,
+    call: Result<ResumableCall, wasmi::Error>,
+) -> Result<Option<ResumableCallHostTrap>, wasmi::Error> {
+    match call? {
+        ResumableCall::Finished => Ok(None),
+        ResumableCall::HostTrap(trap) if std::mem::take(&mut store.data_mut().suspended) => {
+            Ok(Some(trap))
+        }
+        ResumableCall::HostTrap(trap) => Err(trap.into_host_error()),
+        ResumableCall::OutOfFuel(_) => Err(wasmi::Error::from(TrapCode::OutOfFuel)),
     }
 }
 
@@ -308,10 +356,14 @@ enum Planned {
         inputs: Vec<Val>,
         returns: bool,
         repeat: u32,
+        until_ns: Option<u64>,
     },
     Set {
         port: u32,
         value: f64,
+    },
+    Resume {
+        until_ns: u64,
     },
 }
 
@@ -331,6 +383,9 @@ fn execute(
         runtime,
         max_time_ns: script.limits.max_time_ns,
         stop: None,
+        until_ns: None,
+        suspended: false,
+        pending_ns: 0,
         limits: StoreLimitsBuilder::new()
             .memory_size(MAX_FIRMWARE_MEMORY_BYTES)
             .build(),
@@ -375,6 +430,9 @@ fn execute(
                     let host = caller.data_mut();
                     // The portable ABI passes an unsigned 32-bit delta.
                     let delta = u64::from(delta as u32);
+                    if host.advance_to_until(delta)? {
+                        return Err(wasmi::Error::new("suspended at until_ns"));
+                    }
                     if host.runtime.time_ns().saturating_add(delta) > host.max_time_ns {
                         let message = format!(
                             "firmware advanced past limits.max_time_ns ({} ns) at {} ns",
@@ -405,10 +463,13 @@ fn execute(
         .map(|step| FlexStepResult {
             step: step.clone(),
             completed: 0,
+            suspended: false,
             result: None,
             time_ns: None,
         })
         .collect();
+    // The call an `until_ns` suspended, and whether it returns an i32.
+    let mut suspended: Option<(ResumableCallHostTrap, bool)> = None;
     let mut run = |store: &mut Store<Host>| -> Result<Result<(), wasmi::Error>, String> {
         let instance = match linker.instantiate_and_start(&mut *store, &module) {
             Ok(instance) => instance,
@@ -468,6 +529,7 @@ fn execute(
                         inputs,
                         returns,
                         repeat: step.call.repeat,
+                        until_ns: step.call.until_ns,
                     });
                 }
                 FlexStep::Set(step) => {
@@ -491,15 +553,100 @@ fn execute(
                         value: step.set.value,
                     });
                 }
+                FlexStep::Resume(step) => planned.push(Planned::Resume {
+                    until_ns: step.resume.until_ns,
+                }),
             }
         }
-        for (planned, result) in planned.iter().zip(results.iter_mut()) {
+        for (index, (planned, result)) in planned.iter().zip(results.iter_mut()).enumerate() {
             let outcome = match planned {
                 Planned::Call {
                     func,
                     inputs,
                     returns,
+                    until_ns: Some(until_ns),
+                    ..
+                } => {
+                    let now = store.data().runtime.time_ns();
+                    if *until_ns <= now {
+                        let message = format!(
+                            "{}.until_ns ({until_ns} ns) is not after the current time ({now} ns)",
+                            script.step_path(index)
+                        );
+                        Err(store
+                            .data_mut()
+                            .stop(FlexStopReason::SequenceError, message))
+                    } else {
+                        let mut outputs = vec![Val::I32(0); usize::from(*returns)];
+                        store.data_mut().until_ns = Some(*until_ns);
+                        let call = func.call_resumable(&mut *store, inputs, &mut outputs);
+                        let settled = settle(&mut *store, call);
+                        store.data_mut().until_ns = None;
+                        settled.map(|trap| match trap {
+                            Some(trap) => {
+                                suspended = Some((trap, *returns));
+                                result.suspended = true;
+                            }
+                            None => {
+                                result.completed = 1;
+                                if let Some(Val::I32(value)) = outputs.first() {
+                                    result.result = Some(*value as u32);
+                                }
+                            }
+                        })
+                    }
+                }
+                Planned::Resume { until_ns } => match suspended.take() {
+                    None => {
+                        let message = format!(
+                            "{} has no suspended call: the firmware returned before {} ns",
+                            script.step_path(index),
+                            store.data().runtime.time_ns()
+                        );
+                        Err(store
+                            .data_mut()
+                            .stop(FlexStopReason::SequenceError, message))
+                    }
+                    Some((trap, returns)) => {
+                        let host = store.data_mut();
+                        host.until_ns = Some(*until_ns);
+                        // First the rest of the `advance_ns` the call is suspended in.
+                        let pending = std::mem::take(&mut host.pending_ns);
+                        let settled = match host.advance_to_until(pending) {
+                            Err(error) => Err(error),
+                            Ok(true) => {
+                                host.suspended = false;
+                                Ok(Some(trap))
+                            }
+                            Ok(false) => {
+                                let advanced = host.runtime.advance_ns(pending);
+                                host.model(advanced).and_then(|()| {
+                                    let mut outputs = vec![Val::I32(0); usize::from(returns)];
+                                    let call = trap.resume(&mut *store, &[], &mut outputs);
+                                    settle(&mut *store, call).inspect(|trap| {
+                                        if trap.is_none() {
+                                            result.completed = 1;
+                                            if let Some(Val::I32(value)) = outputs.first() {
+                                                result.result = Some(*value as u32);
+                                            }
+                                        }
+                                    })
+                                })
+                            }
+                        };
+                        store.data_mut().until_ns = None;
+                        settled.map(|trap| {
+                            result.suspended = trap.is_some();
+                            suspended = trap.map(|trap| (trap, returns));
+                        })
+                    }
+                },
+                Planned::Call {
+                    func,
+                    inputs,
+                    returns,
                     repeat,
+                    until_ns: None,
                 } => (0..*repeat).try_for_each(|_| {
                     let mut outputs = if *returns {
                         vec![Val::I32(0)]
@@ -537,7 +684,7 @@ fn execute(
             results
                 .iter()
                 .rev()
-                .find(|result| matches!(result.step, FlexStep::Call(_)))
+                .find(|result| !matches!(result.step, FlexStep::Set(_)))
                 .and_then(|result| result.result),
         ),
         Err(error) => match host.stop {
@@ -668,6 +815,7 @@ fn evaluate(
                 // A call step that did not return every repeat has no result.
                 Some(index) => run.steps.get(index).and_then(|step| match &step.step {
                     FlexStep::Call(call) if step.completed == call.call.repeat => step.result,
+                    FlexStep::Resume(_) => step.result,
                     _ => None,
                 }),
             };
@@ -1217,7 +1365,9 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
 
     let exit = match result.stop_reason {
         FlexStopReason::ConfigError => EXIT_CONFIG_ERROR,
-        FlexStopReason::ModelError | FlexStopReason::FirmwareTrap => EXIT_RUNTIME_ERROR,
+        FlexStopReason::ModelError
+        | FlexStopReason::SequenceError
+        | FlexStopReason::FirmwareTrap => EXIT_RUNTIME_ERROR,
         // A limit stop cannot certify a pass, whatever the assertions say.
         FlexStopReason::MaxSteps | FlexStopReason::MaxTimeNs => EXIT_ASSERT_FAIL,
         FlexStopReason::Completed if result.assertions.iter().all(|a| a.passed) => EXIT_PASS,
@@ -1245,6 +1395,17 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
             continue;
         };
         match &step.step {
+            FlexStep::Call(call) if step.suspended => println!(
+                "  step {index}: {}() suspended at {time_ns} ns",
+                call.call.export
+            ),
+            FlexStep::Resume(_) if step.suspended => {
+                println!("  step {index}: resumed, suspended again at {time_ns} ns")
+            }
+            FlexStep::Resume(_) => println!(
+                "  step {index}: resumed, returned {:?} at {time_ns} ns",
+                step.result
+            ),
             FlexStep::Call(call) => println!(
                 "  step {index}: {}() returned {:?} after {}/{} calls at {time_ns} ns",
                 call.call.export, step.result, step.completed, call.call.repeat
