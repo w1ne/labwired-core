@@ -212,7 +212,13 @@ impl Avr {
     fn avrxt_io_write(&mut self, addr: u16, value: u8, bus: &mut dyn Bus) -> SimResult<()> {
         let mirror = AVR_IO_MIRROR_BASE + u64::from(addr);
         if bus.has_mmio_window(mirror) {
-            bus.write_u8(mirror, value)
+            bus.write_u8(mirror, value)?;
+            // PORTx.DIR* / OUT* (0x0400 + 0x20 * port, offsets 0..=7) move
+            // pads: SPI devices see their chip-select edge at this write.
+            if (0x0400..0x04C0).contains(&addr) && addr & 0x18 == 0 {
+                bus.sync_parking_spi_cs();
+            }
+            Ok(())
         } else if self.model.avrxt_strict_io() && !Self::avrxt_gpior(addr) {
             Err(SimulationError::MemoryViolation(u64::from(addr)))
         } else {
