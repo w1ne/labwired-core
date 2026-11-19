@@ -1,0 +1,188 @@
+name: "playground-board"
+chip: "inline"
+cpu_hz: 160_000_000
+debug_uart: "usb_serial_jtag"
+external_devices:
+  - id: "pca_a"
+    type: "pca9685"
+    connection: "i2c0"
+    route:
+      sda: "GPIO8"
+      scl: "GPIO9"
+    config:
+      i2c_address: 0x40
+  - id: "pca_b"
+    type: "pca9685"
+    connection: "i2c0"
+    route:
+      sda: "GPIO8"
+      scl: "GPIO9"
+    config:
+      i2c_address: 0x41
+  - id: "servo0"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 0
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo1"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 1
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo2"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 2
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo3"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 3
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo4"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 4
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo5"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 5
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo6"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 6
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo7"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 7
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo8"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 8
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo9"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 9
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo10"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 10
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo11"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 11
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo12"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 12
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo13"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 13
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo14"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 14
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo15"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 64
+      source_channel: 15
+      source_oe_pin: "GPIO3"
+      model: "sg90"
+  - id: "servo16"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 65
+      source_channel: 0
+      source_oe_pin: "GPIO4"
+      model: "sg90"
+  - id: "servo17"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 65
+      source_channel: 1
+      source_oe_pin: "GPIO4"
+      model: "sg90"
+  - id: "servo18"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 65
+      source_channel: 2
+      source_oe_pin: "GPIO4"
+      model: "sg90"
+  - id: "servo19"
+    type: "servo"
+    connection: "i2c0"
+    config:
+      source_address: 65
+      source_channel: 3
+      source_oe_pin: "GPIO4"
+      model: "sg90"
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 8
+    signal: "output"
+    active_high: true
