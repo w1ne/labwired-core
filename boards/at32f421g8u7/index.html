@@ -4922,6 +4922,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#native-dshot-protocol-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native DShot protocol check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sources" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4940,6 +4951,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Related files">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#output-compare-events-above-the-period" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output-compare events above the period
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -5121,12 +5149,12 @@
 <tr>
 <td>DMA1</td>
 <td><code>dma</code> profile <code>at32f421</code>: five channels, IRQ groups 9/10/11, Artery memory-to-memory direction</td>
-<td>Fixed request map of RM §9.3.7 Table 9-3 (default remap) for ADC, USART1_TX, USART2_TX only</td>
+<td>Fixed request map of RM §9.3.7 Table 9-3 (default remap) for ADC, USART1/2 TX/RX and TMR1/3/6/15/16/17; dynamic SCFG DMA remaps are not implemented</td>
 </tr>
 <tr>
 <td>Timers</td>
 <td>Shared timer with <code>input_capture</code>/<code>pad_map: at32f421</code>; TMR1 channel flags on their own vector (IRQ14)</td>
-<td>No complementary-output, dead-time or timer-DMA model in this target yet</td>
+<td>Shared advanced-timer complementary outputs/dead-time and source-gated update/channel/trigger/commutation DMA requests; no AT32 silicon differential capture</td>
 </tr>
 <tr>
 <td>ADC1</td>
@@ -5152,10 +5180,35 @@
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--features<span class="w"> </span>event-scheduler<span class="w"> </span>--test<span class="w"> </span>vendor<span class="w"> </span>--<span class="w"> </span>at32f421_contract::
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>cargo<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span>labwired-cli<span class="w"> </span>--<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--script<span class="w"> </span>examples/at32f421g8u7/io-smoke.yaml
 </span></code></pre></div>
+<h2 id="native-dshot-protocol-check">Native DShot protocol check</h2>
+<p>The ignored <code>at32_am32_protocol</code> test loads the complete AM32 flash ELF through
+the ordinary loader. It executes the real PB4 bootloader, application and bench
+settings. It drives PB4 with conventional DShot600 edges; it does not write
+firmware RAM or force arming. The test checks protocol acquisition, repeated
+accepted zero commands, rejected bad checksum and accepted command 100 while
+still unarmed. It does not establish bidirectional telemetry, six-gate motor
+commutation or a complete flight-controller/ESC system.</p>
+<p>The application ELF is pinned to
+<code>2dc65fec5924f31548cc3041690b9b5a1645466832a09e46d012c33b14f8452d</code>
+and the complete flash ELF to
+<code>c6ae7b29e1fe35dd56070435aa271b18ec9cba77ec5329f092b3296776664e2a</code>.
+The corresponding source, reproducible build and images are in the LabWired
+examples quadrotor package's <code>firmware/native-esc</code> directory.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">AT32_NATIVE_ARTIFACTS</span><span class="o">=</span>/absolute/package/firmware/native-esc/artifacts<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nv">AT32_NATIVE_PROTOCOL_REPORT</span><span class="o">=</span>/absolute/output/native-protocol.json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--locked<span class="w"> </span>-p<span class="w"> </span>labwired-core<span class="w"> </span>--features<span class="w"> </span>event-scheduler<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--test<span class="w"> </span>vendor<span class="w"> </span>at32_am32_protocol::<span class="w"> </span>--<span class="w"> </span>--ignored<span class="w"> </span>--nocapture
+</span></code></pre></div>
+<p>Timer DMA requests use the existing bus DMA routing and scheduler. Each request
+is a pulse independent of a sticky interrupt flag. <code>IDEN</code> gates the source;
+<code>CTRL2.DRS</code> selects capture/compare versus overflow for channel requests;
+<code>CTRL1.OVFEN</code>/<code>OVFS</code> control update generation. The native request-map and shared
+timer tests include repeated requests, disabled sources, wrong channels,
+filtered capture, DMA-only deadlines and software update restrictions.</p>
 <h2 id="sources">Sources</h2>
 <ul>
 <li><a href="https://www.arterychip.com/download/DS/DS_AT32F421_V2.03_EN.pdf">AT32F421 datasheet Ver 2.03</a>: supply/reset thresholds (Tables 13, 35), GPIO thresholds (Table 32), VDDA range (Table 39).</li>
-<li>RM_AT32F421 V2.05 (2025-05-14): CRM (§4.3), DMA request mapping (§9.3.7).</li>
+<li><a href="https://www.arterychip.com/download/RM/RM_AT32F421_V2.05_EN.pdf">RM_AT32F421 V2.05</a> (2025-05-14): CRM (§4.3), DMA request mapping (§9.3.7 Table 9-3), timer CTRL1/CTRL2/IDEN (§14).</li>
 <li><a href="https://github.com/ArteryTek/AT32F421_Firmware_Library/tree/2fd0bfbc812d7e4984203039cba838345d3058f1">Artery firmware library at 2fd0bfbc</a>: CMSIS <code>at32f421.h</code> memory map and IRQ numbers; driver headers for register layouts.</li>
 </ul>
 <h2 id="related-files">Related files</h2>
@@ -5164,6 +5217,20 @@
 <li><a href="../../configs/systems/at32f421g8u7.yaml">Bare-chip system</a></li>
 <li><a href="../../examples/at32f421g8u7/io-smoke.yaml">Smoke script</a></li>
 </ul>
+<h3 id="output-compare-events-above-the-period">Output-compare events above the period</h3>
+<p>The native AM32 F421 telemetry path uses TMR3 PWM with PR=76 and C1DT
+values 0 or 128. A value above the period still produces the channel compare
+flag/DMA event at natural overflow in the shared STM32-compatible timer
+model. Software update and input-capture mode do not synthesize that event.
+The primary STM32 rule is RM0386, general-purpose TIMx_SR, CC1IF:
+https://www.st.com/resource/en/reference_manual/rm0386-stm32f469xx-and-stm32f479xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf .</p>
+<p>AT32F421 RM v2.05 defines the corresponding TMR3 capture/compare DMA
+selection but does not explicitly state the above-period corner case in
+its English C1IF description. The AT32 compatibility behavior is therefore
+cross-checked against the unchanged native AM32 source and executable
+telemetry path; it is not a physical AT32 timing measurement. The existing
+counter model remains upcounting only. Down/center-aligned event timing is
+not newly qualified by this change.</p>
 
 
 
