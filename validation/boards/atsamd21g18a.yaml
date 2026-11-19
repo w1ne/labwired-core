@@ -36,4 +36,6 @@ models:
   - configs/peripherals/atsamd21g18a/wdt.yaml
   - configs/peripherals/atsamd21g18a/nvmctrl.yaml
   - configs/peripherals/atsamd21g18a/dac.yaml
-  - configs/peripherals/atsamd21g18a/usb.yaml
+  # 2026-11-19: the USB device model and its scripted host (Nano 33 IoT).
+  - crates/core/src/peripherals/sam/usb21.rs
+  - crates/core/src/peripherals/usb_host.rs
