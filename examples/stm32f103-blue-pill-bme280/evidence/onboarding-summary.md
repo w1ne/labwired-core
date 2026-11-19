@@ -1,8 +1,8 @@
 # Onboarding Smoke: stm32f103-blue-pill-bme280
 
 - status: `pass`
-- elapsed_seconds: `4`
-- elapsed_ms: `3442`
+- elapsed_seconds: `2`
+- elapsed_ms: `1650`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

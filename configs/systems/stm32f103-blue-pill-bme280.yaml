@@ -1,7 +1,9 @@
 # STM32F103C8T6 Blue Pill with a BME280 breakout on I2C1's default PB6/PB7 pins.
-# This narrow profile declares only the UART1 console, PC13 user LED and I2C1.
+# Same chip model and reset-HSI clock as stm32f103-blue-pill.yaml; the only
+# addition is the sensor on I2C1.
 name: "stm32f103-blue-pill-bme280"
-chip: "../chips/stm32f103c8-bluepill-bme280-smoke.yaml"
+chip: "../chips/stm32f103.yaml"
+cpu_hz: 8_000_000
 debug_uart: "uart1"
 external_devices:
   - id: "bme280"

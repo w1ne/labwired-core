@@ -71,7 +71,8 @@ pulses the active-low PC13 LED for 20 cycles. The simulator evidence is under
 
 ## Modeled scope
 
-The narrow chip profile declares SysTick, RCC, GPIOA/B/C, USART1, and I2C1. The
+The system uses the full `stm32f103c8` chip model (`configs/chips/stm32f103.yaml`)
+at the reset HSI clock, the same as the plain Blue Pill profile. The
 system attaches a real BME280 model at `0x77`. The smoke verifies the I2C chip-ID
 transaction, USART1 output, and PC13 edges. It does not simulate the board's USB
 device/bootloader, USB-to-serial conversion, SWD hardware, analog behavior, or

@@ -6,23 +6,23 @@
   "script": "examples/stm32f103-blue-pill-bme280/io-smoke.yaml",
   "system": "configs/systems/stm32f103-blue-pill-bme280.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T01:07:28Z",
-  "finished_at_utc": "2026-11-19T01:07:32Z",
-  "elapsed_seconds": 4,
-  "elapsed_ms": 3442,
+  "started_at_utc": "2026-11-19T15:12:17Z",
+  "finished_at_utc": "2026-11-19T15:12:19Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1650,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.915,
-    "build_firmware": 1.109,
-    "run_smoke": 1.331
+    "build_cli": 0.441,
+    "build_firmware": 0.401,
+    "run_smoke": 0.749
   },
   "stages_ms": {
-    "build_cli": 915,
-    "build_firmware": 1109,
-    "run_smoke": 1331
+    "build_cli": 441,
+    "build_firmware": 401,
+    "run_smoke": 749
   }
 }

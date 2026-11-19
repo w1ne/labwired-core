@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.004261">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.006195">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="24413570575b6f07bee7c5bf92646c99e4a67aa78293ba7ce5e60354cd768245"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.004261">
+  <testcase classname="labwired" name="run" time="0.006195">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: BLUEPILL_F103C8_BME280_OK ID=0x60 I2C1=PB6/PB7" time="0.000000">
   </testcase>
