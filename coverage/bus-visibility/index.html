@@ -4963,6 +4963,8 @@
 <li>UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode</li>
 <li><strong>esp32</strong></li>
 <li>SPI: Esp32Spi does not implement line_names()/wire_lines(); pad bindings exist but the wire channel is unpublished on this model</li>
+<li><strong>esp32c2</strong></li>
+<li>UART: no UART bring-up for the ESP32-C2 family in this harness yet; UART0 bytes are proven by esp32c2_compiled_firmware</li>
 <li><strong>esp32c5</strong></li>
 <li>UART: esp32c5_uart is a TX FIFO/console model with no PadLines wire cell; bytes are proven by the esp32c5-devkitc-1-n8r8 board smoke</li>
 <li><strong>esp32c61</strong></li>
@@ -5307,6 +5309,12 @@
 <td>—</td>
 <td>—</td>
 <td>✓</td>
+</tr>
+<tr>
+<td>esp32c2</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
 </tr>
 <tr>
 <td>esp32c3</td>

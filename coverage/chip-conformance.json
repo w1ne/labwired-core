@@ -1,17 +1,17 @@
 [
   {
-    "behavior": false,
-    "excluded": 0,
-    "level": 0,
-    "name": "esp32c2",
-    "reg_match": 0
-  },
-  {
     "behavior": true,
     "excluded": 190,
     "level": 2,
     "name": "esp32c3",
     "reg_match": 380
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "esp32c2",
+    "reg_match": 0
   },
   {
     "behavior": true,
