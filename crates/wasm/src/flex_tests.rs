@@ -25,6 +25,10 @@ const HEYPCB_LDR_SYSTEM_BYTES: &[u8] =
     include_bytes!("../tests/fixtures/flex-heypcb-esp32-ldr/system.yaml");
 const HEYPCB_LDR_SOURCE_MAP_BYTES: &[u8] =
     include_bytes!("../tests/fixtures/flex-heypcb-esp32-ldr/source-map.json");
+const LDR_NETWORK_SYSTEM: &str =
+    include_str!("../tests/fixtures/flex-heypcb-ldr-network/system.yaml");
+const LDR_NETWORK_SOURCE_MAP: &str =
+    include_str!("../tests/fixtures/flex-heypcb-ldr-network/source-map.json");
 const LIPO_SYSTEM: &str = include_str!("../tests/fixtures/flex-analog-multi-input/system.yaml");
 const LIPO_BROWSER: &str = include_str!("../tests/fixtures/flex-analog-multi-input/browser.json");
 const LIPO_NATIVE: &str = include_str!("../tests/fixtures/flex-analog-multi-input/native.json");
@@ -603,6 +607,78 @@ fn heypcb_ldr_analog_evidence(runtime: &FlexRuntime) -> serde_json::Value {
             "values": sample.values,
         })).collect::<Vec<_>>(),
     })
+}
+
+/// Same host calls as flex-heypcb-ldr-network/firmware.rs.
+fn ldr_network_reference(yaml: &str, lux: f64) -> serde_json::Value {
+    let mut runtime = FlexRuntime::from_yaml(yaml).expect("LDR sensor-network manifest");
+    let lux_port = runtime.port_id("lux").unwrap();
+    let sensor_port = runtime.port_id("sensor_v").unwrap();
+    let led_drive = runtime.port_id("user_led_drive").unwrap();
+    let led_state = runtime.port_id("user_led_state").unwrap();
+    let initial_v = runtime.read(sensor_port).unwrap();
+
+    runtime.write(lux_port, lux).unwrap();
+    runtime.advance_ns(4_000_000).unwrap();
+    let sensor_v = runtime.read(sensor_port).unwrap();
+    let adc_code = (sensor_v * 4095.0 / 3.3) as u32;
+    let expected_led = adc_code >= 2048;
+    runtime
+        .write(led_drive, if expected_led { 1.0 } else { 0.0 })
+        .unwrap();
+    runtime.advance_ns(1_000).unwrap();
+    let asserted = runtime.read(led_state).unwrap() == f64::from(u8::from(expected_led));
+    let cleared = if expected_led {
+        runtime.write(led_drive, 0.0).unwrap();
+        runtime.advance_ns(1_000).unwrap();
+        runtime.read(led_state).unwrap() == 0.0
+    } else {
+        asserted
+    };
+
+    let analog = runtime.analog_trace_snapshot(0);
+    let digital = runtime.digital_trace_snapshot(0);
+    assert_eq!(analog.time_unit, "ns");
+    assert_eq!(analog.channels.len(), 1);
+    assert_eq!(analog.channels[0].name, "source-sns-an1.voltage");
+    assert_eq!(analog.channels[0].unit, "V");
+    assert_eq!(analog.channels[0].port_names, ["sensor_v"]);
+    assert_eq!(digital.time_unit, "ns");
+    serde_json::json!({
+        "result": if asserted && cleared { adc_code } else { u32::MAX },
+        "lux": lux,
+        "initial_v": initial_v,
+        "sensor_v": sensor_v,
+        "adc_code": adc_code,
+        "led_final": runtime.read(led_state).unwrap(),
+        "time_ns": runtime.time_ns(),
+        "analog": {
+            "time_unit": analog.time_unit,
+            "channels": analog.channels,
+            "dropped": analog.dropped,
+            "samples": analog.samples.into_iter().map(|sample| serde_json::json!({
+                "cycle": sample.cycle,
+                "time_ns": sample.time_ns,
+                "values": sample.values,
+            })).collect::<Vec<_>>(),
+        },
+        "digital": {
+            "time_unit": digital.time_unit,
+            "channels": digital.channels,
+            "dropped": digital.dropped,
+            "edges": digital.edges.into_iter().map(|edge| serde_json::json!({
+                "ch": edge.ch,
+                "time_ns": edge.time_ns,
+                "value": edge.value,
+            })).collect::<Vec<_>>(),
+        },
+    })
+}
+
+/// Settled SNS_AN1 volts for the pinned divider: U4 above R6 = 10 kΩ on 3.3 V.
+fn ldr_network_divider_v(r10_ohms: f64, lux: f64) -> f64 {
+    let r_u4 = r10_ohms * (lux / 10.0_f64).powf(-0.6);
+    3.3 * 10_000.0 / (r_u4 + 10_000.0)
 }
 
 fn lipo_analog_reference(soc_pct: f64, usb_present: f64) -> serde_json::Value {
@@ -1454,6 +1530,203 @@ fn flex_heypcb_ldr_portable_behavior_has_native_reference_and_dark_negative_cont
         measured, expected,
         "source-mapped LDR model observations changed"
     );
+}
+
+#[test]
+fn flex_heypcb_ldr_network_netlist_matches_the_pinned_source_nets() {
+    let source_map: serde_json::Value = serde_json::from_str(LDR_NETWORK_SOURCE_MAP).unwrap();
+    let slice_map: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+    for key in ["repository", "revision", "asset", "license_spdx"] {
+        assert_eq!(source_map["source"][key], slice_map["source"][key], "{key}");
+    }
+    for file in ["schematic", "pcb", "board_json", "board_readme", "license"] {
+        assert_eq!(
+            source_map["source"]["files"][file], slice_map["source"]["files"][file],
+            "{file} blob must match the existing pinned LDR source map"
+        );
+    }
+
+    let yaml: serde_yaml::Value = serde_yaml::from_str(LDR_NETWORK_SYSTEM).unwrap();
+    let sensor = &yaml["cosim_models"][0];
+    assert_eq!(sensor["adapter"], "analog");
+    let netlist: Vec<Vec<String>> = sensor["config"]["netlist_text"]
+        .as_str()
+        .unwrap()
+        .lines()
+        .map(|line| line.split_whitespace().map(str::to_lowercase).collect())
+        .collect();
+    let node = |net: &str| match net {
+        "GND" => "0".to_owned(),
+        other => other.to_lowercase(),
+    };
+    let elements = source_map["sensor_network"]["elements"].as_array().unwrap();
+    assert_eq!(netlist.len(), elements.len());
+    for element in elements {
+        let name = element["netlist"].as_str().unwrap().to_lowercase();
+        let line = netlist
+            .iter()
+            .find(|line| line[0] == name)
+            .unwrap_or_else(|| panic!("netlist has no {name}"));
+        let nets: Vec<String> = match element.get("pads") {
+            Some(pads) => ["1", "2"]
+                .iter()
+                .map(|pad| node(pads[*pad].as_str().unwrap()))
+                .collect(),
+            None => element["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|net| node(net.as_str().unwrap()))
+                .collect(),
+        };
+        assert_eq!(line[1..3], nets[..], "{name} terminals");
+    }
+    assert_eq!(
+        sensor["config"]["photoresistors"]["lux"],
+        serde_yaml::to_value(&source_map["photoresistor_data"]["model_parameters"])
+            .map(|mut value| {
+                value["resistor"] = "RU4".into();
+                value
+            })
+            .unwrap()
+    );
+    let row = &source_map["photoresistor_data"]["gl5528_row"];
+    assert_eq!(row["gamma_100_10"], 0.6);
+    assert_eq!(
+        row["light_resistance_10lx_kohm"],
+        serde_json::json!([10, 20])
+    );
+    assert_eq!(sensor["outputs"]["voltage"], "source.U3.GPIO1");
+}
+
+#[test]
+fn flex_heypcb_ldr_network_solves_divider_and_c7_transient_with_dim_negative_control() {
+    let bright = ldr_network_reference(LDR_NETWORK_SYSTEM, 100.0);
+    let dim = ldr_network_reference(LDR_NETWORK_SYSTEM, 1.0);
+
+    // Operating point at the 10 lx reference: 3.3 V * 10k / (15k + 10k).
+    assert!((bright["initial_v"].as_f64().unwrap() - 1.32).abs() < 1e-6);
+    let bright_v = bright["sensor_v"].as_f64().unwrap();
+    let dim_v = dim["sensor_v"].as_f64().unwrap();
+    assert!(
+        (bright_v - ldr_network_divider_v(15_000.0, 100.0)).abs() < 1e-3,
+        "{bright_v}"
+    );
+    // 4 ms is about 4.7 time constants at 1 lx; under 1% of the step remains.
+    assert!(
+        (dim_v - ldr_network_divider_v(15_000.0, 1.0)).abs() < 0.01,
+        "{dim_v}"
+    );
+    assert_eq!(bright["result"], bright["adc_code"]);
+    assert!(bright["adc_code"].as_u64().unwrap() >= 2048);
+    assert_eq!(bright["digital"]["edges"].as_array().unwrap().len(), 4);
+    assert_eq!(bright["time_ns"], 4_002_000);
+    assert_eq!(dim["result"], dim["adc_code"]);
+    assert!(dim["adc_code"].as_u64().unwrap() < 2048);
+    assert!(dim["digital"]["edges"].as_array().unwrap().is_empty());
+    assert_eq!(dim["time_ns"], 4_001_000);
+
+    // C7 charges through R6 ∥ U4. At 100 lx that is 100 nF * 2.737 kΩ =
+    // 274 µs; lux written at t=0 is latched at the first 50 µs boundary.
+    let samples = bright["analog"]["samples"].as_array().unwrap();
+    assert_eq!(samples.len(), 81);
+    assert_eq!(bright["analog"]["dropped"], 0);
+    let threshold = 1.32 + 0.632 * (ldr_network_divider_v(15_000.0, 100.0) - 1.32);
+    let crossing = samples
+        .iter()
+        .find(|sample| sample["values"][0].as_f64().unwrap() >= threshold)
+        .map(|sample| sample["time_ns"].as_u64().unwrap())
+        .unwrap();
+    assert!(
+        (300_000..=400_000).contains(&crossing),
+        "63.2% crossing at {crossing} ns"
+    );
+    let volts: Vec<f64> = samples
+        .iter()
+        .map(|sample| sample["values"][0].as_f64().unwrap())
+        .collect();
+    assert!(volts.windows(2).all(|pair| pair[0] <= pair[1] + 1e-6));
+
+    let measured = serde_json::json!({ "bright": bright, "dim": dim });
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/flex-heypcb-ldr-network/native.json");
+    if std::env::var_os("LABWIRED_REGEN_FLEX_LDR_NETWORK").is_some() {
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&measured).unwrap() + "\n",
+        )
+        .unwrap();
+    }
+    // Compared as text: the volts are not integers, and a parse round trip
+    // may move the last bit.
+    assert_eq!(
+        serde_json::to_string_pretty(&measured).unwrap() + "\n",
+        std::fs::read_to_string(path).unwrap(),
+        "LDR sensor-network observations changed"
+    );
+}
+
+#[test]
+fn flex_heypcb_ldr_network_led_decision_holds_at_both_light_resistance_corners() {
+    for (netlist_value, r10_ohms) in [("10k", 10_000.0), ("20k", 20_000.0)] {
+        let yaml = LDR_NETWORK_SYSTEM
+            .replace(
+                "RU4 3v3 sns_an1 15k",
+                &format!("RU4 3v3 sns_an1 {netlist_value}"),
+            )
+            .replace("r_ref_ohms: 15000", &format!("r_ref_ohms: {r10_ohms}"));
+        assert_ne!(yaml, LDR_NETWORK_SYSTEM);
+        let bright = ldr_network_reference(&yaml, 100.0);
+        let dim = ldr_network_reference(&yaml, 1.0);
+        assert!(
+            (bright["sensor_v"].as_f64().unwrap() - ldr_network_divider_v(r10_ohms, 100.0)).abs()
+                < 1e-3
+        );
+        assert!(
+            (dim["sensor_v"].as_f64().unwrap() - ldr_network_divider_v(r10_ohms, 1.0)).abs() < 0.02
+        );
+        assert!(
+            bright["adc_code"].as_u64().unwrap() >= 2048,
+            "{netlist_value}"
+        );
+        assert_eq!(bright["digital"]["edges"].as_array().unwrap().len(), 4);
+        assert!(dim["adc_code"].as_u64().unwrap() < 2048, "{netlist_value}");
+        assert!(dim["digital"]["edges"].as_array().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn flex_heypcb_ldr_network_refuses_illuminance_outside_the_data_sheet_range() {
+    for lux in [0.0, 0.5, 100_000.0] {
+        let mut runtime = FlexRuntime::from_yaml(LDR_NETWORK_SYSTEM).unwrap();
+        let lux_port = runtime.port_id("lux").unwrap();
+        let sensor_port = runtime.port_id("sensor_v").unwrap();
+        let before = runtime.read(sensor_port).unwrap();
+        let error = match runtime.write(lux_port, lux) {
+            Err(error) => error,
+            Ok(()) => runtime.advance_ns(50_000).unwrap_err(),
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("photoresistor illuminance must be within 1..100 lx"),
+            "{lux} lx: {error}"
+        );
+        // No invented reading: the stopped run answers neither a read nor a
+        // further advance, and simulated time has not moved.
+        assert!((before - 1.32).abs() < 1e-6);
+        assert!(runtime
+            .read(sensor_port)
+            .unwrap_err()
+            .to_string()
+            .contains("Flex runtime stopped"));
+        assert!(runtime
+            .advance_ns(50_000)
+            .unwrap_err()
+            .to_string()
+            .contains("Flex runtime stopped"));
+        assert_eq!(runtime.time_ns(), 0);
+    }
 }
 
 #[test]

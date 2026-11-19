@@ -8,6 +8,9 @@
       "channels": [
         {
           "name": "tmp36-sensor.voltage_mv",
+          "port_names": [
+            "temperature_mv"
+          ],
           "unit": "mV"
         }
       ],
@@ -40,6 +43,9 @@
       "channels": [
         {
           "name": "tmp36-sensor.voltage_mv",
+          "port_names": [
+            "temperature_mv"
+          ],
           "unit": "mV"
         }
       ],
@@ -72,6 +78,9 @@
       "channels": [
         {
           "name": "tmp36-sensor.voltage_mv",
+          "port_names": [
+            "temperature_mv"
+          ],
           "unit": "mV"
         }
       ],
@@ -104,6 +113,9 @@
       "channels": [
         {
           "name": "tmp36-sensor.voltage_mv",
+          "port_names": [
+            "temperature_mv"
+          ],
           "unit": "mV"
         }
       ],

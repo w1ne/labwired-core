@@ -156,9 +156,9 @@ impl WasmFlexRuntime {
         self.runtime.advance_ns(delta_ns).map_err(js_error)
     }
 
-    pub fn time_ns(&self) -> f64 {
+    pub fn time_ns(&self) -> Result<f64, JsValue> {
         // FlexRuntime enforces the JavaScript safe-integer time ceiling.
-        self.runtime.time_ns() as f64
+        Ok(self.runtime.time_ns() as f64)
     }
 
     pub fn ports(&self) -> Result<JsValue, JsValue> {

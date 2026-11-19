@@ -287,7 +287,8 @@ fn validate_analog(model: &CosimModelConfig) -> Result<()> {
                 "sources",
                 "substeps",
                 "integration",
-                "input_sampling"
+                "input_sampling",
+                "photoresistors"
             ]
             .contains(&key.as_str()),
             "{path} has unsupported config key '{key}'; this Flex path requires an inline netlist_text"
@@ -337,7 +338,25 @@ fn validate_analog(model: &CosimModelConfig) -> Result<()> {
             "{path} config.integration must be be or trap"
         );
     }
-    check_analog_routes(model, "sources", &model.inputs)?;
+    // A photoresistor entry binds its input by key, in place of a `sources`
+    // entry. The analog adapter validates the model parameters themselves.
+    let mut source_routes = model.inputs.clone();
+    if let Some(value) = model.config.get("photoresistors") {
+        let Value::Mapping(models) = value else {
+            bail!("{path} config.photoresistors must be a mapping");
+        };
+        for name in models.keys() {
+            let Value::String(name) = name else {
+                bail!("{path} config.photoresistors names must be strings");
+            };
+            token(name, &format!("{path} config.photoresistors"))?;
+            ensure!(
+                source_routes.remove(name).is_some(),
+                "{path} config.photoresistors.{name} has no declared model route"
+            );
+        }
+    }
+    check_analog_routes(model, "sources", &source_routes)?;
     check_analog_routes(model, "probes", &model.outputs)?;
     Ok(())
 }
@@ -498,6 +517,44 @@ cosim_models:
                 error.contains("requires config.input_sampling: previous_boundary"),
                 "{error}"
             );
+        }
+    }
+
+    #[test]
+    fn photoresistor_entries_bind_analog_inputs_in_place_of_sources() {
+        let bound = RC
+            .replace(
+                "kind: bool, initial: 0",
+                "kind: number, unit: lx, initial: 10",
+            )
+            .replace(
+                "sources: { drive: Vdrive }",
+                "photoresistors: { drive: { resistor: R1 } }",
+            );
+        assert_ne!(bound, RC);
+        FlexManifest::from_yaml(&bound).unwrap();
+        for (name, yaml, expected) in [
+            (
+                "unbound input",
+                bound.replace("photoresistors: { drive: { resistor: R1 } }", ""),
+                "config.sources is required",
+            ),
+            (
+                "undeclared route",
+                bound.replace("photoresistors: { drive:", "photoresistors: { typo:"),
+                "config.photoresistors.typo has no declared model route",
+            ),
+            (
+                "two owners",
+                bound.replace(
+                    "photoresistors:",
+                    "sources: { drive: Vdrive }\n      photoresistors:",
+                ),
+                "config.sources.drive has no declared model route",
+            ),
+        ] {
+            let error = format!("{:#}", FlexManifest::from_yaml(&yaml).unwrap_err());
+            assert!(error.contains(expected), "{name}: {error}");
         }
     }
 

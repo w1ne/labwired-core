@@ -30,6 +30,7 @@ mod analog_motor_circuit;
 mod analog_mux_e2e;
 mod analog_netlist;
 mod analog_ngspice_macros;
+mod analog_photoresistor;
 mod analog_plant_migration_parity;
 mod analog_solver;
 mod analog_stimulus;
