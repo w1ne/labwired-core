@@ -281,6 +281,47 @@ pub fn after_control(
     log.control.push((setup, data, true));
 }
 
+/// What a terminal does when it opens the first CDC ACM port (interface
+/// class 02, subclass 02) of `config_descriptor`: SET_LINE_CODING 115200 8N1,
+/// then SET_CONTROL_LINE_STATE with DTR and RTS. Empty when the configuration
+/// has no such interface.
+pub fn cdc_open_steps(config_descriptor: &[u8]) -> Vec<HostStep> {
+    let cfg = config_descriptor;
+    let mut i = 0;
+    let mut acm = None;
+    while i + 1 < cfg.len() && cfg[i] >= 2 {
+        let d = &cfg[i..(i + usize::from(cfg[i])).min(cfg.len())];
+        if d[1] == 4 && d.len() >= 9 && d[5] == 0x02 && d[6] == 0x02 {
+            acm = Some(u16::from(d[2]));
+            break;
+        }
+        i += usize::from(cfg[i]);
+    }
+    let Some(interface) = acm else {
+        return Vec::new();
+    };
+    let mut coding = 115_200u32.to_le_bytes().to_vec();
+    coding.extend_from_slice(&[0, 0, 8]);
+    vec![
+        HostStep::Control(Setup {
+            bm_request_type: 0x21,
+            b_request: 0x20, // SET_LINE_CODING
+            w_value: 0,
+            w_index: interface,
+            w_length: 7,
+            data: coding,
+        }),
+        HostStep::Control(Setup {
+            bm_request_type: 0x21,
+            b_request: 0x22, // SET_CONTROL_LINE_STATE
+            w_value: 0x0003, // DTR | RTS
+            w_index: interface,
+            w_length: 0,
+            data: Vec::new(),
+        }),
+    ]
+}
+
 fn parse_hex_bytes(text: &str) -> Result<Vec<u8>, String> {
     let digits: String = text.chars().filter(|c| !c.is_whitespace()).collect();
     if digits.len() % 2 != 0 {
@@ -383,6 +424,29 @@ mod tests {
         assert!(matches!(&steps[1], HostStep::Control(s) if s.dir_in() && s.w_length == 255));
         assert!(matches!(steps[2], HostStep::In { ep: 2, max: 8 }));
         assert!(matches!(steps[3], HostStep::Wait { us: 500 }));
+    }
+
+    #[test]
+    fn cdc_open_targets_the_acm_interface_of_the_configuration() {
+        // config, IAD, interface 1 (CDC ACM), interface 2 (CDC data).
+        let cfg = [
+            9, 2, 34, 0, 2, 1, 0, 0x80, 50, 8, 11, 1, 2, 2, 2, 0, 0, 9, 4, 1, 0, 1, 2, 2, 0, 0, 9,
+            4, 2, 0, 2, 0x0A, 0, 0, 0,
+        ];
+        let steps = cdc_open_steps(&cfg);
+        assert_eq!(steps.len(), 2);
+        match &steps[0] {
+            HostStep::Control(s) => {
+                assert_eq!(s.bytes(), [0x21, 0x20, 0, 0, 1, 0, 7, 0]);
+                assert_eq!(s.data, [0x00, 0xC2, 0x01, 0x00, 0, 0, 8]);
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(matches!(&steps[1], HostStep::Control(s) if s.b_request == 0x22 && s.w_value == 3));
+        // A configuration without a CDC ACM interface opens nothing.
+        assert!(
+            cdc_open_steps(&[9, 2, 18, 0, 1, 1, 0, 0x80, 50, 9, 4, 0, 0, 1, 3, 0, 0, 0]).is_empty()
+        );
     }
 
     #[test]

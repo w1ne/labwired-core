@@ -41,6 +41,14 @@ labwired test --system configs/systems/nano-33-iot.yaml \
 The onboarding smoke lives in [`examples/nano-33-iot/`](../../examples/nano-33-iot/) —
 the same bring-up a user runs without a toolchain.
 
+## Stock Arduino sketches
+
+This page covers the bare-metal smoke on the narrow `atsamd21.yaml`
+descriptor. Stock ArduinoCore-samd sketches for this board, with `Serial` on
+the native USB port, run on the `atsamd21g18a` descriptor:
+[`examples/arduino-nano-33-iot-bme280/`](../../examples/arduino-nano-33-iot-bme280/README.md)
+and the Arduino matrix row `validation/arduino-matrix/boards/nano-33-iot.yaml`.
+
 ## Related
 
 - [ATSAMD21G18A (Arduino Zero)](atsamd21g18a.md) — the deep SAM D21 model

@@ -244,6 +244,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_dmac_sercom4_tx_byte",
     "samd51_dmac_board",
     "samd51_usb_device_banks",
+    // SAM D21 USB device controller with a scripted host (`build_samd21_usb`).
+    "samd21_usb",
     // SAM D21 TC3..TC7 (`build_samd21_tc`): fixed instance addresses.
     "samd21_tc",
     // SAM D21 RTC (`build_samd21_rtc`): fixed IRQ, optional `gclk_hz`.
@@ -625,6 +627,35 @@ fn build_samd51_usb_device_banks(p_cfg: &PeripheralConfig) -> anyhow::Result<Box
     Ok(Box::new(
         crate::peripherals::sam::usb_device::Samd51UsbDeviceBanks::new(),
     ))
+}
+
+// SAM D21 USB device controller: the one instance, its NVIC line, and the
+// scripted host's options.
+#[cold]
+#[inline(never)]
+fn build_samd21_usb(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    if p_cfg.base_address != 0x41005000 || p_cfg.irq != Some(7) {
+        anyhow::bail!("SAMD21 USB requires base 0x41005000 and IRQ 7");
+    }
+    if let Some(key) = p_cfg
+        .config
+        .keys()
+        .find(|k| !matches!(k.as_str(), "host" | "host_steps"))
+    {
+        anyhow::bail!("samd21_usb admits `host` and `host_steps`, not `{key}`");
+    }
+    let mut usb = crate::peripherals::sam::usb21::Samd21Usb::new();
+    // `host: false` leaves the port unplugged (no enumeration).
+    if p_cfg.config.get("host").and_then(|v| v.as_bool()) == Some(false) {
+        usb.set_host_enabled(false);
+    }
+    // `host_steps:` run after enumeration (usb_host::parse_host_steps).
+    if let Some(steps) = p_cfg.config.get("host_steps") {
+        let steps = crate::peripherals::usb_host::parse_host_steps(steps)
+            .map_err(|e| anyhow::anyhow!("samd21_usb host_steps: {e}"))?;
+        usb.queue_host_steps(steps);
+    }
+    Ok(Box::new(usb))
 }
 
 // Opt-in SAMD51 board models: fixed instance addresses, no config overrides.
@@ -1455,6 +1486,7 @@ pub fn try_build(
         | "samd21_sercom_i2cm" | "samd21_adc" | "samd21_tcc" => {
             build_samd51_board_model(canonical_type, p_cfg)?
         }
+        "samd21_usb" => build_samd21_usb(p_cfg)?,
         "samd21_tc" => build_samd21_tc(p_cfg)?,
         "samd21_rtc" => build_samd21_rtc(p_cfg)?,
         "sam4s_tc" => build_sam4s_tc(p_cfg)?,

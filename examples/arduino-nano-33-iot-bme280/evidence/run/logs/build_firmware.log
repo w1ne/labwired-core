@@ -1,0 +1,25 @@
+Processing nano_33_iot (platform: platformio/atmelsam@9.0.0; board: nano_33_iot; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/atmelsam/nano_33_iot.html
+PLATFORM: Atmel SAM (9.0.0) > NANO 33 IoT
+HARDWARE: SAMD21G18A 48MHz, 32KB RAM, 256KB Flash
+DEBUG: Current (atmel-ice) External (atmel-ice, blackmagic, jlink)
+PACKAGES: 
+ - framework-arduino-samd @ 1.8.14 
+ - framework-cmsis @ 1.40500.0 (4.5.0) 
+ - framework-cmsis-atmel @ 1.2.2 
+ - toolchain-gccarmnoneeabi @ 1.70201.0 (7.2.1)
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 27 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Adafruit BME280 Library @ 2.3.0
+|-- Wire @ 1.0
+Building in release mode
+Checking size .pio/build/nano_33_iot/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  12.9% (used 4228 bytes from 32768 bytes)
+Flash: [=         ]  10.5% (used 27464 bytes from 262144 bytes)
+========================= [SUCCESS] Took 1.53 seconds =========================
