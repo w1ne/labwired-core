@@ -577,25 +577,15 @@ impl PeripheralKit for ServoKit {
                         ctx.device_id()
                     )
                 })?;
-                let (addr, bit) = crate::bus::SystemBus::resolve_pin_odr_pub(ctx.bus, pin)
-                    .ok_or_else(|| {
+                Some(
+                    crate::bus::SystemBus::resolve_pin_odr_pub(ctx.bus, pin).ok_or_else(|| {
                         anyhow::anyhow!(
                             "servo '{}' source_oe_pin '{}' does not resolve to a GPIO",
                             ctx.device_id(),
                             pin
                         )
-                    })?;
-                let supported = ctx
-                    .bus
-                    .find_peripheral_index(addr)
-                    .is_some_and(|idx| ctx.bus.peripherals[idx].dev.gpio_routing(bit).is_some());
-                anyhow::ensure!(
-                    supported,
-                    "servo '{}' source_oe_pin '{}' is not a modeled GPIO pad",
-                    ctx.device_id(),
-                    pin
-                );
-                Some((addr, bit))
+                    })?,
+                )
             } else {
                 None
             };
