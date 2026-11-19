@@ -426,6 +426,7 @@ fn pca_servo_rejects_invalid_output_enable_configuration() {
     let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml")).unwrap();
     for config in [
         "source_address: 64, source_channel: 0, source_oe_pin: GPIO999",
+        "source_address: 64, source_channel: 0, source_oe_pin: GPIO25",
         "source_address: 64, source_channel: 0, source_oe_pin: 42",
         "source_oe_pin: GPIO4",
     ] {
