@@ -4867,6 +4867,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#declarative-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Declarative devices
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#validation-and-limits" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4903,6 +4914,18 @@
 <p>At each analog boundary the router validates every present device voltage before publishing any of them. It then submits one batch to the existing SystemBus power API. That API publishes all rails for each device before recomputing its AND gate and generation. Exchanging which of two rails is off therefore cannot create an intermediate power-on/reset event. Invalid batches leave device power untouched.</p>
 <p>World construction already primes the analog model and applies its outputs at time zero. This route uses that path, before any CPU instruction. Later updates use the same boundary path as GPIO, reset and motor signals. Power does not require a controller poll. The existing SPI gate resets the actual sensor and parks its interrupt lines at the power transition; transfers and sensor time do not advance while the gate is off.</p>
 <p><code>MachineTrait::inspect_devices</code> exposes the existing universal declared-device inspection join for World nodes. It does not pretend a sensor is a display. The BMI270 SPI artifact adds read-only <code>model_time_ns</code> so clock parking can be observed both on and off. No protocol behavior changes are introduced by that field.</p>
+<h2 id="declarative-devices">Declarative devices</h2>
+<p>A declarative descriptor opts into routed supply with an optional, bus-agnostic <code>behavior.power</code> block (sibling of <code>behavior.timers</code>). The SPI engine implements it today:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">power</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">rails</span><span class="p">:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">vdd</span><span class="p p-Indicator">,</span><span class="nt">   min_v</span><span class="p">:</span><span class="w"> </span><span class="nv">1.72</span><span class="p p-Indicator">,</span><span class="nt"> max_v</span><span class="p">:</span><span class="w"> </span><span class="nv">3.6</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">vddio</span><span class="p p-Indicator">,</span><span class="nt"> min_v</span><span class="p">:</span><span class="w"> </span><span class="nv">1.2</span><span class="p p-Indicator">,</span><span class="nt">  max_v</span><span class="p">:</span><span class="w"> </span><span class="nv">3.6</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">startup_us</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
+</span></code></pre></div>
+<p>Each rail may also carry an optional <code>pin:</code> (the package pin that feeds it), which the engine ignores and the diagram compiler reads.</p>
+<p>The rails are the required supplies and their operating envelopes (cite the datasheet table next to the block). Without the block the part reports no power-control capability and attaching it with <code>supply_rails</code> is refused, as before.</p>
+<p>When the gate cuts power the part is dark: <code>0xFF</code> on MISO, chip-select edges ignored, no timers, no pin drives. Every power-up is a power-on reset: registers and any register file return to their descriptor reset values, the bus mode returns to its initial state (a part with <code>activate_on_first_cs_release</code> is in I2C mode again and needs a new chip-select rising edge), frame state, timers and rule-machine state are cleared, and a <code>startup_us</code> interval begins. During start-up the part behaves as not yet answering, so a chip-select edge inside it does not select SPI. Start-up elapses on device time. Sensor stimulus inputs (<code>SimInput</code>) are the physical world and survive the cycle. The static <code>powered: false</code> config flag is unchanged.</p>
+<p>The BMA400 (<code>configs/devices/bma400.yaml</code>) declares VDD 1.72-3.6 V, VDDIO 1.2-3.6 V and a 1 ms power-up time from its datasheet. <code>declarative_spi_supply_por</code> charges an RC node from an MCU GPIO-switched source, routes the solved node voltage to both rails and checks the answer/no-answer boundaries on one time base.</p>
 <h2 id="validation-and-limits">Validation and limits</h2>
 <p><code>device_supply_routing</code> exercises exact IDs, route direction, unknown rails, duplicate producers, invalid-batch rollback, blocked off-state SPI traffic, a real BMI startup delay, time-zero World publication, atomic rail swaps, two-node isolation and sensor-clock parking while CPU and MNA time continue. The fixture uses real STM32F401 nodes with a small Cortex-M loop; it does not execute native flight-controller firmware. The existing device rail, BMI SPI, shared analog and circuit BLDC suites cover the adjacent behavior.</p>
 <p>The external-device model records operating availability and reset behavior. It does not model power current, inrush, damage, or sensor accuracy outside its declared envelope. A complete native flight-controller cold-power result still requires the distinct MCU power domains and exact firmware path. The independent bounded native ESC evidence in <code>docs/evidence/native-esc-four-windings-world-20261112.json</code> proves only a 10 microsecond operating-point run with explicit demonstration motor parameters, not startup or commutation.</p>
