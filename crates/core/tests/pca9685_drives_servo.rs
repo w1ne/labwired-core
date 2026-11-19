@@ -349,3 +349,119 @@ external_devices:
         servo.pulse_us()
     );
 }
+
+/// Dynamic, active-low OE gates new commands. The angle remains the last
+/// modeled command while disabled; it is not evidence of physical position.
+#[test]
+fn pca_servo_dynamic_oe_requires_a_driven_low_gpio() {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::bus::{Bus, SystemBus};
+    use std::path::PathBuf;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml")).unwrap();
+    let manifest: SystemManifest = serde_yaml::from_str(r#"
+name: pca-servo-oe
+chip: "../chips/esp32c3.yaml"
+external_devices:
+  - { id: elbow, type: servo, connection: i2c0, config: { model: mg995, source_address: 64, source_channel: 0, source_oe_pin: GPIO4 } }
+"#).unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    // Share the real declarative PCA model with the test without reaching
+    // through the controller's implementation-specific type.
+    struct SharedPca(std::sync::Arc<std::sync::Mutex<GenericI2cDevice>>);
+    impl I2cDevice for SharedPca {
+        fn address(&self) -> u8 {
+            self.0.lock().unwrap().address()
+        }
+        fn read(&mut self) -> u8 {
+            self.0.lock().unwrap().read()
+        }
+        fn write(&mut self, byte: u8) {
+            self.0.lock().unwrap().write(byte);
+        }
+        fn start(&mut self) {
+            self.0.lock().unwrap().start();
+        }
+        fn stop(&mut self) {
+            self.0.lock().unwrap().stop();
+        }
+        fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
+            self.0.lock().unwrap().pwm_channel_pulse_us(channel)
+        }
+    }
+    let pca = std::sync::Arc::new(std::sync::Mutex::new(pca()));
+    let route = std::collections::BTreeMap::from([
+        ("sda".to_owned(), "GPIO8".to_owned()),
+        ("scl".to_owned(), "GPIO9".to_owned()),
+    ]);
+    bus.attach_i2c_slave_with_route("i2c0", Box::new(SharedPca(pca.clone())), Some(&route))
+        .unwrap();
+    let program = |count: u8| {
+        let mut model = pca.lock().unwrap();
+        init_50hz(&mut *model);
+        write_reg(&mut *model, 0x06, &[0, 0, count, 0x01]);
+    };
+    program(0x33);
+    assert!(
+        bus.pwm_channel_pulse_us(0x40, 0).is_some(),
+        "programmed PCA pulse must be visible on the bus"
+    );
+    let commanded = |bus: &SystemBus| bus.observed_of::<Servo>().next().unwrap().is_commanded();
+    let angle = |bus: &SystemBus| bus.observed_of::<Servo>().next().unwrap().angle_degrees();
+    // Input / unknown is not an enable, even if its output latch is low.
+    bus.sync_pwm_sourced_servos();
+    assert!(!commanded(&bus));
+    const GPIO: u64 = 0x6000_4000;
+    bus.write_u32(GPIO + 0x08, 1 << 4).unwrap(); // OUT_W1TS: high
+    bus.write_u32(GPIO + 0x24, 1 << 4).unwrap(); // ENABLE_W1TS
+    bus.sync_pwm_sourced_servos();
+    assert!(!commanded(&bus));
+    bus.write_u32(GPIO + 0x74 + 4 * 4, 1 << 2).unwrap(); // open drain, high releases
+    bus.sync_pwm_sourced_servos();
+    assert!(!commanded(&bus));
+    bus.write_u32(GPIO + 0x0c, 1 << 4).unwrap(); // OUT_W1TC: low enables
+    bus.sync_pwm_sourced_servos();
+    assert!(commanded(&bus));
+    let previous = angle(&bus);
+    bus.write_u32(GPIO + 0x08, 1 << 4).unwrap(); // release open-drain output
+    program(0x80);
+    bus.sync_pwm_sourced_servos();
+    assert_eq!(angle(&bus), previous);
+    bus.write_u32(GPIO + 0x28, 1 << 4).unwrap(); // input again; latch remains high
+    bus.sync_pwm_sourced_servos();
+    assert_eq!(angle(&bus), previous);
+    bus.write_u32(GPIO + 0x0c, 1 << 4).unwrap();
+    bus.sync_pwm_sourced_servos(); // low latch, still undriven
+    assert_eq!(angle(&bus), previous);
+    bus.write_u32(GPIO + 0x24, 1 << 4).unwrap();
+    bus.sync_pwm_sourced_servos();
+    assert_ne!(angle(&bus), previous);
+}
+
+#[test]
+fn pca_servo_rejects_invalid_output_enable_configuration() {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::bus::SystemBus;
+    use std::path::PathBuf;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml")).unwrap();
+    for config in [
+        "source_address: 64, source_channel: 0, source_oe_pin: GPIO999",
+        "source_address: 64, source_channel: 0, source_oe_pin: GPIO26",
+        "source_address: 64, source_channel: 0, source_oe_pin: 42",
+        "source_oe_pin: GPIO4",
+    ] {
+        let yaml = format!(
+            r#"name: invalid-servo-oe
+chip: "../chips/esp32c3.yaml"
+external_devices:
+  - {{ id: elbow, type: servo, connection: i2c0, config: {{ {config} }} }}
+"#
+        );
+        let manifest: SystemManifest = serde_yaml::from_str(&yaml).unwrap();
+        assert!(
+            SystemBus::from_config(&chip, &manifest).is_err(),
+            "{config}"
+        );
+    }
+}
