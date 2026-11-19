@@ -3309,6 +3309,24 @@ mod romboot_tests {
         );
     }
 
+    #[test]
+    fn c3_flash_fast_start_uses_rom_reset_stack() {
+        // Reset ROM at 0x4000_1edc: auipc sp, 0xffcdd; addi sp, sp, -0x7cc.
+        // Lock the provenance to the actual vendored ROM, not a guessed RAM top.
+        let rom = std::fs::read(root().join("../core/roms/esp32c3/esp32c3_rom.bin"))
+            .expect("read vendored C3 ROM");
+        assert_eq!(&rom[0x1edc..0x1ee4], &[0x17, 0xd1, 0xcd, 0xff, 0x13, 0x01, 0x41, 0x83]);
+        let (mut sim, _) = c3_browser_fast_start_sim();
+        assert_eq!(sim.get_register(2).unwrap(), 0x3fcd_e710);
+        let cache_ptr = sim.read_memory(0x3fcd_ffd4, 4).unwrap();
+        let ops_ptr = sim.read_memory(0x3fcd_fffc, 4).unwrap();
+        assert_ne!(cache_ptr, vec![0; 4], "ROM cache pointer must be initialized");
+        assert_ne!(ops_ptr, vec![0; 4], "ROM ops pointer must be initialized");
+        assert!(sim.step_batch(100_000).expect("bootloader executes") > 0);
+        assert_eq!(sim.read_memory(0x3fcd_ffd4, 4).unwrap(), cache_ptr);
+        assert_eq!(sim.read_memory(0x3fcd_fffc, 4).unwrap(), ops_ptr);
+    }
+
     fn c3_browser_fast_start_sim() -> (WasmSimulator, u32) {
         let manifest_dir = root();
         let chip_yaml =
