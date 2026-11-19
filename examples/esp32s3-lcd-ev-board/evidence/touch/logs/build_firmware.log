@@ -25,6 +25,6 @@ Checking size .pio/build/esp32s3_lcd_ev_touch/firmware.elf
 Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
 RAM:   [=         ]   7.0% (used 23024 bytes from 327680 bytes)
 Flash: [=         ]   5.1% (used 332529 bytes from 6553600 bytes)
-========================= [SUCCESS] Took 1.22 seconds =========================
+========================= [SUCCESS] Took 7.64 seconds =========================
 set fast-boot fixture entry to labwired_entry at 0x4200251c
 updated esp32s3-lcd-ev-ft5x06.elf fixture digest in /data/worktrees/legacy-migrated/labwired-hw-onboarding/tests/fixtures/tier1/MANIFEST.json
