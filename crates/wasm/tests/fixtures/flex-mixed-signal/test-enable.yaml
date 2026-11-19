@@ -1,0 +1,19 @@
+# `labwired test --script test-enable.yaml`. The firmware enables the RC network and returns the time, in µs, at which the voltage reaches 63.2 % of 3.3 V.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: command }
+    - { port: voltage }
+    - { number: 0 }
+limits:
+  max_steps: 100000
+  max_time_ns: 4000000
+assertions:
+  - entry_result: { equals: 1050 }
+  - port_value: { port: voltage, min: 2.0856, max: 3.3 }
+  - digital_edges: { port: command, count: 1 }

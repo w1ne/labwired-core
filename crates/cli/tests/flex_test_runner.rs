@@ -305,7 +305,7 @@ fn limits_stop_the_run_and_cannot_pass() {
     assert_eq!(result["status"], "fail");
     assert_eq!(result["stop_reason"], "max_steps");
     assert_eq!(result["steps_executed"], 5000);
-    assert_eq!(result["config"]["entry_export"], "run");
+    assert_eq!(result["config"]["sequence"][0]["call"]["export"], "run");
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -412,4 +412,392 @@ fn flex_never_mixes_with_a_detailed_target() {
         assert!(stderr.contains("unknown field"), "{extra}: {stderr}");
         let _ = std::fs::remove_dir_all(dir);
     }
+}
+
+fn fixtures_root() -> PathBuf {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    std::fs::canonicalize(root.join("../wasm/tests/fixtures")).expect("Flex fixtures")
+}
+
+/// Every committed `test-*.yaml` of every `flex-*` fixture, by fixture.
+fn committed_scripts() -> Vec<(PathBuf, Vec<PathBuf>)> {
+    let mut fixtures: Vec<PathBuf> = std::fs::read_dir(fixtures_root())
+        .expect("list fixtures")
+        .map(|entry| entry.expect("fixture entry").path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("flex-"))
+        })
+        .collect();
+    fixtures.sort();
+    fixtures
+        .into_iter()
+        .map(|fixture| {
+            let mut scripts: Vec<PathBuf> = std::fs::read_dir(&fixture)
+                .expect("list fixture")
+                .map(|entry| entry.expect("script entry").path())
+                .filter(|path| {
+                    path.file_name()
+                        .and_then(|name| name.to_str())
+                        .is_some_and(|name| name.starts_with("test-") && name.ends_with(".yaml"))
+                })
+                .collect();
+            scripts.sort();
+            (fixture, scripts)
+        })
+        .collect()
+}
+
+/// The value of a two-space-indented `key: value` line of a script.
+fn script_value<'a>(text: &'a str, key: &str) -> &'a str {
+    let prefix = format!("  {key}: ");
+    text.lines()
+        .find_map(|line| line.strip_prefix(prefix.as_str()))
+        .unwrap_or_else(|| panic!("script has no '{key}' input"))
+}
+
+#[test]
+fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
+    let fixtures = committed_scripts();
+    assert!(fixtures.len() >= 11, "Flex fixtures went missing");
+    let mut scripts_run = 0;
+    for (fixture, scripts) in fixtures {
+        // A positive case alone proves nothing about the model.
+        assert!(
+            scripts.len() >= 2,
+            "{fixture:?} needs a positive and a negative-control script"
+        );
+        for script in scripts {
+            let text = std::fs::read_to_string(&script).expect("read script");
+            let flex = fixture.join(script_value(&text, "flex"));
+            let firmware = fixture.join(script_value(&text, "firmware"));
+            let dir = unique_dir("matrix");
+            let output = run(&script, &dir, &[]);
+            assert_eq!(
+                output.status.code(),
+                Some(0),
+                "{script:?}: {}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let result = read_result(&dir);
+            assert_eq!(result["status"], "pass", "{script:?}");
+            assert_eq!(result["stop_reason"], "completed", "{script:?}");
+            let assertions = result["assertions"].as_array().unwrap();
+            assert!(!assertions.is_empty(), "{script:?} asserts nothing");
+            assert!(assertions.iter().all(|a| a["passed"] == true));
+            assert_eq!(result["traces"]["digital_dropped"], 0, "{script:?}");
+            assert_eq!(result["traces"]["analog_dropped"], 0, "{script:?}");
+            let report = &result["run_report"];
+            assert_eq!(report["execution_path"], "flex_portable_wasm");
+            assert_eq!(report["target_cpu_emulated"], false);
+            assert_eq!(report["manifest_sha256"], sha256(&flex), "{script:?}");
+            assert_eq!(
+                result["config"]["firmware_sha256"],
+                sha256(&firmware),
+                "{script:?}"
+            );
+            let _ = std::fs::remove_dir_all(dir);
+
+            // Control: the same run with one expected call result moved by
+            // one must fail on exactly that assertion.
+            let marker = "entry_result: { equals: ";
+            let at = text.find(marker).unwrap_or_else(|| {
+                panic!("{script:?} must assert a firmware call result");
+            }) + marker.len();
+            let digits = text[at..]
+                .find(|c: char| !c.is_ascii_digit())
+                .expect("entry_result value");
+            let expected: u64 = text[at..at + digits].parse().expect("entry_result value");
+            let mutated = format!("{}{}{}", &text[..at], expected + 1, &text[at + digits..])
+                .replace(
+                    &format!("  flex: {}", script_value(&text, "flex")),
+                    &format!("  flex: \"{}\"", flex.display()),
+                )
+                .replace(
+                    &format!("  firmware: {}", script_value(&text, "firmware")),
+                    &format!("  firmware: \"{}\"", firmware.display()),
+                );
+            let dir = unique_dir("matrix-control");
+            let control = dir.join("control.yaml");
+            std::fs::write(&control, mutated).expect("write control script");
+            let output = run(&control, &dir, &[]);
+            assert_eq!(output.status.code(), Some(1), "{script:?} control");
+            let result = read_result(&dir);
+            assert_eq!(result["stop_reason"], "completed", "{script:?} control");
+            let failed: Vec<&Value> = result["assertions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|a| a["passed"] == false)
+                .collect();
+            assert_eq!(failed.len(), 1, "{script:?} control");
+            assert_eq!(failed[0]["observed"], expected as f64, "{script:?} control");
+            let _ = std::fs::remove_dir_all(dir);
+            scripts_run += 1;
+        }
+    }
+    assert!(scripts_run >= 26, "only {scripts_run} Flex scripts ran");
+}
+
+fn thermostat() -> PathBuf {
+    fixtures_root().join("flex-ntc-thermostat")
+}
+
+/// The thermostat heat cycle with one text substitution, written outside the
+/// fixture with absolute inputs.
+fn thermostat_script(dir: &Path, from: &str, to: &str) -> PathBuf {
+    let fixture = thermostat();
+    let text = std::fs::read_to_string(fixture.join("test-heat-cycle.yaml")).expect("script");
+    assert!(text.contains(from), "heat-cycle script lost '{from}'");
+    let text = text
+        .replace(from, to)
+        .replace(
+            "  flex: system.yaml",
+            &format!("  flex: \"{}\"", fixture.join("system.yaml").display()),
+        )
+        .replace(
+            "  firmware: firmware.wasm",
+            &format!(
+                "  firmware: \"{}\"",
+                fixture.join("firmware.wasm").display()
+            ),
+        );
+    let path = dir.join("thermostat.yaml");
+    std::fs::write(&path, text).expect("write script");
+    path
+}
+
+fn step_summary(result: &Value) -> Vec<(u64, Option<u64>, Option<u64>)> {
+    result["steps"]
+        .as_array()
+        .expect("steps")
+        .iter()
+        .map(|step| {
+            (
+                step["completed"].as_u64().expect("completed"),
+                step["result"].as_u64(),
+                step["time_ns"].as_u64(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn sequence_keeps_firmware_state_between_calls_and_bench_stimuli() {
+    let fixture = thermostat();
+    let dir = unique_dir("sequence");
+    let output = run(&fixture.join("test-heat-cycle.yaml"), &dir, &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = read_result(&dir);
+    assert_eq!(result["time_ns"], 8000);
+    assert_eq!(result["entry_result"], 0);
+    // setup, then two control periods after each temperature: 25, 50, 33, 25.
+    // At 33 degC the sensor is inside the hysteresis band and the fan stays
+    // on only because the firmware instance kept its state.
+    assert_eq!(
+        step_summary(&result),
+        [
+            (1, None, Some(0)),
+            (2, Some(0), Some(2000)),
+            (1, None, Some(2000)),
+            (2, Some(1), Some(4000)),
+            (1, None, Some(4000)),
+            (2, Some(1), Some(6000)),
+            (1, None, Some(6000)),
+            (2, Some(0), Some(8000)),
+        ]
+    );
+    assert_eq!(result["config"]["sequence"][2]["set"]["value"], 50.0);
+    let trace = json(&dir.join("flex-trace.json"));
+    let channel = |port: &str| {
+        trace["digital"]["channels"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|channel| channel["port_names"][0] == port)
+            .expect("digital channel")["id"]
+            .clone()
+    };
+    let edges: Vec<(u64, Value, u64)> = trace["digital"]["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|edge| {
+            (
+                edge["time_ns"].as_u64().unwrap(),
+                edge["ch"].clone(),
+                edge["value"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        edges,
+        [
+            (3000, channel("fan_drive"), 1),
+            (4000, channel("fan_state"), 1),
+            (7000, channel("fan_drive"), 0),
+            (8000, channel("fan_state"), 0),
+        ]
+    );
+    assert_eq!(
+        trace["analog"]["channels"][0]["port_names"][0],
+        "temperature_mv"
+    );
+    let millivolts: Vec<(u64, f64)> = trace["analog"]["samples"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|sample| {
+            (
+                sample["time_ns"].as_u64().unwrap(),
+                sample["values"][0].as_f64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        millivolts,
+        [
+            (0, 1650.0),
+            (1000, 1650.0),
+            (2000, 1650.0),
+            (3000, 2428.0),
+            (4000, 2428.0),
+            (5000, 1932.0),
+            (6000, 1932.0),
+            (7000, 1650.0),
+            (8000, 1650.0),
+        ]
+    );
+    let _ = std::fs::remove_dir_all(dir);
+
+    // Negative control: the same 33 degC without the hot excursion.
+    let dir = unique_dir("sequence-mild");
+    let output = run(&fixture.join("test-mild.yaml"), &dir, &[]);
+    assert_eq!(output.status.code(), Some(0));
+    let result = read_result(&dir);
+    assert_eq!(step_summary(&result)[3], (2, Some(0), Some(4000)));
+    assert_eq!(result["traces"]["digital_edges"], 0);
+    let _ = std::fs::remove_dir_all(dir);
+
+    // The heat-cycle expectations must fail on the mild sequence.
+    let dir = unique_dir("sequence-cross");
+    let script = thermostat_script(&dir, "value: 50", "value: 33");
+    let output = run(&script, &dir, &[]);
+    assert_eq!(output.status.code(), Some(1));
+    let result = read_result(&dir);
+    assert_eq!(result["stop_reason"], "completed");
+    assert_eq!(result["assertions"][1]["passed"], false);
+    assert_eq!(result["assertions"][1]["observed"], 0.0);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn sequence_errors_and_limits_are_explicit() {
+    // A contract mismatch anywhere in the sequence is found before step 0.
+    for (from, to, expected) in [
+        (
+            "  - set: { port: temperature_c, value: 33 }",
+            "  - set: { port: temperature_mv, value: 33 }",
+            "sequence[4].set needs a write port; 'temperature_mv' is a read port",
+        ),
+        (
+            "  - set: { port: temperature_c, value: 33 }",
+            "  - set: { port: ambient_c, value: 33 }",
+            "sequence[4].set",
+        ),
+        (
+            "  - set: { port: temperature_c, value: 25 }\n  - call: { export: loop, repeat: 2 }",
+            "  - set: { port: temperature_c, value: 25 }\n  - call: { export: tick, repeat: 2 }",
+            "firmware has no exported function 'tick' (sequence[7].call.export)",
+        ),
+        (
+            "export: setup, args: [{ port: temperature_mv }, { port: fan_drive }]",
+            "export: setup, args: [{ port: temperature_mv }]",
+            "takes 2 parameters, but sequence[0].call.args has 1",
+        ),
+    ] {
+        let dir = unique_dir("sequence-config");
+        let output = run(&thermostat_script(&dir, from, to), &dir, &[]);
+        assert_eq!(output.status.code(), Some(2), "{to}");
+        let result = read_result(&dir);
+        assert_eq!(result["stop_reason"], "config_error", "{to}");
+        assert!(
+            result["message"].as_str().unwrap().contains(expected),
+            "{to}: {}",
+            result["message"]
+        );
+        assert_eq!(result["time_ns"], 0, "{to}");
+        assert!(result["steps"].as_array().unwrap().is_empty(), "{to}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    // The model refuses a stimulus outside its declared range. Earlier steps
+    // keep their results; later steps are reported as not reached.
+    let dir = unique_dir("sequence-range");
+    let output = run(
+        &thermostat_script(&dir, "value: 33", "value: 100000"),
+        &dir,
+        &[],
+    );
+    assert_eq!(output.status.code(), Some(3));
+    let result = read_result(&dir);
+    assert_eq!(result["stop_reason"], "model_error");
+    assert!(result["message"]
+        .as_str()
+        .unwrap()
+        .contains("out of range [-55, 300]"));
+    assert_eq!(result["entry_result"], Value::Null);
+    let steps = step_summary(&result);
+    assert_eq!(steps[3], (2, Some(1), Some(4000)));
+    assert_eq!(steps[5], (0, None, Some(4000)));
+    assert_eq!(steps[6], (0, None, None));
+    assert_eq!(steps[7], (0, None, None));
+    assert!(result["ports"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|port| port["value"].is_null()));
+    let _ = std::fs::remove_dir_all(dir);
+
+    // A Boolean port refuses a bench value other than 0 or 1.
+    let dir = unique_dir("sequence-bool");
+    let script = thermostat_script(
+        &dir,
+        "set: { port: temperature_c, value: 33 }",
+        "set: { port: fan_drive, value: 2 }",
+    );
+    let output = run(&script, &dir, &[]);
+    assert_eq!(output.status.code(), Some(3));
+    let result = read_result(&dir);
+    assert!(result["message"]
+        .as_str()
+        .unwrap()
+        .contains("accepts only 0 or 1"));
+    assert_eq!(step_summary(&result)[4], (0, None, Some(4000)));
+    let _ = std::fs::remove_dir_all(dir);
+
+    // A limit inside a repeated call stops the sequence. The interrupted
+    // step has no result, even though its first call returned.
+    let dir = unique_dir("sequence-time");
+    let script = thermostat_script(&dir, "max_time_ns: 10000", "max_time_ns: 5000");
+    let output = run(&script, &dir, &[]);
+    assert_eq!(output.status.code(), Some(1));
+    let result = read_result(&dir);
+    assert_eq!(result["status"], "fail");
+    assert_eq!(result["stop_reason"], "max_time_ns");
+    assert_eq!(result["time_ns"], 5000);
+    assert_eq!(result["entry_result"], Value::Null);
+    assert_eq!(step_summary(&result)[5], (1, Some(1), Some(5000)));
+    let assertions = result["assertions"].as_array().unwrap();
+    assert_eq!(assertions[1]["passed"], true);
+    assert_eq!(assertions[2]["passed"], false);
+    assert_eq!(assertions[2]["observed"], Value::Null);
+    let _ = std::fs::remove_dir_all(dir);
 }

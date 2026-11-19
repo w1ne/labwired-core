@@ -1,0 +1,19 @@
+# `labwired test --script test-disabled.yaml`. Negative control. The firmware leaves the enable low and times out after 4 ms with no response.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: command }
+    - { port: voltage }
+    - { number: 1 }
+limits:
+  max_steps: 100000
+  max_time_ns: 4000000
+assertions:
+  - entry_result: { equals: 0 }
+  - port_value: { port: voltage, equals: 0 }
+  - digital_edges: { port: command, count: 0 }

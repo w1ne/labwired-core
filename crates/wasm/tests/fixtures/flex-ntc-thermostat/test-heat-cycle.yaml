@@ -1,0 +1,30 @@
+# `labwired test --script test-heat-cycle.yaml`. The test bench steps the
+# temperature 25 -> 50 -> 33 -> 25 °C between `loop` calls. At 33 °C (1932 mV,
+# inside the 1800..2000 mV band) the fan must stay on: the firmware remembers
+# its state between calls.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: temperature_mv }, { port: fan_drive }] }
+  - call: { export: loop, repeat: 2 }
+  - set: { port: temperature_c, value: 50 }
+  - call: { export: loop, repeat: 2 }
+  - set: { port: temperature_c, value: 33 }
+  - call: { export: loop, repeat: 2 }
+  - set: { port: temperature_c, value: 25 }
+  - call: { export: loop, repeat: 2 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 0, step: 1 }
+  - entry_result: { equals: 1, step: 3 }
+  - entry_result: { equals: 1, step: 5 }
+  - entry_result: { equals: 0 }
+  - port_value: { port: temperature_mv, equals: 1650 }
+  - port_value: { port: fan_state, equals: 0 }
+  - digital_edges: { port: fan_drive, count: 2 }
+  - digital_edges: { port: fan_state, count: 2 }

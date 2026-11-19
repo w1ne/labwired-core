@@ -7,13 +7,16 @@
 //! `labwired test` for portable Flex projects (`inputs.flex`).
 //!
 //! The firmware is a WebAssembly module whose `labwired.read/write/advance_ns`
-//! imports call the same `FlexRuntime` the browser binding wraps. No `Cpu`,
+//! imports call the same `FlexRuntime` the browser binding wraps. A script
+//! runs one `entry` call or a `sequence` of calls and test-bench stimuli on
+//! one firmware instance, so firmware state persists between steps. No `Cpu`,
 //! `Machine`, or MMIO map is built here, and nothing in this path falls back
 //! to one: a script that wants target instructions names `inputs.system`.
 
 use crate::{TestArgs, EXIT_ASSERT_FAIL, EXIT_CONFIG_ERROR, EXIT_PASS, EXIT_RUNTIME_ERROR};
 use labwired_config::{
-    FlexAssertion, FlexEntryArg, FlexPortAccess, FlexPortKind, FlexTestLimits, FlexTestScript,
+    FlexAssertion, FlexEntryArg, FlexPortAccess, FlexPortKind, FlexStep, FlexTestLimits,
+    FlexTestScript,
 };
 use labwired_core::flex::{
     FlexAnalogTraceBatch, FlexDigitalTraceBatch, FlexRunReport, FlexRuntime,
@@ -24,8 +27,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 use wasmi::{
-    Caller, Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, TrapCode, Val,
-    ValType,
+    Caller, Config, Engine, Func, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, TrapCode,
+    Val, ValType,
 };
 
 /// Portable firmware holds state in a few pages; this only stops a runaway
@@ -61,9 +64,22 @@ struct FlexResultConfig {
     flex: PathBuf,
     firmware: PathBuf,
     firmware_sha256: Option<String>,
-    entry_export: String,
-    entry_args: Vec<FlexEntryArg>,
+    /// The executed steps in order; a single `entry` is a one-call sequence.
+    sequence: Vec<FlexStep>,
     limits: FlexTestLimits,
+}
+
+/// What one step of the sequence did.
+#[derive(Debug, Clone, Serialize)]
+struct FlexStepResult {
+    step: FlexStep,
+    /// Calls that returned (of `repeat`), or 1 for an applied `set`.
+    completed: u32,
+    /// The last returned i32 result of a call step, read as unsigned.
+    result: Option<u32>,
+    /// Virtual time when the step ended or the run stopped inside it; `None`
+    /// for a step the run never reached.
+    time_ns: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -110,7 +126,9 @@ struct FlexTestResult {
     /// WebAssembly fuel the firmware call consumed. Not CPU cycles: no target
     /// CPU is emulated on this path.
     steps_executed: u64,
+    /// Result of the last call step; `None` unless every step completed.
     entry_result: Option<u32>,
+    steps: Vec<FlexStepResult>,
     ports: Vec<FlexPortObservation>,
     assertions: Vec<FlexAssertionResult>,
     traces: Option<FlexTraceSummary>,
@@ -210,6 +228,7 @@ fn resolve_script_path(script: &Path, value: &str) -> PathBuf {
 /// configuration error.
 fn entry_value(
     runtime: &FlexRuntime,
+    path: &str,
     index: usize,
     arg: &FlexEntryArg,
     ty: ValType,
@@ -218,11 +237,11 @@ fn entry_value(
         FlexEntryArg::Port(arg) => {
             let id = runtime
                 .port_id(&arg.port)
-                .map_err(|error| format!("entry.args[{index}]: {error}"))?;
+                .map_err(|error| format!("{path}.args[{index}]: {error}"))?;
             match ty {
                 ValType::I32 => Ok(Val::I32(id as i32)),
                 other => Err(format!(
-                    "entry.args[{index}] is port '{}', but the firmware parameter is {other:?}; port ids are i32",
+                    "{path}.args[{index}] is port '{}', but the firmware parameter is {other:?}; port ids are i32",
                     arg.port
                 )),
             }
@@ -245,7 +264,7 @@ fn entry_value(
                     Ok(Val::I64(number as i64))
                 }
                 other => Err(format!(
-                    "entry.args[{index}] number {number} is not exactly representable as the firmware parameter type {other:?}"
+                    "{path}.args[{index}] number {number} is not exactly representable as the firmware parameter type {other:?}"
                 )),
             }
         }
@@ -256,13 +275,28 @@ struct Executed {
     stop_reason: FlexStopReason,
     message: Option<String>,
     entry_result: Option<u32>,
+    steps: Vec<FlexStepResult>,
     steps_executed: u64,
     runtime: FlexRuntime,
 }
 
-/// Instantiate the firmware against `runtime` and call the entry export once.
-/// `Err` is a configuration error: the module or its entry did not fit the
-/// contract, and the entry export was not called.
+/// A step resolved against the instantiated firmware and the manifest.
+enum Planned {
+    Call {
+        func: Func,
+        inputs: Vec<Val>,
+        returns: bool,
+        repeat: u32,
+    },
+    Set {
+        port: u32,
+        value: f64,
+    },
+}
+
+/// Instantiate the firmware against `runtime` and run the script's steps in
+/// order. `Err` is a configuration error: the module or a step did not fit
+/// the contract, and no step ran.
 fn execute(
     runtime: FlexRuntime,
     firmware: &[u8],
@@ -344,7 +378,17 @@ fn execute(
     if let Err(error) = store.set_fuel(max_steps) {
         return Err(format!("failed to set the firmware step budget: {error}"));
     }
-    let run = |store: &mut Store<Host>| -> Result<Result<Option<u32>, wasmi::Error>, String> {
+    let steps = script.steps();
+    let mut results: Vec<FlexStepResult> = steps
+        .iter()
+        .map(|step| FlexStepResult {
+            step: step.clone(),
+            completed: 0,
+            result: None,
+            time_ns: None,
+        })
+        .collect();
+    let mut run = |store: &mut Store<Host>| -> Result<Result<(), wasmi::Error>, String> {
         let instance = match linker.instantiate_and_start(&mut *store, &module) {
             Ok(instance) => instance,
             // A trapping start function is firmware behavior, not bad config.
@@ -357,46 +401,124 @@ fn execute(
                 ))
             }
         };
-        let export = &script.entry.export;
-        let Some(entry) = instance.get_func(&*store, export) else {
-            return Err(format!(
-                "firmware has no exported function '{export}' (entry.export)"
-            ));
-        };
-        let ty = entry.ty(&*store);
-        if ty.params().len() != script.entry.args.len() {
-            return Err(format!(
-                "firmware export '{export}' takes {} parameters, but entry.args has {}",
-                ty.params().len(),
-                script.entry.args.len()
-            ));
-        }
-        let mut inputs = Vec::with_capacity(ty.params().len());
-        for (index, (arg, param)) in script.entry.args.iter().zip(ty.params()).enumerate() {
-            inputs.push(entry_value(&store.data().runtime, index, arg, *param)?);
-        }
-        let mut outputs = match ty.results() {
-            [] => Vec::new(),
-            [ValType::I32] => vec![Val::I32(0)],
-            other => {
-                return Err(format!(
-                    "firmware export '{export}' returns {other:?}; supported results are none or one i32"
-                ))
+        // Resolve every step before the first one runs, so a contract
+        // mismatch late in the sequence is still a configuration error.
+        let mut planned = Vec::with_capacity(steps.len());
+        for (index, step) in steps.iter().enumerate() {
+            let path = script.step_path(index);
+            match step {
+                FlexStep::Call(step) => {
+                    let export = &step.call.export;
+                    let Some(func) = instance.get_func(&*store, export) else {
+                        return Err(format!(
+                            "firmware has no exported function '{export}' ({path}.export)"
+                        ));
+                    };
+                    let ty = func.ty(&*store);
+                    if ty.params().len() != step.call.args.len() {
+                        return Err(format!(
+                            "firmware export '{export}' takes {} parameters, but {path}.args has {}",
+                            ty.params().len(),
+                            step.call.args.len()
+                        ));
+                    }
+                    let mut inputs = Vec::with_capacity(ty.params().len());
+                    for (index, (arg, param)) in step.call.args.iter().zip(ty.params()).enumerate()
+                    {
+                        inputs.push(entry_value(
+                            &store.data().runtime,
+                            &path,
+                            index,
+                            arg,
+                            *param,
+                        )?);
+                    }
+                    let returns = match ty.results() {
+                        [] => false,
+                        [ValType::I32] => true,
+                        other => {
+                            return Err(format!(
+                                "firmware export '{export}' returns {other:?}; supported results are none or one i32"
+                            ))
+                        }
+                    };
+                    planned.push(Planned::Call {
+                        func,
+                        inputs,
+                        returns,
+                        repeat: step.call.repeat,
+                    });
+                }
+                FlexStep::Set(step) => {
+                    let runtime = &store.data().runtime;
+                    let name = &step.set.port;
+                    let port = runtime
+                        .port_id(name)
+                        .map_err(|error| format!("{path}: {error}"))?;
+                    let writable = runtime
+                        .manifest()
+                        .ports
+                        .iter()
+                        .any(|port| &port.name == name && port.access == FlexPortAccess::Write);
+                    if !writable {
+                        return Err(format!(
+                            "{path} needs a write port; '{name}' is a read port"
+                        ));
+                    }
+                    planned.push(Planned::Set {
+                        port,
+                        value: step.set.value,
+                    });
+                }
             }
-        };
-        Ok(entry
-            .call(&mut *store, &inputs, &mut outputs)
-            .map(|()| match outputs.first() {
-                Some(Val::I32(value)) => Some(*value as u32),
-                _ => None,
-            }))
+        }
+        for (planned, result) in planned.iter().zip(results.iter_mut()) {
+            let outcome = match planned {
+                Planned::Call {
+                    func,
+                    inputs,
+                    returns,
+                    repeat,
+                } => (0..*repeat).try_for_each(|_| {
+                    let mut outputs = if *returns {
+                        vec![Val::I32(0)]
+                    } else {
+                        Vec::new()
+                    };
+                    func.call(&mut *store, inputs, &mut outputs)?;
+                    result.completed += 1;
+                    if let Some(Val::I32(value)) = outputs.first() {
+                        result.result = Some(*value as u32);
+                    }
+                    Ok(())
+                }),
+                Planned::Set { port, value } => {
+                    let host = store.data_mut();
+                    let written = host.runtime.write(*port, *value);
+                    host.model(written).map(|()| result.completed = 1)
+                }
+            };
+            result.time_ns = Some(store.data().runtime.time_ns());
+            if let Err(error) = outcome {
+                return Ok(Err(error));
+            }
+        }
+        Ok(Ok(()))
     };
     let called = run(&mut store);
     let steps_executed = max_steps.saturating_sub(store.get_fuel().unwrap_or(0));
     let host = store.into_data();
     let called = called?;
     let (stop_reason, message, entry_result) = match called {
-        Ok(entry_result) => (FlexStopReason::Completed, None, entry_result),
+        Ok(()) => (
+            FlexStopReason::Completed,
+            None,
+            results
+                .iter()
+                .rev()
+                .find(|result| matches!(result.step, FlexStep::Call(_)))
+                .and_then(|result| result.result),
+        ),
         Err(error) => match host.stop {
             Some((reason, message)) => (reason, Some(message), None),
             None if error.as_trap_code() == Some(TrapCode::OutOfFuel) => (
@@ -417,6 +539,7 @@ fn execute(
         stop_reason,
         message,
         entry_result,
+        steps: results,
         steps_executed,
         runtime: host.runtime,
     })
@@ -447,14 +570,25 @@ fn port_observations(runtime: &FlexRuntime) -> Vec<FlexPortObservation> {
 fn evaluate(
     assertion: &FlexAssertion,
     entry_result: Option<u32>,
+    steps: &[FlexStepResult],
     ports: &[FlexPortObservation],
     digital: &FlexDigitalTraceBatch,
 ) -> FlexAssertionResult {
     let (observed, passed) = match assertion {
-        FlexAssertion::EntryResult(assertion) => (
-            entry_result.map(f64::from),
-            entry_result == Some(assertion.entry_result.equals),
-        ),
+        FlexAssertion::EntryResult(assertion) => {
+            let observed = match assertion.entry_result.step {
+                None => entry_result,
+                // A call step that did not return every repeat has no result.
+                Some(index) => steps.get(index).and_then(|step| match &step.step {
+                    FlexStep::Call(call) if step.completed == call.call.repeat => step.result,
+                    _ => None,
+                }),
+            };
+            (
+                observed.map(f64::from),
+                observed == Some(assertion.entry_result.equals),
+            )
+        }
         FlexAssertion::PortValue(assertion) => {
             let details = &assertion.port_value;
             let observed = ports
@@ -724,8 +858,7 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
             flex: flex_path.clone(),
             firmware: firmware_path.clone(),
             firmware_sha256: None,
-            entry_export: script.entry.export.clone(),
-            entry_args: script.entry.args.clone(),
+            sequence: script.steps(),
             limits: FlexTestLimits {
                 max_steps,
                 max_time_ns: script.limits.max_time_ns,
@@ -734,6 +867,7 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
         time_ns: 0,
         steps_executed: 0,
         entry_result: None,
+        steps: Vec::new(),
         ports: Vec::new(),
         assertions: Vec::new(),
         traces: None,
@@ -770,6 +904,7 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
             result.stop_reason = executed.stop_reason;
             result.message = executed.message;
             result.entry_result = executed.entry_result;
+            result.steps = executed.steps;
             result.steps_executed = executed.steps_executed;
             Some(executed.runtime)
         }
@@ -788,7 +923,15 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
         result.assertions = script
             .assertions
             .iter()
-            .map(|assertion| evaluate(assertion, result.entry_result, &result.ports, &digital))
+            .map(|assertion| {
+                evaluate(
+                    assertion,
+                    result.entry_result,
+                    &result.steps,
+                    &result.ports,
+                    &digital,
+                )
+            })
             .collect();
         result.traces = Some(FlexTraceSummary {
             time_unit: "ns",
@@ -825,8 +968,27 @@ pub(crate) fn run_flex_test(args: &TestArgs, script: FlexTestScript) -> FlexRunO
     if let Some(message) = &result.message {
         eprintln!("{message}");
     }
-    if let Some(entry_result) = result.entry_result {
-        println!("entry '{}' returned {entry_result}", script.entry.export);
+    for (index, step) in result.steps.iter().enumerate() {
+        let Some(time_ns) = step.time_ns else {
+            println!("  step {index}: not reached");
+            continue;
+        };
+        match &step.step {
+            FlexStep::Call(call) => println!(
+                "  step {index}: {}() returned {:?} after {}/{} calls at {time_ns} ns",
+                call.call.export, step.result, step.completed, call.call.repeat
+            ),
+            FlexStep::Set(set) => println!(
+                "  step {index}: set {} = {} ({}) at {time_ns} ns",
+                set.set.port,
+                set.set.value,
+                if step.completed == 1 {
+                    "accepted"
+                } else {
+                    "rejected"
+                }
+            ),
+        }
     }
     for assertion in &result.assertions {
         println!(

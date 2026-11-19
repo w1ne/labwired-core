@@ -145,7 +145,8 @@ and non-negative integers; explicit YAML `null` is rejected.
 Use `inputs.flex` to run portable firmware against a Flex manifest. The
 firmware is a WebAssembly module that imports `labwired.read(i32) -> f64`,
 `labwired.write(i32, f64)` and `labwired.advance_ns(i32)`. The runner calls one
-export once. This path does not emulate a target CPU, and it never falls back
+export once (`entry`), or runs a `sequence` of calls and test-bench stimuli on
+one firmware instance. This path does not emulate a target CPU, and it never falls back
 to one. A script that needs target instructions, MMIO or interrupts names
 `inputs.system` or `inputs.chip` instead; a script that names both is rejected.
 
@@ -172,9 +173,34 @@ assertions:
   - digital_edges: { port: user_led_state, count: 2 }     # exact captured edges
 ```
 
+A `sequence` replaces `entry` when the firmware has more than one entry
+point, for example `setup` and `loop`, or when the environment changes during
+the run. The firmware keeps its memory between steps. The limits apply to the
+whole sequence.
+
+```yaml
+# test-heat-cycle.yaml
+sequence:
+  - call: { export: setup, args: [{ port: temperature_mv }, { port: fan_drive }] }
+  - call: { export: loop, repeat: 2 }          # two calls in a row
+  - set: { port: temperature_c, value: 50 }    # the test bench writes a write port
+  - call: { export: loop, repeat: 2 }
+assertions:
+  - entry_result: { equals: 0, step: 1 }       # last result of sequence step 1
+  - entry_result: { equals: 1 }                # default: the last call step
+```
+
+Each step is resolved against the firmware and the manifest before step 0
+runs: an unknown export, a wrong argument count, or a `set` on a read port is
+a `config_error`. A `set` does not advance time; the models see the value at
+the next firmware `advance_ns`. `result.json` lists each step with the number
+of completed calls, the last result, and the virtual time at its end
+(`time_ns: null` for a step the run did not reach). A call step that a limit
+or an error interrupted has no result for `entry_result`.
+
 | Stop reason | Status | Exit code | Meaning |
 |---|---|---:|---|
-| `completed` | `pass` or `fail` | `0` or `1` | The export returned. The assertions decide. |
+| `completed` | `pass` or `fail` | `0` or `1` | Every call returned. The assertions decide. |
 | `max_steps` | `fail` | `1` | The firmware used all its fuel. |
 | `max_time_ns` | `fail` | `1` | The firmware asked to advance past the ceiling. |
 | `model_error` | `error` | `3` | A port or model rejected a host call, for example an input outside a modeled range. |

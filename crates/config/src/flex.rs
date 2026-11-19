@@ -414,8 +414,13 @@ fn check_analog_routes(
 pub struct FlexTestScript {
     pub schema_version: String,
     pub inputs: FlexTestInputs,
-    #[serde(default)]
-    pub entry: FlexEntry,
+    /// One firmware call. Omitted with no `sequence`, it is `run()`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<FlexEntry>,
+    /// Ordered firmware calls and test-bench stimuli on one firmware
+    /// instance and one runtime. Excludes `entry`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sequence: Vec<FlexStep>,
     pub limits: FlexTestLimits,
     #[serde(default)]
     pub assertions: Vec<FlexAssertion>,
@@ -430,14 +435,17 @@ pub struct FlexTestInputs {
     pub firmware: String,
 }
 
-/// The firmware export the runner calls once, and its arguments in order.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+/// A firmware export the runner calls, its arguments in order, and how many
+/// times in a row it is called.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FlexEntry {
     #[serde(default = "default_flex_entry_export")]
     pub export: String,
     #[serde(default)]
     pub args: Vec<FlexEntryArg>,
+    #[serde(default = "default_flex_entry_repeat")]
+    pub repeat: u32,
 }
 
 impl Default for FlexEntry {
@@ -445,12 +453,46 @@ impl Default for FlexEntry {
         Self {
             export: default_flex_entry_export(),
             args: Vec::new(),
+            repeat: default_flex_entry_repeat(),
         }
     }
 }
 
 fn default_flex_entry_export() -> String {
     "run".to_owned()
+}
+
+fn default_flex_entry_repeat() -> u32 {
+    1
+}
+
+/// One step of a `sequence`: a firmware call, or a value the test bench
+/// writes to a write port before the next call (a changed environment).
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum FlexStep {
+    Call(FlexCallStep),
+    Set(FlexSetStep),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexCallStep {
+    pub call: FlexEntry,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexSetStep {
+    pub set: FlexSetDetails,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexSetDetails {
+    pub port: String,
+    /// In the port's declared unit.
+    pub value: f64,
 }
 
 /// One entry argument: the id of a named manifest port, or a plain number.
@@ -501,8 +543,12 @@ pub struct FlexEntryResultAssertion {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FlexEntryResultDetails {
-    /// The entry export's single i32 result, read as unsigned.
+    /// The call's single i32 result, read as unsigned.
     pub equals: u32,
+    /// Index of the `sequence` call step whose last result is checked.
+    /// Default: the last call step.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -540,6 +586,27 @@ pub struct FlexDigitalEdgesDetails {
 }
 
 impl FlexTestScript {
+    /// The steps the runner executes in order: the `sequence`, or the single
+    /// `entry` call (`run()` when the script names neither).
+    pub fn steps(&self) -> Vec<FlexStep> {
+        if self.sequence.is_empty() {
+            vec![FlexStep::Call(FlexCallStep {
+                call: self.entry.clone().unwrap_or_default(),
+            })]
+        } else {
+            self.sequence.clone()
+        }
+    }
+
+    /// The script path of step `index`, for messages.
+    pub fn step_path(&self, index: usize) -> String {
+        match self.sequence.get(index) {
+            None => "entry".to_owned(),
+            Some(FlexStep::Call(_)) => format!("sequence[{index}].call"),
+            Some(FlexStep::Set(_)) => format!("sequence[{index}].set"),
+        }
+    }
+
     pub fn validate(&self) -> Result<()> {
         ensure!(
             self.schema_version == "1.0",
@@ -552,14 +619,38 @@ impl FlexTestScript {
         ] {
             ensure!(!value.trim().is_empty(), "{field} must not be empty");
         }
-        token(&self.entry.export, "entry.export")?;
-        for (index, arg) in self.entry.args.iter().enumerate() {
-            match arg {
-                FlexEntryArg::Port(arg) => token(&arg.port, &format!("entry.args[{index}].port"))?,
-                FlexEntryArg::Number(arg) => ensure!(
-                    arg.number.is_finite(),
-                    "entry.args[{index}].number must be finite"
-                ),
+        ensure!(
+            self.entry.is_none() || self.sequence.is_empty(),
+            "a Flex test script names entry or sequence, not both"
+        );
+        let steps = self.steps();
+        ensure!(
+            steps.iter().any(|step| matches!(step, FlexStep::Call(_))),
+            "sequence must contain at least one call step"
+        );
+        for (index, step) in steps.iter().enumerate() {
+            let path = self.step_path(index);
+            match step {
+                FlexStep::Call(step) => {
+                    let call = &step.call;
+                    token(&call.export, &format!("{path}.export"))?;
+                    ensure!(call.repeat > 0, "{path}.repeat must be > 0");
+                    for (index, arg) in call.args.iter().enumerate() {
+                        match arg {
+                            FlexEntryArg::Port(arg) => {
+                                token(&arg.port, &format!("{path}.args[{index}].port"))?
+                            }
+                            FlexEntryArg::Number(arg) => ensure!(
+                                arg.number.is_finite(),
+                                "{path}.args[{index}].number must be finite"
+                            ),
+                        }
+                    }
+                }
+                FlexStep::Set(step) => {
+                    token(&step.set.port, &format!("{path}.port"))?;
+                    ensure!(step.set.value.is_finite(), "{path}.value must be finite");
+                }
             }
         }
         ensure!(self.limits.max_steps > 0, "limits.max_steps must be > 0");
@@ -569,7 +660,18 @@ impl FlexTestScript {
         );
         for (index, assertion) in self.assertions.iter().enumerate() {
             match assertion {
-                FlexAssertion::EntryResult(_) => {}
+                FlexAssertion::EntryResult(assertion) => {
+                    if let Some(step) = assertion.entry_result.step {
+                        ensure!(
+                            !self.sequence.is_empty(),
+                            "assertions[{index}].entry_result.step needs a sequence"
+                        );
+                        ensure!(
+                            matches!(self.sequence.get(step), Some(FlexStep::Call(_))),
+                            "assertions[{index}].entry_result.step {step} is not a call step of the sequence"
+                        );
+                    }
+                }
                 FlexAssertion::PortValue(assertion) => {
                     let details = &assertion.port_value;
                     token(
@@ -648,9 +750,11 @@ assertions:
         let Ok(crate::LoadedTestScript::Flex(script)) = load_script(TEST_SCRIPT) else {
             panic!("inputs.flex must load as a Flex test script");
         };
-        assert_eq!(script.entry.export, "run");
+        let entry = script.entry.clone().expect("entry");
+        assert_eq!(entry.export, "run");
+        assert_eq!(entry.repeat, 1);
         assert_eq!(
-            script.entry.args,
+            entry.args,
             [
                 FlexEntryArg::Port(FlexEntryPortArg { port: "lux".into() }),
                 FlexEntryArg::Number(FlexEntryNumberArg { number: 100.0 }),
@@ -730,6 +834,110 @@ assertions:
             let message = format!("{error:#}");
             assert!(message.contains(expected), "'{to}': {message}");
         }
+    }
+
+    #[test]
+    fn test_script_sequence_orders_calls_and_bench_stimuli() {
+        let entry = "entry:\n  args:\n    - { port: lux }\n    - { number: 100 }\n";
+        assert!(TEST_SCRIPT.contains(entry), "fixture lost its entry");
+        let sequence = "sequence:\n  - call: { export: setup, args: [{ port: lux }] }\n  - set: { port: lux, value: 50 }\n  - call: { export: loop, repeat: 3 }\n";
+        let script = TEST_SCRIPT.replace(entry, sequence);
+        let Ok(crate::LoadedTestScript::Flex(loaded)) = load_script(&script) else {
+            panic!("a sequence must load as a Flex test script");
+        };
+        assert!(loaded.entry.is_none());
+        let steps = loaded.steps();
+        assert_eq!(steps, loaded.sequence);
+        assert_eq!(steps.len(), 3);
+        let FlexStep::Call(setup) = &steps[0] else {
+            panic!("step 0 is a call");
+        };
+        assert_eq!(
+            (setup.call.export.as_str(), setup.call.repeat),
+            ("setup", 1)
+        );
+        assert_eq!(
+            steps[1],
+            FlexStep::Set(FlexSetStep {
+                set: FlexSetDetails {
+                    port: "lux".into(),
+                    value: 50.0
+                }
+            })
+        );
+        let FlexStep::Call(repeated) = &steps[2] else {
+            panic!("step 2 is a call");
+        };
+        assert_eq!(
+            (repeated.call.export.as_str(), repeated.call.repeat),
+            ("loop", 3)
+        );
+        assert_eq!(loaded.step_path(1), "sequence[1].set");
+
+        let cases = [
+            (
+                "sequence:\n",
+                "entry: { export: run }\nsequence:\n",
+                "entry or sequence, not both",
+            ),
+            (
+                "repeat: 3",
+                "repeat: 0",
+                "sequence[2].call.repeat must be > 0",
+            ),
+            (
+                "value: 50",
+                "value: .inf",
+                "sequence[1].set.value must be finite",
+            ),
+            (
+                "  - call: { export: setup, args: [{ port: lux }] }\n",
+                "",
+                "", // still valid: one call step remains
+            ),
+            (
+                "entry_result: { equals: 2974 }",
+                "entry_result: { equals: 2974, step: 1 }",
+                "entry_result.step 1 is not a call step",
+            ),
+            (
+                "entry_result: { equals: 2974 }",
+                "entry_result: { equals: 2974, step: 3 }",
+                "entry_result.step 3 is not a call step",
+            ),
+            (
+                "  - call: { export: loop, repeat: 3 }\n",
+                "  - call: { export: loop, repeat: 3, until: 1 }\n",
+                "Failed to parse Flex Test Script",
+            ),
+        ];
+        for (from, to, expected) in cases {
+            assert!(script.contains(from), "sequence fixture lost '{from}'");
+            let loaded = load_script(&script.replace(from, to));
+            if expected.is_empty() {
+                loaded.expect("one remaining call step is a valid sequence");
+                continue;
+            }
+            let message = format!(
+                "{:#}",
+                loaded.expect_err(&format!("'{to}' must be rejected"))
+            );
+            assert!(message.contains(expected), "'{to}': {message}");
+        }
+
+        // Stimuli alone run no firmware.
+        let only_set = script
+            .replace("  - call: { export: setup, args: [{ port: lux }] }\n", "")
+            .replace("  - call: { export: loop, repeat: 3 }\n", "");
+        let message = format!("{:#}", load_script(&only_set).expect_err("no call step"));
+        assert!(message.contains("at least one call step"), "{message}");
+        // `step` names a sequence index, so it needs a sequence.
+        let message = format!(
+            "{:#}",
+            load_script(&TEST_SCRIPT.replace("equals: 2974", "equals: 2974, step: 0"))
+                .expect_err("step without sequence")
+        );
+        assert!(message.contains("needs a sequence"), "{message}");
     }
 
     const RC: &str = r#"
