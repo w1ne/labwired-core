@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="92" failures="0" errors="0" time="0.780359">
+<testsuite name="labwired" tests="92" failures="0" errors="0" time="0.808521">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="125b116e665127cdbea2e43114d43f4ceaa29ca8cb734874165150b7eb4d088e"/>
+    <property name="firmware_hash" value="d9205c93b40fd8f267f2e492a697ab6c00ac3632afc741e50d1e4a3c8a38daf1"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.780359">
+  <testcase classname="labwired" name="run" time="0.808521">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
   </testcase>
@@ -59,7 +59,7 @@
   </testcase>
   <testcase classname="labwired" name="assertion 26: uart_contains: USART2 RX DMA BLOCKED=1 DATA=444D REM=00000000 TCIF=1 IRQ16=1 FLAG_CLEAR=1 IRQ_DEASSERT=1 RXNE_CLEAR=1 ok" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 27: uart_contains: DMAUSART2 TX DMA DATA=DMA REM=00000000 TCIF=1 IRQ17=1 FLAG_CLEAR=1 IRQ_DEASSERT=1 ok" time="0.000000">
+  <testcase classname="labwired" name="assertion 27: uart_contains: DMAR2USART2 TX DMA REARM DATA=DMAR2 REM=00000000 FIRST_TCIF=1 FIRST_IRQ17=1 FIRST_CLEAR=1 FIRST_DEASSERT…" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 28: uart_contains: SPI1 MAX31855=01901600" time="0.000000">
   </testcase>

@@ -32,10 +32,15 @@ and IRQ16 do not change. It
 then enables CR3.DMAR and checks the two bytes in SRAM, CNDTR zero, TCIF6,
 IRQ16 pending, RXNE clear, and that clearing the DMA flags deasserts the
 channel-6 line. It also sends the three-byte `DMA` payload from SRAM through
-USART2's `CR3.DMAT` request on channel 7. It checks the bytes on the USART2 TX
-stream, CNDTR zero, TCIF7 and IRQ17 asserted, and IRQ17 deasserted after
-clearing the channel flags. This is a single three-byte transfer; it does not
-claim repeated-transfer or baud-timing coverage.
+USART2's `CR3.DMAT` request on channel 7. After clearing TCIF7 and its IRQ, it
+clears DMAT, disables channel 7, loads a different two-byte `R2` source and
+count, then re-enables the channel and sets DMAT for the second transfer. This
+follows the STM32F1 HAL normal-mode completion path, which clears DMAT when the
+DMA count completes. The smoke checks the USART2 TX stream contains `DMAR2`,
+both CNDTR values reach zero, both TCIF7/IRQ17 completions occur, and clearing
+each completion lowers the channel line. This verifies two sequential
+transfers and software re-arm; it does not claim baud-timing coverage. See
+[ST's STM32F1 HAL UART driver](https://github.com/STMicroelectronics/stm32f1xx-hal-driver/blob/master/Src/stm32f1xx_hal_uart.c#L2805-L2818).
 
 The smoke also runs software-started two-rank scans with DMA1 channel 1 in
 circular mode. With TCIE disabled and HTIE enabled, two laps must set HTIF and

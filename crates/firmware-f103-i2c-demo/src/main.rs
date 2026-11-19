@@ -187,6 +187,7 @@ static mut ADC1_DMA_CONTINUOUS_RESULTS: [u16; 4] = [0; 4];
 static mut ADC1_DMA_CONTINUOUS_CIRCULAR_RESULTS: [u16; 2] = [0; 2];
 static mut USART2_DMA_RX_BYTES: [u8; 2] = [0; 2];
 static mut USART2_DMA_TX_BYTES: [u8; 3] = *b"DMA";
+static mut USART2_DMA_TX_REARM_BYTES: [u8; 2] = *b"R2";
 
 const I2C1_BASE: u32 = 0x4000_5400;
 const I2C1_CR1: u32 = I2C1_BASE + 0x00;
@@ -4750,9 +4751,10 @@ fn smoke_usart2_rx_dma() {
     putline(if passed { b" ok" } else { b" FAIL" });
 }
 
-/// Transmit `DMA` through the STM32F103 USART2_TX fixed request on DMA1
-/// channel 7. The model emits TX requests while CR3.DMAT is set; completion
-/// raises TCIF7/IRQ17, and clearing the channel flags must lower that line.
+/// Transmit `DMA` and then `R2` through the STM32F103 USART2_TX fixed request
+/// on DMA1 channel 7. The second transfer verifies that software can clear the
+/// first completion, reload a different count and source, and set CR3.DMAT for
+/// the next transfer after normal-mode completion cleared it.
 fn smoke_usart2_tx_dma() {
     let read = |address: u32| unsafe { read_volatile(address as *const u32) };
     let write = |address: u32, value: u32| unsafe { write_volatile(address as *mut u32, value) };
@@ -4790,18 +4792,71 @@ fn smoke_usart2_tx_dma() {
     write(DMA1_CCR7, 0);
     write(DMA1_IFCR, DMA1_CHANNEL7_FLAGS);
 
-    let passed =
-        remaining == 0 && complete && irq_pending && flags_clear && irq_deasserted && irq_cleared;
-    putbytes(b"USART2 TX DMA DATA=DMA REM=");
+    write(DMA1_CNDTR7, 2);
+    let rearm_source = core::ptr::addr_of!(USART2_DMA_TX_REARM_BYTES).cast::<u8>();
+    write(DMA1_CMAR7, rearm_source as u32);
+    let count_loaded = read(DMA1_CNDTR7) == 2;
+    write(DMA1_CCR7, 1 | (1 << 1) | (1 << 4) | (1 << 7));
+    write(USART2_CR3, USART2_CR3_DMAT);
+
+    for _ in 0..1_000_000 {
+        if read(DMA1_CNDTR7) == 0 {
+            break;
+        }
+        core::hint::spin_loop();
+    }
+
+    let rearm_remaining = read(DMA1_CNDTR7);
+    let rearm_complete = read(DMA1_ISR) & DMA1_TCIF7 != 0;
+    let rearm_irq_pending =
+        unsafe { read_volatile(NVIC_ISPR) } & DMA1_CHANNEL7_IRQ_PENDING_BIT != 0;
+    write(DMA1_IFCR, DMA1_CHANNEL7_FLAGS);
+    let rearm_flags_clear = read(DMA1_ISR) & DMA1_CHANNEL7_FLAGS == 0;
+    let rearm_irq_deasserted =
+        unsafe { read_volatile(NVIC_ISPR) } & DMA1_CHANNEL7_IRQ_PENDING_BIT == 0;
+    unsafe { write_volatile(NVIC_ICPR as *mut u32, DMA1_CHANNEL7_IRQ_PENDING_BIT) };
+    let rearm_irq_cleared =
+        unsafe { read_volatile(NVIC_ISPR) } & DMA1_CHANNEL7_IRQ_PENDING_BIT == 0;
+
+    write(USART2_CR3, 0);
+    write(DMA1_CCR7, 0);
+    write(DMA1_IFCR, DMA1_CHANNEL7_FLAGS);
+
+    let passed = remaining == 0
+        && complete
+        && irq_pending
+        && flags_clear
+        && irq_deasserted
+        && irq_cleared
+        && count_loaded
+        && rearm_remaining == 0
+        && rearm_complete
+        && rearm_irq_pending
+        && rearm_flags_clear
+        && rearm_irq_deasserted
+        && rearm_irq_cleared;
+    putbytes(b"USART2 TX DMA REARM DATA=DMAR2 REM=");
     put_hex32(remaining);
-    putbytes(b" TCIF=");
+    putbytes(b" FIRST_TCIF=");
     put_flag(complete);
-    putbytes(b" IRQ17=");
+    putbytes(b" FIRST_IRQ17=");
     put_flag(irq_pending);
-    putbytes(b" FLAG_CLEAR=");
+    putbytes(b" FIRST_CLEAR=");
     put_flag(flags_clear);
-    putbytes(b" IRQ_DEASSERT=");
+    putbytes(b" FIRST_DEASSERT=");
     put_flag(irq_deasserted && irq_cleared);
+    putbytes(b" COUNT_LOADED=");
+    put_flag(count_loaded);
+    putbytes(b" REARM_REM=");
+    put_hex32(rearm_remaining);
+    putbytes(b" REARM_TCIF=");
+    put_flag(rearm_complete);
+    putbytes(b" REARM_IRQ17=");
+    put_flag(rearm_irq_pending);
+    putbytes(b" REARM_CLEAR=");
+    put_flag(rearm_flags_clear);
+    putbytes(b" REARM_DEASSERT=");
+    put_flag(rearm_irq_deasserted && rearm_irq_cleared);
     putline(if passed { b" ok" } else { b" FAIL" });
 }
 
