@@ -1,8 +1,8 @@
 # Control: descriptor without the TWI0 model
 
 Same firmware and smoke assertions as `bme280-smoke.yaml`. The chip descriptor
-is `configs/chips/atmega4809.yaml` from the parent commit (`git show
-HEAD~1:configs/chips/atmega4809.yaml`), which has no window at 0x08A0, and no
+is `configs/chips/atmega4809.yaml` as it was before commit 9b55e08ab (`git show
+9b55e08ab~1:configs/chips/atmega4809.yaml`), which has no window at 0x08A0, and no
 device is attached.
 
 Result: FAIL, 0/6 checks. The run stops with `Memory access violation at
