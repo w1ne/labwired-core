@@ -356,6 +356,7 @@ external_devices:
 fn pca_servo_dynamic_oe_requires_a_driven_low_gpio() {
     use labwired_config::{ChipDescriptor, SystemManifest};
     use labwired_core::bus::{Bus, SystemBus};
+    use labwired_core::peripherals::esp32c3::i2c::Esp32c3I2c;
     use std::path::PathBuf;
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml")).unwrap();
@@ -363,16 +364,27 @@ fn pca_servo_dynamic_oe_requires_a_driven_low_gpio() {
 name: pca-servo-oe
 chip: "../chips/esp32c3.yaml"
 external_devices:
-  - { id: pwm1, type: pca9685, connection: i2c0, config: { address: 64 } }
+  - { id: pwm1, type: pca9685, connection: i2c0, route: { sda: GPIO8, scl: GPIO9 }, config: { address: 64 } }
   - { id: elbow, type: servo, connection: i2c0, config: { model: mg995, source_address: 64, source_channel: 0, source_oe_pin: GPIO4 } }
 "#).unwrap();
     let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
-    let mut slaves = bus.take_i2c_slaves("i2c0");
-    init_50hz(slaves[0].as_mut());
-    write_reg(slaves[0].as_mut(), 0x06, &[0, 0, 0x33, 0x01]);
-    for slave in slaves {
-        bus.attach_i2c_slave("i2c0", slave).unwrap();
-    }
+    let idx = bus.find_peripheral_index_by_name("i2c0").unwrap();
+    let program = |bus: &mut SystemBus, count: u8| {
+        let i2c = bus.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .unwrap()
+            .downcast_mut::<Esp32c3I2c>()
+            .unwrap();
+        let pca = i2c
+            .attached_slaves_mut()
+            .iter_mut()
+            .find(|device| device.address() == 0x40)
+            .unwrap();
+        init_50hz(pca.as_mut());
+        write_reg(pca.as_mut(), 0x06, &[0, 0, count, 0x01]);
+    };
+    program(&mut bus, 0x33);
     let commanded = |bus: &SystemBus| bus.observed_of::<Servo>().next().unwrap().is_commanded();
     let angle = |bus: &SystemBus| bus.observed_of::<Servo>().next().unwrap().angle_degrees();
     // Input / unknown is not an enable, even if its output latch is low.
@@ -388,11 +400,7 @@ external_devices:
     assert!(commanded(&bus));
     let previous = angle(&bus);
     bus.write_u32(GPIO + 0x08, 1 << 4).unwrap(); // disable output
-    let mut slaves = bus.take_i2c_slaves("i2c0");
-    write_reg(slaves[0].as_mut(), 0x06, &[0, 0, 0x80, 0x01]);
-    for slave in slaves {
-        bus.attach_i2c_slave("i2c0", slave).unwrap();
-    }
+    program(&mut bus, 0x80);
     bus.sync_pwm_sourced_servos();
     assert_eq!(angle(&bus), previous);
     bus.write_u32(GPIO + 0x0c, 1 << 4).unwrap();
