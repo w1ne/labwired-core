@@ -3556,6 +3556,11 @@
           "doc": "Output channel (0..15) of the PWM controller at source_address."
         },
         {
+          "name": "source_oe_pin",
+          "ty": "str",
+          "doc": "Optional MCU GPIO wired to the PWM controller active-low OE. Only a known driven-low GPIO allows new commands; last position may persist when disabled."
+        },
+        {
           "name": "ledc_channel",
           "ty": "int",
           "doc": "Optional ESP32 LEDC channel (0..15). When omitted, the servo follows the channel the GPIO matrix routes to its pad."
