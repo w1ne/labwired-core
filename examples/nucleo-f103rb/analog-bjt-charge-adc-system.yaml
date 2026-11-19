@@ -1,0 +1,140 @@
+# Matched generic Gummel–Poon NPN branches isolate base-emitter depletion,
+# base-collector depletion, and forward transit charge through STM32F103 ADC1.
+# The synthetic 10 nF junction capacitances and 100 ns transit time make the
+# transient visible at this fixture's 1 us step; they are a physics stress case.
+name: nucleo-f103rb-analog-bjt-charge-adc
+chip: ../../configs/chips/stm32f103rb.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: unrelated_ntc_divider
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      temperature: ui.bjt_charge.temperature_c
+    outputs:
+      sense_voltage: board.analog.pa0_volts
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        sense_voltage: v(sense)
+      sources:
+        temperature: Rntc
+      vdd: 3.3
+  - id: unrelated_shockley_diode
+    adapter: analog
+    step_ns: 1000
+    outputs:
+      sense_voltage: board.analog.pa1_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 3.3
+        Rdrive drive sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        sense_voltage: v(sense)
+      vdd: 3.3
+  - id: bjt_charge_reference
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_charge.base_v
+    outputs:
+      collector_voltage: board.analog.pa2_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_base_emitter_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_charge.base_v
+    outputs:
+      collector_voltage: board.analog.pa3_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 CJE=10n VJE=0.7 MJE=0.33 FC=0.5)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_base_collector_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_charge.base_v
+    outputs:
+      collector_voltage: board.analog.pa4_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 CJC=10n VJC=0.7 MJC=0.33 FC=0.5)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_forward_transit_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_charge.base_v
+    outputs:
+      collector_voltage: board.analog.pa5_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 TF=100n)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_combined_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_charge.base_v
+    outputs:
+      collector_voltage: board.analog.pa6_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50 CJE=10n VJE=0.7 MJE=0.33 CJC=10n VJC=0.7 MJC=0.33 FC=0.5 TF=100n)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
