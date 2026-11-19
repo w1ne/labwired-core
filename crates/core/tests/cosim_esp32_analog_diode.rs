@@ -49,6 +49,59 @@ fn expected_diode_voltage() -> f64 {
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
 }
 
+/// Independent forward-active Gummel–Poon collector load line. The matched
+/// branches vary only VAF, so a missing Early-effect term or wrong route moves
+/// the asserted collector voltage and SAR result.
+fn expected_bjt_collector_voltage(base_drive_v: f64, forward_early_v: Option<f64>) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const COLLECTOR_OHMS: f64 = 1_000.0;
+    const BASE_OHMS: f64 = 10_000.0;
+    const IS_A: f64 = 1e-16;
+    const BF: f64 = 80.0;
+    const BR: f64 = 4.0;
+    const VAR: f64 = 75.0;
+    const VT: f64 = 1.380_649e-23 * 300.0 / 1.602_176_634e-19;
+
+    let currents = |vbe: f64, collector_v: f64| {
+        let vbc = vbe - collector_v;
+        let forward = (vbe / VT).exp();
+        let reverse = (vbc / VT).exp();
+        let base_width = 1.0 - forward_early_v.map_or(0.0, |vaf| vbc / vaf) - vbe / VAR;
+        let transport = IS_A * (forward - reverse) * base_width;
+        let base_collector = (IS_A / BR) * (reverse - 1.0);
+        let base_emitter = (IS_A / BF) * (forward - 1.0);
+        (transport - base_collector, base_emitter + base_collector)
+    };
+
+    let collector_for_vbe = |vbe: f64| {
+        let (mut low, mut high) = (0.0, SUPPLY_V);
+        for _ in 0..100 {
+            let collector_v = 0.5 * (low + high);
+            let (collector_current, _) = currents(vbe, collector_v);
+            let residual = (SUPPLY_V - collector_v) / COLLECTOR_OHMS - collector_current;
+            if residual > 0.0 {
+                low = collector_v;
+            } else {
+                high = collector_v;
+            }
+        }
+        0.5 * (low + high)
+    };
+
+    let (mut low, mut high) = (0.0, base_drive_v);
+    for _ in 0..100 {
+        let vbe = 0.5 * (low + high);
+        let collector_v = collector_for_vbe(vbe);
+        let (_, base_current) = currents(vbe, collector_v);
+        if (base_drive_v - vbe) / BASE_OHMS > base_current {
+            low = vbe;
+        } else {
+            high = vbe;
+        }
+    }
+    collector_for_vbe(0.5 * (low + high))
+}
+
 fn adc_channel_input_count(bus: &mut SystemBus, channel: u8) -> u16 {
     let adc_index = bus
         .find_peripheral_index_by_name("sens_sar_adc")
@@ -266,6 +319,143 @@ fn esp32_wroom_32_ntc_netlist_reaches_sens_sar_channel_and_one_shot_result() {
     assert_eq!(
         samples[1].2, 2047,
         "25 °C puts the matched divider at half scale"
+    );
+}
+
+/// Reuse the generic Gummel–Poon fixture on a classic ESP32 profile. The two
+/// collector outputs use explicit SENS SAR inputs because this chip profile
+/// does not claim a GPIO-to-ADC pad map; the independent NTC route remains on
+/// channel 6 while Early-effect and control branches use channels 4 and 5.
+#[test]
+fn esp32_wroom_32_bjt_early_effect_reaches_sens_sar_with_ntc() {
+    let profile_path = root("configs/systems/esp32-wroom-32.yaml");
+    let mut profile = SystemManifest::from_file(&profile_path).expect("load WROOM-32 profile");
+    assert_eq!(profile.name, "esp32-wroom-32");
+
+    let ntc = SystemManifest::from_file(root("examples/esp32-wroom-32/analog-ntc-system.yaml"))
+        .expect("load generic Beta NTC divider");
+    profile.cosim_models = ntc.cosim_models;
+    let bjt =
+        SystemManifest::from_file(root("examples/stm32-catalog/analog-bjt-early-effect.yaml"))
+            .expect("load matched generic Gummel–Poon branches");
+    for mut model in bjt.cosim_models {
+        let channel = match model.id.as_str() {
+            "bjt_with_forward_early_effect" => 4,
+            "bjt_without_forward_early_effect" => 5,
+            other => panic!("unexpected generic BJT model {other}"),
+        };
+        model.outputs.insert(
+            "collector_voltage".into(),
+            format!("adc.sens_sar_adc.{channel}_volts"),
+        );
+        profile.cosim_models.push(model);
+    }
+
+    let chip_path = profile_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load classic ESP32 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build WROOM-32 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile carries NTC and matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "the generic BJT branches and NTC must bind to distinct SENS SAR channels"
+    );
+    for channel in [4, 5, 6, 7] {
+        assert_eq!(
+            adc_channel_input_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts undriven"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+    session
+        .set_signal_number("ui.bjt_early.base_v", 0.0)
+        .expect("initialize matched BJT base drives");
+    let expected_ntc_v = 3.3 * 10_000.0 / 20_000.0;
+    let mut cycles = 0;
+    let mut early_samples = Vec::new();
+    let mut control_samples = Vec::new();
+    for base_drive_v in [0.0_f64, 0.7, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt_early.base_v", base_drive_v)
+            .expect("set common BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the NTC and both matched BJT branches");
+        assert_eq!(
+            steps.len(),
+            3,
+            "all three analog branches cross the boundary"
+        );
+        assert!(errors.is_empty(), "unexpected routing errors: {errors:?}");
+
+        let routed_voltage = |channel: u8| match session
+            .signals()
+            .get(&format!("adc.sens_sar_adc.{channel}_volts"))
+        {
+            Some(CosimSignalValue::F64(volts)) => *volts,
+            other => panic!("ADC1 channel {channel} was not routed: {other:?}"),
+        };
+        let early_v = routed_voltage(4);
+        let control_v = routed_voltage(5);
+        let ntc_v = routed_voltage(6);
+        let expected_early_v = expected_bjt_collector_voltage(base_drive_v, Some(50.0));
+        let expected_control_v = expected_bjt_collector_voltage(base_drive_v, None);
+        assert!(
+            (early_v - expected_early_v).abs() < 5e-5,
+            "VAF=50 Gummel–Poon load line at {base_drive_v} V should be {expected_early_v} V, got {early_v} V"
+        );
+        assert!(
+            (control_v - expected_control_v).abs() < 5e-5,
+            "no-forward-Early load line at {base_drive_v} V should be {expected_control_v} V, got {control_v} V"
+        );
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "the unrelated 25 °C Beta divider should remain {expected_ntc_v} V, got {ntc_v} V"
+        );
+        if base_drive_v >= 0.7 {
+            assert!(
+                early_v < control_v - 0.001,
+                "finite VAF increases collector current: {early_v} V vs {control_v} V"
+            );
+        }
+
+        for (channel, volts) in [(4, early_v), (5, control_v), (6, ntc_v)] {
+            let expected_mv = (volts * 1000.0 + 0.5).floor() as u16;
+            let expected_count = (u32::from(expected_mv) * 4095 / 3300) as u16;
+            assert_eq!(
+                adc_channel_input_count(&mut bus, channel),
+                expected_count,
+                "the solved voltage must seed SENS SAR channel {channel}"
+            );
+            assert_eq!(
+                convert_adc1_channel(&mut bus, channel),
+                expected_count,
+                "the firmware-visible one-shot conversion must report channel {channel}"
+            );
+        }
+        assert_eq!(
+            adc_channel_input_count(&mut bus, 7),
+            0xFFFF,
+            "the neighboring undriven SENS SAR channel remains untouched"
+        );
+        early_samples.push(early_v);
+        control_samples.push(control_v);
+    }
+
+    assert!(
+        early_samples[1] > early_samples[2] && early_samples[2] > early_samples[3],
+        "increasing base drive lowers the finite-VAF collector voltage: {early_samples:?}"
+    );
+    assert!(
+        control_samples[1] > control_samples[2] && control_samples[2] > control_samples[3],
+        "increasing base drive lowers the no-Early control collector voltage: {control_samples:?}"
     );
 }
 
