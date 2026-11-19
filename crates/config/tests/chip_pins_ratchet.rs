@@ -75,8 +75,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // so there are no digital pads to read, by parse or by map. The ADC0_SEn
     // pads are analog routes (`analog_pins`), keyed by pad name.
     "vegaboard-ri5cy",
-    // The PolarFire SoC MSS GPIO_0..2 are declared stubs (no GPIO model), and
-    // the kit's LEDs/buttons sit behind the FPGA fabric; no pads to read yet.
+    // The PolarFire SoC MSS GPIO_0..2 ports reach package balls through the
+    // MSS configuration and the FPGA fabric design, not through fixed pads;
+    // a board routes them numerically (`board.gpio_in.mss_gpio2.<port>`).
     "mpfs095t",
     // The SK-AM62 LEDs and button are on I2C GPIO expanders / MAIN GPIO, and
     // neither is modelled; the pad configuration is a declared stub.

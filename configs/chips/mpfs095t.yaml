@@ -15,11 +15,11 @@
 #
 # Modelled: one U54 hart (mhartid 1) as an RV64IMAC M-mode core with the
 # CLINT inside the core (crates/core/src/cpu/riscv64.rs), the five MMUARTs as
-# 16550s (DLAB divisor latches, polled TX), L2-LIM and the DDR window as RAM.
-# Declared, not modelled (`type: stub`): PLIC (no external interrupts are
-# delivered yet), the GPIO/I2C/SPI/QSPI blocks and the system controller
-# mailbox. Not modelled in the core: F/D, S/U modes, Sv39, the E51 and the
-# other three U54s.
+# 16550s (DLAB divisor latches, polled TX), MSS GPIO_0..2, L2-LIM and the DDR
+# window as RAM. Declared, not modelled (`type: stub`): PLIC (no external
+# interrupts are delivered yet), the I2C/SPI/QSPI blocks and the system
+# controller mailbox. Not modelled in the core: F/D, S/U modes, Sv39, the E51
+# and the other three U54s.
 
 name: "mpfs095t"
 arch: "riscv"
@@ -35,10 +35,13 @@ flash: { base: 0x20220000, size: "128KiB" }
 # maps only the window firmware uses.
 ram: { base: 0x80000000, size: "8MiB" }
 flash_boot_alias: false
+# GPIO Bank 1 on the Discovery Kit: VDDI 3.3 V with J45 on 1-2, the default
+# (reference design MPFS_DISCOVERY_KIT_BANK_SETTINGS.pdc; 2.5 V on 2-3).
 io_voltage_v: 3.3
-# Simulation-only input thresholds for the generic co-simulation endpoints
-# below. These are test assumptions, not MPFS MSS or fabric GPIO specifications.
-gpio_input_thresholds: { vil: 0.3, vih: 0.7 }
+# LVCMOS33 / LVTTL DC input levels: VIL max 0.8 V, VIH min 2.0 V (PolarFire
+# SoC Data Sheet DS00004248E, Table 4-15), written as 0.8 / 3.3 and 2.0 / 3.3. The
+# 1.8 V banks (LVCMOS18: 0.35 / 0.65 x VDDI) carry no routed pad here.
+gpio_input_thresholds: { vil: 0.24242424, vih: 0.60606061 }
 memory_regions:
   # L2 cache as loosely-integrated memory (Zephyr `sram0`).
   - { name: "l2lim", base: 0x08000000, size: "512KiB" }
@@ -84,21 +87,30 @@ peripherals:
     type: "stub"
     base_address: 0x0C000000
     size: "65536KB"
-  # MSS GPIO_0..2. Named `mss_gpio*`, not `gpio*`: the bus reads a `gpio0` /
-  # `gpio1` peripheral as a Nordic GPIOTE port and keeps a per-cycle service
-  # pass for it, which these stubs do not need.
+  # MSS GPIO_0..2: CoreGPIO semantics on the mss_gpio.h register map
+  # (crates/core/src/peripherals/miv.rs). `ports` is the bank width
+  # (NB_OF_GPIO_GPIO0/1/2 = 14/24/32 in Microchip's mss_gpio.c). No `irq`:
+  # the PLIC is a stub here, so the banks' interrupt lines go nowhere. Named
+  # `mss_gpio*`, not `gpio*`: the bus reads a `gpio0` / `gpio1` peripheral as
+  # a Nordic GPIOTE port.
   - id: "mss_gpio0"
-    type: "stub"
+    type: "mpfs_gpio"
     base_address: 0x20120000
     size: "4KB"
+    config:
+      ports: 14
   - id: "mss_gpio1"
-    type: "stub"
+    type: "mpfs_gpio"
     base_address: 0x20121000
     size: "4KB"
+    config:
+      ports: 24
   - id: "mss_gpio2"
-    type: "stub"
+    type: "mpfs_gpio"
     base_address: 0x20122000
     size: "4KB"
+    config:
+      ports: 32
   - id: "i2c0"
     type: "stub"
     base_address: 0x2010A000
@@ -119,10 +131,3 @@ peripherals:
     type: "stub"
     base_address: 0x37020000
     size: "4KB"
-  # Abstract inputs for generic analog co-simulation. This does not model the
-  # MSS GPIO registers, FPGA fabric I/O, package pads, or board connectors.
-  - id: "cosim_inputs"
-    type: "input_pin_bank"
-    base_address: 0xF0000000
-    size: "4KB"
-    config: { pin_count: 2 }

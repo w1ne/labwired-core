@@ -1,6 +1,17 @@
-# Generic NTC divider and Shockley diode for the MPFS-DISCO-KIT analog input
-# co-simulation proof. The endpoints and thresholds are simulation-only; this
-# file does not describe physical GPIO pads, board connectors, or an ADC.
+# Generic NTC divider and Shockley diode on the Discovery Kit's Raspberry Pi
+# header, read through MSS GPIO_2.
+#
+# Route (reference design polarfire-soc-discovery-kit-reference-design
+# @a84023d1, the "reference-rtl-v2507" design Linux's mpfs-disco-kit.dts
+# names): MSS GPIO_2 is on the fabric (MPFS_DISCOVERY_KIT_MSS.cfg), and
+# MPFS_DISCOVERY_KIT.tcl wires GPIO_2_0_IO to RPI_GPIO4 (ball E12) and
+# GPIO_2_1_IO to RPI_GPIO17 (ball G18). MPFS_DISCOVERY_RPi.pdc puts both on
+# LVCMOS33; they are Bank 1 pads at 3.3 V. Another FPGA design can route
+# GPIO_2 elsewhere: this file describes that reference bitstream only.
+#
+# Firmware sees the levels in GPIO_IN (0x2012_2084) once GPIO_CFG[n].INREG is
+# set. The header pins are digital pads, not an ADC: the firmware-visible
+# result is the level against the LVCMOS33 limits (VIL 0.8 V, VIH 2.0 V).
 name: "mpfs-disco-kit-analog-inputs"
 chip: "../../configs/chips/mpfs095t.yaml"
 external_devices: []
@@ -11,7 +22,7 @@ cosim_models:
     inputs:
       temperature: "ui.ntc.temperature_c"
     outputs:
-      v_sense: "board.gpio_in.cosim_inputs.0"
+      v_sense: "board.gpio_in.mss_gpio2.0"
     config:
       netlist_text: |
         Vcc vcc 0 dc 3.3
@@ -26,7 +37,7 @@ cosim_models:
     adapter: "analog"
     step_ns: 1000
     outputs:
-      v_diode: "board.gpio_in.cosim_inputs.1"
+      v_diode: "board.gpio_in.mss_gpio2.1"
     config:
       netlist_text: |
         Vcc supply 0 dc 3.3

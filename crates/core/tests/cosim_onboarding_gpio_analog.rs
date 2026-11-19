@@ -187,6 +187,11 @@ const SILICON_INPUT_REGISTER: &[(&str, u64, &str)] = &[
         "SAM4S DS §31.7 PIO_PDSR; AT91RM9200 DS 1768 PIO_PDSR",
     ),
     ("miv_coregpio", 0x90, "CoreGPIO handbook InputRegister"),
+    (
+        "mpfs_gpio",
+        0x84,
+        "Microchip mss_gpio.h GPIO_TypeDef GPIO_IN",
+    ),
     // Switch pads 32..63 read at Switches; see [`input_bit`].
     (
         "litex_controlandstatus",
@@ -274,7 +279,6 @@ const PLACEHOLDER_TYPES: &[&str] = &[
     "efr32_gpioport",
     "gaisler_gpio",
     "max32650_gpio",
-    "mpfs_gpio",
     "murax_gpio",
     "npcx_gpio",
     "nxp_imx_gpio",
@@ -628,7 +632,7 @@ const SILICON_INPUT_ADDRESS: &[(&str, &str, u64, &str)] = &[
 /// Profiles covered here: a port takes the routed level.
 const COVERED: usize = 241;
 /// Covered profiles read back at a [`SILICON_INPUT_REGISTER`] offset.
-const SILICON_REGISTER: usize = 117;
+const SILICON_REGISTER: usize = 120;
 /// Profiles outside this input endpoint sweep: the three H7 profiles and
 /// CrossLink-NX have ADC coverage.
 const NO_GPIO_ENDPOINT: usize = 4;
@@ -795,8 +799,9 @@ fn bring_up_inputs(bus: &mut SystemBus, chip: &ChipDescriptor, port: &str, base:
         .iter()
         .find(|p| p.id == port)
         .map(|p| p.r#type.to_ascii_lowercase());
-    if kind.as_deref() == Some("miv_coregpio") {
-        // CoreGPIO masks InputRegister bits whose CONFIG_X.INREG is clear.
+    if matches!(kind.as_deref(), Some("miv_coregpio" | "mpfs_gpio")) {
+        // CoreGPIO masks InputRegister bits whose CONFIG_X.INREG is clear;
+        // MSS GPIO_IN does the same with GPIO_CFG[n] (same bit, same stride).
         for pin in [pins.ntc, pins.diode] {
             bus.write_u32(base + 4 * u64::from(pin), 1 << 1)
                 .expect("CoreGPIO CONFIG_X.INREG");

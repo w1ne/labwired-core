@@ -26,7 +26,11 @@ is no MPFS bench part, and no Renode or QEMU run was diffed against.
 - **S/U modes, Sv39 MMU, `satp`, delegation**: absent; `misa` reports only
   I, M, A, C, and `mstatus` keeps MPP = M.
 - **PLIC**: declared stub; `MEIP` is never set, so no peripheral interrupt
-  reaches the hart (Zephyr's console is polled).
+  reaches the hart (Zephyr's console is polled). The MSS GPIO interrupt
+  lines therefore go nowhere.
+- **Fabric routing**: the FPGA design decides where MSS GPIO_2 goes. The
+  analog fixture uses the reference design's Raspberry Pi header route and
+  claims nothing for another bitstream.
 - **Other harts**: the E51 and U54 2-4 do not exist; their CLINT `msip` /
   `mtimecmp` words read zero.
 - **PMP**: 16 entries are WARL storage only, never enforced.

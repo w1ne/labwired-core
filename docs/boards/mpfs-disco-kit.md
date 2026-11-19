@@ -19,7 +19,8 @@ DDR window at `0x8000_0000`:
 !!! warning "Not claimed yet"
     F/D, S/U modes and the Sv39 MMU (so no OpenSBI or Linux), the PLIC (no
     peripheral interrupts reach the hart), the E51 and U54 2-4, PMP
-    enforcement, MSS GPIO/I2C/SPI/QSPI, the HSS boot flow and DDR training.
+    enforcement, MSS GPIO interrupts, MSS I2C/SPI/QSPI, the HSS boot flow and
+    DDR training.
     `mvendorid`/`marchid`/`mimpid` read 0. SIM-DERIVED: no bench part.
 
 Evidence and the full claim table: `examples/mpfs-disco-kit/VALIDATION.md`.

@@ -10494,9 +10494,10 @@ boards:
     # latches). Unmodified Zephyr v4.1.0 hello_world, synchronization and
     # tests/kernel/common (12 suites, 63/63) for mpfs_icicle/polarfire/u54 (the
     # same MSS) boot from the DDR window at 0x8000_0000. F/D, S/U modes, Sv39,
-    # the PLIC and the other harts are not modelled; PLIC, MSS GPIO/I2C/SPI/QSPI
-    # and the system-controller mailbox are declared stubs. SIM-DERIVED — no
-    # MPFS bench part. See docs/boards/mpfs-disco-kit.md and
+    # the PLIC and the other harts are not modelled; PLIC, MSS I2C/SPI/QSPI
+    # and the system-controller mailbox are declared stubs. MSS GPIO_0..2 run
+    # on the mpfs_gpio model (2026-11-19; interrupt lines unwired, no PLIC).
+    # SIM-DERIVED — no MPFS bench part. See docs/boards/mpfs-disco-kit.md and
     # examples/mpfs-disco-kit/VALIDATION.md.
     doc: docs/boards/mpfs-disco-kit.md
     chip: configs/chips/mpfs095t.yaml
@@ -10505,6 +10506,7 @@ boards:
       - "firmware_survival::test_mpfs_disco_kit_zephyr_survival"
       - "riscv64_tests (15 tests: RV64I/M/A/C, traps, CLINT + MTI, WFI fast-forward, CSR surface, snapshot)"
       - "uart16550_dlab_routes_divisor_writes_to_the_latches"
+      - "cosim_mpfs_disco_kit_analog::mpfs_disco_kit_ntc_and_diode_netlists_reach_mss_gpio2_through_rpi_header_pads"
     models:
       - crates/core/src/cpu/riscv64.rs
       - crates/core/src/peripherals/uart.rs
@@ -10517,6 +10519,7 @@ boards:
       - crates/firmware-mpfs-zephyr
       - configs/chips/mpfs095t.yaml
       - configs/systems/mpfs-disco-kit.yaml
+      - crates/core/src/peripherals/miv.rs
 
   - id: am6234
     # 2026-11-01: TI SK-AM62B-P1 (AM6234, AM62x). First AArch64 part and

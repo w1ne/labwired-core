@@ -66,6 +66,12 @@ const DATASHEET_VOLTS: &[(&str, f64, f64, &str)] = &[
         "nRF54LM20A datasheet v1.0 11.7.1, 0.3/0.7 x VDD, nRF54LM20 DK default VDD = 1.8 V",
     ),
     (
+        "mpfs095t",
+        0.8,
+        2.0,
+        "PolarFire SoC DS00004248E Table 4-15, LVCMOS33 VIL max 0.8 V / VIH min 2.0 V",
+    ),
+    (
         "ra4m1",
         1.0,
         4.0,
@@ -175,7 +181,12 @@ const CLASS_VOLTS: &[(&str, &str, f64, f64, &str)] = &[
 
 /// Chips whose input pads use a label no generic shape covers: the LiteX
 /// control-and-status block names its pads `<csr>.<bit>` (switches 32..63).
-const PAD_OVERRIDES: &[(&str, &str)] = &[("arty-litex-vexriscv", "cas.32")];
+const PAD_OVERRIDES: &[(&str, &str)] = &[
+    ("arty-litex-vexriscv", "cas.32"),
+    // MSS GPIO_2 ports have no fixed pad: the FPGA design routes them, so a
+    // board names the port (`mss_gpio2.<n>`).
+    ("mpfs095t", "mss_gpio2.0"),
+];
 
 fn all_chips() -> Vec<(String, ChipDescriptor)> {
     let mut chips: Vec<(String, ChipDescriptor)> = std::fs::read_dir(root("configs/chips"))
