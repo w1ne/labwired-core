@@ -247,7 +247,7 @@
   },
   "run_report": {
     "assumptions": [
-      "The catalog curve is a rounded read-off of Sharp's typical white-paper graph at 5 V and 90% reflectance.",
+      "Source: Sharp GP2Y0A21YK0F datasheet, Fig. 2 (typical white-paper output at 5 V and 90% reflectance): https://global.sharp/products/device/lineup/data/pdf/datasheet/gp2y0a21yk_e.pdf. The catalog curve is a rounded graph read-off.",
       "Portable firmware samples the catalog output at 1 us model boundaries and applies a 1500 mV threshold.",
       "The model uses the datasheet's typical 0.4 V at 80 cm and 1.9 V typical 10-to-80 cm differential as endpoint anchors."
     ],
@@ -259,7 +259,7 @@
       "full_board_coverage": "not_established",
       "original_target_firmware_executed": false
     },
-    "manifest_sha256": "5e2112e4993af84b084799a421023f0f7f21683de0ab6edab3f19502f8885819",
+    "manifest_sha256": "85d11916e036f70349086822236be4d4ad73a16e56a726069c9dd740f944a0d4",
     "model_name": "Sharp GP2Y0A21 distance-to-voltage check",
     "models": [
       {
@@ -400,11 +400,11 @@
     "near-far-positive-and-negative-controls",
     "native-model-equality"
   ],
-  "measured_browser_ms": 533.7,
+  "measured_browser_ms": 411.3,
   "browser": "156.0.8078.79",
   "browser_driver": "Playwright",
-  "core_commit": "9e8989aa4c6eb9e44c90f7181e6830c405833005",
+  "core_commit": "aa114a2bd77f638054038539befb62e892e2ceeb",
   "firmware_sha256": "1ad034f4fd6ff023fce09270398391c82b49800348fbceb84ed648523503da44",
   "firmware_source_sha256": "df678a57ecdd0ebb800dfc768dcb1abeff9d515c39377b53e55d6ffe92c1090f",
-  "system_sha256": "5e2112e4993af84b084799a421023f0f7f21683de0ab6edab3f19502f8885819"
+  "system_sha256": "85d11916e036f70349086822236be4d4ad73a16e56a726069c9dd740f944a0d4"
 }

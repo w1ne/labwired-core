@@ -30,12 +30,12 @@ holds the 80 cm endpoint. Those clamps are model assumptions outside Sharp's
 ## Runtime and instruments
 
 `run_report()` identifies the `gp2y0a21` catalog model, its signal bindings,
-portable behavior execution, time units, assumptions, unsupported checks, and
-the exact model YAML digest. The existing oscilloscope reports the named
-`distance_mv` channel in mV with nanosecond samples. The existing logic
-analyzer reports the named `near_led` channel and nanosecond transitions. Both
-captures are checked against the native Flex reference with zero dropped
-samples.
+portable behavior execution, time units, a direct link to Sharp's Fig. 2 source,
+unsupported checks, and the exact model YAML digest. The existing oscilloscope
+reports the named `distance_mv` channel in mV with nanosecond samples. The
+existing logic analyzer reports the named `near_led` channel and nanosecond
+transitions. Both captures are checked against the native Flex reference with
+zero dropped samples.
 
 This proves one functional portable firmware workload using the reusable
 catalog source. It does not establish target-MCU fidelity, sensor measurement

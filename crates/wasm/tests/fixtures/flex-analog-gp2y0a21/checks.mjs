@@ -26,7 +26,8 @@ export function runGp2y0a21Checks(WasmFlexRuntime, system, firmwareBytes, expect
       && report.execution_scope.chip_parity === 'not_established',
     'the run report must disclose portable scope and the unestablished target claims');
     check(report.assumptions.length === 3
-      && report.assumptions.some((item) => item.includes('white-paper graph'))
+      && report.assumptions.some((item) => item.includes('Sharp GP2Y0A21YK0F datasheet, Fig. 2')
+        && item.includes('https://global.sharp/products/device/lineup/data/pdf/datasheet/gp2y0a21yk_e.pdf'))
       && report.unsupported_checks.length === 4
       && report.unsupported_checks.some((item) => item.includes('38 ms'))
       && report.unsupported_checks.some((item) => item.includes('physical behavior')),

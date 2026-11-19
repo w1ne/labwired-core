@@ -2,7 +2,7 @@
 schema_version: 1
 name: Sharp GP2Y0A21 distance-to-voltage check
 assumptions:
-  - The catalog curve is a rounded read-off of Sharp's typical white-paper graph at 5 V and 90% reflectance.
+  - "Source: Sharp GP2Y0A21YK0F datasheet, Fig. 2 (typical white-paper output at 5 V and 90% reflectance): https://global.sharp/products/device/lineup/data/pdf/datasheet/gp2y0a21yk_e.pdf. The catalog curve is a rounded graph read-off."
   - Portable firmware samples the catalog output at 1 us model boundaries and applies a 1500 mV threshold.
   - The model uses the datasheet's typical 0.4 V at 80 cm and 1.9 V typical 10-to-80 cm differential as endpoint anchors.
 unsupported_checks:
