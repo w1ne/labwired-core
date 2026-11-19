@@ -86,6 +86,17 @@ pub const DMA_SIGNAL_RX: u32 = 2;
 /// manuals list it in their DMA request tables.
 pub const DMA_SIGNAL_DATA: u32 = 16;
 
+/// Timer update and channel requests. The bus resolves these through the
+/// existing fixed-channel or multiplexer map as `<timer>_up`, `_ch1`..`_ch4`,
+/// `_com` and `_trig`. They are event pulses, independent of interrupt enables.
+pub const DMA_SIGNAL_TIMER_UPDATE: u32 = 32;
+pub const DMA_SIGNAL_TIMER_CH1: u32 = 33;
+pub const DMA_SIGNAL_TIMER_CH2: u32 = 34;
+pub const DMA_SIGNAL_TIMER_CH3: u32 = 35;
+pub const DMA_SIGNAL_TIMER_CH4: u32 = 36;
+pub const DMA_SIGNAL_TIMER_COMMUTATION: u32 = 37;
+pub const DMA_SIGNAL_TIMER_TRIGGER: u32 = 38;
+
 /// One source-data-unit -> destination-data-unit transform descriptor.
 /// Semantics follow RM0481 §15 and are pinned by the DMA_DataHandling
 /// HAL example's expected-result vectors (sim) and its on-board run.

@@ -161,7 +161,35 @@ peripherals:
     config:
       profile: stm32g0
       channels: 5
-      requests: { adc1: 1, usart1_tx: 2, usart1_rx: 3, usart2_tx: 4, usart2_rx: 5 }
+      requests:
+        adc1: 1
+        usart1_tx: 2
+        usart1_rx: 3
+        usart2_tx: 4
+        usart2_rx: 5
+        # RM V2.05 Table9-3, fixed mappings with SCFG remap bits at reset.
+        tim1_ch1: 2
+        tim1_ch2: 3
+        tim1_ch3: 5
+        tim1_ch4: 4
+        tim1_up: 5
+        tim1_trig: 4
+        tim1_com: 4
+        tim3_ch1: 4
+        tim3_ch3: 2
+        tim3_ch4: 3
+        tim3_up: 3
+        tim3_trig: 4
+        tim6_up: 3
+        tim15_ch1: 5
+        tim15_ch2: 5
+        tim15_up: 5
+        tim15_trig: 5
+        tim15_com: 5
+        tim16_ch1: 3
+        tim16_up: 3
+        tim17_ch1: 1
+        tim17_up: 1
     clock: { reg: ahben, bit: 0 }
   - id: adc1
     type: adc

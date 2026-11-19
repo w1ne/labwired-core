@@ -1,8 +1,8 @@
 # Onboarding Smoke: esp32s3-lcd-ev-board-v1-5-touch
 
 - status: `pass`
-- elapsed_seconds: `19`
-- elapsed_ms: `18231`
+- elapsed_seconds: `5`
+- elapsed_ms: `4813`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`
