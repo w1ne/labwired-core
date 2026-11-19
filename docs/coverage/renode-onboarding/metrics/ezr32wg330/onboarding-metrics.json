@@ -1,6 +1,6 @@
 {
   "target_id": "ezr32wg330",
-  "status": "fail",
+  "status": "pass",
   "measurement_mode": "smoke",
   "run_attempted": true,
   "booted": true,
@@ -9,29 +9,29 @@
     "instructions": 400000,
     "stop_reason": "max_steps"
   },
-  "smoke_passed": false,
+  "smoke_passed": true,
   "crate": "firmware-ezr32-330-smoke",
   "target_triple": "thumbv7m-none-eabi",
   "script": "examples/renode-onboarding/ezr32wg330-smoke.yaml",
   "system": "configs/systems/onboarding/ezr32wg330.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:07:33Z",
-  "finished_at_utc": "2026-11-19T16:07:39Z",
-  "elapsed_seconds": 7,
-  "elapsed_ms": 6785,
-  "failure_stage": "run_smoke",
-  "first_error_signature": "2026-11-19T16:07:34.097348Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"uart1 status=40 ok\", \"usart1 status=40 ok\", \"usart2 status=40 ok\", \"EZR32 330 RENODE SMOKE\", \"gpio pe2/pe3 pushpul",
-  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "started_at_utc": "2026-11-19T17:54:23Z",
+  "finished_at_utc": "2026-11-19T17:54:25Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1874,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.355,
-    "build_firmware": 0.221,
-    "run_smoke": 6.102
+    "build_cli": 0.447,
+    "build_firmware": 0.524,
+    "run_smoke": 0.856
   },
   "stages_ms": {
-    "build_cli": 355,
-    "build_firmware": 221,
-    "run_smoke": 6102
+    "build_cli": 447,
+    "build_firmware": 524,
+    "run_smoke": 856
   }
 }

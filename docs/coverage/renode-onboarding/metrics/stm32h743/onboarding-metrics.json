@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/stm32h743-smoke.yaml",
   "system": "configs/systems/onboarding/stm32h743.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:17:59Z",
-  "finished_at_utc": "2026-11-19T16:18:01Z",
-  "elapsed_seconds": 3,
-  "elapsed_ms": 2478,
+  "started_at_utc": "2026-11-19T17:59:48Z",
+  "finished_at_utc": "2026-11-19T17:59:53Z",
+  "elapsed_seconds": 6,
+  "elapsed_ms": 5072,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.889,
-    "build_firmware": 0.408,
-    "run_smoke": 1.121
+    "build_cli": 0.605,
+    "build_firmware": 0.451,
+    "run_smoke": 3.973
   },
   "stages_ms": {
-    "build_cli": 889,
-    "build_firmware": 408,
-    "run_smoke": 1121
+    "build_cli": 605,
+    "build_firmware": 451,
+    "run_smoke": 3973
   }
 }

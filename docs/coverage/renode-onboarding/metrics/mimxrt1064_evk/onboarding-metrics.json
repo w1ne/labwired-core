@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 806938,
+    "instructions": 801897,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/mimxrt1064_evk-smoke.yaml",
   "system": "configs/systems/onboarding/mimxrt1064_evk.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:09:37Z",
-  "finished_at_utc": "2026-11-19T16:09:39Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1904,
+  "started_at_utc": "2026-11-19T17:55:22Z",
+  "finished_at_utc": "2026-11-19T17:55:24Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2027,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.466,
-    "build_firmware": 1.004,
-    "run_smoke": 0.395
+    "build_cli": 0.316,
+    "build_firmware": 1.05,
+    "run_smoke": 0.619
   },
   "stages_ms": {
-    "build_cli": 466,
-    "build_firmware": 1004,
-    "run_smoke": 395
+    "build_cli": 316,
+    "build_firmware": 1050,
+    "run_smoke": 619
   }
 }

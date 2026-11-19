@@ -1,6 +1,6 @@
 {
   "target_id": "stk3800",
-  "status": "fail",
+  "status": "pass",
   "measurement_mode": "smoke",
   "run_attempted": true,
   "booted": true,
@@ -9,29 +9,29 @@
     "instructions": 400000,
     "stop_reason": "max_steps"
   },
-  "smoke_passed": false,
+  "smoke_passed": true,
   "crate": "firmware-efm32wg995-smoke",
   "target_triple": "thumbv7m-none-eabi",
   "script": "examples/renode-onboarding/stk3800-smoke.yaml",
   "system": "configs/systems/onboarding/stk3800.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:16:37Z",
-  "finished_at_utc": "2026-11-19T16:16:50Z",
-  "elapsed_seconds": 13,
-  "elapsed_ms": 12202,
-  "failure_stage": "run_smoke",
-  "first_error_signature": "2026-11-19T16:16:40.975013Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"uart1 status=40 ok\", \"usart0 status=40 ok\", \"usart1 status=40 ok\", \"usart2 status=40 ok\", \"EFM32WG995 RENODE SMOKE",
-  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "started_at_utc": "2026-11-19T17:59:09Z",
+  "finished_at_utc": "2026-11-19T17:59:11Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1471,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 2.128,
-    "build_firmware": 0.321,
-    "run_smoke": 9.607
+    "build_cli": 0.544,
+    "build_firmware": 0.305,
+    "run_smoke": 0.567
   },
   "stages_ms": {
-    "build_cli": 2128,
-    "build_firmware": 321,
-    "run_smoke": 9607
+    "build_cli": 544,
+    "build_firmware": 305,
+    "run_smoke": 567
   }
 }

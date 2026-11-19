@@ -86,8 +86,8 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      498873,
-      1927544832,
+      323170,
+      3112697856,
       536870912,
       10,
       8388608,
@@ -101,10 +101,10 @@
       0,
       536893320,
       6297,
-      6266
+      6262
     ],
-    "pc": 6266,
-    "xpsr": 16777216,
+    "pc": 6262,
+    "xpsr": 2701131776,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -225,280 +225,192 @@
         "initial": 0,
         "transitions": [
           {
-            "cycle": 2664,
+            "cycle": 428532,
             "value": 1
           },
           {
-            "cycle": 2667,
+            "cycle": 428535,
             "value": 0
           },
           {
-            "cycle": 2671,
+            "cycle": 428539,
             "value": 1
           },
           {
-            "cycle": 69957,
+            "cycle": 772800,
             "value": 0
           },
           {
-            "cycle": 135496,
+            "cycle": 838339,
             "value": 1
           },
           {
-            "cycle": 201035,
+            "cycle": 903878,
             "value": 0
           },
           {
-            "cycle": 266574,
+            "cycle": 969417,
             "value": 1
           },
           {
-            "cycle": 332113,
+            "cycle": 1034956,
             "value": 0
           },
           {
-            "cycle": 397652,
+            "cycle": 1100495,
             "value": 1
           },
           {
-            "cycle": 463191,
+            "cycle": 1166034,
             "value": 0
           },
           {
-            "cycle": 528730,
+            "cycle": 1231573,
             "value": 1
           },
           {
-            "cycle": 594269,
+            "cycle": 1297112,
             "value": 0
           },
           {
-            "cycle": 659808,
+            "cycle": 1362651,
             "value": 1
           },
           {
-            "cycle": 725347,
+            "cycle": 1428190,
             "value": 0
           },
           {
-            "cycle": 790886,
+            "cycle": 1493729,
             "value": 1
           },
           {
-            "cycle": 856425,
+            "cycle": 1559268,
             "value": 0
           },
           {
-            "cycle": 921964,
+            "cycle": 1624807,
             "value": 1
           },
           {
-            "cycle": 987503,
+            "cycle": 1690346,
             "value": 0
           },
           {
-            "cycle": 1053042,
+            "cycle": 1755885,
             "value": 1
           },
           {
-            "cycle": 1118581,
+            "cycle": 1821424,
             "value": 0
           },
           {
-            "cycle": 1184120,
+            "cycle": 1886963,
             "value": 1
           },
           {
-            "cycle": 1249659,
+            "cycle": 1952502,
             "value": 0
-          },
-          {
-            "cycle": 1315198,
-            "value": 1
-          },
-          {
-            "cycle": 1380737,
-            "value": 0
-          },
-          {
-            "cycle": 1446276,
-            "value": 1
-          },
-          {
-            "cycle": 1511815,
-            "value": 0
-          },
-          {
-            "cycle": 1577354,
-            "value": 1
-          },
-          {
-            "cycle": 1642893,
-            "value": 0
-          },
-          {
-            "cycle": 1708432,
-            "value": 1
-          },
-          {
-            "cycle": 1773971,
-            "value": 0
-          },
-          {
-            "cycle": 1839510,
-            "value": 1
-          },
-          {
-            "cycle": 1905049,
-            "value": 0
-          },
-          {
-            "cycle": 1970588,
-            "value": 1
           }
         ],
         "gaps": [],
         "initial_state": "z",
         "states": [
           {
-            "cycle": 2663,
+            "cycle": 428531,
             "state": "0"
           },
           {
-            "cycle": 2664,
+            "cycle": 428532,
             "state": "1"
           },
           {
-            "cycle": 2667,
+            "cycle": 428535,
             "state": "0"
           },
           {
-            "cycle": 2671,
+            "cycle": 428539,
             "state": "1"
           },
           {
-            "cycle": 69957,
+            "cycle": 772800,
             "state": "0"
           },
           {
-            "cycle": 135496,
+            "cycle": 838339,
             "state": "1"
           },
           {
-            "cycle": 201035,
+            "cycle": 903878,
             "state": "0"
           },
           {
-            "cycle": 266574,
+            "cycle": 969417,
             "state": "1"
           },
           {
-            "cycle": 332113,
+            "cycle": 1034956,
             "state": "0"
           },
           {
-            "cycle": 397652,
+            "cycle": 1100495,
             "state": "1"
           },
           {
-            "cycle": 463191,
+            "cycle": 1166034,
             "state": "0"
           },
           {
-            "cycle": 528730,
+            "cycle": 1231573,
             "state": "1"
           },
           {
-            "cycle": 594269,
+            "cycle": 1297112,
             "state": "0"
           },
           {
-            "cycle": 659808,
+            "cycle": 1362651,
             "state": "1"
           },
           {
-            "cycle": 725347,
+            "cycle": 1428190,
             "state": "0"
           },
           {
-            "cycle": 790886,
+            "cycle": 1493729,
             "state": "1"
           },
           {
-            "cycle": 856425,
+            "cycle": 1559268,
             "state": "0"
           },
           {
-            "cycle": 921964,
+            "cycle": 1624807,
             "state": "1"
           },
           {
-            "cycle": 987503,
+            "cycle": 1690346,
             "state": "0"
           },
           {
-            "cycle": 1053042,
+            "cycle": 1755885,
             "state": "1"
           },
           {
-            "cycle": 1118581,
+            "cycle": 1821424,
             "state": "0"
           },
           {
-            "cycle": 1184120,
+            "cycle": 1886963,
             "state": "1"
           },
           {
-            "cycle": 1249659,
+            "cycle": 1952502,
             "state": "0"
-          },
-          {
-            "cycle": 1315198,
-            "state": "1"
-          },
-          {
-            "cycle": 1380737,
-            "state": "0"
-          },
-          {
-            "cycle": 1446276,
-            "state": "1"
-          },
-          {
-            "cycle": 1511815,
-            "state": "0"
-          },
-          {
-            "cycle": 1577354,
-            "state": "1"
-          },
-          {
-            "cycle": 1642893,
-            "state": "0"
-          },
-          {
-            "cycle": 1708432,
-            "state": "1"
-          },
-          {
-            "cycle": 1773971,
-            "state": "0"
-          },
-          {
-            "cycle": 1839510,
-            "state": "1"
-          },
-          {
-            "cycle": 1905049,
-            "state": "0"
-          },
-          {
-            "cycle": 1970588,
-            "state": "1"
           }
         ],
         "mode": "output",
-        "edge_count": 33
+        "edge_count": 22
       }
     ]
   },
@@ -509,10 +421,10 @@
       "number": 0,
       "mode": "output",
       "func": null,
-      "output": true,
+      "output": false,
       "input": false,
-      "pad": true,
-      "drive": "1"
+      "pad": false,
+      "drive": "0"
     }
   ],
   "uart_lines": {
@@ -521,31 +433,31 @@
         "text": "S32K118 LPUART0 SMOKE",
         "cycle_lo": 0,
         "cycle": 10000,
-        "end_cycle": 10000
+        "end_cycle": 100000
       },
       {
         "text": "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00080000",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 380000
       },
       {
         "text": "muls=00000143",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 370000,
+        "cycle": 380000,
+        "end_cycle": 440000
       },
       {
         "text": "ptd pddr=00000009 set=00000001 clr=00000000 tog=00000009",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 440000,
+        "cycle": 450000,
+        "end_cycle": 680000
       },
       {
         "text": "pass=0f",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 680000,
+        "cycle": 690000,
+        "end_cycle": 720000
       }
     ],
     "dropped_lines": 0
@@ -585,30 +497,90 @@
     "cycles": 2000000,
     "instructions": 2000000,
     "steps_executed": 2000000,
-    "memory_reads": 2925,
+    "memory_reads": 2937,
     "memory_writes": 40,
-    "peripheral_accesses": 1430,
+    "peripheral_accesses": 235700,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 6262,
-        "count": 2070,
+        "pc": 6260,
+        "count": 1289,
         "symbol": "firmware_s32k118_smoke::__cortex_m_rt_main"
       },
       {
         "pc": 6264,
-        "count": 2032,
+        "count": 1289,
         "symbol": "firmware_s32k118_smoke::__cortex_m_rt_main"
       },
       {
         "pc": 6266,
-        "count": 1953,
+        "count": 1289,
         "symbol": "firmware_s32k118_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 6260,
-        "count": 1757,
+        "pc": 6262,
+        "count": 1211,
         "symbol": "firmware_s32k118_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 1536,
+        "count": 40,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 2878,
+        "count": 40,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 4228,
+        "count": 40,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 5562,
+        "count": 40,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 450,
+        "count": 39,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 482,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 574,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 630,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 722,
+        "count": 39,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 778,
+        "count": 39,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 834,
+        "count": 39,
+        "symbol": "firmware_s32k118_smoke::putc"
+      },
+      {
+        "pc": 920,
+        "count": 39,
+        "symbol": "firmware_s32k118_smoke::putc"
       }
     ]
   }

@@ -1,6 +1,6 @@
 {
   "target_id": "sltb004a",
-  "status": "fail",
+  "status": "pass",
   "measurement_mode": "smoke",
   "run_attempted": true,
   "booted": true,
@@ -9,29 +9,29 @@
     "instructions": 200000,
     "stop_reason": "max_steps"
   },
-  "smoke_passed": false,
+  "smoke_passed": true,
   "crate": "firmware-efr32mg12-smoke",
   "target_triple": "thumbv7em-none-eabi",
   "script": "examples/renode-onboarding/sltb004a-smoke.yaml",
   "system": "configs/systems/onboarding/sltb004a.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:15:51Z",
-  "finished_at_utc": "2026-11-19T16:15:52Z",
+  "started_at_utc": "2026-11-19T17:58:54Z",
+  "finished_at_utc": "2026-11-19T17:58:55Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1050,
-  "failure_stage": "run_smoke",
-  "first_error_signature": "2026-11-19T16:15:52.261938Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok\", \"gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok\", \"gpio pa",
-  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "elapsed_ms": 1142,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.362,
-    "build_firmware": 0.26,
-    "run_smoke": 0.37
+    "build_cli": 0.384,
+    "build_firmware": 0.318,
+    "run_smoke": 0.393
   },
   "stages_ms": {
-    "build_cli": 362,
-    "build_firmware": 260,
-    "run_smoke": 370
+    "build_cli": 384,
+    "build_firmware": 318,
+    "run_smoke": 393
   }
 }

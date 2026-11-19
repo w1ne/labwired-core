@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/tock_veer_el2_sim-smoke.yaml",
   "system": "configs/systems/onboarding/tock_veer_el2_sim.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:18:38Z",
-  "finished_at_utc": "2026-11-19T16:18:39Z",
+  "started_at_utc": "2026-11-19T18:00:30Z",
+  "finished_at_utc": "2026-11-19T18:00:32Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1264,
+  "elapsed_ms": 1213,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.384,
-    "build_firmware": 0.507,
-    "run_smoke": 0.334
+    "build_cli": 0.352,
+    "build_firmware": 0.362,
+    "run_smoke": 0.439
   },
   "stages_ms": {
-    "build_cli": 384,
-    "build_firmware": 507,
-    "run_smoke": 334
+    "build_cli": 352,
+    "build_firmware": 362,
+    "run_smoke": 439
   }
 }

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.000329">
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.000376">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="23b09c74cd71a093e4c66d9dfdb050df925b5993df2bedaf236aed3bb3ade4dd"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.000329">
+  <testcase classname="labwired" name="run" time="0.000376">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: VF61 M4 SMOKE" time="0.000000">
   </testcase>

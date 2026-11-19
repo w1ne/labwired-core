@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
-  "status": "fail",
-  "steps_executed": 207985,
+  "status": "pass",
+  "steps_executed": 207980,
   "cycles": 111000,
-  "instructions": 207985,
+  "instructions": 207980,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 207985
+      "value": 207980
     }
   },
   "limits": {
@@ -38,7 +38,7 @@
       "assertion": {
         "uart_contains": "UT32 checks PPPPPPPPPPPP DONE"
       },
-      "passed": false
+      "passed": true
     },
     {
       "assertion": {
@@ -55,7 +55,7 @@
           "size": 4
         }
       },
-      "passed": false
+      "passed": true
     },
     {
       "assertion": {
@@ -97,9 +97,9 @@
       0,
       536968840,
       16781481,
-      16781428
+      16781432
     ],
-    "pc": 16781428,
+    "pc": 16781432,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -242,31 +242,31 @@
             "value": 1
           },
           {
-            "cycle": 1354,
+            "cycle": 1357,
             "value": 0
           },
           {
-            "cycle": 1356,
+            "cycle": 1359,
             "value": 1
           },
           {
-            "cycle": 3442,
+            "cycle": 3445,
             "value": 0
           },
           {
-            "cycle": 5525,
+            "cycle": 5528,
             "value": 1
           },
           {
-            "cycle": 7607,
+            "cycle": 7610,
             "value": 0
           },
           {
-            "cycle": 9690,
+            "cycle": 9693,
             "value": 1
           },
           {
-            "cycle": 11772,
+            "cycle": 11775,
             "value": 0
           }
         ],
@@ -278,31 +278,31 @@
             "state": "1"
           },
           {
-            "cycle": 1354,
+            "cycle": 1357,
             "state": "x"
           },
           {
-            "cycle": 1356,
+            "cycle": 1359,
             "state": "1"
           },
           {
-            "cycle": 3442,
+            "cycle": 3445,
             "state": "x"
           },
           {
-            "cycle": 5525,
+            "cycle": 5528,
             "state": "1"
           },
           {
-            "cycle": 7607,
+            "cycle": 7610,
             "state": "x"
           },
           {
-            "cycle": 9690,
+            "cycle": 9693,
             "state": "1"
           },
           {
-            "cycle": 11772,
+            "cycle": 11775,
             "state": "x"
           }
         ],
@@ -333,7 +333,7 @@
         "end_cycle": 1000
       },
       {
-        "text": "UT32 checks PPPPPPPPPPFP DONE",
+        "text": "UT32 checks PPPPPPPPPPPP DONE",
         "cycle_lo": 1000,
         "cycle": 11000,
         "end_cycle": 11000
@@ -394,27 +394,27 @@
   },
   "metrics": {
     "cycles": 111000,
-    "instructions": 207985,
-    "steps_executed": 207985,
-    "memory_reads": 1255,
+    "instructions": 207980,
+    "steps_executed": 207980,
+    "memory_reads": 1326,
     "memory_writes": 61,
-    "peripheral_accesses": 325,
+    "peripheral_accesses": 324,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 16781428,
+        "pc": 16781432,
         "count": 391,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       },
       {
-        "pc": 16780540,
+        "pc": 16780534,
         "count": 39,
         "symbol": "core::core_arch::arm_shared::hints::__yield"
       },
       {
-        "pc": 16778146,
+        "pc": 16778180,
         "count": 3,
-        "symbol": "core::ptr::read_volatile"
+        "symbol": "firmware_ut32m0r500_smoke::check_gpio2_irq"
       }
     ]
   }

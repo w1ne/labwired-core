@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.032416">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="1.174688">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="cc1305c63b45a48f248c1ac644bee69ce9b7aa668045e401ac9200a02b3c2f90"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.032416">
+  <testcase classname="labwired" name="run" time="1.174688">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: MIMXRT798S LP_FLEXCOMM0 LPUART SMOKE" time="0.000000">
   </testcase>

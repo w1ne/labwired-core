@@ -524,11 +524,12 @@ impl Peripheral for Efm32Timer {
     fn peek(&self, offset: u64) -> Option<u8> {
         self.read(offset).ok()
     }
-    // The counter is stepped by the walk, one `tick_elapsed` per bus tick, so
-    // it needs the per-cycle walk for the whole run. Reporting the walk as
-    // idle while stopped let a host widen the bus tick to 1024 cycles before
-    // firmware started the timer; overflows then arrived in 1024-cycle lumps
-    // and re-pended the NVIC line right after firmware had cleared it.
+    fn legacy_tick_dynamic(&self) -> bool {
+        true
+    }
+    fn legacy_tick_active(&self) -> bool {
+        self.running || self.line()
+    }
     fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
         report(self.irq, self.line());
     }

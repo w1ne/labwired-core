@@ -1,6 +1,6 @@
 {
   "target_id": "stk3200",
-  "status": "fail",
+  "status": "pass",
   "measurement_mode": "smoke",
   "run_attempted": true,
   "booted": true,
@@ -9,29 +9,29 @@
     "instructions": 400000,
     "stop_reason": "max_steps"
   },
-  "smoke_passed": false,
+  "smoke_passed": true,
   "crate": "firmware-efm32zg222-smoke",
   "target_triple": "thumbv6m-none-eabi",
   "script": "examples/renode-onboarding/stk3200-smoke.yaml",
   "system": "configs/systems/onboarding/stk3200.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:16:08Z",
-  "finished_at_utc": "2026-11-19T16:16:15Z",
-  "elapsed_seconds": 8,
-  "elapsed_ms": 7388,
-  "failure_stage": "run_smoke",
-  "first_error_signature": "2026-11-19T16:16:09.872396Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"EFM32ZG222 RENODE SMOKE\", \"gpio pc10/pc11 pushpull set=1 tgl=1 clr=1 wo=1 ok\", \"gpio pa0 disabled_din0=1 pullup=1 ",
-  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "started_at_utc": "2026-11-19T17:59:01Z",
+  "finished_at_utc": "2026-11-19T17:59:02Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1466,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.587,
-    "build_firmware": 0.357,
-    "run_smoke": 6.262
+    "build_cli": 0.504,
+    "build_firmware": 0.298,
+    "run_smoke": 0.615
   },
   "stages_ms": {
-    "build_cli": 587,
-    "build_firmware": 357,
-    "run_smoke": 6262
+    "build_cli": 504,
+    "build_firmware": 298,
+    "run_smoke": 615
   }
 }

@@ -4,7 +4,7 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 #
-# Renode import narrowed to the model-backed RA4M1 core, memory, system,
+# Renode import narrowed to the model-backed RA4M1 core, memory, system, MSTP,
 # PORT1/PFS, SysTick, and SCI2 surfaces exercised by the onboarding smoke.
 
 name: arduino_uno_r4_minima
@@ -18,11 +18,18 @@ ram:
   base: 536870912
   size: 32768B
 peripherals:
+# R_SYSTEM register file (0x700 bytes): the smoke unlocks PRCR at +0x3FE and
+# waits for OSCSF.HOCOSF. R_MSTP holds SCI2 stopped out of reset (MSTPB29).
 - id: ra_sysc
-  type: ra_sysc
+  type: ra4_sysc
   bus: sysbus
   base_address: 0x4001E000
-  size: 256B
+  size: 1792B
+- id: mstp
+  type: ra_mstp
+  bus: sysbus
+  base_address: 0x40047000
+  size: 16B
 - id: port1
   type: gpio
   bus: sysbus
@@ -49,5 +56,6 @@ peripherals:
   base_address: 0x40070040
   size: 32B
   irq: 4
+  clock: { reg: mstpcrb, bit: 29, controller: mstp, active_low: true }
   config:
     profile: sci

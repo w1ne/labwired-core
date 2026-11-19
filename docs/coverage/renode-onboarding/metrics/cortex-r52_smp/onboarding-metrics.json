@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/cortex-r52_smp-r52-uart-smoke.yaml",
   "system": "configs/systems/onboarding/cortex-r52_smp.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-06T20:56:30Z",
-  "finished_at_utc": "2026-11-06T20:56:30Z",
+  "started_at_utc": "2026-11-19T17:53:24Z",
+  "finished_at_utc": "2026-11-19T17:53:25Z",
   "elapsed_seconds": 1,
-  "elapsed_ms": 632,
+  "elapsed_ms": 781,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.308,
+    "build_cli": 0.39,
     "build_firmware": null,
-    "run_smoke": 0.316
+    "run_smoke": 0.35
   },
   "stages_ms": {
-    "build_cli": 308,
+    "build_cli": 390,
     "build_firmware": null,
-    "run_smoke": 316
+    "run_smoke": 350
   },
   "prebuilt_firmware": "tests/fixtures/cortex-r52-uart-smoke.elf"
 }
