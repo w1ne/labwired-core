@@ -349,3 +349,53 @@ external_devices:
         servo.pulse_us()
     );
 }
+
+/// Dynamic, active-low OE gates new commands. The angle remains the last
+/// modeled command while disabled; it is not evidence of physical position.
+#[test]
+fn pca_servo_dynamic_oe_requires_a_driven_low_gpio() {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::bus::{Bus, SystemBus};
+    use std::path::PathBuf;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml")).unwrap();
+    let manifest: SystemManifest = serde_yaml::from_str(r#"
+name: pca-servo-oe
+chip: "../chips/esp32c3.yaml"
+external_devices:
+  - { id: pwm1, type: pca9685, connection: i2c0, config: { address: 64 } }
+  - { id: elbow, type: servo, connection: i2c0, config: { model: mg995, source_address: 64, source_channel: 0, source_oe_pin: GPIO4 } }
+"#).unwrap();
+    let mut bus = SystemBus::from_config(&chip, &manifest).unwrap();
+    let mut slaves = bus.take_i2c_slaves("i2c0");
+    init_50hz(slaves[0].as_mut());
+    write_reg(slaves[0].as_mut(), 0x06, &[0, 0, 0x33, 0x01]);
+    for slave in slaves {
+        bus.attach_i2c_slave("i2c0", slave).unwrap();
+    }
+    let commanded = |bus: &SystemBus| bus.observed_of::<Servo>().next().unwrap().is_commanded();
+    let angle = |bus: &SystemBus| bus.observed_of::<Servo>().next().unwrap().angle_degrees();
+    // Input / unknown is not an enable, even if its output latch is low.
+    bus.sync_pwm_sourced_servos();
+    assert!(!commanded(&bus));
+    const GPIO: u64 = 0x6000_4000;
+    bus.write_u32(GPIO + 0x08, 1 << 4).unwrap(); // OUT_W1TS: high
+    bus.write_u32(GPIO + 0x24, 1 << 4).unwrap(); // ENABLE_W1TS
+    bus.sync_pwm_sourced_servos();
+    assert!(!commanded(&bus));
+    bus.write_u32(GPIO + 0x0c, 1 << 4).unwrap(); // OUT_W1TC: low enables
+    bus.sync_pwm_sourced_servos();
+    assert!(commanded(&bus));
+    let previous = angle(&bus);
+    bus.write_u32(GPIO + 0x08, 1 << 4).unwrap(); // disable output
+    let mut slaves = bus.take_i2c_slaves("i2c0");
+    write_reg(slaves[0].as_mut(), 0x06, &[0, 0, 0x80, 0x01]);
+    for slave in slaves {
+        bus.attach_i2c_slave("i2c0", slave).unwrap();
+    }
+    bus.sync_pwm_sourced_servos();
+    assert_eq!(angle(&bus), previous);
+    bus.write_u32(GPIO + 0x0c, 1 << 4).unwrap();
+    bus.sync_pwm_sourced_servos();
+    assert_ne!(angle(&bus), previous);
+}

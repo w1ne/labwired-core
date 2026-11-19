@@ -1,0 +1,15 @@
+name: PCA OE focused evidence
+on:
+  push:
+    branches: [fix/pca-servo-output-enable-20261119]
+permissions:
+  contents: read
+jobs:
+  pca-oe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run targeted servo OE regression
+        run: cargo test --locked -p labwired-core --test pca9685_drives_servo pca_servo_dynamic_oe_requires_a_driven_low_gpio -- --exact --nocapture
