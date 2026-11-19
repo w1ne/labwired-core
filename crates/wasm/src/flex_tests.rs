@@ -50,6 +50,11 @@ const GP2Y_FIRMWARE_SOURCE: &[u8] =
 const GP2Y_SYSTEM_BYTES: &[u8] =
     include_bytes!("../tests/fixtures/flex-analog-gp2y0a21/system.yaml");
 const DUAL_GP2Y_SYSTEM: &str = include_str!("../tests/fixtures/flex-dual-gp2y0a21/system.yaml");
+const DUAL_GP2Y_BROWSER: &str = include_str!("../tests/fixtures/flex-dual-gp2y0a21/browser.json");
+const DUAL_GP2Y_FIRMWARE: &[u8] =
+    include_bytes!("../tests/fixtures/flex-dual-gp2y0a21/firmware.wasm");
+const DUAL_GP2Y_FIRMWARE_SOURCE: &[u8] =
+    include_bytes!("../tests/fixtures/flex-dual-gp2y0a21/firmware.rs");
 const DUAL_GP2Y_SYSTEM_BYTES: &[u8] =
     include_bytes!("../tests/fixtures/flex-dual-gp2y0a21/system.yaml");
 const NTC_SYSTEM: &str = include_str!("../tests/fixtures/flex-analog-ntc/system.yaml");
@@ -1177,6 +1182,73 @@ fn flex_dual_sensor_reuses_one_catalog_model_for_independent_instances() {
     assert_eq!(
         measured, expected,
         "independent instances must share one source-backed catalog model"
+    );
+}
+
+#[test]
+fn flex_dual_sensor_browser_proof_pins_firmware_and_initial_trace() {
+    use sha2::{Digest, Sha256};
+
+    fn normalize_numbers(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Number(number) => {
+                serde_json::json!(number.as_f64().expect("finite fixture number"))
+            }
+            serde_json::Value::Array(items) => {
+                serde_json::Value::Array(items.iter().map(normalize_numbers).collect())
+            }
+            serde_json::Value::Object(fields) => serde_json::Value::Object(
+                fields
+                    .iter()
+                    .map(|(key, value)| (key.clone(), normalize_numbers(value)))
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+    fn sha256(bytes: &[u8]) -> String {
+        format!("{:x}", Sha256::digest(bytes))
+    }
+
+    let browser: serde_json::Value = serde_json::from_str(DUAL_GP2Y_BROWSER).unwrap();
+    let native_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/flex-dual-gp2y0a21/native.json");
+    let native: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(native_path).unwrap()).unwrap();
+    let core_commit = browser["core_commit"].as_str().unwrap();
+    assert_eq!(core_commit.len(), 40);
+    assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(browser["status"], "passed");
+    assert_eq!(browser["browser_driver"], "Playwright");
+    assert_eq!(browser["native_model_equality"], true);
+    assert_eq!(browser["firmware_sha256"], sha256(DUAL_GP2Y_FIRMWARE));
+    assert_eq!(
+        browser["firmware_source_sha256"],
+        sha256(DUAL_GP2Y_FIRMWARE_SOURCE)
+    );
+    assert_eq!(browser["system_sha256"], sha256(DUAL_GP2Y_SYSTEM_BYTES));
+    assert_eq!(
+        normalize_numbers(&browser["observations"]),
+        normalize_numbers(&native["observations"])
+    );
+    assert_eq!(
+        normalize_numbers(&browser["traces"]["analog"]),
+        normalize_numbers(&native["analog_trace"]),
+        "browser scope must retain both real initial outputs at 0 ns"
+    );
+    assert_eq!(
+        browser["traces"]["analog"]["samples"][0]["values"],
+        serde_json::json!([2_300, 400]),
+        "no unresolved zero-valued channel may leak into the initial browser scope sample"
+    );
+    assert_eq!(
+        normalize_numbers(&browser["traces"]["digital"]),
+        normalize_numbers(&native["digital_trace"]),
+        "browser logic analyzer transitions must match the native reference"
+    );
+    assert_eq!(
+        browser["run_report"]["manifest_sha256"],
+        native["run_report"]["manifest_sha256"]
     );
 }
 

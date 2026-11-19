@@ -8,6 +8,24 @@ and produce separate oscilloscope channels. The logic analyzer records both
 indicators, including one-at-a-time positive controls and far-range negative
 controls.
 
+## Browser evidence
+
+Chromium 156.0.8078.79 executed the 330-byte portable firmware in 402.1 ms of
+page-side time. Browser observations matched the native reference: at
+`(100 mm, 800 mm)` the outputs were `(2300 mV, 400 mV)` and only the left
+indicator turned on; at `(800 mm, 100 mm)` they were `(400 mV, 2300 mV)` and
+only the right indicator turned on; at `(700 mm, 200 mm)` they were
+`(440 mV, 1300 mV)` and both indicators were off.
+
+The oscilloscope's single initial row at 0 ns is `[2300, 400]` mV, and its
+final row at 6000 ns is `[440, 1300]` mV. The logic analyzer records separate
+left and right indicator transitions through 6000 ns. Both instruments report
+zero dropped samples. [browser.json](browser.json) pins the Core commit,
+manifest, portable firmware source and Wasm hashes, report, observations and
+traces. The report marks this as portable behavior execution; original target
+firmware, MCU execution, full-board coverage and chip parity remain
+unestablished.
+
 The model reuses Sharp's GP2Y0A21YK0F typical white-paper graph read-offs in
 [Fig. 2](https://global.sharp/products/device/lineup/data/pdf/datasheet/gp2y0a21yk_e.pdf).
 It does not model optical geometry, ambient light, cross-talk, device spread,
