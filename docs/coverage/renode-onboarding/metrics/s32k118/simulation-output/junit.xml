@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.045100">
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.187006">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="eac0014aac359c8657a0af1878ff4c60c9c0e02fbc8be2d96ebb4bb0dd313548"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.045100">
+  <testcase classname="labwired" name="run" time="0.187006">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: S32K118 LPUART0 SMOKE" time="0.000000">
   </testcase>

@@ -439,6 +439,9 @@ pub struct Machine<C: Cpu> {
     /// Off by default (the browser runs wide and quantised); `labwired test`
     /// sets it for Cortex-M, where hosted runs must be cycle-exact.
     pub exact_batch_boundaries: bool,
+    /// The wide interval set aside while the per-cycle walk is live. See
+    /// [`Machine::sync_exact_window_with_walk`].
+    exact_wide_interval: Option<u32>,
     pub config: SimulationConfig,
     /// Injectable host clock used by [`HostTimeMode::Realtime`] pacing.
     host_clock: Box<dyn host_time::HostClock + Send>,
@@ -1291,6 +1294,7 @@ impl<C: Cpu> Machine<C> {
             secondary_defer: None,
             batch_watch_scratch: Vec::new(),
             exact_batch_boundaries: false,
+            exact_wide_interval: None,
             config: SimulationConfig::default(),
             host_clock: Box::new(host_time::StdHostClock::new()),
             step_profile: StepProfile::default(),
@@ -1484,6 +1488,27 @@ impl<C: Cpu> Machine<C> {
     fn enforce_peripheral_tick_cap(&mut self) {
         if self.bus.max_peripheral_tick_interval.is_some() {
             self.set_peripheral_tick_interval(self.config.peripheral_tick_interval);
+        }
+    }
+
+    /// Exact windows hold only on a walk-free bus: a boundary tick hands the
+    /// walk the whole interval as elapsed time, whatever the window's real
+    /// length. A model that wakes the walk (`legacy_tick_dynamic`, e.g. a
+    /// timer firmware just started) would then count a full interval per
+    /// device access. Run at interval 1 while the walk is live and return to
+    /// the wide interval once it is deleted again.
+    #[inline]
+    pub(crate) fn sync_exact_window_with_walk(&mut self) {
+        if !self.exact_batch_boundaries {
+            return;
+        }
+        if self.bus.legacy_walk_disabled {
+            if let Some(wide) = self.exact_wide_interval.take() {
+                self.set_peripheral_tick_interval(wide);
+            }
+        } else if self.config.peripheral_tick_interval > 1 {
+            self.exact_wide_interval = Some(self.config.peripheral_tick_interval);
+            self.set_peripheral_tick_interval(1);
         }
     }
 

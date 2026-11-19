@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/eos-s3-qomu-smoke.yaml",
   "system": "configs/systems/onboarding/eos-s3-qomu.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:07:04Z",
-  "finished_at_utc": "2026-11-19T16:07:06Z",
+  "started_at_utc": "2026-11-19T17:54:14Z",
+  "finished_at_utc": "2026-11-19T17:54:16Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1094,
+  "elapsed_ms": 1908,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.433,
-    "build_firmware": 0.267,
-    "run_smoke": 0.344
+    "build_cli": 0.357,
+    "build_firmware": 0.315,
+    "run_smoke": 1.188
   },
   "stages_ms": {
-    "build_cli": 433,
-    "build_firmware": 267,
-    "run_smoke": 344
+    "build_cli": 357,
+    "build_firmware": 315,
+    "run_smoke": 1188
   }
 }

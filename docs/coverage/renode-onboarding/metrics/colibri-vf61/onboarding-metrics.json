@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.yaml",
   "system": "configs/systems/onboarding/colibri-vf61.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:03:14Z",
-  "finished_at_utc": "2026-11-19T16:03:16Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1124,
+  "started_at_utc": "2026-11-19T17:37:43Z",
+  "finished_at_utc": "2026-11-19T17:37:44Z",
+  "elapsed_seconds": 1,
+  "elapsed_ms": 828,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.402,
+    "build_cli": 0.471,
     "build_firmware": null,
-    "run_smoke": 0.614
+    "run_smoke": 0.309
   },
   "stages_ms": {
-    "build_cli": 402,
+    "build_cli": 471,
     "build_firmware": null,
-    "run_smoke": 614
+    "run_smoke": 309
   },
   "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf"
 }

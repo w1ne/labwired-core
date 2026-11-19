@@ -1,8 +1,5 @@
-[2m2026-11-19T16:26:38.562290Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/atsamd21j17d-aft.yaml
-[2m2026-11-19T16:26:38.568559Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0xc1
+[2m2026-11-19T19:01:43.988847Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/atsamd21j17d-aft.yaml
+[2m2026-11-19T19:01:43.992413Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0xc1
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-[2m2026-11-19T16:26:38.589984Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["samd21 sercom0 up", "portb dir=00000400 out=00000400 clr=00000000", "tc4 cc0=000003e7 adv=1 flags=11 nvic19=1 cleared=00 stop=1", "tc6 reset_stop=1 oneshot_stop=1 ovf=1 count=20 retrigger=1 halted=1", "sercom1 ctrla=40000006 dre=1 txc=1 w1c=1", "sercom3 ctrla=40000006 dre=1 txc=1 w1c=1", "rtc mode2 alarm=1 nvic3=1 released=1 day=1d hm=0000", "rtc mode0 flags=81 wrapped=1", "rtc mode1 per=04 flags=83 wrapped=1", "systick pendsv m0+ tailchain frame=1 r0=1 pending=1 ipsr=0000000e ok", "systick pendsv m0+ psp tailchain frame=1 r0=1 pending=1 exc_return=fffffffd restored=1 ok", "SAMD21 PASS"] }) (captured len=581)
-[2m2026-11-19T16:26:38.590012Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x20002000 (size 4): expected 0x5d2100ff, got 0x5d2100fb (mask 0xffffffff)
-[2m2026-11-19T16:26:38.590016Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536879104, expected_value: 1562444031, mask: None, size: Some(4), node: None } }) (captured len=581)
-FAIL  3/5 checks · atsamd21j17d-aft-smoke · 800000 steps · 0.02s
+PASS  5/5 checks · atsamd21j17d-aft-smoke · 800000 steps · 0.12s

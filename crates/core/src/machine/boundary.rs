@@ -586,6 +586,9 @@ impl<C: Cpu> Machine<C> {
         }
 
         let logic_boundary = self.total_cycles;
+        // A device access in this window may have woken the walk; its first
+        // tick must already see one cycle, not the wide interval.
+        self.sync_exact_window_with_walk();
         let tick_interval = u64::from(self.config.peripheral_tick_interval.max(1));
         if self
             .bus

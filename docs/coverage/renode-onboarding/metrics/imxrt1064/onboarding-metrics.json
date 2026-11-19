@@ -6,7 +6,7 @@
   "booted": true,
   "boot_evidence": {
     "result_path": "simulation-output/result.json",
-    "instructions": 801397,
+    "instructions": 808031,
     "stop_reason": "max_steps"
   },
   "smoke_passed": true,
@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/imxrt1064-smoke.yaml",
   "system": "configs/systems/onboarding/imxrt1064.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:07:54Z",
-  "finished_at_utc": "2026-11-19T16:07:56Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1591,
+  "started_at_utc": "2026-11-19T17:54:32Z",
+  "finished_at_utc": "2026-11-19T17:54:35Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2385,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.355,
-    "build_firmware": 0.781,
-    "run_smoke": 0.411
+    "build_cli": 0.836,
+    "build_firmware": 0.683,
+    "run_smoke": 0.82
   },
   "stages_ms": {
-    "build_cli": 355,
-    "build_firmware": 781,
-    "run_smoke": 411
+    "build_cli": 836,
+    "build_firmware": 683,
+    "run_smoke": 820
   }
 }

@@ -55,7 +55,7 @@
       96,
       32,
       4294963200,
-      17214,
+      19920,
       3758161920,
       3758145536,
       0,
@@ -395,13 +395,13 @@
         "text": "LPC2294 checks PPPPPPPPPP DONE",
         "cycle_lo": 0,
         "cycle": 10000,
-        "end_cycle": 30000
+        "end_cycle": 10000
       },
       {
         "text": "LPC2294_UART1_OK",
-        "cycle_lo": 20000,
-        "cycle": 30000,
-        "end_cycle": 30000
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
       }
     ],
     "dropped_lines": 0
@@ -431,22 +431,14 @@
     "cycles": 100000,
     "instructions": 100000,
     "steps_executed": 100000,
-    "memory_reads": 6044,
+    "memory_reads": 632,
     "memory_writes": 21,
     "peripheral_accesses": 194,
     "exceptions": 0,
     "pc_samples": [
       {
         "pc": 1100,
-        "count": 312
-      },
-      {
-        "pc": 864,
-        "count": 39
-      },
-      {
-        "pc": 872,
-        "count": 39
+        "count": 390
       }
     ]
   }

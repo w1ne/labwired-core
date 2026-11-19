@@ -2113,6 +2113,36 @@ fn resident_exact_deadline_runs_between_coarse_ticks() {
 }
 
 #[test]
+fn exact_windows_run_at_one_cycle_while_the_walk_is_live() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::new());
+    machine.exact_batch_boundaries = true;
+    machine.config.peripheral_tick_interval = 64;
+    machine.bus.config.peripheral_tick_interval = 64;
+    machine.bus.recompute_walk_deletable();
+    let wide = if machine.bus.legacy_walk_disabled {
+        64
+    } else {
+        1
+    };
+    let intervals = |machine: &mut Machine<CountingCpu>| {
+        machine.plan_cpu_window(AdvanceRequest::run(Some(2000)), 0, 0);
+        (
+            machine.config.peripheral_tick_interval,
+            machine.bus.config.peripheral_tick_interval,
+        )
+    };
+    assert_eq!(intervals(&mut machine), (wide, wide));
+
+    // A dynamic model woke the walk (firmware started a walk-stepped timer).
+    machine.bus.legacy_walk_disabled = false;
+    assert_eq!(intervals(&mut machine), (1, 1));
+
+    // The model went idle again and the walk was deleted.
+    machine.bus.recompute_walk_deletable();
+    assert_eq!(intervals(&mut machine), (wide, wide));
+}
+
+#[test]
 fn resident_grid_clamps_parked_window_before_a_midwindow_arm() {
     let mut machine = counting_dual_core_machine();
     machine.cpu_secondary.as_mut().unwrap().parked = true;

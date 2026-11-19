@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/starfive-jh7100-smoke.yaml",
   "system": "configs/systems/onboarding/starfive-jh7100.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:16:05Z",
-  "finished_at_utc": "2026-11-19T16:16:06Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1028,
+  "started_at_utc": "2026-11-19T17:58:59Z",
+  "finished_at_utc": "2026-11-19T17:59:01Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2109,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.381,
-    "build_firmware": 0.259,
-    "run_smoke": 0.341
+    "build_cli": 1.002,
+    "build_firmware": 0.524,
+    "run_smoke": 0.535
   },
   "stages_ms": {
-    "build_cli": 381,
-    "build_firmware": 259,
-    "run_smoke": 341
+    "build_cli": 1002,
+    "build_firmware": 524,
+    "run_smoke": 535
   }
 }

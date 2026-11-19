@@ -18,9 +18,9 @@
       0,
       536968840,
       16781481,
-      16781428
+      16781432
     ],
-    "pc": 16781428,
+    "pc": 16781432,
     "xpsr": 1627389952,
     "primask": false,
     "pending_exceptions": 0,
@@ -33,9 +33,9 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "steps_executed": 207985,
+  "steps_executed": 207980,
   "cycles": 111000,
-  "instructions": 207985,
+  "instructions": 207980,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -45,7 +45,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 207985
+      "value": 207980
     }
   },
   "limits": {

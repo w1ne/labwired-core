@@ -1,8 +1,8 @@
-[2m2026-11-19T16:17:36.997615Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f4_discovery-kit.yaml
-[2m2026-11-19T16:17:37.063787Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000401
+[2m2026-11-19T17:59:26.282400Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f4_discovery-kit.yaml
+[2m2026-11-19T17:59:26.347729Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-[2m2026-11-19T16:17:37.065121Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'usart2'
-[2m2026-11-19T16:17:37.065387Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 25 applied
-[2m2026-11-19T16:17:37.065397Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 50 applied
-PASS  12/12 checks · stm32f4_discovery-kit-smoke · 4000000 steps · 0.52s
+[2m2026-11-19T17:59:26.348991Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'usart2'
+[2m2026-11-19T17:59:26.349247Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 25 applied
+[2m2026-11-19T17:59:26.349262Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 50 applied
+PASS  12/12 checks · stm32f4_discovery-kit-smoke · 4000000 steps · 0.61s
