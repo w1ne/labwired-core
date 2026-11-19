@@ -16,15 +16,6 @@ max_device_only: 1
 min_lab_exercised: 47
 
 parts:
-  apa102:
-    kind: tested
-    tests:
-      - crates/core/tests/apa102_strip.rs
-      - crates/core/tests/led_strip_migration_parity.rs
-    reason: >-
-      Both tests build the strip from the embedded descriptor through the
-      `declarative_led_strip::apa102` constructor, not a manifest `type:`. No
-      example lab places an APA102.
   segment_display_mux:
     kind: device-only
     reason: >-

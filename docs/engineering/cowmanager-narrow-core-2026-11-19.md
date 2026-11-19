@@ -2,7 +2,7 @@
 
 ## Source scope
 
-This integration starts at [941a6c5](https://github.com/w1ne/labwired-core/commit/941a6c5caf0c53b66aa5af9290e5ecba5972ec72), the A1 STM32 GPIO observer revision already selected by the application. It retains all 123 top-level chip YAML descriptors from that revision. No chip descriptor or coverage ledger is added or removed.
+This integration starts at [941a6c5](https://github.com/w1ne/labwired-core/commit/941a6c5caf0c53b66aa5af9290e5ecba5972ec72), the A1 STM32 GPIO observer revision already selected by the application. It retains all 123 top-level chip YAML descriptors from that revision. No chip descriptor is added or removed.
 
 The feature and compatibility changes have explicit upstream sources:
 
@@ -14,6 +14,7 @@ The feature and compatibility changes have explicit upstream sources:
 | [a0b0a91c](https://github.com/w1ne/labwired-core/commit/a0b0a91c1868fe78e4af45e817e566807517ef1e) | Four-file capture-provenance policy and its tests |
 | [ff78e6b7](https://github.com/w1ne/labwired-core/commit/ff78e6b7082c09783989c686bd20e6bfa3330a2f) | Resolve declared SAMD/AVR port labels through the board pin authority; retain STM32 pad numbering and reject undeclared pads |
 | [f57baef7](https://github.com/w1ne/labwired-core/commit/f57baef72dff17bdfd327ac77b1719026e27bdc2) | Propagate autonomous STM32 alternate-function edges through weak PadLines listeners and shared route selection; test waveform timing and listener lifetime |
+| [9b8a55a7](https://github.com/w1ne/labwired-core/commit/9b8a55a764bd1b576d411aa54d3d404b1fae9d23) | Remove only the redundant APA102 tested-ledger entry; exclude the unrelated AVR test change |
 
 The ff78 regression uses this revision's flat `led_strip_system_configs`
 integration target instead of the later grouped test layout. The only
@@ -21,8 +22,16 @@ production context adaptation in f57 places `sync_stm32_af_observers()`
 immediately after `sync_pin_cells()` inside the existing SAM-only reset
 block. No later F1 reset, LCKR or IDR behavior is imported. Both upstream
 fixes are already ancestors of the retained private Core revision ddc48b.
-The seven-file repair changes no descriptor, system manifest, firmware,
-coverage ledger or threshold.
+The seven-file runtime repair changes no descriptor, system manifest,
+firmware or coverage threshold.
+
+One metadata follow-up removes the redundant `apa102` `kind: tested`
+entry from `configs/ci/part-coverage.yaml`. The new LED-system test names
+that type, so the existing static gate now derives its classification.
+The unchanged `apa102_strip` and `led_strip_migration_parity` integration
+tests remain the direct SPI/behavior evidence. This adds no lab or hardware
+coverage claim; `min_lab_exercised: 47`, `max_device_only: 1` and all
+coverage totals remain unchanged.
 
 ## Independent public and private revisions
 
@@ -63,7 +72,8 @@ The self-test preserves all five controls. The existing F103 fixture emits
 all nine TIER1 PASS markers and the done marker. The wrong F407 firmware
 produces a BusFault and exit 3. The wrong-marker control still rejects a
 valid CLI run that exits 0. Missing-chip and nRF marker checks remain in
-place. The real coverage map, firmware files and step budget are unchanged.
+place. The runnable-chip map (`scripts/ci/docs-runnable-chips.json`),
+firmware files and step budget are unchanged.
 
 ## Validation
 
