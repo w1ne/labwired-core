@@ -79,8 +79,10 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // MSS configuration and the FPGA fabric design, not through fixed pads;
     // a board routes them numerically (`board.gpio_in.mss_gpio2.<port>`).
     "mpfs095t",
-    // The SK-AM62 LEDs and button are on I2C GPIO expanders / MAIN GPIO, and
-    // neither is modelled; the pad configuration is a declared stub.
+    // MAIN_GPIO0/1 pads are GPIO numbers across several register banks
+    // (GPIO0_32 is bank 1 bit 0), so a board routes them numerically
+    // (`board.gpio_in.main_gpio0.<gpio>`); the pad configuration is a
+    // declared stub.
     "am6234",
     // RX261 ports are a declared stub (no RX PORT/MPC model yet), so the
     // EK-RX261 LEDs and switch have no pads to read.

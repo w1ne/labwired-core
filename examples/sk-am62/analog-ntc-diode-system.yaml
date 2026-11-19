@@ -1,6 +1,10 @@
-# Generic Beta NTC and Shockley diode netlists drive simulation-only input
-# endpoints for SK-AM62. No AM6234 GPIO register, pad route, ADC, or silicon
-# threshold behavior is claimed by this fixture.
+# Generic Beta NTC and Shockley diode netlists drive two MAIN_GPIO0 pads of
+# the SK-AM62 40-pin user expansion connector (SPRUJ40F, Table 2-28):
+#   pin 15  EXP_GPIO0_32  ball L23  GPIO0_32  <- NTC divider
+#   pin 13  EXP_GPIO0_42  ball L21  GPIO0_42  <- diode load line
+# Both pads are LVCMOS in the 3.3 V GPMC group (VDDSHV3). Firmware reads the
+# levels in MAIN_GPIO0 IN_DATA23 (0x0060_0048), bits 0 and 10. The PADCONFIG
+# receiver enable is not modelled (the pad configuration is a stub).
 name: "sk-am62-analog-inputs"
 chip: "../../configs/chips/am6234.yaml"
 external_devices: []
@@ -12,7 +16,7 @@ cosim_models:
     inputs:
       temperature: "ui.ntc.temperature_c"
     outputs:
-      v_sense: "board.gpio_in.cosim_inputs.0"
+      v_sense: "board.gpio_in.main_gpio0.32"
     config:
       netlist_text: |
         Vcc vcc 0 dc 3.3
@@ -27,7 +31,7 @@ cosim_models:
     adapter: "analog"
     step_ns: 1000
     outputs:
-      v_diode: "board.gpio_in.cosim_inputs.1"
+      v_diode: "board.gpio_in.main_gpio0.42"
     config:
       netlist_text: |
         Vcc supply 0 dc 3.3

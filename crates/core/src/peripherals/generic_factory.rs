@@ -417,6 +417,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "miv_coretimer",
     // PolarFire SoC MSS GPIO (CoreGPIO semantics, MSS register map).
     "mpfs_gpio",
+    // TI DaVinci / Keystone / K3 GPIO (Linux gpio-davinci.c register map).
+    "ti_davinci_gpio",
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
@@ -1881,6 +1883,20 @@ pub fn try_build(
                 anyhow::bail!("mpfs_gpio `ports` must be 1..=32, got {ports}");
             }
             Box::new(crate::peripherals::miv::MivCoreGpio::mpfs(ports as u32))
+        }
+        // TI DaVinci-family GPIO: `ngpio` is the instance's `ti,ngpio`.
+        "ti_davinci_gpio" => {
+            let ngpio = p_cfg
+                .config
+                .get("ngpio")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(32);
+            if !(1..=160).contains(&ngpio) {
+                anyhow::bail!("ti_davinci_gpio `ngpio` must be 1..=160, got {ngpio}");
+            }
+            Box::new(crate::peripherals::ti_davinci_gpio::TiDavinciGpio::new(
+                ngpio as u32,
+            ))
         }
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),

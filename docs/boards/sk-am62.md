@@ -17,7 +17,7 @@ MAIN_UART0 as the console. **Unmodified upstream Zephyr v4.3.0** images for
 
 !!! warning "Not claimed yet"
     Cores 1-3 (SMP), the M4F/R5F, UART interrupts (the console is polled),
-    GPIO/LEDs, the boot flow, stage 2, 16/64 KB granules, Armv8.1+ and crypto
+    GPIO interrupt lines, LEDs, the boot flow, stage 2, 16/64 KB granules, Armv8.1+ and crypto
     instructions, and most SIMD/FP arithmetic. SIM-DERIVED: no bench part.
 
 Evidence and the full claim table: `examples/sk-am62/VALIDATION.md`.

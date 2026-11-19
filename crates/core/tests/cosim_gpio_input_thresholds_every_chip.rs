@@ -60,6 +60,12 @@ const NOT_TRANSCRIBED: &[&str] = &[
 /// (chip, VIL max volts, VIH min volts, source).
 const DATASHEET_VOLTS: &[(&str, f64, f64, &str)] = &[
     (
+        "am6234",
+        0.8,
+        2.0,
+        "AM62x data sheet SPRSP58C 6.8.6, LVCMOS 3.3 V mode VIL max 0.8 V / VIH min 2.0 V",
+    ),
+    (
         "nrf54lm20a",
         0.54,
         1.26,
@@ -186,6 +192,8 @@ const PAD_OVERRIDES: &[(&str, &str)] = &[
     // MSS GPIO_2 ports have no fixed pad: the FPGA design routes them, so a
     // board names the port (`mss_gpio2.<n>`).
     ("mpfs095t", "mss_gpio2.0"),
+    // MAIN_GPIO0 pads are GPIO numbers over several register banks.
+    ("am6234", "main_gpio0.32"),
 ];
 
 fn all_chips() -> Vec<(String, ChipDescriptor)> {

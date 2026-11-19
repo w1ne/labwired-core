@@ -163,8 +163,9 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         // TI AM6234 (SK-AM62), first AArch64 part: one Cortex-A53 with its
         // GICv3 and generic timer in the core. SIM-DERIVED: no AM62x bench
-        // part. Modelled: MAIN_UART0-6 (16550, polled). Pad config and the
-        // mailbox are declared stubs — see examples/sk-am62/VALIDATION.md.
+        // part. Modelled: MAIN_UART0-6 (16550, polled) and MAIN_GPIO0/1
+        // (no interrupt lines). Pad config and the mailbox are declared
+        // stubs — see examples/sk-am62/VALIDATION.md.
         name: "am6234",
         yaml: "configs/chips/am6234.yaml",
         reset_oracle: None,

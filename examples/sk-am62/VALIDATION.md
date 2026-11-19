@@ -36,5 +36,9 @@ there is no AM62x bench part, and no QEMU or Renode run was diffed against.
   IRQ through IAR1), no binary-point preemption subgroups, EOImode 1, LPIs/ITS.
 - **UART**: polled TX/RX; the SPI is wired but Zephyr's console does not
   enable it. Pad configuration and the mailbox are declared stubs.
+- **GPIO**: MAIN_GPIO0/1 registers and pads are modelled; the interrupt
+  lines (TISCI interrupt router) are not, so `INTSTAT` is poll-only. `IN_DATA`
+  does not depend on the PADCONFIG receiver enable. PID and PCR read 0. The
+  analog fixture is read by a bus-level test, not by firmware.
 - Caches (maintenance instructions are accepted), debug and PMU registers
   (RAZ/WI). Timing: one instruction is one CPU clock.

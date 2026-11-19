@@ -1035,7 +1035,7 @@ chips:
 
   - id: am6234
     arch: aarch64
-    headline: "L1 + stock RTOS, SIM-DERIVED. First AArch64 part: one Cortex-A53 PE (A64 Armv8.0, EL0-EL3, stage-1 MMU, GICv3 and generic timer in the core) runs unmodified Zephyr v4.3.0 hello_world, synchronization and tests/kernel/common (12 suites, 63/63, user mode at EL0) for sk_am62/am6234/a53 from EL3, on the polled MAIN_UART0 16550 console with the virtual-timer tick (examples/sk-am62). Pad configuration and the mailbox are declared stubs and UART interrupts are not requested, so no advanced blocks exist to list."
+    headline: "L1 + stock RTOS, SIM-DERIVED. First AArch64 part: one Cortex-A53 PE (A64 Armv8.0, EL0-EL3, stage-1 MMU, GICv3 and generic timer in the core) runs unmodified Zephyr v4.3.0 hello_world, synchronization and tests/kernel/common (12 suites, 63/63, user mode at EL0) for sk_am62/am6234/a53 from EL3, on the polled MAIN_UART0 16550 console with the virtual-timer tick (examples/sk-am62). MAIN_GPIO0/1 are modelled (ti_davinci_gpio) and read an NTC and a diode through two pads of the 40-pin user expansion connector in a bus-level test, not from firmware. Pad configuration and the mailbox are declared stubs and UART interrupts are not requested, so no advanced blocks exist to list."
     functional: []
     advanced_unit_only: []
     advanced_dead: []

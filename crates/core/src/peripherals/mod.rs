@@ -163,6 +163,7 @@ pub mod stub;
 pub mod sunxi_lradc;
 pub mod syscfg;
 pub mod systick;
+pub mod ti_davinci_gpio;
 pub mod timer;
 pub mod tsc;
 pub mod uart;
