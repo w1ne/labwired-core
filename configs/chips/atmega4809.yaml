@@ -152,6 +152,17 @@ peripherals:
     size: "192"
     config:
       tcb_irqs: [12, 13, 25, 36]
+  # TWI0, host side (`megaavr_twi`): START / repeated START, address, data
+  # bytes, STOP, MBAUD bit time, RIF / WIF on the TWIM vector. Pads are not
+  # routed: attached devices answer on any PORTMUX.TWISPIROUTEA selection.
+  # Client mode, dual mode, smart mode, quick command and the bus time-out
+  # are refused.
+  - id: "twi0"
+    type: "megaavr_twi"
+    base_address: 0x000108A0
+    size: "15"
+    config:
+      irq: 15
   # Register banks generated from the ATDF by scripts/atdf_to_declarative.py.
   # They store what firmware writes and nothing more: no clock switching or
   # prescaling, no sleep, no brown-out and no reset cause beyond the reset

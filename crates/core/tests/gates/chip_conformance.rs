@@ -1025,12 +1025,15 @@ const CHIPS: &[ChipConf] = &[
     // ATmega4809 (megaAVR 0-series, Arduino Nano Every). SIM-DERIVED from the
     // Microchip ATDF: no silicon capture. Its Arduino matrix row and
     // examples/arduino-nano-every/io-smoke.yaml run through PlatformIO and the
-    // CLI, not as a Rust test, so no behavior_gate resolves.
+    // CLI. The behavior gate boots the committed stock-Arduino BME280 sketch
+    // (tests/fixtures/avr/arduino-nano-every-bme280.elf) over TWI0 and USART3.
     ChipConf {
         name: "atmega4809",
         yaml: "configs/chips/atmega4809.yaml",
         reset_oracle: None,
-        behavior_gate: None,
+        behavior_gate: Some(
+            "avr_nano_every_bme280::nano_every_wire_reads_compensated_bme280_values",
+        ),
     },
     // ATmega32U4 (Arduino Leonardo / Micro). SIM-DERIVED from DS7766: no
     // silicon capture. The USB device model is unit-tested in

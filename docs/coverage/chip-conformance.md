@@ -115,7 +115,7 @@ This page covers the public models. For every chip we model — public and priva
 | atmega328pb | **L1** | ✓ | 8 | — | — | avr_atmega328pb_usart1::atmega328pb_firmware_uses_usart1_and_drives_pb5 |
 | atmega2560 | **L1** | ✓ | 18 | — | — | avr_mega2560_io::each_led_lands_on_its_mega_port_pin |
 | atmega2561 | **L1** | ✓ | 11 | — | — | avr_atmega2561::atmega2561_boots_and_prints |
-| atmega4809 | **L0** | ✓ | 19 | — | — | — |
+| atmega4809 | **L1** | ✓ | 20 | — | — | avr_nano_every_bme280::nano_every_wire_reads_compensated_bme280_values |
 | atmega32u4 | **L0** | ✓ | 8 | — | — | — |
 | mimxrt1062-teensy41 | **L0** | ✓ | 50 | — | — | — |
 | atmega1281 | **L1** | ✓ | 11 | — | — | avr_atmega1281_firmware::atmega1281_compiled_firmware_prints_and_drives_pb5 |

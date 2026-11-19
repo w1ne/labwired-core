@@ -30,9 +30,11 @@ void loop() {
 The chip descriptor (`configs/chips/atmega4809.yaml`) now models more than
 this example uses. Stock ArduinoCore-megaavr sketches run on it in the Arduino
 matrix (`validation/arduino-matrix`, row `arduino-nano-every`): L0/L1 serial
-through USART3, L2 blink and L7 `millis()`/`micros()` through TCB3 pass. TWI0,
-SPI0, ADC conversion and timer pad outputs are not modelled yet, so L3-L6 are
-skipped with that reason. An I/O access to anything the descriptor does not
+through USART3, L2 blink, L3 `Wire` through TWI0 (INA219, exact registers), L5
+`analogRead()` through ADC0 and L7 `millis()`/`micros()` through TCB3 pass.
+SPI0 and timer pad outputs are not modelled yet, so L4 and L6 are skipped with
+that reason. A sensor example on `Wire` is in
+[`../arduino-nano-every-bme280/`](../arduino-nano-every-bme280/README.md). An I/O access to anything the descriptor does not
 declare faults instead of reading zero.
 
 ## Lifecycle and hardware sources

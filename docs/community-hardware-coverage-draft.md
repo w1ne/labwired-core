@@ -306,6 +306,55 @@ void setup() {
 void loop() {}
 ```
 
+### Arduino Nano Every + Adafruit BME280
+
+Arduino lists the Nano Every as orderable SKU ABX00028, and Microchip's live
+page reported ATMEGA4809 as In Production on 2026-11-19. The Adafruit BME280
+breakout was in stock on the same date. The ATmega4809 is not ranked
+separately; the Nano Every is the in-production Arduino board in the classic
+Nano form factor. This adds a TWI0 host model to the ATmega4809, so stock
+`Wire` runs.
+
+- [Wiring, scope, copy-paste sketch, and smoke instructions](../examples/arduino-nano-every-bme280/README.md)
+- [Live vendor status receipt](../examples/arduino-nano-every-bme280/vendor-status.md)
+- [Committed local smoke evidence and controls](../examples/arduino-nano-every-bme280/evidence/)
+
+The sketch uses the stock Adafruit BME280 library on A4/A5 and prints
+compensated readings on USB `Serial`: `T=25.00 C`, `P=1013.25 hPa`,
+`RH=50.00 %` with the sensor model at its defaults. SPI0, timer pad outputs
+and the TWI0 pads are not modelled. No physical board test was run.
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_BME280.h>
+
+Adafruit_BME280 bme;
+
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  Serial.begin(115200);
+  if (!bme.begin(0x77)) {
+    Serial.println("BME280 not found at 0x77");
+    return;
+  }
+  Serial.print("NANO_EVERY_BME280 ID=0x");
+  Serial.println(bme.sensorID(), HEX);
+  Serial.print("T=");
+  Serial.print(bme.readTemperature(), 2);
+  Serial.println(" C");
+  Serial.print("P=");
+  Serial.print(bme.readPressure() / 100.0F, 2);
+  Serial.println(" hPa");
+  Serial.print("RH=");
+  Serial.print(bme.readHumidity(), 2);
+  Serial.println(" %");
+  digitalWrite(LED_BUILTIN, HIGH);
+}
+
+void loop() {}
+```
+
 ### ESP32-C61-DevKitC-1-N8R2
 
 ESP32 is demand rank 1 (38% of reported MCU use); the survey does not score

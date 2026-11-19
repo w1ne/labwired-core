@@ -404,10 +404,12 @@ pub const MODEL_TYPES: &[&str] = &[
     "pic32_uart",
     // Microchip PIC32MZ 16-bit timer (TxCON/TMRx/PRx, Type A or B).
     "pic32_timer",
-    // Microchip megaAVR 0-series USART, the TCA0 + TCB0..3 timer block and ADC0.
+    // Microchip megaAVR 0-series USART, the TCA0 + TCB0..3 timer block, ADC0
+    // and the TWI host.
     "megaavr_usart",
     "megaavr_tc",
     "megaavr_adc",
+    "megaavr_twi",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -1903,6 +1905,25 @@ pub fn try_build(
                 }
             }
             Box::new(adc)
+        }
+        // `irq`: the part's TWIM (host) vector number.
+        "megaavr_twi" => {
+            if let Some(k) = p_cfg.config.keys().find(|k| k.as_str() != "irq") {
+                anyhow::bail!("megaavr_twi '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            let irq = p_cfg
+                .config
+                .get("irq")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "megaavr_twi '{}' needs `irq: <TWIM vector number>`",
+                        p_cfg.id
+                    )
+                })?;
+            Box::new(crate::peripherals::megaavr::twi::MegaAvrTwi::new(
+                irq as u32,
+            ))
         }
         "rx_flash" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::new()),
         "rx_rtc" => Box::new(crate::peripherals::rx_sysc::RxFlashRegs::rtc()),

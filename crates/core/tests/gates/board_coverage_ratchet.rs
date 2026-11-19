@@ -584,10 +584,10 @@ fn every_shipped_descriptor_is_ratcheted() {
         "atmega2561",
         // ATmega4809 (megaAVR 0-series, Arduino Nano Every). Has a chip
         // descriptor, a system manifest, an io-smoke example and an Arduino
-        // matrix row (stock ArduinoCore-megaavr L0/L1/L2/L5/L7) — but no
+        // matrix row (stock ArduinoCore-megaavr L0/L1/L2/L3/L5/L7) — but no
         // bundled-configs.ts catalog board, no silicon oracle and no
-        // executing-fidelity differential. TWI0, SPI0 and the TCA/TCB
-        // waveform outputs are not modelled.
+        // executing-fidelity differential. SPI0 and the TCA/TCB waveform
+        // outputs are not modelled.
         "atmega4809",
         // Arduino Leonardo / Micro (ATmega32U4). Has a chip descriptor, a
         // system manifest and an Arduino matrix row (stock ArduinoCore-avr
