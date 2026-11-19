@@ -1,6 +1,6 @@
 {
   "result_schema_version": "1.0",
-  "status": "fail",
+  "status": "pass",
   "steps_executed": 200000,
   "cycles": 200000,
   "instructions": 200000,
@@ -51,7 +51,7 @@
           "EFR32MG13 PASS"
         ]
       },
-      "passed": false
+      "passed": true
     },
     {
       "assertion": {
@@ -71,7 +71,7 @@
           "size": 4
         }
       },
-      "passed": false
+      "passed": true
     },
     {
       "assertion": {
@@ -84,23 +84,23 @@
     "type": "arm",
     "registers": [
       16,
-      1191,
-      4012966591,
+      840,
+      4012967935,
       4294867296,
       1,
       1,
-      131088,
+      98316,
       536935400,
-      131088,
+      98316,
       1073807376,
       4294867296,
       1073783036,
       4294867296,
       536935360,
       26985,
-      28136
+      28154
     ],
-    "pc": 28136,
+    "pc": 28154,
     "xpsr": 2164260864,
     "primask": false,
     "pending_exceptions": 0,
@@ -273,64 +273,60 @@
             "value": 0
           },
           {
-            "cycle": 17556,
+            "cycle": 32249,
             "value": 1
           },
           {
-            "cycle": 30056,
+            "cycle": 44749,
             "value": 0
           },
           {
-            "cycle": 42556,
+            "cycle": 57249,
             "value": 1
           },
           {
-            "cycle": 55056,
+            "cycle": 69749,
             "value": 0
           },
           {
-            "cycle": 67556,
+            "cycle": 82249,
             "value": 1
           },
           {
-            "cycle": 80056,
+            "cycle": 94749,
             "value": 0
           },
           {
-            "cycle": 92556,
+            "cycle": 107249,
             "value": 1
           },
           {
-            "cycle": 105056,
+            "cycle": 119749,
             "value": 0
           },
           {
-            "cycle": 117556,
+            "cycle": 132249,
             "value": 1
           },
           {
-            "cycle": 130056,
+            "cycle": 144749,
             "value": 0
           },
           {
-            "cycle": 142556,
+            "cycle": 157249,
             "value": 1
           },
           {
-            "cycle": 155056,
+            "cycle": 169749,
             "value": 0
           },
           {
-            "cycle": 167556,
+            "cycle": 182249,
             "value": 1
           },
           {
-            "cycle": 180056,
+            "cycle": 194749,
             "value": 0
-          },
-          {
-            "cycle": 192556,
-            "value": 1
           }
         ],
         "gaps": [],
@@ -357,68 +353,64 @@
             "state": "0"
           },
           {
-            "cycle": 17556,
+            "cycle": 32249,
             "state": "1"
           },
           {
-            "cycle": 30056,
+            "cycle": 44749,
             "state": "0"
           },
           {
-            "cycle": 42556,
+            "cycle": 57249,
             "state": "1"
           },
           {
-            "cycle": 55056,
+            "cycle": 69749,
             "state": "0"
           },
           {
-            "cycle": 67556,
+            "cycle": 82249,
             "state": "1"
           },
           {
-            "cycle": 80056,
+            "cycle": 94749,
             "state": "0"
           },
           {
-            "cycle": 92556,
+            "cycle": 107249,
             "state": "1"
           },
           {
-            "cycle": 105056,
+            "cycle": 119749,
             "state": "0"
           },
           {
-            "cycle": 117556,
+            "cycle": 132249,
             "state": "1"
           },
           {
-            "cycle": 130056,
+            "cycle": 144749,
             "state": "0"
           },
           {
-            "cycle": 142556,
+            "cycle": 157249,
             "state": "1"
           },
           {
-            "cycle": 155056,
+            "cycle": 169749,
             "state": "0"
           },
           {
-            "cycle": 167556,
+            "cycle": 182249,
             "state": "1"
           },
           {
-            "cycle": 180056,
+            "cycle": 194749,
             "state": "0"
-          },
-          {
-            "cycle": 192556,
-            "state": "1"
           }
         ],
         "mode": "output",
-        "edge_count": 19
+        "edge_count": 18
       }
     ]
   },
@@ -429,10 +421,10 @@
       "number": 4,
       "mode": "output",
       "func": null,
-      "output": true,
-      "input": true,
-      "pad": true,
-      "drive": "1"
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
     }
   ],
   "uart_lines": {
@@ -480,7 +472,7 @@
         "end_cycle": 10000
       },
       {
-        "text": "tim0 up of=1 masked=1 pend=1 released=0 running=1 FAIL",
+        "text": "tim0 up of=1 masked=1 pend=1 released=1 running=1 ok",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -492,7 +484,7 @@
         "end_cycle": 10000
       },
       {
-        "text": "tim1 updown cc3=1 of=1 dirchg=1 dir_down=0 FAIL",
+        "text": "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -504,16 +496,16 @@
         "end_cycle": 10000
       },
       {
-        "text": "rtcc ret=1 of=1 of_first=0 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 FAIL",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "text": "rtcc ret=1 of=1 of_first=1 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       },
       {
-        "text": "EFR32MG13 FAIL",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "text": "EFR32MG13 PASS",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       }
     ],
     "dropped_lines": 0
@@ -553,15 +545,20 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 5657,
+    "memory_reads": 5690,
     "memory_writes": 53,
-    "peripheral_accesses": 1458,
+    "peripheral_accesses": 5012,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 28136,
-        "count": 781,
+        "pc": 28154,
+        "count": 742,
         "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 22818,
+        "count": 39,
+        "symbol": "<u32>::unchecked_add"
       }
     ]
   }

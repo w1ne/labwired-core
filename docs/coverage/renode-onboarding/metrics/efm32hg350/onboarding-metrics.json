@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/efm32hg350-smoke.yaml",
   "system": "configs/systems/onboarding/efm32hg350.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:27:50Z",
-  "finished_at_utc": "2026-11-19T16:27:52Z",
+  "started_at_utc": "2026-11-19T17:53:45Z",
+  "finished_at_utc": "2026-11-19T17:53:47Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1785,
+  "elapsed_ms": 1903,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.604,
-    "build_firmware": 0.412,
-    "run_smoke": 0.729
+    "build_cli": 0.444,
+    "build_firmware": 0.862,
+    "run_smoke": 0.548
   },
   "stages_ms": {
-    "build_cli": 604,
-    "build_firmware": 412,
-    "run_smoke": 729
+    "build_cli": 444,
+    "build_firmware": 862,
+    "run_smoke": 548
   }
 }

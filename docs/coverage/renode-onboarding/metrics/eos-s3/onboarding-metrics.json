@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/eos-s3-smoke.yaml",
   "system": "configs/systems/onboarding/eos-s3.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:07:01Z",
-  "finished_at_utc": "2026-11-19T16:07:02Z",
+  "started_at_utc": "2026-11-19T17:54:18Z",
+  "finished_at_utc": "2026-11-19T17:54:19Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1507,
+  "elapsed_ms": 1059,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.382,
-    "build_firmware": 0.672,
-    "run_smoke": 0.389
+    "build_cli": 0.352,
+    "build_firmware": 0.295,
+    "run_smoke": 0.363
   },
   "stages_ms": {
-    "build_cli": 382,
-    "build_firmware": 672,
-    "run_smoke": 389
+    "build_cli": 352,
+    "build_firmware": 295,
+    "run_smoke": 363
   }
 }

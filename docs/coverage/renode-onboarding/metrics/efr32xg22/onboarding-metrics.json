@@ -15,23 +15,23 @@
   "script": "examples/renode-onboarding/efr32xg22-smoke.yaml",
   "system": "configs/systems/onboarding/efr32xg22.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:06:54Z",
-  "finished_at_utc": "2026-11-19T16:06:55Z",
-  "elapsed_seconds": 2,
-  "elapsed_ms": 1166,
+  "started_at_utc": "2026-11-19T17:54:10Z",
+  "finished_at_utc": "2026-11-19T17:54:13Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2728,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.543,
-    "build_firmware": 0.267,
-    "run_smoke": 0.312
+    "build_cli": 1.605,
+    "build_firmware": 0.568,
+    "run_smoke": 0.5
   },
   "stages_ms": {
-    "build_cli": 543,
-    "build_firmware": 267,
-    "run_smoke": 312
+    "build_cli": 1605,
+    "build_firmware": 568,
+    "run_smoke": 500
   }
 }

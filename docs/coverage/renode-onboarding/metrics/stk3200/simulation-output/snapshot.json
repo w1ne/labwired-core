@@ -3,7 +3,7 @@
   "cpu": {
     "type": "arm",
     "registers": [
-      1,
+      0,
       1073807372,
       1073766496,
       4294867296,
@@ -21,7 +21,7 @@
       10282
     ],
     "pc": 10282,
-    "xpsr": 16777216,
+    "xpsr": 1090519040,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [

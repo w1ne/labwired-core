@@ -15,24 +15,24 @@
   "script": "examples/renode-onboarding/cortex-a53-gicv3_smp-pl011-smoke.yaml",
   "system": "configs/systems/onboarding/cortex-a53-gicv3_smp.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T16:03:32Z",
-  "finished_at_utc": "2026-11-19T16:03:33Z",
+  "started_at_utc": "2026-11-19T17:37:49Z",
+  "finished_at_utc": "2026-11-19T17:37:50Z",
   "elapsed_seconds": 2,
-  "elapsed_ms": 1183,
+  "elapsed_ms": 1030,
   "failure_stage": "",
   "first_error_signature": "",
   "failure_hint": "",
   "threshold_seconds": 3600,
   "threshold_met": true,
   "stages_seconds": {
-    "build_cli": 0.565,
+    "build_cli": 0.434,
     "build_firmware": null,
-    "run_smoke": 0.576
+    "run_smoke": 0.538
   },
   "stages_ms": {
-    "build_cli": 565,
+    "build_cli": 434,
     "build_firmware": null,
-    "run_smoke": 576
+    "run_smoke": 538
   },
   "prebuilt_firmware": "tests/fixtures/virt-a53-pl011-smoke.elf"
 }

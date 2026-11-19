@@ -1,6 +1,6 @@
 {
   "result_schema_version": "1.0",
-  "status": "fail",
+  "status": "pass",
   "steps_executed": 200000,
   "cycles": 200000,
   "instructions": 200000,
@@ -52,7 +52,7 @@
           "EFR32MG12 PASS"
         ]
       },
-      "passed": false
+      "passed": true
     },
     {
       "assertion": {
@@ -72,7 +72,7 @@
           "size": 4
         }
       },
-      "passed": false
+      "passed": true
     },
     {
       "assertion": {
@@ -85,24 +85,24 @@
     "type": "arm",
     "registers": [
       16,
-      1075,
+      69,
       1073783036,
-      4012967615,
+      4012969983,
       1,
-      131088,
+      98316,
       4012969983,
       537132008,
       1,
       1073807376,
       4294867296,
-      1,
+      401,
       4294867296,
       537131944,
       27191,
-      28336
+      28298
     ],
-    "pc": 28336,
-    "xpsr": 2164260864,
+    "pc": 28298,
+    "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
     "pending_exceptions_hi": [
@@ -281,64 +281,60 @@
             "value": 0
           },
           {
-            "cycle": 18281,
+            "cycle": 37072,
             "value": 1
           },
           {
-            "cycle": 30781,
+            "cycle": 49572,
             "value": 0
           },
           {
-            "cycle": 43281,
+            "cycle": 62072,
             "value": 1
           },
           {
-            "cycle": 55781,
+            "cycle": 74572,
             "value": 0
           },
           {
-            "cycle": 68281,
+            "cycle": 87072,
             "value": 1
           },
           {
-            "cycle": 80781,
+            "cycle": 99572,
             "value": 0
           },
           {
-            "cycle": 93281,
+            "cycle": 112072,
             "value": 1
           },
           {
-            "cycle": 105781,
+            "cycle": 124572,
             "value": 0
           },
           {
-            "cycle": 118281,
+            "cycle": 137072,
             "value": 1
           },
           {
-            "cycle": 130781,
+            "cycle": 149572,
             "value": 0
           },
           {
-            "cycle": 143281,
+            "cycle": 162072,
             "value": 1
           },
           {
-            "cycle": 155781,
+            "cycle": 174572,
             "value": 0
           },
           {
-            "cycle": 168281,
+            "cycle": 187072,
             "value": 1
           },
           {
-            "cycle": 180781,
+            "cycle": 199572,
             "value": 0
-          },
-          {
-            "cycle": 193281,
-            "value": 1
           }
         ],
         "gaps": [],
@@ -365,68 +361,64 @@
             "state": "0"
           },
           {
-            "cycle": 18281,
+            "cycle": 37072,
             "state": "1"
           },
           {
-            "cycle": 30781,
+            "cycle": 49572,
             "state": "0"
           },
           {
-            "cycle": 43281,
+            "cycle": 62072,
             "state": "1"
           },
           {
-            "cycle": 55781,
+            "cycle": 74572,
             "state": "0"
           },
           {
-            "cycle": 68281,
+            "cycle": 87072,
             "state": "1"
           },
           {
-            "cycle": 80781,
+            "cycle": 99572,
             "state": "0"
           },
           {
-            "cycle": 93281,
+            "cycle": 112072,
             "state": "1"
           },
           {
-            "cycle": 105781,
+            "cycle": 124572,
             "state": "0"
           },
           {
-            "cycle": 118281,
+            "cycle": 137072,
             "state": "1"
           },
           {
-            "cycle": 130781,
+            "cycle": 149572,
             "state": "0"
           },
           {
-            "cycle": 143281,
+            "cycle": 162072,
             "state": "1"
           },
           {
-            "cycle": 155781,
+            "cycle": 174572,
             "state": "0"
           },
           {
-            "cycle": 168281,
+            "cycle": 187072,
             "state": "1"
           },
           {
-            "cycle": 180781,
+            "cycle": 199572,
             "state": "0"
-          },
-          {
-            "cycle": 193281,
-            "state": "1"
           }
         ],
         "mode": "output",
-        "edge_count": 19
+        "edge_count": 18
       }
     ]
   },
@@ -437,10 +429,10 @@
       "number": 4,
       "mode": "output",
       "func": null,
-      "output": true,
-      "input": true,
-      "pad": true,
-      "drive": "1"
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
     }
   ],
   "uart_lines": {
@@ -488,7 +480,7 @@
         "end_cycle": 10000
       },
       {
-        "text": "tim0 up of=1 masked=1 pend=1 released=0 running=1 FAIL",
+        "text": "tim0 up of=1 masked=1 pend=1 released=1 running=1 ok",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -500,7 +492,7 @@
         "end_cycle": 10000
       },
       {
-        "text": "tim1 updown cc3=1 of=1 dirchg=1 dir_down=0 FAIL",
+        "text": "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok",
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 10000
@@ -513,21 +505,21 @@
       },
       {
         "text": "wtim1 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
       },
       {
-        "text": "rtcc ret=1 of=1 of_first=0 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 FAIL",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "text": "rtcc ret=1 of=1 of_first=1 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 ok",
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 30000
       },
       {
-        "text": "EFR32MG12 FAIL",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "text": "EFR32MG12 PASS",
+        "cycle_lo": 20000,
+        "cycle": 30000,
+        "end_cycle": 30000
       }
     ],
     "dropped_lines": 0
@@ -567,15 +559,25 @@
     "cycles": 200000,
     "instructions": 200000,
     "steps_executed": 200000,
-    "memory_reads": 5801,
+    "memory_reads": 5834,
     "memory_writes": 81,
-    "peripheral_accesses": 1660,
+    "peripheral_accesses": 6330,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 28336,
-        "count": 781,
-        "symbol": "core::ptr::write_volatile"
+        "pc": 28298,
+        "count": 703,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 18762,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 23156,
+        "count": 39,
+        "symbol": "firmware_efr32mg12_smoke::s1::wait"
       }
     ]
   }

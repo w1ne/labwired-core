@@ -1,8 +1,8 @@
-[2m2026-11-19T16:07:42.910980Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/focaltech_ft9001.yaml
-[2m2026-11-19T16:07:42.913372Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x10000401
+[2m2026-11-19T17:54:26.619816Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/focaltech_ft9001.yaml
+[2m2026-11-19T17:54:26.622329Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x10000401
 labwired-cli test: idle_ff=on (event_scheduler=on)
 labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
-[2m2026-11-19T16:07:42.914760Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'usart2'
-[2m2026-11-19T16:07:43.006269Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'usart2'
-[2m2026-11-19T16:07:43.052726Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'usart2'
+[2m2026-11-19T17:54:26.623876Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'usart2'
+[2m2026-11-19T17:54:26.704567Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'usart2'
+[2m2026-11-19T17:54:26.761936Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'usart2'
 PASS  3/3 checks · focaltech_ft9001-smoke · 4000000 steps · 0.15s

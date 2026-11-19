@@ -92,9 +92,9 @@
       1075867676,
       542638032,
       134226743,
-      134226868
+      134226870
     ],
-    "pc": 134226868,
+    "pc": 134226870,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -180,33 +180,33 @@
     "lines": [
       {
         "text": "MIMXRT798S LP_FLEXCOMM0 LPUART SMOKE",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 10000
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 470000
       },
       {
         "text": "flexcomm0 pselid=00103070->00103071->00103079",
-        "cycle_lo": 0,
-        "cycle": 10000,
-        "end_cycle": 20000
+        "cycle_lo": 480000,
+        "cycle": 490000,
+        "end_cycle": 1050000
       },
       {
         "text": "lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001",
-        "cycle_lo": 10000,
-        "cycle": 20000,
-        "end_cycle": 120000
+        "cycle_lo": 1060000,
+        "cycle": 1070000,
+        "end_cycle": 2120000
       },
       {
         "text": "ostimer ctrl=00000000 run=00000001 poll=00000001 w1c=00000001 irq=00000001 isr_ctrl=00000003 masked=00000001 late=00000001",
-        "cycle_lo": 110000,
-        "cycle": 120000,
-        "end_cycle": 140000
+        "cycle_lo": 2120000,
+        "cycle": 2130000,
+        "end_cycle": 3650000
       },
       {
         "text": "pass=0000001f",
-        "cycle_lo": 130000,
-        "cycle": 140000,
-        "end_cycle": 150000
+        "cycle_lo": 3650000,
+        "cycle": 3660000,
+        "end_cycle": 3840000
       }
     ],
     "dropped_lines": 0
@@ -246,69 +246,89 @@
     "cycles": 4000000,
     "instructions": 4000000,
     "steps_executed": 4000000,
-    "memory_reads": 5189,
+    "memory_reads": 5168,
     "memory_writes": 81,
-    "peripheral_accesses": 24073,
+    "peripheral_accesses": 1254686,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134226868,
-        "count": 15079,
+        "pc": 134226870,
+        "count": 665,
         "symbol": "firmware_mimxrt798s_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 134222922,
-        "count": 78,
-        "symbol": "firmware_mimxrt798s_smoke::__cortex_m_rt_main"
-      },
-      {
-        "pc": 134222924,
-        "count": 78,
-        "symbol": "<i32 as core::cmp::PartialOrd>::lt"
-      },
-      {
-        "pc": 134222926,
-        "count": 78,
-        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
-      },
-      {
-        "pc": 134220620,
-        "count": 39,
+        "pc": 134220074,
+        "count": 351,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134221590,
-        "count": 39,
+        "pc": 134220080,
+        "count": 351,
         "symbol": "firmware_mimxrt798s_smoke::putc"
       },
       {
-        "pc": 134223606,
-        "count": 39,
-        "symbol": "core::sync::atomic::atomic_load"
-      },
-      {
-        "pc": 134223782,
-        "count": 39,
+        "pc": 134220068,
+        "count": 313,
         "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 134226902,
-        "count": 39,
+        "pc": 134220086,
+        "count": 312,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220064,
+        "count": 235,
         "symbol": "firmware_mimxrt798s_smoke::putc"
       },
       {
-        "pc": 134227074,
-        "count": 39,
+        "pc": 134227220,
+        "count": 234,
         "symbol": "firmware_mimxrt798s_smoke::putc"
       },
       {
-        "pc": 134227086,
-        "count": 39,
+        "pc": 134226954,
+        "count": 196,
         "symbol": "firmware_mimxrt798s_smoke::putc"
       },
       {
-        "pc": 134227214,
-        "count": 39,
+        "pc": 134226996,
+        "count": 196,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134226908,
+        "count": 195,
+        "symbol": "firmware_mimxrt798s_smoke::putc"
+      },
+      {
+        "pc": 134227042,
+        "count": 195,
+        "symbol": "firmware_mimxrt798s_smoke::putc"
+      },
+      {
+        "pc": 134227090,
+        "count": 195,
+        "symbol": "firmware_mimxrt798s_smoke::putc"
+      },
+      {
+        "pc": 134227136,
+        "count": 195,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134227182,
+        "count": 195,
+        "symbol": "firmware_mimxrt798s_smoke::putc"
+      },
+      {
+        "pc": 134226946,
+        "count": 157,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134220092,
+        "count": 156,
         "symbol": "firmware_mimxrt798s_smoke::putc"
       }
     ]

@@ -1,65 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="6" failures="2" errors="0" time="0.154178">
+<testsuite name="labwired" tests="6" failures="0" errors="0" time="0.136027">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
     <property name="firmware_hash" value="fc5d3cf989eaf54fe4ac36249556fb9a4539055b1988d67f1bb9e2706b2c4f7b"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.154178">
+  <testcase classname="labwired" name="run" time="0.136027">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: EFM32GG995 RENODE SMOKE" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;uart0 status=40 ok&quot;, &quot;uart1 status=40 ok&quot;, &quot;usart1 status=40 ok&quot;, &quot;usart2 status=40 ok&quot;, &quot;EFM32GG995 RE…" time="0.000000">
-    <failure message="assertion failed">assertion 2: uart_ordered: [&quot;uart0 status=40 ok&quot;, &quot;uart1 status=40 ok&quot;, &quot;usart1 status=40 ok&quot;, &quot;usart2 status=40 ok&quot;, &quot;EFM32GG995 RE…
-
-result_schema_version=1.0
-stop_reason=MaxSteps
-stop_reason_details.triggered_stop_condition=MaxSteps
-stop_reason_details.triggered_limit.max_steps=400000
-stop_reason_details.observed.steps_executed=400000
-steps_executed=400000
-cycles=400000
-instructions=400000
-limits:
-  - max_steps=400000
-firmware_hash=fc5d3cf989eaf54fe4ac36249556fb9a4539055b1988d67f1bb9e2706b2c4f7b
-firmware=examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32gg995-smoke
-system=examples/renode-onboarding/../../configs/systems/onboarding/stk3700.yaml
-script=examples/renode-onboarding/stk3700-smoke.yaml
-assertions:
-  - UartContains(UartContainsAssertion { uart_contains: &quot;EFM32GG995 RENODE SMOKE&quot; }): true
-  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;uart0 status=40 ok&quot;, &quot;uart1 status=40 ok&quot;, &quot;usart1 status=40 ok&quot;, &quot;usart2 status=40 ok&quot;, &quot;EFM32GG995 RENODE SMOKE&quot;, &quot;gpio pe2/pe3 pushpull set=1 tgl=1 clr=1 wo=1 ok&quot;, &quot;gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok&quot;, &quot;gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok&quot;, &quot;gpio pa pinlockn reset=ffff after=fffe ok&quot;, &quot;tim0 up of=1 pend=1 released=1 running=1 ok&quot;, &quot;tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok&quot;, &quot;tim2 cc0 hit=1 topbv=1 of=1 top=03e8-&gt;01f4 ok&quot;, &quot;tim3 updown of=1 dir_down=1 uf=1 up_again=1 ok&quot;, &quot;EFM32GG PASS&quot;] }): false
-  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioe:2&quot;, min_edges: 4 } }): true
-  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537001728, expected_value: 4013031679, mask: None, size: Some(4), node: None } }): false
-  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
-</failure>
   </testcase>
   <testcase classname="labwired" name="assertion 3: gpio_edges: gpioe:2 &gt;= 4 edges" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 4: memory_value: @0x2001ff00=0xef3200ff" time="0.000000">
-    <failure message="assertion failed">assertion 4: memory_value: @0x2001ff00=0xef3200ff
-
-result_schema_version=1.0
-stop_reason=MaxSteps
-stop_reason_details.triggered_stop_condition=MaxSteps
-stop_reason_details.triggered_limit.max_steps=400000
-stop_reason_details.observed.steps_executed=400000
-steps_executed=400000
-cycles=400000
-instructions=400000
-limits:
-  - max_steps=400000
-firmware_hash=fc5d3cf989eaf54fe4ac36249556fb9a4539055b1988d67f1bb9e2706b2c4f7b
-firmware=examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-efm32gg995-smoke
-system=examples/renode-onboarding/../../configs/systems/onboarding/stk3700.yaml
-script=examples/renode-onboarding/stk3700-smoke.yaml
-assertions:
-  - UartContains(UartContainsAssertion { uart_contains: &quot;EFM32GG995 RENODE SMOKE&quot; }): true
-  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;uart0 status=40 ok&quot;, &quot;uart1 status=40 ok&quot;, &quot;usart1 status=40 ok&quot;, &quot;usart2 status=40 ok&quot;, &quot;EFM32GG995 RENODE SMOKE&quot;, &quot;gpio pe2/pe3 pushpull set=1 tgl=1 clr=1 wo=1 ok&quot;, &quot;gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok&quot;, &quot;gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok&quot;, &quot;gpio pa pinlockn reset=ffff after=fffe ok&quot;, &quot;tim0 up of=1 pend=1 released=1 running=1 ok&quot;, &quot;tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok&quot;, &quot;tim2 cc0 hit=1 topbv=1 of=1 top=03e8-&gt;01f4 ok&quot;, &quot;tim3 updown of=1 dir_down=1 uf=1 up_again=1 ok&quot;, &quot;EFM32GG PASS&quot;] }): false
-  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioe:2&quot;, min_edges: 4 } }): true
-  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537001728, expected_value: 4013031679, mask: None, size: Some(4), node: None } }): false
-  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
-</failure>
   </testcase>
   <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
