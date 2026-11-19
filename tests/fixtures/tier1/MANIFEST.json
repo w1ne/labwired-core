@@ -157,6 +157,6 @@
   },
   "esp32s3-lcd-ev-ft5x06.elf": {
     "sha256": "7ba63d2245aae0513b22f77fcb8a23650e847ca933ee3009fe19a94952038e32",
-    "source_rev": "513497784b7a11bf1546ce0593079d0b9401446f"
+    "source_rev": "3c304d84b3f4847bb6fa8dc0c87bd74978438c27"
   }
 }
