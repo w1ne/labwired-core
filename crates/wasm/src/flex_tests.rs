@@ -1043,6 +1043,55 @@ fn flex_heypcb_ldr_portable_behavior_has_native_reference_and_dark_negative_cont
 }
 
 #[test]
+fn flex_heypcb_ldr_trace_snapshots_report_history_lost_to_late_consumers() {
+    let mut runtime =
+        FlexRuntime::from_yaml(HEYPCB_LDR_SYSTEM).expect("load pinned LDR behavior slice");
+    let drive = runtime.port_id("user_led_drive").unwrap();
+
+    // The consumer intentionally waits until both bounded rings overflow.
+    // This checks the existing named logic and scope traces expose their loss
+    // rather than making a truncated history look quiet or complete.
+    for step in 0..32_769 {
+        runtime
+            .write(drive, if step % 2 == 0 { 1.0 } else { 0.0 })
+            .unwrap();
+        runtime.advance_ns(1_000).unwrap();
+    }
+
+    let digital = runtime.digital_trace_snapshot(0);
+    assert!(
+        digital.dropped > 0,
+        "late logic-analyzer read hid lost edges"
+    );
+    assert!(
+        !digital.edges.is_empty(),
+        "late read lost the retained edge window"
+    );
+    let digital_tail = runtime.digital_trace_snapshot(digital.cursor);
+    assert!(
+        digital_tail.edges.is_empty(),
+        "digital cursor replayed old edges"
+    );
+    assert_eq!(digital_tail.dropped, digital.dropped);
+
+    let analog = runtime.analog_trace_snapshot(0);
+    assert!(
+        analog.dropped > 0,
+        "late oscilloscope read hid lost samples"
+    );
+    assert!(
+        !analog.samples.is_empty(),
+        "late read lost the retained sample window"
+    );
+    let analog_tail = runtime.analog_trace_snapshot(analog.next_cursor);
+    assert!(
+        analog_tail.samples.is_empty(),
+        "analog cursor replayed old samples"
+    );
+    assert_eq!(analog_tail.dropped, analog.dropped);
+}
+
+#[test]
 fn flex_heypcb_ldr_browser_evidence_pins_source_and_exact_runtime_inputs() {
     use sha2::{Digest, Sha256};
 
@@ -1062,6 +1111,35 @@ fn flex_heypcb_ldr_browser_evidence_pins_source_and_exact_runtime_inputs() {
         .unwrap()
         .iter()
         .any(|check| check == "named-digital-port-aliases"));
+    assert!(browser["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|check| check == "trace-overflow-reporting"));
+    assert!(
+        browser["trace_overflow"]["digital"]["dropped"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    assert!(
+        browser["trace_overflow"]["digital"]["retained_edges"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    assert!(
+        browser["trace_overflow"]["analog"]["dropped"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    assert!(
+        browser["trace_overflow"]["analog"]["retained_samples"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
     assert_eq!(
         browser["digital_port_aliases"],
         serde_json::json!([

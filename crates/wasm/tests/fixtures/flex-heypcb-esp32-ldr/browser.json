@@ -23,6 +23,21 @@
       ]
     }
   ],
+  "trace_overflow": {
+    "time_ns": 32769000,
+    "digital": {
+      "cursor": 65538,
+      "retained_edges": 65536,
+      "dropped": 2,
+      "next_poll_dropped": 2
+    },
+    "analog": {
+      "next_cursor": 32770,
+      "retained_samples": 20000,
+      "dropped": 12770,
+      "next_poll_dropped": 12770
+    }
+  },
   "analog_trace": {
     "positive": {
       "time_unit": "ns",
@@ -241,12 +256,13 @@
     "dark-negative-control",
     "oscilloscope-samples",
     "oscilloscope-nanosecond-time-unit",
-    "safe-integer-host-advance"
+    "safe-integer-host-advance",
+    "trace-overflow-reporting"
   ],
-  "measured_browser_ms": 569.2,
-  "browser": "149.0.7827.55",
+  "measured_browser_ms": 2718.2,
+  "browser": "156.0.8078.79",
   "browser_driver": "Playwright",
-  "core_commit": "461a7ecceec19fa2e5b1a59f265447ca12022cd5",
+  "core_commit": "cd39028f55df69b1c8f9cc6de7519840fca742aa",
   "firmware_sha256": "366f562ab8a19449a479e3b5e4b2d783f108fdaceb6e61948a0f6b559c314294",
   "firmware_source_sha256": "04cdc152150ed1ca85924081f124438698370c12af6535aaff934c1ddd539402",
   "system_sha256": "9c78f66d7564bfb8027fea1515141b6e1273ca8918b168280915c82fdf1dacd8",

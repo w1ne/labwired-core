@@ -45,7 +45,11 @@ pub struct FlexDigitalEdge {
 #[derive(Debug, Serialize)]
 pub struct FlexDigitalTraceBatch {
     pub time_unit: &'static str,
+    /// Monotonic edge cursor to pass to the next snapshot. This acknowledges
+    /// retained edges through this cursor.
     pub cursor: u64,
+    /// Cumulative edges lost to ring-buffer overflow since this runtime
+    /// started. Non-zero means the oldest part of the trace has a gap.
     pub dropped: u64,
     pub channels: Vec<FlexDigitalChannel>,
     pub edges: Vec<FlexDigitalEdge>,
@@ -68,7 +72,11 @@ pub struct FlexAnalogTraceBatch {
     pub time_unit: &'static str,
     pub channels: Vec<FlexAnalogChannel>,
     pub samples: Vec<AnalogSample>,
+    /// Monotonic sample cursor to pass to the next snapshot. This cursor is
+    /// independent from the digital edge cursor.
     pub next_cursor: u64,
+    /// Cumulative samples lost to ring-buffer overflow since this runtime
+    /// started. Non-zero means the oldest part of the trace has a gap.
     pub dropped: u64,
 }
 

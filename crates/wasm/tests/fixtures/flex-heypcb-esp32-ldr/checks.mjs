@@ -168,6 +168,46 @@ export async function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes,
   equal(negative, expected.negative, 'dark negative control differs from the native Flex model reference');
   check(negative.adc_code === 0 && negative.led_final === 0, 'dark negative control must keep the LED off');
   check(negative.trace.dropped === 0 && negative.trace.edges.length === 0, 'dark negative control emitted a digital edge');
+
+  const overflowRuntime = WasmFlexRuntime.new_from_yaml(system);
+  let trace_overflow;
+  try {
+    const drive = overflowRuntime.port_id('user_led_drive');
+    for (let step = 0; step < 32_769; step += 1) {
+      overflowRuntime.write(drive, step % 2 === 0 ? 1 : 0);
+      overflowRuntime.advance_ns(1_000);
+    }
+    const digital = canonical(overflowRuntime.digital_trace_snapshot(0));
+    const analog = canonical(overflowRuntime.analog_trace_snapshot(0));
+    check(digital.dropped > 0 && digital.edges.length > 0,
+      'a late logic-analyzer poll must report lost edges and preserve the retained window');
+    check(analog.dropped > 0 && analog.samples.length > 0,
+      'a late oscilloscope poll must report lost samples and preserve the retained window');
+    const digitalTail = canonical(overflowRuntime.digital_trace_snapshot(digital.cursor));
+    const analogTail = canonical(overflowRuntime.analog_trace_snapshot(analog.next_cursor));
+    check(digitalTail.edges.length === 0 && digitalTail.dropped === digital.dropped,
+      'the digital cursor must acknowledge retained edges while preserving cumulative loss');
+    check(analogTail.samples.length === 0 && analogTail.dropped === analog.dropped,
+      'the analog cursor must acknowledge retained samples while preserving cumulative loss');
+    trace_overflow = {
+      time_ns: Number(overflowRuntime.time_ns()),
+      digital: {
+        cursor: digital.cursor,
+        retained_edges: digital.edges.length,
+        dropped: digital.dropped,
+        next_poll_dropped: digitalTail.dropped,
+      },
+      analog: {
+        next_cursor: analog.next_cursor,
+        retained_samples: analog.samples.length,
+        dropped: analog.dropped,
+        next_poll_dropped: analogTail.dropped,
+      },
+    };
+  } finally {
+    overflowRuntime.free();
+  }
+
   const digital_port_aliases = positive.trace.channels
     .filter(({ port_names }) => port_names.length > 0)
     .map(({ signal, port_names }) => ({ signal, port_names }))
@@ -191,12 +231,13 @@ export async function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes,
     negative_adc_code: negative.adc_code,
     negative_led_edges: negative.trace.edges.length,
     digital_port_aliases,
+    trace_overflow,
     analog_trace: {
       positive: scopeSummary(positive),
       negative: scopeSummary(negative),
     },
     native_model_equality: true,
     run_report: runReport,
-    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'named-digital-port-aliases', 'named-analog-port-aliases', 'bright-output', 'dark-negative-control', 'oscilloscope-samples', 'oscilloscope-nanosecond-time-unit', 'safe-integer-host-advance'],
+    checks: ['portable-firmware-execution', 'native-model-equality', 'pinned-source-mapping', 'run-scope-report', 'named-digital-port-aliases', 'named-analog-port-aliases', 'bright-output', 'dark-negative-control', 'oscilloscope-samples', 'oscilloscope-nanosecond-time-unit', 'safe-integer-host-advance', 'trace-overflow-reporting'],
   };
 }
