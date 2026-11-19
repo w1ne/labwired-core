@@ -96,6 +96,7 @@ fn model_summary(model: &CosimModelConfig) -> BrowserModelSummary {
 struct BrowserRunReport {
     execution_path: &'static str,
     target_cpu_emulated: bool,
+    execution_scope: BrowserExecutionScope,
     time_unit: &'static str,
     scope_notes_complete: bool,
     schema_version: u32,
@@ -105,6 +106,18 @@ struct BrowserRunReport {
     unsupported_checks: Vec<String>,
     ports: Vec<FlexPort>,
     models: Vec<BrowserModelSummary>,
+}
+
+/// Explicitly separate a portable behavior run from target-firmware evidence.
+/// Flex cannot infer complete-board coverage or parity from a manifest, so
+/// those claims stay unestablished in this runtime's report.
+#[derive(Serialize)]
+struct BrowserExecutionScope {
+    firmware: &'static str,
+    original_target_firmware_executed: bool,
+    detailed_target_execution_selected: bool,
+    full_board_coverage: &'static str,
+    chip_parity: &'static str,
 }
 
 #[wasm_bindgen]
@@ -160,6 +173,13 @@ impl WasmFlexRuntime {
         let report = BrowserRunReport {
             execution_path: "flex_portable_wasm",
             target_cpu_emulated: false,
+            execution_scope: BrowserExecutionScope {
+                firmware: "portable_behavior",
+                original_target_firmware_executed: false,
+                detailed_target_execution_selected: false,
+                full_board_coverage: "not_established",
+                chip_parity: "not_established",
+            },
             time_unit: "ns",
             scope_notes_complete: !manifest.assumptions.is_empty()
                 && !manifest.unsupported_checks.is_empty(),

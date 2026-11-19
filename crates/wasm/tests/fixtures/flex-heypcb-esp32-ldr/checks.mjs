@@ -59,6 +59,12 @@ export async function runHeypcbLdrChecks(WasmFlexRuntime, system, firmwareBytes,
         && report.manifest_sha256 === systemSha256
         && report.scope_notes_complete === true,
       'the project run report must identify portable firmware, nanoseconds, the exact model input, and declared scope');
+      check(report.execution_scope?.firmware === 'portable_behavior'
+        && report.execution_scope.original_target_firmware_executed === false
+        && report.execution_scope.detailed_target_execution_selected === false
+        && report.execution_scope.full_board_coverage === 'not_established'
+        && report.execution_scope.chip_parity === 'not_established',
+      'the project run report must distinguish portable behavior from target firmware, full-board coverage, and chip parity');
       check(report.model_name === 'heypcb-esp32-s3-ldr-gl5528'
         && report.assumptions.length === 4
         && report.assumptions.some((assumption) => assumption.includes('Part Knowledge')

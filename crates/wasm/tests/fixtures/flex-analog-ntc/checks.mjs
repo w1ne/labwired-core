@@ -23,6 +23,12 @@ export function runNtcAnalogSourceChecks(WasmFlexRuntime, system, firmwareBytes,
         && report.target_cpu_emulated === false && report.time_unit === 'ns'
         && report.scope_notes_complete === true,
       'the run report must disclose portable execution, ns time, and declared scope');
+      check(report.execution_scope?.firmware === 'portable_behavior'
+        && report.execution_scope.original_target_firmware_executed === false
+        && report.execution_scope.detailed_target_execution_selected === false
+        && report.execution_scope.full_board_coverage === 'not_established'
+        && report.execution_scope.chip_parity === 'not_established',
+      'the run report must separate portable behavior from target firmware, full-board coverage, and chip parity');
       if (firstReport === undefined) firstReport = report;
       else equal(report, firstReport, 'run report changed between temperature controls');
       const temperature = report.ports.find(({ name }) => name === 'temperature_c');
