@@ -7,9 +7,9 @@
 //!
 //! `validation/manifest.yaml` records a `models:` path list per board, and
 //! `scripts/generate_validation_status.py` hashes exactly those files into the
-//! board's drift digest. A model the list omits is INVISIBLE to the drift
-//! gate: the file can be rewritten and the board still reads as fresh, so a
-//! stale `drift_ack` keeps covering a tree it was never written for.
+//! board's source digest. An omitted model can change without moving that
+//! digest, concealing a difference from the source recorded with a capture.
+//! Source drift is informational; complete source watches remain required.
 //!
 //! Not hypothetical, and not a one-off. The manifest already names one
 //! instance in its own header ("the esp32c3 hole"). A second was found the
@@ -342,10 +342,10 @@ fn every_registered_model_is_in_its_board_models_list() {
         holes.is_empty(),
         "models registered by a board but absent from its `models:` list in \
          validation/manifest.yaml:\n{}\n\n\
-         These files are invisible to that board's drift digest: rewrite one and \
-         the board still reads as fresh, so its `drift_ack` goes on covering a \
-         tree it was never written for. Add them to `models:` and re-ack, or \
-         record the board in ALLOWLIST with a reason.",
+         These files are invisible to that board's source digest, so their \
+         changes cannot be compared with captured source. Add them to `models:` \
+         or record the board in ALLOWLIST with a reason. Source-review ACKs \
+         are not required.",
         holes
             .iter()
             .map(|(b, ms)| format!("  {b} ({}):\n      {}", ms.len(), ms.join("\n      ")))

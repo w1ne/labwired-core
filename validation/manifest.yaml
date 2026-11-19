@@ -9292,6 +9292,10 @@ boards:
       # source was not on this watch list. No silicon capture is recorded for
       # this board, so no ack is implied.
       - crates/core/src/peripherals/nrf52/dppic.rs
+      # Explicit member required by model_paths_drift_gate: nrf5340_clock_boot
+      # registers TWIM1 for BMI270 EasyDMA. Backport d9ccc2624e (2026-11-09).
+      # The existing nrf52 directory watch and capture/ACK metadata are retained.
+      - crates/core/src/peripherals/nrf52/twim.rs
 
   - id: stm32h735
     doc: docs/boards/stm32h735.md
