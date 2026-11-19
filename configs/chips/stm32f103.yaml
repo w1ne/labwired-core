@@ -197,6 +197,7 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32f103/pwr.yaml"
+      profile: stm32f1  # PWR_CR/PWR_CSR reset 0; DBP gates BKP
   - id: "iwdg"
     type: "iwdg"
     base_address: 0x40003000
@@ -239,10 +240,17 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32f103/usb.yaml"
+  # BKP backup registers (RM0008 §6): DR1..DR10 survive a system reset and
+  # are write-protected until PWR_CR.DBP is set. Low/medium density = 10 DRs.
+  # No debug_schema: ST's SVD starts the block at DR1 (0x40006C04).
   - id: "bkp"
-    type: "stub"
+    type: "bkp_f1"
     base_address: 0x40006C00
     size: "1KB"
+    # RCC_APB1ENR.BKPEN (bit 27), RM0008 §7.3.8. Unclocked out of reset.
+    clock: { reg: "apb1enr", bit: 27 }
+    config:
+      data_registers: 10
   # Timers & ADC — modelled (the timer model is width-configurable, 16-bit =
   # F1 general-purpose layout; the ADC model defaults to its Stm32F1 layout).
   # Reset values silicon-confirmed on STM32F103 over SWD: TIM2 ARR=0xFFFF,

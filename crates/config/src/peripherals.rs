@@ -364,6 +364,11 @@ pub fn validate_part_pack(pack: &DeviceDescriptor, origin: &str) -> Result<()> {
     if pack.r#type.trim().is_empty() {
         anyhow::bail!("part pack {origin} has an empty `type:`");
     }
+    if let Some(power) = &pack.behavior.power {
+        power
+            .validate()
+            .with_context(|| format!("part pack {origin}"))?;
+    }
     if pack.behavior.primitive.trim().is_empty() {
         anyhow::bail!(
             "part pack '{}' ({origin}) has an empty `behavior.primitive:`",
@@ -1243,6 +1248,56 @@ pub struct LinearMap {
     /// Optional inclusive `[lo, hi]` clamp.
     #[serde(default)]
     pub clamp: Option<(f64, f64)>,
+}
+
+/// `behavior.power`: the supply rails a declarative device requires and how
+/// long it takes to start answering after power-on. Bus-agnostic: every
+/// declarative primitive that supports routed supply reads this one block.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct DevicePowerSpec {
+    /// Required supply rails and their operating envelopes (datasheet
+    /// electrical characteristics). A rail's `name` is the key a placement's
+    /// `supply_rails` and a `board.device.<id>.power.<name>_volts` route use.
+    pub rails: Vec<DevicePowerRail>,
+    /// Power-up time in microseconds: after a power-on reset the part ignores
+    /// the bus (as if unpowered) until this much device time has elapsed.
+    #[serde(default)]
+    pub startup_us: u64,
+}
+
+impl DevicePowerSpec {
+    /// Static checks every consumer of the block needs: at least one rail, named
+    /// uniquely, with `0 <= min_v < max_v`.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(!self.rails.is_empty(), "behavior.power declares no rails");
+        for (i, rail) in self.rails.iter().enumerate() {
+            anyhow::ensure!(
+                !rail.name.is_empty() && rail.min_v >= 0.0 && rail.max_v > rail.min_v,
+                "behavior.power.rails[{i}] '{}' needs a name and 0 <= min_v < max_v",
+                rail.name
+            );
+            anyhow::ensure!(
+                !self.rails[..i].iter().any(|r| r.name == rail.name),
+                "behavior.power.rails[{i}]: duplicate rail '{}'",
+                rail.name
+            );
+        }
+        Ok(())
+    }
+}
+
+/// One required supply rail of a [`DevicePowerSpec`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct DevicePowerRail {
+    pub name: String,
+    /// Package/canvas pin that feeds this rail (e.g. `VDD`). Not interpreted by
+    /// the SPI engine; carried for the diagram compiler.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pin: Option<String>,
+    pub min_v: f64,
+    pub max_v: f64,
 }
 
 /// The `behavior.spi` section of a declarative `spi_device` — datasheet-shaped
@@ -2583,6 +2638,14 @@ pub struct DeviceBehavior {
     /// clock of its own, which is every descriptor written before this existed.
     #[serde(default)]
     pub timers: Vec<DeviceTimer>,
+    /// **Routed supply and power-on reset.** Present ⇒ the part can take its
+    /// powered state from routed rail voltages (`board.device.<id>.power.<rail>_volts`):
+    /// each power-up is a power-on reset (registers, bus mode, timers and rule
+    /// state back to their descriptor initial values) followed by a start-up
+    /// interval during which the part does not answer. Absent ⇒ the part does
+    /// not support routed supply, exactly as before this key existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<DevicePowerSpec>,
     /// **What this part SHOWS** — the artifact a reader (the browser, `inspect`,
     /// `panel_artifact_evidence`) can paint, rendered from the part's own RAM
     /// by the engine rather than by a hand-written model. See [`ArtifactSpec`].
