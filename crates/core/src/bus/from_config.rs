@@ -494,6 +494,7 @@ impl SystemBus {
             parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: Cell::new(0),
             timer_poll_carry: Cell::new(0),
+            timer_poll_sites: Cell::new([None; 8]),
             side_effecting_mmio: Cell::new(0),
             batch_stop: Default::default(),
             memory_reads: Cell::new(0),
