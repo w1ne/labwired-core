@@ -1,0 +1,602 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "CC2538DK SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "cpu=cortex-m3 uart=uart0",
+          "clk osc=hfrc16 sys_div=1 io_div=1 sysclk=16000000",
+          "uart0 rcgc=1 ibrd=8 fbrd=44",
+          "led=yellow on pin=1 leds=02",
+          "led=yellow off pin=0 leds=00",
+          "led=green on pin=1 leds=04",
+          "led=green off pin=0 leds=00",
+          "led=orange on pin=1 leds=08",
+          "led=orange off pin=0 leds=00",
+          "keys select=1 left=1 right=1 up=1 down=1",
+          "ioc pa1_sel=00 pa1_over=08 pa0_over=00 rx0=00 pd7_over=04 gpt3ocp2=1f restored=00",
+          "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c",
+          "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08",
+          "i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0",
+          "pka_sram words=512 bad=0 last=751ef9b8",
+          "gpt0 to=3 nvic19=1 held=1",
+          "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok",
+          "hb=0 yellow=1 green=0 orange=0",
+          "hb=1 yellow=1 green=0 orange=0"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      78709,
+      24,
+      32,
+      101,
+      108,
+      1073791000,
+      101,
+      536903632,
+      111,
+      61,
+      536903652,
+      61,
+      1074638856,
+      536903632,
+      2117471,
+      2119022
+    ],
+    "pc": 2119022,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "7b7d38f2164af8903e8329499b5809888c018793461659db5c8c42b237a0859e",
+  "config": {
+    "firmware": "/home/andrii/worktrees/labwired-core/renode/target/thumbv7m-none-eabi/release/firmware-cc2538dk-smoke",
+    "system": "/tmp/cc2538-negctl/system.yaml",
+    "script": "/tmp/cc2538-negctl/smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "systick",
+        "kind": "native",
+        "base": 3758153744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1073790976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 1073795072,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioa",
+        "kind": "native",
+        "base": 1074630656,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiob",
+        "kind": "native",
+        "base": 1074634752,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioc",
+        "kind": "native",
+        "base": 1074638848,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpiod",
+        "kind": "native",
+        "base": 1074642944,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "sys_ctrl",
+        "kind": "native",
+        "base": 1074601984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ioc",
+        "kind": "native",
+        "base": 1074610176,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "flash_ctrl",
+        "kind": "native",
+        "base": 1074606080,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smwdthrosc",
+        "kind": "native",
+        "base": 1074614272,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ana_regs",
+        "kind": "native",
+        "base": 1074618368,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "soc_adc",
+        "kind": "native",
+        "base": 1074622464,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ssi0",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "ssi1",
+        "kind": "native",
+        "base": 1073778688,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2cm",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2cs",
+        "kind": "native",
+        "base": 1073874944,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gptimer0",
+        "kind": "native",
+        "base": 1073938432,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gptimer1",
+        "kind": "native",
+        "base": 1073942528,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gptimer2",
+        "kind": "native",
+        "base": 1073946624,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gptimer3",
+        "kind": "native",
+        "base": 1073950720,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rfcore",
+        "kind": "native",
+        "base": 1074298880,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usb",
+        "kind": "native",
+        "base": 1074302976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "aes",
+        "kind": "native",
+        "base": 1074311168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "udma",
+        "kind": "native",
+        "base": 1074786304,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pka",
+        "kind": "native",
+        "base": 1140867072,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "cctest",
+        "kind": "native",
+        "base": 1140916224,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "tmp102",
+        "device_type": "tmp102",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2cm",
+          "address": 72
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "tmp102",
+            "meta": {
+              "inputs": {},
+              "powered": true,
+              "registers": {
+                "CONFIG": 24736,
+                "TEMP": 6528,
+                "T_HIGH": 20480,
+                "T_LOW": 19200
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (16000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "CC2538DK SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "cpu=cortex-m3 uart=uart0",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "clk osc=hfrc16 sys_div=1 io_div=1 sysclk=16000000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "uart0 rcgc=1 ibrd=8 fbrd=44",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=yellow on pin=1 leds=02",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=yellow off pin=0 leds=00",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=green on pin=1 leds=04",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=green off pin=0 leds=00",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=orange on pin=1 leds=08",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "led=orange off pin=0 leds=00",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "keys select=1 left=1 right=1 up=1 down=1",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "ioc pa1_sel=00 pa1_over=00 pa0_over=00 rx0=00 pd7_over=00 gpt3ocp2=00 restored=00",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "ssi0 queued sr=12 enabled sr=07 ris=08 rx=a5 3c",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "ssi0 w16=beef overrun sr=0f ris=0d cleared ris=0c drained ris=08",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "i2cm read=1900 stat=20 irq8=1 ris=1 cleared=0",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "pka_sram words=512 bad=0 last=751ef9b8",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "gpt0 to=3 nvic19=1 held=1",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "gpt1b ris=0900 ctl=0000 nvic22=1 span=ok 16007",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
+        "text": "hb=0 yellow=1 green=0 orange=0",
+        "cycle_lo": 30000,
+        "cycle": 40000,
+        "end_cycle": 40000
+      },
+      {
+        "text": "hb=1 yellow=1 green=0 orange=0",
+        "cycle_lo": 630000,
+        "cycle": 640000,
+        "end_cycle": 640000
+      },
+      {
+        "text": "hb=2 yellow=1 green=0 orange=0",
+        "cycle_lo": 1230000,
+        "cycle": 1240000,
+        "end_cycle": 1240000
+      },
+      {
+        "text": "hb=3 yellow=1 green=0 orange=0",
+        "cycle_lo": 1830000,
+        "cycle": 1840000,
+        "end_cycle": 1840000
+      },
+      {
+        "text": "hb=4 yellow=1 green=0 orange=0",
+        "cycle_lo": 2430000,
+        "cycle": 2440000,
+        "end_cycle": 2440000
+      },
+      {
+        "text": "hb=5 yellow=1 green=0 orange=0",
+        "cycle_lo": 3030000,
+        "cycle": 3040000,
+        "end_cycle": 3040000
+      },
+      {
+        "text": "hb=6 yellow=1 green=0 orange=0",
+        "cycle_lo": 3630000,
+        "cycle": 3640000,
+        "end_cycle": 3640000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 23832,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 23832,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 524288,
+    "ram_total_bytes": 32768,
+    "flash_used_pct": 4.55,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 32768,
+    "main_stack_high_water_bytes": 36,
+    "main_stack_free_min_bytes": 32696,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536903680,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 32768,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 32696,
+    "heap_base": 536870912,
+    "heap_top": 536903680
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 5744,
+    "memory_writes": 2298,
+    "peripheral_accesses": 8497,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 2119022,
+        "count": 5196,
+        "symbol": "firmware_cc2538dk_smoke::spin"
+      },
+      {
+        "pc": 2119020,
+        "count": 5156,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 2119024,
+        "count": 5156,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 2112804,
+        "count": 39,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 2115500,
+        "count": 39,
+        "symbol": "firmware_cc2538dk_smoke::wait_set"
+      },
+      {
+        "pc": 2115586,
+        "count": 39,
+        "symbol": "firmware_cc2538dk_smoke::wait_set"
+      }
+    ]
+  }
+}

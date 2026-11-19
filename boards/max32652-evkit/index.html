@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: max32652-evkit - LabWired docs</title>
+        <title>MAX32652 EVKIT validation status - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: max32652-evkit - LabWired docs">
+  <meta property="og:title" content="MAX32652 EVKIT validation status - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/max32652-evkit/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: max32652-evkit - LabWired docs">
+  <meta name="twitter:title" content="MAX32652 EVKIT validation status - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-max32652-evkit" class="md-skip">
+        <a href="#max32652-evkit-validation-status" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: max32652-evkit
+              MAX32652 EVKIT validation status
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#current-measurement-2026-11-09" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Current measurement (2026-11-09)
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#board-io" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Board I/O
       
     </span>
   </a>
@@ -4908,198 +4908,53 @@
   
 
 
-<h1 id="validation-report-max32652-evkit">Validation Report: max32652-evkit</h1>
-<p><strong>Architecture:</strong> ARM Cortex-M4F.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:04.263569Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:04.264133Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/max32652-evkit.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:04.271494Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'max32650_gpio' (peripheral 'gpio0') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:04.271537Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'max32650_gpio' (peripheral 'gpio1') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:04.271552Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'max32650_gpio' (peripheral 'gpio2') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:04.271562Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'max32650_gpio' (peripheral 'gpio3') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:04.271716Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:04.271809Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:04.271820Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:04.271825Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:04.273227Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:04.273243Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:04.273248Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:04.303151Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 319304.59
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:04.316863Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>[2m2026-10-18T14:40:04.316886Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x466
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>[2m2026-10-18T14:40:04.316892Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 19999
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>[2m2026-10-18T14:40:04.316898Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20002
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>[2m2026-10-18T14:40:04.316903Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 443700.35
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
+<h1 id="max32652-evkit-validation-status">MAX32652 EVKIT validation status</h1>
+<h2 id="current-measurement-2026-11-09">Current measurement (2026-11-09)</h2>
+<p>The imported MAX32652 EVKIT system booted <code>firmware-max32652-smoke</code> for
+<strong>100,000 instructions</strong> and passed <strong>7/7 smoke assertions</strong> (ten register
+checks, <code>MAX32652 checks PPPPPPPPPP DONE</code>, summary 0xA32603FF at 0x200FF000,
+one line on each of UART0-2, 6 edges on LED0 P2.25). Evidence is under
+<a href="../coverage/renode-onboarding/metrics/max32652-evkit/"><code>docs/coverage/renode-onboarding/metrics/max32652-evkit/</code></a>.
+The chip surface is <a href="../max32652/"><code>max32652.md</code></a>, included whole.</p>
+<h2 id="board-io">Board I/O</h2>
+<p>Source: MSDK <code>Libraries/Boards/MAX32650/EvKit_V1</code> (<code>board.c</code> <code>led_pin</code> /
+<code>pb_pin</code>, <code>board.h</code> <code>LED_ON 0</code>).</p>
 <table>
 <thead>
 <tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
+<th>id</th>
+<th>Pad</th>
+<th>Polarity</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>led0</code></td>
-<td><code>0x00000019</code></td>
-<td><code>led</code></td>
+<td>led0</td>
+<td>P2.25</td>
+<td>active low</td>
 </tr>
 <tr>
-<td><code>led1</code></td>
-<td><code>0x0000001a</code></td>
-<td><code>led</code></td>
+<td>led1</td>
+<td>P2.26</td>
+<td>active low</td>
 </tr>
 <tr>
-<td><code>gcr</code></td>
-<td><code>0x40000000</code></td>
-<td><code>max32650_gcr</code></td>
+<td>button0</td>
+<td>P2.28</td>
+<td>active low, weak pull-up</td>
 </tr>
 <tr>
-<td><code>wdt0</code></td>
-<td><code>0x40003000</code></td>
-<td><code>max32650_wdt</code></td>
-</tr>
-<tr>
-<td><code>wdt1</code></td>
-<td><code>0x40003400</code></td>
-<td><code>max32650_wdt</code></td>
-</tr>
-<tr>
-<td><code>timer0</code></td>
-<td><code>0x40010000</code></td>
-<td><code>max32650_timer</code></td>
-</tr>
-<tr>
-<td><code>timer1</code></td>
-<td><code>0x40011000</code></td>
-<td><code>max32650_timer</code></td>
-</tr>
-<tr>
-<td><code>tpu</code></td>
-<td><code>0x40001000</code></td>
-<td><code>max32650_tpu</code></td>
-</tr>
-<tr>
-<td><code>timer2</code></td>
-<td><code>0x40012000</code></td>
-<td><code>max32650_timer</code></td>
-</tr>
-<tr>
-<td><code>timer3</code></td>
-<td><code>0x40013000</code></td>
-<td><code>max32650_timer</code></td>
-</tr>
-<tr>
-<td><code>timer4</code></td>
-<td><code>0x40014000</code></td>
-<td><code>max32650_timer</code></td>
-</tr>
-<tr>
-<td><code>timer5</code></td>
-<td><code>0x40015000</code></td>
-<td><code>max32650_timer</code></td>
-</tr>
-<tr>
-<td><code>i2c0</code></td>
-<td><code>0x4001d000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>i2c1</code></td>
-<td><code>0x4001e000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>adc</code></td>
-<td><code>0x40034000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>uart0</code></td>
-<td><code>0x40042000</code></td>
-<td><code>max32650_uart</code></td>
-</tr>
-<tr>
-<td><code>uart1</code></td>
-<td><code>0x40043000</code></td>
-<td><code>max32650_uart</code></td>
-</tr>
-<tr>
-<td><code>uart2</code></td>
-<td><code>0x40044000</code></td>
-<td><code>max32650_uart</code></td>
-</tr>
-<tr>
-<td><code>spi0</code></td>
-<td><code>0x40046000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>spi1</code></td>
-<td><code>0x40047000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>spi2</code></td>
-<td><code>0x40048000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>gpio0</code></td>
-<td><code>0x40008000</code></td>
-<td><code>max32650_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio1</code></td>
-<td><code>0x40009000</code></td>
-<td><code>max32650_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio2</code></td>
-<td><code>0x4000a000</code></td>
-<td><code>max32650_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio3</code></td>
-<td><code>0x4000b000</code></td>
-<td><code>max32650_gpio</code></td>
-</tr>
-<tr>
-<td><code>spi3</code></td>
-<td><code>0x400be000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>rtc</code></td>
-<td><code>0x40006000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>pwrseq</code></td>
-<td><code>0x40006800</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>dwt</code></td>
-<td><code>0xe0001000</code></td>
-<td><code>dwt</code></td>
-</tr>
-<tr>
-<td><code>bitbandPeripherals</code></td>
-<td><code>0x42000000</code></td>
-<td><code>bitbanding</code></td>
-</tr>
-<tr>
-<td><code>bitbandSram</code></td>
-<td><code>0x22000000</code></td>
-<td><code>bitbanding</code></td>
+<td>button1</td>
+<td>P2.30</td>
+<td>active low, weak pull-up</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Total Peripherals:</strong> 31</p>
+<p>Renode <code>max32652-evkit.repl</code> inverts led0 but not led1. The vendor BSP
+drives both LEDs on with OUT_CLR, so both are declared active low.</p>
+<p>The smoke runs its pull check on P1.7, not on a button pad: a declared
+button holds its pad at the released level, so a pull-down on P2.28 reads
+high on this board (first EVKIT run, check 6 failed for that reason).</p>
 
 
 

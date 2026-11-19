@@ -1,0 +1,10 @@
+SIFIVE FE310 SMOKE
+cpu=rv32im uart=sifive
+mul=00000143
+ecall trap mcause=0000000b mepc_match=1 count=00000001 entry_mie=0 entry_mpie=1 entry_mpp=00000003 return_mie=1 ok
+ebreak trap mcause=00000003 mepc_match=1 count=00000001 resumed=1 entry_mie=0 entry_mpie=1 return_mie=1 ok
+ecall masked mret entry_mie=0 entry_mpie=0 return_mie=0 return_mpie=1 ok
+clint mtimecmp=ffffffffffffffff ticks=00000010 clocks_per_tick=00000764 lfclk_rate=1 mtip_low=1 ok
+clint mtip mcause=80000007 count=00000001 armed_low=1 wfi_wake=1 disarmed=1 ok
+clint msip mcause=80000003 count=00000001 mepc_next=1 cleared=1 ok
+clint msip masked pending=1 released=1 traps=00000000 ok

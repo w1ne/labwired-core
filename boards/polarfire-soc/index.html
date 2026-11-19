@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#renode-onboarding-smoke" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Renode Onboarding Smoke
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#bounded-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Bounded Profile
       
     </span>
   </a>
@@ -4909,214 +4909,93 @@
 
 
 <h1 id="validation-report-polarfire-soc">Validation Report: polarfire-soc</h1>
-<p><strong>Architecture:</strong> RISC-V RV64GC.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
+<p><strong>Architecture:</strong> RISC-V RV64IMAC, one U54 application hart in M-mode.</p>
+<h2 id="renode-onboarding-smoke">Renode Onboarding Smoke</h2>
+<p><strong>Status:</strong> Booted and smoke-passing in the local LabWired CLI.</p>
+<p>The imported descriptor was narrowed from a mislabeled ARM profile with broad
+stub windows to the sourced PolarFire MSS memory map, one RV64IMAC U54, the
+model-backed MMUART0/1, and explicit zero-answering startup stubs. The stubs do
+not model PLIC, GPIO, I2C, or SPI behavior. The E51, other U54 harts, F/D,
+supervisor mode, DMA, storage, and other MSS peripherals are outside this
+profile.</p>
+<p>The committed stock Zephyr v4.1.0 <code>mpfs_icicle</code> hello fixture booted on the
+profile, printed its boot banner and <code>Hello World! mpfs_icicle/polarfire/u54</code>,
+and stopped at the 60,000,000-cycle limit after executing 43,938 instructions.
+Both smoke assertions passed. This is a local LabWired CLI simulation against
+the bounded profile; it is not execution in Renode or on physical hardware.</p>
 <table>
 <thead>
 <tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
+<th>Evidence</th>
+<th>Path</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>pdma</code></td>
-<td><code>0x03000000</code></td>
-<td><code>mpfs_pdma</code></td>
+<td>Current aggregate scoreboard</td>
+<td><a href="../../coverage/renode-onboarding-scoreboard/">Renode onboarding scoreboard</a></td>
 </tr>
 <tr>
-<td><code>mmuart0</code></td>
-<td><code>0x20000000</code></td>
-<td><code>ns16550</code></td>
+<td>Per-target metrics</td>
+<td><a href="../../coverage/renode-onboarding/metrics/polarfire-soc/onboarding-metrics.json">onboarding-metrics.json</a></td>
 </tr>
 <tr>
-<td><code>mmuart1</code></td>
-<td><code>0x20100000</code></td>
-<td><code>ns16550</code></td>
+<td>Simulator result</td>
+<td><a href="../../coverage/renode-onboarding/metrics/polarfire-soc/simulation-output/result.json">result.json</a></td>
 </tr>
 <tr>
-<td><code>mmuart2</code></td>
-<td><code>0x20102000</code></td>
-<td><code>ns16550</code></td>
+<td>UART capture</td>
+<td><a href="../../coverage/renode-onboarding/metrics/polarfire-soc/simulation-output/uart.log">uart.log</a></td>
 </tr>
 <tr>
-<td><code>mmuart3</code></td>
-<td><code>0x20104000</code></td>
-<td><code>ns16550</code></td>
-</tr>
-<tr>
-<td><code>mmuart4</code></td>
-<td><code>0x20106000</code></td>
-<td><code>ns16550</code></td>
-</tr>
-<tr>
-<td><code>mmc</code></td>
-<td><code>0x20008000</code></td>
-<td><code>mpfs_sdcontroller</code></td>
-</tr>
-<tr>
-<td><code>spi0</code></td>
-<td><code>0x20108000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>spi1</code></td>
-<td><code>0x20109000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>i2c0</code></td>
-<td><code>0x2010a000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>i2c1</code></td>
-<td><code>0x2010b000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>can0</code></td>
-<td><code>0x2010c000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>can1</code></td>
-<td><code>0x2010d000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>gpio0</code></td>
-<td><code>0x20120000</code></td>
-<td><code>mpfs_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio1</code></td>
-<td><code>0x20121000</code></td>
-<td><code>mpfs_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio2</code></td>
-<td><code>0x20122000</code></td>
-<td><code>mpfs_gpio</code></td>
-</tr>
-<tr>
-<td><code>wdog0</code></td>
-<td><code>0x20001000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>wdog1</code></td>
-<td><code>0x20101000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>wdog2</code></td>
-<td><code>0x20103000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>wdog3</code></td>
-<td><code>0x20105000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>wdog4</code></td>
-<td><code>0x20107000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>rtc</code></td>
-<td><code>0x20124000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>mstimer</code></td>
-<td><code>0x20125000</code></td>
-<td><code>mpfs_timer</code></td>
-</tr>
-<tr>
-<td><code>envmCfg</code></td>
-<td><code>0x20200000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>usb</code></td>
-<td><code>0x20201000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>pcie0</code></td>
-<td><code>0x53004000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>pcieRC0</code></td>
-<td><code>0x00000000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>pcieRC1</code></td>
-<td><code>0x00000000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>pcieMem</code></td>
-<td><code>0x00000001</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>mailbox</code></td>
-<td><code>0x37020800</code></td>
-<td><code>arraymemory</code></td>
-</tr>
-<tr>
-<td><code>ioscb</code></td>
-<td><code>0x37080000</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>DDR_CTRLR</code></td>
-<td><code>0x3e001000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>DDR_PHY</code></td>
-<td><code>0x20007000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>SCB_DDR_PLL</code></td>
-<td><code>0x3e010000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>DDRCFG</code></td>
-<td><code>0x20080000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>CacheConfig_WayEnable</code></td>
-<td><code>0x02010008</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>TopSystemRegisters</code></td>
-<td><code>0x20002000</code></td>
-<td><code>stub</code></td>
+<td>JUnit assertions</td>
+<td><a href="../../coverage/renode-onboarding/metrics/polarfire-soc/simulation-output/junit.xml">junit.xml</a></td>
 </tr>
 </tbody>
 </table>
-<p><strong>Total Peripherals:</strong> 37</p>
+<p>The initial profile attempt is retained under
+<code>docs/coverage/renode-onboarding/attempt-history/polarfire-soc/</code>; it booted but
+failed because the imported chip name did not select the existing MPFS U54
+CLINT parameters.</p>
+<h2 id="bounded-profile">Bounded Profile</h2>
+<table>
+<thead>
+<tr>
+<th>Block</th>
+<th>Declared profile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU</td>
+<td>RV64IMAC U54 application hart, M-mode; CLINT at <code>0x02000000</code></td>
+</tr>
+<tr>
+<td>eNVM window</td>
+<td><code>0x20220000</code>, 128 KiB</td>
+</tr>
+<tr>
+<td>DDR window</td>
+<td><code>0x80000000</code>, 8 MiB</td>
+</tr>
+<tr>
+<td>L2 LIM</td>
+<td><code>0x08000000</code>, 512 KiB</td>
+</tr>
+<tr>
+<td>MMUART0/1</td>
+<td>Model-backed DesignWare APB UARTs at <code>0x20000000</code> / <code>0x20100000</code></td>
+</tr>
+<tr>
+<td>PLIC, MSS GPIO0–2, I2C0/1, SPI1</td>
+<td>Explicit zero-answering stubs used during startup; behavior is not claimed</td>
+</tr>
+</tbody>
+</table>
+<p>The register map follows the <a href="https://www.microchip.com/content/dam/mchp/documents/FPGA/ProductDocuments/ReferenceManuals/PolarFire_SoC_FPGA_MSS_Technical_Reference_Manual_VC.pdf">Microchip PolarFire SoC MSS Technical Reference
+Manual</a>
+and Zephyr v4.1.0's <code>dts/riscv/microchip/mpfs.dtsi</code> and <code>mpfs_icicle</code> board
+description.</p>
 
 
 

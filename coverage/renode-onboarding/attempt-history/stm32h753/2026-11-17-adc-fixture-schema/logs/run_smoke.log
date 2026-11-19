@@ -1,0 +1,1 @@
+2026-11-17T09:43:27.340992Z ERROR labwired_cli::commands::test: Failed to parse Test Script YAML (expected schema_version: "1.0"): unknown field `external_devices`, expected one of `schema_version`, `inputs`, `limits`, `assertions`, `stack_paint`, `faults`, `verdict`, `stimuli`, `uart_injections` at line 6 column 1

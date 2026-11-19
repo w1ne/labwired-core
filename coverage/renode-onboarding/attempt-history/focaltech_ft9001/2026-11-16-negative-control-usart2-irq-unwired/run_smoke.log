@@ -1,0 +1,9 @@
+[2m2026-11-16T05:25:42.356625Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/focaltech_ft9001.yaml
+[2m2026-11-16T05:25:42.359088Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x10000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+[2m2026-11-16T05:25:42.360853Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'usart2'
+[2m2026-11-16T05:25:42.454330Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'usart2'
+[2m2026-11-16T05:25:42.495333Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'usart2'
+[2m2026-11-16T05:25:42.508561Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["cpu=cortex-m4f uart=usart2", "cr2=0c cr1=00 bdh=01 bdl=56 brdf=1a fcr=c0", "rx fsr=64 drl=A fsr=64", "rxfclr fsr=45 drl=00 fcr2=00", "late drl=Z fsr=45", "te=off|te=on", "irq33 idle pend=00 txfie pend=01 off pend=00 rxfie empty pend=00", "irq33 rx pend=01 hits=01 byte=Q after pend=00 fsr=45", "cpm ocsr=0000ff00 csw=00000201 src0=osc8m ocsr=0000ff08 csw=00000201 cder=00000001", "trng ctrl=00ff093b w=e124b63a w=8b9a74ab w=64e1b3ac distinct=1", "rsr=08 por=1 softrst", "boot2 rsr=20 rcr=00000000 csw=00000201 cder=00000000 trng=00000800", "trng ctrl=00ff093b w=00174626 w=f2adbbaf w=fed75123 distinct=1", "FT9001 SMOKE DONE"] }) (captured len=614)
+FAIL  2/3 checks · focaltech_ft9001-smoke · 4000000 steps · 0.15s

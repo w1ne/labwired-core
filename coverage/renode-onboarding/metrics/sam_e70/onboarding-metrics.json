@@ -1,0 +1,37 @@
+{
+  "target_id": "sam_e70",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-sam-e70-renode-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/sam_e70-smoke.yaml",
+  "system": "configs/systems/onboarding/sam_e70.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-19T16:13:14Z",
+  "finished_at_utc": "2026-11-19T16:13:18Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3888,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.557,
+    "build_firmware": 1.582,
+    "run_smoke": 1.687
+  },
+  "stages_ms": {
+    "build_cli": 557,
+    "build_firmware": 1582,
+    "run_smoke": 1687
+  }
+}

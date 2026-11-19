@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: renesas_rz_t2m - LabWired docs</title>
+        <title>Renesas RZ/T2M validation status - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: renesas_rz_t2m - LabWired docs">
+  <meta property="og:title" content="Renesas RZ/T2M validation status - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/renesas_rz_t2m/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: renesas_rz_t2m - LabWired docs">
+  <meta name="twitter:title" content="Renesas RZ/T2M validation status - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-renesas_rz_t2m" class="md-skip">
+        <a href="#renesas-rzt2m-validation-status" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: renesas_rz_t2m
+              Renesas RZ/T2M validation status
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#current-result" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Current result
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#scope" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Scope
       
     </span>
   </a>
@@ -4908,74 +4908,28 @@
   
 
 
-<h1 id="validation-report-renesas_rz_t2m">Validation Report: renesas_rz_t2m</h1>
-<p><strong>Architecture:</strong> Dual ARM Cortex-R52.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:21.447571Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:21.454809Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/renesas_rz_t2m.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:21.570242Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:21.570419Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:21.570477Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:21.570510Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:21.571225Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:21.571283Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:21.571321Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:21.571423Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:21.571494Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:21.571520Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:21.571543Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:21.571565Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:21.571588Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 1909.01
+<h1 id="renesas-rzt2m-validation-status">Renesas RZ/T2M validation status</h1>
+<h2 id="current-result">Current result</h2>
+<p>The imported RZ/T2M descriptor previously showed <code>verified: true</code> based on a
+stale run of a Thumb Cortex-M fixture. It did not validate the platform's dual
+Cortex-R52 processors.</p>
+<p>The bounded onboarding profile now identifies <code>core: cortex-r52</code>, retains the
+imported 64 MiB flash and 1.5 MiB SRAM windows, and omits the untested SCI and
+generic-timer claims. A direct ARM-state integer-loop smoke was attempted
+against the exact imported system. LabWired rejected the unsupported CPU core
+before executing instructions:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>chip 'renesas_rz_t2m': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter
 </span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>timer</code></td>
-<td><code>0x0000000f</code></td>
-<td><code>arm_generictimer</code></td>
-</tr>
-<tr>
-<td><code>sci0</code></td>
-<td><code>0x80001000</code></td>
-<td><code>renesas_sci</code></td>
-</tr>
-<tr>
-<td><code>sci1</code></td>
-<td><code>0x80001400</code></td>
-<td><code>renesas_sci</code></td>
-</tr>
-<tr>
-<td><code>sci2</code></td>
-<td><code>0x80001800</code></td>
-<td><code>renesas_sci</code></td>
-</tr>
-<tr>
-<td><code>sci3</code></td>
-<td><code>0x80001c00</code></td>
-<td><code>renesas_sci</code></td>
-</tr>
-<tr>
-<td><code>sci4</code></td>
-<td><code>0x80002000</code></td>
-<td><code>renesas_sci</code></td>
-</tr>
-<tr>
-<td><code>sci5</code></td>
-<td><code>0x81001000</code></td>
-<td><code>renesas_sci</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 7</p>
+<p>The scoreboard records this as an attempted run that did not boot and did not
+pass its smoke check. Evidence, including the result JSON, JUnit report,
+snapshot, and stage logs, is under
+<a href="../coverage/renode-onboarding/metrics/renesas_rz_t2m/"><code>docs/coverage/renode-onboarding/metrics/renesas_rz_t2m/</code></a>.</p>
+<h2 id="scope">Scope</h2>
+<p>This is local LabWired CLI evidence of an unsupported Cortex-R52 core. It does
+not demonstrate RZ/T2M boot, instruction support, SCI/timer behavior, Renode
+execution, hosted <code>labwired_verify</code> model verification, or hardware behavior.
+No CPU or peripheral stub was added. A real Cortex-R52 adapter is needed
+before this imported platform can boot.</p>
 
 
 

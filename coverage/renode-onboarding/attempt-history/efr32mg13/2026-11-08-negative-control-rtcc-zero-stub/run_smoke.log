@@ -1,0 +1,9 @@
+[2m2026-11-08T21:35:12.700600Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/efr32mg13.yaml
+[2m2026-11-08T21:35:12.702765Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+[2m2026-11-08T21:35:12.704658Z[0m [33m WARN[0m [2mlabwired_core::peripherals::gpio[0m[2m:[0m EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
+[2m2026-11-08T21:35:12.736998Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok", "gpio reserved 0x10/0x14 no_set=1 no_clr=1 read0=1 ok", "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok", "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok", "gpio pa pinlockn reset=ffff after=fffe ok", "gpio pa ctrl=00500050 ovtdis=ffff ok", "tim0 up of=1 masked=1 pend=1 released=1 running=1 ok", "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok", "tim1 updown cc3=1 of=1 dirchg=1 dir_down=1 ok", "wtim0 32bit top=1 cc0=1 no_early_of=1 cnt_hi=1 of=1 masked=1 pend=1 released=1 ifs=1 ok", "rtcc ret=1 of=1 of_first=1 cc1=1 tick=1 masked=1 pend=1 released=1 presc=1 comb=1 ok", "EFR32MG13 PASS"] }) (captured len=543)
+[2m2026-11-08T21:35:12.737038Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x2000fc00 (size 4): expected 0xef3107ff, got 0x0 (mask 0xffffffff)
+[2m2026-11-08T21:35:12.737044Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536935424, expected_value: 4012967935, mask: None, size: Some(4), node: None } }) (captured len=543)
+FAIL  3/5 checks · smoke · 200000 steps · 0.03s

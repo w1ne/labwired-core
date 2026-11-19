@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: eos-s3-quickfeather - LabWired docs</title>
+        <title>EOS S3 QuickFeather validation status - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: eos-s3-quickfeather - LabWired docs">
+  <meta property="og:title" content="EOS S3 QuickFeather validation status - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/eos-s3-quickfeather/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: eos-s3-quickfeather - LabWired docs">
+  <meta name="twitter:title" content="EOS S3 QuickFeather validation status - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-eos-s3-quickfeather" class="md-skip">
+        <a href="#eos-s3-quickfeather-validation-status" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: eos-s3-quickfeather
+              EOS S3 QuickFeather validation status
             
           </span>
         </div>
@@ -4867,21 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#current-measurement-2026-11-16" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hardware Coverage Report
+        Current measurement (2026-11-16)
       
     </span>
   </a>
@@ -4908,134 +4897,26 @@
   
 
 
-<h1 id="validation-report-eos-s3-quickfeather">Validation Report: eos-s3-quickfeather</h1>
-<p><strong>Architecture:</strong> ARM Cortex-M4F.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:39:55.636579Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:39:55.636973Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/eos-s3-quickfeather.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:39:55.642363Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:39:55.642456Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:39:55.642465Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:39:55.642469Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:39:55.649497Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:39:55.649515Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:39:55.649526Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:39:55.649598Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:39:55.649617Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:39:55.649622Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:39:55.649626Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:39:55.649630Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:39:55.649634Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 279.53
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>user_button</code></td>
-<td><code>0x00000001</code></td>
-<td><code>button</code></td>
-</tr>
-<tr>
-<td><code>ledB</code></td>
-<td><code>0x00000004</code></td>
-<td><code>led</code></td>
-</tr>
-<tr>
-<td><code>ledG</code></td>
-<td><code>0x00000005</code></td>
-<td><code>led</code></td>
-</tr>
-<tr>
-<td><code>ledR</code></td>
-<td><code>0x00000006</code></td>
-<td><code>led</code></td>
-</tr>
-<tr>
-<td><code>mc3635</code></td>
-<td><code>0x0000004c</code></td>
-<td><code>mc3635</code></td>
-</tr>
-<tr>
-<td><code>uart</code></td>
-<td><code>0x40010000</code></td>
-<td><code>pl011</code></td>
-</tr>
-<tr>
-<td><code>dwt</code></td>
-<td><code>0xe0001000</code></td>
-<td><code>dwt</code></td>
-</tr>
-<tr>
-<td><code>spt</code></td>
-<td><code>0x40005c00</code></td>
-<td><code>eoss3_simpleperiodictimer</code></td>
-</tr>
-<tr>
-<td><code>adc</code></td>
-<td><code>0x40005a00</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>spi</code></td>
-<td><code>0x40007000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>dmaSpi</code></td>
-<td><code>0x40007400</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>packetFifo</code></td>
-<td><code>0x40002000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>systemDma</code></td>
-<td><code>0x4000c000</code></td>
-<td><code>udma</code></td>
-</tr>
-<tr>
-<td><code>systemDmaBridge</code></td>
-<td><code>0x4000d000</code></td>
-<td><code>eoss3_systemdmabridge</code></td>
-</tr>
-<tr>
-<td><code>ffe</code></td>
-<td><code>0x4004a000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>i2cMaster0</code></td>
-<td><code>0x00000000</code></td>
-<td><code>opencoresi2c</code></td>
-</tr>
-<tr>
-<td><code>i2cMaster1</code></td>
-<td><code>0x00000001</code></td>
-<td><code>opencoresi2c</code></td>
-</tr>
-<tr>
-<td><code>voice</code></td>
-<td><code>0x40015000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>powerMgmt</code></td>
-<td><code>0x40004400</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 19</p>
+<h1 id="eos-s3-quickfeather-validation-status">EOS S3 QuickFeather validation status</h1>
+<h2 id="current-measurement-2026-11-16">Current measurement (2026-11-16)</h2>
+<p>The QuickFeather system booted <code>firmware-eos-s3-smoke</code> for <strong>600,000
+instructions</strong> and passed <strong>7/7 smoke assertions</strong> (<code>EOS S3 checks
+PPPPPPPPPPPP DONE</code>, summary 0xE0530FFF, <code>SPT ms=00000007</code>, 6 edges on GPIO 4). Evidence:
+<a href="../coverage/renode-onboarding/metrics/eos-s3-quickfeather/"><code>docs/coverage/renode-onboarding/metrics/eos-s3-quickfeather/</code></a>.</p>
+<p>The chip descriptor includes the <code>eos-s3</code> profile whole; the checks, the
+memory map fix, the claimed peripherals and the negative controls are in
+<a href="../eos-s3/"><code>eos-s3.md</code></a>.</p>
+<p>Board parts not declared:</p>
+<ul>
+<li>LEDs and the user button. Renode <code>eos-s3-quickfeather.repl</code> wires the LEDs
+  to GPIO 4/5/6; qorc-sdk <code>BSP/quickfeather/src/leds.c</code> drives IO_OUTPUT
+  bits 1/4/6. The two sources disagree, so no board LED is claimed.</li>
+<li>MC3635 accelerometer: it sits behind the FFE I2C master, which has no
+  model.</li>
+</ul>
+<p>The profile's <code>verified</code> field remains false. This result is limited to the
+local model behaviour; it is not datasheet validation or hardware
+confirmation.</p>
 
 
 

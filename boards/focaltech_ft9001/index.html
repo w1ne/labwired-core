@@ -4909,17 +4909,51 @@
 
 
 <h1 id="validation-report-focaltech_ft9001">Validation Report: focaltech_ft9001</h1>
-<p><strong>Architecture:</strong> RISC / Proprietary.</p>
+<p><strong>Architecture:</strong> Arm Cortex-M4F (Renode <code>cortex-m4f</code>).</p>
 <h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
+<p><strong>Status:</strong> Onboarding smoke (<code>examples/renode-onboarding/focaltech_ft9001-smoke.yaml</code>,
+firmware <code>crates/firmware-ft9001-smoke</code>). Evidence:
+<code>docs/coverage/renode-onboarding/metrics/focaltech_ft9001/</code>.</p>
+<p>The smoke proves only USART2's polled register path: TX gated on CR2.TE,
+control-register read-back, FSR tracking the RX FIFO, and RXFCLR. USART2's
+interrupt output, RX-enable gating, baud/framing behavior, and FSR2 error
+flags are not modelled. It is local CLI simulation evidence, not hardware
+confirmation or Renode equivalence.</p>
 <h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
+<p>Memory map from Renode <code>platforms/cpus/focaltech_ft9001.repl</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Region</th>
+<th>Base</th>
+<th>Size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>flash0</code></td>
+<td><code>0x10000000</code></td>
+<td>2 MiB</td>
+</tr>
+<tr>
+<td><code>sram0</code></td>
+<td><code>0x20000000</code></td>
+<td>224 KiB</td>
+</tr>
+<tr>
+<td><code>secure_rom</code></td>
+<td><code>0x00080000</code></td>
+<td>4 KiB (zero-filled; no ROM image)</td>
+</tr>
+<tr>
+<td><code>sramd0</code></td>
+<td><code>0x1fff8000</code></td>
+<td>32 KiB</td>
+</tr>
+</tbody>
+</table>
+<p>The import follows <a href="https://github.com/renode/renode/blob/master/platforms/cpus/focaltech_ft9001.repl">Renode's FT9001 platform definition</a>
+and <a href="https://github.com/renode/renode-infrastructure/blob/master/src/Emulator/Peripherals/Peripherals/UART/FT9001_USART.cs">FT9001 USART model</a>.</p>
 <table>
 <thead>
 <tr>
@@ -4930,33 +4964,21 @@
 </thead>
 <tbody>
 <tr>
-<td><code>cpm</code></td>
-<td><code>0x40004000</code></td>
-<td><code>focaltechft9001_cpm</code></td>
-</tr>
-<tr>
-<td><code>rst</code></td>
-<td><code>0x40002000</code></td>
-<td><code>focaltechft9001_reset</code></td>
-</tr>
-<tr>
-<td><code>trng</code></td>
-<td><code>0x4003b000</code></td>
-<td><code>focaltechft9001_trng</code></td>
+<td><code>systick</code></td>
+<td><code>0xe000e010</code></td>
+<td><code>systick</code></td>
 </tr>
 <tr>
 <td><code>usart2</code></td>
 <td><code>0x40014000</code></td>
-<td><code>ft9001_usart</code></td>
-</tr>
-<tr>
-<td><code>dwt</code></td>
-<td><code>0xe0001000</code></td>
-<td><code>dwt</code></td>
+<td><code>ft9001_usart</code> (polled path; interrupts not modelled)</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Total Peripherals:</strong> 5</p>
+<p><strong>Total Peripherals:</strong> 2</p>
+<p>Not modelled and not declared: CPM, reset controller, TRNG, DWT, and the
+blocks Renode itself only tags (pinctrl, CCM, flash controller, WDT, TC,
+EPORT0-7, USART3, USB, I/D caches, MPU).</p>
 
 
 

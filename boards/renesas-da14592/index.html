@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: renesas-da14592 - LabWired docs</title>
+        <title>Renesas DA14592 validation status - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: renesas-da14592 - LabWired docs">
+  <meta property="og:title" content="Renesas DA14592 validation status - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/renesas-da14592/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: renesas-da14592 - LabWired docs">
+  <meta name="twitter:title" content="Renesas DA14592 validation status - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-renesas-da14592" class="md-skip">
+        <a href="#renesas-da14592-validation-status" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: renesas-da14592
+              Renesas DA14592 validation status
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#current-measurement-2026-11-09" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Current measurement (2026-11-09)
       
     </span>
   </a>
@@ -4878,10 +4878,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#declared-surface" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Declared surface
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#negative-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Negative controls
       
     </span>
   </a>
@@ -4908,110 +4919,94 @@
   
 
 
-<h1 id="validation-report-renesas-da14592">Validation Report: renesas-da14592</h1>
-<p><strong>Architecture:</strong> ARM Cortex-M33.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:20.470813Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:20.471302Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/renesas-da14592.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:20.475040Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'renesasda14_gpio' (peripheral 'gpio') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:20.475298Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:20.475439Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:20.475466Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:20.475471Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:20.476338Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:20.476346Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:20.476351Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:20.476418Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:20.476445Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:20.476452Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:20.476456Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:20.476460Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>[2m2026-10-18T14:40:20.476463Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2024.54
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
+<h1 id="renesas-da14592-validation-status">Renesas DA14592 validation status</h1>
+<h2 id="current-measurement-2026-11-09">Current measurement (2026-11-09)</h2>
+<p>The imported renesas-da14592 system booted <code>firmware-renesas-da14592-smoke</code>
+on the main Cortex-M33 for <strong>100,000 instructions</strong> and passed <strong>6/6 smoke
+assertions</strong>. The firmware runs ten register checks and prints one letter
+per check; the UART0 capture is <code>DA14592 checks PPPPPPPPPP DONE</code>, and the
+summary word at 0x20017F00 is 0xDA1403FF. UART1 prints one line. P0.5 shows
+6 edges. The result, UART capture, JUnit assertions, snapshot and build/run
+logs are under
+<a href="../coverage/renode-onboarding/metrics/renesas-da14592/"><code>docs/coverage/renode-onboarding/metrics/renesas-da14592/</code></a>.</p>
+<p>Checks (source: <code>crates/firmware-renesas-da14592-smoke/src/main.rs</code>):</p>
+<p>0-1. UART0/UART1 LSR reset to THRE | TEMT (0x60).
+2. P0_00_MODE and P1_15_MODE reset to 0x200 (input, pull-down); P0_DATA
+   and P1_DATA read 0.
+3. P0.5 as output: P0_SET drives it high, P0_SET reads 0, P0_RESET drives
+   it low. P0.6 (still an input with pull-down) ignores the SET bit.
+4. P1.2 as output through P1_SET/P1_RESET; P0_DATA is not touched.
+5. P0.3 input reads 1 with PUPD pull-up and 0 with pull-down.
+6. P0_WEAK_CTRL and P1_WEAK_CTRL are separate 16-bit words.
+7. SRAM at 0x20000000 and its 0x800000 view are one store.
+8. The ROM view at 0x900000 shows the vector table at 0x0.
+9. eFlash data at 0x31000000 is seen at 0xA00000; the last SRAM word
+   (0x20017FFC) holds a value.</p>
+<h2 id="declared-surface">Declared surface</h2>
+<p>Sources: Renode <code>platforms/cpus/renesas-da14592.repl</code> (memory map, instance
+bases), Renode <code>RenesasDA14_GPIO.cs</code> (GPIO register map) and Zephyr
+<code>drivers/gpio/gpio_smartbond.c</code> (driver use of DATA/SET/RESET/MODE).</p>
 <table>
 <thead>
 <tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
+<th>Block</th>
+<th>Base</th>
+<th>Model</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>timer1</code></td>
-<td><code>0x50010300</code></td>
-<td><code>renesasda14_gpt</code></td>
+<td>ROM 288 KiB</td>
+<td>0x00000000, mirror 0x00900000</td>
+<td>memory</td>
 </tr>
 <tr>
-<td><code>timer2</code></td>
-<td><code>0x50010400</code></td>
-<td><code>renesasda14_gpt</code></td>
+<td>SRAM 96 KiB</td>
+<td>0x20000000, mirror 0x00800000</td>
+<td>memory</td>
 </tr>
 <tr>
-<td><code>timer3</code></td>
-<td><code>0x50010500</code></td>
-<td><code>renesasda14_gpt</code></td>
+<td>eFlash data 0x40800 B</td>
+<td>0x31000000, mirror 0x00A00000</td>
+<td>memory</td>
 </tr>
 <tr>
-<td><code>timer4</code></td>
-<td><code>0x50020a00</code></td>
-<td><code>renesasda14_gpt</code></td>
+<td>uart0 / uart1</td>
+<td>0x50020000 / 0x50020100 (256 B each)</td>
+<td><code>renesasda14_uart</code> (DW APB 16550), polled</td>
 </tr>
 <tr>
-<td><code>uart0</code></td>
-<td><code>0x50020000</code></td>
-<td><code>renesasda14_uart</code></td>
-</tr>
-<tr>
-<td><code>uart1</code></td>
-<td><code>0x50020100</code></td>
-<td><code>renesasda14_uart</code></td>
-</tr>
-<tr>
-<td><code>gpadc</code></td>
-<td><code>0x50040900</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>gpio</code></td>
-<td><code>0x50020600</code></td>
-<td><code>renesasda14_gpio</code></td>
-</tr>
-<tr>
-<td><code>dma</code></td>
-<td><code>0x50060200</code></td>
-<td><code>renesasda14_dma</code></td>
-</tr>
-<tr>
-<td><code>i2c</code></td>
-<td><code>0x50020300</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>clock_gen</code></td>
-<td><code>0x50000000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>xtal32m_regs</code></td>
-<td><code>0x50010000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>spi</code></td>
-<td><code>0x50020200</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>gp_regs</code></td>
-<td><code>0x50050300</code></td>
-<td><code>stub</code></td>
+<td>gpio (P0 + P1)</td>
+<td>0x50020600 (512 B)</td>
+<td><code>gpio</code> profile <code>da14</code></td>
 </tr>
 </tbody>
 </table>
-<p><strong>Total Peripherals:</strong> 14</p>
+<p>The GPIO model takes one instance for both ports. Pad <code>16 * port + n</code> is
+Pport.n, so P1.2 is pad 18 (<code>gpio:18</code>). Renode's RESET-register handler ORs
+<code>~value</code> into the latch; the model clears the written bits, as Zephyr's
+<code>gpio_smartbond_port_clear_bits_raw</code> expects. PID != 0 reports the pad as
+an alternate function; that PID 0 is GPIO is an assumption from DA1469x
+(no DA1459x source checked). The DAP adapter does not bind board I/O to
+this block (one offset pair cannot address both ports).</p>
+<p>Not declared (no model in this engine): the auxiliary Cortex-M0+ CMAC core,
+GPT timers 1-4, system watchdog, GPADC, DMA, DesignWare I2C, SPI, clock
+generation and XTAL32M registers, general-purpose registers, QSPI and
+eFlash controllers, pad latches, wake-up controller, and the CHIP_ID tags.
+UART and GPIO interrupts are not modelled, so no NVIC lines are declared.</p>
+<h2 id="negative-controls">Negative controls</h2>
+<p>Under
+<a href="../coverage/renode-onboarding/attempt-history/renesas-da14592/"><code>attempt-history/renesas-da14592/</code></a>:</p>
+<ul>
+<li>old descriptor (UART0 only, no mirrors): BusFault at 0x00800100 (SRAM
+  low view), 1/6. The UART1 and GPIO accesses before it did not fault,
+  because UART0's default window covered them. This round gives both UARTs
+  256-byte windows.</li>
+<li>no GPIO block (256-byte UART windows): BusFault at 0x50020618
+  (P0_00_MODE), 1/6.</li>
+<li>SRAM/ROM/eFlash-data low views as separate memories: checks 7-9 fail,
+  4/6, summary 0xDA14007F.</li>
+</ul>
 
 
 

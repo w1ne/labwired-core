@@ -4911,13 +4911,18 @@ DDR window at <code>0x8000_0000</code>:</p>
 <td style="text-align: left;"><code>tests/kernel/common</code></td>
 <td style="text-align: left;">12 suites, 63/63 cases (atomics, irq_offload, clock, …)</td>
 </tr>
+<tr>
+<td style="text-align: left;"><code>mss-peripherals-smoke.yaml</code></td>
+<td style="text-align: left;">bare-metal <code>mpfs-gpio-smoke.S</code></td>
+<td style="text-align: left;">MSS GPIO_0..2 readback, PLIC source 51 claim/complete, I2C0 START/SLA+W NACK/STOP, SPI1 frame + PLIC 55 (13/13)</td>
+</tr>
 </tbody>
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Not claimed yet</p>
-<p>F/D, S/U modes and the Sv39 MMU (so no OpenSBI or Linux), the PLIC (no
-peripheral interrupts reach the hart), the E51 and U54 2-4, PMP
-enforcement, MSS GPIO/I2C/SPI/QSPI, the HSS boot flow and DDR training.
+<p>F/D, S/U modes and the Sv39 MMU (so no OpenSBI or Linux), the E51 and
+U54 2-4, PMP enforcement, I2C/SPI slave mode and bit timing, SPI0, QSPI,
+the per-pin direct GPIO interrupts, the HSS boot flow and DDR training.
 <code>mvendorid</code>/<code>marchid</code>/<code>mimpid</code> read 0. SIM-DERIVED: no bench part.</p>
 </div>
 <p>Evidence and the full claim table: <code>examples/mpfs-disco-kit/VALIDATION.md</code>.

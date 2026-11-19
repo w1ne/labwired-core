@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: nuvoton_npcx9 - LabWired docs</title>
+        <title>Nuvoton NPCX9 validation status - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: nuvoton_npcx9 - LabWired docs">
+  <meta property="og:title" content="Nuvoton NPCX9 validation status - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/nuvoton_npcx9/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: nuvoton_npcx9 - LabWired docs">
+  <meta name="twitter:title" content="Nuvoton NPCX9 validation status - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-nuvoton_npcx9" class="md-skip">
+        <a href="#nuvoton-npcx9-validation-status" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: nuvoton_npcx9
+              Nuvoton NPCX9 validation status
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#current-measurement-2026-11-17" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Current measurement (2026-11-17)
       
     </span>
   </a>
@@ -4878,10 +4878,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#claimed-peripherals" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Claimed peripherals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory windows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#negative-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Negative controls
       
     </span>
   </a>
@@ -4908,309 +4930,359 @@
   
 
 
-<h1 id="validation-report-nuvoton_npcx9">Validation Report: nuvoton_npcx9</h1>
-<p><strong>Architecture:</strong> ARM Cortex-M4F.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:07.849175Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:07.852565Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/nuvoton_npcx9.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:07.855003Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:07.855121Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:07.855134Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:07.855139Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:07.889983Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:07.890005Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:07.890012Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:07.890100Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:07.890121Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:07.890125Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:07.890130Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:07.890134Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:07.890138Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 57.15
+<h1 id="nuvoton-npcx9-validation-status">Nuvoton NPCX9 validation status</h1>
+<h2 id="current-measurement-2026-11-17">Current measurement (2026-11-17)</h2>
+<p>The imported NPCX9 system booted <code>firmware-nuvoton-npcx9-smoke</code>, rebooted
+once through the TWD watchdog, and ran to <strong>100,000,000 cycles</strong>
+(569,374 instructions). It passed <strong>19/19 smoke assertions</strong>. Firmware
+SHA-256 <code>206c39d7c0ffe12882c0ada404a669f78240e65f7eb4ce4e153730cc25a54ba7</code>.
+UART capture (UART1..4 share one capture stream):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>NPCX9 UART1 smoke
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>smbus reset=8 en=8 nack=8 clear=8 stop=8 ok
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>mdma src=1 data=1 dst=1 count=1 tc=1 fifo=1 ok
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>cr_uart2 tx
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>cr_uart3 tx
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>cr_uart4 tx
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>uarts tbe=3 rx=3 isolated=1 ok
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>mem code=1 data=1 image=1 pm=4 bb=1 ok
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>spip reset=1 off=1 x8=1 x16=1 cfg=1 quiet=1 rirq=1 rclr=1 wirq=1 wclr=1 ok
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>fiu reset=1 wel=1 prog=1 clear=1 oneway=1 erase=1 start=1 ok
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>bbram kept=1 ok
 </span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
+<p>The result, UART capture, JUnit assertions, snapshot and build/run logs are
+under
+<a href="../coverage/renode-onboarding/metrics/nuvoton_npcx9/"><code>docs/coverage/renode-onboarding/metrics/nuvoton_npcx9/</code></a>.
+The NPCX9M6F EVB row runs the same firmware on the same chip surface
+(<a href="../nuvoton_npcx9m6fb_evb/"><code>nuvoton_npcx9m6fb_evb.md</code></a>).</p>
+<p>Checks (source: <code>crates/firmware-nuvoton-npcx9-smoke/src/main.rs</code>):</p>
+<ol>
+<li>SMBus0..7 at 0x40009000, 0x4000B000, 0x400C0000, 0x400C2000,
+   0x40008000, 0x40017000, 0x40018000 and 0x40019000: all eight report their
+   reset values, enable, NACK address 0x50 on the intentionally empty board
+   buses, clear NEGACK with W1C, and return idle after STOP. The model unit
+   tests separately verify byte writes and reads through an attached I²C
+   device.</li>
+<li>ITIM32_1 ITPRE and ITCNT hold while ITEN is clear.</li>
+<li>ITEN starts the down-count at 15 MHz / (ITPRE + 1); clearing ITEN stops
+   it, restores the load value and clears TO_STS.</li>
+<li>ITCNT = 99 with TO_IE: three timeouts enter NVIC 28.</li>
+<li>ITIM32_2 with NVIC 27 disabled: TO_STS without TO_IE leaves the line idle,
+   TO_IE pends it, clearing TO_STS lets ICPR release it.</li>
+<li>ITIM32_2..6 and ITIM64 each take one timeout IRQ on their own line.</li>
+<li>ITIM64 holds a 64-bit load and borrows across the word boundary.</li>
+<li>CKSEL selects the 32768 Hz LFCLK.</li>
+<li>GPIO0..GPIOF (0x40081000 + n * 0x2000) each hold PDIR, PPULL, PPUD,
+   PENVDD, PTYPE and PLOCK_CTL values.</li>
+<li>PDOUT written before PDIR (the Zephyr <code>gpio_npcx.c</code> order) holds while
+   the pin is an input and reads on PDIN once PDIR sets it as an output.</li>
+<li>Pull-up / pull-down inputs read 1 / 0 on PDIN.</li>
+<li>An open-drain output with pull-up reads 1 when PDOUT releases the pad
+    and 0 when PDOUT drives it low.</li>
+<li>A set PLOCK_CTL bit keeps its PDOUT bit.</li>
+<li>UART2..4 (0x400E2000 / 0x400E4000 / 0x400E6000): the script injects
+    "bB", "cC", "dD" into <code>cr_uart2</code>..<code>cr_uart4</code>. Each port reads TBE set and
+    RBF set, and URBUF returns its own first byte. UART1 RBF stays clear.</li>
+<li>Each of UART2..4 transmits its own <code>cr_uartN tx</code> line through its UTBUF.</li>
+<li>FIFO-mode interrupts, UART1..4 on NVIC 33 / 32 / 38 / 39. UFTSTS reads
+    0xD0 (NXMIP, TFIFO_EMPTY_STS, TEMPTY_LVL 16) on all four ports. With the
+    NVIC line disabled, UFTCTL.TEMPTY_EN pends it; clearing TEMPTY_EN lets
+    ICPR release it (level). On UART2..4, UFRSTS reads 0x61 (one byte left,
+    RFULL_LVL_SEL reset value 1). UFRCTL.RNEMPTY_EN takes exactly one IRQ per
+    port; the handler reads the upper-case byte from URBUF, which drops the
+    level, and RBF / RFIFO_NEMPTY_STS then read clear.</li>
+<li>MTC at 0x400B7000 on NVIC 5: TTC takes a written value; WTC holds a
+    25-bit PT with WIE clear. With WIE set and PT = TTC + 1 the core idles in
+    WFI; three IRQs arrive, each one TTC increment after the last, and the
+    handler clears PTO and moves PT on. ITIM64 at 1 MHz measures both gaps
+    as 1000 ms (Renode's 1 Hz tick). The core waits in WFI idle
+    fast-forward.</li>
+<li>TWD at 0x400D8000 on NVIC 31: reset values (TWCFG 0, TWDT0 0xFFFF,
+    WDCNT 0x0F, watchdog stopped). MDIV 3 and TWDT0 4095 give a 1 s T0
+    period: three IRQs, ITIM64 times both gaps at 1000 ms, and T0CSR.TC
+    reads 1 once. LTWDT0 makes TWDT0 read 0 and drop a write; 87h/61h/63h
+    with the watchdog stopped clears the lock. With a 32-tick T0 period,
+    WDSDME and WDCNT 10, a 5Ch touch every 5 periods keeps the core running
+    for 30 periods, and TWMWD reads 7 three periods after a touch.
+    87h/61h/63h stops the watchdog (WD_RUN 0) and 15 periods pass. WDCNT 10
+    again with no touch: the handler prints one <code>.</code> per T0 IRQ, and the
+    watchdog resets the chip on the 10th period, so the capture shows exactly
+    nine dots. The second boot reads WDRST_STS 1 and WD_RUN 0, clears
+    WDRST_STS (W1C) and reads TWDT0 back at 0xFFFF. T0 keeps waking the idle
+    core every 2 s, so the run ends on <code>max_cycles</code>, not <code>max_steps</code>.</li>
+<li>HFCG at 0x400B5000 and LFCG at 0x400B5100 (runs before the watchdog
+    expiry of check 17): HFCGN / HFCGML / HFCGMH, then LOAD, in Zephyr
+    <code>clock_control_npcx.c</code> order; the CLK_CHNG poll ends at once, LOAD reads
+    0 and M / N read back. HFCGP, HFCBCD and HFCBCD1..3 read back with the
+    reserved bits clear (0x5F -&gt; 0x53, 0xFF -&gt; 0x32). LOCK drops a later
+    HFCGML write. LFCG HFRDI keeps 12 bits (0xFFFF -&gt; 0x0FFF),
+    LFCGCTL2.XT_OSC_SL_EN reads back, and LFLOC drops a later LFCGCTL2
+    write.</li>
+<li>Memory windows (runs before the watchdog expiry of check 17): a word
+    written at code_ram 0x10058000 reads back through 0x20058000, and a word
+    written through 0x20058000 + 0x67FFC reads back at 0x10058000 + 0x67FFC;
+    a word written through the data RAM view 0x100D0000 reads back at
+    0x200D0000; image_type (0x4000C009) and PM1..4 (+0x00 and +0xFF) read
+    back. A signature in battery-backed RAM (0x400AF000 and +0x7C) reads
+    back at once, and again on the second boot after the watchdog reset
+    (<code>bbram kept=1</code>).</li>
+<li>SPIP (runs before the watchdog expiry of check 17; no SPI device is
+    attached, so MISO reads 0): CTL1 and STAT read 0 at reset; a DATA write
+    with SPIEN clear does not set RBF. With SPIEN a DATA write sets RBF (BSY
+    reads 0), and the DATA read returns 0 and clears RBF, in 8-bit and 16-bit
+    (MOD) mode. SCM / SCIDL / SCDV read back. With NVIC 57 enabled, EIR plus
+    a transfer gives exactly one IRQ (the handler reads DATA and clears
+    EIR); EIW with RBF clear gives exactly one IRQ (the handler clears EIW,
+    as the Zephyr ISR does), and the line is not pending afterwards.</li>
+<li>MDMA1: the smoke injects <code>m</code> into UART1, enables UART receive DMA, and
+    checks the fixed URBUF source, copied byte in code RAM, destination and
+    current counts, terminal-count status and empty UART FIFO.</li>
+<li>FIU at 0x40020000: the smoke checks reset values, WREN / RDSR1, page
+    programming, readback, the NOR 1-to-0 rule, WEL clearing, and a 64 KiB
+    block erase through UMA. The internal flash array is sparse and erased by
+    default.</li>
+</ol>
+<h2 id="claimed-peripherals">Claimed peripherals</h2>
 <table>
 <thead>
 <tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
+<th>id</th>
+<th>model</th>
+<th>scope</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>dwt</code></td>
-<td><code>0xe0001000</code></td>
-<td><code>dwt</code></td>
+<td><code>smbus0</code>..<code>smbus7</code></td>
+<td><code>npcx_smbus</code></td>
+<td>Byte-oriented master START/address/data/STOP flow with attached I²C devices, address NACK and level IRQ predicate. The profile smoke checks reset, enable, NACK, W1C clear and STOP on all eight empty buses; attached-device transfers are covered by model unit tests. No slave mode, FIFO burst, SMBus extensions, bus timing or arbitration.</td>
 </tr>
 <tr>
-<td><code>cr_uart1</code></td>
-<td><code>0x400e0000</code></td>
-<td><code>npcx_uart</code></td>
-</tr>
-<tr>
-<td><code>cr_uart2</code></td>
-<td><code>0x400e2000</code></td>
-<td><code>npcx_uart</code></td>
-</tr>
-<tr>
-<td><code>cr_uart3</code></td>
-<td><code>0x400e4000</code></td>
-<td><code>npcx_uart</code></td>
-</tr>
-<tr>
-<td><code>cr_uart4</code></td>
-<td><code>0x400e6000</code></td>
-<td><code>npcx_uart</code></td>
-</tr>
-<tr>
-<td><code>itim32_1</code></td>
-<td><code>0x400b0000</code></td>
-<td><code>npcx_itim</code></td>
-</tr>
-<tr>
-<td><code>itim32_2</code></td>
-<td><code>0x400b2000</code></td>
-<td><code>npcx_itim</code></td>
-</tr>
-<tr>
-<td><code>itim32_3</code></td>
-<td><code>0x400b4000</code></td>
-<td><code>npcx_itim</code></td>
-</tr>
-<tr>
-<td><code>itim32_4</code></td>
-<td><code>0x400b6000</code></td>
-<td><code>npcx_itim</code></td>
-</tr>
-<tr>
-<td><code>itim32_5</code></td>
-<td><code>0x400b8000</code></td>
-<td><code>npcx_itim</code></td>
-</tr>
-<tr>
-<td><code>itim32_6</code></td>
-<td><code>0x400ba000</code></td>
-<td><code>npcx_itim</code></td>
-</tr>
-<tr>
-<td><code>itim64</code></td>
-<td><code>0x400be000</code></td>
-<td><code>npcx_itim</code></td>
-</tr>
-<tr>
-<td><code>image_type</code></td>
-<td><code>0x4000c009</code></td>
-<td><code>arraymemory</code></td>
-</tr>
-<tr>
-<td><code>twd</code></td>
-<td><code>0x400d8000</code></td>
-<td><code>npcx_twd</code></td>
-</tr>
-<tr>
-<td><code>mtc</code></td>
-<td><code>0x400b7000</code></td>
-<td><code>npcx_mtc</code></td>
-</tr>
-<tr>
-<td><code>mdma1</code></td>
-<td><code>0x40011100</code></td>
+<td><code>mdma1</code>..<code>mdma4</code></td>
 <td><code>npcx_mdma</code></td>
-</tr>
-<tr>
-<td><code>mdma2</code></td>
-<td><code>0x40011200</code></td>
-<td><code>npcx_mdma</code></td>
-</tr>
-<tr>
-<td><code>mdma3</code></td>
-<td><code>0x40011300</code></td>
-<td><code>npcx_mdma</code></td>
-</tr>
-<tr>
-<td><code>mdma4</code></td>
-<td><code>0x40011400</code></td>
-<td><code>npcx_mdma</code></td>
+<td>UART RX context 0 copies one byte from each fixed URBUF source to configured memory on receive requests; MDMA1 is exercised by the smoke. No TX context or shared UART/MDMA IRQ combiner.</td>
 </tr>
 <tr>
 <td><code>mdma5</code></td>
-<td><code>0x40011500</code></td>
 <td><code>npcx_mdma</code></td>
+<td>Context 0 register source/destination mapping only; I3C routing is not modelled.</td>
 </tr>
 <tr>
-<td><code>spip</code></td>
-<td><code>0x400d2000</code></td>
-<td><code>stub</code></td>
+<td><code>cr_uart1</code>..<code>cr_uart4</code></td>
+<td><code>npcx_uart</code></td>
+<td>Polled TX (UTBUF, UICTRL TBE) and RX (URBUF, UICTRL RBF); FIFO-mode UFTSTS / UFRSTS / UFTCTL / UFRCTL; level IRQ on NVIC 33, 32, 38, 39 from TEMPTY_EN, NXMIP_EN, RNEMPTY_EN and RFULL_LVL_EN.</td>
 </tr>
 <tr>
-<td><code>lfcg</code></td>
-<td><code>0x400b5100</code></td>
-<td><code>stub</code></td>
+<td><code>port0</code>..<code>portf</code></td>
+<td><code>npcx_gpio</code></td>
+<td>PDOUT latch, PDIN pad level (own drive, external level, pull), PDIR, PPULL/PPUD pulls, PTYPE open-drain, PLOCK_CTL PDOUT lock, PENVDD storage.</td>
+</tr>
+<tr>
+<td><code>itim32_1</code>..<code>itim32_6</code></td>
+<td><code>npcx_itim32</code></td>
+<td>Down-counter, prescaler, APB2/LFCLK, TO_STS level IRQ on NVIC 28, 27, 17, 43, 44, 45.</td>
+</tr>
+<tr>
+<td><code>itim64</code></td>
+<td><code>npcx_itim64</code></td>
+<td>64-bit down-counter, IRQ on NVIC 58.</td>
+</tr>
+<tr>
+<td><code>mtc</code></td>
+<td><code>npcx_mtc</code></td>
+<td>TTC 1 Hz count (read/write, survives system reset), WTC PT / PTO (W1C) / WIE; level IRQ WIE &amp;&amp; PTO on NVIC 5.</td>
+</tr>
+<tr>
+<td><code>twd</code></td>
+<td><code>npcx_twd</code></td>
+<td>T0 at 32768 Hz / 2^MDIV, TWDT0 period, TC (read clears), pulse IRQ per terminal count on NVIC 31; watchdog WDCNT / TWMWD / WDCP, WDCT0I clock select, 87h/61h/63h stop and unlock, 5Ch touch (WDSDME), bad service byte reset, lock bits, system reset with WDRST_STS.</td>
 </tr>
 <tr>
 <td><code>hfcg</code></td>
-<td><code>0x400b5000</code></td>
-<td><code>stub</code></td>
+<td><code>npcx_hfcg</code></td>
+<td>HFCGCTRL LOAD (reads 0, latches M / N), CLK_CHNG (reads 0), LOCK (set-only, drops HFCG writes); HFCGML / HFCGMH / HFCGN / HFCGP / HFCBCD / HFCBCD1..3 / HFCGPIDL read back with reserved bits clear. Register file only.</td>
+</tr>
+<tr>
+<td><code>spip</code></td>
+<td><code>npcx_spip</code></td>
+<td>SPIP_DATA transfer through attached devices (8-bit, or 16-bit low byte first with MOD), RBF (DATA read clears), BSY reads 0, CTL1 SPIEN / MOD / EIR / EIW / SCM / SCIDL / SCDV read back; level IRQ on NVIC 57 from EIR &amp;&amp; RBF or EIW &amp;&amp; !RBF (the EIW term is an assumption from the Zephyr ISR). No chip select, no timing.</td>
 </tr>
 <tr>
 <td><code>fiu</code></td>
-<td><code>0x40020000</code></td>
-<td><code>stub</code></td>
+<td><code>npcx_fiu</code></td>
+<td>UMA status, read, page program and 64 KiB block erase against a sparse 1 MiB internal flash medium. WEL, 3/4-byte address selection, lock and reset behavior. Direct XIP mapping is not declared.</td>
 </tr>
 <tr>
-<td><code>gpio0</code></td>
-<td><code>0x40081000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio1</code></td>
-<td><code>0x40083000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio2</code></td>
-<td><code>0x40085000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio3</code></td>
-<td><code>0x40087000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio4</code></td>
-<td><code>0x40089000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio5</code></td>
-<td><code>0x4008b000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio6</code></td>
-<td><code>0x4008d000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio7</code></td>
-<td><code>0x4008f000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio8</code></td>
-<td><code>0x40091000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio9</code></td>
-<td><code>0x40093000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpioa</code></td>
-<td><code>0x40095000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpiob</code></td>
-<td><code>0x40097000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpioc</code></td>
-<td><code>0x40099000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpiod</code></td>
-<td><code>0x4009b000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpioe</code></td>
-<td><code>0x4009d000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpiof</code></td>
-<td><code>0x4009f000</code></td>
-<td><code>npcx_gpio</code></td>
-</tr>
-<tr>
-<td><code>smbus0</code></td>
-<td><code>0x40009000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>smbus1</code></td>
-<td><code>0x4000b000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>smbus2</code></td>
-<td><code>0x400c0000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>smbus3</code></td>
-<td><code>0x400c2000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>smbus4</code></td>
-<td><code>0x40008000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>smbus5</code></td>
-<td><code>0x40017000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>smbus6</code></td>
-<td><code>0x40018000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>smbus7</code></td>
-<td><code>0x40019000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>DEV_CTL4</code></td>
-<td><code>0x400c3006</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>SWRST_CTL4</code></td>
-<td><code>0x400c3110</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>pm1</code></td>
-<td><code>0x400c9000</code></td>
-<td><code>arraymemory</code></td>
-</tr>
-<tr>
-<td><code>pm2</code></td>
-<td><code>0x400cb000</code></td>
-<td><code>arraymemory</code></td>
-</tr>
-<tr>
-<td><code>pm3</code></td>
-<td><code>0x400cd000</code></td>
-<td><code>arraymemory</code></td>
-</tr>
-<tr>
-<td><code>pm4</code></td>
-<td><code>0x400cf000</code></td>
-<td><code>arraymemory</code></td>
+<td><code>lfcg</code></td>
+<td><code>npcx_lfcg</code></td>
+<td>LFCGCTL LREFEN, UDCP (reads 0), LFLOC (set-only, drops LFCG writes); HFRDI (12 bits), HFRDF, FRCDIV, DIVCOR1/2, LFCGCTL2 read back. Register file only.</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Total Peripherals:</strong> 54</p>
+<h2 id="memory-windows">Memory windows</h2>
+<table>
+<thead>
+<tr>
+<th>name</th>
+<th>base</th>
+<th>size</th>
+<th>scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ram</code></td>
+<td>0x200C0000</td>
+<td>0x17800</td>
+<td>Renode <code>data_ram</code>.</td>
+</tr>
+<tr>
+<td><code>data_ram_alias</code></td>
+<td>0x100C0000</td>
+<td>0x17800</td>
+<td>Mirror of <code>ram</code> (Renode's second <code>data_ram</code> view).</td>
+</tr>
+<tr>
+<td><code>code_ram</code></td>
+<td>0x10058000</td>
+<td>0x68000</td>
+<td>Renode <code>code_ram</code>.</td>
+</tr>
+<tr>
+<td><code>code_ram_alias</code></td>
+<td>0x20058000</td>
+<td>0x68000</td>
+<td>Mirror of <code>code_ram</code>.</td>
+</tr>
+<tr>
+<td><code>battery_backed_ram</code></td>
+<td>0x400AF000</td>
+<td>0x80</td>
+<td>Size from Zephyr <code>npcx9.dtsi</code> <code>bbram</code> (Renode maps 0x400 and notes it is too large). Kept across a system reset.</td>
+</tr>
+<tr>
+<td><code>image_type</code></td>
+<td>0x4000C009</td>
+<td>1</td>
+<td>Renode <code>image_type</code> ArrayMemory.</td>
+</tr>
+<tr>
+<td><code>pm1</code>..<code>pm4</code></td>
+<td>0x400C9000 + n * 0x2000</td>
+<td>0x100 each</td>
+<td>Renode's read/write memory mock of the PMCH registers.</td>
+</tr>
+</tbody>
+</table>
+<p>Not modelled in these windows: VBAT loss and the BBRAM status byte at
+0x400AF100 (unmapped), PMCH host-interface behaviour (OBF / IBF, host IRQs),
+and direct XIP reads at 0x64000000. FIU accesses use a separate sparse backing
+array until the engine can share it with a mapped memory window.</p>
+<p>GPIO ids are <code>port0</code>..<code>portf</code>, not Zephyr's <code>gpio0</code>..<code>gpiof</code>: a <code>gpio0</code> or
+<code>gpio1</code> id switches on the bus's Nordic GPIOTE pass.</p>
+<p>Sources: Renode <code>platforms/cpus/nuvoton_npcx9.repl</code>, <code>NPCX_FIU.cs</code>,
+<code>NPCX_Flash.cs</code>, <code>NPCX_GPIO.cs</code>,
+<code>NPCX_HFCG.cs</code>, <code>NPCX_ITIM.cs</code>, <code>NPCX_LFCG.cs</code>, <code>NPCX_MTC.cs</code>,
+<code>NPCX_MDMA.cs</code>, <code>NPCX_SMBus.cs</code>, <code>NPCX_TWD.cs</code> and <code>NPCX_UART.cs</code>; Zephyr
+<code>drivers/serial/uart_npcx.c</code>, <code>drivers/clock_control/clock_control_npcx.c</code>; Zephyr <code>soc/nuvoton/npcx/common/reg/reg_def.h</code>
+(<code>cdcg_reg</code>, <code>gpio_reg</code>, <code>itim32_reg</code>, <code>itim64_reg</code>), <code>drivers/gpio/gpio_npcx.c</code> and
+<code>dts/arm/nuvoton/npcx/npcx.dtsi</code> / <code>npcx9.dtsi</code>.</p>
+<p>Differences from Renode <code>NPCX_GPIO</code>: Renode drops a PDOUT write to an input
+pin, reads PDIN from the external level only and tags the pull and type
+registers. This model keeps the PDOUT latch (Zephyr writes PDOUT before PDIR),
+includes the chip's own drive in PDIN, and decodes pulls and open-drain.</p>
+<p>Not modelled:</p>
+<ul>
+<li>UART: UICTRL ETI/ERI/EEI (non-FIFO-mode interrupts; Renode does not model
+  them either), UFTSTS TEMPTY_LVL_STS and UFRSTS ERR (read 0, as in Renode),
+  UFTCTL TEMPTY_LVL_EN, USTAT errors, MDMA transmit, baud and clock
+  configuration. The TX FIFO is always empty: a written byte leaves at once.</li>
+<li>MDMA: context 1, MDMA5 I3C transfer routing, transfer widths other than the
+  byte RX path, and the shared UART/MDMA IRQ combiner.</li>
+<li>MIWU: no GPIO wake-up or pin interrupt reaches the NVIC.</li>
+<li>GPIO: PENVDD drive behaviour, 1.8 V input detection, DEVALT pad muxing,
+  PLOCK_CTL stickiness (the lock bits are plain read/write, as in Renode).</li>
+<li>ITIM: deep-sleep wake-up, ITEN sync delay, PWDWN_CTL gates, CDCG/LFCG
+  clock trees.</li>
+<li>MTC: deep-sleep wake-up (WIE only gates the NVIC line), LFCG clock
+  selection (the tick is fixed at 1 Hz).</li>
+<li>TWD: T0CSR TESDIS and WDLTD (Renode tags them), LTWCFG gating TWCFG
+  (Renode stores the bit only), T0 wake-up through MIWU, 32-bit accesses
+  beyond the 16-bit register at the address.</li>
+<li>HFCG / LFCG: the clock tree. CORE_CLK stays at the descriptor's 15 MHz
+  <code>cpu_hz</code>, and the timers keep their rates, whatever M, N, FPRED or the APB
+  dividers say. CLK_CHNG shows no settling delay. LFLER and XTCLK_VAL read 0.
+  Reset values are 0 (Renode reads 0; datasheet values are not in the
+  sources); a reset clearing LOCK / LFLOC is an assumption.</li>
+</ul>
+<p>Difference from Renode <code>NPCX_HFCG</code> / <code>NPCX_LFCG</code>: Renode defines every field
+as a tag (reads 0, drops writes). This model keeps the written values, so
+Zephyr's "M / N already match" test before the reload sees what it wrote.</p>
+<p>Differences from Renode <code>NPCX_TWD</code>, each toward the documented register
+behaviour: TWCP and WDCP read back the written field (Renode returns the
+divider 2^n); the watchdog decrements once per 2^WDIV input ticks (Renode's
+helper takes 2^WDIV + 1); the TWDT0 reset preset is 0xFFFF (Renode
+initialises its limit to 0xFFFF1, which the 16-bit field cannot hold);
+WDRST_STS survives the watchdog reset it records (Renode clears it in the
+machine reset); a completed 87h/61h/63h sequence returns to idle, so a second
+sequence is accepted (Renode resets on the next 87h).</p>
+<p>SPIP differences from Renode <code>NPCX_SPIP</code>: the IRQ is wired to NVIC 57
+(Zephyr <code>npcx.dtsi</code> <code>spip0</code>; Renode leaves it unconnected), and EIW raises
+it while RBF is clear (Renode ignores EIW). With no attached device MISO
+reads 0 (Renode needs a registered device).</p>
+<p>MDMA limits: context 0 byte receive-to-memory is modelled for MDMA1..4;
+MDMA5's I3C route and context 1 remain outside this profile.</p>
+<p>SMBus limits: this model covers master byte transfers and maps attached
+LabWired I²C devices, but not slave mode, FIFO bursts, SMBus protocol
+extensions, clock timing or arbitration. The onboarding system has no
+off-chip I²C device attached, so its smoke intentionally verifies NACK and
+recovery on all eight controllers.</p>
+<p>Not declared (no model in this engine): the direct XIP internal flash window,
+DEV_CTL4 / SWRST_CTL4 Python peripherals, and the other Renode NPCX blocks.</p>
+<h2 id="negative-controls">Negative controls</h2>
+<ul>
+<li><a href="../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-15-negative-control-head-descriptor/"><code>attempt-history/nuvoton_npcx9/2026-11-15-negative-control-head-descriptor/</code></a>:
+  without the ITIM windows; BusFault at 0x400B0001 (ITPRE), FAIL 2/3.</li>
+<li><a href="../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-gpio-unmapped/"><code>attempt-history/nuvoton_npcx9/2026-11-16-negative-control-gpio-unmapped/</code></a>:
+  without the GPIO ports; BusFault at 0x40081002 (GPIO0 PDIR), FAIL 3/4.</li>
+<li><a href="../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-uart2-4-unmapped/"><code>attempt-history/nuvoton_npcx9/2026-11-16-negative-control-uart2-4-unmapped/</code></a>:
+  previous descriptor without UART2..4 and without the injections (the CLI
+  rejects injections to an unknown id); BusFault at 0x400E2004 (UART2
+  UICTRL), FAIL 4/8.</li>
+<li><a href="../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-uart-injection/"><code>attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-uart-injection/</code></a>:
+  descriptor and firmware of that round, no RX injection; <code>uarts tbe=3 rx=0
+  drained=3 isolated=1 FAIL</code>, FAIL 7/8.</li>
+<li><a href="../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-uart-irq-unwired/"><code>attempt-history/nuvoton_npcx9/2026-11-16-negative-control-uart-irq-unwired/</code></a>:
+  same CLI and firmware (SHA-256 <code>317a070b…</code>), previous descriptor without
+  the UART <code>irq</code> lines; <code>uart irq fts=4 txp=0 txrel=4 frs=3 rx=0 hits=0
+  drained=0 FAIL</code>, FAIL 8/9. The FIFO registers read correctly; only the
+  NVIC wiring is missing.</li>
+<li><a href="../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-mtc/"><code>attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-mtc/</code></a>:
+  same CLI and firmware (SHA-256 <code>85e272a6…</code>), previous descriptor without
+  the <code>mtc</code> entry; BusFault at 0x400B7000 (TTC), FAIL 9/10.</li>
+<li><a href="../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-twd/"><code>attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-twd/</code></a>:
+  same CLI and firmware (SHA-256 <code>197d3e2f…</code>), previous descriptor without
+  the <code>twd</code> entry; BusFault at 0x400D8006 (T0CSR read at entry), FAIL 0/12.</li>
+<li><a href="../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-cdcg/"><code>attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-cdcg/</code></a>:
+  same CLI and firmware (SHA-256 <code>54805aef…</code>), previous descriptor without
+  the <code>hfcg</code> / <code>lfcg</code> entries; BusFault at 0x400B5006 (HFCGN write), FAIL
+  10/13.</li>
+<li><a href="../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-memory-windows/"><code>attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-memory-windows/</code></a>:
+  same CLI and firmware (SHA-256 <code>4e7b49d9…</code>), previous descriptor without
+  <code>memory_regions</code>; BusFault at 0x10058000 (code_ram write), FAIL 11/15.</li>
+<li><a href="../coverage/renode-onboarding/attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-spip/"><code>attempt-history/nuvoton_npcx9/2026-11-16-negative-control-no-spip/</code></a>:
+  same CLI and firmware (SHA-256 <code>31a428ef…</code>), previous descriptor without
+  <code>spip</code>; BusFault at 0x400D2002 (SPIP CTL1 read), FAIL 12/16.</li>
+</ul>
+<p>The profile's <code>verified</code> field remains false. This result is limited to the
+local model behaviour; it is not datasheet validation or hardware
+confirmation.</p>
 
 
 

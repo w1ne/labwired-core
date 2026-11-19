@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: ut32m0r500 - LabWired docs</title>
+        <title>UT32M0R500 validation status - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: ut32m0r500 - LabWired docs">
+  <meta property="og:title" content="UT32M0R500 validation status - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/ut32m0r500/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: ut32m0r500 - LabWired docs">
+  <meta name="twitter:title" content="UT32M0R500 validation status - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-ut32m0r500" class="md-skip">
+        <a href="#ut32m0r500-validation-status" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: ut32m0r500
+              UT32M0R500 validation status
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#current-measurement-2026-11-09" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Current measurement (2026-11-09)
       
     </span>
   </a>
@@ -4878,10 +4878,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#declared-surface" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Declared surface
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#negative-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Negative controls
       
     </span>
   </a>
@@ -4908,92 +4919,113 @@
   
 
 
-<h1 id="validation-report-ut32m0r500">Validation Report: ut32m0r500</h1>
-<p><strong>Architecture:</strong> ARM Cortex-M0+.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:36.751422Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:36.751808Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/ut32m0r500.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:36.753212Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'arm_ahb_gpio' (peripheral 'gpio0') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:36.753290Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'arm_ahb_gpio' (peripheral 'gpio1') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:36.753328Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'arm_ahb_gpio' (peripheral 'gpio2') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:36.753471Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:36.753617Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:36.753652Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:36.753659Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:36.754373Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:36.754380Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:36.754385Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:36.754502Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:36.754520Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:36.754525Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>[2m2026-10-18T14:40:36.754528Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>[2m2026-10-18T14:40:36.754532Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>[2m2026-10-18T14:40:36.754537Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2290.82
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
+<h1 id="ut32m0r500-validation-status">UT32M0R500 validation status</h1>
+<h2 id="current-measurement-2026-11-09">Current measurement (2026-11-09)</h2>
+<p>Cortex-M0+ for <strong>200,000 instructions</strong> and passed <strong>7/7 smoke assertions</strong>.
+The firmware runs twelve register and interrupt checks and prints one letter
+per check; the UART0 capture is <code>UT32 checks PPPPPPPPPPPP DONE</code>, and the
+summary word at 0x20017F00 is 0x5E320FFF. UART1 prints one line. GPIO 45
+(GPIO2 pin 13) shows at least 6 edges. A stimulated rising edge on that pin
+asserts combined GPIO IRQ 24 in NVIC; clearing <code>INTSTATUS</code> drops the
+level-pended NVIC bit. The timer check exercises channel 1 of timer0 and
+channel 2 of timer1: each counts down, asserts RIS/MIS, and clears its
+interrupt latch. The result,
+UART capture, JUnit assertions, snapshot and build/run logs are under
+<a href="../coverage/renode-onboarding/metrics/ut32m0r500/"><code>docs/coverage/renode-onboarding/metrics/ut32m0r500/</code></a>.</p>
+<p>Checks (source: <code>crates/firmware-ut32m0r500-smoke/src/main.rs</code>):</p>
+<ol>
+<li>GPIO0 OUTEN, ALTFUNC and INTEN read 0 after reset.</li>
+<li>GPIO2 ALTFUNC resets to 0xFFFF; ALTFUNCCLR frees pin 13.</li>
+<li>GPIO0 pin 3 with PULL_ENABLE and PULL_UP_DOWN = 1 reads 1.</li>
+<li>The same pin with PULL_UP_DOWN = 0 reads 0.</li>
+<li>GPIO1 pins 0..3: OUTENSET, DATAOUT 0x5, DATA reads the pads.</li>
+<li>MASKLOWBYTE[0x0C] = 0x08 changes pins 2 and 3 only.</li>
+<li>GPIO1 pin 9 set and cleared through MASKHIGHBYTE[0x02].</li>
+<li>OUTENCLR releases pin 0; DATA reads its pull-down.</li>
+<li>GPIO1 pin 1 rising-edge INTSTATUS latches; a write of 1 clears it.</li>
+<li>A pattern at the top of the 96 KiB SRAM reads back.</li>
+<li>SP804 timer0 channel 1 and timer1 channel 2 count down, assert RIS/MIS,
+    and clear their interrupt latches.</li>
+<li>A stimulated rising edge on GPIO2 pin 13 latches <code>INTSTATUS</code>, asserts
+    NVIC IRQ 24, then deasserts the line and clears its NVIC pending bit when
+    <code>INTSTATUS</code> is cleared.</li>
+</ol>
+<h2 id="declared-surface">Declared surface</h2>
+<p>Sources: Renode <code>platforms/cpus/ut32m0r500.repl</code> (memory map, instance
+bases, timer clock/IRQ routes, GPIO2 <code>alternateFunctionResetValue</code>), Renode
+<code>ARM_AHB_GPIO.cs</code> (register map), Renode <code>ARM_SP804_Timer.cs</code>, Arm DDI 0271D
+(SP804 register/timing behavior), and the Frontgrade (Cobham CAES) application note
+"UT32M0R500 Enable the GPIO" (12/21/2017: bank addresses, interrupt type
+and polarity table, masked byte access, pull-up through
+<code>PinPullEnable</code> + <code>PinPullDirection</code>).</p>
 <table>
 <thead>
 <tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
+<th>Block</th>
+<th>Base</th>
+<th>Model</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>uart0</code></td>
-<td><code>0x40004000</code></td>
-<td><code>gaislerapbuart</code></td>
+<td>flash 64 KiB</td>
+<td>0x01000000</td>
+<td>memory</td>
 </tr>
 <tr>
-<td><code>uart1</code></td>
-<td><code>0x40005000</code></td>
-<td><code>gaislerapbuart</code></td>
+<td>SRAM 96 KiB</td>
+<td>0x20000000</td>
+<td>memory</td>
 </tr>
 <tr>
-<td><code>timer0</code></td>
-<td><code>0x40001000</code></td>
-<td><code>arm_sp804_timer</code></td>
+<td>uart0 / uart1</td>
+<td>0x40004000 / 0x40005000 (4 KiB each)</td>
+<td><code>gaislerapbuart</code> profile <code>gaisler</code>, polled</td>
 </tr>
 <tr>
-<td><code>timer1</code></td>
-<td><code>0x40002000</code></td>
-<td><code>arm_sp804_timer</code></td>
+<td>gpio_bank0..2</td>
+<td>0x40020000 / 0x40021000 / 0x40022000 (4 KiB each)</td>
+<td><code>gpio</code> profile <code>cmsdk</code>; combined IRQs 22 and 24 on banks 0 and 2; bank 2 <code>reset_altfunc: 0xFFFF</code></td>
 </tr>
 <tr>
-<td><code>adc</code></td>
-<td><code>0x4000f000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>gpio0</code></td>
-<td><code>0x40020000</code></td>
-<td><code>arm_ahb_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio1</code></td>
-<td><code>0x40021000</code></td>
-<td><code>arm_ahb_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio2</code></td>
-<td><code>0x40022000</code></td>
-<td><code>arm_ahb_gpio</code></td>
-</tr>
-<tr>
-<td><code>can0</code></td>
-<td><code>0x40023000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>can1</code></td>
-<td><code>0x40024000</code></td>
-<td><code>stub</code></td>
+<td>timer0 / timer1</td>
+<td>0x40001000 / 0x40002000 (4 KiB each), IRQ 1 / 2</td>
+<td><code>arm_sp804_timer</code>; two counters per instance</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Total Peripherals:</strong> 10</p>
+<p>GPIO number <code>16 * bank + n</code> is bank pin n (the app note's GPIO 45 is GPIO2
+pin 13). The banks are not named <code>gpio0..2</code>, because those names turn on
+the Nordic GPIOTE pass in the bus.</p>
+<p>Two deviations from Renode, both toward the hardware documents: DATA reads
+the pad level on output pins too (Renode returns 0 there; the Arm CMSDK
+GPIO samples the pin), and the MASKLOWBYTE/MASKHIGHBYTE arrays are modelled
+(Renode tags them; app note §3.5.2 describes them). A level-type interrupt
+latches when a pad changes, as in Renode. Combined IRQ is <code>INTSTATUS &amp;
+INTEN</code>; the smoke checks the GPIO2 combined output through NVIC. GPIO1's
+optional dedicated per-pin IRQ outputs (NVIC 5..12) are not declared or
+claimed.</p>
+<p>The SP804 implementation follows Arm DDI 0271D. This smoke checks timeout
+status and interrupt-latch clearing on one channel in each instance; it does
+not check every counter mode, prescaler, or exception delivery path.</p>
+<p>Not modelled on the declared blocks: GPIO1's optional dedicated per-pin IRQ
+outputs, alternate-function pad routing (an ALTFUNC pad reports AF and this port
+does not drive it), open-drain output, SOFTRESET behaviour (the bit is
+stored), and the PID/CID words.</p>
+<p>Not declared (no model in this engine): boot ROM, EDAC SRAM, system ROM,
+MTB, CAES ADC, CAN0/1, and the
+Renode Tag-only blocks (RTC, PWM, SPI, DACs, watchdog, I2C0/1, trim
+control, NFC, comparators, system controller).</p>
+<h2 id="negative-controls">Negative controls</h2>
+<p>Under
+<a href="../coverage/renode-onboarding/attempt-history/ut32m0r500/"><code>attempt-history/ut32m0r500/</code></a>:</p>
+<ul>
+<li>old descriptor (UART0 only): HardFault on a data access at 0x40020010
+  (GPIO0 OUTENSET, check 1), 2/7.</li>
+<li>GPIO banks on the <code>stm32f1</code> layout at the same addresses: summary
+  <code>PFFPFFFFFP</code> (0x5E320209), 4/7.</li>
+<li>no <code>reset_altfunc</code> on GPIO2: summary <code>PFPPPPPPPP</code> (0x5E3203FD), 5/7.</li>
+</ul>
 
 
 

@@ -4976,12 +4976,29 @@ receives nothing. The µDMA moves only on software requests. The ROM is LabWired
 own (not a TI dump): no serial boot loader. Flash operations do not
 stall a CPU executing from flash, and there is no flash DMA trigger or
 flash interrupt. SYS_CTRL clock gating has no effect on other blocks, the
-IOC pin mux and pad overrides are a stub, GPIO interrupts are not raised
+IOC registers are stored but their pin mux and pad overrides are not
+applied, GPIO interrupts are not raised
 and the watchdog never bites. The cryptoprocessor's slave-interface
 (non-DMA) data path, <code>KEY2</code>/<code>KEY3</code> and pulse interrupts are not modelled.
-PKA, SSI, I²C,
-GPTimers, USB and SoC ADC are declared stubs. There is no silicon
-capture: <strong>SIM-DERIVED</strong>.</p>
+SSI0/SSI1 are modelled in master mode only (no slave mode, RX timeout,
+TI/MICROWIRE formats, bit timing or µDMA requests). GPTimer0-3 model the
+32-bit A timer or split 16-bit A/B timers, one-shot/periodic up/down
+counting, prescaling, timeout/match status and interrupts. RTC, capture,
+PWM, synchronization, ADC trigger and CCP outputs are not modelled. The
+I2C master is synchronous and byte-command based: it supports attached
+slaves, START/repeated START/STOP, NACK status and completion IRQ, but not
+clock stretching, bus timing, arbitration, loopback or the I2C slave
+controller. The imported-system smoke injects a virtual TMP102 test
+fixture; it is not part of the CC2538DK hardware. The SOC_ADC model
+implements single (ADCCON3) and ST-started sequence conversions instantly
+from AIN0-7 inputs; the onboarding smoke exercises single conversions,
+GND, VDD/3 and a fixed 25 °C temperature level; it also runs the RNG
+LFSR/CRC16 and the PA5/PA4 comparator. Conversion timing, timer/free-run
+starts, IOC channel skipping and ADC DMA are not modelled. The PKA compute
+engine, USB, I2CS, ANA_REGS and CCTEST remain declared stubs. Its separate 2 KiB SRAM is mapped
+as ordinary CPU RAM and the onboarding smoke reads back all 512 words;
+this does not exercise PKA arithmetic or ECC. There is no silicon capture:
+<strong>SIM-DERIVED</strong>.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Live status</p>
@@ -5069,7 +5086,7 @@ capture: <strong>SIM-DERIVED</strong>.</p>
 <tr>
 <td>IOC</td>
 <td><code>0x400D_4000</code></td>
-<td><code>type: stub</code> — pin mux / pad overrides not modelled</td>
+<td>modelled (<code>cc2538_ioc</code>) — Table 9-7 register file (reset values, field masks); routing not applied</td>
 </tr>
 <tr>
 <td>UART0 (console)</td>
@@ -5127,7 +5144,32 @@ capture: <strong>SIM-DERIVED</strong>.</p>
 <td>modelled (<code>cc2538_flash_ctrl</code>) — page erase, word write sequence, CCA lock bits, DIECFG0-2</td>
 </tr>
 <tr>
-<td>PKA / SSI / I²C / GPTimers / USB / ADC</td>
+<td>SSI0 / SSI1</td>
+<td><code>0x4000_8000</code> / <code>0x4000_9000</code></td>
+<td>modelled (<code>cc2538_pl022_ssi</code>) — master mode, LBM loopback, 4–16-bit frames, 8-deep TX/RX FIFOs, RORRIS, FIFO-level IRQ 7 / 34; no slave mode, RX timeout, TI/MICROWIRE formats, timing or µDMA requests</td>
+</tr>
+<tr>
+<td>GPTimer0-3</td>
+<td><code>0x4003_0000</code> + <code>0x1000</code>×n</td>
+<td>modelled (<code>cc2538_gptimer</code>) — 32-bit timer A or split 16-bit A/B; one-shot/periodic up/down count, prescaler, timeout/match status and IRQ; no RTC, capture, PWM, synchronization, ADC trigger or CCP output</td>
+</tr>
+<tr>
+<td>I2CM master</td>
+<td><code>0x4002_0000</code></td>
+<td>modelled (<code>cc2538_i2cm</code>) — single-byte master commands through attached <code>external_devices</code>; IRQ 8; no timing, clock stretching, arbitration or loopback</td>
+</tr>
+<tr>
+<td>PKA SRAM</td>
+<td><code>0x4400_6000</code>, 2 KiB</td>
+<td>modelled as ordinary CPU RAM; onboarding smoke writes and reads all 512 words, without PKA computation</td>
+</tr>
+<tr>
+<td>SOC_ADC</td>
+<td><code>0x400D_7000</code></td>
+<td>modelled (<code>cc2538_soc_adc</code>) — smoke exercises ADCCON3 single conversions and IRQ 14 pulse; model also implements ST sequence conversions (not smoke-exercised), AIN0-7 / GND / VDD/3 / fixed 25 °C temperature, internal 1.19 V / AVDD5 / AIN7 / AIN6-AIN7 references; smoke checks RNG reset/seed/clock/CRC and comparator readback; no conversion time, STSEL 01/10 starts, IOC skip or DMA</td>
+</tr>
+<tr>
+<td>I2CS slave / PKA engine / USB / ANA_REGS / CCTEST</td>
 <td>see descriptor</td>
 <td><code>type: stub</code></td>
 </tr>

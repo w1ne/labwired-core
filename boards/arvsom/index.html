@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: arvsom - LabWired docs</title>
+        <title>ARV-SOM Renode onboarding smoke - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: arvsom - LabWired docs">
+  <meta property="og:title" content="ARV-SOM Renode onboarding smoke - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/arvsom/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: arvsom - LabWired docs">
+  <meta name="twitter:title" content="ARV-SOM Renode onboarding smoke - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-arvsom" class="md-skip">
+        <a href="#arv-som-renode-onboarding-smoke" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: arvsom
+              ARV-SOM Renode onboarding smoke
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured profile
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#smoke-evidence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Smoke evidence
       
     </span>
   </a>
@@ -4908,45 +4908,36 @@
   
 
 
-<h1 id="validation-report-arvsom">Validation Report: arvsom</h1>
-<p><strong>Architecture:</strong> RISC-V RV64GC.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>rstgen</code></td>
-<td><code>0x11840000</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>audiorstgen</code></td>
-<td><code>0x10490000</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>voutsysrstgen</code></td>
-<td><code>0x12250000</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 3</p>
+<h1 id="arv-som-renode-onboarding-smoke">ARV-SOM Renode onboarding smoke</h1>
+<h2 id="measured-profile">Measured profile</h2>
+<p>The machine import described the ARV-SOM as a PolarFire SoC module, but
+Renode's <code>platforms/boards/arvsom.repl</code> does not model PolarFire: it is
+<code>using "platforms/cpus/starfive-jh7100.repl"</code> plus a <code>MappedMemory</code> DDR at
+<code>0x80000000</code>. The engine profile follows that Renode platform: one U74 hart in
+the engine's RV64IMAC subset, an 8 MiB window at the start of that DDR, and the
+JH7100 UART0 at <code>0x11870000</code> (NS16550 with 32-bit wide registers, matched by the
+engine's DesignWare 16550 profile). The 8 GiB DDR range is not treated as
+evidence of physical module capacity. This profile does not claim PolarFire
+silicon, RV64GC floating point, supervisor mode, Linux boot, the second hart,
+interrupts, UART RX, or other SoC/board peripherals.</p>
+<h2 id="smoke-evidence">Smoke evidence</h2>
+<p>The exact imported system ran direct-ELF RV64IMAC firmware for 100,000
+instructions and stopped at <code>max_steps</code>. It executes <code>mul</code> on two 64-bit
+operands with nonzero high halves and stores <code>0x0000000500000003</code> at
+<code>0x80700000</code>, then polls UART0 LSR.THRE and prints
+<code>ARV-SOM JH7100 UART0 ok; mul=0000000500000003</code>. The smoke asserts both result
+halves, the UART text and the stop reason (4/4).</p>
+<p>Negative control: with UART0 removed from the profile the same firmware stops
+with a memory violation at <code>0x11870014</code> (UART0 LSR) and fails 2/4 checks
+(<code>attempt-history/arvsom/2026-11-08-uart0-negative-control/</code>). The earlier
+CPU-only measurement is kept in
+<code>attempt-history/arvsom/2026-11-08-before-uart0-smoke/</code>.</p>
+<p>This is evidence for the asserted instruction, DDR window and UART TX path on
+the bounded profile; it is not validation of the full SoC, Linux boot, Renode,
+or physical hardware.</p>
+<p>Evidence: <code>docs/coverage/renode-onboarding/metrics/arvsom/</code> contains the
+per-target metrics, build and run logs, simulator result, snapshot, UART capture,
+and JUnit assertions.</p>
 
 
 

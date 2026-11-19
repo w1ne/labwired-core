@@ -4867,21 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#local-cli-onboarding-smoke" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hardware Coverage Report
+        Local CLI Onboarding Smoke
       
     </span>
   </a>
@@ -4909,253 +4898,27 @@
 
 
 <h1 id="validation-report-nxp-frdm-imx8mplus">Validation Report: nxp-frdm-imx8mplus</h1>
-<p><strong>Architecture:</strong> ARM multicore cluster.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:08.145579Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:08.147555Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/nxp-frdm-imx8mplus.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:12.760650Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'nxp_imx_gpio' (peripheral 'gpio1') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:12.760759Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'nxp_imx_gpio' (peripheral 'gpio2') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:12.760798Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'nxp_imx_gpio' (peripheral 'gpio3') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:12.760830Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'nxp_imx_gpio' (peripheral 'gpio4') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:12.760860Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'nxp_imx_gpio' (peripheral 'gpio5') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:12.761125Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:12.761224Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:12.761258Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:12.761282Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:12.768489Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:12.768508Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:12.768514Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:12.783387Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 452991.99
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>[2m2026-10-18T14:40:12.796834Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>[2m2026-10-18T14:40:12.796927Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x454
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>[2m2026-10-18T14:40:12.796966Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 20000
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>[2m2026-10-18T14:40:12.797000Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20004
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>[2m2026-10-18T14:40:12.797031Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 559833.68
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>phy_mac</code></td>
-<td><code>0x00000001</code></td>
-<td><code>ethernetphysicallayer</code></td>
-</tr>
-<tr>
-<td><code>phy_qos</code></td>
-<td><code>0x00000000</code></td>
-<td><code>ethernetphysicallayer</code></td>
-</tr>
-<tr>
-<td><code>pmic</code></td>
-<td><code>0x00000025</code></td>
-<td><code>dummyi2cslave</code></td>
-</tr>
-<tr>
-<td><code>gpio_exp1</code></td>
-<td><code>0x00000020</code></td>
-<td><code>dummyi2cslave</code></td>
-</tr>
-<tr>
-<td><code>gpio_exp2</code></td>
-<td><code>0x00000021</code></td>
-<td><code>dummyi2cslave</code></td>
-</tr>
-<tr>
-<td><code>codec</code></td>
-<td><code>0x0000001a</code></td>
-<td><code>dummyi2cslave</code></td>
-</tr>
-<tr>
-<td><code>gpt1</code></td>
-<td><code>0x302d0000</code></td>
-<td><code>imx_gptimer</code></td>
-</tr>
-<tr>
-<td><code>gpt2</code></td>
-<td><code>0x302e0000</code></td>
-<td><code>imx_gptimer</code></td>
-</tr>
-<tr>
-<td><code>gpt3</code></td>
-<td><code>0x302f0000</code></td>
-<td><code>imx_gptimer</code></td>
-</tr>
-<tr>
-<td><code>gpt4</code></td>
-<td><code>0x30700000</code></td>
-<td><code>imx_gptimer</code></td>
-</tr>
-<tr>
-<td><code>gpt5</code></td>
-<td><code>0x306f0000</code></td>
-<td><code>imx_gptimer</code></td>
-</tr>
-<tr>
-<td><code>gpt6</code></td>
-<td><code>0x306e0000</code></td>
-<td><code>imx_gptimer</code></td>
-</tr>
-<tr>
-<td><code>gpio1</code></td>
-<td><code>0x30200000</code></td>
-<td><code>nxp_imx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio2</code></td>
-<td><code>0x30210000</code></td>
-<td><code>nxp_imx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio3</code></td>
-<td><code>0x30220000</code></td>
-<td><code>nxp_imx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio4</code></td>
-<td><code>0x30230000</code></td>
-<td><code>nxp_imx_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio5</code></td>
-<td><code>0x30240000</code></td>
-<td><code>nxp_imx_gpio</code></td>
-</tr>
-<tr>
-<td><code>uart1</code></td>
-<td><code>0x30860000</code></td>
-<td><code>mxcuart</code></td>
-</tr>
-<tr>
-<td><code>uart2</code></td>
-<td><code>0x30890000</code></td>
-<td><code>mxcuart</code></td>
-</tr>
-<tr>
-<td><code>uart3</code></td>
-<td><code>0x30880000</code></td>
-<td><code>mxcuart</code></td>
-</tr>
-<tr>
-<td><code>uart4</code></td>
-<td><code>0x30a60000</code></td>
-<td><code>mxcuart</code></td>
-</tr>
-<tr>
-<td><code>usdhc1</code></td>
-<td><code>0x30b40000</code></td>
-<td><code>nxp_usdhc</code></td>
-</tr>
-<tr>
-<td><code>usdhc2</code></td>
-<td><code>0x30b50000</code></td>
-<td><code>nxp_usdhc</code></td>
-</tr>
-<tr>
-<td><code>usdhc3</code></td>
-<td><code>0x30b60000</code></td>
-<td><code>nxp_usdhc</code></td>
-</tr>
-<tr>
-<td><code>wdog1</code></td>
-<td><code>0x30280000</code></td>
-<td><code>nxp_imx_watchdog</code></td>
-</tr>
-<tr>
-<td><code>wdog2</code></td>
-<td><code>0x30290000</code></td>
-<td><code>nxp_imx_watchdog</code></td>
-</tr>
-<tr>
-<td><code>wdog3</code></td>
-<td><code>0x302a0000</code></td>
-<td><code>nxp_imx_watchdog</code></td>
-</tr>
-<tr>
-<td><code>src</code></td>
-<td><code>0x30390000</code></td>
-<td><code>nxp_imx8mp_systemresetcontroller</code></td>
-</tr>
-<tr>
-<td><code>flexcan1</code></td>
-<td><code>0x308c0000</code></td>
-<td><code>nxp_flexcan</code></td>
-</tr>
-<tr>
-<td><code>flexcan2</code></td>
-<td><code>0x308d0000</code></td>
-<td><code>nxp_flexcan</code></td>
-</tr>
-<tr>
-<td><code>eth_mac</code></td>
-<td><code>0x30be0000</code></td>
-<td><code>k6xf_ethernet</code></td>
-</tr>
-<tr>
-<td><code>eth_qos</code></td>
-<td><code>0x30bf0000</code></td>
-<td><code>synopsysdwcethernetqualityofservice</code></td>
-</tr>
-<tr>
-<td><code>i2c1</code></td>
-<td><code>0x30a20000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>i2c2</code></td>
-<td><code>0x30a30000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>i2c3</code></td>
-<td><code>0x30a40000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>i2c4</code></td>
-<td><code>0x30a50000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>i2c5</code></td>
-<td><code>0x30ad0000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>i2c6</code></td>
-<td><code>0x30ae0000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>apis1_gpc</code></td>
-<td><code>0x303a0000</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>ecspi1</code></td>
-<td><code>0x30820000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>ecspi2</code></td>
-<td><code>0x30830000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>ecspi3</code></td>
-<td><code>0x30840000</code></td>
-<td><code>stub</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 42</p>
+<p><strong>Architecture:</strong> AArch64, one Cortex-A53 PE in the measured profile.</p>
+<h2 id="local-cli-onboarding-smoke">Local CLI Onboarding Smoke</h2>
+<p><strong>Status:</strong> Passed, 2/2 assertions. The committed fixture
+<code>tests/fixtures/imx8mp-a53-uart4-smoke.elf</code> (source
+<code>examples/renode-onboarding/imx8mp-a53-mxcuart-smoke.S</code>, built by
+<code>scripts/build_imx8mp_a53_mxcuart_smoke.sh</code>) runs from DDR on one Cortex-A53
+PE. It checks that UART4 USR1 reads TRDY set and RRDY clear after reset; a
+window answering zeros prints <code>USR1=BAD</code> instead. It then sets UCR2/UCR1,
+writes <code>IMX8MP A53 MXCUART SMOKE USR1=OK</code> through UTXD while polling
+USR1.TRDY, and spins until the 100,000-instruction <code>max_steps</code> stop.</p>
+<p>The chip profile declares only UART4 (<code>MxcUart</code> at <code>0x30A60000</code>), which
+Renode's <code>nxp-imx8mplus_zephyr.resc</code> uses as the console. It runs on the
+generic UART engine with the i.MX layout (UTXD <code>0x40</code>, URXD <code>0x00</code>, USR1
+<code>0x94</code>). USR2, UTS, the FIFOs, the baud generator and the interrupt line are
+not claimed. The other three Cortex-A53 cores, the Cortex-M7, the other UARTs
+and peripherals, and the board's boot flow are not tested. The onboarding
+descriptor is <code>verified: false</code> because the whole platform is not covered.</p>
+<p>Negative control: the same ELF on the previous CPU-only chip profile
+(<code>peripherals: []</code>) fails 0/2 with a memory violation at <code>0x30a60094</code>
+(USR1).</p>
+<p>Evidence: <a href="../../coverage/renode-onboarding/metrics/nxp-frdm-imx8mplus/onboarding-metrics.json">onboarding metrics</a>, <a href="../../coverage/renode-onboarding/metrics/nxp-frdm-imx8mplus/simulation-output/result.json">simulation result</a>, <a href="../../coverage/renode-onboarding/metrics/nxp-frdm-imx8mplus/simulation-output/junit.xml">JUnit assertions</a>, <a href="../../coverage/renode-onboarding/metrics/nxp-frdm-imx8mplus/logs/run_smoke.log">run log</a>.</p>
 
 
 

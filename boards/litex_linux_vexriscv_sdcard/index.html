@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured profile
       
     </span>
   </a>
@@ -4878,10 +4878,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#local-labwired-smoke" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Local LabWired smoke
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
       
     </span>
   </a>
@@ -4908,75 +4919,31 @@
   
 
 
-<h1 id="validation-report-litex_linux_vexriscv_sdcard">Validation Report: litex_linux_vexriscv_sdcard</h1>
-<p><strong>Architecture:</strong> RISC-V RV32IMA.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>uart</code></td>
-<td><code>0xf0001000</code></td>
-<td><code>litex_uart</code></td>
-</tr>
-<tr>
-<td><code>spi</code></td>
-<td><code>0xf0007800</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>i2c</code></td>
-<td><code>0xf0008000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>si7021</code></td>
-<td><code>0x00000005</code></td>
-<td><code>si70xx</code></td>
-</tr>
-<tr>
-<td><code>gpio_out</code></td>
-<td><code>0xf0004800</code></td>
-<td><code>litex_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio_in</code></td>
-<td><code>0xf0007000</code></td>
-<td><code>litex_gpio</code></td>
-</tr>
-<tr>
-<td><code>button</code></td>
-<td><code>0x00000000</code></td>
-<td><code>button</code></td>
-</tr>
-<tr>
-<td><code>soc_controller</code></td>
-<td><code>0xf0000000</code></td>
-<td><code>litex_soc_controller</code></td>
-</tr>
-<tr>
-<td><code>mmcm</code></td>
-<td><code>0xf0009800</code></td>
-<td><code>stub</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 9</p>
+<h1 id="validation-report-litex_linux_vexriscv_sdcard">Validation Report: <code>litex_linux_vexriscv_sdcard</code></h1>
+<h2 id="measured-profile">Measured profile</h2>
+<p>The imported profile was mislabeled as ARM and included generated peripherals
+that are not modeled. It now declares one RV32IMA CPU, the upstream 256 MiB DDR
+window at <code>0x40000000</code>, and the implemented LiteX UART at <code>0xf0001000</code>.</p>
+<p>The profile omits Linux boot, SD-card, Ethernet, GPIO, SPI, I2C, MMCM, and other
+unexercised devices. The 32 KiB firmware link window is a smoke image subset of
+the 256 MiB DDR mapping.</p>
+<h2 id="local-labwired-smoke">Local LabWired smoke</h2>
+<p>The exact imported system ran the committed bare-metal RV32IM fixture for
+100,000 instructions (400,000 cycles) and stopped at <code>max_steps</code>. The firmware
+printed both expected UART markers, and both smoke assertions passed. It does
+not boot Linux or access the SD card.</p>
+<p>Evidence: <a href="../coverage/renode-onboarding/metrics/litex_linux_vexriscv_sdcard/"><code>metrics/litex_linux_vexriscv_sdcard/</code></a>.
+The first passing run used a 256 MiB linker stack reservation and is retained
+under <a href="../coverage/renode-onboarding/attempt-history/litex_linux_vexriscv_sdcard/2026-11-06-initial-256m-linker-window/"><code>attempt-history/</code></a>; the final measurement uses a 32 KiB link window.</p>
+<p>The run output records two unmapped reads at <code>0x0</code> and <code>0x4</code> with first PC <code>0x0</code>.
+They did not block the UART assertions, but remain part of the recorded fidelity
+output. The simulator also assumes an ideal VDD rail.</p>
+<h2 id="scope">Scope</h2>
+<p>This is a local LabWired CLI smoke against a bounded imported profile. It is not
+execution in Renode, a hosted <code>labwired_verify</code> verdict, Linux boot evidence,
+SD-card validation, or hardware confirmation.</p>
+<p>Upstream platform description:
+<a href="https://github.com/renode/renode/blob/master/platforms/cpus/litex_linux_vexriscv_sdcard.repl"><code>litex_linux_vexriscv_sdcard.repl</code></a>.</p>
 
 
 

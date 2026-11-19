@@ -4914,8 +4914,9 @@
 <code>onboarding/cc2538</code> descriptor (a generic UART fixture on a placeholder
 memory map that does not match SWRU319C Table 4-1). The promoted CC2538 part
 is <a href="../cc2538sf53/"><code>cc2538sf53</code></a>, and the board package is
-<strong><a href="../cc2538dk/">CC2538DK</a></strong>. The staged descriptor stays only because
-<code>crates/core/src/bus/known_stubs.rs</code> still cites it.</p>
+<strong><a href="../cc2538dk/">CC2538DK</a></strong>. The staged chip descriptor has been deleted;
+the imported Renode system now loads <code>cc2538sf53</code>. The log below is the
+historical run against the deleted descriptor.</p>
 </blockquote>
 <p><strong>Architecture:</strong> ARM Cortex-M3.</p>
 <h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
@@ -4961,14 +4962,9 @@ is <a href="../cc2538sf53/"><code>cc2538sf53</code></a>, and the board package i
 <td><code>pl011</code></td>
 </tr>
 <tr>
-<td><code>watchdog</code></td>
-<td><code>0x400d5000</code></td>
-<td><code>cc2538watchdog</code></td>
-</tr>
-<tr>
 <td><code>sleepTimer</code></td>
-<td><code>0x400d5040</code></td>
-<td><code>cc2538sleeptimer</code></td>
+<td><code>0x400d5000</code></td>
+<td><code>cc2538_sleep_timer</code></td>
 </tr>
 <tr>
 <td><code>uart1</code></td>
@@ -5027,7 +5023,7 @@ is <a href="../cc2538sf53/"><code>cc2538sf53</code></a>, and the board package i
 </tr>
 </tbody>
 </table>
-<p><strong>Total Peripherals:</strong> 15</p>
+<p><strong>Total Peripherals:</strong> 14</p>
 
 
 

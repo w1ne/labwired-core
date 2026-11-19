@@ -1,0 +1,38 @@
+{
+  "target_id": "colibri-vf61",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "memory_violation"
+  },
+  "smoke_passed": false,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/colibri-vf61-cortex-m4-smoke.yaml",
+  "system": "configs/systems/onboarding/colibri-vf61.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T01:39:14Z",
+  "finished_at_utc": "2026-11-06T01:39:21Z",
+  "elapsed_seconds": 8,
+  "elapsed_ms": 7522,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-06T01:39:21.861831Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0xfffffffe",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 7.241,
+    "build_firmware": null,
+    "run_smoke": 0.269
+  },
+  "stages_ms": {
+    "build_cli": 7241,
+    "build_firmware": null,
+    "run_smoke": 269
+  },
+  "prebuilt_firmware": "tests/fixtures/colibri-vf61-cortex-m4-smoke.elf"
+}

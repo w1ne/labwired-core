@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.010772">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="538d296b788137303b9b83dfb7a7a22ec4ae284117cd597145944ce43aaf25f0"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.010772">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x60001000=0x143" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x60001004=0x0" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x60001008=0x4" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x60001010=0xa117e01" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: UARTLite cosim ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

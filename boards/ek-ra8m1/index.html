@@ -5012,7 +5012,8 @@ and MVE enabled will stop with a decode error.
 mapped). Clock generation is register-level only: oscillators and PLLs
 settle at once, and no rate is derived from the selected sources
 (<code>cpu_hz</code> stays 8 MHz after Zephyr moves ICLK to the 480 MHz PLL1P).
-Module stop (MSTP) and the ICU <code>IRQCRn</code>/NMI half are declared stubs;
+MSTP reset/write readback comes from the SVD, but module gating is not
+modelled. The ICU <code>IRQCRn</code>/NMI half is a declared stub;
 the AGT and SCI3/SCI9 raise ELC events, the PFS peripheral mux is stored
 only, and SCI_B is async only: the FIFO trigger levels (<code>RTRG</code>, the
 <code>FRSR.DR</code> timeout), ERI and the error flags, and the <code>CCR2</code> baud decode
@@ -5125,7 +5126,7 @@ is no silicon capture: <strong>SIM-DERIVED</strong>.</p>
 <tr>
 <td>MSTP</td>
 <td><code>0x4020_3000</code></td>
-<td><code>type: stub</code> — module stop not modelled</td>
+<td>SVD-derived declarative registers — reset/write readback; module stop not modelled</td>
 </tr>
 <tr>
 <td>ICU</td>

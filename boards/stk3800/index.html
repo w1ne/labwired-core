@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: stk3800 - LabWired docs</title>
+        <title>STK3800 Renode onboarding smoke - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: stk3800 - LabWired docs">
+  <meta property="og:title" content="STK3800 Renode onboarding smoke - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/stk3800/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: stk3800 - LabWired docs">
+  <meta name="twitter:title" content="STK3800 Renode onboarding smoke - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-stk3800" class="md-skip">
+        <a href="#stk3800-renode-onboarding-smoke" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: stk3800
+              STK3800 Renode onboarding smoke
             
           </span>
         </div>
@@ -4860,36 +4860,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Dynamic Simulation Validation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hardware Coverage Report
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -4908,144 +4878,18 @@
   
 
 
-<h1 id="validation-report-stk3800">Validation Report: stk3800</h1>
-<p><strong>Architecture:</strong> ARM Cortex-M4F.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:25.305751Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:25.306143Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stk3800.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:25.307719Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:25.307886Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:25.308462Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:25.308517Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:25.309587Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:25.309664Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:25.309707Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:25.309818Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:25.309879Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:25.309909Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:25.309938Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:25.309964Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:25.309989Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 1398.08
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>led0</code></td>
-<td><code>0x00000042</code></td>
-<td><code>led</code></td>
-</tr>
-<tr>
-<td><code>led1</code></td>
-<td><code>0x00000043</code></td>
-<td><code>led</code></td>
-</tr>
-<tr>
-<td><code>button0</code></td>
-<td><code>0x00000040</code></td>
-<td><code>button</code></td>
-</tr>
-<tr>
-<td><code>button1</code></td>
-<td><code>0x00000041</code></td>
-<td><code>button</code></td>
-</tr>
-<tr>
-<td><code>i2c0</code></td>
-<td><code>0x4000a000</code></td>
-<td><code>efm32ggi2ccontroller</code></td>
-</tr>
-<tr>
-<td><code>i2c1</code></td>
-<td><code>0x4000a400</code></td>
-<td><code>efm32ggi2ccontroller</code></td>
-</tr>
-<tr>
-<td><code>timer0</code></td>
-<td><code>0x40010000</code></td>
-<td><code>efm32timer</code></td>
-</tr>
-<tr>
-<td><code>timer1</code></td>
-<td><code>0x40010400</code></td>
-<td><code>efm32timer</code></td>
-</tr>
-<tr>
-<td><code>timer2</code></td>
-<td><code>0x40010800</code></td>
-<td><code>efm32timer</code></td>
-</tr>
-<tr>
-<td><code>timer3</code></td>
-<td><code>0x40010c00</code></td>
-<td><code>efm32timer</code></td>
-</tr>
-<tr>
-<td><code>uart0</code></td>
-<td><code>0x4000e000</code></td>
-<td><code>efm32_uart</code></td>
-</tr>
-<tr>
-<td><code>uart1</code></td>
-<td><code>0x4000e400</code></td>
-<td><code>efm32_uart</code></td>
-</tr>
-<tr>
-<td><code>usart0</code></td>
-<td><code>0x4000c000</code></td>
-<td><code>efm32_uart</code></td>
-</tr>
-<tr>
-<td><code>usart1</code></td>
-<td><code>0x4000c400</code></td>
-<td><code>efm32_uart</code></td>
-</tr>
-<tr>
-<td><code>usart2</code></td>
-<td><code>0x4000c800</code></td>
-<td><code>efm32_uart</code></td>
-</tr>
-<tr>
-<td><code>leUart0</code></td>
-<td><code>0x40084000</code></td>
-<td><code>leuart</code></td>
-</tr>
-<tr>
-<td><code>leUart1</code></td>
-<td><code>0x40084400</code></td>
-<td><code>leuart</code></td>
-</tr>
-<tr>
-<td><code>gpioPort</code></td>
-<td><code>0x40006000</code></td>
-<td><code>efmgpioport</code></td>
-</tr>
-<tr>
-<td><code>bitband</code></td>
-<td><code>0x42000000</code></td>
-<td><code>bitbanding</code></td>
-</tr>
-<tr>
-<td><code>cmuStatusOscillator</code></td>
-<td><code>0x400c802c</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>vcmpStatus</code></td>
-<td><code>0x40000008</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 21</p>
+<h1 id="stk3800-renode-onboarding-smoke">STK3800 Renode onboarding smoke</h1>
+<p><strong>Result:</strong> booted and smoke-passing in the repository simulator.</p>
+<ul>
+<li>Imported system: <code>configs/systems/onboarding/stk3800.yaml</code></li>
+<li>Renode source map: <a href="https://github.com/renode/renode/blob/master/platforms/boards/silabs/stk3800.repl">STK3800 board</a> inherits the <a href="https://github.com/renode/renode/blob/master/platforms/cpus/silabs/efm32xg/efm32wg995.repl">EFM32WG995 CPU map</a>: Cortex-M4F, 256 KiB flash at zero, 32 KiB SRAM, UART0 at <code>0x4000e000</code></li>
+<li>Run: 100,000 instructions, stopped at <code>max_steps</code></li>
+<li>Smoke assertions: UART0 emitted <code>STK3800 EFM32WG995 UART0 smoke</code>; expected stop reason was <code>max_steps</code></li>
+</ul>
+<p>The imported profile retains only execution memory and the modeled UART0 path exercised by this smoke. Its generated GPIO, buttons, I2C, timers, other UARTs, LEUARTs, bit-band, and Python peripheral declarations are omitted and are not covered by this result.</p>
+<p>The first attempt used the wrong UART base and faulted on an unmapped write; the full run evidence is retained under <a href="../coverage/renode-onboarding/attempt-history/stk3800/attempt-01/">attempt 01</a>. The descriptor was corrected to Renode's UART0 base before this passing result.</p>
+<p>Evidence: <a href="../../coverage/renode-onboarding/metrics/stk3800/onboarding-metrics.json">metrics</a>, <a href="../../coverage/renode-onboarding/metrics/stk3800/simulation-output/result.json">simulator result</a>, <a href="../../coverage/renode-onboarding/metrics/stk3800/simulation-output/junit.xml">JUnit assertions</a>, and <a href="../../coverage/renode-onboarding/metrics/stk3800/logs/run_smoke.log">run log</a>.</p>
+<p>This is repository CLI simulation evidence, not hardware confirmation or a hosted <code>labwired_verify</code> verdict.</p>
 
 
 

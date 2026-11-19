@@ -1,0 +1,13 @@
+[2m2026-11-08T14:07:29.895322Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: sam4s_xplained-notc-chip.yaml
+[2m2026-11-08T14:07:29.897014Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x400401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+SAM4S XPLAINED RENODE SMOKE
+pmc pcsr0=1f802100 ok
+[2m2026-11-08T14:07:30.692256Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["pmc pcsr0=1f802100 ok", "tc0 up_rc imr=10 pends=3 released=3 cv<=rc=1 ok", "tc1 up adv=1 covfs=1 cleared=1 ok", "tc2 cpcstop cpcs=1 held=1 clksta=1 ok", "tc3 cpcdis running=1 cpcs=1 clksta=0 ok", "tc4 tc5 idle=1 sync=1 ra=0000 ok", "tc5 pmc gated=1 held=1 tc4_runs=1 ok", "SAM4S PASS"] }) (captured len=50)
+[2m2026-11-08T14:07:30.692297Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "pioC:10", min_edges: 4 } }) (captured len=50)
+[2m2026-11-08T14:07:30.692305Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x2001ff00 (size 4): expected 0x5a45007f, got 0xa5a5a5a5 (mask 0xffffffff)
+[2m2026-11-08T14:07:30.692309Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537001728, expected_value: 1514471551, mask: None, size: Some(4), node: None } }) (captured len=50)
+FAIL  2/5 checks · sam4s_xplained-notc-smoke · 4000000 steps · 0.79s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x4001_0004 (BFAR valid), at PC 0x0040_0BCE in `core::ptr::write_volatile` (mod.rs:2178), called from `main`.
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x40010004

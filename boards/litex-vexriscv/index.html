@@ -4954,7 +4954,7 @@
 
 <h1 id="litex-vexriscv-soc">LiteX VexRiscv SoC</h1>
 <p>The LiteX <strong>VexRiscv</strong> soft-core SoC: a 32-bit RISC-V CPU (<code>rv32im_zicsr_zifencei</code> — no compressed, no atomic extension) in a LiteX SoC, as built for FPGA carrier boards such as the Digilent Arty A7. LabWired's target runs a bare-metal ELF from the SoC's integrated SRAM and captures the LiteX UART console.</p>
-<p>This is an <strong>L1 (smoke)</strong> target: boot, the UART byte path and the timer one-shot are proven by a committed smoke fixture and an <code>io-smoke.yaml</code>. The CPU, memory map, UART and the LiteX countdown timer are modelled; everything else is <em>declared, not faked</em> — unmodelled CSR windows are <code>type: stub</code> and answer zeros, and the smoke prints one of those readbacks (<code>spi=00000000</code>) so the omission is visible on the wire. No silicon capture exists: <strong>SIM-DERIVED</strong>, no executing-fidelity differential yet.</p>
+<p>This is an <strong>L1 (smoke)</strong> target: boot, the UART byte path and the timer one-shot are proven by a committed smoke fixture and an <code>io-smoke.yaml</code>. The CPU, memory map, UART and the LiteX countdown timer are modelled, as is the SPI-flash bitbang controller with an MT25Q READ ID / status responder (the smoke prints <code>spi id=20bb19 sr=00 wel=02</code>); everything else is <em>declared, not faked</em> — unmodelled CSR windows are <code>type: stub</code> and answer zeros. No silicon capture exists: <strong>SIM-DERIVED</strong>, no executing-fidelity differential yet.</p>
 <div class="admonition tip">
 <p class="admonition-title">Live status</p>
 <p>The tables below are a maintained snapshot. Authoritative automation:</p>
@@ -5030,7 +5030,7 @@
 <td>SPI-flash window</td>
 <td><code>0x2000_0000</code></td>
 <td>32 MiB</td>
-<td>mapped; reads <code>0xFF</code> untouched, no flash controller behind it</td>
+<td>mapped plain flash memory; separate CSR bitbang model answers MT25Q ID/status commands but does not load XIP data</td>
 </tr>
 <tr>
 <td>Main RAM (DDR)</td>
@@ -5069,7 +5069,7 @@
 <tr>
 <td>LiteX SPI-flash controller</td>
 <td><code>0x6000_5000</code></td>
-<td><code>type: stub</code> — answers zeros</td>
+<td>modelled — bitbang/miso/bitbang_en CSRs + MT25Q READ ID, READ STATUS, WREN/WRDI; array read/program/erase not modelled</td>
 </tr>
 <tr>
 <td>LiteX Ethernet MAC</td>

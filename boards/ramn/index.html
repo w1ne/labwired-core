@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: ramn - LabWired docs</title>
+        <title>RAMN (Toyota Resistant Automotive Miniature Network) imported profile - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: ramn - LabWired docs">
+  <meta property="og:title" content="RAMN (Toyota Resistant Automotive Miniature Network) imported profile - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/ramn/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: ramn - LabWired docs">
+  <meta name="twitter:title" content="RAMN (Toyota Resistant Automotive Miniature Network) imported profile - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-ramn" class="md-skip">
+        <a href="#ramn-toyota-resistant-automotive-miniature-network-imported-profile" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: ramn
+              RAMN (Toyota Resistant Automotive Miniature Network) imported profile
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured profile
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#smoke-evidence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Smoke evidence
       
     </span>
   </a>
@@ -4908,254 +4908,66 @@
   
 
 
-<h1 id="validation-report-ramn">Validation Report: ramn</h1>
-<p><strong>Architecture:</strong> ARM Cortex-M.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:20.145693Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:20.148539Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/ramn.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:20.151065Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:20.151147Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:20.151156Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:20.151161Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:20.155959Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:20.159447Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:20.159474Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:20.163809Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 791430.33
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:20.177057Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:20.177140Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x466
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:20.180447Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 19999
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:20.180463Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20002
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:20.180468Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 682616.81
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>pwr</code></td>
-<td><code>0x40007000</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>otp</code></td>
-<td><code>0x0bfa0000</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>spi1</code></td>
-<td><code>0x40013000</code></td>
-<td><code>stm32spi</code></td>
-</tr>
-<tr>
-<td><code>spi2</code></td>
-<td><code>0x40003800</code></td>
-<td><code>stm32spi</code></td>
-</tr>
-<tr>
-<td><code>spi3</code></td>
-<td><code>0x40003c00</code></td>
-<td><code>stm32spi</code></td>
-</tr>
-<tr>
-<td><code>usart1</code></td>
-<td><code>0x40013800</code></td>
-<td><code>stm32f7_usart</code></td>
-</tr>
-<tr>
-<td><code>usart2</code></td>
-<td><code>0x40004400</code></td>
-<td><code>stm32f7_usart</code></td>
-</tr>
-<tr>
-<td><code>usart3</code></td>
-<td><code>0x40004800</code></td>
-<td><code>stm32f7_usart</code></td>
-</tr>
-<tr>
-<td><code>uart4</code></td>
-<td><code>0x40004c00</code></td>
-<td><code>stm32f7_usart</code></td>
-</tr>
-<tr>
-<td><code>uart5</code></td>
-<td><code>0x40005000</code></td>
-<td><code>stm32f7_usart</code></td>
-</tr>
-<tr>
-<td><code>lpuart1</code></td>
-<td><code>0x40008000</code></td>
-<td><code>stm32f7_usart</code></td>
-</tr>
-<tr>
-<td><code>gpioPortA</code></td>
-<td><code>0x42020000</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortB</code></td>
-<td><code>0x42020400</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortC</code></td>
-<td><code>0x42020800</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortD</code></td>
-<td><code>0x42020c00</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortE</code></td>
-<td><code>0x42021000</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortF</code></td>
-<td><code>0x42021400</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortG</code></td>
-<td><code>0x42021800</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortH</code></td>
-<td><code>0x42021c00</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>dma1</code></td>
-<td><code>0x40020000</code></td>
-<td><code>stm32ldma</code></td>
-</tr>
-<tr>
-<td><code>dma2</code></td>
-<td><code>0x40020400</code></td>
-<td><code>stm32ldma</code></td>
-</tr>
-<tr>
-<td><code>dmamux</code></td>
-<td><code>0x40020800</code></td>
-<td><code>stm32_dmamux</code></td>
-</tr>
-<tr>
-<td><code>i2c1</code></td>
-<td><code>0x40005400</code></td>
-<td><code>stm32f1_i2c</code></td>
-</tr>
-<tr>
-<td><code>fdcanRAM</code></td>
-<td><code>0x4000ac00</code></td>
-<td><code>arraymemory</code></td>
-</tr>
-<tr>
-<td><code>fdcan1</code></td>
-<td><code>0x4000a400</code></td>
-<td><code>stm32_fdcan</code></td>
-</tr>
-<tr>
-<td><code>timer1</code></td>
-<td><code>0x40012c00</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>timer2</code></td>
-<td><code>0x40000000</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>timer3</code></td>
-<td><code>0x40000400</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>timer4</code></td>
-<td><code>0x40000800</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>timer5</code></td>
-<td><code>0x40000c00</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>timer6</code></td>
-<td><code>0x40001000</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>timer7</code></td>
-<td><code>0x40001400</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>timer8</code></td>
-<td><code>0x40013400</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>timer15</code></td>
-<td><code>0x40014000</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>timer16</code></td>
-<td><code>0x40014400</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>timer17</code></td>
-<td><code>0x40014800</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>rcc</code></td>
-<td><code>0x40021000</code></td>
-<td><code>stm32l5_rcc</code></td>
-</tr>
-<tr>
-<td><code>flashController</code></td>
-<td><code>0x40022000</code></td>
-<td><code>stm32wba_flashcontroller</code></td>
-</tr>
-<tr>
-<td><code>rng</code></td>
-<td><code>0x420c0800</code></td>
-<td><code>stm32_rng</code></td>
-</tr>
-<tr>
-<td><code>adc1</code></td>
-<td><code>0x42028000</code></td>
-<td><code>stm32l5_adc</code></td>
-</tr>
-<tr>
-<td><code>iwdg</code></td>
-<td><code>0x40003000</code></td>
-<td><code>stm32_independentwatchdog</code></td>
-</tr>
-<tr>
-<td><code>usb</code></td>
-<td><code>0x4000d400</code></td>
-<td><code>stm32_usb</code></td>
-</tr>
-<tr>
-<td><code>usb_sram</code></td>
-<td><code>0x4000d800</code></td>
-<td><code>arraymemory</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 43</p>
+<h1 id="ramn-toyota-resistant-automotive-miniature-network-imported-profile">RAMN (Toyota Resistant Automotive Miniature Network) imported profile</h1>
+<h2 id="measured-profile">Measured profile</h2>
+<p>LabWired's onboarding profile for the imported Renode <code>ramn</code> target models
+one RAMN ECU, narrowed to what the engine executes and the smoke exercises.
+It follows Renode's
+<a href="https://github.com/renode/renode/blob/master/platforms/boards/ramn.repl"><code>boards/ramn.repl</code></a>,
+which includes
+<a href="https://github.com/renode/renode/blob/master/platforms/cpus/stm32l552.repl"><code>cpus/stm32l552.repl</code></a>,
+and the RAMN firmware's own bring-up
+(<a href="https://github.com/ToyotaInfoTech/RAMN/blob/main/firmware/RAMNV1/Core/Src/main.c"><code>firmware/RAMNV1/Core/Src/main.c</code></a>,
+<code>stm32l5xx_hal_msp.c</code>):</p>
+<ul>
+<li><strong>CPU:</strong> Cortex-M33 (STM32L552).</li>
+<li><strong>Memory:</strong> 512 KiB flash at <code>0x08000000</code> and 256 KiB SRAM at <code>0x20000000</code>
+  (SRAM1 + SRAM2 as one contiguous region, as in the RAMN memory layout).</li>
+<li><strong>RCC</strong> at <code>0x40021000</code> on the <code>stm32l5</code> profile (RM0438 map, MSI 4 MHz
+  reset clock).</li>
+<li><strong>LPUART1</strong> at <code>0x40008000</code> on the <code>stm32v2</code> USART profile. This is the
+  RAMN console: PA2/PA3 AF8, 115200 8N1, FIFO off. Gated by
+  <code>RCC_APB1ENR2.LPUART1EN</code>.</li>
+<li><strong>GPIOA / GPIOB</strong> at <code>0x42020000</code> / <code>0x42020400</code> on the <code>stm32v2</code> GPIO
+  profile, with the per-port MODER/OSPEEDR/PUPDR reset values from the repl
+  (<code>0xABFFFFFF</code> / <code>0xFFFFFEBF</code> MODER). The smoke uses PA9 (<code>HW_TYPE</code>, input
+  with pull-up) and PB6 (<code>FDCAN1_STB</code>, push-pull output), as the RAMN
+  firmware configures them. Gated by <code>RCC_AHB2ENR</code>.</li>
+</ul>
+<p>The descriptor uses the same entries as <code>configs/chips/stm32l552.yaml</code>.</p>
+<p>Not claimed and not mapped: FDCAN1, ADC1, SPI1-3, I2C1, USART1-3, UART4/5,
+GPIOC-H, DMA/DMAMUX, EXTI, RTC, timers, IWDG, RNG, USB, the flash controller,
+PWR and the OTP/unique-ID window (Renode fakes PWR and OTP with Python
+peripherals). Board wiring (LCD, ECU enables, BOOT0 lines) and the four-ECU
+CAN network are not claimed either.</p>
+<p>The earlier report on this page described a 2026-10-18 run of a generic
+<code>uart-ok-thumbv7m.elf</code> fixture that only showed the CPU stepping, and listed
+the Renode peripherals as coverage. It never touched a RAMN peripheral and is
+withdrawn.</p>
+<h2 id="smoke-evidence">Smoke evidence</h2>
+<p>The firmware crate <code>crates/firmware-ramn-smoke</code> (<code>thumbv8m.main-none-eabi</code>)
+enables the GPIOA/GPIOB and LPUART1 clocks, sets PA2/PA3 to AF8 and PA9 to an
+input with pull-up, programs LPUART1 <code>BRR</code> = 8888 (115200 from MSI 4 MHz) and
+<code>CR1</code> = UE | RE | TE, drives PB6 through <code>BSRR</code>, prints its readbacks polled
+on <code>ISR.TXE</code>, waits for <code>ISR.TC</code>, then toggles PB6 as a heartbeat.</p>
+<p>It ran <strong>400,000 instructions</strong> and passed 6/6 checks: the banner
+<code>RAMN LPUART1 SMOKE</code>, the ordered readback lines (<code>brr=000022b8</code>,
+PA <code>MODER</code> <code>0xABF3FFAF</code> / <code>AFRL</code> <code>0x00008800</code>, <code>hw_type=1</code>, PB6 set 1 /
+clear 0, <code>pass=3f</code>), at least 3 PB6 edges, the MUL word <code>0x143</code> at
+<code>0x20001000</code>, the result word <code>0x5A4E003F</code> at <code>0x20001004</code>, and <code>max_steps</code>.
+The idle <code>ISR</code> reads <code>0x006000C0</code> (REACK | TEACK | TXE | TC), as RM0438
+describes.</p>
+<p>With LPUART1 removed from the descriptor, the same firmware takes a precise
+BusFault (BFAR <code>0x4000800C</code>) on its first LPUART1 access and passes 2/6
+(<code>docs/coverage/renode-onboarding/attempt-history/ramn/2026-11-08-lpuart1-negative-control/</code>).</p>
+<p>The exact system manifest is <code>configs/systems/onboarding/ramn.yaml</code> and the
+smoke script is <code>examples/renode-onboarding/ramn-smoke.yaml</code>. Per-target
+metrics, JUnit, UART output, simulator result, snapshot and logs are under
+<code>docs/coverage/renode-onboarding/metrics/ramn/</code>.</p>
+<p>This is local CLI simulation evidence for the smoke assertions. It does not
+show whole-SoC coverage, Renode equivalence or hardware behaviour. See the
+<a href="../../coverage/renode-onboarding-scoreboard/">generated scoreboard</a> for the
+current global totals.</p>
 
 
 

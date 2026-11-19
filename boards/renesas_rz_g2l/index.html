@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: renesas_rz_g2l - LabWired docs</title>
+        <title>Renesas RZ/G2L imported profile - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: renesas_rz_g2l - LabWired docs">
+  <meta property="og:title" content="Renesas RZ/G2L imported profile - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/renesas_rz_g2l/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: renesas_rz_g2l - LabWired docs">
+  <meta name="twitter:title" content="Renesas RZ/G2L imported profile - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-renesas_rz_g2l" class="md-skip">
+        <a href="#renesas-rzg2l-imported-profile" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: renesas_rz_g2l
+              Renesas RZ/G2L imported profile
             
           </span>
         </div>
@@ -4860,36 +4860,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Dynamic Simulation Validation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hardware Coverage Report
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -4908,49 +4878,40 @@
   
 
 
-<h1 id="validation-report-renesas_rz_g2l">Validation Report: renesas_rz_g2l</h1>
-<p><strong>Architecture:</strong> Dual ARM Cortex-A55 / Cortex-M33.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:21.395146Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:21.398256Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/renesas_rz_g2l.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:21.399008Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:21.399126Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:21.399148Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:21.399152Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:21.399756Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:21.399764Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:21.399769Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:21.399852Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:21.399869Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:21.399873Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:21.399877Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:21.399880Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:21.399884Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2747.34
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>timer0</code></td>
-<td><code>0x0000000f</code></td>
-<td><code>arm_generictimer</code></td>
-</tr>
-<tr>
-<td><code>timer1</code></td>
-<td><code>0x0000000f</code></td>
-<td><code>arm_generictimer</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 2</p>
+<h1 id="renesas-rzg2l-imported-profile">Renesas RZ/G2L imported profile</h1>
+<p>The onboarding profile is narrowed to direct integer execution on the Cortex-M33
+and its 64 KiB non-secure code SRAM at <code>0x00010000</code> plus 64 KiB data SRAM at
+<code>0x20010000</code>. The upstream Renode platform defines both windows for <code>cpu_m33</code>;
+it separately models the Cortex-A55 cluster, another SRAM bank, aliases, and
+RZ/G2L peripherals. Those other parts are outside this profile and this result. See the
+<a href="https://github.com/renode/renode/blob/master/platforms/cpus/renesas_rz_g2l.repl#L14-L80">upstream Renode platform description</a>.</p>
+<p>The profile also maps SCIF0-4 at the non-secure M33 aliases
+<code>0x4004B800</code>..<code>0x4004C800</code>. Renode models them as <code>SCI.RenesasRZG_SCIFA</code>;
+LabWired uses the <code>scifa</code> uart profile (16-bit SMR/BRR/SCR/FTDR/FSR/FRDR/FCR/
+FDR/SPTR/LSR/SEMR/FTCR, TX dropped while SCR.TE is clear, BRR locked while
+TE|RE are set). They are polled only: no IRQ is declared, so the NVIC lines and
+the IM33 controller are not claimed. GPT, GTM, watchdog, MHU, RSPI, GPIO, RIIC,
+DMAC, SYC and CPG are not mapped, because LabWired has no model for them.</p>
+<p>The focused firmware (<code>examples/renode-onboarding/rzg2l-cm33-cpu-smoke.S</code>)
+sets MSP into the M33 data SRAM. It checks the SCIF2 FSR reset value (TDFE|TEND),
+BRR readback, and the BRR lock under TE|RE. It also checks SCR readback, the
+write-1 FCR resets, the FTCR reset value, and that SCIF0 keeps its own BRR. It
+writes a <code>#</code> before setting SCR.TE, then prints a banner and the results on
+SCIF2 (the Zephyr <code>rzg2l_smarc</code> cm33 console). Finally it stores <code>0x2620003F</code> at
+<code>0x2001FFF0</code>. The smoke asserts an anchored regex (so the pre-TE byte must have
+been dropped), the ordered UART lines, the result word and <code>max_steps</code>. The CLI's
+initial SP is outside the M33 RAM window, so the firmware sets MSP before using
+the stack. This direct-ELF run does not test reset-vector boot. This is local
+LabWired CLI smoke evidence for the M33 + SCIF subset. It is not a hosted
+<code>labwired_verify</code> verdict, an A55 run, interrupt validation, boot flow, or
+hardware confirmation.</p>
+<p>The earlier generated import validation used the broad fallback memory map and
+faulted on a stack write at <code>0x2001ffe0</code>. Its complete report is preserved under
+<a href="../../coverage/renode-onboarding/attempt-history/renesas_rz_g2l/2026-10-18-generated-import-validation/onboarding-summary/"><code>attempt-history</code></a>.
+It is not counted as a current onboarding run.</p>
+<p>Current evidence is under
+<a href="../coverage/renode-onboarding/metrics/renesas_rz_g2l/"><code>metrics/renesas_rz_g2l</code></a>:
+build/run logs, simulator result, snapshot, and smoke assertion output.</p>
 
 
 

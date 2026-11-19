@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: litex_nexys_video_vexriscv_linux - LabWired docs</title>
+        <title>LiteX Nexys Video VexRiscv smoke evidence - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: litex_nexys_video_vexriscv_linux - LabWired docs">
+  <meta property="og:title" content="LiteX Nexys Video VexRiscv smoke evidence - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/litex_nexys_video_vexriscv_linux/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: litex_nexys_video_vexriscv_linux - LabWired docs">
+  <meta name="twitter:title" content="LiteX Nexys Video VexRiscv smoke evidence - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-litex_nexys_video_vexriscv_linux" class="md-skip">
+        <a href="#litex-nexys-video-vexriscv-smoke-evidence" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: litex_nexys_video_vexriscv_linux
+              LiteX Nexys Video VexRiscv smoke evidence
             
           </span>
         </div>
@@ -4860,25 +4860,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Dynamic Simulation Validation
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -4897,17 +4878,23 @@
   
 
 
-<h1 id="validation-report-litex_nexys_video_vexriscv_linux">Validation Report: litex_nexys_video_vexriscv_linux</h1>
-<p><strong>Architecture:</strong> RISC-V RV32IMA.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
+<h1 id="litex-nexys-video-vexriscv-smoke-evidence">LiteX Nexys Video VexRiscv smoke evidence</h1>
+<p>The imported system is based on Renode's
+<a href="https://github.com/renode/renode/blob/master/platforms/cpus/litex_nexys_video_vexriscv_linux.repl"><code>litex_nexys_video_vexriscv_linux.repl</code></a>.
+The measured LabWired profile includes one RV32IM execution context, the 64 KiB
+ROM at <code>0x00000000</code>, the 8 KiB SRAM at <code>0x10000000</code>, LiteX UART, and LiteX timer.
+The upstream CPU's atomic extension, DDR/Linux boot, CLINT, PLIC, SD card, and
+framebuffer are outside this profile.</p>
+<p>The local CLI smoke executed <strong>4,000,000 instructions</strong> and passed both smoke
+assertions: ordered UART output including the LiteX timer one-shot status, and
+the configured <code>max_steps</code> stop. JUnit records three cases (the run plus two
+assertions) with zero failures. This runs the committed bare-metal fixture; it
+does not boot Linux or claim Renode execution or hardware confirmation.</p>
+<p>Evidence: <a href="../coverage/renode-onboarding/metrics/litex_nexys_video_vexriscv_linux/"><code>metrics/litex_nexys_video_vexriscv_linux/</code></a>.</p>
+<p>The first attempt used the existing 32 KiB LiteX firmware stack map against the
+imported 8 KiB SRAM and stopped on a memory access violation before completing
+the smoke. That attempt is retained under
+<a href="../coverage/renode-onboarding/attempt-history/litex_nexys_video_vexriscv_linux/2026-11-06-sram-stack-mismatch/"><code>attempt-history/</code></a>.</p>
 
 
 

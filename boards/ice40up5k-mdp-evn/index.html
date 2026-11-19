@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: ice40up5k-mdp-evn - LabWired docs</title>
+        <title>iCE40 UltraPlus MDP Renode scope - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: ice40up5k-mdp-evn - LabWired docs">
+  <meta property="og:title" content="iCE40 UltraPlus MDP Renode scope - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/ice40up5k-mdp-evn/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: ice40up5k-mdp-evn - LabWired docs">
+  <meta name="twitter:title" content="iCE40 UltraPlus MDP Renode scope - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-ice40up5k-mdp-evn" class="md-skip">
+        <a href="#ice40-ultraplus-mdp-renode-scope" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: ice40up5k-mdp-evn
+              iCE40 UltraPlus MDP Renode scope
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured run
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#profile-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Profile boundary
       
     </span>
   </a>
@@ -4908,60 +4908,49 @@
   
 
 
-<h1 id="validation-report-ice40up5k-mdp-evn">Validation Report: ice40up5k-mdp-evn</h1>
-<p><strong>Architecture:</strong> Soft RISC-V / FPGA.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>bmp180</code></td>
-<td><code>0x00000077</code></td>
-<td><code>bmp180</code></td>
-</tr>
-<tr>
-<td><code>lsm330_a</code></td>
-<td><code>0x00000018</code></td>
-<td><code>lsm330_accelerometer</code></td>
-</tr>
-<tr>
-<td><code>lsm330_g</code></td>
-<td><code>0x0000006b</code></td>
-<td><code>lsm330_gyroscope</code></td>
-</tr>
-<tr>
-<td><code>lis2ds12</code></td>
-<td><code>0x0000001d</code></td>
-<td><code>lis2ds12</code></td>
-</tr>
-<tr>
-<td><code>lsm303dlhc_a</code></td>
-<td><code>0x00000019</code></td>
-<td><code>lsm303dlhc_accelerometer</code></td>
-</tr>
-<tr>
-<td><code>lsm303dlhc_g</code></td>
-<td><code>0x0000001e</code></td>
-<td><code>lsm303dlhc_gyroscope</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 6</p>
+<h1 id="ice40-ultraplus-mdp-renode-scope">iCE40 UltraPlus MDP Renode scope</h1>
+<p>Renode's board file loads the Fomu VexRiscv profile. Its CPU is configured as
+<code>rv32im_zicsr_zifencei</code>, with an 8 KiB ROM at <code>0x0</code>, 128 KiB SRAM at
+<code>0x10000000</code>, and a <code>Timers.LiteX_Timer</code> timer0 at <code>0x60002800</code>
+(<a href="https://github.com/renode/renode/blob/master/platforms/boards/ice40up5k-mdp-evn.repl">board REPL</a>,
+<a href="https://github.com/renode/renode/blob/master/platforms/cpus/fomu.repl">CPU REPL</a>).
+On top of that the board adds a <code>LiteX_I2C</code> controller at <code>0x60007800</code> with
+BMP180, LSM330, LIS2DS12 and LSM303DLHC sensors. Its CSR layout follows
+Foboot's generated
+<a href="https://github.com/im-tomu/foboot/blob/637bbf10fa9a0b7f52cbd459d80c8c7532d56a18/sw/include/generated/csr.h"><code>csr.h</code></a>
+(<code>csr_data_width = 8</code>).</p>
+<h2 id="measured-run">Measured run</h2>
+<ul>
+<li>Status: <strong>booted and smoke-passing</strong>.</li>
+<li>Firmware: <code>firmware-fomu-smoke --features timer0</code> (the same image as the
+  Fomu row, because the CPU profile is shared), RV32IM, 100,000 instructions.</li>
+<li>Stop reason: <code>max_steps</code> after all checks completed.</li>
+<li>Assertions: the RV32IM MUL result, a 32-bit <code>load</code> written and read back
+  across its four byte-wide CSR slots (0x00012345), the six-bit check word
+  (0x3F: idle event level/pending clear after staging, <code>en</code> readback, a
+  latched <code>value</code> strictly inside the 2000-cycle one-shot, the zero-event
+  level and pending latch after polling, and <code>ev_pending</code> ignoring a written 0
+  and clearing on a written 1), the firmware pass word 0xF0A0003F, and the
+  stop reason (5/5 passed).</li>
+<li>Evidence: <a href="../coverage/renode-onboarding/metrics/ice40up5k-mdp-evn/"><code>docs/coverage/renode-onboarding/metrics/ice40up5k-mdp-evn/</code></a>
+  (build/run logs, JUnit, result, and snapshot) and the generated
+  <a href="../../coverage/renode-onboarding-scoreboard/">Renode onboarding scoreboard</a>.</li>
+</ul>
+<p>The earlier CPU/RAM-only measurement is preserved at
+<code>docs/coverage/renode-onboarding/attempt-history/ice40up5k-mdp-evn/2026-11-08-before-timer0-smoke/</code>.
+A negative control with <code>timer0</code> removed is at
+<code>docs/coverage/renode-onboarding/attempt-history/ice40up5k-mdp-evn/2026-11-08-timer0-negative-control/</code>.</p>
+<h2 id="profile-boundary">Profile boundary</h2>
+<p>The LabWired onboarding profile selects the generic <code>rv32im</code> CPU path, the
+ROM and SRAM windows (no shadow aliases), and timer0 as <code>litex_timer</code> with
+<code>csr_data_width: 8</code>. The timer counts SoC cycles of the simulated core; the
+12 MHz timer clock is not modelled as a separate rate.</p>
+<p>Not claimed: timer0's IRQ (Renode <code>-&gt; cpu@0</code>; the smoke polls the event
+CSRs), the LiteX I2C controller and its four sensors (no <code>LiteX_I2C</code> model in
+this engine, so the window stays unmapped), the shadow aliases, ValentyUSB,
+the SPI flash controller, the Fomu CTRL/TOUCH/REBOOT/RGB/VERSION blocks, and
+reset-vector boot. Simulation assumes an ideal VDD rail. This is repository
+CLI simulation evidence, not hardware confirmation.</p>
 
 
 

@@ -1,0 +1,10 @@
+2026-11-09T23:18:38.317592Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+2026-11-09T23:18:38.393096Z  INFO labwired_loader: ELF Entry Point: 0x8000017
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-09T23:18:38.394756Z  INFO labwired_cli::execute: stimulus: temperature = 50 applied
+2026-11-09T23:18:38.784145Z  INFO labwired_cli::execute: stimulus: temperature = 55 applied
+2026-11-09T23:18:39.060702Z  INFO labwired_cli::execute: stimulus: humidity = 35 applied
+2026-11-09T23:18:39.355309Z  INFO labwired_cli::execute: stimulus: pressure = 1012.5 applied
+2026-11-09T23:18:39.389161Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "SPI1 MAX31855=03201600" }) (captured len=2094)
+FAIL  55/56 checks · stm32f103-i2c-smoke · 50000000 steps · 1.00s

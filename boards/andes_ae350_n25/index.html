@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: andes_ae350_n25 - LabWired docs</title>
+        <title>Renode onboarding evidence: andes_ae350_n25 - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: andes_ae350_n25 - LabWired docs">
+  <meta property="og:title" content="Renode onboarding evidence: andes_ae350_n25 - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/andes_ae350_n25/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: andes_ae350_n25 - LabWired docs">
+  <meta name="twitter:title" content="Renode onboarding evidence: andes_ae350_n25 - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-andes_ae350_n25" class="md-skip">
+        <a href="#renode-onboarding-evidence-andes_ae350_n25" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: andes_ae350_n25
+              Renode onboarding evidence: andes_ae350_n25
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured run
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#profile-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Profile boundary
       
     </span>
   </a>
@@ -4908,35 +4908,41 @@
   
 
 
-<h1 id="validation-report-andes_ae350_n25">Validation Report: andes_ae350_n25</h1>
-<p><strong>Architecture:</strong> RISC-V.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>uart1</code></td>
-<td><code>0xf0300020</code></td>
-<td><code>ns16550</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 1</p>
+<h1 id="renode-onboarding-evidence-andes_ae350_n25">Renode onboarding evidence: andes_ae350_n25</h1>
+<p>The old generated report for this descriptor was a structural check only (no
+firmware run) and listed <code>uart1</code> while the chip descriptor mapped no
+peripherals. This report replaces that claim with a smoke run against the
+imported Andes AE350 N25 system and its CPU/DRAM/uart1 profile.</p>
+<h2 id="measured-run">Measured run</h2>
+<ul>
+<li>Status: <strong>booted and smoke-passing</strong>.</li>
+<li>Firmware: <code>firmware-andes-ae350-n25-smoke --features ae350-uart</code>, RV32IM,
+  100,000 instructions.</li>
+<li>Stop reason: <code>max_steps</code> after all checks completed.</li>
+<li>Assertions: the RV32IM MUL result, the idle LSR (0x60, THRE|TEMT), the
+  LCR/DLAB divisor readback (DLL 0x41, DLM 0x01, LCR 0x03), the firmware pass
+  word, the polled UART banner <code>AE350 N25 uart1 ok</code>, and the stop reason (6/6
+  passed).</li>
+<li>Evidence: <code>docs/coverage/renode-onboarding/metrics/andes_ae350_n25/</code>
+  (build/run logs, UART output, JUnit, result, and snapshot).</li>
+</ul>
+<p>The earlier CPU/memory-only measurement is preserved at
+<code>docs/coverage/renode-onboarding/attempt-history/andes_ae350_n25/2026-11-08-before-uart1-smoke/</code>.
+A negative control with <code>uart1</code> removed fails 1/6 with a memory access
+violation at the LCR (0xF030002C):
+<code>docs/coverage/renode-onboarding/attempt-history/andes_ae350_n25/2026-11-08-uart1-negative-control/</code>.</p>
+<h2 id="profile-boundary">Profile boundary</h2>
+<p>The imported chip profile includes the generic RV32IM instruction path, a
+128 KiB slice of DRAM at <code>0x0</code>, and <code>uart1</code> at <code>0xF0300020</code> (Renode
+<code>cpus/andes_ae350_n25.repl</code>, NS16550 with <code>wideRegisters: true</code>). <code>uart1</code> uses
+this engine's 4-byte-stride 16550 register map (<code>dw_apb_uart</code> profile); that
+selects a register layout and does not claim a Synopsys DesignWare UART.</p>
+<p>The ATCUART100 ID/OSC words below <code>0xF0300020</code>, UART interrupts, FIFOs and
+baud timing, the PLIC, the Andes <code>xandes</code>, floating-point and compressed
+extensions, and the rest of the 1 GiB DRAM are not claimed. Simulation assumes
+an ideal VDD rail; power-on and brown-out behavior were not exercised. This is
+repository CLI simulation evidence, not hardware confirmation or a
+silicon-wide peripheral claim.</p>
 
 
 

@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: xtensa-sample-controller - LabWired docs</title>
+        <title>Renode onboarding evidence: xtensa-sample-controller - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: xtensa-sample-controller - LabWired docs">
+  <meta property="og:title" content="Renode onboarding evidence: xtensa-sample-controller - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/xtensa-sample-controller/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: xtensa-sample-controller - LabWired docs">
+  <meta name="twitter:title" content="Renode onboarding evidence: xtensa-sample-controller - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-xtensa-sample-controller" class="md-skip">
+        <a href="#renode-onboarding-evidence-xtensa-sample-controller" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: xtensa-sample-controller
+              Renode onboarding evidence: xtensa-sample-controller
             
           </span>
         </div>
@@ -4867,10 +4867,21 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profile-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile boundary
       
     </span>
   </a>
@@ -4897,17 +4908,38 @@
   
 
 
-<h1 id="validation-report-xtensa-sample-controller">Validation Report: xtensa-sample-controller</h1>
-<p><strong>Architecture:</strong> Xtensa.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
+<h1 id="renode-onboarding-evidence-xtensa-sample-controller">Renode onboarding evidence: xtensa-sample-controller</h1>
+<p>The imported board descriptor remains <code>verified: false</code>. Renode's <a href="https://github.com/renode/renode/blob/master/platforms/cpus/xtensa-sample-controller.repl">platform file</a> defines a Cadence Xtensa <code>sample_controller</code> CPU (not an ESP32) at 100 MHz, a 64 MiB <code>rom</code> at <code>0x50000000</code> (the reset vector), <code>instram0</code> (128 KiB) at <code>0x40000000</code>, <code>dataram0</code> at <code>0x3FFE0000</code>, <code>dataram1</code> at <code>0x3FFC0000</code> (128 KiB each), a 128 MiB <code>ram</code> at <code>0x60000000</code>, and a SIMCALL semihosting UART.</p>
+<h2 id="measured-run">Measured run</h2>
+<ul>
+<li>Status: <strong>booted and smoke-passing</strong>.</li>
+<li>Firmware: <code>tests/fixtures/xtensa-sample-controller-cpu-smoke.elf</code>, assembled
+  from <code>examples/renode-onboarding/xtensa-sample-controller-cpu-smoke.S</code> by
+  <code>scripts/build_xtensa_sample_controller_cpu_smoke.sh</code>, 100,000 instructions
+  from the <code>0x50000000</code> reset vector.</li>
+<li>Assertions: pass word <code>0x5A5C003F</code> at <code>0x40000000</code> (counted loop, CALL0/RET,
+  L32R rom literal, byte/halfword stores and loads, shifts/EXTUI, signed and
+  unsigned branches), the loop sum 5050 at <code>0x40000004</code>, and the <code>max_steps</code>
+  stop reason (3/3 passed).</li>
+<li>Evidence: <a href="../coverage/renode-onboarding/metrics/xtensa-sample-controller/"><code>docs/coverage/renode-onboarding/metrics/xtensa-sample-controller/</code></a>
+  and the generated <a href="../../coverage/renode-onboarding-scoreboard/">Renode onboarding scoreboard</a>.</li>
+</ul>
+<p>The first run is preserved at
+<code>docs/coverage/renode-onboarding/attempt-history/xtensa-sample-controller/2026-11-08-esp32-rom-thunk-overlay/</code>:
+<code>labwired test</code> built every Xtensa chip as an ESP32, so the ESP32 ROM-thunk
+bank (<code>BREAK 1,14</code>, reads <code>0x41E0</code>) shadowed <code>instram0</code>; the CPU checks that
+need no RAM passed (a4 = <code>0x5A5C0033</code>) but the RAM checks failed (1/3).
+Non-Espressif Xtensa chips (<code>ChipDescriptor::is_espressif_xtensa</code> false) now
+get only their descriptor's map and one core started at the ELF entry.</p>
+<h2 id="profile-boundary">Profile boundary</h2>
+<p>The LabWired profile claims the Xtensa core-ISA execution path (with the
+code-density forms the assembler emits) on the LabWired LX7 interpreter, the
+<code>rom</code> window and <code>instram0</code>. Not claimed: <code>dataram0</code>, <code>dataram1</code>, the 128 MiB
+<code>ram</code>, the SIMCALL semihosting UART (the core has no SIMCALL), interrupts,
+exceptions and windowed calls, MUL and other configuration options, and
+any difference between the LX7 interpreter and the <code>sample_controller</code>
+configuration Renode runs. Renode's Zephyr demos were not run here. This is
+repository CLI simulation evidence, not hardware confirmation.</p>
 
 
 

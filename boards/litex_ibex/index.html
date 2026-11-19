@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: litex_ibex - LabWired docs</title>
+        <title>Renode onboarding evidence: litex_ibex - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: litex_ibex - LabWired docs">
+  <meta property="og:title" content="Renode onboarding evidence: litex_ibex - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/litex_ibex/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: litex_ibex - LabWired docs">
+  <meta name="twitter:title" content="Renode onboarding evidence: litex_ibex - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-litex_ibex" class="md-skip">
+        <a href="#renode-onboarding-evidence-litex_ibex" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: litex_ibex
+              Renode onboarding evidence: litex_ibex
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured run
       
     </span>
   </a>
@@ -4878,10 +4878,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#correction-2026-11-08" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Correction (2026-11-08)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profile-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile boundary
       
     </span>
   </a>
@@ -4908,45 +4919,52 @@
   
 
 
-<h1 id="validation-report-litex_ibex">Validation Report: litex_ibex</h1>
-<p><strong>Architecture:</strong> Unknown</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>ctrl</code></td>
-<td><code>0x82000000</code></td>
-<td><code>litex_soc_controller</code></td>
-</tr>
-<tr>
-<td><code>uart</code></td>
-<td><code>0x82002000</code></td>
-<td><code>litex_uart</code></td>
-</tr>
-<tr>
-<td><code>timer0</code></td>
-<td><code>0x82002800</code></td>
-<td><code>litex_timer_csr32</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 3</p>
+<h1 id="renode-onboarding-evidence-litex_ibex">Renode onboarding evidence: litex_ibex</h1>
+<p>The imported board descriptor remains <code>verified: false</code>. Renode's
+<a href="https://github.com/renode/renode/blob/master/platforms/cpus/litex_ibex.repl">platform file</a> defines an Ibex RV32 core (<code>CPU.IbexRiscV32</code>), a 32 KiB ROM at <code>0x00000000</code>, 8 KiB of
+SRAM at <code>0x01000000</code>, 256 MiB of main RAM at <code>0x40000000</code>, a
+<code>LiteX_SoC_Controller</code> at <code>0x82000000</code>, a <code>LiteX_UART</code> at <code>0x82002000</code>, and
+a <code>Timers.LiteX_Timer_CSR32</code> timer0 at <code>0x82002800</code> (100 MHz). The timer's
+32-bit CSR layout is <code>load</code> 0x00, <code>reload</code> 0x04, <code>en</code> 0x08,
+<code>update_value</code> 0x0C, <code>value</code> 0x10, <code>ev_status</code> 0x14, <code>ev_pending</code> 0x18
+(W1C), <code>ev_enable</code> 0x1C.</p>
+<h2 id="measured-run">Measured run</h2>
+<ul>
+<li>Status: <strong>booted and smoke-passing</strong>.</li>
+<li>Firmware: <code>firmware-litex-ibex-smoke</code>, RV32IMC, 100,000 instructions.</li>
+<li>Stop reason: <code>max_steps</code> after all checks completed.</li>
+<li>Assertions: the banner, then in order the RV32IMC MUL result, <code>ev_pending</code>
+  clearing on a written 1 (<code>timer=cleared</code>), <code>load</code> read back as 0x00004E20,
+  a latched <code>value</code> strictly inside the 20,000-cycle one-shot
+  (<code>timer=counting</code>), the zero-event level low right after enable, the
+  <code>ev_pending</code> latch after the countdown (<code>timer=zero</code>), and the stop reason.</li>
+<li>Evidence: <a href="../coverage/renode-onboarding/metrics/litex_ibex/"><code>docs/coverage/renode-onboarding/metrics/litex_ibex/</code></a>
+  (build/run logs, JUnit, result, and snapshot) and the generated
+  <a href="../../coverage/renode-onboarding-scoreboard/">Renode onboarding scoreboard</a>.</li>
+</ul>
+<h2 id="correction-2026-11-08">Correction (2026-11-08)</h2>
+<p>Until this date the chip descriptor declared timer0 as
+<code>litex_timer_csr32</code>. That is not a LabWired model type: the fuzzy
+<code>contains("timer")</code> rule resolved it to the STM32 general-purpose timer,
+and the earlier smoke passed only because its <code>ev_pending</code> write landed in
+STM32 CCMR1 (+0x18), which reads the 1 back. The descriptor now uses
+<code>litex_timer</code> (32-bit CSR layout), and the smoke checks W1C, <code>load</code>
+readback, and the <code>value</code> latch, which the STM32 model fails
+(<code>timer=pending_kept</code>, <code>load=00000220</code>, <code>value=00000000</code>). The earlier
+measurement is preserved at
+<code>docs/coverage/renode-onboarding/attempt-history/litex_ibex/2026-11-08-before-litex-timer-model/</code>.
+The run that exposed the fallback (same firmware, old descriptor) is at
+<code>docs/coverage/renode-onboarding/attempt-history/litex_ibex/2026-11-08-stm32-timer-fallback-exposed/</code>.</p>
+<h2 id="profile-boundary">Profile boundary</h2>
+<p>The LabWired onboarding profile selects the generic <code>rv32imc</code> CPU path, SRAM,
+a 1 MiB direct-ELF load window at <code>0x20000000</code> (a LabWired loading convenience,
+not a Renode region), the LiteX UART, and timer0 as <code>litex_timer</code>. The timer
+counts simulated core cycles; the 100 MHz timer frequency is not modelled as a
+separate rate.</p>
+<p>Not claimed: the SoC controller, the ROM boot flow, main RAM, the silenced
+DDR PHY/SDRAM windows, and timer/UART interrupts (the descriptor's IRQ numbers
+are not exercised; the smoke polls). This is repository CLI simulation
+evidence, not hardware confirmation.</p>
 
 
 

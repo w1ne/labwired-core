@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: nucleo_f767zi - LabWired docs</title>
+        <title>Imported NUCLEO-F767ZI onboarding smoke - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: nucleo_f767zi - LabWired docs">
+  <meta property="og:title" content="Imported NUCLEO-F767ZI onboarding smoke - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/nucleo_f767zi/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: nucleo_f767zi - LabWired docs">
+  <meta name="twitter:title" content="Imported NUCLEO-F767ZI onboarding smoke - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-nucleo_f767zi" class="md-skip">
+        <a href="#imported-nucleo-f767zi-onboarding-smoke" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: nucleo_f767zi
+              Imported NUCLEO-F767ZI onboarding smoke
             
           </span>
         </div>
@@ -4860,36 +4860,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Dynamic Simulation Validation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hardware Coverage Report
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -4908,329 +4878,26 @@
   
 
 
-<h1 id="validation-report-nucleo_f767zi">Validation Report: nucleo_f767zi</h1>
-<p><strong>Architecture:</strong> ARM Cortex-M.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:06.736735Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:06.740569Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/nucleo_f767zi.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:06.750199Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:06.750303Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:06.750356Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:06.750366Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:06.759674Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:06.759694Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:06.759701Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:06.771194Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 480321.98
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:06.798331Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:06.798352Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x466
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:06.798358Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 19999
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:06.798363Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20002
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:06.798367Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 416682.67
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>GreenLED</code></td>
-<td><code>0x00000000</code></td>
-<td><code>led</code></td>
-</tr>
-<tr>
-<td><code>BlueLED</code></td>
-<td><code>0x00000007</code></td>
-<td><code>led</code></td>
-</tr>
-<tr>
-<td><code>RedLED</code></td>
-<td><code>0x0000000e</code></td>
-<td><code>led</code></td>
-</tr>
-<tr>
-<td><code>UserButton1</code></td>
-<td><code>0x0000000d</code></td>
-<td><code>button</code></td>
-</tr>
-<tr>
-<td><code>phy</code></td>
-<td><code>0x00000000</code></td>
-<td><code>ethernetphysicallayer</code></td>
-</tr>
-<tr>
-<td><code>flash_controller</code></td>
-<td><code>0x40023c00</code></td>
-<td><code>stm32f4_flashcontroller</code></td>
-</tr>
-<tr>
-<td><code>usart1</code></td>
-<td><code>0x40011000</code></td>
-<td><code>stm32f7_usart</code></td>
-</tr>
-<tr>
-<td><code>usart2</code></td>
-<td><code>0x40004400</code></td>
-<td><code>stm32f7_usart</code></td>
-</tr>
-<tr>
-<td><code>usart3</code></td>
-<td><code>0x40004800</code></td>
-<td><code>stm32f7_usart</code></td>
-</tr>
-<tr>
-<td><code>uart4</code></td>
-<td><code>0x40004c00</code></td>
-<td><code>stm32_uart</code></td>
-</tr>
-<tr>
-<td><code>uart5</code></td>
-<td><code>0x40005000</code></td>
-<td><code>stm32_uart</code></td>
-</tr>
-<tr>
-<td><code>usart6</code></td>
-<td><code>0x40011400</code></td>
-<td><code>stm32f7_usart</code></td>
-</tr>
-<tr>
-<td><code>uart7</code></td>
-<td><code>0x40007c00</code></td>
-<td><code>stm32_uart</code></td>
-</tr>
-<tr>
-<td><code>uart8</code></td>
-<td><code>0x40007800</code></td>
-<td><code>stm32_uart</code></td>
-</tr>
-<tr>
-<td><code>can1</code></td>
-<td><code>0x40006400</code></td>
-<td><code>stmcan</code></td>
-</tr>
-<tr>
-<td><code>can2</code></td>
-<td><code>0x40006800</code></td>
-<td><code>stmcan</code></td>
-</tr>
-<tr>
-<td><code>can3</code></td>
-<td><code>0x40003400</code></td>
-<td><code>stmcan</code></td>
-</tr>
-<tr>
-<td><code>dwt</code></td>
-<td><code>0xe0001000</code></td>
-<td><code>dwt</code></td>
-</tr>
-<tr>
-<td><code>adc1</code></td>
-<td><code>0x40012000</code></td>
-<td><code>stm32_adc</code></td>
-</tr>
-<tr>
-<td><code>adc2</code></td>
-<td><code>0x40012100</code></td>
-<td><code>stm32_adc</code></td>
-</tr>
-<tr>
-<td><code>adc3</code></td>
-<td><code>0x40012200</code></td>
-<td><code>stm32_adc</code></td>
-</tr>
-<tr>
-<td><code>crc</code></td>
-<td><code>0x40023000</code></td>
-<td><code>stm32_crc</code></td>
-</tr>
-<tr>
-<td><code>gpioPortA</code></td>
-<td><code>0x40020000</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortB</code></td>
-<td><code>0x40020400</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortC</code></td>
-<td><code>0x40020800</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortD</code></td>
-<td><code>0x40020c00</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortE</code></td>
-<td><code>0x40021000</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortF</code></td>
-<td><code>0x40021400</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortG</code></td>
-<td><code>0x40021800</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortH</code></td>
-<td><code>0x40021c00</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortI</code></td>
-<td><code>0x40022000</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortJ</code></td>
-<td><code>0x40022400</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>gpioPortK</code></td>
-<td><code>0x40022800</code></td>
-<td><code>stm32_gpioport</code></td>
-</tr>
-<tr>
-<td><code>ethernet</code></td>
-<td><code>0x40028000</code></td>
-<td><code>synopsysethernetmac</code></td>
-</tr>
-<tr>
-<td><code>spi1</code></td>
-<td><code>0x40013000</code></td>
-<td><code>stm32spi</code></td>
-</tr>
-<tr>
-<td><code>spi2</code></td>
-<td><code>0x40003800</code></td>
-<td><code>stm32spi</code></td>
-</tr>
-<tr>
-<td><code>spi3</code></td>
-<td><code>0x40003c00</code></td>
-<td><code>stm32spi</code></td>
-</tr>
-<tr>
-<td><code>spi4</code></td>
-<td><code>0x40013400</code></td>
-<td><code>stm32spi</code></td>
-</tr>
-<tr>
-<td><code>spi5</code></td>
-<td><code>0x40015000</code></td>
-<td><code>stm32spi</code></td>
-</tr>
-<tr>
-<td><code>spi6</code></td>
-<td><code>0x40015400</code></td>
-<td><code>stm32spi</code></td>
-</tr>
-<tr>
-<td><code>dma1</code></td>
-<td><code>0x40026000</code></td>
-<td><code>stm32dma</code></td>
-</tr>
-<tr>
-<td><code>dma2</code></td>
-<td><code>0x40026400</code></td>
-<td><code>stm32dma</code></td>
-</tr>
-<tr>
-<td><code>ltdc</code></td>
-<td><code>0x40016800</code></td>
-<td><code>stm32ltdc</code></td>
-</tr>
-<tr>
-<td><code>dma2d</code></td>
-<td><code>0x4002b000</code></td>
-<td><code>stm32dma2d</code></td>
-</tr>
-<tr>
-<td><code>i2c1</code></td>
-<td><code>0x40005400</code></td>
-<td><code>stm32f7_i2c</code></td>
-</tr>
-<tr>
-<td><code>i2c2</code></td>
-<td><code>0x40005800</code></td>
-<td><code>stm32f7_i2c</code></td>
-</tr>
-<tr>
-<td><code>i2c3</code></td>
-<td><code>0x40005c00</code></td>
-<td><code>stm32f7_i2c</code></td>
-</tr>
-<tr>
-<td><code>i2c4</code></td>
-<td><code>0x40006000</code></td>
-<td><code>stm32f7_i2c</code></td>
-</tr>
-<tr>
-<td><code>syscfg</code></td>
-<td><code>0x40013800</code></td>
-<td><code>stm32_syscfg</code></td>
-</tr>
-<tr>
-<td><code>lptim1Isr</code></td>
-<td><code>0x40002400</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>rtc</code></td>
-<td><code>0x40002800</code></td>
-<td><code>stm32f4_rtc</code></td>
-</tr>
-<tr>
-<td><code>rcc</code></td>
-<td><code>0x40023800</code></td>
-<td><code>stm32f4_rcc</code></td>
-</tr>
-<tr>
-<td><code>rng</code></td>
-<td><code>0x50060800</code></td>
-<td><code>stm32_rng</code></td>
-</tr>
-<tr>
-<td><code>pwrCr1</code></td>
-<td><code>0x40007000</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>pwrCsr1</code></td>
-<td><code>0x40007004</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>sdMmcSta</code></td>
-<td><code>0x40012c34</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>timer5</code></td>
-<td><code>0x40000c24</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>timer6</code></td>
-<td><code>0x40001000</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 58</p>
+<h1 id="imported-nucleo-f767zi-onboarding-smoke">Imported NUCLEO-F767ZI onboarding smoke</h1>
+<p>The imported onboarding profile is bounded to Cortex-M7 execution, 2 MiB of
+flash at <code>0x08000000</code>, the 384 KiB SRAM window used by Renode's STM32F746 CPU
+map, RCC, GPIOI, and USART1. The MCU's broader silicon memory includes TCM and
+backup SRAM that this profile does not map. The <a href="https://github.com/renode/renode/blob/master/platforms/cpus/stm32f746.repl">Renode STM32F746 CPU map</a>
+defines the imported flash and SRAM windows; ST's <a href="https://www.st.com/resource/en/datasheet/stm32f767zi.pdf">STM32F767 datasheet</a>
+describes the additional TCM and backup memory. Other peripherals in the
+generated descriptor were removed because this smoke does not exercise them.</p>
+<p>The exact imported-system smoke runs the Cortex-M7 firmware for 800,000
+instructions. It checks the <code>OK</code> USART1 output and an edge on GPIOI pin 1 while
+the firmware configures PI1 and sets it through BSRR. It then stops at the
+configured instruction limit. The JUnit report records the assertion results.
+The run assumes an ideal power rail; power-on and brown-out behavior are not
+tested.</p>
+<p>This is local LabWired CLI evidence against the imported system manifest. It
+does not validate the whole STM32F767 platform, the unlisted peripherals,
+Renode equivalence, or physical hardware.</p>
+<p>Result JSON, UART output, GPIO traces, snapshot, JUnit report, and build/run
+logs are under
+<a href="../coverage/renode-onboarding/metrics/nucleo_f767zi/"><code>docs/coverage/renode-onboarding/metrics/nucleo_f767zi/</code></a>.</p>
 
 
 

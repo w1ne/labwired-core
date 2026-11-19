@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: fomu - LabWired docs</title>
+        <title>Renode onboarding evidence: fomu - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: fomu - LabWired docs">
+  <meta property="og:title" content="Renode onboarding evidence: fomu - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/fomu/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: fomu - LabWired docs">
+  <meta name="twitter:title" content="Renode onboarding evidence: fomu - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-fomu" class="md-skip">
+        <a href="#renode-onboarding-evidence-fomu" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: fomu
+              Renode onboarding evidence: fomu
             
           </span>
         </div>
@@ -4867,10 +4867,21 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profile-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile boundary
       
     </span>
   </a>
@@ -4897,17 +4908,49 @@
   
 
 
-<h1 id="validation-report-fomu">Validation Report: fomu</h1>
-<p><strong>Architecture:</strong> RISC-V RV32I.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
+<h1 id="renode-onboarding-evidence-fomu">Renode onboarding evidence: fomu</h1>
+<p>The imported board descriptor remains <code>verified: false</code>. Renode defines a
+VexRiscv (<code>rv32im_zicsr_zifencei</code>), an 8 KiB ROM at <code>0x00000000</code>, 128 KiB of
+SRAM at <code>0x10000000</code>, a <code>Timers.LiteX_Timer</code> timer0 at <code>0x60002800</code>,
+ValentyUSB at <code>0x60004800</code>, a PicoRV SPI controller with a Micron MT25Q flash,
+and tagged CTRL/TOUCH/REBOOT/RGB/VERSION pages in its
+<a href="https://github.com/renode/renode/blob/master/platforms/cpus/fomu.repl">platform file</a>.
+The CSR layout follows Foboot's generated
+<a href="https://github.com/im-tomu/foboot/blob/637bbf10fa9a0b7f52cbd459d80c8c7532d56a18/sw/include/generated/csr.h"><code>csr.h</code></a>,
+which uses <code>csr_data_width = 8</code>. Renode maps no UART for this board.</p>
+<h2 id="measured-run">Measured run</h2>
+<ul>
+<li>Status: <strong>booted and smoke-passing</strong>.</li>
+<li>Firmware: <code>firmware-fomu-smoke --features timer0</code>, RV32IM, 100,000
+  instructions.</li>
+<li>Stop reason: <code>max_steps</code> after all checks completed.</li>
+<li>Assertions: the RV32IM MUL result, a 32-bit <code>load</code> written and read back
+  across its four byte-wide CSR slots (0x00012345), the six-bit check word
+  (0x3F: idle event level/pending clear after staging, <code>en</code> readback, a
+  latched <code>value</code> strictly inside the 2000-cycle one-shot, the zero-event
+  level and pending latch after polling, and <code>ev_pending</code> ignoring a written 0
+  and clearing on a written 1), the firmware pass word 0xF0A0003F, and the
+  stop reason (5/5 passed).</li>
+<li>Evidence: <a href="../coverage/renode-onboarding/metrics/fomu/"><code>docs/coverage/renode-onboarding/metrics/fomu/</code></a>
+  (build/run logs, JUnit, result, and snapshot) and the generated
+  <a href="../../coverage/renode-onboarding-scoreboard/">Renode onboarding scoreboard</a>.</li>
+</ul>
+<p>The earlier CPU/RAM-only measurement is preserved at
+<code>docs/coverage/renode-onboarding/attempt-history/fomu/2026-11-08-before-timer0-smoke/</code>.
+A negative control with <code>timer0</code> removed fails 1/5 with a memory access
+violation at <code>en</code> (0x60002820):
+<code>docs/coverage/renode-onboarding/attempt-history/fomu/2026-11-08-timer0-negative-control/</code>.</p>
+<h2 id="profile-boundary">Profile boundary</h2>
+<p>The LabWired onboarding profile selects the generic <code>rv32im</code> CPU path, the
+ROM and SRAM windows (no shadow aliases), and timer0 as <code>litex_timer</code> with
+<code>csr_data_width: 8</code>. The timer counts SoC cycles of the simulated core; the
+board's 12 MHz timer clock is not modelled as a separate rate.</p>
+<p>Not claimed: timer0's IRQ (Renode <code>-&gt; cpu@0</code>; the smoke polls the event
+CSRs), the 0x8000_0000/0xE000_0000 shadow aliases, ValentyUSB, the SPI flash
+controller and MT25Q, the RGB/touch/reboot/version blocks, the VexRiscv debug
+window, and the Foboot boot flow. Simulation assumes an ideal VDD rail;
+power-on and brown-out behavior were not exercised. This is repository CLI
+simulation evidence, not hardware confirmation.</p>
 
 
 

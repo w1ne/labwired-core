@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: efm32pg1 - LabWired docs</title>
+        <title>EFM32PG1 Renode onboarding smoke - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: efm32pg1 - LabWired docs">
+  <meta property="og:title" content="EFM32PG1 Renode onboarding smoke - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/efm32pg1/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: efm32pg1 - LabWired docs">
+  <meta name="twitter:title" content="EFM32PG1 Renode onboarding smoke - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-efm32pg1" class="md-skip">
+        <a href="#efm32pg1-renode-onboarding-smoke" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: efm32pg1
+              EFM32PG1 Renode onboarding smoke
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#imported-execution-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Imported execution profile
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#current-evidence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Current evidence
       
     </span>
   </a>
@@ -4908,69 +4908,28 @@
   
 
 
-<h1 id="validation-report-efm32pg1">Validation Report: efm32pg1</h1>
+<h1 id="efm32pg1-renode-onboarding-smoke">EFM32PG1 Renode onboarding smoke</h1>
 <p><strong>Architecture:</strong> ARM Cortex-M4F.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:39:54.732605Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:39:54.736201Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/efm32pg1.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:39:54.737130Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:39:54.737220Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:39:54.737232Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:39:54.737237Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:39:54.737878Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:39:54.737891Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:39:54.737902Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:39:54.737970Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:39:54.737992Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:39:54.737996Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:39:54.738000Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:39:54.738004Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:39:54.738008Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2631.20
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>usart0</code></td>
-<td><code>0x40010000</code></td>
-<td><code>efm32_uart</code></td>
-</tr>
-<tr>
-<td><code>usart1</code></td>
-<td><code>0x40010400</code></td>
-<td><code>efm32_uart</code></td>
-</tr>
-<tr>
-<td><code>leUart0</code></td>
-<td><code>0x4004a000</code></td>
-<td><code>leuart</code></td>
-</tr>
-<tr>
-<td><code>bitband</code></td>
-<td><code>0x42000000</code></td>
-<td><code>bitbanding</code></td>
-</tr>
-<tr>
-<td><code>cmuStatusOscillator</code></td>
-<td><code>0x400c802c</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>vcmpStatus</code></td>
-<td><code>0x40000008</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 6</p>
+<h2 id="imported-execution-profile">Imported execution profile</h2>
+<p><code>configs/chips/onboarding/efm32pg1.yaml</code> keeps the imported 256 KiB flash and
+32 KiB RAM map and exposes the modeled USART0 at <code>0x4000c000</code>. Other generated
+peripheral windows are omitted because this smoke does not exercise them.</p>
+<h2 id="current-evidence">Current evidence</h2>
+<p>The exact imported-system smoke in
+<code>examples/renode-onboarding/efm32pg1-smoke.yaml</code> executed 100,000 instructions.
+USART0 emitted <code>EFM32PG1 USART0 smoke</code> and execution reached the configured
+<code>max_steps</code> limit; both assertions passed.</p>
+<p>Build and simulator logs, UART output, JUnit assertions, result JSON, and a
+snapshot are recorded under
+<a href="../coverage/renode-onboarding/metrics/efm32pg1/"><code>docs/coverage/renode-onboarding/metrics/efm32pg1/</code></a>.
+The initial wrong-address firmware attempt, which faulted at unmapped MMIO and
+emitted no UART bytes, is preserved under
+<a href="../coverage/renode-onboarding/attempt-history/efm32pg1/"><code>docs/coverage/renode-onboarding/attempt-history/efm32pg1/</code></a>.
+The full imported inventory is summarized in the
+<a href="../../coverage/renode-onboarding-scoreboard/"><code>Renode onboarding scoreboard</code></a>.</p>
+<p>This is repository CLI smoke evidence for the imported Cortex-M4F target's
+memory map and USART0 path. It does not establish full EFM32PG1 peripheral
+coverage, hosted <code>labwired_verify</code> model verification, or hardware confirmation.</p>
 
 
 

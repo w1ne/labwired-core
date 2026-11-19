@@ -5172,7 +5172,7 @@ for the validation evidence and the full list of fidelity limits see
 <tr>
 <td>ADC1</td>
 <td>⚠️ analog</td>
-<td>silicon converts VREFINT (<code>~0x86</code>); sim returns deterministic mock</td>
+<td>L0 CHSELR model; demo writes <code>ADC_CCR</code> at 0x40012788 (RM0377: 0x40012708), so VREFEN never sets and sim reads 0 — firmware bug</td>
 </tr>
 <tr>
 <td>RNG</td>

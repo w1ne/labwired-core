@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: s32k118 - LabWired docs</title>
+        <title>NXP S32K118 imported profile - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: s32k118 - LabWired docs">
+  <meta property="og:title" content="NXP S32K118 imported profile - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/s32k118/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: s32k118 - LabWired docs">
+  <meta name="twitter:title" content="NXP S32K118 imported profile - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-s32k118" class="md-skip">
+        <a href="#nxp-s32k118-imported-profile" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: s32k118
+              NXP S32K118 imported profile
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured profile
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#smoke-evidence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Smoke evidence
       
     </span>
   </a>
@@ -4908,84 +4908,64 @@
   
 
 
-<h1 id="validation-report-s32k118">Validation Report: s32k118</h1>
-<p><strong>Architecture:</strong> ARMv6-M.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:21.815171Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:21.818993Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/s32k118.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:21.820031Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:21.820117Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:21.820130Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:21.820134Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:21.820841Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:21.820849Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:21.820854Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:21.827837Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 1299512.73
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:21.841417Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:21.841517Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x466
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:21.841553Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 19999
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:21.841582Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20002
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:21.841609Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 931456.86
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>dwt</code></td>
-<td><code>0xe0001000</code></td>
-<td><code>dwt</code></td>
-</tr>
-<tr>
-<td><code>lpspi0</code></td>
-<td><code>0x4002c000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>lpspi1</code></td>
-<td><code>0x4002d000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>lpuart0</code></td>
-<td><code>0x4006a000</code></td>
-<td><code>nxp_lpuart</code></td>
-</tr>
-<tr>
-<td><code>lpuart1</code></td>
-<td><code>0x4006b000</code></td>
-<td><code>nxp_lpuart</code></td>
-</tr>
-<tr>
-<td><code>can0_mcr</code></td>
-<td><code>0x40024000</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>lpit</code></td>
-<td><code>0x40037000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>lptmr</code></td>
-<td><code>0x40040000</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>scg</code></td>
-<td><code>0x40064000</code></td>
-<td><code>stub</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 9</p>
+<h1 id="nxp-s32k118-imported-profile">NXP S32K118 imported profile</h1>
+<h2 id="measured-profile">Measured profile</h2>
+<p>LabWired's onboarding profile for the imported Renode <code>s32k118</code> target is
+narrowed to what the engine executes and the smoke exercises. It follows
+Renode's
+<a href="https://github.com/renode/renode/blob/master/platforms/cpus/s32k118.repl"><code>s32k118.repl</code></a>:</p>
+<ul>
+<li><strong>CPU:</strong> Cortex-M0+ (ARMv6-M) at 48 MHz, the part's maximum core clock.</li>
+<li><strong>Memory:</strong> 256 KiB program flash at <code>0x00000000</code> and the 0x5800-byte upper
+  SRAM at <code>0x20000000</code>. The original import placed flash at <code>0x08000000</code> (an
+  STM32 default); that is corrected. FlexNVM, FlexRAM and the lower SRAM are
+  omitted.</li>
+<li><strong>LPUART0</strong> at <code>0x4006A000</code> (Renode <code>NXP_LPUART</code>). This uses the i.MX RT
+  LPUART model: VERID/PARAM/GLOBAL/PINCFG ahead of BAUD/STAT/CTRL/DATA
+  (<code>0x10..0x1C</code>), VERID <code>0x04010003</code>, 4-entry FIFOs (PARAM <code>0x0202</code>), and
+  per-frame TX timing from BAUD (OSR/SBR) and a 48 MHz LPUART clock. Polled TX
+  only: no IRQ is declared, and DMA, RX timing and LIN are not claimed.</li>
+<li><strong>GPIO PTA..PTE</strong> data blocks at <code>0x400FF000 + n*0x40</code> (Renode
+  <code>NXPGPIOPort</code> "gpio" region): PDOR/PSOR/PCOR/PTOR/PDIR/PDDR on the Kinetis
+  GPIO model. PIDR is not modelled.</li>
+</ul>
+<p>Not modelled and omitted from the descriptor: PCC clock gating (Renode also
+tags <code>PCC_LPUART0</code> as a constant, so neither enforces the gate), the PORT
+pin-mux and pin-interrupt blocks at <code>0x40049000..</code>, SCG, LPUART1, LPSPI0/1,
+LPIT, LPTMR, FlexCAN, FTM and the DWT.</p>
+<p>The earlier report on this page described a 2026-10-18 run of a Thumb-2
+Cortex-M3 fixture (<code>uart-ok-thumbv7m.elf</code>) against the unnarrowed import, and
+listed zero-answering stubs as hardware coverage. That run never exercised an
+S32K118 peripheral and is withdrawn.</p>
+<h2 id="smoke-evidence">Smoke evidence</h2>
+<p>The firmware crate <code>crates/firmware-s32k118-smoke</code> (<code>thumbv6m-none-eabi</code>)
+programs LPUART0 for 8N1 at OSR=15/SBR=26 (115,384 Bd from 48 MHz), sets
+<code>CTRL.TE</code>, and polls <code>STAT.TDRE</code> before each byte. It prints a banner and
+the VERID/PARAM/BAUD/CTRL readbacks and a MULS result. It then drives PTD0
+and PTD3 through PDDR/PSOR/PCOR/PTOR and reads each step back through PDOR.
+Before the final report it waits for <code>STAT.TC</code>, then toggles PTD0 as a
+heartbeat. Because PCC and PORT are not modelled, it skips <code>PCC_LPUART0</code> and
+<code>PORTD_PCR0</code>; silicon firmware must program both.</p>
+<p>It ran <strong>2,000,000 instructions</strong> and passed 6/6 checks: the UART banner and
+the ordered readback lines (<code>verid=04010003 param=00000202 baud=0f00001a
+ctrl=00080000</code>, <code>ptd pddr=00000009 set=00000001 clr=00000000 tog=00000009</code>,
+<code>pass=0f</code>), at least 3 PTD0 edges, the MULS word at <code>0x20000000</code> and the pass
+word <code>0x5118000F</code> at <code>0x20000004</code>, and <code>max_steps</code>.</p>
+<p>With LPUART0 removed from the descriptor, the same firmware faults on its first
+LPUART0 access and passes 2/6
+(<code>docs/coverage/renode-onboarding/attempt-history/s32k118/2026-11-08-lpuart0-negative-control/</code>).
+The first attempt without a declared <code>cpu_hz</code> timed the LPUART against the
+600 MHz i.MX RT default clock and fit only 38 characters into the step budget;
+it is preserved in
+<code>attempt-history/s32k118/2026-11-08-lpuart-default-600mhz-timebase/</code>.</p>
+<p>The exact system manifest is <code>configs/systems/onboarding/s32k118.yaml</code> and the
+smoke script is <code>examples/renode-onboarding/s32k118-smoke.yaml</code>. Per-target
+metrics, JUnit, UART output, simulator result, snapshot and logs are under
+<code>docs/coverage/renode-onboarding/metrics/s32k118/</code>.</p>
+<p>This is local CLI simulation evidence for the smoke assertions. It does not
+show whole-SoC coverage, Renode equivalence or hardware behaviour. See the
+<a href="../../coverage/renode-onboarding-scoreboard/">generated scoreboard</a> for the
+current global totals.</p>
 
 
 

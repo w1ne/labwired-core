@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: stm32w108 - LabWired docs</title>
+        <title>STMicroelectronics STM32W108 imported profile - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: stm32w108 - LabWired docs">
+  <meta property="og:title" content="STMicroelectronics STM32W108 imported profile - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/stm32w108/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: stm32w108 - LabWired docs">
+  <meta name="twitter:title" content="STMicroelectronics STM32W108 imported profile - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-stm32w108" class="md-skip">
+        <a href="#stmicroelectronics-stm32w108-imported-profile" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: stm32w108
+              STMicroelectronics STM32W108 imported profile
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured profile
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#smoke-evidence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Smoke evidence
       
     </span>
   </a>
@@ -4908,49 +4908,65 @@
   
 
 
-<h1 id="validation-report-stm32w108">Validation Report: stm32w108</h1>
-<p><strong>Architecture:</strong> ARMv7-M.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:33.044777Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:33.046574Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32w108.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:33.047403Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:33.050503Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:33.050524Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:33.050529Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:33.051073Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:33.051087Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:33.051093Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:33.058768Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Progress: 10000 steps, current IPS: 1214880.98
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:33.071777Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:33.071797Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x466
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:33.071803Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 19999
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:33.071808Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 20002
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:33.071812Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 939856.56
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>timer1</code></td>
-<td><code>0x4000e000</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-<tr>
-<td><code>timer2</code></td>
-<td><code>0x4000f000</code></td>
-<td><code>stm32_timer</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 2</p>
+<h1 id="stmicroelectronics-stm32w108-imported-profile">STMicroelectronics STM32W108 imported profile</h1>
+<h2 id="measured-profile">Measured profile</h2>
+<p>LabWired's onboarding profile for the imported Renode <code>stm32w108</code> target is
+narrowed to what the engine executes and the smoke exercises. It follows
+Renode's
+<a href="https://github.com/renode/renode/blob/master/platforms/cpus/stm32w108.repl"><code>cpus/stm32w108.repl</code></a>:</p>
+<ul>
+<li><strong>CPU:</strong> Cortex-M3 (ARMv7-M).</li>
+<li><strong>Memory:</strong> 256 KiB flash at <code>0x08000000</code> and 1 MiB SRAM at <code>0x20000000</code>
+  (Renode's sizes). The flash alias at <code>0x0</code>, the FIB at <code>0x08040000</code> and the
+  external RAM at <code>0x68000000</code> are omitted.</li>
+<li><strong>SC1</strong> at <code>0x4000C800</code> (Renode <code>UART.STM32W_UART</code>, <code>+0x100</code>) in UART mode,
+  on the vendor-neutral custom UART map with the STM32W108 offsets:
+  <code>SC1_DATA</code> at <code>+0x3C</code> (TX/RX), <code>SC1_UARTSTAT</code> at <code>+0x48</code> reading
+  <code>SC_UARTTXFREE</code> (bit 2) | <code>SC_UARTTXIDLE</code> (bit 6) when idle and
+  <code>SC_UARTRXVAL</code> (bit 1) while a byte is queued, and <code>SC1_MODE</code> at <code>+0x54</code>
+  gating TX until <code>SC_MODE</code> = UART. <code>SC1_UARTCFG</code>/<code>UARTPER</code>/<code>UARTFRAC</code> writes
+  are accepted but not stored (they read 0), so baud and framing are not
+  claimed. Polled only: <code>INT_SC1FLAG</code>/<code>INT_SC1CFG</code> (<code>0x4000A808</code>) are not
+  mapped and no IRQ is declared.</li>
+<li><strong>TIM1/TIM2</strong> at <code>0x4000E000</code> / <code>0x4000F000</code> (Renode <code>STM32_Timer</code>), on the
+  generic STM32 timer counter path (CR1/EGR/CNT/PSC/ARR, 16-bit). The
+  update/compare flags and interrupt enables live in the separate <code>INT_TIMx</code>
+  block at <code>0x4000A800</code>, which is not mapped, so no timer IRQ is claimed.</li>
+</ul>
+<p>Not modelled and omitted from the descriptor: the Ember radio and its
+encryptor, the calibration ADC (a Python peripheral in Renode), SC2, and the
+<code>CLK_PERIOD</code> tag. Renode maps no GPIO block for this part, so none is claimed
+here either.</p>
+<p>Renode's <code>STM32W_UART</code> returns 0 for every read except <code>SC1_DATA</code>, so firmware
+that polls <code>SC1_UARTSTAT</code> would spin forever there. LabWired reports the
+reference-manual idle bits instead. This is a deliberate difference from
+Renode.</p>
+<p>The earlier report on this page described a 2026-10-18 run of a generic
+<code>uart-ok-thumbv7m.elf</code> fixture that only showed the CPU stepping. It never
+touched an STM32W108 peripheral and is withdrawn.</p>
+<h2 id="smoke-evidence">Smoke evidence</h2>
+<p>The firmware crate <code>crates/firmware-stm32w108-boot-smoke</code>
+(<code>thumbv7m-none-eabi</code>) writes <code>SC1_MODE</code> = 1 (UART), <code>SC1_UARTCFG</code> and
+<code>SC1_UARTPER</code>, stores the idle <code>SC1_UARTSTAT</code>, prints <code>STM32W108 SC1 SMOKE</code>
+polled on <code>SC_UARTTXFREE</code>, and waits for <code>SC_UARTTXIDLE</code>. Then it runs the
+timer checks: reset values, stopped hold, CEN count, PSC=7 ratio, ARR=99
+bound and wrap, and CEN-clear freeze. The firmware does not program GPIO
+alternate functions or the clock tree. Firmware for real silicon must program
+both.</p>
+<p>It ran <strong>100,000 instructions</strong> and passed 4/4 checks: the result word
+<code>0x571001FF</code> (magic | nine check bits) at <code>0x20080000</code>, the <code>SC1_UARTSTAT</code>
+readback <code>0x44</code> at <code>0x2008000C</code>, the UART banner, and <code>max_steps</code>.</p>
+<p>With SC1 removed from the descriptor, the same firmware takes a precise
+BusFault (BFAR <code>0x4000C854</code>) on its first SC1 access and passes 1/4
+(<code>docs/coverage/renode-onboarding/attempt-history/stm32w108/2026-11-08-sc1-negative-control/</code>).</p>
+<p>The exact system manifest is <code>configs/systems/onboarding/stm32w108.yaml</code>
+and the smoke script is <code>examples/renode-onboarding/stm32w108-boot-smoke.yaml</code>.
+Per-target metrics, JUnit, UART output, simulator result, snapshot and logs are
+under <code>docs/coverage/renode-onboarding/metrics/stm32w108/</code>.</p>
+<p>This is local CLI simulation evidence for the smoke assertions. It does not
+show whole-SoC coverage, Renode equivalence or hardware behaviour. See the
+<a href="../../coverage/renode-onboarding-scoreboard/">generated scoreboard</a> for the
+current global totals.</p>
 
 
 

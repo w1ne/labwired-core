@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-imported-system-smoke" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured imported-system smoke
       
     </span>
   </a>
@@ -4898,16 +4898,23 @@
 
 
 <h1 id="validation-report-litex_vexriscv_zephyr">Validation Report: litex_vexriscv_zephyr</h1>
-<p><strong>Architecture:</strong> RISC-V RV32IMAC.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
+<h2 id="measured-imported-system-smoke">Measured imported-system smoke</h2>
+<p><strong>Status:</strong> smoke passed on the exact imported system descriptor.</p>
+<ul>
+<li>Firmware: <code>firmware-litex-vexriscv-smoke</code>, built for <code>riscv32im-unknown-none-elf</code>.</li>
+<li>Execution: 4,000,000 instructions; stopped at the configured <code>max_steps</code> limit.</li>
+<li>Smoke checks: UART banner and ordered UART output showing the LiteX timer's
+  running and zero states, followed by UART status readbacks.</li>
+<li>Runtime profile: RISC-V RV32IM, mapped memories, LiteX UART, and LiteX timer.</li>
+</ul>
+<p>This measures the firmware path and the assertions above. It does not measure
+booting Zephyr, the LiteX BIOS or SPI-flash boot path, or any omitted peripheral
+such as Ethernet or MMCM. The narrowed profile contains no zero-answering
+peripheral stubs.</p>
+<p>Evidence is committed under
+<a href="../coverage/renode-onboarding/metrics/litex_vexriscv_zephyr/"><code>docs/coverage/renode-onboarding/metrics/litex_vexriscv_zephyr/</code></a>
+and aggregated in the
+<a href="../../coverage/renode-onboarding-scoreboard/">Renode onboarding scoreboard</a>.</p>
 
 
 

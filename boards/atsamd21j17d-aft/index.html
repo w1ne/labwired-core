@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: atsamd21j17d-aft - LabWired docs</title>
+        <title>ATSAMD21J17D-AFT execution profile - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: atsamd21j17d-aft - LabWired docs">
+  <meta property="og:title" content="ATSAMD21J17D-AFT execution profile - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/atsamd21j17d-aft/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: atsamd21j17d-aft - LabWired docs">
+  <meta name="twitter:title" content="ATSAMD21J17D-AFT execution profile - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-atsamd21j17d-aft" class="md-skip">
+        <a href="#atsamd21j17d-aft-execution-profile" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: atsamd21j17d-aft
+              ATSAMD21J17D-AFT execution profile
             
           </span>
         </div>
@@ -4867,21 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#smoke-evidence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Hardware Coverage Report
+        Smoke evidence
       
     </span>
   </a>
@@ -4908,91 +4897,60 @@
   
 
 
-<h1 id="validation-report-atsamd21j17d-aft">Validation Report: atsamd21j17d-aft</h1>
-<p><strong>Architecture:</strong> ARM Cortex-M0+. General purpose low power microcontroller.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:39:50.667753Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:39:50.669570Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/atsamd21j17d-aft.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:39:50.670560Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'samd21_gpio' (peripheral 'gpio_a') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:39:50.670593Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'samd21_gpio' (peripheral 'gpio_b') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:39:50.670756Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:39:50.670843Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:39:50.670854Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:39:50.670858Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:39:50.677439Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:39:50.677458Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:39:50.677469Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:39:50.677546Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:39:50.677569Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:39:50.677573Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:39:50.677577Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>[2m2026-10-18T14:39:50.677581Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>[2m2026-10-18T14:39:50.677585Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 297.75
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>dwt</code></td>
-<td><code>0xe0001000</code></td>
-<td><code>dwt</code></td>
-</tr>
-<tr>
-<td><code>gclk</code></td>
-<td><code>0x40000c00</code></td>
-<td><code>arraymemory</code></td>
-</tr>
-<tr>
-<td><code>rtc</code></td>
-<td><code>0x40001400</code></td>
-<td><code>samd21_rtc</code></td>
-</tr>
-<tr>
-<td><code>gpio_a</code></td>
-<td><code>0x41004400</code></td>
-<td><code>samd21_gpio</code></td>
-</tr>
-<tr>
-<td><code>gpio_b</code></td>
-<td><code>0x41004480</code></td>
-<td><code>samd21_gpio</code></td>
-</tr>
-<tr>
-<td><code>usart0</code></td>
-<td><code>0x42000800</code></td>
-<td><code>samd5_uart</code></td>
-</tr>
-<tr>
-<td><code>usart1</code></td>
-<td><code>0x42000c00</code></td>
-<td><code>samd5_uart</code></td>
-</tr>
-<tr>
-<td><code>usart2</code></td>
-<td><code>0x42001400</code></td>
-<td><code>samd5_uart</code></td>
-</tr>
-<tr>
-<td><code>tc4</code></td>
-<td><code>0x42003000</code></td>
-<td><code>samd21_timer</code></td>
-</tr>
-<tr>
-<td><code>tc6</code></td>
-<td><code>0x42003800</code></td>
-<td><code>samd21_timer</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 10</p>
+<h1 id="atsamd21j17d-aft-execution-profile">ATSAMD21J17D-AFT execution profile</h1>
+<p>The imported descriptor has the J17D memory map: 128 KiB flash at
+<code>0x00000000</code> and 16 KiB SRAM at <code>0x20000000</code>. Its execution profile contains
+the SAM D21 PM, SYSCTRL, GCLK and NVMCTRL register banks; modelled PORT groups
+A and B; SERCOM0, SERCOM1 and SERCOM3 as USARTs; TC4 and TC6 (<code>samd21_tc</code>);
+the RTC (<code>samd21_rtc</code>); and the Cortex-M0+ NVIC and SysTick. That is the set
+of blocks Renode's <code>platforms/cpus/atsamd21j17d-aft.repl</code> models (Renode's
+<code>usart2</code> at <code>0x42001400</code> is SERCOM3 on silicon and is named that here).</p>
+<p><code>samd21_tc</code> (<code>crates/core/src/peripherals/sam/tc21.rs</code>) models COUNT8/COUNT16,
+the NFRQ/MFRQ tops, up/down counting, ONESHOT, the RETRIGGER/STOP commands,
+STATUS.STOP and the OVF/MC0/MC1 interrupts, gated by the instance's
+PM.APBCMASK bit. It counts CPU cycles / prescaler (GCLK routing is not
+modelled). COUNT32, capture, events, output inversion and pad waveforms are
+refused or not modelled.</p>
+<p><code>samd21_rtc</code> (<code>crates/core/src/peripherals/sam/rtc21.rs</code>) models all three
+modes: MODE0 (32-bit COUNT, COMP0, MATCHCLR), MODE1 (16-bit COUNT, PER,
+COMP0/COMP1) and MODE2 (clock/calendar in 24- or 12-hour form, leap years,
+ALARM0 with MASK.SEL, MATCHCLR), with the datasheet's next-edge flag timing,
+the IRQ 3 line and the PM.APBAMASK.RTC gate. Renode's <code>SAMD21_RTC</code> covers
+MODE2 only. GCLK routing is not modelled: GCLK_RTC is a fixed 1.024 kHz
+(OSC32K / 32, the RTCZero/ASF setup) unless the chip declares <code>gclk_hz</code>.
+EVCTRL events and FREQCORR are refused.</p>
+<h2 id="smoke-evidence">Smoke evidence</h2>
+<p>On 2026-11-08 (Round 379) the firmware gained an RTC check and the run grew to
+800,000 instructions; all 5 assertions pass. The RTC lines in the ordered
+transcript cover MODE2 (2024-02-28 23:59:58 rolls into the leap day, ALARM0
+at 00:00:01 raises its flag, pends IRQ 3 and releases after W1C + ICPR),
+MODE0 (COMP0 = 3 with MATCHCLR: CMP0 and OVF together, counter restarted) and
+MODE1 (PER = 4: CMP0, CMP1, then OVF). The summary word is now <code>0x5D21003F</code>.
+With the <code>rtc</code> window removed, the same firmware bus-faults at <code>0x40001400</code>
+and passes 2/5
+(<code>attempt-history/atsamd21j17d-aft/2026-11-08-negative-control-no-rtc/</code>).</p>
+<p>Round 377 (TC model):</p>
+<p>On 2026-11-08 (Round 377), <code>firmware-samd21-j17d-smoke</code> ran against
+<a href="../../configs/systems/onboarding/atsamd21j17d-aft.yaml"><code>configs/systems/onboarding/atsamd21j17d-aft.yaml</code></a>
+for 400,000 instructions and passed all 5 assertions: the console banner; an
+ordered UART transcript covering PB10 DIR/OUT readback, TC4 (CC0 readback,
+counter advance, CC0 match + OVF, IRQ 19 pending in the NVIC, W1C clear, CMD
+STOP), TC6 (8-bit down one-shot: STOP at reset, OVF, PER reload, self-stop,
+RETRIGGER, STOP) and SERCOM1/SERCOM3 (CTRLA readback, DRE, TXC, TXC W1C);
+at least 4 edges on the PA17 LED; the summary word <code>0x5D21001F</code> at
+<code>0x20002000</code>; and the <code>max_steps</code> stop reason. With TC4/TC6 removed from the
+chip, the same firmware bus-faults at <code>0x42003000</code> and passes 2/5
+(<code>attempt-history/atsamd21j17d-aft/2026-11-08-negative-control-no-tc/</code>).</p>
+<p>Evidence files:</p>
+<ul>
+<li><a href="../../coverage/renode-onboarding/metrics/atsamd21j17d-aft/onboarding-metrics.json">Onboarding metrics</a></li>
+<li><a href="../../coverage/renode-onboarding/metrics/atsamd21j17d-aft/simulation-output/result.json">Simulator result</a></li>
+<li><a href="../../coverage/renode-onboarding/metrics/atsamd21j17d-aft/simulation-output/uart.log">UART output</a></li>
+<li><a href="../../coverage/renode-onboarding/metrics/atsamd21j17d-aft/simulation-output/junit.xml">JUnit report</a></li>
+</ul>
+<p>This establishes a local LabWired CLI run and the listed smoke assertions. It
+does not establish complete peripheral coverage, full Renode parity, or
+hardware behavior.</p>
 
 
 

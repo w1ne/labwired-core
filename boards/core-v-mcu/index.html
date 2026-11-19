@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: core-v-mcu - LabWired docs</title>
+        <title>Renode onboarding evidence: core-v-mcu - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: core-v-mcu - LabWired docs">
+  <meta property="og:title" content="Renode onboarding evidence: core-v-mcu - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/core-v-mcu/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: core-v-mcu - LabWired docs">
+  <meta name="twitter:title" content="Renode onboarding evidence: core-v-mcu - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-core-v-mcu" class="md-skip">
+        <a href="#renode-onboarding-evidence-core-v-mcu" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: core-v-mcu
+              Renode onboarding evidence: core-v-mcu
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured run
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#profile-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Profile boundary
       
     </span>
   </a>
@@ -4908,65 +4908,37 @@
   
 
 
-<h1 id="validation-report-core-v-mcu">Validation Report: core-v-mcu</h1>
-<p><strong>Architecture:</strong> RISC-V RV32IMFC.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Structural Check Passed (structural-ok)</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"system_manifest"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">"chip_descriptor"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">"flash_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">"ram_base_present"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>uart</code></td>
-<td><code>0x1a102100</code></td>
-<td><code>pulp_udma_uart</code></td>
-</tr>
-<tr>
-<td><code>timer</code></td>
-<td><code>0x1a10b000</code></td>
-<td><code>pulp_timer</code></td>
-</tr>
-<tr>
-<td><code>gpio</code></td>
-<td><code>0x1a101000</code></td>
-<td><code>pulp_apb_gpio</code></td>
-</tr>
-<tr>
-<td><code>i2s</code></td>
-<td><code>0x1a102200</code></td>
-<td><code>pulp_i2s</code></td>
-</tr>
-<tr>
-<td><code>i2c0</code></td>
-<td><code>0x1a102180</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>spi</code></td>
-<td><code>0x1a102080</code></td>
-<td><code>stub</code></td>
-</tr>
-<tr>
-<td><code>camera_controller</code></td>
-<td><code>0x1a102280</code></td>
-<td><code>pulp_udma_camera</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 7</p>
+<h1 id="renode-onboarding-evidence-core-v-mcu">Renode onboarding evidence: core-v-mcu</h1>
+<p>The imported board descriptor remains <code>verified: false</code>. Renode's <a href="https://github.com/renode/renode/blob/master/platforms/cpus/core-v-mcu.repl">platform file</a> defines a CV32E40P (RV32IMFC, Priv 1.11), an 8 KiB boot ROM at <code>0x1A000000</code>, 512 KiB of SRAM at <code>0x1C000000</code> (aliased at 0), the PULP interrupt/event controllers, uDMA UART/SPI/I2C/camera, a PULP timer, APB GPIO, I2S and a <code>UART.PULP_STDOUT</code> console at <code>0x1A10FF80</code>.</p>
+<h2 id="measured-run">Measured run</h2>
+<ul>
+<li>Status: <strong>booted and smoke-passing</strong>.</li>
+<li>Firmware: <code>firmware-cv32e40p-smoke</code>, RV32IMC, 100,000 instructions.</li>
+<li>Stop reason: <code>max_steps</code> after all checks completed.</li>
+<li>Assertions: the RV32IMC MUL result (0x143), the STD_OUT readback (0, over
+  a 0xDEADBEEF sentinel), the firmware pass word 0xC0DE5701, the banner
+  <code>CORE-V stdout ok</code> on the <code>stdout</code> console (each byte written as a 32-bit
+  word with non-zero reserved bits), and the stop reason (5/5 passed).</li>
+<li>Evidence: <a href="../coverage/renode-onboarding/metrics/core-v-mcu/"><code>docs/coverage/renode-onboarding/metrics/core-v-mcu/</code></a>
+  (build/run logs, JUnit, result, UART log and snapshot) and the generated
+  <a href="../../coverage/renode-onboarding-scoreboard/">Renode onboarding scoreboard</a>.</li>
+</ul>
+<p>The earlier CPU/RAM-only measurement is preserved at
+<code>docs/coverage/renode-onboarding/attempt-history/core-v-mcu/2026-11-08-before-stdout-smoke/</code>.
+A negative control with <code>stdout</code> removed fails 1/5 with a memory access violation at 0x1A10FF80: <code>docs/coverage/renode-onboarding/attempt-history/core-v-mcu/2026-11-08-stdout-negative-control/</code>.</p>
+<h2 id="profile-boundary">Profile boundary</h2>
+<p>The LabWired onboarding profile selects the generic <code>rv32imc</code> CPU path (no F
+extension, no PULP/XCV custom instructions), the boot ROM and SRAM windows
+(no SRAM alias at 0), and <code>stdout</code> as a <code>uart</code> with a custom map: STD_OUT at
+offset 0, write transmits the low byte, reads return 0, matching Renode's
+<code>PULP_STDOUT</code> (renode-infrastructure
+<code>Peripherals/UART/PULP_STDOUT.cs</code>).</p>
+<p>Not claimed: the uDMA UART at 0x1A102100, uDMA SPI/I2C/camera, the PULP
+timer, APB GPIO, I2S, the PULP interrupt and event controllers, the FLL,
+SoC control and the other tagged windows, and the Hart ID 0x3E0. Simulation
+assumes an ideal VDD rail; power-on and brown-out behavior were not
+exercised. This is repository CLI simulation evidence, not hardware
+confirmation.</p>
 
 
 

@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: renesas-ek_ra2e1 - LabWired docs</title>
+        <title>Renesas EK-RA2E1 imported board profile - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: renesas-ek_ra2e1 - LabWired docs">
+  <meta property="og:title" content="Renesas EK-RA2E1 imported board profile - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/renesas-ek_ra2e1/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: renesas-ek_ra2e1 - LabWired docs">
+  <meta name="twitter:title" content="Renesas EK-RA2E1 imported board profile - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-renesas-ek_ra2e1" class="md-skip">
+        <a href="#renesas-ek-ra2e1-imported-board-profile" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: renesas-ek_ra2e1
+              Renesas EK-RA2E1 imported board profile
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured profile
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#smoke-evidence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Smoke evidence
       
     </span>
   </a>
@@ -4908,115 +4908,78 @@
   
 
 
-<h1 id="validation-report-renesas-ek_ra2e1">Validation Report: renesas-ek_ra2e1</h1>
-<p><strong>Architecture:</strong> ARM Cortex-M23.</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:40:20.556032Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:40:20.559962Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/renesas-ek_ra2e1.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:40:20.560927Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'renesasra_gpiomisc' (peripheral 'portMisc') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:40:20.561134Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:40:20.561215Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:40:20.561228Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:40:20.561232Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:40:20.562164Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:40:20.562172Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:40:20.562178Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:40:20.562265Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:40:20.562285Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:40:20.562289Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:40:20.562294Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:40:20.562298Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>[2m2026-10-18T14:40:20.562302Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 1876.89
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>led_blue</code></td>
-<td><code>0x0000000f</code></td>
-<td><code>led</code></td>
-</tr>
-<tr>
-<td><code>led_green</code></td>
-<td><code>0x0000000e</code></td>
-<td><code>led</code></td>
-</tr>
-<tr>
-<td><code>led_red</code></td>
-<td><code>0x0000000d</code></td>
-<td><code>led</code></td>
-</tr>
-<tr>
-<td><code>button_s2</code></td>
-<td><code>0x0000000f</code></td>
-<td><code>button</code></td>
-</tr>
-<tr>
-<td><code>button_s1</code></td>
-<td><code>0x00000004</code></td>
-<td><code>button</code></td>
-</tr>
-<tr>
-<td><code>portMisc</code></td>
-<td><code>0x40040d00</code></td>
-<td><code>renesasra_gpiomisc</code></td>
-</tr>
-<tr>
-<td><code>gpt</code></td>
-<td><code>0x40078000</code></td>
-<td><code>renesasra_gpt</code></td>
-</tr>
-<tr>
-<td><code>agt0</code></td>
-<td><code>0x40084000</code></td>
-<td><code>renesasra_agt</code></td>
-</tr>
-<tr>
-<td><code>agt1</code></td>
-<td><code>0x40084100</code></td>
-<td><code>renesasra_agt</code></td>
-</tr>
-<tr>
-<td><code>sci0</code></td>
-<td><code>0x40070000</code></td>
-<td><code>renesasra6m5_sci</code></td>
-</tr>
-<tr>
-<td><code>sci1</code></td>
-<td><code>0x40070020</code></td>
-<td><code>renesasra6m5_sci</code></td>
-</tr>
-<tr>
-<td><code>sci2</code></td>
-<td><code>0x40070040</code></td>
-<td><code>renesasra6m5_sci</code></td>
-</tr>
-<tr>
-<td><code>sci9</code></td>
-<td><code>0x40070120</code></td>
-<td><code>renesasra6m5_sci</code></td>
-</tr>
-<tr>
-<td><code>sysc_oscsf</code></td>
-<td><code>0x4001e03c</code></td>
-<td><code>pythonperipheral</code></td>
-</tr>
-<tr>
-<td><code>iic0</code></td>
-<td><code>0x40053000</code></td>
-<td><code>stub</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 15</p>
+<h1 id="renesas-ek-ra2e1-imported-board-profile">Renesas EK-RA2E1 imported board profile</h1>
+<h2 id="measured-profile">Measured profile</h2>
+<p>LabWired's onboarding profile for the imported Renode <code>renesas-ek_ra2e1</code>
+board is narrowed to what the engine executes and the smoke exercises. It
+follows Renode's
+<a href="https://github.com/renode/renode/blob/master/platforms/boards/renesas-ek_ra2e1.repl"><code>renesas-ek_ra2e1.repl</code></a>,
+which includes
+<a href="https://github.com/renode/renode/blob/master/platforms/cpus/renesas-r7fa2e1a9.repl"><code>renesas-r7fa2e1a9.repl</code></a>:</p>
+<ul>
+<li><strong>CPU:</strong> Cortex-M23 (ARMv8-M Baseline).</li>
+<li><strong>Memory:</strong> 128 KiB code flash at <code>0x00000000</code> and 16 KiB SRAM at
+  <code>0x20004000</code>. The 4 KiB data flash at <code>0x40100000</code> is omitted.</li>
+<li><strong>SCI9</strong> at <code>0x40070120</code> on the classic Renesas SCI UART model (Renode
+  <code>RenesasRA6M5_SCI</code>, FIFO disabled on this channel). Polled TX only: no IRQ
+  is declared, ICU event routing is not mapped, and baud timing is not
+  claimed.</li>
+<li><strong>PORT0</strong> at <code>0x40040000</code> and <strong>PORT9</strong> at <code>0x40040120</code> on the RA port
+  model, with the PFS block at <code>0x40040800</code>.</li>
+<li><strong>Board wiring</strong> (system <code>board_io</code>), as in the Renode board file: LED1
+  blue P915, LED2 green P914, LED3 red P913; buttons S1 P004 and S2 P015.
+  The buttons are active low here. The EK-RA2E1 switches pull the pin to
+  ground against a pull-up. Renode's <code>Button</code> model drives the pin high when
+  pressed instead.</li>
+</ul>
+<p>Not modelled and omitted from the descriptor: the ICU (so no button
+interrupts), GPT, AGT0/1, IIC0, SCI0/1/2, ports 1..5, the
+<code>RenesasRA_GPIOMisc</code> block and Renode's <code>sysc_oscsf</code> Python script.</p>
+<p>The earlier report on this page described a 2026-10-18 run of a Thumb-2
+Cortex-M3 fixture (<code>uart-ok-thumbv7m.elf</code>) against the unnarrowed import. That
+run hit a memory violation at step 2, and its coverage table listed
+zero-answering stubs and LED/button pin numbers as base addresses. It never
+exercised an RA2E1 peripheral, so it is withdrawn.</p>
+<h2 id="smoke-evidence">Smoke evidence</h2>
+<p>The firmware crate <code>crates/firmware-renesas-ek-ra2e1-smoke</code>
+(<code>thumbv8m.base-none-eabi</code>) does the following:</p>
+<ol>
+<li>Stores a MULS result.</li>
+<li>Sets <code>SCR.TE</code> on SCI9 and stores the SCR readback.</li>
+<li>Polls <code>SSR.TDRE</code> before each byte of <code>EK-RA2E1 SCI9 SMOKE</code>, then waits
+   for <code>SSR.TEND</code>.</li>
+<li>Makes P913..P915 outputs through PCNTR1, turns LED1 and LED3 on and LED2
+   off through POSR/PORR, and stores the PODR readback.</li>
+<li>Stores the idle S1 level (PCNTR2 PIDR bit 4).</li>
+<li>Loops: toggles LED1 as a heartbeat, mirrors S1 onto LED2, and counts S1
+   presses (falling edges) in SRAM.</li>
+</ol>
+<p>The firmware does not program the PFS pin mux, MSTPCRB or the clock tree.
+Firmware for real silicon must program all three.</p>
+<p>The smoke script presses S1 twice (stimuli at 100k/160k and 220k/280k
+cycles). The run took <strong>400,000 instructions</strong> and passed 10/10 checks:</p>
+<ul>
+<li>the MULS word <code>0x143</code></li>
+<li>the SCR readback <code>0x20</code></li>
+<li>the PODR readback <code>0xA000</code></li>
+<li>the idle S1 level <code>0x10</code></li>
+<li>a press count of <code>2</code></li>
+<li>the UART banner</li>
+<li>at least 4 edges on <code>port9:15</code> (LED1)</li>
+<li>at least 4 edges on <code>port9:14</code> (LED2, following S1)</li>
+<li><code>max_steps</code></li>
+</ul>
+<p>Negative control: the same firmware with the stimuli removed passes 8/10. The
+press count stays 0 and LED2 has no edges
+(<code>docs/coverage/renode-onboarding/attempt-history/renesas-ek_ra2e1/2026-11-08-no-press-negative-control/</code>).</p>
+<p>The exact system manifest is <code>configs/systems/onboarding/renesas-ek_ra2e1.yaml</code>
+and the smoke script is <code>examples/renode-onboarding/renesas-ek_ra2e1-smoke.yaml</code>.
+Per-target metrics, JUnit, UART output, simulator result, snapshot and logs are
+under <code>docs/coverage/renode-onboarding/metrics/renesas-ek_ra2e1/</code>.</p>
+<p>This is local CLI simulation evidence for the smoke assertions. It does not
+show whole-SoC coverage, Renode equivalence or hardware behaviour. See the
+<a href="../../coverage/renode-onboarding-scoreboard/">generated scoreboard</a> for the
+current global totals.</p>
 
 
 

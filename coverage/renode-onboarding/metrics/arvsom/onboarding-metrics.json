@@ -1,0 +1,37 @@
+{
+  "target_id": "arvsom",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-arvsom-rv64-cpu-smoke",
+  "target_triple": "riscv64imac-unknown-none-elf",
+  "script": "examples/renode-onboarding/arvsom-rv64-cpu-smoke.yaml",
+  "system": "configs/systems/onboarding/arvsom.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-19T16:02:01Z",
+  "finished_at_utc": "2026-11-19T16:02:08Z",
+  "elapsed_seconds": 7,
+  "elapsed_ms": 6431,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 1.793,
+    "build_firmware": 4.045,
+    "run_smoke": 0.544
+  },
+  "stages_ms": {
+    "build_cli": 1793,
+    "build_firmware": 4045,
+    "run_smoke": 544
+  }
+}

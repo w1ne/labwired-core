@@ -5005,8 +5005,9 @@ Zephyr v3.7.0 has no <code>ek_ra6m5</code> board). What that needed:</p>
 <p>No clock rate is derived from <code>SCKSCR</code>/<code>SCKDIVCR</code>/<code>PLLCCR</code>: oscillators
 settle at once and <code>cpu_hz</code> stays the reset MOCO 8 MHz after Zephyr
 switches ICLK to the 200 MHz PLL (the SysTick-based Zephyr timebase
-counts cycles, so it is unaffected). Module stop (MSTP) is a declared
-stub. The ICU <code>IRQCRn</code>/NMI pin half and <code>DTCE</code> are stored only.
+counts cycles, so it is unaffected). MSTP register reset and write
+readbacks come from the SVD; module gating is not modelled. The ICU
+<code>IRQCRn</code>/NMI pin half and <code>DTCE</code> are stored only.
 SCI0 raises no ERI and no receive error flags, and <code>SMR</code>/<code>BRR</code>/<code>SEMR</code>
 are not decoded (<code>baud</code> comes from the chip YAML). The AGT pulse output, event counter and
 measurement modes are not modelled. The PFS
@@ -5128,7 +5129,7 @@ capture: <strong>SIM-DERIVED</strong>.</p>
 <tr>
 <td>MSTP</td>
 <td><code>0x4008_4000</code></td>
-<td><code>type: stub</code> — module stop not modelled</td>
+<td>SVD-derived declarative registers — reset/write readback; module stop not modelled</td>
 </tr>
 <tr>
 <td>ICU</td>

@@ -23,7 +23,7 @@
     
     
       
-        <title>Validation Report: cortex-a53-gicv2 - LabWired docs</title>
+        <title>Cortex-A53 GICv2 imported profile - LabWired docs</title>
       
     
     
@@ -58,14 +58,14 @@
     
     <meta property="og:type" content="website">
   <meta property="og:site_name" content="LabWired docs">
-  <meta property="og:title" content="Validation Report: cortex-a53-gicv2 - LabWired docs">
+  <meta property="og:title" content="Cortex-A53 GICv2 imported profile - LabWired docs">
   <meta property="og:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta property="og:url" content="https://docs.labwired.com/boards/cortex-a53-gicv2/">
   <meta property="og:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Validation Report: cortex-a53-gicv2 - LabWired docs">
+  <meta name="twitter:title" content="Cortex-A53 GICv2 imported profile - LabWired docs">
   <meta name="twitter:description" content="Run real firmware on a digital twin of the board, in the browser, from an agent, or in CI. Same models. Deterministic results.">
   <meta name="twitter:image" content="https://docs.labwired.com/assets/brand/social-preview.png">
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validation-report-cortex-a53-gicv2" class="md-skip">
+        <a href="#cortex-a53-gicv2-imported-profile" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validation Report: cortex-a53-gicv2
+              Cortex-A53 GICv2 imported profile
             
           </span>
         </div>
@@ -4867,10 +4867,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-dynamic-simulation-validation" class="md-nav__link">
+  <a href="#measured-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Dynamic Simulation Validation
+        Measured profile
       
     </span>
   </a>
@@ -4878,10 +4878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#hardware-coverage-report" class="md-nav__link">
+  <a href="#smoke-evidence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Hardware Coverage Report
+        Smoke evidence
       
     </span>
   </a>
@@ -4908,54 +4908,27 @@
   
 
 
-<h1 id="validation-report-cortex-a53-gicv2">Validation Report: cortex-a53-gicv2</h1>
-<p><strong>Architecture:</strong> ARMv8-A (AArch64).</p>
-<h2 id="1-dynamic-simulation-validation">1. Dynamic Simulation Validation</h2>
-<p><strong>Status:</strong> ✅ Passed (simulation-ok)</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[2m2026-10-18T14:39:51.983110Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[2m2026-10-18T14:39:51.986467Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/cortex-a53-gicv2.yaml
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[2m2026-10-18T14:39:52.217728Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[2m2026-10-18T14:39:52.217821Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>[2m2026-10-18T14:39:52.217832Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>[2m2026-10-18T14:39:52.217836Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>[2m2026-10-18T14:39:52.218436Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>[2m2026-10-18T14:39:52.218445Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>[2m2026-10-18T14:39:52.218450Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>[2m2026-10-18T14:39:52.218532Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>[2m2026-10-18T14:39:52.218550Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>[2m2026-10-18T14:39:52.218554Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>[2m2026-10-18T14:39:52.218558Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>[2m2026-10-18T14:39:52.218563Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>[2m2026-10-18T14:39:52.218567Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2754.39
-</span></code></pre></div>
-<h2 id="hardware-coverage-report">Hardware Coverage Report</h2>
-<table>
-<thead>
-<tr>
-<th>Peripheral ID</th>
-<th>Base Address</th>
-<th>Type</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>timer</code></td>
-<td><code>0x0000000f</code></td>
-<td><code>arm_generictimer</code></td>
-</tr>
-<tr>
-<td><code>uart0</code></td>
-<td><code>0x09000000</code></td>
-<td><code>pl011</code></td>
-</tr>
-<tr>
-<td><code>rtc</code></td>
-<td><code>0x09010000</code></td>
-<td><code>pl031</code></td>
-</tr>
-</tbody>
-</table>
-<p><strong>Total Peripherals:</strong> 3</p>
+<h1 id="cortex-a53-gicv2-imported-profile">Cortex-A53 GICv2 imported profile</h1>
+<h2 id="measured-profile">Measured profile</h2>
+<p>The imported target is narrowed to one Cortex-A53 processing element, the 2 GiB DDR window at
+<code>0x40000000</code>, and the PL011 UART0 at <code>0x09000000</code>, served by the generic UART
+engine with the PL011 register layout (polled TX through <code>UARTFR</code>/<code>UARTDR</code>).
+The inherited <code>gicv2</code> name does not mean this profile models a GIC: the generic timer, GICv2 and PL031 RTC from the imported descriptor are omitted.</p>
+<h2 id="smoke-evidence">Smoke evidence</h2>
+<p>The exact imported system ran the committed AArch64 fixture
+(<code>tests/fixtures/virt-a53-pl011-smoke.elf</code>, built by
+<a href="../../scripts/build_virt_a53_pl011_smoke.sh"><code>scripts/build_virt_a53_pl011_smoke.sh</code></a>).
+It checks that <code>UARTFR</code> reads <code>TXFE|RXFE</code> after reset, enables the UART, writes
+<code>VIRT A53 PL011 SMOKE FR=OK</code> to <code>UARTDR</code> while polling <code>FR.TXFF</code>, then spins in
+an integer loop. The smoke asserts the banner in the captured UART output and
+the bounded <code>max_steps</code> stop after 100,000 instructions. A window answering
+zeros would print the <code>FR=BAD</code> banner instead; with UART0 removed from the
+descriptor the fixture faults on its first <code>UARTFR</code> read (0/2 checks).</p>
+<p>This does not test interrupts, RX, baud timing, the GIC, generic timer,
+multicore boot, boot firmware, Renode, or physical hardware.</p>
+<p>Evidence: <code>docs/coverage/renode-onboarding/metrics/cortex-a53-gicv2/</code> contains the
+per-target metric, JUnit result, simulator result, UART log, snapshot, and run
+log.</p>
 
 
 
