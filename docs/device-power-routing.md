@@ -10,9 +10,9 @@ World construction already primes the analog model and applies its outputs at ti
 
 `MachineTrait::inspect_devices` exposes the existing universal declared-device inspection join for World nodes. It does not pretend a sensor is a display. The BMI270 SPI artifact adds read-only `model_time_ns` so clock parking can be observed both on and off. No protocol behavior changes are introduced by that field.
 
-## Declarative SPI parts
+## Declarative devices
 
-A declarative `spi_device` descriptor opts into routed supply with an optional `behavior.spi.power` block:
+A declarative descriptor opts into routed supply with an optional, bus-agnostic `behavior.power` block (sibling of `behavior.timers`). The SPI engine implements it today:
 
 ```yaml
 power:
@@ -21,6 +21,8 @@ power:
     - { name: vddio, min_v: 1.2,  max_v: 3.6 }
   startup_us: 1000
 ```
+
+Each rail may also carry an optional `pin:` (the package pin that feeds it), which the engine ignores and the diagram compiler reads.
 
 The rails are the required supplies and their operating envelopes (cite the datasheet table next to the block). Without the block the part reports no power-control capability and attaching it with `supply_rails` is refused, as before.
 

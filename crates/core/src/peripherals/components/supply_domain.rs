@@ -501,3 +501,38 @@ impl I2cDevice for GatedI2cDevice {
         self.inner.for_each_sim_input(f)
     }
 }
+
+/// Intern a rail name as `&'static str` once per distinct name, because
+/// [`DeviceSupplyRail::name`] is `'static` and descriptors are data. Leaks one
+/// string per distinct name for the life of the process, never one per device.
+fn intern_rail_name(name: &str) -> &'static str {
+    use std::collections::HashSet;
+    use std::sync::{Mutex, OnceLock};
+    static NAMES: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
+    let mut names = NAMES
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(existing) = names.get(name) {
+        return existing;
+    }
+    let leaked: &'static str = Box::leak(name.to_owned().into_boxed_str());
+    names.insert(leaked);
+    leaked
+}
+
+/// The required rails a descriptor's `behavior.power` block declares, shared by
+/// every declarative engine. Empty when the block is absent.
+pub(crate) fn device_rails(
+    power: Option<&labwired_config::DevicePowerSpec>,
+) -> Vec<crate::peripherals::device::DeviceSupplyRail> {
+    power
+        .into_iter()
+        .flat_map(|p| &p.rails)
+        .map(|r| crate::peripherals::device::DeviceSupplyRail {
+            name: intern_rail_name(&r.name),
+            min_v: r.min_v,
+            max_v: r.max_v,
+        })
+        .collect()
+}

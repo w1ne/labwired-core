@@ -41,7 +41,7 @@ pub struct GenericSpiDevice {
     /// call the constructor makes.
     timer_specs: Vec<labwired_config::DeviceTimer>,
     file_spec: Option<SpiRegisterFile>,
-    /// `behavior.spi.power`: the required rails (names interned to `'static`)
+    /// `behavior.power`: the required rails (names interned to `'static`)
     /// and the start-up interval. Empty rails ⇒ no power-control capability.
     rails: Vec<crate::peripherals::device::DeviceSupplyRail>,
     startup_us: u64,
@@ -209,24 +209,8 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
         .spi
         .as_ref()
         .context("declarative spi device is missing behavior.spi")?;
-    if let Some(power) = &spec.power {
-        if power.rails.is_empty() {
-            bail!("behavior.spi.power declares no rails");
-        }
-        for (i, rail) in power.rails.iter().enumerate() {
-            if rail.name.is_empty() || !(rail.min_v >= 0.0 && rail.max_v > rail.min_v) {
-                bail!(
-                    "behavior.spi.power.rails[{i}] '{}' needs a name and 0 <= min_v < max_v",
-                    rail.name
-                );
-            }
-            if power.rails[..i].iter().any(|r| r.name == rail.name) {
-                bail!(
-                    "behavior.spi.power.rails[{i}]: duplicate rail '{}'",
-                    rail.name
-                );
-            }
-        }
+    if let Some(power) = &descriptor.behavior.power {
+        power.validate()?;
     }
     if spec.registers.is_empty() && spec.register_file.is_none() {
         // ⚠️ ONE exception, and it is a shape rather than a loophole: a part
@@ -422,26 +406,6 @@ impl ChipState {
     }
 }
 
-/// Intern a rail name as `&'static str` once per distinct name, because
-/// [`DeviceSupplyRail::name`](crate::peripherals::device::DeviceSupplyRail) is
-/// `'static` and descriptors are data. Leaks one string per distinct name for
-/// the life of the process, never one per attached device.
-fn intern_rail_name(name: &str) -> &'static str {
-    use std::collections::HashSet;
-    use std::sync::{Mutex, OnceLock};
-    static NAMES: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
-    let mut names = NAMES
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some(existing) = names.get(name) {
-        return existing;
-    }
-    let leaked: &'static str = Box::leak(name.to_owned().into_boxed_str());
-    names.insert(leaked);
-    leaked
-}
-
 impl GenericSpiDevice {
     pub fn from_descriptor(
         descriptor: &DeviceDescriptor,
@@ -473,17 +437,12 @@ impl GenericSpiDevice {
             registers: spec.registers.clone(),
             timer_specs: descriptor.behavior.timers.clone(),
             file_spec: spec.register_file.clone(),
-            rails: spec
+            rails: super::supply_domain::device_rails(descriptor.behavior.power.as_ref()),
+            startup_us: descriptor
+                .behavior
                 .power
-                .iter()
-                .flat_map(|p| &p.rails)
-                .map(|r| crate::peripherals::device::DeviceSupplyRail {
-                    name: intern_rail_name(&r.name),
-                    min_v: r.min_v,
-                    max_v: r.max_v,
-                })
-                .collect(),
-            startup_us: spec.power.as_ref().map_or(0, |p| p.startup_us),
+                .as_ref()
+                .map_or(0, |p| p.startup_us),
             startup_left_us: 0,
             slots,
             reg_values: init.reg_values,

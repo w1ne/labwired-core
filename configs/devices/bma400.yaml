@@ -21,19 +21,6 @@ behavior:
       auto_increment: true
       read_dummy_bytes: 1
       activate_on_first_cs_release: true
-    # Routed supply (`config.supply_rails` / `board.device.<id>.power.<rail>_volts`).
-    # BST-BMA400-DS000-14 rev 2.3, "Parameter Specification" table: VDD 1.72-3.6 V,
-    # VDDIO 1.2-3.6 V, power-up time ts_up max 1 ms ("starting the device to sleep
-    # mode"). Section "Interface I2C/SPI Protocol Selection": power-on-reset is only
-    # executed when both VDD and VDDIO are established; the part powers up in I2C
-    # mode and a CSB rising edge after power-up selects SPI until the next reset or
-    # power-up. A CSB edge during ts_up is therefore ignored (activation happens only
-    # once the part is answering).
-    power:
-      rails:
-        - { name: vdd, pin: VDD, min_v: 1.72, max_v: 3.6 }
-        - { name: vddio, pin: VDDIO, min_v: 1.2, max_v: 3.6 }
-      startup_us: 1000
     registers:
       - { name: CHIP_ID, addr: 0x00, width: 1, endian: le, access: r, reset: 0x90 }
       - { name: RESERVED01, addr: 0x01, width: 1, endian: le, access: r, reset: 0x88 }
@@ -83,6 +70,19 @@ behavior:
       - { name: INT2_MAP, addr: 0x22, width: 1, endian: le, access: rw, reset: 0x00 }
       - { name: IF_CONF, addr: 0x7C, width: 1, endian: le, access: rw, reset: 0x00 }
       - { name: CMD, addr: 0x7E, width: 1, endian: le, access: rw, reset: 0x00 }
+  # Routed supply (`config.supply_rails` / `board.device.<id>.power.<rail>_volts`).
+  # BST-BMA400-DS000-14 rev 2.3, "Parameter Specification" table: VDD 1.72-3.6 V,
+  # VDDIO 1.2-3.6 V, power-up time ts_up max 1 ms ("starting the device to sleep
+  # mode"). Section "Interface I2C/SPI Protocol Selection": power-on-reset is only
+  # executed when both VDD and VDDIO are established; the part powers up in I2C
+  # mode and a CSB rising edge after power-up selects SPI until the next reset or
+  # power-up. A CSB edge during ts_up is therefore ignored (activation happens only
+  # once the part is answering).
+  power:
+    rails:
+      - { name: vdd, pin: VDD, min_v: 1.72, max_v: 3.6 }
+      - { name: vddio, pin: VDDIO, min_v: 1.2, max_v: 3.6 }
+    startup_us: 1000
   rules:
     # STATUS.power_mode[2:1] reflects the programmed ACC_CONFIG0.power_mode.
     - on: { write: ACC_CONFIG0 }
