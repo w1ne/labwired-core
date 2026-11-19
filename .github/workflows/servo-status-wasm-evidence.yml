@@ -1,0 +1,48 @@
+name: Servo modeled source status WASM evidence
+on:
+  push:
+    branches: [test/servo-status-wasm-20261119]
+permissions:
+  contents: read
+jobs:
+  glue:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CARGO_PROFILE_RELEASE_LTO: fat
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
+      CARGO_PROFILE_RELEASE_OPT_LEVEL: s
+      CARGO_PROFILE_RELEASE_DEBUG: 0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install wasm-pack 0.13.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --connect-timeout 20 --retry 8 --retry-delay 3 --retry-max-time 180 https://github.com/rustwasm/wasm-pack/releases/download/v0.13.1/wasm-pack-v0.13.1-x86_64-unknown-linux-musl.tar.gz -o /tmp/wasm-pack.tar.gz
+          tar -xzf /tmp/wasm-pack.tar.gz -C /tmp
+          install -m 0755 /tmp/wasm-pack-v0.13.1-x86_64-unknown-linux-musl/wasm-pack "$HOME/.cargo/bin/wasm-pack"
+          wasm-pack --version
+      - name: Build exact core
+        working-directory: crates/wasm
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=${GITHUB_WORKSPACE}=. --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=.cargo"
+          test "$(git rev-parse HEAD^)" = d3940c6e28d77c4a2b161dc09f780523815411fa
+          rustc --version
+          cargo --version
+          wasm-pack build --release --target web --out-dir "$RUNNER_TEMP/wasm-evidence"
+          sha256sum "$RUNNER_TEMP/wasm-evidence/labwired_wasm.js" "$RUNNER_TEMP/wasm-evidence/labwired_wasm.d.ts" "$RUNNER_TEMP/wasm-evidence/labwired_wasm_bg.wasm" | tee "$RUNNER_TEMP/wasm-evidence/SHA256SUMS"
+          git rev-parse HEAD^ > "$RUNNER_TEMP/wasm-evidence/core-commit.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: servo-source-status-wasm
+          path: ${{ runner.temp }}/wasm-evidence/
+          retention-days: 7
+          if-no-files-found: error
