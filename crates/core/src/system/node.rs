@@ -499,8 +499,11 @@ fn build_riscv_node(
     fab: Option<&crate::system::efuse::FactoryMacAllocator>,
     blobs: &crate::system::builder::BlobMap,
 ) -> anyhow::Result<Box<dyn MachineTrait>> {
-    let mut bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
-        .with_context(|| format!("node '{id}': build bus"))?;
+    // A blob named after an `image_env` region fills it (the C6 mask ROM is
+    // `rom`): a process with no core checkout has no in-tree image to find.
+    let mut bus =
+        crate::bus::SystemBus::from_config_with_region_images(chip, system, plugins, blobs)
+            .with_context(|| format!("node '{id}': build bus"))?;
 
     match firmware {
         // Faithful ROM boot: the mask ROM reads the image through the flash
@@ -593,10 +596,7 @@ fn build_riscv_node(
             machine
                 .load_firmware(&image)
                 .map_err(|e| anyhow::anyhow!("node '{id}': load firmware: {e:?}"))?;
-            // Re-seed ROM .data after ELF load (mask-ROM unpack never ran).
-            if crate::boot::esp32c6_rom::is_esp32c6(chip) {
-                crate::boot::esp32c6_rom::seed_rom_data(&mut machine.bus);
-            }
+            // C2 fast boot: replay the ROM `.data` unpack and arm the matrix.
             if crate::boot::esp32c2_rom::is_esp32c2(chip) {
                 crate::boot::esp32c2_rom::seed_rom_data(&mut machine.bus);
                 crate::boot::esp32c2_rom::arm_interrupt_matrix(&mut machine.bus);
@@ -605,12 +605,12 @@ fn build_riscv_node(
             // Fast boot skips the ROM/2nd-stage bootloader that would normally
             // set the stack pointer, so seed it at the top of app SRAM (16-byte
             // aligned, RISC-V ABI) or the first prologue store faults.
-            // C6: below ROM-reserved HP SRAM (esp32c6_rom::APP_SRAM_END).
-            let sp_top = if crate::boot::esp32c6_rom::is_esp32c6(chip) {
-                crate::boot::esp32c6_rom::app_stack_top()
-            } else {
-                (chip.ram.base + chip.ram.size) as u32
-            };
+            // C6: ROM .data re-seed and the bootloader's factory map first
+            // (mask-ROM unpack never ran); its stack stays below ROM-reserved
+            // HP SRAM (esp32c6_rom::APP_SRAM_END).
+            let sp_top =
+                crate::boot::esp32c6_rom::finish_elf_fast_boot(&mut machine.bus, chip, &bytes)
+                    .unwrap_or((chip.ram.base + chip.ram.size) as u32);
             machine.cpu.set_sp(sp_top & !0xF);
             machine.cpu.set_pc(image.entry_point as u32);
             Ok(Box::new(machine))
@@ -947,7 +947,6 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
             continue;
         }
         let off = ph.p_offset as usize;
-        let n = ph.p_filesz as usize;
         check_load_segment(ph, bytes.len())?;
         let addr = if arch == crate::Arch::Mips {
             // MIPS ELFs name KSEG0/KSEG1 addresses; the bus is physical.
@@ -960,9 +959,72 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
         } else {
             ph.p_paddr
         };
-        image.add_segment(addr, bytes[off..off + n].to_vec());
+        for (piece_off, piece_len) in file_backed_pieces(&elf, ph) {
+            let start = off + piece_off;
+            image.add_segment(
+                addr + piece_off as u64,
+                bytes[start..start + piece_len].to_vec(),
+            );
+        }
     }
     Ok(image)
+}
+
+/// Split a `PT_LOAD` file image into the byte ranges that real sections own.
+///
+/// A `SHT_NOBITS` section has no file content, yet a linker can still place
+/// one inside a segment's `p_filesz` range. ESP-IDF 5 does exactly this on the
+/// ESP32-C6, where IROM and DROM share the 0x4200_0000 window: the rodata
+/// segment starts with `.flash_rodata_dummy`, a 192 KiB NOBITS placeholder at
+/// the *same* address as `.flash.text`. esptool drops it and the bootloader
+/// maps text and rodata through separate MMU pages, so on silicon the code is
+/// intact. Copying the filler as data would zero `.flash.text` instead.
+///
+/// Returns `(offset, len)` pieces relative to the segment's file image. With
+/// no NOBITS section inside `p_filesz` (every ordinary ELF: `.bss` sits past
+/// it) this is the whole segment, unchanged.
+///
+/// Shared with the `loader` crate, so `labwired test`, the browser, the
+/// builder and a world node load the same bytes.
+pub fn file_backed_pieces(
+    elf: &goblin::elf::Elf<'_>,
+    ph: &goblin::elf::ProgramHeader,
+) -> Vec<(usize, usize)> {
+    use goblin::elf::section_header::{SHF_ALLOC, SHT_NOBITS};
+    let filesz = ph.p_filesz as usize;
+    let mut holes: Vec<(usize, usize)> = elf
+        .section_headers
+        .iter()
+        .filter(|sh| {
+            sh.sh_type == SHT_NOBITS && sh.sh_flags & u64::from(SHF_ALLOC) != 0 && sh.sh_size != 0
+        })
+        .filter_map(|sh| {
+            // The section belongs to THIS segment only when its address and
+            // its file position sit at the same offset into it. Matching on
+            // the address alone is wrong for the C6 case: the dummy shares
+            // its address with `.flash.text`, which is a different segment.
+            let at = sh.sh_addr.checked_sub(ph.p_vaddr)?;
+            if sh.sh_offset.checked_sub(ph.p_offset)? != at {
+                return None;
+            }
+            let lo = at as usize;
+            let hi = (at + sh.sh_size).min(filesz as u64) as usize;
+            (lo < hi).then_some((lo, hi))
+        })
+        .collect();
+    holes.sort_unstable();
+    let mut pieces = Vec::new();
+    let mut cursor = 0usize;
+    for (lo, hi) in holes {
+        if lo > cursor {
+            pieces.push((cursor, lo - cursor));
+        }
+        cursor = cursor.max(hi);
+    }
+    if cursor < filesz {
+        pieces.push((cursor, filesz - cursor));
+    }
+    pieces
 }
 
 /// Load a PIC24 XC16 ELF from its **section** table (see [`parse_elf_image`]).
