@@ -646,6 +646,50 @@ mod tests {
     }
 
     #[test]
+    fn adc1_board_input_snapshot_restores_voltage_and_legacy_fallback() {
+        let mut original = Esp32s3SarAdc::new(SRC);
+        assert!(original.set_adc_channel_input(1, 1650));
+        assert!(original.set_adc_channel_input(9, 3300));
+
+        // Reopening a board must restore its distinct physical stimulus
+        // inputs. A channel that is not driven must not inherit either one.
+        let saved = original.snapshot();
+        let mut restored = Esp32s3SarAdc::new(SRC);
+        restored.restore(saved).unwrap();
+        for (channel, expected) in [(1, 2048), (9, 4095)] {
+            restored
+                .write_u32(
+                    ONETIME_SAMPLE,
+                    ONETIME_SAMPLE1_EN | ONETIME_START | (channel << ONETIME_CHANNEL_S),
+                )
+                .unwrap();
+            let packed = restored.read_u32(SARADC1_DATA_STATUS).unwrap();
+            assert_eq!((packed >> 13) & 0xF, channel);
+            assert_eq!(packed & 0xFFF, expected);
+        }
+
+        // After a source is cleared, the converter returns to the same
+        // deterministic unset-channel path as a fresh instance.
+        assert!(restored.clear_adc_channel_input(9));
+        let mut reference = Esp32s3SarAdc::new(SRC);
+        let ch9 = ONETIME_SAMPLE1_EN | ONETIME_START | (9 << ONETIME_CHANNEL_S);
+        restored.write_u32(ONETIME_SAMPLE, ch9).unwrap();
+        reference.write_u32(ONETIME_SAMPLE, ch9).unwrap();
+        assert_eq!(
+            restored.read_u32(SARADC1_DATA_STATUS).unwrap(),
+            reference.read_u32(SARADC1_DATA_STATUS).unwrap(),
+        );
+
+        // Pre-ADC-source snapshots have no adc1_input_mv field. The
+        // backward-compatible restore must not synthesize a voltage.
+        let mut legacy = Esp32s3SarAdc::new(SRC).snapshot();
+        legacy.as_object_mut().unwrap().remove("adc1_input_mv");
+        let mut from_legacy = Esp32s3SarAdc::new(SRC);
+        from_legacy.restore(legacy).unwrap();
+        assert_eq!(from_legacy.adc1_input_mv, [None; 10]);
+    }
+
+    #[test]
     fn forced_start_completes() {
         let mut a = Esp32s3SarAdc::new(SRC);
         a.write_u32(
