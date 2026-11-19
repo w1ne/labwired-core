@@ -866,6 +866,9 @@ impl WasmSimulator {
     /// - `bldc-motor` exports DC-bus `current_a`, `phase_currents_a`, and
     ///   `commutation_sector`
     ///
+    /// Servo `active`, `angle` and `pulse_us` retain the last modeled command.
+    /// `source_status` is a snapshot of modeled source configuration, not
+    /// freshness, servo power, physical output or a reset-fresh observation.
     /// Ids match the diagram part id / external_devices id so the UI maps
     /// straight onto `boardIoStates[partId]`.
     #[wasm_bindgen]
@@ -895,6 +898,7 @@ impl WasmSimulator {
                 "angle": servo.angle_degrees() as f64,
                 "active": servo.is_commanded(),
                 "pulse_us": servo.pulse_us() as f64,
+                "source_status": machine.bus.modeled_servo_source_status(servo).as_str(),
             }));
         }
         for stepper in machine
