@@ -38,6 +38,25 @@
 
 use std::sync::{Arc, Mutex};
 
+/// Current modeled source qualification, independent of the last commanded
+/// servo position. This is not a measurement of a physical signal or power.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModeledServoSourceStatus {
+    Unknown,
+    Disabled,
+    ModeledPwm,
+}
+
+impl ModeledServoSourceStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Disabled => "disabled",
+            Self::ModeledPwm => "modeled_pwm",
+        }
+    }
+}
+
 /// Pulse-width ↔ angle calibration for a hobby servo.
 #[derive(Debug, Clone, Copy)]
 pub struct ServoCal {
