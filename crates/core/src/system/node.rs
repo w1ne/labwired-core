@@ -578,20 +578,30 @@ fn build_riscv_node(
             // that calls into the ROM jumps through a zeroed function table.
             // No ROM resolvable (the browser with no blobs) leaves the windows
             // zero, exactly as the single-chip engine does then.
-            if is_esp32c3(chip) {
-                if let Some(images) =
-                    crate::boot::esp32c3_rom::rom_images_from_blobs_or_provisioned(blobs)
-                {
-                    crate::boot::esp32c3_rom::install_fast_boot_rom(&mut bus, &images);
-                }
-            }
+            let faithful_c3_rom = is_esp32c3(chip)
+                && crate::boot::esp32c3_rom::rom_images_from_blobs_or_provisioned(blobs)
+                    .is_some_and(|images| {
+                        crate::boot::esp32c3_rom::install_fast_boot_rom(&mut bus, &images)
+                    });
             // C6 Arduino Preferences/NVS substrate (SPI_MEM + partitions @ 0x8000).
             crate::boot::esp32c6_rom::maybe_install_arduino_flash(&mut bus, chip);
-            let cpu = crate::system::riscv::configure_riscv(&mut bus);
+            let mut cpu = crate::system::riscv::configure_riscv(&mut bus);
+            if crate::boot::esp32c2_rom::is_esp32c2(chip) {
+                crate::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
+            }
+            if faithful_c3_rom {
+                crate::boot::esp32c3_rom::prepare_fast_boot_cpu(&mut cpu);
+            }
             let mut machine = Machine::new(cpu, bus);
             machine
                 .load_firmware(&image)
                 .map_err(|e| anyhow::anyhow!("node '{id}': load firmware: {e:?}"))?;
+            // C2 fast boot: replay the ROM `.data` unpack and arm the matrix.
+            if crate::boot::esp32c2_rom::is_esp32c2(chip) {
+                crate::boot::esp32c2_rom::seed_rom_data(&mut machine.bus);
+                crate::boot::esp32c2_rom::arm_interrupt_matrix(&mut machine.bus);
+                crate::boot::esp32c2_rom::seed_console_uart(&mut machine.bus);
+            }
             // Fast boot skips the ROM/2nd-stage bootloader that would normally
             // set the stack pointer, so seed it at the top of app SRAM (16-byte
             // aligned, RISC-V ABI) or the first prologue store faults.

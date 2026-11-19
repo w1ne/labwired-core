@@ -2037,7 +2037,7 @@ pub(crate) fn run_test(
     let rom_boot_path =
         args.rom_boot || args.capture_app_entry.is_some() || args.resume_snapshot.is_some();
     if !rom_boot_path {
-        let is_c3 = system_path.as_ref().and_then(|sys_path| {
+        let fast_boot_chip = system_path.as_ref().and_then(|sys_path| {
             labwired_config::SystemManifest::from_file(sys_path)
                 .ok()
                 .and_then(|m| {
@@ -2050,16 +2050,26 @@ pub(crate) fn run_test(
                         &crate::plugin_chip_yaml(plugins),
                     )
                     .ok()
-                    .map(|c| c.name == "esp32c3")
+                    .map(|c| c.name)
                 })
         });
-        if is_c3 == Some(true) {
+        if fast_boot_chip.as_deref() == Some("esp32c3") {
             // SPIMEM / ANA I2C / cache / SYSTIMER / SAR / RMT / MMU+XIP /
             // irq routing — see esp32_boot_state::install_esp32c3_fast_boot.
             super::esp32_boot_state::install_esp32c3_fast_boot(
                 &mut bus,
                 std::path::Path::new(&firmware_path),
             );
+        }
+        // ESP32-C2: interrupt routing through the matrix and the ROM's
+        // UART0 console rate, as the shared builder's fast boot sets them
+        // (`boot::esp32c2_rom`).
+        if fast_boot_chip
+            .as_deref()
+            .is_some_and(|name| name.eq_ignore_ascii_case("esp32c2"))
+        {
+            labwired_core::boot::esp32c2_rom::arm_interrupt_matrix(&mut bus);
+            labwired_core::boot::esp32c2_rom::seed_console_uart(&mut bus);
         }
         // ESP32-C6: SPI_MEM + partition seed + ROM .data pointers (CLI RISC-V
         // path does not go through builder/riscv.rs).
@@ -2426,6 +2436,15 @@ pub(crate) fn run_test(
                                     sp_top = labwired_core::boot::esp32c6_rom::app_stack_top();
                                 }
                                 machine.cpu.set_sp(sp_top & !0xF);
+                            }
+                            // ROM `g_uart_print`, which the ROM's own print
+                            // init sets and the `.data` replay above leaves
+                            // zero: without it ROM `uart_tx_one_char` (the
+                            // esp-println `uart` path) drops every byte.
+                            if chip.name == "esp32c3" {
+                                labwired_core::boot::esp32c3_rom::seed_rom_console(
+                                    &mut machine.bus,
+                                );
                             }
                             // Arduino-ESP32 `system_early_init` validates the
                             // ESP app image magic (0xE9) at the DROM-mapped
@@ -2899,6 +2918,20 @@ pub(crate) fn run_test(
                 // yield via FROM_CPU — same disable as rom-boot.
                 if bus.irq_fabric.esp32c3.routing {
                     cpu.mtimecmp = u64::MAX;
+                }
+                let chip_name = resolved_system
+                    .as_ref()
+                    .and_then(|s| s.chip_with_plugins(&crate::plugin_chip_yaml(plugins)).ok())
+                    .map(|chip| chip.name);
+                match chip_name.as_deref() {
+                    Some(name) if name.eq_ignore_ascii_case("esp32c2") => {
+                        labwired_core::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
+                    }
+                    // Same chip test as the C3 fast-boot install above.
+                    Some("esp32c3") if bus.irq_fabric.esp32c3.routing => {
+                        labwired_core::boot::esp32c3_rom::prepare_fast_boot_cpu(&mut cpu);
+                    }
+                    _ => {}
                 }
                 setup_and_run!(cpu)
             }

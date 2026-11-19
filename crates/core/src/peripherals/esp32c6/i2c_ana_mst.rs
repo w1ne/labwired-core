@@ -14,6 +14,12 @@
 //! - reads of `I2C_BURST_STATUS` force `BURST_DONE` (bit 0).
 //!
 //! Every other word is sticky R/W so the enable-block RMW of `ANA_CONF*` sticks.
+//!
+//! The ESP32-C2 master is the same IP at `0x6004_E800` with `ANA_CONF0`
+//! further up the window: the `esp32c2` PAC (0.30) maps `I2C_ANA_MST` =
+//! `ANA_CONF0` at `0x6004_E840`, `BBPLL_CAL_DONE` still bit 24. A descriptor
+//! selects that with `config: { ana_conf0_offset: 0x40 }`
+//! ([`Esp32c6I2cAnaMst::with_ana_conf0_offset`]).
 
 use crate::{Peripheral, SimResult};
 
@@ -31,13 +37,23 @@ const WINDOW_BYTES: usize = 1024;
 #[derive(Debug)]
 pub struct Esp32c6I2cAnaMst {
     regs: Vec<u32>,
+    /// Window offset of `ANA_CONF0` (C6 `0x18`, C2 `0x40`).
+    ana_conf0: u64,
 }
 
 impl Esp32c6I2cAnaMst {
     pub fn new() -> Self {
         Self {
             regs: vec![0u32; WINDOW_BYTES / 4],
+            ana_conf0: ANA_CONF0,
         }
+    }
+
+    /// The same master with `ANA_CONF0` at `offset` (word-aligned, inside
+    /// the 1 KiB window).
+    pub fn with_ana_conf0_offset(mut self, offset: u64) -> Self {
+        self.ana_conf0 = offset & !3;
+        self
     }
 }
 
@@ -70,7 +86,7 @@ impl Peripheral for Esp32c6I2cAnaMst {
         let stored = *self.regs.get((offset / 4) as usize).unwrap_or(&0);
         Ok(match offset {
             I2C0_CTRL | I2C1_CTRL => stored & !BUSY,
-            ANA_CONF0 => stored | BBPLL_CAL_DONE,
+            o if o == self.ana_conf0 => stored | BBPLL_CAL_DONE,
             BURST_STATUS => stored | BURST_DONE,
             _ => stored,
         })
@@ -113,6 +129,15 @@ mod tests {
     fn ana_conf0_reports_bbpll_cal_done() {
         let p = Esp32c6I2cAnaMst::new();
         assert_ne!(p.read_u32(ANA_CONF0).unwrap() & BBPLL_CAL_DONE, 0);
+    }
+
+    #[test]
+    fn c2_layout_reports_bbpll_cal_done_at_0x40() {
+        // esp-hal 1.x `esp32c2` clocks: `while ana_conf0().bbpll_cal_done()
+        // .bit_is_clear() {}` against I2C_ANA_MST = 0x6004_E840.
+        let p = Esp32c6I2cAnaMst::new().with_ana_conf0_offset(0x40);
+        assert_ne!(p.read_u32(0x40).unwrap() & BBPLL_CAL_DONE, 0);
+        assert_eq!(p.read_u32(ANA_CONF0).unwrap() & BBPLL_CAL_DONE, 0);
     }
 
     #[test]

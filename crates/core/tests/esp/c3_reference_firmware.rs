@@ -88,7 +88,10 @@ fn customer_c3_esp_idf_firmware_initializes_its_gpio_and_uart_driver() {
     let mut machine = build_rom_boot_machine(bus, flash, RomBootOpts::default(), |cpu| cpu);
     let mut entered_app = false;
     let mut sampled = false;
-    for _ in 0..30_000_000 {
+    // The ROM selects XTAL 40 MHz for UART0 (CLK_CONF.SCLK_SEL = 3,
+    // CLKDIV 347): 13,880 CPU cycles per console byte at 115200 baud. The
+    // sample is reached after about 47.4M steps.
+    for _ in 0..80_000_000 {
         entered_app |= machine.cpu.get_pc() == app_main;
         sampled |= machine.cpu.get_pc() == tick;
         if sampled {
