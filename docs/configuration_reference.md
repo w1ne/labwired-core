@@ -428,6 +428,7 @@ canonical `type:`; the table below is rendered from that file by
 | `drv2605` | I²C | TI DRV2605 haptic motor driver over I2C |
 | `ds3231` | I²C | I²C real-time clock with temperature-compensated crystal |
 | `ens160` | I²C | ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C |
+| `ft5x06` | I²C | Single-contact FT5x06 I2C touch report model |
 | `fxos8700` | I²C | NXP FXOS8700 6-axis accelerometer + magnetometer over I2C |
 | `ht16k33` | I²C | 16×8 LED matrix / 7-segment I²C controller (display RAM, setup commands) |
 | `icm20948` | I²C | TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C |
