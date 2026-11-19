@@ -9,7 +9,6 @@ same fields but never their source, chip YAML, binary or build paths.
 
 | Model | Visibility | Conformance | Peripherals | Step Ir/step | Batch Ir/step | RTx | Public docs |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| esp32c2 | open | L0 | 2 | — | — | ≥1× (CI) | — |
 | esp32c3 | open | L2 | 40 | — | 2.5 | ≥1× (CI) | [doc](docs/boards/esp32c3.md) |
 | esp32c2 | open | L1 | 22 | — | — | ≥1× (CI) | — |
 | esp32c6 | open | L1 | 69 | — | 3.5 | ≥1× (CI) | — |
