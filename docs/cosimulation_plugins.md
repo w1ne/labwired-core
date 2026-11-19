@@ -393,6 +393,7 @@ the same circuit and the same routing as `system.yaml`.
 | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` |
 | SPICE voltage switch | `S<name> n+ n- nc+ nc- <model> [on\|off]` with `.model <model> SW(VT= VH= RON= ROFF=)` |
 | SPICE current switch | `W<name> n+ n- <element> <model> [on\|off]` with `.model <model> CSW(IT= IH= RON= ROFF=)` |
+| Lossless transmission line | `T<name> n1+ n1- n2+ n2- Z0=<ohms> TD=<s>` or `Z0=<ohms> F=<Hz> [NL=<wavelengths>]` |
 | Diode | `D<name> n+ n- <model> [<area>] [m=<count>] [temp=<°C>]` |
 | BJT | `Q<name> nc nb ne <model> [<area>] [m=<count>] [temp=<°C>]` |
 | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]` |
@@ -405,6 +406,16 @@ threshold + hysteresis and open below threshold − hysteresis; in between they
 keep their state, and `on` sets the state the operating point starts from.
 Card defaults are ngspice's (`VT`/`IT` 0, `VH`/`IH` 0, `RON` 1 Ω, `ROFF`
 1e12 Ω). Negative hysteresis and parameters from other simulators are refused.
+
+A `T` line is two ports joined by a pure delay: each port sees `Z0` in series
+with the wave the other port sent `TD` earlier, and the operating point sees
+two wires. `F=` gives the delay as `NL / F`, with `NL` 0.25 unless given, as
+in ngspice. Only the differential mode exists, as in SPICE. The delay is
+exact for any step, because the delayed wave is interpolated from the stored
+solution; when the delay is not a whole number of steps, each pass down the
+line widens an edge by up to one step. A step longer than the delay is
+stable and treats the line as electrically short. `ic=`, `rel=` and `abs=`
+are refused by name.
 
 `m=<count>` is the SPICE instance multiplier: the element acts as that many
 identical devices in parallel. Every current, conductance and stored charge it

@@ -53,9 +53,10 @@ pub use netlist::{
     Capacitor, Cccs, Ccvs, Circuit, ComparatorModel, ComparatorOutput, CurrentSource, Diode,
     DiodeModel, Inductor, ModelCard, MosChannelChargeModel, MosModel, Mosfet, MutualInductor,
     NodeRef, NtcModel, OpAmpModel, Polarity, PowerSink, RegulatorKind, RegulatorModel, Resistor,
-    ResistorTemperatureModel, Switch, SwitchModel, SwitchSense, ThresholdSwitchControl, Vccs, Vcvs,
-    VoltageSource, VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE,
-    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
+    ResistorTemperatureModel, Switch, SwitchModel, SwitchSense, ThresholdSwitchControl,
+    TransmissionLine, Vccs, Vcvs, VoltageSource, VoltageSwitchControl, Waveform,
+    COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
+    REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
 };
 pub use trace::{
     AnalogChannel, AnalogSample, AnalogSeries, AnalogSeriesChannel, AnalogTrace, AnalogTraceBatch,

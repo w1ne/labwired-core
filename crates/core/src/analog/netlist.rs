@@ -165,6 +165,20 @@
 //! The `S` forms with `ron=`/`roff=` on the element line are this engine's
 //! own and take no model.
 //!
+//! `T<name> n1+ n1- n2+ n2- Z0=<ohms> TD=<seconds>` is SPICE's lossless
+//! transmission line; `F=<Hz> [NL=<wavelengths>]` gives the delay as
+//! `NL / F` instead (`NL` defaults to 0.25), as in ngspice. The line is the
+//! method of characteristics: each port sees `Z0` in series with the wave the
+//! other port sent `TD` earlier, read from the stored solution by linear
+//! interpolation, and the operating point sees two wires. Only the
+//! differential mode exists, as in SPICE: no current flows between the ports'
+//! reference nodes. When a step is longer than `TD` the delayed wave falls
+//! inside the step and is interpolated to the step's own end point, so the
+//! line stays stable but the edge is resolved no finer than the step. When
+//! the delay is not a whole number of steps, interpolation widens an edge by
+//! up to one step on each pass down the line; the plateaus are exact. `ic=`
+//! and ngspice's `rel=`/`abs=` breakpoint controls are refused by name.
+//!
 //! `<source>` is `[dc] <value>`, `SIN(vo va freq [td [theta]])`,
 //! `SFFM(vo va fc mdi fs)`, `EXP(v1 v2 td1 tau1 td2 tau2)`,
 //! `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, or
@@ -3189,6 +3203,29 @@ impl Switch {
     }
 }
 
+/// `T<name> n1+ n1- n2+ n2- Z0=<ohms> TD=<seconds>` — SPICE's lossless
+/// transmission line, two ports joined by a pure delay.
+///
+/// Each port owns a branch current that enters its `+` node; see
+/// [`Circuit::transmission_line_branch`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransmissionLine {
+    /// Element name as written.
+    pub name: String,
+    /// Port 1 `+` node.
+    pub p1: NodeRef,
+    /// Port 1 `-` node.
+    pub n1: NodeRef,
+    /// Port 2 `+` node.
+    pub p2: NodeRef,
+    /// Port 2 `-` node.
+    pub n2: NodeRef,
+    /// Characteristic impedance `Z0`, ohms.
+    pub z0: f64,
+    /// One-way delay `TD`, seconds; `NL / F` when the line gives a frequency.
+    pub delay: f64,
+}
+
 /// A parsed netlist: elements in file order plus the node table.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Circuit {
@@ -3230,6 +3267,9 @@ pub struct Circuit {
     /// Behavioural current sources (`B ... I=`, `G ... VALUE=`), in netlist
     /// order.
     pub behavioural_currents: Vec<BehaviouralSource>,
+    /// Lossless transmission lines (`T`), in netlist order. Each adds two
+    /// branch currents.
+    pub transmission_lines: Vec<TransmissionLine>,
     /// Power-balance sinks, one per lowered `BUCK`.
     pub power_sinks: Vec<PowerSink>,
     /// Op-amp output stages with an explicit `IOLIM`.
@@ -3268,16 +3308,23 @@ impl Circuit {
 
     /// Number of branch currents (the `M`): one per voltage source, then one
     /// per inductor, then one per `E`, then one per `H`, then one per
-    /// behavioural voltage source, in that order.
+    /// behavioural voltage source, then two per `T` line, in that order.
     ///
     /// The dependent sources come last so that adding one to a netlist never
     /// renumbers a voltage source's or inductor's branch.
     pub fn branch_count(&self) -> usize {
+        self.transmission_line_branch(self.transmission_lines.len())
+    }
+
+    /// Branch-current index of port 1 of `T` line `index`; port 2 is the
+    /// next one. Each is the current entering the port's `+` node.
+    pub fn transmission_line_branch(&self, index: usize) -> usize {
         self.voltage_sources.len()
             + self.inductors.len()
             + self.vcvs.len()
             + self.ccvs.len()
             + self.behavioural_voltages.len()
+            + 2 * index
     }
 
     /// Branch-current index of the named voltage source, inductor, `E`, `H`
@@ -3312,7 +3359,11 @@ impl Circuit {
         if index < self.ccvs.len() {
             return &self.ccvs[index].name;
         }
-        &self.behavioural_voltages[index - self.ccvs.len()].name
+        index -= self.ccvs.len();
+        if index < self.behavioural_voltages.len() {
+            return &self.behavioural_voltages[index].name;
+        }
+        &self.transmission_lines[(index - self.behavioural_voltages.len()) / 2].name
     }
 
     /// `N + M`: the dimension of the MNA system.
@@ -3353,6 +3404,7 @@ impl Circuit {
             || self.ccvs.iter().any(|e| matches(&e.name))
             || self.behavioural_voltages.iter().any(|e| matches(&e.name))
             || self.behavioural_currents.iter().any(|e| matches(&e.name))
+            || self.transmission_lines.iter().any(|e| matches(&e.name))
             || self.power_sinks.iter().any(|e| matches(&e.name))
             || self.output_current_limits.iter().any(|e| matches(&e.name))
             || self.slew_limited_vccs.iter().any(|e| matches(&e.name))
@@ -3477,6 +3529,80 @@ pub fn parse_spice_value(raw: &str) -> Option<f64> {
 }
 
 /// Strip a `*` comment line and any `;` / `$` trailing comment.
+/// `T<name> n1+ n1- n2+ n2- Z0=<ohms> TD=<s>`, or `F=<Hz> [NL=<wavelengths>]`
+/// in place of `TD`, as in ngspice: `TD = NL / F`, and `NL` is 0.25 unless
+/// given. `ZO` is ngspice's second spelling of `Z0`.
+fn parse_transmission_line(
+    ctx: &LineCtx<'_>,
+    name: &str,
+    rest: &[&str],
+    circuit: &mut Circuit,
+) -> Result<TransmissionLine, AnalogError> {
+    const SHAPE: &str = "T<name> n1+ n1- n2+ n2- Z0=<ohms> TD=<seconds>";
+    if rest.len() < 5 || rest[..4].iter().any(|node| node.contains('=')) {
+        return Err(ctx.parse_err(format!("expected `{SHAPE}`")));
+    }
+    let (mut z0, mut delay, mut frequency, mut length) = (None, None, None, None);
+    for token in &rest[4..] {
+        let Some((key, value)) = token.split_once('=') else {
+            return Err(ctx.parse_err(format!("expected `{SHAPE}`, found `{token}`")));
+        };
+        let key = key.to_ascii_lowercase();
+        let slot = match key.as_str() {
+            "z0" | "zo" => &mut z0,
+            "td" => &mut delay,
+            "f" => &mut frequency,
+            "nl" => &mut length,
+            "ic" => {
+                return Err(ctx.parse_err(
+                    "transmission-line `ic=` is not modelled: the line starts from the \
+                     operating point",
+                ))
+            }
+            other => {
+                return Err(ctx.parse_err(format!(
+                    "unknown parameter `{other}`; expected `{SHAPE}` or `F=<Hz> [NL=<n>]`"
+                )))
+            }
+        };
+        if slot.is_some() {
+            return Err(ctx.parse_err(format!("`{key}` is given twice")));
+        }
+        let parsed = ctx.value(value, &key)?;
+        if !parsed.is_finite() || parsed <= 0.0 {
+            return Err(ctx.parse_err(format!("`{key}` must be positive and finite")));
+        }
+        *slot = Some(parsed);
+    }
+    let Some(z0) = z0 else {
+        return Err(ctx.parse_err("a transmission line needs `Z0=<ohms>`"));
+    };
+    let delay = match (delay, frequency) {
+        (Some(_), Some(_)) => {
+            return Err(ctx.parse_err("give the delay once: either `TD=` or `F=`, not both"))
+        }
+        (Some(_), None) if length.is_some() => {
+            return Err(ctx.parse_err("`NL=` needs `F=`; with `TD=` it has no meaning"))
+        }
+        (Some(delay), None) => delay,
+        (None, Some(frequency)) => length.unwrap_or(0.25) / frequency,
+        (None, None) => {
+            return Err(ctx.parse_err(
+                "a transmission line needs its delay: `TD=<seconds>` or `F=<Hz> [NL=<n>]`",
+            ))
+        }
+    };
+    Ok(TransmissionLine {
+        name: name.to_string(),
+        p1: circuit.intern(rest[0]),
+        n1: circuit.intern(rest[1]),
+        p2: circuit.intern(rest[2]),
+        n2: circuit.intern(rest[3]),
+        z0,
+        delay,
+    })
+}
+
 fn strip_comment(line: &str) -> &str {
     let cut = line.find([';', '$']).unwrap_or(line.len());
     line[..cut].trim()
@@ -4552,7 +4678,7 @@ fn expand_call(
             'S' if names_switch_model(rest) => (4, &[], Some(4)),
             'S' => (2, &[], None),
             'W' => (2, &[2], Some(3)),
-            'E' | 'G' => (4, &[], None),
+            'E' | 'G' | 'T' => (4, &[], None),
             'F' | 'H' => (2, &[2], None),
             'K' => (0, &[0, 1], None),
             'D' => (2, &[], Some(2)),
@@ -4891,6 +5017,7 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                 | 'H'
                 | 'X'
                 | 'B'
+                | 'T'
         ) {
             return Err(ctx.unsupported());
         }
@@ -5517,6 +5644,10 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                     off: false,
                     ic: Vec::new(),
                 });
+            }
+            'T' => {
+                let line = parse_transmission_line(&ctx, head, &tokens[1..], &mut circuit)?;
+                circuit.transmission_lines.push(line);
             }
             'W' => {
                 let rest = &tokens[1..];

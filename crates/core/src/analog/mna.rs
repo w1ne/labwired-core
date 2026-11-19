@@ -594,6 +594,11 @@ pub struct Solver {
     behavioural_time: f64,
     /// The first expression that left its domain during the last stamp.
     behavioural_error: Option<AnalogError>,
+    /// What each `T` line's ports sent into it, `[time, w1, w2]` with
+    /// `w = v + Z0·i` for the current entering the port, oldest first. A run
+    /// of equal waves is kept as its two end points, so a line at rest holds
+    /// at most two entries however long it rests.
+    line_history: Vec<Vec<[f64; 3]>>,
     /// The linearisation points at the start of the step in progress, for a
     /// retry with a cut step; see [`Solver::advance`].
     saved_diode_vj: Vec<f64>,
@@ -700,6 +705,7 @@ impl Solver {
         let sinks = circuit.power_sinks.len();
         let output_limits = circuit.output_current_limits.len();
         let slew_limits = circuit.slew_limited_vccs.len();
+        let lines = circuit.transmission_lines.len();
         let behavioural_point: Vec<Vec<f64>> = circuit
             .behavioural_voltages
             .iter()
@@ -762,6 +768,7 @@ impl Solver {
             behavioural_point,
             behavioural_time: 0.0,
             behavioural_error: None,
+            line_history: vec![Vec::new(); lines],
             saved_diode_vj: vec![0.0; diodes],
             saved_bjt_vbe: vec![0.0; bjts],
             saved_bjt_vbc: vec![0.0; bjts],
@@ -1118,8 +1125,152 @@ impl Solver {
             self.ind_v[index] = 0.0;
         }
         self.apply_initial_conditions();
+        // A line at its operating point has carried the same two waves for
+        // ever.
+        for index in 0..self.circuit.transmission_lines.len() {
+            let [w1, w2] = self.line_waves(index, &self.node_v, &self.branch_i);
+            self.line_history[index] = vec![[0.0, w1, w2]];
+        }
         self.restart = true;
         Ok(())
+    }
+
+    /// `v + Z0·i` at each port of `T` line `index`: what the port sends into
+    /// the line, and what the other port sees `TD` later.
+    fn line_waves(&self, index: usize, node_v: &[f64], branch_i: &[f64]) -> [f64; 2] {
+        let line = &self.circuit.transmission_lines[index];
+        let branch = self.circuit.transmission_line_branch(index);
+        [
+            node_diff(node_v, line.p1, line.n1) + line.z0 * branch_i[branch],
+            node_diff(node_v, line.p2, line.n2) + line.z0 * branch_i[branch + 1],
+        ]
+    }
+
+    /// The history terms of `T` line `index` for a step of `h` to `time`:
+    /// `[alpha, e1, e2]`, where port 1 obeys `v1 − Z0·i1 − alpha·w2 = e1`
+    /// and port 2 the mirror image.
+    ///
+    /// The wave wanted is the one sent at `time − TD`. With `TD >= h` that
+    /// instant is at or before the last accepted point, so `alpha` is 0 and
+    /// `e` is read from the history by linear interpolation. With `TD < h`
+    /// it falls inside the step: the wave is interpolated between the last
+    /// accepted point and the step's own unknown end point, which puts the
+    /// weight `alpha = 1 − TD/h` on the unknown. At the operating point
+    /// `alpha` is 1 and `e` is 0: the two ports are wired together.
+    fn line_terms(&self, index: usize, stamp: Stamp, time: f64) -> [f64; 3] {
+        let delay = self.circuit.transmission_lines[index].delay;
+        let alpha = line_alpha(delay, stamp);
+        if stamp == Stamp::OperatingPoint {
+            return [alpha, 0.0, 0.0];
+        }
+        let history = &self.line_history[index];
+        let newest = history[history.len() - 1];
+        if alpha > 0.0 {
+            return [alpha, (1.0 - alpha) * newest[2], (1.0 - alpha) * newest[1]];
+        }
+        let wanted = time - delay;
+        // The newest entry holds from its own time on: a settled line stops
+        // recording, and a wave wanted from that stretch is the settled one.
+        let after = history.partition_point(|entry| entry[0] < wanted);
+        if after == history.len() {
+            return [0.0, newest[2], newest[1]];
+        }
+        if after == 0 {
+            return [0.0, history[0][2], history[0][1]];
+        }
+        let (old, new) = (history[after - 1], history[after]);
+        let weight = (wanted - old[0]) / (new[0] - old[0]);
+        [
+            0.0,
+            old[2] + weight * (new[2] - old[2]),
+            old[1] + weight * (new[1] - old[1]),
+        ]
+    }
+
+    /// The matrix rows and columns of every `T` line, which depend only on
+    /// the stamp.
+    fn stamp_lines(&mut self, stamp: Stamp) {
+        let dim = self.dim();
+        for (index, line) in self.circuit.transmission_lines.iter().enumerate() {
+            let alpha = line_alpha(line.delay, stamp);
+            let row1 = self.nodes + self.circuit.transmission_line_branch(index);
+            let row2 = row1 + 1;
+            let ports = [
+                (row1, line.p1, line.n1, row2, line.p2, line.n2),
+                (row2, line.p2, line.n2, row1, line.p1, line.n1),
+            ];
+            for (row, p, n, far_row, far_p, far_n) in ports {
+                let matrix = &mut self.matrix;
+                // The branch current enters the port at `+` and leaves at `-`.
+                add(matrix, dim, p, Some(row), 1.0);
+                add(matrix, dim, n, Some(row), -1.0);
+                // v − Z0·i − alpha·(v_far + Z0·i_far) = e.
+                add(matrix, dim, Some(row), p, 1.0);
+                add(matrix, dim, Some(row), n, -1.0);
+                matrix[row * dim + row] -= line.z0;
+                add(matrix, dim, Some(row), far_p, -alpha);
+                add(matrix, dim, Some(row), far_n, alpha);
+                matrix[row * dim + far_row] -= alpha * line.z0;
+            }
+        }
+    }
+
+    /// The right-hand side of every `T` line's two rows: the delayed waves.
+    fn stamp_line_history(&mut self, stamp: Stamp) {
+        let time = match stamp {
+            Stamp::OperatingPoint => 0.0,
+            Stamp::Transient(h, _) => self.time + h,
+        };
+        for index in 0..self.circuit.transmission_lines.len() {
+            let [_, e1, e2] = self.line_terms(index, stamp, time);
+            let row = self.nodes + self.circuit.transmission_line_branch(index);
+            self.rhs[row] = e1;
+            self.rhs[row + 1] = e2;
+        }
+    }
+
+    /// Record what each `T` line's ports sent at the end of the step just
+    /// solved, and drop what no later step can ask for. Returns true when
+    /// every line was at rest before the step and still is.
+    fn record_line_waves(&mut self, time: f64) -> bool {
+        let previous_time = self.time;
+        let mut at_rest = true;
+        for index in 0..self.circuit.transmission_lines.len() {
+            let nodes = self.nodes;
+            let [w1, w2] = self.line_waves(index, &self.solution[..nodes], &self.solution[nodes..]);
+            let delay = self.circuit.transmission_lines[index].delay;
+            let history = &mut self.line_history[index];
+            let same = |entry: &[f64; 3], w1: f64, w2: f64| {
+                entry[1].to_bits() == w1.to_bits() && entry[2].to_bits() == w2.to_bits()
+            };
+            let newest = history[history.len() - 1];
+            at_rest &= history.iter().all(|entry| same(entry, w1, w2));
+            // A settled line skipped its records: the newest wave held up to
+            // the start of this step.
+            let extend = |history: &mut Vec<[f64; 3]>, time: f64, w1: f64, w2: f64| {
+                let count = history.len();
+                if count >= 2
+                    && same(&history[count - 2], w1, w2)
+                    && same(&history[count - 1], w1, w2)
+                {
+                    history[count - 1][0] = time;
+                } else {
+                    history.push([time, w1, w2]);
+                }
+            };
+            if newest[0] < previous_time {
+                extend(history, previous_time, newest[1], newest[2]);
+            }
+            extend(history, time, w1, w2);
+            // Keep the newest entry at or before the oldest instant a step
+            // can still ask for, and everything after it.
+            let oldest = time - delay;
+            let keep_from = history
+                .partition_point(|entry| entry[0] <= oldest)
+                .saturating_sub(1);
+            history.drain(..keep_from);
+        }
+        at_rest
     }
 
     /// `.ic V(node)=v` and element `ic=` override the operating point.
@@ -1721,6 +1872,8 @@ impl Solver {
             self.ind_v[index] = node_diff(&self.solution[..self.nodes], inductor.a, inductor.b);
         }
 
+        self.settled &= self.record_line_waves(time);
+
         self.node_v.copy_from_slice(&self.solution[..self.nodes]);
         self.branch_i.copy_from_slice(&self.solution[self.nodes..]);
         self.time = time;
@@ -1938,6 +2091,8 @@ impl Solver {
             }
         }
         self.stamp_dependent_sources();
+        self.stamp_lines(stamp);
+        self.stamp_line_history(stamp);
         self.stamp_devices(stamp);
         if self.node_shunt != 0.0 {
             for node in 0..self.nodes {
@@ -2122,6 +2277,7 @@ impl Solver {
                 inject(&mut self.rhs, capacitor.b, -ieq);
             }
         }
+        self.stamp_line_history(stamp);
     }
 
     /// Dense LU with partial pivoting, in place over the scratch matrix. Own
@@ -3474,6 +3630,17 @@ impl Solver {
 /// u)` for a controlling voltage `u = v(p) − v(n)`. The equivalent current
 /// source is `current − Σ g·u`, which is the part of the tangent that does not
 /// depend on the unknowns.
+/// Weight a `T` line's delayed wave puts on the far port's unknown end-of-step
+/// value: 1 at the operating point, `1 − TD/h` when the step is longer than
+/// the delay, otherwise 0. See [`Solver::line_terms`].
+fn line_alpha(delay: f64, stamp: Stamp) -> f64 {
+    match stamp {
+        Stamp::OperatingPoint => 1.0,
+        Stamp::Transient(h, _) if delay < h => 1.0 - delay / h,
+        Stamp::Transient(..) => 0.0,
+    }
+}
+
 fn stamp_linearised(
     matrix: &mut [f64],
     rhs: &mut [f64],
