@@ -207,6 +207,79 @@ fn nmos_drain_voltage(gate_v: f64, beta: f64) -> f64 {
     0.5 * (low + high)
 }
 
+/// Independent square-law NMOS load line, with the ngspice level-1 process
+/// threshold and body-effect values supplied by the external `showmod` deck.
+fn process_nmos_drain_voltage(
+    gate_v: f64,
+    vto_v: f64,
+    gamma_sqrt_v: f64,
+    phi_v: f64,
+    vbs_v: f64,
+    beta_a_per_v2: f64,
+) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 10_000.0;
+    const GMIN_S: f64 = 1e-12;
+    let threshold_v = vto_v + gamma_sqrt_v * ((phi_v - vbs_v).sqrt() - phi_v.sqrt());
+    let overdrive_v = gate_v - threshold_v;
+    let channel_current = |drain_v: f64| {
+        if overdrive_v <= 0.0 {
+            0.0
+        } else if drain_v < overdrive_v {
+            beta_a_per_v2 * drain_v * (overdrive_v - 0.5 * drain_v)
+        } else {
+            0.5 * beta_a_per_v2 * overdrive_v * overdrive_v
+        }
+    };
+    let residual = |drain_v: f64| {
+        (SUPPLY_V - drain_v) / LOAD_OHMS - channel_current(drain_v) - GMIN_S * drain_v
+    };
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
+/// Independent PMOS load line in source-referenced coordinates. The process
+/// fixture's normalised VTO is −0.0361092 V from the ngspice-45 `showmod`
+/// reference; its drain resistor returns to ground.
+fn process_pmos_drain_voltage(gate_v: f64, beta_a_per_v2: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 10_000.0;
+    const VTO_NORMALIZED_V: f64 = -0.036_109_2;
+    const GMIN_S: f64 = 1e-12;
+    let overdrive_v = SUPPLY_V - gate_v - VTO_NORMALIZED_V;
+    let channel_current = |drain_v: f64| {
+        let vds_v = SUPPLY_V - drain_v;
+        if overdrive_v <= 0.0 {
+            0.0
+        } else if vds_v < overdrive_v {
+            beta_a_per_v2 * vds_v * (overdrive_v - 0.5 * vds_v)
+        } else {
+            0.5 * beta_a_per_v2 * overdrive_v * overdrive_v
+        }
+    };
+    let residual = |drain_v: f64| {
+        drain_v / LOAD_OHMS - channel_current(drain_v) - GMIN_S * (SUPPLY_V - drain_v)
+    };
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let mid = 0.5 * (low + high);
+        if residual(mid) > 0.0 {
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+    0.5 * (low + high)
+}
+
 /// Independent level-1 NMOS channel load line at the model's nominal
 /// temperature or an explicit instance temperature. The reference applies
 /// ngspice's Varshni bandgap and silicon-potential laws to VTO and the
@@ -983,6 +1056,208 @@ fn frdm_k64f_mosfet_lateral_diffusion_and_process_kp_reach_adc16_alongside_ntc_a
                 se_code(voltage_v, 12),
                 "ADC16 {adc:#x} channel {channel} follows its independently checked analog route"
             );
+        }
+    }
+}
+
+/// Generic level-1 MOSFET substrate-process derivation reaches the FRDM-K64F
+/// ADC16 alongside unrelated NTC and diode netlists. The independent load
+/// lines use ngspice-45 `showmod` thresholds for NSUB/TOX, then solve the
+/// square-law channel from the derived UO/TOX KP; matched branches isolate the
+/// NSS/TPG shift, PMOS polarity, explicit-PHI precedence, and derived
+/// GAMMA/PHI body effect.
+#[test]
+fn frdm_k64f_mosfet_substrate_process_reaches_adc16_with_ntc_and_diode() {
+    const VTO_NMOS_V: f64 = 0.068_466_2;
+    const VTO_SURFACE_V: f64 = 1.090_76;
+    const VTO_PHI_OVERRIDE_V: f64 = 0.071_647_8;
+    const GAMMA_NMOS_SQRT_V: f64 = 0.333_698;
+    const PHI_NMOS_V: f64 = 0.695_453;
+    const PHI_OVERRIDE_V: f64 = 0.7;
+    const WIDTH_M: f64 = 10e-6;
+    const LENGTH_M: f64 = 2e-6;
+    const TOX_M: f64 = 20e-9;
+
+    let system_path = root("configs/systems/frdm-k64f.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load FRDM-K64F profile");
+    let unrelated =
+        SystemManifest::from_file(root("examples/frdm-k64f/analog-ntc-diode-system.yaml"))
+            .expect("load unrelated generic NTC divider and Shockley diode");
+    let process = SystemManifest::from_file(root(
+        "examples/frdm-k64f/analog-mosfet-substrate-adc-system.yaml",
+    ))
+    .expect("load generic level-1 MOSFET process stages");
+    profile.cosim_models = unrelated.cosim_models;
+    for model in &mut profile.cosim_models {
+        let (key, pad) = match model.id.as_str() {
+            "ntc_divider" => ("v_sense", "ptb2"),
+            "diode_load_line" => ("v_diode", "ptb10"),
+            other => panic!("unexpected base model {other}"),
+        };
+        model
+            .outputs
+            .insert(key.to_string(), format!("board.analog.{pad}_volts"));
+    }
+    profile.cosim_models.extend(process.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load MK64F12 descriptor");
+    for (pad, peripheral, channel) in [
+        ("PTB0", "adc0", 8),
+        ("PTB1", "adc0", 9),
+        ("PTB2", "adc0", 12),
+        ("PTB3", "adc0", 13),
+        ("PTC0", "adc0", 14),
+        ("PTC1", "adc0", 15),
+        ("PTB10", "adc1", 14),
+    ] {
+        assert_eq!(
+            chip.analog_pins[pad].peripheral, peripheral,
+            "{pad} ADC instance"
+        );
+        assert_eq!(chip.analog_pins[pad].channel, channel, "{pad} ADC channel");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build FRDM-K64F bus");
+    init_and_calibrate(&mut bus, ADC0, MODE_12);
+    init_and_calibrate(&mut bus, ADC1, MODE_12);
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries process MOSFETs, NTC, and diode");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "process MOSFETs, NTC, and diode resolve to K64F ADC16 inputs"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("set unrelated NTC temperature");
+
+    let beta_nmos = process_kp(400.0, TOX_M) * WIDTH_M / LENGTH_M;
+    let beta_pmos = process_kp(200.0, TOX_M) * WIDTH_M / LENGTH_M;
+    let expected_ntc_v = ntc_volts(25.0);
+    let expected_diode_v = diode_load_line_voltage();
+    let mut cycles = 0;
+    for gate_n_v in [0.0_f64, 1.5, 2.0, 2.5] {
+        let gate_p_v = 3.3 - gate_n_v;
+        session
+            .set_signal_number("ui.mosfet_process.gate_n", gate_n_v)
+            .expect("set common NMOS gate drive");
+        session
+            .set_signal_number("ui.mosfet_process.gate_p", gate_p_v)
+            .expect("set mirrored PMOS gate drive");
+
+        for body_bias_v in [0.0_f64, -0.5, -1.0, -2.0] {
+            session
+                .set_signal_number("ui.mosfet_process.body_bias", body_bias_v)
+                .expect("set process NMOS body bias");
+            // The TOX stages carry Meyer charge, so allow the gate edge to
+            // settle before comparing the DC load lines and ADC conversions.
+            for _ in 0..2 {
+                cycles += session.cycles_until_boundary(cycles);
+                let (steps, errors) = session
+                    .advance_to(cycles, &mut bus)
+                    .expect("solve and route process devices, NTC, and diode");
+                assert_eq!(steps.len(), 3, "all three generic analog models solve");
+                assert!(
+                    errors.is_empty(),
+                    "unexpected ADC16 route errors: {errors:?}"
+                );
+            }
+
+            let n_v = signal_voltage(&session, "board.analog.ptb0_volts");
+            let surface_v = signal_voltage(&session, "board.analog.ptb1_volts");
+            let p_v = signal_voltage(&session, "board.analog.ptb3_volts");
+            let phi_v = signal_voltage(&session, "board.analog.ptc0_volts");
+            let body_v = signal_voltage(&session, "board.analog.ptc1_volts");
+            let expected_n_v = process_nmos_drain_voltage(
+                gate_n_v,
+                VTO_NMOS_V,
+                GAMMA_NMOS_SQRT_V,
+                PHI_NMOS_V,
+                0.0,
+                beta_nmos,
+            );
+            let expected_surface_v = process_nmos_drain_voltage(
+                gate_n_v,
+                VTO_SURFACE_V,
+                GAMMA_NMOS_SQRT_V,
+                PHI_NMOS_V,
+                0.0,
+                beta_nmos,
+            );
+            let expected_p_v = process_pmos_drain_voltage(gate_p_v, beta_pmos);
+            let expected_phi_v = process_nmos_drain_voltage(
+                gate_n_v,
+                VTO_PHI_OVERRIDE_V,
+                GAMMA_NMOS_SQRT_V,
+                PHI_OVERRIDE_V,
+                0.0,
+                beta_nmos,
+            );
+            let expected_body_v = process_nmos_drain_voltage(
+                gate_n_v,
+                VTO_NMOS_V,
+                GAMMA_NMOS_SQRT_V,
+                PHI_NMOS_V,
+                body_bias_v,
+                beta_nmos,
+            );
+            for (label, actual_v, expected_v) in [
+                ("NSUB-derived NMOS", n_v, expected_n_v),
+                ("NSS/TPG NMOS", surface_v, expected_surface_v),
+                ("NSUB-derived PMOS", p_v, expected_p_v),
+                ("explicit-PHI NMOS", phi_v, expected_phi_v),
+                ("reverse-body-biased NMOS", body_v, expected_body_v),
+            ] {
+                assert!(
+                    (actual_v - expected_v).abs() < 1e-4,
+                    "{label} drain at gate {gate_n_v} V / body {body_bias_v} V should be {expected_v} V, got {actual_v} V"
+                );
+            }
+            if gate_n_v > 1.0 {
+                assert!(
+                    surface_v > n_v + 0.05,
+                    "NSS/TPG work-function shift raises threshold and drain voltage: {surface_v} / {n_v}"
+                );
+                assert!(
+                    body_v >= n_v - 1e-5,
+                    "reverse body bias must raise the process-derived threshold: {body_v} / {n_v}"
+                );
+            }
+            if body_bias_v < 0.0 && gate_n_v > 1.0 {
+                assert!(
+                    body_v > n_v + 0.01,
+                    "derived GAMMA/PHI body effect changes the routed drain: {body_v} / {n_v}"
+                );
+            }
+
+            let ntc_v = signal_voltage(&session, "board.analog.ptb2_volts");
+            let diode_v = signal_voltage(&session, "board.analog.ptb10_volts");
+            assert!(
+                (ntc_v - expected_ntc_v).abs() < 1e-9,
+                "unrelated NTC stays isolated"
+            );
+            assert!(
+                (diode_v - expected_diode_v).abs() < 2e-5,
+                "unrelated Shockley diode remains at its independent load line"
+            );
+
+            for (adc, channel, voltage_v) in [
+                (ADC0, 8, n_v),
+                (ADC0, 9, surface_v),
+                (ADC0, 12, ntc_v),
+                (ADC0, 13, p_v),
+                (ADC0, 14, phi_v),
+                (ADC0, 15, body_v),
+                (ADC1, 14, diode_v),
+            ] {
+                assert_eq!(
+                    convert(&mut bus, adc, channel),
+                    se_code(voltage_v, 12),
+                    "ADC16 {adc:#x} channel {channel} follows its process-derived analog route"
+                );
+            }
         }
     }
 }

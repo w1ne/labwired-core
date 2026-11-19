@@ -1,0 +1,53 @@
+# Generic level-1 MOSFET stages exercise the NSUB/TOX process derivation on
+# FRDM-K64F ADC0. The base NMOS, shifted TPG/NSS NMOS, PMOS, explicit-PHI
+# NMOS, and reverse-body-biased NMOS all share 10 kΩ load-line endpoints.
+# The companion cosim test adds the unrelated Beta NTC and Shockley diode.
+name: "frdm-k64f-analog-mosfet-substrate-process"
+chip: "../../configs/chips/mk64f12.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_substrate_process"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_n: "ui.mosfet_process.gate_n"
+      gate_p: "ui.mosfet_process.gate_p"
+      body_bias: "ui.mosfet_process.body_bias"
+    outputs:
+      drain_n: "board.analog.ptb0_volts"
+      drain_surface: "board.analog.ptb1_volts"
+      drain_p: "board.analog.ptb3_volts"
+      drain_phi: "board.analog.ptc0_volts"
+      drain_body: "board.analog.ptc1_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Vgate_n gate_n 0 dc 0
+        Vgate_p gate_p 0 dc 3.3
+        Vbody body 0 dc 0
+        Rn supply drain_n 10k
+        Mn drain_n gate_n 0 0 NMOS_PROCESS W=10u L=2u
+        .model NMOS_PROCESS NMOS(LEVEL=1 TOX=20n NSUB=1e16 UO=400)
+        Rsurface supply drain_surface 10k
+        Msupply drain_surface gate_n 0 0 NMOS_SURFACE W=10u L=2u
+        .model NMOS_SURFACE NMOS(LEVEL=1 TOX=20n NSUB=1e16 NSS=1e11 TPG=-1 UO=400)
+        Rp drain_p 0 10k
+        Mp drain_p gate_p supply supply PMOS_PROCESS W=10u L=2u
+        .model PMOS_PROCESS PMOS(LEVEL=1 TOX=20n NSUB=5e15 UO=200)
+        Rphi supply drain_phi 10k
+        Mphi drain_phi gate_n 0 0 NMOS_PHI W=10u L=2u
+        .model NMOS_PHI NMOS(LEVEL=1 TOX=20n NSUB=1e16 PHI=0.7 UO=400)
+        Rbody supply drain_body 10k
+        Mbody drain_body gate_n 0 body NMOS_PROCESS W=10u L=2u
+      probes:
+        drain_n: "v(drain_n)"
+        drain_surface: "v(drain_surface)"
+        drain_p: "v(drain_p)"
+        drain_phi: "v(drain_phi)"
+        drain_body: "v(drain_body)"
+      sources:
+        gate_n: "Vgate_n"
+        gate_p: "Vgate_p"
+        body_bias: "Vbody"
+      vdd: 3.3
