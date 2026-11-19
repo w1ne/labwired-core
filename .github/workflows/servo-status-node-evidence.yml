@@ -1,0 +1,22 @@
+name: Servo status node WASM evidence
+on:
+  push:
+    branches: [test/servo-status-node-wasm-20261119]
+permissions:
+  contents: read
+jobs:
+  serialization:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install wasm-pack 0.13.1
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Build Node WASM as protected CI does
+        working-directory: crates/wasm
+        run: wasm-pack build --target nodejs --dev --out-dir pkg
+      - name: Test actual serialization
+        run: node scripts/test_wasm_servo_source_status.mjs
