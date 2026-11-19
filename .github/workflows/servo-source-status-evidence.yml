@@ -1,0 +1,14 @@
+name: Servo modeled source status evidence
+on:
+  push:
+    branches: [test/servo-source-status-20261119]
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - run: cargo test -p labwired-core --test pca9685_drives_servo pca_servo_dynamic_oe_requires_a_driven_low_gpio -- --exact --nocapture

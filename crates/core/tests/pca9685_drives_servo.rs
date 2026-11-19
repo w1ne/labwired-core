@@ -408,23 +408,30 @@ external_devices:
     );
     let commanded = |bus: &SystemBus| bus.observed_of::<Servo>().next().unwrap().is_commanded();
     let angle = |bus: &SystemBus| bus.observed_of::<Servo>().next().unwrap().angle_degrees();
+    let source = |bus: &SystemBus| bus.modeled_servo_source_status(bus.observed_of::<Servo>().next().unwrap());
     // Input / unknown is not an enable, even if its output latch is low.
     bus.sync_pwm_sourced_servos();
     assert!(!commanded(&bus));
+    assert_eq!(source(&bus).as_str(), "unknown");
     const GPIO: u64 = 0x6000_4000;
     bus.write_u32(GPIO + 0x08, 1 << 4).unwrap(); // OUT_W1TS: high
     bus.write_u32(GPIO + 0x24, 1 << 4).unwrap(); // ENABLE_W1TS
     bus.sync_pwm_sourced_servos();
     assert!(!commanded(&bus));
+    assert_eq!(source(&bus).as_str(), "disabled");
     bus.write_u32(GPIO + 0x74 + 4 * 4, 1 << 2).unwrap(); // open drain, high releases
     bus.sync_pwm_sourced_servos();
     assert!(!commanded(&bus));
+    assert_eq!(source(&bus).as_str(), "unknown");
     bus.write_u32(GPIO + 0x0c, 1 << 4).unwrap(); // OUT_W1TC: low enables
     bus.sync_pwm_sourced_servos();
     assert!(commanded(&bus));
+    assert_eq!(source(&bus).as_str(), "modeled_pwm");
     let previous = angle(&bus);
     bus.write_u32(GPIO + 0x08, 1 << 4).unwrap(); // release open-drain output
     program(0x80);
+    // Status is computed from the current OE pad even before a sync call.
+    assert_eq!(source(&bus).as_str(), "unknown");
     bus.sync_pwm_sourced_servos();
     assert_eq!(angle(&bus), previous);
     bus.write_u32(GPIO + 0x28, 1 << 4).unwrap(); // input again; latch remains high
@@ -433,9 +440,15 @@ external_devices:
     bus.write_u32(GPIO + 0x0c, 1 << 4).unwrap();
     bus.sync_pwm_sourced_servos(); // low latch, still undriven
     assert_eq!(angle(&bus), previous);
+    assert_eq!(source(&bus).as_str(), "unknown");
     bus.write_u32(GPIO + 0x24, 1 << 4).unwrap();
     bus.sync_pwm_sourced_servos();
     assert_ne!(angle(&bus), previous);
+    assert_eq!(source(&bus).as_str(), "modeled_pwm");
+    // FULL_OFF is no PWM, not a new angle or a valid current source.
+    write_reg(&mut *pca.lock().unwrap(), 0x06, &[0, 0, 0, 0x10]);
+    assert_eq!(source(&bus).as_str(), "unknown");
+    assert!(commanded(&bus), "last command must remain backward compatible");
 }
 
 #[test]
