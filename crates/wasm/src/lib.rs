@@ -934,8 +934,12 @@ impl WasmSimulator {
         load_program_segments_without_reset(&mut machine, &bootloader_image)
             .map_err(|e| JsValue::from_str(&format!("C3 flash fast-start load: {e}")))?;
 
-        let sp_top = (chip.ram.base + chip.ram.size) as u32;
-        machine.cpu.set_sp(sp_top & !0xF);
+        // This path skips ROM reset: reproduce the ESP32-C3 rev3 ROM's SP
+        // initialization at 0x4000_1edc. The chip descriptor's full RAM top
+        // includes ROM-reserved memory and can lie outside ESP-IDF's valid
+        // stack range. IDF reserves the area above app DRAM for ROM data/stack;
+        // arbitrary custom ROM or bootloader layouts are not qualified here.
+        machine.cpu.set_sp(0x3fcd_e710);
         machine.cpu.set_pc(bootloader_image.entry_point as u32);
 
         // Attach the per-lab virtual-WiFi AP if the diagram declares one. This is
