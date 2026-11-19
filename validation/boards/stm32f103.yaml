@@ -551,6 +551,8 @@ models:
   - crates/core/src/peripherals/adc.rs
   - crates/core/src/peripherals/bxcan.rs
   - crates/core/src/peripherals/rtc_f1.rs
+  - crates/core/src/peripherals/bkp_f1.rs
+  - crates/core/src/peripherals/pwr.rs
   - crates/core/src/peripherals/iwdg.rs
   - crates/core/src/peripherals/wwdg.rs
   - configs/chips/stm32f103.yaml
@@ -1139,7 +1141,7 @@ drift_ack: 2026-11-09
 # immediate range still Halt, same as before. Shared interpreter
 # path otherwise unchanged. ACK, NOT A SILICON CAPTURE; live
 # re-capture remains pending.
-drift_ack_digest: 4e461392a98a0eed9a20f4f130e723097a63a548b616736ab60579770ec1ca0c
+drift_ack_digest: 72589c4a4ab35756ce7f59e0cbd21c087cc4d26f054e676846b7a257a11eb113
 # 2026-11-01 (feat/rv64-core): uart.rs gained the 16550 LCR.DLAB divisor
 # latches (DLL/DLM), reached only by the `ns16550` / `dw_apb_uart`
 # layouts. STM32 UART register maps, byte paths and IRQ timing are
