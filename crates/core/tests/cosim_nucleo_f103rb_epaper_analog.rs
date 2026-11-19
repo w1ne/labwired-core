@@ -886,6 +886,161 @@ fn nucleo_f103rb_bjt_high_injection_reaches_adc1_alongside_ntc_and_diode() {
     );
 }
 
+/// Route generic Gummel–Poon RB/RC/RE branches through NUCLEO-F103RB ADC1.
+/// The combined internal resistances must match an explicit external network.
+#[test]
+fn nucleo_f103rb_bjt_terminal_resistances_reach_adc1_with_explicit_network_reference() {
+    let system_path = root("configs/systems/nucleo-f103rb.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load NUCLEO-F103RB");
+    let unrelated = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb-epaper/analog-ntc-diode-system.yaml",
+    ))
+    .expect("load unrelated generic NTC and diode netlists");
+    let terminal = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb/analog-bjt-terminal-resistance-adc-system.yaml",
+    ))
+    .expect("load matched generic BJT terminal-resistance branches");
+    profile.cosim_models = unrelated.cosim_models;
+    profile.cosim_models.extend(terminal.cosim_models);
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103RB descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+        ("PA7", 7),
+    ] {
+        assert_eq!(chip.analog_pins[pad].channel, channel);
+        assert_eq!(chip.analog_pins[pad].peripheral, "adc1");
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build NUCLEO-F103RB bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("fixture carries NTC, diode, and six matched BJT branches");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all generic routes must resolve to ADC1 channels 0 through 7"
+    );
+    for channel in 0..=8 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} begins without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+    session
+        .set_signal_number("ui.bjt_terminal.base_v", 0.0)
+        .expect("initialize the matched BJT base drives");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("initialize NTC, diode, and all BJT branches");
+    assert_eq!(initial_steps.len(), 8, "all eight analog branches solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    let mut settled = None;
+    for base_drive_v in [0.7_f64, 0.8, 0.9] {
+        session
+            .set_signal_number("ui.bjt_terminal.base_v", base_drive_v)
+            .expect("step the shared BJT base drive");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route NTC, diode, and the BJT terminal networks");
+        assert_eq!(steps.len(), 8, "all eight analog branches solve");
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        let voltages = [
+            signal_voltage(&session, "board.analog.pa2_volts"),
+            signal_voltage(&session, "board.analog.pa3_volts"),
+            signal_voltage(&session, "board.analog.pa4_volts"),
+            signal_voltage(&session, "board.analog.pa5_volts"),
+            signal_voltage(&session, "board.analog.pa6_volts"),
+            signal_voltage(&session, "board.analog.pa7_volts"),
+        ];
+        let expected_reference_v = bjt_collector_voltage(base_drive_v, Some(50.0));
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (diode_v - diode_load_line_voltage()).abs() < 2e-5,
+            "unrelated Shockley diode remains on its independent load line"
+        );
+        assert!(
+            (voltages[0] - expected_reference_v).abs() < 5e-5,
+            "zero-resistance GP branch should match independent load line {expected_reference_v} V, got {} V",
+            voltages[0]
+        );
+        assert!(
+            (voltages[4] - voltages[5]).abs() < 1e-7,
+            "internal RB/RC/RE must match explicit external resistors: {} V vs {} V",
+            voltages[4],
+            voltages[5]
+        );
+
+        if base_drive_v == 0.9 {
+            for (label, voltage) in [
+                ("RB", voltages[1]),
+                ("RC", voltages[2]),
+                ("RE", voltages[3]),
+                ("RB+RC+RE", voltages[4]),
+            ] {
+                assert!(
+                    (voltage - voltages[0]).abs() > 1e-3,
+                    "{label} must change the high-drive collector voltage: zero-R={} V, actual={voltage} V",
+                    voltages[0]
+                );
+            }
+        }
+        settled = Some((ntc_v, diode_v, voltages));
+    }
+
+    let (ntc_v, diode_v, voltages) = settled.expect("final base-drive sample exists");
+    for (channel, voltage) in std::iter::once((0, ntc_v))
+        .chain(std::iter::once((1, diode_v)))
+        .chain(
+            voltages
+                .iter()
+                .enumerate()
+                .map(|(index, voltage)| (index as u8 + 2, *voltage)),
+        )
+    {
+        let expected = expected_adc_count(voltage);
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            expected,
+            "solved voltage seeds descriptor-routed ADC1 channel {channel}"
+        );
+        assert_eq!(
+            stm32f103_adc_convert(&mut bus, channel),
+            u32::from(expected),
+            "firmware-visible ADC1 conversion reports channel {channel}'s analog voltage"
+        );
+    }
+    assert_eq!(
+        adc_channel_count(&mut bus, 8),
+        0xFFFF,
+        "neighboring ADC1 channel 8 remains undriven"
+    );
+}
+
 /// The same generic Gummel–Poon Early-effect pair also resolves through the
 /// bare STM32F103C8 profile's descriptor-driven ADC routes, alongside unrelated
 /// Beta NTC and Shockley diode netlists.
