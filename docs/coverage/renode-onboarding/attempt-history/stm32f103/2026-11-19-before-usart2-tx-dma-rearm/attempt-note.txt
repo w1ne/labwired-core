@@ -1,0 +1,1 @@
+Passing pre-change evidence for Round 739; this records the single-transfer TX DMA smoke before adding channel-7 re-arm coverage.

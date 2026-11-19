@@ -144,19 +144,23 @@ pub struct ClockGate {
     /// Symbolic enable-register name, e.g. "apb1enr" / "apb2enr" / "ahbenr" / "crrcr" / "APBCMASK".
     pub reg: String,
     /// Bit position within that register that must be **set** for the
-    /// peripheral to be clocked.
+    /// peripheral to be clocked, unless `active_low` is true.
     pub bit: u8,
     /// Clock controller peripheral id. Default `"rcc"` preserves STM32 configs.
     #[serde(default = "default_clock_controller")]
     pub controller: String,
+    /// Set when a cleared register bit enables the peripheral (RA module stop).
+    /// Defaults to the active-high convention used by existing configurations.
+    #[serde(default)]
+    pub active_low: bool,
 }
 
 pub(crate) fn default_clock_controller() -> String {
     "rcc".into()
 }
 
-/// A peripheral's `clock:` declaration: **every** listed RCC bit must be set for
-/// the peripheral to answer the CPU.
+/// A peripheral's `clock:` declaration: **every** listed clock bit must indicate
+/// an enabled clock for the peripheral to answer the CPU.
 ///
 /// One key, one mechanism. Silicon can withhold a peripheral's clock for more
 /// than one reason — the bus-enable bit in an `xxxENR` register is the common
@@ -314,10 +318,9 @@ pub struct PeripheralConfig {
     /// Controller id from `irq: nvic@2` sugar. `None` when YAML is a bare line.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub irq_controller: Option<String>,
-    /// Optional RCC clock-gate: the RCC bits that must ALL be set for this
-    /// peripheral to answer the CPU. `None` → the peripheral is never gated
-    /// (the safe default — existing configs and firmware that never enable a
-    /// clock keep working unchanged).
+    /// Optional clock-gate: the declared clock bits that must ALL indicate an
+    /// enabled peripheral clock. `None` → the peripheral is never gated (the
+    /// safe default — existing configs and firmware remain unchanged).
     #[serde(default)]
     pub clock: Option<ClockGates>,
     /// Instance knobs. Unknown top-level keys flatten here (`easyDMA: true`).
@@ -366,10 +369,12 @@ pub struct AdcPinFn {
     pub channel: u8,
 }
 
-/// A chip's digital input thresholds, as ratios of its I/O supply
-/// ([`ChipDescriptor::io_voltage_v`]): a pad reads low at or below `vil` and
-/// high at or above `vih`, and the band between is where a Schmitt input keeps
-/// its previous level.
+/// A chip's guaranteed digital input limits, as slopes of its I/O supply plus
+/// optional voltage offsets: VIL = `vil * VDD + vil_offset_v` and
+/// VIH = `vih * VDD + vih_offset_v`. Zero offsets preserve ratio-only chips.
+/// A pad reads low at or below VIL and high at or above VIH; the Schmitt band
+/// between them keeps its previous level. A routed VDD is used at each model
+/// boundary, otherwise [`ChipDescriptor::io_voltage_v`] supplies the reference.
 ///
 /// Transcribed from the datasheet's DC characteristics (the guaranteed VIL
 /// maximum and VIH minimum), never guessed: co-simulation turns a model's node
@@ -378,10 +383,14 @@ pub struct AdcPinFn {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 #[serde(try_from = "GpioInputThresholdsYaml", into = "GpioInputThresholdsYaml")]
 pub struct GpioInputThresholds {
-    /// Highest input voltage guaranteed to read low, as a fraction of VDD.
+    /// Supply coefficient for the highest input guaranteed to read low.
     pub vil: f64,
-    /// Lowest input voltage guaranteed to read high, as a fraction of VDD.
+    /// Supply coefficient for the lowest input guaranteed to read high.
     pub vih: f64,
+    /// Fixed addition to VIL, in volts. Zero for ratio-only descriptors.
+    pub vil_offset_v: f64,
+    /// Fixed addition to VIH, in volts. Zero for ratio-only descriptors.
+    pub vih_offset_v: f64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -389,20 +398,48 @@ pub struct GpioInputThresholds {
 pub(crate) struct GpioInputThresholdsYaml {
     vil: f64,
     vih: f64,
+    #[serde(default, skip_serializing_if = "gpio_offset_is_zero")]
+    vil_offset_v: f64,
+    #[serde(default, skip_serializing_if = "gpio_offset_is_zero")]
+    vih_offset_v: f64,
+}
+
+fn gpio_offset_is_zero(value: &f64) -> bool {
+    *value == 0.0
 }
 
 impl TryFrom<GpioInputThresholdsYaml> for GpioInputThresholds {
     type Error = String;
 
     fn try_from(raw: GpioInputThresholdsYaml) -> Result<Self, Self::Error> {
-        let GpioInputThresholdsYaml { vil, vih } = raw;
+        let GpioInputThresholdsYaml {
+            vil,
+            vih,
+            vil_offset_v,
+            vih_offset_v,
+        } = raw;
         if !(vil.is_finite() && vih.is_finite() && 0.0 < vil && vil < vih && vih < 1.0) {
             return Err(format!(
                 "gpio_input_thresholds must satisfy 0 < vil < vih < 1 (ratios of io_voltage_v); \
                  got vil {vil}, vih {vih}"
             ));
         }
-        Ok(Self { vil, vih })
+        if !(vil_offset_v.is_finite()
+            && vih_offset_v.is_finite()
+            && 0.0 <= vil_offset_v
+            && vil_offset_v <= vih_offset_v)
+        {
+            return Err(format!(
+                "gpio_input_thresholds offsets must be finite and satisfy 0 <= vil_offset_v <= vih_offset_v; got {vil_offset_v}, {vih_offset_v}"
+            ));
+        }
+        // Ordered slopes and offsets preserve VIL < VIH at every positive VDD.
+        Ok(Self {
+            vil,
+            vih,
+            vil_offset_v,
+            vih_offset_v,
+        })
     }
 }
 
@@ -411,6 +448,8 @@ impl From<GpioInputThresholds> for GpioInputThresholdsYaml {
         Self {
             vil: thresholds.vil,
             vih: thresholds.vih,
+            vil_offset_v: thresholds.vil_offset_v,
+            vih_offset_v: thresholds.vih_offset_v,
         }
     }
 }
@@ -798,8 +837,8 @@ pub struct ChipDescriptor {
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub analog_pins: std::collections::BTreeMap<String, AdcPinFn>,
     /// The supply the chip's GPIO pads run from, in volts (5.0 on an ATmega328P
-    /// Nano, 3.3 on the STM32 boards). The reference [`Self::gpio_input_thresholds`]
-    /// are ratios of.
+    /// Nano, 3.3 on the STM32 boards). This is the reference for
+    /// [`Self::gpio_input_thresholds`] when no circuit routes the actual VDD.
     ///
     /// Absent means "not transcribed", and nothing defaults it: a board that
     /// runs the part at another supply would get thresholds for the wrong rail.
@@ -809,7 +848,7 @@ pub struct ChipDescriptor {
         skip_serializing_if = "Option::is_none"
     )]
     pub io_voltage_v: Option<f64>,
-    /// Datasheet digital input thresholds, as ratios of [`Self::io_voltage_v`].
+    /// Datasheet digital input limits, as supply slopes plus optional offsets.
     ///
     /// Co-simulation needs them to turn a voltage routed to
     /// `board.gpio_in.<pad>` into the level the firmware reads. A chip without
@@ -817,6 +856,9 @@ pub struct ChipDescriptor {
     /// rather than comparing against a made-up midpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpio_input_thresholds: Option<GpioInputThresholds>,
+    /// Explicit electrical/pulse limits for a separate reset pin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reset_input: Option<crate::ResetInputConfig>,
     /// The chip's supply supervisor: power-on / power-down reset and
     /// brown-out reset thresholds, from the datasheet.
     ///
@@ -1282,6 +1324,15 @@ pub(crate) fn expand_chip_includes(
 }
 
 impl ChipDescriptor {
+    /// Is this an ESP32-S2 (Xtensa LX7) part?
+    ///
+    /// The S2 is a single-core LX7 with a different memory/peripheral map from
+    /// both the classic dual-core ESP32 and the S3. Keep its constructor
+    /// dispatch explicit so it cannot fall through to the classic ESP32 bank.
+    pub fn is_esp32s2(&self) -> bool {
+        self.arch == Arch::Xtensa && self.name.starts_with("esp32s2")
+    }
+
     /// Is this an ESP32-S3 (Xtensa LX7) part?
     ///
     /// The S3 needs its own memory map — DROM 0x3C00_xxxx, DRAM 0x3FC8_xxxx,
@@ -1296,6 +1347,16 @@ impl ChipDescriptor {
     /// covered by a CLI gate at all.
     pub fn is_esp32s3(&self) -> bool {
         self.arch == Arch::Xtensa && self.name.starts_with("esp32s3")
+    }
+
+    /// Is this an Espressif Xtensa part (classic ESP32 or an S3 variant)?
+    ///
+    /// Those get the code-built ESP32 memory map, mask-ROM thunks at
+    /// `0x4000_0000` and a second core. Any other Xtensa chip — e.g. the
+    /// imported Renode sample controller, whose RAM sits at `0x4000_0000` —
+    /// must get none of that: its bus comes from its own descriptor.
+    pub fn is_espressif_xtensa(&self) -> bool {
+        self.arch == Arch::Xtensa && self.name.starts_with("esp32")
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -1485,6 +1546,7 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             analog_pins: Default::default(),
             io_voltage_v: None,
             gpio_input_thresholds: None,
+            reset_input: None,
             supply_monitor: None,
             include: None,
         }

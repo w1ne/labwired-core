@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      21,
+      10,
+      268437720,
+      0,
+      488,
+      268437696,
+      1074200576,
+      537403376,
+      3489660968,
+      33554432,
+      268437680,
+      0,
+      0,
+      537403376,
+      268437657,
+      268437670
+    ],
+    "pc": 268437670,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 200000,
+  "cycles": 200000,
+  "instructions": 200000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 200000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 200000
+    }
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "57dd244c0548157724956b65e0ab37b96e3efb46881bf461327abc41502b15ee",
+  "config": {
+    "firmware": "examples/pico2/../../target/thumbv8m.main-none-eabi/release/firmware-rp2350-demo",
+    "system": "examples/pico2/../../configs/systems/pico2.yaml",
+    "script": "examples/pico2/io-smoke.yaml"
+  }
+}

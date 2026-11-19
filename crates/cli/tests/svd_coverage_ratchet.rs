@@ -1,6 +1,8 @@
 // Regression ratchet: per-peripheral `modelled` coverage must never DROP below
-// the baseline. Gated on the ESP32-S3 SVD being discoverable — skips cleanly
-// where the toolchain isn't installed (like the firmware e2e tests).
+// the baseline. FAILS CLOSED when the ESP32-S3 SVD is not discoverable: a copy
+// is vendored at tests/fixtures/svd/esp32s3.svd, so "not found" means the
+// fixture went missing, not that a toolchain is absent. It used to return green
+// there, which is a silent skip of the whole gate.
 //
 // THE BASELINE IS A DIFFERENT COMMIT, AND THAT IS THE WHOLE GUARANTEE.
 // This used to read the snapshot with
@@ -28,10 +30,11 @@ fn repo_root() -> std::path::PathBuf {
 
 #[test]
 fn esp32s3_coverage_does_not_regress() {
-    if labwired_cli::coverage::discover_svd().is_none() {
-        eprintln!("SKIP: ESP32-S3 SVD not found (set LABWIRED_ESP32S3_SVD)");
-        return;
-    }
+    assert!(
+        labwired_cli::coverage::discover_svd().is_some(),
+        "ESP32-S3 SVD not discoverable: tests/fixtures/svd/esp32s3.svd is vendored, so it \
+         has gone missing. This gate fails closed; it does not skip."
+    );
     let (live, _text) = labwired_cli::coverage::run().expect("coverage run");
 
     let root = repo_root();
@@ -54,6 +57,14 @@ fn esp32s3_coverage_does_not_regress() {
                 found.label
             )
         });
+
+    // Anti-vacuity: an empty baseline or an empty live matrix compares nothing.
+    assert!(
+        !snapshot.0.is_empty() && !live.0.is_empty(),
+        "coverage matrix is empty (baseline {} entries, live {}): the ratchet would pass vacuously",
+        snapshot.0.len(),
+        live.0.len()
+    );
 
     let mut regressions: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     for (name, snap) in &snapshot.0 {

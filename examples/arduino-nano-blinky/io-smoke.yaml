@@ -9,7 +9,7 @@
 # USART0 at the configured baud; the stop-reason assertion proves the model
 # then executes the whole step budget — 2 million AVR instructions of real
 # Arduino-core firmware — with no fault, no halt and no unmapped access.
-# The PB5 toggle itself is proven in crates/core/tests/avr_nano_live_run.rs.
+# The PB5 toggle itself is proven in crates/core/tests/avr/avr_nano_live_run.rs.
 schema_version: "1.0"
 inputs:
   firmware: "../../tests/fixtures/avr/arduino-nano-blinky.elf"

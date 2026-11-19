@@ -1,0 +1,36 @@
+id: microbit-v1
+doc: docs/boards/microbit-v1.md
+chip: configs/chips/nrf51822.yaml
+tier: smoke-manual
+note: "BBC micro:bit V1, target nRF51822 (QFAA), modelled as the S110 v8 application region: flash from 0x18000, the MBR/SoftDevice range an empty hole. Bare-metal legacy UART smoke prints OK\\n, PSELTXD=P0.24 / PSELRXD=P0.25, BAUDRATE=115200, ENABLE=4. Blocks reuse the nRF52 models (UART0 legacy personality, NVMC page size 1 KiB) plus an nRF51 FICR. The 5x5 matrix is a mux primitive. ADC, LPCOMP, QDEC and the radio protocol are not claimed. SoftDevice API emulation lives in crates/nrf-softdevice-hle and is not this board's PR gate. SIM-DERIVED — no silicon diff; no executing-fidelity differential."
+offline_tests:
+  - "firmware_survival::test_nrf51822_microbit_v1_smoke_survival"
+models:
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/decoder/arm.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/nvic.rs
+  - crates/core/src/peripherals/nrf52/clock.rs
+  - crates/core/src/peripherals/nrf52/ecb.rs
+  - crates/core/src/peripherals/nrf52/ficr.rs
+  - crates/core/src/peripherals/nrf52/gpiote.rs
+  - crates/core/src/peripherals/nrf52/nvmc.rs
+  - crates/core/src/peripherals/nrf52/ppi.rs
+  - crates/core/src/peripherals/nrf52/radio.rs
+  - crates/core/src/peripherals/nrf52/rng.rs
+  - crates/core/src/peripherals/nrf52/rtc.rs
+  - crates/core/src/peripherals/nrf52/serial_instance.rs
+  - crates/core/src/peripherals/nrf52/temp.rs
+  - crates/core/src/peripherals/nrf52/timer.rs
+  - crates/core/src/peripherals/nrf52/twim.rs
+  - crates/core/src/peripherals/nrf52/uarte.rs
+  - crates/core/src/peripherals/nrf52/uicr.rs
+  - crates/core/src/peripherals/nrf52/wdt.rs
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/components/declarative_led_matrix.rs
+  - configs/chips/nrf51822.yaml
+  - configs/systems/microbit-v1.yaml
+  # 2026-10-16 (#1394), model_paths_drift_gate: the chip descriptor now
+  # declares the Cortex-M SysTick, so its model joins the watch list. No
+  # silicon capture is recorded for this board, so no ack is implied.
+  - crates/core/src/peripherals/systick.rs

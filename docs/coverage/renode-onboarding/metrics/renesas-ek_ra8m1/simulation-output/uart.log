@@ -1,0 +1,19 @@
+EK-RA8M1 SMOKE
+FPU_SUM=40400000
+cpu=cortex-m85 uart=sci9 (sci_b)
+clk src=moco sciclk=8000000 scickcr=01 brr=25 baud=9600
+ccr3=00001200 cesr=11
+led=blue on pin=1 port=6 podr=0001
+led=blue off pin=0 port=6 podr=0000
+led=green on pin=1 port=4 podr=4000
+led=green off pin=0 port=4 podr=0000
+led=red on pin=1 port=1 podr=0080
+led=red off pin=0 port=1 podr=0000
+s1=1 s2=1
+hb=0 podr6=0001 s1=1 s2=1
+hb=1 podr6=0001 s1=1 s2=1
+hb=2 podr6=0001 s1=1 s2=1
+hb=3 podr6=0001 s1=1 s2=1
+hb=4 podr6=0001 s1=1 s2=1
+hb=5 podr6=0001 s1=1 s2=1
+hb=6 podr6=0001 s1=1 s2=1

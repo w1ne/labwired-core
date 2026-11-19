@@ -1,0 +1,15 @@
+# ATmega328PB smoke against its imported simavr profile. The assertion covers
+# CPU execution, USART1 polling TX, and the PB5 output edge; the remaining
+# peripherals are outside this smoke.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/atmega328pb-usart1.elf"
+  system: "../../configs/systems/onboarding/simavr-atmega328pb.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "PB_USART1_OK"
+  - gpio_edges:
+      pin: "portb:5"
+      min_edges: 1
+  - expected_stop_reason: max_steps

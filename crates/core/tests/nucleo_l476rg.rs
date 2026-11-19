@@ -177,3 +177,63 @@ fn l476_bldc_never_reports_target_without_rotor_motion() {
     assert!(!contains(&uart, b"TARGET REACHED"));
     assert_eq!(machine.bus.motor_snapshots()[0].speed_rpm, 0.0);
 }
+
+// The exact motor-fault path available to Studio is also a deterministic
+// SimInput stimulus: no invented UART logs, no host poking CPU registers.
+#[test]
+fn l476_bldc_inverter_fault_sim_input_disables_inverter() {
+    let (mut machine, uart) = fixture(false);
+    let inputs = machine.bus.list_inputs();
+    assert!(
+        inputs
+            .iter()
+            .any(|(name, channel)| { name == "drive_motor" && channel.key == "inverter_fault" }),
+        "BLDC inverter fault must be discoverable via list_inputs"
+    );
+    let channel = machine
+        .bus
+        .resolve_input(Some("drive_motor"), "inverter_fault")
+        .expect("the same input must resolve before running");
+    assert_eq!(channel.min, 0.0);
+    assert_eq!(channel.max, 1.0);
+
+    for _ in 0..500_000 {
+        machine.step().unwrap();
+        if contains(&uart, b"TARGET REACHED") {
+            break;
+        }
+    }
+    assert!(
+        contains(&uart, b"TARGET REACHED"),
+        "motor never reached the target"
+    );
+
+    let injected_cycle = machine.bus.current_cycle;
+    machine
+        .set_input_on("drive_motor", "inverter_fault", 1.0)
+        .expect("scripted driver fault must be accepted");
+    for _ in 0..500_000 {
+        machine.step().unwrap();
+        if contains(&uart, b"INVERTER OFF") {
+            break;
+        }
+    }
+    let latency = machine.bus.current_cycle - injected_cycle;
+    assert!(
+        contains(&uart, b"FAULT DRIVER"),
+        "UART after injection: {}",
+        String::from_utf8_lossy(&uart.lock().unwrap())
+    );
+    assert!(contains(&uart, b"INVERTER OFF"));
+    assert!(latency <= 310_000, "shutdown took {latency} cycles");
+    assert_eq!(
+        machine.bus.read_u32(0x4001_2c44).unwrap() & (1 << 15),
+        0,
+        "TIM1.MOE"
+    );
+    assert_eq!(
+        machine.bus.read_u32(0x4800_0414).unwrap() & 1,
+        0,
+        "PB0 enable"
+    );
+}

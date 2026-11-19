@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.017579">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="dba3743d423deb43b98483cdac60dab1363122d275504b507cedc3f8c2556475"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.017579">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x20600000=0x143" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x20600010=0x7e3ee120" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: VeeR EL2 htif ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

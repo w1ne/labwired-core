@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="2" errors="0" time="0.721882">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="cf5efe45c01499576513a7545eb8dce270c50e38bed8885a2145aaf30c5c4197"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.721882">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: F4-DISCO SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: SPI1 MAX31855=01901600 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1" time="0.000000">
+    <failure message="assertion failed">assertion 2: uart_contains: SPI1 MAX31855=01901600 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=cf5efe45c01499576513a7545eb8dce270c50e38bed8885a2145aaf30c5c4197
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f4_discovery.yaml
+script=examples/renode-onboarding/stm32f4_discovery-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;F4-DISCO SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;SPI1 MAX31855=01901600 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;SPI1 CHECKS=1&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;hb=0 ld4=on odr=00001000&quot;, &quot;hb=1 ld4=off odr=00000000&quot;, &quot;hb=2 ld3=on odr=00002000&quot;, &quot;hb=3 ld3=off odr=00000000&quot;] }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: SPI1 CHECKS=1" time="0.000000">
+    <failure message="assertion failed">assertion 3: uart_contains: SPI1 CHECKS=1
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=cf5efe45c01499576513a7545eb8dce270c50e38bed8885a2145aaf30c5c4197
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-f4-discovery-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32f4_discovery.yaml
+script=examples/renode-onboarding/stm32f4_discovery-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;F4-DISCO SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;SPI1 MAX31855=01901600 TXEIRQ=1 REARM=0 RXNEIRQ=1 RELEASED=1&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;SPI1 CHECKS=1&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;hb=0 ld4=on odr=00001000&quot;, &quot;hb=1 ld4=off odr=00000000&quot;, &quot;hb=2 ld3=on odr=00002000&quot;, &quot;hb=3 ld3=off odr=00000000&quot;] }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_ordered: [&quot;hb=0 ld4=on odr=00001000&quot;, &quot;hb=1 ld4=off odr=00000000&quot;, &quot;hb=2 ld3=on odr=00002000&quot;, &quot;hb=3 ld3=off odr=0…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

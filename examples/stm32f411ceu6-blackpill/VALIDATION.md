@@ -8,7 +8,7 @@ Run all commands from `core/`.
 capture, no SWD register diff, and no UART byte-parity check against silicon.
 Every `PASS` below is simulation evidence produced by the deterministic engine
 against a descriptor built from ST's own sources. The board's tier in
-`validation/manifest.yaml` is `sim-validated` for exactly that reason.
+`validation/boards/` is `sim-validated` for exactly that reason.
 
 ## Modelled chip scope
 

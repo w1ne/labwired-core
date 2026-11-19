@@ -66,7 +66,7 @@ just running the drawing code.
 
 The two boards have not been run together in the hosted simulator, because that
 path only boots one chip at a time. The wire itself is covered by
-`crates/core/tests/world_esp32c3_pingpong.rs`.
+`crates/core/tests/esp/world_esp32c3_pingpong.rs`.
 
 One thing worth knowing if you run this yourself: the C3's ROM boot uses up most
 of a default step budget before your sketch starts. Give it a bigger budget or

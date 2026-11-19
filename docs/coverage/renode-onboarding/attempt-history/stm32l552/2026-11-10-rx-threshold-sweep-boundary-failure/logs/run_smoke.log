@@ -1,0 +1,7 @@
+2026-11-10T12:26:57.665152Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32l552.yaml
+2026-11-10T12:26:57.678646Z  INFO labwired_loader: ELF Entry Point: 0x8000801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T12:26:57.685695Z  INFO labwired_cli::execute: uart_injection: 8 byte(s) delivered to 'lpuart1'
+2026-11-10T12:26:58.350837Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["cpu=cortex-m33 uart=lpuart1", "rxft=lpuart1 thresholds=8,7,6,4,2,1 boundary=1 irq=1111 bytes=abcdef ok", "rx=lpuart1 rxne_before=1 irq_isolated=1 irq_asserted=1 reasserted=1 data=00000052,00000053 rxne_after=0 irq_released=1 ok", "tx_irq lpuart1 txe=1 tc=1 both=1 ok", "led=ld1 odr=00000080", "led=ld1_off odr=00000000", "led=ld2 odr=00000080", "led=ld2_off odr=00000000", "led=ld3 odr=00000200", "led=ld3_off odr=00000000", "btn=0", "hb=0 odr=00000080 btn=0"] }) (captured len=522)
+FAIL  3/4 checks · stm32l552-smoke · 2000000 steps · 0.67s

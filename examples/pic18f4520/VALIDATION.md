@@ -24,7 +24,7 @@ is no silicon capture; everything here is simulation-derived.
 cargo test -p labwired-core --lib cpu::pic18
 # test result: ok. 52 passed; 0 failed
 
-cargo test -p labwired-core --test pic18f4520_smoke
+cargo test -p labwired-core --test pic pic18f4520_smoke::
 # test result: ok. 4 passed; 0 failed
 
 cargo run -q -p labwired-cli -- test \

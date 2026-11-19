@@ -1,0 +1,35 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+   Compiling nb v1.1.0
+   Compiling cortex-m-rt v0.7.5
+   Compiling cortex-m v0.7.7
+   Compiling nb v0.1.3
+   Compiling bare-metal v0.2.5
+   Compiling vcell v0.1.3
+   Compiling void v1.0.2
+   Compiling embedded-hal v0.2.7
+   Compiling volatile-register v0.2.2
+   Compiling bitfield v0.13.2
+   Compiling firmware-samd21-j17d-smoke v0.1.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/firmware-samd21-j17d-smoke)
+   Compiling panic-halt v0.2.0
+error: <inline asm>:135:1: invalid instruction, any one of the following would fix this:
+adds sp, #8
+^
+
+error: could not compile `firmware-samd21-j17d-smoke` (bin "firmware-samd21-j17d-smoke")
+
+Caused by:
+  process didn't exit successfully: `/home/andrii/.local/bin/sccache /home/andrii/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustc --crate-name firmware_samd21_j17d_smoke --edition=2021 crates/firmware-samd21-j17d-smoke/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C panic=abort -C lto=thin -C debuginfo=2 -C overflow-checks=on --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=e11792fc1225a2d3 -C extra-filename=-d2ef00b019356d9e --out-dir /data/worktrees/legacy-migrated/labwired-renode/target/thumbv6m-none-eabi/release/deps --target thumbv6m-none-eabi -L dependency=/data/worktrees/legacy-migrated/labwired-renode/target/thumbv6m-none-eabi/release/deps -L dependency=/data/worktrees/legacy-migrated/labwired-renode/target/release/deps --extern cortex_m=/data/worktrees/legacy-migrated/labwired-renode/target/thumbv6m-none-eabi/release/deps/libcortex_m-e90d4159870a012c.rlib --extern cortex_m_rt=/data/worktrees/legacy-migrated/labwired-renode/target/thumbv6m-none-eabi/release/deps/libcortex_m_rt-cd3d98e9ab90f214.rlib --extern panic_halt=/data/worktrees/legacy-migrated/labwired-renode/target/thumbv6m-none-eabi/release/deps/libpanic_halt-9d050df563181084.rlib -L /data/worktrees/legacy-migrated/labwired-renode/target/thumbv6m-none-eabi/release/build/firmware-samd21-j17d-smoke-9a4b0620bc854a00/out -L /data/worktrees/legacy-migrated/labwired-renode/target/thumbv6m-none-eabi/release/build/cortex-m-0684b97e40fc8ca0/out -L /data/worktrees/legacy-migrated/labwired-renode/target/thumbv6m-none-eabi/release/build/cortex-m-rt-d6999261687f14f2/out -C link-arg=-Tlink.x` (exit status: 1)

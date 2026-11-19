@@ -8,17 +8,22 @@
 # outputs with the input buffer on, and the buttons (GPIO18/19) pulled-up
 # inputs. It selects the 24-MHz UART clock, derives IBRD/FBRD for 115200 8N1
 # from it, then walks the LEDs with single-bit WTC/WTS strobes and prints
-# each pad level read back through RD.
-schema_version: "1.0"
+# each pad level read back through RD. The injected RX byte checks PL011
+# RIS/MIS, NVIC IRQ 15 pending, and level deassertion when DR is read.
+schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-apollo4p-evb-smoke"
   system: "./system.yaml"
 limits:
   max_steps: 4000000
+uart_injections:
+  - uart: "uart0"
+    bytes: "R"
 assertions:
   - uart_contains: "APOLLO4P EVB SMOKE"
   - uart_ordered:
       - "cpu=cortex-m4f uart=uart0"
+      - "pl011 irq=pass ris=48 mis=16 nvic=1 rx=82 ris_after=32 mis_after=0 nvic_after=0"
       - "pwr perf=lp uart0_pwr=1"
       - "uart0 clksel=1 clk=24000000 ibrd=13 fbrd=1"
       - "led=led0 on rd=0 lit=1"

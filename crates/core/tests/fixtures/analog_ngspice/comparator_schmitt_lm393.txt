@@ -1,4 +1,4 @@
-# ngspice-47 reference for `comparator_schmitt_lm393` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `comparator_schmitt_lm393` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(out) at every 1e-7 s, t = 0 excluded
 # deck 2fb2a8557a2dd853
 # edge 5.59084921325241202e-6

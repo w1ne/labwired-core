@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "targets_total": 1,
+    "pass": 1,
+    "fail": 0,
+    "median_elapsed_ms": 5645,
+    "threshold_seconds": 3600,
+    "threshold_met": 1,
+    "median_elapsed_seconds": 5.645
+  },
+  "targets": [
+    {
+      "target_id": "esp32c3-devkitm-1-n4x",
+      "status": "pass",
+      "crate": "firmware-esp32c3-devkitm-1-n4x-smoke",
+      "target_triple": "riscv32imc-unknown-none-elf",
+      "script": "examples/esp32c3-devkitm-1-n4x/io-smoke.yaml",
+      "system": "configs/systems/esp32c3-devkitm-1-n4x.yaml",
+      "profile": "release",
+      "started_at_utc": "2026-11-17T11:19:53Z",
+      "finished_at_utc": "2026-11-17T11:19:58Z",
+      "elapsed_seconds": 6,
+      "elapsed_ms": 5645,
+      "failure_stage": "",
+      "first_error_signature": "",
+      "failure_hint": "",
+      "threshold_seconds": 3600,
+      "threshold_met": true,
+      "stages_seconds": {
+        "build_cli": 0.881,
+        "build_firmware": 0.601,
+        "run_smoke": 4.105
+      },
+      "stages_ms": {
+        "build_cli": 881,
+        "build_firmware": 601,
+        "run_smoke": 4105
+      },
+      "_artifact_path": "examples/esp32c3-devkitm-1-n4x/evidence"
+    }
+  ]
+}

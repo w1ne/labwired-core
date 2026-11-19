@@ -181,7 +181,7 @@ clock:
 Both offsets and bit positions are from the vendored SVD. The gate is evaluated
 in exactly one place (`SystemBus::is_peripheral_clocked`) against the live RCC
 registers, so no peripheral model carries a clock check of its own. Regression
-test: `crates/core/tests/rcc_kernel_clock_gate.rs`.
+test: `crates/core/tests/bus/rcc_kernel_clock_gate.rs`.
 
 **Consequence for this demo, stated plainly:** the firmware constant is still
 wrong, so the simulator now does what the silicon did — the RNG stays dead and
@@ -194,7 +194,13 @@ firmware constant is tracked separately.
 ### The remaining divergence (correct by design)
 
 1. **ADC VREFINT (analog).** Silicon returns a real conversion (`~0x86`); the
-   simulator's ADC returns a deterministic `0`. An analog reading cannot be
+   simulator's ADC returns a deterministic `0`. Since the ADC moved from the
+   L4 model to the L0 CHSELR model (`stm32f0_adc.rs`), that `0` has a cause:
+   the demo writes `ADC_CCR` at `0x4001_2788`, but RM0377 puts CCR at offset
+   `0x308` (`0x4001_2708`), so `CCR.VREFEN` is never set and the model's
+   V_REFINT channel reads 0. Silicon's `~0x86` is therefore not a V_REFINT
+   conversion either (V_REFINT 1.224 V at 3.3 V is ~0x5EE at 12 bits). Like the
+   RNG constant below, it is a firmware bug, tracked separately. An analog reading cannot be
    reproduced byte-for-byte by a deterministic engine — validation here is
    "silicon converts and returns a plausible value; sim is deterministic."
 2. **RNG (non-deterministic).** The simulator returns a fixed `0xCAFEBABE` —
@@ -279,7 +285,8 @@ and the UART byte stream. Still approximate / unverified against silicon:
 2. **RCC is the L4 model, not L0.** It is permissive (does not gate on enable
    bits), so firmware runs, but L4-offset ready flags will not match L0 — the
    demo polls with bounded spins and never blocks on them.
-3. **I2C / SPI / ADC / EXTI reuse family models** (L4 / `stm32f1` EXTI). Not
+3. **I2C / SPI / EXTI reuse family models** (L4 / `stm32f1` EXTI). The ADC
+   is the L0 CHSELR model (`profile: "stm32l0"`, RM0377 §14). Not
    diffed against L0 silicon — re-validate before trusting any bus lab here.
 4. **USB FS, LCD, COMP, SYSCFG are stubs** (read 0, writes dropped).
 5. **Baud is not timed** in the sim (functional UART, not cycle-accurate).
@@ -287,7 +294,7 @@ and the UART byte stream. Still approximate / unverified against silicon:
 ## To extend coverage
 
 1. Author `examples/nucleo-l073rz/io-smoke.yaml` (turns `[SKIP]` → `[PASS]`).
-2. Add a case to `crates/core/tests/firmware_survival.rs` asserting the
+2. Add a case to `crates/core/tests/gates/firmware_survival.rs` asserting the
    captured byte stream above (regression-locks the L0 chip config + decoder).
 3. Validate I2C/SPI/ADC against silicon, replacing the L4 approximations
    where they diverge.

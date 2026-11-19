@@ -114,7 +114,7 @@ PACKAGE_ARG = re.compile(r"(?:-p|--package)[=\s]+\"?'?([A-Za-z0-9_.-]+)")
 #   invocation unifies features across every package in it. Naming wasm
 #   alongside `labwired-core` therefore lints a DIFFERENT core from the one the
 #   browser builds. Measured on this tree: folding wasm into this scope turns
-#   the step red on `crates/core/tests/esp32_classic_walk_differential.rs:89`
+#   the step red on `crates/core/tests/esp/esp32_classic_walk_differential.rs:89`
 #   (clippy::type_complexity) — real debt in the event-scheduler arm that no
 #   lane lints, and not debt this scope should be paying by accident. Its own
 #   invocation keeps the browser's exact feature set, which is the point of

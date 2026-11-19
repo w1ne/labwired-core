@@ -1,0 +1,12 @@
+id: nrf52840
+chip: nrf52840
+system: systems/nrf52840.yaml
+pio: { platform: nordicnrf52, board: nrf52840_dk, framework: arduino }
+max_steps: 3000000
+budget_reason: "Same class as nRF52832 Arduino core"
+led_watch: "gpio0:17"
+led_min_edges: 2
+family: nrf
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "No on-chip CAN model"

@@ -1,0 +1,37 @@
+{
+  "target_id": "ezr32hg320",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 400000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-ezr32hg320-smoke",
+  "target_triple": "thumbv6m-none-eabi",
+  "script": "examples/renode-onboarding/ezr32hg320-smoke.yaml",
+  "system": "configs/systems/onboarding/ezr32hg320.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-19T16:07:11Z",
+  "finished_at_utc": "2026-11-19T16:07:19Z",
+  "elapsed_seconds": 9,
+  "elapsed_ms": 8072,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-19T16:07:14.244137Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"gpio pf4/pf5 pushpull set=1 tgl=1 clr=1 wo=1 ok\", \"gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok\", \"gpio pa1 wir",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.91,
+    "build_firmware": 1.095,
+    "run_smoke": 5.95
+  },
+  "stages_ms": {
+    "build_cli": 910,
+    "build_firmware": 1095,
+    "run_smoke": 5950
+  }
+}

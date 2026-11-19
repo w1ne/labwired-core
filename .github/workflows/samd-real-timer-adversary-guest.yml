@@ -1,7 +1,11 @@
 name: SAMD actual Timer adapter refusal guests
 on:
   pull_request:
-    paths: ['crates/core/tests/samd_real_timer_adversary_guest.rs', 'scripts/samd-real-timer-adversaries/**', '.github/workflows/samd-real-timer-adversary-guest.yml']
+    paths: ['crates/core/tests/samd/samd_real_timer_adversary_guest.rs', 'scripts/samd-real-timer-adversaries/**', '.github/workflows/samd-real-timer-adversary-guest.yml']
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 env:
@@ -47,9 +51,9 @@ jobs:
           LABWIRED_TIMER_MUTANT_DIR: ${{ runner.temp }}/timer-mutants
         run: |
           set -o pipefail
-          cargo test --release -p labwired-core --test samd_real_timer_adversary_guest -- --nocapture
-          cargo test --release -p labwired-core --test samd_real_timer_adversary_guest -- --ignored --nocapture | tee timer-refusal-default.log
-          cargo test --release -p labwired-core --features event-scheduler --test samd_real_timer_adversary_guest -- --ignored --nocapture | tee timer-refusal-scheduler.log
+          cargo test --release -p labwired-core --test samd -- --nocapture samd_real_timer_adversary_guest::
+          cargo test --release -p labwired-core --test samd -- --ignored --nocapture samd_real_timer_adversary_guest:: | tee timer-refusal-default.log
+          cargo test --release -p labwired-core --features event-scheduler --test samd -- --ignored --nocapture samd_real_timer_adversary_guest:: | tee timer-refusal-scheduler.log
       - name: Bind original source derivatives, objects, images, logs and qualification identity
         env:
           LABWIRED_TIMER_POSITIVE_DIR: ${{ runner.temp }}/timer-positive

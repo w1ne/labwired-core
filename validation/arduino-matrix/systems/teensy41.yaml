@@ -1,0 +1,26 @@
+# Arduino matrix system — PJRC Teensy 4.1 (MIMXRT1062DVJ6B @ 600 MHz).
+# Serial = USB1 CDC (Teensyduino `USB_SERIAL`): the chip's scripted host
+# enumerates the device and opens the port; the bulk IN endpoint is the
+# console. LED_BUILTIN = 13 = GPIO_B0_03 = GPIO7 bit 3 (fast GPIO, GPR27).
+# L3: INA219 at 0x40 on Wire = LPI2C1 (pins 18/19 = AD_B1_01 SDA / AD_B1_00
+# SCL).
+# L5: A0 (pin 14 = GPIO_AD_B1_02 = ADC1_IN7) held at 1650 mV. Teensyduino
+# runs the ADC at 10 bits against the 3.3 V VREFH, so stock analogRead(A0)
+# must return exactly 512.
+name: "arduino-matrix-teensy41"
+chip: "../../../configs/chips/mimxrt1062-teensy41.yaml"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "lpi2c1"
+    config:
+      i2c_address: 0x40
+peripherals:
+  - id: "adc1"
+    type: "imxrt_adc"
+    base_address: 0x400C4000
+    size: "16KB"
+    irq: 67
+    config:
+      input_mv: { 7: 1650 }
+board_io: []

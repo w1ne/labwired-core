@@ -1,0 +1,8 @@
+2026-11-10T17:57:17.536551Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/mimxrt700_evk.yaml
+2026-11-10T17:57:17.612979Z  INFO labwired_loader: ELF Entry Point: 0x38000801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T17:57:17.626490Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'flexcomm0'
+2026-11-10T17:57:18.753752Z ERROR labwired_cli::execute: Memory assertion failed at 0x2000000c (size 4): expected 0x700003ff, got 0x700007ff (mask 0xffffffff)
+2026-11-10T17:57:18.753798Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }) (captured len=681)
+FAIL  23/24 checks · mimxrt700_evk-smoke · 10000000 steps · 1.13s

@@ -108,10 +108,40 @@ _Noreturn void __assert_fail(const char *expression, const char *file,
   tlib_abort(message);
   __builtin_unreachable();
 }
+#ifdef TARGET_ARM64
+extern void tlib_set_mpu_regions_count(uint32_t, uint32_t);
+/* The arm64 build hosts only the AArch32 Cortex-R52 (PMSAv8, no MMU, so no
+ * LPAE). Its tlib numbers R0-R15 from 100 and CPSR as 125; the Rust view is
+ * the arm32 one (R0-R15 = 0-15, CPSR = 16 here, 25 natively). */
+static int lw_register(uint64_t id) {
+  return id <= 15 ? 100 + (int)id : id == 25 ? 125 : (int)id;
+}
+#define LW_CPSR 125
+#define LW_IFAR (uint32_t)cpu->cp15.ifar_ns
+#define LW_IFSR (uint32_t)cpu->cp15.ifsr_ns
+#define LW_DFAR (uint32_t)cpu->cp15.dfar_ns
+#define LW_DFSR (uint32_t)cpu->cp15.dfsr_ns
+#define LW_SCTLR (uint32_t)cpu->cp15.sctlr_ns
+#define LW_TTBR0 0u
+#define LW_TTBR1 0u
+#define LW_DACR 0u
+static void reject_lpae(void) {}
+#else
+static int lw_register(uint64_t id) { return (int)id; }
+#define LW_CPSR 25
+#define LW_IFAR cpu->cp15.c6_insn
+#define LW_IFSR cpu->cp15.c5_insn
+#define LW_DFAR cpu->cp15.c6_data
+#define LW_DFSR cpu->cp15.c5_data
+#define LW_SCTLR cpu->cp15.c1_sys
+#define LW_TTBR0 cpu->cp15.c2_base0
+#define LW_TTBR1 cpu->cp15.c2_base1
+#define LW_DACR cpu->cp15.c3
 static void reject_lpae(void) {
   if (cpu && cpu->cp15.c2_ttbcr_eae)
     tlib_abort("ARM LPAE translation is unsupported");
 }
+#endif
 /* Invalid MMU vectors can repeatedly fault inside ONE tlib_execute call, so
  * a Rust-side zero-retirement retry bound cannot contain them. This hook is
  * reached only in C, after physical callbacks have returned. Count only
@@ -120,14 +150,14 @@ static void reject_lpae(void) {
 void tlib_on_interrupt_begin(uint64_t exception_index) {
   if (exceptions_without_retirement == 0) {
     first_exception.pc = CPU_PC(cpu);
-    first_exception.ifar = cpu->cp15.c6_insn;
-    first_exception.ifsr = cpu->cp15.c5_insn;
-    first_exception.dfar = cpu->cp15.c6_data;
-    first_exception.dfsr = cpu->cp15.c5_data;
-    first_exception.sctlr = cpu->cp15.c1_sys;
-    first_exception.ttbr0 = cpu->cp15.c2_base0;
-    first_exception.ttbr1 = cpu->cp15.c2_base1;
-    first_exception.dacr = cpu->cp15.c3;
+    first_exception.ifar = LW_IFAR;
+    first_exception.ifsr = LW_IFSR;
+    first_exception.dfar = LW_DFAR;
+    first_exception.dfsr = LW_DFSR;
+    first_exception.sctlr = LW_SCTLR;
+    first_exception.ttbr0 = LW_TTBR0;
+    first_exception.ttbr1 = LW_TTBR1;
+    first_exception.dacr = LW_DACR;
     first_exception.index = exception_index;
   }
   if (exceptions_without_retirement >= 8) {
@@ -140,9 +170,8 @@ void tlib_on_interrupt_begin(uint64_t exception_index) {
              "first_dfar=%#x first_dfsr=%#x first_sctlr=%#x first_ttbr0=%#x "
              "first_ttbr1=%#x first_dacr=%#x",
              (uint32_t)CPU_PC(cpu), (unsigned long long)exception_index,
-             cpu->cp15.c6_insn, cpu->cp15.c5_insn, cpu->cp15.c6_data,
-             cpu->cp15.c5_data, cpu->cp15.c1_sys, cpu->cp15.c2_base0,
-             cpu->cp15.c2_base1, cpu->cp15.c3, first_exception.pc,
+             LW_IFAR, LW_IFSR, LW_DFAR, LW_DFSR, LW_SCTLR, LW_TTBR0, LW_TTBR1,
+             LW_DACR, first_exception.pc,
              (unsigned long long)first_exception.index, first_exception.ifar,
              first_exception.ifsr, first_exception.dfar, first_exception.dfsr,
              first_exception.sctlr, first_exception.ttbr0,
@@ -191,7 +220,7 @@ uint32_t tlib_on_block_begin(uint64_t pc, uint32_t count) {
   if (!trace_enabled)
     return 1;
   trace_pc = pc;
-  if (tlib_get_register_value(25) & 32) {
+  if (tlib_get_register_value(LW_CPSR) & 32) {
     uint32_t low = invoke(0, trace_physical(pc), 2, 0, 0);
     uint32_t prefix = low >> 11;
     trace_opcode = low;
@@ -263,16 +292,30 @@ int lw_call(uint32_t op, uint64_t a, uint64_t b, uint64_t *out,
       tlib_abort(
           "ARM translation cache is smaller than native code/search reserve");
     tlib_set_translation_cache_configuration(LW_CACHE_MIN, LW_CACHE_MAX);
-    if (a > 1)
+#ifdef TARGET_ARM64
+    if (a != 3)
+      tlib_abort("the arm64 engine hosts only the Cortex-R52 model selector");
+    const char *model = "cortex-r52";
+#else
+    if (a > 2)
       tlib_abort("unknown ARM CPU model selector");
-    if (tlib_init(a == 1 ? "cortex-r5f" : "cortex-a7"))
-      strcpy(error, a == 1 ? "Cortex-R5F initialization failed"
-                           : "Cortex-A7 initialization failed");
+    const char *model = a == 1 ? "cortex-r5f" : a == 2 ? "arm7tdmi" : "cortex-a7";
+#endif
+    if (tlib_init(model)) {
+      snprintf(error, sizeof(error), "ARM CPU model '%s' initialization failed", model);
+    }
     else {
       /* tlib's PMSA default is zero regions (MPUIR.DREGION 0). The ZynqMP
        * RPU's Cortex-R5F is configured with 16 (UG1085, RPU chapter). */
+#ifdef TARGET_ARM64
+      /* Cortex-R52 EL1/EL2 MPUs are each 0, 16, 20 or 24 regions (TRM r1p3,
+       * IMP_MPUIR); tlib's reset value is zero. Use 16 for both stages; the
+       * per-SoC configuration is not modelled. */
+      tlib_set_mpu_regions_count(16, 16);
+#else
       if (a == 1)
         tlib_set_number_of_mpu_regions(16);
+#endif
       if (tlib_atomic_memory_state_init((uintptr_t)&atomic_state, -1) != 0)
         tlib_abort("native atomic state initialization failed");
       tlib_set_block_finished_hook_present(1);
@@ -289,10 +332,10 @@ int lw_call(uint32_t op, uint64_t a, uint64_t b, uint64_t *out,
     exceptions_without_retirement = 0;
     break;
   case 2:
-    *out = tlib_get_register_value(a);
+    *out = tlib_get_register_value(lw_register(a));
     break;
   case 3:
-    tlib_set_register_value(a, b);
+    tlib_set_register_value(lw_register(a), b);
     break;
   case 4:
     tlib_register_access_flags_for_range(a, b, 1);

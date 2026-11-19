@@ -2201,6 +2201,22 @@ pub fn rtc_get_reset_reason(cpu: &mut XtensaLx7, _bus: &mut dyn Bus) -> SimResul
     Ok(())
 }
 
+/// Classic ESP32 `rtc_get_reset_reason(cpu_no: u32) -> u32` @ `0x4000_81d4`.
+///
+/// Decodes `RTC_CNTL_RESET_STATE` (`0x3FF4_8034`) as the BROM does:
+/// bits[5:0] for PRO_CPU (`cpu_no == 0`), bits[11:6] for APP_CPU. The
+/// RTC_CNTL model seeds POWERON_RESET at power-on and DEEPSLEEP_RESET after
+/// a deep-sleep wake-up, so `esp_reset_reason()` and
+/// `esp_sleep_get_wakeup_cause()` see the real cause.
+pub fn esp32_rtc_get_reset_reason(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let cpu_no = cpu.regs.read_logical(n + 2);
+    let state = bus.read_u32(0x3FF4_8034)?;
+    let shift = if cpu_no == 0 { 0 } else { 6 };
+    RomThunkBank::return_with(cpu, (state >> shift) & 0x3F);
+    Ok(())
+}
+
 /// `ets_printf(fmt: *const u8, ...)` — minimal printf expansion.
 ///
 /// Reads fmt string from `a2`, expands `%s/%d/%i/%u/%x/%p/%c/%%` consuming

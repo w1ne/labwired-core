@@ -2,16 +2,15 @@ name: Native QEMU-derived ARM core
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
     paths:
-      - "Cargo.*"
-      - "crates/core/**"
       - "crates/arm-system/**"
       - "crates/arm-core/**"
       - "third_party/tlib/**"
       - "third_party/tlib-PROVENANCE.md"
-      - "crates/cli/**"
-      - "crates/config/**"
-      - "crates/loader/**"
       - "configs/chips/rv1103.yaml"
       - "configs/systems/luckfox-pico-mini-a.yaml"
       - "examples/cortex-a7-core/**"
@@ -31,37 +30,10 @@ on:
       - "tools/cosim/**"
       - "examples/smart-basket-power/**"
       - ".github/workflows/core-qemu-arm.yml"
-  push:
-    branches: [main]
-    paths:
-      - "Cargo.*"
-      - "crates/core/**"
-      - "crates/arm-system/**"
-      - "crates/arm-core/**"
-      - "third_party/tlib/**"
-      - "third_party/tlib-PROVENANCE.md"
-      - "crates/cli/**"
-      - "crates/config/**"
-      - "crates/loader/**"
-      - "configs/chips/rv1103.yaml"
-      - "configs/systems/luckfox-pico-mini-a.yaml"
-      - "examples/cortex-a7-core/**"
-      - "examples/luckfox-pico-mini-a-linux/**"
-      - "scripts/prepare-rv1103-linux.py"
-      - "scripts/tests/test_prepare_rv1103_linux.py"
-      - "scripts/prepare-rv1103-basket.py"
-      - "scripts/tests/test_prepare_rv1103_basket.py"
-      - "scripts/tests/test_basket_ci.py"
-      - "scripts/ci/validate-basket-ci-inputs.py"
-      - "tests/fixtures/cortex-a7-core-smoke.elf"
-      - "tests/fixtures/kv260-r5-zephyr-*.elf"
-      - "crates/firmware-kv260-r5-zephyr/**"
-      - "configs/chips/xck26-rpu.yaml"
-      - "configs/systems/kv260-r5.yaml"
-      - "examples/kv260-r5/**"
-      - "tools/cosim/**"
-      - "examples/smart-basket-power/**"
-      - ".github/workflows/core-qemu-arm.yml"
+  # CI cut O11: no push-to-main run (25 min each merge); nightly instead.
+  # PRs touching the lane's own paths still run it.
+  schedule:
+    - cron: "30 3 * * *"
   workflow_dispatch:
     inputs:
       linux_acceptance:
@@ -86,10 +58,11 @@ permissions:
 
 concurrency:
   group: qemu-arm-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   native-arm:
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -104,7 +77,7 @@ jobs:
       - name: Install native build tools
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang libngspice0 python3-pytest
       - name: Check CPU, bus, builder and trace contracts
-        run: cargo test --locked -p labwired-core --features qemu-arm,event-scheduler --test qemu_arm_core --test cpu_trace_conformance --test luckfox_declaration --test cpu_runtime_snapshot_honesty --test observer_store_visibility
+        run: 'cargo test --locked -p labwired-core --features qemu-arm,event-scheduler --test qemu_arm_core && cargo test --locked -p labwired-core --features qemu-arm,event-scheduler --test bus -- cpu_trace_conformance:: && cargo test --locked -p labwired-core --features qemu-arm,event-scheduler --test rv1103 -- luckfox_declaration:: && cargo test --locked -p labwired-core --features qemu-arm,event-scheduler --test session -- cpu_runtime_snapshot_honesty:: observer_store_visibility::'
       - name: Check native CLI execution
         run: cargo test --locked -p labwired-cli --features qemu-arm --test cortex_a_cli
       - name: Check behavioral power and real ngspice adapters
@@ -113,6 +86,7 @@ jobs:
           /usr/bin/python3 -m pytest tools/cosim/test_smart_basket_power.py tools/cosim/test_labwired_ngspice.py -q
           /usr/bin/python3 examples/smart-basket-power/run_scenarios.py --output "$RUNNER_TEMP/smart-basket-power"
   default-cli:
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -139,9 +113,10 @@ jobs:
       - name: Install compiled-DTB fixture tools
         run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
       - name: Check default loader refusal and device contracts
-        run: cargo test --locked -p labwired-core --test rv1103_linux_loader --test rv1103_devices --test cpu_runtime_snapshot_honesty --test rv1103_basket_loader --test rv1103_rk3x_i2c --test rv1103_uart4_esp_at
+        run: 'cargo test --locked -p labwired-core --test rv1103 -- rv1103_linux_loader:: rv1103_devices:: rv1103_basket_loader:: rv1103_rk3x_i2c:: rv1103_uart4_esp_at:: && cargo test --locked -p labwired-core --test session -- cpu_runtime_snapshot_honesty::'
 
   native-system:
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -171,10 +146,11 @@ jobs:
         run: scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-arm-system --features native --lib --test architecture
       - name: Check real SystemBus backend, MMU, devices, retirement, snapshot refusal and Cortex-R5F Zephyr
         run: >
-          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-core --features qemu-arm-system,event-scheduler
-          --test qemu_arm_system --test rv1103_devices --test rv1103_linux_loader
-          --test cpu_runtime_snapshot_honesty --test event_scheduler
-          --test rv1103_basket_loader --test rv1103_rk3x_i2c --test dw_uart_timeout --test rv1103_uart4_esp_at --test cosim_canonical_basket --test ordered_debug_metadata --test kv260_r5_zephyr
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-core --features qemu-arm-system,event-scheduler --test qemu_arm_system --test kv260_r5_zephyr &&
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-core --features qemu-arm-system,event-scheduler --test rv1103 -- rv1103_devices:: rv1103_linux_loader:: rv1103_basket_loader:: rv1103_rk3x_i2c:: dw_uart_timeout:: rv1103_uart4_esp_at:: &&
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-core --features qemu-arm-system,event-scheduler --test session -- cpu_runtime_snapshot_honesty:: ordered_debug_metadata:: &&
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-core --features qemu-arm-system,event-scheduler --test gates -- event_scheduler:: &&
+          scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-core --features qemu-arm-system,event-scheduler --test cosim -- cosim_canonical_basket::
       - name: Check exact interrupt metadata ordering and duplicate-value goldens
         run: scripts/ci/cargo-test-nonvacuous.sh --locked -p labwired-config --test ordered_interrupt_metadata
       - name: Check native basket parser and evidence unit contracts

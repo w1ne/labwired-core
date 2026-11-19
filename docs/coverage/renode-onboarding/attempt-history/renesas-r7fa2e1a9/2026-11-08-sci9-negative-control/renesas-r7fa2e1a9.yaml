@@ -1,0 +1,37 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: renesas-r7fa2e1a9
+arch: arm
+# Renode's R7FA2E1A9 platform maps a Cortex-M23, 128 KiB code flash at 0x0,
+# and 16 KiB SRAM at 0x20004000. This profile claims only the model-backed
+# SCI9 (classic SCI, non-FIFO) and PORT9/PFS surfaces exercised by the smoke.
+# ICU, GPT, AGT, IIC, SCI0/1/2, the other ports, data flash and the SYSTEM
+# OSCSF script are not mapped.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/renesas-r7fa2e1a9.repl
+core: cortex-m23
+flash:
+  base: 0x00000000
+  size: 128KB
+ram:
+  base: 0x20004000
+  size: 16KB
+peripherals:
+- id: port9
+  type: gpio
+  bus: sysbus
+  base_address: 0x40040120
+  size: 32B
+  config:
+    profile: ra_port
+    pad_control: pfs
+    pad_control_port: 9
+    swapped_half_aliases: true
+- id: pfs
+  type: ra_pfs
+  bus: sysbus
+  base_address: 0x40040800
+  size: 1536B

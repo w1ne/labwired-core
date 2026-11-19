@@ -1,0 +1,24 @@
+STM32H7 register smoke
+usart3 rx_gate re_off=1 ue_off=1 ok
+usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,reasserted,released ok
+usart3 txe_irq=isolated,asserted,reasserted,released ok
+usart3 tc_irq=isolated,asserted,reasserted,released ok
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high
+gpiob0=low
+gpiob0=high

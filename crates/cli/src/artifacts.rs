@@ -188,6 +188,16 @@ pub(crate) struct TestResult {
     /// printed. See `crate::uart_lines` for the resolution contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) uart_lines: Option<crate::uart_lines::UartLinesResult>,
+    /// Unique 7-bit I²C addresses observed on the universal bus-trace ring
+    /// (sorted). Omitted when none were seen, so runs without I²C stay
+    /// byte-identical. Address phases only — data bytes are not addresses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) i2c_addresses: Vec<u8>,
+    /// True when the shared bus-trace ring evicted events, so an exclusivity
+    /// claim ("only address 0x68") cannot be proved from this summary. Omitted
+    /// when the ring did not evict, keeping non-I²C runs byte-identical.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) i2c_trace_evicted: bool,
     /// Final + peak motor evidence (omitted when the manifest declared no
     /// motors, keeping result.json byte-identical for every other run). The
     /// oracle evaluates the peak `|speed_rpm|` post-hoc: a continuous
@@ -312,6 +322,25 @@ pub(crate) struct ExecutionMetrics {
     /// polling at the end. Omitted unless the run ended in such a poll.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stalled_poll: Option<StalledPoll>,
+    /// A run that hit its step budget parked in a loop that loads a word
+    /// from the first bytes of the address space, i.e. through a NULL
+    /// pointer. Omitted otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stalled_null_read: Option<StalledNullRead>,
+}
+
+/// A step-budget run that ended in a loop reading through a NULL pointer: the
+/// shape of `while (!(hspi->Instance->SR & SPI_SR_TXE));` with a driver handle
+/// whose `Instance` was never set. The loop reads the vector table, not a
+/// peripheral, so no status bit it waits on can ever change.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct StalledNullRead {
+    /// PC the core was parked at.
+    pub pc: String,
+    /// The address the loop loads, e.g. `0x00000008` (NULL + 0x08).
+    pub address: String,
+    /// One sentence for a reader.
+    pub detail: String,
 }
 
 /// A step-budget run that ended inside a wait loop on one peripheral register:
@@ -325,6 +354,22 @@ pub(crate) struct StalledPoll {
     pub offset: u64,
     /// Consecutive accesses to that register.
     pub accesses: u64,
+    /// Register name, when the peripheral model or its debug schema names
+    /// the offset (e.g. `SR`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub register: Option<String>,
+    /// The register value the model holds at the end of the run, when it
+    /// answers a side-effect-free peek.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<u32>,
+    /// `true` when the peripheral is clock-gated at the end of the run: every
+    /// read returned 0 without reaching the model.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub clock_gated: bool,
+    /// One sentence naming the register and the state of its one-bit flags,
+    /// e.g. `spi1 SR (0x08) reads 0x00000000: RXNE=0 TXE=0 ...`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 /// One hot PC from statistical sampling during the test loop.
@@ -496,6 +541,20 @@ pub(crate) struct EnvironmentTestResult {
     /// diagnostics (`GPIO_NET_CONTENTION`, `GPIO_NET_FLOATING`), times in ps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) gpio_nets: Option<serde_json::Value>,
+    /// Actual interval, completed shared boundary, route/reset state and failures.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) cosim: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) analog_series: Option<labwired_core::analog::AnalogSeries>,
+    /// Physical motor states keyed by exact owning node. No entry for nodes
+    /// without motors; the static kind tag is a write-only engine observation.
+    #[serde(
+        default,
+        skip_deserializing,
+        skip_serializing_if = "std::collections::BTreeMap::is_empty"
+    )]
+    pub(crate) node_motors:
+        std::collections::BTreeMap<String, Vec<labwired_core::bus::MotorSnapshot>>,
 }
 
 /// One final machine state in an environment snapshot.

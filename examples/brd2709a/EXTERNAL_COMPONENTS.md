@@ -18,7 +18,7 @@ only runs elsewhere is not holding anything.
 
 ## Parts that DO attach on this board
 
-Gated by `crates/core/tests/efr32_onboarded_parts.rs`, which builds each one
+Gated by `crates/core/tests/vendor/efr32_onboarded_parts.rs`, which builds each one
 through `SystemBus::from_config` against the real `efr32mg26.yaml` — the same
 path a lab takes, so a chip descriptor that lost a peripheral would fail here
 rather than at someone's desk.

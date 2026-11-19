@@ -53,7 +53,7 @@ APBENR2@0x40 (USART1EN bit14), and the resolver names the chip yaml uses.
 ## 3. Smoke survival gate
 
 ```bash
-cargo test -p labwired-core --test firmware_survival test_nucleo_g071rb_smoke_survival -j 4 -- --nocapture
+cargo test -p labwired-core --test gates firmware_survival::test_nucleo_g071rb_smoke_survival -j 4 -- --nocapture
 ```
 
 ```
@@ -72,7 +72,7 @@ so this is a real gate on the G0 register map, not just a boot check.
 ## 4. Config-build gate
 
 ```bash
-cargo test -p labwired-core --test board_config_gates stm32g071_from_config_builds -j 4 -- --nocapture
+cargo test -p labwired-core --test gates board_config_gates::stm32g071_from_config_builds -j 4 -- --nocapture
 ```
 
 ```
@@ -89,11 +89,11 @@ resolves through the `stm32g0` layout.
 ## 5. Config vs vendor SVD
 
 The ST CMSIS-SVD is vendored at `tests/fixtures/real_world/stm32g071.svd` and
-wired into `crates/core/tests/svd_conformance.rs`, which checks every declared
+wired into `crates/core/tests/gates/svd_conformance.rs`, which checks every declared
 peripheral base and IRQ against the SVD (deviations must be allow-listed).
 
 ```bash
-cargo test -p labwired-core --test svd_conformance -j 4 -- --nocapture
+cargo test -p labwired-core --test gates svd_conformance:: -j 4 -- --nocapture
 ```
 
 ```
@@ -106,7 +106,7 @@ test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 ```bash
 cargo test -p labwired-core --lib bus_proof_matrix -j 4 -- --nocapture
-cargo test -p labwired-core --test session_catalog -j 4 -- --nocapture
+cargo test -p labwired-core --test session session_catalog:: -j 4 -- --nocapture
 ```
 
 ```

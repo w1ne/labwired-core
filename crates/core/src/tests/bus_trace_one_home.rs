@@ -76,6 +76,7 @@ fn repo_root(rel: &str) -> PathBuf {
 
 pub(crate) fn dummy_manifest(chip_path: &str) -> SystemManifest {
     SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
@@ -204,7 +205,7 @@ fn peripheral_sources() -> Vec<(String, String)> {
             }
         }
     }
-    let root = repo_root("crates/core/src/peripherals");
+    let root = super::src_roots::core_src("peripherals");
     let mut out = Vec::new();
     walk(&root, &root, &mut out);
     out.sort();

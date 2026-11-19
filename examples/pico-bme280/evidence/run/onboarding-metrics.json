@@ -1,0 +1,29 @@
+{
+  "target_id": "pico-bme280",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/pico-bme280/bme280-smoke.yaml",
+  "system": "configs/systems/pico-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T20:51:04Z",
+  "finished_at_utc": "2026-11-11T20:51:07Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2699,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.241,
+    "build_firmware": 1.964,
+    "run_smoke": 0.455
+  },
+  "stages_ms": {
+    "build_cli": 241,
+    "build_firmware": 1964,
+    "run_smoke": 455
+  },
+  "firmware_build_script": "examples/pico-bme280/build-firmware.sh"
+}

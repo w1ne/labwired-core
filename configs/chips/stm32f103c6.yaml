@@ -4,28 +4,21 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 # SOURCE OF TRUTH for geometry, package and ordering data:
-#   ST DS5792 Rev 7 / DocID15060, "STM32F103x4 STM32F103x6" low-density
+#   ST DS5936 Rev 7 / DocID15060, "STM32F103x4 STM32F103x6" low-density
 #   datasheet:
 #     - Table 2 (device features and peripheral counts)
 #     - Table 5 (pin definitions / package bond-out)
 #     - Table 58 (ordering information scheme)
 #   https://www.st.com/resource/en/datasheet/stm32f103c6.pdf
 #
-# SOURCE OF TRUTH for peripheral bases/IRQs:
-#   configs/chips/stm32f103.yaml (STM32F103C8 medium-density public engine),
-#   itself bound to RM0008 and the CMSIS STM32F10x map.
-#
-# REUSE BOUNDARY AND KNOWN LOW-DENSITY LIMITATION, STATED PLAINLY:
-#   The `peripherals:` block below is the public STM32F103 medium-density
-#   reference map, reused verbatim. It is NOT a low-density peripheral-instance
-#   claim. Low-density x4/x6 silicon has one SPI (SPI1), one I2C (I2C1), two
-#   USARTs (USART1/USART2), TIM1-TIM3, two ADCs and a 7-channel DMA1; the
-#   reused map also exposes medium-density-only SPI2, I2C2, USART3 and TIM4
-#   windows. Those extra windows may answer where low-density silicon has no
-#   instance. This is the known low-density F103 peripheral-map limitation.
-#   Memory, package, GPIO/ADC channel counts and ordering suffixes below are
-#   exact for this orderable part. The register behaviour is the medium-density
-#   engine's; no separate low-density silicon capture exists.
+# SOURCE OF TRUTH for peripheral bases/IRQs and low-density instance counts:
+#   ST RM0008 and DS5936, linked above. This descriptor uses the shared F103
+#   peripheral models but lists only the low-density instances present on the
+#   STM32F103C6: SPI1, I2C1, USART1/2, TIM1-3, ADC1/2 and DMA1. It omits the
+#   medium-density-only SPI2, I2C2, USART3 and TIM4 windows.
+#   The low-density debug-port IDCODE is REV_ID 0x1000 / DEV_ID 0x412 per
+#   RM0008 §31.6.1. ES0348 §2.2.2 says user-mode firmware reads this register
+#   as zero, so the CPU-visible model is zero; debug-port IDCODE is not tested.
 
 # EXACT ORDERABLE GEOMETRY for STM32F103C6 (STM32F103 low-density x6).
 #
@@ -41,9 +34,9 @@ name: "stm32f103c6"
 arch: "arm"
 core: "cortex-m3"
 registers_count: 125
-# STM32F103 maximum core clock, 72 MHz (DS5792 section 5.3).
+# STM32F103 maximum core clock, 72 MHz (DS5936 section 5.3).
 cpu_hz: 72_000_000
-# DS5792 Rev 7, Table 35 "I/O static characteristics", all I/Os except BOOT0:
+# DS5936 Rev 7, Table 35 "I/O static characteristics", all I/Os except BOOT0:
 # VIL max 0.35·VDD, VIH min 0.65·VDD (same electrical family as DS5319).
 io_voltage_v: 3.3
 gpio_input_thresholds:
@@ -51,7 +44,7 @@ gpio_input_thresholds:
   vih: 0.65
 
 # Descriptive ordering data. The engine ignores these keys; the focused
-# `stm32_variant_geometry` gate parses and checks them against DS5792.
+# `stm32_variant_geometry` gate parses and checks them against DS5936.
 package: "LQFP48/UFQFPN48"
 pin_count: 48
 gpio_pin_count: 37
@@ -193,15 +186,6 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32f103/i2c1.yaml"
       irq_error: 32
-  - id: "i2c2"
-    type: "i2c"
-    base_address: 0x40005800
-    size: "1KB"
-    irq: 33
-    # RCC_APB1ENR.I2C2EN (bit 22), RM0008 §7.3.8. Unclocked out of reset.
-    clock: { reg: "apb1enr", bit: 22 }
-    config:
-      debug_schema: "../peripherals/stm32f103/i2c2.yaml"
   - id: "spi1"
     type: "spi"
     base_address: 0x40013000
@@ -212,15 +196,6 @@ peripherals:
     clock: { reg: "apb2enr", bit: 12 }
     config:
       debug_schema: "../peripherals/stm32f103/spi1.yaml"
-  - id: "spi2"
-    type: "spi"
-    base_address: 0x40003800
-    size: "1KB"
-    irq: 36
-    # RCC_APB1ENR.SPI2EN (bit 14), RM0008 §7.3.8. Unclocked out of reset.
-    clock: { reg: "apb1enr", bit: 14 }
-    config:
-      debug_schema: "../peripherals/stm32f103/spi2.yaml"
   - id: "afio"
     type: "afio"
     base_address: 0x40010000
@@ -247,13 +222,11 @@ peripherals:
     clock: { reg: "ahbenr", bit: 0 }
     config:
       debug_schema: "../peripherals/stm32f103/dma1.yaml"
-      # Hard-wired peripheral requests (RM0008 Table 78, DMA1 request
-      # mapping): SPI1_RX ch2, SPI1_TX ch3, SPI2_RX ch4, SPI2_TX ch5.
+      # Low-density STM32F103 DMA1 requests (DS5936 / RM0008): SPI1_RX ch2,
+      # SPI1_TX ch3. SPI2 is not present on this part.
       requests:
         spi1_rx: 2
         spi1_tx: 3
-        spi2_rx: 4
-        spi2_tx: 5
   # ─── STM32F1-family peripherals, reset values verified against ─────────
   # ─── STM32F103C8 silicon (Blue Pill, ST-LINK V2, 2026-06-04). ──────────
   # Each `profile` selects the chip-family layout in the peripheral model
@@ -271,7 +244,7 @@ peripherals:
     size: "1KB"
     config:
       debug_schema: "../peripherals/stm32f103/dbg.yaml"
-      idcode: "0x20036410"  # STM32F103C8 — silicon-verified
+      idcode: "0x00000000"  # ES0348 §2.2.2: DBGMCU_IDCODE reads zero in user mode
   - id: "pwr"
     type: "pwr"
     base_address: 0x40007000
@@ -360,15 +333,6 @@ peripherals:
     clock: { reg: "apb1enr", bit: 1 }
     config:
       debug_schema: "../peripherals/stm32f103/tim3.yaml"
-  - id: "tim4"
-    type: "timer"
-    base_address: 0x40000800
-    size: "1KB"
-    irq: 30
-    # RCC_APB1ENR.TIM4EN (bit 2), RM0008 §7.3.8. Unclocked out of reset.
-    clock: { reg: "apb1enr", bit: 2 }
-    config:
-      debug_schema: "../peripherals/stm32f103/tim4.yaml"
   - id: "adc1"
     type: "adc"
     base_address: 0x40012400
@@ -389,19 +353,10 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32f103/adc2.yaml"
       profile: "stm32f1"
-  - id: "usart3"
-    type: "uart"
-    base_address: 0x40004800
-    size: "1KB"
-    irq: 39
-    # RCC_APB1ENR.USART3EN (bit 18), RM0008 §7.3.8. Unclocked out of reset.
-    clock: { reg: "apb1enr", bit: 18 }
-    config:
-      debug_schema: "../peripherals/stm32f103/usart3.yaml"
 
 # Regular ADC inputs on the shared LQFP48/UFQFPN48 pin map: ADC12_IN0..IN9.
 # The family allocation is PA0..PA7 = IN0..IN7, PB0/PB1 = IN8/IN9 and, on
-# the 64-pin R package only, PC0..PC5 = IN10..IN15 (DS5792 Table 2/5).
+# the 64-pin R package only, PC0..PC5 = IN10..IN15 (DS5936 Table 2/5).
 # Consumed by co-simulation `board.analog.<pad>_volts`; pads not listed are refused.
 analog_pins:
   PA0: { peripheral: "adc1", channel: 0 }
