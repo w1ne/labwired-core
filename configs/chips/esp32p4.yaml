@@ -3,16 +3,20 @@
 # Fast-boot profile: the simulator loads a bare ELF at its entry point; it does
 # not execute mask ROM, the second-stage bootloader, clock startup, or launch
 # the second HP core. The modeled HP core uses the RV32IMAC subset exercised by
-# the smoke. UART0 FIFO/STATUS and the official GPIO data/enable/input head
-# through IN1 are exposed. USB Serial/JTAG, IO_MUX, GPIO matrix, the C5 radio
-# module, display, camera, audio, Ethernet, USB, and MicroSD are not modeled
-# by this profile.
+# the smoke. UART0 FIFO/STATUS, the official GPIO data/enable/input head, and
+# four GPIO matrix selectors for the GPIO7/8 I2C0 route are exposed. IO_MUX
+# stores the two pad setup words without enforcing electrical behavior. USB
+# Serial/JTAG, the C5 radio module, display, camera, audio, Ethernet, USB, and
+# MicroSD are not modeled by this profile.
 #
-# Sources checked 2026-11-12:
+# Sources checked 2026-11-18:
 #   ESP32-P4X-C5-Function-EV-Board guide:
 #     https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4x-c5-function-ev-board/user_guide.html
-#   ESP-IDF P4 memory map and UART registers:
-#     https://github.com/espressif/esp-idf/tree/master/components/soc/esp32p4/register/hw_ver3/soc
+#   ESP-IDF P4 register map, GPIO selectors and I2C registers:
+#     https://github.com/espressif/esp-idf/blob/master/components/soc/esp32p4/register/hw_ver3/soc/reg_base.h
+#     https://github.com/espressif/esp-idf/blob/master/components/soc/esp32p4/register/hw_ver3/soc/gpio_reg.h
+#     https://github.com/espressif/esp-idf/blob/master/components/soc/esp32p4/register/hw_ver3/soc/i2c_reg.h
+#     https://github.com/espressif/esp-idf/blob/master/components/soc/esp32p4/include/soc/gpio_sig_map.h
 
 name: "esp32p4"
 arch: "riscv"
@@ -30,9 +34,17 @@ ram:
   base: 0x4FF40000
   size: "512KB"
 
-# J1 pin 8 is GPIO37/U0TXD and J1 pin 10 is GPIO38/U0RXD per Espressif's
-# ESP32-P4X-C5-Function-EV-Board guide.
+# J1 pins 3/5 are GPIO7/8 for the external I2C0 route, and pins 8/10 are
+# GPIO37/U0TXD and GPIO38/U0RXD, per Espressif's board guide.
 pins:
+  GPIO7:
+    gpio: "gpio"
+    bit: 7
+    functions: [{ type: i2c, peripheral: "i2c0", role: sda }]
+  GPIO8:
+    gpio: "gpio"
+    bit: 8
+    functions: [{ type: i2c, peripheral: "i2c0", role: scl }]
   GPIO37:
     gpio: "gpio"
     bit: 37
@@ -56,11 +68,27 @@ peripherals:
       echo_stdout: true
       cpu_clock_hz: 400000000
       uart_sclk_hz: 90000000
-  # GPIO data/enable/input head at DR_REG_GPIO_BASE = DR_REG_HPPERIPH1_BASE
-  # (0x500C_0000) + 0x20000 = 0x500E_0000 (esp-idf P4 hw_ver3 reg_base.h).
-  # OUT @0x04, ENABLE @0x20, IN @0x3C, IN1 @0x40. The 68-byte window ends at
-  # IN1; matrix routing, PIN_x, IO_MUX and IRQs are omitted.
+  # P4 GPIO data/enable/input head, plus the four GPIO-matrix selector words
+  # used by the J1 GPIO7/8 I2C0 route. Other matrix selectors are RAZ/WI.
   - id: "gpio"
     type: "esp32p4_gpio"
     base_address: 0x500E0000
-    size: "68B"
+    size: "4KB"
+  # P4 HP I2C0 shares the ESP32 command-list engine. This profile implements
+  # the transaction registers exercised by its BME280 smoke; source 44 is
+  # I2C0's P4 interrupt-matrix source.
+  - id: "i2c0"
+    type: "esp32p4_i2c"
+    irq: 44
+    base_address: 0x500C4000
+    size: "4KB"
+    config:
+      cpu_clock_hz: 400000000
+  # GPIO7/8 IO_MUX words accept firmware's function-1 pad setup. The current
+  # profile stores these register words but does not simulate pad electricals.
+  - id: "io_mux"
+    type: "declarative"
+    base_address: 0x500E1000
+    size: "256B"
+    config:
+      path: "../peripherals/esp32c6/io_mux.yaml"

@@ -8,6 +8,8 @@ use labwired_core::console::{ConsoleCapture, HostConsole};
 /// Co-simulation models: the session and the one advance path. See `cosim.rs`.
 mod can_bridge;
 mod cosim;
+mod flex;
+pub use flex::WasmFlexRuntime;
 #[cfg(test)]
 mod cosim_tests;
 mod debug_writes;
@@ -15,6 +17,8 @@ mod debug_writes;
 #[cfg(test)]
 mod error_boundary_ratchet;
 mod fidelity_surface;
+#[cfg(test)]
+mod flex_tests;
 mod inputs;
 mod inspect;
 mod install;
@@ -2095,8 +2099,7 @@ impl WasmSimulator {
     pub fn set_peripheral_tick_interval(&mut self, interval: u32) {
         self.record(lab_tools::Op::SetTickInterval(interval));
         let machine = self.machine();
-        machine.config.peripheral_tick_interval = interval.max(1);
-        machine.bus.config.peripheral_tick_interval = interval.max(1);
+        machine.set_peripheral_tick_interval(interval);
     }
 
     /// The largest `peripheral_tick_interval` this machine's bus can run at

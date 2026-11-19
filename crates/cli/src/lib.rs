@@ -1492,6 +1492,8 @@ fn handle_load_error<C: labwired_core::Cpu>(
         None,
         // Load/reset failed before the run loop, so no stimulus was attempted.
         Vec::new(),
+        // Nor was any UART input attempted.
+        &[],
         // Load failed: no successful machine run for footprint/paint/metrics.
         None,
         None,

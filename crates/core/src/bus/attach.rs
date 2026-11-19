@@ -560,10 +560,10 @@ impl SystemBus {
         Ok(())
     }
 
-    /// Wire the ESP32-C3 I²C0 bit engine to C3 GPIO in both directions: GPIO
+    /// Wire the ESP32 C3/C5/C61 I²C0 bit engine to the shared GPIO model: GPIO
     /// reads the live SDA/SCL waveform, while I²C reads GPIO's live input/output
     /// matrix state before allowing a physically routed slave to acknowledge.
-    /// No-op unless both C3 models are on the bus.
+    /// No-op unless both compatible controller and GPIO models are on the bus.
     pub(crate) fn wire_esp32c3_i2c_pads(&mut self) {
         use crate::peripherals::esp32c3::gpio::Esp32c3Gpio;
         use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
@@ -605,6 +605,44 @@ impl SystemBus {
                 .and_then(|a| a.downcast_mut::<Esp32c3Gpio>()),
         ) {
             gpio.set_i2c_lines(lines);
+        }
+    }
+
+    /// Share the P4 GPIO7/8 matrix selections with its HP I2C0 controller.
+    /// The P4 uses the same command-list register engine as C3/C5/C61, but has
+    /// its own signal IDs (SCL=68, SDA=69) and GPIO selector addresses. The
+    /// P4 GPIO head lowers those selectors into the shared route-state shape.
+    pub(crate) fn wire_esp32p4_i2c_pads(&mut self) {
+        use crate::peripherals::esp32_gpio_head::EspGpioHead;
+        use crate::peripherals::esp32c3::i2c::Esp32c3I2c;
+
+        let i2c_idx = self
+            .peripherals
+            .iter()
+            .position(|p| p.dev.as_any().is_some_and(|a| a.is::<Esp32c3I2c>()));
+        let gpio_idx = self.peripherals.iter().position(|p| {
+            p.dev.as_any().is_some_and(|a| {
+                a.downcast_ref::<EspGpioHead>()
+                    .and_then(|g| g.i2c_matrix_route_state())
+                    .is_some()
+            })
+        });
+        let (Some(i2c_idx), Some(gpio_idx)) = (i2c_idx, gpio_idx) else {
+            return;
+        };
+        let route = self.peripherals[gpio_idx]
+            .dev
+            .as_any()
+            .and_then(|a| a.downcast_ref::<EspGpioHead>())
+            .and_then(|g| g.i2c_matrix_route_state());
+        if let (Some(route), Some(i2c)) = (
+            route,
+            self.peripherals[i2c_idx]
+                .dev
+                .as_any_mut()
+                .and_then(|a| a.downcast_mut::<Esp32c3I2c>()),
+        ) {
+            i2c.set_matrix_route_state(route);
         }
     }
 

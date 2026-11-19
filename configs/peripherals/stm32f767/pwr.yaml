@@ -1,74 +1,94 @@
 peripheral: PWR
 version: 0.1.0
 registers:
-- id: CR
+- id: CR1
   address_offset: 0
   size: 32
   access: READ_WRITE
-  reset_value: 0
+  reset_value: 49152
   fields:
-  - name: VOS
-    bit_range:
-    - 15
-    - 14
-    description: Regulator voltage scaling output selection
-  - name: ADCDC1
-    bit_range:
-    - 13
-    - 13
-    description: ADCDC1
-  - name: FPDS
-    bit_range:
-    - 9
-    - 9
-    description: Flash power down in Stop mode
-  - name: DBP
-    bit_range:
-    - 8
-    - 8
-    description: Disable backup domain write protection
-  - name: PLS
-    bit_range:
-    - 7
-    - 5
-    description: PVD level selection
-  - name: PVDE
-    bit_range:
-    - 4
-    - 4
-    description: Power voltage detector enable
-  - name: CSBF
-    bit_range:
-    - 3
-    - 3
-    description: Clear standby flag
-  - name: CWUF
-    bit_range:
-    - 2
-    - 2
-    description: Clear wakeup flag
-  - name: PDDS
-    bit_range:
-    - 1
-    - 1
-    description: Power down deepsleep
   - name: LPDS
     bit_range:
     - 0
     - 0
     description: Low-power deep sleep
+  - name: PDDS
+    bit_range:
+    - 1
+    - 1
+    description: Power down deepsleep
+  - name: CSBF
+    bit_range:
+    - 3
+    - 3
+    description: Clear standby flag
+  - name: PVDE
+    bit_range:
+    - 4
+    - 4
+    description: Power voltage detector enable
+  - name: PLS
+    bit_range:
+    - 7
+    - 5
+    description: PVD level selection
+  - name: DBP
+    bit_range:
+    - 8
+    - 8
+    description: Disable backup domain write protection
+  - name: FPDS
+    bit_range:
+    - 9
+    - 9
+    description: Flash power down in Stop mode
+  - name: LPUDS
+    bit_range:
+    - 10
+    - 10
+    description: Low-power regulator in deepsleep under-drive mode
+  - name: MRUDS
+    bit_range:
+    - 11
+    - 11
+    description: Main regulator in deepsleep under-drive mode
+  - name: ADCDC1
+    bit_range:
+    - 13
+    - 13
+    description: ADCDC1
+  - name: VOS
+    bit_range:
+    - 15
+    - 14
+    description: Regulator voltage scaling output selection
+  - name: ODEN
+    bit_range:
+    - 16
+    - 16
+    description: Over-drive enable
+  - name: ODSWEN
+    bit_range:
+    - 17
+    - 17
+    description: Over-drive switching enabled
+  - name: UDEN
+    bit_range:
+    - 19
+    - 18
+    description: Under-drive enable in stop mode
   side_effects: null
-- id: CSR
+- id: CSR1
   address_offset: 4
   size: 32
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: WUF
+  - name: WUIF
     bit_range:
     - 0
     - 0
-    description: Wakeup flag
+    description: Wakeup internal flag
   - name: SBF
     bit_range:
     - 1
@@ -84,11 +104,6 @@ registers:
     - 3
     - 3
     description: Backup regulator ready
-  - name: EWUP
-    bit_range:
-    - 8
-    - 8
-    description: Enable WKUP pin
   - name: BRE
     bit_range:
     - 9
@@ -99,7 +114,155 @@ registers:
     - 14
     - 14
     description: Regulator voltage scaling output selection ready bit
+  - name: ODRDY
+    bit_range:
+    - 16
+    - 16
+    description: Over-drive mode ready
+  - name: ODSWRDY
+    bit_range:
+    - 17
+    - 17
+    description: Over-drive mode switching ready
+  - name: UDRDY
+    bit_range:
+    - 19
+    - 18
+    description: Under-drive ready flag
   side_effects: null
-interrupts:
-  EXTI16_PVD: 1
+- id: CR2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CWUPF1
+    bit_range:
+    - 0
+    - 0
+    description: Clear Wakeup Pin flag for PA0
+  - name: CWUPF2
+    bit_range:
+    - 1
+    - 1
+    description: Clear Wakeup Pin flag for PA2
+  - name: CWUPF3
+    bit_range:
+    - 2
+    - 2
+    description: Clear Wakeup Pin flag for PC1
+  - name: CWUPF4
+    bit_range:
+    - 3
+    - 3
+    description: Clear Wakeup Pin flag for PC13
+  - name: CWUPF5
+    bit_range:
+    - 4
+    - 4
+    description: Clear Wakeup Pin flag for PI8
+  - name: CWUPF6
+    bit_range:
+    - 5
+    - 5
+    description: Clear Wakeup Pin flag for PI11
+  - name: WUPP1
+    bit_range:
+    - 8
+    - 8
+    description: Wakeup pin polarity bit for PA0
+  - name: WUPP2
+    bit_range:
+    - 9
+    - 9
+    description: Wakeup pin polarity bit for PA2
+  - name: WUPP3
+    bit_range:
+    - 10
+    - 10
+    description: Wakeup pin polarity bit for PC1
+  - name: WUPP4
+    bit_range:
+    - 11
+    - 11
+    description: Wakeup pin polarity bit for PC13
+  - name: WUPP5
+    bit_range:
+    - 12
+    - 12
+    description: Wakeup pin polarity bit for PI8
+  - name: WUPP6
+    bit_range:
+    - 13
+    - 13
+    description: Wakeup pin polarity bit for PI11
+  side_effects: null
+- id: CSR2
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WUPF1
+    bit_range:
+    - 0
+    - 0
+    description: Wakeup Pin flag for PA0
+  - name: WUPF2
+    bit_range:
+    - 1
+    - 1
+    description: Wakeup Pin flag for PA2
+  - name: WUPF3
+    bit_range:
+    - 2
+    - 2
+    description: Wakeup Pin flag for PC1
+  - name: WUPF4
+    bit_range:
+    - 3
+    - 3
+    description: Wakeup Pin flag for PC13
+  - name: WUPF5
+    bit_range:
+    - 4
+    - 4
+    description: Wakeup Pin flag for PI8
+  - name: WUPF6
+    bit_range:
+    - 5
+    - 5
+    description: Wakeup Pin flag for PI11
+  - name: EWUP1
+    bit_range:
+    - 8
+    - 8
+    description: Enable Wakeup pin for PA0
+  - name: EWUP2
+    bit_range:
+    - 9
+    - 9
+    description: Enable Wakeup pin for PA2
+  - name: EWUP3
+    bit_range:
+    - 10
+    - 10
+    description: Enable Wakeup pin for PC1
+  - name: EWUP4
+    bit_range:
+    - 11
+    - 11
+    description: Enable Wakeup pin for PC13
+  - name: EWUP5
+    bit_range:
+    - 12
+    - 12
+    description: Enable Wakeup pin for PI8
+  - name: EWUP6
+    bit_range:
+    - 13
+    - 13
+    description: Enable Wakeup pin for PI11
+  side_effects: null
+interrupts: null
 timing: null

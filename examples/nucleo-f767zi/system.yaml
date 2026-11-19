@@ -1,6 +1,8 @@
 # LabWired - NUCLEO-F767ZI Example System Configuration
 name: "nucleo-f767zi-example"
 chip: "../../configs/chips/stm32f767.yaml"
+# ST-LINK virtual COM uses USART3 PD8/PD9 on this board (UM1974).
+debug_uart: "usart3"
 external_devices: []
 board_io:
   - id: "led1_pb0"

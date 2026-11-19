@@ -17,6 +17,7 @@ pub fn build_cosim_adapter_with_base(
     base_dir: &Path,
 ) -> SimResult<Box<dyn CosimAdapter>> {
     match config.adapter {
+        ManifestCosimAdapter::Behavior => super::behavior::build_behavior_adapter(config),
         ManifestCosimAdapter::Mock => Ok(Box::new(StaticCosimAdapter::new(mock_outputs(config)?))),
         ManifestCosimAdapter::ExternalProcess => {
             let model = config.model.as_deref().ok_or_else(|| {
@@ -366,6 +367,34 @@ impl CosimRunner {
         kind
     }
 
+    /// Check numeric routes against the receiving adapter's known units.
+    /// Boolean-to-voltage conversion remains an explicit adapter capability.
+    pub(crate) fn validate_numeric_input_units(
+        &self,
+        signals: &CosimSignals,
+        units: &std::collections::BTreeMap<String, String>,
+    ) -> SimResult<()> {
+        for model in &self.models {
+            for (name, path) in &model.config.inputs {
+                if !matches!(
+                    signals.get(path),
+                    Some(CosimSignalValue::F64(_) | CosimSignalValue::I64(_))
+                ) {
+                    continue;
+                }
+                if let Some(expected) = model.adapter.input_unit(name) {
+                    if units.get(path).map(String::as_str) != Some(expected) {
+                        return Err(SimulationError::Other(format!(
+                            "model '{}' input '{name}' requires unit {expected}; signal '{path}' declares {:?}; no implicit unit conversion",
+                            model.config.id, units.get(path)
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// An explicit initial value must agree across every reader of the path.
     /// A reader with no declared initial value is treated as zero/false;
     /// incompatible fanout is rejected rather than silently driving it.
@@ -442,6 +471,66 @@ impl CosimRunner {
         Ok(())
     }
 
+    /// Initialize a routed graph in dependency order without advancing time.
+    /// This is used by portable firmware, whose inputs are explicit values,
+    /// rather than CPU pads. Every model sees its producers' actual initial
+    /// outputs. Algebraic feedback requires an explicit initialization model;
+    /// it must not silently become a missing-input zero.
+    pub(crate) fn prime_routed_with_signals(
+        &mut self,
+        signals: &mut CosimSignals,
+    ) -> SimResult<()> {
+        let mut initialized = vec![false; self.models.len()];
+        let mut remaining = initialized.len();
+        while remaining > 0 {
+            let before = remaining;
+            for (index, model) in self.models.iter_mut().enumerate() {
+                if initialized[index]
+                    || model
+                        .config
+                        .inputs
+                        .values()
+                        .any(|path| !signals.contains_key(path))
+                {
+                    continue;
+                }
+                if model.next_step_ns != model.config.step_ns {
+                    return Err(SimulationError::Other(
+                        "co-sim initialization after time advanced".to_string(),
+                    ));
+                }
+                model.gather_inputs(signals);
+                model
+                    .adapter
+                    .step_into(0, 0, &model.inputs_buf, &mut model.outputs_buf)?;
+                for alias in model.config.outputs.keys() {
+                    if !model.outputs_buf.contains_key(alias) {
+                        return Err(SimulationError::Other(format!(
+                            "model '{}' did not initialize output '{alias}'",
+                            model.config.id
+                        )));
+                    }
+                }
+                model.scatter_outputs(signals, false);
+                initialized[index] = true;
+                remaining -= 1;
+            }
+            if remaining == before {
+                let pending: Vec<_> = self
+                    .models
+                    .iter()
+                    .zip(&initialized)
+                    .filter_map(|(model, ready)| (!ready).then_some(model.config.id.as_str()))
+                    .collect();
+                return Err(SimulationError::Other(format!(
+                    "cannot initialize routed models [{}]: cyclic or missing initial inputs",
+                    pending.join(", ")
+                )));
+            }
+        }
+        Ok(())
+    }
+
     pub fn step_until(
         &mut self,
         time_ns: u64,
@@ -474,6 +563,19 @@ impl CosimRunner {
         time_ns: u64,
         signals: &mut CosimSignals,
     ) -> SimResult<Vec<CosimRoutedModelStep>> {
+        self.step_until_with_signals_observed(time_ns, signals, |_, _| {})
+    }
+
+    /// Observe each committed model boundary using the same nanosecond clock
+    /// as the analog trace. All due outputs are scattered before the callback.
+    /// A caller can disable routed reports and capture edges without allocating
+    /// a second per-step signal history or skipping intermediate transitions.
+    pub(crate) fn step_until_with_signals_observed(
+        &mut self,
+        time_ns: u64,
+        signals: &mut CosimSignals,
+        mut observe: impl FnMut(u64, &CosimSignals),
+    ) -> SimResult<Vec<CosimRoutedModelStep>> {
         let mut results = Vec::new();
         let mut due = std::mem::take(&mut self.due_scratch);
         let outcome = (|| {
@@ -505,6 +607,7 @@ impl CosimRunner {
                         });
                     }
                 }
+                observe(step_time, signals);
             }
             Ok(())
         })();

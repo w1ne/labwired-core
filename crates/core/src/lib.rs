@@ -19,6 +19,7 @@ pub mod debug;
 pub mod decoder;
 pub mod fault_verdict;
 pub mod fidelity;
+pub mod flex;
 pub mod hashers;
 pub mod host_time;
 pub mod inspect;
@@ -67,7 +68,9 @@ pub use machine::{
 pub use peripheral::{
     AnalogProbe, DmaDirection, DmaRequest, DmaRoute, DmaUnitTransform, FlashStoreOutcome,
     MmioAccessClass, Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_DATA,
-    DMA_SIGNAL_RX, DMA_SIGNAL_TX,
+    DMA_SIGNAL_RX, DMA_SIGNAL_TIMER_CH1, DMA_SIGNAL_TIMER_CH2, DMA_SIGNAL_TIMER_CH3,
+    DMA_SIGNAL_TIMER_CH4, DMA_SIGNAL_TIMER_COMMUTATION, DMA_SIGNAL_TIMER_TRIGGER,
+    DMA_SIGNAL_TIMER_UPDATE, DMA_SIGNAL_TX,
 };
 
 use std::collections::HashSet;
@@ -1464,6 +1467,24 @@ impl<C: Cpu> Machine<C> {
     pub fn with_host_clock(mut self, clock: Box<dyn host_time::HostClock + Send>) -> Self {
         self.host_clock = clock;
         self
+    }
+
+    /// Set both execution and bus grids, respecting the system's explicit
+    /// timing cap. Return the effective interval for host reporting.
+    pub fn set_peripheral_tick_interval(&mut self, requested: u32) -> u32 {
+        let effective = self.bus.clamp_peripheral_tick_interval(requested);
+        self.config.peripheral_tick_interval = effective;
+        self.bus.config.peripheral_tick_interval = effective;
+        effective
+    }
+
+    /// Native clients can write public config fields; apply the cap before
+    /// either authoritative execution API plans a CPU or custom-runner window.
+    #[inline]
+    fn enforce_peripheral_tick_cap(&mut self) {
+        if self.bus.max_peripheral_tick_interval.is_some() {
+            self.set_peripheral_tick_interval(self.config.peripheral_tick_interval);
+        }
     }
 
     /// The largest `peripheral_tick_interval` THIS MACHINE can run at without

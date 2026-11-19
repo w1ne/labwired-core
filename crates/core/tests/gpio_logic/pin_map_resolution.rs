@@ -7,6 +7,7 @@ fn bus_for(chip_file: &str) -> SystemBus {
         .join(chip_file);
     let chip = ChipDescriptor::from_file(&path).expect("load chip");
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),

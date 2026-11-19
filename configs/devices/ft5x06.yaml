@@ -1,0 +1,56 @@
+# FocalTech FT5x06 capacitive touch controller used on the ESP32-S3-LCD-EV-Board SUB2.
+#
+# Register offsets, report layout, point-ID sentinel, and event codes follow
+# FocalTech's ft5x06 driver. The Espressif BSP declares the fixed 7-bit I2C
+# address 0x38. This model currently exposes one contact point.
+type: ft5x06
+
+behavior:
+  primitive: i2c_device
+  i2c:
+    default_address: 0x38
+    auto_increment: true
+    unmapped_byte: 0x00
+    registers:
+      # Work mode; firmware can select the mode through the usual register.
+      - { name: DEV_MODE, addr: 0x00, width: 1, endian: be, access: rw, reset: 0x00, write_mask: 0x70 }
+      - { name: GESTURE_ID, addr: 0x01, width: 1, endian: be, access: r, reset: 0x00 }
+      - { name: TD_STATUS, addr: 0x02, width: 1, endian: be, access: r,
+          source: touch_count, encode: { scale: 1.0, round: floor, clamp_min: 0.0, clamp_max: 1.0 } }
+      # Event code 0 (finger down) occupies bits 7:6; x[11:8] occupies bits 3:0.
+      - { name: TOUCH1_XH, addr: 0x03, width: 1, endian: be, access: r,
+          source: x, encode: { scale: 0.00390625, round: floor, clamp_min: 0.0, clamp_max: 15.0 } }
+      - { name: TOUCH1_XL, addr: 0x04, width: 1, endian: be, access: r,
+          source: x, encode: { scale: 1.0, round: floor, wrap: 256 } }
+      # Register 0x05 packs point ID in bits 7:4 and y[11:8] in bits 3:0.
+      # It is an explicit raw report byte so the host can select ID 0 for a
+      # contact or 0xF for the no-point sentinel while posing a y coordinate.
+      - { name: TOUCH1_ID_YH, addr: 0x05, width: 1, endian: be, access: r,
+          source: touch1_id_yh, encode: { scale: 1.0, round: floor, clamp_min: 0.0, clamp_max: 255.0 } }
+      - { name: TOUCH1_YL, addr: 0x06, width: 1, endian: be, access: r,
+          source: y, encode: { scale: 1.0, round: floor, wrap: 256 } }
+      - { name: TOUCH1_WEIGHT, addr: 0x07, width: 1, endian: be, access: r,
+          source: pressure, encode: { scale: 1.0, round: floor, clamp_min: 0.0, clamp_max: 255.0 } }
+      - { name: TOUCH1_MISC, addr: 0x08, width: 1, endian: be, access: r,
+          source: area, encode: { scale: 1.0, round: floor, clamp_min: 0.0, clamp_max: 255.0 } }
+
+metadata:
+  label: "FocalTech FT5x06 Touch Controller"
+  summary: "Single-contact FT5x06 I2C touch report model."
+  detail: "FocalTech FT5x06 at 0x38. Register 0x02 reports a posed one-contact count; 0x03..0x08 carry the first point's event/coordinates/ID/weight/area fields. x and y are 12-bit pixel coordinates. `touch1_id_yh` is the packed byte at 0x05 (ID in bits 7:4, y[11:8] in bits 3:0); use ID 0xF in the high nibble when no point is present. The model supports one point and the finger-down event code; multi-touch slots, gestures, interrupt timing, controller configuration, and firmware-update commands are not modelled."
+  category: i2c
+  config_keys:
+    - { name: i2c_address, ty: int, doc: "7-bit I2C address. The Espressif BSP uses fixed address 0x38." }
+    - { name: touch_count, ty: float, doc: "Number of posed contacts, 0 or 1. This model exposes one point." }
+    - { name: x, ty: float, doc: "First contact x coordinate in 12-bit pixels (0..4095)." }
+    - { name: y, ty: float, doc: "First contact y coordinate in 12-bit pixels (0..4095). The low byte is sourced here; its high nibble is packed into touch1_id_yh." }
+    - { name: touch1_id_yh, ty: float, doc: "Raw report byte at register 0x05: point ID in bits 7:4 and y[11:8] in bits 3:0. Use 0xF0 when no point is present." }
+    - { name: pressure, ty: float, doc: "First contact weight byte (0..255); defaults to 127." }
+    - { name: area, ty: float, doc: "First contact miscellaneous/area byte (0..255); defaults to 0." }
+  inputs:
+    - { key: touch_count, label: "Touch count", unit: contacts, min: 0, max: 1, default: 0 }
+    - { key: x, label: "Touch X", unit: px, min: 0, max: 4095, default: 0 }
+    - { key: y, label: "Touch Y", unit: px, min: 0, max: 4095, default: 0 }
+    - { key: touch1_id_yh, label: "Touch ID / Y high byte", unit: byte, min: 0, max: 255, default: 240 }
+    - { key: pressure, label: "Touch weight", unit: byte, min: 0, max: 255, default: 127 }
+    - { key: area, label: "Touch area", unit: byte, min: 0, max: 255, default: 0 }

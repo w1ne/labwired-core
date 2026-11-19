@@ -78,9 +78,16 @@ pub fn app_stack_top() -> u32 {
     APP_SRAM_END & !0xF
 }
 
-/// True when `chip` is an ESP32-C6 (name match, same style as `is_esp32c3`).
+/// True when `chip` is an ESP32-C6 variant.
+///
+/// C61 has the same textual prefix (`esp32c61`) but a different memory map and
+/// no C6 ROM fast-boot state. Do not classify a digit immediately following
+/// `esp32c6` as a C6 variant suffix.
 pub fn is_esp32c6(chip: &ChipDescriptor) -> bool {
-    chip.name.to_ascii_lowercase().contains("esp32c6")
+    chip.name
+        .to_ascii_lowercase()
+        .strip_prefix("esp32c6")
+        .is_some_and(|suffix| suffix.is_empty() || !suffix.as_bytes()[0].is_ascii_digit())
 }
 
 /// Seed `partitions` (or the default Arduino 4 MiB table) at flash offset

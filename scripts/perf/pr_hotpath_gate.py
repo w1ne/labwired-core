@@ -69,13 +69,20 @@ def changed_paths(tested, base, head):
     # cat-file retains real parents even at shallow depth; git-show %P does not.
     headers = git("cat-file", "commit", tested).split(b"\n\n", 1)[0].splitlines()
     parents = [line[7:].decode() for line in headers if line.startswith(b"parent ")]
-    if parents != [base, head]:
-        raise ValueError("tested merge must have the exact ordered base/head parents")
-    for sha in (base, head):
+    if len(parents) != 2 or parents[1] != head:
+        raise ValueError("tested merge must have exactly two parents and the exact PR head second")
+    first_parent = parents[0]
+    for sha in (base, first_parent, head):
         git("cat-file", "-e", sha + "^{commit}")
-    # The first-parent diff excludes unrelated main changes on an older branch.
+    try:
+        git("merge-base", "--is-ancestor", base, first_parent)
+    except subprocess.CalledProcessError as exc:
+        if exc.returncode == 1:
+            raise ValueError("tested merge first parent is not a descendant of the event base") from exc
+        raise
+    # Diff from the actual first parent to exclude unrelated later main changes.
     # No rename detection: removing a runtime path must still select the gate.
-    raw = git("diff", "--name-only", "--no-renames", "-z", base, tested)
+    raw = git("diff", "--name-only", "--no-renames", "-z", first_parent, tested)
     if raw and not raw.endswith(b"\0"):
         raise ValueError("incomplete changed-path stream")
     return [p.decode("utf-8", "surrogateescape") for p in raw.split(b"\0") if p]

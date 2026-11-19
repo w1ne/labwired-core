@@ -1269,12 +1269,10 @@ fn idle_fast_forward_is_reconciled_in_report_and_cpu() {
     assert_eq!(machine.idle_fast_forward_cycles_skipped, 5);
 }
 
-/// On an active single core with no WFI/poll-loop candidate, the idle
-/// fast-forward probe should not drain an already-bootstrapped empty
-/// scheduler before every CPU window. The regular boundary drain remains.
+/// On an active single core with no WFI/poll-loop candidate, neither the idle
+/// fast-forward probe nor the commit boundary should drain an empty scheduler.
 #[test]
 fn active_cpu_skips_redundant_idle_scheduler_preflight() {
-    let scheduler_enabled = crate::cycle_clock::event_scheduler_enabled();
     let mut bus = SystemBus::new();
     bus.peripherals.clear();
     let mut machine = Machine::new(CountingCpu::default(), bus);
@@ -1291,15 +1289,39 @@ fn active_cpu_skips_redundant_idle_scheduler_preflight() {
     assert_eq!(machine.total_cycles, 2);
     assert_eq!(
         crate::profile::snapshot().sched_calls,
-        if scheduler_enabled { 1 } else { 0 },
-        "the normal commit boundary should drain once; idle preflight is redundant"
+        0,
+        "an empty, bootstrapped scheduler needs no preflight or boundary drain"
+    );
+}
+
+#[test]
+fn steady_state_empty_scheduler_skips_each_cpu_window_drain() {
+    let mut bus = SystemBus::new();
+    bus.peripherals.clear();
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+
+    // Bootstrap once before profiling the steady-state empty scheduler.
+    machine.advance(AdvanceRequest::run(Some(1))).unwrap();
+    crate::profile::start();
+    let report = machine
+        .advance(AdvanceRequest::run(Some(4)).with_batch_cap(NonZeroU32::new(1).unwrap()))
+        .unwrap();
+    crate::profile::stop();
+
+    assert_eq!(report.primary_steps, 4);
+    assert_eq!(report.fuel_consumed, 4);
+    assert_eq!(machine.total_cycles, 5);
+    assert_eq!(
+        crate::profile::snapshot().sched_calls,
+        0,
+        "a bootstrapped scheduler with no due or buffered work needs no boundary drain"
     );
 }
 
 #[test]
 fn active_cpu_keeps_idle_preflight_for_due_or_buffered_events() {
     let expected_scheduler_calls = if crate::cycle_clock::event_scheduler_enabled() {
-        2
+        1
     } else {
         0
     };
@@ -1317,11 +1339,11 @@ fn active_cpu_keeps_idle_preflight_for_due_or_buffered_events() {
     assert_eq!(
         crate::profile::snapshot().sched_calls,
         expected_scheduler_calls,
-        "a due-now heap event needs the preflight drain plus the normal boundary drain"
+        "a due-now heap event is drained by preflight before the CPU window"
     );
 
     // A buffered peripheral event is not visible in the scheduler heap until
-    // preflight drains it, so it must also retain the full path.
+    // preflight drains it, so preflight must retain its full drain path.
     machine
         .bus
         .pending_schedule
@@ -1332,14 +1354,14 @@ fn active_cpu_keeps_idle_preflight_for_due_or_buffered_events() {
     assert_eq!(
         crate::profile::snapshot().sched_calls,
         expected_scheduler_calls,
-        "a buffered event must be enqueued and drained before the next CPU window"
+        "a buffered event is enqueued and drained before the CPU window, not again at commit"
     );
 }
 
 #[test]
 fn active_cpu_keeps_idle_preflight_for_timer_poll_activity() {
     let expected_scheduler_calls = if crate::cycle_clock::event_scheduler_enabled() {
-        2
+        1
     } else {
         0
     };
@@ -2407,5 +2429,76 @@ fn newly_waiting_zero_retirement_can_advance_only_configured_idle_time() {
         assert_eq!(report.idle_cycles, if safe { 4 } else { 0 });
         assert_eq!(machine.cpu.steps, 0);
         assert_eq!(report.cpu_batches, 0);
+    }
+}
+
+/// A manifest cap constrains both authoritative advance APIs even when a
+/// native caller bypasses the setter and writes mismatched public configs.
+/// Check executed tick cadence, not only the stored field.
+#[test]
+fn manifest_tick_cap_applies_before_native_and_custom_windows() {
+    for (cap, requested, effective) in [
+        (None, 64, 64),
+        (NonZeroU32::new(32), 1024, 32),
+        (NonZeroU32::new(32), 8, 8),
+        (NonZeroU32::new(32), 0, 1),
+    ] {
+        let mut native = Machine::new(CountingCpu::default(), SystemBus::new());
+        let mut custom = Machine::new(CountingCpu::default(), SystemBus::new());
+        for machine in [&mut native, &mut custom] {
+            machine.bus.max_peripheral_tick_interval = cap;
+            machine.bus.add_peripheral(
+                "every-tick-irq",
+                0x5100_0000,
+                0x100,
+                Some(7),
+                Box::new(EveryTickIrq),
+            );
+            machine.config.peripheral_tick_interval = requested;
+            // Capped systems must synchronize this stale host-side setting.
+            machine.bus.config.peripheral_tick_interval =
+                if cap.is_some() { 999 } else { requested };
+        }
+        let expected = native.advance(AdvanceRequest::run(Some(97))).unwrap();
+        let mut runner_calls = 0;
+        let actual = custom
+            .advance_with_window_runner(
+                AdvanceRequest::run(Some(97)),
+                |cpu, bus, observers, config, count| {
+                    runner_calls += 1;
+                    assert_eq!(config.peripheral_tick_interval, effective);
+                    assert_eq!(bus.config.peripheral_tick_interval, effective);
+                    assert!(count <= effective);
+                    cpu.step_batch(bus, observers, config, count)
+                },
+            )
+            .unwrap();
+        assert_eq!(actual, expected);
+        for machine in [&native, &custom] {
+            assert_eq!(machine.cpu.steps, 97);
+            assert_eq!(machine.config.peripheral_tick_interval, effective);
+            assert_eq!(machine.bus.config.peripheral_tick_interval, effective);
+            assert_eq!(
+                machine.step_profile().peripheral_ticks,
+                u64::from(97 / effective),
+            );
+        }
+        if effective > 1 {
+            assert!(runner_calls > 0, "custom execution path was not exercised");
+        }
+    }
+}
+
+#[test]
+fn manifest_tick_cap_setter_reports_effective_interval_and_preserves_uncapped_requests() {
+    let mut machine = Machine::new(CountingCpu::default(), SystemBus::empty());
+    assert_eq!(machine.set_peripheral_tick_interval(2048), 2048);
+    assert_eq!(machine.config.peripheral_tick_interval, 2048);
+    assert_eq!(machine.bus.config.peripheral_tick_interval, 2048);
+    machine.bus.max_peripheral_tick_interval = NonZeroU32::new(32);
+    for (requested, effective) in [(2048, 32), (8, 8), (0, 1)] {
+        assert_eq!(machine.set_peripheral_tick_interval(requested), effective);
+        assert_eq!(machine.config.peripheral_tick_interval, effective);
+        assert_eq!(machine.bus.config.peripheral_tick_interval, effective);
     }
 }

@@ -1382,7 +1382,12 @@
         {
           "name": "rd_pin",
           "ty": "str",
-          "doc": "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5."
+          "doc": "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5. Omit when rd_tied_high is true."
+        },
+        {
+          "name": "rd_tied_high",
+          "ty": "bool",
+          "doc": "True when RD is physically tied to the logic-high rail. No RD GPIO is attached; rd_pin/RD must be absent. Defaults to false."
         },
         {
           "name": "rst_pin",
@@ -4361,6 +4366,102 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "ft5x06",
+      "label": "FocalTech FT5x06 Touch Controller",
+      "summary": "Single-contact FT5x06 I2C touch report model.",
+      "detail": "FocalTech FT5x06 at 0x38. Register 0x02 reports a posed one-contact count; 0x03..0x08 carry the first point's event/coordinates/ID/weight/area fields. x and y are 12-bit pixel coordinates. `touch1_id_yh` is the packed byte at 0x05 (ID in bits 7:4, y[11:8] in bits 3:0); use ID 0xF in the high nibble when no point is present. The model supports one point and the finger-down event code; multi-touch slots, gestures, interrupt timing, controller configuration, and firmware-update commands are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit I2C address. The Espressif BSP uses fixed address 0x38."
+        },
+        {
+          "name": "touch_count",
+          "ty": "float",
+          "doc": "Number of posed contacts, 0 or 1. This model exposes one point."
+        },
+        {
+          "name": "x",
+          "ty": "float",
+          "doc": "First contact x coordinate in 12-bit pixels (0..4095)."
+        },
+        {
+          "name": "y",
+          "ty": "float",
+          "doc": "First contact y coordinate in 12-bit pixels (0..4095). The low byte is sourced here; its high nibble is packed into touch1_id_yh."
+        },
+        {
+          "name": "touch1_id_yh",
+          "ty": "float",
+          "doc": "Raw report byte at register 0x05: point ID in bits 7:4 and y[11:8] in bits 3:0. Use 0xF0 when no point is present."
+        },
+        {
+          "name": "pressure",
+          "ty": "float",
+          "doc": "First contact weight byte (0..255); defaults to 127."
+        },
+        {
+          "name": "area",
+          "ty": "float",
+          "doc": "First contact miscellaneous/area byte (0..255); defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "touch_count",
+          "label": "Touch count",
+          "unit": "contacts",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        },
+        {
+          "key": "x",
+          "label": "Touch X",
+          "unit": "px",
+          "min": 0.0,
+          "max": 4095.0,
+          "default": 0.0
+        },
+        {
+          "key": "y",
+          "label": "Touch Y",
+          "unit": "px",
+          "min": 0.0,
+          "max": 4095.0,
+          "default": 0.0
+        },
+        {
+          "key": "touch1_id_yh",
+          "label": "Touch ID / Y high byte",
+          "unit": "byte",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 240.0
+        },
+        {
+          "key": "pressure",
+          "label": "Touch weight",
+          "unit": "byte",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 127.0
+        },
+        {
+          "key": "area",
+          "label": "Touch area",
+          "unit": "byte",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        }
+      ]
     },
     {
       "device_type": "oled-ssd1309",

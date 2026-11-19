@@ -246,16 +246,14 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             .ok()
             .and_then(|v| v.parse::<u32>().ok())
             .unwrap_or(labwired_core::bus::RECOMMENDED_TICK_INTERVAL);
-        ctx.machine.config.peripheral_tick_interval = interval;
-        ctx.machine.bus.config.peripheral_tick_interval = interval;
+        ctx.machine.set_peripheral_tick_interval(interval);
     }
 
     // An explicit script limit sets the peripheral tick for this run.
     // Absent leaves the interval set above: one tick per cycle, or the JIT widen.
     if let Some(interval) = ctx.resolved_limits.peripheral_tick_interval {
         if interval > 0 {
-            ctx.machine.config.peripheral_tick_interval = interval;
-            ctx.machine.bus.config.peripheral_tick_interval = interval;
+            ctx.machine.set_peripheral_tick_interval(interval);
         }
     }
 
@@ -515,7 +513,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // threshold, mirroring `apply_stimulus` above. A named UART that isn't
     // found on the bus is a hard config error — silently dropping serial
     // input a script depends on would be a false pass.
-    let mut uart_injection_error = false;
+    let mut uart_injection_errors = Vec::new();
     let apply_uart_injection =
         |machine: &mut labwired_core::Machine<C>, u: &labwired_config::UartInjectionSpec| {
             if let Some(device) = &u.device {
@@ -551,7 +549,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         if let Some(device) = &u.device {
             if let Err(e) = ctx.machine.bus.check_uart_peer(&u.uart, device) {
                 error!("uart_injection: {e}");
-                uart_injection_error = true;
+                uart_injection_errors.push(e);
             }
         }
     }
@@ -559,11 +557,20 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         if matches!(u.trigger, labwired_config::FaultTrigger::AtStart) {
             if let Some(err) = apply_uart_injection(ctx.machine, u) {
                 error!("{err}");
-                uart_injection_error = true;
+                uart_injection_errors.push(err);
             }
         }
     }
-    if uart_injection_error {
+    if !uart_injection_errors.is_empty() {
+        let firmware_path = ctx.firmware_path.to_path_buf();
+        write_config_error_outputs(
+            ctx.args,
+            Some(&firmware_path),
+            ctx.system_path,
+            Some(ctx.firmware_bytes),
+            Some(ctx.resolved_limits),
+            uart_injection_errors.join("; "),
+        );
         return ExitCode::from(EXIT_CONFIG_ERROR);
     }
 
@@ -737,7 +744,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
 
     let mut step = 0;
     let mut heartbeat = Heartbeat::new(ctx.args.heartbeat_file.clone());
-    while step < max_steps {
+    'run: while step < max_steps {
         crate::log_ts::refresh_cycles(ctx.machine.total_cycles);
         heartbeat.tick(step, ctx.machine.total_cycles);
         // JIT-eligible path: mirror the machine's authoritative counters into
@@ -829,6 +836,14 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
                     if cycles >= threshold {
                         if let Some(err) = apply_uart_injection(ctx.machine, u) {
                             error!("{err}");
+                            uart_injection_errors.push(err);
+                            // Host halt after a refused declared input. Preserve
+                            // the real run metrics and fail through the single
+                            // verdict below, even if the script expected a halt.
+                            // An undelivered injection is never marked fired.
+                            stop_reason = StopReason::Halt;
+                            steps_executed = step;
+                            break 'run;
                         }
                         *fired = true;
                     }
@@ -1650,6 +1665,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     // disagree with. Do not reintroduce a second chain here.
     let verdict = crate::verdict::RunFacts {
         stimuli_rejected: stimuli_rejected > 0,
+        uart_injections_rejected: !uart_injection_errors.is_empty(),
         firmware_declared_failure,
         assertions_failed: !all_passed,
         fault_gate_failed,
@@ -1834,6 +1850,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             .analog_series()
             .filter(|series| !series.channels.is_empty()),
         stimulus_outcomes,
+        &uart_injection_errors,
         footprint,
         Some(memory),
         ctx.machine.bus.memory_policy_report(),

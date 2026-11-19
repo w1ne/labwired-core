@@ -493,6 +493,7 @@ impl SystemBus {
             poll_streak: Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
             legacy_walk_pinned_on: false,
+            max_peripheral_tick_interval: manifest.max_peripheral_tick_interval,
             legacy_tick_candidate_mask: Vec::new(),
             legacy_tick_peer_write_indices: Vec::new(),
             resident_tick_interval_override: None,
@@ -556,7 +557,7 @@ impl SystemBus {
         let merged_peripherals = merged_peripheral_configs(chip, manifest);
 
         // External-device ids already attached by a chip-specific I²C path
-        // (the `i2c` / `esp32c3_i2c` arms below). The generic external-device
+        // (the `i2c` / Espressif I²C arms below). The generic external-device
         // loop must NOT re-process these — otherwise a device that the bus
         // loader correctly attached as an I²C slave would also fall through to
         // the generic `_ =>` arm and emit a spurious "Unsupported external
@@ -623,11 +624,15 @@ impl SystemBus {
             // out). Try them first; unmigrated families fall through to the match.
             let family_dev = plugin_dev
                 .or_else(|| crate::peripherals::esp32s3::factory::try_build(&canonical_type, p_cfg))
+                .or_else(|| crate::peripherals::esp32c2::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c3::factory::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c6::factory::try_build(&canonical_type, p_cfg))
-                .or_else(|| crate::peripherals::esp32_gpio_head::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c5::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32c61::try_build(&canonical_type, p_cfg))
+                // C5/C61 have richer board GPIO adapters for the I2C matrix
+                // routes used by their sensor profiles. Keep the shared
+                // data/enable/input-only heads as a later fallback.
+                .or_else(|| crate::peripherals::esp32_gpio_head::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32h2::try_build(&canonical_type, p_cfg))
                 .or_else(|| crate::peripherals::esp32p4::try_build(&canonical_type, p_cfg))
                 // ESP32-classic was missing from this chain. Its factory has
@@ -735,6 +740,8 @@ impl SystemBus {
                     | "stm32f7_i2c"
                     | "efm32ggi2ccontroller"
                     | "esp32c3_i2c"
+                    | "esp32c5_i2c"
+                    | "esp32c61_i2c"
                     | "imxrt_lpi2c"
             ) {
                 let controller: Box<dyn Peripheral> = if canonical_type == "imxrt_lpi2c" {
@@ -745,6 +752,26 @@ impl SystemBus {
                         .and_then(|v| v.as_u64())
                         .unwrap_or(crate::peripherals::imxrt::lpi2c::DEFAULT_LPI2C_CLK_HZ);
                     Box::new(crate::peripherals::imxrt::lpi2c::ImxrtLpi2c::new(clk))
+                } else if canonical_type == "esp32c5_i2c" {
+                    let src = p_cfg
+                        .irq
+                        .unwrap_or(crate::peripherals::esp32c3::i2c::C5_I2C0_INTR_SOURCE_ID);
+                    Box::new(
+                        crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
+                            240_000_000,
+                            src,
+                        ),
+                    )
+                } else if canonical_type == "esp32c61_i2c" {
+                    // C61's I2C command-list register head matches the C3/C5
+                    // engine; the source and HP-core pacing are C61-specific.
+                    let src = p_cfg.irq.unwrap_or(45);
+                    Box::new(
+                        crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
+                            160_000_000,
+                            src,
+                        ),
+                    )
                 } else if canonical_type == "esp32c3_i2c" {
                     // ESP32-C3/C6 behavioral I²C0 controller (command-list
                     // engine); both RISC-V chips reach it through this config
@@ -1452,10 +1479,14 @@ impl SystemBus {
         // wires it there too; this keeps the declarative path honest if the
         // peripheral is ever declared.)
         bus.wire_esp32s3_pad_controls();
-        // ESP32-C3: share the I²C0 bit engine's live SDA/SCL line levels with
-        // the C3 GPIO model so matrix-routed pads carry the real waveform.
+        // ESP32-C3/C5: share the I²C0 bit engine's live SDA/SCL line levels
+        // with the GPIO model so matrix-routed pads carry the real waveform.
         // No-op for every other chip.
         bus.wire_esp32c3_i2c_pads();
+        // ESP32-P4 HP I2C0 uses GPIO-matrix selectors 68/69 on GPIO7/8.
+        // Share those pad selections with the command-list engine so attached
+        // devices only acknowledge the route configured by firmware.
+        bus.wire_esp32p4_i2c_pads();
         // And GP-SPI2's SCK/MOSI/CS plus each UART's TX, so those buses are
         // measurable on the C3 too rather than reading as a flat line. MISO/RX
         // are deliberately unbound — nothing drives them.
@@ -1673,7 +1704,7 @@ impl SystemBus {
         }
     }
 
-    /// Install a GPIO edge observer on ESP32 / ESP32-S3 GPIO models when present.
+    /// Install a GPIO edge observer on supported ESP32-family GPIO models.
     ///
     /// Public so kits (`Transport::GpioGroup`) and hand arms share one choke
     /// point — the same path `AttachCtx::install_gpio_observer` uses.
@@ -1682,23 +1713,12 @@ impl SystemBus {
     where
         T: crate::peripherals::device::GpioObserver + 'static,
     {
+        let observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver> = observer;
         if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
-            let any = bus.peripherals[idx].dev.as_any_mut();
-            if let Some(gpio) =
-                any.and_then(|a| a.downcast_mut::<crate::peripherals::esp32s3::gpio::Esp32s3Gpio>())
-            {
-                gpio.add_observer(observer);
-                return true;
-            }
-        }
-        // Classic ESP32 GPIO (separate type).
-        if let Some(idx) = bus.find_peripheral_index_by_name("gpio") {
-            if let Some(gpio) = bus.peripherals[idx]
+            if bus.peripherals[idx]
                 .dev
-                .as_any_mut()
-                .and_then(|a| a.downcast_mut::<crate::peripherals::esp32::gpio::Esp32Gpio>())
+                .register_esp_gpio_observer(observer.clone())
             {
-                gpio.add_observer(observer);
                 return true;
             }
         }

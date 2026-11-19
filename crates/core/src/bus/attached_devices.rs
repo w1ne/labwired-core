@@ -90,8 +90,10 @@ impl SystemBus {
         self.for_each_bus_resident_device(f);
     }
 
-    /// Pulse width (µs) the I2C PWM controller at `address` drives on `channel`,
-    /// or `None` when no such controller exists or the channel is silent.
+    /// Modeled pulse width (µs) for an I2C controller at `address`. `None`
+    /// includes silent, absent, unsupported, and unknown outputs. This query
+    /// does not prove output-enable, servo power, or physical signal delivery.
+    /// Addresses can be ambiguous across buses; this query does not resolve them.
     pub fn pwm_channel_pulse_us(&self, address: u8, channel: u8) -> Option<f64> {
         let mut found = None;
         self.for_each_attached_device(&mut |_, d| {
@@ -104,7 +106,7 @@ impl SystemBus {
 
     /// Bring every servo wired to a PWM-controller output up to date with the
     /// pulse the firmware last wrote there. Cheap; call before reading servo
-    /// state. A silent channel leaves the servo where it was.
+    /// state. An absent or unknown pulse leaves the servo where it was.
     pub fn sync_pwm_sourced_servos(&self) {
         for servo in self.observed_of::<crate::peripherals::components::servo::Servo>() {
             if let (Some((address, channel)), Some(bus_name)) =

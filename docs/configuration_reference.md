@@ -343,6 +343,7 @@ This is the complete `SystemManifest` surface (`crates/config/src/manifest.rs`).
 | `name` | Board label; used in logs and to name a private lab air. | `name: "BluePill Board"` |
 | `chip` | A **bare word** (`stm32f103`) is a built-in/plugin chip name; anything containing `/`, `\`, or ending `.yaml`/`.yml`/`.json` is a path resolved relative to THIS manifest, so a manifest is relocatable with the files it names. | `chip: "stm32f103"` |
 | `cpu_hz` | Board-level override of the chip's declared clock, in Hz. Absent ⇒ the chip's default. | `cpu_hz: 4_000_000` (`configs/systems/nucleo-l476rg.yaml`) |
+| `max_peripheral_tick_interval` | Optional positive integer cap, in CPU cycles, on the peripheral service grid. Both native and custom-runner advances clamp larger host requests before execution. Omit to preserve existing defaults. Zero, negative, fractional, and out-of-range values are invalid. | `max_peripheral_tick_interval: 32` (`examples/nokia5110-invaders-lab/system.yaml`) |
 | `memory_overrides` | Parsed but **not consulted by the engine today** — region sizes come from the chip descriptor. The field exists so manifests may carry it; do not rely on it. | `memory_overrides: {flash: "512KB"}` |
 | `peripherals` | Chip-peripheral patches/additions. An entry whose `id` matches a chip peripheral merges its `config` keys and overrides `base_address` (when nonzero; `0` keeps the chip's), `irq` and `size`; an unmatched `id` adds a new peripheral. `id`, `type` and `base_address` are required on every entry. | `peripherals: [{id: "usart1", type: "uart", base_address: 0, config: {profile: "stm32f1"}}]` |
 | `external_devices` | The parts on the board's buses — see [External devices](#external-devices). | see below |
@@ -427,6 +428,7 @@ canonical `type:`; the table below is rendered from that file by
 | `drv2605` | I²C | TI DRV2605 haptic motor driver over I2C |
 | `ds3231` | I²C | I²C real-time clock with temperature-compensated crystal |
 | `ens160` | I²C | ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C |
+| `ft5x06` | I²C | Single-contact FT5x06 I2C touch report model |
 | `fxos8700` | I²C | NXP FXOS8700 6-axis accelerometer + magnetometer over I2C |
 | `ht16k33` | I²C | 16×8 LED matrix / 7-segment I²C controller (display RAM, setup commands) |
 | `icm20948` | I²C | TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C |

@@ -87,6 +87,7 @@ mod spi_edge_sampling_lab_tests {
             );
         }
         SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
