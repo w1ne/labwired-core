@@ -1,0 +1,14 @@
+name: C3 pad preflight evidence
+on:
+  push:
+    branches: [test/c3-pad-preflight-20261119]
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - run: cargo test -p labwired-wasm --lib inputs::tests::c3_owned_pad_preflight_uses_resolved_gpio_and_rejects_ambiguity -- --exact

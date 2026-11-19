@@ -1031,6 +1031,38 @@ mod tests {
     use super::*;
     use labwired_core::cpu::riscv::RiscV;
 
+    #[test]
+    fn c3_owned_pad_preflight_uses_resolved_gpio_and_rejects_ambiguity() {
+        let sim = c3_button_sim();
+        let bus = &sim.machine.as_ref().unwrap().bus;
+        let left = sim.board_io[0].clone();
+        let mut other = left.clone();
+        other.id = "other".into();
+        other.pin = 3;
+        assert_eq!(
+            resolve_owned_pad_preflight(bus, &[left.clone(), other.clone()], "left"),
+            Ok((bus.find_peripheral_index_by_name("gpio").unwrap(), 2))
+        );
+        other.pin = left.pin;
+        assert!(resolve_owned_pad_preflight(bus, &[left.clone(), other.clone()], "left").is_err());
+        other.signal = BoardIoSignal::Output;
+        assert!(resolve_owned_pad_preflight(bus, &[left.clone(), other.clone()], "left").is_err());
+        other.signal = BoardIoSignal::Input;
+        other.id = left.id.clone();
+        other.pin = 3;
+        assert!(resolve_owned_pad_preflight(bus, &[left.clone(), other.clone()], "left").is_err());
+        other.id = "other".into();
+        other.peripheral = "missing".into();
+        assert!(resolve_owned_pad_preflight(bus, &[left.clone(), other], "left").is_err());
+        let mut invalid_pin = left.clone();
+        invalid_pin.pin = 26;
+        assert!(resolve_owned_pad_preflight(bus, &[invalid_pin], "left").is_err());
+        let mut output = left.clone();
+        output.signal = BoardIoSignal::Output;
+        assert!(resolve_owned_pad_preflight(bus, &[output], "left").is_err());
+        assert!(resolve_owned_pad_preflight(bus, &[left], "missing").is_err());
+    }
+
     fn c3_button_sim() -> WasmSimulator {
         let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let chip_yaml = std::fs::read_to_string(root.join("../../configs/chips/esp32c3.yaml"))
