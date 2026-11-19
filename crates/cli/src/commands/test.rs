@@ -2609,109 +2609,24 @@ pub(crate) fn run_test(
                             // allocate free pages for the partition table @ 0x8000.
                             if labwired_core::boot::esp32c6_rom::is_esp32c6(&chip) {
                                 use labwired_core::boot::esp32c6_rom::{
-                                    install_arduino_flash, install_xip_window, write_mmu_entry,
-                                    FACTORY_APP_OFFSET, MMU_VALID,
+                                    map_factory_app, FACTORY_APP_OFFSET, MMU_VALID,
                                 };
-                                const PAGE: usize = 64 * 1024;
-                                let factory_off = FACTORY_APP_OFFSET as usize;
-                                let factory_page = (factory_off / PAGE) as u32; // 1
-                                let flash_page_has_payload = |page: &[u8]| -> bool {
-                                    !(page.iter().all(|&b| b == 0)
-                                        || page.iter().all(|&b| b == 0xFF))
-                                };
-                                let mut virt_pages: Vec<u32> = Vec::new();
-                                let irom_len = machine.bus.flash.data.len();
-                                for page in 0..irom_len.div_ceil(PAGE) {
-                                    if page >= 256 {
-                                        break;
-                                    }
-                                    let start = page * PAGE;
-                                    let end = (start + PAGE).min(irom_len);
-                                    if flash_page_has_payload(
-                                        &machine.bus.flash.data[start..end],
-                                    ) {
-                                        virt_pages.push(page as u32);
-                                    }
-                                }
-                                // Re-install for (flash, mmu) handles — avoids a
-                                // new as_any/downcast site (ratchet stays at 195).
-                                // Fresh backing is then filled from bus.flash.
                                 let partitions = resolve_esp_partitions_bin(
                                     std::path::Path::new(&firmware_path),
                                 )
                                 .and_then(|p| std::fs::read(p).ok());
-                                let (flash, mmu) = install_arduino_flash(
+                                let virt_pages = map_factory_app(
                                     &mut machine.bus,
+                                    &firmware_bytes,
                                     partitions.as_deref(),
                                 );
-                                {
-                                    let mut f = flash.lock().unwrap();
-                                    // Full page copy — unlike C3 (execute
-                                    // stays on bus.flash), C6 FlashXip
-                                    // serves fetches from this backing, so
-                                    // sparse skip-0x00 would corrupt code.
-                                    for page in virt_pages.clone() {
-                                        let start = page as usize * PAGE;
-                                        let end = (start + PAGE).min(irom_len);
-                                        let dst = factory_off + start;
-                                        if start >= irom_len || dst >= f.len() {
-                                            continue;
-                                        }
-                                        let n = (end - start).min(f.len() - dst);
-                                        f[dst..dst + n].copy_from_slice(
-                                            &machine.bus.flash.data[start..start + n],
-                                        );
-                                    }
-                                    // App image magic at start of factory partition.
-                                    // VA 0x4200_0000 maps here, so only stamp the
-                                    // 0x20-byte image-header slot when the ELF left
-                                    // it empty (IDF/Arduino). A bare-metal ELF
-                                    // linked at 0x4200_0000 owns it — stamping
-                                    // would clobber its first instruction.
-                                    let header_slot_free = !flash_page_has_payload(
-                                        &machine.bus.flash.data[..irom_len.min(0x20)],
-                                    );
-                                    if header_slot_free && f.len() > factory_off {
-                                        f[factory_off] = 0xE9;
-                                    }
-                                    // IDF 5 links rodata into the same window
-                                    // after the text, and `system_early_init`
-                                    // checks the magic at the page base of
-                                    // `_rodata_reserved_start` (the start of
-                                    // `.flash.appdesc`, VA 0x4203_0000 on an
-                                    // Arduino L0 sketch). On silicon the
-                                    // bootloader maps the image header there.
-                                    // Stamp it only into an empty header slot.
-                                    if let Some(page_off) = esp_appdesc_page_offset(
-                                        std::path::Path::new(&firmware_path),
-                                        0x4200_0000,
-                                    ) {
-                                        let dst = factory_off + page_off;
-                                        let src = page_off.min(irom_len);
-                                        let slot = &machine.bus.flash.data
-                                            [src..(src + 0x20).min(irom_len)];
-                                        if page_off != 0
-                                            && !flash_page_has_payload(slot)
-                                            && dst < f.len()
-                                        {
-                                            f[dst] = 0xE9;
-                                        }
-                                    }
-                                }
-                                virt_pages.sort_unstable();
-                                virt_pages.dedup();
-                                for vp in &virt_pages {
-                                    let phys = factory_page + *vp;
-                                    write_mmu_entry(&mut machine.bus, *vp, phys);
-                                }
-                                install_xip_window(&mut machine.bus, flash, mmu);
                                 if !virt_pages.is_empty() {
                                     eprintln!(
                                         "labwired-cli test: C6 MMU factory@{:#x} mapped {} virt page(s) {:?} → phys+{}; VALID={:#x}; free entries for PT mmap",
-                                        factory_off,
+                                        FACTORY_APP_OFFSET,
                                         virt_pages.len(),
                                         virt_pages,
-                                        factory_page,
+                                        FACTORY_APP_OFFSET / 0x1_0000,
                                         MMU_VALID
                                     );
                                 }

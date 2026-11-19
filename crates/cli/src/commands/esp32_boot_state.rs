@@ -52,15 +52,8 @@ pub fn resolve_esp_partitions_bin(firmware_path: &Path) -> Option<PathBuf> {
 /// images). The window is 0x4200_0000 on the C6 (unified) and 0x3C00_0000 on
 /// the C3 (DROM).
 pub fn esp_appdesc_page_offset(firmware_path: &Path, window: u64) -> Option<usize> {
-    const PAGE: u64 = 0x1_0000;
     let bytes = std::fs::read(firmware_path).ok()?;
-    let elf = goblin::elf::Elf::parse(&bytes).ok()?;
-    let sh = elf
-        .section_headers
-        .iter()
-        .find(|sh| elf.shdr_strtab.get_at(sh.sh_name) == Some(".flash.appdesc"))?;
-    let page = sh.sh_addr.checked_sub(window)? & !(PAGE - 1);
-    Some(page as usize)
+    labwired_core::boot::esp32c6_rom::appdesc_page_offset(&bytes, window)
 }
 
 /// Install hybrid-preserve TCB base + xthal window spill CPU-model workaround
