@@ -62,6 +62,62 @@ use crate::inspect::{AttachedDeviceRef, DeviceEvidence};
 // same name in `inspect` as it does in the stimulus API.
 
 impl SystemBus {
+    /// Qualify the *current modeled* PCA source without changing the last
+    /// servo command. A missing OE declaration is unknown, even though the
+    /// legacy synchronization path assumes it enabled for compatibility.
+    pub fn modeled_servo_source_status(
+        &self,
+        servo: &crate::peripherals::components::servo::Servo,
+    ) -> crate::peripherals::components::servo::ModeledServoSourceStatus {
+        use crate::bus::DevicePins;
+        use crate::peripherals::components::servo::ModeledServoSourceStatus as Status;
+        use crate::peripherals::gpio::GpioMode;
+        let (Some((address, channel)), Some(bus_name), Some((gpio, pin))) = (
+            servo.source(),
+            self.declared_connection(servo.id()),
+            servo.source_oe(),
+        ) else {
+            return Status::Unknown;
+        };
+        let mut matches = 0;
+        let mut pulse = None;
+        let mut nested_route_possible = false;
+        self.for_each_attached_device(&mut |bus, device| {
+            if bus == Some(bus_name)
+                && device.transport == "i2c"
+                && device.mux_address.is_some()
+                && device.evidence.is_some_and(|e| e.is_i2c_mux())
+            {
+                nested_route_possible = true;
+            }
+            if bus == Some(bus_name) && device.transport == "i2c" && device.address == Some(address)
+            {
+                matches += 1;
+                if device.mux_address.is_none() {
+                    pulse = device
+                        .evidence
+                        .and_then(|e| e.pwm_channel_pulse_us(channel));
+                }
+            }
+        });
+        if matches != 1 || nested_route_possible {
+            return Status::Unknown;
+        }
+        let output = self.find_peripheral_index(gpio).is_some_and(|idx| {
+            self.peripherals[idx]
+                .dev
+                .gpio_routing(pin)
+                .is_some_and(|r| r.mode == GpioMode::Output)
+        });
+        if !output {
+            return Status::Unknown;
+        }
+        match self.known_pad_bit(gpio, pin) {
+            Some(true) => Status::Disabled,
+            Some(false) if pulse.is_some_and(|us| us.is_finite() && us > 0.0) => Status::ModeledPwm,
+            _ => Status::Unknown,
+        }
+    }
     /// Walk every attached (off-chip) device on this machine, calling
     /// `f(bus, device)` for each. `bus` is the peripheral the device hangs off
     /// — `Some("i2c0")`, `Some("gpioa")`, `Some("fdcan1")` — or `None` in the
