@@ -40,6 +40,7 @@ mod circuit_bldc;
 mod cosim_esp32_analog_diode;
 mod cosim_nucleo_f767zi_analog;
 mod declarative_noise;
+mod declarative_spi_supply_por;
 mod device_supply_rails;
 mod device_supply_routing;
 mod lm393_moisture_dout;
