@@ -400,10 +400,10 @@
     "near-far-positive-and-negative-controls",
     "native-model-equality"
   ],
-  "measured_browser_ms": 775.8,
+  "measured_browser_ms": 533.7,
   "browser": "156.0.8078.79",
   "browser_driver": "Playwright",
-  "core_commit": "50e1bfc485a53cea8d0d2d1c11e8476cbbbb02ec",
+  "core_commit": "9e8989aa4c6eb9e44c90f7181e6830c405833005",
   "firmware_sha256": "1ad034f4fd6ff023fce09270398391c82b49800348fbceb84ed648523503da44",
   "firmware_source_sha256": "df678a57ecdd0ebb800dfc768dcb1abeff9d515c39377b53e55d6ffe92c1090f",
   "system_sha256": "5e2112e4993af84b084799a421023f0f7f21683de0ab6edab3f19502f8885819"
