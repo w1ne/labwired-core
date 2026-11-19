@@ -557,8 +557,8 @@
     {
       "device_type": "microsd",
       "label": "microSD (SPI)",
-      "summary": "SPI-mode SDHC card with an in-memory block store (init, CSD/CID, single and multi-block read/write).",
-      "detail": "CMD0/8/55+ACMD41/58/59/9/10/13/16/17/18/12/24/25/32/33/38 with R1/R2/R3/R7 framing, data tokens, data-response 0x05 and busy. Blocks never written read as zeros; written blocks are exposed in the `sd_card` inspect artifact. No filesystem is pre-formatted and no SDSC byte addressing.",
+      "summary": "SPI-mode SDHC card backed by a disk image or an in-memory block store (init, CSD/CID, single and multi-block read/write).",
+      "detail": "CMD0/8/55+ACMD41/58/59/9/10/13/16/17/18/12/24/25/32/33/38 with R1/R2/R3/R7 framing, data tokens, data-response 0x05 and busy. An optional disk image backs the card (capacity follows its size); writes go to an overlay and never modify the image. Blocks outside the image that were never written read as zeros; blocks that differ from the image are exposed in the `sd_card` inspect artifact. No SDSC byte addressing.",
       "transport": "spi",
       "category": "spi",
       "config_keys": [
@@ -570,7 +570,39 @@
         {
           "name": "capacity_mib",
           "ty": "int",
-          "doc": "Card capacity in MiB. Defaults to 1024."
+          "doc": "Card capacity in MiB. Defaults to 1024, or to the image size when an image is given."
+        },
+        {
+          "name": "image",
+          "ty": "str",
+          "doc": "Host path of a raw disk image, relative to the system manifest. Read when the manifest is loaded from a file; the card never writes it back."
+        },
+        {
+          "name": "image_base64",
+          "ty": "str",
+          "doc": "Raw disk image inline, base64 (RFC 4648). Alternative to `image`."
+        }
+      ],
+      "labs": [],
+      "inputs": []
+    },
+    {
+      "device_type": "st7920",
+      "label": "ST7920 128x64 LCD",
+      "summary": "Sitronix ST7920 128x64 monochrome graphic LCD (LCD12864) in serial mode.",
+      "detail": "Serial interface framing (sync byte with RW/RS, split nibbles, CS active high), basic and extended instruction sets, DDRAM text with half-width characters and four CGRAM glyphs, GDRAM graphics with the 128x64 fold, display on/off, clear, home and entry mode. The framebuffer artifact combines text and graphics. Half-width glyphs use a public-domain 8x13 font, not the Sitronix ROM bitmaps; full-width CGROM characters are reported as unknown pixels. Cursor, blink, display shift, scroll and ICON RAM are not modelled.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS (RS pin in serial mode) GPIO, e.g. \"PA4\". Empty means CS tied high."
+        },
+        {
+          "name": "cs_active_high",
+          "ty": "bool",
+          "doc": "CS polarity. Defaults to true (the ST7920 is selected while CS is high)."
         }
       ],
       "labs": [],
@@ -730,7 +762,7 @@
       "device_type": "bme280",
       "label": "BME280 Weather",
       "summary": "Bosch BME280 temp + humidity + pressure sensor over I2C.",
-      "detail": "Serves factory calibration coefficients plus raw ADC words. Firmware recovers engineering units with Bosch's integer compensation formulas. Stimulus inverts those exact formulas with the same coefficients. Defaults to 25 °C / 50 %RH / 1013.25 hPa. Conversion time, filtering and oversampling are not modelled; control registers retain writes and soft reset is ignored, matching the previous model.",
+      "detail": "Serves factory calibration coefficients plus raw ADC words. Firmware recovers engineering units with Bosch's integer compensation formulas. Stimulus inverts those exact formulas with the same coefficients. Disabled temperature, pressure, or humidity oversampling returns the documented skip code. CTRL_HUM and CTRL_MEAS retain their writable fields, but CTRL_HUM latching, conversion timing, operating modes, filtering, status transitions and soft reset are not modelled. Defaults to 25 °C / 50 %RH / 1013.25 hPa.",
       "transport": "i2c",
       "category": "i2c",
       "config_keys": [
@@ -738,6 +770,21 @@
           "name": "i2c_address",
           "ty": "int",
           "doc": "7-bit slave address. Defaults to 0x76; 0x77 selects the SDO=VDDIO variant."
+        },
+        {
+          "name": "temperature",
+          "ty": "float",
+          "doc": "Starting ambient temperature in °C; defaults to 25."
+        },
+        {
+          "name": "humidity",
+          "ty": "float",
+          "doc": "Starting relative humidity in %RH; defaults to 50."
+        },
+        {
+          "name": "pressure",
+          "ty": "float",
+          "doc": "Starting pressure in hPa; defaults to 1013.25."
         }
       ],
       "labs": [
@@ -1350,7 +1397,12 @@
         {
           "name": "rd_pin",
           "ty": "str",
-          "doc": "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5."
+          "doc": "Read strobe GPIO (latched; read-back not modelled). Defaults to GPIO5. Omit when rd_tied_high is true."
+        },
+        {
+          "name": "rd_tied_high",
+          "ty": "bool",
+          "doc": "True when RD is physically tied to the logic-high rail. No RD GPIO is attached; rd_pin/RD must be absent. Defaults to false."
         },
         {
           "name": "rst_pin",
@@ -1805,7 +1857,7 @@
           "label": "Temperature",
           "unit": "°C",
           "min": -55.0,
-          "max": 150.0,
+          "max": 300.0,
           "default": 25.0
         }
       ]
@@ -3005,6 +3057,53 @@
       ]
     },
     {
+      "device_type": "bma400",
+      "label": "Bosch BMA400",
+      "summary": "3-axis 12-bit SPI accelerometer. Configurable full scale and stimulus inputs.",
+      "detail": "3-axis 12-bit SPI accelerometer. Configurable full scale and stimulus inputs.",
+      "transport": "spi",
+      "category": "spi",
+      "config_keys": [
+        {
+          "name": "cs_pin",
+          "ty": "str",
+          "doc": "CS GPIO pin wired as SPI chip-select (e.g. \"PA4\")."
+        },
+        {
+          "name": "spi_mode",
+          "ty": "int",
+          "doc": "Opt in to edge-accurate (bit-level) slave sampling in this SPI mode (0..=3). Omit for the default byte-level frame exchange."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "accel_x",
+          "label": "Accel X",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_y",
+          "label": "Accel Y",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 0.0
+        },
+        {
+          "key": "accel_z",
+          "label": "Accel Z",
+          "unit": "g",
+          "min": -16.0,
+          "max": 16.0,
+          "default": 1.0
+        }
+      ]
+    },
+    {
       "device_type": "max31855",
       "label": "MAX31855 thermocouple",
       "summary": "K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame).",
@@ -3460,6 +3559,21 @@
           "name": "model",
           "ty": "str",
           "doc": "Calibration: sg90 | mg996r | mg995 | mg90s | standard. Defaults from type alias when omitted."
+        },
+        {
+          "name": "source_address",
+          "ty": "int",
+          "doc": "I2C address of a PWM controller (PCA9685) whose output drives this servo. With source_channel, replaces the GPIO/LEDC drive path."
+        },
+        {
+          "name": "source_channel",
+          "ty": "int",
+          "doc": "Output channel (0..15) of the PWM controller at source_address."
+        },
+        {
+          "name": "source_oe_pin",
+          "ty": "str",
+          "doc": "Optional MCU GPIO wired to the PWM controller active-low OE. Only a known driven-low GPIO allows new commands; last position may persist when disabled."
         },
         {
           "name": "ledc_channel",
@@ -4267,6 +4381,102 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "ft5x06",
+      "label": "FocalTech FT5x06 Touch Controller",
+      "summary": "Single-contact FT5x06 I2C touch report model.",
+      "detail": "FocalTech FT5x06 at 0x38. Register 0x02 reports a posed one-contact count; 0x03..0x08 carry the first point's event/coordinates/ID/weight/area fields. x and y are 12-bit pixel coordinates. `touch1_id_yh` is the packed byte at 0x05 (ID in bits 7:4, y[11:8] in bits 3:0); use ID 0xF in the high nibble when no point is present. The model supports one point and the finger-down event code; multi-touch slots, gestures, interrupt timing, controller configuration, and firmware-update commands are not modelled.",
+      "transport": "i2c",
+      "category": "i2c",
+      "config_keys": [
+        {
+          "name": "i2c_address",
+          "ty": "int",
+          "doc": "7-bit I2C address. The Espressif BSP uses fixed address 0x38."
+        },
+        {
+          "name": "touch_count",
+          "ty": "float",
+          "doc": "Number of posed contacts, 0 or 1. This model exposes one point."
+        },
+        {
+          "name": "x",
+          "ty": "float",
+          "doc": "First contact x coordinate in 12-bit pixels (0..4095)."
+        },
+        {
+          "name": "y",
+          "ty": "float",
+          "doc": "First contact y coordinate in 12-bit pixels (0..4095). The low byte is sourced here; its high nibble is packed into touch1_id_yh."
+        },
+        {
+          "name": "touch1_id_yh",
+          "ty": "float",
+          "doc": "Raw report byte at register 0x05: point ID in bits 7:4 and y[11:8] in bits 3:0. Use 0xF0 when no point is present."
+        },
+        {
+          "name": "pressure",
+          "ty": "float",
+          "doc": "First contact weight byte (0..255); defaults to 127."
+        },
+        {
+          "name": "area",
+          "ty": "float",
+          "doc": "First contact miscellaneous/area byte (0..255); defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "touch_count",
+          "label": "Touch count",
+          "unit": "contacts",
+          "min": 0.0,
+          "max": 1.0,
+          "default": 0.0
+        },
+        {
+          "key": "x",
+          "label": "Touch X",
+          "unit": "px",
+          "min": 0.0,
+          "max": 4095.0,
+          "default": 0.0
+        },
+        {
+          "key": "y",
+          "label": "Touch Y",
+          "unit": "px",
+          "min": 0.0,
+          "max": 4095.0,
+          "default": 0.0
+        },
+        {
+          "key": "touch1_id_yh",
+          "label": "Touch ID / Y high byte",
+          "unit": "byte",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 240.0
+        },
+        {
+          "key": "pressure",
+          "label": "Touch weight",
+          "unit": "byte",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 127.0
+        },
+        {
+          "key": "area",
+          "label": "Touch area",
+          "unit": "byte",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        }
+      ]
     },
     {
       "device_type": "oled-ssd1309",
@@ -6803,6 +7013,62 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "ir_receiver_tsop38238",
+      "label": "TSOP38238 IR receiver",
+      "summary": "38 kHz IR receiver; NEC demodulated envelope on OUT (idle HIGH)",
+      "detail": "38 kHz IR receiver; NEC demodulated envelope on OUT (idle HIGH)",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "address",
+          "label": "NEC address",
+          "unit": "code",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 48896.0
+        },
+        {
+          "key": "command",
+          "label": "NEC command",
+          "unit": "code",
+          "min": -1.0,
+          "max": 255.0,
+          "default": -1.0
+        }
+      ]
+    },
+    {
+      "device_type": "ir_remote_nec",
+      "label": "NEC IR remote",
+      "summary": "NEC / NEC-extended remote; demodulated envelope on IR",
+      "detail": "NEC / NEC-extended remote; demodulated envelope on IR",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "address",
+          "label": "NEC address",
+          "unit": "code",
+          "min": 0.0,
+          "max": 65535.0,
+          "default": 48896.0
+        },
+        {
+          "key": "key",
+          "label": "NEC command",
+          "unit": "code",
+          "min": -1.0,
+          "max": 255.0,
+          "default": -1.0
+        }
+      ]
     }
   ]
 }

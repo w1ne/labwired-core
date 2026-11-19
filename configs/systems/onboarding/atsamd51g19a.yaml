@@ -6,3 +6,7 @@
 
 name: atsamd51g19a
 chip: ../../chips/onboarding/atsamd51g19a.yaml
+connectors:
+- type: uart
+  peripheral: sercom3
+  endpoint: host_console

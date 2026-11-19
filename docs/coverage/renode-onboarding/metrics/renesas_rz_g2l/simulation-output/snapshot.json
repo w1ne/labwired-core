@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      639631423,
+      537001968,
+      7967,
+      537001728,
+      1074053120,
+      1074051072,
+      26,
+      63,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537001728,
+      65705,
+      65714
+    ],
+    "pc": 65714,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "e86ee01842ec69bf1f13c52317862ca135e810901563179662a965f0e2c57692",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/rzg2l-cm33-cpu-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/renesas_rz_g2l.yaml",
+    "script": "examples/renode-onboarding/rzg2l-cm33-cpu-smoke.yaml"
+  }
+}

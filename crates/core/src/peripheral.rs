@@ -81,6 +81,22 @@ pub const DMA_SIGNAL_TX: u32 = 1;
 /// See [`DMA_SIGNAL_TX`].
 pub const DMA_SIGNAL_RX: u32 = 2;
 
+/// A converter's data-ready DMA request (ADC regular DR update). The bus
+/// names the request after the peripheral alone (`adc1`), the way reference
+/// manuals list it in their DMA request tables.
+pub const DMA_SIGNAL_DATA: u32 = 16;
+
+/// Timer update and channel requests. The bus resolves these through the
+/// existing fixed-channel or multiplexer map as `<timer>_up`, `_ch1`..`_ch4`,
+/// `_com` and `_trig`. They are event pulses, independent of interrupt enables.
+pub const DMA_SIGNAL_TIMER_UPDATE: u32 = 32;
+pub const DMA_SIGNAL_TIMER_CH1: u32 = 33;
+pub const DMA_SIGNAL_TIMER_CH2: u32 = 34;
+pub const DMA_SIGNAL_TIMER_CH3: u32 = 35;
+pub const DMA_SIGNAL_TIMER_CH4: u32 = 36;
+pub const DMA_SIGNAL_TIMER_COMMUTATION: u32 = 37;
+pub const DMA_SIGNAL_TIMER_TRIGGER: u32 = 38;
+
 /// One source-data-unit -> destination-data-unit transform descriptor.
 /// Semantics follow RM0481 §15 and are pinned by the DMA_DataHandling
 /// HAL example's expected-result vectors (sim) and its on-board run.
@@ -116,6 +132,9 @@ pub enum FlashStoreOutcome {
     /// Program the stored bytes: each array byte becomes `existing & new`, the
     /// 1-to-0 rule of NOR flash.
     Program,
+    /// The controller's behaviour for this store is not modelled: the bus
+    /// fails the access with this reason instead of guessing an outcome.
+    Unsupported(&'static str),
 }
 
 // ── Tick result ───────────────────────────────────────────────────────────
@@ -194,6 +213,16 @@ pub trait Peripheral: std::fmt::Debug + Send {
         _port_index: u8,
         _observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
         _clock: crate::CycleClock,
+    ) -> bool {
+        false
+    }
+
+    /// Subscribe an off-chip device to ESP-family GPIO pad-source and output
+    /// changes. GPIO models report whether a pad is driven by its latch, LEDC,
+    /// or another peripheral signal. Other peripheral families decline.
+    fn register_esp_gpio_observer(
+        &mut self,
+        _observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
     ) -> bool {
         false
     }
@@ -453,6 +482,12 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// UART capability: `pad_map: wch_x035` routes TX through the CH32X035
+    /// default pads instead of the STM32F1 ones. Other UARTs return false.
+    fn uart_pad_map_wch_x035(&self) -> bool {
+        false
+    }
+
     /// Clock-controller capability: resolve a symbolic clock-enable register
     /// name from a peripheral's `clock:` declaration (`"apb1enr"`, `"clken2"`,
     /// …) to its byte offset inside THIS peripheral.
@@ -464,6 +499,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// `None` for every other peripheral, and for a name this controller does
     /// not have (which `resolve_clock_gates` turns into a hard config error
     /// rather than a silently ungated peripheral).
+    /// A reset controller holds the peripheral identified by this resolved
+    /// clock-gate bit in reset. Default false keeps existing families unchanged.
+    fn clock_gate_reset_asserted(&self, _register: u64, _bit: u8) -> bool {
+        false
+    }
+
+    /// This controller's reset bits act on the peripherals it clock-gates:
+    /// the bus calls [`Self::on_node_reset`] on a target when its reset is
+    /// asserted. Default false keeps every existing controller unchanged.
+    fn controls_peripheral_resets(&self) -> bool {
+        false
+    }
+
     fn clock_gate_reg_offset(&self, _name: &str) -> Option<u64> {
         None
     }
@@ -1117,6 +1165,18 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// Route the CDC data a USB device controller sends to its scripted host
+    /// into a console capture sink (`None` detaches). A controller that
+    /// accepts it reads the device's bulk IN endpoints once its host has
+    /// enumerated and opened the port, as a terminal would. Returns false for
+    /// a peripheral that is not such a controller. Default false.
+    fn attach_usb_cdc_console(
+        &mut self,
+        _sink: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>>,
+    ) -> bool {
+        false
+    }
+
     /// Deliver this console's TX bytes into a merged console stream as channel
     /// `ch` (see [`crate::console::ConsoleMerge`]). Returns false for a
     /// peripheral that is not a console that can be merged. Default false.
@@ -1145,6 +1205,14 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// with an injection queue (or one still found by that function's
     /// older downcasts).
     fn uart_rx_source(&self) -> Option<Arc<std::sync::Mutex<std::collections::VecDeque<u8>>>> {
+        None
+    }
+
+    /// Deliver bytes from this UART's external peer through the model's own
+    /// RX path (an STM32 USART holds them on the wire until UE and RE are
+    /// set). Default `None` = no such path; the bus falls back to
+    /// [`Self::uart_rx_source`].
+    fn inject_uart_rx(&mut self, _bytes: &[u8]) -> Option<Result<usize, String>> {
         None
     }
 
@@ -1310,11 +1378,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
         false
     }
     /// A CPU store of `width` bytes (1, 2 or 4) with `value` landed at byte
-    /// `offset` of the flash array. Only called on the peripheral that
-    /// [`Self::owns_flash_stores`], and never for device-originated writes
-    /// (`device_write_bypass`): the controller programs and erases the array
-    /// through those.
-    fn flash_cpu_store(&mut self, _offset: u64, _width: u8, _value: u32) -> FlashStoreOutcome {
+    /// `offset` of the flash array, whose current content there is `existing`
+    /// (little-endian, the same `width` bytes), so a controller can refuse
+    /// to program a location that is not erased. Only called on the
+    /// peripheral that [`Self::owns_flash_stores`], and never for
+    /// device-originated writes (`device_write_bypass`): the controller
+    /// programs and erases the array through those.
+    fn flash_cpu_store(
+        &mut self,
+        _offset: u64,
+        _width: u8,
+        _value: u32,
+        _existing: u32,
+    ) -> FlashStoreOutcome {
         FlashStoreOutcome::Commit
     }
     /// Opt-in manual flash page buffer and instruction-boundary commit
@@ -1415,6 +1491,32 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// as on silicon does so here. Default: nothing — the register state is
     /// kept, and firmware that re-initialises the block is unaffected.
     fn on_node_reset(&mut self) {}
+
+    /// Drive an analog pad level, in millivolts, into this peripheral when it
+    /// samples that pad continuously (an analog comparator). Returns whether
+    /// it took it. ADC channels keep their own seam,
+    /// [`Self::set_adc_channel_input`]; the bus fans one pad write out to
+    /// both (`SystemBus::set_analog_pad_mv`).
+    fn set_analog_pad_input(&mut self, _pad: &str, _millivolts: u16) -> bool {
+        false
+    }
+
+    /// Whether this peripheral drives internal EXTI lines (a comparator
+    /// output). Cached by the bus at attach; only such peripherals are asked
+    /// for [`Self::take_exti_line_edges`] after a write or an input change.
+    fn drives_exti_lines(&self) -> bool {
+        false
+    }
+
+    /// Move the `(line, before, after)` output edges this peripheral produced
+    /// since the last call into `out`, for the EXTI to latch.
+    fn take_exti_line_edges(&mut self, _out: &mut Vec<(u8, bool, bool)>) {}
+
+    /// An edge on internal EXTI `line` (16 and up: comparator, PVD, ...),
+    /// which has no GPIO port mux. Returns true when it set a pending bit.
+    fn exti_internal_line_edge(&mut self, _line: u8, _before: bool, _after: bool) -> bool {
+        false
+    }
 
     /// Put this peripheral on a timed network link
     /// ([`crate::network::timed_uart`]). Only a USART with a timed mode
@@ -1677,6 +1779,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
         None
     }
 
+    /// The GPIO chip-select labels this SPI controller routes edges for, or
+    /// empty when it routes none. A non-empty answer makes the bus watch the
+    /// ports owning those pins and call [`Self::sync_gpio_chip_selects`]
+    /// after each write to one (see `bus/spi_cs.rs`).
+    fn gpio_chip_select_pins(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Re-read the chip-select GPIOs named by [`Self::gpio_chip_select_pins`]
+    /// and deliver the CS edges that moved. Not a tick: it must not advance
+    /// time or move bytes.
+    fn sync_gpio_chip_selects(&mut self, _bus: &dyn Bus) {}
+
     /// Hand this peripheral the bus's shared [`CycleClock`] so `&self` reads
     /// can lazily sync `Cell`-held counter state to the published "now"
     /// (batch-boundary freshness — exact at batch boundaries, < one
@@ -1708,6 +1823,27 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// that bypass the choke points keep the old exact semantics.
     fn attach_irq_line(&mut self, _irq: Option<u32>) {}
 
+    /// Whether this peripheral accepts IRQ levels from other peripherals.
+    /// The bus caches this at peripheral attach so ordinary IRQ delivery does
+    /// not scan every device on every level transition.
+    fn accepts_irq_inputs(&self) -> bool {
+        false
+    }
+
+    /// Accept a level from another peripheral's configured IRQ output.
+    ///
+    /// A peripheral that acts as an interrupt concentrator can consume a
+    /// source line and expose its own output through [`Self::irq_line_levels`]
+    /// instead of letting the bus pend the source line directly. `source` is
+    /// the source peripheral's configured IRQ number. Return `None` when this
+    /// device does not accept that input; return `Some(changed)` when it does,
+    /// where `changed` reports whether the input level changed.
+    ///
+    /// Default: no inputs accepted.
+    fn set_irq_input_level(&self, _source: u32, _level: bool) -> Option<bool> {
+        None
+    }
+
     /// The CURRENT state of this peripheral's interrupt line, for level
     /// reconciliation. `Some(level)` marks the model as a LEVEL source —
     /// its line is a live conjunction (status & enable), not a pulse —
@@ -1727,6 +1863,19 @@ pub trait Peripheral: std::fmt::Debug + Send {
     fn irq_line_level(&self) -> Option<bool> {
         None
     }
+
+    /// ARM application-core IRQ/FIQ output pair driven by an interrupt
+    /// controller peripheral. Most peripherals do not own CPU interrupt pins;
+    /// ARM7's LPC2294 PL190 does and is sampled by `Bus::arm_irq_fiq_levels`.
+    fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
+        None
+    }
+
+    /// Drive one external input of an ARM interrupt controller as a level.
+    /// The bus calls this on the controller that answers
+    /// [`Self::arm_irq_fiq_levels`], before it samples IRQ/FIQ. Peripherals
+    /// that own no controller inputs ignore it.
+    fn set_arm_irq_input_level(&self, _source: usize, _level: bool) {}
 
     /// Multi-line twin of [`Self::irq_line_level`], for a LEVEL source that
     /// drives SEVERAL NVIC lines from one model (the STM32 EXTI: EXTI0..4,
@@ -1785,6 +1934,26 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// promise on every store that takes the fast path
     /// (`SystemBus::debug_check_plain_memory`).
     fn is_plain_memory(&self) -> bool {
+        false
+    }
+
+    /// True when a CPU read at `offset` is pure: it returns a value and
+    /// changes nothing anyone else can observe. Lazily derived state the
+    /// model brings up to "now" on the read (a free-running counter) is
+    /// allowed, as long as everything that state can cause — an interrupt,
+    /// a scheduled event, a pad edge — still reaches the machine through the
+    /// event scheduler or a later write, never through the read itself.
+    ///
+    /// Under exact batch boundaries (`Machine::exact_batch_boundaries`) a
+    /// device access ends the CPU batch so the machine boundary can tick at
+    /// the cycle where something changed. A pure read changes nothing, so the
+    /// batch continues through it: a `millis()` loop polling a counter keeps
+    /// its full window instead of one per poll.
+    ///
+    /// A promise, like [`Self::is_plain_memory`]: a read that pops a FIFO,
+    /// clears a flag or moves an interrupt level must answer `false`, the
+    /// default.
+    fn read_is_pure(&self, _offset: u64) -> bool {
         false
     }
 

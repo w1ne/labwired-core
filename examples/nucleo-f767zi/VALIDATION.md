@@ -1,48 +1,18 @@
 # NUCLEO-F767ZI Validation Runbook
 
-Run all commands from `core/`.
-
-## 0) Firmware reuse rationale (and its invalidation conditions)
-
-The smoke firmware is `firmware-f401-demo`, reused unchanged. Valid because:
-Thumb-2/v7em is a subset of the M7's ISA, flash base `0x08000000` and SRAM
-base `0x20000000` match, USART2 sits at `0x40004400` on IRQ 38 on both, and
-the F7 RCC covers the F4 bring-up registers this firmware touches. The reuse
-would be invalidated by: firmware configuring PLLSAI/DCKCFGR muxes (not
-modeled), F7-only peripherals, or any silicon delta found against an F767
-bench part (none exists yet — this chip is NOT_SHIPPED in the ratchet).
-
-## 1) Build smoke firmware
-
-```bash
-rustup target add thumbv7em-none-eabi   # once
-cargo build -p firmware-f401-demo --release --target thumbv7em-none-eabi
-```
-
-## 2) Run deterministic UART smoke
+Run from `core/`. The fixture is built for the actual NUCLEO-F767ZI with
+PlatformIO `ststm32@19.7.1` and STM32duino, rather than borrowing an F401 ELF.
+Source, exact toolchain and rebuild instructions are in
+`tests/fixtures/stm32f767-stock-arduino/README.md`.
 
 ```bash
 cargo run -q -p labwired-cli -- test \
-  --script examples/nucleo-f767zi/uart-smoke.yaml \
-  --output-dir out/nucleo-f767zi/uart-smoke \
-  --no-uart-stdout
+  --script examples/nucleo-f767zi/io-smoke.yaml \
+  --output-dir out/nucleo-f767zi/io-smoke --no-uart-stdout
 ```
 
-Pass criteria: exit `0`, UART contains `OK`.
-
-## 3) Run unsupported-instruction audit
-
-```bash
-./scripts/unsupported_instruction_audit.sh \
-  --firmware target/thumbv7em-none-eabi/release/firmware-f401-demo \
-  --system examples/nucleo-f767zi/system.yaml \
-  --max-steps 200000 \
-  --out-dir out/unsupported-audit/nucleo-f767zi
-```
-
-Pass criteria: exit `0`, report exists.
-
-## Validation record
-
-- 2026-08-05: UART smoke exit 0 (`OK` received) on the feat/stm32f767 branch;
-  audit result recorded below once run.
+The simulation should capture `F767_OK` on the ST-LINK USART3 path and at
+least four transitions on the green LED at PB0. `uart-smoke.yaml` is the
+serial-only variant. The model uses instantaneous F4-style overdrive-ready
+transitions and a shared STM32 CRC model; unmodeled peripheral behavior and
+physical-board acceptance are outside this fixture's evidence.

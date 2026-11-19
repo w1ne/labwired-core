@@ -1,0 +1,16 @@
+# Bare-metal RV32IM smoke against the imported Nexys Video LiteX system.
+# Exercises its ROM/SRAM, UART and LiteX timer; this does not boot Linux or
+# claim DDR, CLINT, PLIC, SD-card or video behavior.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-linux-smoke"
+  system: "../../configs/systems/onboarding/litex_nexys_video_vexriscv_linux.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_ordered:
+      - "LITEX VEXRISCV LINUX PROFILE RV32IM"
+      - "boot=direct-elf memory=rom+sram"
+      - "timer=running"
+      - "timer=zero"
+  - expected_stop_reason: max_steps

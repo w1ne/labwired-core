@@ -25,6 +25,7 @@ mod dfplayer_mini;
 mod everyday_sensor_set;
 mod mlx90640_clock;
 mod rs485_modbus;
+mod sd_card_spi;
 mod tmp102_config_writable;
 mod vcnl4010_bay_occupancy;
 mod vl53l0x_vendor_init;

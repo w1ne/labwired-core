@@ -55,17 +55,16 @@
 # CONFIG 0x60A0 (byte 1 = 0110_0000, byte 2 = 1010_0000 — Tables 6-10/6-11),
 # T_LOW 0x4B00 (75 °C), T_HIGH 0x5000 (80 °C).
 #
-# Two things this descriptor still approximates, named so they are not mistaken
-# for fidelity:
+# One thing this descriptor still approximates, named so it is not mistaken for
+# fidelity:
 #   * AL is held at its power-up 1 rather than driven. On silicon it is the
 #     comparator's output — with POL = 0 it drops to 0 once the temperature
 #     reaches T_HIGH for F1:F0 consecutive faults and returns to 1 below
 #     T_LOW. Driving it needs a comparator primitive, not a register bit.
-#   * A single-byte update is absorbed. The datasheet's "Data Transfer" note
-#     lets a master update only the MS byte by ending the frame after one data
-#     byte; the shared engine stores a register write only at its full declared
-#     width, so a half-word write lands nowhere. (Pinned in
-#     `pca9685_tmp102_parity.rs::tmp102_short_config_write_is_absorbed_identically`.)
+#
+# The datasheet's Data Transfer note permits a single-byte MSB update by ending
+# the frame after one data byte. The generic I2C model supports this explicitly
+# for this descriptor; lower bytes and silicon-owned bits remain unchanged.
 #
 # The temperature register is left-justified 12-bit, 1 LSB = 0.0625 °C
 # (0x1900 = 25.0 °C). It is **self-driving** for the demo: every full
@@ -79,6 +78,7 @@ behavior:
   i2c:
     default_address: 0x48
     pointer_mask: 0x03
+    update_msb_on_short_write: true
     registers:
       # Temperature: 12-bit left-justified, big-endian, self-drifting (below).
       - { name: TEMP, addr: 0x00, width: 2, endian: be, access: r, reset: 0x1900 }

@@ -1,0 +1,10 @@
+# Read BME280 CHIP_ID and raw temperature over Nano ESP32 I2C0 on A4/A5.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/arduino-nano-esp32-bme280.elf"
+  system: "../../configs/systems/arduino-nano-esp32-bme280.yaml"
+limits:
+  max_steps: 1800000
+assertions:
+  - uart_contains: "NANO_ESP32_BME280_ID=0x60"
+  - uart_contains: "NANO_ESP32_BME280_TEMP_RAW=0x082DC0"

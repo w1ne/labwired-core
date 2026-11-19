@@ -28,11 +28,25 @@ fn arm_test_family(
     let family = machine_family(&chip)?;
     if !matches!(
         family,
-        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR
+        MachineFamily::CortexM
+            | MachineFamily::CortexA
+            | MachineFamily::CortexR
+            | MachineFamily::Arm7Tdmi
     ) {
         anyhow::bail!("ARM ELF does not match chip '{}' ({family:?})", chip.name);
     }
     Ok(family)
+}
+
+/// The declared Cortex-A core for a [`arm_test_family`] `CortexA` run.
+#[cfg(feature = "qemu-arm")]
+fn arm_test_cortex_a_core(
+    system: Option<&labwired_config::ResolvedSystem>,
+    plugins: &[&dyn labwired_core::plugin::ChipPlugin],
+) -> anyhow::Result<labwired_core::system::arch_policy::CortexACore> {
+    let system = system.ok_or_else(|| anyhow::anyhow!("Cortex-A run needs a system manifest"))?;
+    let chip = system.chip_with_plugins(&crate::plugin_chip_yaml(plugins))?;
+    labwired_core::system::arch_policy::cortex_a_core(&chip)
 }
 
 /// Turn on scheduler-safe CPU idle fast-forward for this `labwired test` run.
@@ -245,6 +259,37 @@ fn esp32s3_rom_boot_flash_size(system: &labwired_config::ResolvedSystem) -> u32 
         .unwrap_or_else(|| labwired_core::system::xtensa::Esp32s3Opts::default().flash_size)
 }
 
+/// ROM boot has the same hardware whether an ELF is present for symbols or not.
+fn esp32s3_rom_boot_opts(
+    system: Option<&labwired_config::ResolvedSystem>,
+) -> labwired_core::system::xtensa::Esp32s3Opts {
+    use labwired_core::system::xtensa::Esp32s3Opts;
+    let defaults = Esp32s3Opts::default();
+    Esp32s3Opts {
+        real_reset_boot: true,
+        flash_size: system
+            .map(esp32s3_rom_boot_flash_size)
+            .unwrap_or(defaults.flash_size),
+        ..system
+            .and_then(|system| system.chip().ok())
+            .as_ref()
+            .map(Esp32s3Opts::for_chip)
+            .unwrap_or(defaults)
+    }
+}
+
+/// Keep APP_CPU held at its real reset vector until firmware releases it through
+/// SYSTEM_CORE_1_CONTROL_0. Machine owns that edge and schedules both cores.
+fn esp32s3_rom_boot_machine(
+    mut cpu: labwired_core::cpu::xtensa_lx7::XtensaLx7,
+    bus: labwired_core::bus::SystemBus,
+) -> labwired_core::Machine<labwired_core::cpu::xtensa_lx7::XtensaLx7> {
+    cpu.faithful_windows = true;
+    let mut app_cpu = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
+    app_cpu.faithful_windows = true;
+    labwired_core::Machine::new(cpu, bus).with_secondary_cpu(app_cpu)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_s3_rom_boot_no_elf(
     args: &TestArgs,
@@ -261,7 +306,7 @@ fn run_s3_rom_boot_no_elf(
     semihost_capture: bool,
     itm_flag: bool,
 ) -> ExitCode {
-    use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3BootMode, Esp32s3Opts};
+    use labwired_core::system::xtensa::{configure_xtensa_esp32s3, Esp32s3BootMode};
 
     let fail = |msg: String| -> ExitCode {
         error!("{}", msg);
@@ -299,22 +344,7 @@ fn run_s3_rom_boot_no_elf(
     let metrics = std::sync::Arc::new(labwired_core::metrics::PerformanceMetrics::new());
 
     let mut bus = labwired_core::bus::SystemBus::new();
-    let opts = Esp32s3Opts {
-        real_reset_boot: true,
-        // The hosted path receives a merged flash image but no ELF. It still
-        // has the resolved chip descriptor, so use its physical capacity just
-        // like `labwired run` and the Wasm constructor do. Falling back to the
-        // 4 MiB default makes the ROM reject every N8/N16 image before app_main.
-        flash_size: esp32s3_rom_boot_flash_size(system),
-        // Core clock from the same resolved descriptor: `cpu_hz:` in the chip
-        // YAML is the one home for it, and it is what the SYSTIMER divides the
-        // CPU cycle stream by to keep `esp_timer` time.
-        ..system
-            .chip()
-            .as_ref()
-            .map(Esp32s3Opts::for_chip)
-            .unwrap_or_default()
-    };
+    let opts = esp32s3_rom_boot_opts(Some(system));
     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
     // Wire matrix kits (INA219, OLED, …) the same way the ELF arm does.
     if let Err(e) =
@@ -331,8 +361,6 @@ fn run_s3_rom_boot_no_elf(
                 .to_string(),
         );
     }
-    let mut cpu = wiring.cpu;
-    cpu.faithful_windows = true;
     bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
     // The ESP32-S3 is a DUAL-core chip and an Arduino sketch's setup()/loop()
     // run on core 1. Booting it single-core does not merely lose the second
@@ -345,9 +373,7 @@ fn run_s3_rom_boot_no_elf(
     //
     // Halted at the ROM reset vector: PRO_CPU releases it by clearing
     // SYSTEM_CORE_1_RESETING, and `Machine` acts on that edge.
-    let mut app_cpu = labwired_core::cpu::xtensa_lx7::XtensaLx7::new_app_cpu();
-    app_cpu.faithful_windows = true;
-    let mut machine = labwired_core::Machine::new(cpu, bus).with_secondary_cpu(app_cpu);
+    let mut machine = esp32s3_rom_boot_machine(wiring.cpu, bus);
     crate::log_ts::set_hz(machine.bus.cpu_hz);
     // BOTH consoles, because the boot and the sketch do not share one. The mask
     // ROM and the 2nd-stage bootloader talk on UART0 (attached above); an
@@ -1168,11 +1194,13 @@ pub(crate) fn run_test(
     // `build_esp32_system_from_manifest` path that calls configure + attach
     // together, before falling through to `build_system_bus` for all other
     // architectures. The parsed manifest is reused so the file is read only once.
+    // A non-Espressif Xtensa chip has its whole map in its YAML and takes the
+    // generic path, which builds it through the Xtensa family builder.
     let esp32_manifest: Option<labwired_config::SystemManifest> = resolved_system
         .as_ref()
         .filter(|s| {
             s.chip_with_plugins(&crate::plugin_chip_yaml(plugins))
-                .map(|c| c.arch == labwired_config::Arch::Xtensa)
+                .map(|c| c.is_espressif_xtensa())
                 .unwrap_or(false)
         })
         .map(|s| s.manifest.clone());
@@ -1350,10 +1378,7 @@ pub(crate) fn run_test(
                         return ExitCode::from(EXIT_CONFIG_ERROR);
                     }
                     let mut bus = labwired_core::bus::SystemBus::new();
-                    let opts = Esp32s3Opts {
-                        real_reset_boot: true,
-                        ..Esp32s3Opts::default()
-                    };
+                    let opts = esp32s3_rom_boot_opts(resolved_system.as_ref());
                     let wiring = configure_xtensa_esp32s3(&mut bus, &opts);
                     // Wire matrix kits (INA219, OLED, …) the same way classic ESP32 does.
                     if let Err(e) = labwired_core::system::xtensa::attach_esp32_external_devices(
@@ -1389,10 +1414,11 @@ pub(crate) fn run_test(
                         );
                         return ExitCode::from(EXIT_CONFIG_ERROR);
                     }
-                    let mut cpu = wiring.cpu;
-                    cpu.faithful_windows = true;
                     bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
-                    let mut machine = labwired_core::Machine::new(cpu, bus);
+                    // Supplying symbols must not turn a dual-core ROM boot into
+                    // a single-core run that stalls at `cpu_start: Multicore app`.
+                    let mut machine = esp32s3_rom_boot_machine(wiring.cpu, bus);
+                    machine.bus.attach_usb_serial_jtag_sink(uart_tx.clone());
                     crate::log_ts::set_hz(machine.bus.cpu_hz);
                     machine.add_observer(metrics.clone());
                     machine
@@ -1638,10 +1664,10 @@ pub(crate) fn run_test(
                             break;
                         }
                     }
-                    super::esp32_boot_state::install_xtensa_freertos_workarounds(
-                        &mut bus,
-                        &firmware_bytes,
-                    );
+                    // No `install_xtensa_freertos_workarounds` here: its
+                    // `xthal_window_spill_nw` thunk spills only the shadow
+                    // stack. Both cores run faithful windows (below), so the
+                    // firmware's own spill routine is the correct one.
                     // Real APP_CPU: start_cpu0 waits on s_system_inited[0]&[1];
                     // APP sets [1] in do_system_init_fn after s_resume_cores.
                     // ets_set_appcpu_boot_addr still raises s_cpu_up/s_cpu_inited
@@ -1650,6 +1676,15 @@ pub(crate) fn run_test(
                     let mut app_cpu = XtensaLx7::new_app_cpu();
                     // DRAM below PRO stack (fast_boot ~0x3FCD_FFF0); 16B aligned.
                     app_cpu.set_sp(0x3FCD_8000);
+                    // Real window overflow/underflow on both cores, as the
+                    // rom-boot and flash-boot paths run. The shadow-window
+                    // mode keyed saved registers by FreeRTOS TCB; an
+                    // interrupt-exit task switch on core 1 (TinyUSB event on
+                    // the Arduino Nano ESP32) then ran `esp_event_loop_run`
+                    // on the idle task's window chain and it asserted in
+                    // `xQueueSemaphoreTake` with a NULL queue.
+                    labwired_core::boot::esp32s3::prime_faithful_windows(&mut pro_cpu);
+                    labwired_core::boot::esp32s3::prime_faithful_windows(&mut app_cpu);
                     let mut machine =
                         labwired_core::Machine::new(pro_cpu, bus).with_secondary_cpu(app_cpu);
                     crate::log_ts::set_hz(machine.bus.cpu_hz);
@@ -1970,6 +2005,34 @@ pub(crate) fn run_test(
         #[cfg(not(feature = "qemu-arm-system"))]
         let _ = chip;
     }
+    #[cfg(feature = "qemu-arm-system")]
+    let mut arm7_cpu = None;
+    if let Some(chip) = resolved_system
+        .as_ref()
+        .and_then(|s| s.chip_with_plugins(&crate::plugin_chip_yaml(plugins)).ok())
+        .filter(|chip| {
+            labwired_core::system::arch_policy::machine_family(chip).ok()
+                == Some(labwired_core::system::arch_policy::MachineFamily::Arm7Tdmi)
+        })
+    {
+        #[cfg(feature = "qemu-arm-system")]
+        match labwired_core::system::arm7::attach(&mut bus, &chip) {
+            Ok(cpu) => arm7_cpu = Some(cpu),
+            Err(error) => {
+                write_config_error_outputs(
+                    &args,
+                    Some(&firmware_path),
+                    system_path.as_ref(),
+                    Some(&firmware_bytes),
+                    Some(&resolved_limits),
+                    format!("{error:#}"),
+                );
+                return ExitCode::from(EXIT_CONFIG_ERROR);
+            }
+        }
+        #[cfg(not(feature = "qemu-arm-system"))]
+        let _ = chip;
+    }
 
     let rom_boot_path =
         args.rom_boot || args.capture_app_entry.is_some() || args.resume_snapshot.is_some();
@@ -2106,7 +2169,8 @@ pub(crate) fn run_test(
         match declaration {
             Ok(
                 labwired_core::system::arch_policy::MachineFamily::CortexA
-                | labwired_core::system::arch_policy::MachineFamily::CortexR,
+                | labwired_core::system::arch_policy::MachineFamily::CortexR
+                | labwired_core::system::arch_policy::MachineFamily::Arm7Tdmi,
             ) if program.arch != labwired_core::Arch::Arm => {
                 write_config_error_outputs(
                     &args,
@@ -2212,7 +2276,7 @@ pub(crate) fn run_test(
                 machine.bus.attach_itm_output(Some(itm_tx.clone()), false);
             }
             let fault_evidence = handle_faults(&mut machine.bus, &faults);
-            execute_test_loop(&mut TestExecutionContext {
+            let exit = execute_test_loop(&mut TestExecutionContext {
                 args: &args,
                 machine: &mut machine,
                 resolved_limits: &resolved_limits,
@@ -2238,10 +2302,18 @@ pub(crate) fn run_test(
                 chip_mem,
                 system: resolved_system.as_ref(),
                 semihost_capture,
-            })
+            });
+            // Test and Run must expose the same engine-owned bus trace.
+            // Emit after execution, from the actual machine that produced
+            // result.json, so the hosted lab cannot display canned SPI bytes.
+            super::run::export_bus_trace_if_requested(&args.bus_trace_out, &machine.bus);
+            exit
         }};
     }
 
+    // Set by the generic (non-Espressif) Xtensa arm below; read inside the macro.
+    #[allow(unused_mut)]
+    let mut xtensa_entry: Option<u32> = None;
     macro_rules! setup_and_run {
         ($cpu:expr) => {{
             let mut machine = labwired_core::Machine::new($cpu, bus);
@@ -2274,6 +2346,9 @@ pub(crate) fn run_test(
                     Ok(pc) => machine.cpu.set_pc(pc),
                     Err(e) => error!("{e:#}"),
                 }
+            }
+            if let Some(pc) = xtensa_entry {
+                machine.cpu.set_pc(pc);
             }
             // MIPS starts at the reset vector 0xBFC00000 once the image's
             // boot ISA has been checked.
@@ -2726,6 +2801,37 @@ pub(crate) fn run_test(
                     );
                     ExitCode::from(EXIT_CONFIG_ERROR)
                 }
+            } else if family == MachineFamily::Arm7Tdmi {
+                if args.rom_boot || args.resume_snapshot.is_some() {
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        "ARM7TDMI boot ROM and snapshot resume are not implemented; use a bare-metal ELF without --rom-boot or --resume-snapshot".into(),
+                    );
+                    return ExitCode::from(EXIT_CONFIG_ERROR);
+                }
+                #[cfg(feature = "qemu-arm-system")]
+                {
+                    let cpu = arm7_cpu
+                        .take()
+                        .expect("ARM7TDMI CPU is prepared with the bus");
+                    setup_and_run!(cpu)
+                }
+                #[cfg(not(feature = "qemu-arm-system"))]
+                {
+                    write_config_error_outputs(
+                        &args,
+                        Some(&firmware_path),
+                        system_path.as_ref(),
+                        Some(&firmware_bytes),
+                        Some(&resolved_limits),
+                        "ARM7TDMI needs a native build with --features qemu-arm-system".into(),
+                    );
+                    ExitCode::from(EXIT_CONFIG_ERROR)
+                }
             } else if family == MachineFamily::CortexA {
                 if args.rom_boot || args.resume_snapshot.is_some() {
                     write_config_error_outputs(
@@ -2740,7 +2846,9 @@ pub(crate) fn run_test(
                 }
                 #[cfg(feature = "qemu-arm")]
                 {
-                    let cpu = match labwired_core::cpu::CortexA7::new() {
+                    let cpu = match arm_test_cortex_a_core(resolved_system.as_ref(), plugins)
+                        .and_then(|core| Ok(labwired_core::cpu::CortexA7::with_core(core)?))
+                    {
                         Ok(cpu) => cpu,
                         Err(error) => {
                             write_config_error_outputs(
@@ -2914,9 +3022,26 @@ pub(crate) fn run_test(
             }
         }
         labwired_core::Arch::XtensaLx7 => {
-            // No system manifest present: plain configure path (no external devices).
-            let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
-            setup_and_run!(cpu)
+            let generic_xtensa = resolved_system
+                .as_ref()
+                .and_then(|s| {
+                    s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                        .ok()
+                })
+                .is_some_and(|c| {
+                    c.arch == labwired_config::Arch::Xtensa && !c.is_espressif_xtensa()
+                });
+            if generic_xtensa {
+                // A non-Espressif Xtensa core (the Renode sample controller):
+                // its whole map is the from_config bus; it starts at the ELF
+                // entry, which `load_firmware` does not set for Xtensa.
+                xtensa_entry = Some(program.entry_point as u32);
+                setup_and_run!(labwired_core::cpu::XtensaLx7::new())
+            } else {
+                // No system manifest present: plain configure path (no external devices).
+                let cpu = labwired_core::system::xtensa::configure_xtensa(&mut bus);
+                setup_and_run!(cpu)
+            }
         }
         labwired_core::Arch::Avr => {
             // AVR is Harvard: code lives in the CPU flash image, not bus.flash.
@@ -3092,10 +3217,45 @@ mod esp32s3_rom_boot_tests {
     use super::*;
 
     #[test]
-    fn elf_less_s3_uses_the_descriptor_flash_capacity() {
+    fn s3_rom_boot_releases_and_executes_app_cpu_on_the_hardware_edge() {
+        use labwired_core::system::xtensa::configure_xtensa_esp32s3;
+        use labwired_core::{Bus, Cpu};
+
         let system = labwired_config::ResolvedSystem::from_builtin_chip("esp32s3")
             .expect("built-in ESP32-S3 descriptor");
-        assert_eq!(esp32s3_rom_boot_flash_size(&system), 16 * 1024 * 1024);
+        let mut bus = labwired_core::bus::SystemBus::new();
+        let wiring = configure_xtensa_esp32s3(&mut bus, &esp32s3_rom_boot_opts(Some(&system)));
+        let mut machine = esp32s3_rom_boot_machine(wiring.cpu, bus);
+        let reset_pc = machine.cpu_secondary.as_ref().expect("APP_CPU").get_pc();
+        assert!(machine.cpu_secondary.as_ref().unwrap().halted);
+        machine.step().expect("primary boot instruction");
+        assert_eq!(machine.cpu_secondary.as_ref().unwrap().get_pc(), reset_pc);
+        assert!(machine.cpu_secondary.as_ref().unwrap().halted);
+
+        // The same real MMIO sequence used by ESP-IDF, not a host-side unhalt.
+        machine.bus.write_u32(0x600c_0000, 0x6).unwrap();
+        machine.bus.write_u32(0x600c_0000, 0x2).unwrap();
+        for _ in 0..8 {
+            machine.step().expect("dual-core ROM instruction");
+        }
+        let app_cpu = machine.cpu_secondary.as_ref().unwrap();
+        assert!(
+            !app_cpu.halted,
+            "the reset falling edge must release APP_CPU"
+        );
+        assert_ne!(app_cpu.get_pc(), reset_pc, "APP_CPU must execute ROM code");
+        assert!(app_cpu.faithful_windows);
+        assert!(machine.cpu.faithful_windows);
+    }
+
+    #[test]
+    fn s3_rom_boot_uses_the_descriptor_flash_capacity() {
+        let system = labwired_config::ResolvedSystem::from_builtin_chip("esp32s3")
+            .expect("built-in ESP32-S3 descriptor");
+        let opts = esp32s3_rom_boot_opts(Some(&system));
+        assert_eq!(opts.flash_size, 16 * 1024 * 1024);
+        assert_eq!(opts.cpu_clock_hz as u64, system.chip().unwrap().cpu_hz);
+        assert!(opts.real_reset_boot);
         assert_ne!(
             esp32s3_rom_boot_flash_size(&system),
             labwired_core::system::xtensa::Esp32s3Opts::default().flash_size,

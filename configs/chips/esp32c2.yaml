@@ -29,10 +29,26 @@
 # SPI, LEDC, ADC, GDMA, crypto, Wi-Fi and Bluetooth LE.
 name: "esp32c2"
 arch: "riscv"
-# RV32IMC, the same Espressif core as the C3.
+# The die is RV32IMC, the same Espressif core as the C3. The declared core is
+# RV32IMAC because the ESP8684-DevKitM-1-H4X board smoke
+# (examples/esp8684-devkitm-1-h4x) is built for riscv32imac-unknown-none-elf.
+core: "rv32imac"
 registers_count: 50
 # 120 MHz maximum CPU clock (product selector "Freq. (MHz)" = 120).
 cpu_hz: 120_000_000
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.25
+  vih: 0.75
+
+# Pads the ESP8684-DevKitM-1-H4X profile binds (v1.1 user guide): GPIO0 is the
+# red RGB LED channel, GPIO19/GPIO20 are the UART0 default pads.
+pins:
+  GPIO0: { gpio: "gpio", bit: 0 }
+  GPIO1: { gpio: "gpio", bit: 1 }
+  GPIO8: { gpio: "gpio", bit: 8 }
+  GPIO19: { gpio: "gpio", bit: 19 } # UART0 RXD default pad
+  GPIO20: { gpio: "gpio", bit: 20 } # UART0 TXD default pad
 
 flash:
   # IROM cache window: soc.h SOC_IROM_LOW/HIGH = 0x42000000/0x42400000, 4 MiB.

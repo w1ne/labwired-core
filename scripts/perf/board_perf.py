@@ -334,10 +334,20 @@ FIXTURES = {
 # their own chip config and get their own baseline. A generic CPU-only smoke
 # fixture must not stand in for an unimplemented board platform.
 WAIVED: dict[str, str] = {
+    "ch32l103c8t6": (
+        "The CH32L103 model runs RV32IMAC with F1-layout peripherals; CI "
+        "has no perf-spin fixture built for this memory map. No throughput "
+        "claim is made for this part yet."
+    ),
     "ch32v005f6p6": (
         "The CH32V005 model uses RV32EmC, but CI has no RV32E-specific "
         "perf-spin fixture or compiler. No throughput claim is made for this "
         "part yet."
+    ),
+    "ch32x035c8t6": (
+        "The CH32X035 model runs RV32IMAC with WCH/F1-layout peripherals; CI "
+        "has no perf-spin fixture built for this memory map. No throughput "
+        "claim is made for this part yet."
     ),
     "ch32v006k8u6": (
         "The CH32V006 model uses RV32EmC, but CI has no RV32E-specific "
@@ -370,16 +380,17 @@ WAIVED: dict[str, str] = {
         "registers x16–x31 that this core does not implement. No throughput "
         "claim is made for this part yet."
     ),
-    "esp32c2": (
-        "ESP32-C2 (ESP8684H4X) bare-ELF slice (flash 0x42000000, RAM "
-        "0x3FCA0000). No perf-spin fixture is linked for this memory map, so "
-        "no throughput claim is made for this part (examples/esp32c2)."
-    ),
     "esp32p4": (
         "ESP32-P4X-C5-Function-EV fast-boot profile: a bare-ELF UART0 smoke on "
         "the HP core only (flash 0x40000000, RAM 0x4FF40000). No perf-spin "
         "fixture is linked for this memory map, so no throughput claim is made "
         "for this part (examples/esp32p4x-c5-function-ev-board)."
+    ),
+    "esp32c2": (
+        "ESP8684-DevKitM-1-H4X fast-boot profile: a bare-ELF UART0 and GPIO0 "
+        "smoke (flash 0x42000000, RAM 0x3FCA0000). The ESP32-C3 fixture uses a "
+        "different RAM base and no C2 perf-spin fixture is built; no throughput "
+        "claim is made for this profile (examples/esp8684-devkitm-1-h4x)."
     ),
     "esp32s2": (
         "ESP32-S2-DevKitC-1 N8R2 fast-boot profile: a bare-ELF UART0 smoke "
@@ -387,6 +398,12 @@ WAIVED: dict[str, str] = {
         "linked for the ESP32 and ESP32-S3 maps and no S2 build exists, so no "
         "throughput claim is made for this part "
         "(examples/esp32s2-devkitc-1-n8r2)."
+    ),
+    "mspm0g3507": (
+        "LP-MSPM0G3507 is a narrow UART0 smoke profile, not a representative "
+        "throughput workload. CI has no perf-spin fixture linked for its "
+        "0x00000000 flash / 0x20200000 RAM map; no throughput claim is made "
+        "for this profile yet (examples/lp-mspm0g3507-launchpad)."
     ),
     "atmega1281": (
         "The committed -mmcu=atmega1281 firmware validates boot, USART0 and GPIO, "

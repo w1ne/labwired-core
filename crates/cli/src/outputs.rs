@@ -45,6 +45,7 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
     motors: Vec<labwired_core::bus::MotorSnapshot>,
     analog_series: Option<labwired_core::analog::AnalogSeries>,
     stimuli: Vec<StimulusOutcome>,
+    uart_injection_errors: &[String],
     footprint: Option<artifacts::FootprintReport>,
     memory: Option<labwired_core::stack_paint::MainStackReport>,
     memory_policy: Option<labwired_core::bus::MemoryPolicyReport>,
@@ -92,13 +93,22 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
         .filter(|o| o.is_rejected())
         .map(|o| o.describe())
         .collect();
-    let message = (!rejected.is_empty()).then(|| {
-        format!(
+    let mut messages = Vec::new();
+    if !rejected.is_empty() {
+        messages.push(format!(
             "{} stimulus/stimuli could not be applied, so the run proved nothing about them: {}",
             rejected.len(),
             rejected.join("; ")
-        )
-    });
+        ));
+    }
+    if !uart_injection_errors.is_empty() {
+        messages.push(format!(
+            "{} UART injection(s) could not be delivered; the run is invalid: {}",
+            uart_injection_errors.len(),
+            uart_injection_errors.join("; ")
+        ));
+    }
+    let message = (!messages.is_empty()).then(|| messages.join("; "));
 
     let assertions_for_junit = assertions.clone();
     let result = TestResult {

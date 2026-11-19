@@ -1,0 +1,37 @@
+{
+  "target_id": "efm32pg1",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-efm32pg1-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/efm32pg1-smoke.yaml",
+  "system": "configs/systems/onboarding/efm32pg1.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T07:08:56Z",
+  "finished_at_utc": "2026-11-04T07:09:10Z",
+  "elapsed_seconds": 15,
+  "elapsed_ms": 14748,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-04T07:09:10.821959Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: \"EFM32PG1 USART0 smoke\" }) (captured len=0)",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 13.709,
+    "build_firmware": 0.573,
+    "run_smoke": 0.453
+  },
+  "stages_ms": {
+    "build_cli": 13709,
+    "build_firmware": 573,
+    "run_smoke": 453
+  }
+}

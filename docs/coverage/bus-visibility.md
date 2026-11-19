@@ -47,6 +47,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: PyBadge variant of the atsamd51 twin: generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
 * **cc2538sf53**
   * UART: no UART0 bring-up in this harness; bytes are proven by the cc2538dk survival smoke
+* **ch32l103c8t6**
+  * UART: no UART bring-up for the WCH L103 family in this harness yet; USART1 bytes are proven by ch32l103_compiled_firmware
 * **ch32v003a4m6**
   * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
 * **ch32v003f4p6**
@@ -61,6 +63,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v006_compiled_firmware
 * **ch32v203c8t6**
   * UART: no UART bring-up for the WCH V20x family in this harness yet; USART1 bytes are proven by ch32v203_compiled_firmware
+* **ch32x035c8t6**
+  * UART: no UART bring-up for the WCH X035 family in this harness yet; USART1 bytes are proven by ch32x035_compiled_firmware
 * **efr32mg26**
   * UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode
 * **esp32**
@@ -126,6 +130,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no SCI9 bring-up in this harness; bytes are proven by the ek-ra8m1 survival smoke
 * **ra4m1**
   * UART: Uno R4 Minima SCI2 uses generic type:uart (sci layout); no UART bring-up for this chip family in the edge gate yet
+  * SPI: RA RSPI (profile ra_rspi) hands each frame straight to the attached device and installs no PadLines cell, so no wire waveform is narrated; frames are proven by the UNO R4 WiFi Arduino matrix L4 cell
 * **rp2350**
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
@@ -154,6 +159,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | am6234 | — | — | — |
 | amap42kp | — | — | — |
 | arty-litex-vexriscv | — | — | — |
+| at32f421g8u7 | — | — | ✓ |
 | atmega1281 | — | — | — |
 | atmega2560 | — | — | — |
 | atmega2561 | — | — | — |
@@ -177,6 +183,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | atsamd51 | — | — | — |
 | atsamd51-pybadge | — | — | — |
 | cc2538sf53 | — | — | — |
+| ch32l103c8t6 | — | — | — |
 | ch32v003a4m6 | — | — | — |
 | ch32v003f4p6 | — | — | — |
 | ch32v003f4u6 | — | — | — |
@@ -184,6 +191,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | ch32v005f6p6 | — | — | — |
 | ch32v006k8u6 | — | — | — |
 | ch32v203c8t6 | — | — | — |
+| ch32x035c8t6 | — | — | — |
 | dspic33fj32mc202 | — | — | — |
 | dspic33fj32mc204 | — | — | — |
 | efr32mg26 | ✓ | ✓ | — |

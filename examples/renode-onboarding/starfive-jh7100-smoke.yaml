@@ -1,0 +1,11 @@
+# One RV64IMAC U74 subset, on-chip memory windows and UART0 TX from the
+# narrowed imported StarFive JH7100 profile. No Linux/U-Boot or SMP claim.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv64imac-unknown-none-elf/release/firmware-starfive-jh7100-smoke"
+  system: "../../configs/systems/onboarding/starfive-jh7100.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "RV64 JH7100 U74 UART0 smoke; mul=0000001100000011"
+  - expected_stop_reason: max_steps

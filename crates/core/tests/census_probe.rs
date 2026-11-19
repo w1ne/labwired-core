@@ -130,6 +130,7 @@ fn nvic_and_scb_trip_the_factory_counter_but_are_not_live_stubs() {
         .join(chip_rel);
     let chip = labwired_config::ChipDescriptor::from_file(&chip_path).expect("chip yaml");
     let manifest = labwired_config::SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),

@@ -2,25 +2,41 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! ESP32-P4 UART models.
+//! ESP32-P4 UART and HP I2C0 model adapters.
 //!
 //! The P4 HP UART FIFO/status head matches the shared Espressif UART model
-//! through offset 0x1C. This family wrapper supplies the P4 interrupt source,
-//! 400 MHz HP-core clock, and 90 MHz APB/UART source clock. The P4 board
-//! descriptor limits the exposed window to FIFO and STATUS; UART clock/reset,
-//! IO_MUX routing, and USB Serial/JTAG are outside this profile.
+//! through offset 0x1C. This wrapper supplies the P4 UART interrupt source,
+//! 400 MHz HP-core clock, and 90 MHz APB/UART source clock. P4 HP I2C0 reuses
+//! the Espressif command-list engine with its own clock and interrupt source;
+//! GPIO-matrix gating remains tied to the four modeled P4 selector registers.
 
 use crate::Peripheral;
 use labwired_config::PeripheralConfig;
 
 /// ESP32-P4 UART0 interrupt number from ESP-IDF `soc.h`.
 pub const UART0_INTR_SOURCE_ID: u32 = 5;
+/// ESP32-P4 HP I2C0 interrupt source from ESP-IDF `interrupts.h`.
+pub const I2C0_INTR_SOURCE_ID: u32 = 44;
 /// ESP32-P4 HP-core maximum frequency.
 pub const CPU_CLOCK_HZ: u64 = 400_000_000;
 /// ESP32-P4 APB clock (`APB_CLK_FREQ` in ESP-IDF `soc.h`).
 pub const UART_SCLK_HZ: u64 = 90_000_000;
 
 pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<dyn Peripheral>> {
+    if canonical_type == "esp32p4_i2c" {
+        let source_id = p_cfg.irq.unwrap_or(I2C0_INTR_SOURCE_ID);
+        let cpu_clock_hz = p_cfg
+            .config
+            .get("cpu_clock_hz")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(CPU_CLOCK_HZ);
+        return Some(Box::new(
+            crate::peripherals::esp32c3::i2c::Esp32c3I2c::with_cpu_clock_and_intr(
+                cpu_clock_hz,
+                source_id,
+            ),
+        ));
+    }
     if canonical_type != "esp32p4_uart" {
         return None;
     }
@@ -48,7 +64,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
     ))
 }
 
-pub const SUPPORTED_TYPES: &[&str] = &["esp32p4_uart"];
+pub const SUPPORTED_TYPES: &[&str] = &["esp32p4_i2c", "esp32p4_uart"];
 
 #[cfg(test)]
 mod tests {

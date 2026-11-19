@@ -700,6 +700,13 @@ pub struct I2cSpec {
     /// byte-addressable `register_file:`.
     #[serde(default = "default_pointer_width")]
     pub pointer_width: u8,
+    /// A register-mode device may accept a frame containing only the first
+    /// data byte for a wider big-endian register. When true, that byte updates
+    /// the register's most-significant byte when the frame ends at STOP or a
+    /// repeated START, preserving all lower bytes. This is opt-in because most
+    /// devices require a complete register word.
+    #[serde(default)]
+    pub update_msb_on_short_write: bool,
     /// **Write page size in bytes** for a memory-like part. A sequential write
     /// that runs past a page boundary wraps to the START of the same page
     /// instead of spilling into the next one — the single most surprising real
@@ -1339,6 +1346,14 @@ pub struct SpiFraming {
     /// one; false ⇒ only the selected register is served.
     #[serde(default = "default_true")]
     pub auto_increment: bool,
+    /// SPI devices such as BMA400 clock one or more invalid bytes after a
+    /// read command before the first register byte. Writes have no dummy byte.
+    #[serde(default)]
+    pub read_dummy_bytes: u8,
+    /// Some dual-I2C/SPI devices (BMA400) only enable SPI on the first CS
+    /// rising edge after power-up. The whole first transaction is ignored.
+    #[serde(default)]
+    pub activate_on_first_cs_release: bool,
     /// **The command byte is an OPCODE plus an address**, not one direction
     /// bit: `mosi & op_mask` selects the operation and is compared against
     /// [`op_read`](Self::op_read) and [`op_write`](Self::op_write). Absent ⇒
@@ -1390,6 +1405,8 @@ impl Default for SpiFraming {
             addr_mask: default_addr_mask(),
             addr_shift: 0,
             auto_increment: true,
+            read_dummy_bytes: 0,
+            activate_on_first_cs_release: false,
             op_mask: None,
             op_read: None,
             op_write: None,

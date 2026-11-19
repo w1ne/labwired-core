@@ -50,6 +50,7 @@ fn rig(device_type: &str, connection: &str, config: &[(&str, serde_yaml::Value)]
         cfg.insert(k.to_string(), v.clone());
     }
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
         walk_deleted: Some(false),
@@ -120,16 +121,20 @@ fn spi_write(bus: &mut SystemBus, controller: &str, frames: &[(bool, u8)]) {
 }
 
 /// Finish the rig and read the panel's device record out of `inspect`.
-fn inspect_panel(mut bus: SystemBus) -> DeviceInspect {
+fn inspect_panel_with(mut bus: SystemBus, opts: InspectOpts) -> DeviceInspect {
     let (cpu, _nvic) = configure_cortex_m(&mut bus);
     bus.refresh_peripheral_index();
     let machine = Machine::new(cpu, bus);
     machine
-        .inspect(None, &InspectOpts::default())
+        .inspect(None, &opts)
         .devices
         .into_iter()
         .find(|d| d.id == "panel")
         .expect("the declared panel is a device")
+}
+
+fn inspect_panel(bus: SystemBus) -> DeviceInspect {
+    inspect_panel_with(bus, InspectOpts::default())
 }
 
 /// The panel's one evidence artifact, or a panic naming what came out instead.
@@ -214,6 +219,88 @@ fn ssd1306_full_plane_logs_one_frame_sha() {
     assert_eq!(
         art.meta["generation_history"].as_array().map(|a| a.len()),
         Some(1)
+    );
+}
+
+/// Summary inspect omits per-frame bytes; `include_bytes` publishes the
+/// oriented 1024-byte plane and its sha256 must be of those bytes.
+#[test]
+fn ssd1306_frames_seen_bytes_only_when_requested() {
+    fn write_plane(bus: &mut SystemBus, fill: u8) {
+        oled_paint(bus, &[0xAF], &[]);
+        let plane = vec![fill; 1024];
+        for chunk in plane.chunks(32) {
+            let mut px = vec![0x40u8];
+            px.extend_from_slice(chunk);
+            i2c_write(bus, "i2c1", &px);
+        }
+    }
+
+    let mut bus = rig("oled-ssd1306", "i2c1", &[("i2c_address", 0x3Cu64.into())]);
+    write_plane(&mut bus, 0xA5);
+    let inspected = inspect_panel_with(bus, InspectOpts::default());
+    let summary = evidence(&inspected);
+    let hist = summary.meta["frames_seen"].as_array().expect("frames_seen");
+    assert_eq!(hist.len(), 1);
+    assert!(
+        hist[0].get("bytes").is_none(),
+        "summary mode must not carry framebuffer bytes: {:?}",
+        hist[0]
+    );
+    assert_eq!(hist[0]["sha256"].as_str().expect("sha256").len(), 64);
+
+    let mut bus = rig("oled-ssd1306", "i2c1", &[("i2c_address", 0x3Cu64.into())]);
+    write_plane(&mut bus, 0xA5);
+    write_plane(&mut bus, 0x5A);
+    let inspected = inspect_panel_with(
+        bus,
+        InspectOpts {
+            include_bytes: true,
+            ..InspectOpts::default()
+        },
+    );
+    let art = evidence(&inspected);
+    let hist = art.meta["frames_seen"].as_array().expect("frames_seen");
+    assert_eq!(
+        hist.len(),
+        2,
+        "two distinct full planes => two frames: {hist:?}"
+    );
+    let mut shas = Vec::new();
+    let mut times = Vec::new();
+    for (i, frame) in hist.iter().enumerate() {
+        let bytes = frame["bytes"]
+            .as_array()
+            .unwrap_or_else(|| panic!("frame {i} missing bytes"));
+        assert_eq!(bytes.len(), 1024, "frame {i} must be a full 128x64 plane");
+        let raw: Vec<u8> = bytes
+            .iter()
+            .map(|v| v.as_u64().expect("byte") as u8)
+            .collect();
+        let want = if i == 0 { 0xA5 } else { 0x5A };
+        assert!(
+            raw.iter().all(|&b| b == want),
+            "frame {i} bytes must be the plane just written"
+        );
+        let sha = frame["sha256"].as_str().expect("sha256");
+        assert_eq!(sha.len(), 64);
+        // sha256 of the published bytes — the geometry oracle's input.
+        let got = {
+            use sha2::{Digest, Sha256};
+            let dig = Sha256::digest(&raw);
+            dig.iter().map(|b| format!("{b:02x}")).collect::<String>()
+        };
+        assert_eq!(sha, got, "frame {i} sha256 must be of the published bytes");
+        shas.push(sha.to_string());
+        times.push(frame["t_us"].as_u64().expect("t_us"));
+    }
+    assert_ne!(
+        shas[0], shas[1],
+        "distinct planes must have distinct sha256"
+    );
+    assert!(
+        times[1] >= times[0],
+        "later frame must not have an earlier t_us ({times:?})"
     );
 }
 

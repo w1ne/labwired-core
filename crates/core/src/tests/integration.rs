@@ -84,6 +84,7 @@ pub mod integration_tests {
     /// name with `chip` → `system`; `chip` points at the descriptor name.
     fn manifest_for(chip_name: &str) -> SystemManifest {
         SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -530,6 +531,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -605,7 +607,7 @@ pub mod integration_tests {
         );
         assert_eq!(
             crate::bus::SystemBus::canonical_peripheral_type("arm_sp804_timer"),
-            "systick"
+            "arm_sp804_timer"
         );
         // RP2040 native peripherals must NOT be coerced by the fuzzy
         // contains("timer"/"spi"/"i2c") matchers to the generic STM32 models;
@@ -751,6 +753,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -832,6 +835,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -901,7 +905,7 @@ pub mod integration_tests {
         bus.attach_uart_tx_sink(sink.clone(), false);
 
         let base = 0x4000_4800;
-        bus.write_u32(base, (1 << 0) | (1 << 3)).unwrap(); // UE + TE
+        bus.write_u32(base, 0x9).unwrap(); // CR1: UE | TE
         bus.write_u8(base + 0x04, b'X').unwrap(); // legacy DR offset should not TX in v2 mode
         bus.write_u8(base + 0x28, b'Y').unwrap(); // TDR
         assert_eq!(bus.read_u8(base + 0x1C).unwrap(), 0xC0); // ISR ready flags
@@ -959,6 +963,7 @@ pub mod integration_tests {
             ("leuart", L::Leuart),
             ("renesas_sci", L::Sci),
             ("renesasra6m5_sci", L::Sci),
+            ("renesasrzg_scifa", L::Scifa),
             ("renesasda14_uart", L::DwApbUart),
             ("gaislerapbuart", L::Gaisler),
             ("npcx_uart", L::Npcx),
@@ -973,7 +978,7 @@ pub mod integration_tests {
             ("miv_coreuart", L::CoreUart),
             ("k6xf_uart", L::KinetisUart),
             ("pulp_udma_uart", L::Pulp),
-            ("ft9001_usart", L::Ns16550),
+            ("ft9001_usart", L::Ft9001),
             ("cosimulateduart", L::Ns16550),
             ("mpc5567_uart", L::Esci),
             ("picosoc_simpleuart", L::PicoUart),
@@ -1053,6 +1058,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -1414,6 +1420,13 @@ pub mod integration_tests {
         // Step 3: Execute MOV R0, #42 in ISR
         machine.step().unwrap();
         assert_eq!(machine.cpu.r0, 42);
+
+        // With RVR=1 the counter wraps again inside this two-instruction ISR,
+        // and a pending SysTick at BX LR tail-chains straight back into the
+        // handler. Stop the timer and clear the pend (ICSR.PENDSTCLR) so the
+        // return reaches Thread mode.
+        machine.bus.write_u32(0xE000_E010, 0).unwrap();
+        machine.bus.write_u32(0xE000_ED04, 1 << 25).unwrap();
 
         // Step 4: Execute BX LR (Exception Return)
         machine.step().unwrap();
@@ -2181,14 +2194,20 @@ pub mod integration_tests {
         let dr_addr = adc_base + 0x4C;
         let sr_addr = adc_base;
 
-        let dr = machine.bus.read_u32(dr_addr).unwrap();
+        // RM0008 §11.12.1: reading ADC_DR clears EOC, so sample SR first.
         let sr = machine.bus.read_u32(sr_addr).unwrap();
+        let dr = machine.bus.read_u32(dr_addr).unwrap();
 
         assert_ne!(dr, 0, "Data Register should have updated value");
         assert_eq!(
             sr & (1 << 1),
             (1 << 1),
             "EOC bit should be set in Status Register"
+        );
+        assert_eq!(
+            machine.bus.read_u32(sr_addr).unwrap() & (1 << 1),
+            0,
+            "reading DR clears EOC"
         );
     }
 
@@ -2369,6 +2388,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -2475,6 +2495,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -2566,6 +2587,7 @@ pub mod integration_tests {
         };
 
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -2995,6 +3017,7 @@ pub mod integration_tests {
             serde_yaml::Value::Number(0x3C.into()),
         );
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             cosim_models: Vec::new(),
             motor_models: Vec::new(),
@@ -3125,6 +3148,7 @@ pub mod integration_tests {
                 include: None,
             };
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),
@@ -3208,6 +3232,7 @@ pub mod integration_tests {
                 include: None,
             };
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),
@@ -3330,6 +3355,7 @@ pub mod integration_tests {
                 serde_yaml::Value::Number(0x3C.into()),
             );
             let manifest = SystemManifest {
+                max_peripheral_tick_interval: None,
                 parts: Vec::new(),
                 cosim_models: Vec::new(),
                 motor_models: Vec::new(),

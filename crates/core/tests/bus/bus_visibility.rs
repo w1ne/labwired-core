@@ -158,6 +158,15 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
          harness yet; bytes are proven by ch32v003_compiled_firmware",
     ),
+    // CH32L103C8T6: the bring-up has no UART drive for the WCH L103 family.
+    // USART1 bytes are proven by
+    // ch32l103_compiled_firmware::ch32l103_compiled_rv32imac_firmware_prints_on_usart1.
+    (
+        "ch32l103c8t6",
+        BusKind::Uart,
+        "no UART bring-up for the WCH L103 family in this harness yet; USART1 \
+         bytes are proven by ch32l103_compiled_firmware",
+    ),
     // CH32V005F6P6: same pad-gated USART1 (TX=PD5) as the CH32V003. USART1
     // bytes are proven by
     // ch32v005_compiled_firmware::ch32v005_compiled_rv32ec_zmmul_firmware_prints_on_usart1.
@@ -166,6 +175,15 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Uart,
         "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
          harness yet; bytes are proven by ch32v005_compiled_firmware",
+    ),
+    // CH32X035C8T6: no UART bring-up for the WCH X035 family in this harness.
+    // USART1 bytes are proven by
+    // ch32x035_compiled_firmware::ch32x035_compiled_rv32imac_firmware_prints_on_usart1.
+    (
+        "ch32x035c8t6",
+        BusKind::Uart,
+        "no UART bring-up for the WCH X035 family in this harness yet; USART1 \
+         bytes are proven by ch32x035_compiled_firmware",
     ),
     // CH32V006K8U6: same pad-gated USART1 (TX=PD5) as the CH32V003. USART1
     // bytes are proven by
@@ -379,7 +397,8 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "USART0 registers live on the AVR CPU and are forwarded to the bus-side host; \
          this harness drives bus MMIO, not the CPU, so no bring-up exists here",
     ),
-    // ATmega2560: same USART0 model and addresses as the 328P.
+    // ATmega2560: USART0..3 live on the AVR CPU (cpu/avr/usart.rs), which hands
+    // finished frames to the bus-side hosts; the harness drives bus MMIO only.
     (
         "atmega2560",
         BusKind::Uart,
@@ -649,6 +668,13 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
          bring-up for this chip family in the edge gate yet",
     ),
     (
+        "ra4m1",
+        BusKind::Spi,
+        "RA RSPI (profile ra_rspi) hands each frame straight to the attached \
+         device and installs no PadLines cell, so no wire waveform is narrated; \
+         frames are proven by the UNO R4 WiFi Arduino matrix L4 cell",
+    ),
+    (
         "imxrt1064",
         BusKind::Uart,
         "no edge bring-up path for i.MX LPUART in this gate yet",
@@ -673,6 +699,7 @@ fn is_excluded(chip: &str, kind: BusKind) -> Option<&'static str> {
 /// so both boards measure the same construction path.
 fn dummy_manifest(path: &str) -> SystemManifest {
     SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
@@ -1050,6 +1077,12 @@ fn family_of(chip: &str) -> Family {
         Family::Esp32
     } else if chip.starts_with("efr32") {
         Family::Efr32s2
+    } else if chip == "at32f421g8u7" {
+        // usart1/usart2 are the classic F1 STS/DT/BAUDR/CTRL1 subset
+        // (`profile: stm32f1`), audited against at32f421_usart.h. This
+        // descriptor has no SPI/I2C instances, so the classification only
+        // selects the existing STM32 UART F1/V2 drive.
+        Family::Stm32F1
     } else {
         Family::Unknown
     }

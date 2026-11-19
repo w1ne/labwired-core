@@ -13,7 +13,13 @@ flash:
 ram:
   base: 96
   size: 64B
-peripherals: []
+peripherals:
+  # This bounded smoke claims only GPIOB. Timers, ADC, analog comparator
+  # and interrupts remain outside this profile.
+  - id: portb
+    type: avr_gpio
+    base_address: 0x00010036
+    size: 3
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

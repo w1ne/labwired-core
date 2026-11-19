@@ -128,6 +128,8 @@ pub enum RccRegisterLayout {
     /// silicon-pinned AHBENR mask would discard — so the enable registers are
     /// stored unmasked, like an un-pinned F4 part.
     Stm32F0,
+    /// Artery AT32F421 CRM (vendor RM and BSP 2.1.9). Distinct PLL/MISC registers.
+    At32F421,
 }
 
 impl FromStr for RccRegisterLayout {
@@ -152,6 +154,7 @@ impl FromStr for RccRegisterLayout {
             "stm32g0b1" | "g0b1" => Ok(Self::Stm32G0b1),
             "stm32c0" | "c0" => Ok(Self::Stm32C0),
             "stm32f0" | "f0" => Ok(Self::Stm32F0),
+            "at32f421" => Ok(Self::At32F421),
             _ => Err(format!(
                 "unsupported RCC register layout '{}'; supported: stm32f1, stm32f4, stm32v2, stm32h5, stm32h7, stm32l4, stm32l5, stm32l0, stm32g4, stm32wb, stm32wba, wch, stm32g0, stm32g0b1, stm32c0, stm32f0",
                 value
@@ -204,6 +207,13 @@ trait RccModel: std::fmt::Debug {
     fn read_reg(&self, offset: u64) -> u32;
     fn write_reg(&mut self, offset: u64, value: u32);
     fn snapshot(&self) -> serde_json::Value;
+    /// Why this access cannot be modelled (`write`: the full register value
+    /// about to be stored), or `None` to proceed. A model that declares its
+    /// register map exactly refuses absent registers and unmodelled controls
+    /// here instead of storing them. Default: every access proceeds.
+    fn refusal(&self, _offset: u64, _write: Option<u32>) -> Option<String> {
+        None
+    }
 }
 
 // ── STM32F1 ─────────────────────────────────────────────────────────────────
@@ -450,6 +460,165 @@ impl RccModel for F0Rcc {
     }
     fn snapshot(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+}
+
+/// AT32F421 clock/reset manager. Register source: Artery BSP 2.1.9
+/// `at32f421_crm.h`, `crm_type`; CMSIS device header at commit 2fd0bfbc.
+/// Source-ready handshakes are functional; oscillator lock delays and changing
+/// the CPU clock during execution remain outside this model's timing scope.
+#[derive(Debug, serde::Serialize)]
+pub struct At32F421Crm {
+    ctrl: u32,
+    cfg: u32,
+    clkint: u32,
+    apb2rst: u32,
+    apb1rst: u32,
+    ahben: u32,
+    apb2en: u32,
+    apb1en: u32,
+    bpdc: u32,
+    ctrlsts: u32,
+    ahbrst: u32,
+    pll: u32,
+    misc1: u32,
+    misc2: u32,
+    hext_present: bool,
+}
+
+impl At32F421Crm {
+    fn new() -> Self {
+        Self {
+            ctrl: 0x83,
+            cfg: 0,
+            clkint: 0,
+            apb2rst: 0,
+            apb1rst: 0,
+            ahben: 0x14,
+            apb2en: 0,
+            apb1en: 0,
+            bpdc: 0,
+            ctrlsts: 0x0c00_0000,
+            ahbrst: 0,
+            pll: 0x1f10,
+            misc1: 0,
+            misc2: 0x0d,
+            hext_present: false,
+        }
+    }
+
+    fn reset_registers(&mut self, cause: u32) {
+        let hext_present = self.hext_present;
+        let flags = self.ctrlsts & 0xfc00_0000;
+        *self = Self::new();
+        self.hext_present = hext_present;
+        self.ctrlsts = flags | cause;
+    }
+
+    fn refresh(&mut self) {
+        self.ctrl = on_sets_ready(self.ctrl, 0, 1);
+        let hext_ready = self.hext_present && self.ctrl & (1 << 16) != 0;
+        self.ctrl = (self.ctrl & !(1 << 17)) | ((hext_ready as u32) << 17);
+        let source_ready = if self.cfg & (1 << 16) != 0 {
+            hext_ready
+        } else {
+            self.ctrl & (1 << 1) != 0
+        };
+        let pll_ready = source_ready && self.ctrl & (1 << 24) != 0;
+        self.ctrl = (self.ctrl & !(1 << 25)) | ((pll_ready as u32) << 25);
+        self.cfg = cfgr_with_gated_sws(
+            self.cfg,
+            self.ctrl,
+            self.cfg,
+            [Some(1), Some(17), Some(25), None],
+        );
+    }
+}
+
+impl RccModel for At32F421Crm {
+    fn read_reg(&self, offset: u64) -> u32 {
+        match offset {
+            0x00 => self.ctrl,
+            0x04 => self.cfg,
+            0x08 => self.clkint,
+            0x0c => self.apb2rst,
+            0x10 => self.apb1rst,
+            0x14 => self.ahben,
+            0x18 => self.apb2en,
+            0x1c => self.apb1en,
+            0x20 => self.bpdc,
+            0x24 => self.ctrlsts,
+            0x28 => self.ahbrst,
+            0x2c => self.pll,
+            0x30 => self.misc1,
+            0x54 => self.misc2,
+            _ => {
+                crate::census_reg!("crm:At32F421", offset, "read");
+                0
+            }
+        }
+    }
+
+    fn write_reg(&mut self, offset: u64, value: u32) {
+        match offset {
+            // HICKCAL and stable flags are read-only. Factory calibration is
+            // modelled at zero, not claimed as a measured die calibration.
+            0x00 => {
+                self.ctrl = (self.ctrl & 0x0000_ff00) | (value & 0x010d_00fd);
+                self.refresh();
+            }
+            0x04 => {
+                self.cfg = (self.cfg & 0x0c) | (value & 0x773f_fff3);
+                self.refresh();
+            }
+            0x08 => self.clkint = value & 0x1f00,
+            0x0c => self.apb2rst = value & 0x0007_5a03,
+            0x10 => self.apb1rst = value & 0x1062_4912,
+            0x14 => self.ahben = value & 0x004e_0055,
+            0x18 => self.apb2en = value & 0x0007_5a01,
+            0x1c => self.apb1en = value & 0x1062_4912,
+            0x20 => self.bpdc = value & 0x0001_8305, // No LEXT source is attached.
+            0x24 => {
+                let flags = if value & (1 << 24) != 0 {
+                    0
+                } else {
+                    self.ctrlsts & 0xfc00_0000
+                };
+                self.ctrlsts = flags | on_sets_ready(value & 1, 0, 1);
+            }
+            0x28 => self.ahbrst = value & 0x004e_0000,
+            0x2c => self.pll = value & 0x8701_fff7,
+            0x30 => self.misc1 = value & 0xf211_00ff,
+            0x54 => self.misc2 = (self.misc2 & 0x0d) | (value & 0x230),
+            _ => {
+                crate::census_reg!("crm:At32F421", offset, "write");
+            }
+        }
+    }
+
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn refusal(&self, offset: u64, write: Option<u32>) -> Option<String> {
+        if !matches!(offset, 0x00..=0x30 | 0x54) || offset % 4 != 0 {
+            return Some(format!("AT32F421 CRM: no register at {offset:#x}"));
+        }
+        // A reset bit is honoured only for a block whose model returns to its
+        // reset state ([`crate::Peripheral::on_node_reset`]): GPIOA/B/C/F in
+        // AHBRST, TMR1/TMR15/TMR16/TMR17 in APB2RST (bits 11, 16, 17, 18) and
+        // TMR3/TMR6/TMR14 in APB1RST (bits 1, 4, 8) (RM_AT32F421 V2.05
+        // CRM_AHBRST/APB2RST/APB1RST). Every other peripheral reset refuses
+        // rather than leaving the block's registers untouched.
+        let unsupported = match (offset, write?) {
+            (0x0c, v) => v & !0x0007_0800,
+            (0x10, v) => v & !0x0000_0112,
+            (0x28, v) => v & !0x004e_0000,
+            _ => 0,
+        };
+        (unsupported != 0).then(|| {
+            format!("AT32F421 CRM: peripheral reset bits {unsupported:#x} at {offset:#x} are not modelled")
+        })
     }
 }
 
@@ -2934,6 +3103,7 @@ pub enum Rcc {
     Stm32G4(G4Rcc),
     Stm32G0(G0Rcc),
     Stm32F0(F0Rcc),
+    At32F421(At32F421Crm),
     Wch(WchRcc),
 }
 
@@ -2963,6 +3133,7 @@ impl Rcc {
             RccRegisterLayout::Stm32G0b1 => Self::Stm32G0(G0Rcc::new_g0b1()),
             RccRegisterLayout::Stm32C0 => Self::Stm32G0(G0Rcc::new_c0()),
             RccRegisterLayout::Stm32F0 => Self::Stm32F0(F0Rcc::new()),
+            RccRegisterLayout::At32F421 => Self::At32F421(At32F421Crm::new()),
             RccRegisterLayout::Wch => Self::Wch(WchRcc::new()),
             // Same V2 model, RM0434 enable/reset placement.
             RccRegisterLayout::Stm32Wb => Self::Stm32V2(V2Rcc::new_wb()),
@@ -2971,10 +3142,22 @@ impl Rcc {
         }
     }
 
+    /// The model's refusal of this access as an error ([`RccModel::refusal`]).
+    fn check_access(&self, offset: u64, write: Option<u32>) -> SimResult<()> {
+        match self.model().refusal(offset, write) {
+            Some(reason) => Err(crate::SimulationError::Other(reason)),
+            None => Ok(()),
+        }
+    }
+
     /// Board option: an external HSE oscillator is fitted. Only the U5/V2
     /// clock tree gates HSERDY on this today; other families keep their
     /// existing fixed-oscillator behaviour.
     pub fn set_hse_present(&mut self, present: bool) {
+        if let Self::At32F421(crm) = self {
+            crm.hext_present = present;
+            crm.refresh();
+        }
         if let Self::Stm32V2(v2) = self {
             v2.set_hse_present(present);
         }
@@ -3042,6 +3225,14 @@ impl Rcc {
             _ => {}
         }
         match self {
+            Self::At32F421(_) => match r.as_str() {
+                "ctrl" | "cr" => Some(0x00),
+                "cfg" => Some(0x04),
+                "ahben" | "ahbenr" => Some(0x14),
+                "apb2en" | "apb2enr" => Some(0x18),
+                "apb1en" | "apb1enr" => Some(0x1c),
+                _ => None,
+            },
             Self::Wch(_) => match r.as_str() {
                 "ahbpcenr" | "ahbenr" => Some(WchRcc::AHBPCENR),
                 "apb2pcenr" => Some(WchRcc::APB2PCENR),
@@ -3234,6 +3425,15 @@ impl Rcc {
         }
     }
 
+    /// Set the F4-layout AHB1ENR reset value — the per-part always-on RAM
+    /// clock: 0x0010_0000 (DTCMRAMEN) on the F7 (RM0385 §5.3.10), CCMDATARAMEN
+    /// on the F405/F407 (RM0090 §7.3.10). No-op for non-F4 layouts.
+    pub fn set_f4_ahb1enr_reset(&mut self, value: u32) {
+        if let Self::Stm32F4(r) = self {
+            r.ahbenr = value & r.ahb1_mask;
+        }
+    }
+
     /// Opt-in live G0 clock contract for a fixed-operating-point transceiver.
     /// Other RCC families are not silently treated as G0.
     pub fn g0_clock_registers(&mut self) -> Option<Arc<super::stm32g0_clock::G0ClockRegisters>> {
@@ -3264,6 +3464,7 @@ impl Rcc {
             Self::Stm32G4(r) => r,
             Self::Stm32G0(r) => r,
             Self::Stm32F0(r) => r,
+            Self::At32F421(r) => r,
             Self::Wch(r) => r,
         }
     }
@@ -3281,6 +3482,7 @@ impl Rcc {
             Self::Stm32G4(r) => r,
             Self::Stm32G0(r) => r,
             Self::Stm32F0(r) => r,
+            Self::At32F421(r) => r,
             Self::Wch(r) => r,
         }
     }
@@ -3291,16 +3493,19 @@ impl crate::Peripheral for Rcc {
         self.set_dbp_flag(enabled);
     }
 
-    /// Record a supply reset in RCC_CSR. Modelled on the F4 layout; the other
-    /// families' CSR reset flags stay as they were (plain storage).
+    /// Record the supply reset only on profiles with an explicit contract.
     fn on_supply_reset(&mut self, cause: crate::power::SupplyResetCause) {
-        if let Self::Stm32F4(rcc) = self {
-            rcc.on_supply_reset(cause);
+        match self {
+            Self::Stm32F4(rcc) => rcc.on_supply_reset(cause),
+            // AT32 has one POR/LVR cause flag. Pin reset is also present in
+            // the power-on register image (Artery CTRLSTS reset 0x0c000000).
+            Self::At32F421(crm) => crm.reset_registers((1 << 26) | (1 << 27)),
+            _ => {}
         }
     }
 
     fn stm32_uart_pad_af_override(&self) -> Option<u8> {
-        matches!(self, Self::Stm32G0(_)).then_some(1)
+        matches!(self, Self::Stm32G0(_) | Self::At32F421(_)).then_some(1)
     }
 
     /// The RCC is this chip's clock controller: resolve `clock:` register names
@@ -3316,6 +3521,7 @@ impl crate::Peripheral for Rcc {
 
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg_offset = offset & !3;
+        self.check_access(reg_offset, None)?;
         let byte_offset = (offset % 4) as u32;
         let reg_val = self.model().read_reg(reg_offset);
         Ok(((reg_val >> (byte_offset * 8)) & 0xFF) as u8)
@@ -3331,6 +3537,7 @@ impl crate::Peripheral for Rcc {
     /// memory, but kept correct) falls back to the per-byte path.
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         if offset % 4 == 0 {
+            self.check_access(offset, Some(value))?;
             self.model_mut().write_reg(offset, value);
             return Ok(());
         }
@@ -3349,10 +3556,46 @@ impl crate::Peripheral for Rcc {
         reg_val &= !mask;
         reg_val |= (value as u32) << (byte_offset * 8);
 
+        self.check_access(reg_offset, Some(reg_val))?;
         self.model_mut().write_reg(reg_offset, reg_val);
         Ok(())
     }
 
+    fn clock_gate_reset_asserted(&self, register: u64, bit: u8) -> bool {
+        let Self::At32F421(crm) = self else {
+            return false;
+        };
+        match register {
+            // Each reset bit sits at its clock-enable bit's position.
+            0x14 => crm.ahbrst & (1 << bit) != 0,
+            0x18 => crm.apb2rst & (1 << bit) != 0,
+            0x1c => crm.apb1rst & (1 << bit) != 0,
+            _ => false,
+        }
+    }
+    fn controls_peripheral_resets(&self) -> bool {
+        matches!(self, Self::At32F421(_))
+    }
+    fn on_node_reset(&mut self) {
+        if let Self::At32F421(crm) = self {
+            crm.reset_registers(1 << 26);
+        }
+    }
+    fn on_system_reset(&mut self) {
+        if let Self::At32F421(crm) = self {
+            // The requesting source records software/watchdog after reset;
+            // do not invent a fresh POR flag on every warm reset.
+            crm.reset_registers(0);
+        }
+    }
+    fn on_peripheral_reset(&mut self, cause: crate::PeripheralResetCause) {
+        if let Self::At32F421(crm) = self {
+            crm.ctrlsts |= match cause {
+                crate::PeripheralResetCause::Watchdog => 1 << 29,
+                _ => 1 << 28,
+            };
+        }
+    }
     fn snapshot(&self) -> serde_json::Value {
         self.model().snapshot()
     }

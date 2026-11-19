@@ -1,0 +1,22 @@
+# Narrowed from Renode's Andes AE350 N25 profile. The measured engine profile
+# covers the generic RV32IM instruction path and a 128 KiB DRAM aperture only.
+# The upstream CPU advertises rv32gc_xandes; this profile does not claim its
+# Andes-specific, floating-point, or compressed instruction extensions.
+# uart1 follows Renode's NS16550 @ 0xF0300020 with `wideRegisters: true`:
+# `dw_apb_uart` selects this engine's 4-byte-stride 16550 register map (polled
+# TX, LCR/DLAB divisor latches, LSR). It does not claim the ATCUART100 ID/OSC
+# words below 0xF0300020, interrupts (the PLIC is not mapped), FIFOs, or baud
+# timing.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/andes_ae350_n25.repl
+name: andes_ae350_n25
+arch: riscv
+core: rv32im
+flash_boot_alias: false
+flash:
+  base: 0
+  size: 0B
+ram:
+  base: 0
+  size: 128KB
+# Negative control: uart1 removed.
+peripherals: []

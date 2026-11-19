@@ -1,0 +1,650 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_ordered": [
+          "SAM E70 RENODE SMOKE",
+          "chipid cidr=a1020e00 exid=00000002 ok",
+          "eefc fmr=00000600 ok",
+          "eefc getd size=00200000 page=0200 locks=0080 region=00004000 ok",
+          "eefc glb3=10 clb=0 gpnvm=002 set8=102 ok",
+          "eefc fsr gpnvm9=3 badkey=3 after=1 ok",
+          "rstc sr=00010000 wdt mr=3fff2fff ok",
+          "rstc software reset",
+          "SAM E70 RENODE SMOKE",
+          "rstc rsttyp=3 ok",
+          "wdt arm wdv=2",
+          "SAM E70 RENODE SMOKE",
+          "wdt rsttyp=2 mr=3fff2fff ok",
+          "wdt window sr=2 pended released ok",
+          "wdt mr once=00801100 ok",
+          "pmc pcsr0=",
+          "pio ports=5 ok",
+          "pioa pa11 change pend=1 released=1 ok",
+          "uarts=7 ok",
+          "SAM E70 PASS"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "usart0 tx"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "usart2 tx"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "uart0 tx"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "uart4 tx"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 541454336,
+          "expected_value": 3875553279,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      19549,
+      16383,
+      1074667008,
+      2147483648,
+      1073905684,
+      80,
+      2147483648,
+      541458392,
+      120,
+      10,
+      32,
+      541454080,
+      4219910,
+      541458392,
+      4219479,
+      4219654
+    ],
+    "pc": 4219654,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 4194304,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "45a5484e491430415892662ede9cd6a525f17ae3c68e99b041e7331e907b65e7",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam-e70-renode-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam_e70.yaml",
+    "script": "examples/renode-onboarding/sam_e70-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 1073889280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073905664,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073922048,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pmc",
+        "kind": "native",
+        "base": 1074660864,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 1074661376,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart1",
+        "kind": "native",
+        "base": 1074661888,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "chipid",
+        "kind": "declarative",
+        "base": 1074661696,
+        "registers": [
+          {
+            "name": "CIDR",
+            "offset": 0,
+            "size": 32,
+            "value": 2701266432,
+            "fields": [
+              {
+                "name": "VERSION",
+                "bits": [
+                  0,
+                  4
+                ],
+                "value": 0
+              },
+              {
+                "name": "EPROC",
+                "bits": [
+                  5,
+                  7
+                ],
+                "value": 0
+              },
+              {
+                "name": "NVPSIZ",
+                "bits": [
+                  8,
+                  11
+                ],
+                "value": 0
+              },
+              {
+                "name": "NVPSIZ2",
+                "bits": [
+                  12,
+                  15
+                ],
+                "value": 0
+              },
+              {
+                "name": "SRAMSIZ",
+                "bits": [
+                  16,
+                  19
+                ],
+                "value": 0
+              },
+              {
+                "name": "ARCH",
+                "bits": [
+                  20,
+                  27
+                ],
+                "value": 0
+              },
+              {
+                "name": "NVPTYP",
+                "bits": [
+                  28,
+                  30
+                ],
+                "value": 0
+              },
+              {
+                "name": "EXT",
+                "bits": [
+                  31,
+                  31
+                ],
+                "value": 1
+              }
+            ],
+            "access": "ro"
+          },
+          {
+            "name": "EXID",
+            "offset": 4,
+            "size": 32,
+            "value": 2,
+            "fields": [
+              {
+                "name": "EXID",
+                "bits": [
+                  0,
+                  31
+                ],
+                "value": 0
+              }
+            ],
+            "access": "ro"
+          }
+        ],
+        "artifacts": []
+      },
+      {
+        "name": "eefc",
+        "kind": "native",
+        "base": 1074662400,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioA",
+        "kind": "native",
+        "base": 1074662912,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioB",
+        "kind": "native",
+        "base": 1074663424,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioC",
+        "kind": "native",
+        "base": 1074663936,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioD",
+        "kind": "native",
+        "base": 1074664448,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "pioE",
+        "kind": "native",
+        "base": 1074664960,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rstc",
+        "kind": "native",
+        "base": 1074665472,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "wdt",
+        "kind": "native",
+        "base": 1074665552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart2",
+        "kind": "native",
+        "base": 1074665984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart3",
+        "kind": "native",
+        "base": 1074666496,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "uart4",
+        "kind": "native",
+        "base": 1074667008,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "l1_cache",
+        "kind": "native",
+        "base": 3758157648,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "read"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0xe000e010",
+      "first_pc": "0x0",
+      "count": 2,
+      "detail": "write"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "SAM E70 RENODE SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "chipid cidr=a1020e00 exid=00000002 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "eefc fmr=00000600 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "eefc getd size=00200000 page=0200 locks=0080 region=00004000 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "eefc glb3=10 clb=0 gpnvm=002 set8=102 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "eefc fsr gpnvm9=3 badkey=3 after=1 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "rstc sr=00010000 wdt mr=3fff2fff ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "rstc software reset",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SAM E70 RENODE SMOKE",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "rstc rsttyp=3 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "wdt arm wdv=2",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SAM E70 RENODE SMOKE",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "wdt rsttyp=2 mr=3fff2fff ok",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "wdt window sr=2 pended released ok",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "wdt mr once=00801100 ok",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "pmc pcsr0=0003fd80 pcsr1=00007000 ok",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "pio ports=5 ok",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "pioa pa11 change up=0 isr=11 pend=1 released=1 FAIL",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "usart0 tx",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "usart2 tx",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "uart0 tx",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "uart1 tx",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "uart2 tx",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "uart3 tx",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "uart4 tx",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "uarts=7 ok",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      },
+      {
+        "text": "SAM E70 FAIL",
+        "cycle_lo": 90000,
+        "cycle": 100000,
+        "end_cycle": 100000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 25740,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 25740,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 2097152,
+    "ram_total_bytes": 393216,
+    "flash_used_pct": 1.23,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 393216,
+    "main_stack_high_water_bytes": 64,
+    "main_stack_free_min_bytes": 393144,
+    "main_stack_base": 541065216,
+    "main_stack_top": 541458432,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 393216,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 393144,
+    "heap_base": 541065216,
+    "heap_top": 541458432
+  },
+  "metrics": {
+    "cycles": 4000000,
+    "instructions": 4000000,
+    "steps_executed": 4000000,
+    "memory_reads": 4858,
+    "memory_writes": 179,
+    "peripheral_accesses": 1435,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 4219654,
+        "count": 5235,
+        "symbol": "firmware_sam_e70_renode_smoke::spin"
+      },
+      {
+        "pc": 4219652,
+        "count": 5195,
+        "symbol": "<u32 as core::cmp::PartialOrd>::lt"
+      },
+      {
+        "pc": 4219656,
+        "count": 5195,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      }
+    ]
+  }
+}

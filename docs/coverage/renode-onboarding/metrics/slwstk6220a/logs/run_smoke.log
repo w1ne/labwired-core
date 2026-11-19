@@ -1,0 +1,9 @@
+[2m2026-11-19T16:15:56.780159Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/slwstk6220a.yaml
+[2m2026-11-19T16:15:56.782121Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+[2m2026-11-19T16:15:56.783839Z[0m [33m WARN[0m [2mlabwired_core::peripherals::gpio[0m[2m:[0m EFM32 GPIO PINLOCKN 0xfffe: pin lock is stored but not enforced
+[2m2026-11-19T16:15:56.928095Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["uart1 status=40 ok", "usart1 status=40 ok", "usart2 status=40 ok", "SLWSTK6220A RENODE SMOKE", "gpio pe2/pe3 pushpull set=1 tgl=1 clr=1 wo=1 ok", "gpio pa0 disabled_din0=1 pullup=1 pulldown=1 ok", "gpio pa1 wiredand pa2 wiredor hi=3 lo=0 ok", "gpio pa pinlockn reset=ffff after=fffe ok", "tim0 up of=1 pend=1 released=1 running=1 ok", "tim1 down oneshot dir=1 stopped=1 if=2 cnt=00c8 ok", "tim2 cc0 hit=1 topbv=1 of=1 top=03e8->01f4 ok", "tim3 updown of=1 dir_down=1 uf=1 up_again=1 ok", "SLWSTK6220A PASS"] }) (captured len=487)
+[2m2026-11-19T16:15:56.928127Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x20007f00 (size 4): expected 0xef3200ff, got 0xef3200af (mask 0xffffffff)
+[2m2026-11-19T16:15:56.928131Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536903424, expected_value: 4013031679, mask: None, size: Some(4), node: None } }) (captured len=487)
+FAIL  3/5 checks · slwstk6220a-smoke · 400000 steps · 0.14s

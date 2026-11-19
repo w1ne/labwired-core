@@ -473,6 +473,8 @@ impl F1I2c {
             || self.stop_requested
             // Level EV must keep walking while ITEVTEN/ITBUFEN flags are live.
             || self.irq_level()
+            // So must the ER level while ITERREN and an error flag are.
+            || self.error_irqs().is_some()
     }
 
     /// Set the ERROR-line NVIC vector for this instance.
@@ -1632,6 +1634,23 @@ impl KinetisI2c {
     fn irq_level(&self) -> bool {
         (self.s.get() & KI_S_IICIF) != 0 && (self.c1 & KI_C1_IICIE) != 0
     }
+    /// Whether the level-check chain still has anything to observe.
+    ///
+    /// With IICIE clear nothing can pend. With IICIE set the level is
+    /// `IICIF & IICIE`, and IICIF changes only by (a) an MMIO write, which
+    /// re-arms a stopped chain through `take_scheduled_events`, or (b) a `&self`
+    /// read of `D` that completes a byte, which cannot arm anything. (b) is
+    /// possible only while `is_reading` or `rx_dummy_pending` is set, so the
+    /// chain keeps polling every cycle then. With IICIF latched it pends the
+    /// own IRQ every cycle until firmware clears it. Otherwise (IICIE set on
+    /// an idle bus: no read transfer, IICIF clear) every cycle's poll is a
+    /// no-op and the chain stops until the next write.
+    #[inline]
+    fn needs_level_poll(&self) -> bool {
+        (self.c1 & KI_C1_IICIE) != 0
+            && (self.irq_level() || self.is_reading || self.rx_dummy_pending.get())
+    }
+
     /// Mark a byte transfer complete: TCF + IICIF latch; RXAK mirrors the slave ack.
     fn byte_complete(&self, acked: bool) {
         let mut s = self.s.get() | KI_S_TCF | KI_S_IICIF;
@@ -1830,6 +1849,14 @@ pub struct Efr32s2I2c {
     /// See [`Self::resolve`] — the route gate this controller obeys.
     #[serde(skip)]
     route_gate: Option<crate::peripherals::efr32::usart_route::RouteGate>,
+    /// The shared pad-claim table and this controller's SCL/SDA claim tokens.
+    /// See [`Self::resolve`]: a routed wire whose pad is not open-drain does
+    /// not carry a transfer.
+    #[serde(skip)]
+    pad_check: Option<(
+        std::sync::Arc<crate::peripherals::pad_claims::PadClaims>,
+        [u32; 2],
+    )>,
     en: u32,
     ctrl: u32,
     clkdiv: u32,
@@ -1886,6 +1913,7 @@ impl Default for Efr32s2I2c {
     fn default() -> Self {
         Self {
             route_gate: None,
+            pad_check: None,
             en: 0,
             ctrl: 0,
             clkdiv: 0,
@@ -2088,6 +2116,25 @@ impl Efr32s2I2c {
         {
             return None;
         }
+        // ⚠️ ROUTED IS NOT ENOUGH. The route hands the pad to the I2C, but the
+        // pad's output stage is still whatever GPIO_Px_MODEL/MODEH says. I2C
+        // signals by pulling low and letting the pull-up raise the line, so
+        // only a WIREDAND* mode (8..15) carries a transfer: DISABLED or an
+        // input drives nothing, WIREDOR can never pull low, and PUSHPULL
+        // fights the target on every ACK. emlib's examples all use
+        // gpioModeWiredAndPullUp(Filter). Before this check a mode-6 line
+        // reached its device, so firmware with the wrong mode passed here and
+        // stalled on the bench.
+        if let Some((claims, tokens)) = &self.pad_check {
+            let open_drain = |token: u32| {
+                claims
+                    .pad_of(token)
+                    .is_some_and(|pad| claims.pad_open_drain(pad))
+            };
+            if !tokens.iter().all(|&t| open_drain(t)) {
+                return None;
+            }
+        }
         self.attached_devices
             .iter()
             .position(|d| d.borrow().claims_address(addr))
@@ -2096,6 +2143,17 @@ impl Efr32s2I2c {
     /// Install the `GPIO_I2Cn_ROUTEEN` gate for this instance.
     pub fn set_route_gate(&mut self, gate: crate::peripherals::efr32::usart_route::RouteGate) {
         self.route_gate = Some(gate);
+    }
+
+    /// Make this controller check that its routed pads are open-drain.
+    /// `tokens` are its SCL and SDA claim tokens
+    /// ([`i2c_token`](crate::peripherals::efr32::usart_route::i2c_token)).
+    pub fn set_pad_check(
+        &mut self,
+        claims: std::sync::Arc<crate::peripherals::pad_claims::PadClaims>,
+        tokens: [u32; 2],
+    ) {
+        self.pad_check = Some((claims, tokens));
     }
 
     /// A `TXDATA` write: the address byte after a START, or a data byte.
@@ -2374,6 +2432,18 @@ impl I2c {
     ) {
         if let Self::Efr32s2(i2c) = self {
             i2c.set_route_gate(gate);
+        }
+    }
+
+    /// Install the EFR32 open-drain pad check ([`Efr32s2I2c::set_pad_check`]),
+    /// when this is that family. A no-op on every other layout.
+    pub(crate) fn set_pad_check(
+        &mut self,
+        claims: std::sync::Arc<crate::peripherals::pad_claims::PadClaims>,
+        tokens: [u32; 2],
+    ) {
+        if let Self::Efr32s2(i2c) = self {
+            i2c.set_pad_check(claims, tokens);
         }
     }
 
@@ -2842,11 +2912,11 @@ impl crate::Peripheral for I2c {
                 // at delay 1 while IICIE stays set so a byte completion latched by
                 // a `&self` read is caught the next cycle; stop when firmware
                 // disables IICIE.
-                let iicie = (i.c1 & KI_C1_IICIE) != 0;
-                i.chain_live = iicie;
+                let keep = i.needs_level_poll();
+                i.chain_live = keep;
                 crate::sched::EventResult {
                     raise_own_irq: i.irq_level(),
-                    reschedule_delay: iicie.then_some(1),
+                    reschedule_delay: keep.then_some(1),
                     ..Default::default()
                 }
             }
@@ -2875,6 +2945,9 @@ impl crate::Peripheral for I2c {
                 i.chain_live = active;
                 crate::sched::EventResult {
                     raise_own_irq: irq,
+                    // Errors ride the ER vector, exactly as `tick_legacy` pends
+                    // them on the walk.
+                    explicit_irqs: i.error_irqs().unwrap_or_default(),
                     reschedule_delay: active.then_some(1),
                     ..Default::default()
                 }

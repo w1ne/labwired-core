@@ -405,6 +405,10 @@ impl GatedI2cDevice {
     }
 }
 impl I2cDevice for GatedI2cDevice {
+    fn is_i2c_mux(&self) -> bool {
+        self.inner.is_i2c_mux()
+    }
+
     fn address(&self) -> u8 {
         self.inner.address()
     }
@@ -471,6 +475,15 @@ impl I2cDevice for GatedI2cDevice {
     }
     fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
         self.inner.logs()
+    }
+    /// Forward the controller pulse query only while its supply is powered.
+    /// Output-enable wiring is not modeled by this query.
+    fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
+        if self.gate.powered() {
+            self.inner.pwm_channel_pulse_us(channel)
+        } else {
+            None
+        }
     }
     fn wrapped_device(&self) -> Option<&dyn I2cDevice> {
         Some(self.inner.as_ref())

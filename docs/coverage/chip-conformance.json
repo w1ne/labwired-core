@@ -633,6 +633,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "stm32h533re",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "stm32u575",
     "reg_match": 0
   },
@@ -791,6 +798,13 @@
     "reg_match": 0
   },
   {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "mspm0g3507",
+    "reg_match": 0
+  },
+  {
     "behavior": true,
     "excluded": 0,
     "level": 1,
@@ -906,7 +920,21 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "ch32l103c8t6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "ch32v005f6p6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32x035c8t6",
     "reg_match": 0
   },
   {
@@ -935,6 +963,13 @@
     "excluded": 0,
     "level": 1,
     "name": "ch32v003a4m6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "at32f421g8u7",
     "reg_match": 0
   },
   {

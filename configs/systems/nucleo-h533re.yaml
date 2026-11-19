@@ -1,0 +1,13 @@
+# NUCLEO-H533RE (MB1814 C-02) wiring from ST's official schematic.
+# This profile models the default ST-LINK VCP route and the green LD2 only.
+name: "nucleo-h533re"
+chip: "../chips/stm32h533re.yaml"
+debug_uart: "usart2"
+external_devices: []
+board_io:
+  - id: "led_ld2_green"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

@@ -1,0 +1,14 @@
+# Xtensa core-ISA smoke against the imported Renode sample controller.
+# Firmware: examples/renode-onboarding/xtensa-sample-controller-cpu-smoke.S
+# (built by scripts/build_xtensa_sample_controller_cpu_smoke.sh). Loop, CALL0,
+# rom literal, byte/halfword memory, shift and branch checks; no console.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/xtensa-sample-controller-cpu-smoke.elf"
+  system: "../../configs/systems/onboarding/xtensa-sample-controller.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - memory_value: {address: 0x40000000, expected_value: 0x5A5C003F}
+  - memory_value: {address: 0x40000004, expected_value: 5050}
+  - expected_stop_reason: max_steps

@@ -36,6 +36,7 @@ tracing = { workspace = true }
 serde = { workspace = true }
 bitflags = { workspace = true }
 labwired-config = { path = "../config" }
+labwired-physics = { path = "physics" }
 nrf-softdevice-hle = { path = "../nrf-softdevice-hle" }
 anyhow = { workspace = true }
 serde_json = { workspace = true }

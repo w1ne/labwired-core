@@ -1,0 +1,46 @@
+2026-11-19T05:05:08.680406Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+2026-11-19T05:05:08.752429Z  INFO labwired_loader: ELF Entry Point: 0x8000497
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-19T05:05:08.753952Z  INFO labwired_cli::execute: uart_injection: 4 byte(s) delivered to 'usart2'
+2026-11-19T05:05:08.754254Z  INFO labwired_cli::execute: stimulus: position = 25 applied
+2026-11-19T05:05:08.754270Z  INFO labwired_cli::execute: stimulus: position = 50 applied
+2026-11-19T05:05:08.760036Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x800025c: Opcode 0xde00
+2026-11-19T05:05:08.760068Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x800025c: Opcode 0xde00
+2026-11-19T05:05:08.815064Z  INFO labwired_cli::execute: stimulus: temperature = 55 applied
+2026-11-19T05:05:08.893257Z  INFO labwired_cli::execute: stimulus: humidity = 35 applied
+2026-11-19T05:05:08.950705Z  INFO labwired_cli::execute: stimulus: pressure = 1012.5 applied
+labwired-cli test: idle_ff skipped 125 of 50000125 device cycles (50000000 interpreted)
+2026-11-19T05:05:23.155751Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "DMAR2USART2 TX DMA REARM DATA=DMAR2 REM=00000000 FIRST_TCIF=1 FIRST_IRQ17=1 FIRST_CLEAR=1 FIRST_DEASSERT=1 COUNT_LOADED=1 REARM_REM=00000000 REARM_TCIF=1 REARM_IRQ17=1 REARM_CLEAR=1 REARM_DEASSERT=1 ok" }) (captured len=4244)
+2026-11-19T05:05:23.155801Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_PRESS_RAW=0005883F" }) (captured len=4244)
+2026-11-19T05:05:23.155807Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_TEMP_RAW=0008E910" }) (captured len=4244)
+2026-11-19T05:05:23.155811Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_HUM_RAW=0000853F" }) (captured len=4244)
+2026-11-19T05:05:23.155815Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_SEEDED_ENVIRONMENT_OK" }) (captured len=4244)
+2026-11-19T05:05:23.155822Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_SEEDED_TEMP_CENTI=00000FA0" }) (captured len=4244)
+2026-11-19T05:05:23.155827Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_SEEDED_PRESS_Q8=01731804" }) (captured len=4244)
+2026-11-19T05:05:23.155831Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_SEEDED_HUM_Q10=00014005" }) (captured len=4244)
+2026-11-19T05:05:23.155836Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_SEEDED_COMPENSATION_OK" }) (captured len=4244)
+2026-11-19T05:05:23.155840Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_DYNAMIC_TEMP_RAW=0009A510" }) (captured len=4244)
+2026-11-19T05:05:23.155845Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_DYNAMIC_TEMPERATURE_OK" }) (captured len=4244)
+2026-11-19T05:05:23.155851Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_DYNAMIC_TEMP_CENTI=0000157C" }) (captured len=4244)
+2026-11-19T05:05:23.155856Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_DYNAMIC_TEMP_COMPENSATION_OK" }) (captured len=4244)
+2026-11-19T05:05:23.155860Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_DYNAMIC_HUMIDITY_OK" }) (captured len=4244)
+2026-11-19T05:05:23.155865Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_DYNAMIC_HUM_RAW=000064D2" }) (captured len=4244)
+2026-11-19T05:05:23.155878Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_HUM_TEMP_CENTI=0000157C" }) (captured len=4244)
+2026-11-19T05:05:23.155882Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_HUM_PRESS_Q8=0173180D" }) (captured len=4244)
+2026-11-19T05:05:23.155885Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_HUM_Q10=00008BFD" }) (captured len=4244)
+2026-11-19T05:05:23.155889Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_DYNAMIC_HUM_COMPENSATION_OK" }) (captured len=4244)
+2026-11-19T05:05:23.155893Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_DYNAMIC_PRESSURE_OK" }) (captured len=4244)
+2026-11-19T05:05:23.155898Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_DYNAMIC_PRESS_RAW=0005305F" }) (captured len=4244)
+2026-11-19T05:05:23.155901Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_PRESS_TEMP_CENTI=0000157C" }) (captured len=4244)
+2026-11-19T05:05:23.155904Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_PRESS_Q8=018B81EE" }) (captured len=4244)
+2026-11-19T05:05:23.155907Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_PRESS_HUM_Q10=00008BFD" }) (captured len=4244)
+2026-11-19T05:05:23.155912Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_DYNAMIC_PRESS_COMPENSATION_OK" }) (captured len=4244)
+2026-11-19T05:05:23.155915Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_CTRL_HUM_STORAGE=00000001" }) (captured len=4244)
+2026-11-19T05:05:23.155918Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_CTRL_HUM_STORAGE_OK" }) (captured len=4244)
+2026-11-19T05:05:23.155923Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_CTRL_MEAS_STORAGE=00000027" }) (captured len=4244)
+2026-11-19T05:05:23.155926Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "BME280_CTRL_MEAS_STORAGE_OK" }) (captured len=4244)
+2026-11-19T05:05:23.155930Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "DONE" }) (captured len=4244)
+FAIL  61/91 checks · stm32f103-i2c-smoke · 50000000 steps · 14.40s
+FAULT  UsageFault: undefined instruction, at PC 0x0800_025C in `_ZN22firmware_f103_i2c_demo35smoke_trigger_undefined_instruction17h47760c0d41e8d816E`, called from `firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation`.
+       HFSR=0x00000000 CFSR=0x00010000 [UNDEFINSTR]

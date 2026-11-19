@@ -1,0 +1,594 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "aarch64",
+    "x": [
+      515,
+      1,
+      514,
+      814284800,
+      1074266258,
+      0,
+      8256,
+      1,
+      8192,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "sp": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1074266204,
+    "nzcv": 1610612736,
+    "daif": 960,
+    "el": 3,
+    "spsel": true,
+    "v": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ],
+    "fpcr": 0,
+    "fpsr": 0,
+    "sctlr": [
+      0,
+      12912696,
+      818219064,
+      818219064
+    ],
+    "vbar": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "elr": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "spsr": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "esr": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "far": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "tcr": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "ttbr0": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "mair": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "ttbr1_el1": 0,
+    "cpacr_el1": 0,
+    "cptr_el2": 0,
+    "cptr_el3": 0,
+    "hcr_el2": 0,
+    "scr_el3": 0,
+    "par_el1": 0,
+    "csselr_el1": 0,
+    "plain": [],
+    "timer": {
+      "count": 100000,
+      "divider": 1,
+      "residue": 0,
+      "cntfrq": 0,
+      "cntvoff": 0,
+      "cnthctl": 0,
+      "cntkctl": 0,
+      "phys": {
+        "ctl": 0,
+        "cval": 0
+      },
+      "virt": {
+        "ctl": 0,
+        "cval": 0
+      },
+      "hyp": {
+        "ctl": 0,
+        "cval": 0
+      },
+      "sec_phys": {
+        "ctl": 0,
+        "cval": 0
+      }
+    },
+    "gic": {
+      "dist_base": null,
+      "redist_base": null,
+      "num_intids": 32,
+      "affinity": 0,
+      "gicd_ctlr": 0,
+      "gicr_ctlr": 0,
+      "gicr_waker": 6,
+      "enabled": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "pending": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "active": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "priority": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "group": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "grpmod": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "edge": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "router": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "pmr": 0,
+      "bpr1": 0,
+      "icc_ctlr": 0,
+      "igrpen1": false,
+      "igrpen0": false,
+      "sre_el1": 1,
+      "sre_el2": 1,
+      "sre_el3": 1,
+      "active_stack": [],
+      "any_latched": false
+    },
+    "cycles": 100000
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "8515c5f253b07712e686d533f4b9d5e54d47e07e11416cb1423cb81509ee7403",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/imx8mp-a53-uart2-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/nxp-mimx8ml.yaml",
+    "script": "examples/renode-onboarding/nxp-mimx8ml-mxcuart-smoke.yaml"
+  }
+}

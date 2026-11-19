@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.001334">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="454ed5f4075e77193a866bf488d44efbf16232cbb5da55c0c7a9033bc74d88a6"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.001334">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: DA14592 M33 UART0 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: DA14592 UART1 line" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: DA14592 checks PPPPPPPPPP DONE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20017f00=0xda1403ff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: gpio:5 &gt;= 6 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

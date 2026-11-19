@@ -1,20 +1,27 @@
 name: nucleo_f767zi
-description: 'nucleo_f767zi (root platform, STM32). Architecture: ARM Cortex-M.'
+description: >-
+  Imported NUCLEO-F767ZI profile bounded to Cortex-M7 execution, 2 MiB flash,
+  the Renode CPU map's 384 KiB SRAM window, RCC, GPIOI, and USART1. The whole
+  platform and other peripherals remain unverified.
 family: STM32
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
 pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/nucleo_f767zi.yaml
 provenance:
   generated_by: scripts/onboard_hw_targets.py
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-exact-import-smoke
+  reason: bounded Cortex-M7, USART1 transmission, and GPIOI pin 1 edge smoke; whole platform remains unverified
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:40:06.931457+00:00'
+    cortex_m7_smoke: true
+    usart1_tx: true
+    gpioi_pi1_edges: true
+    whole_platform: false
+    other_peripherals: false
+  timestamp_utc: '2026-11-06T05:49:08Z'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/nucleo_f767zi.md

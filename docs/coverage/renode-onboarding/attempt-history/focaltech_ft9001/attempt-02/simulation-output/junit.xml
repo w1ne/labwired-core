@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="1" errors="0" time="0.124920">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="0aa048d9ca211ff4c01ff31ac29196e3d873de6b685b9f646ac555e61f821e52"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.124920">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_regex: \AFT9001 SMOKE
+" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_regex: \AFT9001 SMOKE
+
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=0aa048d9ca211ff4c01ff31ac29196e3d873de6b685b9f646ac555e61f821e52
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-ft9001-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/focaltech_ft9001.yaml
+script=examples/renode-onboarding/focaltech_ft9001-smoke.yaml
+assertions:
+  - UartRegex(UartRegexAssertion { uart_regex: &quot;\\AFT9001 SMOKE\r\n&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;cpu=cortex-m4f uart=usart2&quot;, &quot;cr2=0c cr1=00 bdh=01 bdl=56 brdf=1a fcr=c0&quot;, &quot;rx fsr=64 drl=A fsr=64&quot;, &quot;rxfclr fsr=45 drl=00 fcr2=00&quot;, &quot;late drl=Z fsr=45&quot;, &quot;te=off|te=on&quot;, &quot;FT9001 SMOKE DONE&quot;] }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_ordered: [&quot;cpu=cortex-m4f uart=usart2&quot;, &quot;cr2=0c cr1=00 bdh=01 bdl=56 brdf=1a fcr=c0&quot;, &quot;rx fsr=64 drl=A fsr=64&quot;, &quot;r…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

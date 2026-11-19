@@ -64,8 +64,6 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     "efr32mg26",
     "esp32",
     "esp32c3",
-    // ESP32-C2 uses the same GPIO<n> label form as the C3.
-    "esp32c2",
     // C5, C61, P4 and S2 use the same GPIO<n> label form as their ESP peers; no
     // alternate package-label scheme exists to transcribe a `pins:` override from.
     "esp32c5",

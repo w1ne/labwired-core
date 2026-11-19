@@ -1,0 +1,755 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 291705,
+  "cycles": 100000000,
+  "instructions": 291705,
+  "stop_reason": "max_cycles",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_cycles",
+    "triggered_limit": {
+      "name": "max_cycles",
+      "value": 100000000
+    },
+    "observed": {
+      "name": "cycles",
+      "value": 100000000
+    }
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": 100000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NPCX9 UART1 smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "smbus reset=8 en=8 nack=8 clear=8 stop=8 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "mdma src=1 data=1 dst=1 count=1 tc=1 fifo=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "uarts tbe=3 rx=3 isolated=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "mem code=1 data=1 image=1 pm=4 bb=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "spip reset=1 off=1 x8=1 x16=1 cfg=1 quiet=1 rirq=1 rclr=1 wirq=1 wclr=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "fiu reset=1 wel=1 prog=1 clear=1 oneway=1 erase=1 start=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "bbram kept=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cr_uart2 tx"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cr_uart3 tx"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cr_uart4 tx"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_cycles"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      10,
+      537753476,
+      49,
+      1074659332,
+      1329935617,
+      1329935617,
+      0,
+      537753584,
+      65535,
+      255,
+      9,
+      90,
+      25808,
+      537753496,
+      1074659332,
+      7100
+    ],
+    "pc": 7100,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "206c39d7c0ffe12882c0ada404a669f78240e65f7eb4ce4e153730cc25a54ba7",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/nuvoton_npcx9.yaml",
+    "script": "examples/renode-onboarding/nuvoton_npcx9-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "smbus4",
+        "kind": "native",
+        "base": 1073774592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus0",
+        "kind": "native",
+        "base": 1073778688,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus1",
+        "kind": "native",
+        "base": 1073786880,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus5",
+        "kind": "native",
+        "base": 1073836032,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus6",
+        "kind": "native",
+        "base": 1073840128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus7",
+        "kind": "native",
+        "base": 1073844224,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus2",
+        "kind": "native",
+        "base": 1074528256,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "smbus3",
+        "kind": "native",
+        "base": 1074536448,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "cr_uart1",
+        "kind": "native",
+        "base": 1074659328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "cr_uart2",
+        "kind": "native",
+        "base": 1074667520,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "cr_uart3",
+        "kind": "native",
+        "base": 1074675712,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "cr_uart4",
+        "kind": "native",
+        "base": 1074683904,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port0",
+        "kind": "native",
+        "base": 1074270208,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port1",
+        "kind": "native",
+        "base": 1074278400,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port2",
+        "kind": "native",
+        "base": 1074286592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port3",
+        "kind": "native",
+        "base": 1074294784,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port4",
+        "kind": "native",
+        "base": 1074302976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port5",
+        "kind": "native",
+        "base": 1074311168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port6",
+        "kind": "native",
+        "base": 1074319360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port7",
+        "kind": "native",
+        "base": 1074327552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port8",
+        "kind": "native",
+        "base": 1074335744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port9",
+        "kind": "native",
+        "base": 1074343936,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porta",
+        "kind": "native",
+        "base": 1074352128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 1074360320,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 1074368512,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 1074376704,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porte",
+        "kind": "native",
+        "base": 1074384896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 1074393088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_1",
+        "kind": "native",
+        "base": 1074462720,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_2",
+        "kind": "native",
+        "base": 1074470912,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_3",
+        "kind": "native",
+        "base": 1074479104,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_4",
+        "kind": "native",
+        "base": 1074487296,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_5",
+        "kind": "native",
+        "base": 1074495488,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_6",
+        "kind": "native",
+        "base": 1074503680,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim64",
+        "kind": "native",
+        "base": 1074520064,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "hfcg",
+        "kind": "native",
+        "base": 1074483200,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "lfcg",
+        "kind": "native",
+        "base": 1074483456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mtc",
+        "kind": "native",
+        "base": 1074491392,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "twd",
+        "kind": "native",
+        "base": 1074626560,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spip",
+        "kind": "native",
+        "base": 1074601984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mdma1",
+        "kind": "native",
+        "base": 1073811712,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mdma2",
+        "kind": "native",
+        "base": 1073811968,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mdma3",
+        "kind": "native",
+        "base": 1073812224,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mdma4",
+        "kind": "native",
+        "base": 1073812480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mdma5",
+        "kind": "native",
+        "base": 1073812736,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "fiu",
+        "kind": "native",
+        "base": 1073872896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scs_debug",
+        "kind": "native",
+        "base": 3758157308,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0xe000e010",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "write"
+    },
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (15000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NPCX9 UART1 smoke",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "smbus reset=8 en=8 nack=8 clear=8 stop=8 ok",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "mdma src=1 data=1 dst=1 count=1 tc=1 fifo=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cr_uart2 tx",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cr_uart3 tx",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cr_uart4 tx",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "uarts tbe=3 rx=3 isolated=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 30000
+      },
+      {
+        "text": "mtc ttc=1 pt=1 irq=3 steps=1 ms1=1000 ms2=1000 ok",
+        "cycle_lo": 44030000,
+        "cycle": 45030000,
+        "end_cycle": 45030000
+      },
+      {
+        "text": "twd regs=1 t0=1 irq=3 ms1=1000 ms2=1000 tc=1 lock=1 unlock=1 run=1 touch=1 dec=1 stop=1 ok",
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
+      },
+      {
+        "text": "cdcg load=1 div=1 hlock=1 lf=1 llock=1 ok",
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
+      },
+      {
+        "text": "mem code=1 data=1 image=1 pm=4 bb=1 ok",
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
+      },
+      {
+        "text": "spip reset=1 off=1 x8=1 x16=1 cfg=1 quiet=1 rirq=1 rclr=1 wirq=1 wclr=1 ok",
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
+      },
+      {
+        "text": "fiu reset=1 wel=1 prog=1 clear=1 oneway=1 erase=1 start=1 ok",
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
+      },
+      {
+        "text": "twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok",
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
+      },
+      {
+        "text": "bbram kept=1 ok",
+        "cycle_lo": 90030000,
+        "cycle": 91030000,
+        "end_cycle": 91030000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 26412,
+    "data_bytes": 0,
+    "bss_bytes": 80,
+    "flash_used_bytes": 26412,
+    "ram_static_bytes": 80,
+    "flash_total_bytes": 65536,
+    "ram_total_bytes": 96256,
+    "flash_used_pct": 40.3,
+    "ram_static_pct": 0.08,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 96176,
+    "main_stack_high_water_bytes": 100,
+    "main_stack_free_min_bytes": 96032,
+    "main_stack_base": 537657424,
+    "main_stack_top": 537753600,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 96176,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 96032,
+    "heap_base": 537657424,
+    "heap_top": 537753600
+  },
+  "metrics": {
+    "cycles": 100000000,
+    "instructions": 291705,
+    "steps_executed": 291705,
+    "memory_reads": 10200,
+    "memory_writes": 1594,
+    "peripheral_accesses": 2682,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 7100,
+        "count": 540,
+        "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 9382,
+        "count": 39,
+        "symbol": "firmware_nuvoton_npcx9_smoke::__cortex_m_rt_main"
+      },
+      {
+        "pc": 15792,
+        "count": 39,
+        "symbol": "core::ptr::write_volatile"
+      },
+      {
+        "pc": 16570,
+        "count": 3,
+        "symbol": "core::sync::atomic::atomic_load"
+      },
+      {
+        "pc": 17680,
+        "count": 3,
+        "symbol": "core::sync::atomic::atomic_load"
+      },
+      {
+        "pc": 17966,
+        "count": 1,
+        "symbol": "core::sync::atomic::atomic_load"
+      }
+    ]
+  }
+}

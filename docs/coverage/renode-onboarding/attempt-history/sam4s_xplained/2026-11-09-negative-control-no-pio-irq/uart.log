@@ -1,0 +1,28 @@
+SAM4S XPLAINED RENODE SMOKE
+eefc fmr=00000500 ok
+eefc getd size=00100000 page=0200 locks=0080 ok
+eefc gpnvm=2 set=3 glb=2 clb=0 ok
+eefc fsr badkey=3 after=1 ok
+rstc sr=00010000 wdt mr=3fff2fff ok
+rstc software reset
+SAM4S XPLAINED RENODE SMOKE
+rstc rsttyp=3 ok
+wdt arm wdv=2
+SAM4S XPLAINED RENODE SMOKE
+wdt rsttyp=2 mr=3fff2fff ok
+wdt window sr=2 pended released ok
+wdt mr once=00801100 ok
+pmc pcsr0=1f80fb00 ok
+pio ports=3 ok
+tc0 rc pend=1 ok
+SAM4S XPLAINED PASS
+SAM4S XPLAINED BOARD
+tc0 up_rc imr=10 pends=3 released=3 cv<=rc=1 ok
+tc1 up adv=1 covfs=1 cleared=1 ok
+tc2 cpcstop cpcs=1 held=1 clksta=1 ok
+tc3 cpcdis running=1 cpcs=1 clksta=0 ok
+tc4 tc5 idle=1 sync=1 ra=0000 ok
+tc5 pmc gated=1 held=1 tc4_runs=1 ok
+leds off=81 d10 lit=01 ok
+bp2 wait
+bp2 pressed

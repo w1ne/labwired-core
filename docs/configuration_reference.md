@@ -343,6 +343,7 @@ This is the complete `SystemManifest` surface (`crates/config/src/manifest.rs`).
 | `name` | Board label; used in logs and to name a private lab air. | `name: "BluePill Board"` |
 | `chip` | A **bare word** (`stm32f103`) is a built-in/plugin chip name; anything containing `/`, `\`, or ending `.yaml`/`.yml`/`.json` is a path resolved relative to THIS manifest, so a manifest is relocatable with the files it names. | `chip: "stm32f103"` |
 | `cpu_hz` | Board-level override of the chip's declared clock, in Hz. Absent ⇒ the chip's default. | `cpu_hz: 4_000_000` (`configs/systems/nucleo-l476rg.yaml`) |
+| `max_peripheral_tick_interval` | Optional positive integer cap, in CPU cycles, on the peripheral service grid. Both native and custom-runner advances clamp larger host requests before execution. Omit to preserve existing defaults. Zero, negative, fractional, and out-of-range values are invalid. | `max_peripheral_tick_interval: 32` (`examples/nokia5110-invaders-lab/system.yaml`) |
 | `memory_overrides` | Parsed but **not consulted by the engine today** — region sizes come from the chip descriptor. The field exists so manifests may carry it; do not rely on it. | `memory_overrides: {flash: "512KB"}` |
 | `peripherals` | Chip-peripheral patches/additions. An entry whose `id` matches a chip peripheral merges its `config` keys and overrides `base_address` (when nonzero; `0` keeps the chip's), `irq` and `size`; an unmatched `id` adds a new peripheral. `id`, `type` and `base_address` are required on every entry. | `peripherals: [{id: "usart1", type: "uart", base_address: 0, config: {profile: "stm32f1"}}]` |
 | `external_devices` | The parts on the board's buses — see [External devices](#external-devices). | see below |
@@ -427,6 +428,7 @@ canonical `type:`; the table below is rendered from that file by
 | `drv2605` | I²C | TI DRV2605 haptic motor driver over I2C |
 | `ds3231` | I²C | I²C real-time clock with temperature-compensated crystal |
 | `ens160` | I²C | ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C |
+| `ft5x06` | I²C | Single-contact FT5x06 I2C touch report model |
 | `fxos8700` | I²C | NXP FXOS8700 6-axis accelerometer + magnetometer over I2C |
 | `ht16k33` | I²C | 16×8 LED matrix / 7-segment I²C controller (display RAM, setup commands) |
 | `icm20948` | I²C | TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C |
@@ -477,6 +479,7 @@ canonical `type:`; the table below is rendered from that file by
 | `adxl345_spi` | SPI | 3-axis ±16 g accelerometer over SPI (full-resolution, 256 LSB/g) |
 | `amoled-rm67162` | SPI | 240x536 RGB565 AMOLED, 4-wire SPI (DBI Type-C) |
 | `apa102` | SPI | SPI-clocked addressable RGB LED strip (write-only sink) |
+| `bma400` | SPI | 3-axis 12-bit SPI accelerometer. Configurable full scale and stimulus inputs |
 | `bmi270_spi` | SPI | Native four-wire BMI270 with real CS/dummy-byte framing, verified configuration upload and nominal motion sampling |
 | `gc9a01` | SPI | 1.28in round 240x240 RGB565 IPS TFT on a GalaxyCore GC9A01A, 4-wire SPI |
 | `hc595-7seg` | SPI | 4-digit 7-segment LED display driven by two chained 74HC595 shift registers over SPI |
@@ -488,7 +491,7 @@ canonical `type:`; the table below is rendered from that file by
 | `max31855` | SPI | K-type thermocouple-to-digital converter over SPI (read-only 32-bit frame) |
 | `mcp2515` | SPI | Functional SPI classical CAN controller for standard 11-bit data frames |
 | `mcp3008` | SPI | 8-channel 10-bit SPI ADC (single-ended / differential, Figure 6-1 framing) |
-| `microsd` | SPI | SPI-mode SDHC card with an in-memory block store (init, CSD/CID, single and multi-block read/write) |
+| `microsd` | SPI | SPI-mode SDHC card backed by a disk image or an in-memory block store (init, CSD/CID, single and multi-block read/write) |
 | `nrf24l01` | SPI | 2.4 GHz SPI transceiver register shell (no air link) |
 | `pcd8544` | SPI | Nokia 5110 (PCD8544) monochrome 84×48 LCD over SPI |
 | `rc522` | SPI | MFRC522 SPI RFID reader with ISO/IEC 14443-A cascade-level-1 air interface |
@@ -497,6 +500,7 @@ canonical `type:`; the table below is rendered from that file by
 | `ssd1680_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_C90c -- the WeAct / Waveshare 2.9" B/W/R module. Not interchangeable with the UC8151D part |
 | `st7735` | SPI | 1.8in 128x160 RGB565 TFT on a Sitronix ST7735R, 4-wire SPI |
 | `st7789-170x320` | SPI | 1.9in 170x320 IPS TFT on a Sitronix ST7789V, 4-wire SPI |
+| `st7920` | SPI | Sitronix ST7920 128x64 monochrome graphic LCD (LCD12864) in serial mode |
 | `sx1262` | SPI | Semtech SX1262 LoRa transceiver, SPI command interface (status, standby/RX/TX, registers, IRQ) — no RF air link |
 | `sx1276` | SPI | Semtech SX1276 LoRa transceiver, SPI register model of the LoRa page (no RF air link) |
 | `uc8151d_tricolor_290` | SPI | 2.9" tri-color (black/white/red) e-paper over SPI. Driver class GxEPD2_290_Z13c. Different command set from the SSD1680 part -- pick by the driver class your firmware instantiates, not by how the panel looks |
@@ -519,6 +523,8 @@ canonical `type:`; the table below is rendered from that file by
 | `hc-sr04` | GPIO | Ultrasonic distance sensor (trigger / echo) |
 | `hx711` | GPIO | 24-bit load-cell amplifier (DT/SCK bit-bang) |
 | `ili9341-16bit` | GPIO | 240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang |
+| `ir_receiver_tsop38238` | GPIO | 38 kHz IR receiver; NEC demodulated envelope on OUT (idle HIGH) |
+| `ir_remote_nec` | GPIO | NEC / NEC-extended remote; demodulated envelope on IR |
 | `keypad` | GPIO | 4×4 membrane keypad (row-drive / column-read) |
 | `l298n` | GPIO | L298N/TB6612/L293D-class dual H-bridge twin (direction + enable effort) |
 | `led-matrix-mux` | GPIO | Row/column LED matrix (micro:bit 5x5, bare 8x8) multiplexed by GPIO row and column lines, with per-pixel brightness |
@@ -583,6 +589,44 @@ it; and `shm_i2c` — a shared-memory I²C bridge for host-injected traffic.
 Beyond the catalog and those two, any `type:` is valid if the manifest's own
 `parts:` defines it — see [Part packs](part-packs.md) for the
 `labwired.part/v1` contract and the `behavior:` primitive reference.
+
+### SPI on GPIO pins (`connection: spi_gpio`)
+
+Any SPI device type can sit on arbitrary GPIO pads instead of a controller.
+A decoder watches the MCU's output latch for SCK, MOSI and CS, samples MOSI on
+the mode's sampling edge, assembles bytes and hands them to the device through
+the same interface a hardware SPI uses; MISO is driven onto the input pad bit
+by bit. It works whether the firmware bit-bangs the pads or (with
+`controller:`) uses the hardware SPI on them.
+
+```yaml
+external_devices:
+  - id: lcd
+    type: st7920
+    connection: spi_gpio
+    config:
+      sck: PA1          # required
+      mosi: PA2         # required
+      cs: PA0           # optional; absent = always selected
+      cs_active: high   # high | low; default: the device's own polarity
+      mode: 0           # 0..3 (bit 1 = CPOL, bit 0 = CPHA); default 0
+      bit_order: msb    # msb | lsb; default msb
+      miso: PA3         # optional read-back pad
+      controller: spi   # optional: the hardware SPI that also reaches it
+```
+
+- A CS edge drops a partial byte and calls the device's select/release, as a
+  hardware CS does. Clocks while CS is inactive are ignored.
+- `miso` needs a device that knows its next answer before the frame
+  (`SpiDevice::next_miso`; the microSD model does). Other devices are refused
+  with `miso` set rather than answered wrongly. A deselected device releases
+  MISO, which then reads high.
+- A store that moves MOSI together with the sampling edge latches the old
+  MOSI level (setup violation), as the controller bit engine does.
+- With `controller:`, the device is shared: hardware transfers on that
+  controller and decoded GPIO traffic reach the same model and CS state, and
+  inspect lists it once. Routed supplies (`supply_rails`) are not supported on
+  `spi_gpio`.
 
 ### Device descriptors (external parts as data)
 

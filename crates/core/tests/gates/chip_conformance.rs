@@ -24,7 +24,7 @@
 //! baseline is `docs/coverage/chip-conformance.json`. A chip's estate must stay
 //! green, its reg-match% may not fall, and a present behavior gate may not vanish.
 //! Re-baseline (after a deliberate, explained change):
-//!   UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test chip_conformance -- --nocapture
+//!   UPDATE_CONFORMANCE_BASELINE=1 cargo test -p labwired-core --test gates chip_conformance_ratchet -- --nocapture
 //!
 //! "Are the gates enough?" is now a number per chip on the board — and missing
 //! coverage is a visible red cell, not a silent gap.
@@ -162,8 +162,9 @@ const CHIPS: &[ChipConf] = &[
         // PolarFire SoC MPFS095T (Discovery Kit), first RV64 part: one U54
         // hart (RV64IMAC M-mode, CLINT in the core). SIM-DERIVED: no MPFS
         // bench part. Modelled: MMUART0-4 as 16550s with the DLAB divisor
-        // latch. PLIC, MSS GPIO/I2C/SPI/QSPI and the system-controller mailbox
-        // are declared stubs — see examples/mpfs-disco-kit/VALIDATION.md.
+        // latch; the PLIC, MSS GPIO_0..2, I2C0/1 and SPI1 (master). QSPI and the
+        // system-controller mailbox are declared stubs — see
+        // examples/mpfs-disco-kit/VALIDATION.md.
         name: "mpfs095t",
         yaml: "configs/chips/mpfs095t.yaml",
         reset_oracle: None,
@@ -832,6 +833,17 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: Some("firmware_survival::test_stm32h563_demo_survival"),
     },
     ChipConf {
+        // NUCLEO-H533RE. Sim-derived from the H5 register models and the
+        // official H533RE datasheet/schematic; USART2 + PA5 execution is
+        // checked by the walk-vs-scheduler differential.
+        name: "stm32h533re",
+        yaml: "configs/chips/stm32h533re.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "stm32h563_walk_differential::stm32h533re_boot_walk_vs_scheduler_is_byte_identical",
+        ),
+    },
+    ChipConf {
         // First U5 part. Sim-derived (RM0456 + the vendor SVD); no bench part
         // has been captured, so no reset_oracle. The running-firmware gate is
         // the committed stock Zephyr 3.7.2 hello_world for nucleo_u575zi_q
@@ -1077,6 +1089,15 @@ const CHIPS: &[ChipConf] = &[
         behavior_gate: None,
     },
     ChipConf {
+        // Narrow LP-MSPM0G3507 LaunchPad profile. Its committed onboarding
+        // smoke runs in board CI; it has no Rust test-target behavior gate or
+        // silicon reset capture yet, so the public conformance row is estate-only.
+        name: "mspm0g3507",
+        yaml: "configs/chips/mspm0g3507.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
+    ChipConf {
         name: "ra4m1",
         yaml: "configs/chips/ra4m1.yaml",
         reset_oracle: None,
@@ -1211,6 +1232,16 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0",
         ),
     },
+    // CH32L103C8T6 (QingKe V4C, RV32IMAC). SIM-DERIVED: no silicon capture,
+    // so no reset_oracle. The gate boots a committed ELF that blinks PC13.
+    ChipConf {
+        name: "ch32l103c8t6",
+        yaml: "configs/chips/ch32l103c8t6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32l103_compiled_firmware::ch32l103_compiled_rv32imac_firmware_toggles_pc13",
+        ),
+    },
     // CH32V005F6P6 (QingKe V2C, RV32EmC). SIM-DERIVED: no silicon capture,
     // so no reset_oracle. The gate boots a committed ELF that blinks PC0.
     ChipConf {
@@ -1219,6 +1250,16 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: Some(
             "ch32v005_compiled_firmware::ch32v005_compiled_rv32e_firmware_toggles_pc0",
+        ),
+    },
+    // CH32X035C8T6 (QingKe V4C, RV32IMAC). SIM-DERIVED: no silicon capture,
+    // so no reset_oracle. The gate boots a committed ELF that blinks PB12.
+    ChipConf {
+        name: "ch32x035c8t6",
+        yaml: "configs/chips/ch32x035c8t6.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "ch32x035_compiled_firmware::ch32x035_compiled_rv32imac_firmware_toggles_pb12",
         ),
     },
     // CH32V006K8U6 (QingKe V2C, RV32EmC). SIM-DERIVED: no silicon capture,
@@ -1262,6 +1303,18 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin",
         ),
     },
+    // AT32F421G8U7 (Artery). SIM-DERIVED from RM_AT32F421 V2.05 and the
+    // Artery BSP 2.1.9 headers: no silicon capture, so no reset_oracle. The
+    // gate runs the committed BSP smoke (PLL, flash program/erase, DMA copy,
+    // TMR6 IRQ on PA5) through the machine.
+    ChipConf {
+        name: "at32f421g8u7",
+        yaml: "configs/chips/at32f421g8u7.yaml",
+        reset_oracle: None,
+        behavior_gate: Some(
+            "at32f421_contract::vendor_sdk_smoke_runs_flash_dma_and_timer_irq_paths",
+        ),
+    },
     ChipConf {
         name: "ch32v003j4m6",
         yaml: "configs/chips/ch32v003j4m6.yaml",
@@ -1270,10 +1323,11 @@ const CHIPS: &[ChipConf] = &[
             "ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin",
         ),
     },
-    // ESP32-H2/C5/C61/P4/S2 UART0-only board profiles. SIM-DERIVED: no silicon
-    // capture, so no reset_oracle. Their board smokes run as CLI scripts in
-    // core-board-ci / core-onboarding-smoke, not as Rust integration tests, so
-    // no behavior_gate can resolve yet.
+    // ESP32-H2/C5/P4/S2 UART0-only board profiles; C61 also includes its
+    // narrow GPIO4 output-register head. SIM-DERIVED: no silicon capture, so
+    // no reset_oracle. Board smokes run as CLI scripts in core-board-ci /
+    // core-onboarding-smoke, not as Rust integration tests, so no behavior_gate
+    // can resolve yet.
     ChipConf {
         name: "esp32h2",
         yaml: "configs/chips/esp32h2.yaml",
@@ -2148,6 +2202,7 @@ fn t() {}
 
 fn dummy_manifest(path: &str) -> SystemManifest {
     SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
