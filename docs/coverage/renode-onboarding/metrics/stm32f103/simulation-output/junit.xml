@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="90" failures="0" errors="0" time="0.732491">
+<testsuite name="labwired" tests="90" failures="0" errors="0" time="0.860469">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="4038d578dd20c1b435e5b5ace1a6247f0f7c060a291f577bb49ebbc88abcafdd"/>
+    <property name="firmware_hash" value="6796e256538956ebfa43b06957f8b30b8b40d0643784e0ad358d2f26b8e88303"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.732491">
+  <testcase classname="labwired" name="run" time="0.860469">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_contains: F103 I2C" time="0.000000">
   </testcase>

@@ -1016,6 +1016,44 @@ mod tests {
         assert_eq!(dma.read_reg(0x00) & (1 << 2), 0, "HTIF stays clear");
     }
 
+    /// Disabling and re-enabling a channel starts a new transfer, so its
+    /// halfway event must be armed again even after the previous HTIF was
+    /// cleared and its transfer completed.
+    #[test]
+    fn reenabling_channel_rearms_half_transfer_for_new_count() {
+        let mut dma = Dma1::new().with_channel_irqs([11, 12, 13, 14, 15, 16, 17]);
+        dma.write_reg(0x0C, 5); // CH1 CNDTR
+        dma.write_reg(0x10, 0x4001_244C); // ADC1 DR
+        dma.write_reg(0x14, 0x2000_0100); // result buffer
+        dma.write_reg(0x08, 1 | (1 << 2) | (1 << 7)); // EN | HTIE | MINC
+
+        for item in 0..5 {
+            dma.dma_request(1);
+            let result = dma.tick();
+            if item == 2 {
+                assert_eq!(result.explicit_irqs, Some(vec![11]));
+                assert_eq!(dma.read_reg(0x0C), 2);
+                assert_ne!(dma.read_reg(0x00) & (1 << 2), 0, "first HTIF is set");
+            } else {
+                assert!(result.explicit_irqs.is_none());
+            }
+        }
+        assert_eq!(dma.read_reg(0x0C), 0);
+
+        dma.write_reg(0x08, 0); // Disable before loading the next CNDTR.
+        dma.write_reg(0x04, 0xF); // Clear the completed transfer's flags.
+        dma.write_reg(0x0C, 3);
+        dma.write_reg(0x08, 1 | (1 << 2) | (1 << 7));
+
+        dma.dma_request(1);
+        assert!(dma.tick().explicit_irqs.is_none());
+        dma.dma_request(1);
+        let second_half = dma.tick();
+        assert_eq!(second_half.explicit_irqs, Some(vec![11]));
+        assert_eq!(dma.read_reg(0x0C), 1);
+        assert_ne!(dma.read_reg(0x00) & (1 << 2), 0, "new transfer raises HTIF");
+    }
+
     /// RM0008 §13.3.1: peripheral circular mode reloads CNDTR and the
     /// internal memory pointer at each completed lap while leaving CCR.EN set.
     #[test]

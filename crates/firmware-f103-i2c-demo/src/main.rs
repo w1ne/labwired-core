@@ -3954,10 +3954,53 @@ fn smoke_adc1_dma_scan_rank_boundaries() {
         let actual = unsafe { read_volatile(results.add(rank)) };
         sequence_matches &= actual == *expected_value;
     }
+    let remaining = read(DMA1_CNDTR1);
     let eoc_cleared = read(ADC1_SR) & ADC1_EOC == 0;
+
+    // A new one-shot transfer on the same channel must arm another HT event.
+    // Disable the completed channel before reloading CNDTR, then restart the
+    // same 13-rank scan and stop at the next halfway boundary.
     write(ADC1_CR2, 0);
     write(DMA1_CCR1, 0);
     write(DMA1_IFCR, 0xF);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
+    write(DMA1_CNDTR1, expected.len() as u32);
+    write(DMA1_CMAR1, results as u32);
+    write(
+        DMA1_CCR1,
+        DMA1_CCR1_EN
+            | DMA1_CCR1_HTIE
+            | DMA1_CCR1_MINC
+            | DMA1_CCR1_PSIZE_HALFWORD
+            | DMA1_CCR1_MSIZE_HALFWORD,
+    );
+    write(ADC1_CR2, scan_base);
+    write(ADC1_CR2, scan_base | ADC1_SWSTART);
+
+    let mut rearmed_half_remaining = 0;
+    let mut rearmed_half_flags = 0;
+    for _ in 0..1_000_000 {
+        let flags = read(DMA1_ISR);
+        if flags & DMA1_HTIF1 != 0 {
+            rearmed_half_remaining = read(DMA1_CNDTR1);
+            rearmed_half_flags = flags;
+            break;
+        }
+        if read(DMA1_CNDTR1) == 0 || flags & DMA1_TCIF1 != 0 {
+            rearmed_half_flags = flags;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let rearmed_half = rearmed_half_remaining == (expected.len() / 2) as u32
+        && rearmed_half_flags & DMA1_HTIF1 != 0
+        && rearmed_half_flags & DMA1_TCIF1 == 0;
+    let rearmed_half_irq = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
+
+    write(ADC1_CR2, 0);
+    write(DMA1_CCR1, 0);
+    write(DMA1_IFCR, 0xF);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
 
     putbytes(b"ADC1 F1 DMA_SCAN=13 HALF=");
     put_flag(half_before_complete);
@@ -3970,11 +4013,13 @@ fn smoke_adc1_dma_scan_rank_boundaries() {
     putbytes(b" COMPLETE=");
     put_flag(complete);
     putbytes(b" REM=");
-    put_hex32(read(DMA1_CNDTR1));
+    put_hex32(remaining);
     putbytes(b" SEQ=");
     put_flag(sequence_matches);
     putbytes(b" EOC_CLEAR=");
     put_flag(eoc_cleared);
+    putbytes(b" HT_REARM=");
+    put_flag(rearmed_half && rearmed_half_irq);
     putline(
         if half_before_complete
             && half_irq
@@ -3983,6 +4028,8 @@ fn smoke_adc1_dma_scan_rank_boundaries() {
             && complete
             && sequence_matches
             && eoc_cleared
+            && rearmed_half
+            && rearmed_half_irq
         {
             b" ok"
         } else {

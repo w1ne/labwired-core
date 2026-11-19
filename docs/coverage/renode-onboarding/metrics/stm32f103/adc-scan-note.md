@@ -11,8 +11,10 @@ pending IRQ while transfers remain, clears the half-transfer flag, then checks
 that completion occurs without TCIE pending another IRQ. The DMA model now
 tracks that half-transfer event once per transfer, so clearing HTIF cannot
 retrigger it on later items; circular reload arms it for the next lap. The
-UART records the remaining count observed when HTIF is first seen; this check
-does not claim cycle-accurate interrupt latency.
+smoke also disables the completed channel, loads a new odd transfer count,
+and verifies that HTIF and its IRQ fire again for the new transfer. The UART
+records the remaining count observed when HTIF is first seen; this check does
+not claim cycle-accurate interrupt latency.
 
 The bounded model emits ADC1's DMA request on each completed regular rank only
 when CR2.DMA is set. The imported chip profile routes `adc1_rx` to DMA1 channel
