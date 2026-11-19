@@ -34,6 +34,13 @@ jobs:
             target: thumbv7m-none-eabi
             script: examples/stm32f103-blue-pill/io-smoke.yaml
             system: configs/systems/stm32f103-blue-pill.yaml
+          # Same Blue Pill board with a BME280 on I2C1 PB6/PB7: CHIP_ID read
+          # over I2C, USART1 marker and PC13 LED edges on the full C8 model.
+          - id: stm32f103-blue-pill-bme280
+            crate: firmware-stm32f103-bluepill-bme280-smoke
+            target: thumbv7m-none-eabi
+            script: examples/stm32f103-blue-pill-bme280/io-smoke.yaml
+            system: configs/systems/stm32f103-blue-pill-bme280.yaml
           # Exact low-density C6 x6 order-code profile. This smoke checks
           # USART2 output and PA5 LED edges; ES0348 makes IDCODE debug-only.
           - id: stm32f103c6-low-density
