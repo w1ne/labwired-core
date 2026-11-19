@@ -1,12 +1,15 @@
 # ESP32-P4X-C5-Function-EV-Board and BME280 status
 
-Checked live on 2026-11-18.
+Checked live on 2026-11-19.
 
 Espressif's current [board guide](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4x-c5-function-ev-board/user_guide.html)
 lists `ESP32-P4X-C5-Function-EV-Board` as the available part number, documents
 retail orders, and maps J1 pins 3 and 5 to GPIO7 and GPIO8. Espressif's
-[live development-board catalog](https://www.espressif.com/products/devkits)
-also lists this exact C5 variant and provides an AliExpress buy link. The
+[live development-board catalog](https://esp-wrover-kit.espressif.com/en/products/devkits)
+lists this exact C5 variant and links it to this
+[AliExpress buy listing](https://www.aliexpress.com/item/1005012707148248.html).
+The direct marketplace page could not be opened by the browser tool during this
+check; the buy link is present in Espressif's own catalog. The
 [revision-change notice](https://documentation.espressif.com/en/PCN202600801_ESP32-P4_Chip_Revision_v3.2_Upgrade_Chip_Revision_v1.3_Demand_Collection_and_EOL_Plan_Description.html)
 plans EOL for the previous non-X ESP32-P4NRW16/32 parts and the previous
 ESP32-P4-Function-EV-Board, and recommends the v3.2/X-suffix successors. This

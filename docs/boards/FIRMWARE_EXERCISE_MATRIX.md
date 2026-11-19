@@ -40,7 +40,7 @@ Each chip's Tier-1 fixture is **real firmware** that drives these peripheral cla
 
 ## Beyond the rubric — functional reads, advanced peripherals, shims
 
-What the rubric grid does not cover: real drivers decoding a sensor/protocol over a bus (the gold standard), chip-specific advanced peripherals, and shims (hardcoded stubs or declarative register files with no engine behind them). From `validation/firmware_exercise.yaml`.
+What the rubric grid does not cover: real sensor/protocol behavior over a bus (ideally through an unmodified driver decoding sensor values), register-level firmware checks, chip-specific advanced peripherals, and shims (hardcoded stubs or declarative register files with no engine behind them). From `validation/firmware_exercise.yaml`.
 
 ### `stm32l476`
 
@@ -268,10 +268,10 @@ _The DevKitC-1-N8R2 profile exercises the UART0 TX FIFO, GPIO4 output latch, and
 
 ### `esp32p4`
 
-_The P4X-C5 Function EV board smoke checks UART0 output and reads the BME280 chip ID and raw temperature over HP I2C0 routed through GPIO7/8. GPIO supports its data/enable/input head and only the four I2C matrix selector words needed for that route; IO_MUX stores the two pad setup words without electrical enforcement. The profile does not model mask ROM, the second HP core, the LP core, MIPI-CSI/DSI, the H.264/JPEG/PPA media blocks, USB, Ethernet, the companion ESP32-C5 radio, or the other P4 peripherals._
+_The P4X-C5 Function EV board smoke checks BME280 chip ID 0x60 and the model's raw-temperature vector 0x082DC0 over HP I2C0 routed through GPIO7/8, then reports over UART0. The profile models the GPIO data/enable/input head, four matrix selectors, I2C0 transaction registers, and IO_MUX setup words without pad electricals. It does not model mask ROM, the second HP core, the LP core, MIPI-CSI/DSI, the H.264/JPEG/PPA media blocks, USB, Ethernet, the companion ESP32-C5 radio or the other P4 peripherals._
 
-**Functional device/protocol reads** (real driver, decoded value):
-- BME280 ID and raw-temperature read over GPIO7/8-routed P4 HP I2C0 — `firmware-esp32p4-demo` · examples/esp32p4x-c5-function-ev-board/evidence/run/logs/run_smoke.log
+**Functional device/protocol checks** (register-level firmware asserts observable behavior):
+- BME280 ID and raw-temperature register read through GPIO7/8-routed HP I2C0 (register-level firmware) — `firmware-esp32p4-demo` · examples/esp32p4x-c5-function-ev-board/evidence/run/logs/run_smoke.log (ungated)
 
 ### `esp32s2`
 
