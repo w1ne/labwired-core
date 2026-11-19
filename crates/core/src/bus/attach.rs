@@ -515,6 +515,27 @@ impl SystemBus {
         let idx = self
             .find_peripheral_index_by_name(controller)
             .ok_or_else(|| anyhow::anyhow!("attach_i2c_slave: no peripheral '{controller}'"))?;
+        // S3 manifest devices are physically attached to pads, not merely to
+        // a controller name. Keep their route until the GPIO matrix is wired
+        // (which happens after external-device attachment in from_config).
+        if let Some(s3) = self.peripherals[idx]
+            .dev
+            .as_any_mut()
+            .and_then(|any| any.downcast_mut::<crate::peripherals::esp32s3::i2c::Esp32s3I2c>())
+        {
+            let pads = route
+                .filter(|r| !r.is_empty())
+                .map(|r| {
+                    crate::peripherals::i2c_matrix::route_pads(r).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "ESP32-S3 I2C external device on '{controller}' requires GPIO route.scl and route.sda"
+                        )
+                    })
+                })
+                .transpose()?;
+            s3.push_slave_with_route(wrapped, pads);
+            return Ok(());
+        }
         if let Some(host) = self.peripherals[idx].dev.i2c_slave_host() {
             host.attach_slave(wrapped);
             return Ok(());
