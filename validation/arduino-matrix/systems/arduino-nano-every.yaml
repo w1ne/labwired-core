@@ -1,7 +1,8 @@
 # Arduino matrix system — Arduino Nano Every (ATmega4809 @ 16 MHz).
 # Serial = USART3 (the SAMD11 USB bridge on PB4/PB5); LED_BUILTIN = D13 = PE2.
-# L3: INA219 at 0x40 on Wire (TWI0, A4/A5). SPI0 is not modelled on this part
-# yet, so L4 is skipped in the board file rather than attached to a stand-in.
+# L3: INA219 at 0x40 on Wire (TWI0, A4/A5).
+# L4: MAX31855 on SPI (SPI0 on PE[3:0]: MOSI D11, MISO D12, SCK D13); CS is
+# the sketch's SS = D8 = PE3.
 # L5: A0 (PD3 = AIN3) held at 2500 mV, half the board's 5 V VDD — a divider
 # on the pin. init() selects analogReference(VDD), so stock analogRead() must
 # return exactly 512 (10-bit).
@@ -13,6 +14,11 @@ external_devices:
     connection: "twi0"
     config:
       i2c_address: 0x40
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi0"
+    config:
+      cs_pin: "PE3"
 peripherals:
   - id: "adc0"
     type: "megaavr_adc"

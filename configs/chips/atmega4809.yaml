@@ -163,6 +163,18 @@ peripherals:
     size: "15"
     config:
       irq: 15
+  # SPI0, host side, Normal mode (`megaavr_spi`): 8-bit transfers at the
+  # PRESC / CLK2X bit time, DORD, IF / WRCOL, the SPI0 vector. The byte
+  # reaches a device only while the SCK pad of the PORTMUX.TWISPIROUTEA route
+  # (PA[7:4], PC[3:0] or PE[3:0]) is an output; a device is selected by its
+  # chip-select pad. Buffer mode and client mode are refused. The multi-host
+  # SS input and the MODE clock phase / polarity are not modelled.
+  - id: "spi0"
+    type: "megaavr_spi"
+    base_address: 0x000108C0
+    size: "5"
+    config:
+      irq: 16
   # Register banks generated from the ATDF by scripts/atdf_to_declarative.py.
   # They store what firmware writes and nothing more: no clock switching or
   # prescaling, no sleep, no brown-out and no reset cause beyond the reset

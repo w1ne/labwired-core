@@ -404,12 +404,13 @@ pub const MODEL_TYPES: &[&str] = &[
     "pic32_uart",
     // Microchip PIC32MZ 16-bit timer (TxCON/TMRx/PRx, Type A or B).
     "pic32_timer",
-    // Microchip megaAVR 0-series USART, the TCA0 + TCB0..3 timer block, ADC0
-    // and the TWI host.
+    // Microchip megaAVR 0-series USART, the TCA0 + TCB0..3 timer block, ADC0,
+    // the TWI host and the SPI host.
     "megaavr_usart",
     "megaavr_tc",
     "megaavr_adc",
     "megaavr_twi",
+    "megaavr_spi",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -1922,6 +1923,25 @@ pub fn try_build(
                     )
                 })?;
             Box::new(crate::peripherals::megaavr::twi::MegaAvrTwi::new(
+                irq as u32,
+            ))
+        }
+        // `irq`: the part's SPI vector number.
+        "megaavr_spi" => {
+            if let Some(k) = p_cfg.config.keys().find(|k| k.as_str() != "irq") {
+                anyhow::bail!("megaavr_spi '{}' admits no config key '{k}'", p_cfg.id);
+            }
+            let irq = p_cfg
+                .config
+                .get("irq")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "megaavr_spi '{}' needs `irq: <SPI vector number>`",
+                        p_cfg.id
+                    )
+                })?;
+            Box::new(crate::peripherals::megaavr::spi::MegaAvrSpi::new(
                 irq as u32,
             ))
         }

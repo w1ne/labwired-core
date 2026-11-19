@@ -1,0 +1,12 @@
+# Control: the converter's CS is wired to D9 (PB0). The sketch drives D10
+# (PB1), so the converter is never selected and MISO stays high.
+name: arduino-nano-every-max31855-wrong-chip-select
+chip: ../../../configs/chips/atmega4809.yaml
+cpu_hz: 16000000
+external_devices:
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi0"
+    config:
+      cs_pin: "PB0"
+board_io: []

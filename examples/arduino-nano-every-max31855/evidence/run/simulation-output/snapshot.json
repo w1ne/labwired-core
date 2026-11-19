@@ -1,0 +1,75 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      23,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      96,
+      1,
+      25,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2,
+      0,
+      10,
+      96,
+      4,
+      0,
+      100,
+      8,
+      0,
+      0,
+      96,
+      8
+    ],
+    "pc": 5816,
+    "sp": 16381,
+    "sreg": 194
+  },
+  "steps_executed": 2000000,
+  "cycles": 3984999,
+  "instructions": 2000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000000
+    }
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "ed8dca5031bd293a9ec9e0655956cd4690213b9fc6867a96024e19d1c7c89aa1",
+  "config": {
+    "firmware": "examples/arduino-nano-every-max31855/../../tests/fixtures/avr/arduino-nano-every-max31855.elf",
+    "system": "examples/arduino-nano-every-max31855/../../configs/systems/arduino-nano-every-max31855.yaml",
+    "script": "examples/arduino-nano-every-max31855/max31855-smoke.yaml"
+  }
+}
