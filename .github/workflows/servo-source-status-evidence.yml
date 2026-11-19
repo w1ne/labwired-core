@@ -11,4 +11,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.95.0
-      - run: cargo test -p labwired-core --test pca9685_drives_servo pca_servo_dynamic_oe_requires_a_driven_low_gpio -- --exact --nocapture
+      - run: cargo test -p labwired-core --test pca9685_drives_servo -- --nocapture
+      - run: cargo test -p labwired-wasm --lib romboot_tests::c3_flash_fast_start_uses_rom_reset_stack -- --exact
