@@ -1054,6 +1054,32 @@ mod tests {
         assert_ne!(dma.read_reg(0x00) & (1 << 2), 0, "new transfer raises HTIF");
     }
 
+    /// Clearing the previous transfer's completion flag and starting a new
+    /// transfer on the same channel must produce a fresh TC interrupt.
+    #[test]
+    fn reenabling_channel_rearms_transfer_complete_for_new_count() {
+        let mut dma = Dma1::new().with_channel_irqs([11, 12, 13, 14, 15, 16, 17]);
+
+        for transfer in 0..2 {
+            dma.write_reg(0x0C, 1); // CH1 CNDTR
+            dma.write_reg(0x10, 0x4001_244C); // ADC1 DR
+            dma.write_reg(0x14, 0x2000_0100); // result buffer
+            dma.write_reg(0x08, 1 | (1 << 1)); // EN | TCIE
+
+            dma.dma_request(1);
+            let complete = dma.tick();
+            assert_eq!(complete.explicit_irqs, Some(vec![11]));
+            assert_eq!(dma.read_reg(0x0C), 0);
+            assert_ne!(dma.read_reg(0x00) & (1 << 1), 0, "TCIF is set");
+
+            if transfer == 0 {
+                dma.write_reg(0x08, 0); // Disable before reloading CNDTR.
+                dma.write_reg(0x04, 0xF); // Clear CH1 flags before rearming.
+                assert_eq!(dma.read_reg(0x00) & 0xF, 0);
+            }
+        }
+    }
+
     /// RM0008 §13.3.1: peripheral circular mode reloads CNDTR and the
     /// internal memory pointer at each completed lap while leaving CCR.EN set.
     #[test]

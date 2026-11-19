@@ -3970,6 +3970,7 @@ fn smoke_adc1_dma_scan_rank_boundaries() {
         DMA1_CCR1,
         DMA1_CCR1_EN
             | DMA1_CCR1_HTIE
+            | DMA1_CCR1_TCIE
             | DMA1_CCR1_MINC
             | DMA1_CCR1_PSIZE_HALFWORD
             | DMA1_CCR1_MSIZE_HALFWORD,
@@ -3997,6 +3998,18 @@ fn smoke_adc1_dma_scan_rank_boundaries() {
         && rearmed_half_flags & DMA1_TCIF1 == 0;
     let rearmed_half_irq = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
 
+    write(DMA1_IFCR, DMA1_HTIF1);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
+    let mut rearmed_complete = false;
+    for _ in 0..1_000_000 {
+        if read(DMA1_ISR) & DMA1_TCIF1 != 0 {
+            rearmed_complete = read(DMA1_CNDTR1) == 0;
+            break;
+        }
+        core::hint::spin_loop();
+    }
+    let rearmed_complete_irq = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
+
     write(ADC1_CR2, 0);
     write(DMA1_CCR1, 0);
     write(DMA1_IFCR, 0xF);
@@ -4020,6 +4033,8 @@ fn smoke_adc1_dma_scan_rank_boundaries() {
     put_flag(eoc_cleared);
     putbytes(b" HT_REARM=");
     put_flag(rearmed_half && rearmed_half_irq);
+    putbytes(b" TC_REARM=");
+    put_flag(rearmed_complete && rearmed_complete_irq);
     putline(
         if half_before_complete
             && half_irq
@@ -4030,6 +4045,8 @@ fn smoke_adc1_dma_scan_rank_boundaries() {
             && eoc_cleared
             && rearmed_half
             && rearmed_half_irq
+            && rearmed_complete
+            && rearmed_complete_irq
         {
             b" ok"
         } else {
