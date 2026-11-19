@@ -1245,6 +1245,34 @@ pub struct LinearMap {
     pub clamp: Option<(f64, f64)>,
 }
 
+/// `behavior.spi.power`: the supply rails a declarative SPI part requires and
+/// how long it takes to start answering after power-on.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SpiPowerSpec {
+    /// Required supply rails and their operating envelopes (datasheet
+    /// electrical characteristics). A rail's `name` is the key a placement's
+    /// `supply_rails` and a `board.device.<id>.power.<name>_volts` route use.
+    pub rails: Vec<SpiPowerRail>,
+    /// Power-up time in microseconds: after a power-on reset the part ignores
+    /// the bus (as if unpowered) until this much device time has elapsed.
+    #[serde(default)]
+    pub startup_us: u64,
+}
+
+/// One required supply rail of a [`SpiPowerSpec`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SpiPowerRail {
+    pub name: String,
+    /// Package/canvas pin that feeds this rail (e.g. `VDD`). Not interpreted by
+    /// the SPI engine; carried for the diagram compiler.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pin: Option<String>,
+    pub min_v: f64,
+    pub max_v: f64,
+}
+
 /// The `behavior.spi` section of a declarative `spi_device` — datasheet-shaped
 /// wire framing for a register-style SPI sensor, interpreted by the engine's
 /// generic device. The measurement→word machinery (`endian`/`source`/`encode`/
@@ -1278,6 +1306,14 @@ pub struct SpiSpec {
     /// the other twenty-three addresses are storage.
     #[serde(default)]
     pub register_file: Option<SpiRegisterFile>,
+    /// **Routed supply and power-on reset.** Present ⇒ the part can take its
+    /// powered state from routed rail voltages (`board.device.<id>.power.<rail>_volts`):
+    /// each power-up is a power-on reset (registers, bus mode, timers and rule
+    /// state back to their descriptor initial values) followed by a start-up
+    /// interval during which the part does not answer. Absent ⇒ the part does
+    /// not support routed supply, exactly as before this key existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<SpiPowerSpec>,
     /// **The reply byte of a MESSAGE part**: the name of a `vars:` entry whose
     /// low byte is clocked out on MISO for every byte of a `frames:`-only part
     /// (no `registers:`, no `register_file:`). Absent ⇒ such a part answers
