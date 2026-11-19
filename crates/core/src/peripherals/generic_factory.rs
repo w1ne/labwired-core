@@ -184,8 +184,9 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32c61_uart",
     "esp32c61_pcr",
     "esp32c61_i2c",
-    // P4 UART0 uses the shared FIFO/status head with P4's 400 MHz core and
-    // 90 MHz APB clock. Its chip descriptor exposes only FIFO and STATUS.
+    // P4 HP I2C0 and UART0 are family-wrapped shared Espressif models; the P4
+    // descriptor selects their bases and wires the tested GPIO matrix route.
+    "esp32p4_i2c",
     "esp32p4_uart",
     // Narrow GPIO data/enable/input heads (S2/P4 classic head, C5/C61 later
     // head). Listed so a fuzzy "gpio" heuristic cannot coerce them onto an

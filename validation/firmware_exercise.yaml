@@ -359,8 +359,13 @@ chips:
 
   - id: esp32p4
     arch: riscv32imac
-    headline: "No beyond-rubric P4 peripheral is exercised: the P4X-C5 Function EV board smoke covers only the UART0 TX FIFO/console path. This narrow profile declares UART0 only; it does not model mask ROM, the second HP core, the LP core, MIPI-CSI/DSI, the H.264/JPEG/PPA media blocks, USB, Ethernet, the companion ESP32-C5 radio or the other P4 peripherals."
+    headline: "The P4X-C5 Function EV board smoke checks BME280 chip ID 0x60 and the model's raw-temperature vector 0x082DC0 over HP I2C0 routed through GPIO7/8, then reports over UART0. The profile models the GPIO data/enable/input head, four matrix selectors, I2C0 transaction registers, and IO_MUX setup words without pad electricals. It does not model mask ROM, the second HP core, the LP core, MIPI-CSI/DSI, the H.264/JPEG/PPA media blocks, USB, Ethernet, the companion ESP32-C5 radio or the other P4 peripherals."
     functional: []
+    functional_checks:
+      - what: "BME280 ID and raw-temperature register read through GPIO7/8-routed HP I2C0 (register-level firmware)"
+        fw: firmware-esp32p4-demo
+        ev: examples/esp32p4x-c5-function-ev-board/evidence/run/logs/run_smoke.log
+        gate: none
     advanced_unit_only: []
     advanced_dead: []
     shim: []
