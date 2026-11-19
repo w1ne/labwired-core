@@ -87,6 +87,7 @@ members = [
     "crates/firmware-nucleo-h723zg-smoke",
     "crates/firmware-nucleo-h533re-smoke",
     "crates/firmware-stm32f103-bluepill-smoke",
+    "crates/firmware-stm32f103-bluepill-bme280-smoke",
     "crates/firmware-stm32f103-lowdensity-smoke",
     "crates/firmware-f401-lowram-smoke",
     "crates/firmware-arty-litex-smoke",

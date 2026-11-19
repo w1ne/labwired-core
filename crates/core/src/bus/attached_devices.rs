@@ -112,6 +112,20 @@ impl SystemBus {
             if let (Some((address, channel)), Some(bus_name)) =
                 (servo.source(), self.declared_connection(servo.id()))
             {
+                if let Some((addr, bit)) = servo.source_oe() {
+                    use crate::bus::DevicePins;
+                    use crate::peripherals::gpio::GpioMode;
+                    let gpio_output = self.find_peripheral_index(addr).is_some_and(|idx| {
+                        self.peripherals[idx]
+                            .dev
+                            .gpio_routing(bit)
+                            .is_some_and(|routing| routing.mode == GpioMode::Output)
+                    });
+                    // An input, released/open-drain, contended or unknown pad is not an enable.
+                    if !gpio_output || self.known_pad_bit(addr, bit) != Some(false) {
+                        continue;
+                    }
+                }
                 // Match the servo's declared bus, not just the address: the
                 // same I2C address may exist on multiple controllers. A routed
                 // device needs mux/channel wiring evidence that this source
