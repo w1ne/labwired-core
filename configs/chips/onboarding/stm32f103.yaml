@@ -75,6 +75,9 @@ peripherals:
   # RM0008 hard-wires ADC1 to DMA1 channel 1 and USART2_RX to channel 6.
   irq: 11
   config:
+    # RM0008 IRQn values for DMA1_Channel1..7. Channel 1 retains IRQ 11;
+    # USART2_RX on channel 6 reaches IRQ 16.
+    channel_irqs: [11, 12, 13, 14, 15, 16, 17]
     requests:
       adc1_rx: 1
       usart2_rx: 6

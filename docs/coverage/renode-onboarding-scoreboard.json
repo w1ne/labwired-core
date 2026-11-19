@@ -9492,24 +9492,24 @@
       "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml",
       "system": "configs/systems/onboarding/stm32f103.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-19T01:53:12Z",
-      "finished_at_utc": "2026-11-19T02:10:33Z",
-      "elapsed_seconds": 1042,
-      "elapsed_ms": 1041334,
+      "started_at_utc": "2026-11-19T03:21:16Z",
+      "finished_at_utc": "2026-11-19T03:27:37Z",
+      "elapsed_seconds": 382,
+      "elapsed_ms": 381106,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 1035.355,
-        "build_firmware": 2.668,
-        "run_smoke": 3.241
+        "build_cli": 377.063,
+        "build_firmware": 2.067,
+        "run_smoke": 1.92
       },
       "stages_ms": {
-        "build_cli": 1035355,
-        "build_firmware": 2668,
-        "run_smoke": 3241
+        "build_cli": 377063,
+        "build_firmware": 2067,
+        "run_smoke": 1920
       },
       "_artifact_path": "stm32f103",
       "zero_answering_windows": [],

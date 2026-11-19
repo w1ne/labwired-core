@@ -168,7 +168,7 @@ const DMA1_CPAR6: u32 = DMA1_CCR6 + 0x08;
 const DMA1_CMAR6: u32 = DMA1_CCR6 + 0x0C;
 const DMA1_TCIF6: u32 = 1 << 21;
 const DMA1_CHANNEL6_FLAGS: u32 = 0xF << 20;
-const DMA1_IRQ_PENDING_BIT: u32 = 1 << 11;
+const DMA1_CHANNEL6_IRQ_PENDING_BIT: u32 = 1 << 16;
 const USART2_CR3: u32 = USART2_BASE + 0x14;
 const USART2_CR3_DMAR: u32 = 1 << 6;
 
@@ -4183,7 +4183,7 @@ fn smoke_adc1_dma_circular_two_laps() {
         read(DMA1_ISR) & DMA1_TCIF1 == 0 && read(DMA1_ISR) & DMA1_GIF1 != 0;
     write(DMA1_IFCR, DMA1_GIF1);
     let channel_flags_cleared = read(DMA1_ISR) & DMA1_CHANNEL1_FLAGS == 0;
-    let pending_survives_clear = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT != 0;
+    let pending_deasserts_with_flag = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT == 0;
     unsafe { write_volatile(NVIC_ICPR, DMA1_IRQ_BIT) };
     let nvic_pending_cleared = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_BIT == 0;
 
@@ -4210,7 +4210,7 @@ fn smoke_adc1_dma_circular_two_laps() {
         && half_clear_preserves_tc
         && tc_clear_preserves_gif
         && channel_flags_cleared
-        && pending_survives_clear
+        && pending_deasserts_with_flag
         && nvic_pending_cleared;
     putbytes(b"ADC1 F1 CIRCULAR HT_LAPS=2 HT_IRQ=");
     put_flag(half_transfer_irq);
@@ -4228,8 +4228,8 @@ fn smoke_adc1_dma_circular_two_laps() {
     put_flag(half_clear_preserves_tc && tc_clear_preserves_gif);
     putbytes(b" GIF_CLEAR=");
     put_flag(channel_flags_cleared);
-    putbytes(b" NVIC_CLEAR=");
-    put_flag(pending_survives_clear && nvic_pending_cleared);
+    putbytes(b" NVIC_DEASSERT=");
+    put_flag(pending_deasserts_with_flag && nvic_pending_cleared);
     putline(if passed { b" ok" } else { b" FAIL" });
 }
 
@@ -4652,8 +4652,7 @@ fn smoke_usart2_rx_enable_gate() {
 /// Drain the remaining injected USART2 bytes through its F1 DMA1 channel 6
 /// request. With DMAR clear, an enabled channel must leave both RXNE and
 /// CNDTR unchanged; setting DMAR then transfers the queued bytes to SRAM and
-/// raises channel 6's TC flag (RM0008 §§13.3, 13.4, 27.3.7). This bounded
-/// profile does not enable or claim channel 6's interrupt route.
+/// raises channel 6's TC flag and its IRQ16 line (RM0008 §§13.3, 13.4, 27.3.7).
 fn smoke_usart2_rx_dma() {
     let read = |address: u32| unsafe { read_volatile(address as *const u32) };
     let write = |address: u32, value: u32| unsafe { write_volatile(address as *mut u32, value) };
@@ -4664,18 +4663,20 @@ fn smoke_usart2_rx_dma() {
     write(USART2_CR3, 0); // DMAR off
     write(DMA1_CCR6, 0);
     write(DMA1_IFCR, DMA1_CHANNEL6_FLAGS);
+    unsafe { write_volatile(NVIC_ICPR, DMA1_CHANNEL6_IRQ_PENDING_BIT) };
     write(DMA1_CNDTR6, 2);
     write(DMA1_CPAR6, USART2_DR);
     let destination = core::ptr::addr_of_mut!(USART2_DMA_RX_BYTES).cast::<u8>();
     write(DMA1_CMAR6, destination as u32);
-    write(DMA1_CCR6, DMA1_CCR1_EN | DMA1_CCR1_MINC);
+    write(DMA1_CCR6, DMA1_CCR1_EN | DMA1_CCR1_MINC | DMA1_CCR1_TCIE);
 
     for _ in 0..512 {
         core::hint::spin_loop();
     }
     let blocked = read(DMA1_CNDTR6) == 2
         && read(USART2_SR) & USART_SR_RXNE != 0
-        && read(DMA1_ISR) & DMA1_TCIF6 == 0;
+        && read(DMA1_ISR) & DMA1_TCIF6 == 0
+        && unsafe { read_volatile(NVIC_ISPR) } & DMA1_CHANNEL6_IRQ_PENDING_BIT == 0;
 
     write(USART2_CR3, USART2_CR3_DMAR);
     for _ in 0..1_000_000 {
@@ -4690,13 +4691,21 @@ fn smoke_usart2_rx_dma() {
     let second = unsafe { read_volatile(bytes.add(1)) };
     let remaining = read(DMA1_CNDTR6);
     let complete = read(DMA1_ISR) & DMA1_TCIF6 != 0;
-    let irq_none = unsafe { read_volatile(NVIC_ISPR) } & DMA1_IRQ_PENDING_BIT == 0;
+    let irq_pending = unsafe { read_volatile(NVIC_ISPR) } & DMA1_CHANNEL6_IRQ_PENDING_BIT != 0;
     let rxne_clear = read(USART2_SR) & USART_SR_RXNE == 0;
+    write(DMA1_IFCR, DMA1_CHANNEL6_FLAGS);
+    let flags_clear = read(DMA1_ISR) & DMA1_CHANNEL6_FLAGS == 0;
+    let irq_deasserted = unsafe { read_volatile(NVIC_ISPR) } & DMA1_CHANNEL6_IRQ_PENDING_BIT == 0;
+    unsafe { write_volatile(NVIC_ICPR, DMA1_CHANNEL6_IRQ_PENDING_BIT) };
+    let irq_cleared = unsafe { read_volatile(NVIC_ISPR) } & DMA1_CHANNEL6_IRQ_PENDING_BIT == 0;
     let passed = blocked
         && [first, second] == *b"DM"
         && remaining == 0
         && complete
-        && irq_none
+        && irq_pending
+        && flags_clear
+        && irq_deasserted
+        && irq_cleared
         && rxne_clear;
 
     write(USART2_CR3, 0);
@@ -4720,8 +4729,12 @@ fn smoke_usart2_rx_dma() {
     put_hex32(remaining);
     putbytes(b" TCIF=");
     put_flag(complete);
-    putbytes(b" IRQ_NONE=");
-    put_flag(irq_none);
+    putbytes(b" IRQ16=");
+    put_flag(irq_pending);
+    putbytes(b" FLAG_CLEAR=");
+    put_flag(flags_clear);
+    putbytes(b" IRQ_DEASSERT=");
+    put_flag(irq_deasserted && irq_cleared);
     putbytes(b" RXNE_CLEAR=");
     put_flag(rxne_clear);
     putline(if passed { b" ok" } else { b" FAIL" });
