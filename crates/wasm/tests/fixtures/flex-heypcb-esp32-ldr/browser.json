@@ -92,6 +92,13 @@
       "The IO48 user LED is represented by digital logic state only."
     ],
     "execution_path": "flex_portable_wasm",
+    "execution_scope": {
+      "chip_parity": "not_established",
+      "detailed_target_execution_selected": false,
+      "firmware": "portable_behavior",
+      "full_board_coverage": "not_established",
+      "original_target_firmware_executed": false
+    },
     "manifest_sha256": "9c78f66d7564bfb8027fea1515141b6e1273ca8918b168280915c82fdf1dacd8",
     "model_name": "heypcb-esp32-s3-ldr-gl5528",
     "models": [
@@ -236,10 +243,10 @@
     "oscilloscope-nanosecond-time-unit",
     "safe-integer-host-advance"
   ],
-  "measured_browser_ms": 388.2,
-  "browser": "156.0.8078.79",
+  "measured_browser_ms": 569.2,
+  "browser": "149.0.7827.55",
   "browser_driver": "Playwright",
-  "core_commit": "d8b62f413f387167ac8c261e904901daf3849c4e",
+  "core_commit": "461a7ecceec19fa2e5b1a59f265447ca12022cd5",
   "firmware_sha256": "366f562ab8a19449a479e3b5e4b2d783f108fdaceb6e61948a0f6b559c314294",
   "firmware_source_sha256": "04cdc152150ed1ca85924081f124438698370c12af6535aaff934c1ddd539402",
   "system_sha256": "9c78f66d7564bfb8027fea1515141b6e1273ca8918b168280915c82fdf1dacd8",

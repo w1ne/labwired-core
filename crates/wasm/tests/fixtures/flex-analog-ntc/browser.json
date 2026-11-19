@@ -220,6 +220,13 @@
       "Portable firmware asserts the alarm above a fixed 2000 mV threshold; it does not run a target ADC driver."
     ],
     "execution_path": "flex_portable_wasm",
+    "execution_scope": {
+      "chip_parity": "not_established",
+      "detailed_target_execution_selected": false,
+      "firmware": "portable_behavior",
+      "full_board_coverage": "not_established",
+      "original_target_firmware_executed": false
+    },
     "manifest_sha256": "0b30434b802e8fbb68d5d4ff5a9dd8ac1de186cbb3e5b9f4aba0c16fabfca48f",
     "model_name": "Reusable NTC over-temperature alarm",
     "models": [
@@ -356,10 +363,10 @@
     "cold-negative-control",
     "hot-positive-control"
   ],
-  "measured_browser_ms": 770.7,
-  "browser": "156.0.8078.79",
+  "measured_browser_ms": 699.9,
+  "browser": "149.0.7827.55",
   "browser_driver": "Playwright",
-  "core_commit": "d7baa419220aadd0ec30b0ca4ed02221fccc62dd",
+  "core_commit": "461a7ecceec19fa2e5b1a59f265447ca12022cd5",
   "firmware_sha256": "3ebee4a49c9f4d5d35496e4275bb8b9eda8742a1114abcede18bcdf08d727768",
   "firmware_source_sha256": "ca88ab2e7f22794a8929caa67791161f64eb4bcb359e4fe2b8927c05408d0204",
   "system_sha256": "0b30434b802e8fbb68d5d4ff5a9dd8ac1de186cbb3e5b9f4aba0c16fabfca48f"

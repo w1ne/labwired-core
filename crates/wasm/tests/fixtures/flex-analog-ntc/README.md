@@ -6,6 +6,8 @@ The proof exercises the existing oscilloscope and logic analyzer through their n
 
 This is functional behavior against a reusable analog source, not original target firmware, target ADC fidelity, component tolerance, a physical measurement, or a full-board simulation.
 
+The run report carries structured `execution_scope` fields: it marks the firmware as portable behavior, says the original target firmware and detailed target path were not executed, and leaves full-board coverage and chip parity unestablished.
+
 Reproduce from the repository root:
 
 ```sh
