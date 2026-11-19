@@ -6,62 +6,9 @@
 
 name: stk3200
 arch: arm
-flash:
-  base: 134217728
-  size: 32768B
-ram:
-  base: 536870912
-  size: 4096B
-peripherals:
-- id: led0
-  type: led
-  bus: gpioPort
-  base_address: 66
-- id: led1
-  type: led
-  bus: gpioPort
-  base_address: 67
-- id: button0
-  type: button
-  bus: gpioPort
-  base_address: 64
-- id: button1
-  type: button
-  bus: gpioPort
-  base_address: 65
-- id: i2c0
-  type: efm32ggi2ccontroller
-  bus: sysbus
-  base_address: 1073782784
-- id: timer0
-  type: efm32timer
-  bus: sysbus
-  base_address: 1073807360
-- id: timer1
-  type: efm32timer
-  bus: sysbus
-  base_address: 1073808384
-- id: usart1
-  type: efm32_uart
-  bus: sysbus
-  base_address: 1073792000
-- id: leUart0
-  type: leuart
-  bus: sysbus
-  base_address: 1074282496
-- id: gpioPort
-  type: efmgpioport
-  bus: sysbus
-  base_address: 1073766400
-- id: bitband
-  type: bitbanding
-  bus: sysbus
-  base_address: 1107296256
-- id: cmuStatusOscillator
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1074561068
-- id: vcmpStatus
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073741832
+# EFM32ZG-STK3200 (Zero Gecko starter kit, EFM32ZG222F32). Renode
+# platforms/boards/silabs/stk3200.repl is
+# cpus/silabs/efm32xg/efm32zg222.repl plus two LEDs and two buttons, so the
+# chip surface is the efm32zg222 onboarding profile, included whole. The
+# deviceInformation block (0x0FE081B0) is not declared: no model behind it.
+include: efm32zg222.yaml

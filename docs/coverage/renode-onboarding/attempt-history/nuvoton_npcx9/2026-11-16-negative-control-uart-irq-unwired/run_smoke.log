@@ -1,0 +1,8 @@
+2026-11-16T08:37:43.883383Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nuvoton_npcx9.yaml
+2026-11-16T08:37:43.886539Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-16T08:37:43.890383Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart2'
+2026-11-16T08:37:43.890389Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart3'
+2026-11-16T08:37:43.890392Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart4'
+2026-11-16T08:37:44.176270Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "uart irq fts=4 txp=4 txrel=4 frs=3 rx=3 hits=3 drained=3 ok" }) (captured len=318)
+FAIL  8/9 checks · nuvoton_npcx9-smoke · 400000 steps · 0.29s

@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32w108",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "config_error"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-stm32w108-boot-smoke",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/stm32w108-boot-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32w108.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-04T11:29:36Z",
+  "finished_at_utc": "2026-11-04T11:29:51Z",
+  "elapsed_seconds": 15,
+  "elapsed_ms": 14644,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-04T11:29:51.288498Z ERROR labwired_cli::commands::test: Failed to parse Chip Descriptor YAML: missing field `peripherals` at line 7 column 1",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 13.638,
+    "build_firmware": 0.544,
+    "run_smoke": 0.447
+  },
+  "stages_ms": {
+    "build_cli": 13638,
+    "build_firmware": 544,
+    "run_smoke": 447
+  }
+}

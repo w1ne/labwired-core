@@ -87,7 +87,9 @@ fn build_program_image(
 ) -> anyhow::Result<BuiltMachine> {
     let (chip, manifest, blobs) = (req.chip, req.system, req.blobs);
     let echo = req.options.echo_uart_stdout;
-    let mut bus = SystemBus::from_config_with_plugins(chip, manifest, plugins)
+    // A blob named after an `image_env` region fills it (the C6 mask ROM is
+    // `rom`): a process with no core checkout has no in-tree image to find.
+    let mut bus = SystemBus::from_config_with_region_images(chip, manifest, plugins, blobs)
         .map_err(|e| anyhow!("Bus config error: {e:#}"))?;
 
     // Inject the on-demand ESP32-C3 boot ROM blobs into the chip's still
@@ -153,17 +155,11 @@ fn build_program_image(
 
     // C6 fast-boot: re-seed ROM .data after ELF load/reset so a segment or
     // reset path cannot leave interface pointers (heap_tlsf_table_ptr etc.)
-    // stale — mask-ROM unpackloop never ran.
-    if esp32c6_rom::is_esp32c6(chip) {
-        esp32c6_rom::seed_rom_data(&mut machine.bus);
-    }
-
-    // C6: stay below ROM-reserved HP SRAM (see esp32c6_rom::APP_SRAM_END).
-    let sp_top = if esp32c6_rom::is_esp32c6(chip) {
-        esp32c6_rom::app_stack_top()
-    } else {
-        (chip.ram.base + chip.ram.size) as u32
-    };
+    // stale — mask-ROM unpackloop never ran — then map the app the way the
+    // bootloader does. The C6 stack stays below ROM-reserved HP SRAM (see
+    // esp32c6_rom::APP_SRAM_END).
+    let sp_top = esp32c6_rom::finish_elf_fast_boot(&mut machine.bus, chip, &firmware_bytes)
+        .unwrap_or((chip.ram.base + chip.ram.size) as u32);
     machine.cpu.set_sp(sp_top & !0xF);
     machine.cpu.set_pc(program_image.entry_point as u32);
 

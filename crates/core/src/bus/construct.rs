@@ -5,6 +5,17 @@
 //! SystemBus construction, peripheral install, UART/IO-Link sinks, bit-band/atomic helpers.
 
 use super::*;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_NATIVE_CODE_IDENTITY: AtomicU64 = AtomicU64::new(1);
+
+pub(super) fn next_native_code_identity() -> u64 {
+    NEXT_NATIVE_CODE_IDENTITY
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            value.checked_add(1)
+        })
+        .expect("native code identity space exhausted")
+}
 
 impl SystemBus {
     pub fn new() -> Self {
@@ -65,7 +76,12 @@ impl SystemBus {
             // A bare test bus has no chip descriptor; the historical default
             // profile is the ESP32-C3's (the engine's `RiscV::new` default).
             riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
+            riscv_clint: None,
+            riscv_plic: None,
+            native_code_identity: next_native_code_identity(),
             bit_band_enabled: true,
+            armv6m: false,
+            armv8m_baseline: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             esp32c3_io_mux_idx: None,
@@ -83,6 +99,7 @@ impl SystemBus {
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             scheduler_driver_indices: Vec::new(),
+            irq_input_receiver_indices: Vec::new(),
             exti_line_driver_indices: Vec::new(),
             matrix_source_scratch: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -127,6 +144,7 @@ impl SystemBus {
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
             analog_muxes: Vec::new(),
+            spi_cs_watches: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -186,7 +204,12 @@ impl SystemBus {
             config: crate::SimulationConfig::default(),
             cpu_hz: 0,
             riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
+            riscv_clint: None,
+            riscv_plic: None,
+            native_code_identity: next_native_code_identity(),
             bit_band_enabled: false,
+            armv6m: false,
+            armv8m_baseline: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             esp32c3_io_mux_idx: None,
@@ -204,6 +227,7 @@ impl SystemBus {
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             scheduler_driver_indices: Vec::new(),
+            irq_input_receiver_indices: Vec::new(),
             exti_line_driver_indices: Vec::new(),
             matrix_source_scratch: Vec::new(),
             peripheral_hint: Cell::new(None),
@@ -248,6 +272,7 @@ impl SystemBus {
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
             analog_muxes: Vec::new(),
+            spi_cs_watches: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -1156,8 +1181,9 @@ impl SystemBus {
         })
     }
 
-    /// Push `bytes` into the named UART's external RX queue and re-arm its
-    /// scheduler wake.
+    /// Deliver `bytes` from the named UART's external peer and re-arm its
+    /// scheduler wake. STM32v2 UARTs keep input on the wire until UE and RE
+    /// are both enabled; other UART models keep their established queue path.
     ///
     /// Test-script `uart_injections` (and interactive serial) used to only
     /// `extend` the shared queue. Under the event-scheduler an idle EspUart
@@ -1170,17 +1196,21 @@ impl SystemBus {
         let index = self.uart_index_by_name(name).ok_or_else(|| {
             format!("uart_injection: UART peripheral '{name}' not found on the bus")
         })?;
-        let rx = self.attach_uart_rx_source_named(name).ok_or_else(|| {
-            format!("uart_injection: UART peripheral '{name}' not found on the bus")
-        })?;
-        {
+        let delivered = if let Some(result) = self.peripherals[index].dev.inject_uart_rx(bytes) {
+            result.map_err(|e| format!("uart_injection '{name}': {e}"))?
+        } else {
+            let rx = self.attach_uart_rx_source_named(name).ok_or_else(|| {
+                format!("uart_injection: UART peripheral '{name}' not found on the bus")
+            })?;
             let mut guard = rx
                 .lock()
                 .map_err(|e| format!("uart_injection '{name}': RX buffer poisoned: {e}"))?;
             guard.extend(bytes.iter().copied());
-        }
+            bytes.len()
+        };
         self.collect_scheduled_events(index);
-        Ok(bytes.len())
+        self.reconcile_irq_levels_after_write(index);
+        Ok(delivered)
     }
 
     /// Give `bytes` to the far side of the external device `device` that is
@@ -1286,6 +1316,26 @@ impl SystemBus {
             }
             None => matches!(chip.arch, labwired_config::Arch::Arm),
         }
+    }
+
+    /// True when the chip declares an ARMv6-M core (Cortex-M0, M0+, M1).
+    /// An absent `core` keeps the ARMv7-M fault register file, as before.
+    pub(crate) fn chip_is_armv6m(chip: &ChipDescriptor) -> bool {
+        chip.core.as_deref().is_some_and(|core| {
+            let c = core.trim().to_ascii_lowercase();
+            let c = c.strip_prefix("cortex-").unwrap_or(&c);
+            matches!(c, "m0" | "m0+" | "m0plus" | "m1")
+        })
+    }
+
+    /// True for ARMv8-M Baseline cores, whose AIRCR does not implement
+    /// PRIGROUP. The Cortex-M23 is the in-tree core in this profile.
+    pub(crate) fn chip_is_armv8m_baseline(chip: &ChipDescriptor) -> bool {
+        chip.core.as_deref().is_some_and(|core| {
+            let c = core.trim().to_ascii_lowercase();
+            let c = c.strip_prefix("cortex-").unwrap_or(&c);
+            c == "m23"
+        })
     }
 
     /// Decode an atomic register-alias access. Returns the aligned base

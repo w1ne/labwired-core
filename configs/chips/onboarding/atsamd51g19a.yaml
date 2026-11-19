@@ -3,33 +3,47 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
+#
+# Narrow execution profile for the imported SAMD51G19A descriptor. The importer
+# supplied the wrong flash base and several Python windows that returned zero.
+# Keep only the documented memory and modeled MCLK, GCLK, PORTA, and SERCOM3
+# blocks used by the exact-import Metro M4 register smoke. This profile does not
+# claim the rest of the SAMD51 peripheral map.
 
 name: atsamd51g19a
 arch: arm
+core: cortex-m4
+cpu_hz: 120000000
 flash:
-  base: 134217728
-  size: 524288B
+  base: 0x00000000
+  size: 512KB
 ram:
-  base: 536870912
-  size: 196608B
+  base: 0x20000000
+  size: 192KB
 peripherals:
+- id: mclk
+  type: sam_mclk
+  base_address: 0x40000800
+  size: 256B
+- id: gclk
+  type: samd51_gclk
+  base_address: 0x40001C00
+  size: 1KB
+- id: porta
+  type: gpio
+  base_address: 0x41008000
+  size: 128B
+  config:
+    profile: sam_port
 - id: sercom3
-  type: samd5_uart
-  bus: sysbus
-  base_address: 1090600960
-- id: dwt
-  type: dwt
-  bus: sysbus
-  base_address: 3758100480
-- id: gclk_phctrl1
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073749124
-- id: pac_intflag
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073745936
-- id: pac_status
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073745984
+  type: uart
+  base_address: 0x41014000
+  size: 256B
+  irq: 58
+  clock:
+    controller: mclk
+    reg: APBBMASK
+    bit: 10
+  config:
+    profile: sercom
+    gclk_id: 24

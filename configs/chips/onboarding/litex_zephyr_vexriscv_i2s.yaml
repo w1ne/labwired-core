@@ -1,15 +1,17 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Bounded profile from Renode's platforms/cpus/litex_zephyr_vexriscv_i2s.repl.
+# The smoke covers only RV32IMAC execution, the imported RAM, and LiteX UART.
+# It does not exercise the timer, I2S, Ethernet, or Zephyr boot path.
 name: litex_zephyr_vexriscv_i2s
-arch: arm
+arch: riscv
+core: rv32imac
 flash:
-  base: 1073741824
-  size: 268435456B
+  base: 0
+  size: 0
 ram:
-  base: 1073741824
+  base: 0x40000000
   size: 268435456B
-peripherals: []
+peripherals:
+  - id: uart
+    type: litex_uart
+    base_address: 0x82001800
+    size: "2KB"

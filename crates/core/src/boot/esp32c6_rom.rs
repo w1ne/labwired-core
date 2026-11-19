@@ -195,6 +195,117 @@ pub fn write_mmu_entry(bus: &mut SystemBus, entry_id: u32, phys_page: u32) {
     );
 }
 
+/// Offset into an ESP flash data window of the 64 KiB page that holds
+/// `.flash.appdesc`, IDF's `_rodata_reserved_start`.
+///
+/// ESP-IDF 5 places rodata after the text in the MMU address space, and
+/// `system_early_init` reads the image magic at that page base. On silicon the
+/// bootloader maps the factory image header there. The page moves with the
+/// text size. Returns `None` for an ELF with no such section (bare-metal
+/// images). The window is 0x4200_0000 on the C6 (unified) and 0x3C00_0000 on
+/// the C3 (DROM).
+pub fn appdesc_page_offset(elf: &[u8], window: u64) -> Option<usize> {
+    const PAGE: u64 = 0x1_0000;
+    let elf = goblin::elf::Elf::parse(elf).ok()?;
+    let sh = elf
+        .section_headers
+        .iter()
+        .find(|sh| elf.shdr_strtab.get_at(sh.sh_name) == Some(".flash.appdesc"))?;
+    let page = sh.sh_addr.checked_sub(window)? & !(PAGE - 1);
+    Some(page as usize)
+}
+
+/// Bootloader-equivalent factory layout for a loaded C6 ELF: copy the app
+/// from the bare `0x4200_0000` image into the SPI NOR backing at the factory
+/// offset, program the SPI0 MMU, then put the FlashXip window over it.
+///
+/// IROM and DROM share `0x4200_0000`; the MMU lives in SPI0
+/// MMU_ITEM_INDEX/CONTENT (VALID = BIT(9), 256 x 64 KiB). Entries with no ELF
+/// payload stay invalid so `spi_flash_mmap` can allocate free pages for the
+/// partition table at flash `0x8000`.
+///
+/// Call after ELF load. One home for `labwired test`, the RISC-V builder, a
+/// world node and the browser, so the four cannot diverge. Returns the mapped
+/// virtual pages.
+pub fn map_factory_app(bus: &mut SystemBus, elf: &[u8], partitions: Option<&[u8]>) -> Vec<u32> {
+    const PAGE: usize = 64 * 1024;
+    let factory_off = FACTORY_APP_OFFSET as usize;
+    let factory_page = (factory_off / PAGE) as u32; // 1
+    let flash_page_has_payload = |page: &[u8]| -> bool {
+        !(page.iter().all(|&b| b == 0) || page.iter().all(|&b| b == 0xFF))
+    };
+    let mut virt_pages: Vec<u32> = Vec::new();
+    let irom_len = bus.flash.data.len();
+    for page in 0..irom_len.div_ceil(PAGE) {
+        if page >= 256 {
+            break;
+        }
+        let start = page * PAGE;
+        let end = (start + PAGE).min(irom_len);
+        if flash_page_has_payload(&bus.flash.data[start..end]) {
+            virt_pages.push(page as u32);
+        }
+    }
+    // Re-install for (flash, mmu) handles — avoids a new as_any/downcast
+    // site. The fresh backing is then filled from bus.flash.
+    let (flash, mmu) = install_arduino_flash(bus, partitions);
+    {
+        let mut f = flash.lock().unwrap();
+        // Full page copy — unlike C3 (execute stays on bus.flash), C6
+        // FlashXip serves fetches from this backing, so a sparse skip-0x00
+        // copy would corrupt code.
+        for page in &virt_pages {
+            let start = *page as usize * PAGE;
+            let end = (start + PAGE).min(irom_len);
+            let dst = factory_off + start;
+            if start >= irom_len || dst >= f.len() {
+                continue;
+            }
+            let n = (end - start).min(f.len() - dst);
+            f[dst..dst + n].copy_from_slice(&bus.flash.data[start..start + n]);
+        }
+        // App image magic at start of factory partition. VA 0x4200_0000 maps
+        // here, so only stamp the 0x20-byte image-header slot when the ELF
+        // left it empty (IDF/Arduino). A bare-metal ELF linked at 0x4200_0000
+        // owns it — stamping would clobber its first instruction.
+        let header_slot_free = !flash_page_has_payload(&bus.flash.data[..irom_len.min(0x20)]);
+        if header_slot_free && f.len() > factory_off {
+            f[factory_off] = 0xE9;
+        }
+        // IDF 5 links rodata into the same window after the text, and
+        // `system_early_init` checks the magic at the page base of
+        // `_rodata_reserved_start` (the start of `.flash.appdesc`, VA
+        // 0x4203_0000 on an Arduino L0 sketch). On silicon the bootloader
+        // maps the image header there. Stamp it only into an empty header slot.
+        if let Some(page_off) = appdesc_page_offset(elf, XIP_BASE) {
+            let dst = factory_off + page_off;
+            let src = page_off.min(irom_len);
+            let slot = &bus.flash.data[src..(src + 0x20).min(irom_len)];
+            if page_off != 0 && !flash_page_has_payload(slot) && dst < f.len() {
+                f[dst] = 0xE9;
+            }
+        }
+    }
+    for vp in &virt_pages {
+        write_mmu_entry(bus, *vp, factory_page + *vp);
+    }
+    install_xip_window(bus, flash, mmu);
+    virt_pages
+}
+
+/// Post-load half of the C6 ELF fast boot: ROM `.data` re-seed (a segment or
+/// the reset path can leave the interface pointers stale) and the factory
+/// map. Returns the stack top the caller must seed. No-op on other chips,
+/// which get `None`.
+pub fn finish_elf_fast_boot(bus: &mut SystemBus, chip: &ChipDescriptor, elf: &[u8]) -> Option<u32> {
+    if !is_esp32c6(chip) {
+        return None;
+    }
+    seed_rom_data(bus);
+    map_factory_app(bus, elf, None);
+    Some(app_stack_top())
+}
+
 /// C6 mask-ROM `.data` the fast-boot path must seed because it skips the ROM
 /// `unpackloop` (12-byte `{dst_start,dst_end,src}` records at `_data_table_start`).
 /// Without this, `rom_cache_internal_table_ptr` @ `0x4087_ffc8` stays null and
@@ -272,7 +383,7 @@ pub fn maybe_install_arduino_flash(bus: &mut SystemBus, chip: &ChipDescriptor) {
         // Fast-boot skips mask-ROM unpackloop — seed the ROM `.data` tables
         // Arduino cache_hal / Preferences dispatch through.
         seed_rom_data(bus);
-        // FlashXip is installed later (after ELF → factory map) by the CLI.
+        // FlashXip is installed later, after ELF load: `map_factory_app`.
     }
 }
 

@@ -1,0 +1,562 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="25" failures="12" errors="0" time="0.892114">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.892114">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 release…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8" time="0.000000">
+    <failure message="assertion failed">assertion 3: uart_contains: padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: unaligned_context=0000001f unaligned_xpsr=" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=" time="0.000000">
+    <failure message="assertion failed">assertion 5: uart_contains: msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ct…" time="0.000000">
+    <failure message="assertion failed">assertion 6: uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ct…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: memory_value: @0x20000008=0x143" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: memory_value: @0x2000000c=0x700003ff" time="0.000000">
+    <failure message="assertion failed">assertion 8: memory_value: @0x2000000c=0x700003ff
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: memory_value: @0x20000010=0xf" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: memory_value: @0x20000014=0x12345678" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: memory_value: @0x2000001c=0x1000000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 12: memory_value: @0x20000020=0x200000e0" time="0.000000">
+    <failure message="assertion failed">assertion 12: memory_value: @0x20000020=0x200000e0
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 13: memory_value: @0x20000024=0xf" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 14: memory_value: @0x20000028=0x1000200" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 15: memory_value: @0x2000002c=0x200000d8" time="0.000000">
+    <failure message="assertion failed">assertion 15: memory_value: @0x2000002c=0x200000d8
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 16: memory_value: @0x20000030=0x200000fc" time="0.000000">
+    <failure message="assertion failed">assertion 16: memory_value: @0x20000030=0x200000fc
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 17: memory_value: @0x20000034=0x1f" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 18: memory_value: @0x20000038=0x1000000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 19: memory_value: @0x2000003c=0x200000dc" time="0.000000">
+    <failure message="assertion failed">assertion 19: memory_value: @0x2000003c=0x200000dc
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 20: memory_value: @0x20000040=0x200000fc" time="0.000000">
+    <failure message="assertion failed">assertion 20: memory_value: @0x20000040=0x200000fc
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 21: memory_value: @0x20000044=0x1f" time="0.000000">
+    <failure message="assertion failed">assertion 21: memory_value: @0x20000044=0x1f
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 22: memory_value: @0x20000048=0x9bdf1357" time="0.000000">
+    <failure message="assertion failed">assertion 22: memory_value: @0x20000048=0x9bdf1357
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 23: memory_value: @0x2000004c=0x1000200" time="0.000000">
+    <failure message="assertion failed">assertion 23: memory_value: @0x2000004c=0x1000200
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=7000000
+stop_reason_details.observed.steps_executed=7000000
+steps_executed=7000000
+cycles=7000000
+instructions=7000000
+limits:
+  - max_steps=7000000
+firmware_hash=92abbb97ba189eadddf6cd554f31839a638a1c4ea0f6ae31514d0442e89f67da
+firmware=examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml
+script=examples/renode-onboarding/mimxrt700_evk-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MIMXRT700 LP_FLEXCOMM0 LPUART SMOKE&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;rx lpuart0 re_off=1 queued=2 masked=1 asserted=1 masked_data=1 unmasked=1 data=00000052,00000053 released=1 irq=11111 handler=1 ipsr=00000017 exc_return=fffffffd psp_context=1 frame_r0=12345678 frame_pc=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;padded_context=0000000f padded_xpsr=01000200 padded_sp=200000d8&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;unaligned_context=0000001f unaligned_xpsr=&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;msp_context=0000001f msp_r0=9bdf1357 msp_xpsr=&quot; }): false
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;flexcomm0 pselid=00103070-&gt;00103071-&gt;00103079&quot;, &quot;lpuart0 verid=04010003 param=00000202 baud=0f00001a ctrl=00880000 istat=00000001&quot;, &quot;pass=000007ff&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870924, expected_value: 1879049215, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870928, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870932, expected_value: 305419896, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870940, expected_value: 16777216, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870944, expected_value: 536871136, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870948, expected_value: 15, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870952, expected_value: 16777728, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870956, expected_value: 536871128, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870960, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870964, expected_value: 31, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870968, expected_value: 16777216, mask: Some(16777728), size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870972, expected_value: 536871132, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870976, expected_value: 536871164, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870980, expected_value: 31, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870984, expected_value: 2615087959, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536870988, expected_value: 16777728, mask: Some(16777728), size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 24: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

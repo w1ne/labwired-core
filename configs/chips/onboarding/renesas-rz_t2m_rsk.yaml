@@ -4,40 +4,29 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
+# Imported Renode target `renesas-rz_t2m_rsk` (RZ/T2M, platforms/cpus/renesas_rz_t2m.repl),
+# narrowed to what the engine executes and the SCI smoke exercises: CPU0, one
+# Cortex-R52 PE on the native AArch32 Cortex-R52 model (pinned tlib arm64
+# target), the 1.5 MiB System RAM at 0x10000000, and SCI0 at 0x80001000 with
+# polled TX. Renode's `Renesas_SCI` there is the 32-bit RDR/TDR/CCR0-4/CSR
+# register map, which this engine models as `sci_b` (the RA8 SCI_B layout);
+# the imported `renesas_sci` type would have selected the classic 8-bit SCI.
+# The second R52, ATCM/BTCM, boot ROM, xSPI/flash0, GICv3, generic timer,
+# GPIO, SCI1-5 and the clock/module-stop controllers are not modeled here and
+# are intentionally omitted; the model does not gate SCI on MSTPCR.
 name: renesas-rz_t2m_rsk
 arch: arm
-flash:
-  base: 2281701376
-  size: 67108864B
+core: cortex-r52
+flash: { base: 0, size: 0 }
 ram:
-  base: 268435456
-  size: 1572864B
+  base: 0x10000000
+  size: 1536KB
+flash_boot_alias: false
 peripherals:
-- id: timer
-  type: arm_generictimer
-  bus: cpu
-  base_address: 15
 - id: sci0
-  type: renesas_sci
+  type: uart
   bus: sysbus
-  base_address: 2147487744
-- id: sci1
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147488768
-- id: sci2
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147489792
-- id: sci3
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147490816
-- id: sci4
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2147491840
-- id: sci5
-  type: renesas_sci
-  bus: sysbus
-  base_address: 2164264960
+  base_address: 0x80001000
+  size: 1KB
+  config:
+    profile: sci_b

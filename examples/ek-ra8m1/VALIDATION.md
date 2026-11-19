@@ -16,7 +16,7 @@ there is no RA8M1 bench part, and no Renode parity claim is made.
 | FSP `bsp_clock_init`: MOSC start, PLL1/PLL2 start, ICLK to PLL1P, SCICKCR | smoke-tested | Zephyr's console comes up only after `OSCSF.MOSCSF`/`PLLSF` and `SCICKCR.CKSRDY`; unit tests `ra8_oscsf_follows_the_oscillator_stop_bits`, `ra8_every_peripheral_clock_switch_has_the_handshake` |
 | `SCICKCR` CKSREQ/CKSRDY clock-switch handshake | smoke-tested | the firmware spins on CKSRDY both ways and prints `scickcr=01` (MOCO) read back |
 | SCICLK rate, `SCKDIVCR`/PLL rates, oscillator settle time, `PRCR` key | **not modelled** | every `R_SYSTEM` register is stored and reads back, but no rate is derived and `cpu_hz` stays 8 MHz; oscillators settle at once; PRCR does not gate writes |
-| `MSTPCRB.MSTPB22` release of SCI9 | declared only | `MSTP` is a stub; SCI9 runs with the bit set too |
+| MSTP registers and `MSTPCRB.MSTPB22` write/readback | sim-tested | `renesas-r7fa8m1ah-tier1-smoke.yaml` checks SVD reset values and the cleared bit; module gating is not modelled, so SCI9 also runs with the bit set |
 | SCI9 (SCI_B) async TX at 9600 8N1 (`CCR2.BRR` 25 from 8 MHz) | smoke-tested | every console line, polled on `CSR.TDRE`; `brr=25` and `ccr3=00001200` read back |
 | SCI_B `CCR0.TE` gate and `CESR.TIST/RIST` | smoke-tested | the firmware waits for `cesr=11` before its first `TDR` write; unit test `test_sci_b_tx_gate_status_and_readback` proves TX is dropped while TE is 0 |
 | `PWPRS` unlock + `PmnPFS` write (S1/S2 `PCR` pull-up) | smoke-tested | `s1=1 s2=1`: the pads read high through the PFS pull-up link; unit test `ra8_layout_moves_pwpr_and_adds_the_secure_twin` |

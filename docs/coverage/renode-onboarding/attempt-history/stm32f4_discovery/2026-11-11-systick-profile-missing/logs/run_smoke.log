@@ -1,0 +1,10 @@
+2026-11-11T20:26:04.522829Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f4_discovery.yaml
+2026-11-11T20:26:04.580038Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-11T20:26:04.580982Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-11T20:26:04.644739Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "SysTick PendSV tailchain frame=1 r0=1 pending=1 ipsr=14 ok" }) (captured len=155)
+2026-11-11T20:26:04.644758Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["hb=0 ld4=on odr=00001000", "hb=1 ld4=off odr=00000000", "hb=2 ld3=on odr=00002000", "hb=3 ld3=off odr=00000000"] }) (captured len=155)
+FAIL  5/7 checks · stm32f4_discovery-smoke · 4000000 steps · 0.06s
+FAULT  HardFault escalated from a precise BusFault: data access at 0xE000_E014 (BFAR valid), at PC 0x0800_25B8 in `core::ptr::read_volatile` (mod.rs:2091).
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0xE000E014

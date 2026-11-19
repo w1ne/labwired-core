@@ -6,3 +6,10 @@
 
 name: simavr-atmega64m1
 chip: ../../chips/onboarding/simavr-atmega64m1.yaml
+board_io:
+  - id: status_led
+    kind: led
+    peripheral: portb
+    pin: 0
+    signal: output
+    active_high: true

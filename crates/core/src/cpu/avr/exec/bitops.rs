@@ -20,6 +20,43 @@ fn write_one_register(data_addr: u16, model: AvrModel) -> bool {
         matches!(data_addr, 0x03 | 0x07)
     } else if model.is_reduced_core() {
         matches!(data_addr, 0x00 | 0x11 | 0x14)
+    } else if model.has_classic_pin_toggle() {
+        // Classic tinyAVR PINx toggle PORTx on a written 1.
+        match model {
+            AvrModel::Attiny2313 | AvrModel::Attiny4313 => matches!(data_addr, 0x30 | 0x36 | 0x39),
+            AvrModel::Attiny24 | AvrModel::Attiny44 | AvrModel::Attiny84 => {
+                matches!(data_addr, 0x36 | 0x39)
+            }
+            AvrModel::Attiny13 | AvrModel::Attiny25 | AvrModel::Attiny45 | AvrModel::Attiny85 => {
+                data_addr == 0x36
+            }
+            // ATtiny1634: PINC 0x27, PINB 0x2B, PINA 0x2F.
+            AvrModel::Attiny1634 => matches!(data_addr, 0x27 | 0x2B | 0x2F),
+            _ => false,
+        }
+    } else if model.has_classic_io_file() || model == AvrModel::Atmega128 {
+        // Classic layout: 0x35..0x3B are PORTC..PORTA/DDRx/PINx (read-only
+        // PINx), so a single-bit write there would clobber the latch.
+        false
+    } else if matches!(
+        model,
+        AvrModel::Atmega1281
+            | AvrModel::Atmega2560
+            | AvrModel::Atmega169
+            | AvrModel::Atmega128rfa1
+            | AvrModel::Atmega128rfr2
+    ) {
+        // Ports A-G: PINA..PING at 0x20, 0x23, .., 0x32.
+        matches!(
+            data_addr,
+            0x20 | 0x23 | 0x26 | 0x29 | 0x2C | 0x2F | 0x32 | 0x35..=0x37 | 0x3B | 0x3C
+        )
+    } else if matches!(model, AvrModel::Atmega16m1 | AvrModel::Atmega64m1) {
+        // The M1 parts add PINE at 0x2C.
+        matches!(
+            data_addr,
+            0x23 | 0x26 | 0x29 | 0x2C | 0x35..=0x37 | 0x3B | 0x3C
+        )
     } else {
         matches!(data_addr, 0x23 | 0x26 | 0x29 | 0x35..=0x37 | 0x3B | 0x3C)
     }

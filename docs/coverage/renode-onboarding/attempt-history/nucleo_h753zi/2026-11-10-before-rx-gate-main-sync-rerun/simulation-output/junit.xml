@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="10" failures="0" errors="0" time="1.462544">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="42f01b3931a1dab79208427110e5aee0db4fe999c0f143fc84a6209f9930eda1"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="1.462544">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_regex: ^STM32H7 register smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: STM32H7 register smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: usart3 rx_gate re_off=1 ue_off=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: usart3 rx=00000052,00000053 rxne_irq=isolated,asserted,reasserted,released ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: usart3 txe_irq=isolated,asserted,reasserted,released ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: uart_contains: usart3 tc_irq=isolated,asserted,reasserted,released ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: uart_ordered: [&quot;STM32H7 register smoke&quot;, &quot;usart3 rx_gate re_off=1 ue_off=1 ok&quot;, &quot;usart3 rx=00000052,00000053 rxne_irq=i…" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: gpio_edges: gpioPortB:0 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

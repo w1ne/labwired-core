@@ -1,0 +1,37 @@
+{
+  "target_id": "zolertia-firefly",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-zolertia-firefly-smoke",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/zolertia-firefly-smoke.yaml",
+  "system": "configs/systems/onboarding/zolertia-firefly.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-05T10:39:26Z",
+  "finished_at_utc": "2026-11-05T10:39:41Z",
+  "elapsed_seconds": 16,
+  "elapsed_ms": 15637,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 14.355,
+    "build_firmware": 0.786,
+    "run_smoke": 0.483
+  },
+  "stages_ms": {
+    "build_cli": 14355,
+    "build_firmware": 786,
+    "run_smoke": 483
+  }
+}

@@ -1,0 +1,15 @@
+2026-11-16T19:32:33.168593Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nuvoton_npcx9.yaml
+2026-11-16T19:32:33.171185Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-16T19:32:33.173240Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart2'
+2026-11-16T19:32:33.173246Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart3'
+2026-11-16T19:32:33.173248Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'cr_uart4'
+labwired-cli test: idle_ff skipped 90681982 of 92214302 device cycles (1532320 interpreted)
+2026-11-16T19:32:33.243498Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "mem code=1 data=1 image=1 pm=4 bb=1 ok" }) (captured len=502)
+2026-11-16T19:32:33.243516Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "twd expire .........|twd reboot wdrst=1 stopped=1 clr=1 t0=1 ok" }) (captured len=502)
+2026-11-16T19:32:33.243520Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "bbram kept=1 ok" }) (captured len=502)
+2026-11-16T19:32:33.243523Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxCycles }) (captured len=502)
+FAIL  11/15 checks · nuvoton_npcx9-smoke · 2000000 steps · 0.07s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x1005_8000 (BFAR valid), at PC 0x0000_44E2 in `core::ptr::write_volatile` (mod.rs:2178).
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x10058000

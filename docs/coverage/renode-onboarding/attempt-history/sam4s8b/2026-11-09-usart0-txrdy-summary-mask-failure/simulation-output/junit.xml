@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="1" errors="0" time="0.783789">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="ee89abd6722fb91b654bd3903949a005adc895e2e512b9e4fc8a14aa19b55fc1"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.783789">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;SAM4S8B RENODE SMOKE&quot;, &quot;eefc fmr=00000500 ok&quot;, &quot;eefc getd size=&quot;, &quot;eefc gpnvm=2 set=3 glb=2 clb=0 ok&quot;, …" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_ordered: [&quot;SAM4S8B RENODE SMOKE&quot;, &quot;eefc fmr=00000500 ok&quot;, &quot;eefc getd size=&quot;, &quot;eefc gpnvm=2 set=3 glb=2 clb=0 ok&quot;, …
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=1500000
+stop_reason_details.observed.steps_executed=1500000
+steps_executed=1500000
+cycles=1500000
+instructions=1500000
+limits:
+  - max_steps=1500000
+firmware_hash=ee89abd6722fb91b654bd3903949a005adc895e2e512b9e4fc8a14aa19b55fc1
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s8b-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/sam4s8b.yaml
+script=examples/renode-onboarding/sam4s8b-smoke.yaml
+assertions:
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;SAM4S8B RENODE SMOKE&quot;, &quot;eefc fmr=00000500 ok&quot;, &quot;eefc getd size=&quot;, &quot;eefc gpnvm=2 set=3 glb=2 clb=0 ok&quot;, &quot;eefc fsr badkey=3 after=1 ok&quot;, &quot;rstc sr=00010000 wdt mr=3fff2fff ok&quot;, &quot;rstc software reset&quot;, &quot;SAM4S8B RENODE SMOKE&quot;, &quot;rstc rsttyp=3 ok&quot;, &quot;wdt arm wdv=2&quot;, &quot;SAM4S8B RENODE SMOKE&quot;, &quot;wdt rsttyp=2 mr=3fff2fff ok&quot;, &quot;wdt window sr=2 pended released ok&quot;, &quot;wdt mr once=00801100 ok&quot;, &quot;pmc pcsr0=&quot;, &quot;pio ports=2 ok&quot;, &quot;tc0 rc pend=1 ok&quot;, &quot;usart0 txrdy imr=2 pend=1 released=1 ok&quot;, &quot;SAM4S8B PASS&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537001728, expected_value: 1514151935, mask: None, size: Some(4), node: None } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x2001ff00=0x5a401fff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

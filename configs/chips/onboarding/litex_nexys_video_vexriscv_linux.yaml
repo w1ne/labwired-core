@@ -1,9 +1,24 @@
+# Bounded bare-metal RV32IM profile from Renode's Nexys Video LiteX platform.
+# This profile keeps the ROM, SRAM, LiteX UART, and timer exercised by the
+# onboarding smoke. RV32A, DDR/Linux boot, CLINT, PLIC, SD, and video are outside
+# the measured subset.
+# Upstream: https://github.com/renode/renode/blob/master/platforms/cpus/litex_nexys_video_vexriscv_linux.repl
 name: litex_nexys_video_vexriscv_linux
-arch: arm
+arch: riscv
+core: rv32im
 flash:
-  base: 536870912
-  size: 1048576
+  base: 0
+  size: 65536B
+flash_boot_alias: false
 ram:
   base: 268435456
   size: 8192B
-peripherals: []
+peripherals:
+- id: uart
+  type: litex_uart
+  bus: sysbus
+  base_address: 4026535936
+- id: timer0
+  type: litex_timer
+  bus: sysbus
+  base_address: 4026537984

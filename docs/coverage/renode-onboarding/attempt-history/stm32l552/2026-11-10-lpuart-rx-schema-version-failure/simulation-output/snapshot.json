@@ -1,0 +1,25 @@
+{
+  "type": "config_error",
+  "message": "'uart_injections' require schema_version '1.2' (got '1.0')",
+  "stop_reason_details": {
+    "triggered_stop_condition": "config_error",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 0,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 0,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "config": {
+    "firmware": "",
+    "system": null,
+    "script": "examples/renode-onboarding/stm32l552-smoke.yaml"
+  }
+}

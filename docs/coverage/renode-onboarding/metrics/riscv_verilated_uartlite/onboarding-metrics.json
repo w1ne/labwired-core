@@ -1,0 +1,37 @@
+{
+  "target_id": "riscv_verilated_uartlite",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-riscv-verilated-uartlite-smoke",
+  "target_triple": "riscv32im-unknown-none-elf",
+  "script": "examples/renode-onboarding/riscv_verilated_uartlite-smoke.yaml",
+  "system": "configs/systems/onboarding/riscv_verilated_uartlite.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-19T16:12:29Z",
+  "finished_at_utc": "2026-11-19T16:12:36Z",
+  "elapsed_seconds": 7,
+  "elapsed_ms": 6885,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 4.471,
+    "build_firmware": 1.373,
+    "run_smoke": 0.99
+  },
+  "stages_ms": {
+    "build_cli": 4471,
+    "build_firmware": 1373,
+    "run_smoke": 990
+  }
+}

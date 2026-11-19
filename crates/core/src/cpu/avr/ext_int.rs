@@ -649,6 +649,7 @@ mod tests {
         cpu.load_words(0x100, &[0x9A1D, 0xCFFF]);
         cpu.set_pc(0x100);
         run(&mut cpu, &mut bus, 1);
+        // The CPU owns the latch: PB5 toggles low, PB0 stays high.
         assert_eq!(
             read(&cpu, &bus, PB + 2),
             0x01,

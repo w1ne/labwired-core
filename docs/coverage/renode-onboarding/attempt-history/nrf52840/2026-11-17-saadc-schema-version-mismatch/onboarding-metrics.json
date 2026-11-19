@@ -1,0 +1,37 @@
+{
+  "target_id": "nrf52840",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "config_error"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-nrf52840-demo",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/nrf52840-smoke.yaml",
+  "system": "configs/systems/onboarding/nrf52840.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-17T03:06:33Z",
+  "finished_at_utc": "2026-11-17T03:06:39Z",
+  "elapsed_seconds": 6,
+  "elapsed_ms": 5992,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "'stimuli' require schema_version '1.2' (got '1.0')",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 4.357,
+    "build_firmware": 1.333,
+    "run_smoke": 0.257
+  },
+  "stages_ms": {
+    "build_cli": 4357,
+    "build_firmware": 1333,
+    "run_smoke": 257
+  }
+}

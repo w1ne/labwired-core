@@ -1,13 +1,19 @@
-name: kendryte_k210
-arch: arm
-flash:
-  base: 2147483648
-  size: 33554432B
-ram:
-  base: 1073741824
-  size: 262144
+# Narrowed K210 execution profile based on Renode's kendryte_k210.repl.
+# Run one RV64IMAC hart and use the mapped 32 MiB window at 0x80000000 for
+# firmware and data. The second hart, F/D instructions, interrupt controllers,
+# KPU, and unmodeled K210 peripherals are outside this smoke. The memory window
+# is represented as RAM by the engine; flash-controller behavior is not claimed.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/kendryte_k210.repl
+
+name: "kendryte_k210"
+arch: "riscv"
+core: "rv64imac"
+flash_boot_alias: false
+flash: { base: 0, size: "0B" }
+ram: { base: 0x80000000, size: "32MiB" }
+
 peripherals:
-- id: uart
-  type: sifive_uart
-  bus: sysbus
-  base_address: 939524096
+  - id: "uart"
+    type: "sifive_uart"
+    base_address: 0x38000000
+    size: "4KB"

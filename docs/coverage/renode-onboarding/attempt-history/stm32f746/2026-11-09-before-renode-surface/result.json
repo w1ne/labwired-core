@@ -1,0 +1,513 @@
+{
+  "result_schema_version": "1.0",
+  "status": "error",
+  "steps_executed": 8000000,
+  "cycles": 8000000,
+  "instructions": 8000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 8000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 8000000
+    }
+  },
+  "limits": {
+    "max_steps": 8000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "message": "9 stimulus/stimuli could not be applied, so the run proved nothing about them: tc_spi2.temperature = 100: no attached input device exposes channel 'tc_spi2/temperature'; tc_spi3.temperature = 75: no attached input device exposes channel 'tc_spi3/temperature'; tc_spi1b.temperature = 50: no attached input device exposes channel 'tc_spi1b/temperature'; sw_pk3.pressed = 1: no attached input device exposes channel 'sw_pk3/pressed'; sw_pk3.pressed = 0: no attached input device exposes channel 'sw_pk3/pressed'; sw_pk3.pressed = 1: no attached input device exposes channel 'sw_pk3/pressed'; sw_pk3.pressed = 0: no attached input device exposes channel 'sw_pk3/pressed'; sw_pc13.pressed = 1: no attached input device exposes channel 'sw_pc13/pressed'; sw_pc13.pressed = 0: no attached input device exposes channel 'sw_pc13/pressed'",
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "STM32F746 Cortex-M7 smoke"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "usart2 ok"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "usart3 ok"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "uart4 ok"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "uart5 ok"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "usart6 ok"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "uart7 ok"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "uart8 ok"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "rcc reset=1 gate=1 mask=1 ok",
+          "usart irq usart1=1 usart2=1 usart3=1 uart4=1 uart5=1 usart6=1 uart7=1 uart8=1 ok",
+          "gpio pa=1 pb=1 reset=1 pi1=1 jk=1 ok",
+          "syscfg memrmp=0x00000C00 pmc=0x008700FF fields=1 cmpcr=1 ok",
+          "exti swier masked=1 routed=1 ok",
+          "tim1 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim2 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim4 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim8 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim9 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim12 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim13 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "tim14 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok",
+          "exti pads idle=1 presses=1 pa_quiet=1 pk3=1 pc13=1 ok",
+          "spi1 frame=0x01901600 ds=1 data=1 pend=1 alone=1 released=1 ok",
+          "spi2 frame=0x06401600 ds=1 data=1 pend=1 alone=1 released=1 ok",
+          "spi3 frame=0x04B01600 ds=1 data=1 pend=1 alone=1 released=1 ok",
+          "spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok",
+          "dma2 spi1 frame=0x01901600 unselected=1 data=1 flags=1 pend=1 alone=1 released=1 ok",
+          "dma1 spi2 frame=0x06401600 unselected=1 data=1 flags=1 pend=1 alone=1 released=1 ok",
+          "dma m2m dma1_refused=1 dma2_copied=1 ok",
+          "i2c1 tmp102=0x00001900 data=1 rx_pend=1 ok",
+          "i2c1 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok",
+          "i2c2 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok",
+          "i2c3 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok",
+          "i2c4 oar=1 nack=1 nack_pend=1 stop=1 released=1 ok",
+          "crc word=0xDF8A8A2B crc16=0x000029B1 seed=1 std=1 init=1 idr=1 poly16=1 ok",
+          "rng off=1 ready=1 draws=1 stopped=1 ok",
+          "summary 0x747FFFFF",
+          "DONE"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 536883200,
+          "expected_value": 1954545663,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpioi:1",
+          "min_edges": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      165,
+      1073887280,
+      134242540,
+      0,
+      0,
+      1073875988,
+      0,
+      537198464,
+      0,
+      0,
+      0,
+      0,
+      0,
+      537198464,
+      4294967289,
+      134241072
+    ],
+    "pc": 134241072,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "1d67d620bdc36fbe4bc371c5dcfdbef8a87f05ba826a346fbcc933f0a186267d",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746-smoke",
+    "system": "/tmp/f746before/configs/systems/onboarding/stm32f746.yaml",
+    "script": "examples/renode-onboarding/stm32f746-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "usart1",
+        "kind": "native",
+        "base": 1073811456,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortI",
+        "kind": "native",
+        "base": 1073881088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073887232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x40020c14",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "write"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "fault_verdict": {
+    "summary": "HardFault escalated from a precise BusFault: data access at 0x4002_0C14 (BFAR valid), at PC 0x0800_1376 in `core::ptr::write_volatile` (mod.rs:2178), called from `main`.",
+    "kind": "hard_fault",
+    "escalated": true,
+    "origin": "bus_fault",
+    "causes": [
+      {
+        "register": "HFSR",
+        "flag": "FORCED",
+        "meaning": "a configurable fault escalated to HardFault"
+      },
+      {
+        "register": "BFSR",
+        "flag": "PRECISERR",
+        "meaning": "data access"
+      }
+    ],
+    "precise": true,
+    "fault_address": "0x40020C14",
+    "fault_address_source": "BFAR",
+    "pc": "0x08001376",
+    "lr": "0x08005B27",
+    "exc_return": {
+      "value": "0xFFFFFFF9",
+      "return_to": "thread",
+      "stack": "msp",
+      "fp_frame": false
+    },
+    "frame": {
+      "sp": "0x2004FF88",
+      "r0": "0x000000A5",
+      "r1": "0x40023830",
+      "r2": "0x080060EC",
+      "r3": "0x00000000",
+      "r12": "0x00000000",
+      "lr": "0x08005B27",
+      "pc": "0x08001376",
+      "xpsr": "0x01000000"
+    },
+    "location": {
+      "function": "core::ptr::write_volatile",
+      "file": "/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/core/src/ptr/mod.rs",
+      "line": 2178
+    },
+    "caller": {
+      "function": "main",
+      "file": "/home/andrii/worktrees/labwired-core/renode/crates/firmware-stm32f746-smoke/src/main.rs",
+      "line": 1002
+    },
+    "registers": {
+      "hfsr": "0x40000000",
+      "cfsr": "0x00008200",
+      "mmfsr": "0x00",
+      "bfsr": "0x82",
+      "ufsr": "0x0000",
+      "mmfar": "0x00000000",
+      "bfar": "0x40020C14"
+    }
+  },
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 8000000,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpioi",
+        "pin": 1,
+        "transitions": [],
+        "gaps": [],
+        "mode": "unknown",
+        "edge_count": 0
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpioi",
+      "number": 1,
+      "mode": "unknown",
+      "func": null,
+      "output": null,
+      "input": null,
+      "pad": null,
+      "drive": null
+    }
+  ],
+  "stimuli": [
+    {
+      "channel": "temperature",
+      "component": "tc_spi2",
+      "value": 100.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "rejected",
+      "at_cycle": 1000,
+      "error": "no attached input device exposes channel 'tc_spi2/temperature'"
+    },
+    {
+      "channel": "temperature",
+      "component": "tc_spi3",
+      "value": 75.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "rejected",
+      "at_cycle": 1000,
+      "error": "no attached input device exposes channel 'tc_spi3/temperature'"
+    },
+    {
+      "channel": "temperature",
+      "component": "tc_spi1b",
+      "value": 50.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000
+        }
+      },
+      "outcome": "rejected",
+      "at_cycle": 1000,
+      "error": "no attached input device exposes channel 'tc_spi1b/temperature'"
+    },
+    {
+      "channel": "pressed",
+      "component": "sw_pk3",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1500000
+        }
+      },
+      "outcome": "rejected",
+      "at_cycle": 1500000,
+      "error": "no attached input device exposes channel 'sw_pk3/pressed'"
+    },
+    {
+      "channel": "pressed",
+      "component": "sw_pk3",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1700000
+        }
+      },
+      "outcome": "rejected",
+      "at_cycle": 1700000,
+      "error": "no attached input device exposes channel 'sw_pk3/pressed'"
+    },
+    {
+      "channel": "pressed",
+      "component": "sw_pk3",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 2100000
+        }
+      },
+      "outcome": "rejected",
+      "at_cycle": 2100000,
+      "error": "no attached input device exposes channel 'sw_pk3/pressed'"
+    },
+    {
+      "channel": "pressed",
+      "component": "sw_pk3",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 2300000
+        }
+      },
+      "outcome": "rejected",
+      "at_cycle": 2300000,
+      "error": "no attached input device exposes channel 'sw_pk3/pressed'"
+    },
+    {
+      "channel": "pressed",
+      "component": "sw_pc13",
+      "value": 1.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 2700000
+        }
+      },
+      "outcome": "rejected",
+      "at_cycle": 2700000,
+      "error": "no attached input device exposes channel 'sw_pc13/pressed'"
+    },
+    {
+      "channel": "pressed",
+      "component": "sw_pc13",
+      "value": 0.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 2900000
+        }
+      },
+      "outcome": "rejected",
+      "at_cycle": 2900000,
+      "error": "no attached input device exposes channel 'sw_pc13/pressed'"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 24812,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 24812,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 2097152,
+    "ram_total_bytes": 393216,
+    "flash_used_pct": 1.18,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 327680,
+    "main_stack_high_water_bytes": 20,
+    "main_stack_free_min_bytes": 327620,
+    "main_stack_base": 536870912,
+    "main_stack_top": 537198592,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 327680,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 327620,
+    "heap_base": 536870912,
+    "heap_top": 537198592
+  },
+  "metrics": {
+    "cycles": 8000000,
+    "instructions": 8000000,
+    "steps_executed": 8000000,
+    "memory_reads": 58,
+    "memory_writes": 17,
+    "peripheral_accesses": 2,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134241072,
+        "count": 31250,
+        "symbol": "HardFault_"
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+2026-11-03T10:02:44.721809Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32l071.yaml
+2026-11-03T10:02:44.722645Z  INFO labwired_loader: ELF Entry Point: 0x80000c1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-03T10:02:44.748095Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpioPortA:5", min_edges: 1 } }) (captured len=25)
+FAIL  2/3 checks · stm32l071-smoke · 800000 steps · 0.02s

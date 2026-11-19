@@ -1,0 +1,1 @@
+Passing target metrics and simulation artifacts before the Cortex-M0 external exception smoke was added. The baseline had five JUnit cases (the run plus four smoke assertions) and summary word `0x0DC3FFFF`.

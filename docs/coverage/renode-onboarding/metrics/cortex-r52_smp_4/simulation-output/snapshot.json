@@ -1,0 +1,58 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "cortex_a",
+    "registers": [
+      3347,
+      3347,
+      0,
+      0,
+      117,
+      0,
+      2617835520,
+      144,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      68
+    ],
+    "pc": 68,
+    "cpsr": 1610613210
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "7a471136828ff7260a3d738a42b3250e9f8c2f2aa7924b02d21a0fcb9b69946a",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/cortex-r52-uart-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/cortex-r52_smp_4.yaml",
+    "script": "examples/renode-onboarding/cortex-r52_smp_4-r52-uart-smoke.yaml"
+  }
+}

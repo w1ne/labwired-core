@@ -1,0 +1,61 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: renesas-da14592
+arch: arm
+# DA14592 main Cortex-M33 profile from Renode platforms/cpus/renesas-da14592.repl
+# (https://github.com/renode/renode/blob/master/platforms/cpus/renesas-da14592.repl).
+#
+# Memory: ROM 0x48000 bytes at 0x0 (Renode `rom`, also at 0x900000); SRAM
+# 0x18000 bytes at 0x20000000, also at 0x800000 (Renode `sram`); eFlash data
+# area 0x40800 bytes at 0x31000000, also at 0xA00000 (Renode
+# `eflash_data_header` + `eflash_data_text`, plain memory there too). The
+# mirrors are same-backing aliases: a store through one view shows in the
+# other.
+#
+# Declared: UART0/UART1 (Renesas DA14 UART = DesignWare APB 16550, 4-byte
+# stride, polled; IRQs 3/4 not routed; 256-byte windows, since the UART
+# default window would cover UART1 at +0x100 and GPIO at +0x600) and the P0/P1 GPIO block (`da14`
+# layout: DATA/SET/RESET + per-pad MODE; Renode RenesasDA14_GPIO, Zephyr
+# gpio_smartbond.c).
+# Not declared (no model): auxiliary Cortex-M0+ CMAC core, GPT timers 1-4,
+# system watchdog, GPADC, DMA, DesignWare I2C, SPI, clock generation and
+# XTAL32M registers, general-purpose registers, QSPI/flash controllers,
+# the tagged CHIP_ID words.
+core: cortex-m33
+flash:
+  base: 0x00000000
+  size: 294912B
+ram:
+  base: 0x20000000
+  size: 98304B
+memory_regions:
+- name: rom_mirror
+  base: 0x00900000
+  size: 294912B
+  alias_of: 0x00000000
+- name: sram_low
+  base: 0x00800000
+  size: 98304B
+  alias_of: 0x20000000
+- name: eflash_data
+  base: 0x31000000
+  size: 264192B
+- name: eflash_data_low
+  base: 0x00A00000
+  size: 264192B
+  alias_of: 0x31000000
+peripherals:
+- id: uart0
+  type: renesasda14_uart
+  bus: sysbus
+  base_address: 0x50020000
+  size: 256B
+- id: uart1
+  type: renesasda14_uart
+  bus: sysbus
+  base_address: 0x50020100
+  size: 256B
