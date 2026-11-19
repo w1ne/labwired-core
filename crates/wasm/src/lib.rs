@@ -847,6 +847,19 @@ impl WasmSimulator {
             .map_err(|e| JsValue::from_str(&format!("Loader Error: {}", e)))?;
         let mut sim =
             Self::new_from_config_riscv_program_image(chip, manifest, &program_image, blobs)?;
+        // C6: ROM `.data` re-seed, the bootloader's factory map and the app
+        // stack top — the post-load half `labwired test` and the native
+        // builder run. It needs the ELF's section table, so it lives here and
+        // not in the program-image body. No-op on every other chip.
+        if let Some(machine) = sim.machine.as_mut() {
+            if let Some(sp_top) = labwired_core::boot::esp32c6_rom::finish_elf_fast_boot(
+                &mut machine.bus,
+                chip,
+                firmware,
+            ) {
+                machine.cpu.set_sp(sp_top & !0xF);
+            }
+        }
         if let Some(addr) = control_block {
             if let Some(machine) = sim.machine.as_mut() {
                 machine.bus.attach_segger_rtt(Some(addr));
@@ -937,8 +950,12 @@ impl WasmSimulator {
         load_program_segments_without_reset(&mut machine, &bootloader_image)
             .map_err(|e| JsValue::from_str(&format!("C3 flash fast-start load: {e}")))?;
 
-        let sp_top = (chip.ram.base + chip.ram.size) as u32;
-        machine.cpu.set_sp(sp_top & !0xF);
+        // This path skips ROM reset: reproduce the ESP32-C3 rev3 ROM's SP
+        // initialization at 0x4000_1edc. The chip descriptor's full RAM top
+        // includes ROM-reserved memory and can lie outside ESP-IDF's valid
+        // stack range. IDF reserves the area above app DRAM for ROM data/stack;
+        // arbitrary custom ROM or bootloader layouts are not qualified here.
+        machine.cpu.set_sp(0x3fcd_e710);
         machine.cpu.set_pc(bootloader_image.entry_point as u32);
 
         // Attach the per-lab virtual-WiFi AP if the diagram declares one. This is
@@ -969,7 +986,11 @@ impl WasmSimulator {
         program_image: &ProgramImage,
         blobs: &std::collections::HashMap<String, Vec<u8>>,
     ) -> Result<WasmSimulator, JsValue> {
-        let mut bus = SystemBus::from_config(chip, manifest)
+        // A blob named after an `image_env` region fills it. The ESP32-C6
+        // mask ROM is `rom`: it is not compiled into the bundle, and stock
+        // Arduino-ESP32 3.x calls it from its first instructions (ROM
+        // `rtc_get_reset_reason` at step 21), so a zero window wedges there.
+        let mut bus = SystemBus::from_config_with_region_images(chip, manifest, &[], blobs)
             .map_err(|e| JsValue::from_str(&format!("Bus config error: {:#}", e)))?;
 
         // Inject the on-demand ESP32-C3 boot ROM blobs into the chip's still
@@ -1036,6 +1057,10 @@ impl WasmSimulator {
                 false
             }
         };
+
+        // C6 Arduino Preferences/NVS: MSPI SPI_MEM + partition table @ 0x8000.
+        // No-op on non-C6 chips. See `boot::esp32c6_rom`.
+        labwired_core::boot::esp32c6_rom::maybe_install_arduino_flash(&mut bus, chip);
 
         let console = ConsoleCapture::for_manifest(manifest);
         let uart_sink = console.heard_sink();
@@ -2958,6 +2983,71 @@ mod romboot_tests {
         );
     }
 
+    /// Stock Arduino-ESP32 3.x on the ESP32-C6 through the browser entry
+    /// (`new_from_config_riscv`), with the mask ROM passed as the `rom` blob;
+    /// see `tests/fixtures/esp32c6-stock-arduino-gpio2.md`. The sketch calls
+    /// ROM `rtc_get_reset_reason` at step 21 and drives GPIO2 high near cycle
+    /// 554,514. Returns whether GPIO2 read high inside the budget.
+    fn c6_stock_arduino_gpio2_high(rom: Vec<u8>) -> bool {
+        use labwired_core::machine::AdvanceRequest;
+        use labwired_core::Bus as _;
+        use std::collections::HashMap;
+        use std::path::Path;
+
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            &std::fs::read_to_string(root.join("configs/chips/esp32c6.yaml")).unwrap(),
+        )
+        .unwrap();
+        let manifest: SystemManifest = serde_yaml::from_str(
+            &std::fs::read_to_string(root.join("configs/systems/esp32c6-devkitc.yaml")).unwrap(),
+        )
+        .unwrap();
+        let fw = std::fs::read(root.join("tests/fixtures/esp32c6-stock-arduino-gpio2.elf"))
+            .expect("read stock Arduino C6 ELF");
+        let mut blobs: HashMap<String, Vec<u8>> = HashMap::new();
+        blobs.insert("rom".into(), rom);
+
+        let mut sim = WasmSimulator::new_from_config_riscv(&chip, &manifest, &fw, &blobs)
+            .expect("construct C6 WasmSimulator");
+        let m = sim.machine.as_mut().unwrap();
+        // GPIO_OUT_REG (GPIO base 0x6009_1000 + 0x04), bit 2.
+        const GPIO_OUT: u64 = 0x6009_1004;
+        for _ in 0..40 {
+            // Machine-level advance: a fault is a core error here, and a
+            // `JsValue` cannot be built off wasm32.
+            if m.advance(AdvanceRequest::run(Some(50_000))).is_err() {
+                return false;
+            }
+            if m.bus.read_u32(GPIO_OUT).unwrap() & (1 << 2) != 0 {
+                return true;
+            }
+        }
+        false
+    }
+
+    #[test]
+    fn esp32c6_stock_arduino_elf_boots_with_rom_blob() {
+        let rom = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../core/roms/esp32c6/esp32c6_rom.bin"),
+        )
+        .expect("read vendored C6 ROM");
+        assert!(
+            c6_stock_arduino_gpio2_high(rom),
+            "GPIO2 stayed low for 2,000,000 cycles"
+        );
+    }
+
+    /// Negative control: a zero ROM window never reaches `setup()`.
+    #[test]
+    fn esp32c6_stock_arduino_elf_needs_the_rom_blob() {
+        assert!(
+            !c6_stock_arduino_gpio2_high(vec![0; 16]),
+            "GPIO2 went high with a zero ROM window"
+        );
+    }
+
     /// Decisive proof the browser OLED lab paints: boot the curated
     /// `esp32c3-oled-demo` IDF flash image FAITHFULLY through the real mask ROM
     /// (the exact browser entry `new_from_config_riscv_romboot`), let the
@@ -3310,6 +3400,33 @@ mod romboot_tests {
             "C3 must parse the stats and repaint the panel — the device is only \
              'working' once the panel shows the numbers; serial:\n{out}"
         );
+    }
+
+    #[test]
+    fn c3_flash_fast_start_uses_rom_reset_stack() {
+        // Reset ROM at 0x4000_1edc: auipc sp, 0xffcdd; addi sp, sp, -0x7cc.
+        // Lock the provenance to the actual vendored ROM, not a guessed RAM top.
+        let rom = std::fs::read(root().join("../core/roms/esp32c3/esp32c3_rom.bin"))
+            .expect("read vendored C3 ROM");
+        assert_eq!(
+            &rom[0x1edc..0x1ee4],
+            &[0x17, 0xd1, 0xcd, 0xff, 0x13, 0x01, 0x41, 0x83]
+        );
+        let (mut sim, _) = c3_browser_fast_start_sim();
+        assert_eq!(sim.get_register(2).unwrap(), 0x3fcd_e710);
+        let cache_ptr = sim.read_memory(0x3fcd_ffd4, 4).unwrap();
+        let ops_ptr = sim.read_memory(0x3fcd_fffc, 4).unwrap();
+        assert_ne!(
+            cache_ptr,
+            vec![0; 4],
+            "ROM cache pointer must be initialized"
+        );
+        assert_ne!(ops_ptr, vec![0; 4], "ROM ops pointer must be initialized");
+        // A machine error after partial progress is returned as the elapsed
+        // count; require the entire budget, allowing cycle-count overshoot.
+        assert!(sim.step_batch(100_000).expect("bootloader executes") >= 100_000);
+        assert_eq!(sim.read_memory(0x3fcd_ffd4, 4).unwrap(), cache_ptr);
+        assert_eq!(sim.read_memory(0x3fcd_fffc, 4).unwrap(), ops_ptr);
     }
 
     fn c3_browser_fast_start_sim() -> (WasmSimulator, u32) {
