@@ -16,6 +16,11 @@ models:
   # board records no silicon capture, so there is no "silicon-verified"
   # claim for the corrected digest to invalidate — no ack is implied.
   - crates/core/src/peripherals/adc.rs
+  # 2026-11-09, model_paths_drift_gate: the F7 CRC sub-word fix registered
+  # `crc` in this board's chip descriptor while the models list kept omitting
+  # it, so its source stayed invisible to the drift digest. Same as the
+  # 2026-09-22 batch: no silicon capture, no ack implied.
+  - crates/core/src/peripherals/crc.rs
   - crates/core/src/peripherals/dbgmcu.rs
   - crates/core/src/peripherals/exti.rs
   - crates/core/src/peripherals/flash.rs

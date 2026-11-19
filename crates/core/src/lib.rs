@@ -1801,7 +1801,10 @@ impl<C: Cpu> Machine<C> {
                 }
             }
             let wfi_budget = self.cpu.idle_fast_forward_budget(&self.bus);
-            let timer_poll = !cycle_accurate && self.bus.take_timer_poll_coalesce_eligible();
+            let timer_poll = !cycle_accurate
+                && self
+                    .bus
+                    .take_timer_poll_coalesce_eligible(u64::from(self.cpu.get_pc()));
             let primary_spin = match wfi_budget {
                 Some(budget) if budget > 0 => None,
                 _ if self.cpu.poll_loop_anchor_ready() => {
