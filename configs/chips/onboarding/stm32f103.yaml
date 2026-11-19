@@ -72,11 +72,12 @@ peripherals:
   bus: sysbus
   base_address: 0x40020000
   size: 1KB
-  # RM0008 hard-wires ADC1 to DMA1 channel 1.
+  # RM0008 hard-wires ADC1 to DMA1 channel 1 and USART2_RX to channel 6.
   irq: 11
   config:
     requests:
       adc1_rx: 1
+      usart2_rx: 6
 - id: i2c1
   type: i2c
   bus: sysbus
