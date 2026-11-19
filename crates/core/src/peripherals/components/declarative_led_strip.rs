@@ -781,7 +781,7 @@ impl PeripheralKit for DeclarativeLedStripKit {
                 let label = ctx.config_str("data_pin").unwrap_or("GPIO48").to_string();
                 let pin = ctx.parse_gpio_pin(&label).ok_or_else(|| {
                     anyhow::anyhow!(
-                        "{} '{}' data_pin '{}' could not be parsed to an ESP GPIO (0..=48)",
+                        "{} '{}' data_pin '{}' could not be resolved to a GPIO pad (ESP GPIO name, STM32 port pad, or chip-declared pin)",
                         self.descriptor.r#type,
                         ctx.device_id(),
                         label
