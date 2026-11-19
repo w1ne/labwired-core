@@ -4,147 +4,56 @@
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
 
-# SUPERSEDED: staged onboarding descriptor (its flash at 0x08000000 is the
-# RA6M5 8 KiB data flash, not the 2 MiB code flash at 0x0 per R7FA6M5BH.h /
-# Zephyr r7fa6m5bh3cfc.dtsi). The promoted RA6M5 part is
-# configs/chips/r7fa6m5bh.yaml (board: configs/systems/ek-ra6m5.yaml).
+# Deliberately narrow Renode onboarding profile. Renode's CK-RA6M5 board
+# includes platforms/cpus/renesas-r7fa6m5b.repl (Cortex-M33, 2 MiB code flash
+# at 0x0, 512 KiB SRAM at 0x20000000) and wires LEDs to P601/P609/P610 and
+# the button to P804. This profile claims only the model-backed SCI0 (classic
+# SCI; Renode sets enableFIFO: false, and its RA6M5 tests use sci0 as the
+# console), PORT6, PORT8, PFS, FPU context, and the R_MSTP register file
+# exercised by the smoke. R_MSTP provides SVD-derived register readback only;
+# it does not gate modules. ICU, GPT, AGT, IIC (and the board's I2C sensors), SCI1-9, the
+# other ports, data flash and the SYSTEM OSCSF script are not mapped. The
+# promoted RA6M5 part with ICU/AGT/GPT and FIFO SCI is configs/chips/r7fa6m5bh.yaml.
+# Source: https://github.com/renode/renode/blob/master/platforms/boards/renesas-ck_ra6m5.repl
 name: renesas-ck_ra6m5
 arch: arm
+core: cortex-m33
 flash:
-  base: 134217728
-  size: 2097152B
+  base: 0x00000000
+  size: 2MiB
 ram:
-  base: 536870912
-  size: 524288B
+  base: 0x20000000
+  size: 512KiB
 peripherals:
-- id: led_red
-  type: led
-  bus: port6
-  base_address: 10
-- id: led_green
-  type: led
-  bus: port6
-  base_address: 9
-- id: led_blue
-  type: led
-  bus: port6
-  base_address: 1
-- id: button
-  type: button
-  bus: port8
-  base_address: 4
-- id: hs3001
-  type: hs3001
-  bus: iic0
-  base_address: 68
-- id: iaq
-  type: zmod4xxx
-  bus: iic0
-  base_address: 50
-- id: oaq
-  type: zmod4xxx
-  bus: iic0
-  base_address: 51
-- id: barometer
-  type: icp_101xx
-  bus: iic0
-  base_address: 99
-- id: icm
-  type: icm20948
-  bus: iic0
-  base_address: 104
-- id: magnetometer
-  type: ak09916
-  bus: icm
-  base_address: 12
-- id: sysc_oscsf
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073864764
-- id: gpt
-  type: renesasra_gpt
-  bus: sysbus
-  base_address: 1075220480
-- id: agt0
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074692096
-- id: agt1
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074692352
-- id: agt2
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074692608
-- id: agt3
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074692864
-- id: agt4
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074693120
-- id: agt5
-  type: renesasra_agt
-  bus: sysbus
-  base_address: 1074693376
-- id: sci0
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074888704
-- id: sci1
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074888960
-- id: sci2
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074889216
-- id: sci3
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074889472
-- id: sci4
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074889728
-- id: sci5
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074889984
-- id: sci6
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074890240
-- id: sci7
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074890496
-- id: sci8
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074890752
-- id: sci9
-  type: renesasra6m5_sci
-  bus: sysbus
-  base_address: 1074891008
-- id: portMisc
-  type: renesasra_gpiomisc
-  bus: sysbus
-  base_address: 1074269440
-- id: iic0
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1074393088
-- id: iic1
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1074393344
-- id: iic2
-  type: stub
-  renode_type: renesasra_iic
-  bus: sysbus
-  base_address: 1074393600
+  - id: mstp
+    type: declarative
+    base_address: 0x40084000
+    size: 64B
+    config:
+      path: ../../peripherals/r7fa6m5bh/mstp.yaml
+  - id: port6
+    type: gpio
+    base_address: 0x400800C0
+    size: 32B
+    config: { profile: ra_port, pad_control: pfs, pad_control_port: 6, swapped_half_aliases: true }
+  - id: port8
+    type: gpio
+    base_address: 0x40080100
+    size: 32B
+    config: { profile: ra_port, pad_control: pfs, pad_control_port: 8, swapped_half_aliases: true }
+  - id: pfs
+    type: ra_pfs
+    base_address: 0x40080800
+    size: 1536B
+  - id: sci0
+    type: uart
+    base_address: 0x40118000
+    size: 256B
+    config:
+      profile: sci
+  # FP context registers and CPACR gate used by the scalar FPU smoke; MVFR
+  # feature-ID registers remain unmapped.
+  - id: fpu
+    type: cortex_m_fpu
+    base_address: 0xE000EF30
+    size: 16B

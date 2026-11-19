@@ -1,0 +1,23 @@
+name: eos-s3
+arch: arm
+core: cortex-m4
+flash:
+  base: 0
+  size: 512KB
+ram:
+  base: 536870912
+  size: 512KB
+memory_regions:
+- name: sdma_sram
+  base: 1073803264
+  size: 4KB
+peripherals:
+- id: uart
+  type: pl011
+  base_address: 1073807360
+- id: gpio
+  type: gpio
+  base_address: 1073762560
+  size: 8B
+  config:
+    profile: eos_s3

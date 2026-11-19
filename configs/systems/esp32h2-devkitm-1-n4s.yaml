@@ -1,0 +1,19 @@
+# LabWired - ESP32-H2-DevKitM-1-N4S UART and onboard RGB profile.
+#
+# Board source: ESP32-H2-DevKitM-1 User Guide. UART0 capture goes directly to
+# the host console; the addressable RGB LED is an external WS2812 observer on
+# GPIO8. The board's USB-to-UART bridge and physical IO_MUX route are not
+# simulated.
+
+name: "esp32h2-devkitm-1-n4s"
+chip: "../chips/esp32h2.yaml"
+cpu_hz: 96_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO8"
+      num_pixels: 1
+      cpu_hz: 96000000

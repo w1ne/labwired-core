@@ -15,6 +15,8 @@
 //! * the idle switch/button levels and the button pending/enable registers,
 //! * a one-shot run of the modelled LiteX timer (`timer=running` → `timer=zero`),
 //! * a heartbeat whose `txfull` field is read back from the UART CSR.
+//! * a bitbanged SPI-flash READ ID and status/write-enable exchange through
+//!   the LiteX controller CSRs.
 //!
 //! Built for `riscv32im-unknown-none-elf` (VexRiscv `rv32im_zicsr_zifencei`).
 
@@ -44,6 +46,56 @@ const CAS_BUTTONS: *const u32 = 0x6000_6808 as *const u32;
 const CAS_PENDING: *mut u32 = 0x6000_680C as *mut u32;
 const CAS_ENABLED: *mut u32 = 0x6000_6810 as *mut u32;
 
+/// LiteX SPI-flash bitbang CSRs (BitBang, Miso, BitBangEnable).
+mod spiflash {
+    const BITBANG: *mut u32 = 0x6000_5000 as *mut u32;
+    const MISO: *const u32 = 0x6000_5004 as *const u32;
+    const BITBANG_EN: *mut u32 = 0x6000_5008 as *mut u32;
+    const CLK: u32 = 1 << 1;
+    const CS_N: u32 = 1 << 2;
+    const DIR: u32 = 1 << 3;
+
+    fn bb(value: u32) {
+        unsafe { core::ptr::write_volatile(BITBANG, value) }
+    }
+
+    fn send(byte: u8) {
+        for bit in (0..8).rev() {
+            let mosi = ((byte >> bit) & 1) as u32;
+            bb(mosi);
+            bb(mosi | CLK);
+        }
+        bb(0);
+    }
+
+    fn receive() -> u8 {
+        // LiteX BIOS order: send a dummy byte, then clock the answer out.
+        send(0);
+        let mut value = 0u8;
+        for _ in 0..8 {
+            bb(DIR);
+            bb(DIR | CLK);
+            value = (value << 1) | (unsafe { core::ptr::read_volatile(MISO) } & 1) as u8;
+        }
+        bb(0);
+        value
+    }
+
+    pub fn command<const N: usize>(cmd: u8) -> [u8; N] {
+        unsafe { core::ptr::write_volatile(BITBANG_EN, 1) };
+        bb(CS_N);
+        bb(0);
+        send(cmd);
+        let mut answer = [0u8; N];
+        for byte in answer.iter_mut() {
+            *byte = receive();
+        }
+        bb(CS_N);
+        unsafe { core::ptr::write_volatile(BITBANG_EN, 0) };
+        answer
+    }
+}
+
 fn putc(byte: u8) {
     unsafe {
         while core::ptr::read_volatile(UART_TXFULL) != 0 {}
@@ -60,6 +112,15 @@ fn puts(text: &str) {
 fn put_hex32(value: u32) {
     for shift in (0..8).rev() {
         let nibble = ((value >> (shift * 4)) & 0xF) as u8;
+        putc(match nibble {
+            0..=9 => b'0' + nibble,
+            _ => b'a' + nibble - 10,
+        });
+    }
+}
+
+fn put_hex8(value: u8) {
+    for nibble in [value >> 4, value & 0xF] {
         putc(match nibble {
             0..=9 => b'0' + nibble,
             _ => b'a' + nibble - 10,
@@ -151,6 +212,21 @@ fn main() -> ! {
     }
 
     timer_one_shot(100_000);
+
+    // Read the Micron MT25Q ID, then verify its write-enable status bit.
+    let id: [u8; 3] = spiflash::command(0x9F);
+    puts("spi id=");
+    for byte in id {
+        put_hex8(byte);
+    }
+    let [before]: [u8; 1] = spiflash::command(0x05);
+    let _: [u8; 0] = spiflash::command(0x06);
+    let [after]: [u8; 1] = spiflash::command(0x05);
+    puts(" sr=");
+    put_hex8(before);
+    puts(" wel=");
+    put_hex8(after);
+    putc(b'\n');
 
     let mut heartbeat: u32 = 0;
     loop {

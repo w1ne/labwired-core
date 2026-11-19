@@ -1,0 +1,52 @@
+{
+  "applied_at_utc": "2026-11-12T22:31:21.946392+00:00",
+  "base_commit": "a148db88c953fdf926fcd92a09abb8289f14b9d1",
+  "runtime_source": "crates/core/src/peripherals/gpio.rs",
+  "source_before_sha256": "8d77bb53d7bef77d3a2c5b139054801bb9bfd83df413d8013f5085a9ce929c48",
+  "source_after_sha256": "3c39554b8ca2118aef37d27b0cb4d543f04305691707f9cf1d33ee5d2517c684",
+  "copied_byte_identical": {
+    "patch-receipt.json": {
+      "bytes": 1174,
+      "sha256": "3b3c08a3b1f32882f183b68dc23f887c98cd25c5584ac89af88653f74150d2fd"
+    },
+    "passing-main-board-throughput-report.zip": {
+      "bytes": 33771,
+      "sha256": "444e3fd2ffec2ee8adf027164e66532a8fd1963becc338fa4ebfd121d2918686"
+    },
+    "failing-a0-board-throughput-report.zip": {
+      "bytes": 33840,
+      "sha256": "ecb0ba2669c70ffba86a93d3c4e03a8908d42021217a5dda5ea5f66cddeea1b5"
+    },
+    "performance-comparison.json": {
+      "bytes": 29943,
+      "sha256": "e104abd4b6fa3dccf58e25ef28158a9ca1ea23aab709c3380fcf68e6aa391b56"
+    }
+  },
+  "reproduction": "The before/after full GPIO snapshots referenced by patch-receipt.json can be reconstructed from the base commit and the exact retained patch; duplicated full source snapshots were not added.",
+  "state": "Source-reviewed patch applied. Normal commit hooks, GPIO regressions, pre-push and final-head97-board performance gate are pending. No performance pass is claimed.",
+  "compressed_originals": {
+    "source-path-evidence.txt": {
+      "repository_path": "source-path-evidence.txt.gz",
+      "uncompressed_bytes": 9616,
+      "uncompressed_sha256": "6aecd229bf0fb522f55815ca68dac3898a08bafa1970f482890e34f38797a409",
+      "compressed_bytes": 3976,
+      "compressed_sha256": "c91c5620da08f7764b5c4ee12f2e0bbe279ba4ff915476ef10ff2c99ba552092",
+      "reason": "Preserve exact diagnostic/diff whitespace as an immutable payload while retaining the repository whitespace gate."
+    },
+    "efr32-input-snapshot.patch": {
+      "repository_path": "efr32-input-snapshot.patch.gz",
+      "uncompressed_bytes": 7668,
+      "uncompressed_sha256": "0144d677bbc4463327e54ee7ad2ee5ff9582e951f4d26ff72114235e99959557",
+      "compressed_bytes": 2225,
+      "compressed_sha256": "7e6f72ffaea38ad74c2881a82f4c754e56cb83ec8a8e324b9f5c5e3347e5ec7f",
+      "reason": "Preserve exact diagnostic/diff whitespace as an immutable payload while retaining the repository whitespace gate."
+    }
+  },
+  "adapted_files": {
+    "README.md": {
+      "original_sha256": "decb710613a66b8f3bc0ccb7cadf95331940374f5e219d57cea86c596a72ce72",
+      "repository_sha256": "ad0b288ffe527267195f4a69f1fdf1445cb55b18b219bd8bbb5f1307242d635a",
+      "change": "Add repository packaging note; preserve pre-application review text unchanged."
+    }
+  }
+}

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="9" failures="0" errors="0" time="0.108014">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="3eee9490e21991696056200cb90c2c8f5b39f15aefc7e40709d3fd7089e72a5b"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.108014">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32F4 shared profile smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: STM32F429 PSP tailchain PASS" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: adc1 in1=000003FF gated=1 clock=1 eoc=1 irq=1 clear=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: adc1 scan=000003FF,000007FF irq=1 pending=1 end=1 released=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: uart_contains: adc1 scan_cont_groups=000007FF,000007FF,000007FF groups=3 irq=1 ovr=0 stop=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: gpio_edges: gpioPortD:12 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

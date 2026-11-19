@@ -158,7 +158,8 @@ fn no_chip_declares_a_size_in_decimal_mb() {
 ///   SRAM (DS30009937C Table 1-1 and the §4.2 stack example ending at 0x09FF)
 ///   and the 08KA/16KA parts have 1536 B (DS39927C Table 1-1). The PIC18F4520
 ///   also has 1536 B (six 256 B GPR banks, DS39631E device table), and the
-///   PIC16F877A 368 B (DS39582B device table). A whole-KiB rule can express
+///   PIC16F877A 368 B (DS39582B device table), and the ATmega32U4 2560 B
+///   (DS7766 §5.2). A whole-KiB rule can express
 ///   none of these.
 ///
 /// This is the backstop for the mistake with no unit attached: `size: 4000000`
@@ -212,7 +213,8 @@ fn declared_memory_sizes_are_real_part_sizes() {
     );
 }
 
-/// Non-KiB-aligned SRAM is real on exactly these PIC24F KA, PIC18 and PIC16 parts.
+/// Non-KiB-aligned SRAM is real on exactly these PIC24F KA, PIC18, PIC16 and
+/// ATmega32U4 parts.
 /// Everywhere else a non-KiB-aligned RAM size is still a transcription error.
 const NON_KIB_RAM_PARTS: &[(&str, u64)] = &[
     ("pic24f04ka200", 512),  // DS30009937C Table 1-1, §4.2
@@ -224,6 +226,7 @@ const NON_KIB_RAM_PARTS: &[(&str, u64)] = &[
     ("pic18f4520", 1536),    // DS39631E: GPR banks 0-5
     ("pic16f877a", 368),     // DS39582B: 96 + 80 + 96 + 96 B GPR, 0x70-0x7F shared
     ("pic16f1829", 1024),    // DS40001440E: 1024 B incl. 16 B common RAM
+    ("atmega32u4", 2560),    // DS7766 §5.2: 2.5 KB SRAM at 0x0100..0x0AFF
 ];
 
 fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {
@@ -238,12 +241,24 @@ fn ram_geometry_is_valid(chip: &ChipDescriptor) -> bool {
         .any(|(name, size)| chip.name == *name && chip.ram.size == *size)
 }
 
+/// Flash that is not a whole number of 4 KiB sectors is real on exactly these
+/// parts. WCH's CH32V006 CodeFlash is 62 KB (CH32V006DS0 V2.0 product table;
+/// openwch ch32v002_004_005_006_007 Link.ld `LENGTH = 62K`) and erases in
+/// 256 B pages (CH32V00XRM), so 62 KiB is a part size, not a typo. The
+/// CH32X035 CodeFlash is also 62 KB (CH32X035/X033 DS V2.3 product table;
+/// openwch ch32x035 Link.ld `LENGTH = 62K`).
+const NON_SECTOR_FLASH_PARTS: &[(&str, u64)] =
+    &[("ch32v006k8u6", 62 * 1024), ("ch32x035c8t6", 62 * 1024)];
+
 /// Zero is an honest absence of internal flash only for this declared SoC.
 /// The base must also be zero: the placeholder must not imply a storage map.
 fn flash_geometry_is_valid(chip: &ChipDescriptor) -> bool {
     const SECTOR: u64 = 4096;
     if chip.flash.size != 0 {
-        return chip.flash.size % SECTOR == 0;
+        return chip.flash.size % SECTOR == 0
+            || NON_SECTOR_FLASH_PARTS
+                .iter()
+                .any(|(name, size)| chip.name == *name && chip.flash.size == *size);
     }
     // RV1103 boots from MicroSD; the XCK26 RPU runs from TCM/DDR the FSBL
     // loads; the AM6234 A53s run from DDR that U-Boot (or here, the loader)
@@ -347,4 +362,26 @@ fn stm32f103c8_declares_the_datasheet_flash_and_sram() {
     assert_eq!(chip.flash.size, 64 * 1024, "DS5319 Table 2: C8 = 64 KiB");
     assert_eq!(chip.ram.base, 0x2000_0000);
     assert_eq!(chip.ram.size, 20 * 1024, "DS5319 Table 2: 20 KiB SRAM");
+}
+
+#[test]
+fn non_sector_flash_exception_is_exactly_the_listed_parts() {
+    for (name, size) in NON_SECTOR_FLASH_PARTS {
+        let path = chips_dir().join(format!("{name}.yaml"));
+        let chip = ChipDescriptor::from_file(&path).expect("load non-sector flash part");
+        assert_eq!(chip.flash.size, *size, "{name}");
+        assert!(flash_geometry_is_valid(&chip), "{name}");
+    }
+    let mut other = ChipDescriptor::from_file(chips_dir().join("ch32v006k8u6.yaml")).unwrap();
+    other.name = "not-a-ch32v006".into();
+    assert!(
+        !flash_geometry_is_valid(&other),
+        "the exception must not leak by size alone"
+    );
+    other.name = "ch32v006k8u6".into();
+    other.flash.size = 60 * 1024 + 512;
+    assert!(
+        !flash_geometry_is_valid(&other),
+        "the exception is 62 KiB, not any non-sector size"
+    );
 }

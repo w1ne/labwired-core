@@ -5,14 +5,10 @@
 //! Espressif UART controller — full digital twin, shared by the SoC families
 //! that carry this IP.
 //!
-//! Chip-neutral on purpose: the ESP32-S3 (UART0/1/2) and the ESP32-C3
-//! (UART0/1) expose the identical register map, the identical `uart_ll.h`
-//! interrupt bits and the same 128-entry FIFOs, so both wire this one model
-//! rather than a per-chip copy — see `peripherals::esp32s3::uart` and
-//! `peripherals::esp32c3::uart` for each family's source ids and core clock.
-//! Anything genuinely per-family (interrupt-matrix source, CPU clock, whether
-//! the instance is the stdout console) is a constructor argument, never a
-//! branch in here.
+//! Chip-neutral on purpose: ESP32-S3, C3, C5, C6, H2, and P4 families expose
+//! compatible UART FIFO/register heads. Family differences such as interrupt
+//! source, CPU clock, UART source clock, and console routing are constructor
+//! arguments, never a branch in the register model.
 //!
 //! Models the real controller's TX/RX FIFOs (occupancy + baud-rate shifting),
 //! FIFO-reset pulses, and the full interrupt set (latched edge bits + live
@@ -30,8 +26,10 @@
 //! | 0x14   | CLKDIV  | clkdiv[11:0] → baud = sclk / clkdiv                   |
 //! | 0x18   | RX_FILT | glitch filter threshold                               |
 //! | 0x1C   | STATUS  | RXFIFO_CNT[9:0], TXFIFO_CNT[25:16] — live occupancy   |
-//! | 0x20   | CONF0   | RXFIFO_RST(b17) / TXFIFO_RST(b18) flush the FIFOs     |
+//! | 0x20   | CONF0   | RXFIFO_RST(b17) / TXFIFO_RST(b18) flush the FIFOs;    |
+//! |        |         | LOOPBACK(b14, C6 map b12) feeds TX into the RX FIFO   |
 //! | 0x24   | CONF1   | RXFIFO_FULL_THRHD[9:0], TXFIFO_EMPTY_THRHD[19:10]     |
+//! | 0x80   | ID      | REG_UPDATE(b31) self-clears (S3/C3/C2 map only)       |
 //!
 //! ## FIFOs + baud timing
 //!
@@ -126,6 +124,16 @@ const LEVEL_BITS: u32 = INT_RXFIFO_FULL | INT_TXFIFO_EMPTY;
 // CONF0 FIFO-reset bits.
 const CONF0_RXFIFO_RST: u32 = 1 << 17;
 const CONF0_TXFIFO_RST: u32 = 1 << 18;
+// CONF0.LOOPBACK: bit 14 in the S3/C3/C2 map, bit 12 in the C6 map (PAC
+// crates esp32s3/esp32c3/esp32c2 `uart0::conf0` vs esp32c6 `uart0::conf0`).
+const CONF0_LOOPBACK: u32 = 1 << 14;
+const CONF0_LOOPBACK_C6: u32 = 1 << 12;
+
+/// ID.REG_UPDATE (S3/C3/C2): software writes 1 to move the configuration into
+/// the UART core clock domain and hardware clears it when the sync is done.
+/// esp-hal `Uart::new` spins on it. The C6 map keeps this bit in a separate
+/// register at 0x98, outside [`RegFile`], which already reads 0.
+const ID_REG_UPDATE: u32 = 1 << 31;
 
 /// STATUS static bits: TXD/RXD/DSR/CTS idle-high line states (bits 29..28..27..26 and
 /// the reserved/always-1 bits that read back as 0xE000C000 on idle silicon).
@@ -350,6 +358,16 @@ pub struct EspUart {
     /// Core clock this instance is paced against (S3 = 240 MHz, C3 = 160 MHz).
     /// 0 only via `Default`, which no bus path uses; `cycles_per_byte` clamps.
     cpu_clock_hz: u64,
+    /// UART source clock. Most existing constructors use 80 MHz; ESP32-P4
+    /// uses a 90 MHz APB clock.
+    uart_sclk_hz: u64,
+    /// Source frequency per `CLK_CONF.SCLK_SEL` value (bits [21:20]), for a
+    /// SoC whose UART selects its function clock there (C3: 1 = APB 80 MHz,
+    /// 2 = RC_FAST, 3 = XTAL 40 MHz). `None` keeps the fixed `uart_sclk_hz`.
+    sclk_sel_hz: Option<[u64; 4]>,
+    /// Set by the first firmware write to `CLK_CONF`. Until then the pacing
+    /// keeps `uart_sclk_hz`, the clock a fast boot assumes the ROM set up.
+    clk_conf_programmed: bool,
     /// ESP32-C6 UART register tail: `UART_FSM_STATUS` lives at 0x70 (C3 had
     /// `POSPULSE` there). ROM `uart_tx_wait_idle` polls `ST_UTX_OUT` in bits
     /// [7:4] and spins forever if the C3 POSPULSE reset (0xFFF) is returned.
@@ -432,6 +450,9 @@ impl EspUart {
             clock: None,
             scheduled: false,
             cpu_clock_hz,
+            uart_sclk_hz: UART_SCLK_HZ,
+            sclk_sel_hz: None,
+            clk_conf_programmed: false,
             c6_reg_map: false,
             rx_source: Arc::new(Mutex::new(VecDeque::new())),
             rx_source_exposed: Cell::new(false),
@@ -717,7 +738,22 @@ impl EspUart {
         } else {
             clkdiv
         };
-        (10 * clkdiv * self.cpu_clock_hz / UART_SCLK_HZ).max(1)
+        (10 * clkdiv * self.cpu_clock_hz / self.function_clock_hz().max(1)).max(1)
+    }
+
+    /// The UART function clock: `uart_sclk_hz`, or, once firmware has
+    /// programmed `CLK_CONF` on a part with `sclk_sel_hz`, the selected
+    /// source divided by `SCLK_DIV_NUM + 1` (the DIV_A/DIV_B fraction is
+    /// ignored, as the CLKDIV fraction is).
+    fn function_clock_hz(&self) -> u64 {
+        let Some(table) = self.sclk_sel_hz.filter(|_| self.clk_conf_programmed) else {
+            return self.uart_sclk_hz;
+        };
+        let conf = self.reg(OFF_CLK_CONF);
+        match table[((conf >> 20) & 0x3) as usize] {
+            0 => self.uart_sclk_hz,
+            hz => hz / (u64::from((conf >> 12) & 0xFF) + 1),
+        }
     }
 
     /// INT_RAW = latched edge bits OR the live level conditions.
@@ -748,6 +784,20 @@ impl EspUart {
     /// ESP32-C6: remap offset 0x70 to idle `UART_FSM_STATUS` (see field docs).
     pub fn with_c6_reg_map(mut self) -> Self {
         self.c6_reg_map = true;
+        self
+    }
+
+    /// Override the UART source clock for SoCs whose APB clock differs from
+    /// the shared model's 80 MHz default.
+    pub fn with_uart_sclk_hz(mut self, uart_sclk_hz: u64) -> Self {
+        self.uart_sclk_hz = uart_sclk_hz.max(1);
+        self
+    }
+
+    /// Pace from `CLK_CONF.SCLK_SEL` once firmware programs it: `hz[sel]` is
+    /// the source behind each selector value, 0 for a reserved one.
+    pub fn with_sclk_sel_hz(mut self, hz: [u64; 4]) -> Self {
+        self.sclk_sel_hz = Some(hz);
         self
     }
 
@@ -858,6 +908,13 @@ impl EspUart {
                     let _ = io::stdout().write_all(&[byte]);
                     let _ = io::stdout().flush();
                 }
+                // Loopback: TXD is tied to RXD inside the UART, so the byte
+                // lands in our own RX FIFO the moment its frame completes.
+                // The sink and pad still see it; the TRM does not say whether
+                // the TXD pad also toggles in loopback mode.
+                if self.loopback() {
+                    self.push_rx(byte);
+                }
             }
             if self.tx_fifo.is_empty() && self.tx_active {
                 self.int_raw_sticky
@@ -869,6 +926,16 @@ impl EspUart {
         // every bus that has not routed a TX pad, which is every ESP lab that
         // existed before this.
         self.wire_flush();
+    }
+
+    /// CONF0.LOOPBACK, at the bit position of this instance's register map.
+    fn loopback(&self) -> bool {
+        let bit = if self.c6_reg_map {
+            CONF0_LOOPBACK_C6
+        } else {
+            CONF0_LOOPBACK
+        };
+        self.reg(OFF_CONF0) & bit != 0
     }
 
     /// Apply a CONF0 write: the RXFIFO_RST/TXFIFO_RST pulse bits flush a FIFO.
@@ -886,8 +953,15 @@ impl EspUart {
     /// Write a config register word, applying mask and CONF0 side-effects.
     fn write_config_reg(&mut self, off: u64, value: u32) {
         if let Some(mask) = Self::config_mask(off) {
-            let masked = value & mask;
+            let mut masked = value & mask;
+            if off == OFF_ID && !self.c6_reg_map {
+                // The register sync completes at once: REG_UPDATE reads 0.
+                masked &= !ID_REG_UPDATE;
+            }
             self.regs.set(off, masked);
+            if off == OFF_CLK_CONF {
+                self.clk_conf_programmed = true;
+            }
             if off == OFF_CONF0 {
                 self.apply_conf0(masked);
             }
@@ -1322,10 +1396,86 @@ mod tests {
     }
 
     #[test]
+    fn loopback_feeds_shifted_out_tx_bytes_into_the_rx_fifo() {
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let mut u = EspUart::new(false, 28);
+        u.set_sink(Some(sink.clone()));
+        u.write_u32(OFF_CONF0, RESET_CONF0 | CONF0_LOOPBACK)
+            .unwrap();
+        for &b in b"ok" {
+            u.push_tx(b);
+        }
+        assert_eq!(
+            u.rx_fifo.borrow().len(),
+            0,
+            "nothing arrives before the frame ends"
+        );
+        drain_all(&mut u);
+        assert_eq!(u.read_u32(OFF_FIFO).unwrap(), b'o' as u32);
+        assert_eq!(u.read_u32(OFF_FIFO).unwrap(), b'k' as u32);
+        assert_ne!(u.int_raw() & INT_RXFIFO_TOUT, 0, "RX data latches TOUT");
+        assert_eq!(sink.lock().unwrap().as_slice(), b"ok", "sink still sees TX");
+
+        // Loopback off (reset CONF0): TX no longer reaches RX.
+        u.write_u32(OFF_CONF0, RESET_CONF0).unwrap();
+        u.push_tx(b'z');
+        drain_all(&mut u);
+        assert_eq!(u.rx_fifo.borrow().len(), 0);
+    }
+
+    #[test]
+    fn c6_map_loopback_is_conf0_bit_12() {
+        let mut u = EspUart::new(false, 43).with_c6_reg_map();
+        u.write_u32(OFF_CONF0, CONF0_LOOPBACK).unwrap();
+        u.push_tx(b'a');
+        drain_all(&mut u);
+        assert_eq!(u.rx_fifo.borrow().len(), 0, "bit 14 is not LOOPBACK on C6");
+        u.write_u32(OFF_CONF0, CONF0_LOOPBACK_C6).unwrap();
+        u.push_tx(b'b');
+        drain_all(&mut u);
+        assert_eq!(u.read_u32(OFF_FIFO).unwrap(), b'b' as u32);
+    }
+
+    /// esp-hal `Uart::new` writes ID with REG_UPDATE set and spins until it
+    /// reads 0; a stored bit hung UART1 bring-up on the ESP32-C2.
+    #[test]
+    fn id_reg_update_self_clears_and_keeps_the_other_bits() {
+        let mut u = EspUart::new(false, 28);
+        u.write_u32(OFF_ID, ID_REG_UPDATE | 0x0000_0500).unwrap();
+        assert_eq!(u.read_u32(OFF_ID).unwrap(), 0x0000_0500);
+        u.write_u32(OFF_ID, 0x4000_0500).unwrap();
+        assert_eq!(
+            u.read_u32(OFF_ID).unwrap(),
+            0x4000_0500,
+            "HIGH_SPEED stores"
+        );
+    }
+
+    #[test]
     fn baud_timing_scales_with_clkdiv() {
         let u = EspUart::new(false, 27);
         // RESET_CLKDIV=0x2B6=694; 10*694*240/80=20820 ticks/byte.
         assert_eq!(u.cycles_per_byte(), 20820); // 115200: 10*694*240/80
+    }
+
+    #[test]
+    fn clk_conf_sclk_sel_paces_once_firmware_programs_it() {
+        // C3: 160 MHz core; SCLK_SEL 1 = APB 80 MHz, 3 = XTAL 40 MHz.
+        let mut u = EspUart::new_with_cpu_clock(false, 22, 160_000_000)
+            .with_sclk_sel_hz([0, 80_000_000, 17_500_000, 40_000_000]);
+        u.write_u32(OFF_CLKDIV, 347).unwrap(); // 40 MHz / 115200
+                                               // Reset CLK_CONF selects XTAL, but nothing has programmed it yet:
+                                               // the fixed 80 MHz source still paces.
+        assert_eq!(u.cycles_per_byte(), 10 * 347 * 2);
+        // esp-hal 1.2: SCLK_SEL = XTAL, DIV_NUM = 0.
+        u.write_u32(OFF_CLK_CONF, (3 << 20) | (1 << 22)).unwrap();
+        assert_eq!(u.cycles_per_byte(), 10 * 347 * 4);
+        // APB with DIV_NUM = 1 is 40 MHz too.
+        u.write_u32(OFF_CLK_CONF, (1 << 20) | (1 << 12)).unwrap();
+        assert_eq!(u.cycles_per_byte(), 10 * 347 * 4);
+        // A reserved selector falls back to the fixed source.
+        u.write_u32(OFF_CLK_CONF, 0).unwrap();
+        assert_eq!(u.cycles_per_byte(), 10 * 347 * 2);
     }
 
     #[test]

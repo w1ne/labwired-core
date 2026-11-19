@@ -1,0 +1,7 @@
+2026-11-17T12:41:58.808866Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f429.yaml
+2026-11-17T12:41:58.869037Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-17T12:41:58.871101Z  INFO labwired_cli::execute: stimulus: position = 25 applied
+2026-11-17T12:41:58.994374Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "i2c1 bme280_id=00000060 gated=1 clock=1 ok" }) (captured len=371)
+FAIL  9/10 checks · stm32f429-smoke · 800000 steps · 0.12s

@@ -184,7 +184,7 @@ def main():
     require(run > 0 and attempt > 0, 'positive official run/attempt')
     helpers = {}
     for name in ('scripts/samd-real-timer-adversaries/build.py', 'scripts/samd-real-timer-adversaries/record.py',
-                 'crates/core/tests/samd_real_timer_adversary_guest.rs'):
+                 'crates/core/tests/samd/samd_real_timer_adversary_guest.rs'):
         data = Path(name).read_bytes()
         require(data == subprocess.check_output(['git', 'show', 'HEAD:' + name]), 'qualification helper drift')
         helpers[name] = identity(data)

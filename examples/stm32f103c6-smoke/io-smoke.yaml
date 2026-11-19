@@ -1,7 +1,5 @@
-# STM32F103C6 boots the low-density smoke image: the reset vector runs,
-# USART2 prints "OK", and PA5 toggles. The NUCLEO-F103RB image does NOT
-# boot here (initial SP 0x2000_5000 is past this part's SRAM; HardFault on
-# the first push), so this smoke is the per-variant boot proof.
+# STM32F103C6 boots the low-density smoke image, reports its marker over
+# USART2 and toggles PA5. DBGMCU_IDCODE is debug-only on this part (ES0348).
 schema_version: "1.2"
 inputs:
   firmware: "../../target/thumbv7m-none-eabi/release/firmware-stm32f103-lowdensity-smoke"
@@ -9,6 +7,7 @@ inputs:
 limits:
   max_steps: 200000
 assertions:
+  - uart_contains: "F103_LOW_DENSITY_SMOKE_OK"
   - uart_contains: "OK"
   - gpio_edges:
       pin: "gpioa:5"

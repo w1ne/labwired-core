@@ -33,6 +33,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_uart::HC05_KIT,
     &components::declarative_spi::NRF24L01_KIT,
     &components::microsd::MICROSD_KIT,
+    &components::st7920::ST7920_KIT,
     &components::mcp2515::MCP2515_KIT,
     &components::declarative_i2c::MPU6050_KIT,
     &components::declarative_i2c::MMA8451Q_KIT,
@@ -139,10 +140,12 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     // Declarative SPI devices — model lives entirely in configs/devices/*.yaml,
     // interpreted by the generic GenericSpiDevice (zero per-part Rust).
     &components::declarative_spi::ADXL345_KIT,
+    &components::declarative_spi::BMA400_KIT,
     &components::declarative_spi::MAX31855_KIT,
     &components::declarative_led_strip::APA102_KIT,
     // Migrated from i2c_factory-only → universal kit attach (any MCU).
     &components::declarative_i2c::BMI270_KIT,
+    &components::bmi270_spi::BMI270_SPI_KIT,
     &components::max30102::MAX30102_KIT,
     &components::declarative_i2c::CAP1188_KIT,
     &components::drv2605::DRV2605_KIT,

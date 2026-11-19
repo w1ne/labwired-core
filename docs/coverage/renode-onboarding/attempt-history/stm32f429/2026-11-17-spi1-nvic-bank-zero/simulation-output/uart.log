@@ -1,0 +1,7 @@
+STM32F4 shared profile smoke
+tim2 gated=1 arr_reset=1 w32=1 ug=1 uif_clr=1 run=1 masked=1 irq=2 stop=1 rel=1 ok
+systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok
+STM32F429 PSP tailchain PASS
+fpu m4f cpacr=1 mvfr=1 add=1 ok
+adc1 in1=000003FF gated=1 clock=1 eoc=1 ok
+spi1 max31855=01901600 gated=1 clock=1 txeirq=0 rearm=0 rxneirq=0 released=1 FAIL

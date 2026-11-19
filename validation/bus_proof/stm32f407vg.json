@@ -1,0 +1,19 @@
+{
+  "id": "stm32f407vg",
+  "in_boards": false,
+  "uart": {
+    "state": "none",
+    "gap": "The exact-part CI smoke proves CPU execution only; no UART byte is asserted on this descriptor.",
+    "lane": "none"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No exact-part firmware SPI transfer is proven for this descriptor.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No exact-part firmware I2C transaction is proven for this descriptor.",
+    "lane": "none"
+  }
+}

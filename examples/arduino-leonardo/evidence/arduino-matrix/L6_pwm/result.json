@@ -1,0 +1,598 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 796935,
+  "cycles": 1042354,
+  "instructions": 796796,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": null,
+    "max_uart_bytes": 65536,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 1000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "LW_L6_OK"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      152,
+      251,
+      0,
+      0,
+      0,
+      0,
+      146,
+      149,
+      0,
+      0,
+      0,
+      63,
+      0,
+      63,
+      0,
+      0,
+      0,
+      0,
+      39,
+      1
+    ],
+    "pc": 758,
+    "sp": 2801,
+    "sreg": 131
+  },
+  "firmware_hash": "4794fc96c20f7ffdb7341e78dd99ce32eaecc740254460bfc289dfb053824625",
+  "config": {
+    "firmware": "validation/arduino-matrix/out/arduino-leonardo/L6_pwm/firmware.elf",
+    "system": "validation/arduino-matrix/systems/arduino-leonardo.yaml",
+    "script": "validation/arduino-matrix/out/arduino-leonardo/L6_pwm/test.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "spi",
+        "kind": "native",
+        "base": 65536,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c",
+        "kind": "i2c",
+        "base": 65552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 65571,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 65574,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 65577,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porte",
+        "kind": "native",
+        "base": 65580,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 65583,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 66048,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "max31855",
+        "device_type": "max31855",
+        "declared": true,
+        "attachment": {
+          "transport": "spi",
+          "bus": "spi",
+          "cs_pin": "D17"
+        },
+        "artifacts": []
+      },
+      {
+        "id": "ina219",
+        "device_type": "ina219",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c",
+          "address": 64
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "ina219",
+            "meta": {
+              "inputs": {
+                "bus_voltage": 3.3,
+                "current": 0.0
+              },
+              "powered": true,
+              "registers": {
+                "BUS_VOLTAGE": 6602,
+                "CALIBRATION": 4096,
+                "CONFIGURATION": 14751,
+                "CURRENT": 0,
+                "POWER": 0,
+                "SHUNT_VOLTAGE": 0
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (16000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 5 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 1042910,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "portb",
+        "pin": 5,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 548015,
+            "value": 1
+          },
+          {
+            "cycle": 564396,
+            "value": 0
+          },
+          {
+            "cycle": 580655,
+            "value": 1
+          },
+          {
+            "cycle": 597036,
+            "value": 0
+          },
+          {
+            "cycle": 613293,
+            "value": 1
+          },
+          {
+            "cycle": 629676,
+            "value": 0
+          },
+          {
+            "cycle": 645932,
+            "value": 1
+          },
+          {
+            "cycle": 662319,
+            "value": 0
+          },
+          {
+            "cycle": 678572,
+            "value": 1
+          },
+          {
+            "cycle": 694956,
+            "value": 0
+          },
+          {
+            "cycle": 711212,
+            "value": 1
+          },
+          {
+            "cycle": 727596,
+            "value": 0
+          },
+          {
+            "cycle": 743853,
+            "value": 1
+          },
+          {
+            "cycle": 760236,
+            "value": 0
+          },
+          {
+            "cycle": 776492,
+            "value": 1
+          },
+          {
+            "cycle": 792876,
+            "value": 0
+          },
+          {
+            "cycle": 809132,
+            "value": 1
+          },
+          {
+            "cycle": 825516,
+            "value": 0
+          },
+          {
+            "cycle": 841772,
+            "value": 1
+          },
+          {
+            "cycle": 858157,
+            "value": 0
+          },
+          {
+            "cycle": 874412,
+            "value": 1
+          },
+          {
+            "cycle": 890796,
+            "value": 0
+          },
+          {
+            "cycle": 907052,
+            "value": 1
+          },
+          {
+            "cycle": 923436,
+            "value": 0
+          },
+          {
+            "cycle": 939692,
+            "value": 1
+          },
+          {
+            "cycle": 956076,
+            "value": 0
+          },
+          {
+            "cycle": 972332,
+            "value": 1
+          },
+          {
+            "cycle": 988716,
+            "value": 0
+          },
+          {
+            "cycle": 1004973,
+            "value": 1
+          },
+          {
+            "cycle": 1021356,
+            "value": 0
+          },
+          {
+            "cycle": 1037612,
+            "value": 1
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 547511,
+            "state": "0"
+          },
+          {
+            "cycle": 548015,
+            "state": "1"
+          },
+          {
+            "cycle": 564396,
+            "state": "0"
+          },
+          {
+            "cycle": 580655,
+            "state": "1"
+          },
+          {
+            "cycle": 597036,
+            "state": "0"
+          },
+          {
+            "cycle": 613293,
+            "state": "1"
+          },
+          {
+            "cycle": 629676,
+            "state": "0"
+          },
+          {
+            "cycle": 645932,
+            "state": "1"
+          },
+          {
+            "cycle": 662319,
+            "state": "0"
+          },
+          {
+            "cycle": 678572,
+            "state": "1"
+          },
+          {
+            "cycle": 694956,
+            "state": "0"
+          },
+          {
+            "cycle": 711212,
+            "state": "1"
+          },
+          {
+            "cycle": 727596,
+            "state": "0"
+          },
+          {
+            "cycle": 743853,
+            "state": "1"
+          },
+          {
+            "cycle": 760236,
+            "state": "0"
+          },
+          {
+            "cycle": 776492,
+            "state": "1"
+          },
+          {
+            "cycle": 792876,
+            "state": "0"
+          },
+          {
+            "cycle": 809132,
+            "state": "1"
+          },
+          {
+            "cycle": 825516,
+            "state": "0"
+          },
+          {
+            "cycle": 841772,
+            "state": "1"
+          },
+          {
+            "cycle": 858157,
+            "state": "0"
+          },
+          {
+            "cycle": 874412,
+            "state": "1"
+          },
+          {
+            "cycle": 890796,
+            "state": "0"
+          },
+          {
+            "cycle": 907052,
+            "state": "1"
+          },
+          {
+            "cycle": 923436,
+            "state": "0"
+          },
+          {
+            "cycle": 939692,
+            "state": "1"
+          },
+          {
+            "cycle": 956076,
+            "state": "0"
+          },
+          {
+            "cycle": 972332,
+            "state": "1"
+          },
+          {
+            "cycle": 988716,
+            "state": "0"
+          },
+          {
+            "cycle": 1004973,
+            "state": "1"
+          },
+          {
+            "cycle": 1021356,
+            "state": "0"
+          },
+          {
+            "cycle": 1037612,
+            "state": "1"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 31
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "portb",
+      "number": 5,
+      "mode": "output",
+      "func": null,
+      "output": true,
+      "input": true,
+      "pad": true,
+      "drive": "1"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "LW_L6_BOOT",
+        "cycle_lo": 561597,
+        "cycle": 561599,
+        "end_cycle": 561599
+      },
+      {
+        "text": "LW_L6_OK",
+        "cycle_lo": 1041604,
+        "cycle": 1041606,
+        "end_cycle": 1041606
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 4334,
+    "data_bytes": 60,
+    "bss_bytes": 111,
+    "flash_used_bytes": 4394,
+    "ram_static_bytes": 171,
+    "flash_total_bytes": 32768,
+    "ram_total_bytes": 2560,
+    "flash_used_pct": 13.41,
+    "ram_static_pct": 6.68,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 1042354,
+    "instructions": 796796,
+    "steps_executed": 796935,
+    "memory_reads": 0,
+    "memory_writes": 39800,
+    "peripheral_accesses": 53,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 772,
+        "count": 151
+      },
+      {
+        "pc": 776,
+        "count": 151
+      },
+      {
+        "pc": 780,
+        "count": 151
+      },
+      {
+        "pc": 778,
+        "count": 120
+      },
+      {
+        "pc": 770,
+        "count": 119
+      },
+      {
+        "pc": 774,
+        "count": 119
+      },
+      {
+        "pc": 748,
+        "count": 91
+      },
+      {
+        "pc": 764,
+        "count": 91
+      },
+      {
+        "pc": 714,
+        "count": 90
+      },
+      {
+        "pc": 730,
+        "count": 90
+      },
+      {
+        "pc": 756,
+        "count": 90
+      },
+      {
+        "pc": 824,
+        "count": 90
+      },
+      {
+        "pc": 832,
+        "count": 90
+      },
+      {
+        "pc": 816,
+        "count": 82
+      },
+      {
+        "pc": 746,
+        "count": 67
+      },
+      {
+        "pc": 762,
+        "count": 67
+      }
+    ]
+  }
+}

@@ -19,4 +19,4 @@ HAL hiding the problem.
 cargo build --release          # writes firmware/{server,client}.elf
 ```
 
-The assertions are in `crates/core/tests/world_esp32c3_pingpong.rs`.
+The assertions are in `crates/core/tests/esp/world_esp32c3_pingpong.rs`.

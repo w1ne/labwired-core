@@ -1,0 +1,26 @@
+# Cortex-M23, SCI9 polled TX and PORT9 (P915, EK-RA2E1 LED1) smoke against the
+# narrowed imported RA2E1 profile. It does not claim ICU/GPT/AGT/IIC parity.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.base-none-eabi/release/firmware-renesas-r7fa2e1a9-smoke"
+  system: "../../configs/systems/onboarding/renesas-r7fa2e1a9.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - memory_value:
+      address: 0x20004000
+      expected_value: 0x00000143
+      size: 4
+  - memory_value:
+      address: 0x20004004
+      expected_value: 0x00000020
+      size: 4
+  - memory_value:
+      address: 0x20004008
+      expected_value: 0x00008000
+      size: 4
+  - uart_contains: "RA2E1 SCI9 SMOKE"
+  - gpio_edges:
+      pin: "port9:15"
+      min_edges: 4
+  - expected_stop_reason: max_steps

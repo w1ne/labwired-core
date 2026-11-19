@@ -1,0 +1,10 @@
+2026-11-11T19:54:21.004129Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nrf52840.yaml
+2026-11-11T19:54:21.008261Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-11T19:54:22.183447Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["NRF52840 RENODE SMOKE", "ficr part=52840 nvmc ready=1 ok", "clock hfstat=00010001 lfstat=00010001 ok", "gpio p0.13 in=00002000/00000000 ok", "gpiote out0 p0.14 in=10 out=0 ok", "timer0 cmp=1 cap>=50 1 clear=00000000 ok", "rtc0 cmp=1 counter>=4 1 ok", "rng valrdy=11 bytes<=ff ok", "ppi egu0->egu1 off=0 on=1 ok", "systick-pendsv tailchain frame=1 live_r0=1 pend_clear=1 ok", "NRF52840 PASS"] }) (captured len=287)
+2026-11-11T19:54:22.183483Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpio0:13", min_edges: 4 } }) (captured len=287)
+2026-11-11T19:54:22.183495Z ERROR labwired_cli::execute: Memory assertion failed at 0x2003ff00 (size 4): expected 0x528401ff, got 0xa5a5a5a5 (mask 0xffffffff)
+2026-11-11T19:54:22.183500Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537132800, expected_value: 1384382975, mask: None, size: Some(4), node: None } }) (captured len=287)
+FAIL  1/4 checks · nrf52840-smoke · 4000000 steps · 1.17s
+FAULT  HardFault escalated from a precise BusFault: data access at 0xE000_E010 (BFAR valid), at PC 0x0000_0F1E in `core::ptr::write_volatile` (mod.rs:2178).
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0xE000E010

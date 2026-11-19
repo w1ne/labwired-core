@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.040058">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="AssertionsPassed"/>
+    <property name="firmware_hash" value="0bba282abc1aca2e5ad4826b7a4520db8df855b3d904ed184063342ce478016b"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.040058">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: PICO_W_BME280_ID=0x60_I2C0_GP4_GP5" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x40014024=0x3" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x4001402c=0x3" time="0.000000">
+  </testcase>
+</testsuite>

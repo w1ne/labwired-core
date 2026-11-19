@@ -1,0 +1,94 @@
+# Narrow ESP32-P4 HP-core profile for the ESP32-P4X-C5-Function-EV-Board.
+#
+# Fast-boot profile: the simulator loads a bare ELF at its entry point; it does
+# not execute mask ROM, the second-stage bootloader, clock startup, or launch
+# the second HP core. The modeled HP core uses the RV32IMAC subset exercised by
+# the smoke. UART0 FIFO/STATUS, the official GPIO data/enable/input head, and
+# four GPIO matrix selectors for the GPIO7/8 I2C0 route are exposed. IO_MUX
+# stores the two pad setup words without enforcing electrical behavior. USB
+# Serial/JTAG, the C5 radio module, display, camera, audio, Ethernet, USB, and
+# MicroSD are not modeled by this profile.
+#
+# Sources checked 2026-11-18:
+#   ESP32-P4X-C5-Function-EV-Board guide:
+#     https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32p4/esp32-p4x-c5-function-ev-board/user_guide.html
+#   ESP-IDF P4 register map, GPIO selectors and I2C registers:
+#     https://github.com/espressif/esp-idf/blob/master/components/soc/esp32p4/register/hw_ver3/soc/reg_base.h
+#     https://github.com/espressif/esp-idf/blob/master/components/soc/esp32p4/register/hw_ver3/soc/gpio_reg.h
+#     https://github.com/espressif/esp-idf/blob/master/components/soc/esp32p4/register/hw_ver3/soc/i2c_reg.h
+#     https://github.com/espressif/esp-idf/blob/master/components/soc/esp32p4/include/soc/gpio_sig_map.h
+
+name: "esp32p4"
+arch: "riscv"
+core: "rv32imac"
+registers_count: 31
+cpu_hz: 400_000_000
+
+# The board carries 16 MB SPI flash at the P4 IROM/DROM window. The board
+# profile maps the 512 KiB high HP-SRAM window used for v3.x P4 firmware; the
+# rest of the nominal 768 KiB SRAM is outside this fast-boot profile.
+flash:
+  base: 0x40000000
+  size: "16384KB"
+ram:
+  base: 0x4FF40000
+  size: "512KB"
+
+# J1 pins 3/5 are GPIO7/8 for the external I2C0 route, and pins 8/10 are
+# GPIO37/U0TXD and GPIO38/U0RXD, per Espressif's board guide.
+pins:
+  GPIO7:
+    gpio: "gpio"
+    bit: 7
+    functions: [{ type: i2c, peripheral: "i2c0", role: sda }]
+  GPIO8:
+    gpio: "gpio"
+    bit: 8
+    functions: [{ type: i2c, peripheral: "i2c0", role: scl }]
+  GPIO37:
+    gpio: "gpio"
+    bit: 37
+    functions: [{ type: uart, peripheral: "uart0", role: tx }]
+  GPIO38:
+    gpio: "gpio"
+    bit: 38
+    functions: [{ type: uart, peripheral: "uart0", role: rx }]
+
+peripherals:
+  # P4 UART0 FIFO@0x00 / STATUS@0x1C, at 0x500C_A000 (ESP-IDF hw_ver3).
+  # IRQ 5, 400 MHz HP core and 90 MHz APB source clock. The 32-byte window
+  # stops before the unmodeled UART configuration tail. UART0's physical
+  # U0TXD/U0RXD pins are GPIO37/GPIO38, exposed on J1 pins 8/10.
+  - id: "uart0"
+    type: "esp32p4_uart"
+    irq: 5
+    base_address: 0x500CA000
+    size: "32B"
+    config:
+      echo_stdout: true
+      cpu_clock_hz: 400000000
+      uart_sclk_hz: 90000000
+  # P4 GPIO data/enable/input head, plus the four GPIO-matrix selector words
+  # used by the J1 GPIO7/8 I2C0 route. Other matrix selectors are RAZ/WI.
+  - id: "gpio"
+    type: "esp32p4_gpio"
+    base_address: 0x500E0000
+    size: "4KB"
+  # P4 HP I2C0 shares the ESP32 command-list engine. This profile implements
+  # the transaction registers exercised by its BME280 smoke; source 44 is
+  # I2C0's P4 interrupt-matrix source.
+  - id: "i2c0"
+    type: "esp32p4_i2c"
+    irq: 44
+    base_address: 0x500C4000
+    size: "4KB"
+    config:
+      cpu_clock_hz: 400000000
+  # GPIO7/8 IO_MUX words accept firmware's function-1 pad setup. The current
+  # profile stores these register words but does not simulate pad electricals.
+  - id: "io_mux"
+    type: "declarative"
+    base_address: 0x500E1000
+    size: "256B"
+    config:
+      path: "../peripherals/esp32c6/io_mux.yaml"

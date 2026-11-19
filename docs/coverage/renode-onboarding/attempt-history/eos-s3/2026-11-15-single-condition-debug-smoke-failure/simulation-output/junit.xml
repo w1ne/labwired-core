@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="2" errors="0" time="0.005687">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="9610171e0d24beb042508e76d64cbf384e74c98587a752fdaad75a94f521603f"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.005687">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: PL011 IRQ7 status=00000002 rx=00000052 cleared=00000000" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: EOS S3 Cortex-M4F PL011 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: EOS S3 checks PPPPPPPPPPP DONE" time="0.000000">
+    <failure message="assertion failed">assertion 3: uart_contains: EOS S3 checks PPPPPPPPPPP DONE
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=100000
+stop_reason_details.observed.steps_executed=100000
+steps_executed=100000
+cycles=100000
+instructions=100000
+limits:
+  - max_steps=100000
+firmware_hash=9610171e0d24beb042508e76d64cbf384e74c98587a752fdaad75a94f521603f
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-eos-s3-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/eos-s3.yaml
+script=examples/renode-onboarding/eos-s3-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;PL011 IRQ7 status=00000002 rx=00000052 cleared=00000000&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;EOS S3 Cortex-M4F PL011 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;EOS S3 checks PPPPPPPPPPP DONE&quot; }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537394944, expected_value: 3763537919, mask: None, size: Some(4), node: None } }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio:4&quot;, min_edges: 6 } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x2007ff00=0xe05307ff" time="0.000000">
+    <failure message="assertion failed">assertion 4: memory_value: @0x2007ff00=0xe05307ff
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=100000
+stop_reason_details.observed.steps_executed=100000
+steps_executed=100000
+cycles=100000
+instructions=100000
+limits:
+  - max_steps=100000
+firmware_hash=9610171e0d24beb042508e76d64cbf384e74c98587a752fdaad75a94f521603f
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-eos-s3-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/eos-s3.yaml
+script=examples/renode-onboarding/eos-s3-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;PL011 IRQ7 status=00000002 rx=00000052 cleared=00000000&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;EOS S3 Cortex-M4F PL011 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;EOS S3 checks PPPPPPPPPPP DONE&quot; }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537394944, expected_value: 3763537919, mask: None, size: Some(4), node: None } }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio:4&quot;, min_edges: 6 } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: gpio:4 &gt;= 6 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

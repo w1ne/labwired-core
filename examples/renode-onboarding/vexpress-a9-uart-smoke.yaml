@@ -1,0 +1,10 @@
+# Direct A32 fixture against the bounded imported vexpress profile: one Cortex-A9 PE, a 64 KiB DRAM aperture at 0x80000000, and polled PL011 UART0 TX only.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/vexpress-a9-uart-smoke.elf"
+  system: "../../configs/systems/onboarding/vexpress.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "VEXPRESS A9 UART SMOKE"
+  - expected_stop_reason: max_steps

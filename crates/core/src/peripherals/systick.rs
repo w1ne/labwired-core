@@ -81,6 +81,18 @@ pub struct Systick {
     /// read-side freshness). In legacy mode only `tick()` mutates it.
     cvr: Cell<u32>,
     calib: u32,
+    /// Number of processor cycles per external-reference tick for this chip.
+    /// STM32F0 feeds SysTick from HCLK/8 when CLKSOURCE is clear; other chips
+    /// can declare their implementation-specific source in the chip yaml.
+    external_clock_divider: u32,
+    /// Cortex-M0 resets TICKINT when CALIB.NOREF is set; Cortex-M3 resets only
+    /// CLKSOURCE in that case. The chip's core profile selects the M0 rule.
+    no_reference_tickint_reset: bool,
+    /// Partial divider progress for the external source. Updated while the
+    /// timer is disabled or the processor source is selected, because the
+    /// reference clock itself keeps running.
+    #[serde(skip)]
+    external_clock_phase: Cell<u64>,
     /// SYST_CSR.COUNTFLAG. Set when the counter wraps to 0; cleared on a read
     /// of SYST_CSR or a write of SYST_CVR. `Cell` so the `&self` read path can
     /// clear it.
@@ -119,6 +131,21 @@ pub struct Systick {
     /// walk path.
     #[serde(skip)]
     clock: Option<CycleClock>,
+    /// The implementation-defined reference clock SysTick counts when
+    /// `SYST_CSR.CLKSOURCE` = 0, in Hz (ARMv7-M B3.3.1). `0` = the chip
+    /// declares none, and the counter runs on the processor clock whatever
+    /// CLKSOURCE says (the historical behaviour, which every chip without
+    /// the key keeps). The i.MX RT1060 wires a 100 kHz reference here and
+    /// Teensyduino's 1 ms tick runs on it.
+    #[serde(skip)]
+    ref_hz: u64,
+    /// Processor clock, for the reference divider (`attach_cpu_hz`).
+    #[serde(skip)]
+    cpu_hz: u64,
+    /// Processor cycles accumulated towards the next reference edge, always
+    /// below the divider. Only moves while the reference clock is selected.
+    #[serde(skip)]
+    ref_phase: Cell<u64>,
 }
 
 impl Systick {
@@ -127,22 +154,89 @@ impl Systick {
             csr: 0,
             rvr: 0,
             cvr: Cell::new(0),
-            calib: 0x4000_0000, // No reference clock, no skew
+            calib: 0x4000_0000, // Reference clock present, calibration is skewed
+            external_clock_divider: 1,
+            no_reference_tickint_reset: false,
+            external_clock_phase: Cell::new(0),
             countflag: Cell::new(false),
             anchor: Cell::new(0),
             pending_fires: Cell::new(0),
             arm_seq: 0,
             live_deadline: None,
             clock: None,
+            ref_hz: 0,
+            cpu_hz: 0,
+            ref_phase: Cell::new(0),
         }
+    }
+
+    /// Declare the external reference clock CLKSOURCE = 0 selects.
+    pub fn with_external_ref_hz(mut self, hz: u64) -> Self {
+        self.ref_hz = hz;
+        self
+    }
+
+    /// Processor cycles per counter decrement: 1 on the processor clock,
+    /// `cpu_hz / ref_hz` while the declared reference clock is selected.
+    fn divider(&self) -> u64 {
+        if self.ref_hz == 0 || self.cpu_hz == 0 || self.csr & 0x4 != 0 {
+            1
+        } else {
+            (self.cpu_hz / self.ref_hz).max(1)
+        }
+    }
+
+    /// Counter decrements in the next `cycles` processor cycles, carrying the
+    /// sub-edge remainder in `ref_phase`.
+    fn counter_ticks(&self, cycles: u64) -> u64 {
+        let d = self.divider();
+        if d == 1 {
+            return cycles;
+        }
+        let total = self.ref_phase.get() + cycles;
+        self.ref_phase.set(total % d);
+        total / d
+    }
+
+    /// Processor cycles until the `n`-th counter decrement from now.
+    fn cycles_for_ticks(&self, n: u64) -> u64 {
+        let d = self.divider();
+        if d == 1 {
+            return n;
+        }
+        (n * d).saturating_sub(self.ref_phase.get()).max(1)
     }
 
     /// CALIB is implementation-defined per chip (TENMS/SKEW/NOREF). The chip
     /// yaml can supply the silicon value via `config: { calib: ... }`.
     pub fn with_calib(calib: u32) -> Self {
-        Self {
-            calib,
-            ..Self::new()
+        let mut systick = Self::new();
+        systick.calib = calib;
+        systick.csr = systick.reset_csr_for_calibration();
+        systick
+    }
+
+    /// Configure the chip-specific external SysTick source. A divider of 8
+    /// models the STM32 HCLK/8 source when CSR.CLKSOURCE is clear.
+    pub fn with_calib_and_external_clock_divider(calib: u32, divider: u32) -> Self {
+        let mut systick = Self::with_calib(calib);
+        systick.external_clock_divider = divider.max(1);
+        systick
+    }
+
+    /// Select the Cortex-M0 reset rule: TICKINT resets to one when CALIB.NOREF
+    /// is set. Other Cortex-M profiles leave TICKINT clear on reset.
+    pub fn with_no_reference_tickint_reset(mut self) -> Self {
+        self.no_reference_tickint_reset = true;
+        self.csr = self.reset_csr_for_calibration();
+        self
+    }
+
+    fn reset_csr_for_calibration(&self) -> u32 {
+        if self.calib & 0x8000_0000 != 0 && self.no_reference_tickint_reset {
+            0x2
+        } else {
+            0
         }
     }
 
@@ -195,11 +289,16 @@ impl Systick {
         if n == 0 || self.scheduler_mode() {
             return;
         }
+        let ticks = self.source_ticks_for_cycles(n);
         if (self.csr & 0x1) == 0 {
             return;
         }
-        let (val, wraps) =
-            Self::advance_counter(self.cvr.get() as u64, (self.rvr & 0x00FF_FFFF) as u64, n);
+        let ticks = self.counter_ticks(ticks);
+        let (val, wraps) = Self::advance_counter(
+            self.cvr.get() as u64,
+            (self.rvr & 0x00FF_FFFF) as u64,
+            ticks,
+        );
         debug_assert!(
             wraps == 0,
             "JIT block consumed {n} cycles across a SysTick wrap (horizon {:?})",
@@ -227,6 +326,7 @@ impl Systick {
             return;
         }
         self.anchor.set(now);
+        let ticks = self.source_ticks_for_cycles(now - anchor);
         if (self.csr & 0x1) == 0 {
             // ENABLE=0: the counter is frozen; the window elapses unobserved.
             return;
@@ -234,7 +334,7 @@ impl Systick {
         let (val, wraps) = Self::advance_counter(
             self.cvr.get() as u64,
             (self.rvr & 0x00FF_FFFF) as u64,
-            now - anchor,
+            self.counter_ticks(ticks),
         );
         self.cvr.set(val as u32);
         if wraps > 0 {
@@ -262,6 +362,50 @@ impl Systick {
         }
     }
 
+    /// Convert elapsed processor cycles into SysTick source ticks while
+    /// retaining fractional progress through the free-running external source.
+    fn source_ticks_for_cycles(&self, cycles: u64) -> u64 {
+        if self.calib & 0x8000_0000 != 0 {
+            self.external_clock_phase.set(0);
+            return cycles;
+        }
+        let divider = self.external_clock_divider as u64;
+        let total = self.external_clock_phase.get().saturating_add(cycles);
+        self.external_clock_phase.set(total % divider);
+        if self.csr & 0x4 != 0 {
+            cycles
+        } else {
+            total / divider
+        }
+    }
+
+    fn active_clock_divider(&self) -> u32 {
+        // ARMv6-M: when CALIB.NOREF is set, CLKSOURCE is forced to one and
+        // writes to select the external source are ignored.
+        if (self.calib & 0x8000_0000) != 0 || (self.csr & 0x4) != 0 {
+            1
+        } else {
+            self.external_clock_divider
+        }
+    }
+
+    fn consume_external_clock_cycle(&self) -> bool {
+        if self.calib & 0x8000_0000 != 0 {
+            self.external_clock_phase.set(0);
+            return true;
+        }
+        let divider = self.external_clock_divider as u64;
+        let phase = self.external_clock_phase.get() + 1;
+        let external_edge = if phase >= divider {
+            self.external_clock_phase.set(0);
+            true
+        } else {
+            self.external_clock_phase.set(phase);
+            false
+        };
+        self.csr & 0x4 != 0 || external_edge
+    }
+
     /// Walk ticks until the next zero-hit from the CURRENT (just-synced)
     /// state, when one is armed to fire: requires ENABLE and TICKINT, and a
     /// reachable wrap (`v > 0`, or `v == 0` with `r > 0`).
@@ -275,13 +419,24 @@ impl Systick {
         }
         let v = self.cvr.get() as u64;
         let r = (self.rvr & 0x00FF_FFFF) as u64;
-        if v > 0 {
-            Some(v)
+        let ticks = if v > 0 {
+            v
         } else if r > 0 {
-            Some(r + 1) // reload tick + r count-down ticks
+            r + 1 // reload tick + r count-down ticks
         } else {
-            None
-        }
+            return None;
+        };
+        // A chip declares at most one CLKSOURCE = 0 source: a reference clock
+        // in Hz (`external_ref_hz`) or a fixed divider of the processor clock
+        // (`external_clock_divider`). The other stage is then the identity.
+        let source_ticks = self.cycles_for_ticks(ticks);
+        let divider = self.active_clock_divider() as u64;
+        let phase = if divider > 1 {
+            self.external_clock_phase.get()
+        } else {
+            0
+        };
+        Some(source_ticks.saturating_mul(divider).saturating_sub(phase))
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -289,7 +444,14 @@ impl Systick {
             // COUNTFLAG (bit 16) folded in from `countflag`. Byte reads do not
             // clear it; the word read (`read_u32`) does, matching how the
             // driver accesses CSR.
-            0x00 => self.csr | if self.countflag.get() { 0x1_0000 } else { 0 },
+            0x00 => {
+                let clksource = if self.calib & 0x8000_0000 != 0 {
+                    0x4
+                } else {
+                    0
+                };
+                (self.csr | clksource) | if self.countflag.get() { 0x1_0000 } else { 0 }
+            }
             0x04 => self.rvr,
             0x08 => self.cvr.get(),
             0x0C => self.calib,
@@ -303,7 +465,14 @@ impl Systick {
     fn write_reg(&mut self, offset: u64, value: u32) {
         match offset {
             0x00 => {
+                if (self.csr ^ value) & 0x4 != 0 {
+                    // Switching clock source starts a fresh divider phase.
+                    self.ref_phase.set(0);
+                }
                 self.csr = value & 0x7;
+                if self.calib & 0x8000_0000 != 0 {
+                    self.csr |= 0x4;
+                }
                 if std::env::var("LABWIRED_TRACE_SYSTICK").is_ok() {
                     eprintln!(
                         "SYSTICK CSR <- 0x{:08X} (enable={} tickint={} clksrc={})",
@@ -331,6 +500,9 @@ impl Systick {
                 self.cvr.set(0);
                 self.countflag.set(false);
             }
+            // SYST_CALIB is read-only. A write is architecturally ignored,
+            // not an unknown register access.
+            0x0C => {}
             _ => {
                 crate::census_reg!("systick:Systick", offset, "write");
             }
@@ -339,15 +511,19 @@ impl Systick {
 }
 
 impl crate::Peripheral for Systick {
-    /// ARMv7-M B3.3.3: SYST_CSR resets to 0 (counter off, no interrupt); RVR
-    /// and CVR are UNKNOWN, taken as 0. Bumping `arm_seq` retires any event
-    /// chain armed under the old configuration.
+    /// SYST_CSR resets to 0, with the Cortex-M0 TICKINT exception when the
+    /// configured core profile selects it and CALIB.NOREF is set. CLKSOURCE
+    /// reads as one whenever NOREF is set. RVR and CVR are UNKNOWN, taken as
+    /// 0. Bumping `arm_seq` retires any event chain armed under the old
+    /// configuration.
     fn on_node_reset(&mut self) {
-        self.csr = 0;
+        self.csr = self.reset_csr_for_calibration();
         self.rvr = 0;
         self.cvr.set(0);
         self.countflag.set(false);
+        self.external_clock_phase.set(0);
         self.pending_fires.set(0);
+        self.ref_phase.set(0);
         self.arm_seq = self.arm_seq.wrapping_add(1);
         self.live_deadline = None;
     }
@@ -404,11 +580,19 @@ impl crate::Peripheral for Systick {
         if self.scheduler_mode() {
             return crate::PeripheralTickResult::default();
         }
+        if !self.consume_external_clock_cycle() {
+            return crate::PeripheralTickResult::default();
+        }
         if (self.csr & 0x1) == 0 {
             return crate::PeripheralTickResult {
                 cycles: 0,
                 ..Default::default()
             };
+        }
+        // On the reference clock only every `divider()`-th processor cycle
+        // is a counter edge.
+        if self.counter_ticks(1) == 0 {
+            return crate::PeripheralTickResult::default();
         }
 
         // ARMv7-M SysTick is EDGE-triggered: COUNTFLAG/interrupt are raised only
@@ -537,6 +721,10 @@ impl crate::Peripheral for Systick {
         }
     }
 
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        self.cpu_hz = hz;
+    }
+
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
         // Anchor at the clock's current value so cycles that elapsed before
         // attach (normally zero — attach happens at bus assembly) are not
@@ -575,6 +763,51 @@ mod tests {
         st.write(0x08, 0x00).unwrap(); // CVR write → clears counter to 0
         st.write(0x00, 0x07).unwrap(); // CSR: ENABLE | TICKINT | CLKSOURCE
         st
+    }
+
+    #[test]
+    fn calibration_register_is_read_only() {
+        let mut st = Systick::with_calib(0x4000_1770);
+        st.write_u32(0x0C, 0xA55A_3CC3).unwrap();
+        assert_eq!(st.read_u32(0x0C).unwrap(), 0x4000_1770);
+    }
+
+    #[test]
+    fn no_reference_clock_defaults_to_processor_clock_without_tickint() {
+        let mut st = Systick::with_calib(0x8000_0000);
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x4);
+
+        st.write_u32(0x00, 0).unwrap();
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x4);
+
+        st.on_node_reset();
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x4);
+    }
+
+    #[test]
+    fn cortex_m0_no_reference_clock_resets_tickint() {
+        let mut st = Systick::with_calib(0x8000_0000).with_no_reference_tickint_reset();
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x6);
+
+        st.write_u32(0x00, 0).unwrap();
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x4);
+
+        st.on_node_reset();
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x6);
+    }
+
+    #[test]
+    fn no_reference_clock_uses_processor_cycles_even_with_external_divider() {
+        let mut st = Systick::with_calib_and_external_clock_divider(0x8000_0000, 8)
+            .with_no_reference_tickint_reset();
+        st.write_u32(0x04, 2).unwrap(); // RVR
+        st.write_u32(0x08, 0).unwrap(); // CVR
+        st.write_u32(0x00, 0x3).unwrap(); // ENABLE | TICKINT; CLKSOURCE forced
+
+        assert_eq!(st.read_u32(0x00).unwrap() & 0x7, 0x7);
+        assert_eq!(st.tick().system_exception, None); // reload
+        assert_eq!(st.tick().system_exception, None); // 2 -> 1
+        assert_eq!(st.tick().system_exception, Some(15)); // 1 -> 0
     }
 
     /// Regression: a counter sitting at zero (freshly reloaded, or just cleared
@@ -624,6 +857,25 @@ mod tests {
         st.write(0x08, 0x00).unwrap();
         // Next tick reloads, does not fire.
         assert_eq!(st.tick().system_exception, None);
+    }
+
+    #[test]
+    fn reload_write_preserves_current_count_and_applies_after_wrap() {
+        let mut st = armed(5);
+        st.tick(); // Reload 5.
+        st.tick(); // 5→4.
+
+        st.write_u32(0x04, 2).unwrap(); // New value applies on the next reload.
+        assert_eq!(st.read_u32(0x08).unwrap(), 4);
+        assert_eq!(st.tick().system_exception, None); // 4→3
+        assert_eq!(st.tick().system_exception, None); // 3→2
+        assert_eq!(st.tick().system_exception, None); // 2→1
+        assert_eq!(st.tick().system_exception, Some(15)); // 1→0
+        assert_eq!(st.read_u32(0x08).unwrap(), 0);
+        assert_ne!(st.read_u32(0x00).unwrap() & 0x1_0000, 0);
+
+        assert_eq!(st.tick().system_exception, None); // Reload the new value 2.
+        assert_eq!(st.read_u32(0x08).unwrap(), 2);
     }
 
     /// COUNTFLAG (SYST_CSR bit 16) reads as set after a wrap and is cleared by
@@ -961,5 +1213,56 @@ mod tests {
                 "already-latched pend must be delivered at the next drain (delay 0)"
             );
         }
+    }
+
+    /// i.MX RT1060 / Teensyduino: SysTick on the 100 kHz reference
+    /// (CLKSOURCE = 0) with RVR = 99 is a 1 ms tick, i.e. one exception every
+    /// 600 000 cycles at 600 MHz — not every 100 cycles.
+    fn teensy_tick(clksource: u32) -> Systick {
+        let mut st = Systick::new().with_external_ref_hz(100_000);
+        st.attach_cpu_hz(600_000_000);
+        st.write_u32(0x04, 99).unwrap();
+        st.write_u32(0x08, 0).unwrap();
+        st.write_u32(0x00, 0x3 | clksource).unwrap(); // ENABLE | TICKINT
+        st
+    }
+
+    #[test]
+    fn external_reference_clock_divides_the_counter() {
+        let mut st = teensy_tick(0);
+        // Reload edge + 99 count-down edges = 100 edges, 6000 cycles each.
+        assert_eq!(st.ticks_until_fire(), Some(100 * 6000));
+        let fires: Vec<u64> = (1..=1_200_000u64)
+            .filter(|_| st.tick().system_exception == Some(15))
+            .collect();
+        assert_eq!(fires, vec![600_000, 1_200_000], "one exception per 1 ms");
+    }
+
+    #[test]
+    fn external_reference_window_matches_the_walk() {
+        // The JIT / lazy path (consume_cycles) lands on the same counter value
+        // as the per-cycle walk, carrying the sub-edge phase across windows.
+        let walk = teensy_tick(0);
+        let mut w = walk;
+        for _ in 0..12_345 {
+            w.tick();
+        }
+        let lazy = teensy_tick(0);
+        lazy.consume_cycles(5_000);
+        lazy.consume_cycles(7_345);
+        assert_eq!(lazy.read_u32(0x08).unwrap(), w.read_u32(0x08).unwrap());
+    }
+
+    #[test]
+    fn clksource_processor_ignores_the_reference() {
+        let st = teensy_tick(0x4);
+        assert_eq!(st.ticks_until_fire(), Some(100));
+        // A chip that declares no reference keeps the historical behaviour
+        // even with CLKSOURCE = 0.
+        let mut plain = Systick::new();
+        plain.attach_cpu_hz(600_000_000);
+        plain.write_u32(0x04, 99).unwrap();
+        plain.write_u32(0x00, 0x3).unwrap();
+        assert_eq!(plain.ticks_until_fire(), Some(100));
     }
 }

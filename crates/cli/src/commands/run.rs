@@ -179,6 +179,7 @@ pub(crate) fn run_firmware_riscv(
     // Minimal system manifest: no external devices, no extra peripherals.
     // All peripherals come from the chip descriptor.
     let manifest = labwired_config::SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         schema_version: "1.0".to_string(),
         name: chip.name.clone(),
@@ -587,8 +588,7 @@ fn run_firmware_riscv_batched(
     // interval-1 while giving the JIT a batch window wide enough to retire whole
     // basic blocks between peripheral ticks (see the differential gate). Set on
     // BOTH machine.config and machine.bus.config, exactly as the gate does.
-    machine.config.peripheral_tick_interval = RECOMMENDED_TICK_INTERVAL;
-    machine.bus.config.peripheral_tick_interval = RECOMMENDED_TICK_INTERVAL;
+    machine.set_peripheral_tick_interval(RECOMMENDED_TICK_INTERVAL);
     machine.config.riscv_jit_enabled = jit_on;
     machine.bus.config.riscv_jit_enabled = jit_on;
 
@@ -793,8 +793,7 @@ fn run_firmware_xtensa_batched(
     use labwired_core::{AdvanceRequest, AdvanceStop};
 
     let interval = machine.bus.max_safe_tick_interval();
-    machine.config.peripheral_tick_interval = interval;
-    machine.bus.config.peripheral_tick_interval = interval;
+    machine.set_peripheral_tick_interval(interval);
 
     const CHUNK: u64 = 4_000_000;
     let mut ran = 0u64;
@@ -1520,8 +1519,7 @@ fn run_xtensa_batched_loop(
     let mut faulted = false;
 
     let interval = machine.bus.max_safe_tick_interval();
-    machine.config.peripheral_tick_interval = interval;
-    machine.bus.config.peripheral_tick_interval = interval;
+    machine.set_peripheral_tick_interval(interval);
 
     // Chunk so an absent `--max-steps` (limit == u64::MAX) still bounds the
     // fuel handed to any single `advance` call, mirroring the ARM/RISC-V
@@ -1611,8 +1609,7 @@ fn run_firmware_avr(
     crate::log_ts::set_hz(machine.bus.cpu_hz);
     if args.batched {
         let interval = machine.bus.max_safe_tick_interval();
-        machine.config.peripheral_tick_interval = interval;
-        machine.bus.config.peripheral_tick_interval = interval;
+        machine.set_peripheral_tick_interval(interval);
         let result = machine.advance(AdvanceRequest::run(Some(limit)));
         crate::log_ts::refresh_cycles(machine.total_cycles);
         let report = match result {
@@ -1702,8 +1699,7 @@ fn run_firmware_pic24(
     let mut machine = Machine::new(cpu, bus);
     if args.batched {
         let interval = machine.bus.max_safe_tick_interval();
-        machine.config.peripheral_tick_interval = interval;
-        machine.bus.config.peripheral_tick_interval = interval;
+        machine.set_peripheral_tick_interval(interval);
         let report = match machine.advance(AdvanceRequest::run(Some(limit))) {
             Ok(report) => report,
             Err(e) => {
@@ -1980,7 +1976,11 @@ pub(crate) fn run_firmware_arm(
     match labwired_core::system::arch_policy::machine_family(&chip) {
         Ok(labwired_core::system::arch_policy::MachineFamily::CortexM) => {}
         Ok(_) => {
-            eprintln!("error: this --chip driver runs Cortex-M; Cortex-A7 uses run --firmware <ELF> --system <manifest> with native --features qemu-arm");
+            let core = match labwired_core::system::arch_policy::cortex_a_core(&chip) {
+                Ok(core) => core.name().to_string(),
+                Err(_) => chip.core.clone().unwrap_or_else(|| chip.name.clone()),
+            };
+            eprintln!("error: this --chip driver runs Cortex-M; {core} uses run --firmware <ELF> --system <manifest> on the native ARM engine");
             return ExitCode::from(EXIT_CONFIG_ERROR);
         }
         Err(error) => {
@@ -2341,8 +2341,7 @@ fn run_arm_batched_loop(
     let mut faulted = false;
 
     let interval = machine.bus.max_safe_tick_interval();
-    machine.config.peripheral_tick_interval = interval;
-    machine.bus.config.peripheral_tick_interval = interval;
+    machine.set_peripheral_tick_interval(interval);
     // Default-on for batched ARM, matching RISC-V `labwired run`. Escape
     // hatch: LABWIRED_CORTEX_M_JIT=0 forces the interpreter.
     let jit_on = std::env::var("LABWIRED_CORTEX_M_JIT").as_deref() != Ok("0");

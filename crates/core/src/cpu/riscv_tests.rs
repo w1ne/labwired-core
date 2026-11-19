@@ -1870,3 +1870,250 @@ fn riscv_profile_is_selected_from_the_chip_descriptor() {
         "an undeclared core keeps the historical default"
     );
 }
+
+const FE310_CLINT: u32 = 0x0200_0000;
+const FE310_CPU_HZ: u64 = 62_000_000;
+
+fn fe310_clint_cpu() -> RiscV {
+    let mut cpu = RiscV::new_for(RiscVCoreProfile::StandardRv32);
+    cpu.attach_clint(Rv32Clint::new(FE310_CLINT, 32_768, FE310_CPU_HZ));
+    cpu
+}
+
+#[test]
+fn rv32_clint_attach_disarms_mtimecmp() {
+    let cpu = fe310_clint_cpu();
+    assert_eq!(cpu.mtimecmp, u64::MAX);
+    assert_eq!(cpu.mip & (1 << 7), 0, "MTIP stays low until armed");
+    assert_eq!(cpu.clint_read(0x4000, 4), u32::MAX);
+    assert_eq!(cpu.clint_read(0x4004, 4), u32::MAX);
+}
+
+#[test]
+fn rv32_clint_mtime_counts_the_reference_clock() {
+    let mut cpu = fe310_clint_cpu();
+    cpu.update_mtime_after_elapsed_cycles(FE310_CPU_HZ);
+    assert_eq!(cpu.clint_read(0xBFF8, 4), 32_768, "one second of lfclk");
+    assert_eq!(cpu.clint_read(0xBFFC, 4), 0);
+    assert_eq!(cpu.clint_read(0xBFF9, 1), 0x80, "byte lane of mtime");
+    // The `cycle` CSR keeps counting CPU clocks.
+    assert_eq!(cpu.read_csr(0xC00), Some(FE310_CPU_HZ as u32));
+}
+
+#[test]
+fn rv32_clint_mtimecmp_raises_mtip_at_the_exact_cycle() {
+    let mut bus = SystemBus::new();
+    let mut cpu = fe310_clint_cpu();
+    cpu.store(&mut bus, FE310_CLINT + 0x4004, 4, 0).unwrap();
+    cpu.store(&mut bus, FE310_CLINT + 0x4000, 4, 10).unwrap();
+    assert_eq!(cpu.mtimecmp, 10);
+    // mtime reaches 10 at ceil(10 * 62e6 / 32768) = 18921 CPU clocks.
+    assert_eq!(cpu.cycles_until_mtip(), Some(18_921));
+    cpu.update_mtime_after_elapsed_cycles(18_920);
+    assert_eq!(cpu.mip & (1 << 7), 0);
+    assert_eq!(cpu.load(&mut bus, FE310_CLINT + 0xBFF8, 4).unwrap(), 9);
+    cpu.update_mtime_after_elapsed_cycles(1);
+    assert_ne!(cpu.mip & (1 << 7), 0, "MTIP at mtime == mtimecmp");
+    assert_eq!(cpu.cycles_until_mtip(), None);
+    // Re-arming in the future drops MTIP at the store.
+    cpu.store(&mut bus, FE310_CLINT + 0x4000, 4, 20).unwrap();
+    assert_eq!(cpu.mip & (1 << 7), 0);
+}
+
+#[test]
+fn rv32_clint_mtime_write_moves_the_count() {
+    let mut bus = SystemBus::new();
+    let mut cpu = fe310_clint_cpu();
+    cpu.update_mtime_after_elapsed_cycles(FE310_CPU_HZ);
+    cpu.store(&mut bus, FE310_CLINT + 0xBFFC, 4, 1).unwrap();
+    cpu.store(&mut bus, FE310_CLINT + 0xBFF8, 2, 0x0005)
+        .unwrap();
+    assert_eq!(
+        cpu.load(&mut bus, FE310_CLINT + 0xBFF8, 4).unwrap(),
+        0x0000_0005
+    );
+    assert_eq!(cpu.load(&mut bus, FE310_CLINT + 0xBFFC, 4).unwrap(), 1);
+    cpu.update_mtime_after_elapsed_cycles(FE310_CPU_HZ);
+    assert_eq!(cpu.load(&mut bus, FE310_CLINT + 0xBFF8, 4).unwrap(), 0x8005);
+}
+
+#[test]
+fn rv32_clint_msip_store_takes_the_software_interrupt() {
+    let mut bus = SystemBus::new();
+    // sw x5, 0(x6)
+    bus.flash.data = 0x0053_2023u32.to_le_bytes().to_vec();
+    let mut cpu = fe310_clint_cpu();
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    cpu.mstatus = 1 << 3;
+    cpu.mie = 1 << 3;
+    cpu.write_reg(5, 1);
+    cpu.write_reg(6, FE310_CLINT);
+    let mut machine = Machine::new(cpu, bus);
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.mcause, 0x8000_0003);
+    assert_eq!(machine.cpu.mepc, 4);
+    assert_eq!(machine.cpu.pc, 0x100);
+    assert_eq!(machine.cpu.clint_read(0, 4), 1);
+    let mut bus = SystemBus::new();
+    machine.cpu.store(&mut bus, FE310_CLINT, 4, 0).unwrap();
+    assert_eq!(machine.cpu.mip & (1 << 3), 0, "MSIP clears with msip");
+}
+
+#[test]
+fn rv32_clint_is_resolved_for_fe310_only() {
+    let mut chip: labwired_config::ChipDescriptor = serde_yaml::from_str(
+        "name: sifive-fe310\narch: riscv\ncore: rv32imac\ncpu_hz: 62000000\nflash: { base: 0x20000000, size: 4MiB }\nram: { base: 0x80000000, size: 16KiB }\nperipherals: []\n",
+    )
+    .unwrap();
+    let clint = Rv32Clint::for_chip(&chip).expect("FE310 has a CLINT");
+    assert_eq!(
+        (clint.base, clint.mtime_hz, clint.cpu_hz),
+        (FE310_CLINT, 32_768, FE310_CPU_HZ)
+    );
+    chip.name = "litex_vexriscv".into();
+    assert_eq!(Rv32Clint::for_chip(&chip), None);
+}
+
+const FE310_PLIC: u32 = 0x0C00_0000;
+const FE310_UART0_SRC: u32 = 3;
+
+fn fe310_plic_cpu() -> RiscV {
+    let chip: labwired_config::ChipDescriptor = serde_yaml::from_str(
+        "name: sifive-fe310\narch: riscv\ncore: rv32imac\ncpu_hz: 62000000\nflash: { base: 0x20000000, size: 4MiB }\nram: { base: 0x80000000, size: 16KiB }\nperipherals: []\n",
+    )
+    .unwrap();
+    let mut cpu = fe310_clint_cpu();
+    cpu.attach_plic(Rv32Clint::plic_for_chip(&chip).expect("FE310 has a PLIC"));
+    cpu
+}
+
+/// Priority 1 and enable for source `id` on context 0.
+fn fe310_plic_arm(cpu: &mut RiscV, id: u32) {
+    let mut bus = SystemBus::new();
+    cpu.store(&mut bus, FE310_PLIC + 4 * id, 4, 1).unwrap();
+    cpu.store(&mut bus, FE310_PLIC + 0x2000, 4, 1 << id)
+        .unwrap();
+}
+
+#[test]
+fn rv32_plic_is_resolved_for_fe310_only() {
+    let mut chip: labwired_config::ChipDescriptor = serde_yaml::from_str(
+        "name: sifive-fe310\narch: riscv\ncore: rv32imac\ncpu_hz: 62000000\nflash: { base: 0x20000000, size: 4MiB }\nram: { base: 0x80000000, size: 16KiB }\nperipherals: []\n",
+    )
+    .unwrap();
+    let p = Rv32Clint::plic_for_chip(&chip).expect("FE310 has a PLIC");
+    assert_eq!(
+        (
+            p.base,
+            p.num_sources,
+            p.num_contexts,
+            p.priority_bits,
+            p.context
+        ),
+        (0x0C00_0000, 53, 1, 3, 0)
+    );
+    chip.name = "litex_vexriscv".into();
+    assert_eq!(Rv32Clint::plic_for_chip(&chip), None);
+}
+
+#[test]
+fn rv32_miv_clint_and_fixed_priority_plic() {
+    let chip: labwired_config::ChipDescriptor = serde_yaml::from_str(
+        "name: miv_rv32\narch: riscv\ncore: rv32imaf_zicsr_zifencei\ncpu_hz: 66000000\nflash: { base: 0x60000000, size: 256KiB }\nram: { base: 0x80000000, size: 64MiB }\nperipherals: []\n",
+    )
+    .unwrap();
+    let clint = Rv32Clint::for_chip(&chip).expect("Mi-V has a CLINT");
+    assert_eq!(
+        (clint.base, clint.mtime_hz, clint.cpu_hz),
+        (0x4400_0000, 66_000_000, 66_000_000)
+    );
+    let params = Rv32Clint::plic_for_chip(&chip).expect("Mi-V has a PLIC");
+    assert_eq!(
+        (params.base, params.num_sources, params.priority_bits),
+        (0x4000_0000, 32, 0)
+    );
+
+    // No priority write is needed: every source is fixed at priority 1.
+    let mut cpu = fe310_clint_cpu();
+    cpu.attach_plic(params);
+    let mut bus = SystemBus::new();
+    cpu.set_exception_pending(30);
+    assert_eq!(cpu.mip & (1 << 11), 0, "disabled source does not notify");
+    cpu.store(&mut bus, 0x4000_2000, 4, 1 << 30).unwrap();
+    assert_ne!(cpu.mip & (1 << 11), 0, "enabled source notifies");
+    cpu.store(&mut bus, 0x4000_0000 + 4 * 30, 4, 0).unwrap();
+    assert_eq!(cpu.load(&mut bus, 0x4000_0000 + 4 * 30, 4).unwrap(), 1);
+    assert_ne!(cpu.mip & (1 << 11), 0, "priority write is ignored");
+    assert_eq!(cpu.load(&mut bus, 0x4020_0004, 4).unwrap(), 30);
+    assert_eq!(cpu.mip & (1 << 11), 0, "claim drops MEIP");
+}
+
+#[test]
+fn rv32_plic_gates_meip_on_enable_and_priority() {
+    let mut cpu = fe310_plic_cpu();
+    let mut bus = SystemBus::new();
+    cpu.set_exception_pending(FE310_UART0_SRC);
+    assert_eq!(cpu.mip & (1 << 11), 0, "disabled source does not notify");
+    assert_eq!(
+        cpu.load(&mut bus, FE310_PLIC + 0x1000, 4).unwrap(),
+        1 << FE310_UART0_SRC,
+        "the gateway still latches it"
+    );
+    fe310_plic_arm(&mut cpu, FE310_UART0_SRC);
+    assert_ne!(cpu.mip & (1 << 11), 0, "enabled, priority 1 > threshold 0");
+    cpu.store(&mut bus, FE310_PLIC + 0x20_0000, 4, 1).unwrap();
+    assert_eq!(cpu.mip & (1 << 11), 0, "threshold 1 masks priority 1");
+    assert_eq!(
+        cpu.load(&mut bus, FE310_PLIC + 0x4 * FE310_UART0_SRC, 4)
+            .unwrap(),
+        1
+    );
+    cpu.store(&mut bus, FE310_PLIC + 0x4 * FE310_UART0_SRC, 4, 0xFF)
+        .unwrap();
+    assert_eq!(
+        cpu.load(&mut bus, FE310_PLIC + 0x4 * FE310_UART0_SRC, 4)
+            .unwrap(),
+        7,
+        "priority is a 3-bit WARL field"
+    );
+    assert_ne!(cpu.mip & (1 << 11), 0, "priority 7 > threshold 1");
+}
+
+#[test]
+fn rv32_plic_claim_complete_drives_meip_and_survives_mip_writes() {
+    let mut cpu = fe310_plic_cpu();
+    let mut bus = SystemBus::new();
+    fe310_plic_arm(&mut cpu, FE310_UART0_SRC);
+    cpu.set_exception_pending(FE310_UART0_SRC);
+    cpu.write_csr(0x344, 0);
+    assert_ne!(cpu.mip & (1 << 11), 0, "MEIP is read-only to csrw mip");
+    let claim = FE310_PLIC + 0x20_0004;
+    assert_eq!(cpu.load(&mut bus, claim, 4).unwrap(), FE310_UART0_SRC);
+    assert_eq!(cpu.mip & (1 << 11), 0, "the claim drops MEIP");
+    assert_eq!(cpu.load(&mut bus, claim, 4).unwrap(), 0, "nothing else");
+    cpu.set_exception_pending(FE310_UART0_SRC);
+    assert_eq!(cpu.mip & (1 << 11), 0, "in service: the gateway is closed");
+    cpu.store(&mut bus, claim, 4, FE310_UART0_SRC).unwrap();
+    cpu.set_exception_pending(FE310_UART0_SRC);
+    assert_ne!(cpu.mip & (1 << 11), 0, "re-pends after complete");
+}
+
+#[test]
+fn rv32_plic_meip_takes_the_external_interrupt() {
+    let mut bus = SystemBus::new();
+    // addi x0, x0, 0
+    bus.flash.data = 0x0000_0013u32.to_le_bytes().to_vec();
+    let mut cpu = fe310_plic_cpu();
+    fe310_plic_arm(&mut cpu, FE310_UART0_SRC);
+    cpu.pc = 0;
+    cpu.mtvec = 0x100;
+    cpu.mstatus = 1 << 3;
+    cpu.mie = 1 << 11;
+    cpu.set_exception_pending(FE310_UART0_SRC);
+    let mut machine = Machine::new(cpu, bus);
+    machine.step().unwrap();
+    assert_eq!(machine.cpu.mcause, 0x8000_000B);
+    assert_eq!(machine.cpu.mepc, 4);
+    assert_eq!(machine.cpu.pc, 0x100);
+}

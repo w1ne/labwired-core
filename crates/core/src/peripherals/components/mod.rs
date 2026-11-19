@@ -78,11 +78,13 @@ pub mod seven_seg_font;
 pub mod shm_i2c;
 pub mod sps30;
 pub mod st7735_color;
+pub mod st7920;
 pub mod step_dir_motor;
 pub mod supply;
 pub mod supply_domain;
 pub mod tca9548a;
 pub mod tiol112;
+pub mod tm1637_trace;
 pub mod unipolar_stepper;
 /// Hand-written VEML7700 model, retained only as the byte-parity oracle the
 /// declarative descriptor is proven identical against (see `veml7700_parity`).
@@ -135,3 +137,5 @@ pub use sps30::{Sps30, SPS30_ADDR};
 pub use tca9548a::Tca9548a;
 #[cfg(test)]
 pub use veml7700::{Veml7700, VEML7700_ADDR};
+
+pub mod bmi270_spi;

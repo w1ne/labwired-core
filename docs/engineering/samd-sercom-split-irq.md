@@ -33,7 +33,7 @@ This does not add SPI client/SSL support or claim wire-edge timing.
 - The shared DATA-read cleanup drops deasserted, marked multi-line pends only.
   It never raises an IRQ and must preserve unrelated lines, non-consuming
   peeks/upper DATA lanes, and a software pend of a low source.
-- `crates/core/tests/sam_sercom_spi.rs` checks simultaneous source routing,
+- `crates/core/tests/samd/sam_sercom_spi.rs` checks simultaneous source routing,
   NVIC bank crossing, per-source W1C/masking, FIFO consumption, software pend
   preservation and reset. Authored Thumb guests configure SPI/NVIC themselves,
   exercise all four handlers, leave time for a held-source re-pend, acknowledge

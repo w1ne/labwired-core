@@ -1,0 +1,497 @@
+{
+  "contracts": [
+    "RM0351 Rev10 table199",
+    "crates/core/src/physics/motor/bldc.rs step() documentation",
+    "crates/core/src/physics/motor/shaft.rs step() documentation"
+  ],
+  "capture_sha256": "f1f2f15b7af770d4b843bda56debfc23710cae8c1241a1764ce575fffd93c02c",
+  "reference_script_sha256": "0bb538857f0b6f30306133324209d11bc64d5c2822da4b2a5d98938b083763ee",
+  "base": {
+    "subdivisions": 1,
+    "end_cycle": 300000,
+    "legacy_gates": false,
+    "first_excitation": {
+      "cycle": 40171,
+      "phase_cycle": 86,
+      "terminals_v": [
+        24.0,
+        0.0,
+        null
+      ],
+      "phase_currents_a": [
+        0.0008333333333333332,
+        -0.0008333333333333332,
+        0.0
+      ],
+      "position_rad": 5.2083333333333324e-14,
+      "speed_rpm": 3.978873577297383e-05,
+      "torque_nm": 3.333333333333333e-05
+    },
+    "samples": [
+      {
+        "cycle": 100000,
+        "position_rad": 0.2877425637693264,
+        "speed_rpm": 4247.631058080654,
+        "torque_nm": -0.1914532230850933,
+        "current_a": 0,
+        "phase_currents_a": [
+          -2.299595483889271,
+          -0.2210065723209865,
+          2.5206020562102576
+        ],
+        "commutation_sector": 1
+      },
+      {
+        "cycle": 150000,
+        "position_rad": 0.47078343159916514,
+        "speed_rpm": 2698.2560544324924,
+        "torque_nm": 0.050129908266857336,
+        "current_a": 0.6266238533357167,
+        "phase_currents_a": [
+          0.0,
+          0.6266238533357167,
+          -0.6266238533357167
+        ],
+        "commutation_sector": 3
+      },
+      {
+        "cycle": 200000,
+        "position_rad": 0.5672770073579102,
+        "speed_rpm": -3862.7727929336897,
+        "torque_nm": -0.14490534236805,
+        "current_a": 0,
+        "phase_currents_a": [
+          6.710845805155307,
+          0.20940536297532447,
+          -6.920251168130632
+        ],
+        "commutation_sector": 3
+      },
+      {
+        "cycle": 250000,
+        "position_rad": 0.44886999944627237,
+        "speed_rpm": 1958.2804365491354,
+        "torque_nm": 0.08452121472029353,
+        "current_a": 0,
+        "phase_currents_a": [
+          1.9906221273756113,
+          0.06211541156401666,
+          -2.052737538939628
+        ],
+        "commutation_sector": 3
+      },
+      {
+        "cycle": 300000,
+        "position_rad": 0.6319169242354892,
+        "speed_rpm": 2584.200544088743,
+        "torque_nm": -0.017635300323462517,
+        "current_a": 0,
+        "phase_currents_a": [
+          0.853140962012695,
+          1.4395057707542862,
+          -2.2926467327669813
+        ],
+        "commutation_sector": 4
+      }
+    ]
+  },
+  "comparisons": [
+    {
+      "cycle": 100000,
+      "field": "position_rad",
+      "difference": -5.551115123125783e-17,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 100000,
+      "field": "speed_rpm",
+      "difference": 5.4569682106375694e-12,
+      "tolerance": 4.247631058080648e-09,
+      "pass": true
+    },
+    {
+      "cycle": 100000,
+      "field": "torque_nm",
+      "difference": 6.106226635438361e-16,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 100000,
+      "field": "current_a",
+      "difference": 0,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 100000,
+      "field": "phase_currents_a[0]",
+      "difference": 8.43769498715119e-15,
+      "tolerance": 2.2995954838892793e-12,
+      "pass": true
+    },
+    {
+      "cycle": 100000,
+      "field": "phase_currents_a[1]",
+      "difference": -3.608224830031759e-15,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 100000,
+      "field": "phase_currents_a[2]",
+      "difference": -4.884981308350689e-15,
+      "tolerance": 2.5206020562102624e-12,
+      "pass": true
+    },
+    {
+      "cycle": 150000,
+      "field": "position_rad",
+      "difference": 2.7755575615628914e-16,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 150000,
+      "field": "speed_rpm",
+      "difference": -3.637978807091713e-12,
+      "tolerance": 2.698256054432496e-09,
+      "pass": true
+    },
+    {
+      "cycle": 150000,
+      "field": "torque_nm",
+      "difference": -1.5959455978986625e-16,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 150000,
+      "field": "current_a",
+      "difference": -1.9984014443252818e-15,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 150000,
+      "field": "phase_currents_a[0]",
+      "difference": 0.0,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 150000,
+      "field": "phase_currents_a[1]",
+      "difference": -1.9984014443252818e-15,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 150000,
+      "field": "phase_currents_a[2]",
+      "difference": 1.9984014443252818e-15,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 200000,
+      "field": "position_rad",
+      "difference": 3.3306690738754696e-16,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 200000,
+      "field": "speed_rpm",
+      "difference": 3.9108272176235914e-11,
+      "tolerance": 3.8627727929337285e-09,
+      "pass": true
+    },
+    {
+      "cycle": 200000,
+      "field": "torque_nm",
+      "difference": -1.3600232051658168e-15,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 200000,
+      "field": "current_a",
+      "difference": 0,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 200000,
+      "field": "phase_currents_a[0]",
+      "difference": -1.1546319456101628e-14,
+      "tolerance": 6.710845805155318e-12,
+      "pass": true
+    },
+    {
+      "cycle": 200000,
+      "field": "phase_currents_a[1]",
+      "difference": -3.552713678800501e-15,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 200000,
+      "field": "phase_currents_a[2]",
+      "difference": 1.509903313490213e-14,
+      "tolerance": 6.920251168130646e-12,
+      "pass": true
+    },
+    {
+      "cycle": 250000,
+      "field": "position_rad",
+      "difference": -2.1649348980190553e-15,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 250000,
+      "field": "speed_rpm",
+      "difference": -8.981260180007666e-11,
+      "tolerance": 1.9582804365492253e-09,
+      "pass": true
+    },
+    {
+      "cycle": 250000,
+      "field": "torque_nm",
+      "difference": 5.689893001203927e-16,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 250000,
+      "field": "current_a",
+      "difference": 0,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 250000,
+      "field": "phase_currents_a[0]",
+      "difference": -4.218847493575595e-15,
+      "tolerance": 1.9906221273756153e-12,
+      "pass": true
+    },
+    {
+      "cycle": 250000,
+      "field": "phase_currents_a[1]",
+      "difference": -1.9061141554033156e-14,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 250000,
+      "field": "phase_currents_a[2]",
+      "difference": 2.3092638912203256e-14,
+      "tolerance": 2.052737538939651e-12,
+      "pass": true
+    },
+    {
+      "cycle": 300000,
+      "field": "position_rad",
+      "difference": -3.1086244689504383e-15,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 300000,
+      "field": "speed_rpm",
+      "difference": 2.2737367544323206e-11,
+      "tolerance": 2.58420054408872e-09,
+      "pass": true
+    },
+    {
+      "cycle": 300000,
+      "field": "torque_nm",
+      "difference": 5.48172618408671e-16,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 300000,
+      "field": "current_a",
+      "difference": 0,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 300000,
+      "field": "phase_currents_a[0]",
+      "difference": 1.2656542480726785e-14,
+      "tolerance": 1e-12,
+      "pass": true
+    },
+    {
+      "cycle": 300000,
+      "field": "phase_currents_a[1]",
+      "difference": -1.1057821325266559e-13,
+      "tolerance": 1.4395057707543967e-12,
+      "pass": true
+    },
+    {
+      "cycle": 300000,
+      "field": "phase_currents_a[2]",
+      "difference": 9.769962616701378e-14,
+      "tolerance": 2.292646732767079e-12,
+      "pass": true
+    }
+  ],
+  "all_native_tolerance_pass": true,
+  "fine": [
+    {
+      "subdivisions": 2,
+      "end_cycle": 100000,
+      "legacy_gates": false,
+      "first_excitation": {
+        "cycle": 40171,
+        "phase_cycle": 86,
+        "terminals_v": [
+          24.0,
+          0.0,
+          null
+        ],
+        "phase_currents_a": [
+          0.0008333282689525461,
+          -0.0008333282689525461,
+          0.0
+        ],
+        "position_rad": 2.6041586315014876e-14,
+        "speed_rpm": 2.9841429061449724e-05,
+        "torque_nm": 3.333313075810475e-05
+      },
+      "samples": [
+        {
+          "cycle": 100000,
+          "position_rad": 0.28774134891788244,
+          "speed_rpm": 4247.796957562338,
+          "torque_nm": -0.19145331497586177,
+          "current_a": 0,
+          "phase_currents_a": [
+            -2.299584862875424,
+            -0.22102890980734163,
+            2.5206137726827653
+          ],
+          "commutation_sector": 1
+        }
+      ]
+    },
+    {
+      "subdivisions": 4,
+      "end_cycle": 100000,
+      "legacy_gates": false,
+      "first_excitation": {
+        "cycle": 40171,
+        "phase_cycle": 86,
+        "terminals_v": [
+          24.0,
+          0.0,
+          null
+        ],
+        "phase_currents_a": [
+          0.0008333257369737718,
+          -0.0008333257369737719,
+          1.0842021724855044e-19
+        ],
+        "position_rad": 1.627596634035472e-14,
+        "speed_rpm": 2.4867806403620187e-05,
+        "torque_nm": 3.333302947895451e-05
+      },
+      "samples": [
+        {
+          "cycle": 100000,
+          "position_rad": 0.28774074138385897,
+          "speed_rpm": 4247.879905514185,
+          "torque_nm": -0.19145336091027113,
+          "current_a": 0,
+          "phase_currents_a": [
+            -2.2995795524939546,
+            -0.22104007760998828,
+            2.5206196301039427
+          ],
+          "commutation_sector": 1
+        }
+      ]
+    },
+    {
+      "subdivisions": 8,
+      "end_cycle": 100000,
+      "legacy_gates": false,
+      "first_excitation": {
+        "cycle": 40171,
+        "phase_cycle": 86,
+        "terminals_v": [
+          24.0,
+          0.0,
+          null
+        ],
+        "phase_currents_a": [
+          0.0008333244710372884,
+          -0.0008333244710372884,
+          0.0
+        ],
+        "position_rad": 1.2206965340947778e-14,
+        "speed_rpm": 2.2381002748162647e-05,
+        "torque_nm": 3.3332978841495345e-05
+      },
+      "samples": [
+        {
+          "cycle": 100000,
+          "position_rad": 0.28774043758989953,
+          "speed_rpm": 4247.921378949133,
+          "torque_nm": -0.19145338387523575,
+          "current_a": 0,
+          "phase_currents_a": [
+            -2.299576897352644,
+            -0.2210456612479659,
+            2.5206225586006097
+          ],
+          "commutation_sector": 1
+        }
+      ]
+    }
+  ],
+  "legacy_counterfactual_same_mmio": {
+    "subdivisions": 1,
+    "end_cycle": 100000,
+    "legacy_gates": true,
+    "first_excitation": {
+      "cycle": 41377,
+      "phase_cycle": 1292,
+      "terminals_v": [
+        24.0,
+        0.0,
+        null
+      ],
+      "phase_currents_a": [
+        0.0008333333333333332,
+        -0.0008333333333333332,
+        0.0
+      ],
+      "position_rad": 5.2083333333333324e-14,
+      "speed_rpm": 3.978873577297383e-05,
+      "torque_nm": 3.333333333333333e-05
+    },
+    "samples": [
+      {
+        "cycle": 100000,
+        "position_rad": 0.27596760305632023,
+        "speed_rpm": 3018.2824068036143,
+        "torque_nm": -0.1918496998800401,
+        "current_a": 0,
+        "phase_currents_a": [
+          -2.5290895941378775,
+          0.379969581156593,
+          2.1491200129812844
+        ],
+        "commutation_sector": 1
+      }
+    ]
+  },
+  "duration_s": 5.425621002970729
+}

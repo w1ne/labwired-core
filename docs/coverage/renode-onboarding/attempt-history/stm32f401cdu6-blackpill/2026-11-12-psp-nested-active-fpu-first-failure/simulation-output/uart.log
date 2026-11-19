@@ -1,0 +1,10 @@
+BLACKPILL F401 SMOKE
+systick wrap=1 pending=1 countflag=read-clear clear=1 ok
+systick irq entries>=2 vector=15 ipsr=15 return=1 ok
+systick priority flags=000007FF ok
+pendsv clear pending=1 fresh repend=1 ok
+systick pendsv tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok
+systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok
+fpu m4f lazy frame=FFFFFFE9 lspact=1->0 fpcar=1 saved=1 restored=1 ok
+fpu m4f nested lazy lspact=1 exc_return=FFFFFFF1 frame=1 saved=1 restored=1 ok
+fpu m4f nested active exc_return=FFFFFFE1 frames=1 saved=1 restored=1 ok

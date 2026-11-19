@@ -1,0 +1,7 @@
+2026-11-10T13:00:19.309776Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nucleo_h753zi.yaml
+2026-11-10T13:00:19.311494Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T13:00:19.312461Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart3'
+2026-11-10T13:00:20.269262Z ERROR labwired_cli::execute: Assertion failed: UartRegex(UartRegexAssertion { uart_regex: "^STM32H7 register smoke\nusart3 rx_gate re_off=1 ue_off=1 ok\nusart3 rx=00000052,00000053 rxne_irq=isolated,asserted,reasserted,released ok\nusart3 tx_gate ue_only=1 te_only=1 ok" }) (captured len=530)
+FAIL  8/9 checks · nucleo_h753zi-smoke · 4000000 steps · 0.96s

@@ -1,0 +1,17 @@
+2026-11-18T05:31:05.237909Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+2026-11-18T05:31:05.297774Z  INFO labwired_loader: ELF Entry Point: 0x8000497
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-18T05:31:05.298922Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-18T05:31:05.299211Z  INFO labwired_cli::execute: stimulus: position = 25 applied
+2026-11-18T05:31:05.299231Z  INFO labwired_cli::execute: stimulus: position = 50 applied
+2026-11-18T05:31:05.301762Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x800025c: Opcode 0xde00
+2026-11-18T05:31:05.301779Z  WARN labwired_core::cpu::cortex_m::exec::misc: Unknown instruction at 0x800025c: Opcode 0xde00
+2026-11-18T05:31:05.554968Z  INFO labwired_cli::execute: stimulus: temperature = 55 applied
+2026-11-18T05:31:05.755798Z  INFO labwired_cli::execute: stimulus: humidity = 35 applied
+2026-11-18T05:31:05.972620Z  INFO labwired_cli::execute: stimulus: pressure = 1012.5 applied
+labwired-cli test: idle_ff skipped 125 of 50000125 device cycles (50000000 interpreted)
+2026-11-18T05:31:05.987189Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "ADC1 F1 SCAN=000003FF,000007FF IRQ=1,1 CLEAR=1 ok" }) (captured len=4041)
+FAIL  83/84 checks · stm32f103-i2c-smoke · 50000000 steps · 0.69s
+FAULT  UsageFault: undefined instruction, at PC 0x0800_025C in `_ZN22firmware_f103_i2c_demo35smoke_trigger_undefined_instruction17h47760c0d41e8d816E`, called from `firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation`.
+       HFSR=0x00000000 CFSR=0x00010000 [UNDEFINSTR]

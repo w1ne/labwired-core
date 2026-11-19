@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      10,
+      10,
+      1342177280,
+      50,
+      1073823761,
+      1073758236,
+      268451514,
+      537100264,
+      1073750016,
+      32,
+      0,
+      0,
+      268451514,
+      537100264,
+      119,
+      268438820
+    ],
+    "pc": 268438820,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 268435456,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "c4265b7e3d23e4b43b6e0bbefc9b33fee5dfa5f8c3b2cd39ac1f44a8197c2bfa",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-ft9001-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/focaltech_ft9001.yaml",
+    "script": "examples/renode-onboarding/focaltech_ft9001-smoke.yaml"
+  }
+}

@@ -408,6 +408,15 @@ impl Solver {
     /// (`roff`), because their control is a routed input and no input has
     /// arrived yet.
     pub fn new(circuit: Circuit, integration: Integration) -> Result<Self, AnalogError> {
+        for resistor in &circuit.resistors {
+            let resistance = resistor.resistance_ohms();
+            if !resistance.is_finite() || resistance == 0.0 || !resistance.recip().is_finite() {
+                return Err(AnalogError::Config(format!(
+                    "resistor `{}` must have finite non-zero resistance and finite conductance",
+                    resistor.name
+                )));
+            }
+        }
         let unknowns = circuit.unknowns();
         if unknowns > MAX_UNKNOWNS {
             return Err(AnalogError::TooLarge {
@@ -547,11 +556,60 @@ impl Solver {
             .position(|s| s.name.to_ascii_lowercase() == key)
     }
 
+    /// Index of the named resistor, for routed resistance inputs.
+    pub fn resistor_index(&self, name: &str) -> Option<usize> {
+        let key = name.trim().to_ascii_lowercase();
+        self.circuit
+            .resistors
+            .iter()
+            .position(|r| r.name.to_ascii_lowercase() == key)
+    }
+
+    /// Set a positive, finite resistance in ohms for the next solver step.
+    pub fn set_resistance(&mut self, index: usize, ohms: f64) -> Result<(), AnalogError> {
+        if !ohms.is_finite() || ohms <= 0.0 {
+            return Err(AnalogError::Config(
+                "resistance must be positive and finite".to_string(),
+            ));
+        }
+        let effective = self.circuit.resistors[index]
+            .ntc
+            .map(|ntc| ntc.resistance_ohms(ohms))
+            .or_else(|| {
+                self.circuit.resistors[index]
+                    .temperature_coefficients
+                    .map(|model| model.resistance_ohms(ohms))
+            })
+            .unwrap_or(ohms);
+        if !effective.is_finite() || effective <= 0.0 || !effective.recip().is_finite() {
+            return Err(AnalogError::Config(
+                "effective resistance must be positive and finite with finite conductance"
+                    .to_string(),
+            ));
+        }
+        if self.circuit.resistors[index].ohms != ohms {
+            self.circuit.resistors[index].ohms = ohms;
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        Ok(())
+    }
+
     /// Index of a named resistor that has an NTC Beta model.
     pub fn thermistor_index(&self, name: &str) -> Option<usize> {
         let key = name.trim().to_ascii_lowercase();
         self.circuit.resistors.iter().position(|resistor| {
             resistor.ntc.is_some() && resistor.name.to_ascii_lowercase() == key
+        })
+    }
+
+    /// Index of a named resistor whose resistance depends on external temperature.
+    pub fn temperature_dependent_resistor_index(&self, name: &str) -> Option<usize> {
+        let key = name.trim().to_ascii_lowercase();
+        self.circuit.resistors.iter().position(|resistor| {
+            (resistor.ntc.is_some() || resistor.temperature_coefficients.is_some())
+                && resistor.name.to_ascii_lowercase() == key
         })
     }
 
@@ -571,11 +629,55 @@ impl Solver {
         };
         ntc.temperature_celsius = celsius;
         let resistance = ntc.resistance_ohms(resistor.ohms);
-        if !resistance.is_finite() || resistance <= 0.0 {
+        if !resistance.is_finite() || resistance <= 0.0 || !resistance.recip().is_finite() {
             return false;
         }
         if resistor.ntc != Some(ntc) {
             resistor.ntc = Some(ntc);
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        true
+    }
+
+    /// Set an NTC or temperature-coefficient resistor's external temperature.
+    /// A changed value invalidates the linear stamp so its resistance is
+    /// rebuilt on the next step. Returns false for a fixed resistor, an invalid
+    /// temperature, or a model whose resulting resistance is not finite and
+    /// positive.
+    pub fn set_resistor_temperature(&mut self, index: usize, celsius: f64) -> bool {
+        if !celsius.is_finite() || celsius <= -273.15 {
+            return false;
+        }
+        let Some(resistor) = self.circuit.resistors.get_mut(index) else {
+            return false;
+        };
+        let (ntc, temperature_coefficients) =
+            match (resistor.ntc, resistor.temperature_coefficients) {
+                (Some(mut ntc), None) => {
+                    ntc.temperature_celsius = celsius;
+                    (Some(ntc), None)
+                }
+                (None, Some(mut model)) => {
+                    model.temperature_celsius = celsius;
+                    (None, Some(model))
+                }
+                // Parsing rejects a resistor that has both temperature laws.
+                // Treat a fixed resistor (or an invalid hand-built circuit) as
+                // non-routable.
+                _ => return false,
+            };
+        let resistance = ntc
+            .map(|model| model.resistance_ohms(resistor.ohms))
+            .or_else(|| temperature_coefficients.map(|model| model.resistance_ohms(resistor.ohms)))
+            .unwrap_or(f64::NAN);
+        if !resistance.is_finite() || resistance <= 0.0 || !resistance.recip().is_finite() {
+            return false;
+        }
+        if resistor.ntc != ntc || resistor.temperature_coefficients != temperature_coefficients {
+            resistor.ntc = ntc;
+            resistor.temperature_coefficients = temperature_coefficients;
             self.cached_stamp = None;
             self.restart = true;
             self.settled = false;
@@ -662,7 +764,8 @@ impl Solver {
             let Some(control) = self.circuit.switches[index].voltage.clone() else {
                 continue;
             };
-            let v = node_diff(&self.node_v, control.pos, control.neg).abs();
+            let sensed = node_diff(&self.node_v, control.pos, control.neg);
+            let v = if control.signed { sensed } else { sensed.abs() };
             let on = control.vt;
             let off = (control.vt - control.vh).max(0.0);
             let closed_now = self.switch_closed[index];
@@ -1734,12 +1837,17 @@ impl Solver {
         self.previous[..dim].fill(f64::NAN);
         self.limiter_clamped = true;
 
-        for _ in 1..=MAX_NEWTON_ITERATIONS {
+        for iteration in 1..=MAX_NEWTON_ITERATIONS {
             self.build(stamp);
             self.factorize()?;
             self.solve();
             if self.newton_converged() {
                 return Ok(());
+            }
+            // Preserve the previous iterate for the failure diagnostic. There
+            // is no next iteration to seed after the final failed solve.
+            if iteration == MAX_NEWTON_ITERATIONS {
+                break;
             }
             self.previous[..dim].copy_from_slice(&self.solution[..dim]);
             self.relinearise();

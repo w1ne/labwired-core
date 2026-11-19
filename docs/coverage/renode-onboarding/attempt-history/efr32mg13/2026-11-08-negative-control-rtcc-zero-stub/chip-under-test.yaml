@@ -1,0 +1,102 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: efr32mg13
+arch: arm
+# Renode silabs/efr32/efr32mg13.repl: cpuType "cortex-m4f".
+core: cortex-m4f
+# HFRCO reset band: Gecko SDK v4.4.0 system_efr32mg13p.c EFR32_HFRCO_STARTUP_FREQ
+# 19000000. Only the RTCC converts CPU cycles to its 32768 Hz LFECLK with it.
+cpu_hz: 19000000
+# Mapped: the memory map, USART0, the Series-1 GPIO ports, TIMERs and RTCC,
+# all exercised by the exact-system smoke. Everything else in the repl
+# (LDMA, CMU, I2C, LEUART, GPCRC, ...) is omitted: no model behind it.
+# Flash 512 KiB and main SRAM 64 KiB at 0x20000000, as on silicon: every
+# EFR32MG13P header in Gecko SDK v4.4.0 is an F512 part with SRAM_SIZE
+# 0x10000. Renode's efr32mg13.repl keeps the MG12 sizes (1 MiB / 0x40000);
+# memory an MG13 does not have is not mapped. The radio sequencer RAM at
+# 0x21000000 is separate.
+flash:
+  base: 0
+  size: 524288B
+ram:
+  base: 0x20000000
+  size: 65536B
+memory_regions:
+# Radio sequencer SRAM (Renode `seq_sram: Memory.MappedMemory @ sysbus
+# 0x21000000`, size 0x2000).
+- name: seq_sram
+  base: 0x21000000
+  size: 8KB
+peripherals:
+- id: usart0
+  type: efr32_usart
+  bus: sysbus
+  base_address: 0x40010000
+# Series-1 GPIO ports A..F. Renode maps EFR32_GPIOPort @ 0x4000A000; the
+# per-port GPIO_P_TypeDef sits at a 0x30 stride (Gecko SDK v4.4.0
+# efr32mg13p_gpio_p.h: no DOUTSET/DOUTCLR, OVTDIS @0x28; efr32mg13p_gpio.h
+# _GPIO_P_CTRL_RESETVALUE 0x00500050) — identical to EFM32PG1B, so the
+# `efm32s1_gpioport` model is reused. The block head from 0x4000A400 (EXTI,
+# ROUTE, INSENSE, EM4 wake) is NOT mapped: no model behind it.
+- id: gpioa
+  type: efm32s1_gpioport
+  base_address: 0x4000A000
+  size: 48B
+- id: gpiob
+  type: efm32s1_gpioport
+  base_address: 0x4000A030
+  size: 48B
+- id: gpioc
+  type: efm32s1_gpioport
+  base_address: 0x4000A060
+  size: 48B
+- id: gpiod
+  type: efm32s1_gpioport
+  base_address: 0x4000A090
+  size: 48B
+- id: gpioe
+  type: efm32s1_gpioport
+  base_address: 0x4000A0C0
+  size: 48B
+- id: gpiof
+  type: efm32s1_gpioport
+  base_address: 0x4000A0F0
+  size: 48B
+# TIMER0/TIMER1 at 0x40018000/0x40018400 (Renode EFR32_Timer, 16-bit).
+# Series-1 layout (efr32mg13p_timer.h: IF/IFS/IFC/IEN at 0x0C..0x18), same as
+# EFM32PG1B, so `efm32s1_timer` is reused. IRQs: Gecko SDK TIMER0_IRQn 11,
+# TIMER1_IRQn 19, as in the repl. Counts CPU cycles / 2^PRESC; the CMU
+# HFPERCLKEN0 gate is not modelled.
+- id: timer0
+  type: efm32s1_timer
+  base_address: 0x40018000
+  size: 1KB
+  irq: 11
+- id: timer1
+  type: efm32s1_timer
+  base_address: 0x40018400
+  size: 1KB
+  irq: 19
+# Series-1 WTIMER0 (0x4001A000): the TIMER layout above
+# with 32-bit TOP/CNT/CCV (_WTIMER_CNT_MASK 0xFFFFFFFF; TOP resets to 0xFFFF).
+# Renode efr32/efr32mg13.repl: wtimer0 -> nvic@37, wtimer1 @ none; Gecko SDK
+# v4.4.0 EFR32MG13P: WTIMER_COUNT 1, WTIMER0_IRQn 37.
+- id: wtimer0
+  type: efm32s1_wtimer
+  base_address: 0x4001A000
+  size: 1KB
+  irq: 37
+# Series-1 RTCC at 0x40042000 (Renode efr32/efr32mg13.repl: EFR32_RTCC, frequency
+# 32768 -> nvic@31; Gecko SDK v4.4.0 efr32mg13p_rtcc.h RTCC_TypeDef,
+# RTCC_IRQn 31). Normal mode only: PRECNT, CNT, CC0..CC2 output compare,
+# OF/CCx/CNTTICK, RET[0..31]; calendar mode and input capture are refused.
+# LFECLK is a fixed 32768 Hz: CMU LFECLKSEL/LFECLKEN0 are not modelled.
+- id: rtcc
+  type: stub
+  base_address: 0x40042000
+  size: 1KB
+  irq: 31

@@ -30,19 +30,17 @@ on:
       - "examples/common/uds_ecu_app.c"
       - "scripts/uds_evidence.sh"
   pull_request:
+    # Lean PR gate (2026-11-13): on pull requests this lane runs only when
+    # its own files change. Shared engine paths (crates/core, crates/cli,
+    # Cargo.*) trigger it on push to main instead.
     branches:
       - main
     paths:
       - ".github/workflows/core-uds-evidence.yml"
-      - "Cargo.lock"
       - "crates/core/src/bus/can_devices.rs"
-      - "crates/core/src/bus/tick.rs"
       - "crates/core/src/uds_evidence.rs"
       - "crates/core/src/peripherals/fdcan.rs"
       - "crates/core/src/peripherals/components/can_testers.rs"
-      - "crates/core/src/peripherals/scb.rs"
-      - "crates/core/src/machine/**"
-      - "crates/cli/src/**"
       - "crates/cli/tests/e2e_h563_uds*.rs"
       - "configs/chips/stm32h563.yaml"
       - "examples/h563-uds-ecu/**"

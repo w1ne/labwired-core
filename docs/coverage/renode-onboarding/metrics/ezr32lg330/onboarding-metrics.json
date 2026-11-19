@@ -1,0 +1,37 @@
+{
+  "target_id": "ezr32lg330",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 400000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-ezr32-330-smoke",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/ezr32lg330-smoke.yaml",
+  "system": "configs/systems/onboarding/ezr32lg330.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-19T19:02:16Z",
+  "finished_at_utc": "2026-11-19T19:02:21Z",
+  "elapsed_seconds": 5,
+  "elapsed_ms": 4470,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 1.433,
+    "build_firmware": 0.496,
+    "run_smoke": 2.486
+  },
+  "stages_ms": {
+    "build_cli": 1433,
+    "build_firmware": 496,
+    "run_smoke": 2486
+  }
+}

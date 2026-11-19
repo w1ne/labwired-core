@@ -1,0 +1,17 @@
+id: esp32c3
+chip: esp32c3
+system: systems/esp32c3.yaml
+pio: { platform: espressif32, board: esp32-c3-devkitm-1, framework: arduino }
+max_steps: 50000000
+budget_reason: "FreeRTOS C3 boot ~1.9M; L3 Wire headroom (CLI max_steps cap 50M)"
+# LED_BUILTIN → rgbLedWrite → RMT TX_START (inspect + synthetic ch0 edges)
+min_rmt_tx: 1
+led_watch: "rmt:0"
+led_min_edges: 2
+# L6: analogWrite(2, 128) on plain GPIO2 (the RGB LED_BUILTIN is RMT, not
+# LEDC); the watch counts real LEDC pad edges.
+pwm_watch: "gpio:2"
+pwm_min_edges: 20
+family: esp32
+notes: "Arduino-ESP32-C3 RISC-V; L8 TWAI self-RX (S3 TWAI model, irq 25)"
+# L8_can: TWAI @ 0x6002B000 self-reception (esp32s3_twai model)

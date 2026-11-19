@@ -2,7 +2,7 @@
 
 - status: `pass`
 - elapsed_seconds: `2`
-- elapsed_ms: `1727`
+- elapsed_ms: `1238`
 - threshold_seconds: `3600`
 - threshold_met: `True`
 - failure_stage: `n/a`

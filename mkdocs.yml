@@ -55,6 +55,11 @@ markdown_extensions:
 plugins:
   - search
 
+# MkDocs stamps every URL with the deployment day by default. That is not a
+# content-change date; do not advertise 500+ unchanged URLs as freshly edited.
+hooks:
+  - scripts/docs/sitemap_lastmod.py
+
 extra_css:
   - assets/chip-list.css
 

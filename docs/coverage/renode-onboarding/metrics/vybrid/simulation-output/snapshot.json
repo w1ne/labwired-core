@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1600192543,
+      1057488880,
+      0,
+      0,
+      1073901568,
+      1074786368,
+      65,
+      31,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1057488640,
+      1056964741,
+      1056964750
+    ],
+    "pc": 1056964750,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "23b09c74cd71a093e4c66d9dfdb050df925b5993df2bedaf236aed3bb3ade4dd",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/colibri-vf61-cortex-m4-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/vybrid.yaml",
+    "script": "examples/renode-onboarding/vybrid-cortex-m4-smoke.yaml"
+  }
+}

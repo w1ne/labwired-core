@@ -157,7 +157,7 @@ Committed fixtures (hard `assert!` on presence — absence fails, never skips):
 | `tests/fixtures/stm32u575-arduino-serial.elf` | `e4d620734c1b8bebd091cf17d6e87decdaaa6154f35fc5b64d2425a1419255a9` | Arduino matrix L0 (`PlatformIO`, `nucleo_u575zi_q`) |
 
 ```bash
-cargo test -p labwired-core --test firmware_survival stm32u575 -- --nocapture
+cargo test -p labwired-core --test gates stm32u575 -- --nocapture
 ```
 
 Captured output:
@@ -173,7 +173,7 @@ The Zephyr case asserts `Hello World! nucleo_u575zi_q` (the full stock line is
 capture; the Arduino case asserts the `LW_L0_OK` marker and exercises the
 Cube-startup `CRC->POL` write plus the U5 CRS register surface.
 
-`validation/bus_proof_matrix.json` carries the U575 row (`uart`/`i2c`/`spi` all
+`validation/bus_proof/stm32u575.json` carries the U575 row (`uart`/`i2c`/`spi` all
 `proven`), gated by `cargo test -p labwired-core --lib bus_proof_matrix`:
 
 ```
@@ -216,9 +216,9 @@ INA219 model attached.
 python3 scripts/generate_validation_status.py --check   # exit 0
 ```
 
-`validation/manifest.yaml` carries the `stm32u575` entry (`tier: sim-validated`,
+`validation/boards/` carries the `stm32u575` entry (`tier: sim-validated`,
 no `silicon:`) and the regenerated
-[`docs/boards/VALIDATION_STATUS.md`](../../docs/boards/VALIDATION_STATUS.md)
+[validation status](https://docs.labwired.com/boards/VALIDATION_STATUS/) (generated, not committed)
 renders it as "no silicon capture". `--check --drift` is green. The 7
 silicon-verified boards it used to flag (nrf52840, seeed-xiao-nrf52840-sense,
 stm32h563, nucleo-l476rg, nucleo-l073rz, stm32f103, stm32f407) were this
@@ -227,7 +227,7 @@ branch's own drift, not a pre-existing red: the CPU shift-flag edits
 V2 RCC PLL1/U5 CR-ready edits (`crates/core/src/peripherals/rcc.rs`) changed
 their watched content digests past the old `drift_ack_digest`. Each was
 re-acked on 2026-09-18 with a note naming the changed paths (see its
-`drift_ack` block in `validation/manifest.yaml`) and re-stamped with
+`drift_ack` block in `validation/boards/`) and re-stamped with
 `python3 scripts/generate_validation_status.py --write-ack-digests`; a live
 re-capture remains owed. U575 is not among them.
 
@@ -258,7 +258,7 @@ test result: ok. 2589 passed; 0 failed; 0 ignored; 0 measured; 954 filtered out;
 ```
 
 ```bash
-cargo test -p labwired-core --test chip_conformance --test svd_conformance --test strict_onboarding -- --nocapture 2>&1 | tail -30
+cargo test -p labwired-core --test gates --test strict_onboarding -- chip_conformance:: svd_conformance:: -- --nocapture 2>&1 | tail -30
 ```
 
 The exact command stops at the known `strict_onboarding` red (cargo fail-fast),
@@ -278,7 +278,7 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; 
 U575 passes; the six listed chips are the pre-existing reds.
 
 ```bash
-cargo test -p labwired-core --test firmware_survival stm32u575 -- --nocapture 2>&1 | tail -10
+cargo test -p labwired-core --test gates stm32u575 -- --nocapture 2>&1 | tail -10
 ```
 
 ```text
@@ -519,7 +519,7 @@ updating the U545/U575 package-difference allow-list:
 cargo build --locked -p firmware-stm32u575-demo --release --target thumbv8m.main-none-eabi
 cargo run --locked -q -p labwired-cli -- test --script examples/nucleo-u575zi/io-smoke.yaml
 cargo run --locked -q -p labwired-cli -- test --script examples/nucleo-u575zi/uart-smoke.yaml
-cargo test --locked -p labwired-core --test stm32u575_60north_registers --test u545_u575_drift_guard
+cargo test --locked -p labwired-core --test stm32 -- stm32u575_60north_registers:: u545_u575_drift_guard::
 ./scripts/unsupported_instruction_audit.sh \
   --firmware target/thumbv8m.main-none-eabi/release/firmware-stm32u575-demo \
   --system configs/systems/nucleo-u575zi.yaml --max-steps 200000 \
@@ -551,11 +551,8 @@ cargo run --locked -q -p labwired-cli -- test \
   --script examples/nucleo-u575zi/io-smoke.yaml
 cargo run --locked -q -p labwired-cli -- test \
   --script examples/nucleo-u575zi/uart-smoke.yaml
-cargo test --locked -p labwired-core \
-  --test board_io_button_stimulus \
-  --test stm32u575_60north_registers \
-  --test u545_u575_drift_guard \
-  --test h563_conformance
+cargo test --locked -p labwired-core --test gpio_logic board_io_button_stimulus::
+cargo test --locked -p labwired-core --test stm32 -- stm32u575_60north_registers:: u545_u575_drift_guard:: h563_conformance::
 ./scripts/unsupported_instruction_audit.sh \
   --firmware target/thumbv8m.main-none-eabi/release/nucleo-u575-star-catcher \
   --system examples/nucleo-u575zi/star-catcher-system.yaml \
@@ -598,9 +595,9 @@ lines and no longer keep inert per-cycle walks alive. Regression evidence:
 ```bash
 cargo fmt --all -- --check
 git diff --check
-cargo test -p labwired-core --test stm32u575_60north_registers --features event-scheduler
-cargo test -p labwired-core --test stm32u5_crypto_walk_free --features event-scheduler
-cargo test -p labwired-core --test stm32u5_exec_oracle --features event-scheduler
+cargo test -p labwired-core --test stm32 stm32u575_60north_registers:: --features event-scheduler
+cargo test -p labwired-core --test stm32 stm32u5_crypto_walk_free:: --features event-scheduler
+cargo test -p labwired-core --test stm32 stm32u5_exec_oracle:: --features event-scheduler
 python3 scripts/generate_validation_status.py --check --drift
 ```
 

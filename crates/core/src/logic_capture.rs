@@ -362,8 +362,9 @@ struct LogicChannel {
     /// through the [`LogicTap`] (event-driven capture); `false` for the
     /// per-cycle poll fallback. A channel is exactly one of the two.
     push: bool,
-    /// Last known drive of the pad, `None` when the owning model cannot say
-    /// (then the channel has no four-state trace at all — never a guess).
+    /// Last known drive of the pad, `None` until the owning model reports it.
+    /// A later explicit report can start four-state capture without guessing
+    /// the pad's earlier state.
     drive: Option<PadDrive>,
     /// Last four-state value recorded (or the initial one).
     state: Option<PadState>,
@@ -719,19 +720,21 @@ pub fn attach_logic_edge_counts(result: &mut LogicEdgesResult, counts: &[u64]) {
     }
 }
 
-/// Fold a drained four-state batch into an already-built edge result: each
-/// channel whose initial state is known gets `initial_state` and a `states`
-/// list (possibly empty). `initial[i]` is channel `i`'s state at arm time.
+/// Fold a drained four-state batch into an already-built edge result. A
+/// channel may first report its drive after arm time: retain those actual
+/// transitions without inventing an initial state. A never-known channel has
+/// no state series. `initial[i]` remains channel `i`'s state at arm time.
 pub fn attach_logic_states(
     result: &mut LogicEdgesResult,
     initial: &[Option<PadState>],
     batch: &LogicStateBatch,
 ) {
     for lane in result.channels.iter_mut() {
-        let Some(init) = initial.get(lane.ch as usize).copied().flatten() else {
+        let init = initial.get(lane.ch as usize).copied().flatten();
+        if init.is_none() && !batch.edges.iter().any(|edge| edge.ch == lane.ch) {
             continue;
-        };
-        lane.initial_state = Some(init);
+        }
+        lane.initial_state = init;
         lane.states = Some(
             batch
                 .edges
@@ -1006,7 +1009,8 @@ impl LogicCapture {
 
     /// Seed each channel's drive at arm time (after [`Self::install`]) and
     /// return the initial four-state values. A channel with `None` drive has
-    /// no four-state trace. `drives[i]` describes channel `i`.
+    /// no initial state; later explicit drive reports can start its trace.
+    /// `drives[i]` describes channel `i`.
     pub fn install_drives(&mut self, drives: &[Option<PadDrive>]) -> Vec<Option<PadState>> {
         for (channel, drive) in self.channels.iter_mut().zip(drives.iter()) {
             channel.drive = *drive;
@@ -1077,7 +1081,7 @@ impl LogicCapture {
     ) {
         self.sample(now, &read);
         for i in 0..self.channels.len() {
-            if self.channels[i].push || self.channels[i].drive.is_none() {
+            if self.channels[i].push {
                 continue;
             }
             let Some(source) = self.channels[i].resolved else {
@@ -1196,7 +1200,7 @@ impl LogicCapture {
                             value: level,
                         });
                     }
-                    if drive.is_some() && self.channels[ch].drive.is_some() {
+                    if drive.is_some() {
                         self.channels[ch].drive = drive;
                     }
                     self.refresh_state(ch, stamp);

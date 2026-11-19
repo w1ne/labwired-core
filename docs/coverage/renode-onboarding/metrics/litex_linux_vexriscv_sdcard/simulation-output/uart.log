@@ -1,0 +1,2 @@
+LITEX VEXRISCV SDCARD PROFILE RV32IMA
+boot=direct-elf memory=ddr uart=litex

@@ -13,7 +13,20 @@ flash:
 ram:
   base: 256
   size: 1KB
-peripherals: []
+peripherals:
+  # This bounded smoke claims only GPIOA/GPIOB. PINA..PORTB sit at 0x20..0x25
+  # as on the ATmega1281; the CPU owns ports A-G (0x20..0x34) and mirrors them
+  # to these windows. Ports C-G are kept by the CPU but not mapped or claimed.
+  # The LCD controller, USART, USI, SPI, timers, ADC, analog comparator, pull-ups,
+  # interrupts, EEPROM and the watchdog remain outside this profile.
+  - id: portb
+    type: avr_gpio
+    base_address: 0x00010023
+    size: 3
+  - id: porta
+    type: avr_gpio
+    base_address: 0x00010020
+    size: 3
 provenance:
   source: simavr
   repo: https://github.com/buserror/simavr

@@ -33,7 +33,7 @@ simulation-derived.
 cargo test -p labwired-core --lib cpu::pic16
 # test result: ok. 44 passed; 0 failed
 
-cargo test -p labwired-core --test pic16f1829_smoke
+cargo test -p labwired-core --test pic pic16f1829_smoke::
 # test result: ok. 6 passed; 0 failed
 
 cargo run -q -p labwired-cli -- test \

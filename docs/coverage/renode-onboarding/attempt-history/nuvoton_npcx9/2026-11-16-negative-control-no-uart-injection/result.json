@@ -1,0 +1,449 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 400000,
+  "cycles": 400000,
+  "instructions": 400000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 400000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 400000
+    }
+  },
+  "limits": {
+    "max_steps": 400000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "NPCX9 UART1 smoke"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "uarts tbe=3 rx=3 drained=3 isolated=1 ok"
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "cr_uart2 tx"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cr_uart3 tx"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "cr_uart4 tx"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      10,
+      537753484,
+      49,
+      2147483648,
+      1,
+      3,
+      0,
+      537753584,
+      0,
+      1,
+      1074659332,
+      3,
+      8994,
+      537753504,
+      1074659332,
+      7760
+    ],
+    "pc": 7760,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "bb0011248b792c6fa60b1b51fdd9ccf16167ce9c47b1c16219193c785a8d7ab8",
+  "config": {
+    "firmware": "<repo>/target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke",
+    "system": "<repo>/configs/systems/onboarding/nuvoton_npcx9.yaml",
+    "script": "<tmp>/ex/b.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "cr_uart1",
+        "kind": "native",
+        "base": 1074659328,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "cr_uart2",
+        "kind": "native",
+        "base": 1074667520,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "cr_uart3",
+        "kind": "native",
+        "base": 1074675712,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "cr_uart4",
+        "kind": "native",
+        "base": 1074683904,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port0",
+        "kind": "native",
+        "base": 1074270208,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port1",
+        "kind": "native",
+        "base": 1074278400,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port2",
+        "kind": "native",
+        "base": 1074286592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port3",
+        "kind": "native",
+        "base": 1074294784,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port4",
+        "kind": "native",
+        "base": 1074302976,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port5",
+        "kind": "native",
+        "base": 1074311168,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port6",
+        "kind": "native",
+        "base": 1074319360,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port7",
+        "kind": "native",
+        "base": 1074327552,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port8",
+        "kind": "native",
+        "base": 1074335744,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "port9",
+        "kind": "native",
+        "base": 1074343936,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porta",
+        "kind": "native",
+        "base": 1074352128,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 1074360320,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portc",
+        "kind": "native",
+        "base": 1074368512,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portd",
+        "kind": "native",
+        "base": 1074376704,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porte",
+        "kind": "native",
+        "base": 1074384896,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 1074393088,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_1",
+        "kind": "native",
+        "base": 1074462720,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_2",
+        "kind": "native",
+        "base": 1074470912,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_3",
+        "kind": "native",
+        "base": 1074479104,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_4",
+        "kind": "native",
+        "base": 1074487296,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_5",
+        "kind": "native",
+        "base": 1074495488,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim32_6",
+        "kind": "native",
+        "base": 1074503680,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itim64",
+        "kind": "native",
+        "base": 1074520064,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "NPCX9 UART1 smoke",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "gpio ports=16 latch=1 drive=1 pull=1 od=1 lock=1 ok",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cr_uart2 tx",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cr_uart3 tx",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "cr_uart4 tx",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "uarts tbe=3 rx=0 drained=3 isolated=1 FAIL",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 9076,
+    "data_bytes": 0,
+    "bss_bytes": 8,
+    "flash_used_bytes": 9076,
+    "ram_static_bytes": 8,
+    "flash_total_bytes": 65536,
+    "ram_total_bytes": 96256,
+    "flash_used_pct": 13.85,
+    "ram_static_pct": 0.01,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 96248,
+    "main_stack_high_water_bytes": 136,
+    "main_stack_free_min_bytes": 96112,
+    "main_stack_base": 537657352,
+    "main_stack_top": 537753600,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 96248,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 96112,
+    "heap_base": 537657352,
+    "heap_top": 537753600
+  },
+  "metrics": {
+    "cycles": 400000,
+    "instructions": 400000,
+    "steps_executed": 400000,
+    "memory_reads": 4045,
+    "memory_writes": 310,
+    "peripheral_accesses": 1038,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 7760,
+        "count": 1523,
+        "symbol": "core::core_arch::arm_shared::hints::__yield"
+      },
+      {
+        "pc": 3108,
+        "count": 39,
+        "symbol": "core::sync::atomic::atomic_load"
+      }
+    ]
+  }
+}

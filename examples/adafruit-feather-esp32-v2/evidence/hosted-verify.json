@@ -1,0 +1,39 @@
+{
+  "board": "adafruit-feather-esp32-v2",
+  "chip": "esp32",
+  "entry_path": "src/main.ino",
+  "language": "arduino",
+  "source": "#include <Arduino.h>\nvoid setup() { pinMode(LED_BUILTIN, OUTPUT); digitalWrite(LED_BUILTIN, HIGH); }\nvoid loop() { delay(100); }\n",
+  "oracle": {
+    "gpio": [
+      {
+        "pin": "GPIO13",
+        "state": "high"
+      }
+    ]
+  },
+  "result": {
+    "ok": true,
+    "status": "model_verified",
+    "verification": "GPIO13 is high (gpio_pins pad). Model-verified deterministically.",
+    "run_status": "pass",
+    "stop_reason": "max_steps",
+    "oracle_results": [
+      {
+        "kind": "gpio",
+        "passed": true,
+        "detail": "GPIO13 is high (gpio_pins pad)"
+      }
+    ],
+    "gaps": [
+      {
+        "code": "approximation",
+        "scope": "model",
+        "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated",
+        "address": "0x0",
+        "pc": "0x0"
+      }
+    ]
+  },
+  "scope_note": "Model verification of the Arduino GPIO behavior, not physical hardware confirmation."
+}

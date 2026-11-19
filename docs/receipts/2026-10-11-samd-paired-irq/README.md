@@ -75,7 +75,7 @@ Both default and event-scheduler profiles produced the same following results:
 | Depth limit | `0x203` | 4 | 16644 | 64 |
 | Lost masking | `0x204` | 6 | 638 | 64 |
 
-The [tested harness](https://github.com/CrispStrobe/labwired-core/blob/e7589656998d3a08cd59670ff09a4f3214310d2e/crates/core/tests/samd_paired_irq_guest.rs)
+The [tested harness](https://github.com/CrispStrobe/labwired-core/blob/e7589656998d3a08cd59670ff09a4f3214310d2e/crates/core/tests/samd/samd_paired_irq_guest.rs)
 checks vectors, startup BSS/data initialization, mask restoration, one positive
 stage2/mask0/exception16 IRQ and thread return. Refusals require unchanged exact
 diagnostics, masked thread mode and zero IRQ witnesses. Only the actual compiled

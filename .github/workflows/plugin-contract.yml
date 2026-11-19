@@ -1,0 +1,35 @@
+name: Plugin contract
+
+on:
+  pull_request:
+    paths:
+      - '.claude-plugin/marketplace.json'
+      - 'plugins/labwired/**'
+      - 'tests/test_plugin_contract.py'
+      - '.github/workflows/plugin-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.claude-plugin/marketplace.json'
+      - 'plugins/labwired/**'
+      - 'tests/test_plugin_contract.py'
+      - '.github/workflows/plugin-contract.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Check package and workflow instructions
+        run: python3 -m unittest discover -s tests -p 'test_plugin_contract.py' -v
