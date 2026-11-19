@@ -678,6 +678,54 @@ fn an_inactive_walk_model_is_deleted_and_restored_when_enabled() {
     assert_eq!(bus.legacy_tick_indices, vec![1]);
 }
 
+/// Two dynamic models that go idle with no bus write between them (a system
+/// reset clears both enables): the first one leaving deletes the walk, and
+/// the second then stays in the tick index. The walk must step over it; a
+/// regression here is a hang, not a failed assertion.
+#[test]
+fn two_dynamic_models_going_idle_in_one_pass_end_the_walk() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    #[derive(Debug)]
+    struct SharedWalk(Arc<AtomicBool>);
+    impl crate::Peripheral for SharedWalk {
+        fn read(&self, _offset: u64) -> SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, _value: u8) -> SimResult<()> {
+            Ok(())
+        }
+        fn legacy_tick_active(&self) -> bool {
+            self.0.load(Ordering::Relaxed)
+        }
+        fn legacy_tick_dynamic(&self) -> bool {
+            true
+        }
+    }
+
+    let active = Arc::new(AtomicBool::new(true));
+    let mut bus = SystemBus::empty();
+    for (name, base) in [("first", 0x1000), ("second", 0x2000)] {
+        bus.add_peripheral(
+            name,
+            base,
+            0x100,
+            None,
+            Box::new(SharedWalk(active.clone())),
+        );
+    }
+    assert_eq!(bus.legacy_tick_indices, vec![0, 1]);
+    assert!(!bus.legacy_walk_disabled);
+
+    active.store(false, Ordering::Relaxed);
+    bus.tick_peripherals_fully();
+    assert!(
+        bus.legacy_walk_disabled,
+        "both models are idle, so the walk is deleted"
+    );
+}
+
 #[test]
 fn structurally_walk_free_models_do_not_enter_the_legacy_tick_index() {
     #[derive(Debug)]

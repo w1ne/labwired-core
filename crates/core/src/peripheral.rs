@@ -1806,6 +1806,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// buses that bypass `add_peripheral` keep the old exact semantics.
     fn attach_cycle_clock(&mut self, _clock: CycleClock) {}
 
+    /// Hand this peripheral the interrupt request lines it shares with the
+    /// MSP430 core ([`peripherals::msp430::Msp430Irq`]): the module IFG/IE
+    /// bits of an MSP430 are the request lines themselves. Called once per
+    /// peripheral when an MSP430 machine is built. Default: not an MSP430
+    /// module.
+    fn attach_msp430_irq(&mut self, _irq: &Arc<peripherals::msp430::Msp430Irq>) {}
+
     /// Tell the peripheral which NVIC/matrix line it was registered with (the
     /// `irq` of its `PeripheralEntry`), or `None` when the descriptor wired
     /// none. Called once at the same attach choke points as

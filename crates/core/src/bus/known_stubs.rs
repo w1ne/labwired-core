@@ -53,14 +53,6 @@
 /// `fixtures/` and `configs/ci/`.
 pub const KNOWN_STUBBED_PERIPHERAL_TYPES: &[(&str, &str)] = &[
     (
-        "arraymemory",
-        "Renode ArrayMemory window (a raw memory array declared as a peripheral). \
-         Renode-imported onboarding descriptor; no model in this engine, so the window \
-         answers reads with zeros. Used by: onboarding/litex_minerva, \
-         onboarding/mpfs-icicle-kit, \
-         onboarding/msp430f2619 (+8 more).",
-    ),
-    (
         "button",
         "Renode board push-button. LabWired models buttons through `board_io`, not as a bus \
          peripheral (see attach_board_io_buttons), so the imported entry is inert. \

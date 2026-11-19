@@ -69,6 +69,22 @@ SMOKE_MAPPINGS = {
         "cli_features": "qemu-arm",
         "cli_profile": "native-system",
     },
+    "mspsim-msp430f149": {
+        "prebuilt_firmware": "tests/fixtures/msp430f149-uart-smoke.elf",
+        "script": "examples/renode-onboarding/msp430f149-uart-smoke.yaml",
+    },
+    "mspsim-msp430f1611": {
+        "prebuilt_firmware": "tests/fixtures/msp430f1611-uart-smoke.elf",
+        "script": "examples/renode-onboarding/msp430f1611-uart-smoke.yaml",
+    },
+    "mspsim-msp430f2617": {
+        "prebuilt_firmware": "tests/fixtures/msp430f2617-uart-smoke.elf",
+        "script": "examples/renode-onboarding/msp430f2617-uart-smoke.yaml",
+    },
+    "msp430f2619": {
+        "prebuilt_firmware": "tests/fixtures/msp430f2619-uart-smoke.elf",
+        "script": "examples/renode-onboarding/msp430f2619-uart-smoke.yaml",
+    },
     "xtensa-sample-controller": {
         "prebuilt_firmware": "tests/fixtures/xtensa-sample-controller-cpu-smoke.elf",
         "script": "examples/renode-onboarding/xtensa-sample-controller-cpu-smoke.yaml",
@@ -1132,22 +1148,18 @@ SMOKE_MAPPINGS = {
     },
 }
 
+# The MSP430 core (16-bit CPU and CPUX) runs the x1xx and x2xx parts. The
+# MSP430F5437 needs the x5xx module set, which has no models yet.
 MSP430_NOT_RUN_REASON = (
-    "MSP430 CPU execution and MSP430 ELF architecture support are not implemented; "
-    "no firmware run was attempted. A real CPU core is required before this target "
-    "can enter executable coverage."
+    "The MSP430X core exists, but the MSP430x5xx modules this part needs (SFR block at "
+    "0x0100, PMM, UCS, USCI_A at 0x05C0, WDT_A, MPY32) are not modelled; the chip "
+    "declares `arch: unknown` and is refused. No firmware run was attempted."
 )
 MSP430_NOT_RUN_HINT = (
-    "Implement a real MSP430 CPU core and ELF architecture support before adding "
-    "a smoke; do not substitute a peripheral stub."
+    "Model the x5xx SFR/PMM/UCS/USCI_A/WDT_A modules and narrow the descriptor to them "
+    "before adding a smoke; do not reuse the x2xx module addresses."
 )
-MSP430_TARGETS = (
-    "msp430f2619",
-    "mspsim-msp430f149",
-    "mspsim-msp430f1611",
-    "mspsim-msp430f2617",
-    "mspsim-msp430f5437",
-)
+MSP430_TARGETS = ("mspsim-msp430f5437",)
 NOT_RUN_REASONS = {target: MSP430_NOT_RUN_REASON for target in MSP430_TARGETS}
 NOT_RUN_HINTS = {target: MSP430_NOT_RUN_HINT for target in MSP430_TARGETS}
 

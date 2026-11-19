@@ -137,6 +137,13 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
                 path
             );
         }
+        Arch::Msp430 => {
+            // No SVD-backed register list for the MSP430 parts yet.
+            println!(
+                "Skipping MSP430 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
         Arch::Mips => {
             // No SVD-backed register list for the PIC32MZ parts yet.
             println!(
