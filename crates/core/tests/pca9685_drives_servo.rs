@@ -395,15 +395,51 @@ external_devices:
     bus.write_u32(GPIO + 0x24, 1 << 4).unwrap(); // ENABLE_W1TS
     bus.sync_pwm_sourced_servos();
     assert!(!commanded(&bus));
+    bus.write_u32(GPIO + 0x74 + 4 * 4, 1 << 2).unwrap(); // open drain, high releases
+    bus.sync_pwm_sourced_servos();
+    assert!(!commanded(&bus));
     bus.write_u32(GPIO + 0x0c, 1 << 4).unwrap(); // OUT_W1TC: low enables
     bus.sync_pwm_sourced_servos();
     assert!(commanded(&bus));
     let previous = angle(&bus);
-    bus.write_u32(GPIO + 0x08, 1 << 4).unwrap(); // disable output
+    bus.write_u32(GPIO + 0x08, 1 << 4).unwrap(); // release open-drain output
     program(&mut bus, 0x80);
     bus.sync_pwm_sourced_servos();
     assert_eq!(angle(&bus), previous);
+    bus.write_u32(GPIO + 0x28, 1 << 4).unwrap(); // input again; latch remains high
+    bus.sync_pwm_sourced_servos();
+    assert_eq!(angle(&bus), previous);
     bus.write_u32(GPIO + 0x0c, 1 << 4).unwrap();
+    bus.sync_pwm_sourced_servos(); // low latch, still undriven
+    assert_eq!(angle(&bus), previous);
+    bus.write_u32(GPIO + 0x24, 1 << 4).unwrap();
     bus.sync_pwm_sourced_servos();
     assert_ne!(angle(&bus), previous);
+}
+
+#[test]
+fn pca_servo_rejects_invalid_output_enable_configuration() {
+    use labwired_config::{ChipDescriptor, SystemManifest};
+    use labwired_core::bus::SystemBus;
+    use std::path::PathBuf;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let chip = ChipDescriptor::from_file(root.join("../../configs/chips/esp32c3.yaml")).unwrap();
+    for config in [
+        "source_address: 64, source_channel: 0, source_oe_pin: GPIO999",
+        "source_address: 64, source_channel: 0, source_oe_pin: 42",
+        "source_oe_pin: GPIO4",
+    ] {
+        let yaml = format!(
+            r#"name: invalid-servo-oe
+chip: "../chips/esp32c3.yaml"
+external_devices:
+  - {{ id: elbow, type: servo, connection: i2c0, config: {{ {config} }} }}
+"#
+        );
+        let manifest: SystemManifest = serde_yaml::from_str(&yaml).unwrap();
+        assert!(
+            SystemBus::from_config(&chip, &manifest).is_err(),
+            "{config}"
+        );
+    }
 }
