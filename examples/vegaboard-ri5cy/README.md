@@ -54,15 +54,17 @@ cd core
 | SRAM (0x20000000, 192 KiB) | modelled |
 | LPUART0 (0x40042000) | modelled — LPUART profile, polled console path |
 | LPUART1 (0x40043000) | modelled |
+| LPADC0 (0x4004A000) | modelled — `nxp_lpadc`, `single_fifo` layout; no interrupt, no PCC gate |
 | SCG CSR / PCC0 / PCC1 | `type: stub` — zeros |
 | INTMUX, LPTMR0/1/2 | `type: stub` |
 | Silicon capture / executing-fidelity differential | **none** — SIM-DERIVED |
 
 The separate [`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml)
-fixture and `cosim_input_bank_analog` integration test drive generic NTC and
-Shockley diode netlists into two simulation-only input endpoints. Their 3.3 V
-rail and thresholds are assumptions; this does not add RI5CY GPIO, ADC, or
-physical pad behavior.
+fixture and the `cosim_vegaboard_ri5cy_adc_analog` integration test drive
+generic NTC and Shockley diode netlists into LPADC0 through the pads PTB7
+(ADC0_SE2) and PTC9 (ADC0_SE4). The pad names come from the RV32M1 SDK
+`pin_mux.c` signal lists. VREFH 1.8 V is an assumption. The descriptor
+declares no GPIO/PORT block, so no digital pad level is defined.
 
 ## Documents
 

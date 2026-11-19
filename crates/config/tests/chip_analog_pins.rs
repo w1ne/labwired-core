@@ -179,6 +179,10 @@ const PORTS_NOT_MODELLED: &[(&str, &str)] = &[
         "stm32g474re",
         "PF0 (ADC1_IN10) is on GPIOF, which is not modelled",
     ),
+    (
+        "vegaboard-ri5cy",
+        "PTB/PTC/PTD pads are on GPIOB..D, which the descriptor does not declare",
+    ),
 ];
 
 /// Pads that one ADC input really reaches twice. S32K388 RTD 7.0.1

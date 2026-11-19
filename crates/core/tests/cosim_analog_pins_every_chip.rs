@@ -175,6 +175,13 @@ const DIGITAL_PORTS_NOT_MODELLED: &[(&str, &[&str], &str)] = &[
         "PORT0 is not modelled",
     ),
     ("stm32g474re", &["PF0"], "GPIOF is not modelled"),
+    (
+        "vegaboard-ri5cy",
+        &[
+            "PTB3", "PTB4", "PTB7", "PTC9", "PTC10", "PTC11", "PTC12", "PTD5", "PTD7", "PTD9",
+        ],
+        "GPIOB..D are not declared",
+    ),
 ];
 
 /// A mock model that holds `level` on `board.gpio_in.<pad>` for each of `pads`.

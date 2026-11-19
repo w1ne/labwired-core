@@ -34,6 +34,8 @@ const NOT_TRANSCRIBED: &[&str] = &[
     "nrf52833",
     "nrf52840",
     "nrf54l15",
+    // Declared-only descriptor (CPU and memory): no GPIO block and no levels.
+    "rv1103",
     "s32k388",
     "sam4s16c",
     "stm32f746",
@@ -47,6 +49,10 @@ const NOT_TRANSCRIBED: &[&str] = &[
     "stm32u575",
     "stm32u5a5zj",
     "stm32wba52",
+    // No GPIO/PORT block is declared; the ADC0_SEn pads are analog routes.
+    "vegaboard-ri5cy",
+    // Declared-only descriptor (CPU and memory): no GPIO block and no levels.
+    "xck26-rpu",
 ];
 
 /// Datasheet anchors for descriptors whose thresholds are absolute volts or

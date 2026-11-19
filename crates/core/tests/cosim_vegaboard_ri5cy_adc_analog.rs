@@ -15,6 +15,11 @@
 //!
 //! Also: the netlists moved to PTB3 (SE0) and PTD9 (SE12) convert there
 //! while the old pads go back to 0.
+//!
+//! The promoted `vegaboard-ri5cy` descriptor carries the same LPADC0 block
+//! and pad map. Its example (`examples/vegaboard-ri5cy/
+//! analog-ntc-diode-system.yaml`) scales the NTC divider with a 68 k top
+//! resistor, so every temperature converts below the 1.8 V full scale.
 
 mod common;
 use common::root;
@@ -237,4 +242,138 @@ fn vegaboard_ptb3_and_ptd9_convert_after_the_netlists_move() {
     assert_eq!(adc_read(&mut bus, 12), code(diode_v), "SE12");
     assert_eq!(adc_read(&mut bus, 2), 0, "PTB7 is not driven");
     assert_eq!(adc_read(&mut bus, 4), 0, "PTC9 is not driven");
+}
+
+/// `examples/vegaboard-ri5cy/analog-ntc-diode-system.yaml`: 68 k over the NTC.
+fn promoted_ntc_volts(temperature_c: f64) -> f64 {
+    let r = ntc_resistance_ohms(temperature_c);
+    3.3 * r / (68_000.0 + r)
+}
+
+/// Shockley diode with series resistance under 3.3 V through 1 k, by bisection.
+fn diode_load_line_volts() -> f64 {
+    const IS_A: f64 = 2.52e-9;
+    const N: f64 = 1.752;
+    const RS_OHMS: f64 = 0.568;
+    const THERMAL_V: f64 = 1.380_649e-23 * 298.15 / 1.602_176_634e-19;
+    let current = |junction_v: f64| IS_A * ((junction_v / (N * THERMAL_V)).exp() - 1.0);
+    let residual = |junction_v: f64| {
+        (3.3 - junction_v - current(junction_v) * RS_OHMS) / 1_000.0 - current(junction_v)
+    };
+    let (mut low, mut high) = (0.0, 1.2);
+    for _ in 0..100 {
+        let mid = (low + high) / 2.0;
+        if residual(mid) > 0.0 {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    let junction_v = (low + high) / 2.0;
+    junction_v + current(junction_v) * RS_OHMS
+}
+
+fn promoted_system() -> (SystemManifest, ChipDescriptor) {
+    let system_path = root("examples/vegaboard-ri5cy/analog-ntc-diode-system.yaml");
+    let system = SystemManifest::from_file(&system_path).expect("load the Vega analog example");
+    let chip = ChipDescriptor::from_file(system_path.parent().unwrap().join(&system.chip))
+        .expect("load the promoted Vega descriptor");
+    assert_eq!(chip.name, "vegaboard-ri5cy");
+    (system, chip)
+}
+
+fn promoted_board(system: &SystemManifest, chip: &ChipDescriptor) -> (SystemBus, CosimSession) {
+    let bus = SystemBus::from_config(chip, system).expect("build the Vega bus");
+    let session = CosimSession::new(&system.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("the example carries both analog devices");
+    (bus, session)
+}
+
+#[test]
+fn promoted_vegaboard_converts_ntc_and_diode_on_adc0_se2_and_se4() {
+    let (system, chip) = promoted_system();
+    // The descriptor has no invented endpoint and no assumed pad levels.
+    assert!(chip.peripherals.iter().all(|p| p.id != "cosim_inputs"));
+    assert_eq!(chip.io_voltage_v, None);
+    assert_eq!(chip.gpio_input_thresholds, None);
+    let (mut bus, mut session) = promoted_board(&system, &chip);
+    assert_eq!(session.binding_errors(), &[] as &[RoutingError]);
+    assert_eq!(bus.read_u32(ADC).unwrap(), 0x0100_0708, "VERID");
+    lpadc_init(&mut bus);
+
+    let expected_diode_v = diode_load_line_volts();
+    let mut cycles = 0;
+    let mut ntc_codes = Vec::new();
+    for temperature_c in [-10.0_f64, 25.0, 50.0, 80.0] {
+        settle(&mut session, &mut bus, &mut cycles, temperature_c);
+        let ntc_v = signal_voltage(&session, "board.analog.PTB7_volts");
+        let expected_ntc_v = promoted_ntc_volts(temperature_c);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "at {temperature_c} °C the divider should be {expected_ntc_v} V, got {ntc_v} V"
+        );
+        let diode_v = signal_voltage(&session, "board.analog.PTC9_volts");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the load line should be {expected_diode_v} V, got {diode_v} V"
+        );
+
+        let ntc_code = adc_read(&mut bus, 2);
+        assert_eq!(ntc_code, code(expected_ntc_v), "SE2 at {temperature_c} °C");
+        assert!(
+            ntc_code > 0 && ntc_code < 4095,
+            "in range at {temperature_c} °C"
+        );
+        assert_eq!(adc_read(&mut bus, 4), code(expected_diode_v), "SE4");
+        for idle in [0, 1, 5, 6, 7, 8, 10, 12] {
+            assert_eq!(adc_read(&mut bus, idle), 0, "SE{idle} is not driven");
+        }
+        ntc_codes.push(ntc_code);
+    }
+    assert!(
+        ntc_codes.windows(2).all(|pair| pair[0] > pair[1]),
+        "the NTC codes fall as it warms: {ntc_codes:?}"
+    );
+    // Firmware scales the result back: code * VREFH / 4096.
+    let mv = ntc_codes[0] * VREF_MV / 4096;
+    assert!(
+        mv.abs_diff(millivolts(promoted_ntc_volts(-10.0))) <= 1,
+        "code * VREFH / 4096 gives {mv} mV at -10 °C"
+    );
+
+    // One trigger converts both pads through a CMDH.NEXT chain.
+    command(&mut bus, 1, 2, 2 << 24);
+    command(&mut bus, 2, 4, 0);
+    bus.write_u32(TCTRL0 + 8, 1 << 24).expect("TCTRL2");
+    bus.write_u32(SWTRIG, 1 << 2).expect("SWT2");
+    assert_eq!(bus.read_u32(FCTRL).unwrap() & 0x1F, 2, "FCOUNT");
+    let got: Vec<(u32, u32)> = (0..2)
+        .map(|_| bus.read_u32(RESFIFO).unwrap())
+        .map(|e| ((e >> 24) & 0xF, (e & 0xFFFF) >> 3))
+        .collect();
+    assert_eq!(
+        got,
+        [(1, ntc_codes[3]), (2, code(expected_diode_v))],
+        "(CMDSRC, code)"
+    );
+}
+
+/// The removed simulation-only bank and a pad with no ADC0_SE function are
+/// binding errors, not guessed routes.
+#[test]
+fn promoted_vegaboard_refuses_the_removed_input_bank_and_a_pad_without_adc() {
+    for path in ["board.gpio_in.cosim_inputs.0", "board.analog.PTA0_volts"] {
+        let (mut system, chip) = promoted_system();
+        system.cosim_models[0]
+            .outputs
+            .insert("v_sense".to_string(), path.to_string());
+        let (_bus, session) = promoted_board(&system, &chip);
+        assert_eq!(
+            session.binding_errors().len(),
+            1,
+            "{path} must not bind: {:?}",
+            session.binding_errors()
+        );
+    }
 }

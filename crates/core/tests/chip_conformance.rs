@@ -115,8 +115,8 @@ const CHIPS: &[ChipConf] = &[
     },
     ChipConf {
         // Vega board (RI5CY, RV32IMC). SIM-DERIVED: no silicon capture.
-        // Modelled: CPU + memory + LPUART0/1; the SCG/PCC clock blocks, INTMUX
-        // and low-power timers are declared stubs — see
+        // Modelled: CPU + memory + LPUART0/1 + LPADC0; the SCG/PCC clock
+        // blocks, INTMUX and low-power timers are declared stubs — see
         // examples/vegaboard-ri5cy/VALIDATION.md.
         name: "vegaboard-ri5cy",
         yaml: "configs/chips/vegaboard-ri5cy.yaml",

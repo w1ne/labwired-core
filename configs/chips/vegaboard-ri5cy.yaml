@@ -11,10 +11,16 @@
 # - NXP LPUART (Kinetis) register map: DATA @ +0x0C, STAT @ +0x04 with TDRE
 #   (bit 23) / TC (bit 22); the engine's `lpuart` UART profile models it.
 #
-# Modelled: CPU + memory + LPUART0/1 (polled console path).
+# - LPADC0: rv32m1_sdk_riscv @92fb0650 RV32M1_ri5cy.h (ADC0_BASE 0x4004A000,
+#   ADC_Type ends with RESFIFO at 0x300), fsl_lpadc.c and the
+#   boards/rv32m1_vega pin_mux.c signal lists (ADC0_SEn pads); reset values
+#   from rv32m1-rust/rv32m1_ri5cy-pac RV32M1_RI5CY.svd.
+#
+# Modelled: CPU + memory + LPUART0/1 (polled console path) + LPADC0.
 # Declared, not modelled (`type: stub`): the low-power timers, the INTMUX and
 # the SCG/PCC clock blocks — the smoke prints the SCG/PCC readbacks so the
-# boundary is visible on the wire. The board has no modelled user I/O.
+# boundary is visible on the wire. GPIO/PORT are not declared: the ADC0_SEn
+# pads below are analog routes only, and no digital pad level is defined.
 #
 # Tier: L1 smoke — boot + UART byte path on the Vega SoC map.
 
@@ -29,10 +35,6 @@ flash: { base: 0x0, size: "1MiB" }
 ram: { base: 0x20000000, size: "192KB" }
 # 0x0 is the SoC's real flash, not an alias.
 flash_boot_alias: false
-# Simulation-only co-simulation inputs; the Vega descriptor has no physical
-# GPIO or ADC model, and these assumptions are not RI5CY pad specifications.
-io_voltage_v: 3.3
-gpio_input_thresholds: { vil: 0.3, vih: 0.7 }
 peripherals:
   - id: "lpuart0"
     type: "uart"
@@ -73,9 +75,32 @@ peripherals:
     type: "stub"
     base_address: 0x41027000
     size: "1KB"
-  # Generic mixed-signal co-simulation inputs; not SoC registers or board pads.
-  - id: "cosim_inputs"
-    type: "input_pin_bank"
-    base_address: 0xF0000000
+  # LPADC0 on `nxp_lpadc` with the RV32M1 `single_fifo` layout (one RESFIFO,
+  # FCTRL at 0x30, four triggers at 0xC0, CMDL.ADCH/ABSEL only, CFG.CALOFS).
+  # ADC0_IRQn is 21 on the RI5CY core and arrives through the INTMUX/event
+  # unit, which is a stub here, so no irq is wired. The PCC clock gate is a
+  # stub too: the block converts without it. VREFH 1.8 V is an ASSUMPTION: no
+  # source was found for the Vega board's VREFH rail.
+  - id: "adc0"
+    type: "nxp_lpadc"
+    base_address: 0x4004A000
     size: "4KB"
-    config: { pin_count: 2 }
+    config: { layout: "single_fifo", vref_mv: 1800 }
+
+# ADC0_SEn pads from the pin_signal lists in the rv32m1_sdk_riscv
+# boards/rv32m1_vega/*/pin_mux.c files (e.g. lpspi/interrupt: "ADC0_SE2/PTB7",
+# lpspi_loopback: "ADC0_SE4/LPCMP0_IN2/PTC9"). SEn is converted as CHnA
+# (CMDL.ADCH = n, ABSEL = 0), the SDK's kLPADC_SampleChannelSingleEndSideA
+# default that the lpadc/polling example uses on channel 0 (J2-4). ADC0_SE3,
+# SE9 and SE11 are left out: no SDK file names their pads.
+analog_pins:
+  PTB3:  { peripheral: adc0, channel: 0 }    # ADC0_SE0
+  PTB4:  { peripheral: adc0, channel: 1 }    # ADC0_SE1
+  PTB7:  { peripheral: adc0, channel: 2 }    # ADC0_SE2
+  PTC9:  { peripheral: adc0, channel: 4 }    # ADC0_SE4
+  PTC10: { peripheral: adc0, channel: 5 }    # ADC0_SE5
+  PTC11: { peripheral: adc0, channel: 6 }    # ADC0_SE6
+  PTC12: { peripheral: adc0, channel: 7 }    # ADC0_SE7
+  PTD5:  { peripheral: adc0, channel: 8 }    # ADC0_SE8
+  PTD7:  { peripheral: adc0, channel: 10 }   # ADC0_SE10
+  PTD9:  { peripheral: adc0, channel: 12 }   # ADC0_SE12

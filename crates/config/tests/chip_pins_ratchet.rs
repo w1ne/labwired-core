@@ -71,8 +71,9 @@ const PARSE_FALLBACK_CHIPS: &[&str] = &[
     // CSR (`board_io` binds `cas` pin N); no `P<bank><bit>` label exists to
     // parse, and the CAS model is the authoritative pad surface.
     "arty-litex-vexriscv",
-    // The Vega board's SoC models UARTs and timers and no GPIO bank, so there
-    // are no pads to read, by parse or by map.
+    // The Vega board's SoC models UARTs, timers and LPADC0 and no GPIO bank,
+    // so there are no digital pads to read, by parse or by map. The ADC0_SEn
+    // pads are analog routes (`analog_pins`), keyed by pad name.
     "vegaboard-ri5cy",
     // The PolarFire SoC MSS GPIO_0..2 are declared stubs (no GPIO model), and
     // the kit's LEDs/buttons sit behind the FPGA fabric; no pads to read yet.
