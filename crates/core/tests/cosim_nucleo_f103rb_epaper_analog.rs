@@ -77,6 +77,43 @@ fn expected_jfet_gate_voltage(previous_v: f64, drive_v: f64, step_s: f64) -> f64
     0.5 * (low + high)
 }
 
+/// Independent level-1 NJF load line including model-card drain/source
+/// resistances. The root solves channel current against the external load and
+/// intrinsic terminal drops, independently of MNA.
+fn jfet_drain_voltage(gate_v: f64, drain_ohms: f64, source_ohms: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 1_000.0;
+    const VTO: f64 = -2.0;
+    const BETA_A_PER_V2: f64 = 500e-6;
+    const LAMBDA_PER_V: f64 = 0.025;
+
+    let channel_current = |current_a: f64| {
+        let external_drain_v = SUPPLY_V - current_a * LOAD_OHMS;
+        let internal_drain_v = external_drain_v - current_a * drain_ohms;
+        let internal_source_v = current_a * source_ohms;
+        let vds = internal_drain_v - internal_source_v;
+        let vgst = gate_v - internal_source_v - VTO;
+        if vgst <= 0.0 {
+            0.0
+        } else if vds < vgst {
+            BETA_A_PER_V2 * (1.0 + LAMBDA_PER_V * vds) * vds * (2.0 * vgst - vds)
+        } else {
+            BETA_A_PER_V2 * (1.0 + LAMBDA_PER_V * vds) * vgst * vgst
+        }
+    };
+
+    let (mut low, mut high) = (0.0, SUPPLY_V / LOAD_OHMS);
+    for _ in 0..100 {
+        let current_a = 0.5 * (low + high);
+        if channel_current(current_a) > current_a {
+            low = current_a;
+        } else {
+            high = current_a;
+        }
+    }
+    SUPPLY_V - 0.5 * (low + high) * LOAD_OHMS
+}
+
 /// Independent forward-active Gummel–Poon load line, with optional Early effect.
 fn bjt_collector_voltage(base_drive_v: f64, early_voltage_v: Option<f64>) -> f64 {
     const SUPPLY_V: f64 = 3.3;
@@ -1507,6 +1544,170 @@ fn stm32f103_bare_jfet_gate_depletion_charge_reaches_adc1_with_ntc_and_diode() {
         signal_voltage(&session, "board.analog.pa2_volts") < 1.0,
         "gate depletion charge delays the edge but eventually follows the low drive"
     );
+}
+
+/// Generic NJF model-card terminal resistances resolve through the bare
+/// STM32F103 ADC1 routes. An explicit external resistor network is the
+/// counterfactual reference; the unrelated NTC and diode remain isolated.
+#[test]
+fn stm32f103_bare_jfet_terminal_resistances_reach_adc1_with_ntc_and_diode() {
+    const TERMINAL_OHMS: f64 = 200.0;
+    let system_path = root("configs/systems/stm32f103-bare.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load bare STM32F103");
+    let analog = SystemManifest::from_file(root(
+        "examples/nucleo-f103rb/analog-jfet-terminal-resistance-adc-system.yaml",
+    ))
+    .expect("load generic JFET, NTC, and diode netlists");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load STM32F103 descriptor");
+    for (pad, channel) in [
+        ("PA0", 0),
+        ("PA1", 1),
+        ("PA2", 2),
+        ("PA3", 3),
+        ("PA4", 4),
+        ("PA5", 5),
+        ("PA6", 6),
+    ] {
+        assert_eq!(
+            chip.analog_pins
+                .get(pad)
+                .map(|route| (route.peripheral.as_str(), route.channel)),
+            Some(("adc1", channel)),
+            "{pad} must resolve to STM32F103 ADC1_IN{channel}"
+        );
+    }
+
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build bare STM32F103 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries the JFET branches, NTC, and diode");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic outputs must resolve through PA0..PA6 ADC1 routes"
+    );
+    for channel in 0..=7 {
+        assert_eq!(
+            adc_channel_count(&mut bus, channel),
+            0xFFFF,
+            "ADC1 channel {channel} starts without an analog source"
+        );
+    }
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+    session
+        .set_signal_number("ui.jfet.gate_v", -1.0)
+        .expect("initialize all matched JFET gate drives");
+    let mut cycles = session.cycles_until_boundary(0);
+    let (initial_steps, initial_errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve the JFET branches and unrelated devices");
+    assert_eq!(initial_steps.len(), 3, "all three analog netlists solve");
+    assert!(
+        initial_errors.is_empty(),
+        "unexpected route errors: {initial_errors:?}"
+    );
+
+    let branches = [
+        ("control", "pa2", 2, 0.0, 0.0),
+        ("drain resistance", "pa3", 3, TERMINAL_OHMS, 0.0),
+        ("source resistance", "pa4", 4, 0.0, TERMINAL_OHMS),
+        (
+            "both model-card resistances",
+            "pa5",
+            5,
+            TERMINAL_OHMS,
+            TERMINAL_OHMS,
+        ),
+        (
+            "explicit external resistor network",
+            "pa6",
+            6,
+            TERMINAL_OHMS,
+            TERMINAL_OHMS,
+        ),
+    ];
+    let diode_reference_v = diode_load_line_voltage();
+    for gate_v in [-1.0_f64, 0.0] {
+        session
+            .set_signal_number("ui.jfet.gate_v", gate_v)
+            .expect("step all matched JFET gate drives");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route the unrelated diode and JFET branches");
+        assert_eq!(
+            steps.len(),
+            3,
+            "all analog netlists solve at each gate bias"
+        );
+        assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+        let ntc_v = signal_voltage(&session, "board.analog.pa0_volts");
+        let diode_v = signal_voltage(&session, "board.analog.pa1_volts");
+        assert!(
+            (ntc_v - 1.65).abs() < 1e-9,
+            "unrelated NTC remains isolated"
+        );
+        assert!(
+            (diode_v - diode_reference_v).abs() < 2e-5,
+            "unrelated diode remains on its independent load line: expected {diode_reference_v} V, got {diode_v} V"
+        );
+
+        let mut terminal_model_voltage = None;
+        let mut explicit_network_voltage = None;
+        for (name, pad, channel, drain_ohms, source_ohms) in branches {
+            let solved_v = signal_voltage(&session, &format!("board.analog.{pad}_volts"));
+            let expected_v = jfet_drain_voltage(gate_v, drain_ohms, source_ohms);
+            assert!(
+                (solved_v - expected_v).abs() < 5e-5,
+                "{name} NJF load line at gate={gate_v} V should be {expected_v} V, got {solved_v} V"
+            );
+            if name == "both model-card resistances" {
+                terminal_model_voltage = Some(solved_v);
+            } else if name == "explicit external resistor network" {
+                explicit_network_voltage = Some(solved_v);
+            }
+            let expected = expected_adc_count(solved_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved {name} voltage seeds descriptor-routed ADC1_IN{channel}"
+            );
+            assert_eq!(
+                stm32f103_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1_IN{channel} conversion follows the {name} branch"
+            );
+        }
+        assert!(
+            (terminal_model_voltage.unwrap() - explicit_network_voltage.unwrap()).abs() < 5e-5,
+            "model-card RD/RS must match the explicit external resistor network"
+        );
+        for (channel, voltage_v) in [(0, ntc_v), (1, diode_v)] {
+            let expected = expected_adc_count(voltage_v);
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected,
+                "solved unrelated device voltage seeds ADC1 channel {channel}"
+            );
+            assert_eq!(
+                stm32f103_adc_convert(&mut bus, channel),
+                u32::from(expected),
+                "firmware-visible ADC1 channel {channel} converts the unrelated device"
+            );
+        }
+        assert_eq!(
+            adc_channel_count(&mut bus, 7),
+            0xFFFF,
+            "the neighboring ADC1 channel remains undriven"
+        );
+    }
 }
 
 /// The integrated-test system extends the common STM32F103 chip with DMA1 and
