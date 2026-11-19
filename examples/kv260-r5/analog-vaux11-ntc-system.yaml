@@ -1,0 +1,52 @@
+# Generic MNA NTC divider on the KV260's one complete SYSMON auxiliary pair,
+# VAUX11:
+#   VAUXP11 = package pin C11, IO_L9P_AD11P_45, som240_1_d22, `pmod[3]`
+#   VAUXN11 = package pin B10, IO_L9N_AD11N_45, som240_1_b20, `pmod[4]`
+# Source: Xilinx/Kria-PYNQ @8b975f43 kv260/base/vivado/constraints/base.xdc
+# (the Pmod J2 block). The other Pmod pads with an analog function carry one
+# half of a pair only (B11 = AD10P, H12 = AD12N), and the SOM ties the
+# dedicated VP/VN pair to its own VAUX_5V0 monitor (K26 SOM XDC Rev 1), so
+# VAUX11 is the only user input on this connector.
+#
+# The XCK26 RPU descriptor is declared-only (CPU and memory), so this system
+# adds the converter itself: the Zynq UltraScale+ AMS at 0xFFA50000
+# (embeddedsw sysmonpsu XSYSMONPSU_BASEADDR; PL SYSMON at +0xC00). The route
+# is by PL SYSMON channel: VAUX11 = 16 + 11 = 27. The native RPU machine does
+# not instantiate this block.
+#
+# Assumptions, not verified in this repository:
+# - the PL bitstream instantiates SYSMONE4 and connects VAUXP/VAUXN[11] to
+#   the two pads (the PL is not modelled);
+# - VAUXN11 is tied to ground at the connector (unipolar input, 0 V to 1 V).
+#
+# The pads are in the 3.3 V bank 45 and the input range is 1 V. A 150 k top
+# resistor keeps the 10 k Beta NTC below 1 V from -10 C upward (0.92 V at
+# -10 C). Acquisition time is not modelled, so the source impedance has no
+# effect here.
+name: kv260-r5-analog-vaux11-ntc
+chip: ../../configs/chips/xck26-rpu.yaml
+external_devices: []
+board_io: []
+peripherals:
+  - id: ams
+    type: zynqmp_ams
+    base_address: 0xFFA50000
+    size: 4KiB
+cosim_models:
+  - id: ntc_divider
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      temperature: ui.ntc.temperature_c
+    outputs:
+      v_sense: adc.ams.27_volts
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rtop vcc sense 150k
+        Rntc sense 0 10k beta=3950 tnom=25 temp=25
+      probes:
+        v_sense: v(sense)
+      sources:
+        temperature: Rntc
+      vdd: 3.3
