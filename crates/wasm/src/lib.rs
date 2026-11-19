@@ -3319,12 +3319,19 @@ mod romboot_tests {
         // Lock the provenance to the actual vendored ROM, not a guessed RAM top.
         let rom = std::fs::read(root().join("../core/roms/esp32c3/esp32c3_rom.bin"))
             .expect("read vendored C3 ROM");
-        assert_eq!(&rom[0x1edc..0x1ee4], &[0x17, 0xd1, 0xcd, 0xff, 0x13, 0x01, 0x41, 0x83]);
+        assert_eq!(
+            &rom[0x1edc..0x1ee4],
+            &[0x17, 0xd1, 0xcd, 0xff, 0x13, 0x01, 0x41, 0x83]
+        );
         let (mut sim, _) = c3_browser_fast_start_sim();
         assert_eq!(sim.get_register(2).unwrap(), 0x3fcd_e710);
         let cache_ptr = sim.read_memory(0x3fcd_ffd4, 4).unwrap();
         let ops_ptr = sim.read_memory(0x3fcd_fffc, 4).unwrap();
-        assert_ne!(cache_ptr, vec![0; 4], "ROM cache pointer must be initialized");
+        assert_ne!(
+            cache_ptr,
+            vec![0; 4],
+            "ROM cache pointer must be initialized"
+        );
         assert_ne!(ops_ptr, vec![0; 4], "ROM ops pointer must be initialized");
         // A machine error after partial progress is returned as the elapsed
         // count; require the entire budget, allowing cycle-count overshoot.
