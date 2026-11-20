@@ -177,7 +177,7 @@ impl DcResponse {
         self.inner.len()
     }
 
-    /// Inner swept value at `point`: volts, amps or ohms.
+    /// Inner swept value at `point`: volts, amps, ohms or °C.
     pub fn inner_value(&self, point: usize) -> f64 {
         self.inner[point % self.inner.len()]
     }
@@ -1027,6 +1027,36 @@ impl Solver {
             self.settled = false;
         }
         true
+    }
+
+    /// Lower every temperature-dependent element again at `celsius`, as a
+    /// `.dc TEMP` point: the `D`, `Q`, `J` and `M` devices are replaced and
+    /// each resistor takes the fresh NTC or `tc1`/`tc2` temperature while
+    /// keeping its present nominal value. Sources and switches are untouched.
+    fn set_circuit_temperature(&mut self, celsius: f64) -> Result<(), AnalogError> {
+        let lowered = self.circuit.at_temperature(celsius)?;
+        if lowered.resistors.len() != self.circuit.resistors.len()
+            || lowered.diodes.len() != self.circuit.diodes.len()
+            || lowered.bjts.len() != self.circuit.bjts.len()
+            || lowered.mosfets.len() != self.circuit.mosfets.len()
+            || lowered.jfets.len() != self.circuit.jfets.len()
+        {
+            return Err(AnalogError::Config(
+                "`.dc TEMP` lowered a circuit that no longer matches the solver's".to_string(),
+            ));
+        }
+        for (resistor, fresh) in self.circuit.resistors.iter_mut().zip(lowered.resistors) {
+            resistor.ntc = fresh.ntc;
+            resistor.temperature_coefficients = fresh.temperature_coefficients;
+        }
+        self.circuit.diodes = lowered.diodes;
+        self.circuit.bjts = lowered.bjts;
+        self.circuit.mosfets = lowered.mosfets;
+        self.circuit.jfets = lowered.jfets;
+        self.cached_stamp = None;
+        self.restart = true;
+        self.settled = false;
+        Ok(())
     }
 
     /// Index of a named resistor that has an NTC Beta model.
@@ -2106,8 +2136,12 @@ impl Solver {
     /// DC transfer curve: the operating point at every value of `sweep`, as
     /// ngspice's `.dc` computes it. A swept `V` or `I` takes the value as its
     /// DC level; a swept `R` takes it as its nominal resistance, so an NTC or
-    /// `tc1`/`tc2` law still scales it. Each point starts Newton from the one
-    /// before, so a sweep through a diode knee converges like a source ramp.
+    /// `tc1`/`tc2` law still scales it. A swept `TEMP` (°C) lowers every
+    /// temperature-dependent device and resistor again at that temperature,
+    /// as a `.temp` card would, unless the element sets its own `temp=`; this
+    /// needs the circuit to come from a parsed deck. Each point starts Newton
+    /// from the one before, so a sweep through a diode knee converges like a
+    /// source ramp.
     /// Every other source keeps its present value; `.tran ... uic` does not
     /// apply, because a DC sweep has no initial transient.
     ///
@@ -2119,8 +2153,12 @@ impl Solver {
             Voltage(usize),
             Current(usize),
             Resistor(usize),
+            Temperature,
         }
         let resolve = |name: &str| {
+            if name.eq_ignore_ascii_case("temp") {
+                return Ok(Swept::Temperature);
+            }
             self.voltage_source_index(name)
                 .map(Swept::Voltage)
                 .or_else(|| self.current_source_index(name).map(Swept::Current))
@@ -2161,6 +2199,7 @@ impl Solver {
                     )))
                 }
             }
+            Swept::Temperature => work.set_circuit_temperature(value),
         };
         let dim = self.dim();
         let outer_values = outer.clone().unwrap_or_else(|| vec![0.0]);

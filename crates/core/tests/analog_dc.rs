@@ -9,10 +9,13 @@
 //! (divider, diode law, Gummel-Poon forward-active collector current with the
 //! Early factor), not from the engine. Nothing is device-specific in the
 //! sweep itself: the same code drives a resistor, a diode and a BJT, and a
-//! swept `R` sets a divider ratio or a BJT's base bias the same way.
+//! swept `R` sets a divider ratio or a BJT's base bias the same way. A swept
+//! `TEMP` is held to ngspice-42 and to the same deck run with a `.temp` card.
 
 mod analog {
-    use labwired_core::analog::{parse_netlist, AnalogError, Integration, Solver};
+    use labwired_core::analog::{
+        parse_netlist, AnalogError, DcSweep, DcSweepSource, Integration, Solver,
+    };
 
     const GMIN: f64 = 1e-12;
     /// `kT/q` at the engine's nominal 300 K, from CODATA constants.
@@ -386,5 +389,222 @@ Q1 c b 0 QN
             let message = parse_netlist(deck).expect_err(deck).to_string();
             assert!(message.contains(needle), "{deck}: {message}");
         }
+    }
+
+    /// Diode, BJT, level-1 MOSFET and a `tc1`/`tc2` collector resistor in one
+    /// deck, swept over temperature. Reference: ngspice-42 on the same deck
+    /// with `.options reltol=1e-9 abstol=1e-18 vntol=1e-12` and
+    /// `set numdgt=10`.
+    const TEMPERATURE_DECK: &str = "I1 0 a DC 1m\n\
+        D1 a 0 DMOD\n\
+        VCC c 0 DC 5\n\
+        RC c col 1k tc1=2e-3 tc2=1e-6\n\
+        RB c b 470k\n\
+        Q1 col b 0 QMOD\n\
+        VG g 0 DC 2\n\
+        RD c dr 2k\n\
+        M1 dr g 0 0 NMOD l=1u w=10u\n\
+        .model DMOD D(is=1e-14 n=1.05 rs=2 eg=1.11 xti=3)\n\
+        .model QMOD NPN(is=2e-15 bf=150 vaf=80 xtb=1.5 eg=1.11 xti=3)\n\
+        .model NMOD NMOS(level=1 vto=0.8 kp=60u lambda=0.02 phi=0.65 gamma=0.4)\n";
+
+    #[test]
+    fn temperature_sweep_matches_ngspice_for_diode_bjt_mosfet_and_tc_resistor() {
+        let solver = build(&format!("{TEMPERATURE_DECK}.dc TEMP -40 125 55\n"));
+        let response = solver.dc_sweep().expect("temperature sweep solves");
+        // index, °C, V(a), V(col), V(b), V(dr)
+        const NGSPICE: [[f64; 5]; 4] = [
+            [
+                -40.0,
+                7.9932674114e-01,
+                4.1680601180e+00,
+                8.0248040790e-01,
+                3.8404742835e+00,
+            ],
+            [
+                15.0,
+                7.0978978228e-01,
+                3.6998730379e+00,
+                7.2251650669e-01,
+                4.0351227548e+00,
+            ],
+            [
+                70.0,
+                6.1752215611e-01,
+                3.0934727939e+00,
+                6.4136388296e-01,
+                4.1526046775e+00,
+            ],
+            [
+                125.0,
+                5.2296573643e-01,
+                2.3316654664e+00,
+                5.5924103430e-01,
+                4.2265117585e+00,
+            ],
+        ];
+        assert_eq!(response.len(), NGSPICE.len());
+        let probes = ["a", "col", "b", "dr"].map(|name| node(&solver, name));
+        for (point, row) in NGSPICE.iter().enumerate() {
+            assert_close("TEMP", response.inner_value(point), row[0], 1e-12, 1e-12);
+            for (probe, (&index, &expected)) in probes.iter().zip(&row[1..]).enumerate() {
+                assert_close(
+                    &format!(
+                        "{} at {} °C",
+                        ["V(a)", "V(col)", "V(b)", "V(dr)"][probe],
+                        row[0]
+                    ),
+                    response.node_voltage(point, index),
+                    expected,
+                    // CODATA 2014 (ngspice) vs 2018 (engine) kT/q.
+                    2e-6,
+                    0.0,
+                );
+            }
+        }
+        // The sweep runs on a copy: the solver keeps its nominal devices.
+        assert_eq!(
+            solver.circuit().diodes,
+            build(TEMPERATURE_DECK).circuit().diodes
+        );
+    }
+
+    /// Every point of a `TEMP` sweep is the operating point of the same deck
+    /// with that `.temp` card, for every temperature-dependent element kind:
+    /// diode, BJT, MOSFET, JFET, NTC (`beta`) and `tc1` resistor. An element
+    /// with its own `temp=` does not follow the sweep.
+    #[test]
+    fn temperature_sweep_point_equals_the_deck_with_that_temp_card() {
+        let deck = format!(
+            "{TEMPERATURE_DECK}\
+             VJ jd 0 DC 3\n\
+             RJ jd jdr 1k\n\
+             J1 jdr 0 0 JMOD\n\
+             .model JMOD NJF(vto=-1.5 beta=1m lambda=0.01 is=1e-14)\n\
+             VN ntc 0 DC 3.3\n\
+             RN ntc mid 10k beta=3950\n\
+             RF mid 0 10k\n\
+             I2 0 fixed DC 1m\n\
+             D2 fixed 0 DMOD temp=85\n"
+        );
+        let swept = build(&format!("{deck}.dc TEMP -20 100 40\n"));
+        let response = swept.dc_sweep().expect("temperature sweep solves");
+        assert_eq!(response.len(), 4);
+        let fixed = node(&swept, "fixed");
+        let mut previous_mid = None;
+        for point in 0..response.len() {
+            let celsius = response.inner_value(point);
+            let mut reference = build(&format!("{deck}.temp {celsius}\n"));
+            reference
+                .solve_operating_point()
+                .expect("reference OP solves");
+            for index in 0..reference.circuit().node_count() {
+                let name = reference.circuit().node_name(index).to_string();
+                assert_close(
+                    &format!("V({name}) at {celsius} °C"),
+                    response.node_voltage(point, Some(index)),
+                    reference.node_voltage(Some(index)),
+                    1e-9,
+                    1e-12,
+                );
+            }
+            // D2 stays at its own 85 °C whatever the sweep says.
+            let at_85 = {
+                let mut solver = build(&format!("{deck}.temp 85\n"));
+                solver.solve_operating_point().unwrap();
+                solver.node_voltage(fixed)
+            };
+            assert_close(
+                "V(fixed)",
+                response.node_voltage(point, fixed),
+                at_85,
+                1e-9,
+                1e-12,
+            );
+            // The NTC divider output rises with temperature.
+            let mid = response.node_voltage(point, node(&swept, "mid"));
+            if let Some(previous) = previous_mid {
+                assert!(
+                    mid > previous,
+                    "NTC mid {mid} not above {previous} at {celsius} °C"
+                );
+            }
+            previous_mid = Some(mid);
+        }
+    }
+
+    /// `TEMP` nests with an element sweep in either order. A swept `R` keeps
+    /// its swept nominal value while the temperature lowers the deck again.
+    #[test]
+    fn temperature_sweep_nests_with_source_and_resistor_sweeps() {
+        let deck = "V1 in 0 DC 0\n\
+            R1 in a 1k tc1=4e-3\n\
+            D1 a 0 DX\n\
+            .model DX D(is=1e-14 n=1.2 eg=1.11 xti=3)\n";
+        let reference = |celsius: f64, volts: f64, ohms: f64| {
+            let mut solver = build(&format!(
+                "V1 in 0 DC {volts}\nR1 in a {ohms} tc1=4e-3\nD1 a 0 DX\n\
+                 .model DX D(is=1e-14 n=1.2 eg=1.11 xti=3)\n.temp {celsius}\n"
+            ));
+            solver.solve_operating_point().unwrap();
+            solver.node_voltage(node(&solver, "a"))
+        };
+
+        let solver = build(&format!("{deck}.dc V1 1 3 1 TEMP 0 100 50\n"));
+        let response = solver.dc_sweep().expect("V inside TEMP solves");
+        assert_eq!(response.len(), 9);
+        let a = node(&solver, "a");
+        for point in 0..response.len() {
+            let celsius = response.outer_value(point).unwrap();
+            let volts = response.inner_value(point);
+            assert_close(
+                &format!("V(a) at {volts} V, {celsius} °C"),
+                response.node_voltage(point, a),
+                reference(celsius, volts, 1e3),
+                1e-9,
+                1e-12,
+            );
+        }
+
+        let deck = deck.replacen("DC 0", "DC 2", 1);
+        let solver = build(&format!("{deck}.dc TEMP 0 100 50 R1 1k 3k 2k\n"));
+        let response = solver.dc_sweep().expect("TEMP inside R solves");
+        assert_eq!(response.len(), 6);
+        for point in 0..response.len() {
+            let ohms = response.outer_value(point).unwrap();
+            let celsius = response.inner_value(point);
+            assert_close(
+                &format!("V(a) at {ohms} ohm, {celsius} °C"),
+                response.node_voltage(point, a),
+                reference(celsius, 2.0, ohms),
+                1e-9,
+                1e-12,
+            );
+        }
+    }
+
+    #[test]
+    fn temperature_sweep_needs_its_parsed_deck_and_stays_above_absolute_zero() {
+        let message = parse_netlist("V1 a 0 1\nR1 a 0 1\n.dc TEMP -300 0 100\n")
+            .expect_err("below absolute zero")
+            .to_string();
+        assert!(message.contains("absolute zero"), "{message}");
+        // A sweep handed in by the caller on a deck with no `.dc` card has no
+        // deck to lower again.
+        let solver = build("I1 0 a 1m\nD1 a 0 DX\n.model DX D(is=1e-14)\n");
+        let sweep = DcSweep {
+            inner: DcSweepSource {
+                source: "TEMP".to_string(),
+                start: 0.0,
+                stop: 50.0,
+                step: 50.0,
+            },
+            outer: None,
+        };
+        let result = solver.dc_analysis(&sweep);
+        assert!(
+            matches!(&result, Err(AnalogError::Config(message)) if message.contains("`.dc TEMP`")),
+            "{result:?}"
+        );
     }
 }

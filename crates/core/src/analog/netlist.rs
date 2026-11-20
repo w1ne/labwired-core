@@ -376,9 +376,12 @@
 //! not change the DC or transient run.
 //! `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` is kept
 //! as [`Circuit::dc_sweep`] and run by [`crate::analog::Solver::dc_analysis`];
-//! `<src>` must be a `V`, `I` or `R` element, and the second source is the
-//! outer loop. A swept `R` takes the value as its nominal resistance, so its
-//! NTC or `tc1`/`tc2` law still applies, as in ngspice.
+//! `<src>` must be a `V`, `I` or `R` element or `TEMP`, and the second source
+//! is the outer loop. A swept `R` takes the value as its nominal resistance,
+//! so its NTC or `tc1`/`tc2` law still applies, as in ngspice. A swept `TEMP`
+//! (°C) replaces `.temp` at each point: every `D`, `Q`, `J` and `M` and every
+//! `beta`/`tc1`/`tc2` resistor without its own `temp=` is lowered again at
+//! that temperature, as ngspice's `CKTtemp` does.
 //! `+` continuation lines and `.subckt`…`.ends` blocks are rewritten before
 //! any of this, as described at the top.
 //!
@@ -954,11 +957,11 @@ impl AcSweep {
 /// One source of a `.dc` sweep: `<src> <start> <stop> <incr>`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DcSweepSource {
-    /// Name of the swept `V`, `I` or `R` element, as written.
+    /// Name of the swept `V`, `I` or `R` element as written, or `TEMP`.
     pub source: String,
-    /// First value, volts, amps or ohms.
+    /// First value: volts, amps, ohms or °C.
     pub start: f64,
-    /// Last value, volts, amps or ohms.
+    /// Last value: volts, amps, ohms or °C.
     pub stop: f64,
     /// Increment; its sign matches `stop - start`.
     pub step: f64,
@@ -3401,9 +3404,26 @@ pub struct Circuit {
     /// The deck's `.dc` sweep, if it has one; see
     /// [`crate::analog::Solver::dc_analysis`].
     pub dc_sweep: Option<DcSweep>,
+    /// The deck's lines after `.include` expansion, kept only when a `.dc`
+    /// card is present, so that a `TEMP` sweep can lower the deck again at
+    /// each temperature (see [`Circuit::at_temperature`]).
+    temperature_deck: Option<std::sync::Arc<Vec<LogicalLine>>>,
 }
 
 impl Circuit {
+    /// The same deck lowered again with `celsius` as its `.temp`, as ngspice's
+    /// `CKTtemp` recomputes every device's temperature parameters for a
+    /// `.dc TEMP` point. An instance or resistor with its own `temp=` keeps
+    /// it. Only a parsed deck with a `.dc` card can do this.
+    pub(crate) fn at_temperature(&self, celsius: f64) -> Result<Circuit, AnalogError> {
+        let deck = self.temperature_deck.as_ref().ok_or_else(|| {
+            AnalogError::Config(
+                "`.dc TEMP` needs a circuit parsed from a netlist with its `.dc` card".to_string(),
+            )
+        })?;
+        parse_lines_at(deck.as_ref().clone(), Some(celsius))
+    }
+
     /// Number of non-ground nodes (the `N` of the MNA system).
     pub fn node_count(&self) -> usize {
         self.node_names.len()
@@ -3890,6 +3910,7 @@ struct PendingMutualInductor {
 }
 
 /// One logical netlist line: comments stripped, `+` continuations joined.
+#[derive(Debug, Clone, PartialEq)]
 struct LogicalLine {
     /// 1-based source line the logical line starts on.
     number: usize,
@@ -5025,7 +5046,25 @@ pub fn parse_netlist_with_files(
 }
 
 fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
+    parse_lines_at(lines, None)
+}
+
+/// Parse `lines`, with `temperature` (°C) replacing the deck's own `.temp`
+/// when given.
+fn parse_lines_at(
+    lines: Vec<LogicalLine>,
+    temperature: Option<f64>,
+) -> Result<Circuit, AnalogError> {
     let mut circuit = Circuit::default();
+    let has_dc_card = lines.iter().any(|line| {
+        line.text
+            .split_whitespace()
+            .next()
+            .is_some_and(|head| head.eq_ignore_ascii_case(".dc"))
+    });
+    if has_dc_card {
+        circuit.temperature_deck = Some(std::sync::Arc::new(lines.clone()));
+    }
     let mut ended = false;
     let mut models: BTreeMap<String, ModelCard> = BTreeMap::new();
     let mut pending: Vec<PendingDevice> = Vec::new();
@@ -5043,7 +5082,10 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
     // how ngspice's `inp2q.c` tells `Q c b e s mod` from `Q c b e mod`.
     let lines = expand_functions(lines)?;
     let lines = expand_subcircuits(lines)?;
-    let temperatures = circuit_temperatures(&lines)?;
+    let mut temperatures = circuit_temperatures(&lines)?;
+    if temperature.is_some() {
+        temperatures.temperature = temperature;
+    }
     let circuit_temperature = temperatures.temperature;
     let declared_models: Vec<String> = lines
         .iter()
@@ -7654,8 +7696,9 @@ fn parse_ac_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<AcSweep, AnalogE
 }
 
 /// Parse `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]`.
-/// Only `V`, `I` and `R` elements may be swept; that the names exist is checked
-/// when the sweep runs, because a deck may declare the source after the card.
+/// Only `V`, `I` and `R` elements and `TEMP` may be swept; that the names
+/// exist is checked when the sweep runs, because a deck may declare the source
+/// after the card.
 fn parse_dc_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<DcSweep, AnalogError> {
     const SHAPE: &str =
         "expected `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]`";
@@ -7664,11 +7707,12 @@ fn parse_dc_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<DcSweep, AnalogE
     }
     let source = |chunk: &[&str]| -> Result<DcSweepSource, AnalogError> {
         let name = chunk[0];
-        if !(name.len() >= 2
-            && matches!(name.as_bytes()[0].to_ascii_uppercase(), b'V' | b'I' | b'R'))
-        {
+        let temperature = name.eq_ignore_ascii_case("temp");
+        let element = name.len() >= 2
+            && matches!(name.as_bytes()[0].to_ascii_uppercase(), b'V' | b'I' | b'R');
+        if !(temperature || element) {
             return Err(ctx.parse_err(format!(
-                "`.dc` sweeps a `V`, `I` or `R` element; `{name}` is not one"
+                "`.dc` sweeps a `V`, `I` or `R` element or `TEMP`; `{name}` is not one"
             )));
         }
         let start = ctx.value(chunk[1], "DC sweep start")?;
@@ -7690,6 +7734,9 @@ fn parse_dc_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<DcSweep, AnalogE
         };
         if (stop - start) / step > 100_000.0 {
             return Err(ctx.parse_err("`.dc` sweep has more than 100001 points"));
+        }
+        if temperature && sweep.values().iter().any(|&celsius| celsius <= -273.15) {
+            return Err(ctx.parse_err("`.dc TEMP` must stay above absolute zero (-273.15 °C)"));
         }
         Ok(sweep)
     };
