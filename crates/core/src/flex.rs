@@ -11,6 +11,7 @@
 
 use crate::analog::{AnalogCrossing, AnalogSample, AnalogTraceBatch, AnalogWindowTally};
 use crate::cosim::{CosimRunner, CosimSignalValue, CosimSignals};
+use crate::flex_i2c::{FlexI2cBusSummary, FlexI2cTraceBatch, FlexI2cTransfer, I2cBuses};
 use crate::logic_capture::{LogicCapture, PadEvent};
 use crate::{SimResult, SimulationError};
 use labwired_config::{
@@ -133,6 +134,9 @@ pub struct FlexRunReport {
     pub unsupported_checks: Vec<String>,
     pub ports: Vec<FlexPort>,
     pub models: Vec<FlexModelSummary>,
+    /// The I2C buses and their catalog device models. Absent without a bus.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub i2c_buses: Vec<FlexI2cBusSummary>,
 }
 
 fn signal_bindings(bindings: &HashMap<String, String>) -> Vec<FlexSignalBinding> {
@@ -301,6 +305,7 @@ pub struct FlexRuntime {
     runner: CosimRunner,
     signals: CosimSignals,
     digital: DigitalCapture,
+    i2c: I2cBuses,
     time_ns: u64,
     failure: Option<String>,
 }
@@ -377,6 +382,8 @@ impl FlexRuntime {
             }
         }
         runner.validate_numeric_input_units(&signals, &units)?;
+        let mut i2c = I2cBuses::new(&manifest.i2c_buses, &units)?;
+        i2c.sync_inputs(&signals)?;
         let digital = DigitalCapture::new(&signals, &manifest.ports)?;
         let runtime = Self {
             manifest,
@@ -385,6 +392,7 @@ impl FlexRuntime {
             runner,
             signals,
             digital,
+            i2c,
             time_ns: 0,
             failure: None,
         };
@@ -422,6 +430,7 @@ impl FlexRuntime {
             unsupported_checks: manifest.unsupported_checks.clone(),
             ports: manifest.ports.clone(),
             models: manifest.cosim_models.iter().map(model_summary).collect(),
+            i2c_buses: self.i2c.summaries().to_vec(),
         }
     }
 
@@ -484,6 +493,12 @@ impl FlexRuntime {
         }
         self.signals.insert(port.signal.clone(), value);
         self.digital.sample(self.time_ns, &self.signals);
+        // A bus device takes its input at the write, so the next transfer
+        // reads it. A value the device rejects stops the runtime.
+        if let Err(failure) = self.i2c.sync_inputs(&self.signals) {
+            self.failure = Some(failure.to_string());
+            return Err(failure);
+        }
         Ok(())
     }
 
@@ -556,13 +571,52 @@ impl FlexRuntime {
             .step_until_with_signals_observed(target, &mut self.signals, |time_ns, signals| {
                 digital.sample(time_ns, signals)
             })
-            .and_then(|_| self.validate_observations());
+            .and_then(|_| self.validate_observations())
+            .and_then(|_| self.i2c.sync_inputs(&self.signals));
         if let Err(failure) = result {
             self.failure = Some(failure.to_string());
             return Err(failure);
         }
+        self.i2c.advance_ns(delta_ns);
         self.time_ns = target;
         Ok(())
+    }
+
+    pub fn i2c_bus_id(&self, name: &str) -> SimResult<u32> {
+        self.i2c.bus_id(name)
+    }
+
+    /// One I2C transfer as the bus controller: write `write` to the 7-bit
+    /// `address`, then read `read_len` bytes after a repeated START, then
+    /// STOP. An address no device answers is `ack: false`, not an error.
+    ///
+    /// Virtual time does not move here. The caller advances it by the
+    /// returned `duration_ns`, through its own time limits.
+    pub fn i2c_transfer(
+        &mut self,
+        bus_id: u32,
+        address: u32,
+        write: &[u8],
+        read_len: usize,
+    ) -> SimResult<FlexI2cTransfer> {
+        self.ensure_healthy()?;
+        self.i2c
+            .transfer(bus_id, self.time_ns, address, write, read_len)
+    }
+
+    /// Exact number of transfers on a bus since the start, optionally of one
+    /// address and one outcome. `None`: no such bus.
+    pub fn i2c_transfer_count(
+        &self,
+        bus_id: u32,
+        address: Option<u8>,
+        ack: Option<bool>,
+    ) -> Option<u64> {
+        self.i2c.transfer_count(bus_id, address, ack)
+    }
+
+    pub fn i2c_trace_snapshot(&self, cursor: u64) -> FlexI2cTraceBatch {
+        self.i2c.snapshot(cursor)
     }
 
     pub fn digital_trace_snapshot(&mut self, cursor: u64) -> FlexDigitalTraceBatch {

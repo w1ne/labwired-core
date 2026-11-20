@@ -108,6 +108,37 @@ impl WasmFlexRuntime {
         let cursor = js_trace_cursor(cursor)?;
         serde_wasm_bindgen::to_value(&self.runtime.analog_trace_snapshot(cursor)).map_err(js_error)
     }
+
+    pub fn i2c_bus_id(&self, name: &str) -> Result<u32, JsValue> {
+        self.runtime.i2c_bus_id(name).map_err(js_error)
+    }
+
+    /// One I2C transfer as the bus controller: write `write` to the 7-bit
+    /// `address`, read `read_len` bytes after a repeated START, STOP. Returns
+    /// the transfer (`ack`, `read`, `duration_ns`) and advances virtual time
+    /// by its `duration_ns`. An address no device answers is `ack: false`.
+    pub fn i2c_transfer(
+        &mut self,
+        bus: u32,
+        address: u32,
+        write: &[u8],
+        read_len: u32,
+    ) -> Result<JsValue, JsValue> {
+        let transfer = self
+            .runtime
+            .i2c_transfer(bus, address, write, read_len as usize)
+            .map_err(js_error)?;
+        self.runtime
+            .advance_ns(transfer.duration_ns)
+            .map_err(js_error)?;
+        serde_wasm_bindgen::to_value(&transfer).map_err(js_error)
+    }
+
+    /// The retained transfers of every I2C bus, for a protocol view.
+    pub fn i2c_trace_snapshot(&self, cursor: f64) -> Result<JsValue, JsValue> {
+        let cursor = js_trace_cursor(cursor)?;
+        serde_wasm_bindgen::to_value(&self.runtime.i2c_trace_snapshot(cursor)).map_err(js_error)
+    }
 }
 
 /// Parse and validate a Flex test script, then run it with the shared runner.

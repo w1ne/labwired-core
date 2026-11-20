@@ -144,7 +144,8 @@ and non-negative integers; explicit YAML `null` is rejected.
 
 Use `inputs.flex` to run portable firmware against a Flex manifest. The
 firmware is a WebAssembly module that imports `labwired.read(i32) -> f64`,
-`labwired.write(i32, f64)` and `labwired.advance_ns(i32)`. The runner calls one
+`labwired.write(i32, f64)` and `labwired.advance_ns(i32)`, and
+`labwired.i2c_transfer` if the manifest has an I2C bus. The runner calls one
 export once (`entry`), or runs a `sequence` of calls and test-bench stimuli on
 one firmware instance. This path does not emulate a target CPU, and it never falls back
 to one. A script that needs target instructions, MMIO or interrupts names
@@ -188,6 +189,7 @@ assertions:
 | `analog_window` | Every value of one oscilloscope channel with `from_ns <= time <= to_ns`, and the value the channel holds at `from_ns`. The default is the whole run. | The lowest value is at or above `min` and the highest is at or below `max`. |
 | `analog_crossings` | The times one oscilloscope channel crosses `level` in one `direction`: `rising` (from below to at or above) or `falling` (from above to at or below). `from_ns` and `to_ns` limit it as for `digital_edges`. | The crossing `count` matches, every crossing time matches `times_ns` in order, or both. |
 | `final_time_ns` | The virtual time at the end of the run | It is `equals`, or inside `min`..`max`. |
+| `i2c_transfers` | The number of `labwired.i2c_transfer` calls on one `bus` in the whole run. `address` limits it to one 7-bit address. `ack: true` counts the transfers a device acknowledged, `ack: false` those no device answered. | The count is `equals`, or inside `min`..`max`. |
 
 A port or channel that the instrument does not have is a `config_error`
 before the firmware runs. An `at_ns` or a `to_ns` after the end of the run was
@@ -270,6 +272,68 @@ A pass shows that this firmware module satisfied the assertions against the
 declared model. It is not evidence for original target firmware, MCU
 instruction or peripheral fidelity, full-board coverage, or chip parity.
 
+#### I2C devices from the catalog
+
+A Flex manifest can declare I2C buses. Each device is a catalog I2C device
+model, the same model that `external_devices` attaches to an MCU's I2C
+controller on the detailed path. The firmware is the only controller of the
+bus.
+
+```yaml
+# system.yaml
+ports:
+  - { name: ambient_c, signal: environment.temperature, access: write, kind: number, unit: "°C", initial: 25 }
+i2c_buses:
+  - name: sensor_i2c
+    frequency_hz: 100000
+    devices:
+      - id: source-u4-bme280
+        type: bme280                      # catalog device type
+        config: { i2c_address: 0x76 }     # the device's external_devices config
+        inputs:                           # device input channel -> signal
+          temperature: environment.temperature
+```
+
+The firmware imports one more function:
+
+```
+labwired.i2c_transfer(bus: i32, address: i32,
+                      write_ptr: i32, write_len: i32,
+                      read_ptr: i32, read_len: i32) -> i32
+```
+
+- The call writes `write_len` bytes to the 7-bit `address`, reads `read_len`
+  bytes after a repeated START, and sends a STOP. Either length can be 0. Both
+  lengths 0 is an address probe.
+- The result is 0 when a device acknowledged the address and 1 when no device
+  answered. A refused address is a result, not an error.
+- The byte ranges are in the firmware's exported `memory`. Each range is at
+  most 4,096 bytes.
+- The call takes virtual time: one SCL period for each bit, for START and for
+  STOP, at the bus `frequency_hz`. This time counts against `max_time_ns`, and
+  an `until_ns` can suspend the firmware inside a transfer.
+- A script passes the bus to the firmware with a `{ bus: sensor_i2c }` call
+  argument. The value is the bus id (i32).
+
+A device input channel takes its value from a signal: a write port, or a model
+output. The signal must have the unit that the channel declares (`°C` for the
+BME280 `temperature` channel); there is no unit conversion. A `set` on that
+port changes the device at once. A value outside the channel's range stops the
+run with `model_error`.
+
+`result.json` gives the number of transfers in `traces.i2c_transfers`, and
+`run_report.i2c_buses` lists each bus with its devices, their addresses, and
+`not_modeled`. `flex-trace.json` gets an `i2c` record: each transfer with its
+start time, duration, address, `ack`, and the bytes written and read. The
+record keeps the newest 4,096 transfers; the `i2c_transfers` counts are exact
+for a run of any length.
+
+This path exchanges whole bytes with the device model. It does not model the
+SCL and SDA waveforms, pull-ups, bus capacitance, clock stretching, a second
+controller, or device pin outputs such as an interrupt line. An unknown bus
+name, an unknown device type, an unknown input channel, a unit mismatch, or
+two devices with one address on a bus is a `config_error`.
+
 #### The same script in the browser
 
 The browser package (`labwired-wasm`) runs a Flex script with the runner that
@@ -282,6 +346,7 @@ const result = JSON.parse(run.result_json());   // the content of result.json
 const runtime = run.take_runtime();              // a WasmFlexRuntime
 const edges = runtime.digital_trace_snapshot(0); // logic analyzer
 const samples = runtime.analog_trace_snapshot(0); // oscilloscope
+const transfers = runtime.i2c_trace_snapshot(0);  // I2C transfer record
 ```
 
 - `result_json()` is the text of `result.json`. It differs from the CLI file

@@ -9,7 +9,7 @@
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::{CosimAdapter, CosimModelConfig};
 
@@ -27,7 +27,43 @@ pub struct FlexManifest {
     pub unsupported_checks: Vec<String>,
     pub ports: Vec<FlexPort>,
     pub cosim_models: Vec<CosimModelConfig>,
+    /// I2C buses the firmware reaches through `labwired.i2c_transfer`. The
+    /// devices are the catalog device models the detailed path attaches to an
+    /// MCU's I2C controller. No controller and no pad is modeled here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub i2c_buses: Vec<FlexI2cBus>,
 }
+
+/// One I2C bus with the firmware as its only controller.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FlexI2cBus {
+    pub name: String,
+    /// SCL frequency. A transfer takes one SCL period for each bit, START
+    /// and STOP; this is the only bus timing the path models.
+    pub frequency_hz: u32,
+    #[serde(default)]
+    pub devices: Vec<FlexI2cDevice>,
+}
+
+/// A catalog I2C device model on a Flex bus.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FlexI2cDevice {
+    pub id: String,
+    /// Catalog device type, as in `external_devices[].type`.
+    #[serde(rename = "type")]
+    pub device_type: String,
+    /// The device's `external_devices[].config`, for example `i2c_address`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub config: BTreeMap<String, Value>,
+    /// Device input channel -> signal that drives it, in the channel's unit.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub inputs: BTreeMap<String, String>,
+}
+
+/// Highest SCL frequency of the I2C specification (high-speed mode).
+pub const FLEX_I2C_MAX_FREQUENCY_HZ: u32 = 3_400_000;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -220,6 +256,48 @@ impl FlexManifest {
                 );
             }
         }
+
+        let mut bus_names = HashSet::new();
+        let mut device_ids = HashSet::new();
+        for bus in &self.i2c_buses {
+            token(&bus.name, "I2C bus name")?;
+            ensure!(
+                bus_names.insert(bus.name.as_str()),
+                "duplicate I2C bus name '{}'",
+                bus.name
+            );
+            ensure!(
+                (1..=FLEX_I2C_MAX_FREQUENCY_HZ).contains(&bus.frequency_hz),
+                "I2C bus '{}' frequency_hz must be within 1..={FLEX_I2C_MAX_FREQUENCY_HZ}",
+                bus.name
+            );
+            for device in &bus.devices {
+                token(&device.id, &format!("I2C bus '{}' device id", bus.name))?;
+                ensure!(
+                    device_ids.insert(device.id.as_str()),
+                    "duplicate I2C device id '{}'",
+                    device.id
+                );
+                token(
+                    &device.device_type,
+                    &format!("I2C device '{}'.type", device.id),
+                )?;
+                for (channel, signal) in &device.inputs {
+                    token(channel, &format!("I2C device '{}' input name", device.id))?;
+                    token(
+                        signal,
+                        &format!("I2C device '{}' input '{channel}' signal", device.id),
+                    )?;
+                    ensure!(
+                        write_signals.contains_key(signal.as_str())
+                            || outputs.contains_key(signal.as_str()),
+                        "I2C device '{}' input signal '{signal}' has no declared producer",
+                        device.id
+                    );
+                    consumed.insert(signal.as_str());
+                }
+            }
+        }
         for port in &self.ports {
             match port.access {
                 FlexPortAccess::Read => ensure!(
@@ -230,7 +308,7 @@ impl FlexManifest {
                 ),
                 FlexPortAccess::Write => ensure!(
                     consumed.contains(port.signal.as_str()),
-                    "write port '{}' signal '{}' is not consumed by any model",
+                    "write port '{}' signal '{}' is not consumed by any model or bus device",
                     port.name,
                     port.signal
                 ),
@@ -522,7 +600,15 @@ pub struct FlexSetDetails {
 #[serde(untagged)]
 pub enum FlexEntryArg {
     Port(FlexEntryPortArg),
+    Bus(FlexEntryBusArg),
     Number(FlexEntryNumberArg),
+}
+
+/// The id of a manifest `i2c_buses` entry, for `labwired.i2c_transfer`.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexEntryBusArg {
+    pub bus: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -558,6 +644,33 @@ pub enum FlexAssertion {
     AnalogWindow(FlexAnalogWindowAssertion),
     AnalogCrossings(FlexAnalogCrossingsAssertion),
     FinalTime(FlexFinalTimeAssertion),
+    I2cTransfers(FlexI2cTransfersAssertion),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexI2cTransfersAssertion {
+    pub i2c_transfers: FlexI2cTransfersDetails,
+}
+
+/// The number of `labwired.i2c_transfer` calls on one bus over the whole run.
+/// `address` limits the count to one 7-bit address; `ack` to transfers a
+/// device acknowledged (`true`) or no device answered (`false`). At least one
+/// bound is required.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexI2cTransfersDetails {
+    pub bus: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ack: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub equals: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -920,6 +1033,9 @@ impl FlexTestScript {
                             FlexEntryArg::Port(arg) => {
                                 token(&arg.port, &format!("{path}.args[{index}].port"))?
                             }
+                            FlexEntryArg::Bus(arg) => {
+                                token(&arg.bus, &format!("{path}.args[{index}].bus"))?
+                            }
                             FlexEntryArg::Number(arg) => ensure!(
                                 arg.number.is_finite(),
                                 "{path}.args[{index}].number must be finite"
@@ -1042,6 +1158,16 @@ impl FlexTestScript {
                         details.max,
                         &format!("assertions[{index}].final_time_ns"),
                     )?;
+                }
+                FlexAssertion::I2cTransfers(assertion) => {
+                    let details = &assertion.i2c_transfers;
+                    let path = format!("assertions[{index}].i2c_transfers");
+                    token(&details.bus, &format!("{path}.bus"))?;
+                    ensure!(
+                        details.address.is_none_or(|address| address <= 0x7f),
+                        "{path}.address must be a 7-bit address"
+                    );
+                    bounds(details.equals, details.min, details.max, &path)?;
                 }
             }
         }

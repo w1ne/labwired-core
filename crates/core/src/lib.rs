@@ -20,6 +20,7 @@ pub mod decoder;
 pub mod fault_verdict;
 pub mod fidelity;
 pub mod flex;
+pub mod flex_i2c;
 #[cfg(feature = "flex-script")]
 pub mod flex_script;
 pub mod hashers;

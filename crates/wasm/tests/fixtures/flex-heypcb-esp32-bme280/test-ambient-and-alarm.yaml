@@ -1,0 +1,38 @@
+# `labwired test --script test-ambient-and-alarm.yaml`. The firmware probes U4
+# at 0x76, loads its calibration and reads one sample per period. The test
+# bench steps the ambient temperature 25 -> 31.5 -> 29 -> 27 °C. The indicator
+# goes on at 30 °C, stays on at 29 °C (hysteresis) and goes off below 28 °C.
+# `loop` returns the temperature in 0.01 °C plus 10,000.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x76 }] }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 31.5 }
+  - call: { export: loop, repeat: 2 }
+  - set: { port: ambient_c, value: 29 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 27 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 100000000
+assertions:
+  - entry_result: { equals: 12700 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 12500, step: 1 }
+  - entry_result: { equals: 13150, step: 3 }
+  - entry_result: { equals: 12900, step: 5 }
+  # Seven transfers in `setup`, one in each `loop`; none was refused.
+  - i2c_transfers: { bus: sensor_i2c, address: 0x76, ack: true, equals: 12 }
+  - i2c_transfers: { bus: sensor_i2c, ack: false, equals: 0 }
+  - port_value: { port: user_led_state, equals: 0 }
+  # Logic analyzer: the drive changes at the end of the sample transfer that
+  # reads 31.5 °C and of the one that reads 27 °C; D1 follows 1 µs later.
+  - digital_edges: { port: user_led_drive, times_ns: [8080000, 14140000] }
+  - digital_edges: { port: user_led_state, times_ns: [8081000, 14141000] }
+  # 504 bit times in `setup`; 102 bit times and a 1 ms period in each `loop`.
+  - final_time_ns: { equals: 15140000 }

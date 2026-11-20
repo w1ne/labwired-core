@@ -2409,6 +2409,76 @@ fn flex_script_binding_reports_bad_scripts_and_limits_without_a_pass() {
     assert_eq!(result["time_ns"], 299_996_000_u64);
 }
 
+/// The BME280 fixture's bus is the pinned board's bus: same source pin as the
+/// LDR fixture of the same repository, U4 strapped for I2C at the address the
+/// manifest gives the catalog model, and firmware built from the committed
+/// source.
+#[test]
+fn flex_heypcb_bme280_bus_matches_the_pinned_source_nets() {
+    const SOURCE_MAP: &str =
+        include_str!("../tests/fixtures/flex-heypcb-esp32-bme280/source-map.json");
+    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-bme280/system.yaml");
+
+    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
+    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+    for key in ["repository", "revision", "license_spdx"] {
+        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
+    }
+    assert_eq!(
+        source_map["source"]["files"]["license"], sibling["source"]["files"]["license"],
+        "one repository revision has one LICENSE blob"
+    );
+    assert_eq!(
+        source_map["source"]["asset"],
+        "boards/bme280/kicad/esp32_bme280"
+    );
+    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
+        let entry = &source_map["source"]["files"][file];
+        assert!(entry["path"]
+            .as_str()
+            .unwrap()
+            .starts_with("boards/bme280/"));
+        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
+    }
+
+    // U4: the datasheet's I2C straps, on the bus nets of the board.
+    let u4 = &source_map["sensor_bus"]["elements"][0];
+    assert_eq!(u4["source_ref"], "U4");
+    assert_eq!(u4["pads"]["2"], "3V3", "CSB high selects I2C");
+    assert_eq!(u4["pads"]["5"], "GND", "SDO low selects 0x76");
+    assert_eq!(u4["pads"]["3"], "I2C_SDA");
+    assert_eq!(u4["pads"]["4"], "I2C_SCL");
+
+    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
+    let bus = &yaml["i2c_buses"][0];
+    let binding = &source_map["runtime_bindings"];
+    assert_eq!(bus["name"], binding["bus"]["name"].as_str().unwrap());
+    assert_eq!(
+        bus["frequency_hz"],
+        binding["bus"]["frequency_hz"].as_u64().unwrap()
+    );
+    let device = &bus["devices"][0];
+    assert_eq!(device["id"], binding["device"]["id"].as_str().unwrap());
+    assert_eq!(device["type"], binding["device"]["type"].as_str().unwrap());
+    assert_eq!(device["config"]["i2c_address"], 0x76);
+    assert_eq!(binding["device"]["address"], "0x76");
+
+    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
+    let report = runtime.run_report();
+    assert!(report.scope_notes_complete);
+    assert!(!report.execution_scope.original_target_firmware_executed);
+    assert_eq!(report.execution_scope.chip_parity, "not_established");
+    assert_eq!(report.i2c_buses.len(), 1);
+    assert_eq!(report.i2c_buses[0].devices[0].address, 0x76);
+    for port in binding["ports"].as_object().unwrap().keys() {
+        runtime.port_id(port).unwrap();
+    }
+    assert_eq!(
+        report.ports.len(),
+        binding["ports"].as_object().unwrap().len()
+    );
+}
+
 /// The Chromium receipt of `scripts/test_browser_flex_scripts.mjs` covers
 /// every committed `test-*.yaml`, and the shared runner still gives the
 /// result text that Chromium and the CLI gave.

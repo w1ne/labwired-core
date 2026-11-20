@@ -1,0 +1,54 @@
+# Source-grounded functional slice of HeyPCB's ESP32-S3 BME280 board.
+# Portable firmware reaches U4 through a Flex I2C bus; the ESP32 CPU and its
+# I2C controller are not emulated.
+schema_version: 1
+name: heypcb-esp32-s3-bme280
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - U4 is the catalog `bme280` device model with its shipped calibration coefficients, at address 0x76 as the source README states (SDO to GND).
+  - The bus runs at 100 kHz. The pinned source contains no firmware and states no bus speed.
+  - A transfer takes one SCL period for each bit, START and STOP. Firmware instructions take no virtual time.
+  - The IO48 user LED is represented by digital logic state only.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or I2C controller fidelity; the pinned source contains no board firmware.
+  - The SCL and SDA waveforms on IO9 and IO8, the R6 and R7 pull-ups, bus capacitance, and clock stretching.
+  - BME280 measurement time, standby time, IIR filter, and oversampling noise; a sample follows its input at once.
+  - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+  - Sensor accuracy, self-heating, and production spread of a physical BME280.
+ports:
+  - { name: ambient_c, signal: environment.temperature, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: humidity_rh, signal: environment.humidity, access: write, kind: number, unit: "%RH", initial: 50 }
+  - { name: pressure_hpa, signal: environment.pressure, access: write, kind: number, unit: hPa, initial: 1013.25 }
+  - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
+  - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  - id: source-d1-user-led
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U3.GPIO48 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: led, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: led, level: 0 }]
+i2c_buses:
+  # Source nets I2C_SCL (U3 pin 17, IO9) and I2C_SDA (U3 pin 12, IO8).
+  - name: sensor_i2c
+    frequency_hz: 100000
+    devices:
+      - id: source-u4-bme280
+        type: bme280
+        config: { i2c_address: 0x76 }
+        inputs:
+          temperature: environment.temperature
+          humidity: environment.humidity
+          pressure: environment.pressure

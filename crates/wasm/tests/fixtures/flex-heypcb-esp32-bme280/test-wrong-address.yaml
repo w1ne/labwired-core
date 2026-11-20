@@ -1,0 +1,25 @@
+# `labwired test --script test-wrong-address.yaml`. Negative control. The
+# firmware probes 0x77, the address of a BME280 with SDO at VDDIO. The pinned
+# board ties SDO to GND, so no device answers: `setup` returns 1, `loop` has no
+# sample, and the indicator stays off.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x77 }] }
+  - set: { port: ambient_c, value: 31.5 }
+  - call: { export: loop, repeat: 2 }
+limits:
+  max_steps: 1000000
+  max_time_ns: 100000000
+assertions:
+  - entry_result: { equals: 0 }
+  - entry_result: { equals: 1, step: 0 }
+  - i2c_transfers: { bus: sensor_i2c, address: 0x77, ack: false, equals: 1 }
+  - i2c_transfers: { bus: sensor_i2c, ack: true, equals: 0 }
+  - digital_edges: { port: user_led_drive, count: 0 }
+  - digital_edges: { port: user_led_state, count: 0 }
+  # One refused address byte: START, 9 bits and STOP at 100 kHz.
+  - final_time_ns: { equals: 110000 }

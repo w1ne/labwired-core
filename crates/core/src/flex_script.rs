@@ -8,7 +8,7 @@
 //! binding so one script gives one result on both hosts.
 //!
 //! The firmware is a WebAssembly module whose `labwired.read/write/advance_ns`
-//! imports call a [`FlexRuntime`]. A script runs one `entry` call or a
+//! and `labwired.i2c_transfer` imports call a [`FlexRuntime`]. A script runs one `entry` call or a
 //! `sequence` of calls and test-bench stimuli on one firmware instance, so
 //! firmware state persists between steps. The module runs in `wasmi` on both
 //! hosts: its fuel is the step budget, and a resumable call is what lets an
@@ -29,8 +29,8 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use wasmi::{
-    Caller, Config, Engine, Func, Linker, Module, ResumableCall, ResumableCallHostTrap, Store,
-    StoreLimits, StoreLimitsBuilder, TrapCode, Val, ValType,
+    Caller, Config, Engine, Extern, Func, Linker, Module, ResumableCall, ResumableCallHostTrap,
+    Store, StoreLimits, StoreLimitsBuilder, TrapCode, Val, ValType,
 };
 
 /// Portable firmware holds state in a few pages; this only stops a runaway
@@ -131,6 +131,9 @@ pub struct FlexTraceSummary {
     pub analog_channels: usize,
     pub analog_samples: usize,
     pub analog_dropped: u64,
+    /// Every `i2c_transfer` of the run. Absent when the manifest has no bus.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub i2c_transfers: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -165,8 +168,10 @@ struct Host {
     /// Set by the `advance_ns` that reached `until_ns`; the host error it
     /// returns then suspends the call and is not a stop.
     suspended: bool,
-    /// What the suspended `advance_ns` still has to advance after `until_ns`.
+    /// What the suspended host call still has to advance after `until_ns`.
     pending_ns: u64,
+    /// The i32 a suspended `i2c_transfer` returns when it resumes.
+    resume_result: Option<i32>,
     limits: StoreLimits,
 }
 
@@ -197,6 +202,78 @@ impl Host {
         self.suspended = true;
         Ok(true)
     }
+
+    /// Advance virtual time for a firmware host call, inside the step's
+    /// `until_ns` and the script's `max_time_ns`. `Ok(true)`: the step's
+    /// `until_ns` was reached and the call must suspend.
+    fn advance(&mut self, delta: u64) -> Result<bool, wasmi::Error> {
+        if self.advance_to_until(delta)? {
+            return Ok(true);
+        }
+        if self.runtime.time_ns().saturating_add(delta) > self.max_time_ns {
+            let message = format!(
+                "firmware advanced past limits.max_time_ns ({} ns) at {} ns",
+                self.max_time_ns,
+                self.runtime.time_ns()
+            );
+            return Err(self.stop(FlexStopReason::MaxTimeNs, message));
+        }
+        let result = self.runtime.advance_ns(delta);
+        self.model(result)?;
+        Ok(false)
+    }
+}
+
+/// `labwired.i2c_transfer(bus, address, write_ptr, write_len, read_ptr,
+/// read_len) -> i32`: 0 when a device acknowledged, 1 when none answered.
+/// The byte ranges are in the firmware's exported `memory`. The call takes
+/// the transfer's bus time.
+fn i2c_transfer(
+    mut caller: Caller<'_, Host>,
+    bus: i32,
+    address: i32,
+    write_ptr: i32,
+    write_len: i32,
+    read_ptr: i32,
+    read_len: i32,
+) -> Result<i32, wasmi::Error> {
+    let (write_len, read_len) = (write_len as u32 as usize, read_len as u32 as usize);
+    let limit = crate::flex_i2c::FLEX_I2C_MAX_TRANSFER_BYTES;
+    if write_len > limit || read_len > limit {
+        let message = format!("an I2C transfer writes and reads at most {limit} bytes each");
+        return Err(caller.data_mut().stop(FlexStopReason::ModelError, message));
+    }
+    let Some(memory) = caller.get_export("memory").and_then(Extern::into_memory) else {
+        let message = "labwired.i2c_transfer needs the firmware to export its memory".to_owned();
+        return Err(caller.data_mut().stop(FlexStopReason::ModelError, message));
+    };
+    let mut write = vec![0u8; write_len];
+    if memory
+        .read(&caller, write_ptr as u32 as usize, &mut write)
+        .is_err()
+    {
+        let message = "labwired.i2c_transfer write buffer is outside firmware memory".to_owned();
+        return Err(caller.data_mut().stop(FlexStopReason::ModelError, message));
+    }
+    let host = caller.data_mut();
+    let transfer = host
+        .runtime
+        .i2c_transfer(bus as u32, address as u32, &write, read_len);
+    let transfer = host.model(transfer)?;
+    if memory
+        .write(&mut caller, read_ptr as u32 as usize, &transfer.read)
+        .is_err()
+    {
+        let message = "labwired.i2c_transfer read buffer is outside firmware memory".to_owned();
+        return Err(caller.data_mut().stop(FlexStopReason::ModelError, message));
+    }
+    let status = i32::from(!transfer.ack);
+    let host = caller.data_mut();
+    if host.advance(transfer.duration_ns)? {
+        host.resume_result = Some(status);
+        return Err(wasmi::Error::new("suspended at until_ns"));
+    }
+    Ok(status)
 }
 
 /// Settle a resumable call: `Ok(Some(trap))` is the firmware suspended at the
@@ -235,6 +312,18 @@ fn entry_value(
                 other => Err(format!(
                     "{path}.args[{index}] is port '{}', but the firmware parameter is {other:?}; port ids are i32",
                     arg.port
+                )),
+            }
+        }
+        FlexEntryArg::Bus(arg) => {
+            let id = runtime
+                .i2c_bus_id(&arg.bus)
+                .map_err(|error| format!("{path}.args[{index}]: {error}"))?;
+            match ty {
+                ValType::I32 => Ok(Val::I32(id as i32)),
+                other => Err(format!(
+                    "{path}.args[{index}] is bus '{}', but the firmware parameter is {other:?}; bus ids are i32",
+                    arg.bus
                 )),
             }
         }
@@ -309,6 +398,7 @@ fn execute(
         until_ns: None,
         suspended: false,
         pending_ns: 0,
+        resume_result: None,
         limits: StoreLimitsBuilder::new()
             .memory_size(MAX_FIRMWARE_MEMORY_BYTES)
             .build(),
@@ -352,23 +442,14 @@ fn execute(
                 |mut caller: Caller<'_, Host>, delta: i32| -> Result<(), wasmi::Error> {
                     let host = caller.data_mut();
                     // The portable ABI passes an unsigned 32-bit delta.
-                    let delta = u64::from(delta as u32);
-                    if host.advance_to_until(delta)? {
+                    if host.advance(u64::from(delta as u32))? {
                         return Err(wasmi::Error::new("suspended at until_ns"));
                     }
-                    if host.runtime.time_ns().saturating_add(delta) > host.max_time_ns {
-                        let message = format!(
-                            "firmware advanced past limits.max_time_ns ({} ns) at {} ns",
-                            host.max_time_ns,
-                            host.runtime.time_ns()
-                        );
-                        return Err(host.stop(FlexStopReason::MaxTimeNs, message));
-                    }
-                    let result = host.runtime.advance_ns(delta);
-                    host.model(result)
+                    Ok(())
                 },
             )
         })
+        .and_then(|linker| linker.func_wrap("labwired", "i2c_transfer", i2c_transfer))
         .map(|_| ());
     if let Err(error) = defined {
         return Err(format!(
@@ -402,7 +483,7 @@ fn execute(
             }
             Err(error) => {
                 return Err(format!(
-                    "firmware does not fit the portable Flex ABI (imports labwired.read(i32) -> f64, labwired.write(i32, f64), labwired.advance_ns(i32)): {error}"
+                    "firmware does not fit the portable Flex ABI (imports labwired.read(i32) -> f64, labwired.write(i32, f64), labwired.advance_ns(i32), labwired.i2c_transfer(i32, i32, i32, i32, i32, i32) -> i32): {error}"
                 ))
             }
         };
@@ -543,9 +624,16 @@ fn execute(
                             }
                             Ok(false) => {
                                 let advanced = host.runtime.advance_ns(pending);
+                                // A suspended `i2c_transfer` returns its status.
+                                let resumed: Vec<Val> = host
+                                    .resume_result
+                                    .take()
+                                    .map(Val::I32)
+                                    .into_iter()
+                                    .collect();
                                 host.model(advanced).and_then(|()| {
                                     let mut outputs = vec![Val::I32(0); usize::from(returns)];
-                                    let call = trap.resume(&mut *store, &[], &mut outputs);
+                                    let call = trap.resume(&mut *store, &resumed, &mut outputs);
                                     settle(&mut *store, call).inspect(|trap| {
                                         if trap.is_none() {
                                             result.completed = 1;
@@ -727,6 +815,7 @@ fn evaluate(
     run: &FlexTestResult,
     tally: Option<&FlexDigitalEdgeTally>,
     analog: Option<&AnalogWindowTally>,
+    i2c_transfers: Option<u64>,
 ) -> FlexAssertionResult {
     let mut observed_max = None;
     let mut observed_times_ns = None;
@@ -833,6 +922,13 @@ fn evaluate(
                 within(run.time_ns, details.equals, details.min, details.max),
             )
         }
+        FlexAssertion::I2cTransfers(assertion) => {
+            let details = &assertion.i2c_transfers;
+            // The bus keeps an exact count for each address and outcome.
+            let passed = i2c_transfers
+                .is_some_and(|count| within(count, details.equals, details.min, details.max));
+            (i2c_transfers.map(|count| count as f64), passed)
+        }
     };
     FlexAssertionResult {
         assertion: assertion.clone(),
@@ -860,6 +956,11 @@ fn validate_assertion_ports(
     for (index, assertion) in script.assertions.iter().enumerate() {
         match assertion {
             FlexAssertion::EntryResult(_) | FlexAssertion::FinalTime(_) => {}
+            FlexAssertion::I2cTransfers(assertion) => {
+                runtime
+                    .i2c_bus_id(&assertion.i2c_transfers.bus)
+                    .map_err(|error| format!("assertions[{index}].i2c_transfers: {error}"))?;
+            }
             FlexAssertion::PortValue(assertion) => {
                 let name = &assertion.port_value.port;
                 let Some(port) = ports.iter().find(|port| &port.name == name) else {
@@ -1073,6 +1174,7 @@ pub fn run_script(
     // Cursor 0 reads the whole retained ring.
     let digital = runtime.digital_trace_snapshot(0);
     let analog = runtime.analog_trace_snapshot(0);
+    let i2c = runtime.i2c_trace_snapshot(u64::MAX);
     let assertions = script
         .assertions
         .iter()
@@ -1080,11 +1182,19 @@ pub fn run_script(
         .map(|(assertion, tally)| match assertion {
             FlexAssertion::DigitalEdges(_) => {
                 let tally = tally.and_then(|id| runtime.digital_edge_tally(id));
-                evaluate(assertion, &result, tally, None)
+                evaluate(assertion, &result, tally, None, None)
+            }
+            FlexAssertion::I2cTransfers(i2c) => {
+                let details = &i2c.i2c_transfers;
+                let count = runtime
+                    .i2c_bus_id(&details.bus)
+                    .ok()
+                    .and_then(|bus| runtime.i2c_transfer_count(bus, details.address, details.ack));
+                evaluate(assertion, &result, None, None, count)
             }
             _ => {
                 let tally = tally.and_then(|id| runtime.analog_window_tally(id));
-                evaluate(assertion, &result, None, tally.as_ref())
+                evaluate(assertion, &result, None, tally.as_ref(), None)
             }
         })
         .collect();
@@ -1097,6 +1207,7 @@ pub fn run_script(
         analog_channels: analog.channels.len(),
         analog_samples: analog.samples.len(),
         analog_dropped: analog.dropped,
+        i2c_transfers: (!i2c.buses.is_empty()).then_some(i2c.next_cursor),
     });
     result.status = match result.stop_reason {
         FlexStopReason::ConfigError

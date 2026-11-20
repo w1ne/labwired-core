@@ -595,7 +595,7 @@ fn script_value<'a>(text: &'a str, key: &str) -> &'a str {
 #[test]
 fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
     let fixtures = committed_scripts();
-    assert!(fixtures.len() >= 13, "Flex fixtures went missing");
+    assert!(fixtures.len() >= 14, "Flex fixtures went missing");
     let mut scripts_run = 0;
     for (fixture, scripts) in fixtures {
         // A positive case alone proves nothing about the model.
@@ -673,7 +673,7 @@ fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
             scripts_run += 1;
         }
     }
-    assert!(scripts_run >= 32, "only {scripts_run} Flex scripts ran");
+    assert!(scripts_run >= 35, "only {scripts_run} Flex scripts ran");
 }
 
 fn thermostat() -> PathBuf {
@@ -1467,5 +1467,198 @@ fn the_pinned_c_firmware_source_is_unchanged_and_its_main_never_returns() {
     // The idle loop starts at 149,606,000 ns and takes 5,000 ns for each
     // pass: 30,078 whole passes end before the limit.
     assert_eq!(result["time_ns"], 299_996_000u64);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The BME280 station firmware with `steps` as its sequence, outside the
+/// fixture. `SETUP` is the `setup` call on the board's sensor address.
+fn bme280_sequence(dir: &Path, steps: &str, assertions: &str) -> PathBuf {
+    let fixture = fixtures_root().join("flex-heypcb-esp32-bme280");
+    let text = format!(
+        "schema_version: \"1.0\"\ninputs:\n  flex: \"{}\"\n  firmware: \"{}\"\nsequence:\n{}limits: {{ max_steps: 1000000, max_time_ns: 100000000 }}\nassertions:\n{assertions}",
+        fixture.join("system.yaml").display(),
+        fixture.join("firmware.wasm").display(),
+        steps.replace(
+            "SETUP",
+            "export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x76 }]"
+        ),
+    );
+    let path = dir.join("bme280.yaml");
+    std::fs::write(&path, text).expect("write script");
+    path
+}
+
+#[test]
+fn i2c_transfers_reach_the_catalog_sensor_and_are_recorded() {
+    let dir = unique_dir("i2c");
+    let script = bme280_sequence(
+        &dir,
+        "  - call: { SETUP }\n  - call: { export: loop }\n",
+        "  - entry_result: { equals: 12500 }\n  - i2c_transfers: { bus: sensor_i2c, address: 0x76, ack: true, equals: 8 }\n",
+    );
+    let output = run(&script, &dir, &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = read_result(&dir);
+    // `setup`: 504 bit times at 100 kHz. `loop`: 102 bit times and 1 ms.
+    assert_eq!(
+        step_summary(&result),
+        [
+            (1, Some(0), Some(5_040_000)),
+            (1, Some(12_500), Some(7_060_000))
+        ]
+    );
+    assert_eq!(result["traces"]["i2c_transfers"], 8);
+    assert_eq!(result["assertions"][1]["observed"], 8.0);
+    let bus = &result["run_report"]["i2c_buses"][0];
+    assert_eq!(bus["devices"][0]["model_type"], "bme280");
+    assert_eq!(bus["devices"][0]["address"], 0x76);
+
+    let trace = json(&dir.join("flex-trace.json"));
+    let transfers = trace["i2c"]["transfers"].as_array().unwrap();
+    assert_eq!(transfers.len(), 8);
+    assert_eq!(trace["i2c"]["buses"][0]["name"], "sensor_i2c");
+    // Chip id, then the 24 calibration bytes that start with dig_T1 = 28528.
+    assert_eq!(transfers[0]["write"], serde_json::json!([0xD0]));
+    assert_eq!(transfers[0]["read"], serde_json::json!([0x60]));
+    assert_eq!(transfers[0]["time_ns"], 0);
+    assert_eq!(transfers[1]["time_ns"], 390_000);
+    assert_eq!(transfers[1]["write"], serde_json::json!([0x88]));
+    assert_eq!(transfers[1]["read"][0], 28528 & 0xff);
+    assert_eq!(transfers[1]["read"][1], 28528 >> 8);
+    // ctrl_hum before ctrl_meas, as the datasheet requires.
+    assert_eq!(transfers[4]["write"], serde_json::json!([0xF2, 0x01]));
+    assert_eq!(transfers[5]["write"], serde_json::json!([0xF4, 0x27]));
+    assert_eq!(transfers[7]["write"], serde_json::json!([0xF7]));
+    assert_eq!(transfers[7]["read"].as_array().unwrap().len(), 8);
+    assert!(transfers.iter().all(|transfer| transfer["ack"] == true));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn until_ns_suspends_inside_an_i2c_transfer_and_resume_returns_its_status() {
+    // The chip-id transfer of `setup` runs from 0 to 390,000 ns. The call is
+    // suspended inside it, and again inside the calibration transfer. The
+    // resumed transfers return their ACK status: `setup` still returns 0 at
+    // the time an unsuspended `setup` returns. A wrong status would make
+    // `setup` return 1 after the first transfer.
+    let dir = unique_dir("i2c-until");
+    let script = bme280_sequence(
+        &dir,
+        "  - call: { SETUP, until_ns: 200000 }\n  - resume: { until_ns: 1000000 }\n  - resume: { until_ns: 90000000 }\n",
+        "  - entry_result: { equals: 0 }\n  - i2c_transfers: { bus: sensor_i2c, ack: true, equals: 7 }\n",
+    );
+    let output = run(&script, &dir, &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = read_result(&dir);
+    assert_eq!(
+        step_summary(&result),
+        [
+            (0, None, Some(200_000)),
+            (0, None, Some(1_000_000)),
+            (1, Some(0), Some(5_040_000)),
+        ]
+    );
+    assert_eq!(suspended(&result), [true, true, false]);
+    assert_eq!(result["traces"]["i2c_transfers"], 7);
+    // The two transfers that were suspended keep their own start times.
+    let trace = json(&dir.join("flex-trace.json"));
+    assert_eq!(trace["i2c"]["transfers"][0]["time_ns"], 0);
+    assert_eq!(trace["i2c"]["transfers"][1]["time_ns"], 390_000);
+    assert_eq!(trace["i2c"]["transfers"][2]["time_ns"], 2_850_000);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn i2c_contract_mismatches_and_limits_are_explicit() {
+    // An unknown bus in a call argument or an assertion is exit 2 before any
+    // firmware instruction.
+    for (steps, assertions, message) in [
+        (
+            "  - call: { export: setup, args: [{ bus: missing }, { port: user_led_drive }, { number: 0x76 }] }\n",
+            "  - entry_result: { equals: 0 }\n",
+            "unknown Flex I2C bus 'missing'",
+        ),
+        (
+            "  - call: { SETUP }\n",
+            "  - i2c_transfers: { bus: missing, equals: 0 }\n",
+            "assertions[0].i2c_transfers: Simulation error: unknown Flex I2C bus 'missing'",
+        ),
+    ] {
+        let dir = unique_dir("i2c-config");
+        let script = bme280_sequence(&dir, steps, assertions);
+        let output = run(&script, &dir, &[]);
+        assert_eq!(output.status.code(), Some(2), "{message}");
+        let result = read_result(&dir);
+        assert_eq!(result["stop_reason"], "config_error");
+        assert!(
+            result["message"].as_str().unwrap().contains(message),
+            "{result:#}"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    // A script-level schema error: an address outside 7 bits.
+    let dir = unique_dir("i2c-schema");
+    let script = bme280_sequence(
+        &dir,
+        "  - call: { SETUP }\n",
+        "  - i2c_transfers: { bus: sensor_i2c, address: 128, equals: 0 }\n",
+    );
+    let output = run(&script, &dir, &[]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("address must be a 7-bit address"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let _ = std::fs::remove_dir_all(dir);
+
+    // A bench value the sensor model refuses stops the run as a model error.
+    let dir = unique_dir("i2c-range");
+    let script = bme280_sequence(
+        &dir,
+        "  - call: { SETUP }\n  - set: { port: ambient_c, value: 200 }\n  - call: { export: loop }\n",
+        "  - entry_result: { equals: 0 }\n",
+    );
+    let output = run(&script, &dir, &[]);
+    assert_eq!(output.status.code(), Some(3));
+    let result = read_result(&dir);
+    assert_eq!(result["stop_reason"], "model_error");
+    assert!(
+        result["message"].as_str().unwrap().contains("out of range"),
+        "{result:#}"
+    );
+    assert_eq!(result["entry_result"], Value::Null);
+    let _ = std::fs::remove_dir_all(dir);
+
+    // The transfer time counts against `limits.max_time_ns`.
+    let dir = unique_dir("i2c-time");
+    let script = bme280_sequence(
+        &dir,
+        "  - call: { SETUP }\n",
+        "  - entry_result: { equals: 0 }\n",
+    );
+    let text = std::fs::read_to_string(&script)
+        .unwrap()
+        .replace("max_time_ns: 100000000", "max_time_ns: 300000");
+    std::fs::write(&script, text).unwrap();
+    let output = run(&script, &dir, &[]);
+    assert_eq!(output.status.code(), Some(1));
+    let result = read_result(&dir);
+    assert_eq!(result["stop_reason"], "max_time_ns");
+    assert_eq!(result["time_ns"], 0);
+    assert_eq!(result["traces"]["i2c_transfers"], 1);
     let _ = std::fs::remove_dir_all(dir);
 }

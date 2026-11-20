@@ -138,6 +138,7 @@ try {
             ms,
             digital: plain(runtime.digital_trace_snapshot(0)),
             analog: plain(runtime.analog_trace_snapshot(0)),
+            i2c: plain(runtime.i2c_trace_snapshot(0)),
           };
         } finally {
           runtime.free();
@@ -150,6 +151,10 @@ try {
     assert.equal(ran.result, nativeResult, `${fixture}/${name}: the browser result differs from labwired test`);
     assert.deepEqual(canonical(ran.digital), canonical(nativeTrace.digital), `${fixture}/${name}: the browser logic-analyzer capture differs from labwired test`);
     assert.deepEqual(canonical(ran.analog), canonical(nativeTrace.analog), `${fixture}/${name}: the browser oscilloscope capture differs from labwired test`);
+    // The CLI writes the I2C record only for a manifest with a bus.
+    if (ran.i2c.buses.length > 0 || nativeTrace.i2c !== undefined) {
+      assert.deepEqual(canonical(ran.i2c), canonical(nativeTrace.i2c), `${fixture}/${name}: the browser I2C transfer record differs from labwired test`);
+    }
     const result = JSON.parse(ran.result);
     assert.equal(result.status, 'pass', `${fixture}/${name}: status ${result.status} (${result.stop_reason})`);
     assert.equal(native.status, 0, `${fixture}/${name}: labwired test exit ${native.status}`);
@@ -167,6 +172,7 @@ try {
       assertions: result.assertions.length,
       digital_edges: ran.digital.edges.length,
       analog_samples: ran.analog.samples.length,
+      i2c_transfers: ran.i2c.transfers.length,
       // SHA-256 of the result text both hosts produced.
       result_sha256: sha256(ran.result),
       measured_native_ms: Math.round(nativeMs),
