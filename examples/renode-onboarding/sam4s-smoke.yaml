@@ -2,7 +2,8 @@
 # power-on EEFC (FMR, GETD, GPNVM/lock bits, FCMDE) + RSTC/WDT reset state,
 # an RSTC software reset, a WDT_MR-armed watchdog reset, then the WDT window
 # error interrupt, write-once WDT_MR, PMC clocks, PIO latches, TC0's RC compare,
-# and USART0/USART1 TXRDY interrupts. Summary word 0x5A403FFF = all fourteen
+# USART0/USART1 TXRDY IRQs 14/15 and UART0/UART1 TXRDY IRQs 8/9. Summary
+# word 0x5A40FFFF = all sixteen
 # checks.
 schema_version: "1.0"
 inputs:
@@ -31,9 +32,11 @@ assertions:
       - "tc0 rc pend=1 ok"
       - "usart0 txrdy imr=2 pend=1 released=1 ok"
       - "usart1 txrdy imr=2 pend=1 released=1 ok"
+      - "uart0 txrdy imr=2 ispr8=01 rel=1 ok"
+      - "uart1 txrdy imr=2 ispr8=02 rel=1 ok"
       - "SAM4S PASS"
   - memory_value:
       address: 0x2000FF00
-      expected_value: 0x5A403FFF
+      expected_value: 0x5A40FFFF
       size: 4
   - expected_stop_reason: max_steps

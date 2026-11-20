@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.537438">
+<testsuite name="labwired" tests="4" failures="0" errors="0" time="0.507173">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="319327b88b343a52c39bfc8f0dedd6f661f6881c5ac525f475aaf4b51d0ad8f0"/>
+    <property name="firmware_hash" value="4021e8c405d7987bc6c18b57d358150cc8ce04920d9eb41e6426bfd98d37275d"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.537438">
+  <testcase classname="labwired" name="run" time="0.507173">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;SAM4S16C RENODE SMOKE&quot;, &quot;eefc fmr=00000500 ok&quot;, &quot;eefc getd size=&quot;, &quot;eefc gpnvm=2 set=3 glb=2 clb=0 ok&quot;,…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: memory_value: @0x2001ff00=0x5a403fff" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x2001ff00=0x5a40ffff" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
