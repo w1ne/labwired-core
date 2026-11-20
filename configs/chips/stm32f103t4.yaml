@@ -57,6 +57,19 @@ gpio_pin_count: 26
 adc_channels: 10
 variant: "x4"
 orderable_suffixes: ["U6", "U6TR", "U6A", "U6ATR", "U7", "U7TR", "U7A", "U7ATR"]
+# GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
+# DocID15060 Rev 7 (STM32F103x4/x6), section 5.3.13, Table 36 "Output voltage
+# characteristics", CMOS port, 2.7 V < VDD < 3.6 V: VOH min VDD - 0.4 V and VOL
+# max 0.4 V at IIO = 8 mA (8 pins at once). (VDD - VOH) / IIO = 0.4 V / 8 mA =
+# 50 ohm, both sides. Guaranteed limits, so a typical pad is stiffer. Read by
+# the diagram compiler, which places it as the pad driver's on-resistance in
+# the analog netlist.
+gpio_output_ohms: 50
+# Absolute maximum current sunk or sourced by any I/O and control pin, mA.
+# DocID15060 Rev 7, Table 7 "Current characteristics": IIO 25 (sunk) and -25
+# (sourced). A run reports a pad whose simulated current went past it; the
+# simulation does not stop or clamp it.
+gpio_abs_max_ma: 25
 
 flash:
   base: 0x08000000
