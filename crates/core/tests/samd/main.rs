@@ -18,6 +18,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod arduino_nano_33_iot_bme280;
 mod atsamd21_peripheral_estate;
 mod atsamd21_variant_geometry;
 mod pybadge_config;
