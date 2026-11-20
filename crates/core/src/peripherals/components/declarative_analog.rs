@@ -704,6 +704,7 @@ analog_kit!(LDR_KIT, "ldr");
 analog_kit!(POTENTIOMETER_KIT, "potentiometer");
 analog_kit!(NTC_THERMISTOR_KIT, "ntc-thermistor");
 analog_kit!(TMP36_KIT, "tmp36");
+analog_kit!(MCP9700_KIT, "mcp9700");
 analog_kit!(MQ6_KIT, "mq-6");
 analog_kit!(SOIL_MOISTURE_KIT, "soil-moisture");
 analog_kit!(LIPO_CHARGER_KIT, "lipo_charger");
@@ -1008,6 +1009,7 @@ behavior:
             ("potentiometer", 1650),  // 50 %
             ("ntc-thermistor", 1650), // 25 °C ⇒ exactly Vref/2
             ("tmp36", 750),           // 25 °C ⇒ 500 + 250 mV
+            ("mcp9700", 750),         // 25 °C ⇒ 500 + 250 mV
             ("mq-6", 0),              // 0 ppm, clean air
             ("soil-moisture", 1980),  // 40 % moisture
             ("lipo_charger", 1875),   // 50 % SoC, unplugged
@@ -1035,6 +1037,31 @@ behavior:
         assert_eq!(bat.output_mv(), 1950, "3750 + 150 = 3900 mV, halved");
         bat.set_input("usb_present", 0.0).unwrap();
         assert_eq!(bat.output_mv(), 1875);
+    }
+
+    /// MCP9700 data sheet DS20001942L, Equation 4-1: 500 mV at 0 °C,
+    /// 10.0 mV/°C, over the extended range -40..125 °C. A fraction of a
+    /// millivolt truncates.
+    #[test]
+    fn mcp9700_follows_its_data_sheet_line() {
+        let mut t = kit_device("mcp9700");
+        for (c, mv) in [
+            (-40.0, 100u16),
+            (0.0, 500),
+            (25.0, 750),
+            (25.37, 753),
+            (39.99, 899),
+            (40.0, 900),
+            (125.0, 1750),
+        ] {
+            t.set_input("temperature", c).unwrap();
+            assert_eq!(t.output_mv(), mv, "{c} °C");
+        }
+        assert!(
+            t.set_input("temperature", 126.0).is_err(),
+            "the +150 °C grade is another order code; above 125 is refused"
+        );
+        assert!(t.set_input("temperature", -41.0).is_err());
     }
 
     /// TMP36 datasheet line: 500 mV at 0 °C, 10 mV/°C, clamped to the

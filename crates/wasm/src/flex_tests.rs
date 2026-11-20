@@ -2666,6 +2666,67 @@ fn flex_heypcb_dht11_line_matches_the_pinned_source_nets() {
     assert_eq!(report.ports.len(), ports.as_object().unwrap().len());
 }
 
+/// The MCP9700 fixture is an analog board of the same pinned repository: U4
+/// is the catalog `mcp9700` analog source, its VOUT pad on the SNS_AN1 net
+/// that the pinned PCB routes to IO1.
+#[test]
+fn flex_heypcb_mcp9700_output_matches_the_pinned_source_nets() {
+    const SOURCE_MAP: &str =
+        include_str!("../tests/fixtures/flex-heypcb-esp32-mcp9700/source-map.json");
+    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-mcp9700/system.yaml");
+
+    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
+    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+    for key in ["repository", "revision", "license_spdx"] {
+        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
+    }
+    assert_eq!(
+        source_map["source"]["files"]["license"],
+        sibling["source"]["files"]["license"]
+    );
+    assert_eq!(
+        source_map["source"]["asset"],
+        "boards/mcp9700/kicad/esp32_mcp9700"
+    );
+    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
+        let entry = &source_map["source"]["files"][file];
+        assert!(entry["path"]
+            .as_str()
+            .unwrap()
+            .starts_with("boards/mcp9700/"));
+        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
+    }
+
+    // The data sheet pin table and the PCB agree: VOUT is pad 3.
+    let facts = &source_map["part_source"]["facts"];
+    assert_eq!(facts["sc70_5_pins"]["3"], "VOUT");
+    let u4 = &source_map["sensor_line"]["elements"][0];
+    assert_eq!(u4["source_ref"], "U4");
+    assert_eq!(u4["source_part"], "MCP9700T-E/LT");
+    assert_eq!(u4["pads"]["3"], "SNS_AN1");
+    assert_eq!(u4["pads"]["4"], "3V3");
+    assert_eq!(u4["pads"]["2"], "GND");
+
+    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
+    let model = &yaml["cosim_models"][0];
+    let binding = &source_map["runtime_bindings"]["device"];
+    assert_eq!(model["id"], binding["id"].as_str().unwrap());
+    assert_eq!(model["adapter"], "behavior");
+    assert_eq!(model["config"]["device_type"], "mcp9700");
+    assert_eq!(model["outputs"]["voltage_mv"], "source.net.SNS_AN1");
+
+    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
+    let report = runtime.run_report();
+    assert!(report.scope_notes_complete);
+    assert!(!report.execution_scope.original_target_firmware_executed);
+    assert_eq!(report.execution_scope.chip_parity, "not_established");
+    let ports = &source_map["runtime_bindings"]["ports"];
+    for port in ports.as_object().unwrap().keys() {
+        runtime.port_id(port).unwrap();
+    }
+    assert_eq!(report.ports.len(), ports.as_object().unwrap().len());
+}
+
 /// The Chromium receipt of `scripts/test_browser_flex_scripts.mjs` covers
 /// every committed `test-*.yaml`, and the shared runner still gives the
 /// result text that Chromium and the CLI gave.

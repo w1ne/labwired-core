@@ -330,6 +330,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         &["tmp36"],
         include_str!("../../../configs/devices/tmp36.yaml"),
     ),
+    (
+        &["mcp9700"],
+        include_str!("../../../configs/devices/mcp9700.yaml"),
+    ),
     (&["mq-6"], include_str!("../../../configs/devices/mq6.yaml")),
     (
         &["sound-sensor"],
