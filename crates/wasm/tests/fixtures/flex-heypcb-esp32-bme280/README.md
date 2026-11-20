@@ -60,7 +60,7 @@ Assumptions and limits, also carried in `run_report`:
 - Sensor removed (unit test): with no device on the bus, a probe of 0x76 is refused.
 - 200 °C on `ambient_c` stops the run with `model_error`: the BME280 model takes -40 to 85 °C.
 
-Browser run ([browser-flex-scripts.json](../browser-flex-scripts.json)): Chromium 156.0.8078.79 with Playwright ran the three scripts through `WasmFlexTestRun` in the web package built from Core commit `d66caf783`. Each result text equals the `labwired test` result text, and the logic-analyzer capture and the I2C transfer record are equal. The script runs took 65 ms, 13 ms and 3 ms in the page (dev build, one run each).
+Browser run ([browser-flex-scripts.json](../browser-flex-scripts.json)): Chromium 156.0.8078.79 with Playwright ran the three scripts through `WasmFlexTestRun` in the web package built from Core commit `f04b87d28`. Each result text equals the `labwired test` result text, and the logic-analyzer capture, the I2C transfer record and the console record are equal. The script runs took 32 ms, 10 ms and 3 ms in the page (dev build, one run each).
 
 Effort, measured once on 2026-11-20: 35 minutes from the start of the work to three passing native scripts. This time includes the generic `i2c_buses` code, the firmware, the manifest and the scripts, and it is not split between them. No comparable time exists for a chip-specific model of this board, so this number supports no speed claim.
 
