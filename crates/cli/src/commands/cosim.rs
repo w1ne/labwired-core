@@ -43,6 +43,14 @@ pub struct CosimStepArgs {
     /// samples.
     #[arg(long = "analog-trace", value_name = "PATH")]
     pub analog_trace: Option<PathBuf>,
+
+    /// Write the run-long analog series here as JSON: the same
+    /// `{end_time_ns, channels: [{name, unit, points, dropped}]}` block a
+    /// firmware run puts in `result.json` as `analog_series`. Unlike the
+    /// `--analog-trace` ring it covers the whole run, so a circuit with no
+    /// MCU yields the same evidence a firmware run does.
+    #[arg(long = "analog-series", value_name = "PATH")]
+    pub analog_series: Option<PathBuf>,
 }
 
 fn parse_signal_value(raw: &str) -> CosimSignalValue {
@@ -172,6 +180,23 @@ pub fn run_cosim_step(args: CosimStepArgs) -> ExitCode {
             ),
             Err(err) => {
                 eprintln!("error: cannot write --analog-trace {path:?}: {err}");
+                return ExitCode::from(EXIT_RUNTIME_ERROR);
+            }
+        }
+    }
+
+    if let Some(path) = &args.analog_series {
+        let series = runner.analog_trace_registry().series();
+        let written = serde_json::to_vec(&series)
+            .map_err(|err| err.to_string())
+            .and_then(|bytes| std::fs::write(path, bytes).map_err(|err| err.to_string()));
+        match written {
+            Ok(()) => eprintln!(
+                "analog series ({} channels) -> {path:?}",
+                series.channels.len()
+            ),
+            Err(err) => {
+                eprintln!("error: cannot write --analog-series {path:?}: {err}");
                 return ExitCode::from(EXIT_RUNTIME_ERROR);
             }
         }
