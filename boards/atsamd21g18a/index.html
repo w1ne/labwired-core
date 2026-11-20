@@ -5221,7 +5221,7 @@ the run fails with <code>expected 0x3, got 0x22</code> while every UART line sti
 <tr>
 <td>SERCOM3 I²C master, SERCOM4 SPI master</td>
 <td>✅ behavioural</td>
-<td>The Zero variant roles (Wire, SPI); other instances are USART-only and go inert in SPI/I²C mode</td>
+<td>The Zero variant roles (Wire, SPI); other instances are USART-only and go inert in SPI/I²C mode. A board manifest can give an instance another role by naming another <code>type</code> (the Nano 33 IoT uses SERCOM4 for Wire and SERCOM1 for SPI)</td>
 </tr>
 <tr>
 <td>SYSCTRL, GCLK, PM, WDT, NVMCTRL</td>
@@ -5234,9 +5234,9 @@ the run fails with <code>expected 0x3, got 0x22</code> while every UART line sti
 <td>Window unmapped — an access is reported, not absorbed</td>
 </tr>
 <tr>
-<td>USB</td>
-<td>❌</td>
-<td>A sketch whose console is <code>SerialUSB</code> prints nothing yet</td>
+<td>USB device</td>
+<td>✅ behavioural</td>
+<td><code>samd21_usb</code>: RAM endpoint table, control / bulk / interrupt endpoints, bus reset, SOF, and a scripted host that enumerates and opens a CDC port into the console. Off by default (<code>host: false</code>, no cable); a board manifest plugs it in. Host mode, high speed, isochronous, LPM and suspend are not modelled</td>
 </tr>
 <tr>
 <td>ADC</td>

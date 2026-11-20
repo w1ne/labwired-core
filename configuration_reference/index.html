@@ -5926,7 +5926,7 @@ rather than guessed.</p>
 </tr>
 <tr>
 <td><code>peripherals</code></td>
-<td>Chip-peripheral patches/additions. An entry whose <code>id</code> matches a chip peripheral merges its <code>config</code> keys and overrides <code>base_address</code> (when nonzero; <code>0</code> keeps the chip's), <code>irq</code> and <code>size</code>; an unmatched <code>id</code> adds a new peripheral. <code>id</code>, <code>type</code> and <code>base_address</code> are required on every entry.</td>
+<td>Chip-peripheral patches/additions. An entry whose <code>id</code> matches a chip peripheral merges its <code>config</code> keys and overrides <code>base_address</code> (when nonzero; <code>0</code> keeps the chip's), <code>irq</code> and <code>size</code>; a <code>type</code> that differs from the chip's replaces the model and drops the chip's <code>config</code> and <code>irq</code> (a SAM SERCOM as the SPI or I2C controller a board uses it as); an unmatched <code>id</code> adds a new peripheral. <code>id</code>, <code>type</code> and <code>base_address</code> are required on every entry.</td>
 <td><code>peripherals: [{id: "usart1", type: "uart", base_address: 0, config: {profile: "stm32f1"}}]</code></td>
 </tr>
 <tr>
