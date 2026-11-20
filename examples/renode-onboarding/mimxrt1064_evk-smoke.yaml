@@ -1,5 +1,5 @@
 # Cortex-M7 smoke against the exact imported MIMXRT1064-EVK system, including
-# GPT1 reset/count/OF1 IRQ/OF2 level checks.
+# GPT1 reset/count/OF1 IRQ/OF2 level checks, the LPUART6 IRQ line (25).
 schema_version: "1.0"
 inputs:
   firmware: "../../target/thumbv7em-none-eabi/release/firmware-imxrt1064-smoke"
@@ -9,6 +9,7 @@ limits:
 assertions:
   - uart_contains: "OK"
   - uart_contains: "gpt1 swr=1 cnt=1 irq=3 of1=1 of2=1 ok"
+  - uart_contains: "lpuart6 tcie ispr=20 rel=00 ok"
   - gpio_edges:
       pin: "gpio2:3"
       min_edges: 1

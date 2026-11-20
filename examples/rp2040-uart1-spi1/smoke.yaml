@@ -1,0 +1,20 @@
+# LabWired - RP2040 UART1, SPI1 and UART0/UART1 IRQ smoke.
+schema_version: "1.2"
+inputs:
+  firmware: "./firmware/uart1-spi1.elf"
+  system: "./system.yaml"
+limits:
+  max_steps: 3000000
+uart_injections:
+  - uart: "uart1"
+    bytes: "R"
+    trigger: !after_cycles { cycles: 200000 }
+assertions:
+  - uart_contains: "UART1 OK"
+  - uart_contains: "RP2040 UART1 SPI1 PASS"
+  - memory_value: { address: 0x20000100, expected_value: 0xA5 }   # SPI1 loopback byte 1
+  - memory_value: { address: 0x20000104, expected_value: 0x3C }   # SPI1 loopback byte 2
+  - memory_value: { address: 0x20000108, expected_value: 1 }      # UART0_IRQ taken once
+  - memory_value: { address: 0x2000010C, expected_value: 0x52 }   # 'R' via UART1_IRQ
+  - memory_value: { address: 0x20000110, expected_value: 0xA55A } # done
+  - memory_value: { address: 0x20000114, expected_value: 1 }      # pass
