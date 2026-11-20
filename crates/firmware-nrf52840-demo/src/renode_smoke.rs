@@ -35,6 +35,8 @@
 //!   GPIO P1 at its silicon block base 0x50000300: P1.1 drive readback, P1.2
 //!           pull-up, GPIOTE PORT=1 toggles on P1.3; P0 OUT and PIN_CNF[31]
 //!           unchanged
+//!   PWM1/2  INTEN.SEQEND0 pends NVIC line 33 / 34 (and no other line in
+//!           28..35); clearing EVENTS_SEQEND0 drops it
 //! A summary word goes to RAM at 0x2003FF00 (one bit per block passed). The
 //! radio is not exercised.
 
@@ -68,9 +70,10 @@ fn main() -> ! {
         .hex(pwm_rises, 4)
         .send();
     summary |= u32::from(check_gpio_p1(&mut l)) << 14;
+    summary |= u32::from(check_pwm_irq_lines(&mut l)) << 15;
 
     wr(RESULT, 0x5284_0000 | summary);
-    if summary == 0x7FFF {
+    if summary == 0xFFFF {
         l.s(b"NRF52840 PASS").send();
     } else {
         l.s(b"NRF52840 FAIL summary=").hex(summary, 4).send();

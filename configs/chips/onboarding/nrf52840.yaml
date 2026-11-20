@@ -146,8 +146,8 @@ peripherals:
 - id: pdm
   type: nrf52840_pdm
   bus: sysbus
-  base_address: 1073860608
-  irq: 31
+  base_address: 1073860608  # 0x4001D000
+  irq: 29
 - id: radio
   type: nrf52840_radio
   bus: sysbus
@@ -182,12 +182,12 @@ peripherals:
   type: nrf52840_pwm
   bus: sysbus
   base_address: 1073876992  # 0x40021000
-  irq: 29
+  irq: 33
 - id: pwm2
   type: nrf52840_pwm
   bus: sysbus
   base_address: 1073881088  # 0x40022000
-  irq: 30
+  irq: 34
 - id: pwm3
   type: nrf52840_pwm
   bus: sysbus
@@ -274,11 +274,13 @@ peripherals:
   type: nrf52840_usbregulator
   bus: sysbus
   base_address: 1073967104  # 0x40037000
+# ACL's registers live in the NVMC page (0x4001E000), which `nvmc` maps, so
+# the inert stub gets a private window at reserved 0x4002E000. ID 30 (ACL/NVMC)
+# has no interrupt line. 0x4002F000 is SPIM3's block.
 - id: acl
   type: nrf52840_acl
   bus: sysbus
-  base_address: 1073934336  # 0x4002F000
-  irq: 30
+  base_address: 1073930240  # 0x4002E000
 - id: cryptocell
   type: nrf52840_cryptocell
   bus: sysbus

@@ -649,6 +649,67 @@ pub fn check_pwm0_duty(l: &mut Line) -> (bool, u32, u32) {
     (pass, high, rises)
 }
 
+const NVIC_ISPR0: u32 = 0xE000_E200;
+const NVIC_ISPR1: u32 = 0xE000_E204;
+const NVIC_ICPR0: u32 = 0xE000_E280;
+const NVIC_ICPR1: u32 = 0xE000_E284;
+/// NVIC lines 28..35: PWM0, PDM, 30 and 31 (no IRQ), MWU, PWM1, PWM2, SPIM2.
+const PWM_IRQ_WINDOW: u32 = 0xFF;
+
+/// NVIC pending bits for lines 28..35, bit 0 = line 28.
+fn pwm_window_pending() -> u32 {
+    ((rd(NVIC_ISPR0) >> 28) | (rd(NVIC_ISPR1) << 4)) & PWM_IRQ_WINDOW
+}
+
+/// PWM1 and PWM2 (PS v1.7 §6.17.5 INTEN) raise their own NVIC lines, 33 and
+/// 34 (instantiation table, ch. 4.3; nrf52840.svd). The lines stay disabled
+/// in NVIC, so only ISPR shows the routing. With INTEN.SEQEND0 set, a
+/// one-step sequence must pend exactly the instance's line within 28..35,
+/// and clearing EVENTS_SEQEND0 must drop it (level line). Returns pass; the
+/// line prints both pending windows (expected 20 and 40).
+pub fn check_pwm_irq_lines(l: &mut Line) -> bool {
+    let seq = core::ptr::addr_of_mut!(PWM_SEQ) as *mut u16;
+    unsafe { write_volatile(seq, 0x8000 | 100) };
+    let mut pass = true;
+    let mut windows = [0u32; 2];
+    for (n, (base, irq)) in [(0x4002_1000u32, 33u32), (0x4002_2000, 34)]
+        .into_iter()
+        .enumerate()
+    {
+        wr(NVIC_ICPR0, 0xF000_0000);
+        wr(NVIC_ICPR1, 0xF);
+        wr(base + 0x500, 1); // ENABLE
+        wr(base + 0x508, 400); // COUNTERTOP
+        wr(base + 0x520, seq as u32); // SEQ[0].PTR
+        wr(base + 0x524, 1); // SEQ[0].CNT
+        wr(base + 0x110, 0); // EVENTS_SEQEND0
+        wr(base + 0x304, 1 << 4); // INTENSET.SEQEND0
+        wr(base + 0x008, 1); // TASKS_SEQSTART0
+        let seqend = wait_set(base + 0x110);
+        windows[n] = pwm_window_pending();
+        wr(base + 0x110, 0);
+        settle();
+        let dropped = pwm_window_pending() & (1 << (irq - 28)) == 0;
+        wr(base + 0x308, 0xFFFF_FFFF); // INTENCLR
+        wr(base + 0x004, 1); // TASKS_STOP
+        let stopped = wait_set(base + 0x104);
+        for ev in (0x104..=0x11C).step_by(4) {
+            wr(base + ev, 0);
+        }
+        wr(base + 0x500, 0);
+        wr(NVIC_ICPR0, 0xF000_0000);
+        wr(NVIC_ICPR1, 0xF);
+        pass &= seqend && windows[n] == 1 << (irq - 28) && dropped && stopped;
+    }
+    l.s(b"pwm irq lines 28..35 pwm1=")
+        .hex(windows[0], 2)
+        .s(b" pwm2=")
+        .hex(windows[1], 2)
+        .ok(pass)
+        .send();
+    pass
+}
+
 /// Convert the held 1.65 V input on AIN3 into one 12-bit EasyDMA sample.
 /// CONFIG=0 selects single-ended, gain 1/6 and the 600 mV internal reference:
 /// floor(1650 mV * (1/6) * 4096 / 600 mV) = 1877 (0x755).

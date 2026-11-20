@@ -384,12 +384,11 @@ peripherals:
   # ACL's registers live in the NVMC page (0x4001E000), which `nvmc` maps, so
   # the inert stub gets a private window at 0x4002E000, a reserved slot (no
   # peripheral ID 46 on this part). It used to sit at 0x4002F000, which is
-  # SPIM3's (below).
+  # SPIM3's (below). ID 30 (ACL/NVMC) has no interrupt line, so none is claimed.
   - id: "acl"
     type: "nrf52840_acl"
     base_address: 0x4002e000
     size: "4KB"
-    irq: 30
     config:
       debug_schema: "../peripherals/nrf52840/acl.yaml"
   # SPIM3 — the 32 MHz SPI master with hardware chip select (PSEL.CSN,
