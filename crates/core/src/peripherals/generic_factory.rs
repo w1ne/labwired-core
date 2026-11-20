@@ -2244,8 +2244,35 @@ pub fn try_build(
             // SQRx families, so it is its own model.
             use crate::peripherals::stm32f0_adc::{Stm32F0Adc, Stm32F0AdcFamily};
             match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
-                Some("stm32f0") => Box::new(Stm32F0Adc::new(Stm32F0AdcFamily::F0)),
-                Some("stm32l0") => Box::new(Stm32F0Adc::new(Stm32F0AdcFamily::L0)),
+                Some(profile @ ("stm32f0" | "stm32l0")) => {
+                    let family = if profile == "stm32f0" {
+                        Stm32F0AdcFamily::F0
+                    } else {
+                        Stm32F0AdcFamily::L0
+                    };
+                    let mut adc = Stm32F0Adc::new(family);
+                    // Same board-level `input_mv: { <ch>: <mV> }` as the SQRx
+                    // families below; a system that holds a pad (the Arduino
+                    // matrix L5 potentiometer) must reach this model too.
+                    if let Some(map) = p_cfg.config.get("input_mv").and_then(|v| v.as_mapping()) {
+                        for (k, v) in map {
+                            match (k.as_u64(), v.as_u64()) {
+                                (Some(ch), Some(mv))
+                                    if ch < 256
+                                        && u16::try_from(mv).is_ok()
+                                        && Peripheral::set_adc_channel_input(
+                                            &mut adc, ch as u8, mv as u16,
+                                        ) => {}
+                                _ => anyhow::bail!(
+                                    "adc '{}': input_mv wants {{ <channel 0..{}>: <mV> }}",
+                                    p_cfg.id,
+                                    Peripheral::adc_channel_count(&adc).unwrap_or(1) - 1
+                                ),
+                            }
+                        }
+                    }
+                    Box::new(adc)
+                }
                 _ => {
                     let layout: crate::peripherals::adc::AdcRegisterLayout =
                         SystemBus::parse_profile_or_default(p_cfg, "ADC")?;
