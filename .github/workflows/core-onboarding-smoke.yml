@@ -34,6 +34,10 @@ jobs:
           # One Cortex-A9 PE, a bounded RAM aperture and one polled UART TX;
           # boot ROM, multicore, GIC, timers and other SoC peripherals are not modeled.
           - id: zynq-7000
+            # Matrix schema anchor: optional keys must exist in each half of the
+            # split for actionlint; the empty values preserve runtime defaults.
+            target_features: ''
+            firmware_build_dir: ''
             prebuilt_firmware: tests/fixtures/zynq7000-a9-uart-smoke.elf
             cli_features: qemu-arm
             cli_profile: native-system
@@ -997,6 +1001,9 @@ jobs:
       matrix:
         include:
           - id: simavr-attiny24
+            # Same optional matrix contract as onboarding-smoke above.
+            cli_features: ''
+            cli_profile: ''
             prebuilt_firmware: tests/fixtures/avr/attiny24-io-smoke.elf
             script: examples/renode-onboarding/simavr-attiny24-smoke.yaml
             system: configs/systems/onboarding/simavr-attiny24.yaml
