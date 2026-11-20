@@ -1,0 +1,11 @@
+# Control for bme280-smoke.yaml: nothing is plugged into the USB port, so
+# `while (!Serial)` never ends. The assertion is the passing run's marker, so
+# this script must FAIL.
+schema_version: "1.2"
+inputs:
+  firmware: ../../../tests/fixtures/samd/arduino-nano-33-iot-bme280.elf
+  system: ./system-no-host.yaml
+limits:
+  max_steps: 30000000
+assertions:
+  - uart_contains: "NANO_33_IOT_BME280 ID=0x60"

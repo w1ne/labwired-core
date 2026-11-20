@@ -21,7 +21,7 @@
 // the S2: analogRead returns 0 without converting). A0 = GPIO1 = ADC1_CH0.
 #    define LW_ADC_PIN A0
 #    define LW_ADC_RES_BITS 12
-#  elif defined(ARDUINO_SAMD_ZERO)
+#  elif defined(ARDUINO_SAMD_ZERO) || defined(ARDUINO_SAMD_NANO_33_IOT)
 // ArduinoCore-samd's A0 is a `static const uint8_t`, not a macro, so
 // `defined(A0)` misses it. analogRead(0) would still land on A0 (the core
 // adds A0 to pins below it), but name it: A0 = PA02 = AIN0, the input the
@@ -45,6 +45,7 @@
 static void logBegin() {
   Serial.begin(115200);
 #if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__) || \
+    defined(ARDUINO_SAMD_NANO_33_IOT) || \
     ((defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)) && \
      defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE)
   // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
@@ -52,6 +53,8 @@ static void logBegin() {
   // on the twin alike.
   // ESP32-S2/S3 with ARDUINO_USB_MODE=0 (Arduino Nano ESP32): Serial is
   // TinyUSB CDC on USB-OTG, which drops writes until DTR the same way.
+  // ArduinoCore-samd on the Nano 33 IoT: Serial is SerialUSB, native USB CDC,
+  // and operator bool() is false until the host raises DTR.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
@@ -90,7 +93,7 @@ static bool samples_ok(int v0, int v1) {
   // is 512. Exact; a 0 here means no conversion or the wrong channel.
   return v0 == 512 && v1 == 512;
 
-#elif defined(ARDUINO_SAMD_ZERO)
+#elif defined(ARDUINO_SAMD_ZERO) || defined(ARDUINO_SAMD_NANO_33_IOT)
   // samd21_adc: the matrix system drives AIN0 at 1650 mV. AR_DEFAULT is GAIN
   // DIV2 against INTVCC1 (VDDANA / 2), so full scale is 3.3 V and the 10-bit
   // code is 512. Exact; a 0 here means no conversion, or the pad was never
