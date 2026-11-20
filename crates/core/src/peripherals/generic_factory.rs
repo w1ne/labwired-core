@@ -1803,7 +1803,13 @@ pub fn try_build(
         }
         "crs" => Box::new(crate::peripherals::crs::Crs::new()),
         "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
-        "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
+        "rtc_f1" => {
+            let rtc = crate::peripherals::rtc_f1::RtcF1::new();
+            match p_cfg.config.get("alarm_irq").and_then(|v| v.as_u64()) {
+                Some(line) => Box::new(rtc.with_alarm_irq(line as u32)),
+                None => Box::new(rtc),
+            }
+        }
         "bkp_f1" => {
             // `data_registers: 10` (low/medium density, the default) or 42
             // (high/XL density, DR11..DR42 at 0x40..0xBC).
