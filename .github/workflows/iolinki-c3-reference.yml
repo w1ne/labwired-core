@@ -3,7 +3,7 @@ on:
   pull_request:
     # Lean PR gate (2026-11-13): on pull requests this lane runs only when
     # its own files change. Shared engine paths (crates/core, crates/cli,
-    # Cargo.*) trigger it on push to main instead.
+    # Cargo.*) trigger it in the daily schedule instead.
     paths:
       - 'configs/chips/esp32c3.yaml'
       - '.github/workflows/iolinki-c3-reference.yml'
@@ -12,10 +12,11 @@ on:
     paths:
       - 'configs/chips/esp32c3.yaml'
       - '.github/workflows/iolinki-c3-reference.yml'
-      - 'crates/core/**'
-      - 'crates/cli/**'
-      - 'crates/config/**'
-      - 'Cargo.*'
+  # Shared-engine regressions (crates/core, crates/cli, crates/config, Cargo.*)
+  # are caught daily instead of on every main push: this lane cost ~9 runner-min
+  # per push, ~31 pushes/day, and the PR lane already skips it for engine edits.
+  schedule:
+    - cron: "50 2 * * *"
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -25,6 +26,9 @@ permissions:
   contents: read
 jobs:
   c3-esp-idf-firmware-wake:
+    # Cron runs are gated to this repository (a fork would mail failures to a
+    # maintainer here about a run they cannot see).
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

@@ -14,7 +14,7 @@ on:
   pull_request:
     # Lean PR gate (2026-11-13): on pull requests this lane runs only when
     # its own files change. Shared engine paths (crates/core, crates/cli,
-    # Cargo.*) trigger it on push to main instead.
+    # Cargo.*) trigger it in the daily schedule instead.
     branches: [main]
     paths:
       - "crates/python/**"
@@ -25,20 +25,14 @@ on:
     branches: [main]
     paths:
       - "crates/python/**"
-      - "crates/core/**"
-      - "crates/config/**"
-      - "crates/loader/**"
-      - "crates/ir/**"
-      - "crates/hw-trace/**"
-      - "crates/svd-ingestor/**"
-      - "configs/**"
-      - "tests/fixtures/**"
       - "examples/nrf54l15-smart-ring/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
       - "scripts/ci/python-sdk-gate.sh"
       - ".github/workflows/core-python-sdk.yml"
+  # Shared-engine regressions (crates/core, crates/cli, crates/config, Cargo.*)
+  # are caught daily instead of on every main push: this lane cost ~9 runner-min
+  # per push, ~31 pushes/day, and the PR lane already skips it for engine edits.
+  schedule:
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -50,6 +44,9 @@ concurrency:
 
 jobs:
   python-sdk:
+    # Cron runs are gated to this repository (a fork would mail failures to a
+    # maintainer here about a run they cannot see).
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
     name: python-sdk (wheel + pytest, 0 skipped)
     # setup-python no longer publishes Python 3.9 for the Ubuntu 26.04
     # `ubuntu-latest` image. Pin the OS so this job keeps testing the declared
