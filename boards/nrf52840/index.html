@@ -5479,10 +5479,22 @@ capture truth-set lives in the private repo at <code>validation/silicon/nrf52840
 <td>FREQUENCY/MODE/BASE</td>
 </tr>
 <tr>
-<td>PWM0–3, SAADC, QSPI, PDM, I2S, PPI, GPIOTE, NFCT, COMP, QDEC, EGU0–5, ECB, TEMP, AAR, MWU, NVMC, UICR, FICR, USBD, ACL, CRYPTOCELL, CLOCK</td>
+<td>PWM0–3, SAADC, QSPI, PDM, I2S, PPI, GPIOTE, NFCT, COMP, QDEC, EGU0–5, ECB, TEMP, AAR, MWU, NVMC, UICR, FICR, ACL, CRYPTOCELL, CLOCK</td>
 <td>various</td>
 <td>modeled / silicon-verified</td>
 <td>declared in chip yaml; notable registers swept</td>
+</tr>
+<tr>
+<td>USBD</td>
+<td>0x40027000</td>
+<td>behavioural, not silicon-verified beyond the register sweep</td>
+<td>EasyDMA control / bulk / interrupt endpoints, the nrfx start-up sequence (anomalies 171 and 187, POWER USB events) and a scripted host that enumerates and opens a CDC port. Off by default (<code>host: false</code>, no cable); a board manifest plugs it in. Isochronous, remote wake-up and <code>LOWPOWER</code> are refused; suspend is not modelled</td>
+</tr>
+<tr>
+<td>TWI0/TWI1 (byte registers, <code>ENABLE = 5</code>)</td>
+<td>0x40003000 / 0x40004000</td>
+<td>behavioural, not silicon-verified</td>
+<td>master only, inside the TWIM model: <code>TXD</code>/<code>RXD</code>, <code>TXDSENT</code>/<code>RXDREADY</code>/<code>BB</code>, <code>BB_SUSPEND</code>/<code>BB_STOP</code>, address NACK. No data NACK</td>
 </tr>
 </tbody>
 </table>

@@ -5921,8 +5921,8 @@ rather than guessed.</p>
 </tr>
 <tr>
 <td><code>memory_overrides</code></td>
-<td>Parsed but <strong>not consulted by the engine today</strong> — region sizes come from the chip descriptor. The field exists so manifests may carry it; do not rely on it.</td>
-<td><code>memory_overrides: {flash: "512KB"}</code></td>
+<td>One key is read: <code>reset_vector_offset</code>, the offset from the flash base of the vector table that reset enters. It replaces the chip descriptor's value, for a board whose resident bootloader hands over to an application image (0x10000 on the Arduino Nano 33 BLE). A value that is not a number fails the load. Every other key is ignored with a warning — region sizes come from the chip descriptor.</td>
+<td><code>memory_overrides: {reset_vector_offset: "0x10000"}</code></td>
 </tr>
 <tr>
 <td><code>peripherals</code></td>
