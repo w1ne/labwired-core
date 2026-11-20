@@ -457,7 +457,9 @@ fn pin_driven(ron: &str) -> (f64, f64, f64) {
     (
         motor.speed_rpm,
         motor.current_a.expect("a routed winding current"),
-        motor.bus_voltage_v.expect("the pad voltage, routed as the bus"),
+        motor
+            .bus_voltage_v
+            .expect("the pad voltage, routed as the bus"),
     )
 }
 
@@ -474,7 +476,10 @@ fn a_motor_straight_off_a_pin_is_a_load_on_the_pads_output_resistance() {
     // Through the ATmega328P's 25 ohm the winding current pulls the pad down
     // by volts, past what a 40 mA-rated pin should ever source...
     assert!(pad_v < 4.0, "pad sags under the motor: {pad_v} V");
-    assert!(amps > 0.040, "draws past the 40 mA absolute maximum: {amps} A");
+    assert!(
+        amps > 0.040,
+        "draws past the 40 mA absolute maximum: {amps} A"
+    );
     // ... and the shaft turns far slower than an ideal pin would spin it.
     assert!(rpm < 0.75 * ideal_rpm, "{rpm} rpm vs {ideal_rpm} rpm ideal");
 }

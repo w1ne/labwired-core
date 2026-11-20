@@ -7390,7 +7390,10 @@ board_io: []
         .expect("the stepper is still in the motor evidence");
     assert_eq!(snapshot.position_rad, 0.0);
     assert_eq!(snapshot.control_state, "idle");
-    assert_eq!(snapshot.faults, vec![crate::bus::motors::UNPOWERED_FAULT.to_owned()]);
+    assert_eq!(
+        snapshot.faults,
+        vec![crate::bus::motors::UNPOWERED_FAULT.to_owned()]
+    );
 }
 
 /// An observer on an STM32 pad that a timer drives in alternate-function mode

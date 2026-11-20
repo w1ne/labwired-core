@@ -404,7 +404,7 @@ impl PeripheralKit for HBridgeMotorKit {
                     enb.as_ref().map(BridgeControlSource::observer_pin),
                 )
                 .with_declared_id(ctx.device_id().to_string())
-            .with_powered(super::supply::powered_from_config(ctx)),
+                .with_powered(super::supply::powered_from_config(ctx)),
             );
             let mut channel_b_sources = vec![&in3, &in4];
             if let Some(enb) = enb.as_ref() {
@@ -458,7 +458,7 @@ fn attach_ibt2(ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
             ids[3],
         )
         .with_declared_id(ctx.device_id().to_string())
-            .with_powered(super::supply::powered_from_config(ctx)),
+        .with_powered(super::supply::powered_from_config(ctx)),
     );
     if !native || !ctx.install_gpio_observer(motor.clone()) {
         let mut pads = Vec::new();
