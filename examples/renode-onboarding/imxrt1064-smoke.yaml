@@ -10,6 +10,7 @@ limits:
 assertions:
   - uart_contains: "OK"
   - uart_contains: "gpt1 swr=1 cnt=1 irq=3 of1=1 of2=1 ok"
+  - uart_contains: "lpuart6 tcie ispr=20 rel=00 ok"
   - uart_contains: "adc cal=1 ready=1 coco=1 result=0400 ok"
   - gpio_edges:
       pin: "gpio2:3"

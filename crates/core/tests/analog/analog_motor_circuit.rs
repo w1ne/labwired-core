@@ -400,3 +400,86 @@ fn no_routed_current_holds_the_shaft_instead_of_guessing() {
     assert_eq!(motor.current_a, None);
     assert_eq!(motor.bus_voltage_v, None, "no rail routed, none reported");
 }
+
+/// The catalog motor wired straight to PB1 (Uno D9) and GND, as the diagram
+/// compiler lowers it: the pad is a Thevenin source, the chip's `io_voltage_v`
+/// behind its `gpio_output_ohms` (25 ohm on the ATmega328P), and the winding is
+/// its load. `RON` is the pad resistance under test.
+const PIN_DRIVEN_SYSTEM: &str = r#"
+motor_models:
+  - kind: dc
+    id: "M1"
+    armature: circuit
+    resistance_ohm: 1.2
+    inductance_h: 0.002
+    torque_constant_nm_per_a: 0.08
+    back_emf_constant_v_per_rad_s: 0.08
+    rotor_inertia_kg_m2: 0.00004
+    viscous_friction_nm_per_rad_s: 0.00001
+    coulomb_friction_nm: 0.006
+    load_torque_nm: 0.0
+    encoder_cpr: 1024
+    simulation_clock_hz: 16000000
+cosim_models:
+  - id: "circuit"
+    adapter: "analog"
+    step_ns: 100000
+    inputs:
+      emf_M1: "board.motor.M1.back_emf_v"
+      drv_pb1: "board.gpio_pad.pb1"
+      ctl_pb1: "board.gpio_driven.pb1"
+    outputs:
+      motor_M1: "board.motor.M1.current_a"
+      supply_M1: "board.motor.M1.supply_v"
+      in_pb1: "board.gpio_in.pb1"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        RM1 v_net_m1__plus mot_M1a 1.2
+        LM1 mot_M1a mot_M1b 2m
+        Vemf_M1 mot_M1b 0 dc 0
+        Vdrv_pb1 d_pb1 0 dc 0
+        Sdrv_pb1 d_pb1 v_net_m1__plus ctl_pb1 ron=RON roff=1e12
+      probes:
+        in_pb1: "v(v_net_m1__plus)"
+        motor_M1: "i(LM1)"
+        supply_M1: "v(v_net_m1__plus)"
+      sources:
+        emf_M1: "Vemf_M1"
+        drv_pb1: "Vdrv_pb1"
+"#;
+
+/// Steady speed, winding current and pad voltage of the pin-driven motor.
+fn pin_driven(ron: &str) -> (f64, f64, f64) {
+    let mut bench = Bench::with_system(&PIN_DRIVEN_SYSTEM.replace("RON", ron));
+    bench.run_to_ms(1500);
+    let motor = bench.motor();
+    (
+        motor.speed_rpm,
+        motor.current_a.expect("a routed winding current"),
+        motor
+            .bus_voltage_v
+            .expect("the pad voltage, routed as the bus"),
+    )
+}
+
+#[test]
+fn a_motor_straight_off_a_pin_is_a_load_on_the_pads_output_resistance() {
+    let (rpm, amps, pad_v) = pin_driven("25");
+    let (ideal_rpm, _, ideal_v) = pin_driven("1e-3");
+    eprintln!(
+        "pin-driven: {rpm:.1} rpm, {:.1} mA, pad {pad_v:.2} V; ideal pin: {ideal_rpm:.1} rpm at {ideal_v:.2} V",
+        amps * 1e3
+    );
+    // An ideal 5 V source would hold the pad at the rail.
+    assert!((ideal_v - 5.0).abs() < 0.01, "ideal pad: {ideal_v} V");
+    // Through the ATmega328P's 25 ohm the winding current pulls the pad down
+    // by volts, past what a 40 mA-rated pin should ever source...
+    assert!(pad_v < 4.0, "pad sags under the motor: {pad_v} V");
+    assert!(
+        amps > 0.040,
+        "draws past the 40 mA absolute maximum: {amps} A"
+    );
+    // ... and the shaft turns far slower than an ideal pin would spin it.
+    assert!(rpm < 0.75 * ideal_rpm, "{rpm} rpm vs {ideal_rpm} rpm ideal");
+}
