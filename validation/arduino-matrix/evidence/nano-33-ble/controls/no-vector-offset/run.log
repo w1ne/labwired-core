@@ -1,0 +1,6 @@
+2026-11-20T02:25:33.577940Z  INFO labwired_core::system::builder: Loading chip descriptor: configs/chips/nrf52840.yaml
+2026-11-20T02:25:33.679308Z  INFO labwired_loader: ELF Entry Point: 0x18e5d
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-20T02:25:33.682945Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0xfffffffe
+2026-11-20T02:25:33.683697Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "LW_L0_OK" }) (captured len=0)
+FAIL  0/1 checks · test · 0 steps · 0.00s

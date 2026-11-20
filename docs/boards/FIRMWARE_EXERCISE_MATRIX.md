@@ -112,8 +112,9 @@ _TWIM/PWM are firmware-proven via the rubric fixture; the PR-gated OBD2 scanner 
 
 **Functional device/protocol reads** (real driver, decoded value):
 - BME280 temperature read (~25 °C) via an unmodified Zephyr sensor driver — `zephyr-bme280-ztest` · external west build (not in core cargo test) (on-demand)
+- Stock ArduinoCore-mbed sketch on the Arduino Nano 33 BLE Rev2: the scripted USB host enumerates the native port (nrf52840_usbd) and opens its CDC serial port; the Adafruit BME280 library reads the sensor over Wire (TWI0 master, byte registers) and prints 25.00 C, 1013.25 hPa, 50.00 %RH on Serial (USB CDC) — `arduino-nano-33-ble-bme280` · crates/core/tests/nrf/arduino_nano_33_ble_bme280.rs (tests/fixtures/nrf52/arduino-nano-33-ble-bme280.elf) (PR gate)
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `TWIS`, `SPIS`, `CCM`, `RNG`, `TEMP`, `ECB`, `GPIOTE`, `PPI`, `NVMC`, `FICR`, `UICR`, `NFCT`, `PDM`, `EGU`, `QSPI`, `USBD`
+**Advanced peripherals — unit-tested only** (no firmware drives them): `TWIS`, `SPIS`, `CCM`, `RNG`, `TEMP`, `ECB`, `GPIOTE`, `PPI`, `NVMC`, `FICR`, `UICR`, `NFCT`, `PDM`, `EGU`, `QSPI`
 
 **Dead** (8 modeled, never exercised): `QDEC`, `AAR`, `ACL`, `COMP`, `CRYPTOCELL`, `I2S`, `LPCOMP`, `MWU`
 
@@ -295,7 +296,7 @@ _Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml copies
 
 ### `stm32h723zg`
 
-_No beyond-rubric H723 peripheral is exercised: the NUCLEO-H723ZG smoke drives RCC enables, GPIOB (LD1 on PB0), GPIOD AF7 and USART3 TX only. This narrow board slice declares RCC, SysTick, GPIO B/C/D/E and USART3; it does not model PWR, the cache/MPU, FMC/OCTOSPI, Ethernet, USB OTG, FDCAN, ADC, timers, DMA, I2C, SPI or the other H723 peripherals._
+_Two firmware paths drive this die. The NUCLEO-H723ZG Rust smoke (core-onboarding-smoke) drives RCC enables, GPIOB (LD1 on PB0), GPIOD AF7 and USART3 TX. The stock stm32duino NUCLEO_H723ZG row in the Arduino matrix (core-arduino-matrix-smoke, nightly + push to main; evidence validation/arduino-matrix/evidence/nucleo-h723zg) drives PWR supply/VOS bring-up, the PLL clock tree, CRS (HAL_RCCEx_CRSConfig), USART3, GPIO, I2C1 (INA219 exact registers), SPI1 (MAX31855 exact frame), ADC1 plus the ADC12 common CCR (analogRead), TIM2 PWM on PA0 (1.000 kHz, 50.2 % duty on the pad) and SysTick (micros). FDCAN1/2, CRC, RNG, IWDG, WWDG, DBGMCU, USART1/2/6, UART4, LPUART1, I2C2/3, SPI2/3, TIM1/3/4/8 and ADC2 are declared with the H735 instance list but no H723 firmware drives them; the FDCAN message RAM is not mapped, so the L8 CAN cell is a declared skip._
 
 ### `esp32s3-zero`
 

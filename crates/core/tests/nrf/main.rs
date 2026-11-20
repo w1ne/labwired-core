@@ -21,6 +21,7 @@ mod common;
 #[path = "../common/microbit_sensor_guest.rs"]
 mod guest;
 
+mod arduino_nano_33_ble_bme280;
 mod microbit_v2_led_matrix;
 mod microbit_v2_mag_drdy_guest;
 mod microbit_v2_open_drain_guest;

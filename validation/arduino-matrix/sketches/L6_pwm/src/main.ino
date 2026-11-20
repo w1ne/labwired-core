@@ -28,10 +28,10 @@
 // PinMap_TIM, so analogWrite would fall back to digitalWrite. Use TIM2_CH1
 // on PA0.
 #    define LW_PWM_PIN PA0
-#  elif defined(STM32H563xx)
-// NUCLEO-H563ZI LD1 is PB0, whose PinMap_TIM entry is TIM1_CH2N, a
-// complementary output the twin's timer does not generate. Use TIM2_CH1 on
-// PA0.
+#  elif defined(STM32H563xx) || defined(STM32H723xx)
+// NUCLEO-H563ZI / NUCLEO-H723ZG LD1 is PB0, whose PinMap_TIM entry is
+// TIM1_CH2N, a complementary output the twin's timer does not generate. Use
+// TIM2_CH1 on PA0.
 #    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_NUCLEO_F446RE)
 // NUCLEO-F446RE LD2 is PA5 = DAC_OUT2 too; stock analogWrite would take the
@@ -89,6 +89,7 @@ static void logBegin() {
   Serial.begin(115200);
 #if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED) || \
     defined(ARDUINO_SAMD_NANO_33_IOT) || \
+    defined(ARDUINO_ARDUINO_NANO33BLE) || \
     ((defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)) && \
      defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE)
   // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
@@ -97,6 +98,8 @@ static void logBegin() {
   // TinyUSB CDC on USB-OTG, which drops writes until DTR the same way.
   // ArduinoCore-samd on the Nano 33 IoT: Serial is SerialUSB, native USB CDC,
   // and operator bool() is false until the host raises DTR.
+  // ArduinoCore-mbed on the Nano 33 BLE: Serial is USB CDC on the nRF52840
+  // USBD and drops writes until the host raises DTR.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)

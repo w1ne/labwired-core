@@ -1,0 +1,18 @@
+# Arduino matrix system — NUCLEO-H723ZG. INA219 on Wire for L3, MAX31855 on
+# SPI for L4; L0–L2 ignore both.
+name: "arduino-matrix-nucleo-h723zg"
+chip: "../../../configs/chips/stm32h723zg.yaml"
+external_devices:
+  # L3_i2c_sensor: INA219 at 0x40 on the default Wire bus (I2C1, PB8/PB9).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+  # L4_spi_sensor: MAX31855 on the default SPI bus (SPI1, PA5/PA6/PB5).
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PD14"
+board_io: []

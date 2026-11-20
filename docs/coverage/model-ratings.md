@@ -57,7 +57,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | nrf51822 | open | L1 | 22 | 965.1 | 2.0 | ≥1× (CI) | — |
 | nrf52832 | open | L1 | 17 | 835.5 | 1.4 | ≥1× (CI) | [doc](docs/boards/nrf52832.md) |
 | nrf52833 | open | L1 | 48 | 995.9 | 2.1 | ≥1× (CI) | — |
-| nrf52840 | open | L1 | 51 | 995.9 | 2.1 | ≥1× (CI) | [doc](docs/boards/nrf52840.md) |
+| nrf52840 | open | L1 | 52 | 995.9 | 2.1 | ≥1× (CI) | [doc](docs/boards/nrf52840.md) |
 | nrf5340 | open | L1 | 22 | 819.6 | 1.4 | ≥1× (CI) | [doc](docs/boards/nrf5340.md) |
 | rp2040 | open | L1 | 24 | 905.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2040.md) |
 | stm32f103 | open | L1 | 31 | 835.3 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f103.md) |
@@ -159,7 +159,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | esp32s2-arduino | open | L1 | 32 | — | — | ≥1× (CI) | — |
 | rp2040-feather | open | L0 | 24 | 906.8 | 1.6 | ≥1× (CI) | — |
 | rp2350-feather | open | L0 | 27 | 906.8 | 1.7 | ≥1× (CI) | — |
-| stm32h723zg | open | L0 | 9 | 808.5 | 1.5 | ≥1× (CI) | — |
+| stm32h723zg | open | L0 | 43 | 808.5 | 1.5 | ≥1× (CI) | — |
 | esp32c6fh4 | open | L0 | 69 | — | 3.8 | ≥1× (CI) | — |
 | k32w041z (closed) | closed | L2 | 9 | 987.8 | 1.6 | 6.50× | [doc](docs/boards/k32w041amdk6.md) |
 
