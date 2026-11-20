@@ -486,6 +486,13 @@ pub const MODEL_TYPES: &[&str] = &[
     "msp430_bcm",
     "msp430_bcm_plus",
     "msp430_bcsctl3",
+    // Texas Instruments MSP430x2xx digital I/O port, and byte registers that
+    // are storage with reset values (PxSEL2, calibration constants).
+    "msp430_port",
+    "msp430_bytes",
+    // Texas Instruments MSP430x2xx Timer_A and its TAIV register.
+    "msp430_timer_a",
+    "msp430_timer_a_iv",
     // Texas Instruments MSP430x5xx: SFRIE1/SFRIFG1/SFRRPCR, USCI_A (UART
     // mode, own UCAxIE/UCAxIFG/UCAxIV), WDT_A control, 32-bit hardware
     // multiplier, unified clock system, power management module.
@@ -2519,6 +2526,147 @@ pub fn try_build(
         "msp430_bcsctl3" => {
             msp430_keys(p_cfg, &[])?;
             Box::new(crate::peripherals::msp430::Msp430Bcm::bcsctl3())
+        }
+        "msp430_port" => {
+            use crate::peripherals::msp430_port::{Msp430Port, PortRequest};
+            msp430_keys(p_cfg, &["interrupt", "sel_reset", "irq_source", "irq_line"])?;
+            let byte = |key: &str| -> anyhow::Result<Option<u32>> {
+                match p_cfg.config.get(key) {
+                    None => Ok(None),
+                    Some(v) => v.as_u64().map(|v| Some(v as u32)).ok_or_else(|| {
+                        anyhow::anyhow!("msp430_port '{}': `{key}` is not a number", p_cfg.id)
+                    }),
+                }
+            };
+            let sel_reset = byte("sel_reset")?.unwrap_or(0);
+            if sel_reset > 0xFF {
+                anyhow::bail!("msp430_port '{}': `sel_reset` is one byte", p_cfg.id);
+            }
+            let interrupt = match p_cfg.config.get("interrupt") {
+                None => false,
+                Some(v) => v.as_bool().ok_or_else(|| {
+                    anyhow::anyhow!("msp430_port '{}': `interrupt` is true or false", p_cfg.id)
+                })?,
+            };
+            let request = match (byte("irq_source")?, byte("irq_line")?) {
+                (None, None) => None,
+                (Some(source), Some(line))
+                    if interrupt && source < crate::peripherals::msp430::SOURCES && line < 64 =>
+                {
+                    Some(PortRequest { source, line })
+                }
+                _ => anyhow::bail!(
+                    "msp430_port '{}': `irq_source` (below {}) and `irq_line` (below 64) come \
+                     together, on a port with `interrupt: true`",
+                    p_cfg.id,
+                    crate::peripherals::msp430::SOURCES
+                ),
+            };
+            if interrupt {
+                Box::new(Msp430Port::with_interrupt(sel_reset as u8, request))
+            } else {
+                Box::new(Msp430Port::basic(sel_reset as u8))
+            }
+        }
+        "msp430_bytes" => {
+            msp430_keys(p_cfg, &["reset"])?;
+            let reset = p_cfg
+                .config
+                .get("reset")
+                .and_then(|v| v.as_sequence())
+                .and_then(|s| {
+                    s.iter()
+                        .map(|v| v.as_u64().and_then(|v| u8::try_from(v).ok()))
+                        .collect::<Option<Vec<u8>>>()
+                })
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "msp430_bytes '{}' needs `reset`: one byte value per register",
+                        p_cfg.id
+                    )
+                })?;
+            Box::new(crate::peripherals::msp430_port::Msp430Bytes::new(reset))
+        }
+        // `blocks`: capture/compare blocks (default 3); `irq_sources`:
+        // CCIFG0 ... CCIFGn-1, then TAIFG; `irq_lines`: the TACCR0 line, then
+        // the TAIV line; `aclk_hz` (default 32768) and `cpu_hz` clock ACLK.
+        "msp430_timer_a" => {
+            use crate::peripherals::msp430_timer_a::{Msp430TimerA, TimerAClocks, TimerARequest};
+            msp430_keys(
+                p_cfg,
+                &["blocks", "irq_sources", "irq_lines", "aclk_hz", "cpu_hz"],
+            )?;
+            let number = |key: &str, default: u64| -> anyhow::Result<u64> {
+                match p_cfg.config.get(key) {
+                    None => Ok(default),
+                    Some(v) => v.as_u64().ok_or_else(|| {
+                        anyhow::anyhow!("msp430_timer_a '{}': `{key}` is not a number", p_cfg.id)
+                    }),
+                }
+            };
+            let blocks = number("blocks", 3)? as usize;
+            if !(2..=7).contains(&blocks) {
+                anyhow::bail!("msp430_timer_a '{}': `blocks` is 2 to 7", p_cfg.id);
+            }
+            let request = match (
+                p_cfg.config.get("irq_sources"),
+                p_cfg.config.get("irq_lines"),
+            ) {
+                (None, None) => None,
+                _ => {
+                    let sources = u32_list(p_cfg, "irq_sources", blocks + 1)
+                        .filter(|v| v.iter().all(|s| *s < crate::peripherals::msp430::SOURCES));
+                    let lines =
+                        u32_list(p_cfg, "irq_lines", 2).filter(|v| v.iter().all(|l| *l < 64));
+                    match (sources, lines) {
+                        (Some(sources), Some(lines)) => Some(TimerARequest {
+                            sources,
+                            lines: [lines[0], lines[1]],
+                        }),
+                        _ => anyhow::bail!(
+                            "msp430_timer_a '{}': `irq_sources` ({} sources below {}) and \
+                             `irq_lines` (two lines below 64) come together",
+                            p_cfg.id,
+                            blocks + 1,
+                            crate::peripherals::msp430::SOURCES
+                        ),
+                    }
+                }
+            };
+            let clocks = TimerAClocks {
+                aclk_hz: number("aclk_hz", 32_768)?,
+                cpu_hz: number("cpu_hz", 0)?,
+            };
+            Box::new(Msp430TimerA::new(blocks, request, clocks))
+        }
+        // `irq_sources`: CCIFG1 ... CCIFGn-1, then TAIFG, as the timer names
+        // them.
+        "msp430_timer_a_iv" => {
+            msp430_keys(p_cfg, &["irq_sources"])?;
+            let sources = p_cfg
+                .config
+                .get("irq_sources")
+                .and_then(|v| v.as_sequence())
+                .and_then(|s| {
+                    s.iter()
+                        .map(|v| {
+                            v.as_u64()
+                                .map(|v| v as u32)
+                                .filter(|v| *v < crate::peripherals::msp430::SOURCES)
+                        })
+                        .collect::<Option<Vec<u32>>>()
+                })
+                .filter(|v| (2..=7).contains(&v.len()))
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "msp430_timer_a_iv '{}' needs `irq_sources`: CCIFG1 ... CCIFGn-1, then TAIFG",
+                        p_cfg.id
+                    )
+                })?;
+            Box::new(crate::peripherals::msp430_timer_a::Msp430TimerAIv::new(
+                sources,
+            ))
         }
         // `lines`: the interrupt line behind each bit (0 to 7) of
         // SFRIE1/SFRIFG1; 0 = the bit requests no interrupt.
