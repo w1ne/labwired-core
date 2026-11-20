@@ -133,17 +133,27 @@ pub struct Tcs3200 {
     schedule_revision: u64,
 }
 
+/// Resolved GPIO pads (ODR address, bit) the sensor is wired to.
+struct Tcs3200Pads {
+    s0: (u64, u8),
+    s1: (u64, u8),
+    s2: (u64, u8),
+    s3: (u64, u8),
+    /// `None` when OE is tied off and the output is always enabled.
+    oe: Option<(u64, u8)>,
+    out: (u64, u8),
+}
+
 impl Tcs3200 {
-    fn new(
-        id: String,
-        cpu_hz: u64,
-        s0: (u64, u8),
-        s1: (u64, u8),
-        s2: (u64, u8),
-        s3: (u64, u8),
-        oe: Option<(u64, u8)>,
-        out: (u64, u8),
-    ) -> Self {
+    fn new(id: String, cpu_hz: u64, pads: Tcs3200Pads) -> Self {
+        let Tcs3200Pads {
+            s0,
+            s1,
+            s2,
+            s3,
+            oe,
+            out,
+        } = pads;
         let mut addrs: Vec<u64> = [s0.0, s1.0, s2.0, s3.0]
             .into_iter()
             .chain(oe.map(|p| p.0))
@@ -330,9 +340,18 @@ impl PeripheralKit for Tcs3200Kit {
             .filter(|&hz| hz > 0)
             .unwrap_or(ctx.bus.cpu_hz)
             .max(1);
-        ctx.bus
-            .gpio_devices
-            .push(Box::new(Tcs3200::new(id, cpu_hz, s0, s1, s2, s3, oe, out)));
+        ctx.bus.gpio_devices.push(Box::new(Tcs3200::new(
+            id,
+            cpu_hz,
+            Tcs3200Pads {
+                s0,
+                s1,
+                s2,
+                s3,
+                oe,
+                out,
+            },
+        )));
         Ok(())
     }
 }
@@ -495,7 +514,18 @@ mod tests {
     }
 
     fn sensor() -> (Tcs3200, FakePads) {
-        let dev = Tcs3200::new("color".into(), CPU, S0, S1, S2, S3, Some(OE), OUT);
+        let dev = Tcs3200::new(
+            "color".into(),
+            CPU,
+            Tcs3200Pads {
+                s0: S0,
+                s1: S1,
+                s2: S2,
+                s3: S3,
+                oe: Some(OE),
+                out: OUT,
+            },
+        );
         let mut pins = FakePads::default();
         // Firmware default: 20 % scale, red filter, OE enabled (low).
         pins.set(S0, true);
