@@ -19,6 +19,9 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # GitHub refuses to create a matrix job with more than 256 entries (the whole
+  # job silently vanishes and the run fails). The board list is therefore split
+  # across onboarding-smoke and onboarding-smoke-b; keep each under 256, steps identical.
   onboarding-smoke:
     name: onboarding-${{ matrix.id }}
     if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
@@ -894,6 +897,105 @@ jobs:
             prebuilt_firmware: tests/fixtures/avr/attiny4313-io-smoke.elf
             script: examples/renode-onboarding/simavr-attiny4313-smoke.yaml
             system: configs/systems/onboarding/simavr-attiny4313.yaml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,thumbv8m.base-none-eabi,riscv32i-unknown-none-elf,riscv32im-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32imac-unknown-none-elf,riscv64imac-unknown-none-elf
+
+      - name: Install Python for PlatformIO
+        if: ${{ matrix.firmware_build_script != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        if: ${{ matrix.firmware_build_script != '' }}
+        run: python -m pip install platformio==6.2.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-onboarding-smoke
+          workspaces: |
+            . -> target
+
+      - name: Run onboarding smoke
+        run: |
+          chmod +x scripts/onboarding_smoke.sh
+          args=(
+            --target-id "${{ matrix.id }}"
+            --features "${{ matrix.features }}"
+            --cli-features "${{ matrix.cli_features }}"
+            --cli-profile "${{ matrix.cli_profile }}"
+            --script "${{ matrix.script }}"
+            --system "${{ matrix.system }}"
+            --out-dir "out/onboarding-smoke/${{ matrix.id }}"
+            --threshold-seconds 3600
+          )
+          if [[ -n "${{ matrix.target_features }}" ]]; then
+            args+=(--target-features "${{ matrix.target_features }}")
+          fi
+          if [[ -n "${{ matrix.firmware_build_script }}" ]]; then
+            args+=(--firmware-build-script "${{ matrix.firmware_build_script }}")
+          elif [[ -n "${{ matrix.prebuilt_firmware }}" ]]; then
+            args+=(--prebuilt-firmware "${{ matrix.prebuilt_firmware }}")
+          else
+            args+=(--crate "${{ matrix.crate }}" --target "${{ matrix.target }}")
+            if [[ -n "${{ matrix.firmware_build_dir }}" ]]; then
+              args+=(--firmware-build-dir "${{ matrix.firmware_build_dir }}")
+            fi
+          fi
+          scripts/onboarding_smoke.sh "${args[@]}"
+
+      - name: Check decoded ESP32-C5 onboard RGB evidence
+        if: matrix.id == 'esp32c5-devkitc-1-n8r8-bme280'
+        run: |
+          python3 examples/esp32c5-devkitc-1-bme280-smoke/ci/verify-rgb-evidence.py \
+            "out/onboarding-smoke/${{ matrix.id }}/simulation-output/result.json"
+
+      - name: Check decoded ESP32-C61 onboard RGB evidence
+        if: matrix.id == 'esp32c61-devkitc-1-n8r2-bme280'
+        run: |
+          python3 examples/esp32c61-devkitc-1-n8r2-bme280/ci/verify-rgb-evidence.py \
+            "out/onboarding-smoke/${{ matrix.id }}/simulation-output/result.json"
+
+      - name: Check decoded ESP32-H2 onboard RGB evidence
+        if: matrix.id == 'esp32h2-devkitm-1-n4s'
+        run: |
+          python3 examples/esp32h2-devkitm-1-n4s/ci/verify-rgb-evidence.py \
+            "out/onboarding-smoke/${{ matrix.id }}/simulation-output/result.json"
+
+      - name: Check decoded ESP32-C3 onboard RGB evidence
+        if: matrix.id == 'esp32c3-devkitm-1-n4x'
+        run: |
+          python3 examples/esp32c3-devkitm-1-n4x/ci/verify-rgb-evidence.py \
+            "out/onboarding-smoke/${{ matrix.id }}/simulation-output/result.json"
+
+      - name: Publish onboarding summary
+        if: always()
+        run: |
+          cat "out/onboarding-smoke/${{ matrix.id }}/onboarding-summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload onboarding artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onboarding-smoke-${{ matrix.id }}
+          path: out/onboarding-smoke/${{ matrix.id }}/
+          retention-days: 5
+
+  onboarding-smoke-b:
+    name: onboarding-${{ matrix.id }}
+    if: ${{ github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
           - id: simavr-attiny24
             prebuilt_firmware: tests/fixtures/avr/attiny24-io-smoke.elf
             script: examples/renode-onboarding/simavr-attiny24-smoke.yaml
@@ -1910,7 +2012,7 @@ jobs:
     name: onboarding-scoreboard
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: onboarding-smoke
+    needs: [onboarding-smoke, onboarding-smoke-b]
     if: ${{ always() && (github.event_name != 'schedule' || github.repository == 'w1ne/labwired-core') }}
     steps:
       - uses: actions/checkout@v4
