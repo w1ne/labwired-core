@@ -23,6 +23,21 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 
+/// Work units of one boundary of `model`. An analog boundary can contain many
+/// solver steps. Count them so a huge YAML substeps value cannot bypass the
+/// synchronous budget.
+fn model_step_cost(model: &CosimModelConfig) -> u64 {
+    if model.adapter == CosimAdapter::Analog {
+        model
+            .config
+            .get("substeps")
+            .and_then(serde_yaml::Value::as_u64)
+            .unwrap_or(10)
+    } else {
+        1
+    }
+}
+
 /// Bound the amount of synchronous work in a host call. Portable firmware
 /// should advance cooperatively; this is not an instruction-fuel mechanism.
 const MAX_MODEL_STEPS_PER_ADVANCE: u64 = 100_000;
@@ -567,22 +582,15 @@ impl FlexRuntime {
         if target > MAX_TIME_NS {
             return Err(error("Flex time exceeds exact nanosecond trace range"));
         }
-        let mut steps = 0u64;
-        for model in &self.manifest.cosim_models {
-            let boundaries = target / model.step_ns - self.time_ns / model.step_ns;
-            // An analog boundary can contain many solver steps. Count them so
-            // a huge YAML substeps value cannot bypass the synchronous budget.
-            let cost = if model.adapter == CosimAdapter::Analog {
-                model
-                    .config
-                    .get("substeps")
-                    .and_then(serde_yaml::Value::as_u64)
-                    .unwrap_or(10)
-            } else {
-                1
-            };
-            steps = steps.saturating_add(boundaries.saturating_mul(cost));
-        }
+        let steps = self
+            .manifest
+            .cosim_models
+            .iter()
+            .map(|model| {
+                let boundaries = target / model.step_ns - self.time_ns / model.step_ns;
+                boundaries.saturating_mul(model_step_cost(model))
+            })
+            .fold(0u64, u64::saturating_add);
         if steps > MAX_MODEL_STEPS_PER_ADVANCE {
             return Err(error(format!("Flex advance requests {steps} simulation steps (including analog substeps); maximum per call is {MAX_MODEL_STEPS_PER_ADVANCE}")));
         }
@@ -603,6 +611,40 @@ impl FlexRuntime {
         self.spi.advance_ns(delta_ns);
         self.time_ns = target;
         Ok(())
+    }
+
+    /// [`Self::advance_ns`] in pieces that each fit the per-call work
+    /// budget. For a host that bounds the whole run in another way, as the
+    /// script runner does with `limits.max_time_ns`: a firmware wait of one
+    /// second is ordinary, and with a 1 µs model step it is 1,000,000 steps.
+    /// A failed piece latches as in [`Self::advance_ns`].
+    pub fn advance_ns_in_pieces(&mut self, delta_ns: u64) -> SimResult<()> {
+        let models = self.manifest.cosim_models.len() as u64;
+        // Each model gets an equal share of the budget. A piece of
+        // `(share - 1) * step_ns` crosses at most `share` boundaries of it.
+        let piece_ns = self
+            .manifest
+            .cosim_models
+            .iter()
+            .map(|model| {
+                let share = MAX_MODEL_STEPS_PER_ADVANCE / models / model_step_cost(model).max(1);
+                share.saturating_sub(1).saturating_mul(model.step_ns)
+            })
+            .min()
+            .unwrap_or(u64::MAX);
+        if piece_ns == 0 {
+            // One boundary is already over the budget: report it.
+            return self.advance_ns(delta_ns);
+        }
+        let mut remaining = delta_ns;
+        loop {
+            let piece = remaining.min(piece_ns);
+            self.advance_ns(piece)?;
+            remaining -= piece;
+            if remaining == 0 {
+                return Ok(());
+            }
+        }
     }
 
     pub fn i2c_bus_id(&self, name: &str) -> SimResult<u32> {
@@ -1016,6 +1058,32 @@ cosim_models:
         // A rejected request is not a partially executed model failure.
         runtime.advance_ns(1_000).unwrap();
         assert_eq!(runtime.time_ns(), 1_000);
+    }
+
+    /// A firmware wait longer than one call's budget runs in pieces and gives
+    /// the same trace as the same wait in small calls.
+    #[test]
+    fn advance_in_pieces_covers_a_wait_over_the_call_budget() {
+        let wait_ns = 1_000_000_000;
+        let mut whole = FlexRuntime::from_yaml(PULSE).unwrap();
+        let command = whole.port_id("command").unwrap();
+        whole.write(command, 1.0).unwrap();
+        assert!(whole.advance_ns(wait_ns).is_err());
+        assert_eq!(whole.time_ns(), 0);
+        whole.advance_ns_in_pieces(wait_ns).unwrap();
+        assert_eq!(whole.time_ns(), wait_ns);
+
+        let mut small = FlexRuntime::from_yaml(PULSE).unwrap();
+        small.write(command, 1.0).unwrap();
+        for _ in 0..1_000 {
+            small.advance_ns(1_000_000).unwrap();
+        }
+        let edges = |runtime: &mut FlexRuntime| {
+            serde_json::to_string(&runtime.digital_trace_snapshot(0).edges).unwrap()
+        };
+        let whole_edges = edges(&mut whole);
+        assert_ne!(whole_edges, "[]");
+        assert_eq!(whole_edges, edges(&mut small));
     }
 
     #[test]

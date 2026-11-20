@@ -206,7 +206,7 @@ impl Host {
         else {
             return Ok(false);
         };
-        let result = self.runtime.advance_ns(until - now);
+        let result = self.runtime.advance_ns_in_pieces(until - now);
         self.model(result)?;
         self.pending_ns = delta - (until - now);
         self.suspended = true;
@@ -228,7 +228,7 @@ impl Host {
             );
             return Err(self.stop(FlexStopReason::MaxTimeNs, message));
         }
-        let result = self.runtime.advance_ns(delta);
+        let result = self.runtime.advance_ns_in_pieces(delta);
         self.model(result)?;
         Ok(false)
     }
@@ -712,7 +712,7 @@ fn execute(
                                 Ok(Some(trap))
                             }
                             Ok(false) => {
-                                let advanced = host.runtime.advance_ns(pending);
+                                let advanced = host.runtime.advance_ns_in_pieces(pending);
                                 // A suspended bus transfer returns its status.
                                 let resumed: Vec<Val> = host
                                     .resume_result
