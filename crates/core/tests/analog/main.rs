@@ -45,6 +45,7 @@ mod device_supply_routing;
 mod lm393_moisture_dout;
 mod motor_models;
 mod mpu6050_noise;
+mod ne555_astable;
 mod noise_model;
 mod power_routing;
 mod rain_sensor_analog;

@@ -1,0 +1,21 @@
+* NE555 astable: 9 V, R1 10k, R2 68k, C 10 uF, LED + 1k on OUT (LabWired canvas lowering)
+CC1 v_net_c1_1 0 10u
+DD1 v_net_d1_a 0 D
+Vsup_J1 v_net_j1__plus 0 dc 9
+RR1 v_net_j1__plus v_net_r1_2 10k
+RR2 v_net_r1_2 v_net_c1_1 68k
+RR3 v_net_r3_1 v_net_d1_a 1k
+Rdiv1_U1 v_net_j1__plus pin_ctrl_U1 5k
+Rdiv2_U1 pin_ctrl_U1 lo_U1 5k
+Rdiv3_U1 lo_U1 0 5k
+Sset_U1 v_net_j1__plus q_U1 lo_U1 v_net_c1_1 ron=10 roff=1e9 vt=1m signed=1
+Srst_U1 q_U1 0 v_net_c1_1 pin_ctrl_U1 ron=100 roff=1e9 vt=1m signed=1
+Shold_U1 v_net_j1__plus q_U1 q_U1 lo_U1 ron=10k roff=1e9 vt=1m signed=1
+Sreset_U1 q_U1 0 v_net_j1__plus 0 ron=1 roff=1e9 vt=0.7 invert=1
+Rq_U1 q_U1 0 1meg
+Shi_U1 v_net_j1__plus oh_U1 q_U1 lo_U1 ron=10 roff=1e9 vt=1m signed=1
+Dhi1_U1 oh_U1 od_U1 D
+Dhi2_U1 od_U1 v_net_r3_1 D
+Slo_U1 v_net_r3_1 0 lo_U1 q_U1 ron=10 roff=1e9 vt=1m signed=1
+Sdis_U1 v_net_r1_2 0 lo_U1 q_U1 ron=10 roff=1e9 vt=1m signed=1
+.end
