@@ -90,6 +90,10 @@ struct ClockContract {
 pub struct Tiol112 {
     id: String,
     en: PinSense,
+    /// False when the placement says VCC_IN has no usable supply
+    /// (`powered: false`): the driver never takes CQ and the receiver passes
+    /// nothing, whatever EN and TX do.
+    powered: bool,
     state: Arc<Mutex<State>>,
     pub driver_delay_ps: u64,
     pub receiver_delay_ps: u64,
@@ -104,6 +108,7 @@ impl Tiol112 {
         Self {
             id: id.into(),
             en,
+            powered: true,
             state: Arc::new(Mutex::new(State::default())),
             driver_delay_ps: DRIVER_MAX_DELAY_PS,
             receiver_delay_ps: RECEIVER_MAX_DELAY_PS,
@@ -112,8 +117,13 @@ impl Tiol112 {
             clock_contract: None,
         }
     }
+    /// Hold the transceiver off for the whole run (no usable supply).
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
     pub fn driver_enabled(&self) -> bool {
-        self.en.level()
+        self.powered && self.en.level()
     }
     pub fn id(&self) -> &str {
         &self.id
@@ -242,7 +252,8 @@ impl Tiol112 {
     }
     /// A master byte cannot be trusted while the device drives the same CQ line.
     pub(crate) fn accept_peer_byte(&self) -> bool {
-        if !self.clock_valid() {
+        // An unpowered receiver drives no RX edge.
+        if !self.powered || !self.clock_valid() {
             return false;
         }
         if !self.driver_enabled() {
@@ -409,6 +420,7 @@ static METADATA: KitMetadata = KitMetadata {
         ConfigKey { name: Cow::Borrowed("receiver_delay_ns"), ty: ConfigType::Int, doc: Cow::Borrowed("Timed-mode CQ-to-RX propagation, 0..300 ns; default datasheet maximum300.") },
         ConfigKey { name: Cow::Borrowed("enable_delay_ns"), ty: ConfigType::Int, doc: Cow::Borrowed("Timed EN settling scenario, default4000ns TYPICAL, not a guaranteed maximum. Premature frames are rejected.") },
         ConfigKey { name: Cow::Borrowed("disable_delay_ns"), ty: ConfigType::Int, doc: Cow::Borrowed("Timed EN release scenario, default4000ns TYPICAL, not a guaranteed maximum.") },
+        super::supply::POWERED_CONFIG_KEY,
     ]),
     labs: Cow::Borrowed(&[]), inputs: Cow::Borrowed(INPUTS),
 };
@@ -441,6 +453,7 @@ impl PeripheralKit for Tiol112Kit {
                         | "receiver_delay_ns"
                         | "enable_delay_ns"
                         | "disable_delay_ns"
+                        | "powered"
                 ),
                 "tiol112: unsupported config key '{key}'"
             );
@@ -468,7 +481,8 @@ impl PeripheralKit for Tiol112Kit {
                 PinSense::Cell(cell)
             }
         };
-        let mut gate = Tiol112::new(ctx.device_id(), sense);
+        let mut gate = Tiol112::new(ctx.device_id(), sense)
+            .with_powered(super::supply::powered_from_config(ctx));
         if let Some(idx) = ctx.bus.find_peripheral_index_by_name("rcc") {
             if let Some(rcc) = ctx.bus.peripherals[idx]
                 .dev
@@ -534,5 +548,23 @@ impl PeripheralKit for Tiol112Kit {
         ctx.uart()?.set_tiol112(gate)?;
         ctx.bus.gpio_devices.push(Box::new(pins));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// No supply on VCC_IN: EN high still leaves CQ released, and a byte the
+    /// master puts on CQ reaches nothing.
+    #[test]
+    fn unpowered_transceiver_neither_drives_nor_receives() {
+        let off = Tiol112::new("phy", PinSense::Const(true)).with_powered(false);
+        assert!(!off.driver_enabled());
+        assert!(!off.accept_peer_byte());
+        assert!(!off.allow_tx());
+        let on = Tiol112::new("phy", PinSense::Const(true));
+        assert!(on.driver_enabled());
+        assert!(on.allow_tx());
     }
 }
