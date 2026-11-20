@@ -1108,6 +1108,11 @@ models:
 # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
 # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
 # SILICON CAPTURE; live re-capture remains pending.
+# 2026-11-09 (L4/G4/WB ADC, feat/stm32-l4-l0-adc): changes the shared
+# adc.rs digest. The `stm32l4` layout keeps its conversion path; the
+# stm32g0/c0 CHSELR layout and the f0/l0 block are separate models. F1/F4/H7/
+# U5 layouts are unchanged. This is a reviewed model-drift acknowledgment,
+# NOT a new silicon capture; no capture or ack date moves.
 drift_ack: 2026-11-09
 # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
 # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap
