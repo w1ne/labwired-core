@@ -374,6 +374,10 @@
 //! (degrees) before or after its DC or transient part; `V1 in 0 AC 1` alone
 //! is a 0 V source. Both feed [`crate::analog::Solver::ac_analysis`] and do
 //! not change the DC or transient run.
+//! `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` is kept
+//! as [`Circuit::dc_sweep`] and run by [`crate::analog::Solver::dc_analysis`];
+//! `<src>` must be a `V` or `I` element, and the second source is the outer
+//! loop.
 //! `+` continuation lines and `.subckt`…`.ends` blocks are rewritten before
 //! any of this, as described at the top.
 //!
@@ -944,6 +948,42 @@ impl AcSweep {
             .take_while(|f| *f <= limit)
             .collect()
     }
+}
+
+/// One source of a `.dc` sweep: `<src> <start> <stop> <incr>`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DcSweepSource {
+    /// Name of the swept `V` or `I` element, as written.
+    pub source: String,
+    /// First value, volts or amps.
+    pub start: f64,
+    /// Last value, volts or amps.
+    pub stop: f64,
+    /// Increment; its sign matches `stop - start`.
+    pub step: f64,
+}
+
+impl DcSweepSource {
+    /// The swept values: `start + k·step` up to and including `stop`, as
+    /// ngspice steps them. The tolerance keeps an end point that rounding
+    /// puts a hair past `stop`, e.g. 0 to 1 V by 0.1 V.
+    pub fn values(&self) -> Vec<f64> {
+        let limit = 1e-9 * self.step.abs();
+        (0..)
+            .map(|k| self.start + self.step * k as f64)
+            .take_while(|value| self.step.signum() * (value - self.stop) <= limit)
+            .collect()
+    }
+}
+
+/// `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]`. The
+/// second source, when given, is the outer loop, as in ngspice.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DcSweep {
+    /// Inner (fast) sweep.
+    pub inner: DcSweepSource,
+    /// Outer (slow) sweep.
+    pub outer: Option<DcSweepSource>,
 }
 
 /// `V<name> n+ n- <source>`.
@@ -3357,6 +3397,9 @@ pub struct Circuit {
     /// The deck's `.ac` sweep, if it has one; see
     /// [`crate::analog::Solver::ac_analysis`].
     pub ac_sweep: Option<AcSweep>,
+    /// The deck's `.dc` sweep, if it has one; see
+    /// [`crate::analog::Solver::dc_analysis`].
+    pub dc_sweep: Option<DcSweep>,
 }
 
 impl Circuit {
@@ -5051,6 +5094,12 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                         return Err(ctx.parse_err("only one `.ac` sweep is supported"));
                     }
                     circuit.ac_sweep = Some(parse_ac_sweep(&ctx, &tokens[1..])?);
+                }
+                "dc" => {
+                    if circuit.dc_sweep.is_some() {
+                        return Err(ctx.parse_err("only one `.dc` sweep is supported"));
+                    }
+                    circuit.dc_sweep = Some(parse_dc_sweep(&ctx, &tokens[1..])?);
                 }
                 "model" => parse_model(
                     &mut models,
@@ -7601,6 +7650,60 @@ fn parse_ac_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<AcSweep, AnalogE
         start_hz,
         stop_hz,
     })
+}
+
+/// Parse `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]`.
+/// Only `V` and `I` sources may be swept; that the names exist is checked
+/// when the sweep runs, because a deck may declare the source after the card.
+fn parse_dc_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<DcSweep, AnalogError> {
+    const SHAPE: &str =
+        "expected `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]`";
+    if tokens.len() != 4 && tokens.len() != 8 {
+        return Err(ctx.parse_err(SHAPE));
+    }
+    let source = |chunk: &[&str]| -> Result<DcSweepSource, AnalogError> {
+        let name = chunk[0];
+        if !(name.len() >= 2 && matches!(name.as_bytes()[0].to_ascii_uppercase(), b'V' | b'I')) {
+            return Err(ctx.parse_err(format!(
+                "`.dc` sweeps a `V` or `I` source; `{name}` is not one"
+            )));
+        }
+        let start = ctx.value(chunk[1], "DC sweep start")?;
+        let stop = ctx.value(chunk[2], "DC sweep stop")?;
+        let step = ctx.value(chunk[3], "DC sweep increment")?;
+        if !(start.is_finite() && stop.is_finite() && step.is_finite()) {
+            return Err(ctx.parse_err("`.dc` start, stop and increment must be finite"));
+        }
+        if step == 0.0 || (stop - start) * step < 0.0 {
+            return Err(ctx.parse_err(format!(
+                "`.dc` increment of `{name}` must be non-zero and step from start toward stop"
+            )));
+        }
+        let sweep = DcSweepSource {
+            source: name.to_string(),
+            start,
+            stop,
+            step,
+        };
+        if (stop - start) / step > 100_000.0 {
+            return Err(ctx.parse_err("`.dc` sweep has more than 100001 points"));
+        }
+        Ok(sweep)
+    };
+    let inner = source(&tokens[..4])?;
+    let outer = match tokens.len() {
+        8 => Some(source(&tokens[4..])?),
+        _ => None,
+    };
+    if let Some(outer) = &outer {
+        if outer.source.eq_ignore_ascii_case(&inner.source) {
+            return Err(ctx.parse_err("`.dc` cannot sweep the same source twice"));
+        }
+        if inner.values().len() * outer.values().len() > 1_000_000 {
+            return Err(ctx.parse_err("`.dc` sweep has more than 1000000 points"));
+        }
+    }
+    Ok(DcSweep { inner, outer })
 }
 
 /// Parse the value part of a `V`/`I` line: `[dc] <value>`, `SIN(...)`,

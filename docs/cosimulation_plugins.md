@@ -491,6 +491,19 @@ closed forms. Transmission lines, BJT
 refused by name. The co-simulation run ignores the `AC` values. The closed-form
 proofs are in `crates/core/tests/analog_ac.rs`.
 
+### DC transfer sweep (`.dc`)
+
+`.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` feeds
+`Solver::dc_sweep` / `Solver::dc_analysis`. `<src>` must be a `V` or `I`
+element. The second source is the outer loop, as in ngspice. Values are
+`start + k·incr` up to and including `stop`; `incr` may be negative. Each
+point is a full operating-point solve that starts Newton from the point
+before. Capacitors are open and inductors are shorts. `.tran ... uic` does not
+apply. The sweep runs on a copy of the solver, so the transient state does not
+change. The tests check a divider, the diode law under a descending current
+sweep, and BJT output curves (Early slope) against closed forms and against
+ngspice-42. The proofs are in `crates/core/tests/analog_dc.rs`.
+
 ### Independent sources
 
 `<source>` is one of:

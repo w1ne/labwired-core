@@ -73,7 +73,7 @@
 use super::behavioural::Control as BehaviouralControl;
 use super::device;
 use super::netlist::{
-    AnalogError, BjtModel, Circuit, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
+    AnalogError, BjtModel, Circuit, DcSweep, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
     SwitchSense, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
 };
 
@@ -145,6 +145,58 @@ impl AcResponse {
     /// Branch current phasor `index` at frequency index `point`, in the order
     /// [`Solver::branch_current`] uses.
     pub fn branch_current(&self, point: usize, index: usize) -> Phasor {
+        self.values[point * self.dim + self.nodes + index]
+    }
+}
+
+/// The result of [`Solver::dc_analysis`]: the full solution at every point
+/// of a `.dc` sweep. Points run inner-fastest: point `k` has inner index
+/// `k % inner_len()` and outer index `k / inner_len()`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DcResponse {
+    inner: Vec<f64>,
+    outer: Option<Vec<f64>>,
+    nodes: usize,
+    dim: usize,
+    values: Vec<f64>,
+}
+
+impl DcResponse {
+    /// Number of solved points.
+    pub fn len(&self) -> usize {
+        self.values.len() / self.dim.max(1)
+    }
+
+    /// True when the sweep has no points.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Number of inner sweep values.
+    pub fn inner_len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Inner swept source value at `point`, volts or amps.
+    pub fn inner_value(&self, point: usize) -> f64 {
+        self.inner[point % self.inner.len()]
+    }
+
+    /// Outer swept source value at `point`, if the sweep has an outer source.
+    pub fn outer_value(&self, point: usize) -> Option<f64> {
+        self.outer
+            .as_ref()
+            .map(|outer| outer[point / self.inner.len()])
+    }
+
+    /// Node voltage at `point`; ground is zero.
+    pub fn node_voltage(&self, point: usize, node: NodeRef) -> f64 {
+        node.map_or(0.0, |node| self.values[point * self.dim + node])
+    }
+
+    /// Branch current `index` at `point`, in the order
+    /// [`Solver::branch_current`] uses.
+    pub fn branch_current(&self, point: usize, index: usize) -> f64 {
         self.values[point * self.dim + self.nodes + index]
     }
 }
@@ -2008,6 +2060,78 @@ impl Solver {
     /// True when the circuit needs Newton iteration.
     pub fn is_nonlinear(&self) -> bool {
         self.nonlinear
+    }
+
+    /// Run the netlist's own `.dc` sweep; see [`Solver::dc_analysis`].
+    pub fn dc_sweep(&self) -> Result<DcResponse, AnalogError> {
+        let sweep = self.circuit.dc_sweep.as_ref().ok_or_else(|| {
+            AnalogError::Config(
+                "netlist has no `.dc <src> <start> <stop> <incr>` sweep".to_string(),
+            )
+        })?;
+        self.dc_analysis(sweep)
+    }
+
+    /// DC transfer curve: the operating point at every value of `sweep`, as
+    /// ngspice's `.dc` computes it. Each point starts Newton from the one
+    /// before, so a sweep through a diode knee converges like a source ramp.
+    /// Every other source keeps its present value; `.tran ... uic` does not
+    /// apply, because a DC sweep has no initial transient.
+    ///
+    /// The sweep runs on a copy of the solver: `self` and its transient state
+    /// are not touched.
+    pub fn dc_analysis(&self, sweep: &DcSweep) -> Result<DcResponse, AnalogError> {
+        #[derive(Clone, Copy)]
+        enum Swept {
+            Voltage(usize),
+            Current(usize),
+        }
+        let resolve = |name: &str| {
+            self.voltage_source_index(name)
+                .map(Swept::Voltage)
+                .or_else(|| self.current_source_index(name).map(Swept::Current))
+                .ok_or_else(|| {
+                    AnalogError::Config(format!(
+                        "`.dc` sweeps `{name}`, but the netlist has no such `V` or `I` source"
+                    ))
+                })
+        };
+        let inner_source = resolve(&sweep.inner.source)?;
+        let outer_source = sweep
+            .outer
+            .as_ref()
+            .map(|outer| resolve(&outer.source))
+            .transpose()?;
+        let inner = sweep.inner.values();
+        let outer = sweep.outer.as_ref().map(|outer| outer.values());
+
+        let mut work = self.clone();
+        work.circuit.uic = false;
+        let set = |work: &mut Self, swept: Swept, value: f64| match swept {
+            Swept::Voltage(index) => work.set_voltage_source(index, value),
+            Swept::Current(index) => work.set_current_source(index, value),
+        };
+        let dim = self.dim();
+        let outer_values = outer.clone().unwrap_or_else(|| vec![0.0]);
+        let mut values = Vec::with_capacity(inner.len() * outer_values.len() * dim);
+        for &outer_value in &outer_values {
+            if let Some(swept) = outer_source {
+                set(&mut work, swept, outer_value);
+            }
+            for &inner_value in &inner {
+                set(&mut work, inner_source, inner_value);
+                work.solve_operating_point()?;
+                values.extend_from_slice(&work.node_v);
+                values.extend_from_slice(&work.branch_i);
+            }
+        }
+        Ok(DcResponse {
+            inner,
+            outer,
+            nodes: self.nodes,
+            dim,
+            values,
+        })
     }
 
     /// Run the netlist's own `.ac` sweep; see [`Solver::ac_analysis`].
