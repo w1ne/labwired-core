@@ -1421,9 +1421,10 @@ pub fn try_build(
                     Some("stm32wba") => Some("stm32wba"),
                     Some("stm32u5") => Some("stm32u5"),
                     Some("stm32h5") => Some("stm32h5"),
+                    Some("stm32h7") => Some("stm32h7"),
                     Some(other) => {
                         return Err(anyhow::anyhow!(
-                            "timer '{}': unknown pad_map '{other}' (supported: at32f421, stm32g0, stm32c0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5)",
+                            "timer '{}': unknown pad_map '{other}' (supported: at32f421, stm32g0, stm32c0, stm32g4, stm32l0, stm32l4, stm32wb, stm32wba, stm32u5, stm32h5, stm32h7)",
                             p_cfg.id
                         ))
                     }
@@ -1878,7 +1879,18 @@ pub fn try_build(
                 .unwrap_or(32);
             Box::new(crate::peripherals::crc::Crc::new().with_idr_width(idr_width))
         }
-        "crs" => Box::new(crate::peripherals::crs::Crs::new()),
+        "crs" => match p_cfg.config.get("trim_bits").and_then(|v| v.as_u64()) {
+            Some(bits) if (6..=7).contains(&bits) => {
+                Box::new(crate::peripherals::crs::Crs::with_trim_bits(bits as u32))
+            }
+            Some(bits) => {
+                return Err(anyhow::anyhow!(
+                    "crs `{}`: trim_bits must be 6 or 7, got {bits}",
+                    p_cfg.id
+                ))
+            }
+            None => Box::new(crate::peripherals::crs::Crs::new()),
+        },
         "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
         "rtc_f1" => {
             let rtc = crate::peripherals::rtc_f1::RtcF1::new();

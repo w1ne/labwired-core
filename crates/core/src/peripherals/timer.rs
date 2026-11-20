@@ -208,7 +208,7 @@ pub struct Timer {
     /// The V2 alternate-function table the bus routes this timer's channel
     /// OUTPUTS through, when it is not the F4 one (chip yaml `config: {
     /// pad_map: stm32g0 | stm32g4 | stm32l0 | stm32l4 | stm32wb | stm32wba |
-    /// stm32u5 | stm32h5 }`). Reported as
+    /// stm32u5 | stm32h5 | stm32h7 }`). Reported as
     /// [`crate::Peripheral::timer_output_family`].
     #[serde(skip)]
     pad_map: Option<&'static str>,
