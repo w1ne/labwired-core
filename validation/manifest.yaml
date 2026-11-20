@@ -10574,9 +10574,12 @@ boards:
     # tests/kernel/common (12 suites, 61 pass + 1 skip) and
     # tests/drivers/uart/uart_basic_api (7/7, interrupt-driven SCI6 on ICU
     # vectors 227/228/229) for ek_rx261 start at the fixed reset vector.
-    # PORT/MPC, DTC, BSC and the reset-status block are declared stubs; SCI
-    # ERI, user-mode privilege checks, the register banks and FPU exceptions
-    # are not modelled. SIM-DERIVED — no
+    # 2026-11-20: the S12AD 12-bit A/D converter runs on the unchanged
+    # `ra_adc12` model (the RX261 S12ADE layout matches the RA ADC12) with the
+    # 100-pin AN pad map as `analog_pins`; the scan-end interrupt is not
+    # delivered. PORT/MPC, DTC, BSC and the reset-status block are declared
+    # stubs; SCI ERI, user-mode privilege checks, the register banks and FPU
+    # exceptions are not modelled. SIM-DERIVED — no
     # RX261 bench part. See docs/boards/ek-rx261.md and
     # examples/ek-rx261/VALIDATION.md.
     doc: docs/boards/ek-rx261.md
@@ -10587,8 +10590,10 @@ boards:
       - "ek_rx261_zephyr (synchronization on the CMT0 tick, kernel/common 12 suites, uart_basic_api on the SCI6 RXI/TXI/TEI vectors)"
       - "rx_tests (25 tests: integer forms and flags, memex sizes, string ops, INT/RTE stack switch, ICU priority/IPL, accumulators, FPU, BFMOV, MOVLI/MOVCO, undefined-instruction trap, snapshot)"
       - "rx_cmt, rx_sysc unit tests (compare match, one live wake, OSCOVFSR, keyed MEMWAITR)"
+      - "cosim_ek_rx261_analog (S12AD converts the solved NTC divider on P40/AN000 and diode on P41/AN001; bare-metal firmware prints both codes in a Session)"
     models:
       - crates/core/src/cpu/rx.rs
+      - crates/core/src/peripherals/ra_adc12.rs
       - crates/core/src/peripherals/rx_cmt.rs
       - crates/core/src/peripherals/rx_sysc.rs
       - crates/core/src/peripherals/uart.rs

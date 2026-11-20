@@ -5,7 +5,7 @@ Sources used by this example (retrieved 2026-11-01):
 | Doc | Used for |
 | :--- | :--- |
 | RX Family RXv3 Instruction Set Architecture User's Manual: Software (R01US0316) | Instruction semantics and flags, PSW/USP/ISP/INTB/EXTB, exception and interrupt entry/return, accumulator and FPU behaviour |
-| RX261 Group User's Manual: Hardware (R01UH1045) | Memory map, ICU (IR/IER/IPR/SWINTR/FIR, vector table), CMT, SCI, clock generation (OSCOVFSR, OPCCR), FLASH MEMWAITR |
+| RX261 Group User's Manual: Hardware (R01UH1045) | Memory map, ICU (IR/IER/IPR/SWINTR/FIR, vector table), CMT, SCI, clock generation (OSCOVFSR, OPCCR), FLASH MEMWAITR; R01UH1045EJ0100 Rev.1.00 (retrieved 2026-11-20 from renesas.com) section 40 S12ADE (Table 40.1), Table 1.5 100-pin AN pad map, Table 14.3 S12ADI0 = vector 102 |
 | EK-RX261 v1 User's Manual | Board: R5F52618BGFP, SCI6 to the on-board debugger's virtual COM port |
 | Renesas RX Driver Package (hal_renesas a279c14e196c) `iodefine.h`, `mcu_clocks.c` | Register offsets (checked by compiling `offsetof` with the RX GCC), the start-up handshakes |
 | Zephyr v4.3.0 `dts/rx/renesas/rx261-common.dtsi`, `boards/renesas/ek_rx261`, `arch/rx` | Peripheral bases and vectors (SCI6 226-229, CMT0 28, CMT1 29), console on SCI6, CMT at 4 MHz, the low-vector IPR map, the context-switch path |

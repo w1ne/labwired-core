@@ -183,6 +183,14 @@ const DIGITAL_PORTS_NOT_MODELLED: &[(&str, &[&str], &str)] = &[
         "GPIOB..D are not declared",
     ),
     (
+        "r5f52618bgfp",
+        &[
+            "P40", "P41", "P42", "P43", "P44", "P45", "P46", "P47", "PE0", "PE1", "PE2", "PE3",
+            "PE4", "PE5", "PE6", "PE7", "PD0", "PD1", "PD2", "PD3", "PD4",
+        ],
+        "PORT0-J and MPC are a declared stub",
+    ),
+    (
         "pic16f1829",
         &[
             "RA0", "RA1", "RA2", "RA4", "RC0", "RC1", "RC2", "RC3", "RC6", "RC7", "RB4", "RB5",

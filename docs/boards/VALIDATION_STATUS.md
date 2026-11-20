@@ -66,7 +66,7 @@ The models column is a content digest over everything that board's `models` list
 | `vegaboard-ri5cy` | 🟡 smoke-manual | — | `43c7f8696c49be6b` | no silicon capture |
 | `mpfs095t` | 🟡 smoke-manual | — | `1e0ca9c7d4e26be2` | no silicon capture |
 | `am6234` | 🟡 smoke-manual | — | `e0ac9c014e134157` | no silicon capture |
-| `r5f52618bgfp` | 🟡 smoke-manual | — | `1d7ab6f49254427f` | no silicon capture |
+| `r5f52618bgfp` | 🟡 smoke-manual | — | `6aed0360224fecbc` | no silicon capture |
 | `pic32mz2048efm144` | 🟡 smoke-manual | — | `c43bb120ee30bad1` | no silicon capture |
 
 ## `nrf52840` — 🟢 silicon-verified
@@ -578,6 +578,7 @@ The models column is a content digest over everything that board's `models` list
   - offline (CI): ek_rx261_zephyr (synchronization on the CMT0 tick, kernel/common 12 suites, uart_basic_api on the SCI6 RXI/TXI/TEI vectors)
   - offline (CI): rx_tests (25 tests: integer forms and flags, memex sizes, string ops, INT/RTE stack switch, ICU priority/IPL, accumulators, FPU, BFMOV, MOVLI/MOVCO, undefined-instruction trap, snapshot)
   - offline (CI): rx_cmt, rx_sysc unit tests (compare match, one live wake, OSCOVFSR, keyed MEMWAITR)
+  - offline (CI): cosim_ek_rx261_analog (S12AD converts the solved NTC divider on P40/AN000 and diode on P41/AN001; bare-metal firmware prints both codes in a Session)
 - Drift status: **no silicon capture**
 
 ## `pic32mz2048efm144` — 🟡 smoke-manual

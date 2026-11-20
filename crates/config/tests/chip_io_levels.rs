@@ -100,6 +100,7 @@ fn an_untranscribed_chip_declares_nothing() {
         "pic16f1829",
         "pic16f877a",
         "pic18f4520",
+        "r5f52618bgfp",
         "rv1103",
         "vegaboard-ri5cy",
         "xck26-rpu",

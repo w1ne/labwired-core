@@ -188,6 +188,10 @@ const PORTS_NOT_MODELLED: &[(&str, &str)] = &[
         "PORTA/PORTE are SFRs inside the PIC16 core, not bus port blocks",
     ),
     (
+        "r5f52618bgfp",
+        "PORT4/PORTD/PORTE are a declared stub (no RX PORT/MPC model)",
+    ),
+    (
         "pic16f1829",
         "PORTA..PORTC are SFRs inside the PIC16 core, not bus port blocks",
     ),
@@ -211,6 +215,7 @@ const SHARED_INPUTS: &[(&str, &[&str], &str)] = &[(
 /// The port ids a pad label may live on, and its bit. Labels are
 /// `P<port><bit>` (STM32, SAM, SAMD, CC2538: gpioa / gpio_a / porta / pioA),
 /// `PT<port><bit>` (Kinetis, S32K), `P<digit><bit2>` (Renesas RA),
+/// `P<digit><bit>` (Renesas RX),
 /// Nordic `P<port>.<bit>`, AVR `P<port><bit>` on `port<x>`, and Microchip
 /// `R<port><bit>`.
 fn pad_port_and_bit(pad: &str, nordic: bool, avr: bool, pic24: bool) -> Option<(Vec<String>, u8)> {
@@ -245,8 +250,9 @@ fn pad_port_and_bit(pad: &str, nordic: bool, avr: bool, pic24: bool) -> Option<(
     }
     let port = rest.chars().next()?;
     if port.is_ascii_digit() {
-        // Renesas RA: P<port digit><two-digit bit>.
-        return (rest.len() == 3 && digits(rest))
+        // Renesas RA: P<port digit><two-digit bit>; Renesas RX: P<port
+        // digit><bit digit> (P40 = PORT4 bit 0).
+        return ((rest.len() == 3 || rest.len() == 2) && digits(rest))
             .then(|| Some((vec![format!("port{port}")], rest[1..].parse().ok()?)))?;
     }
     if !port.is_ascii_alphabetic() || !digits(&rest[1..]) {

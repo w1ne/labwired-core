@@ -39,10 +39,32 @@ RX target is an RXv1 RX62N; Renode has no RX).
   edges into IRn; the hardware manual's per-source detection mode was not
   transcribed. No FIFO, multiprocessor, smart-card, simple I2C/SPI modes.
 - **Ports/MPC register behavior, BSC, DTC, the reset-status block**: not
-  modelled. The `port` window has two input-only `input_pin_bank` endpoints for
-  co-simulation; they do not implement RX registers or firmware-visible GPIO
-  reads, and their voltage thresholds are simulation assumptions. FLASH
+  modelled (declared stubs). The AN pads of `analog_pins` (P40-P47, PE0-PE7,
+  PD0-PD4; Table 1.5) are analog routes only, with no digital level. FLASH
   programming/erase is not modelled (only the control registers are stored).
 - **Clocks**: no rate is derived from SCKCR/PLL settings; `cpu_hz` is the
   64 MHz ICLK Zephyr's board configures and the CMT counts PCLKB = 32 MHz.
 - Timing: one instruction is one CPU clock.
+
+## S12AD (12-bit A/D converter)
+
+- **Modelled** (`ra_adc12`, unchanged; the RX261 S12ADE layout matches the
+  RA ADC12, offsets checked with `offsetof` against hal_renesas `iodefine.h`):
+  single and continuous scan of `ADANSA0/1` channels started by `ADCSR.ADST`,
+  `ADDRn` loads at scan end and `ADST` clears, `ADCER.ADRFMT` left
+  justification, value addition/averaging. Code = mV * 4095 / VREFH0.
+- **Evidence**: `cargo test -p labwired-core --test cosim_ek_rx261_analog`.
+  The register sweep converts the solved NTC divider at -10/25/50/80 °C and
+  the diode load line against independent references; AN016 (PE0) converts in
+  `ADDR16`. The `Session` tests run `firmware/ek-rx261-adc-ntc-diode.elf`: it
+  prints `N=000 D=000` with nothing routed, and the solved codes at 25 °C and
+  80 °C with the netlists routed.
+- **Not modelled**: the S12ADI0 scan-end interrupt (vector 102; the RX ICU
+  links no ELC events, so firmware polls `ADST`), group scan, hardware
+  triggers, double trigger, the temperature sensor and internal reference
+  channels, self-diagnosis, `ADCCR`/sampling-state timing (a nominal 1 us per
+  channel; the manual gives 0.7 us at ADCLK 64 MHz), MSTPA17 module stop
+  (the block converts while stopped), AN029-AN031 (`ra_adc12` holds
+  ADDR0-ADDR28).
+- **Assumed**: VREFH0 = AVCC0 = 3.3 V (EK-RX261 default supply; not checked
+  against the board schematic).

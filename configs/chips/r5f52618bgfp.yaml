@@ -31,11 +31,16 @@
 # core, so it is not listed below; a peripheral's `irq`/explicit IRQ is the
 # ICU vector number. The core starts at the fixed reset vector 0xFFFFFFFC.
 #
+# S12AD (12-bit A/D converter, S12ADE): R01UH1045EJ0100 section 40 and
+# Table 1.5 (100-pin LFQFP pin functions); iodefine.h `st_s12ad` at 0x00089000
+# (offsets checked with `offsetof` and the RX GCC). The register layout and the
+# ADCSR/ADCER bits match the RA ADC12, so the block runs on the existing
+# `ra_adc12` model, unchanged. See the `s12ad` entry and `analog_pins` below.
+#
 # NOT modelled in this slice:
-# - PORT/MPC register behavior (pin direction/output/input, PmnPFS). The
-#   `port` window exposes only two input_pin_bank co-simulation endpoints;
-#   they are not firmware GPIO access, and the EK-RX261 LEDs and switch remain
-#   unreachable. SCI6 needs no pad routing.
+# - PORT/MPC register behavior (pin direction/output/input, PmnPFS): a
+#   declared stub. The EK-RX261 LEDs and switch remain unreachable. SCI6 needs
+#   no pad routing, and the AN pads below are analog routes only.
 # - SCI6 ERI6 (receive errors) is never requested; RXI6/TXI6/TEI6 are, as
 #   ICU vectors (`rxi_vector`). Every request is an edge into IRn.
 # - DTC, BSC, the reset/LVD status block at 0x0008C280: declared stubs.
@@ -52,13 +57,6 @@ name: "r5f52618bgfp"
 arch: "rx"
 core: "rxv3"
 cpu_hz: 64_000_000
-# Simulation-only voltage thresholds for the input_pin_bank endpoints below.
-# They let analog co-simulation exercise thresholded digital inputs; they are
-# assumptions for the twin, not RX261 electrical specifications.
-io_voltage_v: 3.3
-gpio_input_thresholds:
-  vil: 0.35
-  vih: 0.65
 # RAM sits at 0x0; the RX has no Cortex-M style flash mirror there.
 flash_boot_alias: false
 flash:
@@ -126,17 +124,59 @@ peripherals:
       vectors: [30, 31]
       clock_hz: 64000000
       pclkb_hz: 32000000
-  # PORT0-J / MPC registers remain unmodelled. This input-only endpoint bank
-  # exposes two simulation channels for co-simulation; it does not claim RX
-  # register behavior or firmware-visible GPIO access.
+  # S12AD, the 12-bit A/D converter (S12ADE, one unit, R01UH1045EJ0100
+  # section 40). On `ra_adc12`: ADCSR +0x00 (ADST bit 15, ADCS bits 14:13),
+  # ADANSA0/1 +0x04/+0x06, ADADS0/1 +0x08/+0x0A, ADADC +0x0C, ADCER +0x0E
+  # (ADRFMT bit 15; the ADPRC bits are reserved 0 on the RX261, which the
+  # model reads as 12-bit), ADDR0-ADDR28 +0x20 (ADDRn holds ANn, channel 16 is
+  # AN016). The model converts a nominal 1 us per channel at `clock_hz`; the
+  # manual gives 0.7 us at ADCLK 64 MHz (Table 40.1). `elc_event` is the
+  # S12ADI0 vector, 102 (Table 14.3): the RX ICU links no events, so the
+  # scan-end interrupt is NOT delivered and firmware polls ADCSR.ADST.
+  # VREFH0 = AVCC0 = 3.3 V is an ASSUMPTION for the EK-RX261 default supply.
+  - id: "s12ad"
+    type: "ra_adc12"
+    base_address: 0x00089000
+    size: "512B"
+    config:
+      elc_event: 102
+      clock_hz: 64000000
+      vref_mv: 3300
+  # PORT0-J (0x0008C000) and MPC (0x0008C11F, PmnPFS from 0x0008C140):
+  # storage-free stub, no pin behavior.
   - id: "port"
-    type: "input_pin_bank"
+    type: "stub"
     base_address: 0x0008C000
     size: "640B"
-    config:
-      pin_count: 2
   # Reset status (RSTSR0/2), LVD, FWEPROR (part of the SYSTEM struct).
   - id: "system_rst"
     type: "stub"
     base_address: 0x0008C280
     size: "128B"
+
+# AN pads of the 100-pin LFQFP (R01UH1045EJ0100 Table 1.5): AN000-AN007 on
+# P40-P47 (AVCC0 I/O supply), AN016-AN023 on PE0-PE7, AN024-AN026 on PD0-PD2,
+# AN027-AN028 on PD3-PD4. AN029-AN031 (PD5-PD7) are left out: `ra_adc12`
+# holds ADDR0-ADDR28 only. AN008 has no pin on this product (TSCAP).
+analog_pins:
+  P40: { peripheral: s12ad, channel: 0 }    # AN000, pin 95
+  P41: { peripheral: s12ad, channel: 1 }    # AN001, pin 93
+  P42: { peripheral: s12ad, channel: 2 }    # AN002, pin 92
+  P43: { peripheral: s12ad, channel: 3 }    # AN003, pin 91
+  P44: { peripheral: s12ad, channel: 4 }    # AN004, pin 90
+  P45: { peripheral: s12ad, channel: 5 }    # AN005, pin 89
+  P46: { peripheral: s12ad, channel: 6 }    # AN006, pin 88
+  P47: { peripheral: s12ad, channel: 7 }    # AN007, pin 87
+  PE0: { peripheral: s12ad, channel: 16 }   # AN016, pin 78
+  PE1: { peripheral: s12ad, channel: 17 }   # AN017, pin 77
+  PE2: { peripheral: s12ad, channel: 18 }   # AN018, pin 76
+  PE3: { peripheral: s12ad, channel: 19 }   # AN019, pin 75
+  PE4: { peripheral: s12ad, channel: 20 }   # AN020, pin 74
+  PE5: { peripheral: s12ad, channel: 21 }   # AN021, pin 73
+  PE6: { peripheral: s12ad, channel: 22 }   # AN022, pin 72
+  PE7: { peripheral: s12ad, channel: 23 }   # AN023, pin 71
+  PD0: { peripheral: s12ad, channel: 24 }   # AN024, pin 86
+  PD1: { peripheral: s12ad, channel: 25 }   # AN025, pin 85
+  PD2: { peripheral: s12ad, channel: 26 }   # AN026, pin 84
+  PD3: { peripheral: s12ad, channel: 27 }   # AN027, pin 83
+  PD4: { peripheral: s12ad, channel: 28 }   # AN028, pin 82

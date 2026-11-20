@@ -39,6 +39,8 @@ const NOT_TRANSCRIBED: &[&str] = &[
     "pic16f877a",
     // Same on the PIC18 core.
     "pic18f4520",
+    // RX261 PORT/MPC is a declared stub; the AN pads are analog routes.
+    "r5f52618bgfp",
     // Declared-only descriptor (CPU and memory): no GPIO block and no levels.
     "rv1103",
     "s32k388",

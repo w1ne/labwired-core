@@ -28,11 +28,15 @@ examples/ek-rx261/ci/test.sh
 Rebuild the fixtures (byte-identical): `crates/firmware-ek-rx261-zephyr/build.sh`.
 
 The generic NTC and diode co-simulation proof is
-`cargo test -p labwired-core --test cosim_ek_rx261_analog`. It drives two
-input-only simulator endpoints on the `port` window and asserts their solved
-voltages, thresholded levels, and hysteresis. It does not model RX GPIO
-registers or firmware-visible pin reads.
+`cargo test -p labwired-core --test cosim_ek_rx261_analog`. The example
+`analog-ntc-diode-system.yaml` puts a Beta NTC divider on P40/AN000 and a
+Shockley diode on P41/AN001. The S12AD (12-bit A/D converter, on the
+`ra_adc12` model) converts both. The bare-metal firmware
+`firmware/adc-ntc-diode.c` (rebuild: `firmware/build.sh`, Zephyr SDK RX GCC)
+starts a single scan, polls `ADCSR.ADST` and prints `N=7FF D=...` at 25 °C on
+SCI6. The test runs that firmware in a `Session` that solves the netlists. The
+S12ADI0 interrupt is not delivered, and VREFH0 = 3.3 V is an assumption.
 
-Not modelled yet: PORT/MPC register behavior (so no firmware-accessible LEDs or switches), SCI6
+Not modelled yet: PORT/MPC register behavior (so no firmware-accessible LEDs or switches; the AN pads are analog routes only), the S12AD scan-end interrupt, SCI6
 ERI (receive-error interrupt), DTC, group interrupts, IRQ pins, the
 RXv3 register banks and user-mode privilege checks. See `VALIDATION.md`.

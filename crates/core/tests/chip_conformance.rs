@@ -175,7 +175,8 @@ const CHIPS: &[ChipConf] = &[
         // Renesas R5F52618BGFP (RX261, EK-RX261), first RX part: the RXv3
         // core with the ICU in the core. SIM-DERIVED: no RX261 bench part.
         // Modelled: SCI6 (classic SCI, polled), CMT0-3, the SYSTEM clock
-        // handshakes and FLASH MEMWAITR. PORT/MPC, BSC, DTC and the reset
+        // handshakes, FLASH MEMWAITR and S12AD (on `ra_adc12`, polled scan
+        // end). PORT/MPC, BSC, DTC and the reset
         // status block are declared stubs — see examples/ek-rx261/VALIDATION.md.
         name: "r5f52618bgfp",
         yaml: "configs/chips/r5f52618bgfp.yaml",
