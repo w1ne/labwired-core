@@ -553,6 +553,95 @@ pub fn check_twim0_tmp102(l: &mut Line) -> bool {
     pass
 }
 
+pub const PWM0: u32 = 0x4001_C000;
+pub const PWM_TASKS_STOP: u32 = PWM0 + 0x004;
+pub const PWM_TASKS_SEQSTART0: u32 = PWM0 + 0x008;
+pub const PWM_EVENTS_STOPPED: u32 = PWM0 + 0x104;
+pub const PWM_EVENTS_SEQEND0: u32 = PWM0 + 0x110;
+pub const PWM_ENABLE: u32 = PWM0 + 0x500;
+pub const PWM_MODE: u32 = PWM0 + 0x504;
+pub const PWM_COUNTERTOP: u32 = PWM0 + 0x508;
+pub const PWM_PRESCALER: u32 = PWM0 + 0x50C;
+pub const PWM_DECODER: u32 = PWM0 + 0x510;
+pub const PWM_LOOP: u32 = PWM0 + 0x514;
+pub const PWM_SEQ0_PTR: u32 = PWM0 + 0x520;
+pub const PWM_SEQ0_CNT: u32 = PWM0 + 0x524;
+pub const PWM_SEQ0_REFRESH: u32 = PWM0 + 0x528;
+pub const PWM_SEQ0_ENDDELAY: u32 = PWM0 + 0x52C;
+pub const PWM_PSEL_OUT0: u32 = PWM0 + 0x560;
+/// Free on the bare chip row: no other block drives P0.15.
+pub const PWM_PIN: u32 = 15;
+const PWM_SAMPLES: u32 = 8000;
+
+#[repr(C, align(4))]
+struct PwmSeq([u16; 2]);
+static mut PWM_SEQ: PwmSeq = PwmSeq([0; 2]);
+
+/// PWM0 (PS v1.7 §6.17) on P0.15: MODE Up, PWM_CLK 16 MHz, COUNTERTOP 400
+/// (25 us period), one Common step 0x8000 | 100 read through EasyDMA.
+/// POLARITY bit 15 set starts each period high and falls at COMP, so the pad
+/// is high 100/400 = 25% of the time. GPIO IN samples the pad 8000 times
+/// (many periods); the duty must be 20..30% with at least 10 rising edges.
+/// After TASKS_STOP the pad falls back to the GPIO OUT latch (0).
+/// Returns (pass, high samples, rising edges).
+pub fn check_pwm0_duty(l: &mut Line) -> (bool, u32, u32) {
+    let bit = 1 << PWM_PIN;
+    wr(GPIO_OUTCLR, bit);
+    wr(GPIO_PIN_CNF + PWM_PIN * 4, 1);
+    let seq = core::ptr::addr_of_mut!(PWM_SEQ) as *mut u16;
+    unsafe { write_volatile(seq, 0x8000 | 100) };
+    wr(PWM_PSEL_OUT0, PWM_PIN);
+    wr(PWM_ENABLE, 1);
+    wr(PWM_MODE, 0);
+    wr(PWM_PRESCALER, 0);
+    wr(PWM_COUNTERTOP, 400);
+    wr(PWM_DECODER, 0);
+    wr(PWM_LOOP, 0);
+    wr(PWM_SEQ0_PTR, seq as u32);
+    wr(PWM_SEQ0_CNT, 1);
+    wr(PWM_SEQ0_REFRESH, 0);
+    wr(PWM_SEQ0_ENDDELAY, 0);
+    wr(PWM_EVENTS_SEQEND0, 0);
+    wr(PWM_EVENTS_STOPPED, 0);
+    wr(PWM_TASKS_SEQSTART0, 1);
+    let seqend = wait_set(PWM_EVENTS_SEQEND0);
+
+    let mut high = 0u32;
+    let mut rises = 0u32;
+    let mut last = rd(GPIO_IN) & bit;
+    // Branch-free, so every sample costs the same cycles and the sample
+    // count is proportional to time: a longer "high" path under-counts high.
+    for _ in 0..PWM_SAMPLES {
+        let v = rd(GPIO_IN) & bit;
+        high += v >> PWM_PIN;
+        rises += (v & !last) >> PWM_PIN;
+        last = v;
+    }
+
+    wr(PWM_TASKS_STOP, 1);
+    let stopped = wait_set(PWM_EVENTS_STOPPED);
+    settle();
+    let idle = rd(GPIO_IN) & bit;
+    wr(PWM_ENABLE, 0);
+    wr(PWM_PSEL_OUT0, 0xFFFF_FFFF);
+
+    let duty_ok = high * 10 >= PWM_SAMPLES * 2 && high * 10 <= PWM_SAMPLES * 3;
+    let pass = seqend && duty_ok && rises >= 10 && stopped && idle == 0;
+    l.s(b"pwm0 p0.15 seqend=")
+        .hex(seqend as u32, 1)
+        .s(b" duty=")
+        .hex(duty_ok as u32, 1)
+        .s(b" rises=")
+        .hex((rises >= 10) as u32, 1)
+        .s(b" stop=")
+        .hex(stopped as u32, 1)
+        .s(b" idle=")
+        .hex(idle, 1)
+        .ok(pass)
+        .send();
+    (pass, high, rises)
+}
+
 /// Convert the held 1.65 V input on AIN3 into one 12-bit EasyDMA sample.
 /// CONFIG=0 selects single-ended, gain 1/6 and the 600 mV internal reference:
 /// floor(1650 mV * (1/6) * 4096 / 600 mV) = 1877 (0x755).

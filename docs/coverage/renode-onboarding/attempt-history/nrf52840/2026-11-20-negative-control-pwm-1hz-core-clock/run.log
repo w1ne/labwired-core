@@ -1,0 +1,9 @@
+[2m2026-11-20T03:14:05.845063Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: <repo>/configs/chips/onboarding/nrf52840.yaml
+[2m2026-11-20T03:14:05.941673Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+[2m2026-11-20T03:14:05.945223Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 50 applied
+[2m2026-11-20T03:14:06.464619Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["NRF52840 RENODE SMOKE", "ficr part=52840 nvmc ready=1 ok", "clock hfstat=00010001 lfstat=00010001 ok", "gpio p0.13 in=00002000/00000000 ok", "gpiote out0 p0.14 in=10 out=0 ok", "timer0 cmp=1 cap>=50 1 clear=00000000 ok", "rtc0 cmp=1 counter>=4 1 ok", "rng valrdy=11 bytes<=ff ok", "ppi egu0->egu1 off=0 on=1 ok", "systick-pendsv frame=1 r0=1 pending=1 priority=1 ok", "saadc ain3=00000755 amount=1 end=1 ok", "temp datardy=1 raw=00000064 ok", "ecb fips197 ct=69c4e0d8..70b4c55a end=1 ok", "twim0 tmp102 cfg=fff0 temp=1900 anack=1 w1c=1 ok", "pwm0 p0.15 seqend=1 duty=1 rises=1 stop=1 idle=0 ok", "NRF52840 PASS"] }) (captured len=620)
+[2m2026-11-20T03:14:06.464661Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x2003ff00 (size 4): expected 0x52843fff, got 0x52841fff (mask 0xffffffff)
+[2m2026-11-20T03:14:06.464665Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537132800, expected_value: 1384398847, mask: None, size: Some(4), node: None } }) (captured len=620)
+FAIL  2/4 checks · smoke · 4000000 steps · 0.52s
