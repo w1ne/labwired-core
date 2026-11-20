@@ -2659,3 +2659,65 @@ fn flex_browser_script_receipt_covers_every_script_and_matches_the_shared_runner
         "the receipt must include the endless-`main` scripts"
     );
 }
+
+/// The MAX31855 fixture is a third board of the same pinned repository, and
+/// the first on a Flex SPI bus: U4 on the SPI nets of the pinned PCB, its
+/// chip select the GPIO of the SPI_CS net.
+#[test]
+fn flex_heypcb_max31855_bus_matches_the_pinned_source_nets() {
+    const SOURCE_MAP: &str =
+        include_str!("../tests/fixtures/flex-heypcb-esp32-max31855/source-map.json");
+    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-max31855/system.yaml");
+
+    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
+    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+    for key in ["repository", "revision", "license_spdx"] {
+        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
+    }
+    assert_eq!(
+        source_map["source"]["files"]["license"],
+        sibling["source"]["files"]["license"]
+    );
+    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
+        let entry = &source_map["source"]["files"][file];
+        assert!(entry["path"]
+            .as_str()
+            .unwrap()
+            .starts_with("boards/max31855/"));
+        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
+    }
+
+    let u4 = &source_map["sensor_bus"]["elements"][0];
+    assert_eq!(u4["source_ref"], "U4");
+    assert_eq!(u4["source_part"], "MAX31855KASA+T");
+    assert_eq!(u4["pads"]["5"], "SPI_SCK");
+    assert_eq!(u4["pads"]["6"], "SPI_CS");
+    assert_eq!(u4["pads"]["7"], "SPI_MISO");
+    assert_eq!(
+        source_map["sensor_bus"]["controller"]["endpoints"]["SPI_CS"],
+        "U3 pad 18 (IO10)"
+    );
+
+    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
+    let bus = &yaml["spi_buses"][0];
+    let binding = &source_map["runtime_bindings"];
+    assert_eq!(bus["name"], binding["bus"]["name"].as_str().unwrap());
+    let device = &bus["devices"][0];
+    assert_eq!(device["id"], binding["device"]["id"].as_str().unwrap());
+    assert_eq!(device["type"], "max31855");
+    assert_eq!(device["cs"], 10);
+
+    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
+    let report = runtime.run_report();
+    assert!(report.scope_notes_complete);
+    assert!(!report.execution_scope.original_target_firmware_executed);
+    assert_eq!(report.execution_scope.chip_parity, "not_established");
+    assert_eq!(report.spi_buses[0].devices[0].cs, 10);
+    for port in binding["ports"].as_object().unwrap().keys() {
+        runtime.port_id(port).unwrap();
+    }
+    assert_eq!(
+        report.ports.len(),
+        binding["ports"].as_object().unwrap().len()
+    );
+}

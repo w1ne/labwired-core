@@ -13,6 +13,7 @@
 use crate::cosim::{CosimSignalValue, CosimSignals};
 use crate::peripherals::components::build_i2c_device;
 use crate::peripherals::device::I2cDevice;
+use crate::sim_input::SimInput;
 use crate::{SimResult, SimulationError};
 use labwired_config::FlexI2cBus;
 use serde::Serialize;
@@ -57,8 +58,9 @@ pub struct FlexI2cTraceBatch {
     pub dropped: u64,
 }
 
+/// A device input channel and the signal that drives it.
 #[derive(Debug, Clone, Serialize)]
-pub struct FlexI2cInputSummary {
+pub struct FlexBusInputSummary {
     pub name: String,
     pub signal: String,
     pub unit: String,
@@ -70,7 +72,7 @@ pub struct FlexI2cDeviceSummary {
     pub model_type: String,
     pub address: u8,
     pub config: BTreeMap<String, serde_yaml::Value>,
-    pub inputs: Vec<FlexI2cInputSummary>,
+    pub inputs: Vec<FlexBusInputSummary>,
 }
 
 /// What a run report states about one bus, including what the path leaves out.
@@ -90,11 +92,93 @@ const NOT_MODELED: &[&str] = &[
     "other_controllers",
 ];
 
-struct InputBinding {
+pub(crate) struct InputBinding {
     channel: String,
     signal: String,
     /// The value the device model holds for this channel.
     applied: Option<f64>,
+}
+
+/// Bind each `channel -> signal` of a bus device to the model's input
+/// channels. `units` maps a signal to the unit its producer declares; a
+/// channel takes only a signal in its own unit.
+pub(crate) fn bind_inputs(
+    path: &str,
+    id: &str,
+    mut input: Option<&mut dyn SimInput>,
+    declared: &BTreeMap<String, String>,
+    units: &BTreeMap<String, String>,
+) -> SimResult<(Vec<InputBinding>, Vec<FlexBusInputSummary>)> {
+    if let Some(input) = input.as_deref_mut() {
+        input.set_component_id(id.to_owned());
+    }
+    let channels = input
+        .map(|input| input.input_channels().to_vec())
+        .unwrap_or_default();
+    let mut bindings = Vec::with_capacity(declared.len());
+    let mut summaries = Vec::with_capacity(declared.len());
+    for (channel, signal) in declared {
+        let Some(found) = channels.iter().find(|c| c.key == channel.as_str()) else {
+            return Err(error(format!(
+                "{path} has no input channel '{channel}'; its channels are [{}]",
+                channels
+                    .iter()
+                    .map(|c| c.key.as_ref())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )));
+        };
+        let produced = units.get(signal).map(String::as_str);
+        if produced != Some(found.unit.as_ref()) {
+            return Err(error(format!(
+                "{path} input '{channel}' takes unit {:?}, but '{signal}' produces {produced:?}; no implicit unit conversion",
+                found.unit
+            )));
+        }
+        bindings.push(InputBinding {
+            channel: channel.clone(),
+            signal: signal.clone(),
+            applied: None,
+        });
+        summaries.push(FlexBusInputSummary {
+            name: channel.clone(),
+            signal: signal.clone(),
+            unit: found.unit.to_string(),
+        });
+    }
+    Ok((bindings, summaries))
+}
+
+/// Hand every bound signal value that changed to a device model.
+pub(crate) fn apply_inputs(
+    path: &str,
+    mut input: Option<&mut dyn SimInput>,
+    bindings: &mut [InputBinding],
+    signals: &CosimSignals,
+) -> SimResult<()> {
+    for binding in bindings {
+        let value = match signals.get(&binding.signal) {
+            Some(CosimSignalValue::F64(value)) => *value,
+            Some(CosimSignalValue::I64(value)) => *value as f64,
+            _ => {
+                return Err(error(format!(
+                    "{path} input '{}': signal '{}' has no numeric value",
+                    binding.channel, binding.signal
+                )))
+            }
+        };
+        if binding.applied == Some(value) {
+            continue;
+        }
+        let Some(input) = input.as_deref_mut() else {
+            continue; // Bindings exist only for models with inputs.
+        };
+        input
+            .set_input(&binding.channel, value)
+            .map_err(|cause| error(format!("{path} input '{}': {cause}", binding.channel)))?;
+        binding.applied = Some(value);
+    }
+    Ok(())
 }
 
 struct Device {
@@ -169,44 +253,13 @@ impl I2cBuses {
                         other.id, config.name
                     )));
                 }
-                let mut inputs = Vec::with_capacity(device.inputs.len());
-                let mut input_summaries = Vec::with_capacity(device.inputs.len());
-                if let Some(input) = model.as_sim_input_mut() {
-                    input.set_component_id(device.id.clone());
-                }
-                for (channel, signal) in &device.inputs {
-                    let channels = model
-                        .as_sim_input_mut()
-                        .map(|input| input.input_channels().to_vec())
-                        .unwrap_or_default();
-                    let Some(declared) = channels.iter().find(|c| c.key == channel.as_str()) else {
-                        return Err(error(format!(
-                            "{path} has no input channel '{channel}'; its channels are [{}]",
-                            channels
-                                .iter()
-                                .map(|c| c.key.as_ref())
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )));
-                    };
-                    let produced = units.get(signal).map(String::as_str);
-                    if produced != Some(declared.unit.as_ref()) {
-                        return Err(error(format!(
-                            "{path} input '{channel}' takes unit {:?}, but '{signal}' produces {produced:?}; no implicit unit conversion",
-                            declared.unit
-                        )));
-                    }
-                    inputs.push(InputBinding {
-                        channel: channel.clone(),
-                        signal: signal.clone(),
-                        applied: None,
-                    });
-                    input_summaries.push(FlexI2cInputSummary {
-                        name: channel.clone(),
-                        signal: signal.clone(),
-                        unit: declared.unit.to_string(),
-                    });
-                }
+                let (inputs, input_summaries) = bind_inputs(
+                    &path,
+                    &device.id,
+                    model.as_sim_input_mut(),
+                    &device.inputs,
+                    units,
+                )?;
                 device_summaries.push(FlexI2cDeviceSummary {
                     id: device.id.clone(),
                     model_type: device.device_type.clone(),
@@ -257,31 +310,13 @@ impl I2cBuses {
     /// Hand every bound signal value that changed to its device model.
     pub(crate) fn sync_inputs(&mut self, signals: &CosimSignals) -> SimResult<()> {
         for device in self.buses.iter_mut().flat_map(|bus| &mut bus.devices) {
-            for binding in &mut device.inputs {
-                let value = match signals.get(&binding.signal) {
-                    Some(CosimSignalValue::F64(value)) => *value,
-                    Some(CosimSignalValue::I64(value)) => *value as f64,
-                    _ => {
-                        return Err(error(format!(
-                            "I2C device '{}' input '{}': signal '{}' has no numeric value",
-                            device.id, binding.channel, binding.signal
-                        )))
-                    }
-                };
-                if binding.applied == Some(value) {
-                    continue;
-                }
-                let Some(input) = device.model.as_sim_input_mut() else {
-                    continue; // Bindings exist only for models with inputs.
-                };
-                input.set_input(&binding.channel, value).map_err(|cause| {
-                    error(format!(
-                        "I2C device '{}' input '{}': {cause}",
-                        device.id, binding.channel
-                    ))
-                })?;
-                binding.applied = Some(value);
-            }
+            let path = format!("I2C device '{}'", device.id);
+            apply_inputs(
+                &path,
+                device.model.as_sim_input_mut(),
+                &mut device.inputs,
+                signals,
+            )?;
         }
         Ok(())
     }

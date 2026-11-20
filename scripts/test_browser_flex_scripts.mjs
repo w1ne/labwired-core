@@ -139,6 +139,7 @@ try {
             digital: plain(runtime.digital_trace_snapshot(0)),
             analog: plain(runtime.analog_trace_snapshot(0)),
             i2c: plain(runtime.i2c_trace_snapshot(0)),
+            spi: plain(runtime.spi_trace_snapshot(0)),
             // `null` or `undefined` for a manifest without a console.
             console: runtime.console_capture() == null ? undefined : plain(runtime.console_capture()),
           };
@@ -156,6 +157,10 @@ try {
     // The CLI writes the I2C record only for a manifest with a bus.
     if (ran.i2c.buses.length > 0 || nativeTrace.i2c !== undefined) {
       assert.deepEqual(canonical(ran.i2c), canonical(nativeTrace.i2c), `${fixture}/${name}: the browser I2C transfer record differs from labwired test`);
+    }
+    // The CLI writes the SPI record only for a manifest with a bus.
+    if (ran.spi.buses.length > 0 || nativeTrace.spi !== undefined) {
+      assert.deepEqual(canonical(ran.spi), canonical(nativeTrace.spi), `${fixture}/${name}: the browser SPI transfer record differs from labwired test`);
     }
     // The CLI writes the console record only for a manifest with a console.
     assert.deepEqual(canonical(ran.console), canonical(nativeTrace.console), `${fixture}/${name}: the browser console record differs from labwired test`);
@@ -177,6 +182,7 @@ try {
       digital_edges: ran.digital.edges.length,
       analog_samples: ran.analog.samples.length,
       i2c_transfers: ran.i2c.transfers.length,
+      spi_transfers: ran.spi.transfers.length,
       console_bytes: ran.console?.bytes ?? 0,
       // SHA-256 of the result text both hosts produced.
       result_sha256: sha256(ran.result),
@@ -192,7 +198,7 @@ try {
 
 console.log(JSON.stringify({
   status: 'passed',
-  checks: ['result-text-equality', 'logic-analyzer-capture-equality', 'oscilloscope-capture-equality', 'i2c-transfer-record-equality', 'console-record-equality', 'every-script-passes'],
+  checks: ['result-text-equality', 'logic-analyzer-capture-equality', 'oscilloscope-capture-equality', 'i2c-transfer-record-equality', 'spi-transfer-record-equality', 'console-record-equality', 'every-script-passes'],
   execution_path: 'flex_portable_wasm',
   cpu_emulation: false,
   firmware_interpreter: 'wasmi, in labwired-wasm and in the CLI',

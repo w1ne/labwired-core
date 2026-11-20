@@ -13,6 +13,7 @@ use crate::analog::{AnalogCrossing, AnalogSample, AnalogTraceBatch, AnalogWindow
 use crate::cosim::{CosimRunner, CosimSignalValue, CosimSignals};
 use crate::flex_console::{Console, FlexConsoleCapture, FlexConsoleSummary};
 use crate::flex_i2c::{FlexI2cBusSummary, FlexI2cTraceBatch, FlexI2cTransfer, I2cBuses};
+use crate::flex_spi::{FlexSpiBusSummary, FlexSpiTraceBatch, FlexSpiTransfer, SpiBuses};
 use crate::logic_capture::{LogicCapture, PadEvent};
 use crate::{SimResult, SimulationError};
 use labwired_config::{
@@ -138,6 +139,9 @@ pub struct FlexRunReport {
     /// The I2C buses and their catalog device models. Absent without a bus.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub i2c_buses: Vec<FlexI2cBusSummary>,
+    /// The SPI buses and their catalog device models. Absent without a bus.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub spi_buses: Vec<FlexSpiBusSummary>,
     /// The console and what it leaves out. Absent without a console.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub console: Option<FlexConsoleSummary>,
@@ -310,6 +314,7 @@ pub struct FlexRuntime {
     signals: CosimSignals,
     digital: DigitalCapture,
     i2c: I2cBuses,
+    spi: SpiBuses,
     console: Option<Console>,
     time_ns: u64,
     failure: Option<String>,
@@ -389,6 +394,8 @@ impl FlexRuntime {
         runner.validate_numeric_input_units(&signals, &units)?;
         let mut i2c = I2cBuses::new(&manifest.i2c_buses, &units)?;
         i2c.sync_inputs(&signals)?;
+        let mut spi = SpiBuses::new(&manifest.spi_buses, &units)?;
+        spi.sync_inputs(&signals)?;
         let digital = DigitalCapture::new(&signals, &manifest.ports)?;
         let console = manifest.console.as_ref().map(Console::new);
         let runtime = Self {
@@ -399,6 +406,7 @@ impl FlexRuntime {
             signals,
             digital,
             i2c,
+            spi,
             console,
             time_ns: 0,
             failure: None,
@@ -438,6 +446,7 @@ impl FlexRuntime {
             ports: manifest.ports.clone(),
             models: manifest.cosim_models.iter().map(model_summary).collect(),
             i2c_buses: self.i2c.summaries().to_vec(),
+            spi_buses: self.spi.summaries().to_vec(),
             console: self.console.as_ref().map(Console::summary),
         }
     }
@@ -503,7 +512,11 @@ impl FlexRuntime {
         self.digital.sample(self.time_ns, &self.signals);
         // A bus device takes its input at the write, so the next transfer
         // reads it. A value the device rejects stops the runtime.
-        if let Err(failure) = self.i2c.sync_inputs(&self.signals) {
+        if let Err(failure) = self
+            .i2c
+            .sync_inputs(&self.signals)
+            .and_then(|_| self.spi.sync_inputs(&self.signals))
+        {
             self.failure = Some(failure.to_string());
             return Err(failure);
         }
@@ -580,12 +593,14 @@ impl FlexRuntime {
                 digital.sample(time_ns, signals)
             })
             .and_then(|_| self.validate_observations())
-            .and_then(|_| self.i2c.sync_inputs(&self.signals));
+            .and_then(|_| self.i2c.sync_inputs(&self.signals))
+            .and_then(|_| self.spi.sync_inputs(&self.signals));
         if let Err(failure) = result {
             self.failure = Some(failure.to_string());
             return Err(failure);
         }
         self.i2c.advance_ns(delta_ns);
+        self.spi.advance_ns(delta_ns);
         self.time_ns = target;
         Ok(())
     }
@@ -625,6 +640,53 @@ impl FlexRuntime {
 
     pub fn i2c_trace_snapshot(&self, cursor: u64) -> FlexI2cTraceBatch {
         self.i2c.snapshot(cursor)
+    }
+
+    pub fn spi_bus_id(&self, name: &str) -> SimResult<u32> {
+        self.spi
+            .bus_id(name)
+            .ok_or_else(|| error(format!("unknown Flex SPI bus '{name}'")))
+    }
+
+    /// The id of a manifest bus of either kind, for a `{ bus: name }` entry
+    /// argument. Bus names are unique across both kinds.
+    pub fn bus_id(&self, name: &str) -> SimResult<u32> {
+        self.i2c
+            .bus_id(name)
+            .or_else(|_| self.spi_bus_id(name))
+            .map_err(|_| error(format!("unknown Flex bus '{name}'")))
+    }
+
+    /// One SPI transfer as the bus controller: select `cs`, shift out `mosi`
+    /// one byte at a time while the device shifts in the returned `miso`, and
+    /// release `cs`. A chip select with no device is `selected: false` and
+    /// returns no MISO bytes, not an error.
+    ///
+    /// Virtual time does not move here. The caller advances it by the
+    /// returned `duration_ns`, through its own time limits.
+    pub fn spi_transfer(
+        &mut self,
+        bus_id: u32,
+        cs: u32,
+        mosi: &[u8],
+    ) -> SimResult<FlexSpiTransfer> {
+        self.ensure_healthy()?;
+        self.spi.transfer(bus_id, self.time_ns, cs, mosi)
+    }
+
+    /// Exact number of transfers on a bus since the start, optionally of one
+    /// chip select and one outcome. `None`: no such bus.
+    pub fn spi_transfer_count(
+        &self,
+        bus_id: u32,
+        cs: Option<u32>,
+        selected: Option<bool>,
+    ) -> Option<u64> {
+        self.spi.transfer_count(bus_id, cs, selected)
+    }
+
+    pub fn spi_trace_snapshot(&self, cursor: u64) -> FlexSpiTraceBatch {
+        self.spi.snapshot(cursor)
     }
 
     /// Append firmware output to the manifest console at the current virtual

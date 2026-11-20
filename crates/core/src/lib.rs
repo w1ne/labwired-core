@@ -24,6 +24,7 @@ pub mod flex_console;
 pub mod flex_i2c;
 #[cfg(feature = "flex-script")]
 pub mod flex_script;
+pub mod flex_spi;
 pub mod hashers;
 pub mod host_time;
 pub mod inspect;

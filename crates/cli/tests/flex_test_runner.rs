@@ -595,7 +595,7 @@ fn script_value<'a>(text: &'a str, key: &str) -> &'a str {
 #[test]
 fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
     let fixtures = committed_scripts();
-    assert!(fixtures.len() >= 15, "Flex fixtures went missing");
+    assert!(fixtures.len() >= 16, "Flex fixtures went missing");
     let mut scripts_run = 0;
     for (fixture, scripts) in fixtures {
         // A positive case alone proves nothing about the model.
@@ -673,7 +673,7 @@ fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
             scripts_run += 1;
         }
     }
-    assert!(scripts_run >= 39, "only {scripts_run} Flex scripts ran");
+    assert!(scripts_run >= 42, "only {scripts_run} Flex scripts ran");
 }
 
 fn thermostat() -> PathBuf {
@@ -1588,7 +1588,8 @@ fn i2c_contract_mismatches_and_limits_are_explicit() {
         (
             "  - call: { export: setup, args: [{ bus: missing }, { port: user_led_drive }, { number: 0x76 }] }\n",
             "  - entry_result: { equals: 0 }\n",
-            "unknown Flex I2C bus 'missing'",
+            // A call argument names an I2C or an SPI bus.
+            "unknown Flex bus 'missing'",
         ),
         (
             "  - call: { SETUP }\n",

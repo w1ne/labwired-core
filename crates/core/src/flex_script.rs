@@ -7,8 +7,10 @@
 //! Runner for Flex test scripts, shared by `labwired test` and the browser
 //! binding so one script gives one result on both hosts.
 //!
-//! The firmware is a WebAssembly module whose `labwired.read/write/advance_ns`
-//! `labwired.i2c_transfer` and `labwired.console_write` imports call a [`FlexRuntime`]. A script runs one `entry` call or a
+//! The firmware is a WebAssembly module whose `labwired.read/write/advance_ns`,
+//! `labwired.i2c_transfer`, `labwired.spi_transfer` and
+//! `labwired.console_write` imports call a [`FlexRuntime`]. A script runs one
+//! `entry` call or a
 //! `sequence` of calls and test-bench stimuli on one firmware instance, so
 //! firmware state persists between steps. The module runs in `wasmi` on both
 //! hosts: its fuel is the step budget, and a resumable call is what lets an
@@ -135,6 +137,9 @@ pub struct FlexTraceSummary {
     /// Every `i2c_transfer` of the run. Absent when the manifest has no bus.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub i2c_transfers: Option<u64>,
+    /// Every `spi_transfer` of the run. Absent when the manifest has no bus.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spi_transfers: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -174,7 +179,8 @@ struct Host {
     suspended: bool,
     /// What the suspended host call still has to advance after `until_ns`.
     pending_ns: u64,
-    /// The i32 a suspended `i2c_transfer` returns when it resumes.
+    /// The i32 a suspended `i2c_transfer` or `spi_transfer` returns when it
+    /// resumes.
     resume_result: Option<i32>,
     limits: StoreLimits,
 }
@@ -280,6 +286,57 @@ fn i2c_transfer(
     Ok(status)
 }
 
+/// `labwired.spi_transfer(bus, cs, tx_ptr, rx_ptr, len) -> i32`: 0 when a
+/// device is declared on chip select `cs`, 1 when none is. `len` bytes go out
+/// from `tx_ptr` while `len` bytes come back into `rx_ptr`; the two ranges
+/// may be the same. With no device the receive range is not written. The
+/// byte ranges are in the firmware's exported `memory`. The call takes the
+/// transfer's bus time.
+fn spi_transfer(
+    mut caller: Caller<'_, Host>,
+    bus: i32,
+    cs: i32,
+    tx_ptr: i32,
+    rx_ptr: i32,
+    len: i32,
+) -> Result<i32, wasmi::Error> {
+    let len = len as u32 as usize;
+    let limit = crate::flex_spi::FLEX_SPI_MAX_TRANSFER_BYTES;
+    if len > limit {
+        let message = format!("an SPI transfer exchanges at most {limit} bytes");
+        return Err(caller.data_mut().stop(FlexStopReason::ModelError, message));
+    }
+    let Some(memory) = caller.get_export("memory").and_then(Extern::into_memory) else {
+        let message = "labwired.spi_transfer needs the firmware to export its memory".to_owned();
+        return Err(caller.data_mut().stop(FlexStopReason::ModelError, message));
+    };
+    let mut mosi = vec![0u8; len];
+    if memory
+        .read(&caller, tx_ptr as u32 as usize, &mut mosi)
+        .is_err()
+    {
+        let message = "labwired.spi_transfer transmit buffer is outside firmware memory".to_owned();
+        return Err(caller.data_mut().stop(FlexStopReason::ModelError, message));
+    }
+    let host = caller.data_mut();
+    let transfer = host.runtime.spi_transfer(bus as u32, cs as u32, &mosi);
+    let transfer = host.model(transfer)?;
+    if memory
+        .write(&mut caller, rx_ptr as u32 as usize, &transfer.miso)
+        .is_err()
+    {
+        let message = "labwired.spi_transfer receive buffer is outside firmware memory".to_owned();
+        return Err(caller.data_mut().stop(FlexStopReason::ModelError, message));
+    }
+    let status = i32::from(!transfer.selected);
+    let host = caller.data_mut();
+    if host.advance(transfer.duration_ns)? {
+        host.resume_result = Some(status);
+        return Err(wasmi::Error::new("suspended at until_ns"));
+    }
+    Ok(status)
+}
+
 /// `labwired.console_write(ptr, len)`: append `len` bytes of the firmware's
 /// exported `memory` to the manifest console. The call takes no virtual time.
 fn console_write(mut caller: Caller<'_, Host>, ptr: i32, len: i32) -> Result<(), wasmi::Error> {
@@ -347,7 +404,7 @@ fn entry_value(
         }
         FlexEntryArg::Bus(arg) => {
             let id = runtime
-                .i2c_bus_id(&arg.bus)
+                .bus_id(&arg.bus)
                 .map_err(|error| format!("{path}.args[{index}]: {error}"))?;
             match ty {
                 ValType::I32 => Ok(Val::I32(id as i32)),
@@ -480,6 +537,7 @@ fn execute(
             )
         })
         .and_then(|linker| linker.func_wrap("labwired", "i2c_transfer", i2c_transfer))
+        .and_then(|linker| linker.func_wrap("labwired", "spi_transfer", spi_transfer))
         .and_then(|linker| linker.func_wrap("labwired", "console_write", console_write))
         .map(|_| ());
     if let Err(error) = defined {
@@ -514,7 +572,7 @@ fn execute(
             }
             Err(error) => {
                 return Err(format!(
-                    "firmware does not fit the portable Flex ABI (imports labwired.read(i32) -> f64, labwired.write(i32, f64), labwired.advance_ns(i32), labwired.i2c_transfer(i32, i32, i32, i32, i32, i32) -> i32, labwired.console_write(i32, i32)): {error}"
+                    "firmware does not fit the portable Flex ABI (imports labwired.read(i32) -> f64, labwired.write(i32, f64), labwired.advance_ns(i32), labwired.i2c_transfer(i32, i32, i32, i32, i32, i32) -> i32, labwired.spi_transfer(i32, i32, i32, i32, i32) -> i32, labwired.console_write(i32, i32)): {error}"
                 ))
             }
         };
@@ -655,7 +713,7 @@ fn execute(
                             }
                             Ok(false) => {
                                 let advanced = host.runtime.advance_ns(pending);
-                                // A suspended `i2c_transfer` returns its status.
+                                // A suspended bus transfer returns its status.
                                 let resumed: Vec<Val> = host
                                     .resume_result
                                     .take()
@@ -846,7 +904,7 @@ fn evaluate(
     run: &FlexTestResult,
     tally: Option<&FlexDigitalEdgeTally>,
     analog: Option<&AnalogWindowTally>,
-    i2c_transfers: Option<u64>,
+    bus_transfers: Option<u64>,
 ) -> FlexAssertionResult {
     let mut observed_max = None;
     let mut observed_times_ns = None;
@@ -956,9 +1014,16 @@ fn evaluate(
         FlexAssertion::I2cTransfers(assertion) => {
             let details = &assertion.i2c_transfers;
             // The bus keeps an exact count for each address and outcome.
-            let passed = i2c_transfers
+            let passed = bus_transfers
                 .is_some_and(|count| within(count, details.equals, details.min, details.max));
-            (i2c_transfers.map(|count| count as f64), passed)
+            (bus_transfers.map(|count| count as f64), passed)
+        }
+        FlexAssertion::SpiTransfers(assertion) => {
+            let details = &assertion.spi_transfers;
+            // The bus keeps an exact count for each chip select and outcome.
+            let passed = bus_transfers
+                .is_some_and(|count| within(count, details.equals, details.min, details.max));
+            (bus_transfers.map(|count| count as f64), passed)
         }
         FlexAssertion::ConsoleContains(assertion) => {
             // `observed` is the byte offset of the first match in the text.
@@ -1006,6 +1071,11 @@ fn validate_assertion_ports(
                 runtime
                     .i2c_bus_id(&assertion.i2c_transfers.bus)
                     .map_err(|error| format!("assertions[{index}].i2c_transfers: {error}"))?;
+            }
+            FlexAssertion::SpiTransfers(assertion) => {
+                runtime
+                    .spi_bus_id(&assertion.spi_transfers.bus)
+                    .map_err(|error| format!("assertions[{index}].spi_transfers: {error}"))?;
             }
             FlexAssertion::PortValue(assertion) => {
                 let name = &assertion.port_value.port;
@@ -1223,29 +1293,37 @@ pub fn run_script(
     let digital = runtime.digital_trace_snapshot(0);
     let analog = runtime.analog_trace_snapshot(0);
     let i2c = runtime.i2c_trace_snapshot(u64::MAX);
-    let assertions = script
-        .assertions
-        .iter()
-        .zip(&tallies)
-        .map(|(assertion, tally)| match assertion {
-            FlexAssertion::DigitalEdges(_) => {
-                let tally = tally.and_then(|id| runtime.digital_edge_tally(id));
-                evaluate(assertion, &result, tally, None, None)
-            }
-            FlexAssertion::I2cTransfers(i2c) => {
-                let details = &i2c.i2c_transfers;
-                let count = runtime
-                    .i2c_bus_id(&details.bus)
-                    .ok()
-                    .and_then(|bus| runtime.i2c_transfer_count(bus, details.address, details.ack));
-                evaluate(assertion, &result, None, None, count)
-            }
-            _ => {
-                let tally = tally.and_then(|id| runtime.analog_window_tally(id));
-                evaluate(assertion, &result, None, tally.as_ref(), None)
-            }
-        })
-        .collect();
+    let spi = runtime.spi_trace_snapshot(u64::MAX);
+    let assertions =
+        script
+            .assertions
+            .iter()
+            .zip(&tallies)
+            .map(|(assertion, tally)| match assertion {
+                FlexAssertion::DigitalEdges(_) => {
+                    let tally = tally.and_then(|id| runtime.digital_edge_tally(id));
+                    evaluate(assertion, &result, tally, None, None)
+                }
+                FlexAssertion::I2cTransfers(i2c) => {
+                    let details = &i2c.i2c_transfers;
+                    let count = runtime.i2c_bus_id(&details.bus).ok().and_then(|bus| {
+                        runtime.i2c_transfer_count(bus, details.address, details.ack)
+                    });
+                    evaluate(assertion, &result, None, None, count)
+                }
+                FlexAssertion::SpiTransfers(spi) => {
+                    let details = &spi.spi_transfers;
+                    let count = runtime.spi_bus_id(&details.bus).ok().and_then(|bus| {
+                        runtime.spi_transfer_count(bus, details.cs, details.selected)
+                    });
+                    evaluate(assertion, &result, None, None, count)
+                }
+                _ => {
+                    let tally = tally.and_then(|id| runtime.analog_window_tally(id));
+                    evaluate(assertion, &result, None, tally.as_ref(), None)
+                }
+            })
+            .collect();
     result.assertions = assertions;
     result.traces = Some(FlexTraceSummary {
         time_unit: "ns",
@@ -1256,6 +1334,7 @@ pub fn run_script(
         analog_samples: analog.samples.len(),
         analog_dropped: analog.dropped,
         i2c_transfers: (!i2c.buses.is_empty()).then_some(i2c.next_cursor),
+        spi_transfers: (!spi.buses.is_empty()).then_some(spi.next_cursor),
     });
     result.status = match result.stop_reason {
         FlexStopReason::ConfigError

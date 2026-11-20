@@ -32,6 +32,12 @@ pub struct FlexManifest {
     /// MCU's I2C controller. No controller and no pad is modeled here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub i2c_buses: Vec<FlexI2cBus>,
+    /// SPI buses the firmware reaches through `labwired.spi_transfer`. The
+    /// devices are the declarative catalog SPI models the detailed path
+    /// attaches to an MCU's SPI controller. No controller and no pad is
+    /// modeled here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spi_buses: Vec<FlexSpiBus>,
     /// The text output the firmware writes through `labwired.console_write`,
     /// where target firmware prints over a UART or a USB serial port.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -77,6 +83,51 @@ pub struct FlexI2cDevice {
 
 /// Highest SCL frequency of the I2C specification (high-speed mode).
 pub const FLEX_I2C_MAX_FREQUENCY_HZ: u32 = 3_400_000;
+
+/// One SPI bus with the firmware as its only controller.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FlexSpiBus {
+    pub name: String,
+    /// SCK frequency. A byte takes eight SCK periods; this is the only bus
+    /// timing the path models.
+    pub frequency_hz: u32,
+    #[serde(default)]
+    pub devices: Vec<FlexSpiDevice>,
+}
+
+/// A declarative catalog SPI device model on a Flex bus.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FlexSpiDevice {
+    pub id: String,
+    /// Catalog device type, as in `external_devices[].type`.
+    #[serde(rename = "type")]
+    pub device_type: String,
+    /// The chip-select number the firmware passes to `labwired.spi_transfer`,
+    /// for example the GPIO number of the CS pad. Unique on its bus.
+    pub cs: u32,
+    /// The device's `external_devices[].config`, for input start values.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub config: BTreeMap<String, Value>,
+    /// Device input channel -> signal that drives it, in the channel's unit.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub inputs: BTreeMap<String, String>,
+}
+
+/// Highest SCK frequency a Flex SPI bus accepts.
+pub const FLEX_SPI_MAX_FREQUENCY_HZ: u32 = 100_000_000;
+
+/// Device `config` keys of the detailed path that have no meaning on a Flex
+/// SPI bus: the bus exchanges whole bytes and selects by `cs`.
+const FLEX_SPI_REJECTED_CONFIG: &[(&str, &str)] = &[
+    ("cs_pin", "a Flex SPI device is selected by its `cs` number"),
+    (
+        "spi_mode",
+        "a Flex SPI bus exchanges whole bytes; CPOL/CPHA edge sampling is not modeled",
+    ),
+    ("chain_index", "a Flex SPI bus has no daisy chain"),
+];
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -305,6 +356,60 @@ impl FlexManifest {
                         write_signals.contains_key(signal.as_str())
                             || outputs.contains_key(signal.as_str()),
                         "I2C device '{}' input signal '{signal}' has no declared producer",
+                        device.id
+                    );
+                    consumed.insert(signal.as_str());
+                }
+            }
+        }
+        for bus in &self.spi_buses {
+            token(&bus.name, "SPI bus name")?;
+            // `{ bus: name }` entry arguments name either kind of bus.
+            ensure!(
+                bus_names.insert(bus.name.as_str()),
+                "duplicate bus name '{}'",
+                bus.name
+            );
+            ensure!(
+                (1..=FLEX_SPI_MAX_FREQUENCY_HZ).contains(&bus.frequency_hz),
+                "SPI bus '{}' frequency_hz must be within 1..={FLEX_SPI_MAX_FREQUENCY_HZ}",
+                bus.name
+            );
+            let mut selects = HashSet::new();
+            for device in &bus.devices {
+                token(&device.id, &format!("SPI bus '{}' device id", bus.name))?;
+                ensure!(
+                    device_ids.insert(device.id.as_str()),
+                    "duplicate bus device id '{}'",
+                    device.id
+                );
+                token(
+                    &device.device_type,
+                    &format!("SPI device '{}'.type", device.id),
+                )?;
+                ensure!(
+                    selects.insert(device.cs),
+                    "SPI devices on bus '{}' share cs {}",
+                    bus.name,
+                    device.cs
+                );
+                for (key, reason) in FLEX_SPI_REJECTED_CONFIG {
+                    ensure!(
+                        !device.config.contains_key(*key),
+                        "SPI device '{}' config '{key}' is not supported: {reason}",
+                        device.id
+                    );
+                }
+                for (channel, signal) in &device.inputs {
+                    token(channel, &format!("SPI device '{}' input name", device.id))?;
+                    token(
+                        signal,
+                        &format!("SPI device '{}' input '{channel}' signal", device.id),
+                    )?;
+                    ensure!(
+                        write_signals.contains_key(signal.as_str())
+                            || outputs.contains_key(signal.as_str()),
+                        "SPI device '{}' input signal '{signal}' has no declared producer",
                         device.id
                     );
                     consumed.insert(signal.as_str());
@@ -620,7 +725,8 @@ pub enum FlexEntryArg {
     Number(FlexEntryNumberArg),
 }
 
-/// The id of a manifest `i2c_buses` entry, for `labwired.i2c_transfer`.
+/// The id of a manifest `i2c_buses` or `spi_buses` entry, for
+/// `labwired.i2c_transfer` or `labwired.spi_transfer`.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FlexEntryBusArg {
@@ -661,6 +767,7 @@ pub enum FlexAssertion {
     AnalogCrossings(FlexAnalogCrossingsAssertion),
     FinalTime(FlexFinalTimeAssertion),
     I2cTransfers(FlexI2cTransfersAssertion),
+    SpiTransfers(FlexSpiTransfersAssertion),
     ConsoleContains(FlexConsoleContainsAssertion),
 }
 
@@ -676,6 +783,32 @@ pub struct FlexConsoleContainsAssertion {
 #[serde(deny_unknown_fields)]
 pub struct FlexI2cTransfersAssertion {
     pub i2c_transfers: FlexI2cTransfersDetails,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexSpiTransfersAssertion {
+    pub spi_transfers: FlexSpiTransfersDetails,
+}
+
+/// The number of `labwired.spi_transfer` calls on one bus over the whole run.
+/// `cs` limits the count to one chip select; `selected` to transfers a device
+/// answered (`true`) or that selected no device (`false`). At least one
+/// bound is required.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexSpiTransfersDetails {
+    pub bus: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cs: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub equals: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<u64>,
 }
 
 /// The number of `labwired.i2c_transfer` calls on one bus over the whole run.
@@ -1192,6 +1325,12 @@ impl FlexTestScript {
                         details.address.is_none_or(|address| address <= 0x7f),
                         "{path}.address must be a 7-bit address"
                     );
+                    bounds(details.equals, details.min, details.max, &path)?;
+                }
+                FlexAssertion::SpiTransfers(assertion) => {
+                    let details = &assertion.spi_transfers;
+                    let path = format!("assertions[{index}].spi_transfers");
+                    token(&details.bus, &format!("{path}.bus"))?;
                     bounds(details.equals, details.min, details.max, &path)?;
                 }
                 FlexAssertion::ConsoleContains(assertion) => ensure!(

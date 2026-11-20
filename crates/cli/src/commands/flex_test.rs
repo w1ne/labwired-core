@@ -20,6 +20,7 @@ use labwired_core::flex_i2c::FlexI2cTraceBatch;
 use labwired_core::flex_script::{
     run_script, FlexResultConfig, FlexScriptRun, FlexStopReason, FlexTestResult,
 };
+use labwired_core::flex_spi::FlexSpiTraceBatch;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -39,6 +40,9 @@ struct FlexTraceFile {
     /// The transfers of the manifest's I2C buses. Absent without a bus.
     #[serde(skip_serializing_if = "Option::is_none")]
     i2c: Option<FlexI2cTraceBatch>,
+    /// The transfers of the manifest's SPI buses. Absent without a bus.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    spi: Option<FlexSpiTraceBatch>,
     /// The manifest console with the time of each write. Absent without one.
     #[serde(skip_serializing_if = "Option::is_none")]
     console: Option<FlexConsoleCapture>,
@@ -209,6 +213,7 @@ fn write_junit(path: &Path, result: &FlexTestResult, duration: Duration) -> std:
                 ),
                 FlexAssertion::FinalTime(_) => "final_time_ns".to_owned(),
                 FlexAssertion::I2cTransfers(a) => format!("i2c_transfers {}", a.i2c_transfers.bus),
+                FlexAssertion::SpiTransfers(a) => format!("spi_transfers {}", a.spi_transfers.bus),
                 FlexAssertion::ConsoleContains(_) => "console_contains".to_owned(),
             }
         );
@@ -300,6 +305,7 @@ fn write_artifacts(
             digital,
             analog: runtime.analog_trace_snapshot(0),
             i2c: Some(runtime.i2c_trace_snapshot(0)).filter(|i2c| !i2c.buses.is_empty()),
+            spi: Some(runtime.spi_trace_snapshot(0)).filter(|spi| !spi.buses.is_empty()),
             console: runtime.console_capture(),
         };
         write_json(&path, &trace);

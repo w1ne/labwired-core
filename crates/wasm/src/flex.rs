@@ -140,6 +140,28 @@ impl WasmFlexRuntime {
         serde_wasm_bindgen::to_value(&self.runtime.i2c_trace_snapshot(cursor)).map_err(js_error)
     }
 
+    pub fn spi_bus_id(&self, name: &str) -> Result<u32, JsValue> {
+        self.runtime.spi_bus_id(name).map_err(js_error)
+    }
+
+    /// One SPI transfer as the bus controller: select `cs`, exchange `mosi`
+    /// byte for byte, release `cs`. Returns the transfer (`selected`, `miso`,
+    /// `duration_ns`) and advances virtual time by its `duration_ns`. A chip
+    /// select with no device is `selected: false` with no MISO bytes.
+    pub fn spi_transfer(&mut self, bus: u32, cs: u32, mosi: &[u8]) -> Result<JsValue, JsValue> {
+        let transfer = self.runtime.spi_transfer(bus, cs, mosi).map_err(js_error)?;
+        self.runtime
+            .advance_ns(transfer.duration_ns)
+            .map_err(js_error)?;
+        serde_wasm_bindgen::to_value(&transfer).map_err(js_error)
+    }
+
+    /// The retained transfers of every SPI bus, for a protocol view.
+    pub fn spi_trace_snapshot(&self, cursor: f64) -> Result<JsValue, JsValue> {
+        let cursor = js_trace_cursor(cursor)?;
+        serde_wasm_bindgen::to_value(&self.runtime.spi_trace_snapshot(cursor)).map_err(js_error)
+    }
+
     /// Append firmware output to the manifest console at the current virtual
     /// time. An error when the manifest declares no console.
     pub fn console_write(&mut self, bytes: &[u8]) -> Result<(), JsValue> {

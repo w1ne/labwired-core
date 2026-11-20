@@ -1,0 +1,50 @@
+{
+  "source": {
+    "repository": "HeyPCB/esp32-sensors-1",
+    "revision": "57a2122a19ac1aa9c092e43fb5b123c461508752",
+    "asset": "boards/max31855/kicad/esp32_max31855",
+    "title": "HeyPCB ESP32-S3 MAX31855 - Maxim MAX31855K K-thermocouple converter",
+    "board_revision": "A",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "files": {
+      "schematic": { "path": "boards/max31855/kicad/esp32_max31855.kicad_sch", "git_blob": "5548568ea2054b49c3890d0ee3ec563ec4705c6d" },
+      "pcb": { "path": "boards/max31855/kicad/esp32_max31855.kicad_pcb", "git_blob": "8b96909b7ae884c1d2b469d90a4e0793c8827591" },
+      "bom": { "path": "boards/max31855/fab/esp32_max31855_bom.csv", "git_blob": "5f4c2679cf63ff4329a3cc0c4587c94d53a29dd5" },
+      "board_json": { "path": "boards/max31855/board.json", "git_blob": "04a5d9805149c46e935cc5c2078b3e501d003c75" },
+      "board_readme": { "path": "boards/max31855/README.md", "git_blob": "fb01a049c480e77e2fcca21b93b5824d9c1eb426" },
+      "license": { "path": "LICENSE", "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1" }
+    },
+    "fabrication_status": "source README says not fabricated, assembled, or powered",
+    "original_board_firmware": "none found for this board in the pinned source"
+  },
+  "sensor_bus": {
+    "evidence": "pad nets read from the pinned PCB blob; values and MPNs from the pinned BOM blob; the GPIO numbers from the README sensor line",
+    "elements": [
+      { "source_ref": "U4", "source_part": "MAX31855KASA+T", "lcsc": "C52028", "pads": { "1": "GND", "2": "U4_TN", "3": "U4_TP", "4": "3V3", "5": "SPI_SCK", "6": "SPI_CS", "7": "SPI_MISO", "8": "unconnected-(U4-NC-Pad8)" }, "modeled_as": "catalog declarative SPI device model `max31855` on chip select 10" },
+      { "source_ref": "J2", "source_part": "MX126-5.0-02P-GN01-Cu-S-A", "lcsc": "C5188434", "pads": { "1": "U4_TP", "2": "U4_TN" }, "value": "TC", "modeled_as": "not modeled; the thermocouple temperature is a bench port" },
+      { "source_ref": "C8", "source_part": "CL05B103KB5NNNC", "lcsc": "C15195", "pads": { "1": "U4_TP", "2": "U4_TN" }, "value": "10nF", "modeled_as": "not modeled" },
+      { "source_ref": "C7", "source_part": "CL05B104KO5NNNC", "lcsc": "C1525", "pads": { "1": "3V3", "2": "GND" }, "value": "100nF", "modeled_as": "not modeled" }
+    ],
+    "controller": {
+      "source_ref": "U3",
+      "source_part": "ESP32-S3-WROOM-1-N16R8",
+      "endpoints": { "SPI_CS": "U3 pad 18 (IO10)", "SPI_SCK": "U3 pad 20 (IO12)", "SPI_MISO": "U3 pad 21 (IO13)" },
+      "evidence": "board.json maps U?.18 to SPI_CS, U?.20 to SPI_SCK and U?.21 to SPI_MISO; README says SPI_CS on IO10, SPI_MISO on IO13, SPI_SCK on IO12; the board has no MOSI net",
+      "modeled_as": "the portable firmware is the bus controller; no ESP32-S3 SPI peripheral is emulated"
+    },
+    "user_led": { "source_net": "IO48", "endpoints": ["U3 pad 25 (IO48)", "R4.1"], "indicator": "D1", "modeled_as": "digital logic state only" }
+  },
+  "runtime_bindings": {
+    "manifest": "system.yaml",
+    "bus": { "name": "sensor_spi", "source_nets": ["SPI_SCK", "SPI_CS", "SPI_MISO"], "frequency_hz": 1000000, "frequency_source": "assumption; the pinned source states no bus speed" },
+    "device": { "id": "source-u4-max31855", "source_ref": "U4", "type": "max31855", "cs": 10 },
+    "ports": {
+      "thermocouple_c": "environment.thermocouple_temperature -> U4 input temperature",
+      "cold_junction_c": "environment.cold_junction_temperature -> U4 input internal",
+      "user_led_drive": "source.U3.GPIO48",
+      "user_led_state": "source.D1.logic_state"
+    }
+  },
+  "library_asset_id": "heypcb:HeyPCB/esp32-sensors-1:boards/max31855/kicad/esp32_max31855",
+  "detailed_target_alternative": "No detailed-path run of this asset is known to this lane. The Flex run proves nothing about ESP32-S3 firmware for it."
+}
