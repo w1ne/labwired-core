@@ -1,0 +1,7 @@
+[2m2026-11-19T22:13:10.093355Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../../configs/chips/atsamd21g18a.yaml
+[2m2026-11-19T22:13:10.168183Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x4f71
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+[2m2026-11-19T22:13:11.929185Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartContains(UartContainsAssertion { uart_contains: "NANO_33_IOT_BME280 ID=0x60" }) (captured len=0)
+FAIL  0/1 checks · usb-register-bank · 30000000 steps · 1.76s
+usb-register-bank exit=1

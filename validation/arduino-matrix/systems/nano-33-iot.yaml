@@ -1,0 +1,47 @@
+# Arduino matrix system — Arduino Nano 33 IoT (ATSAMD21G18A).
+# Pins and SERCOM roles are ArduinoCore-samd variants/nano_33_iot:
+#   Serial  = SerialUSB, native USB CDC (PA24/PA25); the host is plugged in.
+#   Wire    = SERCOM4, SDA A4 = PB08 / SCL A5 = PB09 (PMUX D).
+#   SPI     = SERCOM1, MOSI D11 = PA16 PAD0 / SCK D13 = PA17 PAD1 /
+#             MISO D12 = PA19 PAD3 (PMUX C). SCK shares PA17 with LED_BUILTIN.
+# L3: INA219 on Wire. L4: MAX31855 on SPI; CS is the sketch's SS = D10 = PA21.
+# L5: A0 (PA02 = AIN0) held at 1650 mV, half of VDDANA — a divider on the
+# pin. Stock analogRead() must return exactly 512 (10-bit, full scale 3.3 V).
+# The on-board NINA-W102, ATECC608A and LSM6DS3 are not attached.
+name: "arduino-matrix-nano-33-iot"
+chip: "../../../configs/chips/atsamd21g18a.yaml"
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "sercom4"
+    config:
+      i2c_address: 0x40
+  - id: "max31855"
+    type: "max31855"
+    connection: "sercom1"
+    config:
+      cs_pin: "PA21"
+peripherals:
+  - id: "usb"
+    type: "samd21_usb"
+    base_address: 0x41005000
+    config:
+      host: true
+  - id: "sercom1"
+    type: "sam_sercom_spi"
+    base_address: 0x42000C00
+    config:
+      port_base: 0x41004400
+      sck_bit: 17
+      mosi_bit: 16
+      pad_mux: 2
+      dopo: 0
+  - id: "sercom4"
+    type: "samd21_sercom_i2cm"
+    base_address: 0x42001800
+  - id: "adc"
+    type: "samd21_adc"
+    base_address: 0x42004000
+    config:
+      input_mv: { 0: 1650 }
+board_io: []

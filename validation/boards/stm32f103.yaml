@@ -1133,6 +1133,15 @@ models:
 # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
 # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
 # SILICON CAPTURE; live re-capture remains pending.
+# 2026-11-09 (feat/f1-flash-program-round374): flash.rs adds the opt-in F1
+# program gate (`error_flags: true`, now set on this board's chip yaml):
+# PG half-word programming, PER page erase (AR) and MER mass erase reach
+# the flash backing store; locked CR ignores writes; LOCK relocks the key
+# sequence. bus/accessors.rs routes flash stores and the CR word write to
+# it. Reset values and the register map are unchanged. Evidence: flash lib
+# tests, src/tests/stm32f103_flash.rs, stock EEPROM.h put/get on C8 (page
+# 0x0800FC00) and NUCLEO-F103RB. ACK, NOT A SILICON CAPTURE; no bench flash
+# program/erase capture exists yet.
 # 2026-11-09 (L4/G4/WB ADC, feat/stm32-l4-l0-adc): changes the shared
 # adc.rs digest. The `stm32l4` layout keeps its conversion path; the
 # stm32g0/c0 CHSELR layout and the f0/l0 block are separate models. F1/F4/H7/

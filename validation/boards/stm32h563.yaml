@@ -1137,6 +1137,10 @@ models:
 # (diode/BJT/MOSFET/JFET + misc) touched shared files on this board's
 # watch list. Re-acked by owner 2026-11-07 during PR triage. ACK, NOT A
 # SILICON CAPTURE; live re-capture remains pending.
+# 2026-11-09 (feat/f1-flash-program-round374): flash.rs gains an F1-only
+# program gate and an F1 arm in flash_geometry(). Every H5 branch is
+# unchanged; this board's reads, writes, erase and swap paths see no change.
+# ACK, NOT A SILICON CAPTURE.
 # 2026-11-09 (L4/G4/WB ADC, feat/stm32-l4-l0-adc): changes the shared
 # adc.rs digest. The `stm32l4` layout keeps its conversion path; the
 # stm32g0/c0 CHSELR layout and the f0/l0 block are separate models. F1/F4/H7/
