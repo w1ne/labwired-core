@@ -2485,6 +2485,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/sam4s16c/2026-11-09-negative-control-old-descriptor/NOTE/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/sam4s16c/2026-11-20-negative-control-uart-irq-old-descriptor/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/sam4s8b/2026-11-09-before-usart0-txrdy-irq/</loc>
     </url>
     <url>
