@@ -20,6 +20,7 @@ fn main() -> ! {
         has_pioc: true,
         check_usart0_irq: true,
         check_usart1_irq: true,
+        check_uart_irq: true,
         summary: 0x2000_FF00,
         board: None,
     })

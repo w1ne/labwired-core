@@ -17,6 +17,15 @@ io_voltage_v: 5.0
 gpio_input_thresholds:
   vil: 0.3
   vih: 0.6
+# GPIO pad output resistance: a driven pad is VCC (or 0 V) behind this many
+# ohms. DS40002061B section 31 typical curves "I/O Pin Output Voltage vs.
+# Source Current (VCC = 5V)" and "... vs. Sink Current (VCC = 5V)": about
+# 0.5 V of droop at 20 mA at 25 C, i.e. 25 ohm. Table 30-1 bounds it: VOH min
+# 4.2 V at IOH = -20 mA and VOL max 0.9 V at IOL = 20 mA (VCC = 5 V), at most
+# 40-45 ohm over temperature. Absolute maximum DC current per I/O pin: 40 mA.
+# Read by the diagram compiler, which places it as the pad driver's
+# on-resistance in the analog netlist.
+gpio_output_ohms: 25
 
 # Microchip DS40002061B, "System and Reset Characteristics":
 # typical POR rising/falling 1.4/1.3 V; BOD centers 1.8, 2.7, 4.3 V with

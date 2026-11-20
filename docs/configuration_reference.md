@@ -538,6 +538,7 @@ canonical `type:`; the table below is rendered from that file by
 | `servo` | GPIO | RC hobby servo driven by a single PWM control pin (GPIO edges and/or LEDC duty) |
 | `seven-segment` | GPIO | Bare single-digit 7-segment LED display driven straight from nine GPIO pins |
 | `sk6812` | GPIO | Addressable RGBW LED strip on one data pin (32-bit edge-timed frames) |
+| `tcs3200` | GPIO | Programmable RGB light-to-frequency converter (S0/S1 scale, S2/S3 filter, OE) |
 | `tm1637-7seg` | GPIO | 4-digit 7-segment LED display with the TM1637 2-wire (CLK/DIO) driver |
 | `tm1638` | GPIO | 8-digit 7-segment + 8 LED display with the TM1638 3-wire (STB/CLK/DIO) driver |
 | `uln2003` | GPIO | Four-phase unipolar stepper twin (IN1..IN4) |

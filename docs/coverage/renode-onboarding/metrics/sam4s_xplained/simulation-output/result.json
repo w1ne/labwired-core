@@ -137,7 +137,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "2962d2224b5a7b8b9ae84a17d58f775cc6dc92cc9834406e8ce783053f73fcd8",
+  "firmware_hash": "30f57e6d0e49f1a351ea303dcc6199d257d373cf9d06135fdf0db59202690696",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-sam4s-xplained-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/sam4s_xplained.yaml",

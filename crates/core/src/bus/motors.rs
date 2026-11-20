@@ -202,6 +202,9 @@ pub(super) struct PwmPhaseCursor {
 /// `MotorSnapshot.kind` for STEP/DIR steppers folded from ObservedDevice.
 /// Keep in sync with the filter in wasm `get_actuator_states`.
 pub const STEPPER_SNAPSHOT_KIND: &str = "stepper";
+/// Snapshot fault of a motor whose driving stage has no usable supply
+/// (`powered: false` on its placement): the stage is off, so it cannot turn.
+pub const UNPOWERED_FAULT: &str = "unpowered";
 
 /// Timing of a circuit-driven shaft. Unknown until the model primes at time zero.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
@@ -263,6 +266,9 @@ pub(super) enum MotorRuntime {
         /// constants and the plant is advanced from the routed current.
         circuit: Option<CircuitWinding>,
         series: Box<MotorSeries>,
+        /// False when the placement says the stage driving this winding has
+        /// no usable supply (`powered: false`): the enable is held low.
+        powered: bool,
     },
     Bldc {
         id: String,
@@ -614,6 +620,10 @@ impl SystemBus {
             }
             _ => None,
         };
+        // ABSENT MEANS POWERED (components::supply). An explicit false is a
+        // driver with no usable supply: its output stage stays off whatever
+        // the firmware does with the control pins.
+        let powered = c.powered != Some(false);
         Ok(MotorRuntime::Dc {
             pwm: self.resolve_motor_control(&c.id, "pwm", &c.pwm_pin)?,
             steering: self.resolve_dc_steering(&c)?,
@@ -622,6 +632,7 @@ impl SystemBus {
                 None => MotorControlSource::Constant(false),
             },
             enable: match c.enable_pin.as_deref() {
+                _ if !powered => MotorControlSource::Constant(false),
                 Some(p) => self.resolve_motor_control(&c.id, "enable", p)?,
                 None => MotorControlSource::Constant(true),
             },
@@ -654,6 +665,7 @@ impl SystemBus {
             encoder: QuadratureEncoder::new(c.encoder_cpr)?,
             circuit: None,
             series: MotorSeries::new(&c.id),
+            powered,
             id: c.id,
             plant: Box::new(plant),
         })
@@ -706,6 +718,7 @@ impl SystemBus {
             encoder: QuadratureEncoder::new(c.encoder_cpr)?,
             circuit: Some(CircuitWinding::default()),
             series: MotorSeries::new(&c.id),
+            powered: true,
             id: c.id,
             plant: Box::new(plant),
         })
@@ -1641,6 +1654,7 @@ impl SystemBus {
                     speed_extremes,
                     control_state,
                     circuit,
+                    powered,
                     ..
                 } => {
                     let s = plant.snapshot();
@@ -1674,6 +1688,7 @@ impl SystemBus {
                             .stalled
                             .then(|| "stalled".to_owned())
                             .into_iter()
+                            .chain((!powered).then(|| UNPOWERED_FAULT.to_owned()))
                             .collect(),
                     }
                 }
@@ -1790,7 +1805,11 @@ impl SystemBus {
                     "idle".to_owned()
                 },
                 coupling: None,
-                faults: Vec::new(),
+                faults: if m.is_powered() {
+                    Vec::new()
+                } else {
+                    vec![UNPOWERED_FAULT.to_owned()]
+                },
             });
         }
         // IN1..IN4 unipolar steppers (28BYJ-48 behind a ULN2003) are also
