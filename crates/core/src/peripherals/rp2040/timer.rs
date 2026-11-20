@@ -120,8 +120,9 @@ pub struct Rp2040Timer {
     anchor: Cell<u64>,
     /// Bumped each arm so stale compare events die on arrival.
     arm_seq: u32,
-    /// True while a compare / level-IRQ event is live in the scheduler.
-    scheduled: bool,
+    /// Absolute deadline of the current compare / level-IRQ wake. Reuse an
+    /// equal or earlier wake instead of accumulating tokens on MMIO harvest.
+    scheduled_at: Option<u64>,
 }
 
 impl Default for Rp2040Timer {
@@ -149,7 +150,7 @@ impl Rp2040Timer {
             clock: None,
             anchor: Cell::new(0),
             arm_seq: 0,
-            scheduled: false,
+            scheduled_at: None,
         }
     }
 
@@ -439,7 +440,7 @@ impl Peripheral for Rp2040Timer {
 
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if !self.scheduler_mode() {
-            self.scheduled = false;
+            self.scheduled_at = None;
             return Vec::new();
         }
         // Arm for: (a) next alarm match, and/or (b) held level-IRQ re-pend.
@@ -453,11 +454,17 @@ impl Peripheral for Rp2040Timer {
             (None, None) => None,
         };
         let Some(d) = delay else {
-            self.scheduled = false;
+            // Keep an already queued wake: it will observe the disarm/pause
+            // and retire. Forgetting it here permits duplicate later re-arms.
             return Vec::new();
         };
+        let now = self.clock.as_ref().map_or(0, CycleClock::now);
+        let deadline = now.saturating_add(1).saturating_add(d);
+        if self.scheduled_at.is_some_and(|queued| queued <= deadline) {
+            return Vec::new();
+        }
         self.arm_seq = self.arm_seq.wrapping_add(1);
-        self.scheduled = true;
+        self.scheduled_at = Some(deadline);
         vec![(d, self.arm_seq)]
     }
 
@@ -470,8 +477,11 @@ impl Peripheral for Rp2040Timer {
         if !self.scheduler_mode() || event_token != self.arm_seq {
             return crate::sched::EventResult::default();
         }
+        self.scheduled_at = None;
         let res = self.advance_to(sched.now());
-        let next_alarm = self.cycles_until_next_alarm().map(|d| d.saturating_sub(1));
+        // EventResult delays are from now, unlike the write-harvest path's
+        // now+1+delay convention. Preserve the exact next compare deadline.
+        let next_alarm = self.cycles_until_next_alarm();
         let next_level = (self.ints() != 0).then_some(1u64);
         let reschedule = match (next_alarm, next_level) {
             (Some(a), Some(l)) => Some(a.min(l)),
@@ -479,7 +489,7 @@ impl Peripheral for Rp2040Timer {
             (None, Some(l)) => Some(l),
             (None, None) => None,
         };
-        self.scheduled = reschedule.is_some();
+        self.scheduled_at = reschedule.map(|delay| sched.now().saturating_add(delay));
         crate::sched::EventResult {
             explicit_irqs: res.explicit_irqs.unwrap_or_default(),
             reschedule_delay: reschedule,

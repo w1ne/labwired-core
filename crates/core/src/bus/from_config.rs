@@ -358,6 +358,7 @@ impl SystemBus {
 
         let mut extra_mem = Vec::with_capacity(chip.memory_regions.len());
         let mut mem_aliases = Vec::new();
+        let mut rp2350_clean_room_rom = false;
         for region in &chip.memory_regions {
             let size = region.size;
             // A mirror holds no bytes; the accessors translate into its target.
@@ -460,6 +461,10 @@ impl SystemBus {
                 );
                 continue;
             }
+            rp2350_clean_room_rom |= loaded_image
+                && region.base == 0
+                && region.image_env.as_deref() == Some("LABWIRED_RP2350_BOOTROM")
+                && mem.data.as_slice() == include_bytes!("../../roms/rp2350/rp2350_bootrom.bin");
             extra_mem.push(mem);
         }
 
@@ -1711,6 +1716,17 @@ impl SystemBus {
             bus.peripherals[pwr_i]
                 .dev
                 .bind_backup_domain_write_enable(flag);
+        }
+
+        if rp2350_clean_room_rom {
+            let bootram = merged_peripherals
+                .iter()
+                .find(|p| p.r#type == "rp2350_bootram")
+                .context("the clean-room RP2350 ROM requires a BOOTRAM endpoint")?;
+            crate::peripherals::rp2350_bootram::install_clean_room_rom_state(
+                &mut bus,
+                bootram.base_address,
+            )?;
         }
 
         Ok(bus)

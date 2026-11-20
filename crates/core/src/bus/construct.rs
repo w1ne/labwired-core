@@ -1372,8 +1372,19 @@ impl SystemBus {
     pub fn atomic_alias_redirect(&self, addr: u64) -> Option<(u64, AtomicAliasOp)> {
         const PERIPHERAL_WINDOW: std::ops::Range<u64> = 0x4000_0000..0x5050_0000;
         const XIP_SSI_WINDOW: std::ops::Range<u64> = 0x1800_0000..0x1800_4000;
-        if !PERIPHERAL_WINDOW.contains(&addr) && !XIP_SSI_WINDOW.contains(&addr) {
-            return None;
+        if !PERIPHERAL_WINDOW.contains(&addr) {
+            if !XIP_SSI_WINDOW.contains(&addr) {
+                return None;
+            }
+            // RP2350 reuses this address for cache maintenance, whose address
+            // bits select a line and operation. Only the actual RP2040 SSI
+            // endpoint has SET/CLR/XOR aliases here; never fold maintenance.
+            let index = self.find_peripheral_index(0x1800_0000)?;
+            if self.peripherals[index].dev.impl_type_path()
+                != std::any::type_name::<crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi>()
+            {
+                return None;
+            }
         }
         let op = self
             .atomic_register_aliases

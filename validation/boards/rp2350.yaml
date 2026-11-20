@@ -37,3 +37,7 @@ models:
   - crates/core/roms/rp2350
   - crates/core/src/cpu/cortex_m/rp2350_dcp.rs
   - crates/core/src/cpu/cortex_m/exec/misc.rs
+  # Cacheless ROM-flash support; source watch only, no hardware capture.
+  - crates/core/src/peripherals/rp2350_xip.rs
+  - crates/core/src/bus/from_config.rs
+  - crates/core/src/bus/construct.rs

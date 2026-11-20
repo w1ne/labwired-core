@@ -1077,6 +1077,10 @@ impl SystemBus {
             (20, 1, LINE_TX, "UART1_TX"),
             (24, 1, LINE_TX, "UART1_TX"),
             (28, 0, LINE_TX, "UART0_TX"),
+            (32, 0, LINE_TX, "UART0_TX"),
+            (36, 1, LINE_TX, "UART1_TX"),
+            (40, 1, LINE_TX, "UART1_TX"),
+            (44, 0, LINE_TX, "UART0_TX"),
         ];
 
         let Some((bank_idx, functions, bank_irq)) =
@@ -1130,7 +1134,7 @@ impl SystemBus {
                 return;
             };
             for &(pin, pad_instance, line, func) in PADS {
-                if pad_instance != instance {
+                if pad_instance != instance || pin >= sio.pad_count() {
                     continue;
                 }
                 sio.bind_pad_route(functions.clone(), &lines, pin, GPIO_FUNC_UART, line, func);
@@ -1151,7 +1155,7 @@ impl SystemBus {
     /// moment is FUNCSEL's.
     pub(crate) fn wire_rp2040_i2c_pads(&mut self) {
         use crate::peripherals::rp2040::i2c::{Rp2040I2c, LINE_SCL, LINE_SDA};
-        use crate::peripherals::rp2040::io_bank0::{Rp2040IoBank0, GPIO_FUNC_I2C, PAD_COUNT};
+        use crate::peripherals::rp2040::io_bank0::{Rp2040IoBank0, GPIO_FUNC_I2C};
         use crate::peripherals::rp2040::sio::Rp2040Sio;
 
         let Some(functions) = self
@@ -1189,7 +1193,7 @@ impl SystemBus {
             else {
                 return;
             };
-            for pin in 0..PAD_COUNT {
+            for pin in 0..sio.pad_count() {
                 if usize::from(pin / 2) % 2 != instance {
                     continue;
                 }
@@ -1284,6 +1288,20 @@ impl SystemBus {
             (26, 1, LINE_SCK, "SPI1_SCK"),
             (27, 1, LINE_MOSI, "SPI1_TX"),
             (29, 1, LINE_CSN, "SPI1_CSn"),
+            (30, 1, LINE_SCK, "SPI1_SCK"),
+            (31, 1, LINE_MOSI, "SPI1_TX"),
+            (33, 0, LINE_CSN, "SPI0_CSn"),
+            (34, 0, LINE_SCK, "SPI0_SCK"),
+            (35, 0, LINE_MOSI, "SPI0_TX"),
+            (37, 0, LINE_CSN, "SPI0_CSn"),
+            (38, 0, LINE_SCK, "SPI0_SCK"),
+            (39, 0, LINE_MOSI, "SPI0_TX"),
+            (41, 1, LINE_CSN, "SPI1_CSn"),
+            (42, 1, LINE_SCK, "SPI1_SCK"),
+            (43, 1, LINE_MOSI, "SPI1_TX"),
+            (45, 1, LINE_CSN, "SPI1_CSn"),
+            (46, 1, LINE_SCK, "SPI1_SCK"),
+            (47, 1, LINE_MOSI, "SPI1_TX"),
         ];
 
         // ⚠️ Resolve SIO BEFORE touching an SPI: `pad_lines_arc` CREATES the pad
@@ -1314,7 +1332,7 @@ impl SystemBus {
                 return;
             };
             for &(pin, pad_instance, line, func) in PADS {
-                if pad_instance != instance {
+                if pad_instance != instance || pin >= sio.pad_count() {
                     continue;
                 }
                 sio.bind_pad_route(functions.clone(), &lines, pin, GPIO_FUNC_SPI, line, func);
@@ -1365,7 +1383,7 @@ impl SystemBus {
     /// so GP16..GP29 repeat GP0..GP13. Which one is live at any moment is
     /// FUNCSEL's.
     pub(crate) fn wire_rp2040_pwm_pads(&mut self) {
-        use crate::peripherals::rp2040::io_bank0::{GPIO_FUNC_PWM, PAD_COUNT};
+        use crate::peripherals::rp2040::io_bank0::GPIO_FUNC_PWM;
         use crate::peripherals::rp2040::pwm::LINE_NAMES;
 
         // SIO first: arming the wire makes the PWM publish every edge.
@@ -1386,7 +1404,7 @@ impl SystemBus {
         let Some(sio) = self.rp2040_sio_mut(sio_idx) else {
             return;
         };
-        for pin in 0..PAD_COUNT {
+        for pin in 0..sio.pad_count() {
             // GP0..31 -> slice (n >> 1) & 7; RP2350B GP32..47 -> slices 8..11
             // (pico-sdk PWM_GPIO_SLICE_NUM).
             let line = if pin < 32 {
@@ -1417,7 +1435,7 @@ impl SystemBus {
     /// `pioN` block are all on the bus.
     pub(crate) fn wire_rp2040_pio_pads(&mut self) {
         use crate::peripherals::pio::LINE_NAMES;
-        use crate::peripherals::rp2040::io_bank0::{GPIO_FUNC_PIO0, PAD_COUNT};
+        use crate::peripherals::rp2040::io_bank0::GPIO_FUNC_PIO0;
 
         let Some((functions, sio_idx)) = self.rp2040_pad_route_target() else {
             return;
@@ -1436,7 +1454,7 @@ impl SystemBus {
             let Some(sio) = self.rp2040_sio_mut(sio_idx) else {
                 return;
             };
-            for pin in 0..PAD_COUNT.min(32) {
+            for pin in 0..sio.pad_count().min(32) {
                 let line = usize::from(pin);
                 sio.bind_pad_route(
                     functions.clone(),
