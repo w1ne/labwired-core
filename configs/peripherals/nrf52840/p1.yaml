@@ -1,8 +1,10 @@
+# Offsets are relative to the compact MMIO window at 0x50000800 (chip yaml
+# `reg_offset: 0x500`), not Nordic's P1 block base 0x50000300.
 peripheral: P1
 version: 0.1.0
 registers:
 - id: OUT
-  address_offset: 1284
+  address_offset: 4
   size: 32
   access: READ_WRITE
   reset_value: 0
@@ -169,7 +171,7 @@ registers:
     description: Pin 31
   side_effects: null
 - id: OUTSET
-  address_offset: 1288
+  address_offset: 8
   size: 32
   access: READ_WRITE
   reset_value: 0
@@ -336,7 +338,7 @@ registers:
     description: Pin 31
   side_effects: null
 - id: OUTCLR
-  address_offset: 1292
+  address_offset: 12
   size: 32
   access: READ_WRITE
   reset_value: 0
@@ -507,7 +509,7 @@ registers:
     on_read: null
     on_write: null
 - id: IN
-  address_offset: 1296
+  address_offset: 16
   size: 32
   access: READ_ONLY
   reset_value: 0
@@ -674,7 +676,7 @@ registers:
     description: Pin 31
   side_effects: null
 - id: DIR
-  address_offset: 1300
+  address_offset: 20
   size: 32
   access: READ_WRITE
   reset_value: 0
@@ -841,7 +843,7 @@ registers:
     description: Pin 31
   side_effects: null
 - id: DIRSET
-  address_offset: 1304
+  address_offset: 24
   size: 32
   access: READ_WRITE
   reset_value: 0
@@ -1008,7 +1010,7 @@ registers:
     description: Set as output pin 31
   side_effects: null
 - id: DIRCLR
-  address_offset: 1308
+  address_offset: 28
   size: 32
   access: READ_WRITE
   reset_value: 0
@@ -1179,7 +1181,7 @@ registers:
     on_read: null
     on_write: null
 - id: LATCH
-  address_offset: 1312
+  address_offset: 32
   size: 32
   access: READ_WRITE
   reset_value: 0
@@ -1346,7 +1348,7 @@ registers:
     description: Status on whether PIN31 has met criteria set in PIN_CNF31.SENSE register. Write '1' to clear.
   side_effects: null
 - id: DETECTMODE
-  address_offset: 1316
+  address_offset: 36
   size: 32
   access: READ_WRITE
   reset_value: 0
@@ -1358,7 +1360,7 @@ registers:
     description: Select between default DETECT signal behavior and LDETECT mode
   side_effects: null
 - id: PIN_CNF0
-  address_offset: 1792
+  address_offset: 512
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1390,7 +1392,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF1
-  address_offset: 1796
+  address_offset: 516
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1422,7 +1424,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF2
-  address_offset: 1800
+  address_offset: 520
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1454,7 +1456,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF3
-  address_offset: 1804
+  address_offset: 524
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1486,7 +1488,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF4
-  address_offset: 1808
+  address_offset: 528
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1518,7 +1520,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF5
-  address_offset: 1812
+  address_offset: 532
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1550,7 +1552,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF6
-  address_offset: 1816
+  address_offset: 536
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1582,7 +1584,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF7
-  address_offset: 1820
+  address_offset: 540
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1614,7 +1616,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF8
-  address_offset: 1824
+  address_offset: 544
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1646,7 +1648,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF9
-  address_offset: 1828
+  address_offset: 548
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1678,7 +1680,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF10
-  address_offset: 1832
+  address_offset: 552
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1710,7 +1712,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF11
-  address_offset: 1836
+  address_offset: 556
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1742,7 +1744,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF12
-  address_offset: 1840
+  address_offset: 560
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1774,7 +1776,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF13
-  address_offset: 1844
+  address_offset: 564
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1806,7 +1808,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF14
-  address_offset: 1848
+  address_offset: 568
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1838,7 +1840,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF15
-  address_offset: 1852
+  address_offset: 572
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1870,7 +1872,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF16
-  address_offset: 1856
+  address_offset: 576
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1902,7 +1904,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF17
-  address_offset: 1860
+  address_offset: 580
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1934,7 +1936,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF18
-  address_offset: 1864
+  address_offset: 584
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1966,7 +1968,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF19
-  address_offset: 1868
+  address_offset: 588
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -1998,7 +2000,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF20
-  address_offset: 1872
+  address_offset: 592
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -2030,7 +2032,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF21
-  address_offset: 1876
+  address_offset: 596
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -2062,7 +2064,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF22
-  address_offset: 1880
+  address_offset: 600
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -2094,7 +2096,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF23
-  address_offset: 1884
+  address_offset: 604
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -2126,7 +2128,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF24
-  address_offset: 1888
+  address_offset: 608
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -2158,7 +2160,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF25
-  address_offset: 1892
+  address_offset: 612
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -2190,7 +2192,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF26
-  address_offset: 1896
+  address_offset: 616
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -2222,7 +2224,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF27
-  address_offset: 1900
+  address_offset: 620
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -2254,7 +2256,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF28
-  address_offset: 1904
+  address_offset: 624
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -2286,7 +2288,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF29
-  address_offset: 1908
+  address_offset: 628
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -2318,7 +2320,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF30
-  address_offset: 1912
+  address_offset: 632
   size: 32
   access: READ_WRITE
   reset_value: 2
@@ -2350,7 +2352,7 @@ registers:
     description: Pin sensing mechanism
   side_effects: null
 - id: PIN_CNF31
-  address_offset: 1916
+  address_offset: 636
   size: 32
   access: READ_WRITE
   reset_value: 2

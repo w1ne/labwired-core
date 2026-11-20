@@ -891,3 +891,76 @@ unsafe extern "C" fn nrf_pendsv_tailchain_handler() {
         icsr = const SCB_ICSR,
     );
 }
+
+/// Nordic's P1 block base (PS v1.7 §6.9.2). Its registers start at 0x804 —
+/// inside P0's 4 KB page, after P0's PIN_CNF[31] at 0x5000077C.
+pub const GPIO1: u32 = 0x5000_0300;
+pub const P1_OUT: u32 = GPIO1 + 0x504;
+pub const P1_OUTSET: u32 = GPIO1 + 0x508;
+pub const P1_OUTCLR: u32 = GPIO1 + 0x50C;
+pub const P1_IN: u32 = GPIO1 + 0x510;
+pub const P1_PIN_CNF: u32 = GPIO1 + 0x700;
+/// P1.1 driven output, P1.2 pulled-up input, P1.3 GPIOTE task pin.
+pub const P1_OUT_PIN: u32 = 1;
+pub const P1_PULL_PIN: u32 = 2;
+pub const P1_GPIOTE_PIN: u32 = 3;
+
+/// GPIO P1 at its silicon addresses (0x50000300 block): OUTSET/OUTCLR on P1.1
+/// read back through OUT and IN, PIN_CNF PULL=Up on input P1.2 reads IN = 1,
+/// and GPIOTE CONFIG[0] PORT=1 toggles P1.3 at the pad. P0's OUT and
+/// PIN_CNF[31] (0x5000077C, the last P0 word before P1) must not change.
+/// Returns pass; the line prints P1 IN while high and P0 OUT.
+pub fn check_gpio_p1(l: &mut Line) -> bool {
+    let p0_cnf31 = GPIO_PIN_CNF + 31 * 4;
+    wr(p0_cnf31, 2);
+    let p0_out_before = rd(GPIO_OUT);
+
+    let out_bit = 1 << P1_OUT_PIN;
+    wr(P1_PIN_CNF + P1_OUT_PIN * 4, 1);
+    wr(P1_OUTSET, out_bit);
+    let out_hi = rd(P1_OUT) & out_bit;
+    let in_hi = rd(P1_IN);
+    wr(P1_OUTCLR, out_bit);
+    let out_lo = rd(P1_OUT) & out_bit;
+    let in_lo = rd(P1_IN) & out_bit;
+    let drive_ok = out_hi != 0 && in_hi & out_bit != 0 && out_lo == 0 && in_lo == 0;
+
+    // DIR=0, INPUT=connect, PULL=Up (3 << 2).
+    let pull_bit = 1 << P1_PULL_PIN;
+    wr(P1_PIN_CNF + P1_PULL_PIN * 4, 3 << 2);
+    settle();
+    let pull_ok = rd(P1_IN) & pull_bit != 0;
+
+    // GPIOTE task mode (3), PSEL=3, PORT=1 (bit 13), POLARITY=Toggle.
+    let te_bit = 1 << P1_GPIOTE_PIN;
+    wr(P1_PIN_CNF + P1_GPIOTE_PIN * 4, 1);
+    wr(
+        GPIOTE_CONFIG0,
+        3 | (P1_GPIOTE_PIN << 8) | (1 << 13) | (3 << 16),
+    );
+    wr(GPIOTE_TASKS_OUT0, 1);
+    settle();
+    let t1 = rd(P1_IN) & te_bit;
+    wr(GPIOTE_TASKS_OUT0, 1);
+    settle();
+    let t2 = rd(P1_IN) & te_bit;
+    wr(GPIOTE_CONFIG0, 0);
+    let gpiote_ok = t1 != 0 && t2 == 0;
+
+    let p0_out = rd(GPIO_OUT);
+    let p0_ok = p0_out == p0_out_before && rd(p0_cnf31) == 2;
+    let pass = drive_ok && pull_ok && gpiote_ok && p0_ok;
+    l.s(b"gpio p1 in=")
+        .hex(in_hi & (out_bit | pull_bit), 2)
+        .s(b" drive=")
+        .hex(drive_ok as u32, 1)
+        .s(b" pull=")
+        .hex(pull_ok as u32, 1)
+        .s(b" gpiote=")
+        .hex(gpiote_ok as u32, 1)
+        .s(b" p0=")
+        .hex(p0_ok as u32, 1)
+        .ok(pass)
+        .send();
+    pass
+}

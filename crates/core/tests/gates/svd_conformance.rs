@@ -93,8 +93,10 @@ const ALLOWED: &[(&str, &str, Deviation, &str)] = &[
     // place a port's base at its OUT register; the model absorbs that with
     // `profile: nrf54l` on the nRF54L family and `reg_offset: 0x500` on
     // nRF5340, both anchored at the SVD base, so their configs match the SVD
-    // exactly. The one remaining Nordic GPIO entry below (nrf52840/gpio1) is a
-    // real overlapping-window gap, not a bookkeeping remap.
+    // exactly. nRF52840 P1 is the other shape: its SVD block base 0x50000300
+    // lies inside P0's register range, so its window starts at block offset
+    // 0x500 (0x50000800). The check below accepts `base - reg_offset` == SVD
+    // base for that case, so it is verified, not allowlisted.
     // Blocks that silicon co-locates INSIDE another peripheral's page. The bus
     // maps one peripheral per address range, so these get a private window at a
     // reserved address. Their real registers are covered by the peripheral whose
@@ -114,20 +116,6 @@ const ALLOWED: &[(&str, &str, Deviation, &str)] = &[
         Deviation::Base,
         "FPU's event registers live in the DCNF page (0x50000000), which `dcnf` \
          already maps; the stub sits at reserved 0x50002000 instead.",
-    ),
-    // KNOWN GAP, not a bookkeeping quirk: on nRF52840 the two GPIO ports share
-    // one 4KB page — P0 at 0x50000000, P1 at 0x50000300 — so P1's registers
-    // overlap P0's window. The GPIO model gives every port its own 4KB block, so
-    // P1 cannot be mapped where silicon puts it and is parked at 0x50001000.
-    // Firmware addressing P1 at its real 0x50000300 therefore lands in gpio0.
-    // Closing this needs the GPIO model to support sub-page ports; until then
-    // the deviation is recorded here rather than hidden.
-    (
-        "nrf52840",
-        "gpio1",
-        Deviation::Base,
-        "P1 overlaps P0's 4KB page on silicon; the per-port GPIO model cannot \
-         represent that, so P1 is parked at 0x50001000. KNOWN GAP.",
     ),
 ];
 
@@ -267,7 +255,15 @@ fn chip_configs_match_their_svd() {
             checked += 1;
 
             let svd_bases = &facts.bases[name];
-            if !svd_bases.contains(&p.base_address) && !allowed(chip, &p.id, Deviation::Base) {
+            // A compact window (`reg_offset`) starts that far into the block.
+            let block_base = p
+                .config
+                .get("reg_offset")
+                .and_then(|v| v.as_u64())
+                .and_then(|off| p.base_address.checked_sub(off));
+            let base_ok = svd_bases.contains(&p.base_address)
+                || block_base.is_some_and(|b| svd_bases.contains(&b));
+            if !base_ok && !allowed(chip, &p.id, Deviation::Base) {
                 let mut want: Vec<_> = svd_bases.iter().map(|b| format!("{b:#X}")).collect();
                 want.sort();
                 failures.push(format!(
