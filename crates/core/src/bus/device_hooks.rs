@@ -66,7 +66,7 @@ impl SystemBus {
     /// Early-outs on a bus with no such device, which is almost every bus.
     #[inline]
     pub(crate) fn service_device_pin_drives(&mut self) {
-        if !self.device_pin_pads.is_empty() {
+        if !self.device_pin_pads.is_empty() || !self.device_output_observers.is_empty() {
             self.service_bound_device_pin_drives();
         }
     }
@@ -84,9 +84,24 @@ impl SystemBus {
             return;
         }
         for (device_id, role, raw_level) in drives {
-            // One source can feed several pads. Resolve each destination
-            // independently; the source level also remains available unchanged
-            // for a future direct device-output observer.
+            // Device-to-device wires are first-class: notify every sink that
+            // names this source role without inventing an MCU pad. One expander
+            // output may fan out to several loads, exactly as one copper net can.
+            let now = self.current_cycle;
+            for binding in self.device_output_observers.iter_mut().filter(|binding| {
+                binding.source_device_id == device_id && binding.source_role == role
+            }) {
+                let from = binding.previous_level;
+                binding.previous_level = raw_level;
+                if from != raw_level {
+                    binding
+                        .observer
+                        .on_pin_change(binding.observer_pin, from, raw_level, now);
+                }
+            }
+
+            // The same source role may also be connected to one or more MCU
+            // input pads. Resolve each destination independently.
             let pads: Vec<_> = self
                 .device_pin_pads
                 .iter()
