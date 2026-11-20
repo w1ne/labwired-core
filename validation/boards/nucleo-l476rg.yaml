@@ -512,6 +512,8 @@ silicon:
 # no live re-capture. This is an ACK, NOT A CAPTURE — a live re-capture
 # is owed.
 models:
+  # Track the descriptor-derived EXTI source mux. No new silicon capture.
+  - configs/peripherals/stm32l476/syscfg.yaml
   - configs/peripherals/stm32l476/uid.yaml
   - crates/core/src/peripherals/esp_ledc_wave.rs
   - crates/core/src/cpu/cortex_m.rs

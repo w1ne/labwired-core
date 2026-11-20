@@ -39,3 +39,24 @@ fn uid_is_twelve_read_only_bytes_with_explicit_unspecified_identity() {
         "map only the 96-bit identifier"
     );
 }
+
+#[test]
+fn explicit_uid_fixtures_are_isolated_and_read_only_without_custom_files() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../configs/chips/stm32l476.yaml");
+    let chip = ChipDescriptor::from_file(&path).unwrap();
+    for fixture in [[0x1001u32, 0x2001, 0x3001], [0x1002, 0x2002, 0x3002]] {
+        let manifest: SystemManifest = serde_yaml::from_str(&format!(
+            "name: explicit-synthetic-uid\nchip: stm32l476\nperipherals:\n- id: uid\n  type: declarative\n  base_address: 536835472\n  size: 12B\n  config:\n    path: configs/peripherals/stm32l476/uid.yaml\n    reset_values: {{UID0: {}, UID1: {}, UID2: {}}}\n", fixture[0], fixture[1], fixture[2]
+        )).unwrap();
+        let mut instance = SystemBus::from_config(&chip, &manifest).unwrap();
+        for (i, value) in fixture.into_iter().enumerate() {
+            let address = UID + i as u64 * 4;
+            assert_eq!(instance.read_u32(address).unwrap(), value);
+            instance.write_u32(address, 0xffff_ffff).unwrap();
+            assert_eq!(instance.read_u32(address).unwrap(), value);
+        }
+        assert!(instance.read_u32(UID + 12).is_err());
+    }
+    // Constructing instances must not alter the shared default descriptor.
+    assert_eq!(bus().read_u32(UID).unwrap(), 0);
+}

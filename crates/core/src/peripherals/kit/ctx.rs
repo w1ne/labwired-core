@@ -328,7 +328,17 @@ impl<'a> AttachCtx<'a> {
         pads.chain(links)
     }
 
-    pub fn attach_i2c_device(&mut self, mut device: Box<dyn I2cDevice>) -> Result<()> {
+    pub fn attach_i2c_device(&mut self, device: Box<dyn I2cDevice>) -> Result<()> {
+        self.attach_i2c_device_with_supply(device).map(|_| ())
+    }
+
+    /// Attach through the same trace/power choke point and return its shared
+    /// supply gate for a mixed-transport device's GPIO/UART side. All sides of
+    /// the physical IC must agree on the declared rail state.
+    pub fn attach_i2c_device_with_supply(
+        &mut self,
+        mut device: Box<dyn I2cDevice>,
+    ) -> Result<crate::peripherals::components::supply_domain::SupplyGate> {
         // Input devices get their system.yaml id stamped here (the ONE kit
         // attach path), so discovery and the stimulus resolver address them
         // by the name the author wrote (see crate::sim_input).
@@ -355,7 +365,10 @@ impl<'a> AttachCtx<'a> {
         // asymmetry is load-bearing: the curated labs declare no rails at all.
         let gate = crate::peripherals::components::supply_domain::SupplyGate::from_config(self)?;
         device = Box::new(
-            crate::peripherals::components::supply_domain::GatedI2cDevice::new(device, gate),
+            crate::peripherals::components::supply_domain::GatedI2cDevice::new(
+                device,
+                gate.clone(),
+            ),
         );
         // Funnel through the single bus choke point, which wraps the device in
         // the shared bus trace before handing it to whichever I²C controller the
@@ -363,7 +376,8 @@ impl<'a> AttachCtx<'a> {
         let connection = self.ext.connection.clone();
         self.bus
             .attach_i2c_slave_with_route(&connection, device, Some(&self.ext.route))
-            .map_err(|err| anyhow::anyhow!("{}: {err:#}", wrong_transport_err(self.ext, "I2C")))
+            .map_err(|err| anyhow::anyhow!("{}: {err:#}", wrong_transport_err(self.ext, "I2C")))?;
+        Ok(gate)
     }
 
     /// Attach an [`SpiDevice`] to whichever SPI controller the `connection:`

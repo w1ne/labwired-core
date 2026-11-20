@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MIT
+# TI SN74HC165, SCLS116H (December2015), sections3 and8.4:
+# https://www.ti.com/lit/ds/symlink/sn74hc165.pdf
+# GPIO interface using the existing generic GPIO rule engine.
+# This wiring profile ties SER and CLK INH to GND (the native DI8 board).
+# SH/LD low is transparent; high shifts toward QH on each rising CLK.
+# Raw inputs are A..H = ch0..ch7; high/open=1, grounded/closed=0.
+# No bounce, propagation delay, voltage thresholds or floating power-on proof.
+type: sn74hc165_gpio
+
+behavior:
+  primitive: gpio_device
+  output_update: final_level
+  pins:
+    LATCH: latch_pin
+    CLOCK: clock_pin
+  outputs: [DATA]
+  output_pins: {DATA: data_pin}
+  vars: {shift: 255}
+  rules:
+    - on: {pins: [LATCH, CLOCK]}
+      when: "!pin(LATCH)"
+      do: &load
+        - var:
+            name: shift
+            value: "input(ch0) | (input(ch1) << 1) | (input(ch2) << 2) | (input(ch3) << 3) | (input(ch4) << 4) | (input(ch5) << 5) | (input(ch6) << 6) | (input(ch7) << 7)"
+        - {pin: DATA, level: "(var(shift) >> 7) & 1"}
+    - {on: {input: ch0}, when: "!pin(LATCH)", do: *load}
+    - {on: {input: ch1}, when: "!pin(LATCH)", do: *load}
+    - {on: {input: ch2}, when: "!pin(LATCH)", do: *load}
+    - {on: {input: ch3}, when: "!pin(LATCH)", do: *load}
+    - {on: {input: ch4}, when: "!pin(LATCH)", do: *load}
+    - {on: {input: ch5}, when: "!pin(LATCH)", do: *load}
+    - {on: {input: ch6}, when: "!pin(LATCH)", do: *load}
+    - {on: {input: ch7}, when: "!pin(LATCH)", do: *load}
+    - on: {pin: CLOCK, edge: rising}
+      when: "pin(LATCH)"
+      do:
+        - {var: {name: shift, value: "(var(shift) << 1) & 255"}}
+        - {pin: DATA, level: "(var(shift) >> 7) & 1"}
+
+metadata:
+  label: "SN74HC165 GPIO input register"
+  summary: "Eight raw digital inputs, parallel load and GPIO clock."
+  detail: "SH/LD low loads transparently; rising CLK shifts toward QH while SH/LD is high. H is sampled before the first pulse. This profile requires SER and CLK INH grounded; it fills with zeros after eight clocks. No analog or propagation timing."
+  category: gpio
+  config_keys:
+    - {name: latch_pin, ty: str, doc: "SH/LD MCU output."}
+    - {name: clock_pin, ty: str, doc: "CLK MCU output."}
+    - {name: data_pin, ty: str, doc: "QH MCU input."}
+    - {name: inputs, ty: int, doc: "Initial raw8-bit A..H parallel state,0..255; default all high."}
+  inputs:
+    - key: ch
+      label: "Input"
+      unit: bool
+      min: 0
+      max: 1
+      default: 1
+      bits: {count: 8, config_key: inputs}
+
+emit:
+  connection: gpio
+  config:
+    - {key: latch_pin, from_part_pins: [SH_LD, LOAD, LATCH]}
+    - {key: clock_pin, from_part_pins: [CLK, CLOCK]}
+    - {key: data_pin, from_part_pins: [QH, DATA]}

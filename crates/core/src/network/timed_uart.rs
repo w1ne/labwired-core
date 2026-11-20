@@ -88,6 +88,17 @@ pub struct LineFormat {
     pub rx_enabled: bool,
     /// UE and TE: the transmitter drives the line.
     pub tx_enabled: bool,
+    /// UART pin polarity (STM32 USART_CR2 TXINV/RXINV), before any external
+    /// transceiver. The transmitted start, data, parity, stop and idle levels
+    /// all invert together; receive inversion precedes start-edge detection.
+    #[serde(skip_serializing_if = "is_false")]
+    pub tx_inverted: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    pub rx_inverted: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl LineFormat {
@@ -123,10 +134,10 @@ impl LineFormat {
             Parity::Odd => !ones,
         }
     }
-    /// Line level of bit `idx` (0 = start) of `value`; stop and idle are 1.
+    /// Physical pin level of bit `idx` (0 = start), including TX inversion.
     pub(crate) fn level_of_bit(&self, value: u16, idx: u64) -> bool {
         let data = u64::from(self.data_bits);
-        if idx == 0 {
+        let logical = if idx == 0 {
             false
         } else if idx <= data {
             (value >> (idx - 1)) & 1 == 1
@@ -134,7 +145,8 @@ impl LineFormat {
             self.parity_bit(value)
         } else {
             true
-        }
+        };
+        logical ^ self.tx_inverted
     }
 }
 
@@ -169,13 +181,13 @@ impl Wire {
 
     fn level_at(&self, t: u64) -> bool {
         if t < self.t0_ps {
-            return true;
+            return !self.tx.tx_inverted;
         }
         if self.truncate_ps.is_some_and(|cut| t >= cut) {
             return true;
         }
         if self.tx.bit_ps == 0 {
-            return true;
+            return !self.tx.tx_inverted;
         }
         let idx = (t - self.t0_ps) / self.tx.bit_ps;
         self.tx.level_of_bit(self.value, idx)
@@ -185,28 +197,32 @@ impl Wire {
 /// The line a receiver sees: the characters on the wire toward it, in time
 /// order and never overlapping, idle (1) between and after them.
 fn line_level(inbox: &VecDeque<Wire>, t: u64) -> bool {
+    let mut idle = true;
     for w in inbox {
         if t < w.t0_ps {
-            return true;
+            return !w.tx.tx_inverted;
         }
         if t < w.end_ps() {
             return w.level_at(t);
         }
+        // A cut link retains the existing pulled-high model. An intact
+        // inverted transmitter instead holds its stop/idle level low.
+        idle = w.truncate_ps.is_some() || !w.tx.tx_inverted;
     }
-    true
+    idle
 }
 
-/// The first falling edge of the line at or after `from`, and the character
+/// The first logical start edge at or after `from`, and the character
 /// it belongs to. Every start bit is one; with a mismatched receiver a data
 /// bit can be one too.
-fn next_falling_edge(inbox: &VecDeque<Wire>, from: u64) -> Option<(u64, usize)> {
+fn next_start_edge(inbox: &VecDeque<Wire>, from: u64, rx_inverted: bool) -> Option<(u64, usize)> {
     for (i, w) in inbox.iter().enumerate() {
         if w.end_ps() <= from || w.tx.bit_ps == 0 || w.instant {
             continue;
         }
-        let mut prev = true; // the line before a start bit is idle or a stop bit
+        let mut prev = !w.tx.tx_inverted ^ rx_inverted;
         for k in 0..=w.tx.bits_before_stop() {
-            let level = w.tx.level_of_bit(w.value, k);
+            let level = w.tx.level_of_bit(w.value, k) ^ rx_inverted;
             let tb = w.t0_ps + k * w.tx.bit_ps;
             if tb >= w.end_ps() {
                 break;
@@ -223,7 +239,8 @@ fn next_falling_edge(inbox: &VecDeque<Wire>, from: u64) -> Option<(u64, usize)> 
 /// Two formats a receiver decodes correctly and within the character: same
 /// framing and bit times within 1/32 (about 3 %, inside the USART's tolerance).
 fn formats_match(tx: &LineFormat, rx: &LineFormat) -> bool {
-    tx.data_bits == rx.data_bits
+    tx.tx_inverted == rx.rx_inverted
+        && tx.data_bits == rx.data_bits
         && tx.parity == rx.parity
         && tx.bit_ps.abs_diff(rx.bit_ps) <= tx.bit_ps / 32
 }
@@ -251,28 +268,29 @@ fn decode_line(inbox: &VecDeque<Wire>, edge: u64, rx: &LineFormat) -> Option<Dec
 }
 
 fn decode_with(edge: u64, rx: &LineFormat, level: impl Fn(u64) -> bool) -> Option<Decoded> {
+    let logical_level = |t| level(t) ^ rx.rx_inverted;
     let bit = rx.bit_ps;
     let half = bit / 2;
     let at = |k: u64| edge + k * bit + half;
-    if level(at(0)) {
+    if logical_level(at(0)) {
         return None;
     }
     let data = u64::from(rx.data_bits);
     let mut value: u16 = 0;
     for i in 0..data {
-        if level(at(1 + i)) {
+        if logical_level(at(1 + i)) {
             value |= 1 << i;
         }
     }
     let mut parity_error = false;
     if rx.parity != Parity::None {
-        let p = level(at(1 + data));
+        let p = logical_level(at(1 + data));
         parity_error = p != rx.parity_bit(value);
         if p {
             value |= 1 << data;
         }
     }
-    let framing_error = !level(at(rx.bits_before_stop()));
+    let framing_error = !logical_level(at(rx.bits_before_stop()));
     Some(Decoded {
         value,
         framing_error,
@@ -408,6 +426,82 @@ impl DirStats {
     }
 }
 
+/// A digital line contribution. Unknown is distinct from high impedance:
+/// a query older than retained history must not create a clean electrical state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DigitalDrive {
+    HighImpedance,
+    Low,
+    High,
+    Unknown,
+}
+
+impl DigitalDrive {
+    pub fn level(self) -> Option<bool> {
+        match self {
+            Self::Low => Some(false),
+            Self::High => Some(true),
+            _ => None,
+        }
+    }
+    pub fn from_level(level: Option<bool>) -> Self {
+        match level {
+            Some(false) => Self::Low,
+            Some(true) => Self::High,
+            None => Self::HighImpedance,
+        }
+    }
+}
+
+const DIGITAL_HISTORY_CAP: usize = 4096;
+
+#[derive(Debug)]
+struct DigitalHistory {
+    transitions: VecDeque<(u64, DigitalDrive)>,
+    discarded: u64,
+}
+
+impl DigitalHistory {
+    fn new() -> Self {
+        Self {
+            transitions: VecDeque::new(),
+            discarded: 0,
+        }
+    }
+    fn push(&mut self, at: u64, level: DigitalDrive) -> anyhow::Result<()> {
+        if let Some((last_at, last_level)) = self.transitions.back() {
+            anyhow::ensure!(
+                at >= *last_at,
+                "digital line transition is out of time order"
+            );
+            if *last_level == level {
+                return Ok(());
+            }
+        }
+        if self.transitions.len() == DIGITAL_HISTORY_CAP {
+            self.transitions.pop_front();
+            self.discarded += 1;
+        }
+        self.transitions.push_back((at, level));
+        Ok(())
+    }
+    fn at(&self, at: u64) -> DigitalDrive {
+        if self.discarded > 0
+            && self
+                .transitions
+                .front()
+                .is_some_and(|(first, _)| at < *first)
+        {
+            return DigitalDrive::Unknown;
+        }
+        self.transitions
+            .iter()
+            .rev()
+            .find(|(time, _)| *time <= at)
+            .map_or(DigitalDrive::HighImpedance, |(_, level)| *level)
+    }
+}
+
 #[derive(Debug)]
 struct Port {
     node: String,
@@ -427,6 +521,9 @@ struct Port {
     /// Digital transceiver propagation at this endpoint; zero on bare UARTs.
     tx_path_delay_ps: u64,
     rx_path_delay_ps: u64,
+    /// Non-UART drive on this same wire (for example GPIO/TIM SIO). UART
+    /// serialization remains in Wire; this history does not inject bytes.
+    digital_drive: DigitalHistory,
 }
 
 #[derive(Debug)]
@@ -660,6 +757,7 @@ impl TimedUartNet {
                 tx_sniff: Sniffer::default(),
                 tx_path_delay_ps: 0,
                 rx_path_delay_ps: 0,
+                digital_drive: DigitalHistory::new(),
             });
         }
         let dir_stats = |from: &Port, to: &Port| DirStats {
@@ -903,6 +1001,36 @@ impl TimedUartPort {
         g.ports[self.port].rx_path_delay_ps = rx_ps;
     }
 
+    /// Publish a non-UART electrical drive from the MCU pad, with this
+    /// endpoint's driver propagation. High impedance is a real release.
+    pub fn drive_digital(&self, cycle: u64, level: DigitalDrive) -> anyhow::Result<()> {
+        let mut g = self.lock();
+        let port = &mut g.ports[self.port];
+        let at = cycles_to_ps(cycle, self.hz).saturating_add(port.tx_path_delay_ps);
+        port.digital_drive.push(at, level)
+    }
+
+    /// Peer CQ contribution at this endpoint in physical line time. It
+    /// includes cable delay, before the receiving transceiver's propagation.
+    /// Queries search history, so a later CPU slice cannot overwrite the past.
+    pub fn peer_digital_drive(&self, cycle: u64) -> DigitalDrive {
+        let g = self.lock();
+        let own = &g.ports[self.port];
+        let link = &g.links[own.link];
+        if !link.connected {
+            return DigitalDrive::HighImpedance;
+        }
+        let at = cycles_to_ps(cycle, self.hz);
+        let Some(at) = at.checked_sub(link.delay_ps) else {
+            return DigitalDrive::HighImpedance;
+        };
+        g.ports[link.ports[own.side ^ 1]].digital_drive.at(at)
+    }
+
+    pub fn digital_history_discarded(&self) -> u64 {
+        self.lock().ports[self.port].digital_drive.discarded
+    }
+
     /// The USART's registers changed: record its line format.
     pub fn publish_format(&self, fmt: LineFormat) {
         self.lock().ports[self.port].fmt = fmt;
@@ -1034,7 +1162,7 @@ impl TimedUartPort {
                 .find(|w| !w.decoded && w.end_ps() > port.hunt_ps)
                 .map(Wire::end_ps);
         }
-        let (edge, _) = next_falling_edge(&port.inbox, port.hunt_ps)?;
+        let (edge, _) = next_start_edge(&port.inbox, port.hunt_ps, rx.rx_inverted)?;
         Some(edge + rx.sample_offset_ps())
     }
 
@@ -1125,8 +1253,8 @@ impl TimedUartPort {
                 port.hunt_ps = due;
                 (i, Err(DropReason::RxDisabled))
             } else {
-                let (edge, i) =
-                    next_falling_edge(&port.inbox, port.hunt_ps).expect("next_due_ps found one");
+                let (edge, i) = next_start_edge(&port.inbox, port.hunt_ps, rx.rx_inverted)
+                    .expect("next_due_ps found one");
                 let d = decode_line(&port.inbox, edge, rx);
                 // The receiver hunts for the next start edge after this
                 // character's stop-bit sample (or, on a false start, after
@@ -1358,6 +1486,8 @@ mod tests {
             stop_half_bits: 2,
             rx_enabled: true,
             tx_enabled: true,
+            tx_inverted: false,
+            rx_inverted: false,
         }
     }
 

@@ -598,6 +598,9 @@ fn real_g0_firmware_timed_cq_session() {
         stop_half_bits: 2,
         rx_enabled: true,
         tx_enabled: true,
+        // The test peer is on physical CQ, beyond the TI inverter.
+        tx_inverted: true,
+        rx_inverted: true,
     };
     master.publish_format(fmt);
     let mut records = Vec::new();

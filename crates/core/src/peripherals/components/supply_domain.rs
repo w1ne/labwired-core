@@ -118,7 +118,7 @@ impl SupplyDomain {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SupplyGate {
     domain: Option<Arc<SupplyDomain>>,
     enabled: bool,

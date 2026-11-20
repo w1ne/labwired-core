@@ -35,8 +35,9 @@
 //! control, 9-bit transmit data (the high bit of DR is not captured), and the
 //! APB prescaler (BRR is read in core clock cycles — true when PCLK = HCLK).
 
-use super::Uart;
+use super::{Uart, LINE_TX};
 use crate::network::timed_uart::{LineFormat, Parity, TimedUartPort};
+use crate::peripherals::pad_lines::LineDrive;
 use std::sync::Mutex;
 
 // CR1 (RM0368 §19.6.4).
@@ -65,6 +66,18 @@ const SR_RXNE: u8 = 1 << 5;
 const SR_TC: u8 = 1 << 6;
 const SR_TXE: u8 = 1 << 7;
 
+/// The already-running timed shifter's MCU-pad view. It uses the same captured
+/// format and bit positions as `Wire`; it does not queue or decode another byte.
+#[derive(Debug)]
+struct TxPadFrame {
+    start: u64,
+    value: u16,
+    format: LineFormat,
+    bit_cycles: u64,
+    frame_cycles: u64,
+    next_bit: u64,
+}
+
 /// Registers the timed mode adds, behind a lock because `read` is `&self`
 /// and a DR read has side effects (it clears RXNE, and ORE/FE/PE after an SR
 /// read).
@@ -90,6 +103,7 @@ pub(crate) struct TimedRegs {
     next_wake: Option<u64>,
     tx_on_cq: bool,
     local_echo: Option<(u64, u16)>,
+    tx_pad: Option<TxPadFrame>,
 }
 
 #[derive(Debug)]
@@ -148,8 +162,8 @@ impl Uart {
         }
         // The console sink would splice protocol bytes into the log.
         self.set_sink(None, false);
-        if let Some(phy) = &self.tiol112 {
-            port.set_path_delays(phy.driver_delay_ps, phy.receiver_delay_ps);
+        if let Some(phy) = &self.transceiver {
+            port.set_path_delays(phy.driver_delay_ps(), phy.receiver_delay_ps());
             phy.bind_timed_port(port.clone());
         }
         self.timed = Some(Box::new(TimedUart {
@@ -223,7 +237,18 @@ impl Uart {
             stop_half_bits,
             rx_enabled: ue && self.cr1 & CR1_RE != 0,
             tx_enabled: ue && self.cr1 & CR1_TE != 0,
+            // ST RM0351 USART_CR2: RXINV bit16, TXINV bit17. Legacy STM32
+            // layouts do not expose these modern polarity controls.
+            tx_inverted: self.modern_timed() && self.cr2 & (1 << 17) != 0,
+            rx_inverted: self.modern_timed() && self.cr2 & (1 << 16) != 0,
         }
+    }
+
+    fn timed_wire_format(&self) -> LineFormat {
+        let format = self.timed_format();
+        self.transceiver
+            .as_ref()
+            .map_or(format, |phy| phy.wire_format(format))
     }
 
     fn timed_frame_cycles(&self, fmt: &LineFormat) -> u64 {
@@ -233,7 +258,60 @@ impl Uart {
 
     pub(crate) fn timed_publish(&self) {
         if let Some(t) = &self.timed {
-            t.port.publish_format(self.timed_format());
+            t.port.publish_format(self.timed_wire_format());
+            let r = t.regs.lock().unwrap_or_else(|e| e.into_inner());
+            if !r.tx_active {
+                if let Some(lines) = &self.lines {
+                    let fmt = self.timed_format();
+                    lines.drive_line(
+                        LINE_TX,
+                        if fmt.tx_enabled {
+                            LineDrive::PushPull
+                        } else {
+                            LineDrive::Input
+                        },
+                        !fmt.tx_inverted,
+                    );
+                }
+            }
+        }
+    }
+
+    /// Publish elapsed shifter bits at their actual cycles, before external
+    /// GPIO devices sample the pad. The USART's TXINV acts here; the external
+    /// transceiver inversion acts separately on the shared network wire.
+    fn timed_tx_pad(&self, now: u64, r: &mut TimedRegs, fmt: &LineFormat) {
+        let Some(lines) = &self.lines else {
+            return;
+        };
+        if let Some(frame) = &mut r.tx_pad {
+            lines.set_mode(LINE_TX, LineDrive::PushPull);
+            while frame.next_bit <= frame.format.bits_before_stop() {
+                let at = frame.start + frame.next_bit * frame.bit_cycles;
+                if at > now {
+                    break;
+                }
+                lines.set_line_at(
+                    LINE_TX,
+                    frame.format.level_of_bit(frame.value, frame.next_bit),
+                    at,
+                );
+                frame.next_bit += 1;
+            }
+            if now >= frame.start + frame.frame_cycles {
+                r.tx_pad = None;
+            }
+        }
+        if r.tx_pad.is_none() {
+            lines.drive_line(
+                LINE_TX,
+                if fmt.tx_enabled {
+                    LineDrive::PushPull
+                } else {
+                    LineDrive::Input
+                },
+                !fmt.tx_inverted,
+            );
         }
     }
 
@@ -382,7 +460,6 @@ impl Uart {
     /// After a config register write: publish the new format and reset a
     /// disabled UART. Request levels are derived from the live registers.
     pub(crate) fn timed_config_written(&mut self) {
-        self.timed_publish();
         let now = self.timed_now();
         let enabled = self.timed_enabled();
         if let Some(t) = &self.timed {
@@ -394,6 +471,7 @@ impl Uart {
                 *r = TimedRegs::default();
             }
         }
+        self.timed_publish();
     }
 
     fn modern_timed(&self) -> bool {
@@ -450,14 +528,16 @@ impl Uart {
     /// due characters. Returns true on a rising edge of the interrupt line.
     pub(crate) fn timed_service(&mut self, now: u64) -> bool {
         let fmt = self.timed_format();
+        let wire_fmt = self.timed_wire_format();
         let frame_cycles = self.timed_frame_cycles(&fmt);
         let (cr1, cr3) = (self.cr1, self.cr3);
         let Some(t) = &self.timed else {
             return false;
         };
         let mut r = t.regs.lock().unwrap_or_else(|e| e.into_inner());
+        self.timed_tx_pad(now, &mut r, &fmt);
         // TX: a finished character frees the shifter; a waiting TDR moves in.
-        // TIOL112's GPIO observer schedules CQ release/truncation at the
+        // The transceiver GPIO observer schedules release/truncation at the
         // configured disable delay, even between UART scheduler wakes.
         if r.tx_active && now >= r.shift_busy_until {
             r.tx_active = false;
@@ -472,27 +552,40 @@ impl Uart {
                 if start <= now {
                     r.tdr = None;
                     if fmt.tx_enabled && fmt.configured() {
-                        let on_cq = self.tiol112.as_ref().is_none_or(|phy| {
+                        let on_cq = self.transceiver.as_ref().is_none_or(|phy| {
                             phy.allow_timed_tx(start, t.port.hz()) && self.presc == 0
                         });
                         if on_cq {
-                            t.port.transmit(start, value, fmt);
-                            if let Some(phy) = &self.tiol112 {
+                            t.port.transmit(start, value, wire_fmt);
+                            if let Some(phy) = &self.transceiver {
                                 phy.record_timed_tx(start, value, fmt, t.port.hz());
-                                let echo_delay = phy.driver_delay_ps
-                                    + phy.receiver_delay_ps
+                                let echo_delay = phy.driver_delay_ps()
+                                    + phy.receiver_delay_ps()
                                     + fmt.sample_offset_ps();
-                                r.local_echo = Some((
-                                    start
-                                        + crate::network::timed_uart::ps_to_cycles_ceil(
-                                            echo_delay,
-                                            t.port.hz(),
-                                        ),
-                                    value,
-                                ));
+                                // A polarity mismatch must not become a clean local byte.
+                                r.local_echo = (fmt.rx_enabled
+                                    && phy.receiver_valid()
+                                    && wire_fmt.tx_inverted == wire_fmt.rx_inverted)
+                                    .then_some((
+                                        start
+                                            + crate::network::timed_uart::ps_to_cycles_ceil(
+                                                echo_delay,
+                                                t.port.hz(),
+                                            ),
+                                        value,
+                                    ));
                             }
                         }
-                        r.tx_on_cq = on_cq && self.tiol112.is_some();
+                        r.tx_on_cq = on_cq && self.transceiver.is_some();
+                        r.tx_pad = self.lines.as_ref().map(|_| TxPadFrame {
+                            start,
+                            value,
+                            format: fmt,
+                            bit_cycles: self.timed_bit_cycles(),
+                            frame_cycles,
+                            next_bit: 0,
+                        });
+                        self.timed_tx_pad(now, &mut r, &fmt);
                         r.tx_active = true;
                         r.shift_busy_until = start + frame_cycles;
                         if now >= r.shift_busy_until {
@@ -504,10 +597,12 @@ impl Uart {
             }
         }
         // RX.
-        let mut receive_format = fmt;
-        if self.tiol112.as_ref().is_some_and(|phy| {
-            phy.cq_driving_at(now, t.port.hz())
-                || (fmt.rx_enabled && fmt.configured() && (!phy.clock_valid() || self.presc != 0))
+        let mut receive_format = wire_fmt;
+        if self.transceiver.as_ref().is_some_and(|phy| {
+            phy.driving_at(now, t.port.hz())
+                || (fmt.rx_enabled
+                    && fmt.configured()
+                    && (!phy.receiver_valid() || self.presc != 0))
         }) {
             receive_format.rx_enabled = false; // shared CQ contention: no clean peer character
         }
@@ -540,7 +635,12 @@ impl Uart {
         if let Some((due, value)) = r.local_echo.filter(|(due, _)| *due <= now) {
             let _ = due;
             r.local_echo = None;
-            if fmt.rx_enabled {
+            if fmt.rx_enabled
+                && self
+                    .transceiver
+                    .as_ref()
+                    .is_none_or(|phy| phy.receiver_valid())
+            {
                 if r.rxne && !overwrite {
                     r.ore = true;
                 } else {
@@ -560,7 +660,7 @@ impl Uart {
 
     /// The next cycle after `now` this USART must be serviced at, if any.
     pub(crate) fn timed_due(&self, now: u64) -> Option<u64> {
-        let fmt = self.timed_format();
+        let fmt = self.timed_wire_format();
         let t = self.timed.as_ref()?;
         let r = t.regs.lock().unwrap_or_else(|e| e.into_inner());
         let mut due: Option<u64> = None;
@@ -578,6 +678,11 @@ impl Uart {
         }
         if r.tx_active {
             want(r.shift_busy_until);
+            if let Some(frame) = &r.tx_pad {
+                if frame.next_bit <= frame.format.bits_before_stop() {
+                    want(frame.start + frame.next_bit * frame.bit_cycles);
+                }
+            }
         }
         if r.tdr.is_some() && !r.tx_active {
             want(r.shift_busy_until.max(r.tdr_written_cycle + 1));

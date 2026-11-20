@@ -131,6 +131,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
         include_str!("../../../configs/devices/sn74hc165.yaml"),
     ),
     (
+        &["sn74hc165_gpio"],
+        include_str!("../../../configs/devices/sn74hc165_gpio.yaml"),
+    ),
+    (
         &["lsm303agr_accel"],
         include_str!("../../../configs/devices/lsm303agr_accel.yaml"),
     ),

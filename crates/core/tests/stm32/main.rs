@@ -54,3 +54,12 @@ mod timer_masked_level_batches;
 mod u545_u575_drift_guard;
 mod u5_exti;
 mod u5_reference_firmware;
+
+mod l6360_digital;
+mod l6362a_digital;
+mod stm32_iolink_physical;
+mod stm32l476_exti_mux;
+
+mod sn74hc165_gpio;
+
+mod timed_uart_pad;

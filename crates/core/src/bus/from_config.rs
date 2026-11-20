@@ -14,6 +14,65 @@ use labwired_config::{ChipDescriptor, SystemManifest};
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
+/// Apply explicit per-instance fixture reset values before constructing a
+/// declarative register bank. The descriptor's addresses, widths and access
+/// policies remain authoritative. This is also usable by filesystem-free WASM
+/// callers; it never mutates the shared embedded descriptor.
+fn apply_declarative_reset_values(
+    descriptor: &mut labwired_config::PeripheralDescriptor,
+    peripheral: &labwired_config::PeripheralConfig,
+) -> anyhow::Result<()> {
+    let Some(value) = peripheral.config.get("reset_values") else {
+        return Ok(());
+    };
+    let values = value.as_mapping().ok_or_else(|| {
+        anyhow::anyhow!(
+            "{}: reset_values must be a register-id mapping",
+            peripheral.id
+        )
+    })?;
+    for (key, value) in values {
+        let name = key.as_str().ok_or_else(|| {
+            anyhow::anyhow!("{}: reset_values keys must be register ids", peripheral.id)
+        })?;
+        let register = descriptor
+            .registers
+            .iter_mut()
+            .find(|r| r.id == name)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "{}: reset_values names unknown register '{}'",
+                    peripheral.id,
+                    name
+                )
+            })?;
+        let value = value.as_u64().ok_or_else(|| {
+            anyhow::anyhow!(
+                "{}: reset value for '{}' must be an unsigned integer",
+                peripheral.id,
+                name
+            )
+        })?;
+        anyhow::ensure!(
+            matches!(register.size, 8 | 16 | 32),
+            "{}: register '{}' has unsupported width {}",
+            peripheral.id,
+            name,
+            register.size
+        );
+        let maximum = (1u64 << register.size) - 1;
+        anyhow::ensure!(
+            value <= maximum,
+            "{}: reset value for '{}' exceeds its {}-bit width",
+            peripheral.id,
+            name,
+            register.size
+        );
+        register.reset_value = value as u32;
+    }
+    Ok(())
+}
+
 /// Mask ROMs compiled into the binary. Used when `image_env` is unset so a
 /// process with no repo checkout (the browser, a lab worker whose cwd is not
 /// the workspace) still maps the window. An explicit env path still wins;
@@ -1349,7 +1408,7 @@ impl SystemBus {
                     // Prefer the descriptor embedded in the binary (wasm32 has no
                     // std::fs); fall back to the filesystem for native builds and
                     // any path not embedded.
-                    let desc = if let Some(embedded) =
+                    let mut desc = if let Some(embedded) =
                         super::embedded_descriptors::lookup(descriptor_path)
                     {
                         labwired_config::PeripheralDescriptor::from_yaml(embedded).with_context(
@@ -1375,9 +1434,17 @@ impl SystemBus {
                         )?
                     };
 
-                    Box::new(crate::peripherals::declarative::GenericPeripheral::new(
-                        desc,
-                    ))
+                    apply_declarative_reset_values(&mut desc, p_cfg)?;
+                    let mut model = crate::peripherals::declarative::GenericPeripheral::new(desc);
+                    if let Some(value) = p_cfg.config.get("exti_line_source") {
+                        let enabled = value.as_bool().ok_or_else(|| {
+                            anyhow::anyhow!("{}: exti_line_source must be a boolean", p_cfg.id)
+                        })?;
+                        if enabled {
+                            model = model.with_exti_line_source()?;
+                        }
+                    }
+                    Box::new(model)
                 }
                 "strict_ir" => {
                     let descriptor_path = p_cfg
@@ -2183,5 +2250,60 @@ peripherals:
         let (chip, manifest) = chip_with_custom_uart("      tx_offset: 0\n", "4KB");
         SystemBus::from_config(&chip, &manifest)
             .expect("tx_offset 0 with no status_offset must build");
+    }
+}
+
+#[cfg(test)]
+mod reset_values_tests {
+    use super::apply_declarative_reset_values;
+    use labwired_config::{PeripheralConfig, PeripheralDescriptor};
+
+    fn descriptor() -> PeripheralDescriptor {
+        serde_yaml::from_str("peripheral: fixture\nversion: '1.0'\nregisters:\n- {id: R8, address_offset: 0, size: 8, access: RO, reset_value: 0}\n- {id: R16, address_offset: 2, size: 16, access: R/W, reset_value: 0}\n- {id: R32, address_offset: 4, size: 32, access: RO, reset_value: 0}\n").unwrap()
+    }
+    fn config(values: &str) -> PeripheralConfig {
+        serde_yaml::from_str(&format!(
+            "id: fixture\ntype: declarative\nbase_address: 0\nconfig:\n  reset_values: {values}\n"
+        ))
+        .unwrap()
+    }
+    #[test]
+    fn reset_values_preserve_width_and_access_policy() {
+        let mut d = descriptor();
+        apply_declarative_reset_values(&mut d, &config("{R8: 255, R16: 65535, R32: 4294967295}"))
+            .unwrap();
+        assert_eq!(
+            d.registers
+                .iter()
+                .map(|r| r.reset_value)
+                .collect::<Vec<_>>(),
+            [255, 65535, u32::MAX]
+        );
+        assert_eq!(d.registers[0].size, 8);
+        assert_eq!(d.registers[1].size, 16);
+        assert_eq!(d.registers[2].size, 32);
+        assert_eq!(d.registers[0].access, labwired_config::Access::ReadOnly);
+    }
+    #[test]
+    fn reset_values_reject_wrong_shape_unknown_ids_and_out_of_range_values() {
+        for bad in [
+            "null",
+            "7",
+            "[]",
+            "{3: 1}",
+            "{NO_REGISTER: 1}",
+            "{R8: -1}",
+            "{R8: true}",
+            "{R8: 0.5}",
+            "{R8: '7'}",
+            "{R8: 256}",
+            "{R16: 65536}",
+            "{R32: 4294967296}",
+        ] {
+            assert!(
+                apply_declarative_reset_values(&mut descriptor(), &config(bad)).is_err(),
+                "accepted {bad}"
+            );
+        }
     }
 }

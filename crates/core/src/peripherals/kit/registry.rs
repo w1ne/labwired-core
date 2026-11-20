@@ -67,6 +67,8 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::declarative_display::PCD8544_KIT,
     &components::iolink_master::IOLINK_MASTER_KIT,
     &components::tiol112::TIOL112_KIT,
+    &components::l6360::L6360_KIT,
+    &components::l6362a::L6362A_KIT,
     // The analog plants. Every one of these was a hand-written Rust model until
     // the `analog_source` primitive grew a `formula:` (the two that ARE
     // equations — a CdS power law and an NTC beta equation) and more than one

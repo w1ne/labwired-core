@@ -37,6 +37,13 @@ struct StuckBit {
 /// Sentinel for "no register covers this byte" in [`GenericPeripheral::reg_at_byte`].
 const NO_REG: u32 = u32::MAX;
 
+#[derive(Debug, Clone, Copy)]
+struct ExtiSourceField {
+    offset: u64,
+    shift: u8,
+    mask: u32,
+}
+
 #[derive(Debug)]
 pub struct GenericPeripheral {
     descriptor: PeripheralDescriptor,
@@ -60,6 +67,9 @@ pub struct GenericPeripheral {
     /// GPIO descriptors only: pads the outside world holds
     /// ([`PinPort::set_external`]); the level on each is its `IN` bit.
     ext_mask: u32,
+    /// Opt-in line-source mux, resolved from descriptor EXTI0..EXTI15 fields.
+    /// No vendor addresses or field widths live in this runtime seam.
+    exti_source_mux: Option<Vec<ExtiSourceField>>,
 }
 
 impl GenericPeripheral {
@@ -119,6 +129,7 @@ impl GenericPeripheral {
             inflight_events: RefCell::new(Vec::new()),
             stuck_bits: RefCell::new(Vec::new()),
             ext_mask: 0,
+            exti_source_mux: None,
         };
 
         // Initialize periodic events
@@ -136,6 +147,70 @@ impl GenericPeripheral {
             }
         }
         p
+    }
+
+    /// Enable the external-interrupt source selector described by the
+    /// descriptor's EXTI0..EXTI15 fields. It remains a passive register bank;
+    /// the existing EXTI engine owns edge detection, polarity, PR and IRQ.
+    pub fn with_exti_line_source(mut self) -> anyhow::Result<Self> {
+        let mut fields = Vec::with_capacity(16);
+        for line in 0..16 {
+            let name = format!("EXTI{line}");
+            let matches: Vec<_> = self
+                .descriptor
+                .registers
+                .iter()
+                .flat_map(|reg| {
+                    reg.fields
+                        .iter()
+                        .filter(|field| field.name == name)
+                        .map(move |field| (reg, field))
+                })
+                .collect();
+            anyhow::ensure!(
+                matches.len() == 1,
+                "EXTI source mux needs exactly one {name} field"
+            );
+            let (reg, field) = matches[0];
+            let [high, low] = field.bit_range;
+            anyhow::ensure!(
+                reg.size == 32
+                    && reg.access == labwired_config::Access::ReadWrite
+                    && high >= low
+                    && high < 32
+                    && high - low < 8
+                    && reg.side_effects.is_none(),
+                "EXTI source field {name} must be a plain 1..8-bit field in a 32-bit RW register"
+            );
+            let mask = ((1u32 << (high - low + 1)) - 1) << low;
+            anyhow::ensure!(
+                fields
+                    .iter()
+                    .all(|other: &ExtiSourceField| other.offset != reg.address_offset
+                        || other.mask & mask == 0),
+                "EXTI source fields overlap in register {}",
+                reg.id
+            );
+            fields.push(ExtiSourceField {
+                offset: reg.address_offset,
+                shift: low,
+                mask,
+            });
+        }
+        self.exti_source_mux = Some(fields);
+        Ok(self)
+    }
+
+    fn exti_write_mask(&self, offset: u64) -> Option<u32> {
+        let fields = self.exti_source_mux.as_ref()?;
+        let first = fields
+            .iter()
+            .find(|field| offset >= field.offset && offset < field.offset + 4)?;
+        let mask = fields
+            .iter()
+            .filter(|field| field.offset == first.offset)
+            .fold(0u32, |mask, field| mask | field.mask);
+        Some(mask >> ((offset - first.offset) * 8))
     }
 
     pub fn get_descriptor(&self) -> &labwired_config::PeripheralDescriptor {
@@ -537,6 +612,9 @@ impl Peripheral for GenericPeripheral {
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let value = self
+            .exti_write_mask(offset)
+            .map_or(value, |mask| value & mask as u8);
         // Resolve the containing register in O(1) (see `reg_at_byte`).
         if let Some(idx) = self.reg_index_at(offset) {
             let reg = &self.descriptor.registers[idx];
@@ -627,6 +705,9 @@ impl Peripheral for GenericPeripheral {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        let value = self
+            .exti_write_mask(offset)
+            .map_or(value, |mask| value & mask);
         // O(1) resolve + full-fit check, matching `read_u32`; non-fitting or
         // unmapped accesses fall through to the per-byte path unchanged.
         if let Some(idx) = self.reg_index_at(offset) {
@@ -808,6 +889,11 @@ impl Peripheral for GenericPeripheral {
     fn pins_mut(&mut self) -> Option<&mut dyn PinPort> {
         self.gpio_reg_offset("IN")?;
         Some(self)
+    }
+
+    fn exti_line_source(&self, line: u8) -> Option<u8> {
+        let field = self.exti_source_mux.as_ref()?.get(usize::from(line))?;
+        Some(((self.peek_u32_raw(field.offset)? & field.mask) >> field.shift) as u8)
     }
 
     fn peripheral_descriptor(&self) -> Option<PeripheralDescriptor> {
