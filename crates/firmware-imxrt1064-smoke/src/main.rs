@@ -15,6 +15,10 @@
 // 3. Free-run mode with OF2IE and the NVIC line masked: the OF2 level reaches
 //    ISPR, and clearing SR.OF2 drops the level so ICPR stays clear.
 //
+// Then LPUART6 CTRL.TCIE with the NVIC line masked must pend line 25 only
+// (LPUART6_IRQn in MIMXRT1064.h and Renode's imxrt1064.repl) inside the
+// LPUART1..8 window 20..27, and clearing TCIE releases it.
+//
 // Bare-register — no HAL. Soft-float thumbv7em-none-eabi.
 
 #![no_std]
@@ -36,6 +40,8 @@ const LPUART6_STAT: u32 = 0x4019_8004;
 const LPUART6_CTRL: u32 = 0x4019_8008;
 const LPUART6_DATA: u32 = 0x4019_800C;
 const STAT_TDRE: u32 = 1 << 23;
+const STAT_TC: u32 = 1 << 22;
+const CTRL_TCIE: u32 = 1 << 22;
 const CTRL_TE: u32 = 1 << 19;
 const CTRL_RE: u32 = 1 << 18;
 
@@ -68,6 +74,13 @@ const NVIC_ICER3: u32 = 0xE000_E18C;
 const NVIC_ISPR3: u32 = 0xE000_E20C;
 const NVIC_ICPR3: u32 = 0xE000_E28C;
 const GPT1_NVIC_BIT: u32 = 1 << (GPT1_IRQN as u32 - 96);
+
+// LPUART6_IRQn = 25 → NVIC word 0. LPUART1..8 occupy lines 20..27.
+const NVIC_ICER0: u32 = 0xE000_E180;
+const NVIC_ISPR0: u32 = 0xE000_E200;
+const NVIC_ICPR0: u32 = 0xE000_E280;
+const LPUART_LINES: u32 = 0xFF << 20;
+const LPUART6_NVIC_BIT: u32 = 1 << 25;
 
 #[cfg(feature = "onboarding-adc")]
 const ADC1: u32 = 0x400C_4000;
@@ -239,6 +252,40 @@ fn smoke_gpt1() -> bool {
     swr && counting && in_range && irq_ok && of2
 }
 
+fn send_hex_byte(value: u32) {
+    for shift in [4, 0] {
+        let digit = ((value >> shift) & 0xF) as u8;
+        putc(if digit < 10 {
+            b'0' + digit
+        } else {
+            b'a' + digit - 10
+        });
+    }
+}
+
+fn smoke_lpuart6_irq() -> bool {
+    // Drain the transmitter so STAT.TC is set, then mask and clear 20..27.
+    let idle = wait(20_000, || rd(LPUART6_STAT) & STAT_TC != 0);
+    wr(NVIC_ICER0, LPUART_LINES);
+    wr(NVIC_ICPR0, LPUART_LINES);
+    let ctrl = rd(LPUART6_CTRL);
+    wr(LPUART6_CTRL, ctrl | CTRL_TCIE);
+    wait(1_000, || rd(NVIC_ISPR0) & LPUART_LINES != 0);
+    let pended = rd(NVIC_ISPR0) & LPUART_LINES;
+    wr(LPUART6_CTRL, ctrl);
+    wr(NVIC_ICPR0, LPUART_LINES);
+    let released = rd(NVIC_ISPR0) & LPUART_LINES;
+    let ok = idle && pended == LPUART6_NVIC_BIT && released == 0;
+
+    // ISPR bits 20..27 as one byte: 0x20 is line 25.
+    send(b"lpuart6 tcie ispr=");
+    send_hex_byte(pended >> 20);
+    send(b" rel=");
+    send_hex_byte(released >> 20);
+    send(if ok { b" ok\n" } else { b" FAIL\n" });
+    ok
+}
+
 #[cfg(feature = "onboarding-adc")]
 fn smoke_adc1() -> bool {
     // Select 12-bit results while retaining the reset clock selection.
@@ -291,6 +338,8 @@ fn main() -> ! {
     send(b"gpt1 ");
     let ok = smoke_gpt1();
     send(if ok { b"ok\n" } else { b"FAIL\n" });
+
+    smoke_lpuart6_irq();
 
     #[cfg(feature = "onboarding-adc")]
     {
