@@ -1109,7 +1109,15 @@ impl Adc {
     /// ready — that is the whole reason a HAL that skips the wake-up hangs on
     /// silicon, and modelling it is the difference between reproducing that
     /// hang and silently succeeding where the real part would stall.
+    ///
+    /// `ADCAL`, `JADSTP`, `ADSTP`, `JADSTART`, `ADSTART`, `ADDIS` and `ADEN`
+    /// are `rs` bits (RM0433/RM0468 ADC_CR): software sets them, writing 0 has
+    /// no effect, and only hardware clears them. The HAL relies on this:
+    /// `LL_ADC_REG_StartConversion` is `MODIFY_REG(CR,
+    /// ADC_CR_BITS_PROPERTY_RS, ADSTART)`, so the word it writes has ADEN = 0.
+    /// Storing CR verbatim disabled the converter on every start.
     fn h7_apply_cr(&mut self, value: u32) {
+        const RS_BITS: u32 = (1 << 31) | (1 << 5) | (1 << 4) | (1 << 3) | (1 << 2) | (1 << 1) | 1;
         let AdcRegs::Stm32H7(r) = &mut self.regs else {
             return;
         };
@@ -1117,7 +1125,14 @@ impl Adc {
         // (no analog settling to model), so it reads back as already complete
         // rather than latching set forever.
         let calibrating = value & (1 << 31) != 0;
-        r.cr = value & !(1 << 31);
+        r.cr = ((value & !RS_BITS) | ((r.cr | value) & RS_BITS)) & !(1 << 31);
+        // ADSTP/JADSTP stop the regular/injected sequence at once and
+        // self-clear. No injected engine is modelled, so JADSTART completes
+        // immediately rather than latching set.
+        if r.cr & (1 << 4) != 0 {
+            r.cr &= !((1 << 4) | (1 << 2)); // ADSTP, ADSTART
+        }
+        r.cr &= !((1 << 5) | (1 << 3)); // JADSTP, JADSTART
 
         let deeppwd = r.cr & (1 << 29) != 0;
         let advregen = r.cr & (1 << 28) != 0;
@@ -1975,10 +1990,14 @@ impl Peripheral for Adc {
                 // Same byte-merge discipline as the L4 arm: read the current
                 // word, splice in this byte, write the whole word back, so a
                 // `strb` to one byte of CR cannot clear the rest of the
-                // power-up state.
+                // power-up state. ISR is rc_w1, so a byte write clears only
+                // its own bits: merging the read-back word would clear every
+                // flag in the other bytes (LDORDY, ADRDY) on `ISR = EOC|EOS`.
                 let reg = offset & !3;
                 let dr = self.dr;
-                let full = if let AdcRegs::Stm32H7(r) = &self.regs {
+                let full = if reg == 0x00 {
+                    val_shifted
+                } else if let AdcRegs::Stm32H7(r) = &self.regs {
                     (Self::read_reg_h7(r, dr, reg) & !mask) | val_shifted
                 } else {
                     0
@@ -2645,6 +2664,51 @@ mod tests {
             "ADCAL must read back clear on the H7 as well"
         );
         assert_eq!(adc.read_u32(0x08).unwrap(), 1 << 28);
+    }
+
+    /// H7 ADC_CR `rs` bits ignore a 0 write. `LL_ADC_REG_StartConversion` is
+    /// `MODIFY_REG(CR, ADC_CR_BITS_PROPERTY_RS, ADSTART)`: the word it writes
+    /// has ADEN = 0. Stock stm32duino `analogRead` on NUCLEO-H753ZI and
+    /// NUCLEO-H723ZG returned 0 because that write disabled the converter and
+    /// `HAL_ADC_PollForConversion` timed out.
+    #[test]
+    fn test_adc_h7_start_without_aden_in_word_keeps_converter_enabled() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32H7);
+        adc.write_u32(0x08, 0).unwrap(); // leave deep power-down
+        adc.write_u32(0x08, 1 << 28).unwrap(); // ADVREGEN
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap(); // LL_ADC_Enable
+        assert_eq!(adc.read_u32(0x00).unwrap() & 0x1, 1, "ADRDY");
+        adc.write_u32(0x00, (1 << 2) | (1 << 3)).unwrap(); // clear EOC|EOS
+                                                           // MODIFY_REG(CR, RS, ADSTART): ADEN is 0 in the written word.
+        adc.write_u32(0x08, (1 << 28) | (1 << 2)).unwrap();
+        let cr = adc.read_u32(0x08).unwrap();
+        assert_eq!(cr & 0x1, 1, "a 0 write to ADEN has no effect");
+        assert_eq!(cr & (1 << 2), 0, "single conversion done, ADSTART clear");
+        assert_ne!(adc.read_u32(0x00).unwrap() & (1 << 2), 0, "EOC");
+        assert_ne!(adc.read_u32(0x40).unwrap(), 0, "DR holds a code");
+        // Writing 0 to the whole word must not disable it either.
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        assert_eq!(adc.read_u32(0x08).unwrap() & 0x1, 1);
+        // ADDIS is the only software path that clears ADEN.
+        adc.write_u32(0x08, (1 << 28) | (1 << 1)).unwrap();
+        assert_eq!(adc.read_u32(0x08).unwrap(), 1 << 28);
+    }
+
+    /// H7 ISR is rc_w1 through the byte-lane `Peripheral::write` path too.
+    /// `__HAL_ADC_CLEAR_FLAG(EOC|EOS)` must leave LDORDY and ADRDY set; the
+    /// read-merge used for CR cleared them.
+    #[test]
+    fn test_adc_h7_isr_byte_write_clears_only_written_flags() {
+        let mut adc = Adc::new_with_layout(AdcRegisterLayout::Stm32H7);
+        adc.write_u32(0x08, 0).unwrap();
+        adc.write_u32(0x08, 1 << 28).unwrap();
+        adc.write_u32(0x08, (1 << 28) | 1).unwrap();
+        adc.write_u32(0x08, (1 << 28) | (1 << 2)).unwrap(); // ADSTART
+        assert_eq!(adc.read_u32(0x00).unwrap(), 0x100D);
+        for (i, b) in 0x0000_000Cu32.to_le_bytes().iter().enumerate() {
+            Peripheral::write(&mut adc, i as u64, *b).unwrap();
+        }
+        assert_eq!(adc.read_u32(0x00).unwrap(), 0x1001, "LDORDY|ADRDY stay");
     }
 
     /// The H563 is an L4-class ADC: `CFGR.RES` is two bits at [4:3], so the

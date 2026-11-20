@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 6607233,
-  "cycles": 6607233,
-  "instructions": 6607233,
+  "steps_executed": 630000,
+  "cycles": 630000,
+  "instructions": 630000,
   "stop_reason": "assertions_passed",
   "stop_reason_details": {
     "triggered_stop_condition": "assertions_passed",
@@ -32,27 +32,27 @@
   "cpu_state": {
     "type": "arm",
     "registers": [
-      603980524,
-      6291648,
-      9,
-      603980524,
-      603980372,
-      32,
-      10,
-      603980520,
-      134249256,
-      10,
-      63,
+      5,
+      1,
+      3758153984,
       0,
-      128,
-      604307360,
-      4294967289,
-      134233064
+      603981044,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1073881136,
+      604307440,
+      134245375,
+      134245578
     ],
-    "pc": 134233064,
-    "xpsr": 1627390007,
+    "pc": 134245578,
+    "xpsr": 16777216,
     "primask": false,
-    "pending_exceptions": 36028797018963968,
+    "pending_exceptions": 0,
     "pending_exceptions_hi": [
       0,
       0,
@@ -62,11 +62,11 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "ee50f1ea6057e9f60e77ec935d849f74e4c8a47e742b0c4f080b73937869a4ab",
+  "firmware_hash": "9dadbc0ceab622f2ad622b1eac5981f17385d2876cd594293299b9728846b397",
   "config": {
-    "firmware": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/validation/arduino-matrix/out/nucleo-h723zg/L5_adc/firmware.elf",
+    "firmware": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/nucleo-h723zg/L5_adc/firmware.elf",
     "system": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/validation/arduino-matrix/systems/nucleo-h723zg.yaml",
-    "script": "/data/worktrees/legacy-migrated/labwired-hw-onboarding/validation/arduino-matrix/out/nucleo-h723zg/L5_adc/test.yaml"
+    "script": "/home/andrii/worktrees/labwired-core/hw-onboarding/validation/arduino-matrix/out/nucleo-h723zg/L5_adc/test.yaml"
   },
   "inspect": {
     "peripherals": [
@@ -1390,7 +1390,7 @@
             "name": "CR1",
             "offset": 0,
             "size": 32,
-            "value": 173,
+            "value": 45,
             "fields": [
               {
                 "name": "UE",
@@ -1454,7 +1454,7 @@
                   7,
                   7
                 ],
-                "value": 1
+                "value": 0
               },
               {
                 "name": "PEIE",
@@ -13548,7 +13548,7 @@
             "name": "CCR",
             "offset": 8,
             "size": 32,
-            "value": 196608,
+            "value": 0,
             "fields": [
               {
                 "name": "DUAL",
@@ -13580,7 +13580,7 @@
                   16,
                   17
                 ],
-                "value": 1
+                "value": 0
               },
               {
                 "name": "PRESC",
@@ -14335,30 +14335,31 @@
     "lines": [
       {
         "text": "LW_L5_BOOT",
-        "cycle_lo": 553815,
-        "cycle": 553816,
-        "end_cycle": 554865
+        "cycle_lo": 550000,
+        "cycle": 560000,
+        "end_cycle": 560000
       },
       {
         "text": "LW_L5_OK",
-        "cycle_lo": 6605784,
-        "cycle": 6605785,
-        "end_cycle": 6606706
+        "cycle_lo": 610000,
+        "cycle": 620000,
+        "end_cycle": 620000
       },
       {
-        "text": "L",
-        "cycle_lo": 6607172,
-        "cycle": 6607173
+        "text": "LW_L5_VAL 512 512",
+        "cycle_lo": 620000,
+        "cycle": 630000,
+        "end_cycle": 630000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 31652,
+    "text_bytes": 31656,
     "data_bytes": 144,
     "bss_bytes": 2664,
-    "flash_used_bytes": 31796,
+    "flash_used_bytes": 31800,
     "ram_static_bytes": 2808,
     "flash_total_bytes": 1048576,
     "ram_total_bytes": 131072,
@@ -14375,77 +14376,37 @@
     "heap_method": "unsupported"
   },
   "metrics": {
-    "cycles": 6607233,
-    "instructions": 6607233,
-    "steps_executed": 6607233,
-    "memory_reads": 1327140,
-    "memory_writes": 18114,
-    "peripheral_accesses": 402459,
+    "cycles": 630000,
+    "instructions": 630000,
+    "steps_executed": 630000,
+    "memory_reads": 28200,
+    "memory_writes": 49067,
+    "peripheral_accesses": 1229,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 134219070,
-        "count": 2000
+        "pc": 134245572,
+        "count": 2148
       },
       {
-        "pc": 134219068,
-        "count": 1574
+        "pc": 134223144,
+        "count": 117
       },
       {
-        "pc": 134219320,
-        "count": 1574
+        "pc": 134223134,
+        "count": 78
       },
       {
-        "pc": 134219322,
-        "count": 1574
+        "pc": 134223136,
+        "count": 39
       },
       {
-        "pc": 134219318,
-        "count": 1572
+        "pc": 134243992,
+        "count": 39
       },
       {
-        "pc": 134219240,
-        "count": 1570
-      },
-      {
-        "pc": 134219072,
-        "count": 1569
-      },
-      {
-        "pc": 134219234,
-        "count": 1568
-      },
-      {
-        "pc": 134219236,
-        "count": 1568
-      },
-      {
-        "pc": 134219238,
-        "count": 1568
-      },
-      {
-        "pc": 134219326,
-        "count": 1567
-      },
-      {
-        "pc": 134219330,
-        "count": 1567
-      },
-      {
-        "pc": 134219332,
-        "count": 1567
-      },
-      {
-        "pc": 134219334,
-        "count": 1567
-      },
-      {
-        "pc": 134219336,
-        "count": 1567
-      },
-      {
-        "pc": 134245568,
-        "count": 428
+        "pc": 134245578,
+        "count": 39
       }
     ]
   }

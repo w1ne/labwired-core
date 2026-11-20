@@ -1,0 +1,25 @@
+{
+  "id": "stm32h753zi",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L1_serial_loop/src/main.ino",
+    "test": "LW_L1_OK",
+    "signal": "stock stm32duino Serial on USART3 (PD8/PD9, the ST-LINK VCP) prints the boot and loop markers; uart_contains matches them.",
+    "lane": "core-arduino-matrix-smoke (board nucleo-h753zi): validation/arduino-matrix/run_matrix.py + labwired test"
+  },
+  "spi": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+    "test": "LW_L4_OK",
+    "signal": "stock stm32duino SPI.transfer on SPI1 (PA5/PA6/PB5) reads the MAX31855 device's own 32-bit frame (exact default frame 0x01901600 required for LW_L4_OK).",
+    "lane": "core-arduino-matrix-smoke (board nucleo-h753zi): validation/arduino-matrix/run_matrix.py + labwired test"
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+    "test": "LW_L3_OK",
+    "signal": "stock stm32duino Wire on I2C1 (PB8/PB9) writes and reads back the INA219 model at 0x40: config 0x399F and bus-voltage register 0x19CA must match exactly for LW_L3_OK.",
+    "lane": "core-arduino-matrix-smoke (board nucleo-h753zi): validation/arduino-matrix/run_matrix.py + labwired test"
+  }
+}
