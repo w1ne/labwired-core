@@ -11,7 +11,7 @@
     "pass_observable_assertions": 231,
     "pass_stop_reason_only": 0,
     "pass_depth_unknown": 0,
-    "pass_claimed_peripherals_total": 1708,
+    "pass_claimed_peripherals_total": 1711,
     "pass_claimed_peripherals_median": 4,
     "median_elapsed_ms": 1872,
     "median_elapsed_seconds": 1.872,
@@ -356,28 +356,28 @@
       "script": "examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml",
       "system": "configs/systems/onboarding/arduino_nano_33_ble.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-20T07:21:02Z",
-      "finished_at_utc": "2026-11-20T07:21:08Z",
-      "elapsed_seconds": 7,
-      "elapsed_ms": 6013,
+      "started_at_utc": "2026-11-20T09:28:32Z",
+      "finished_at_utc": "2026-11-20T09:28:40Z",
+      "elapsed_seconds": 8,
+      "elapsed_ms": 7408,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 1.494,
-        "build_firmware": 2.36,
-        "run_smoke": 2.113
+        "build_cli": 3.127,
+        "build_firmware": 2.378,
+        "run_smoke": 1.853
       },
       "stages_ms": {
-        "build_cli": 1494,
-        "build_firmware": 2360,
-        "run_smoke": 2113
+        "build_cli": 3127,
+        "build_firmware": 2378,
+        "run_smoke": 1853
       },
       "_artifact_path": "arduino_nano_33_ble",
       "zero_answering_windows": [],
-      "claimed_peripherals": 50,
+      "claimed_peripherals": 51,
       "smoke_assertion_kinds": [
         "uart_ordered",
         "memory_value",
@@ -5389,28 +5389,28 @@
       "script": "examples/renode-onboarding/nrf52840-smoke.yaml",
       "system": "configs/systems/onboarding/nrf52840.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-20T08:04:45Z",
-      "finished_at_utc": "2026-11-20T08:09:39Z",
-      "elapsed_seconds": 294,
-      "elapsed_ms": 293702,
+      "started_at_utc": "2026-11-20T09:26:18Z",
+      "finished_at_utc": "2026-11-20T09:28:20Z",
+      "elapsed_seconds": 122,
+      "elapsed_ms": 121387,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 285.431,
-        "build_firmware": 2.543,
-        "run_smoke": 5.587
+        "build_cli": 116.795,
+        "build_firmware": 0.614,
+        "run_smoke": 3.931
       },
       "stages_ms": {
-        "build_cli": 285431,
-        "build_firmware": 2543,
-        "run_smoke": 5587
+        "build_cli": 116795,
+        "build_firmware": 614,
+        "run_smoke": 3931
       },
       "_artifact_path": "nrf52840",
       "zero_answering_windows": [],
-      "claimed_peripherals": 50,
+      "claimed_peripherals": 51,
       "smoke_assertion_kinds": [
         "uart_ordered",
         "gpio_edges",
@@ -5436,28 +5436,28 @@
       "script": "examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml",
       "system": "configs/systems/onboarding/nrf52840dk_nrf52840.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-20T08:26:25Z",
-      "finished_at_utc": "2026-11-20T08:29:25Z",
-      "elapsed_seconds": 180,
-      "elapsed_ms": 179639,
+      "started_at_utc": "2026-11-20T09:28:26Z",
+      "finished_at_utc": "2026-11-20T09:28:30Z",
+      "elapsed_seconds": 4,
+      "elapsed_ms": 3746,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 176.672,
-        "build_firmware": 0.336,
-        "run_smoke": 2.579
+        "build_cli": 1.446,
+        "build_firmware": 0.237,
+        "run_smoke": 2.016
       },
       "stages_ms": {
-        "build_cli": 176672,
-        "build_firmware": 336,
-        "run_smoke": 2579
+        "build_cli": 1446,
+        "build_firmware": 237,
+        "run_smoke": 2016
       },
       "_artifact_path": "nrf52840dk_nrf52840",
       "zero_answering_windows": [],
-      "claimed_peripherals": 50,
+      "claimed_peripherals": 51,
       "smoke_assertion_kinds": [
         "uart_ordered",
         "memory_value",

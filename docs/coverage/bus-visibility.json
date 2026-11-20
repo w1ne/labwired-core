@@ -777,6 +777,8 @@
   },
   {
     "buses": [
+      "I2C",
+      "SPI",
       "UART"
     ],
     "name": "stm32h723zg"

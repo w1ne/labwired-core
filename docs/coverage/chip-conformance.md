@@ -158,7 +158,7 @@ This page covers the public models. For every chip we model — public and priva
 | esp32s2-arduino | **L1** | ✓ | 32 | — | — | esp32s2_arduino_boot::stock_arduino_l0_prints_over_uart0 |
 | rp2040-feather | **L0** | ✓ | 24 | — | — | — |
 | rp2350-feather | **L0** | ✓ | 27 | — | — | — |
-| stm32h723zg | **L0** | ✓ | 9 | — | — | — |
+| stm32h723zg | **L0** | ✓ | 43 | — | — | — |
 | esp32c6fh4 | **L0** | ✓ | 69 | — | — | — |
 
 ## Declared platforms without a model

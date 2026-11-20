@@ -130,7 +130,7 @@
     "waiting_for_event": false,
     "event_register": false
   },
-  "firmware_hash": "c889f7a748afaf07a7196bc72f911fdfa54e07decbc10ab652bd38189edcfa1f",
+  "firmware_hash": "37ad0654b045604db9ccaee2f1fc643f243d9899a4a5a54a3ab08f5f89b939d4",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabihf/release/firmware-arduino-nano-33-ble-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/arduino_nano_33_ble.yaml",
@@ -476,6 +476,13 @@
       },
       {
         "name": "acl",
+        "kind": "native",
+        "base": 1073930240,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi3",
         "kind": "native",
         "base": 1073934336,
         "registers": [],

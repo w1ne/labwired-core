@@ -34,8 +34,14 @@
 # EVENTS_SEQEND0 must drop it. The lines stay disabled; ISPR is the readout.
 # Before, this descriptor put PWM1 on 29 (PDM's line) and PWM2 on 30, and the
 # PWM model raised no interrupt at all.
+# SPIM3 at 0x4002F000 with its hardware chip select: PSEL.CSN = P0.20 selects
+# a MAX31855 fixture whose cs_pin is P0.20, while the GPIO OUT latch holds
+# P0.20 high (nrfx idle level). Two 4-byte reads must each return the
+# power-on frame 0x01901600 and INTEN.END must pend NVIC line 47. Before,
+# this descriptor had no SPIM3 and the fast SPIM model honoured PSEL.CSN on
+# nRF54L only. The RESULT prefix moved to 0x5280_0000 for the 17th bit.
 # Not exercised: radio, USBD, QSPI,
-# SPIM, UART1, WDT. GPIOTE on a pin whose PIN_CNF.DIR = output is a known
+# SPIM0-2, UART1, WDT. GPIOTE on a pin whose PIN_CNF.DIR = output is a known
 # engine gap (IN shows OUT, not the GPIOTE drive) — see
 # attempt-history/nrf52840/2026-11-08-direct-probe-failures.
 schema_version: "1.2"
@@ -67,6 +73,7 @@ assertions:
       - "pwm0 p0.15 seqend=1 duty=1 rises=1 stop=1 idle=0 ok"
       - "gpio p1 in=02 drive=1 pull=1 gpiote=1 p0=1 ok"
       - "pwm irq lines 28..35 pwm1=20 pwm2=40 ok"
+      - "spim3 csn max31855=01901600/01901600 n=8 gpio=1 irq47=1 ok"
       - "NRF52840 PASS"
   - gpio_edges:
       pin: "gpio0:13"
@@ -82,6 +89,6 @@ assertions:
       min_edges: 2
   - memory_value:
       address: 0x2003FF00
-      expected_value: 0x5284FFFF
+      expected_value: 0x5281FFFF
       size: 4
   - expected_stop_reason: max_steps
