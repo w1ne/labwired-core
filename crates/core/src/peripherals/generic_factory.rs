@@ -493,6 +493,8 @@ pub const MODEL_TYPES: &[&str] = &[
     // Texas Instruments MSP430x2xx Timer_A and its TAIV register.
     "msp430_timer_a",
     "msp430_timer_a_iv",
+    // Texas Instruments MSP430x2xx ADC10 (no data transfer controller).
+    "msp430_adc10",
     // Texas Instruments MSP430x5xx: SFRIE1/SFRIFG1/SFRRPCR, USCI_A (UART
     // mode, own UCAxIE/UCAxIFG/UCAxIV), WDT_A control, 32-bit hardware
     // multiplier, unified clock system, power management module.
@@ -2666,6 +2668,71 @@ pub fn try_build(
                 })?;
             Box::new(crate::peripherals::msp430_timer_a::Msp430TimerAIv::new(
                 sources,
+            ))
+        }
+        // `inputs`: bonded external inputs A0 .. A(n-1); `vcc_mv`: supply.
+        "msp430_adc10" => {
+            use crate::peripherals::msp430_adc10::{
+                Adc10Config, Adc10Request, Msp430Adc10, EXTERNAL_INPUTS,
+            };
+            msp430_keys(
+                p_cfg,
+                &[
+                    "inputs",
+                    "vcc_mv",
+                    "adc10osc_hz",
+                    "aclk_hz",
+                    "cpu_hz",
+                    "irq_source",
+                    "irq_line",
+                ],
+            )?;
+            let number = |key: &str| -> anyhow::Result<Option<u64>> {
+                match p_cfg.config.get(key) {
+                    None => Ok(None),
+                    Some(v) => v.as_u64().map(Some).ok_or_else(|| {
+                        anyhow::anyhow!("msp430_adc10 '{}': `{key}` is not a number", p_cfg.id)
+                    }),
+                }
+            };
+            let inputs = number("inputs")?.unwrap_or(u64::from(EXTERNAL_INPUTS));
+            if inputs > u64::from(EXTERNAL_INPUTS) {
+                anyhow::bail!(
+                    "msp430_adc10 '{}': `inputs` is 0 to {EXTERNAL_INPUTS}",
+                    p_cfg.id
+                );
+            }
+            let vcc_mv = number("vcc_mv")?.unwrap_or(3000);
+            if !(1..=u64::from(u16::MAX)).contains(&vcc_mv) {
+                anyhow::bail!("msp430_adc10 '{}': `vcc_mv` is 1 to 65535", p_cfg.id);
+            }
+            let request = match (number("irq_source")?, number("irq_line")?) {
+                (None, None) => None,
+                (Some(source), Some(line))
+                    if source < u64::from(crate::peripherals::msp430::SOURCES) && line < 64 =>
+                {
+                    Some(Adc10Request {
+                        source: source as u32,
+                        line: line as u32,
+                    })
+                }
+                _ => anyhow::bail!(
+                    "msp430_adc10 '{}': `irq_source` (below {}) and `irq_line` (below 64) come \
+                     together",
+                    p_cfg.id,
+                    crate::peripherals::msp430::SOURCES
+                ),
+            };
+            Box::new(Msp430Adc10::new(
+                request,
+                Adc10Config {
+                    inputs: inputs as u8,
+                    vcc_mv: vcc_mv as u32,
+                    // ADC10OSC typical (3.7 to 6.3 MHz in the x2xx data sheets).
+                    adc10osc_hz: number("adc10osc_hz")?.unwrap_or(5_000_000),
+                    aclk_hz: number("aclk_hz")?.unwrap_or(32_768),
+                    cpu_hz: number("cpu_hz")?.unwrap_or(0),
+                },
             ))
         }
         // `lines`: the interrupt line behind each bit (0 to 7) of
