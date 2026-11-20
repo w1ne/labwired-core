@@ -80,12 +80,12 @@ cosim_models:
         * red LED: junction fitted to Kingbright WP7113ID, DSAF0012 rev V.14A: VF 1.9 V typ at 10 mA (table), 2.0 V at 20 mA (IF-VF curve)
         .model LED_RED D (IS=3.799e-18 N=2 RS=6.416)
         Vdrv_pa5 d_pa5 0 dc 0
-        Sdrv_pa5 d_pa5 v_net_r5_1 ctl_pa5 ron=25 roff=1e12
+        Sdrv_pa5 d_pa5 v_net_r5_1 ctl_pa5 ron=50 roff=1e12
         Vdrv_ph0 d_ph0 0 dc 0
-        Sdrv_ph0 d_ph0 v_net_c7_1 ctl_ph0 ron=25 roff=1e12
+        Sdrv_ph0 d_ph0 v_net_c7_1 ctl_ph0 ron=50 roff=1e12
         Rleak_ph0 v_net_c7_1 0 1e9
         Vdrv_ph1 d_ph1 0 dc 0
-        Sdrv_ph1 d_ph1 v_net_c8_1 ctl_ph1 ron=25 roff=1e12
+        Sdrv_ph1 d_ph1 v_net_c8_1 ctl_ph1 ron=50 roff=1e12
         Rleak_ph1 v_net_c8_1 0 1e9
       probes:
         in_pa5: "v(v_net_r5_1)"

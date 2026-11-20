@@ -55,6 +55,19 @@ gpio_pin_count: 50
 adc_channels: 16
 variant: "xB"
 orderable_suffixes: ["T6", "T6TR", "T7", "T7TR"]
+# GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
+# DS9716 Rev 11 (STM32F401xB/xC), section 6.3.16, Table 55 "Output voltage
+# characteristics", CMOS port, 2.7 V <= VDD <= 3.6 V: VOH min VDD - 0.4 V and
+# VOL max 0.4 V at IIO = 8 mA. (VDD - VOH) / IIO = 0.4 V / 8 mA = 50 ohm, both
+# sides. Guaranteed limits, so a typical pad is stiffer. Read by the diagram
+# compiler, which places it as the pad driver's on-resistance in the analog
+# netlist.
+gpio_output_ohms: 50
+# Absolute maximum current sunk or sourced by any I/O and control pin, mA.
+# DS9716 Rev 11, Table 12 "Current characteristics": IIO 25 (sunk) and -25
+# (sourced). A run reports a pad whose simulated current went past it; the
+# simulation does not stop or clamp it.
+gpio_abs_max_ma: 25
 
 flash:
   base: 0x08000000

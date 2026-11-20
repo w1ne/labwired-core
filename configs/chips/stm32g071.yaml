@@ -31,6 +31,19 @@ arch: "arm"
 core: "cortex-m0+"
 # Simulated core clock, Hz — STM32G071RB maximum core clock, 64 MHz (DS12232).
 cpu_hz: 64_000_000
+# GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
+# DS12232 Rev 5 (STM32G071x8/xB), section 5.3.14, Table 52 "Output voltage
+# characteristics", CMOS port, VDDIO1 >= 2.7 V: VOH min VDD - 0.4 V and VOL max
+# 0.4 V at |IIO| = 8 mA (I/Os other than FT_c). (VDD - VOH) / IIO = 0.4 V / 8
+# mA = 50 ohm, both sides. Guaranteed limits, so a typical pad is stiffer. Read
+# by the diagram compiler, which places it as the pad driver's on-resistance in
+# the analog netlist.
+gpio_output_ohms: 50
+# Absolute maximum current sunk or sourced by any I/O and control pin, mA.
+# DS12232 Rev 5, Table 19 "Current characteristics": IIO 15 (sourced; sunk 15,
+# 20 on FT_f pins). A run reports a pad whose simulated current went past it;
+# the simulation does not stop or clamp it.
+gpio_abs_max_ma: 15
 
 flash:
   base: 0x08000000

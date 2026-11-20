@@ -21,6 +21,14 @@ io_voltage_v: 3.3
 gpio_input_thresholds:
   vil: 0.35
   vih: 0.65
+# GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
+# DS5319 Rev 20 (STM32F103x8/xB), section 5.3.13, Table 37 "Output voltage
+# characteristics", CMOS port, 2.7 V < VDD < 3.6 V: VOH min VDD - 0.4 V and VOL
+# max 0.4 V at IIO = 8 mA (8 pins at once). (VDD - VOH) / IIO = 0.4 V / 8 mA =
+# 50 ohm, both sides. Guaranteed limits, so a typical pad is stiffer. Read by
+# the diagram compiler, which places it as the pad driver's on-resistance in
+# the analog netlist.
+gpio_output_ohms: 50
 # Absolute maximum current sunk or sourced by any I/O and control pin, mA.
 # DS5319 Rev 20, section 5.2, Table 7 "Current characteristics": IIO 25 mA
 # (sunk) and -25 mA (sourced). A run reports a pad whose simulated current went

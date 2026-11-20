@@ -7,6 +7,19 @@ registers_count: 240
 # scale their datasheet microseconds by it; a slower board overrides it.
 # RP2040 SDK default system clock, 125 MHz.
 cpu_hz: 125_000_000
+# GPIO pad output resistance, ohms: a driven pad is IOVDD (or 0 V) behind it.
+# RP2040 Datasheet (Raspberry Pi, release 13), section 5.5.3.4 "IO Electrical
+# Characteristics", Table 646, IOVDD = 3.3 V: VOH min 2.62 V and VOL max 0.5 V
+# at IOH / IOL equal to the selected drive strength; section 5.5.2.1: the
+# default drive strength is 4 mA. Source side (3.3 - 2.62) V / 4 mA = 170 ohm
+# (sink side 0.5 V / 4 mA = 125 ohm). These are guaranteed limits; Figure 172
+# shows a typical pad stiffer than this.
+# Read by the diagram compiler, which places it as the pad driver's
+# on-resistance in the analog netlist.
+gpio_output_ohms: 170
+# gpio_abs_max_ma is not stated: Table 643 "Absolute maximum ratings for
+# digital IO" gives no per-pin current; Table 646 limits only the bank totals
+# IIOVDD_MAX and IIOVSS_MAX (50 mA each).
 
 flash:
   base: 0x10000000

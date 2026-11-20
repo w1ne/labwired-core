@@ -40,6 +40,19 @@ registers_count: 220
 # scale their datasheet microseconds by it; a slower board overrides it.
 # STM32H563ZI maximum core clock, 250 MHz.
 cpu_hz: 250_000_000
+# GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
+# DS14258 Rev 6 (STM32H562/H563), section 5.3.15, Table 59 "Output voltage
+# characteristics", CMOS port, 2.7 V <= VDD <= 3.6 V: VOH min VDD - 0.4 V and
+# VOL max 0.4 V at IIO = 8 mA (I/Os other than PC13-15, PI8). (VDD - VOH) / IIO
+# = 0.4 V / 8 mA = 50 ohm, both sides. Guaranteed limits, so a typical pad is
+# stiffer. Read by the diagram compiler, which places it as the pad driver's
+# on-resistance in the analog netlist.
+gpio_output_ohms: 50
+# Absolute maximum current sunk or sourced by any I/O and control pin, mA.
+# DS14258 Rev 6, Table 18 "Current characteristics": IIO 20 (sunk, sourced). A
+# run reports a pad whose simulated current went past it; the simulation does
+# not stop or clamp it.
+gpio_abs_max_ma: 20
 
 flash:
   base: 0x08000000
