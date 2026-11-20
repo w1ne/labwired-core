@@ -187,7 +187,7 @@ try {
 
 console.log(JSON.stringify({
   status: 'passed',
-  checks: ['result-text-equality', 'logic-analyzer-capture-equality', 'oscilloscope-capture-equality', 'every-script-passes'],
+  checks: ['result-text-equality', 'logic-analyzer-capture-equality', 'oscilloscope-capture-equality', 'i2c-transfer-record-equality', 'every-script-passes'],
   execution_path: 'flex_portable_wasm',
   cpu_emulation: false,
   firmware_interpreter: 'wasmi, in labwired-wasm and in the CLI',

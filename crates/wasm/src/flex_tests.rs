@@ -2532,9 +2532,15 @@ fn flex_browser_script_receipt_covers_every_script_and_matches_the_shared_runner
         "the browser receipt must list every committed Flex test script; rerun scripts/test_browser_flex_scripts.mjs"
     );
     assert_eq!(rows.len(), listed.len(), "a script is listed twice");
-    assert!(rows.len() >= 32);
+    assert!(rows.len() >= 35);
+    assert!(receipt["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|check| check == "i2c-transfer-record-equality"));
 
     let mut suspended_steps = 0;
+    let mut i2c_transfers = 0;
     for row in rows {
         let name = row["script"].as_str().unwrap();
         let dir = fixtures.join(row["fixture"].as_str().unwrap());
@@ -2565,7 +2571,17 @@ fn flex_browser_script_receipt_covers_every_script_and_matches_the_shared_runner
             "{label}: the runner no longer gives the result text of the browser receipt; rerun scripts/test_browser_flex_scripts.mjs"
         );
         suspended_steps += row["suspended_steps"].as_u64().unwrap();
+        i2c_transfers += row["i2c_transfers"].as_u64().unwrap();
+        assert_eq!(
+            run.runtime.unwrap().i2c_trace_snapshot(0).next_cursor,
+            row["i2c_transfers"],
+            "{label}"
+        );
     }
+    assert!(
+        i2c_transfers >= 21,
+        "the receipt must include the I2C bus scripts"
+    );
     assert!(
         suspended_steps >= 13,
         "the receipt must include the endless-`main` scripts"
