@@ -270,6 +270,37 @@ A pass shows that this firmware module satisfied the assertions against the
 declared model. It is not evidence for original target firmware, MCU
 instruction or peripheral fidelity, full-board coverage, or chip parity.
 
+#### The same script in the browser
+
+The browser package (`labwired-wasm`) runs a Flex script with the runner that
+`labwired test` uses. The page gives the three texts the script names; there
+are no paths in the browser.
+
+```js
+const run = WasmFlexTestRun.run('test-heat-cycle.yaml', scriptYaml, manifestYaml, firmwareBytes);
+const result = JSON.parse(run.result_json());   // the content of result.json
+const runtime = run.take_runtime();              // a WasmFlexRuntime
+const edges = runtime.digital_trace_snapshot(0); // logic analyzer
+const samples = runtime.analog_trace_snapshot(0); // oscilloscope
+```
+
+- `result_json()` is the text of `result.json`. It differs from the CLI file
+  only in `config.script`, `config.flex` and `config.firmware`: the browser
+  keeps the names as the script writes them.
+- `take_runtime()` gives the runtime of the run to the existing instrument
+  methods. It is an error after a `config_error`, because no runtime exists.
+- A script that does not parse or validate throws. Every later failure is a
+  result with a `stop_reason`, as in the table above.
+- `sequence`, `until_ns`, `resume`, all assertions and both limits work as in
+  the CLI. The firmware module runs in the `wasmi` interpreter on both hosts,
+  so `steps_executed` is the same number.
+- The call returns when the script ends. Call it from a worker if the script
+  is long.
+
+`scripts/test_browser_flex_scripts.mjs` runs each `test-*.yaml` of the Flex
+fixtures in Chromium and in the CLI and compares the result text and both
+instrument captures.
+
 ## Exit Codes
 
 | Code | Meaning | Notes |

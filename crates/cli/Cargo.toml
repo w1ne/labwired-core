@@ -21,7 +21,7 @@ name = "gen-peripherals-manifest"
 path = "src/bin/gen_peripherals_manifest.rs"
 
 [dependencies]
-labwired-core = { path = "../core" }
+labwired-core = { path = "../core", features = ["flex-script"] }
 labwired-loader = { path = "../loader" }
 labwired-config = { path = "../config" }
 labwired-fuzz = { path = "../labwired-fuzz" }
@@ -43,12 +43,6 @@ sha2 = { workspace = true }
 vcd = "0.7"
 ureq = { workspace = true }
 goblin = { workspace = true }
-# Portable Flex firmware (`inputs.flex` test scripts) is a WebAssembly module.
-# An interpreter keeps the default CLI free of a native code generator; the
-# optional `jit-core` wasmtime path is unrelated. `auto-dispatch` is needed:
-# without it wasmi always uses its tail-call dispatch, which a dev build does
-# not compile to tail calls, and one long firmware call overflows the host stack.
-wasmi = { version = "2.0.2", default-features = false, features = ["std", "validate", "auto-dispatch"] }
 
 [features]
 default = ["event-scheduler"]

@@ -2309,3 +2309,102 @@ fn flex_gpio_reuse_binds_shared_behavior_to_pomodoro_and_uno_with_held_out_workl
         "cross-hardware GPIO behavior evidence changed"
     );
 }
+
+const POMODORO_C_SCRIPT: &str =
+    include_str!("../tests/fixtures/flex-heypcb-pomodoro-c/test-untouched-stays-idle.yaml");
+const POMODORO_C_SYSTEM: &str =
+    include_str!("../tests/fixtures/flex-heypcb-pomodoro-c/system.yaml");
+const POMODORO_C_FIRMWARE: &[u8] =
+    include_bytes!("../tests/fixtures/flex-heypcb-pomodoro-c/firmware.wasm");
+
+#[test]
+fn flex_script_binding_suspends_an_endless_main_and_hands_over_the_instruments() {
+    let mut run = crate::flex::run_test_script(
+        "test-untouched-stays-idle.yaml",
+        POMODORO_C_SCRIPT,
+        POMODORO_C_SYSTEM,
+        POMODORO_C_FIRMWARE,
+    )
+    .unwrap();
+    let result = serde_json::to_value(&run.result).unwrap();
+    assert_eq!(result["status"], "pass", "{result:#}");
+    assert_eq!(result["stop_reason"], "completed");
+    assert_eq!(result["time_ns"], 300_000_000_u64);
+    // The names are the ones the script writes; the browser has no paths.
+    assert_eq!(result["config"]["script"], "test-untouched-stays-idle.yaml");
+    assert_eq!(result["config"]["flex"], "system.yaml");
+    assert_eq!(result["config"]["firmware"], "firmware.wasm");
+    // `main` never returns: the call and both resumes end suspended.
+    let steps = result["steps"].as_array().unwrap();
+    let suspended: Vec<usize> = (0..steps.len())
+        .filter(|index| steps[*index]["suspended"] == true)
+        .collect();
+    assert_eq!(suspended, [15, 16, 17]);
+    assert!(result["entry_result"].is_null());
+    assert_eq!(result["assertions"].as_array().unwrap().len(), 10);
+    // The runtime the binding hands to the instruments holds the capture.
+    let runtime = run.runtime.as_mut().unwrap();
+    assert_eq!(runtime.time_ns(), 300_000_000);
+    let digital = runtime.digital_trace_snapshot(0);
+    assert_eq!(digital.dropped, 0);
+    assert_eq!(
+        digital.edges.len() as u64,
+        result["traces"]["digital_edges"].as_u64().unwrap()
+    );
+    assert!(digital.edges.len() >= 474, "the start-up chirp is captured");
+}
+
+#[test]
+fn flex_script_binding_reports_bad_scripts_and_limits_without_a_pass() {
+    let run = |script: &str| {
+        crate::flex::run_test_script(
+            "edited.yaml",
+            script,
+            POMODORO_C_SYSTEM,
+            POMODORO_C_FIRMWARE,
+        )
+    };
+    // A script that does not parse or validate never reaches the runner.
+    let error = run("schema_version: \"1.0\"\ninputs: { flex: system.yaml }\n")
+        .err()
+        .unwrap();
+    assert!(
+        error.starts_with("Failed to parse Flex Test Script YAML"),
+        "{error}"
+    );
+    let error = run(&POMODORO_C_SCRIPT.replace("schema_version: \"1.0\"", "schema_version: \"9\""))
+        .err()
+        .unwrap();
+    assert!(error.contains("Unsupported schema_version"), "{error}");
+
+    // An unknown port is a configuration error: no step runs, no runtime.
+    let unknown =
+        run(&POMODORO_C_SCRIPT.replace("port: leaf, count: 0", "port: lead, count: 0")).unwrap();
+    assert_eq!(unknown.result.status, "error");
+    let result = serde_json::to_value(&unknown.result).unwrap();
+    assert_eq!(result["stop_reason"], "config_error");
+    assert!(result["message"].as_str().unwrap().contains("'lead'"));
+    assert!(result["steps"].as_array().unwrap().is_empty());
+    assert!(unknown.runtime.is_none());
+
+    // A fuel limit below the start-up chirp stops the run; it cannot pass.
+    let starved =
+        run(&POMODORO_C_SCRIPT.replace("max_steps: 200000000", "max_steps: 100000")).unwrap();
+    let result = serde_json::to_value(&starved.result).unwrap();
+    assert_eq!(result["stop_reason"], "max_steps");
+    assert_eq!(result["status"], "fail");
+    // wasmi charges fuel for each block, so the stop is at or just below the limit.
+    let used = result["steps_executed"].as_u64().unwrap();
+    assert!((99_000..=100_000).contains(&used), "{used}");
+
+    // With no `until_ns` the endless `main` runs into the time limit.
+    let endless = run(&POMODORO_C_SCRIPT
+        .replace("__main_void, until_ns: 200000000", "__main_void")
+        .replace("  - resume: { until_ns: 250000000 }\n", "")
+        .replace("  - resume: { until_ns: 300000000 }\n", ""))
+    .unwrap();
+    let result = serde_json::to_value(&endless.result).unwrap();
+    assert_eq!(result["stop_reason"], "max_time_ns", "{result:#}");
+    assert_eq!(result["status"], "fail");
+    assert_eq!(result["time_ns"], 299_996_000_u64);
+}

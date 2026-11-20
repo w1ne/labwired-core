@@ -3309,7 +3309,6 @@ dependencies = [
  "tracing-subscriber",
  "ureq",
  "vcd",
- "wasmi",
 ]
 
 [[package]]
@@ -3377,6 +3376,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tracing",
  "unicorn-engine",
+ "wasmi",
  "wasmtime",
  "wat",
 ]

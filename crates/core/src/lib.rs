@@ -20,6 +20,8 @@ pub mod decoder;
 pub mod fault_verdict;
 pub mod fidelity;
 pub mod flex;
+#[cfg(feature = "flex-script")]
+pub mod flex_script;
 pub mod hashers;
 pub mod host_time;
 pub mod inspect;
