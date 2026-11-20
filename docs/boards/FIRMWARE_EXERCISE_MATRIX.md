@@ -273,6 +273,10 @@ _The P4X-C5 Function EV board smoke checks BME280 chip ID 0x60 and the model's r
 **Functional device/protocol checks** (register-level firmware asserts observable behavior):
 - BME280 ID and raw-temperature register read through GPIO7/8-routed HP I2C0 (register-level firmware) — `firmware-esp32p4-demo` · examples/esp32p4x-c5-function-ev-board/evidence/run/logs/run_smoke.log (ungated)
 
+### `esp32s2-arduino`
+
+_Arduino matrix profile of the ESP32-S2 on its genuine mask ROM: stock Arduino-ESP32 runs L0-L8 (UART0, SYSTIMER, RMT WS2812, I2C0, GP-SPI2, SENS ADC, LEDC, TWAI). Those are rubric classes, so no beyond-rubric firmware exercise is recorded in this ledger. Wi-Fi, USB OTG, PSRAM and the ULP are not modelled._
+
 ### `esp32s2`
 
 _No beyond-rubric S2 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO through host_console. This direct-ELF profile declares UART0 only; it does not model mask ROM, flash-cache/MMU boot, PSRAM, the GPIO matrix, the RGB LED, USB OTG, Wi-Fi or the other S2 peripherals._

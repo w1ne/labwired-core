@@ -370,6 +370,14 @@ chips:
     advanced_dead: []
     shim: []
 
+  - id: esp32s2-arduino
+    arch: xtensa-lx7
+    headline: "Arduino matrix profile of the ESP32-S2 on its genuine mask ROM: stock Arduino-ESP32 runs L0-L8 (UART0, SYSTIMER, RMT WS2812, I2C0, GP-SPI2, SENS ADC, LEDC, TWAI). Those are rubric classes, so no beyond-rubric firmware exercise is recorded in this ledger. Wi-Fi, USB OTG, PSRAM and the ULP are not modelled."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: esp32s2
     arch: xtensa-lx7
     headline: "No beyond-rubric S2 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO through host_console. This direct-ELF profile declares UART0 only; it does not model mask ROM, flash-cache/MMU boot, PSRAM, the GPIO matrix, the RGB LED, USB OTG, Wi-Fi or the other S2 peripherals."
