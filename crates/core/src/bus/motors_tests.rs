@@ -434,6 +434,22 @@ fn terminal_driven_motor_reverses_and_records_both_extremes() {
     assert_eq!(bus.motor_speed_rpm("missing"), None);
 }
 
+/// A bridge with no usable supply (`powered: false`: the compiler places it
+/// so when the driver's VM is outside its datasheet window) holds the plant's
+/// enable low: the firmware drives forward and the shaft stays put, and the
+/// evidence names the reason.
+#[test]
+fn unpowered_bridge_leaves_the_plant_still() {
+    let mut bus = terminal_bus(
+        "      pwm_pin: VCC\n      in1_pin: PA0\n      in2_pin: PA1\n      powered: false\n",
+    );
+    bus.write_u32(0x4800_0014, 0b01).unwrap(); // IN1 high, IN2 low -> forward
+    run_cycles(&mut bus, 8_000_000);
+    let snapshot = bus.motor_snapshots()[0].clone();
+    assert_eq!(snapshot.speed_rpm, 0.0, "{snapshot:?}");
+    assert_eq!(snapshot.faults, vec![UNPOWERED_FAULT.to_owned()]);
+}
+
 #[test]
 fn terminal_and_direction_forms_are_mutually_exclusive() {
     let mut manifest: SystemManifest = serde_yaml::from_str(

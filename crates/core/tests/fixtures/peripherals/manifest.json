@@ -3663,6 +3663,11 @@
           "name": "limit_active_high",
           "ty": "bool",
           "doc": "Limit output polarity; false is active-low (default)."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
         }
       ],
       "labs": [],
@@ -3710,6 +3715,11 @@
           "name": "r_en_pin",
           "ty": "str",
           "doc": "IBT-2 R_EN enable; synonym REN."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
         }
       ],
       "labs": [],
