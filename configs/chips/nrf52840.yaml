@@ -22,6 +22,13 @@ memory_regions:
   - name: "nrf_errata_probe"
     base: 0xF0000000
     size: "4KB"
+  # Undocumented test registers that the published workarounds for USBD
+  # anomalies 171 and 187 write (0x4006EC00 unlock key, 0x4006EC14,
+  # 0x4006ED14). They store what firmware writes; the USBD model reads
+  # 0x4006ED14 to decide whether the core starts (anomaly 187).
+  - name: "usbd_anomaly_test"
+    base: 0x4006E000
+    size: "4KB"
 peripherals:
   # SysTick: an ARMv6-M/ARMv7-M/ARMv8-M core peripheral every Cortex-M on
   # this family has. The Nordic SVD starts above the PPB, so it is declared
@@ -285,6 +292,12 @@ peripherals:
     base_address: 0x10000000
     size: "4KB"
     config:
+      # The words nrfx reads to pick anomaly workarounds: 0x08 is the
+      # nRF52840. Revision 3 goes with the modelled build code (INFO.VARIANT
+      # "AAD0"); it is an assumption, not a bench reading. Every value >= 1
+      # selects the same USBD workarounds (nrfx nrf52_erratas.h).
+      part_code: 0x08
+      part_revision: 3
       debug_schema: "../peripherals/nrf52840/ficr.yaml"
   - id: "uicr"
     type: "nrf52840_uicr"
@@ -374,7 +387,18 @@ peripherals:
     size: "4KB"
     irq: 39
     config:
+      # No cable: a board manifest sets `host: true` to plug one in.
+      host: false
+      anomaly_187: true
       debug_schema: "../peripherals/nrf52840/usbd.yaml"
+  # Peripheral ID 54 has no peripheral on this part, yet the window decodes
+  # on silicon: Mbed OS USBPhy_Nordic.cpp clears a truncated event offset
+  # (0xFFFF) on every USB bus reset, a word store at 0x40036FFF, and runs on
+  # the Arduino Nano 33 BLE without a fault. Reads zero, ignores writes.
+  - id: "reserved_id54"
+    type: "stub"
+    base_address: 0x40036000
+    size: "4KB"
   - id: "usbregulator"
     type: "nrf52840_usbregulator"
     base_address: 0x40037000
