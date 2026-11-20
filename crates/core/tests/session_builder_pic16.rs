@@ -52,6 +52,18 @@ fn pic16f877a_smoke_prints_through_build_machine() {
     );
 }
 
+/// The builder binds the A/D module to the descriptor's pad window: the gpasm
+/// A/D firmware waits on GO/DONE, so it prints only when a conversion ends.
+/// Nothing is routed here, so both inputs convert 0 V.
+#[test]
+fn pic16f877a_adc_firmware_converts_through_build_machine() {
+    let fw = common::committed("examples/pic16f877a/firmware/pic16f877a-gpasm-adc-ntc-diode.elf");
+    let mut s = open(FirmwareSource::Elf(&fw), BootMode::FastBoot).unwrap();
+    let r = s.expect("N=000 D=000", Duration::from_secs(2));
+    let transcript = s.uart_transcript();
+    r.unwrap_or_else(|e| panic!("{e}\n--- console ---\n{transcript}"));
+}
+
 #[test]
 fn pic16_boots_only_from_an_elf() {
     let fw = common::committed(PIC16_ELF);

@@ -34,6 +34,8 @@ const NOT_TRANSCRIBED: &[&str] = &[
     "nrf52833",
     "nrf52840",
     "nrf54l15",
+    // Ports are SFRs inside the PIC16 core; the ANx pads are analog routes.
+    "pic16f877a",
     // Declared-only descriptor (CPU and memory): no GPIO block and no levels.
     "rv1103",
     "s32k388",

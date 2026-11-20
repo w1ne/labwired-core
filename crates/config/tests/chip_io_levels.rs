@@ -97,6 +97,7 @@ fn an_untranscribed_chip_declares_nothing() {
     for chip in [
         "nrf52832",
         "nrf54l15",
+        "pic16f877a",
         "rv1103",
         "vegaboard-ri5cy",
         "xck26-rpu",

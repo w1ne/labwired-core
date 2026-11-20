@@ -183,6 +183,10 @@ const PORTS_NOT_MODELLED: &[(&str, &str)] = &[
         "vegaboard-ri5cy",
         "PTB/PTC/PTD pads are on GPIOB..D, which the descriptor does not declare",
     ),
+    (
+        "pic16f877a",
+        "PORTA/PORTE are SFRs inside the PIC16 core, not bus port blocks",
+    ),
 ];
 
 /// Pads that one ADC input really reaches twice. S32K388 RTD 7.0.1

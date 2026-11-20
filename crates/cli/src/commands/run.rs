@@ -2685,6 +2685,7 @@ pub(crate) fn run_interactive_pic16(
     chip_name: &str,
 ) -> ExitCode {
     let mut cpu = labwired_core::cpu::Pic16::for_chip_name(chip_name);
+    cpu.bind_adc_pads(&bus);
     if let Err(e) = cpu.load_program_image(&program) {
         error!("{e}");
         return ExitCode::from(EXIT_CONFIG_ERROR);

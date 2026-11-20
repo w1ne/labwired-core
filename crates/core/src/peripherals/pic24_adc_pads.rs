@@ -21,6 +21,10 @@
 //! | [`OFF_HELD`] | bit `n` set: AN`n` carries a routed level |
 //! | [`OFF_CHANNEL_MV`] + 2·`n` | AN`n` level, mV |
 //!
+//! The PIC16F87XA A/D module is CPU-internal as well (`cpu::pic16`), and its
+//! core pulls AN0-AN7 from the same window at `cpu::pic16::PIC16_ADC_PAD_BASE`;
+//! there [`OFF_VREF_MV`] is VDD.
+//!
 //! A released channel (never routed, or cleared) leaves the core's harness
 //! code (`Pic24::set_adc_analog`) in charge of that input.
 
