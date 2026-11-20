@@ -985,6 +985,15 @@ models:
 #   Evidence: ch32v003_compiled_firmware 3/3 locally. The --lib run was
 #   OOM-killed on the authoring host, so the full --lib result is the PR's
 #   CI. ACK, NOT A SILICON CAPTURE; live re-capture remains pending.
+# 2026-11-09 (feat/stm32-l4-l0-adc, hw-onboarding): adc.rs and
+# configs/chips/stm32l073.yaml. The L073 ADC moves from the `stm32l4`
+# profile to `stm32l0`, which selects the CHSELR block (stm32f0_adc.rs;
+# RM0367 §14.12 is a subset of that map at the same offsets). The L4
+# layout's CR handler also changes (rs mask, ADSTP/ADDIS complete, ADCAL
+# clears when CCR.CKMODE != 0, SQR1.SQ1 channel); this board no longer
+# reaches it. The silicon reg_oracle capture has no ADC block, and the
+# firmware_survival l073 tests pass. ACK, NOT A SILICON CAPTURE; live
+# re-capture remains pending.
 drift_ack: 2026-11-09
 # 2026-11-09 (feat/rp2040-cleanroom-rom-float): exec/system.rs serves
 # BKPT #0xC0..0xFF via a clean-room RP2040 ROM float HLE. The trap

@@ -517,3 +517,39 @@ fn the_bus_links_the_pair_and_brackets_rtc_writes() {
         0x8410_0010
     );
 }
+
+#[test]
+fn classic_dac_drives_code_over_255_of_3v3_while_powered() {
+    let (mut rtc, _gpio) = classic();
+    let dac1 = rtc.analog_output_probe(0).expect("DAC1 probe");
+    let dac2 = rtc.analog_output_probe(1).expect("DAC2 probe");
+    assert!(rtc.analog_output_probe(2).is_none());
+    // Reset: powered down, nothing driven.
+    assert_eq!((dac1(), dac2()), (None, None));
+    // Code without power (dac_output_voltage before dac_output_enable).
+    set(&mut rtc, PAD_DAC1, 200 << 19);
+    assert_eq!(dac1(), None);
+    // XPD_DAC alone leaves the power bit to the SAR FSM: still off.
+    set(&mut rtc, PAD_DAC1, 1 << 18);
+    assert_eq!(dac1(), None);
+    // dac_ll_power_on: XPD_FORCE + XPD_DAC.
+    set(&mut rtc, PAD_DAC1, 1 << 10);
+    assert_eq!(dac1(), Some((200 * 3300 / 255) as u16));
+    assert_eq!(dac2(), None, "DAC2 is its own pad register");
+    set(&mut rtc, PAD_DAC2, (255 << 19) | (1 << 18) | (1 << 10));
+    assert_eq!(dac2(), Some(3300));
+    // The probe is live: a new code is seen without re-binding.
+    clear(&mut rtc, PAD_DAC1, 0xFF << 19);
+    set(&mut rtc, PAD_DAC1, 64 << 19);
+    assert_eq!(dac1(), Some((64 * 3300 / 255) as u16));
+    // dac_ll_power_down.
+    clear(&mut rtc, PAD_DAC1, (1 << 18) | (1 << 10));
+    assert_eq!(dac1(), None);
+}
+
+#[test]
+fn s3_has_no_dac() {
+    let (rtc, _gpio) = s3();
+    assert!(rtc.analog_output_probe(0).is_none());
+    assert!(rtc.analog_output_probe(1).is_none());
+}

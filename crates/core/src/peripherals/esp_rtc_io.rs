@@ -76,6 +76,23 @@
 //! neither is the classic `DIG_PAD_HOLD` / `RTC_CNTL_HOLD_FORCE` path, nor a
 //! hold on a pad in the digital domain.
 //!
+//! # DAC (classic only)
+//!
+//! GPIO25 / GPIO26 carry the classic part's two 8-bit DACs, controlled from
+//! `PAD_DAC1` / `PAD_DAC2` (`soc/esp32/rtc_io_reg.h`): `PDACn_DAC` [26:19] is
+//! the code, `PDACn_XPD_DAC` (18) powers the DAC and `PDACn_DAC_XPD_FORCE`
+//! (10) hands that power bit to software (0 = the SAR ADC FSM controls it,
+//! which is not modelled and reads as off). IDF `dac_ll_power_on` sets both;
+//! Arduino `dacWrite()` goes through it. A powered DAC drives
+//! `VDD3P3_RTC · code / 255`, taken as an ideal 3.3 V with no offset or INL.
+//! That pad-stage level is this block's [`Peripheral::analog_output_probe`]
+//! channel 0 / 1. It is NOT yet the DAC output: the SENS
+//! `SAR_DAC_CTRL2.DAC_CW_ENn` mux can put the cosine generator on the DAC
+//! instead. The bus hands these probes to SENS, which applies the mux and
+//! republishes the result as `sens_sar_adc` outputs 0 / 1, the source a
+//! board wire should name (see `peripherals::esp32::sar_adc`). The S3 has no
+//! DAC.
+//!
 //! # Sharing
 //!
 //! The register state lives in [`RtcIoPads`], one `Arc` shared by the MMIO
@@ -111,6 +128,15 @@ const IN: u64 = 0x24;
 /// `RTC_GPIO_PIN0_REG`, stride 4: PAD_DRIVER (2), INT_TYPE [9:7],
 /// WAKEUP_ENABLE (10) on both parts.
 const PIN0: u64 = 0x28;
+
+/// Classic `PAD_DAC1` / `PAD_DAC2` and the DAC fields in them (see the
+/// module docs).
+const PAD_DAC: [u64; 2] = [0x84, 0x88];
+const PDAC_CODE_SHIFT: u32 = 19;
+const PDAC_XPD_DAC: u32 = 1 << 18;
+const PDAC_DAC_XPD_FORCE: u32 = 1 << 10;
+/// `VDD3P3_RTC`, the DAC's full scale, in millivolts.
+const DAC_VDD_MV: u32 = 3300;
 
 /// Which part a layout describes. A GPIO model only takes the RTC pads of
 /// its own part.
@@ -586,6 +612,23 @@ impl RtcIoPads {
         self.latch(&mut st);
     }
 
+    /// The level classic DAC `channel` (0 = GPIO25, 1 = GPIO26) drives, in
+    /// millivolts, or `None` while it is powered down or on a part without a
+    /// DAC.
+    pub fn dac_output_mv(&self, channel: u8) -> Option<u16> {
+        if self.layout.chip != RtcChip::Esp32 {
+            return None;
+        }
+        let off = *PAD_DAC.get(usize::from(channel))?;
+        let word = self.word(&self.read_state(), off);
+        let on = PDAC_DAC_XPD_FORCE | PDAC_XPD_DAC;
+        if word & on != on {
+            return None;
+        }
+        let code = (word >> PDAC_CODE_SHIFT) & 0xFF;
+        Some((code * DAC_VDD_MV / 255) as u16)
+    }
+
     fn write_state(&self) -> std::sync::RwLockWriteGuard<'_, State> {
         self.state.write().expect("RTC_IO state poisoned")
     }
@@ -897,6 +940,16 @@ impl Peripheral for EspRtcIo {
 
     fn rtc_io_pads(&self) -> Option<Arc<RtcIoPads>> {
         Some(self.pads())
+    }
+
+    /// The classic DAC pad stages: channel 0 is GPIO25, 1 is GPIO26 (before
+    /// the SENS source mux; see the module docs).
+    fn analog_output_probe(&self, channel: u8) -> Option<crate::AnalogProbe> {
+        if self.pads.chip() != RtcChip::Esp32 || usize::from(channel) >= PAD_DAC.len() {
+            return None;
+        }
+        let pads = self.pads();
+        Some(Arc::new(move || pads.dac_output_mv(channel)))
     }
 
     fn snapshot(&self) -> serde_json::Value {
