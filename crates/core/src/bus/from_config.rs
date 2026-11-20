@@ -70,6 +70,9 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
         // Flattened esp32c2_rev200_rom.elf (roms/esp32c2/README.md). esp-hal
         // links memcpy and the regi2c clock helpers to ROM addresses.
         "LABWIRED_ESP32C2_ROM" => "roms/esp32c2/esp32c2_rom.bin",
+        "LABWIRED_ESP32S2_ROM" => "roms/esp32s2/esp32s2_rom.bin",
+        "LABWIRED_ESP32S2_DROM" => "roms/esp32s2/esp32s2_drom.bin",
+        "LABWIRED_ESP32S2_ROM_DATA" => "roms/esp32s2/esp32s2_rom_data.bin",
         // Same image as `embedded_region_image`; kept so an operator can
         // still point the env var at a replacement file. Bare-metal ELFs
         // that need the Cortex-M flash boot alias at 0 (PIO onboarding) set
@@ -101,6 +104,17 @@ pub fn merged_peripheral_configs(
     let mut merged = chip.peripherals.clone();
     for manifest_cfg in &manifest.peripherals {
         if let Some(existing) = merged.iter_mut().find(|p| p.id == manifest_cfg.id) {
+            // A different `type` replaces the model: the board decides which
+            // role a multi-role block plays (a SERCOM is the USART, the SPI
+            // or the I2C controller the firmware makes it). The chip's
+            // `config` and `irq` belong to the model it named (models differ
+            // in the lines they take), so neither carries over; the window
+            // (base, size) does unless given.
+            if manifest_cfg.r#type != existing.r#type {
+                existing.r#type = manifest_cfg.r#type.clone();
+                existing.config.clear();
+                existing.irq = None;
+            }
             for (key, value) in &manifest_cfg.config {
                 existing.config.insert(key.clone(), value.clone());
             }
@@ -1557,6 +1571,8 @@ impl SystemBus {
         bus.wire_esp32_uart_pads();
         // …and its LEDC outputs (signals 71..86).
         bus.wire_esp32_ledc_pads();
+        // Matrix output wires published through capabilities (S2 RMT).
+        bus.wire_matrix_output_lines();
         // RP2040: bind I²C wires to the pads IO_BANK0's FUNCSEL can route them to.
         bus.wire_rp2040_i2c_pads();
         // Same for the RP2040 UARTs' TX/RX, so serial output is a waveform on
@@ -1825,6 +1841,60 @@ impl SystemBus {
             .or_else(|| ext.config.get(alt_key))
             .and_then(|v| v.as_str())?;
         Self::parse_esp32s3_gpio_pin(label).or_else(|| Self::parse_esp32_gpio_pin(label))
+    }
+}
+
+#[cfg(test)]
+mod manifest_peripheral_merge_tests {
+    use super::*;
+
+    /// A manifest entry with the chip's `type` patches it; one with another
+    /// `type` replaces the model and inherits neither `config` nor `irq`.
+    #[test]
+    fn a_different_type_replaces_the_model_and_drops_the_chip_config() {
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "test-merge"
+arch: "arm"
+flash: { base: 0x0, size: "1KB" }
+ram: { base: 0x20000000, size: "1KB" }
+peripherals:
+  - { id: "sercom1", type: "sam_sercom_usart", base_address: 0x42000C00, size: "64B", irq: 10 }
+  - id: "sercom4"
+    type: "sam_sercom_spi"
+    base_address: 0x42001800
+    size: "64B"
+    config: { sck_bit: 11, dopo: 1 }
+"#,
+        )
+        .expect("parse chip");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "test-merge-system"
+chip: "test-merge"
+peripherals:
+  - { id: "sercom1", type: "sam_sercom_spi", base_address: 0, config: { sck_bit: 17 } }
+  - { id: "sercom4", type: "sam_sercom_spi", base_address: 0, config: { dopo: 0 } }
+"#,
+        )
+        .expect("parse manifest");
+        let merged = merged_peripheral_configs(&chip, &manifest);
+        let by_id = |id: &str| merged.iter().find(|p| p.id == id).unwrap();
+
+        let sercom1 = by_id("sercom1");
+        assert_eq!(sercom1.r#type, "sam_sercom_spi");
+        assert_eq!(sercom1.base_address, 0x42000C00, "window kept");
+        assert_eq!(sercom1.irq, None, "the IRQ went with the old model");
+        assert_eq!(sercom1.config.len(), 1);
+        assert_eq!(sercom1.config["sck_bit"].as_u64(), Some(17));
+
+        let sercom4 = by_id("sercom4");
+        assert_eq!(
+            sercom4.config["sck_bit"].as_u64(),
+            Some(11),
+            "same type merges"
+        );
+        assert_eq!(sercom4.config["dopo"].as_u64(), Some(0));
     }
 }
 

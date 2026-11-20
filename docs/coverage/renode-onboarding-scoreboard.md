@@ -2,22 +2,22 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `230`
-- booted: `230/245`
-- boot_and_smoke_passed: `230/245`
-- not_run: `15`
-- pass: `230`
+- run_attempted: `231`
+- booted: `231/245`
+- boot_and_smoke_passed: `231/245`
+- not_run: `14`
+- pass: `231`
 - fail: `0`
-- pass_loading_zero_answering_windows: `0/230`
-- pass_observable_assertions: `230/230`
-- pass_stop_reason_only: `0/230`
-- pass_depth_unknown: `0/230`
-- pass_claimed_peripherals_total: `1701`
+- pass_loading_zero_answering_windows: `0/231`
+- pass_observable_assertions: `231/231`
+- pass_stop_reason_only: `0/231`
+- pass_depth_unknown: `0/231`
+- pass_claimed_peripherals_total: `1708`
 - pass_claimed_peripherals_median: `4`
-- median_elapsed_ms: `1867`
-- median_elapsed_seconds: `1.867`
+- median_elapsed_ms: `1872`
+- median_elapsed_seconds: `1.872`
 - threshold_seconds: `3600`
-- threshold_met: `230/230`
+- threshold_met: `231/231`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor. `Zero Windows` lists the peripherals in the chip the target's system actually loads that are allowlisted stubs (`crates/core/src/bus/known_stubs.rs`) and answer reads with zeros; a pass with zero windows did not exercise those blocks. `Smoke Depth` is `stop_reason_only` when the script asserts nothing but `expected_stop_reason` (the CPU stepped to its budget without faulting; no UART, memory or GPIO result is checked) and `observable` when it also checks a UART, memory, GPIO or fidelity result. `Claimed` is the number of peripheral windows the loaded chip profile declares and `Checks` the assertion kinds the smoke script uses; a smoke rarely exercises every claimed window, so a large `Claimed` next to a single `uart_contains` is a profile claim the smoke does not prove.
 
@@ -136,7 +136,7 @@
 | `mspsim-msp430f149` | `pass` | `True` | `yes` | `yes` | `1358` | `1.358` | `True` | `observable` | `6` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `mspsim-msp430f1611` | `pass` | `True` | `yes` | `yes` | `3923` | `3.923` | `True` | `observable` | `6` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `mspsim-msp430f2617` | `pass` | `True` | `yes` | `yes` | `766` | `0.766` | `True` | `observable` | `7` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `mspsim-msp430f5437` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `0` | n/a | 0 | `not_configured` | Model the x5xx SFR/PMM/UCS/USCI_A/WDT_A modules and narrow the descriptor to them before adding a smoke; do not reuse the x2xx module addresses. | The MSP430X core exists, but the MSP430x5xx modules this part needs (SFR block at 0x0100, PMM, UCS, USCI_A at 0x05C0, WDT_A, MPY32) are not modelled; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
+| `mspsim-msp430f5437` | `pass` | `True` | `yes` | `yes` | `260103` | `260.103` | `True` | `observable` | `7` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `murax_vexriscv` | `pass` | `True` | `yes` | `yes` | `3037` | `3.037` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `murax_vexriscv_verilated_uart` | `pass` | `True` | `yes` | `yes` | `2455` | `2.455` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `nrf52840` | `pass` | `True` | `yes` | `yes` | `4122` | `4.122` | `True` | `observable` | `50` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |

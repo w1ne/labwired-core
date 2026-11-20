@@ -273,6 +273,10 @@ _The P4X-C5 Function EV board smoke checks BME280 chip ID 0x60 and the model's r
 **Functional device/protocol checks** (register-level firmware asserts observable behavior):
 - BME280 ID and raw-temperature register read through GPIO7/8-routed HP I2C0 (register-level firmware) — `firmware-esp32p4-demo` · examples/esp32p4x-c5-function-ev-board/evidence/run/logs/run_smoke.log (ungated)
 
+### `esp32s2-arduino`
+
+_Arduino matrix profile of the ESP32-S2 on its genuine mask ROM: stock Arduino-ESP32 runs L0-L8 (UART0, SYSTIMER, RMT WS2812, I2C0, GP-SPI2, SENS ADC, LEDC, TWAI). Those are rubric classes, so no beyond-rubric firmware exercise is recorded in this ledger. Wi-Fi, USB OTG, PSRAM and the ULP are not modelled._
+
 ### `esp32s2`
 
 _No beyond-rubric S2 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO through host_console. This direct-ELF profile declares UART0 only; it does not model mask ROM, flash-cache/MMU boot, PSRAM, the GPIO matrix, the RGB LED, USB OTG, Wi-Fi or the other S2 peripherals._
@@ -675,6 +679,9 @@ _No tier-1 target. The firmware that runs is the PR-gated `firmware_survival::te
 ### `atsamd21g18a`
 
 _No tier-1 target. The firmware that runs is the SAM D21 bring-up smoke built from `crates/firmware-samd21-demo` (committed copy at tests/fixtures/samd21-smoke.elf; the gated lanes build the crate, not that copy): examples/samd21-smoke/io-smoke.yaml asserts `OK`, `samd21 sercom0 up` and `led on` plus three PORT memory_value reads, and is executed by strict_onboarding (nightly core-full, cross-build-excluded from the PR shards, workspace-test-shards.json:44-48) and the nightly coverage-matrix cell `samd21-smoke` (core-coverage-matrix-smoke.yml:296-303). It drives the rubric classes (clock through PM/GCLK, GPIO through PORT, uart through SERCOM0) and touches both beyond-rubric declarative banks directly — the SYSCTRL.PCLKSR poll and the NVMCTRL.CTRLB wait-state write — which are register storage with no behavioural engine behind them. PM/GCLK are the clock-class banks and WDT the wdt-class bank: same declarative shape, class-owned, not listed here._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- Stock ArduinoCore-samd sketch on the Arduino Nano 33 IoT: the scripted USB host enumerates the native port (samd21_usb) and opens its CDC serial port; the Adafruit BME280 library reads the sensor over Wire (SERCOM4) and prints 25.00 C, 1013.25 hPa, 50.00 %RH on Serial (USB CDC) — `arduino-nano-33-iot-bme280` · crates/core/tests/samd/arduino_nano_33_iot_bme280.rs (tests/fixtures/samd/arduino-nano-33-iot-bme280.elf) (PR gate)
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `SYSCTRL` (configs/chips/atsamd21g18a.yaml:144 (type: declarative; configs/peripherals/atsamd21g18a/sysctrl.yaml)) — CLOSABLE: declarative register file with no engine — the smoke's OSC8MRDY poll (crates/firmware-samd21-demo/src/main.rs:151-155) is bounded (`for _ in 0..10_000`) and passes even with PCLKSR reset to 0, so it does not depend on the hand-set value; that value (0x1_8ADF, configs/peripherals/atsamd21g18a/sysctrl.yaml:250-272, value at :264) is what unbounded driver spins like the Arduino SAMD core's DFLLRDY wait need, and the pin is the estate test (atsamd21_peripheral_estate.rs:116-139), the chip's `chip_conformance` behavior gate (chip_conformance.rs:86-93). No oscillator/DFLL state is modelled, and regenerating the file from the SVD drops the value. ⚠️ examples/samd21-smoke/io-smoke.yaml:17-19 and crates/firmware-samd21-demo/src/main.rs:149-150 still claim a PCLKSR=0 model hangs / never returns — those comments are STALE (the poll is bounded); do not 'correct' this note back from them.

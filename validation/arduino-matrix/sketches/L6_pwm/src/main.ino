@@ -59,11 +59,21 @@
 // ATmega328P, so analogWrite(13, 128) is digitalWrite(HIGH). Use D9 = PB1 =
 // OC1A (Timer1, phase-correct 8-bit, 16 MHz / 64 / 510 = 490 Hz).
 #    define LW_PWM_PIN 9
+#  elif defined(ARDUINO_ESP32S2_DEV)
+// Saola-1 / DevKitM-1: LED_BUILTIN is the WS2812's virtual pin 64
+// (SOC_GPIO_PIN_COUNT + 18), and stock analogWrite ignores pins
+// >= SOC_GPIO_PIN_COUNT. Use a plain header GPIO so LEDC really runs.
+#    define LW_PWM_PIN 2
 #  elif defined(__AVR_ATmega32U4__)
 // Leonardo LED_BUILTIN is D13 = PC7 = OC4A, the 10-bit high-speed Timer4,
 // which the twin does not model. Use D9 = PB5 = OC1A (Timer1, phase-correct
 // 8-bit, 16 MHz / 64 / 510 = 490 Hz), the same unit the Uno row drives.
 #    define LW_PWM_PIN 9
+#  elif defined(ARDUINO_SAMD_NANO_33_IOT)
+// Nano 33 IoT LED_BUILTIN is D13 = PA17, which the variant lists without a
+// timer (it is the SPI clock), so analogWrite(13, 128) is digitalWrite(HIGH).
+// Use D5 = PA05 = TCC0/WO1 (PMUX E).
+#    define LW_PWM_PIN 5
 #  elif defined(LED_BUILTIN)
 #    define LW_PWM_PIN LED_BUILTIN
 #  elif defined(ARDUINO_ARCH_ESP32)
@@ -78,12 +88,15 @@
 static void logBegin() {
   Serial.begin(115200);
 #if defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED) || \
+    defined(ARDUINO_SAMD_NANO_33_IOT) || \
     ((defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)) && \
      defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE)
   // arduino-pico (Pico 2): Serial is native USB CDC and drops writes until
   // the host opens the port (DTR), on silicon and on the twin alike.
   // ESP32-S2/S3 with ARDUINO_USB_MODE=0 (Arduino Nano ESP32): Serial is
   // TinyUSB CDC on USB-OTG, which drops writes until DTR the same way.
+  // ArduinoCore-samd on the Nano 33 IoT: Serial is SerialUSB, native USB CDC,
+  // and operator bool() is false until the host raises DTR.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)

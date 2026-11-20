@@ -23,6 +23,7 @@
 static void logBegin() {
   Serial.begin(115200);
 #if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__) || \
+    defined(ARDUINO_SAMD_NANO_33_IOT) || \
     ((defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)) && \
      defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE)
   // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
@@ -30,6 +31,8 @@ static void logBegin() {
   // on the twin alike.
   // ESP32-S2/S3 with ARDUINO_USB_MODE=0 (Arduino Nano ESP32): Serial is
   // TinyUSB CDC on USB-OTG, which drops writes until DTR the same way.
+  // ArduinoCore-samd on the Nano 33 IoT: Serial is SerialUSB, native USB CDC,
+  // and operator bool() is false until the host raises DTR.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
@@ -61,6 +64,10 @@ static void wireBegin() {
 #elif defined(CONFIG_IDF_TARGET_ESP32C6)
   // esp32c6 variant SDA/SCL. GPIO21 (the classic SDA below) is not the kit.
   Wire.begin(23, 22);
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+  // The S2 variant's SDA/SCL (variants/esp32s2/pins_arduino.h); the S2 has
+  // no GPIO22 for the classic pair below.
+  Wire.begin(8, 9);
 #elif defined(ARDUINO_ARCH_ESP32)
   Wire.begin(21, 22);
 #elif defined(ARDUINO_ARCH_RP2040)

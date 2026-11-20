@@ -143,6 +143,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // would resolve them to the STM32 maps.
     "esp32c6_uart",
     "esp32c6_gpio",
+    "esp32s2_rmt",
+    "esp32s2_i2c",
+    "esp32s2_spi",
     // C6-only behavioral blocks: PCR (clock/reset, full SVD register map) and
     // GDMA (3 channels, C6 register layout). The fuzzy `contains("dma")`
     // fallback would otherwise coerce `esp32c6_gdma` onto the STM32 DMA
@@ -245,6 +248,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "sam_dmac_sercom4_tx_byte",
     "samd51_dmac_board",
     "samd51_usb_device_banks",
+    // SAM D21 USB device controller with a scripted host (`build_samd21_usb`).
+    "samd21_usb",
     // SAM D21 TC3..TC7 (`build_samd21_tc`): fixed instance addresses.
     "samd21_tc",
     // SAM D21 RTC (`build_samd21_rtc`): fixed IRQ, optional `gclk_hz`.
@@ -357,6 +362,16 @@ pub const MODEL_TYPES: &[&str] = &[
     "esp32s3_usb_otg",
     "esp32s3_usb_serial_jtag",
     "esp32s3_wifi_mac",
+    // ESP32-S2 layouts of the shared S3 models (Arduino profile).
+    "esp32s2_apb_saradc",
+    "esp32s2_crosscore_ipi",
+    "esp32s2_gpio",
+    "esp32s2_intmatrix",
+    "esp32s2_ledc",
+    "esp32s2_rng",
+    "esp32s2_sens",
+    "esp32s2_systimer",
+    "esp32s2_uart",
     // nRF52 behavioral models the factory builds but this table never named.
     // Alias spellings are deliberately NOT here -- `canonical_peripheral_type`
     // maps those to their canonical output, and listing an alias INPUT would
@@ -475,6 +490,15 @@ pub const MODEL_TYPES: &[&str] = &[
     // are storage with reset values (PxSEL2, calibration constants).
     "msp430_port",
     "msp430_bytes",
+    // Texas Instruments MSP430x5xx: SFRIE1/SFRIFG1/SFRRPCR, USCI_A (UART
+    // mode, own UCAxIE/UCAxIFG/UCAxIV), WDT_A control, 32-bit hardware
+    // multiplier, unified clock system, power management module.
+    "msp430_sfr_x5",
+    "msp430_usci_a_x5",
+    "msp430_wdt_a",
+    "msp430_mpy32",
+    "msp430_ucs",
+    "msp430_pmm",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -641,6 +665,35 @@ fn build_samd51_usb_device_banks(p_cfg: &PeripheralConfig) -> anyhow::Result<Box
     Ok(Box::new(
         crate::peripherals::sam::usb_device::Samd51UsbDeviceBanks::new(),
     ))
+}
+
+// SAM D21 USB device controller: the one instance, its NVIC line, and the
+// scripted host's options.
+#[cold]
+#[inline(never)]
+fn build_samd21_usb(p_cfg: &PeripheralConfig) -> anyhow::Result<Box<dyn Peripheral>> {
+    if p_cfg.base_address != 0x41005000 || p_cfg.irq != Some(7) {
+        anyhow::bail!("SAMD21 USB requires base 0x41005000 and IRQ 7");
+    }
+    if let Some(key) = p_cfg
+        .config
+        .keys()
+        .find(|k| !matches!(k.as_str(), "host" | "host_steps"))
+    {
+        anyhow::bail!("samd21_usb admits `host` and `host_steps`, not `{key}`");
+    }
+    let mut usb = crate::peripherals::sam::usb21::Samd21Usb::new();
+    // `host: false` leaves the port unplugged (no enumeration).
+    if p_cfg.config.get("host").and_then(|v| v.as_bool()) == Some(false) {
+        usb.set_host_enabled(false);
+    }
+    // `host_steps:` run after enumeration (usb_host::parse_host_steps).
+    if let Some(steps) = p_cfg.config.get("host_steps") {
+        let steps = crate::peripherals::usb_host::parse_host_steps(steps)
+            .map_err(|e| anyhow::anyhow!("samd21_usb host_steps: {e}"))?;
+        usb.queue_host_steps(steps);
+    }
+    Ok(Box::new(usb))
 }
 
 // Opt-in SAMD51 board models: fixed instance addresses, no config overrides.
@@ -1471,6 +1524,7 @@ pub fn try_build(
         | "samd21_sercom_i2cm" | "samd21_adc" | "samd21_tcc" => {
             build_samd51_board_model(canonical_type, p_cfg)?
         }
+        "samd21_usb" => build_samd21_usb(p_cfg)?,
         "samd21_tc" => build_samd21_tc(p_cfg)?,
         "samd21_rtc" => build_samd21_rtc(p_cfg)?,
         "sam4s_tc" => build_sam4s_tc(p_cfg)?,
@@ -2530,6 +2584,60 @@ pub fn try_build(
                     )
                 })?;
             Box::new(crate::peripherals::msp430_port::Msp430Bytes::new(reset))
+        }
+        // `lines`: the interrupt line behind each bit (0 to 7) of
+        // SFRIE1/SFRIFG1; 0 = the bit requests no interrupt.
+        "msp430_sfr_x5" => {
+            msp430_keys(p_cfg, &["lines"])?;
+            let v = u32_list(p_cfg, "lines", 8).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "msp430_sfr_x5 '{}' needs `lines`: eight line numbers",
+                    p_cfg.id
+                )
+            })?;
+            Box::new(crate::peripherals::msp430::Msp430SfrX5::new(
+                std::array::from_fn(|i| v[i]),
+            ))
+        }
+        // `unit`: the number of this USCI module on the chip (it selects the
+        // interrupt sources, so each module needs its own); `line`: the
+        // request line UCRXIFG and UCTXIFG share.
+        "msp430_usci_a_x5" => {
+            msp430_keys(p_cfg, &["unit", "line"])?;
+            let number = |key: &str, limit: u64| -> anyhow::Result<u32> {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .filter(|v| *v < limit)
+                    .map(|v| v as u32)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "msp430_usci_a_x5 '{}' needs `{key}`: a number below {limit}",
+                            p_cfg.id
+                        )
+                    })
+            };
+            Box::new(crate::peripherals::msp430::Msp430Usart::usci_a_x5(
+                number("unit", u64::from(crate::peripherals::msp430::X5_USCI_UNITS))?,
+                number("line", 64)?,
+            ))
+        }
+        "msp430_wdt_a" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Wdt::wdt_a())
+        }
+        "msp430_mpy32" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Mpy32::new())
+        }
+        "msp430_ucs" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Ucs::new())
+        }
+        "msp430_pmm" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Pmm::new())
         }
         // `vdd_mv`: the board's VDD (the VDDREF reference, default 5000);
         // `input_mv: { <ain>: <mV> }`: static levels on AIN0..AIN15.

@@ -10,7 +10,7 @@ cd "$(dirname "$0")"
 : "${MSP430_GCC:?set MSP430_GCC to the msp430-gcc root}"
 : "${MSP430_SUPPORT:?set MSP430_SUPPORT to msp430-gcc-support-files/include}"
 gcc="$MSP430_GCC/bin/msp430-elf-gcc"
-flags=(-I"$MSP430_SUPPORT" -L"$MSP430_SUPPORT" -Os -ffunction-sections -Wl,--gc-sections)
+flags=(-I"$MSP430_SUPPORT" -L"$MSP430_SUPPORT" -Os -ffunction-sections "-Wl,--gc-sections")
 
 "$gcc" -mmcu=msp430f149 "${flags[@]}" -o torture-f149.elf torture.c
 "$gcc" -mmcu=msp430f2619 -msmall "${flags[@]}" -o torture-f2619-small.elf torture.c
