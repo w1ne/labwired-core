@@ -185,3 +185,49 @@ def test_validate_requires_ci_scripts_for_sim_validate():
     errors = bm.validate([bad], str(REPO_ROOT))
     assert any("ci/build.sh" in error for error in errors)
     assert any("ci/test.sh" in error for error in errors)
+
+
+def _real_entries():
+    return bm.load_manifest(str(REPO_ROOT / "configs/ci/boards.yml"))
+
+
+def _push(paths):
+    return {e["id"] for e in bm.select(_real_entries(), "push", paths, str(REPO_ROOT))}
+
+
+def test_trigger_paths_mirror_the_workflow_push_filter():
+    import yaml
+
+    wf = yaml.safe_load((REPO_ROOT / ".github/workflows/core-board-ci.yml").read_text())
+    on = wf.get("on", wf.get(True))
+    assert sorted(on["push"]["paths"]) == sorted(bm.TRIGGER_PATHS)
+
+
+def test_push_ignores_paths_the_workflow_does_not_trigger_on():
+    # A relevant board edit riding with crates/docs changes must not widen to all boards.
+    got = _push(["crates/core/src/lib.rs", "docs/x.md", "examples/nucleo-f411re/io-smoke.yaml"])
+    assert got == {"nucleo-f411re"}
+
+
+def test_push_onboarding_only_changes_select_no_board():
+    assert _push([
+        "configs/chips/onboarding/nrf52840.yaml",
+        "configs/systems/onboarding/nrf52840.yaml",
+        "examples/renode-onboarding/nrf52840-smoke.yaml",
+    ]) == set()
+
+
+def test_push_chip_change_selects_only_boards_that_read_it():
+    got = _push(["configs/chips/stm32f411re.yaml"])
+    assert "nucleo-f411re" in got and 0 < len(got) < 5
+
+
+def test_push_unknown_config_paths_fail_closed():
+    gated = {e["id"] for e in _real_entries() if e.get("gate")}
+    assert _push(["configs/chips-legacy.yaml"]) == gated
+    assert _push(["configs/ci/boards.yml"]) == gated
+    assert _push([".github/workflows/core-board-ci.yml"]) == gated
+
+
+def test_push_new_unmanifested_example_runs_no_board():
+    assert _push(["examples/some-new-board-bme280/bme280-smoke.yaml"]) == set()
