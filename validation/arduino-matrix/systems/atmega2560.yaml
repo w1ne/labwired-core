@@ -14,5 +14,5 @@ external_devices:
     type: "max31855"
     connection: "spi"
     config:
-      cs_pin: "D53"
+      cs_pin: "PB0"
 board_io: []
