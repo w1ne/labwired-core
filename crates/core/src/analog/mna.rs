@@ -58,14 +58,14 @@
 //! inductance). So every device that integrates in a transient gets its
 //! small-signal admittance from the same code, and a device model added later
 //! gets it without an AC stamp of its own. Two step lengths are stamped and
-//! compared; a transient term that is not proportional to `1/h` (BJT excess
-//! phase, diode soft recovery, op-amp slew or current limits) is refused by
-//! name rather than mis-modelled. A transmission line's delay is not a
-//! capacitance, so its far-port coupling is taken out of both stamps and put
-//! back per frequency as the exact phasor `e^{-jωTD}`: the lossless line is
-//! not approximated by lumped sections. `b` holds the `AC <mag> [<phase>]`
-//! values of the independent sources; every other source is a small-signal
-//! zero.
+//! compared; a transient term that is not proportional to `1/h` (diode soft
+//! recovery, op-amp slew or current limits) is refused by name rather than
+//! mis-modelled. A delay is not a capacitance: a transmission line's far-port
+//! coupling and a BJT's excess-phase transconductance (`PTF`) are taken out
+//! of the stamps and put back per frequency as the exact phasor `e^{-jωTD}`,
+//! so neither is approximated by lumped sections or by Weil's filter. `b`
+//! holds the `AC <mag> [<phase>]` values of the independent sources; every
+//! other source is a small-signal zero.
 //!
 //! ## Determinism
 //!
@@ -76,8 +76,8 @@
 use super::behavioural::Control as BehaviouralControl;
 use super::device;
 use super::netlist::{
-    AnalogError, BjtModel, Circuit, DcSweep, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
-    SwitchSense, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
+    AnalogError, Bjt, BjtModel, Circuit, DcSweep, DiodeModel, MosChannelChargeModel, Mosfet,
+    NodeRef, SwitchSense, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
 };
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
@@ -328,6 +328,31 @@ fn excess_phase_step(delay: f64, h: f64, previous: f64, history: [f64; 2]) -> (f
     let ratio = if previous > 0.0 { h / previous } else { 1.0 };
     let cc = (history[0] * (1.0 + ratio + arg2) - history[1] * ratio) / denom;
     (cc, arg1 / denom)
+}
+
+/// One BJT's DC linearisation at junction voltages `vbe`, `vbc` in device
+/// coordinates, before any excess phase.
+fn bjt_op(bjt: &Bjt, vbe: f64, vbc: f64) -> device::BjtOp {
+    let model = bjt.operating_model;
+    device::bjt_op_split_at_thermal_voltage(
+        vbe,
+        vbc,
+        model.junction_saturation_currents(),
+        model.bf,
+        model.br,
+        model.nf,
+        model.nr,
+        model.vaf,
+        model.var,
+        model.ikf,
+        model.ikr,
+        model.ise,
+        model.ne,
+        model.isc,
+        model.nc,
+        model.nkf,
+        bjt.thermal_voltage,
+    )
 }
 
 fn bjt_charge_active(model: BjtModel, branch: usize) -> bool {
@@ -763,6 +788,10 @@ pub struct Solver {
     behavioural_time: f64,
     /// The first expression that left its domain during the last stamp.
     behavioural_error: Option<AnalogError>,
+    /// Set only while `.ac` reads `C` back from the transient stamp: the
+    /// BJT excess-phase filter is then left out, and `.ac` applies its
+    /// exact phasor instead.
+    excess_phase_off: bool,
     /// What each `T` line's ports sent into it, `[time, w1, w2]` with
     /// `w = v + Z0·i` for the current entering the port, oldest first. A run
     /// of equal waves is kept as its two end points, so a line at rest holds
@@ -937,6 +966,7 @@ impl Solver {
             behavioural_point,
             behavioural_time: 0.0,
             behavioural_error: None,
+            excess_phase_off: false,
             line_history: vec![Vec::new(); lines],
             saved_diode_vj: vec![0.0; diodes],
             saved_bjt_vbe: vec![0.0; bjts],
@@ -2253,7 +2283,8 @@ impl Solver {
             self.save_linearisation();
             self.relinearise();
         }
-        let result = self.ac_matrices().map(|(g, c)| {
+        let couplings = self.delayed_couplings();
+        let result = self.ac_matrices(&couplings).map(|(g, c)| {
             let excitation = self.ac_excitation();
             (g, c, excitation)
         });
@@ -2263,7 +2294,6 @@ impl Solver {
         self.cached_stamp = None;
         self.settled = false;
         let (g, c, excitation) = result?;
-        let couplings = self.line_couplings();
 
         let mut values = Vec::with_capacity(frequencies.len() * dim);
         let size = 2 * dim;
@@ -2281,8 +2311,17 @@ impl Solver {
                     system[(dim + row) * size + dim + column] = conductance;
                 }
             }
-            // Each port sees the other's wave `TD` later: `e^{-jωTD}`.
-            for &(row, column, coefficient, delay) in &couplings {
+            // Each port of a line sees the other's wave `TD` later, and a
+            // BJT's transport current lags its B-E voltage by `td`:
+            // `e^{-jωTD}`.
+            for &DelayedCoupling {
+                row,
+                column,
+                coefficient,
+                delay,
+                ..
+            } in &couplings
+            {
                 let re = coefficient * libm::cos(omega * delay);
                 let im = -coefficient * libm::sin(omega * delay);
                 system[row * size + column] += re;
@@ -2311,7 +2350,10 @@ impl Solver {
     }
 
     /// `G` and `C` of the small-signal system, row-major `dim × dim`.
-    fn ac_matrices(&mut self) -> Result<(Vec<f64>, Vec<f64>), AnalogError> {
+    fn ac_matrices(
+        &mut self,
+        couplings: &[DelayedCoupling],
+    ) -> Result<(Vec<f64>, Vec<f64>), AnalogError> {
         // A step far below any time constant a netlist carries keeps `C/h`
         // well above `G`, so the subtraction loses little; the second step
         // checks that the difference really is `C/h`.
@@ -2324,23 +2366,30 @@ impl Solver {
                 None => Ok(solver.matrix[..dim * dim].to_vec()),
             }
         };
-        // The far-port coupling of a `T` line is `alpha` times a fixed
-        // pattern, with `alpha` set by the stamp; take it out of each matrix
-        // so that what is left is the line's frequency-independent part.
-        let couplings = self.line_couplings();
+        // Each delayed term is a fixed pattern times a factor set by the
+        // stamp; take it out of each matrix so that what is left is the
+        // frequency-independent part. The BJT excess-phase filter is turned
+        // off for the transient stamps, so its term is the plain DC one.
         let stamp = |solver: &mut Self, kind: Stamp| {
             let mut matrix = raw(solver, kind)?;
-            for &(row, column, coefficient, delay) in &couplings {
-                matrix[row * dim + column] -= line_alpha(delay, kind) * coefficient;
+            for coupling in couplings {
+                matrix[coupling.row * dim + coupling.column] -=
+                    coupling.present_factor(kind) * coupling.coefficient;
             }
             Ok::<_, AnalogError>(matrix)
         };
-        let g = stamp(self, Stamp::OperatingPoint)?;
-        let short = stamp(self, Stamp::Transient(STEP, Integration::BackwardEuler))?;
-        let long = stamp(
-            self,
-            Stamp::Transient(2.0 * STEP, Integration::BackwardEuler),
-        )?;
+        let g = stamp(self, Stamp::OperatingPoint);
+        self.excess_phase_off = true;
+        let transient = g.and_then(|g| {
+            let short = stamp(self, Stamp::Transient(STEP, Integration::BackwardEuler))?;
+            let long = stamp(
+                self,
+                Stamp::Transient(2.0 * STEP, Integration::BackwardEuler),
+            )?;
+            Ok((g, short, long))
+        });
+        self.excess_phase_off = false;
+        let (g, short, long) = transient?;
         let mut c = vec![0.0; dim * dim];
         for cell in 0..dim * dim {
             let first = short[cell] - g[cell];
@@ -2349,8 +2398,8 @@ impl Solver {
             if (first - 2.0 * second).abs() > tolerance {
                 return Err(AnalogError::Config(format!(
                     "`.ac` cannot linearise row `{}`, column `{}`: an element there has a \
-                     transient term that is not a capacitance or inductance (BJT `PTF`, \
-                     diode soft recovery `VP`, op-amp `SR`/`IOLIM`)",
+                     transient term that is not a capacitance or inductance (diode soft \
+                     recovery `VP`, op-amp `SR`/`IOLIM`)",
                     self.unknown_name(cell / dim),
                     self.unknown_name(cell % dim),
                 )));
@@ -2360,12 +2409,38 @@ impl Solver {
         Ok((g, c))
     }
 
-    /// The far-port terms of every `T` line, per unit of the coupling
-    /// factor: `(row, column, coefficient, TD)`. [`Solver::stamp_lines`]
-    /// writes `alpha · coefficient` at each; in `.ac` the factor is
-    /// `e^{-jωTD}`.
-    fn line_couplings(&self) -> Vec<(usize, usize, f64, f64)> {
+    /// Every matrix term that `.ac` multiplies by `e^{-jωTD}`.
+    ///
+    /// The far-port terms of each `T` line, per unit of the coupling factor:
+    /// [`Solver::stamp_lines`] writes `alpha · coefficient` at each.
+    ///
+    /// The forward transconductance `∂Ict/∂Vbe` of each BJT with `PTF`, at
+    /// the present linearisation. ngspice's `bjtacld.c` delays exactly this
+    /// term by Weil's `td = PTF·π/180·TF`; the reverse term `∂Ict/∂Vbc` and
+    /// the base current are not delayed. With `e^{-jωtd} = 1` the system is
+    /// the one without excess phase.
+    fn delayed_couplings(&self) -> Vec<DelayedCoupling> {
         let mut couplings = Vec::new();
+        for (index, bjt) in self.circuit.bjts.iter().enumerate() {
+            let delay = device::bjt_excess_phase_delay(bjt.model);
+            if delay <= 0.0 {
+                continue;
+            }
+            let gif = bjt.multiplier * bjt_op(bjt, self.bjt_vbe[index], self.bjt_vbc[index]).gif;
+            for (row, sign) in [(bjt.junction_c, 1.0), (bjt.junction_e, -1.0)] {
+                for (column, polarity) in [(bjt.junction_b, 1.0), (bjt.junction_e, -1.0)] {
+                    if let (Some(row), Some(column)) = (row, column) {
+                        couplings.push(DelayedCoupling {
+                            row,
+                            column,
+                            coefficient: sign * polarity * gif,
+                            delay,
+                            line: false,
+                        });
+                    }
+                }
+            }
+        }
         for (index, line) in self.circuit.transmission_lines.iter().enumerate() {
             let row1 = self.nodes + self.circuit.transmission_line_branch(index);
             let row2 = row1 + 1;
@@ -2374,12 +2449,30 @@ impl Solver {
                 (row2, line.p1, line.n1, row1),
             ] {
                 if let Some(column) = far_p {
-                    couplings.push((row, column, -1.0, line.delay));
+                    couplings.push(DelayedCoupling {
+                        row,
+                        column,
+                        coefficient: -1.0,
+                        delay: line.delay,
+                        line: true,
+                    });
                 }
                 if let Some(column) = far_n {
-                    couplings.push((row, column, 1.0, line.delay));
+                    couplings.push(DelayedCoupling {
+                        row,
+                        column,
+                        coefficient: 1.0,
+                        delay: line.delay,
+                        line: true,
+                    });
                 }
-                couplings.push((row, far_row, -line.z0, line.delay));
+                couplings.push(DelayedCoupling {
+                    row,
+                    column: far_row,
+                    coefficient: -line.z0,
+                    delay: line.delay,
+                    line: true,
+                });
             }
         }
         couplings
@@ -3368,29 +3461,10 @@ impl Solver {
             let model = bjt.operating_model;
             let operating_model = bjt.operating_model;
             let (vbe, vbc) = (self.bjt_vbe[index], self.bjt_vbc[index]);
-            let op = device::bjt_op_split_at_thermal_voltage(
-                vbe,
-                vbc,
-                operating_model.junction_saturation_currents(),
-                operating_model.bf,
-                operating_model.br,
-                operating_model.nf,
-                operating_model.nr,
-                operating_model.vaf,
-                operating_model.var,
-                operating_model.ikf,
-                operating_model.ikr,
-                operating_model.ise,
-                operating_model.ne,
-                operating_model.isc,
-                operating_model.nc,
-                operating_model.nkf,
-                bjt.thermal_voltage,
-            );
-            let mut op = op;
+            let mut op = bjt_op(bjt, vbe, vbc);
             if let Stamp::Transient(h, _) = stamp {
                 let delay = device::bjt_excess_phase_delay(bjt.model);
-                if delay > 0.0 {
+                if delay > 0.0 && !self.excess_phase_off {
                     // ngspice replaces cbe by cex = arg3·cbe in the transport
                     // current and adds the history term cc; the base current
                     // keeps the undelayed cbe.
@@ -4159,6 +4233,30 @@ impl Solver {
 /// Weight a `T` line's delayed wave puts on the far port's unknown end-of-step
 /// value: 1 at the operating point, `1 − TD/h` when the step is longer than
 /// the delay, otherwise 0. See [`Solver::line_terms`].
+/// One matrix term that `.ac` multiplies by `e^{-jωTD}`; see
+/// [`Solver::delayed_couplings`].
+#[derive(Debug, Clone, Copy)]
+struct DelayedCoupling {
+    row: usize,
+    column: usize,
+    coefficient: f64,
+    delay: f64,
+    /// A `T` line's far-port term, which each stamp scales by
+    /// [`line_alpha`]; otherwise a BJT excess-phase term, which every stamp
+    /// `.ac` builds holds at its full DC value.
+    line: bool,
+}
+
+impl DelayedCoupling {
+    fn present_factor(&self, stamp: Stamp) -> f64 {
+        if self.line {
+            line_alpha(self.delay, stamp)
+        } else {
+            1.0
+        }
+    }
+}
+
 fn line_alpha(delay: f64, stamp: Stamp) -> f64 {
     match stamp {
         Stamp::OperatingPoint => 1.0,

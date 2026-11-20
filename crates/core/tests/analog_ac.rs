@@ -7,8 +7,8 @@
 //! The analysis has no per-device AC code: `G` is the operating-point Newton
 //! Jacobian and `C` is read back from the backward-Euler transient stamp. So
 //! each test below takes a different element family (R/C, L/C, diode charge,
-//! BJT and MOSFET with a Miller capacitance, a `LAPLACE` source, a lossless `T`
-//! line) and holds the sweep to a closed form written from the device
+//! BJT and MOSFET with a Miller capacitance, BJT excess phase, a `LAPLACE`
+//! source, a lossless `T` line) and holds the sweep to a closed form written from the device
 //! equations, not from the engine. Operating points come from the solver; everything derived from
 //! them (`gm`, `gd`, junction capacitance) is computed here.
 
@@ -276,6 +276,138 @@ mod analog {
     }
 
     #[test]
+    fn bjt_excess_phase_delays_the_transconductance_by_td() {
+        // `td = PTF·π/180·TF` = 60° of a 1 ns TF. The base and emitter are
+        // held by sources, so the diffusion charge `TF·gm` carries no signal
+        // and the only reactive effect left is the delayed transport current.
+        let deck = |ptf: f64| {
+            format!(
+                "VCC vcc 0 DC 10\n\
+                 VB b 0 DC 0.65 AC 1\n\
+                 RC vcc c 10k\n\
+                 Q1 c b 0 QN\n\
+                 .model QN NPN(IS=1e-15 BF=100 TF=1n PTF={ptf})\n"
+            )
+        };
+        let td = PI / 3.0 * 1e-9;
+        let quarter = 1.0 / (4.0 * td);
+        let frequencies = [1e3, 1e7, quarter, 2.0 * quarter, 3.0 * quarter];
+        let mut delayed = build(&deck(60.0));
+        let mut plain = build(&deck(0.0));
+        assert_eq!(
+            dc(&delayed, "c").to_bits(),
+            dc(&plain, "c").to_bits(),
+            "excess phase does not move the operating point"
+        );
+        let gm = 1e-15 * (dc(&delayed, "b") / VT).exp() / VT;
+        let with = delayed.ac_analysis(&frequencies).unwrap();
+        let without = plain.ac_analysis(&frequencies).unwrap();
+        let c = node(&delayed, "c");
+        for (point, &f) in frequencies.iter().enumerate() {
+            let phase = -2.0 * PI * f * td;
+            let gain = -gm * 10e3;
+            assert_phasor(
+                &format!("Av at {f} Hz"),
+                with.node_voltage(point, c),
+                C64::new(gain * phase.cos(), gain * phase.sin()),
+                1e-6,
+            );
+            assert_phasor(
+                &format!("Av without PTF at {f} Hz"),
+                without.node_voltage(point, c),
+                C64::new(gain, 0.0),
+                1e-6,
+            );
+        }
+        // A quarter period of delay turns the inverting stage's 180° into 90°.
+        let v = with.node_voltage(2, c);
+        assert!(
+            (v.phase_degrees() - 90.0).abs() < 1e-4,
+            "{}",
+            v.phase_degrees()
+        );
+    }
+
+    #[test]
+    fn bjt_excess_phase_stage_matches_ngspice() {
+        // ngspice-42, `.options reltol=1e-9 abstol=1e-18 vntol=1e-12`. A
+        // biased, degenerated common emitter with RB/RE/RC, Early effect,
+        // junction and diffusion charge and 45° of excess phase: the delayed
+        // `∂Ict/∂Vbe` sees the internal B-E voltage, not a source.
+        let mut solver = build(
+            "VCC vcc 0 DC 12\n\
+             V1 in 0 DC 0 AC 1\n\
+             RS in bx 50\n\
+             CIN bx b 1u\n\
+             RB1 vcc b 47k\n\
+             RB2 b 0 10k\n\
+             RC vcc c 2.2k\n\
+             RE e 0 100\n\
+             CL c 0 2p\n\
+             Q1 c b e QX\n\
+             .model QX NPN(IS=2e-15 BF=150 BR=3 VAF=80 NF=1 TF=0.4n PTF=45 CJE=1p \
+             VJE=0.75 MJE=0.33 CJC=0.8p VJC=0.75 MJC=0.33 RB=20 RE=1 RC=5)\n\
+             .ac lin 6 50Meg 550Meg\n",
+        );
+        let response = solver.ac_sweep().unwrap();
+        let reference = [
+            (
+                -7.224129503422e-01,
+                9.2435031176555e-01,
+                5.7507726086594e-01,
+                2.1613365822235e-02,
+            ),
+            (
+                4.1627909588598e-01,
+                8.3345320600280e-01,
+                6.1744357686207e-01,
+                -2.514952600779e-02,
+            ),
+            (
+                7.2241820320780e-01,
+                4.2564692847893e-01,
+                6.0948674191322e-01,
+                -8.231582335237e-02,
+            ),
+            (
+                7.7859436244152e-01,
+                1.2591845468282e-01,
+                5.7964017077762e-01,
+                -1.259574168403e-01,
+            ),
+            (
+                7.3688699600021e-01,
+                -9.512946570129e-02,
+                5.3810168348448e-01,
+                -1.530564029621e-01,
+            ),
+            (
+                6.3998094937785e-01,
+                -2.519274899597e-01,
+                4.9292553430249e-01,
+                -1.611025962185e-01,
+            ),
+        ];
+        let (c, e) = (node(&solver, "c"), node(&solver, "e"));
+        for (point, &(c_re, c_im, e_re, e_im)) in reference.iter().enumerate() {
+            let f = response.frequencies()[point];
+            // ngspice-42's k/q is CODATA 2014; the engine's is CODATA 2018.
+            assert_phasor(
+                &format!("V(c) at {f} Hz"),
+                response.node_voltage(point, c),
+                C64::new(c_re, c_im),
+                1e-5,
+            );
+            assert_phasor(
+                &format!("V(e) at {f} Hz"),
+                response.node_voltage(point, e),
+                C64::new(e_re, e_im),
+                1e-5,
+            );
+        }
+    }
+
+    #[test]
     fn mosfet_common_source_gain_and_miller_zero_follow_gm_and_cgdo() {
         let (kp, w, l, vto, cgdo) = (50e-6, 10e-6, 2e-6, 1.0, 3e-9);
         let mut solver = build(
@@ -394,6 +526,34 @@ mod analog {
             plain.advance(1e-7).unwrap();
             probed.advance(1e-7).unwrap();
             for name in ["a", "b"] {
+                assert_eq!(
+                    dc(&plain, name).to_bits(),
+                    dc(&probed, name).to_bits(),
+                    "step {step}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn ac_analysis_leaves_an_excess_phase_transient_bit_identical() {
+        // `.ac` turns the Weil filter off while it reads `C`; the transient
+        // that resumes must not see that, nor any change to its history.
+        let deck = "VCC vcc 0 DC 10\n\
+                    V1 in 0 PULSE(0.6 0.7 0 1n 1n 20n 50n) AC 1\n\
+                    RB in b 100\n\
+                    RC vcc c 1k\n\
+                    Q1 c b 0 QN\n\
+                    .model QN NPN(IS=1e-15 BF=100 TF=1n PTF=40 CJC=1p CJE=1p)\n";
+        let mut plain = build(deck);
+        let mut probed = build(deck);
+        for step in 0..300 {
+            if step % 29 == 0 {
+                probed.ac_analysis(&[1e6, 1e8]).expect("AC mid-run");
+            }
+            plain.advance(2e-10).unwrap();
+            probed.advance(2e-10).unwrap();
+            for name in ["b", "c"] {
                 assert_eq!(
                     dc(&plain, name).to_bits(),
                     dc(&probed, name).to_bits(),
@@ -600,20 +760,8 @@ mod analog {
         }
     }
 
-    fn config_error(deck: &str) -> String {
-        match build(deck).ac_analysis(&[1e3]) {
-            Err(AnalogError::Config(message)) => message,
-            other => panic!("expected a refusal, got {other:?}"),
-        }
-    }
-
     #[test]
-    fn ac_refuses_terms_it_cannot_linearise_by_name() {
-        let excess = config_error(
-            "VCC vcc 0 DC 5\nVB b 0 DC 0.7 AC 1\nRC vcc c 1k\nQ1 c b 0 QX\n\
-             .model QX NPN(IS=1e-15 TF=1n PTF=30)\n",
-        );
-        assert!(excess.contains("PTF"), "{excess}");
+    fn ac_sweep_without_an_ac_directive_is_refused() {
         assert!(matches!(
             build("V1 in 0 AC 1\nR1 in 0 1k\n").ac_sweep(),
             Err(AnalogError::Config(message)) if message.contains(".ac")
