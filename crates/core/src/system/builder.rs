@@ -227,6 +227,7 @@ mod avr;
 mod cortex_a;
 mod cortex_r;
 mod mips;
+mod msp430;
 mod pic16;
 mod pic18;
 mod pic24;
@@ -415,6 +416,7 @@ pub fn build_machine_with_plugins(
         MachineFamily::Aarch64 => aarch64::build(req, plugins),
         MachineFamily::Rx => rx::build(req, plugins),
         MachineFamily::Mips => mips::build(req, plugins),
+        MachineFamily::Msp430 => msp430::build(req, plugins),
     }
 }
 

@@ -2,22 +2,22 @@
 
 - descriptors_present: `245`
 - targets_total: `245`
-- run_attempted: `226`
-- booted: `226/245`
-- boot_and_smoke_passed: `226/245`
-- not_run: `19`
-- pass: `226`
+- run_attempted: `231`
+- booted: `231/245`
+- boot_and_smoke_passed: `231/245`
+- not_run: `14`
+- pass: `231`
 - fail: `0`
-- pass_loading_zero_answering_windows: `0/226`
-- pass_observable_assertions: `226/226`
-- pass_stop_reason_only: `0/226`
-- pass_depth_unknown: `0/226`
-- pass_claimed_peripherals_total: `1675`
+- pass_loading_zero_answering_windows: `0/231`
+- pass_observable_assertions: `231/231`
+- pass_stop_reason_only: `0/231`
+- pass_depth_unknown: `0/231`
+- pass_claimed_peripherals_total: `1708`
 - pass_claimed_peripherals_median: `4`
-- median_elapsed_ms: `1884`
-- median_elapsed_seconds: `1.884`
+- median_elapsed_ms: `1872`
+- median_elapsed_seconds: `1.872`
 - threshold_seconds: `3600`
-- threshold_met: `226/226`
+- threshold_met: `231/231`
 
 > `booted` means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. `not_run` means no firmware run was attempted for that descriptor. `Zero Windows` lists the peripherals in the chip the target's system actually loads that are allowlisted stubs (`crates/core/src/bus/known_stubs.rs`) and answer reads with zeros; a pass with zero windows did not exercise those blocks. `Smoke Depth` is `stop_reason_only` when the script asserts nothing but `expected_stop_reason` (the CPU stepped to its budget without faulting; no UART, memory or GPIO result is checked) and `observable` when it also checks a UART, memory, GPIO or fidelity result. `Claimed` is the number of peripheral windows the loaded chip profile declares and `Checks` the assertion kinds the smoke script uses; a smoke rarely exercises every claimed window, so a large `Claimed` next to a single `uart_contains` is a profile claim the smoke does not prove.
 
@@ -132,11 +132,11 @@
 | `miv_rv32` | `pass` | `True` | `yes` | `yes` | `1520` | `1.52` | `True` | `observable` | `5` | `uart_contains`, `uart_ordered` | 0 | `n/a` | n/a | n/a |
 | `mpc5567` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `5` | n/a | 3: `fec:fastethernetcontroller`, `emios:emios`, `fmpllSynsr:pythonperipheral` | `not_configured` | Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M. | The engine has no PowerPC e200z6 CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted. |
 | `mpfs-icicle-kit` | `pass` | `True` | `yes` | `yes` | `804` | `0.804` | `True` | `observable` | `8` | `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `msp430f2619` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `4` | n/a | 4: `boot:arraymemory`, `ram_extended:arraymemory`, `code:arraymemory`, `info_mem:arraymemory` | `not_configured` | Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub. | MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage. |
-| `mspsim-msp430f149` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `0` | n/a | 0 | `not_configured` | Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub. | MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage. |
-| `mspsim-msp430f1611` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `0` | n/a | 0 | `not_configured` | Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub. | MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage. |
-| `mspsim-msp430f2617` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `0` | n/a | 0 | `not_configured` | Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub. | MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage. |
-| `mspsim-msp430f5437` | `not_run` | `False` | `n/a` | `n/a` | `0` | `0.0` | `n/a` | `n/a` | `0` | n/a | 0 | `not_configured` | Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub. | MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage. |
+| `msp430f2619` | `pass` | `True` | `yes` | `yes` | `981` | `0.981` | `True` | `observable` | `7` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `mspsim-msp430f149` | `pass` | `True` | `yes` | `yes` | `1358` | `1.358` | `True` | `observable` | `6` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `mspsim-msp430f1611` | `pass` | `True` | `yes` | `yes` | `3923` | `3.923` | `True` | `observable` | `6` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `mspsim-msp430f2617` | `pass` | `True` | `yes` | `yes` | `766` | `0.766` | `True` | `observable` | `7` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `mspsim-msp430f5437` | `pass` | `True` | `yes` | `yes` | `260103` | `260.103` | `True` | `observable` | `7` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `murax_vexriscv` | `pass` | `True` | `yes` | `yes` | `3037` | `3.037` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `murax_vexriscv_verilated_uart` | `pass` | `True` | `yes` | `yes` | `2455` | `2.455` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `nrf52840` | `pass` | `True` | `yes` | `yes` | `4122` | `4.122` | `True` | `observable` | `50` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |

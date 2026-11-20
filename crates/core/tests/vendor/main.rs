@@ -43,6 +43,7 @@ mod ek_rx261_zephyr;
 mod esp32c2_compiled_firmware;
 mod kw41z_clock_boot;
 mod modulshop_49213;
+mod msp430_gdb_sim_lockstep;
 mod ra6m5_adc12_icu;
 mod ra6m5_agt_icu;
 mod ra6m5_gpt_pwm;

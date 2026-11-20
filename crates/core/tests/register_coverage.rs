@@ -331,6 +331,7 @@ fn measure_chip(name: &str, yaml: &str, svd: &str) -> (usize, usize, usize, usiz
         | Arch::Pic16
         | Arch::Rx
         | Arch::Mips
+        | Arch::Msp430
         | Arch::Aarch64
         | Arch::Unknown) => {
             panic!(

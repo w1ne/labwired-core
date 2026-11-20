@@ -1329,26 +1329,70 @@ pub(crate) fn run_test(
                         }
                     };
                 s2_bus.attach_uart_tx_sink(uart_tx.clone(), !args.no_uart_stdout);
-                let mut machine = labwired_core::Machine::new(s2_cpu, s2_bus);
+                // An ESP-IDF / Arduino app ships its partition table beside
+                // the ELF; a freestanding smoke ELF does not. The app needs
+                // the S2 external flash (MMU-translated cache windows + SPI1)
+                // and a bootloader-equivalent layout; the smoke keeps the
+                // descriptor's identity flash window.
+                let partitions = resolve_esp_partitions_bin(std::path::Path::new(&firmware_path))
+                    .and_then(|p| std::fs::read(p).ok());
+                let mut machine = if let Some(table) = partitions {
+                    let flash_size = resolved_system
+                        .as_ref()
+                        .and_then(|s| s.chip().ok())
+                        .map(|c| c.flash.size as usize)
+                        .unwrap_or(4 * 1024 * 1024);
+                    let flash = labwired_core::system::xtensa::attach_esp32s2_flash(
+                        &mut s2_bus,
+                        flash_size,
+                    );
+                    let mut s2_cpu = s2_cpu;
+                    if let Err(e) = labwired_core::boot::esp32s2::fast_boot(
+                        &firmware_bytes,
+                        &mut s2_bus,
+                        &mut s2_cpu,
+                        &flash,
+                        Some(&table),
+                    ) {
+                        let msg = format!("ESP32-S2 fast_boot: {e:#}");
+                        error!("{}", msg);
+                        write_config_error_outputs(
+                            &args,
+                            Some(&firmware_path),
+                            system_path.as_ref(),
+                            Some(&firmware_bytes),
+                            Some(&resolved_limits),
+                            msg,
+                        );
+                        return ExitCode::from(EXIT_CONFIG_ERROR);
+                    }
+                    eprintln!(
+                        "labwired-cli test: ESP32-S2 app fast-boot (partition table + MMU-mapped app @ flash 0x10000)"
+                    );
+                    labwired_core::Machine::new(s2_cpu, s2_bus)
+                } else {
+                    let mut machine = labwired_core::Machine::new(s2_cpu, s2_bus);
+                    if let Err(e) = machine.load_firmware(&program) {
+                        return handle_load_error(
+                            &args,
+                            &metrics,
+                            &resolved_limits,
+                            &firmware_bytes,
+                            &uart_tx,
+                            &rtt_tx,
+                            &itm_tx,
+                            &machine.cpu,
+                            &firmware_path,
+                            system_path.as_ref(),
+                            e,
+                        );
+                    }
+                    machine.cpu.set_pc(program.entry_point as u32);
+                    machine.cpu.set_sp(stack_top);
+                    machine
+                };
                 crate::log_ts::set_hz(machine.bus.cpu_hz);
                 apply_run_speed_opts(&mut machine);
-                if let Err(e) = machine.load_firmware(&program) {
-                    return handle_load_error(
-                        &args,
-                        &metrics,
-                        &resolved_limits,
-                        &firmware_bytes,
-                        &uart_tx,
-                        &rtt_tx,
-                        &itm_tx,
-                        &machine.cpu,
-                        &firmware_path,
-                        system_path.as_ref(),
-                        e,
-                    );
-                }
-                machine.cpu.set_pc(program.entry_point as u32);
-                machine.cpu.set_sp(stack_top);
                 machine.add_observer(metrics.clone());
                 machine
             } else if is_esp32s3 {
@@ -2359,6 +2403,13 @@ pub(crate) fn run_test(
                     Err(e) => error!("{e:#}"),
                 }
             }
+            // MSP430 starts at the address in the reset vector (0xFFFE).
+            if matches!(program.arch, labwired_core::Arch::Msp430) {
+                use labwired_core::Cpu as _;
+                if let Err(e) = machine.cpu.reset(&mut machine.bus) {
+                    error!("MSP430 reset vector: {e:#}");
+                }
+            }
             // RISC-V Arduino-ESP32 images enter at `call_start_cpu0`, which
             // assumes the second-stage bootloader already left a DRAM stack.
             // Cortex-M gets SP from the vector table in `load_firmware`; RISC-V
@@ -3031,6 +3082,16 @@ pub(crate) fn run_test(
             // PIC32MZ: physical bus (RAM, program and boot flash, SFRs); the
             // EVIC is part of the core.
             setup_and_run!(labwired_core::cpu::Mips32::new())
+        }
+        labwired_core::Arch::Msp430 => {
+            // The chip selects the 16-bit CPU or the CPUX; the core shares
+            // the interrupt sources with the modules on the bus.
+            let chip = resolved_system.as_ref().and_then(|s| {
+                s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                    .ok()
+            });
+            let cpu = labwired_core::system::msp430::cpu_for(&mut bus, chip.as_ref());
+            setup_and_run!(cpu)
         }
         labwired_core::Arch::Aarch64 => {
             // The PE's GICv3 and generic timer are part of the core; its

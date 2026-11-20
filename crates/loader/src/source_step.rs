@@ -363,6 +363,8 @@ impl SourceDebug {
             MachineFamily::Mips => 32,
             // X0-X30, SP (31).
             MachineFamily::Aarch64 => 32,
+            // R0-R15 (PC, SP, SR, CG, R4-R15), GCC's MSP430 DWARF numbering.
+            MachineFamily::Msp430 => 16,
         };
         let cpu = target.debug_cpu();
         self.symbols
@@ -543,6 +545,17 @@ fn abi(family: MachineFamily) -> Abi {
             unwind: false,
             exc_return: false,
         },
+        MachineFamily::Msp430 => Abi {
+            // R1 is the stack pointer; R4-R10 are callee-saved (MSP430 EABI).
+            // Frame 0 only until the MSP430 CFI unwind has been checked
+            // against GCC output.
+            sp: 1,
+            callee_saved: (4..=10).collect(),
+            code_mask: !0,
+            register_size: 4,
+            unwind: false,
+            exc_return: false,
+        },
     }
 }
 
@@ -567,6 +580,7 @@ fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> Regis
         MachineFamily::Mips => 32,
         // X0-X30, SP.
         MachineFamily::Aarch64 => 32,
+        MachineFamily::Msp430 => 16,
     };
     for r in 0..count {
         regs.set(u16::from(r), Some(u64::from(cpu.get_register(r))));
@@ -748,6 +762,7 @@ fn stack_register(family: MachineFamily) -> u8 {
         MachineFamily::Rx => 0,
         MachineFamily::Mips => 29,
         MachineFamily::Aarch64 => 31,
+        MachineFamily::Msp430 => 1,
     }
 }
 

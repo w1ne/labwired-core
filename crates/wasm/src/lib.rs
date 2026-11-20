@@ -594,6 +594,9 @@ impl WasmSimulator {
             MachineFamily::Mips => Err(JsValue::from_str(
                 "MIPS is not available in the browser build yet",
             )),
+            MachineFamily::Msp430 => Err(JsValue::from_str(
+                "MSP430 is not available in the browser build yet",
+            )),
         }?;
         // Every architecture's machine is built by now, so co-simulation binds
         // here once rather than in each constructor above.

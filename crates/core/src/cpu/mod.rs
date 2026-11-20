@@ -43,6 +43,8 @@ pub use cortex_a::CortexA7;
 #[deny(clippy::let_underscore_must_use)]
 pub mod mips;
 #[deny(clippy::let_underscore_must_use)]
+pub mod msp430;
+#[deny(clippy::let_underscore_must_use)]
 pub mod riscv;
 #[deny(clippy::let_underscore_must_use)]
 pub mod riscv64;
@@ -90,6 +92,7 @@ pub use aarch64::Aarch64;
 pub use avr::{Avr, AvrGeometry, AvrModel};
 pub use cortex_m::CortexM;
 pub use mips::Mips32;
+pub use msp430::Msp430;
 pub use pic16::Pic16;
 pub use pic18::Pic18;
 pub use pic24::Pic24;
