@@ -13,8 +13,8 @@
   "firmware_interpreter": "wasmi, in labwired-wasm and in the CLI",
   "browser": "156.0.8078.79",
   "browser_driver": "Playwright",
-  "core_commit": "f04b87d28b01d491c61763a84a31045ae98ce904",
-  "fixtures": 14,
+  "core_commit": "b1b0b5d269b7acba305cab2c9c06775a4760eb29",
+  "fixtures": 15,
   "scripts": [
     {
       "fixture": "flex-analog-gp2y0a21",
@@ -33,8 +33,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "a0a6e68bfa09fc41bf463728db2c41ddedd11b15292db2e5fde34dff80711a22",
-      "measured_native_ms": 103,
-      "measured_browser_ms": 279
+      "measured_native_ms": 78,
+      "measured_browser_ms": 217
     },
     {
       "fixture": "flex-analog-gp2y0a21",
@@ -53,8 +53,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "f069a48f5589edabafda11226bf3f28b7c83df41cf815b9312e0aa7114b39829",
-      "measured_native_ms": 108,
-      "measured_browser_ms": 2
+      "measured_native_ms": 93,
+      "measured_browser_ms": 1
     },
     {
       "fixture": "flex-analog-multi-input",
@@ -73,8 +73,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "0baaa0d241fcc3fc5afcdde89ee349dae68453797c702e3429055046d53e858b",
-      "measured_native_ms": 95,
-      "measured_browser_ms": 1
+      "measured_native_ms": 92,
+      "measured_browser_ms": 4
     },
     {
       "fixture": "flex-analog-multi-input",
@@ -93,8 +93,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "44961fbee95af95e59f5c63d44bbd7cc101d31f387654389513b7d097326fe19",
-      "measured_native_ms": 81,
-      "measured_browser_ms": 1
+      "measured_native_ms": 96,
+      "measured_browser_ms": 2
     },
     {
       "fixture": "flex-analog-multi-input",
@@ -113,7 +113,7 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "0381414d8a27e5f24abb39d39e4de227369c78c9cc99d3b9c1f861b9da52b369",
-      "measured_native_ms": 78,
+      "measured_native_ms": 153,
       "measured_browser_ms": 1
     },
     {
@@ -133,8 +133,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "b2fd9dc123abfceed0e68b8ef2b5a697785985445ffa483ad63e70d80c84bd2e",
-      "measured_native_ms": 130,
-      "measured_browser_ms": 2
+      "measured_native_ms": 132,
+      "measured_browser_ms": 3
     },
     {
       "fixture": "flex-analog-ntc",
@@ -153,7 +153,7 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "dba866e086ff53f4e60c5811f46251f6ddafcfdc59bc3a9916a69a444ae4bad3",
-      "measured_native_ms": 78,
+      "measured_native_ms": 117,
       "measured_browser_ms": 1
     },
     {
@@ -173,8 +173,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "8c4841e830e70bc589dd0ecce39f69c87849547f891e154efc3ac2eea5a5a01d",
-      "measured_native_ms": 96,
-      "measured_browser_ms": 1
+      "measured_native_ms": 104,
+      "measured_browser_ms": 2
     },
     {
       "fixture": "flex-analog-tmp36",
@@ -193,8 +193,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "782b66c6ae031eac24718cc40d953d5087a44559d9fbd0af8b5b190555d186f9",
-      "measured_native_ms": 84,
-      "measured_browser_ms": 1
+      "measured_native_ms": 92,
+      "measured_browser_ms": 2
     },
     {
       "fixture": "flex-dual-gp2y0a21",
@@ -213,7 +213,7 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "f48048712b1df98d122f7b2b32ecaf89d11dcf4b321bd723b6cce03f739131dd",
-      "measured_native_ms": 120,
+      "measured_native_ms": 85,
       "measured_browser_ms": 2
     },
     {
@@ -233,7 +233,7 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "92eb25fcf97b85613a55569123c7b749b3003a6c8049bad743e99d4847121018",
-      "measured_native_ms": 80,
+      "measured_native_ms": 93,
       "measured_browser_ms": 1
     },
     {
@@ -253,7 +253,7 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "30eeb35cba3f7cef7f5775019eb4eb175a96a285a748d36d65fda8b091530c10",
-      "measured_native_ms": 90,
+      "measured_native_ms": 87,
       "measured_browser_ms": 2
     },
     {
@@ -273,8 +273,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "c332f4cf40cdb8d2df0c696af77f4e2d3338e350965d89a93d611782d0774e6c",
-      "measured_native_ms": 44,
-      "measured_browser_ms": 4
+      "measured_native_ms": 20,
+      "measured_browser_ms": 3
     },
     {
       "fixture": "flex-gpio-reuse",
@@ -293,7 +293,7 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "5934b672a93b620568dbb866e2cdc11de996c69f5b502c7702b10fee9ae6bf16",
-      "measured_native_ms": 24,
+      "measured_native_ms": 18,
       "measured_browser_ms": 1
     },
     {
@@ -313,7 +313,7 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "30995b39181641c5d1fdc64ef67ab60e3596edf1bec31deea1addd43251ce64f",
-      "measured_native_ms": 30,
+      "measured_native_ms": 17,
       "measured_browser_ms": 1
     },
     {
@@ -333,8 +333,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "db2228ba0ed84e2079f4a5776253734dd4c5ec31307e050274cfc601d4f07c00",
-      "measured_native_ms": 17,
-      "measured_browser_ms": 1
+      "measured_native_ms": 15,
+      "measured_browser_ms": 4
     },
     {
       "fixture": "flex-heypcb-esp32-bme280",
@@ -354,7 +354,7 @@
       "console_bytes": 191,
       "result_sha256": "652ee4ba60e868ddf4066692f74d56f6145c4f3a28a7b77a6e57e4deda4441cd",
       "measured_native_ms": 40,
-      "measured_browser_ms": 32
+      "measured_browser_ms": 27
     },
     {
       "fixture": "flex-heypcb-esp32-bme280",
@@ -373,7 +373,7 @@
       "i2c_transfers": 8,
       "console_bytes": 55,
       "result_sha256": "d511f4672e13e94405bd1af49db329238a076c5736f9cc7a5b747df251171f67",
-      "measured_native_ms": 29,
+      "measured_native_ms": 23,
       "measured_browser_ms": 10
     },
     {
@@ -393,8 +393,8 @@
       "i2c_transfers": 1,
       "console_bytes": 18,
       "result_sha256": "113ff27cd151c38affd4a495feb9a3f20263babaeeccd555d562568e5d1ca96a",
-      "measured_native_ms": 21,
-      "measured_browser_ms": 3
+      "measured_native_ms": 25,
+      "measured_browser_ms": 7
     },
     {
       "fixture": "flex-heypcb-esp32-ldr",
@@ -413,7 +413,7 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "d0822a4efb544850b882f54eda286b7110a49f3eeb3a0176f00e2f824378b5b0",
-      "measured_native_ms": 114,
+      "measured_native_ms": 122,
       "measured_browser_ms": 2
     },
     {
@@ -433,8 +433,88 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "58dc2a9cc56f3e23cbbcdebd655b1ab898ae65c8dec28a53fc2a3604308619c6",
-      "measured_native_ms": 95,
+      "measured_native_ms": 104,
       "measured_browser_ms": 1
+    },
+    {
+      "fixture": "flex-heypcb-esp32-sht40",
+      "script": "test-cold-and-humid.yaml",
+      "script_sha256": "85470d7d51e563b46d4673427a8b0347915a25c939e9ef3a6ffa5f5bb90dca19",
+      "manifest_sha256": "ecb28f3a4e5359e0d2d9ebde86c7e41f16c5e829d1acc02dd3d026e81984cb89",
+      "firmware_sha256": "91122d3452aa851b3b6fb869a82bc1d56e3a1af8ab4dcbb211488fd2481b62f5",
+      "status": "pass",
+      "stop_reason": "completed",
+      "time_ns": 14900000,
+      "steps_executed": 17982,
+      "suspended_steps": 0,
+      "assertions": 9,
+      "digital_edges": 2,
+      "analog_samples": 0,
+      "i2c_transfers": 5,
+      "console_bytes": 54,
+      "result_sha256": "13ca14bb17ae089fb409122d1a6d2cde5a81c842c320ea20e33656eaf0860cce",
+      "measured_native_ms": 37,
+      "measured_browser_ms": 12
+    },
+    {
+      "fixture": "flex-heypcb-esp32-sht40",
+      "script": "test-humidity-alarm.yaml",
+      "script_sha256": "333b02ead5f11c236ef23eaf3115fec00f30273c30938fbfeb1d87f0551ef02e",
+      "manifest_sha256": "ecb28f3a4e5359e0d2d9ebde86c7e41f16c5e829d1acc02dd3d026e81984cb89",
+      "firmware_sha256": "91122d3452aa851b3b6fb869a82bc1d56e3a1af8ab4dcbb211488fd2481b62f5",
+      "status": "pass",
+      "stop_reason": "completed",
+      "time_ns": 62300000,
+      "steps_executed": 25989,
+      "suspended_steps": 0,
+      "assertions": 13,
+      "digital_edges": 4,
+      "analog_samples": 0,
+      "i2c_transfers": 13,
+      "console_bytes": 137,
+      "result_sha256": "3f61ba360b75298830df87fb9461dba5a1d07d443a0d24a891e768889aead975",
+      "measured_native_ms": 50,
+      "measured_browser_ms": 22
+    },
+    {
+      "fixture": "flex-heypcb-esp32-sht40",
+      "script": "test-read-too-early.yaml",
+      "script_sha256": "60d427e0d56e1b38c1d66e5b959dd026a5b9eb44093170676bb3afe2ece1ae9c",
+      "manifest_sha256": "ecb28f3a4e5359e0d2d9ebde86c7e41f16c5e829d1acc02dd3d026e81984cb89",
+      "firmware_sha256": "91122d3452aa851b3b6fb869a82bc1d56e3a1af8ab4dcbb211488fd2481b62f5",
+      "status": "pass",
+      "stop_reason": "completed",
+      "time_ns": 8750000,
+      "steps_executed": 15523,
+      "suspended_steps": 0,
+      "assertions": 7,
+      "digital_edges": 0,
+      "analog_samples": 0,
+      "i2c_transfers": 7,
+      "console_bytes": 64,
+      "result_sha256": "5d64b7f6459d4ed2bbd38788f1bea077febc8038ff65c6b4533052ee6cdc5db1",
+      "measured_native_ms": 21,
+      "measured_browser_ms": 6
+    },
+    {
+      "fixture": "flex-heypcb-esp32-sht40",
+      "script": "test-wrong-address.yaml",
+      "script_sha256": "cedcba751ca0ebe6f6f3810b012ba22265c7ed11533ad996a843faa067c77963",
+      "manifest_sha256": "ecb28f3a4e5359e0d2d9ebde86c7e41f16c5e829d1acc02dd3d026e81984cb89",
+      "firmware_sha256": "91122d3452aa851b3b6fb869a82bc1d56e3a1af8ab4dcbb211488fd2481b62f5",
+      "status": "pass",
+      "stop_reason": "completed",
+      "time_ns": 110000,
+      "steps_executed": 9777,
+      "suspended_steps": 0,
+      "assertions": 8,
+      "digital_edges": 0,
+      "analog_samples": 0,
+      "i2c_transfers": 1,
+      "console_bytes": 17,
+      "result_sha256": "17e9bc1fde2b34b662e10e59ad7322f6eefca19707ffe00e20c9c8b9f9a5b7a6",
+      "measured_native_ms": 28,
+      "measured_browser_ms": 3
     },
     {
       "fixture": "flex-heypcb-ldr-network",
@@ -453,8 +533,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "bfa60d35186b503a5da15d945eda3b41fcd1c7bf3497c30e964bcb8fd3fadfd9",
-      "measured_native_ms": 65,
-      "measured_browser_ms": 17
+      "measured_native_ms": 31,
+      "measured_browser_ms": 37
     },
     {
       "fixture": "flex-heypcb-ldr-network",
@@ -473,8 +553,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "09dda3907d65216cbfd7b4ee30518f6c3e8afd617ac0674a31707eb92c5d9ef0",
-      "measured_native_ms": 27,
-      "measured_browser_ms": 3
+      "measured_native_ms": 24,
+      "measured_browser_ms": 2
     },
     {
       "fixture": "flex-heypcb-pomodoro",
@@ -493,7 +573,7 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "b8fc025db486fdc6d98fe905f4de91b56e368b91757d3ae904ab622a407d65b3",
-      "measured_native_ms": 51,
+      "measured_native_ms": 20,
       "measured_browser_ms": 1
     },
     {
@@ -513,8 +593,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "640ccc5e30b2871b9ac116b9a3e38031a792a31025dbe0e3032ee43b9302cf4c",
-      "measured_native_ms": 21,
-      "measured_browser_ms": 3
+      "measured_native_ms": 22,
+      "measured_browser_ms": 1
     },
     {
       "fixture": "flex-heypcb-pomodoro-c",
@@ -533,8 +613,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "4491672580007ba8cd40cc196f518554ddb2d4dd0b37df15936a94fce5f1255b",
-      "measured_native_ms": 5451,
-      "measured_browser_ms": 8377
+      "measured_native_ms": 5132,
+      "measured_browser_ms": 7359
     },
     {
       "fixture": "flex-heypcb-pomodoro-c",
@@ -553,8 +633,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "f70f8107fa42ef5ff5b83a042436d1df76ec5d4d941cf34b85b72781cd3cc9d4",
-      "measured_native_ms": 643,
-      "measured_browser_ms": 788
+      "measured_native_ms": 553,
+      "measured_browser_ms": 633
     },
     {
       "fixture": "flex-heypcb-pomodoro-c",
@@ -573,8 +653,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "90d546b307d298677f6bad892e8847062fdd5dc5685589e7190fce3ce0d47653",
-      "measured_native_ms": 639,
-      "measured_browser_ms": 587
+      "measured_native_ms": 558,
+      "measured_browser_ms": 579
     },
     {
       "fixture": "flex-heypcb-pomodoro-timer",
@@ -593,8 +673,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "f9474ff719441ffa94346582eb50b979c347dc9ce937b5f43cdb15e25e4d79bc",
-      "measured_native_ms": 1376,
-      "measured_browser_ms": 1704
+      "measured_native_ms": 1320,
+      "measured_browser_ms": 1636
     },
     {
       "fixture": "flex-heypcb-pomodoro-timer",
@@ -613,8 +693,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "1a34cff25fed818333ef1d2fd05a43384534b0c055902c13921fbc495bb1be5d",
-      "measured_native_ms": 250,
-      "measured_browser_ms": 184
+      "measured_native_ms": 230,
+      "measured_browser_ms": 133
     },
     {
       "fixture": "flex-heypcb-pomodoro-timer",
@@ -633,8 +713,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "fd786be8f21cd52d5b33f208a3ee6375a0b3c054f87ad1b89e51072b7e6de593",
-      "measured_native_ms": 254,
-      "measured_browser_ms": 132
+      "measured_native_ms": 221,
+      "measured_browser_ms": 175
     },
     {
       "fixture": "flex-mixed-signal",
@@ -653,8 +733,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "e560990ade2c84b96094d95dc585b44a76f1c51eb77f5316bebf13f8f252d71f",
-      "measured_native_ms": 109,
-      "measured_browser_ms": 4
+      "measured_native_ms": 46,
+      "measured_browser_ms": 2
     },
     {
       "fixture": "flex-mixed-signal",
@@ -673,8 +753,8 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "71d16e0f209d264edf5cb20ee19f07bab85cf2dbc4b9c438127be9f00d881e2c",
-      "measured_native_ms": 21,
-      "measured_browser_ms": 2
+      "measured_native_ms": 22,
+      "measured_browser_ms": 1
     },
     {
       "fixture": "flex-ntc-thermostat",
@@ -693,7 +773,7 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "a1a92fa37265aef7eaafe2e918b0e1f552ea28dcc080272d8ee406a80eb36eed",
-      "measured_native_ms": 150,
+      "measured_native_ms": 164,
       "measured_browser_ms": 1
     },
     {
@@ -713,7 +793,7 @@
       "i2c_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "46cec36c50af475a7044b91e2dd6bf170a9aab113d4fd8c2996493551d77109c",
-      "measured_native_ms": 91,
+      "measured_native_ms": 127,
       "measured_browser_ms": 1
     }
   ]

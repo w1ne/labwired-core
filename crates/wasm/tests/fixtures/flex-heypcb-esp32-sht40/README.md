@@ -60,6 +60,8 @@ Time at 100 kHz: a one-byte command is 20 bit times (200 µs), a six-byte read 6
 - Console, first script: `SHT40 serial 0x0f4e2a71 at 0x44`, then one line for each sample, from `T=25.00 C RH=50.00 %` to `T=25.00 C RH=60.00 %`. The negative controls print `no SHT40 at 0x45` and `SHT40 CRC error`.
 - In `test-humidity-alarm.yaml`, moving one expected result or one D1 edge time by one unit fails exactly that assertion. With a 8,300 µs wait, `test-read-too-early.yaml` fails on five assertions.
 
+Browser run ([browser-flex-scripts.json](../browser-flex-scripts.json)): Chromium 156.0.8078.79 with Playwright ran the four scripts through `WasmFlexTestRun` in the web package built from Core commit `b1b0b5d26`. Each result text equals the `labwired test` result text, and the logic-analyzer capture, the I2C transfer record and the console record are equal. The script runs took 12 ms, 22 ms, 6 ms, 3 ms in the page (test-cold-and-humid.yaml, test-humidity-alarm.yaml, test-read-too-early.yaml, test-wrong-address.yaml; dev build, one run each). The result hashes of the 35 older scripts did not change with the two timing fixes.
+
 ## Defects found
 
 Both are generic and affect every command device with `delay_us` (SHT3x, SHT4x and others), not this board only.
