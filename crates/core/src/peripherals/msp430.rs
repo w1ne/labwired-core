@@ -4,9 +4,9 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
-//! Texas Instruments MSP430x1xx and MSP430x2xx on-chip modules (family user's
-//! guides SLAU049 and SLAU144) and the interrupt sources they share with the
-//! [`crate::cpu::Msp430`] core.
+//! Texas Instruments MSP430x1xx, MSP430x2xx and MSP430x5xx on-chip modules
+//! (family user's guides SLAU049, SLAU144 and SLAU208) and the interrupt
+//! sources they share with the [`crate::cpu::Msp430`] core.
 //!
 //! * [`Msp430Irq`]: the interrupt sources. Each has a flag (IFG) and an
 //!   enable (IE) and is routed to one request line; lines are numbered by
@@ -36,6 +36,22 @@
 //! * [`Msp430Bcm`] (`msp430_bcm`, `msp430_bcm_plus`, `msp430_bcsctl3`): the
 //!   basic clock module registers as storage with their reset values. No
 //!   clock frequency is derived from them.
+//!
+//! MSP430x5xx modules (SLAU208):
+//!
+//! * [`Msp430SfrX5`] (`msp430_sfr_x5`): SFRIE1, SFRIFG1 and SFRRPCR. A
+//!   descriptor maps each interrupt bit to its line; a bit with no line keeps
+//!   its flag and enable but requests nothing.
+//! * [`Msp430Usart`] (`msp430_usci_a_x5`): the USCI_A register window of the
+//!   x5xx parts, UART mode, with the module's own UCAxIE, UCAxIFG and UCAxIV.
+//! * [`Msp430Wdt`] (`msp430_wdt_a`): WDT_A, the same password scheme.
+//! * [`Msp430Mpy32`] (`msp430_mpy32`): the 32-bit hardware multiplier.
+//! * [`Msp430Ucs`] (`msp430_ucs`): the unified clock system registers and the
+//!   oscillator fault flags of a part with no crystal fitted. No clock
+//!   frequency is derived from them and the FLL does not run.
+//! * [`Msp430Pmm`] (`msp430_pmm`): the power management module password,
+//!   PMMCOREV and the low-side supervisor flags of a core voltage that
+//!   settles at once.
 
 use crate::bus::bus_trace::{BusDir, BusPayload, BusTrace};
 use crate::peripheral::PeripheralResetCause;
@@ -71,6 +87,9 @@ pub struct Msp430Irq {
     enable: AtomicU64,
     /// Sources whose flag the core clears when it accepts their line.
     auto_clear: AtomicU64,
+    /// Sources a module holds set: their condition still exists, so
+    /// firmware cannot clear the flag.
+    held: AtomicU64,
     line: [AtomicU8; SOURCES as usize],
     /// ME1, ME2.
     module_enable: [AtomicU8; 2],
@@ -82,6 +101,7 @@ impl Default for Msp430Irq {
             flag: AtomicU64::new(0),
             enable: AtomicU64::new(0),
             auto_clear: AtomicU64::new(0),
+            held: AtomicU64::new(0),
             line: std::array::from_fn(|_| AtomicU8::new(0)),
             module_enable: [AtomicU8::new(0), AtomicU8::new(0)],
         }
@@ -119,7 +139,16 @@ impl Msp430Irq {
     }
 
     pub fn set_flag(&self, source: u32, on: bool) {
-        Self::put(&self.flag, source, on);
+        Self::put(&self.flag, source, on || Self::get(&self.held, source));
+    }
+
+    /// Hold the flag of `source` set while `on`; when released the flag
+    /// stays until firmware clears it.
+    pub fn hold(&self, source: u32, on: bool) {
+        Self::put(&self.held, source, on);
+        if on {
+            Self::put(&self.flag, source, true);
+        }
     }
 
     pub fn flag(&self, source: u32) -> bool {
@@ -323,6 +352,20 @@ const CONSOLE: usize = 64 * 1024;
 const RX_TOKEN: u32 = 1;
 const MAX_REGS: usize = 9;
 
+/// What one byte of a UART register window is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Slot {
+    /// A control or status register, by index.
+    Reg(usize),
+    Rxbuf,
+    Txbuf,
+    /// UCAxIE, UCAxIFG and the low byte of UCAxIV (x5xx).
+    Ie,
+    Ifg,
+    Iv,
+    Unused,
+}
+
 /// Where a UART module keeps the bits this model acts on.
 #[derive(Debug)]
 struct Layout {
@@ -339,6 +382,24 @@ struct Layout {
     forced: (usize, u8, u8),
     /// Receive and transmit need their ME bits.
     module_enable: bool,
+    /// The register window of a module that is not laid out as `regs`
+    /// registers followed by the two data buffers. Such a module has its
+    /// own interrupt enable, flag and vector registers.
+    window: Option<fn(u64) -> Slot>,
+}
+
+impl Layout {
+    fn slot(&self, offset: u64) -> Slot {
+        match self.window {
+            Some(window) => window(offset),
+            None => match offset as usize {
+                o if o < self.regs => Slot::Reg(o),
+                o if o == self.regs => Slot::Rxbuf,
+                o if o == self.regs + 1 => Slot::Txbuf,
+                _ => Slot::Unused,
+            },
+        }
+    }
 }
 
 /// MSP430x1xx USART: UxCTL, UxTCTL, UxRCTL, UxMCTL, UxBR0, UxBR1, UxRXBUF,
@@ -351,6 +412,7 @@ const USART: Layout = Layout {
     divider: 4,
     forced: (1, 0x01, 0),
     module_enable: true,
+    window: None,
 };
 /// The USART receive error flags in UxRCTL (FE, PE, OE, BRK, RXERR).
 const USART_RCTL: (usize, u8) = (2, 0xF1);
@@ -366,7 +428,49 @@ const USCI_A: Layout = Layout {
     divider: 5,
     forced: (8, 0, 0x7F),
     module_enable: false,
+    window: None,
 };
+
+/// MSP430x5xx USCI_A (SLAU208 36.4): UCAxCTL1, UCAxCTL0, UCAxBR0, UCAxBR1,
+/// UCAxMCTL, UCAxSTAT, UCAxABCTL, UCAxIRTCTL, UCAxIRRCTL in a 32-byte window
+/// with UCAxRXBUF at 0x0C, UCAxTXBUF at 0x0E and UCAxIE, UCAxIFG, UCAxIV at
+/// 0x1C to 0x1F. UCAxSTAT keeps UCLISTEN; its error and busy flags are never
+/// set.
+const USCI_A_X5: Layout = Layout {
+    regs: 9,
+    reset: [0x01, 0, 0, 0, 0, 0, 0, 0, 0],
+    swrst: (0, 0x01),
+    listen: (5, 0x80),
+    divider: 2,
+    forced: (5, 0, 0x7F),
+    module_enable: false,
+    window: Some(usci_a_x5_slot),
+};
+
+fn usci_a_x5_slot(offset: u64) -> Slot {
+    match offset {
+        0x00 | 0x01 => Slot::Reg(offset as usize),
+        0x06..=0x08 => Slot::Reg(offset as usize - 4),
+        0x0A => Slot::Reg(5),
+        0x0C => Slot::Rxbuf,
+        0x0E => Slot::Txbuf,
+        0x10 => Slot::Reg(6),
+        0x12 | 0x13 => Slot::Reg(offset as usize - 11),
+        0x1C => Slot::Ie,
+        0x1D => Slot::Ifg,
+        0x1E => Slot::Iv,
+        _ => Slot::Unused,
+    }
+}
+
+/// The first interrupt source of the x5xx USCI modules: module `unit` owns
+/// sources `X5_USCI_SOURCE + 2 * unit` (receive) and the next one (transmit).
+const X5_USCI_SOURCE: u32 = 24;
+/// x5xx USCI modules one chip can declare.
+pub const X5_USCI_UNITS: u32 = (SOURCES - X5_USCI_SOURCE) / 2;
+/// UCAxIV values.
+const UCIV_RX: u8 = 2;
+const UCIV_TX: u8 = 4;
 
 struct UsartState {
     regs: [u8; MAX_REGS],
@@ -391,6 +495,8 @@ pub struct Msp430Usart {
     sources: [u32; 2],
     /// Module enable bits: register (1 = ME1, 2 = ME2), URXE bit, UTXE bit.
     me: [u32; 3],
+    /// The request line of a module with its own flag registers.
+    line: Option<u32>,
     trace: BusTrace,
     trace_name: String,
     clock: Option<CycleClock>,
@@ -417,6 +523,68 @@ impl Msp430Usart {
         Self::with_layout(&USCI_A, flags, [0; 3])
     }
 
+    /// An x5xx USCI_A. `unit` numbers the USCI modules of the chip (it
+    /// selects the interrupt sources); `line` is the request line both
+    /// flags share.
+    pub fn usci_a_x5(unit: u32, line: u32) -> Self {
+        let mut usart = Self::with_layout(&USCI_A_X5, [0; 3], [0; 3]);
+        let rx = X5_USCI_SOURCE + 2 * (unit % X5_USCI_UNITS);
+        usart.sources = [rx, rx + 1];
+        usart.line = Some(line);
+        usart.irq = Msp430Irq::new();
+        usart.route();
+        usart.reset_flags();
+        usart
+    }
+
+    /// A module with its own flags shares one line between them, so the
+    /// core does not clear either on acceptance.
+    fn route(&self) {
+        if let Some(line) = self.line {
+            for source in self.sources {
+                self.irq.route(source, line, false);
+            }
+        }
+    }
+
+    /// UCAxIV: the highest-priority flag that is set and enabled.
+    fn vector(&self) -> u8 {
+        let pending = |source| self.irq.flag(source) && self.irq.enabled(source);
+        if pending(self.sources[0]) {
+            UCIV_RX
+        } else if pending(self.sources[1]) {
+            UCIV_TX
+        } else {
+            0
+        }
+    }
+
+    /// An access to UCAxIV clears the flag it reports.
+    fn take_vector(&self, s: &mut UsartState) -> u8 {
+        let vector = self.vector();
+        match vector {
+            UCIV_RX => {
+                s.rx_full = false;
+                self.irq.set_flag(self.sources[0], false);
+            }
+            UCIV_TX => self.irq.set_flag(self.sources[1], false),
+            _ => {}
+        }
+        vector
+    }
+
+    fn own_bits(&self, flags: bool) -> u8 {
+        (0..2).fold(0, |v, bit| {
+            let source = self.sources[bit];
+            let on = if flags {
+                self.irq.flag(source)
+            } else {
+                self.irq.enabled(source)
+            };
+            v | u8::from(on) << bit
+        })
+    }
+
     fn with_layout(layout: &'static Layout, flags: [u32; 3], me: [u32; 3]) -> Self {
         let usart = Self {
             layout,
@@ -438,6 +606,7 @@ impl Msp430Usart {
                 sfr_source(flags[0], flags[2]),
             ],
             me,
+            line: None,
             trace: crate::bus::bus_trace::new_log(),
             trace_name: String::new(),
             clock: None,
@@ -448,19 +617,17 @@ impl Msp430Usart {
 
     crate::cycle_clock::scheduler_mode!();
 
-    fn rxbuf_offset(&self) -> u64 {
-        self.layout.regs as u64
-    }
-
-    fn txbuf_offset(&self) -> u64 {
-        self.layout.regs as u64 + 1
-    }
-
     /// The transmit flag is set and the receive flag cleared by a PUC and
-    /// while the software reset bit is set.
+    /// while the software reset bit is set. A module with its own enable
+    /// register loses its enables as well.
     fn reset_flags(&self) {
         self.irq.set_flag(self.sources[0], false);
         self.irq.set_flag(self.sources[1], true);
+        if self.line.is_some() {
+            for source in self.sources {
+                self.irq.set_enable(source, false);
+            }
+        }
     }
 
     fn running(&self, s: &UsartState) -> bool {
@@ -613,10 +780,13 @@ impl Peripheral for Msp430Usart {
 
     fn peek(&self, offset: u64) -> Option<u8> {
         let s = self.state.lock().unwrap();
-        Some(match offset {
-            o if (o as usize) < self.layout.regs => s.regs[o as usize],
-            o if o == self.rxbuf_offset() => s.rxbuf,
-            _ => 0,
+        Some(match self.layout.slot(offset) {
+            Slot::Reg(index) => s.regs[index],
+            Slot::Rxbuf => s.rxbuf,
+            Slot::Ie => self.own_bits(false),
+            Slot::Ifg => self.own_bits(true),
+            Slot::Iv => self.vector(),
+            Slot::Txbuf | Slot::Unused => 0,
         })
     }
 
@@ -643,26 +813,45 @@ impl Peripheral for Msp430Usart {
 
     fn read(&self, offset: u64) -> SimResult<u8> {
         let mut s = self.state.lock().unwrap();
-        Ok(match offset {
-            o if (o as usize) < self.layout.regs => s.regs[o as usize],
-            o if o == self.rxbuf_offset() => {
+        Ok(match self.layout.slot(offset) {
+            Slot::Reg(index) => s.regs[index],
+            Slot::Rxbuf => {
                 // Reading the receive buffer clears the receive flag.
                 s.rx_full = false;
                 self.irq.set_flag(self.sources[0], false);
                 s.rxbuf
             }
-            _ => 0,
+            Slot::Ie => self.own_bits(false),
+            Slot::Ifg => self.own_bits(true),
+            Slot::Iv => self.take_vector(&mut s),
+            Slot::Txbuf | Slot::Unused => 0,
         })
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
         let mut s = self.state.lock().unwrap();
-        match offset {
-            o if (o as usize) < self.layout.regs => self.store(&mut s, o as usize, value),
-            o if o == self.txbuf_offset() && self.tx_enabled(&s) => {
+        match self.layout.slot(offset) {
+            Slot::Reg(index) => self.store(&mut s, index, value),
+            Slot::Txbuf if self.tx_enabled(&s) => {
                 self.transmit(&mut s, value);
                 // The byte is gone at once, so the buffer is empty again.
                 self.irq.set_flag(self.sources[1], true);
+            }
+            Slot::Ie => {
+                for (bit, source) in self.sources.into_iter().enumerate() {
+                    self.irq.set_enable(source, value >> bit & 1 != 0);
+                }
+            }
+            // Firmware can set and clear both flags; a cleared receive flag
+            // frees the receive buffer for the next byte.
+            Slot::Ifg => {
+                s.rx_full = value & 1 != 0;
+                for (bit, source) in self.sources.into_iter().enumerate() {
+                    self.irq.set_flag(source, value >> bit & 1 != 0);
+                }
+            }
+            Slot::Iv => {
+                self.take_vector(&mut s);
             }
             _ => {}
         }
@@ -740,6 +929,7 @@ impl Peripheral for Msp430Usart {
 
     fn attach_msp430_irq(&mut self, irq: &Arc<Msp430Irq>) {
         self.irq = irq.clone();
+        self.route();
         self.reset_flags();
     }
 
@@ -766,10 +956,13 @@ const WDT_READ_KEY: u16 = 0x6900;
 /// WDTCNTCL: clears the counter and reads as zero.
 const WDT_CNTCL: u16 = 1 << 3;
 
-/// WDTCTL.
+/// WDTCTL of the watchdog timer (x1xx), the watchdog timer+ (x2xx) and
+/// WDT_A (x5xx).
 #[derive(Debug, Default)]
 pub struct Msp430Wdt {
     ctl: u8,
+    /// The low byte after a PUC.
+    reset: u8,
     reset_latched: bool,
     irq: Option<Arc<Msp430Irq>>,
 }
@@ -780,6 +973,15 @@ const WDTIFG: u32 = sfr_source(1, 0);
 impl Msp430Wdt {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// WDT_A: WDTIS resets to 4 (SLAU208 16.3.1).
+    pub fn wdt_a() -> Self {
+        Self {
+            ctl: 0x04,
+            reset: 0x04,
+            ..Self::default()
+        }
     }
 
     /// A security key violation sets WDTIFG and requests a PUC.
@@ -849,7 +1051,7 @@ impl Peripheral for Msp430Wdt {
     }
 
     fn on_system_reset(&mut self) {
-        self.ctl = 0;
+        self.ctl = self.reset;
     }
 
     fn attach_msp430_irq(&mut self, irq: &Arc<Msp430Irq>) {
@@ -1019,6 +1221,641 @@ impl Peripheral for Msp430Bcm {
 
     fn on_system_reset(&mut self) {
         self.regs = self.reset.to_vec();
+    }
+}
+
+// ── MSP430x5xx special function registers ─────────────────────────────────
+
+/// Implemented bits of SFRIE1 and SFRIFG1 (SLAU208 1.14.1, 1.14.2).
+const SFRIE1_BITS: u8 = 0xFB;
+const SFRIFG1_BITS: u8 = 0xDB;
+/// OFIFG and JMBOUTIFG: set by a power-on reset.
+const SFRIFG1_POR: u8 = 0x82;
+/// NMIIFG and VMAIFG: cleared by a PUC.
+const SFRIFG1_PUC_CLEARED: u8 = 0x18;
+/// SYSRSTRE and SYSRSTUP.
+const SFRRPCR_RESET: u8 = 0x0C;
+/// OFIFG is SFRIFG1.1, as it is IFG1.1 on the older families.
+const OFIFG: u32 = sfr_source(1, 1);
+
+/// SFRIE1, SFRIFG1 and SFRRPCR, three word registers at 0x0100. The bits of
+/// SFRIE1/SFRIFG1 are interrupt sources 0 to 7.
+#[derive(Debug)]
+pub struct Msp430SfrX5 {
+    irq: Arc<Msp430Irq>,
+    /// The line behind each bit (0 = the bit requests no interrupt).
+    lines: [u32; 8],
+    rpcr: u8,
+}
+
+impl Msp430SfrX5 {
+    pub fn new(lines: [u32; 8]) -> Self {
+        let sfr = Self {
+            irq: Msp430Irq::new(),
+            lines,
+            rpcr: SFRRPCR_RESET,
+        };
+        sfr.power_on();
+        sfr
+    }
+
+    fn power_on(&self) {
+        for bit in 0..8 {
+            let source = sfr_source(1, bit);
+            let line = self.lines[bit as usize];
+            if line != 0 {
+                let alone = self.lines.iter().filter(|l| **l == line).count() == 1;
+                self.irq.route(source, line, alone);
+            }
+            if SFRIFG1_POR >> bit & 1 != 0 {
+                self.irq.set_flag(source, true);
+            }
+        }
+    }
+
+    fn bits(&self, flags: bool) -> u8 {
+        (0..8).fold(0, |v, bit| {
+            let source = sfr_source(1, bit);
+            let on = if flags {
+                self.irq.flag(source)
+            } else {
+                self.irq.enabled(source)
+            };
+            v | u8::from(on) << bit
+        })
+    }
+}
+
+impl Peripheral for Msp430SfrX5 {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        Ok(match offset {
+            0 => self.bits(false) & SFRIE1_BITS,
+            2 => self.bits(true) & SFRIFG1_BITS,
+            4 => self.rpcr,
+            _ => 0,
+        })
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        match offset {
+            0 | 2 => {
+                let implemented = if offset == 0 {
+                    SFRIE1_BITS
+                } else {
+                    SFRIFG1_BITS
+                };
+                for bit in (0..8).filter(|b| implemented >> b & 1 != 0) {
+                    let on = value >> bit & 1 != 0;
+                    if offset == 0 {
+                        self.irq.set_enable(sfr_source(1, bit), on);
+                    } else {
+                        self.irq.set_flag(sfr_source(1, bit), on);
+                    }
+                }
+            }
+            4 => self.rpcr = value & 0x0F,
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn peek(&self, offset: u64) -> Option<u8> {
+        self.read(offset).ok()
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
+    fn attach_msp430_irq(&mut self, irq: &Arc<Msp430Irq>) {
+        self.irq = irq.clone();
+        self.power_on();
+    }
+
+    fn on_system_reset(&mut self) {
+        self.rpcr = SFRRPCR_RESET;
+        for bit in 0..8 {
+            let source = sfr_source(1, bit);
+            self.irq.set_enable(source, false);
+            if SFRIFG1_PUC_CLEARED >> bit & 1 != 0 {
+                self.irq.set_flag(source, false);
+            }
+        }
+    }
+}
+
+// ── 32-bit hardware multiplier ────────────────────────────────────────────
+
+const MPY32_OP1_32: u64 = 0x10;
+const MPY32_OP2L: u64 = 0x20;
+const MPY32_OP2H: u64 = 0x22;
+const MPY32_RES0: u64 = 0x24;
+const MPY32_RES3: u64 = 0x2A;
+const MPY32_CTL0: u64 = 0x2C;
+const MPYC: u16 = 1 << 0;
+const MPYM_SHIFT: u16 = 4;
+const MPYOP1_32: u16 = 1 << 6;
+const MPYOP2_32: u16 = 1 << 7;
+/// Writable bits of MPY32CTL0.
+const MPY32CTL0_BITS: u16 = 0x03FD;
+
+/// MPY32 (SLAU208 chapter 25): 16-bit and 32-bit operands, MPY, MPYS, MAC and
+/// MACS, a 64-bit result in RES0 to RES3. The result is ready at once.
+/// MPYFRAC and MPYSAT are stored and do not change the result; the delayed
+/// write bits are stored. A byte store to an operand register writes its low
+/// byte (sign-extended in a signed mode); a byte store to the upper byte of
+/// an operand or result register is ignored. After a 16-bit MAC or MACS the
+/// accumulation carries into RES2 and RES3 (the guide does not specify them).
+#[derive(Debug, Default)]
+pub struct Msp430Mpy32 {
+    op1: u32,
+    op2: u32,
+    result: u64,
+    sumext: u16,
+    ctl: u16,
+    /// OP2L was written: OP2H completes the operand and runs the operation.
+    expect_op2h: bool,
+}
+
+impl Msp430Mpy32 {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn mode(&self) -> u16 {
+        self.ctl >> MPYM_SHIFT & 3
+    }
+
+    fn signed(&self) -> bool {
+        self.mode() & 1 != 0
+    }
+
+    fn set_low(word: &mut u32, value: u16) {
+        *word = (*word & 0xFFFF_0000) | u32::from(value);
+    }
+
+    fn set_high(word: &mut u32, value: u16) {
+        *word = (*word & 0xFFFF) | u32::from(value) << 16;
+    }
+
+    /// An operand at its width, extended to 64 bits.
+    fn operand(&self, value: u32, wide: bool) -> u64 {
+        match (wide, self.signed()) {
+            (true, true) => value as i32 as i64 as u64,
+            (true, false) => u64::from(value),
+            (false, true) => value as u16 as i16 as i64 as u64,
+            (false, false) => u64::from(value as u16),
+        }
+    }
+
+    fn run(&mut self) {
+        let op1_wide = self.ctl & MPYOP1_32 != 0;
+        let op2_wide = self.ctl & MPYOP2_32 != 0;
+        // With an operand above 16 bits the 64-bit result gives sign and
+        // carry, otherwise the 32-bit result does (SLAU208 25.2.2).
+        let wide = op1_wide || op2_wide;
+        let product = self
+            .operand(self.op1, op1_wide)
+            .wrapping_mul(self.operand(self.op2, op2_wide));
+        let mode = self.mode();
+        let accumulate = mode & 2 != 0;
+        let carry = if !accumulate {
+            self.result = product;
+            false
+        } else {
+            let sum = self.result.wrapping_add(product);
+            let carry = if wide {
+                sum < self.result
+            } else {
+                u64::from(self.result as u32) + u64::from(product as u32) > u64::from(u32::MAX)
+            };
+            self.result = sum;
+            carry
+        };
+        let sign_bit = if wide { 63 } else { 31 };
+        let negative = self.result >> sign_bit & 1 != 0;
+        self.sumext = match mode {
+            0 => 0,
+            2 => u16::from(carry),
+            _ if negative => 0xFFFF,
+            _ => 0,
+        };
+        let mpyc = match mode {
+            0 => false,
+            1 => negative,
+            _ => carry,
+        };
+        self.ctl = (self.ctl & !MPYC) | u16::from(mpyc);
+    }
+
+    fn word(&self, offset: u64) -> u16 {
+        match offset & !1 {
+            0x00..=0x06 => self.op1 as u16,
+            MPY_OP2 | MPY32_OP2L => self.op2 as u16,
+            MPY_RESLO => self.result as u16,
+            MPY_RESHI => (self.result >> 16) as u16,
+            MPY_SUMEXT => self.sumext,
+            o @ MPY32_OP1_32..=0x1E if o & 2 == 0 => self.op1 as u16,
+            MPY32_OP1_32..=0x1E => (self.op1 >> 16) as u16,
+            MPY32_OP2H => (self.op2 >> 16) as u16,
+            o @ MPY32_RES0..=MPY32_RES3 => (self.result >> ((o - MPY32_RES0) * 8)) as u16,
+            MPY32_CTL0 => self.ctl,
+            _ => 0,
+        }
+    }
+
+    fn set_mode(&mut self, mode: u64) {
+        self.ctl = (self.ctl & !(3 << MPYM_SHIFT)) | (mode as u16 & 3) << MPYM_SHIFT;
+    }
+
+    fn set_result_word(&mut self, index: u64, value: u16) {
+        let shift = index * 16;
+        self.result = (self.result & !(0xFFFF << shift)) | u64::from(value) << shift;
+    }
+}
+
+impl Peripheral for Msp430Mpy32 {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        Ok((self.word(offset) >> ((offset & 1) * 8)) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        match offset {
+            MPY32_CTL0 => self.write_u16(MPY32_CTL0, (self.ctl & 0xFF00) | u16::from(value))?,
+            o if o == MPY32_CTL0 + 1 => {
+                self.write_u16(MPY32_CTL0, (self.ctl & 0xFF) | u16::from(value) << 8)?
+            }
+            o if o & 1 != 0 => {}
+            0x00..=MPY32_OP2H if !(MPY_RESLO..=MPY_SUMEXT).contains(&offset) => {
+                // The register written selects the mode before the byte is
+                // extended: MPYS, MACS and their 32-bit forms are signed.
+                let signed = match offset {
+                    0x00..=0x06 => offset & 2 != 0,
+                    MPY32_OP1_32..=0x1E => offset & 4 != 0,
+                    _ => self.signed(),
+                };
+                let word = if signed {
+                    value as i8 as i16 as u16
+                } else {
+                    u16::from(value)
+                };
+                self.write_u16(offset, word)?;
+            }
+            _ => self.write_u16(offset, u16::from(value))?,
+        }
+        Ok(())
+    }
+
+    fn read_u16(&self, offset: u64) -> SimResult<u16> {
+        Ok(self.word(offset))
+    }
+
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        match offset & !1 {
+            o @ 0x00..=0x06 => {
+                Self::set_low(&mut self.op1, value);
+                self.set_mode(o >> 1);
+                self.ctl &= !MPYOP1_32;
+            }
+            MPY_OP2 => {
+                Self::set_low(&mut self.op2, value);
+                self.ctl &= !MPYOP2_32;
+                self.expect_op2h = false;
+                self.run();
+            }
+            MPY_RESLO => self.set_result_word(0, value),
+            MPY_RESHI => self.set_result_word(1, value),
+            o @ MPY32_OP1_32..=0x1E => {
+                self.set_mode((o - MPY32_OP1_32) >> 2);
+                if o & 2 == 0 {
+                    Self::set_low(&mut self.op1, value);
+                    self.ctl &= !MPYOP1_32;
+                } else {
+                    Self::set_high(&mut self.op1, value);
+                    self.ctl |= MPYOP1_32;
+                }
+            }
+            MPY32_OP2L => {
+                Self::set_low(&mut self.op2, value);
+                self.ctl |= MPYOP2_32;
+                self.expect_op2h = true;
+            }
+            // Without a preceding OP2L write the store is ignored.
+            MPY32_OP2H if self.expect_op2h => {
+                Self::set_high(&mut self.op2, value);
+                self.expect_op2h = false;
+                self.run();
+            }
+            o @ MPY32_RES0..=MPY32_RES3 => self.set_result_word((o - MPY32_RES0) >> 1, value),
+            MPY32_CTL0 => self.ctl = value & MPY32CTL0_BITS,
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn peek(&self, offset: u64) -> Option<u8> {
+        self.read(offset).ok()
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+}
+
+// ── Unified clock system ──────────────────────────────────────────────────
+
+const UCS_REGS: usize = 9;
+/// UCSCTL0 to UCSCTL8 after a power-on reset (SLAU208 5.4).
+const UCS_RESET: [u16; UCS_REGS] = [
+    0x0000, 0x0020, 0x101F, 0x0000, 0x0044, 0x0000, 0xC1CD, 0x0F03, 0x0707,
+];
+/// Writable bits of UCSCTL0 to UCSCTL8.
+const UCS_BITS: [u16; UCS_REGS] = [
+    0x1FF8, 0x0073, 0x73FF, 0x0077, 0x0777, 0x7777, 0xD1FF, 0x3C1F, 0x0717,
+];
+/// UCSCTL7 and UCSCTL8 keep their value through a PUC.
+const UCS_PUC_REGS: usize = 7;
+/// Bits 9 and 8 of UCSCTL7 read 1.
+const UCSCTL7_ONES: u16 = 0x0300;
+const UCSCTL7: usize = 7;
+const DCOFFG: u16 = 1 << 0;
+const XT1LFOFFG: u16 = 1 << 1;
+const XT1HFOFFG: u16 = 1 << 2;
+const XT2OFFG: u16 = 1 << 3;
+const UCS_FAULTS: u16 = DCOFFG | XT1LFOFFG | XT1HFOFFG | XT2OFFG;
+
+/// UCSCTL0 to UCSCTL8 of a part with no crystal on XT1 or XT2.
+///
+/// The registers are storage with their reset values and reserved bits. A
+/// crystal oscillator that is switched on (its XTxOFF bit is clear) or
+/// selected (FLL reference, ACLK, SMCLK or MCLK) has a fault, because no
+/// crystal is fitted: its fault flag is set again when firmware clears it.
+/// After reset XT1 is the FLL reference and the ACLK source, so XT1LFOFFG
+/// stays set until firmware selects other sources. DCOFFG is set by a
+/// power-on reset and stays clear once cleared: the FLL does not run and the
+/// DCO tap in UCSCTL0 does not move. OFIFG (SFRIFG1.1) is held set while a
+/// fault flag is set. No clock frequency follows these registers.
+#[derive(Debug)]
+pub struct Msp430Ucs {
+    regs: [u16; UCS_REGS],
+    irq: Option<Arc<Msp430Irq>>,
+}
+
+impl Default for Msp430Ucs {
+    fn default() -> Self {
+        Self {
+            regs: UCS_RESET,
+            irq: None,
+        }
+    }
+}
+
+impl Msp430Ucs {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Fault flags of the crystal oscillators that are in use.
+    fn crystal_faults(&self) -> u16 {
+        let selects = [
+            self.regs[3] >> 4 & 7,
+            self.regs[4] & 7,
+            self.regs[4] >> 4 & 7,
+            self.regs[4] >> 8 & 7,
+        ];
+        let ctl6 = self.regs[6];
+        let xt1 = ctl6 & 0x0001 == 0 || selects.contains(&0);
+        let xt2 = ctl6 & 0x0100 == 0 || selects.iter().any(|s| matches!(s, 5 | 6));
+        let xt1_flag = if ctl6 & 0x0020 != 0 {
+            XT1HFOFFG
+        } else {
+            XT1LFOFFG
+        };
+        (if xt1 { xt1_flag } else { 0 }) | (if xt2 { XT2OFFG } else { 0 })
+    }
+
+    fn update(&mut self) {
+        self.regs[UCSCTL7] |= self.crystal_faults() | UCSCTL7_ONES;
+        if let Some(irq) = &self.irq {
+            irq.hold(OFIFG, self.regs[UCSCTL7] & UCS_FAULTS != 0);
+        }
+    }
+}
+
+impl Peripheral for Msp430Ucs {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        let word = self.regs.get((offset >> 1) as usize).copied().unwrap_or(0);
+        Ok((word >> ((offset & 1) * 8)) as u8)
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        let index = (offset >> 1) as usize;
+        if index < UCS_REGS {
+            let shift = (offset & 1) * 8;
+            let word = (self.regs[index] & !(0xFF << shift)) | u16::from(value) << shift;
+            self.regs[index] = word & UCS_BITS[index];
+            self.update();
+        }
+        Ok(())
+    }
+
+    fn peek(&self, offset: u64) -> Option<u8> {
+        self.read(offset).ok()
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
+    fn attach_msp430_irq(&mut self, irq: &Arc<Msp430Irq>) {
+        self.irq = Some(irq.clone());
+        self.update();
+    }
+
+    fn on_system_reset(&mut self) {
+        self.regs[..UCS_PUC_REGS].copy_from_slice(&UCS_RESET[..UCS_PUC_REGS]);
+        self.update();
+    }
+}
+
+// ── Power management module ───────────────────────────────────────────────
+
+const PMM_PASSWORD: u8 = 0xA5;
+const PMM_READ_KEY: u8 = 0x96;
+/// PMMCTL0 low byte: PMMCOREV, PMMSWBOR, PMMSWPOR, PMMREGOFF.
+const PMMCOREV: u8 = 0x03;
+const PMMSWBOR: u8 = 1 << 2;
+const PMMSWPOR: u8 = 1 << 3;
+const PMMREGOFF: u8 = 1 << 4;
+/// Word registers after PMMCTL0: PMMCTL1, SVSMHCTL, SVSMLCTL, SVSMIO, the
+/// reserved word at 0x0A, PMMIFG, PMMRIE.
+const PMM_WORDS: usize = 7;
+const PMM_RESET: [u16; PMM_WORDS] = [0, 0x4400, 0x4400, 0x0020, 0, 0, 0x1100];
+const PMM_BITS: [u16; PMM_WORDS] = [0x0033, 0xDFD7, 0xDFD7, 0x1838, 0, 0xB777, 0x3377];
+const PMM_SVSMHCTL: usize = 1;
+const PMM_SVSMLCTL: usize = 2;
+const PMM_IFG: usize = 5;
+/// SVSMLCTL: SVMLE and the SVSMLRRL level.
+const SVMLE: u16 = 1 << 14;
+const SVSMLRRL: u16 = 0x0007;
+const SVSMLDLYIFG: u16 = 1 << 0;
+const SVMLIFG: u16 = 1 << 1;
+const SVMLVLRIFG: u16 = 1 << 2;
+const SVSMHDLYIFG: u16 = 1 << 4;
+
+/// The PMM registers at 0x0120 (SLAU208 2.3).
+///
+/// PMMCTL0 has a password: a word store needs 0xA5 in the upper byte or it
+/// requests a PUC; a byte store of 0xA5 to the upper byte unlocks the
+/// registers and any other byte locks them. Stores to a locked register are
+/// ignored. PMMSWBOR and PMMSWPOR request a reset, which this engine runs as
+/// a PUC (the brownout and power-on reset state is not restored).
+///
+/// No voltage is simulated. The core voltage is at its PMMCOREV level at
+/// once and DVCC is above every high-side level, so: a store to SVSMHCTL or
+/// SVSMLCTL sets its delay flag (SVSMHDLYIFG, SVSMLDLYIFG); SVMLIFG is set
+/// when the low-side monitor is enabled with a level above PMMCOREV;
+/// SVMLVLRIFG is set when the core voltage level reaches the monitor level.
+/// The high-side flags and the reset flags of PMMIFG are never set. PMMIFG
+/// requests no interrupt and PMMRIE is storage.
+#[derive(Debug)]
+pub struct Msp430Pmm {
+    ctl0: u8,
+    words: [u16; PMM_WORDS],
+    unlocked: bool,
+    reset_latched: bool,
+}
+
+impl Default for Msp430Pmm {
+    fn default() -> Self {
+        Self {
+            ctl0: 0,
+            words: PMM_RESET,
+            unlocked: false,
+            reset_latched: false,
+        }
+    }
+}
+
+impl Msp430Pmm {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The core voltage is below the enabled low-side monitor level.
+    fn below_monitor(&self) -> bool {
+        let ctl = self.words[PMM_SVSMLCTL];
+        ctl & SVMLE != 0 && (ctl & SVSMLRRL) > u16::from(self.ctl0 & PMMCOREV)
+    }
+
+    /// Apply a change of PMMCOREV or SVSMLCTL to the low-side monitor flags.
+    fn change(&mut self, apply: impl FnOnce(&mut Self)) {
+        let was_below = self.below_monitor();
+        apply(self);
+        let below = self.below_monitor();
+        if below && !was_below {
+            self.words[PMM_IFG] |= SVMLIFG;
+        }
+        if was_below && !below && self.words[PMM_SVSMLCTL] & SVMLE != 0 {
+            self.words[PMM_IFG] |= SVMLVLRIFG;
+        }
+    }
+
+    fn write_ctl0(&mut self, value: u8) {
+        if value & (PMMSWBOR | PMMSWPOR) != 0 {
+            self.reset_latched = true;
+        }
+        self.change(|pmm| pmm.ctl0 = value & (PMMCOREV | PMMREGOFF));
+    }
+
+    fn write_word(&mut self, index: usize, value: u16) {
+        let value = value & PMM_BITS[index];
+        match index {
+            PMM_SVSMLCTL => {
+                self.change(|pmm| pmm.words[PMM_SVSMLCTL] = value);
+                self.words[PMM_IFG] |= SVSMLDLYIFG;
+            }
+            PMM_SVSMHCTL => {
+                self.words[index] = value;
+                self.words[PMM_IFG] |= SVSMHDLYIFG;
+            }
+            _ => self.words[index] = value,
+        }
+    }
+}
+
+impl Peripheral for Msp430Pmm {
+    fn read(&self, offset: u64) -> SimResult<u8> {
+        Ok(match offset {
+            0 => self.ctl0,
+            1 => PMM_READ_KEY,
+            _ => {
+                let word = self.words.get((offset >> 1) as usize - 1).copied();
+                (word.unwrap_or(0) >> ((offset & 1) * 8)) as u8
+            }
+        })
+    }
+
+    fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        match offset {
+            0 if self.unlocked => self.write_ctl0(value),
+            1 => self.unlocked = value == PMM_PASSWORD,
+            _ if self.unlocked && offset >= 2 => {
+                let index = (offset >> 1) as usize - 1;
+                if index < PMM_WORDS {
+                    let shift = (offset & 1) * 8;
+                    let word = (self.words[index] & !(0xFF << shift)) | u16::from(value) << shift;
+                    self.write_word(index, word);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        match offset {
+            0 if (value >> 8) as u8 == PMM_PASSWORD => {
+                self.unlocked = true;
+                self.write_ctl0(value as u8);
+            }
+            // A word store without the password is a key violation.
+            0 => self.reset_latched = true,
+            _ if self.unlocked && offset & 1 == 0 => {
+                let index = (offset >> 1) as usize - 1;
+                if index < PMM_WORDS {
+                    self.write_word(index, value);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn peek(&self, offset: u64) -> Option<u8> {
+        self.read(offset).ok()
+    }
+
+    fn legacy_tick_active(&self) -> bool {
+        false
+    }
+
+    fn reset_request_capable(&self) -> bool {
+        true
+    }
+
+    fn latched_reset_cause(&self) -> Option<PeripheralResetCause> {
+        self.reset_latched.then_some(PeripheralResetCause::System)
+    }
+
+    fn take_reset_request(&mut self) -> bool {
+        std::mem::take(&mut self.reset_latched)
+    }
+
+    /// A PUC locks the registers; their contents stay (they are reset by a
+    /// brownout or power-on reset only).
+    fn on_system_reset(&mut self) {
+        self.unlocked = false;
     }
 }
 
@@ -1268,5 +2105,354 @@ mod tests {
         plus.on_system_reset();
         assert_eq!(plus.read(1).unwrap(), 0x87);
         assert_eq!(Msp430Bcm::bcsctl3().read(0).unwrap(), 0x05);
+    }
+
+    // ── MSP430x5xx ──
+
+    const SFRIE1: u64 = 0;
+    const SFRIFG1: u64 = 2;
+    /// F5437: only the watchdog interval interrupt (line 5) is delivered.
+    const F5437_LINES: [u32; 8] = [5, 0, 0, 0, 0, 0, 0, 0];
+
+    #[test]
+    fn x5_sfr_reset_state_reserved_bits_and_puc() {
+        let irq = Msp430Irq::new();
+        let mut sfr = Msp430SfrX5::new(F5437_LINES);
+        sfr.attach_msp430_irq(&irq);
+        assert_eq!(sfr.read_u16(SFRIFG1).unwrap(), 0x0082, "OFIFG, JMBOUTIFG");
+        assert_eq!(sfr.read_u16(4).unwrap(), 0x000C, "SFRRPCR");
+        sfr.write_u16(SFRIE1, 0xFFFF).unwrap();
+        assert_eq!(sfr.read_u16(SFRIE1).unwrap(), 0x00FB, "bit 2 is reserved");
+        // OFIE is set with OFIFG, but no line is mapped: nothing is requested
+        // on a maskable or NMI line.
+        assert_eq!(irq.pending() & !1, 0);
+        sfr.write_u16(SFRIFG1, 0x0019).unwrap();
+        assert_eq!(sfr.read_u16(SFRIFG1).unwrap(), 0x0019);
+        assert_eq!(irq.pending() & !1, 1 << 5, "WDTIFG with WDTIE");
+        irq.accept(5);
+        assert!(!irq.flag(WDTIFG), "alone on its line");
+        sfr.write_u16(SFRIFG1, 0x0019).unwrap();
+        sfr.on_system_reset();
+        assert_eq!(sfr.read_u16(SFRIE1).unwrap(), 0);
+        assert_eq!(
+            sfr.read_u16(SFRIFG1).unwrap(),
+            0x0001,
+            "a PUC clears NMIIFG and VMAIFG and keeps WDTIFG"
+        );
+    }
+
+    const X5_CTL1: u64 = 0x00;
+    const X5_BR0: u64 = 0x06;
+    const X5_STAT: u64 = 0x0A;
+    const X5_RXBUF: u64 = 0x0C;
+    const X5_TXBUF: u64 = 0x0E;
+    const X5_IE: u64 = 0x1C;
+    const X5_IFG: u64 = 0x1D;
+    const X5_IV: u64 = 0x1E;
+
+    #[test]
+    fn x5_usci_has_its_own_enable_flag_and_vector_registers() {
+        let irq = Msp430Irq::new();
+        let mut u = Msp430Usart::usci_a_x5(0, 6);
+        u.attach_msp430_irq(&irq);
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        u.attach_console_sink(Some(sink.clone()), false);
+        assert_eq!(u.read(X5_CTL1).unwrap(), 0x01, "UCSWRST after a PUC");
+        assert_eq!(u.read(X5_IFG).unwrap(), 0x02, "UCTXIFG after a PUC");
+        u.write(X5_TXBUF, b'x').unwrap();
+        assert!(sink.lock().unwrap().is_empty(), "held in reset");
+        u.write(X5_BR0, 9).unwrap();
+        u.write(X5_CTL1, 0x80).unwrap();
+        u.write(X5_TXBUF, b'U').unwrap();
+        assert_eq!(*sink.lock().unwrap(), b"U");
+        assert_eq!(u.read(X5_BR0).unwrap(), 9);
+
+        // Disabled flags do not show in UCAxIV and request nothing.
+        assert_eq!(u.read_u16(X5_IV).unwrap(), 0);
+        assert_eq!(irq.pending(), 0);
+        u.write(X5_IE, 0x03).unwrap();
+        assert_eq!(u.read(X5_IE).unwrap(), 0x03);
+        assert_eq!(irq.pending(), 1 << 6);
+        // Both flags share the line, so acceptance keeps them.
+        irq.accept(6);
+        assert_eq!(u.read(X5_IFG).unwrap(), 0x02);
+
+        // UCLISTEN loops a byte back; the receive flag has priority.
+        u.write(X5_STAT, 0xFF).unwrap();
+        assert_eq!(u.read(X5_STAT).unwrap(), 0x80);
+        u.write(X5_TXBUF, 0x5A).unwrap();
+        // One character: ten bit times of the divider.
+        u.tick_elapsed(90);
+        assert_eq!(u.read(X5_IFG).unwrap(), 0x03);
+        assert_eq!(u.peek(X5_IV), Some(2), "a peek clears nothing");
+        assert_eq!(u.read(X5_IFG).unwrap(), 0x03);
+        assert_eq!(u.read_u16(X5_IV).unwrap(), 2, "UCRXIFG first");
+        assert_eq!(u.read(X5_IFG).unwrap(), 0x02, "reading UCAxIV cleared it");
+        assert_eq!(u.read_u16(X5_IV).unwrap(), 4, "then UCTXIFG");
+        assert_eq!(u.read(X5_IFG).unwrap(), 0);
+        assert_eq!(u.read_u16(X5_IV).unwrap(), 0);
+
+        // Reading UCAxRXBUF clears UCRXIFG.
+        u.write(X5_TXBUF, 0xA5).unwrap();
+        u.tick_elapsed(90);
+        assert_eq!(u.read(X5_IFG).unwrap(), 0x03);
+        assert_eq!(u.read(X5_RXBUF).unwrap(), 0xA5);
+        assert_eq!(u.read(X5_IFG).unwrap(), 0x02);
+
+        // UCSWRST clears the enables and restores the flag reset state.
+        u.write(X5_CTL1, 0x81).unwrap();
+        assert_eq!(u.read(X5_IE).unwrap(), 0);
+        assert_eq!(u.read(X5_IFG).unwrap(), 0x02);
+    }
+
+    #[test]
+    fn x5_usci_units_do_not_share_sources() {
+        let irq = Msp430Irq::new();
+        let mut a0 = Msp430Usart::usci_a_x5(0, 6);
+        let mut a1 = Msp430Usart::usci_a_x5(1, 17);
+        a0.attach_msp430_irq(&irq);
+        a1.attach_msp430_irq(&irq);
+        a1.write(X5_IE, 0x02).unwrap();
+        assert_eq!(a0.read(X5_IE).unwrap(), 0);
+        assert_eq!(irq.pending(), 1 << 17);
+        a1.write(X5_IFG, 0).unwrap();
+        assert_eq!(a0.read(X5_IFG).unwrap(), 0x02);
+        assert_eq!(irq.pending(), 0);
+    }
+
+    #[test]
+    fn wdt_a_resets_to_its_interval_select() {
+        let mut w = Msp430Wdt::wdt_a();
+        assert_eq!(w.read_u16(0).unwrap(), 0x6904);
+        w.write_u16(0, 0x5A80).unwrap();
+        assert_eq!(w.read_u16(0).unwrap(), 0x6980);
+        w.on_system_reset();
+        assert_eq!(w.read_u16(0).unwrap(), 0x6904);
+    }
+
+    const M32_MPY32L: u64 = 0x10;
+    const M32_MPY32H: u64 = 0x12;
+    const M32_MPYS32L: u64 = 0x14;
+    const M32_MAC32L: u64 = 0x18;
+    const M32_MAC32H: u64 = 0x1A;
+
+    fn result64(m: &Msp430Mpy32) -> u64 {
+        (0..4).fold(0, |v, i| {
+            v | u64::from(m.read_u16(MPY32_RES0 + 2 * i).unwrap()) << (16 * i)
+        })
+    }
+
+    #[test]
+    fn mpy32_16_bit_operations_match_the_16_bit_multiplier() {
+        let mut m = Msp430Mpy32::new();
+        m.write_u16(0x0, 0xFFFF).unwrap();
+        m.write_u16(MPY_OP2, 0xFFFF).unwrap();
+        assert_eq!(result64(&m), 0xFFFE_0001);
+        assert_eq!(m.read_u16(MPY_RESHI).unwrap(), 0xFFFE);
+        assert_eq!(m.read_u16(MPY_SUMEXT).unwrap(), 0);
+        // MPYS: -1 * 2 = -2, sign-extended to 64 bits; MPYC is the sign.
+        m.write_u16(0x2, 0xFFFF).unwrap();
+        m.write_u16(MPY_OP2, 2).unwrap();
+        assert_eq!(result64(&m), 0xFFFF_FFFF_FFFF_FFFE);
+        assert_eq!(m.read_u16(MPY_SUMEXT).unwrap(), 0xFFFF);
+        assert_eq!(m.read_u16(MPY32_CTL0).unwrap(), 0x0011, "MPYS, MPYC");
+        // MAC: 0xFFFFFFFE + 2 * 2 carries out of 32 bits.
+        m.write_u16(MPY32_RES0 + 4, 0).unwrap();
+        m.write_u16(MPY32_RES3, 0).unwrap();
+        m.write_u16(0x4, 2).unwrap();
+        m.write_u16(MPY_OP2, 2).unwrap();
+        assert_eq!(m.read_u16(MPY_RESLO).unwrap(), 2);
+        assert_eq!(m.read_u16(MPY_RESHI).unwrap(), 0);
+        assert_eq!(m.read_u16(MPY_SUMEXT).unwrap(), 1);
+        assert_eq!(m.read_u16(MPY32_CTL0).unwrap() & MPYC, MPYC);
+        // MACS: 2 + (-3 * 1) = -1.
+        m.write_u16(MPY32_RES0 + 4, 0).unwrap();
+        m.write_u16(0x6, 0xFFFD).unwrap();
+        m.write_u16(MPY_OP2, 1).unwrap();
+        assert_eq!(m.read_u16(MPY_RESLO).unwrap(), 0xFFFF);
+        assert_eq!(m.read_u16(MPY_RESHI).unwrap(), 0xFFFF);
+        assert_eq!(m.read_u16(MPY_SUMEXT).unwrap(), 0xFFFF);
+    }
+
+    #[test]
+    fn mpy32_32_bit_operands() {
+        let mut m = Msp430Mpy32::new();
+        let op1 = |m: &mut Msp430Mpy32, low: u64, v: u32| {
+            m.write_u16(low, v as u16).unwrap();
+            m.write_u16(low + 2, (v >> 16) as u16).unwrap();
+        };
+        let op2 = |m: &mut Msp430Mpy32, v: u32| {
+            m.write_u16(MPY32_OP2L, v as u16).unwrap();
+            m.write_u16(MPY32_OP2H, (v >> 16) as u16).unwrap();
+        };
+        // Unsigned 32 x 32.
+        op1(&mut m, M32_MPY32L, 0xFFFF_FFFF);
+        op2(&mut m, 0xFFFF_FFFF);
+        assert_eq!(result64(&m), 0xFFFF_FFFE_0000_0001);
+        assert_eq!(m.read_u16(MPY32_CTL0).unwrap(), 0x00C0, "both 32-bit");
+        // Signed 32 x 32: -100000 * 70000.
+        op1(&mut m, M32_MPYS32L, (-100_000i32) as u32);
+        op2(&mut m, 70_000);
+        assert_eq!(result64(&m) as i64, -7_000_000_000);
+        assert_eq!(m.read_u16(MPY_SUMEXT).unwrap(), 0xFFFF);
+        // 32-bit OP1 with a 16-bit OP2.
+        op1(&mut m, M32_MPY32L, 0x0001_0000);
+        m.write_u16(MPY_OP2, 3).unwrap();
+        assert_eq!(result64(&m), 0x0003_0000);
+        // The high word alone, then the low word: a 16-bit OP1.
+        m.write_u16(M32_MPY32H, 0x1234).unwrap();
+        m.write_u16(M32_MPY32L, 5).unwrap();
+        m.write_u16(MPY_OP2, 5).unwrap();
+        assert_eq!(result64(&m), 25);
+        // OP2H without OP2L is ignored.
+        m.write_u16(MPY32_OP2H, 0xFFFF).unwrap();
+        assert_eq!(result64(&m), 25);
+        // MAC with a 64-bit carry.
+        for i in 0..4 {
+            m.write_u16(MPY32_RES0 + 2 * i, 0xFFFF).unwrap();
+        }
+        op1(&mut m, M32_MAC32L, 0x0001_0000);
+        op2(&mut m, 1);
+        assert_eq!(result64(&m), 0xFFFF);
+        assert_eq!(m.read_u16(MPY_SUMEXT).unwrap(), 1);
+        assert_eq!(m.read_u16(M32_MAC32H).unwrap(), 1, "OP1 reads back");
+        // A byte store to a signed operand register is sign-extended.
+        m.write(0x2, 0xFE).unwrap();
+        m.write_u16(MPY_OP2, 3).unwrap();
+        assert_eq!(result64(&m) as i64, -6);
+    }
+
+    #[test]
+    fn ucs_reset_values_and_reserved_bits() {
+        let mut ucs = Msp430Ucs::new();
+        let reset = [
+            0x0000, 0x0020, 0x101F, 0x0000, 0x0044, 0x0000, 0xC1CD, 0x0F03, 0x0707,
+        ];
+        for (i, value) in reset.into_iter().enumerate() {
+            assert_eq!(ucs.read_u16(2 * i as u64).unwrap(), value, "UCSCTL{i}");
+        }
+        ucs.write_u16(0x02, 0xFFFF).unwrap();
+        assert_eq!(ucs.read_u16(0x02).unwrap(), 0x0073, "UCSCTL1");
+        ucs.write(0x05, 0xFF).unwrap();
+        assert_eq!(ucs.read_u16(0x04).unwrap(), 0x731F, "UCSCTL2 high byte");
+        ucs.on_system_reset();
+        assert_eq!(ucs.read_u16(0x02).unwrap(), 0x0020);
+    }
+
+    #[test]
+    fn ucs_crystal_faults_last_until_the_crystal_is_deselected() {
+        let irq = Msp430Irq::new();
+        let mut sfr = Msp430SfrX5::new(F5437_LINES);
+        sfr.attach_msp430_irq(&irq);
+        let mut ucs = Msp430Ucs::new();
+        ucs.attach_msp430_irq(&irq);
+        let clear = |ucs: &mut Msp430Ucs, sfr: &mut Msp430SfrX5| {
+            let ctl7 = ucs.read_u16(0x0E).unwrap();
+            ucs.write_u16(0x0E, ctl7 & !UCS_FAULTS).unwrap();
+            let ifg = sfr.read_u16(SFRIFG1).unwrap();
+            sfr.write_u16(SFRIFG1, ifg & !0x0002).unwrap();
+        };
+        // After reset XT1 is the FLL reference and the ACLK source, and no
+        // crystal is fitted: XT1LFOFFG and OFIFG come back.
+        clear(&mut ucs, &mut sfr);
+        assert_eq!(ucs.read_u16(0x0E).unwrap() & UCS_FAULTS, XT1LFOFFG);
+        assert_eq!(sfr.read_u16(SFRIFG1).unwrap() & 0x0002, 0x0002);
+        // FLL reference = REFO: ACLK still asks for XT1.
+        ucs.write_u16(0x06, 0x0020).unwrap();
+        clear(&mut ucs, &mut sfr);
+        assert_eq!(ucs.read_u16(0x0E).unwrap() & UCS_FAULTS, XT1LFOFFG);
+        // ACLK = REFO as well: the flags clear and stay clear.
+        ucs.write_u16(0x08, 0x0244).unwrap();
+        assert_eq!(
+            sfr.read_u16(SFRIFG1).unwrap() & 0x0002,
+            0x0002,
+            "OFIFG is latched"
+        );
+        clear(&mut ucs, &mut sfr);
+        assert_eq!(ucs.read_u16(0x0E).unwrap() & UCS_FAULTS, 0);
+        assert_eq!(sfr.read_u16(SFRIFG1).unwrap() & 0x0002, 0);
+        // Switching XT2 on with no crystal is a fault again.
+        ucs.write_u16(0x0C, 0xC0CD).unwrap();
+        assert_eq!(ucs.read_u16(0x0E).unwrap() & UCS_FAULTS, XT2OFFG);
+        assert_eq!(sfr.read_u16(SFRIFG1).unwrap() & 0x0002, 0x0002);
+        // The fault flags outlast a PUC.
+        ucs.on_system_reset();
+        assert_eq!(
+            ucs.read_u16(0x0E).unwrap() & UCS_FAULTS,
+            XT2OFFG | XT1LFOFFG,
+            "XT1 is selected again after the PUC"
+        );
+    }
+
+    const PMMCTL0: u64 = 0x00;
+    const SVSMHCTL: u64 = 0x04;
+    const SVSMLCTL: u64 = 0x06;
+    const PMMIFG: u64 = 0x0C;
+    const PMMRIE: u64 = 0x0E;
+
+    #[test]
+    fn pmm_password_and_lock() {
+        let mut pmm = Msp430Pmm::new();
+        assert_eq!(pmm.read_u16(PMMCTL0).unwrap(), 0x9600);
+        assert_eq!(pmm.read_u16(SVSMHCTL).unwrap(), 0x4400);
+        assert_eq!(pmm.read_u16(SVSMLCTL).unwrap(), 0x4400);
+        assert_eq!(pmm.read_u16(PMMRIE).unwrap(), 0x1100);
+        // Locked: stores are ignored.
+        pmm.write_u16(SVSMLCTL, 0x4401).unwrap();
+        pmm.write(PMMCTL0, 0x01).unwrap();
+        assert_eq!(pmm.read_u16(SVSMLCTL).unwrap(), 0x4400);
+        assert_eq!(pmm.read_u16(PMMCTL0).unwrap(), 0x9600);
+        // A byte store of the password unlocks, any other byte locks.
+        pmm.write(PMMCTL0 + 1, 0xA5).unwrap();
+        pmm.write(PMMCTL0, 0x01).unwrap();
+        assert_eq!(pmm.read_u16(PMMCTL0).unwrap(), 0x9601);
+        pmm.write(PMMCTL0 + 1, 0x00).unwrap();
+        pmm.write(PMMCTL0, 0x02).unwrap();
+        assert_eq!(pmm.read_u16(PMMCTL0).unwrap(), 0x9601);
+        assert!(!pmm.take_reset_request());
+        // A word store needs the password.
+        pmm.write_u16(PMMCTL0, 0xA502).unwrap();
+        assert_eq!(pmm.read_u16(PMMCTL0).unwrap(), 0x9602);
+        assert!(!pmm.take_reset_request());
+        pmm.write_u16(PMMCTL0, 0x0003).unwrap();
+        assert_eq!(pmm.read_u16(PMMCTL0).unwrap(), 0x9602);
+        assert!(pmm.take_reset_request(), "key violation");
+        // PMMSWBOR is self-clearing and requests a reset; a PUC locks.
+        pmm.write_u16(PMMCTL0, 0xA506).unwrap();
+        assert_eq!(pmm.read_u16(PMMCTL0).unwrap(), 0x9602);
+        assert_eq!(
+            pmm.latched_reset_cause(),
+            Some(PeripheralResetCause::System)
+        );
+        assert!(pmm.take_reset_request());
+        pmm.on_system_reset();
+        pmm.write(PMMCTL0, 0x00).unwrap();
+        assert_eq!(pmm.read_u16(PMMCTL0).unwrap(), 0x9602, "locked, level kept");
+    }
+
+    /// The core voltage step of SLAU208 2.2.4 (`SetVCoreUp`).
+    #[test]
+    fn pmm_core_voltage_step_sets_the_low_side_flags() {
+        let mut pmm = Msp430Pmm::new();
+        let level = 1u16;
+        pmm.write(PMMCTL0 + 1, 0xA5).unwrap();
+        // SVSHE | SVSHRVL = level | SVMHE | SVSMHRRL = level.
+        pmm.write_u16(SVSMHCTL, 0x4400 | level << 8 | level)
+            .unwrap();
+        assert_eq!(pmm.read_u16(PMMIFG).unwrap(), SVSMHDLYIFG);
+        // SVSLE | SVMLE | SVSMLRRL = level: the monitor is above the core.
+        pmm.write_u16(SVSMLCTL, 0x4400 | level).unwrap();
+        assert_eq!(
+            pmm.read_u16(PMMIFG).unwrap(),
+            SVSMHDLYIFG | SVSMLDLYIFG | SVMLIFG
+        );
+        pmm.write_u16(PMMIFG, 0).unwrap();
+        pmm.write(PMMCTL0, level as u8).unwrap();
+        assert_eq!(pmm.read_u16(PMMIFG).unwrap(), SVMLVLRIFG, "level reached");
+        pmm.write_u16(SVSMLCTL, 0x4400 | level << 8 | level)
+            .unwrap();
+        pmm.write(PMMCTL0 + 1, 0).unwrap();
+        assert_eq!(pmm.read_u16(SVSMLCTL).unwrap(), 0x4501);
+        assert_eq!(pmm.read_u16(PMMCTL0).unwrap(), 0x9601);
     }
 }

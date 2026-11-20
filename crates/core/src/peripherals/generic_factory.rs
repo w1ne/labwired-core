@@ -473,6 +473,15 @@ pub const MODEL_TYPES: &[&str] = &[
     "msp430_bcm",
     "msp430_bcm_plus",
     "msp430_bcsctl3",
+    // Texas Instruments MSP430x5xx: SFRIE1/SFRIFG1/SFRRPCR, USCI_A (UART
+    // mode, own UCAxIE/UCAxIFG/UCAxIV), WDT_A control, 32-bit hardware
+    // multiplier, unified clock system, power management module.
+    "msp430_sfr_x5",
+    "msp430_usci_a_x5",
+    "msp430_wdt_a",
+    "msp430_mpy32",
+    "msp430_ucs",
+    "msp430_pmm",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -2497,6 +2506,60 @@ pub fn try_build(
         "msp430_bcsctl3" => {
             msp430_keys(p_cfg, &[])?;
             Box::new(crate::peripherals::msp430::Msp430Bcm::bcsctl3())
+        }
+        // `lines`: the interrupt line behind each bit (0 to 7) of
+        // SFRIE1/SFRIFG1; 0 = the bit requests no interrupt.
+        "msp430_sfr_x5" => {
+            msp430_keys(p_cfg, &["lines"])?;
+            let v = u32_list(p_cfg, "lines", 8).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "msp430_sfr_x5 '{}' needs `lines`: eight line numbers",
+                    p_cfg.id
+                )
+            })?;
+            Box::new(crate::peripherals::msp430::Msp430SfrX5::new(
+                std::array::from_fn(|i| v[i]),
+            ))
+        }
+        // `unit`: the number of this USCI module on the chip (it selects the
+        // interrupt sources, so each module needs its own); `line`: the
+        // request line UCRXIFG and UCTXIFG share.
+        "msp430_usci_a_x5" => {
+            msp430_keys(p_cfg, &["unit", "line"])?;
+            let number = |key: &str, limit: u64| -> anyhow::Result<u32> {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .filter(|v| *v < limit)
+                    .map(|v| v as u32)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "msp430_usci_a_x5 '{}' needs `{key}`: a number below {limit}",
+                            p_cfg.id
+                        )
+                    })
+            };
+            Box::new(crate::peripherals::msp430::Msp430Usart::usci_a_x5(
+                number("unit", u64::from(crate::peripherals::msp430::X5_USCI_UNITS))?,
+                number("line", 64)?,
+            ))
+        }
+        "msp430_wdt_a" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Wdt::wdt_a())
+        }
+        "msp430_mpy32" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Mpy32::new())
+        }
+        "msp430_ucs" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Ucs::new())
+        }
+        "msp430_pmm" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Pmm::new())
         }
         // `vdd_mv`: the board's VDD (the VDDREF reference, default 5000);
         // `input_mv: { <ain>: <mV> }`: static levels on AIN0..AIN15.

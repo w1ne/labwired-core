@@ -3,16 +3,108 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
-
+#
+# Texas Instruments MSP430F5437 (20-bit MSP430X CPU, 256 KiB flash, 16 KiB
+# RAM). SIM-DERIVED: no MSP430F5437 bench part.
+#
+# Sources:
+#   - MSP430x5xx and MSP430x6xx Family User's Guide (SLAU208Q): CPUX, SFRs,
+#     PMM, UCS, WDT_A, MPY32, USCI (UART mode).
+#   - msp430-gcc-support-files 1.212 `msp430f5437.h`, `msp430f5437.ld`,
+#     `msp430f5437_symbols.ld`: register addresses, vector numbers, memory
+#     regions.
+#   - mspsim `MSP430f5437Config.java`: the chip-config this descriptor was
+#     imported from (memory geometry, module base addresses, vector numbers).
+#
+# Core: `arch: msp430`, `core: msp430x` builds the MSP430 machine family with
+# the CPUX (crates/core/src/cpu/msp430.rs). Interrupt line n vectors through
+# 0xFFFE - 2n: WDT = 5 (0xFFF4), USCI_A0 = 6 (0xFFF2), USCI_A1 = 17 (0xFFDC).
+#
+# NOT modelled, and not mapped (an access is a bus error): the bootstrap
+# loader ROM at 0x1000, digital I/O ports, Timer_A0/A1, Timer_B0, USCI_A2/A3,
+# USCI_B0-B3, ADC12_A, DMA, RTC_A, CRC16, the flash controller, RAM control
+# and the SYS module (SYSRSTIV, SYSUNIV, SYSSNIV, the JTAG mailbox).
+# Modelled with limits (crates/core/src/peripherals/msp430.rs):
+#   - No NMI is delivered: OFIE, NMIIE, VMAIE, ACCVIE and the JTAG mailbox
+#     enables of SFRIE1 are stored and request nothing. WDTIE requests line 5,
+#     but the watchdog counter does not run, so only firmware sets WDTIFG.
+#   - UCS: registers with reset values and reserved bits; no crystal is fitted
+#     on XT1 or XT2, so their fault flags and OFIFG last while the crystal is
+#     switched on or selected. The FLL does not run and no clock rate follows
+#     the registers.
+#   - PMM: password, lock and PMMCOREV; the core voltage settles at once and
+#     only the low-side monitor flags follow it. A software BOR or POR runs as
+#     a PUC. No PMM interrupt.
+#   - MPY32: MPYFRAC and MPYSAT do not change the result.
+#   - USCI_A UART mode only, immediate transmit, no receive errors.
+#   - Every instruction takes one clock cycle.
+# Information memory reads erased (0xFF).
 name: mspsim-msp430f5437
-arch: unknown
+arch: msp430
+core: msp430x
+# MCLK = DCOCLKDIV at the reset FLL setting (32768 Hz x 32). The clock
+# registers do not change it, and every instruction takes one cycle.
+cpu_hz: 1048576
+# Module registers sit below the flash; the MSP430 has no Cortex-M style
+# flash mirror at 0x0.
+flash_boot_alias: false
 flash:
-  base: 23552
+  # 0x5C00-0x45BFF; the interrupt vectors are at 0xFF80-0xFFFF.
+  base: 0x5C00
   size: 256KB
 ram:
-  base: 7168
+  base: 0x1C00
   size: 16KB
-peripherals: []
+memory_regions:
+  # Information memory, segments D to A.
+  - name: infomem
+    base: 0x1800
+    size: 512B
+    erased: true
+peripherals:
+  # SFRIE1, SFRIFG1, SFRRPCR. WDTIE/WDTIFG are bit 0 and request line 5; the
+  # NMI sources (bits 1 and 3 to 7) request nothing.
+  - id: sfr
+    type: msp430_sfr_x5
+    base_address: 0x0100
+    size: 6B
+    config:
+      lines: [5, 0, 0, 0, 0, 0, 0, 0]
+  # PMMCTL0, PMMCTL1, SVSMHCTL, SVSMLCTL, SVSMIO, PMMIFG, PMMRIE.
+  - id: pmm
+    type: msp430_pmm
+    base_address: 0x0120
+    size: 16B
+  - id: wdt
+    type: msp430_wdt_a
+    base_address: 0x015C
+    size: 2B
+  # UCSCTL0 ... UCSCTL8.
+  - id: ucs
+    type: msp430_ucs
+    base_address: 0x0160
+    size: 18B
+  # MPY ... MPY32CTL0.
+  - id: mpy32
+    type: msp430_mpy32
+    base_address: 0x04C0
+    size: 46B
+  # UCA0CTL1 ... UCA0IV.
+  - id: usci_a0
+    type: msp430_usci_a_x5
+    base_address: 0x05C0
+    size: 32B
+    config:
+      unit: 0
+      line: 6
+  # UCA1CTL1 ... UCA1IV.
+  - id: usci_a1
+    type: msp430_usci_a_x5
+    base_address: 0x0600
+    size: 32B
+    config:
+      unit: 1
+      line: 17
 provenance:
   source: mspsim
   repo: https://github.com/contiki-ng/mspsim

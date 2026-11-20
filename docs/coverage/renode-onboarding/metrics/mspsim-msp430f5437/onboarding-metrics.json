@@ -1,33 +1,38 @@
 {
   "target_id": "mspsim-msp430f5437",
-  "status": "not_run",
-  "measurement_mode": "inventory_only",
-  "run_attempted": false,
-  "booted": null,
-  "boot_evidence": null,
-  "smoke_passed": null,
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 399999,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
   "crate": null,
   "target_triple": null,
-  "script": "",
+  "script": "examples/renode-onboarding/msp430f5437-uart-smoke.yaml",
   "system": "configs/systems/onboarding/mspsim-msp430f5437.yaml",
   "profile": "release",
-  "started_at_utc": "2026-11-19T23:08:57Z",
-  "finished_at_utc": "2026-11-19T23:08:57Z",
-  "elapsed_seconds": 0,
-  "elapsed_ms": 0,
-  "failure_stage": "not_configured",
-  "first_error_signature": "The MSP430X core exists, but the MSP430x5xx modules this part needs (SFR block at 0x0100, PMM, UCS, USCI_A at 0x05C0, WDT_A, MPY32) are not modelled; the chip declares `arch: unknown` and is refused. No firmware run was attempted.",
-  "failure_hint": "Model the x5xx SFR/PMM/UCS/USCI_A/WDT_A modules and narrow the descriptor to them before adding a smoke; do not reuse the x2xx module addresses.",
+  "started_at_utc": "2026-11-20T01:13:47Z",
+  "finished_at_utc": "2026-11-20T01:18:07Z",
+  "elapsed_seconds": 261,
+  "elapsed_ms": 260103,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
   "threshold_seconds": 3600,
-  "threshold_met": false,
+  "threshold_met": true,
   "stages_seconds": {
-    "build_cli": null,
+    "build_cli": 257.566,
     "build_firmware": null,
-    "run_smoke": null
+    "run_smoke": 2.475
   },
   "stages_ms": {
-    "build_cli": null,
+    "build_cli": 257566,
     "build_firmware": null,
-    "run_smoke": null
-  }
+    "run_smoke": 2475
+  },
+  "prebuilt_firmware": "tests/fixtures/msp430f5437-uart-smoke.elf"
 }
