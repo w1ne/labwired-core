@@ -283,6 +283,11 @@ enum TaskKind {
 }
 
 impl Peripheral for Nrf52Gpiote {
+    /// `CONFIG[n].PSEL` names the pad a Task-mode channel drives.
+    fn claims_pads(&self) -> bool {
+        true
+    }
+
     fn read(&self, _offset: u64) -> SimResult<u8> {
         Ok(0)
     }

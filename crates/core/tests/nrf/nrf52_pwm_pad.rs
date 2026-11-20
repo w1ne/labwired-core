@@ -152,3 +152,26 @@ fn stop_hands_the_pad_back_to_the_port() {
         "stopped: the pad reads the port's OUT (low) again"
     );
 }
+
+/// The logic analyzer records the PWM waveform on a pad it was armed on
+/// BEFORE the PWM claimed that pad. The claim moves in a PWM register write
+/// (`TASKS_SEQSTART0`), not a GPIO port write; the port must re-register its
+/// watched pad with the PWM's line then, or capture shows a flat pad.
+#[test]
+fn logic_capture_follows_a_pad_the_pwm_claims_after_arming() {
+    use labwired_core::logic_capture::LogicSource;
+    let mut m = microbit_v2();
+    let gpio = m.bus.find_peripheral_index_by_name("gpio0").unwrap();
+    m.logic_watch(&[Some(LogicSource::pad(gpio, RING0 as u8))]);
+    analog_write(&mut m, 1000, 750); // 25 % duty, 4000-cycle period
+    m.step().unwrap();
+    let (_, rises) = measure(&mut m, 20 * 4000);
+    let edges = m.logic_read_edges(0).edges;
+    let captured_rises = edges.iter().filter(|e| e.value).count();
+    assert!(
+        (19..=21).contains(&captured_rises),
+        "pad read shows {rises} periods; capture recorded {captured_rises} rising edges \
+         ({} edges in all)",
+        edges.len()
+    );
+}

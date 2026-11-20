@@ -615,11 +615,15 @@ impl SystemBus {
                 bus_tick_pos += 1;
                 continue;
             }
+            // Same pad-claim bracket as an event (see `Machine` event dispatch).
+            let pad_claim_capture =
+                !self.pad_claim_links.owners.is_empty() && self.begin_pad_claim_write(i);
             let placeholder: Box<dyn Peripheral> =
                 Box::new(crate::peripherals::stub::StubPeripheral::new(0));
             let mut dev = std::mem::replace(&mut self.peripherals[i].dev, placeholder);
             dev.tick_with_bus(self);
             self.peripherals[i].dev = dev;
+            self.finish_pad_claim_write(pad_claim_capture);
             // A level source may have raised its line inside the bus tick
             // (nRF52 UARTE EasyDMA completion). Reconcile it here, the same
             // way the walk and the MMIO write path do.

@@ -509,17 +509,21 @@ pub fn check_twim0_tmp102(l: &mut Line) -> bool {
     let (t_stop, _, t_rx, temp) = twim_xfer(TMP102_ADDR, &[0x00], 2);
     let clean = rd(TWIM_ERRORSRC) == 0;
 
-    // Absent address: no SHORTS, so firmware ends the transfer on ERROR as
-    // nrfx does.
+    // Absent address with LASTTX_STOP armed: no data byte starts, so silicon
+    // fires no LASTTX, runs no shortcut and holds the bus until the firmware
+    // triggers STOP itself, as nrfx does on ERROR.
     for ev in [TWIM_EVENTS_STOPPED, TWIM_EVENTS_ERROR, TWIM_EVENTS_LASTTX] {
         wr(ev, 0);
     }
-    wr(TWIM_SHORTS, 0);
+    wr(TWIM_SHORTS, TWIM_SHORT_LASTTX_STOP);
     wr(TWIM_ADDRESS, ABSENT_ADDR);
     wr(TWIM_TXD_MAXCNT, 1);
     wr(TWIM_TASKS_STARTTX, 1);
     let error = wait_set(TWIM_EVENTS_ERROR);
     let anack = rd(TWIM_ERRORSRC) & TWIM_ERRORSRC_ANACK != 0;
+    let held =
+        rd(TWIM_EVENTS_LASTTX) == 0 && rd(TWIM_TXD_AMOUNT) == 0 && rd(TWIM_EVENTS_STOPPED) == 0;
+    wr(TWIM_SHORTS, 0);
     wr(TWIM_TASKS_STOP, 1);
     let n_stop = wait_set(TWIM_EVENTS_STOPPED);
     wr(TWIM_ERRORSRC, TWIM_ERRORSRC_ANACK);
@@ -538,6 +542,7 @@ pub fn check_twim0_tmp102(l: &mut Line) -> bool {
         && clean
         && error
         && anack
+        && held
         && n_stop
         && cleared;
     l.s(b"twim0 tmp102 cfg=")
@@ -546,6 +551,8 @@ pub fn check_twim0_tmp102(l: &mut Line) -> bool {
         .hex(temp, 4)
         .s(b" anack=")
         .hex((error && anack) as u32, 1)
+        .s(b" held=")
+        .hex(held as u32, 1)
         .s(b" w1c=")
         .hex(cleared as u32, 1)
         .ok(pass)

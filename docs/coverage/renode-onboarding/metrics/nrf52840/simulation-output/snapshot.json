@@ -4,7 +4,7 @@
     "type": "arm",
     "registers": [
       8192,
-      248,
+      235,
       8,
       83,
       1342178564,
@@ -14,13 +14,13 @@
       0,
       60,
       2000,
-      9208,
+      9344,
       16383,
       537132952,
       1,
-      8556
+      8690
     ],
-    "pc": 8556,
+    "pc": 8690,
     "xpsr": 553648128,
     "primask": false,
     "pending_exceptions": 0,
@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "9e406316bf70576bedd9034f0e9b6434c2347bcfa199d509ab9e49ef2b1a3043",
+  "firmware_hash": "9c51e82d0177098dc1b9b7d2d5b93f9061e83525163d62014450d9f2fe12760f",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nrf52840-renode-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nrf52840.yaml",
