@@ -415,6 +415,144 @@ pub fn check_ecb_fips197(l: &mut Line) -> bool {
     pass
 }
 
+pub const TWIM0: u32 = 0x4000_3000;
+pub const TWIM_TASKS_STARTRX: u32 = TWIM0;
+pub const TWIM_TASKS_STARTTX: u32 = TWIM0 + 0x008;
+pub const TWIM_TASKS_STOP: u32 = TWIM0 + 0x014;
+pub const TWIM_EVENTS_STOPPED: u32 = TWIM0 + 0x104;
+pub const TWIM_EVENTS_ERROR: u32 = TWIM0 + 0x124;
+pub const TWIM_EVENTS_LASTRX: u32 = TWIM0 + 0x15C;
+pub const TWIM_EVENTS_LASTTX: u32 = TWIM0 + 0x160;
+pub const TWIM_SHORTS: u32 = TWIM0 + 0x200;
+pub const TWIM_ERRORSRC: u32 = TWIM0 + 0x4C4;
+pub const TWIM_ENABLE: u32 = TWIM0 + 0x500;
+pub const TWIM_PSEL_SCL: u32 = TWIM0 + 0x508;
+pub const TWIM_PSEL_SDA: u32 = TWIM0 + 0x50C;
+pub const TWIM_FREQUENCY: u32 = TWIM0 + 0x524;
+pub const TWIM_RXD_PTR: u32 = TWIM0 + 0x534;
+pub const TWIM_RXD_MAXCNT: u32 = TWIM0 + 0x538;
+pub const TWIM_RXD_AMOUNT: u32 = TWIM0 + 0x53C;
+pub const TWIM_TXD_PTR: u32 = TWIM0 + 0x544;
+pub const TWIM_TXD_MAXCNT: u32 = TWIM0 + 0x548;
+pub const TWIM_TXD_AMOUNT: u32 = TWIM0 + 0x54C;
+pub const TWIM_ADDRESS: u32 = TWIM0 + 0x588;
+const TWIM_SHORT_LASTTX_STARTRX: u32 = 1 << 7;
+const TWIM_SHORT_LASTTX_STOP: u32 = 1 << 9;
+const TWIM_SHORT_LASTRX_STOP: u32 = 1 << 12;
+const TWIM_ERRORSRC_ANACK: u32 = 1 << 1;
+/// TMP102 at its ADD0 = GND address; 0x49 has no device on the bus.
+const TMP102_ADDR: u32 = 0x48;
+const ABSENT_ADDR: u32 = 0x49;
+
+#[repr(C, align(4))]
+struct TwimBuf([u8; 4]);
+static mut TWIM_TX: TwimBuf = TwimBuf([0; 4]);
+static mut TWIM_RX: TwimBuf = TwimBuf([0; 4]);
+
+/// One TWIM0 transaction through EasyDMA: write `tx`, then (if `rx_len` > 0)
+/// a repeated START and read `rx_len` bytes, then STOP via SHORTS. Returns
+/// (stopped, TXD.AMOUNT, RXD.AMOUNT, first two RX bytes big-endian).
+fn twim_xfer(addr: u32, tx: &[u8], rx_len: u32) -> (bool, u32, u32, u32) {
+    let txb = core::ptr::addr_of_mut!(TWIM_TX) as *mut u8;
+    let rxb = core::ptr::addr_of_mut!(TWIM_RX) as *mut u8;
+    for (i, b) in tx.iter().enumerate() {
+        unsafe { write_volatile(txb.add(i), *b) };
+    }
+    for i in 0..4 {
+        unsafe { write_volatile(rxb.add(i), 0) };
+    }
+    for ev in [
+        TWIM_EVENTS_STOPPED,
+        TWIM_EVENTS_ERROR,
+        TWIM_EVENTS_LASTRX,
+        TWIM_EVENTS_LASTTX,
+    ] {
+        wr(ev, 0);
+    }
+    wr(TWIM_ADDRESS, addr);
+    wr(TWIM_TXD_PTR, txb as u32);
+    wr(TWIM_TXD_MAXCNT, tx.len() as u32);
+    wr(TWIM_RXD_PTR, rxb as u32);
+    wr(TWIM_RXD_MAXCNT, rx_len);
+    wr(
+        TWIM_SHORTS,
+        if rx_len > 0 {
+            TWIM_SHORT_LASTTX_STARTRX | TWIM_SHORT_LASTRX_STOP
+        } else {
+            TWIM_SHORT_LASTTX_STOP
+        },
+    );
+    wr(TWIM_TASKS_STARTTX, 1);
+    let stopped = wait_set(TWIM_EVENTS_STOPPED);
+    let word = unsafe { u32::from(read_volatile(rxb)) << 8 | u32::from(read_volatile(rxb.add(1))) };
+    (stopped, rd(TWIM_TXD_AMOUNT), rd(TWIM_RXD_AMOUNT), word)
+}
+
+/// TWIM0 (PS v1.7 §6.31) against the TMP102 test fixture on `twi0`:
+///   * write CONFIG = 0xFFFF; the TMP102 write mask (SBOS397I Tables
+///     6-10/6-11) keeps R1:R0 = 11, AL = 1 and D3:D0 = 0, so it reads back
+///     0xFFF0 through a write + repeated-START read;
+///   * the first TEMP read is the 25.0 degC reset value 0x1900;
+///   * an address with no device sets EVENTS_ERROR and ERRORSRC.ANACK, which
+///     is write-1-to-clear.
+/// P0.26/P0.27 are the nRF52840 DK's Arduino SCL/SDA pads; no other block
+/// uses them.
+pub fn check_twim0_tmp102(l: &mut Line) -> bool {
+    wr(TWIM_ENABLE, 0);
+    wr(TWIM_PSEL_SCL, 26);
+    wr(TWIM_PSEL_SDA, 27);
+    wr(TWIM_FREQUENCY, 0x0640_0000); // K400
+    wr(TWIM_ENABLE, 6);
+
+    let (w_stop, w_tx, _, _) = twim_xfer(TMP102_ADDR, &[0x01, 0xFF, 0xFF], 0);
+    let (c_stop, c_tx, c_rx, cfg) = twim_xfer(TMP102_ADDR, &[0x01], 2);
+    let (t_stop, _, t_rx, temp) = twim_xfer(TMP102_ADDR, &[0x00], 2);
+    let clean = rd(TWIM_ERRORSRC) == 0;
+
+    // Absent address: no SHORTS, so firmware ends the transfer on ERROR as
+    // nrfx does.
+    for ev in [TWIM_EVENTS_STOPPED, TWIM_EVENTS_ERROR, TWIM_EVENTS_LASTTX] {
+        wr(ev, 0);
+    }
+    wr(TWIM_SHORTS, 0);
+    wr(TWIM_ADDRESS, ABSENT_ADDR);
+    wr(TWIM_TXD_MAXCNT, 1);
+    wr(TWIM_TASKS_STARTTX, 1);
+    let error = wait_set(TWIM_EVENTS_ERROR);
+    let anack = rd(TWIM_ERRORSRC) & TWIM_ERRORSRC_ANACK != 0;
+    wr(TWIM_TASKS_STOP, 1);
+    let n_stop = wait_set(TWIM_EVENTS_STOPPED);
+    wr(TWIM_ERRORSRC, TWIM_ERRORSRC_ANACK);
+    let cleared = rd(TWIM_ERRORSRC) == 0;
+    wr(TWIM_ENABLE, 0);
+
+    let pass = w_stop
+        && w_tx == 3
+        && c_stop
+        && c_tx == 1
+        && c_rx == 2
+        && cfg == 0xFFF0
+        && t_stop
+        && t_rx == 2
+        && temp == 0x1900
+        && clean
+        && error
+        && anack
+        && n_stop
+        && cleared;
+    l.s(b"twim0 tmp102 cfg=")
+        .hex(cfg, 4)
+        .s(b" temp=")
+        .hex(temp, 4)
+        .s(b" anack=")
+        .hex((error && anack) as u32, 1)
+        .s(b" w1c=")
+        .hex(cleared as u32, 1)
+        .ok(pass)
+        .send();
+    pass
+}
+
 /// Convert the held 1.65 V input on AIN3 into one 12-bit EasyDMA sample.
 /// CONFIG=0 selects single-ended, gain 1/6 and the 600 mV internal reference:
 /// floor(1650 mV * (1/6) * 4096 / 600 mV) = 1877 (0x755).

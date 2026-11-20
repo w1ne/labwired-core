@@ -28,6 +28,8 @@
 //! including exception-frame reuse and preservation of the live handler R0.
 //!   TEMP    TASKS_START -> EVENTS_DATARDY; TEMP in the -40..85 degC range
 //!   ECB     AES-128 FIPS-197 C.1 known-answer test through EasyDMA
+//!   TWIM0   TMP102 test fixture on twi0: CONFIG write-mask readback over a
+//!           repeated START, reset TEMP 0x1900, ANACK on an empty address
 //! A summary word goes to RAM at 0x2003FF00 (one bit per block passed). The
 //! radio is not exercised.
 
@@ -52,12 +54,13 @@ fn main() -> ! {
     summary |= u32::from(saadc_ok) << 9;
     summary |= u32::from(check_temp(&mut l)) << 10;
     summary |= u32::from(check_ecb_fips197(&mut l)) << 11;
+    summary |= u32::from(check_twim0_tmp102(&mut l)) << 12;
 
     wr(RESULT, 0x5284_0000 | summary);
-    if summary == 0xFFF {
+    if summary == 0x1FFF {
         l.s(b"NRF52840 PASS").send();
     } else {
-        l.s(b"NRF52840 FAIL summary=").hex(summary, 3).send();
+        l.s(b"NRF52840 FAIL summary=").hex(summary, 4).send();
     }
 
     // Heartbeat on P0.13 for the gpio_edges check.

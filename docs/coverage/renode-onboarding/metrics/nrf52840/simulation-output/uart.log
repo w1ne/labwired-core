@@ -11,4 +11,5 @@ systick-pendsv frame=1 r0=1 pending=1 priority=1 ok
 saadc ain3=00000755 amount=1 end=1 ok
 temp datardy=1 raw=00000064 ok
 ecb fips197 ct=69c4e0d8..70b4c55a end=1 ok
+twim0 tmp102 cfg=fff0 temp=1900 anack=1 w1c=1 ok
 NRF52840 PASS

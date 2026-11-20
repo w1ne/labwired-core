@@ -13,3 +13,10 @@ external_devices:
     connection: saadc
     config:
       channel: 3
+  # Bare-platform smoke fixture: a TMP102 at 0x48 on TWIM0. It is external
+  # test equipment, not a component of Renode's nrf52840 platform.
+  - id: tmp102_twi0
+    type: tmp102
+    connection: twi0
+    config:
+      i2c_address: 0x48
