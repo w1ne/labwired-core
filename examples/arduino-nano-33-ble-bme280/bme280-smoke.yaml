@@ -1,0 +1,33 @@
+# Arduino Nano 33 BLE Rev2 + BME280: the stock Adafruit BME280 library reads
+# the sensor over Wire (TWI0) and prints compensated values on Serial, the
+# native USB CDC port. The host log shows what the scripted host enumerated.
+# LED_BUILTIN (D13 / P0.13) goes high only after all three readings print.
+schema_version: "1.2"
+inputs:
+  firmware: ../../tests/fixtures/nrf52/arduino-nano-33-ble-bme280.elf
+  system: ../../configs/systems/arduino-nano-33-ble-bme280.yaml
+limits:
+  max_steps: 30000000
+assertions:
+  - uart_contains: "NANO_33_BLE_BME280 ID=0x60"
+  - uart_contains: "T=25.00 C"
+  - uart_contains: "P=1013.25 hPa"
+  - uart_contains: "RH=50.00 %"
+  # What the scripted host read: Arduino VID / Nano 33 BLE PID, the CDC ACM
+  # and CDC data interfaces with their endpoints, the product string.
+  - peripheral_log: {peripheral: usbd, log: host, contains: "device 2341:805a class ef/02/01 usb 0200 ep0 64"}
+  - peripheral_log: {peripheral: usbd, log: host, contains: "address 5"}
+  - peripheral_log: {peripheral: usbd, log: host, contains: "interface 0 alt 0 class 02/02/01 endpoints 1"}
+  - peripheral_log: {peripheral: usbd, log: host, contains: "interface 1 alt 0 class 0a/00/00 endpoints 2"}
+  - peripheral_log: {peripheral: usbd, log: host, contains: "endpoint 0x82 attr 0x03 max 64"}
+  - peripheral_log: {peripheral: usbd, log: host, contains: "endpoint 0x01 attr 0x02 max 64"}
+  - peripheral_log: {peripheral: usbd, log: host, contains: "endpoint 0x81 attr 0x02 max 64"}
+  - peripheral_log: {peripheral: usbd, log: host, contains: "string 2 \"Nano 33 BLE\""}
+  # SET_CONFIGURATION 1, SET_LINE_CODING 115200 8N1, DTR | RTS.
+  - peripheral_log: {peripheral: usbd, log: host, contains: "control 00 09 0001 0000 0000 ok"}
+  - peripheral_log: {peripheral: usbd, log: host, contains: "control 21 20 0000 0000 0007 ok 00 c2 01 00 00 00 08"}
+  - peripheral_log: {peripheral: usbd, log: host, contains: "control 21 22 0003 0000 0000 ok"}
+  - gpio_edges:
+      pin: "gpio0:13"
+      min_edges: 1
+  - expected_stop_reason: max_steps

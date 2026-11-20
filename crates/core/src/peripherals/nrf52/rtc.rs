@@ -15,7 +15,10 @@
 //!
 //! EVENTS_* semantics: hardware-generated only. Writes of 1 are ignored;
 //! only writes of 0 clear the event register. HW sets events via tick() /
-//! lazy advance.
+//! lazy advance. An event latches when it is enabled in INTEN or in EVTEN;
+//! EVTEN alone routes it to PPI. (Mbed OS `common_rtc.c` clears EVTEN for
+//! OVRFLW and its ticker COMPARE, enables INTEN only, and its interrupt
+//! handler reads the EVENTS registers.)
 //!
 //! ## Drive modes (walk-free plan Part 1)
 //!
@@ -111,6 +114,11 @@ pub struct Nrf52Rtc {
     /// CPU cycle of the last advance (`Cell` so `&self` read-sync is idempotent).
     anchor: Cell<u64>,
     arm_seq: u32,
+    /// Cycles at which queued wakes arrive. Every wake re-evaluates the
+    /// counter and re-arms for what is due next, so a re-arm is queued only
+    /// when no wake already arrives by its deadline: repeated CC/INTEN
+    /// writes then leave a few live events, not one each.
+    live_wakes: Vec<u64>,
     /// IRQ latched by a lazy advance that has not yet been claimed by `on_event`.
     pending_irq: Cell<bool>,
     /// Event bitmap (INTEN/EVTEN bit positions) for PPI `fired_events` not yet
@@ -138,6 +146,7 @@ impl Default for Nrf52Rtc {
             clock: None,
             anchor: Cell::new(0),
             arm_seq: 0,
+            live_wakes: Vec::new(),
             pending_irq: Cell::new(false),
             pending_fired: Cell::new(0),
         }
@@ -186,6 +195,13 @@ impl Nrf52Rtc {
         }
     }
 
+    /// A queued wake arrives in `[now, deadline]`.
+    fn wake_arrives_by(&self, now: u64, deadline: u64) -> bool {
+        self.live_wakes
+            .iter()
+            .any(|&at| at >= now && at <= deadline)
+    }
+
     /// INTEN/EVTEN compare-bit mask: bits 16..16+num_cc.
     fn compare_mask(&self) -> u32 {
         let bits = (1u32 << self.num_cc) - 1;
@@ -218,31 +234,39 @@ impl Nrf52Rtc {
             let prev = self.counter.get();
             let next = (prev.wrapping_add(1)) & COUNTER_MASK;
             self.counter.set(next);
+            // An event enabled in INTEN or in EVTEN latches its EVENTS_*
+            // register; EVTEN alone decides whether it reaches PPI.
             if self.evten & EN_TICK != 0 {
-                self.events_tick.set(1);
                 fired_mask |= EN_TICK;
             }
             if self.inten & EN_TICK != 0 {
                 irq = true;
             }
+            if (self.evten | self.inten) & EN_TICK != 0 {
+                self.events_tick.set(1);
+            }
             if prev == COUNTER_MASK && next == 0 {
                 if self.evten & EN_OVRFLW != 0 {
-                    self.events_ovrflw.set(1);
                     fired_mask |= EN_OVRFLW;
                 }
                 if self.inten & EN_OVRFLW != 0 {
                     irq = true;
+                }
+                if (self.evten | self.inten) & EN_OVRFLW != 0 {
+                    self.events_ovrflw.set(1);
                 }
             }
             for i in 0..self.num_cc {
                 if next == (self.cc[i] & COUNTER_MASK) {
                     let bit = 1u32 << (EN_COMPARE_SHIFT + i as u32);
                     if self.evten & bit != 0 {
-                        self.events_compare[i].set(1);
                         fired_mask |= bit;
                     }
                     if self.inten & bit != 0 {
                         irq = true;
+                    }
+                    if (self.evten | self.inten) & bit != 0 {
+                        self.events_compare[i].set(1);
                     }
                 }
             }
@@ -541,39 +565,54 @@ impl Peripheral for Nrf52Rtc {
         if !self.scheduler_mode() || !self.running {
             return Vec::new();
         }
-        if self.pending_irq.get() || self.pending_fired.get() != 0 {
+        let delay = if self.pending_irq.get() || self.pending_fired.get() != 0 {
             // A compare/tick already materialised (a COUNTER/EVENTS read
             // synced past its deadline): deliver at the next drain.
-            self.arm_seq = self.arm_seq.wrapping_add(1);
-            return vec![(0, self.arm_seq)];
-        }
-        let Some(d) = self.cycles_until_next_event() else {
-            return Vec::new();
+            0
+        } else {
+            match self.cycles_until_next_event() {
+                Some(d) => d.saturating_sub(1),
+                None => return Vec::new(),
+            }
         };
+        if let Some(now) = self.clock.as_ref().map(|c| c.now()) {
+            if self.wake_arrives_by(now, now + delay) {
+                return Vec::new();
+            }
+            self.live_wakes.push(now + delay);
+        }
         self.arm_seq = self.arm_seq.wrapping_add(1);
-        vec![(d.saturating_sub(1), self.arm_seq)]
+        vec![(delay, self.arm_seq)]
     }
 
     fn on_event(
         &mut self,
-        event_token: u32,
+        _event_token: u32,
         sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
-        if !self.scheduler_mode() || event_token != self.arm_seq {
+        if !self.scheduler_mode() {
             return crate::sched::EventResult::default();
         }
+        let now = sched.now();
+        self.live_wakes.retain(|&at| at > now);
         // Bring lazy free-running state up to the drain cycle; this
         // materialises events this wake was scheduled for (and is a no-op
         // if a prior COUNTER/EVENTS poll already advanced to `now`).
-        self.advance_to(sched.now());
+        self.advance_to(now);
         let irq = self.pending_irq.replace(false);
         let fired_mask = self.pending_fired.replace(0);
-        let next = self.cycles_until_next_event();
+        let next = self
+            .cycles_until_next_event()
+            .map(|d| d.saturating_sub(1))
+            .filter(|&d| !self.wake_arrives_by(now, now + d));
+        if let Some(d) = next {
+            self.live_wakes.push(now + d);
+        }
         crate::sched::EventResult {
             raise_own_irq: irq,
             fired_events: self.fired_mask_to_events(fired_mask),
-            reschedule_delay: next.map(|d| d.saturating_sub(1)),
+            reschedule_delay: next,
             ..Default::default()
         }
     }
@@ -688,6 +727,30 @@ mod tests {
         }
         assert_eq!(r.read_u32(OFF_EVENTS_COMPARE0).unwrap(), 1);
         assert_eq!(fires, 1);
+    }
+
+    #[test]
+    fn an_event_enabled_in_inten_alone_latches_but_stays_off_ppi() {
+        let mut r = Nrf52Rtc::new_fast();
+        r.write_u32(OFF_PRESCALER, 0).unwrap();
+        r.write_u32(OFF_CC0 + 4, 3).unwrap();
+        r.write_u32(OFF_CC0 + 8, 3).unwrap();
+        r.write_u32(OFF_EVTENCLR, 0xFFFF_FFFF).unwrap();
+        r.write_u32(OFF_INTENSET, 1 << 17).unwrap();
+        r.write_u32(OFF_TASKS_START, 1).unwrap();
+
+        let mut irqs = 0;
+        let mut routed = 0;
+        for _ in 0..8 {
+            let result = r.tick();
+            irqs += u32::from(result.irq);
+            routed += result.fired_events.len();
+        }
+        assert_eq!(irqs, 1);
+        assert_eq!(routed, 0, "EVTEN is clear: nothing for PPI");
+        assert_eq!(r.read_u32(OFF_EVENTS_COMPARE0 + 4).unwrap(), 1);
+        // CC[2] matched too, with neither enable: no event.
+        assert_eq!(r.read_u32(OFF_EVENTS_COMPARE0 + 8).unwrap(), 0);
     }
 
     #[test]
