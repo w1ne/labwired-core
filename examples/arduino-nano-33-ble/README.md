@@ -59,7 +59,7 @@ cd core
 | RGB LED (P0.24/P0.16/P0.06) | modelled GPIO — active low |
 | Built-in D13 LED (P0.13) | modelled GPIO — active high |
 | LSM9DS1 IMU (TWI0 0x6B/0x1E) | **not modelled** (the TWI0 controller is) |
-| USB CDC (`Serial`) | **not modelled** |
+| USB CDC (`Serial`) | not used by this smoke; modelled, see `examples/arduino-nano-33-ble-bme280/` |
 | Silicon capture / executing-fidelity differential | **none** — SIM-DERIVED |
 
 ## Documents

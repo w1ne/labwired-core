@@ -1,0 +1,5 @@
+2026-11-20T02:24:55.186266Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../../configs/chips/nrf52840.yaml
+2026-11-20T02:24:55.283359Z  INFO labwired_loader: ELF Entry Point: 0x19005
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: idle_ff skipped 1 of 4230983 device cycles (4230982 interpreted)
+PASS  1/1 checks · test · 4230982 steps · 1.05s
