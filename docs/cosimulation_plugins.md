@@ -494,15 +494,19 @@ proofs are in `crates/core/tests/analog_ac.rs`.
 ### DC transfer sweep (`.dc`)
 
 `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` feeds
-`Solver::dc_sweep` / `Solver::dc_analysis`. `<src>` must be a `V` or `I`
-element. The second source is the outer loop, as in ngspice. Values are
+`Solver::dc_sweep` / `Solver::dc_analysis`. `<src>` must be a `V`, `I` or
+`R` element. The second source is the outer loop, as in ngspice. A swept `R`
+takes the value as its nominal resistance, so its NTC or `tc1`/`tc2` law still
+applies (ngspice does the same). A swept value that gives zero ohms stops the
+sweep with an error. Values are
 `start + k·incr` up to and including `stop`; `incr` may be negative. Each
 point is a full operating-point solve that starts Newton from the point
 before. Capacitors are open and inductors are shorts. `.tran ... uic` does not
 apply. The sweep runs on a copy of the solver, so the transient state does not
 change. The tests check a divider, the diode law under a descending current
-sweep, and BJT output curves (Early slope) against closed forms and against
-ngspice-42. The proofs are in `crates/core/tests/analog_dc.rs`.
+sweep, BJT output curves (Early slope), a `tc1` resistor swept at 77 °C and a
+base-resistor sweep that sets a BJT bias point against closed forms and
+against ngspice-42. The proofs are in `crates/core/tests/analog_dc.rs`.
 
 ### Independent sources
 

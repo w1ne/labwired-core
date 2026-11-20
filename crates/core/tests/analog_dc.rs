@@ -8,7 +8,8 @@
 //! tests hold each point to a closed form written from the device equations
 //! (divider, diode law, Gummel-Poon forward-active collector current with the
 //! Early factor), not from the engine. Nothing is device-specific in the
-//! sweep itself: the same code drives a resistor, a diode and a BJT.
+//! sweep itself: the same code drives a resistor, a diode and a BJT, and a
+//! swept `R` sets a divider ratio or a BJT's base bias the same way.
 
 mod analog {
     use labwired_core::analog::{parse_netlist, AnalogError, Integration, Solver};
@@ -254,11 +255,125 @@ Q1 c b 0 QN
         ));
     }
 
+    /// ngspice-42 `.dc R1 1k 3k 1k V1 1 2 1` at `.temp 77`, `R1 ... tc1=0.01`,
+    /// `print v(out) i(v1)` with `numdgt=10`. ngspice sweeps the nominal
+    /// value and still applies `tc1`: R1 = 1k is 1.5k at 77 °C. Fails if the
+    /// sweep replaced the effective resistance or dropped the temperature law.
+    #[test]
+    fn resistor_sweep_keeps_the_tc1_law_like_ngspice() {
+        const NGSPICE: [(f64, f64, f64, f64); 6] = [
+            (1e3, 1.0, 4.0000000000e-01, -4.000000000e-04),
+            (2e3, 1.0, 2.5000000000e-01, -2.500000000e-04),
+            (3e3, 1.0, 1.8181818182e-01, -1.818181818e-04),
+            (1e3, 2.0, 8.0000000000e-01, -8.000000000e-04),
+            (2e3, 2.0, 5.0000000000e-01, -5.000000000e-04),
+            (3e3, 2.0, 3.6363636364e-01, -3.636363636e-04),
+        ];
+        let solver = build(
+            "V1 in 0 DC 1\n\
+             R1 in out 1k tc1=0.01\n\
+             R2 out 0 1k\n\
+             .temp 77\n\
+             .dc R1 1k 3k 1k V1 1 2 1\n",
+        );
+        let response = solver.dc_sweep().expect("resistor sweep solves");
+        assert_eq!(response.len(), NGSPICE.len());
+        let out = node(&solver, "out");
+        for (point, (ohms, volts, v_out, i_v1)) in NGSPICE.into_iter().enumerate() {
+            assert_close("R1", response.inner_value(point), ohms, 1e-12, 0.0);
+            assert_close(
+                "V1",
+                response.outer_value(point).unwrap(),
+                volts,
+                1e-12,
+                0.0,
+            );
+            // Closed form: R1 = ohms·(1 + 0.01·(77 − 27)) over a 1k leg.
+            let expected = volts * 1e3 / (ohms * 1.5 + 1e3);
+            assert_close(
+                "V(out) closed form",
+                response.node_voltage(point, out),
+                expected,
+                1e-9,
+                0.0,
+            );
+            assert_close(
+                "V(out)",
+                response.node_voltage(point, out),
+                v_out,
+                1e-9,
+                0.0,
+            );
+            assert_close("I(V1)", response.branch_current(point, 0), i_v1, 1e-9, 0.0);
+        }
+        // The sweep ran on a copy: the solver's own R1 is still 1k.
+        assert_eq!(solver.circuit().resistors[0].ohms, 1e3);
+    }
+
+    /// ngspice-42 `.dc RB 200k 600k 200k VCC 4 6 2` on the same deck
+    /// (`.options temp=26.85 tnom=26.85 reltol=1e-9 abstol=1e-18 vntol=1e-12`,
+    /// `numdgt=10`), `print v(c) v(b)`. A swept base resistor sets the
+    /// Gummel-Poon bias point: fails if the stamp keeps the old resistance.
+    #[test]
+    fn base_resistor_sweep_sets_bjt_bias_like_ngspice() {
+        const NGSPICE: [(f64, f64); 6] = [
+            (2.3116614582e+00, 7.2705016655e-01),
+            (3.1373665388e+00, 7.0927098820e-01),
+            (3.4198702863e+00, 6.9887048927e-01),
+            (3.2382009387e+00, 7.3931871713e-01),
+            (4.5785730011e+00, 7.2148696757e-01),
+            (5.0421524935e+00, 7.1105592799e-01),
+        ];
+        let solver = build(
+            "VCC vcc 0 DC 5\n\
+             RB vcc b 100k\n\
+             RC vcc c 1k\n\
+             Q1 c b 0 QN\n\
+             .model QN NPN(IS=1e-15 BF=100 BR=1 VAF=50)\n\
+             .dc RB 200k 600k 200k VCC 4 6 2\n",
+        );
+        let response = solver.dc_sweep().expect("base resistor sweep solves");
+        assert_eq!(response.len(), NGSPICE.len());
+        let (b, c) = (node(&solver, "b"), node(&solver, "c"));
+        for (point, (v_c, v_b)) in NGSPICE.into_iter().enumerate() {
+            assert_close("V(c)", response.node_voltage(point, c), v_c, 1e-7, 0.0);
+            // CODATA 2014 (ngspice) vs 2018 (engine) kT/q: 3.4e-7 relative.
+            assert_close("VBE", response.node_voltage(point, b), v_b, 1e-6, 0.0);
+        }
+    }
+
+    /// `Solver::set_resistor` is the sweep's own setter; on a linear circuit
+    /// the next transient step must refactor, not reuse the cached matrix.
+    #[test]
+    fn set_resistor_takes_effect_on_the_next_step() {
+        let mut solver = build("V1 in 0 DC 1\nR1 in out 1k\nR2 out 0 1k\n");
+        let out = node(&solver, "out");
+        solver.advance(1e-6).unwrap();
+        assert_close("V(out) before", solver.node_voltage(out), 0.5, 1e-12, 0.0);
+        let r1 = solver.resistor_index("r1").expect("R1 by name, any case");
+        assert!(solver.set_resistor(r1, 3e3));
+        solver.advance(1e-6).unwrap();
+        assert_close("V(out) after", solver.node_voltage(out), 0.25, 1e-12, 0.0);
+        assert!(!solver.set_resistor(r1, 0.0));
+        assert!(!solver.set_resistor(r1, f64::NAN));
+        assert_eq!(solver.circuit().resistors[r1].ohms, 3e3);
+    }
+
+    #[test]
+    fn resistor_sweep_through_zero_ohm_is_refused() {
+        let solver = build("V1 a 0 1\nR1 a 0 1k\n.dc R1 -1k 1k 1k\n");
+        let result = solver.dc_sweep();
+        assert!(
+            matches!(&result, Err(AnalogError::Config(message)) if message.contains("R1")),
+            "{result:?}"
+        );
+    }
+
     #[test]
     fn dc_directive_errors_name_the_problem() {
         for (deck, needle) in [
             ("V1 a 0 1\nR1 a 0 1\n.dc V1 0 1\n", "expected `.dc"),
-            ("V1 a 0 1\nR1 a 0 1\n.dc R1 0 1 0.1\n", "`R1` is not one"),
+            ("V1 a 0 1\nC1 a 0 1\n.dc C1 0 1 0.1\n", "`C1` is not one"),
             ("V1 a 0 1\nR1 a 0 1\n.dc V1 0 1 0\n", "non-zero"),
             ("V1 a 0 1\nR1 a 0 1\n.dc V1 0 1 -0.1\n", "toward stop"),
             ("V1 a 0 1\nR1 a 0 1\n.dc V1 0 1 1u\n", "100001"),

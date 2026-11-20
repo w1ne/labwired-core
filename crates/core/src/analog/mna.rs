@@ -177,12 +177,12 @@ impl DcResponse {
         self.inner.len()
     }
 
-    /// Inner swept source value at `point`, volts or amps.
+    /// Inner swept value at `point`: volts, amps or ohms.
     pub fn inner_value(&self, point: usize) -> f64 {
         self.inner[point % self.inner.len()]
     }
 
-    /// Outer swept source value at `point`, if the sweep has an outer source.
+    /// Outer swept value at `point`, if the sweep has an outer source.
     pub fn outer_value(&self, point: usize) -> Option<f64> {
         self.outer
             .as_ref()
@@ -996,6 +996,37 @@ impl Solver {
             .current_sources
             .iter()
             .position(|s| s.name.to_ascii_lowercase() == key)
+    }
+
+    /// Index of the named resistor, with or without a temperature law.
+    pub fn resistor_index(&self, name: &str) -> Option<usize> {
+        let key = name.trim().to_ascii_lowercase();
+        self.circuit
+            .resistors
+            .iter()
+            .position(|resistor| resistor.name.to_ascii_lowercase() == key)
+    }
+
+    /// Set a resistor's nominal resistance, as a `.dc R...` sweep does. An
+    /// NTC or `tc1`/`tc2` law still applies to the new value, as in ngspice.
+    /// Returns false when the resulting resistance is zero or not finite.
+    pub fn set_resistor(&mut self, index: usize, ohms: f64) -> bool {
+        let Some(resistor) = self.circuit.resistors.get_mut(index) else {
+            return false;
+        };
+        let mut changed = resistor.clone();
+        changed.ohms = ohms;
+        let resistance = changed.resistance_ohms();
+        if !resistance.is_finite() || resistance == 0.0 {
+            return false;
+        }
+        if resistor.ohms != ohms {
+            resistor.ohms = ohms;
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        true
     }
 
     /// Index of a named resistor that has an NTC Beta model.
@@ -2073,7 +2104,9 @@ impl Solver {
     }
 
     /// DC transfer curve: the operating point at every value of `sweep`, as
-    /// ngspice's `.dc` computes it. Each point starts Newton from the one
+    /// ngspice's `.dc` computes it. A swept `V` or `I` takes the value as its
+    /// DC level; a swept `R` takes it as its nominal resistance, so an NTC or
+    /// `tc1`/`tc2` law still scales it. Each point starts Newton from the one
     /// before, so a sweep through a diode knee converges like a source ramp.
     /// Every other source keeps its present value; `.tran ... uic` does not
     /// apply, because a DC sweep has no initial transient.
@@ -2085,14 +2118,16 @@ impl Solver {
         enum Swept {
             Voltage(usize),
             Current(usize),
+            Resistor(usize),
         }
         let resolve = |name: &str| {
             self.voltage_source_index(name)
                 .map(Swept::Voltage)
                 .or_else(|| self.current_source_index(name).map(Swept::Current))
+                .or_else(|| self.resistor_index(name).map(Swept::Resistor))
                 .ok_or_else(|| {
                     AnalogError::Config(format!(
-                        "`.dc` sweeps `{name}`, but the netlist has no such `V` or `I` source"
+                        "`.dc` sweeps `{name}`, but the netlist has no such `V`, `I` or `R` element"
                     ))
                 })
         };
@@ -2108,18 +2143,34 @@ impl Solver {
         let mut work = self.clone();
         work.circuit.uic = false;
         let set = |work: &mut Self, swept: Swept, value: f64| match swept {
-            Swept::Voltage(index) => work.set_voltage_source(index, value),
-            Swept::Current(index) => work.set_current_source(index, value),
+            Swept::Voltage(index) => {
+                work.set_voltage_source(index, value);
+                Ok(())
+            }
+            Swept::Current(index) => {
+                work.set_current_source(index, value);
+                Ok(())
+            }
+            Swept::Resistor(index) => {
+                if work.set_resistor(index, value) {
+                    Ok(())
+                } else {
+                    Err(AnalogError::Config(format!(
+                        "`.dc` sets resistor `{}` to {value} ohm, which gives a zero or non-finite resistance",
+                        work.circuit.resistors[index].name
+                    )))
+                }
+            }
         };
         let dim = self.dim();
         let outer_values = outer.clone().unwrap_or_else(|| vec![0.0]);
         let mut values = Vec::with_capacity(inner.len() * outer_values.len() * dim);
         for &outer_value in &outer_values {
             if let Some(swept) = outer_source {
-                set(&mut work, swept, outer_value);
+                set(&mut work, swept, outer_value)?;
             }
             for &inner_value in &inner {
-                set(&mut work, inner_source, inner_value);
+                set(&mut work, inner_source, inner_value)?;
                 work.solve_operating_point()?;
                 values.extend_from_slice(&work.node_v);
                 values.extend_from_slice(&work.branch_i);

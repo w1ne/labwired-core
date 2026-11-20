@@ -376,8 +376,9 @@
 //! not change the DC or transient run.
 //! `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` is kept
 //! as [`Circuit::dc_sweep`] and run by [`crate::analog::Solver::dc_analysis`];
-//! `<src>` must be a `V` or `I` element, and the second source is the outer
-//! loop.
+//! `<src>` must be a `V`, `I` or `R` element, and the second source is the
+//! outer loop. A swept `R` takes the value as its nominal resistance, so its
+//! NTC or `tc1`/`tc2` law still applies, as in ngspice.
 //! `+` continuation lines and `.subckt`…`.ends` blocks are rewritten before
 //! any of this, as described at the top.
 //!
@@ -953,11 +954,11 @@ impl AcSweep {
 /// One source of a `.dc` sweep: `<src> <start> <stop> <incr>`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DcSweepSource {
-    /// Name of the swept `V` or `I` element, as written.
+    /// Name of the swept `V`, `I` or `R` element, as written.
     pub source: String,
-    /// First value, volts or amps.
+    /// First value, volts, amps or ohms.
     pub start: f64,
-    /// Last value, volts or amps.
+    /// Last value, volts, amps or ohms.
     pub stop: f64,
     /// Increment; its sign matches `stop - start`.
     pub step: f64,
@@ -7653,7 +7654,7 @@ fn parse_ac_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<AcSweep, AnalogE
 }
 
 /// Parse `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]`.
-/// Only `V` and `I` sources may be swept; that the names exist is checked
+/// Only `V`, `I` and `R` elements may be swept; that the names exist is checked
 /// when the sweep runs, because a deck may declare the source after the card.
 fn parse_dc_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<DcSweep, AnalogError> {
     const SHAPE: &str =
@@ -7663,9 +7664,11 @@ fn parse_dc_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<DcSweep, AnalogE
     }
     let source = |chunk: &[&str]| -> Result<DcSweepSource, AnalogError> {
         let name = chunk[0];
-        if !(name.len() >= 2 && matches!(name.as_bytes()[0].to_ascii_uppercase(), b'V' | b'I')) {
+        if !(name.len() >= 2
+            && matches!(name.as_bytes()[0].to_ascii_uppercase(), b'V' | b'I' | b'R'))
+        {
             return Err(ctx.parse_err(format!(
-                "`.dc` sweeps a `V` or `I` source; `{name}` is not one"
+                "`.dc` sweeps a `V`, `I` or `R` element; `{name}` is not one"
             )));
         }
         let start = ctx.value(chunk[1], "DC sweep start")?;
