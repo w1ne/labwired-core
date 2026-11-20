@@ -36,6 +36,9 @@ pub struct HBridgeMotor {
     state: Mutex<State>,
     id: String,
     declared_id: Option<String>,
+    /// False when the placement says the bridge has no usable supply
+    /// (`powered: false`): its outputs stay off and the effort reads zero.
+    powered: bool,
 }
 
 impl HBridgeMotor {
@@ -74,7 +77,14 @@ impl HBridgeMotor {
             }),
             id: id.into(),
             declared_id: None,
+            powered: true,
         }
+    }
+
+    /// Hold the outputs off for the whole run (no usable supply).
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
     }
 
     /// Record the `external_devices:` entry this channel was built from.
@@ -101,7 +111,7 @@ impl HBridgeMotor {
     /// Signed effort in [-1.0, 1.0].
     pub fn effort(&self) -> f32 {
         let s = self.state.lock().unwrap();
-        if !(s.en && s.en2) {
+        if !(self.powered && s.en && s.en2) {
             return 0.0;
         }
         // Positive means OUT1/M+ is high relative to OUT2/M-. Equal inputs
@@ -301,6 +311,7 @@ static H_BRIDGE_METADATA: KitMetadata = KitMetadata {
             ty: ConfigType::Str,
             doc: std::borrow::Cow::Borrowed("IBT-2 R_EN enable; synonym REN."),
         },
+        super::supply::POWERED_CONFIG_KEY,
     ]),
     labs: std::borrow::Cow::Borrowed(&[]),
 };
@@ -350,7 +361,8 @@ impl PeripheralKit for HBridgeMotorKit {
                 in2.observer_pin(),
                 en.as_ref().map(BridgeControlSource::observer_pin),
             )
-            .with_declared_id(ctx.device_id().to_string()),
+            .with_declared_id(ctx.device_id().to_string())
+            .with_powered(super::supply::powered_from_config(ctx)),
         );
         let mut channel_a_sources = vec![&in1, &in2];
         if let Some(en) = en.as_ref() {
@@ -391,7 +403,8 @@ impl PeripheralKit for HBridgeMotorKit {
                     in4.observer_pin(),
                     enb.as_ref().map(BridgeControlSource::observer_pin),
                 )
-                .with_declared_id(ctx.device_id().to_string()),
+                .with_declared_id(ctx.device_id().to_string())
+            .with_powered(super::supply::powered_from_config(ctx)),
             );
             let mut channel_b_sources = vec![&in3, &in4];
             if let Some(enb) = enb.as_ref() {
@@ -444,7 +457,8 @@ fn attach_ibt2(ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
             ids[2],
             ids[3],
         )
-        .with_declared_id(ctx.device_id().to_string()),
+        .with_declared_id(ctx.device_id().to_string())
+            .with_powered(super::supply::powered_from_config(ctx)),
     );
     if !native || !ctx.install_gpio_observer(motor.clone()) {
         let mut pads = Vec::new();
@@ -561,6 +575,13 @@ impl crate::bus::ObservedDevice for HBridgeMotor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unpowered_bridge_has_no_effort() {
+        let m = HBridgeMotor::new("m", 2, 3, None).with_powered(false);
+        m.on_gpio_edge(2, true, 0);
+        assert_eq!(m.effort(), 0.0);
+    }
 
     #[test]
     fn forward_when_in1_high() {

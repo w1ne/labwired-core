@@ -105,6 +105,12 @@ pub struct BrushedMotorConfig {
     pub timer_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timer_channel: Option<u8>,
+    /// `false` when the stage driving this winding has no usable supply (a
+    /// bridge whose motor supply is below its under-voltage lockout, or
+    /// unwired): the plant's enable is held low for the run. Absent means
+    /// powered, the same asymmetry as every other placement's `powered` key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub powered: Option<bool>,
 }
 
 /// Who drives a motor's winding or three phase windings.
@@ -566,6 +572,7 @@ fn validate_circuit_armature(config: &BrushedMotorConfig, issues: &mut Vec<Strin
         ("enable2_pin", config.enable2_pin.is_some()),
         ("timer_name", config.timer_name.is_some()),
         ("timer_channel", config.timer_channel.is_some()),
+        ("powered", config.powered.is_some()),
     ] {
         if set {
             present.push(field);

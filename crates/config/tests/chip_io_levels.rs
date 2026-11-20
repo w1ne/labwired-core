@@ -122,6 +122,8 @@ fn malformed_levels_are_refused_when_the_descriptor_loads() {
         ("gpio_input_thresholds: { vil: 0.3 }\n", "vih"),
         ("io_voltage_v: -3.3\n", "io_voltage_v must be a positive"),
         ("io_voltage_v: 0\n", "io_voltage_v must be a positive"),
+        ("gpio_output_ohms: 0\n", "gpio_output_ohms must be a positive"),
+        ("gpio_output_ohms: -25\n", "gpio_output_ohms must be a positive"),
     ] {
         let err = parse_levels(block).expect_err(block).to_string();
         assert!(err.contains(expected), "{block}: {err}");
@@ -134,6 +136,10 @@ fn malformed_levels_are_refused_when_the_descriptor_loads() {
     let text = serde_yaml::to_string(&ok).unwrap();
     assert!(text.contains("io_voltage_v: 3.3"), "{text}");
     assert!(text.contains("vih: 0.7"), "{text}");
+    assert_eq!(
+        parse_levels("gpio_output_ohms: 25\n").unwrap().gpio_output_ohms,
+        Some(25.0)
+    );
 }
 
 #[test]
