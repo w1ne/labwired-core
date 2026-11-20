@@ -36,7 +36,7 @@ DONE
 The same firmware, flashed to a real NUCLEO-L476RG with `JLinkExe`, emits
 the identical byte stream over USART2 → ST-LINK / J-Link OB Virtual COM
 Port. Drift between the two breaks `test_nucleo_l476rg_demo_survival` in
-`crates/core/tests/firmware_survival.rs`.
+`crates/core/tests/gates/firmware_survival.rs`.
 
 ## Board pinout (UM1724)
 
@@ -152,7 +152,7 @@ arm-none-eabi-gdb target/thumbv7em-none-eabihf/release/firmware-l476-demo \
 
 ## How the survival tests work
 
-`crates/core/tests/firmware_survival.rs` runs each of the L476 fixtures
+`crates/core/tests/gates/firmware_survival.rs` runs each of the L476 fixtures
 through the simulator and asserts on the byte-for-byte UART output. The
 `expected_uart_output` field for each case is the raw capture from real
 silicon. CI runs this on every commit; any drift in the L4 chip config,

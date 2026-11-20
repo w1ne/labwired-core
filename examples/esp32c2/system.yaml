@@ -1,0 +1,2 @@
+name: esp32c2-smoke
+chip: ../../configs/chips/esp32c2.yaml

@@ -1,189 +1,65 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
+# Bounded profile of one RAMN ECU for the imported inventory smoke.
+# Renode identifies RAMN as STM32L552 (boards/ramn.repl includes
+# cpus/stm32l552.repl). SRAM range: ToyotaInfoTech/RAMN memory layout.
+# https://github.com/ToyotaInfoTech/RAMN/blob/main/docs/firmware/memory_layout.rst
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Mapped, following stm32l552.repl and the RAMN firmware's own bring-up
+# (firmware/RAMNV1/Core/Src/main.c, stm32l5xx_hal_msp.c):
+# - RCC @0x40021000 (`stm32l5`, RM0438 map; MSI 4 MHz reset clock).
+# - LPUART1 @0x40008000 (`stm32v2`): the RAMN console, PA2/PA3 AF8,
+#   115200 8N1 with FIFO off.
+# - GPIOA/GPIOB @0x42020000/0x42020400 (`stm32v2`): PA9 HW_TYPE input with
+#   pull-up, PB6 FDCAN1_STB output.
+# The same entries as configs/chips/stm32l552.yaml, plus the per-port GPIO
+# reset values from stm32l552.repl.
+#
+# Not claimed: FDCAN1, ADC1, SPI1-3, I2C1, USART1-3/UART4-5, GPIOC-H, DMA,
+# DMAMUX, EXTI, RTC, timers, IWDG, RNG, USB, flash controller, PWR and the
+# OTP/UID window (Renode fakes PWR and OTP with Python peripherals), board
+# wiring (LCD, ECU enables) and four-node behavior.
 name: ramn
 arch: arm
+core: cortex-m33
 flash:
   base: 134217728
   size: 524288B
 ram:
   base: 536870912
-  size: 196608B
+  size: 262144B
 peripherals:
-- id: pwr
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073770496
-- id: otp
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 200933376
-- id: spi1
-  type: stm32spi
-  bus: sysbus
-  base_address: 1073819648
-- id: spi2
-  type: stm32spi
-  bus: sysbus
-  base_address: 1073756160
-- id: spi3
-  type: stm32spi
-  bus: sysbus
-  base_address: 1073757184
-- id: usart1
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073821696
-- id: usart2
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073759232
-- id: usart3
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073760256
-- id: uart4
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073761280
-- id: uart5
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073762304
-- id: lpuart1
-  type: stm32f7_usart
-  bus: sysbus
-  base_address: 1073774592
-- id: gpioPortA
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107427328
-- id: gpioPortB
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107428352
-- id: gpioPortC
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107429376
-- id: gpioPortD
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107430400
-- id: gpioPortE
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107431424
-- id: gpioPortF
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107432448
-- id: gpioPortG
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107433472
-- id: gpioPortH
-  type: stm32_gpioport
-  bus: sysbus
-  base_address: 1107434496
-- id: dma1
-  type: stm32ldma
-  bus: sysbus
-  base_address: 1073872896
-- id: dma2
-  type: stm32ldma
-  bus: sysbus
-  base_address: 1073873920
-- id: dmamux
-  type: stm32_dmamux
-  bus: sysbus
-  base_address: 1073874944
-- id: i2c1
-  type: stm32f1_i2c
-  bus: sysbus
-  base_address: 1073763328
-- id: fdcanRAM
-  type: arraymemory
-  bus: sysbus
-  base_address: 1073785856
-- id: fdcan1
-  type: stm32_fdcan
-  bus: sysbus
-  base_address: 1073783808
-- id: timer1
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073818624
-- id: timer2
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073741824
-- id: timer3
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073742848
-- id: timer4
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073743872
-- id: timer5
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073744896
-- id: timer6
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073745920
-- id: timer7
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073746944
-- id: timer8
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073820672
-- id: timer15
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073823744
-- id: timer16
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073824768
-- id: timer17
-  type: stm32_timer
-  bus: sysbus
-  base_address: 1073825792
-- id: rcc
-  type: stm32l5_rcc
-  bus: sysbus
-  base_address: 1073876992
-- id: flashController
-  type: stm32wba_flashcontroller
-  bus: sysbus
-  base_address: 1073881088
-- id: rng
-  type: stm32_rng
-  bus: sysbus
-  base_address: 1108084736
-- id: adc1
-  type: stm32l5_adc
-  bus: sysbus
-  base_address: 1107460096
-- id: iwdg
-  type: stm32_independentwatchdog
-  bus: sysbus
-  base_address: 1073754112
-- id: usb
-  type: stm32_usb
-  bus: sysbus
-  base_address: 1073796096
-- id: usb_sram
-  type: arraymemory
-  bus: sysbus
-  base_address: 1073797120
-provenance:
-  generated_by: scripts/onboard_hw_targets.py
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "stm32l5"
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x42020000
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 0 }
+    config:
+      profile: "stm32v2"
+      # PA13/PA14 SWD + PA15 JTDI defaults (stm32l552.repl gpioPortA).
+      reset_moder: 0xABFFFFFF
+      reset_ospeedr: 0x0C000000
+      reset_pupdr: 0x64000000
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x42020400
+    size: "1KB"
+    clock: { reg: "ahb2enr", bit: 1 }
+    config:
+      profile: "stm32v2"
+      # PB3 JTDO + PB4 NJTRST defaults (stm32l552.repl gpioPortB). OSPEEDR
+      # reset is left at 0, as in the repl.
+      reset_moder: 0xFFFFFEBF
+      reset_pupdr: 0x00000100
+  - id: "lpuart1"
+    type: "uart"
+    base_address: 0x40008000
+    size: "1KB"
+    irq: 66
+    clock: { reg: "apb1enr2", bit: 0 }
+    config:
+      profile: "stm32v2"

@@ -1,0 +1,93 @@
+# NEC IR remote source.
+#
+# Emits the same demodulated NEC envelope as ir_receiver_tsop38238, on
+# an IR pin, when `key` (the NEC command, 0..255) is pressed. `address`
+# > 255 is the 16-bit extended form; 0..255 is the 8-bit form. Repeat
+# frames start 108 ms after the leader while the key is held. `key` = -1
+# is released: the frame is cancelled and repeats stop.
+#
+# Optical coupling to a receiver is not a gpio_net (two external devices
+# cannot share a pad as a net). Labs bind this source's key/address onto
+# the receiver's command/address inputs. The IR pin is for measurement
+# and tests.
+type: ir_remote_nec
+behavior:
+  primitive: gpio_device
+  output_update: final_level
+  timer_clock: cycles_floor
+  input_timer_start_on_service: true
+  pins: {IR: ir_pin}
+  outputs: [IR]
+  output_pins: {IR: ir_pin}
+  pin_config_defaults: {ir_pin: PD2}
+  pin_defaults: {IR: true}
+  params:
+    cpu_hz: {key: cpu_hz, default: 16000000}
+  vars: {frame: 0}
+  timers:
+    - {name: repeat, period_us: 108000, start: manual}
+  schedules:
+    frame:
+      output: IR
+      idle: true
+      final: true
+      timing: exact
+      segments:
+        - hold: {level: false, us: 9000}
+        - hold: {level: true, us: 4500}
+        - bits:
+            value: "var(frame)"
+            count: 32
+            order: lsb_first
+            zero: [{level: false, us: 562.5}, {level: true, us: 562.5}]
+            one: [{level: false, us: 562.5}, {level: true, us: 1687.5}]
+        - hold: {level: false, us: 562.5}
+    repeat_frame:
+      output: IR
+      idle: true
+      final: true
+      timing: exact
+      segments:
+        - hold: {level: false, us: 9000}
+        - hold: {level: true, us: 2250}
+        - hold: {level: false, us: 562.5}
+  rules:
+    - on: {input: key}
+      when: "input(address) > 255"
+      do:
+        - {var: frame, value: "(input(address) & 65535) | ((input(key) & 255) << 16) | ((~input(key) & 255) << 24)"}
+    - on: {input: key}
+      when: "input(address) <= 255"
+      do:
+        - {var: frame, value: "(input(address) & 255) | ((~input(address) & 255) << 8) | ((input(key) & 255) << 16) | ((~input(key) & 255) << 24)"}
+    - on: {input: key}
+      when: "input(key) >= 0"
+      do:
+        - {cancel_schedule: frame}
+        - {cancel_schedule: repeat_frame}
+        - {emit_schedule: frame}
+        - {timer: repeat, start: true}
+    - on: {input: key}
+      when: "input(key) < 0"
+      do:
+        - {cancel_schedule: frame}
+        - {cancel_schedule: repeat_frame}
+        - {timer: repeat, start: false}
+    - on: {timer: repeat}
+      when: "input(key) >= 0"
+      do:
+        - {emit_schedule: repeat_frame}
+
+metadata:
+  label: "NEC IR remote"
+  summary: "NEC / NEC-extended remote; demodulated envelope on IR"
+  category: gpio
+  inputs:
+    - {key: address, label: "NEC address", unit: code, min: 0, max: 65535, default: 48896}
+    - {key: key, label: "NEC command", unit: code, min: -1, max: 255, default: -1}
+
+emit:
+  connection: gpio
+  config:
+    - {key: ir_pin, from_part_pin: [IR]}
+    - {key: cpu_hz, from: sim_cpu_hz}

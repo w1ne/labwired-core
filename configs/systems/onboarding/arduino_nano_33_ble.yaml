@@ -6,3 +6,11 @@
 
 name: arduino_nano_33_ble
 chip: ../../chips/onboarding/arduino_nano_33_ble.yaml
+# Board LEDs (Arduino Nano 33 BLE schematic): the RGB LED is active low on
+# P0.24 (red), P0.16 (green) and P0.06 (blue); LED_BUILTIN (D13) is P0.13,
+# active high.
+board_io:
+  - { id: "led_red", kind: "led", peripheral: "gpio0", pin: 24, signal: "output", active_high: false }
+  - { id: "led_green", kind: "led", peripheral: "gpio0", pin: 16, signal: "output", active_high: false }
+  - { id: "led_blue", kind: "led", peripheral: "gpio0", pin: 6, signal: "output", active_high: false }
+  - { id: "led_builtin", kind: "led", peripheral: "gpio0", pin: 13, signal: "output", active_high: true }

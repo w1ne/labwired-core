@@ -319,6 +319,52 @@ impl WasmWorld {
         Self::from_node_inputs(manifest, inputs).map_err(|error| JsValue::from_str(&error))
     }
 
+    /// Shared analog trace and its declared sampling interval. The same core
+    /// session advances in native and browser worlds.
+    /// No model is a successful optional value; serialization failure is an error.
+    pub fn cosim_status(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.world.cosim_status())
+            .map_err(|error| JsValue::from_str(&format!("cosim_status: {error}")))
+    }
+
+    pub fn analog_channels(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.world.analog_channels())
+            .map_err(|error| JsValue::from_str(&format!("analog_channels: {error}")))
+    }
+
+    /// Node-local shaft state; unknown measured electrical quantities stay null.
+    pub fn get_actuator_states(&self, node_id: &str) -> Result<JsValue, JsValue> {
+        let states = crate::inspect::motor_states_json(self.machine(node_id)?.motor_snapshots());
+        serde_wasm_bindgen::to_value(&states)
+            .map_err(|error| JsValue::from_str(&format!("get_actuator_states: {error}")))
+    }
+
+    pub fn motor_series(&self, node_id: &str) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.machine(node_id)?.motor_series())
+            .map_err(|error| JsValue::from_str(&format!("motor_series: {error}")))
+    }
+
+    pub fn analog_trace_snapshot(&self, cursor: f64) -> Result<JsValue, JsValue> {
+        if !cursor.is_finite() || cursor < 0.0 {
+            return Err(JsValue::from_str(
+                "analog_trace_snapshot: cursor must be a non-negative number",
+            ));
+        }
+        serde_wasm_bindgen::to_value(&self.world.analog_trace_snapshot(cursor as u64))
+            .map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+
+    pub fn analog_series(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.world.analog_series())
+            .map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+
+    pub fn set_cosim_signal(&mut self, path: &str, value: f64) -> Result<(), JsValue> {
+        self.world
+            .set_cosim_signal(path, labwired_core::cosim::CosimSignalValue::F64(value))
+            .map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+
     pub fn node_ids(&self) -> JsValue {
         let mut ids = self.world.machines.keys().cloned().collect::<Vec<_>>();
         ids.sort();
@@ -1205,9 +1251,65 @@ interconnects:
         );
     }
 
-    /// A world steps its nodes without a co-simulation session, so a node that
-    /// declares `cosim_models` must refuse to build rather than run with its
-    /// models silently absent.
+    #[test]
+    fn a_wasm_world_preserves_the_shared_analog_boundary_and_trace() {
+        let environment: EnvironmentManifest = serde_yaml::from_str(
+            r#"
+name: shared-browser-circuit
+nodes:
+  - { id: a, system: a.yaml, firmware: a.elf }
+  - { id: b, system: b.yaml, firmware: b.elf }
+cosim_models:
+  - id: circuit
+    adapter: analog
+    step_ns: 1000
+    inputs: {}
+    outputs: {a: node.a.adc.adc1.0_volts, b: node.b.adc.adc1.0_volts}
+    config:
+      netlist_text: |
+        Vrail rail 0 dc 3.3
+        R1 rail a 1k
+        R2 a 0 500
+        R3 rail b 500
+        R4 b 0 1k
+        .end
+      probes: {a: 'v(a)', b: 'v(b)'}
+"#,
+        )
+        .unwrap();
+        let inputs = ["a", "b"]
+            .into_iter()
+            .map(|id| ResolvedNodeInput {
+                id: id.to_string(),
+                system_yaml: "name: analog-node\nchip: stm32f401\n".to_string(),
+                chip_yaml: include_str!("../../../configs/chips/stm32f401.yaml").to_string(),
+                firmware: include_bytes!("../../../tests/fixtures/stm32f401-blinky.elf").to_vec(),
+                blobs: HashMap::new(),
+            })
+            .collect();
+        let mut wrapper = WasmWorld::from_node_inputs(environment, inputs).unwrap();
+        for _ in 0..2 {
+            for (_, result) in wrapper.world.step_all() {
+                result.unwrap();
+            }
+        }
+        let status = wrapper.world.cosim_status().unwrap();
+        assert_eq!(status.step_ns, 1000);
+        assert_eq!(status.completed_time_ns, 2000);
+        assert_eq!(status.model_steps, 2);
+        let trace = wrapper.world.analog_trace_snapshot(0);
+        assert_eq!(
+            trace.samples.iter().map(|s| s.time_ns).collect::<Vec<_>>(),
+            vec![0, 1000, 2000]
+        );
+        let last = trace.samples.last().unwrap();
+        assert!((last.values[0] - 1.1).abs() < 1e-6);
+        assert!((last.values[1] - 2.2).abs() < 1e-6);
+        assert_eq!(wrapper.world.analog_series().unwrap().end_time_ns, 2000);
+    }
+
+    /// A circuit belongs to the environment. A per-node model remains refused
+    /// so the browser cannot clone or silently omit a shared island.
     #[test]
     fn a_node_with_cosim_models_refuses_to_build() {
         let environment: EnvironmentManifest = serde_yaml::from_str(
@@ -1253,7 +1355,7 @@ cosim_models:
         };
         assert!(
             error.contains(
-                "co-simulation models are not supported in multi-node worlds yet; node 'scope' declares 1"
+                "node-level co-simulation models are not supported in worlds; node 'scope' declares 1"
             ),
             "{error}"
         );

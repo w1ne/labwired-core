@@ -6,8 +6,37 @@ registers_count: 32
 # AvrModel::Atmega2560: 256 KB flash and a 3-byte PC (EIND/EIJMP/EICALL,
 # RAMPZ/ELPM), 8 KB SRAM at 0x0200, ports A..L, a 16-channel ADC (ADCSRB.MUX5
 # selects ADC8..15 = A8..A15) and the 2560 vector table. Timer0 (millis/delay),
-# Timer1/Timer2 and USART0 (Serial) are the 328P models at the same addresses.
-# Not modelled here: INTn/PCINT, PWM pads (analogWrite), Timer3/4/5, USART1..3.
+# Timer2 use the 328P models at the same addresses.
+# Timer1/3/4/5 are the 16-bit timers with compare units A/B/C: every WGM mode
+# (normal, CTC on OCRnA or ICRn, fast PWM, phase correct, phase and frequency
+# correct), compare A/B/C, overflow and input-capture interrupts at their 2560
+# vectors, ICFn at TOP when ICRn is TOP, ICP1/3/4/5 on PD4/PE7/PL0/PL1
+# (cpu/avr/timer345.rs).
+# analogWrite reaches every timer pad (OC0A PB7, OC0B PG5, OC1A/B/C
+# PB5/PB6/PB7, OC2A PB4, OC2B PH6, OC3A/B/C PE3/PE4/PE5, OC4A/B/C PH3/PH4/PH5,
+# OC5A/B/C PL3/PL4/PL5; cpu/avr/oc_pins.rs), with the OC0A/OC1C modulator on PB7.
+# USART0..3 (Serial..Serial3, cpu/avr/usart.rs): UCSRnA/B/C, UBRRn with U2X,
+# the UDRn transmit buffer and shift register timed at the programmed baud,
+# the two-character receive FIFO with FE/DOR/UPE/RXB8, and the RX complete,
+# UDRE and TX complete interrupts (Table 14-1 slots 26..28, 37..39, 52..54,
+# 55..57). Host input and TX capture go through the usart0..usart3 windows
+# below; USART0 also feeds the CPU console. Synchronous/MSPIM modes and MPCM
+# address filtering are not modelled.
+# EEPROM (cpu/avr/eeprom.rs): 4 KB, EEARH/L, EEDR, EECR (EERE, EEPE, EEMPE,
+# EEPM erase+write / erase only / write only, EERIE -> EE_READY slot 31) with
+# the 3.4 / 1.8 ms programming times; the array survives reset and can be
+# carried into the next run (Avr::eeprom / Avr::load_eeprom).
+# INT0..7 (PD0..3, PE4..7; EICRA/EICRB, EIMSK, EIFR) and PCINT0..23 (PB0..7,
+# PE0, PJ0..6, PK0..7; PCICR/PCIFR/PCMSK0..2) on vectors 2..12
+# (cpu/avr/mega_ext_int.rs). The ADC converts in ADPS-timed 13/25 ADC clocks,
+# single, free running or auto-triggered (ADATE/ADTS), with ADIF/ADIE on
+# vector 30, REFS AVCC/1.1 V/2.56 V and ADLAR (cpu/avr/mega_adc.rs). SPI
+# (SS/SCK/MOSI/MISO = PB0/PB1/PB2/PB3) times SPIF by SPR/SPI2X, honours DORD,
+# WCOL and the SS mode fault, interrupts on vector 25 and clocks the attached
+# SPI device models (cpu/avr/mega_spi.rs).
+# Not modelled here: the analog comparator, SPI slave transfers
+# from an external master; on the 16-bit timers external clock (Tn pins),
+# toggle and non-PWM compare-output pads, double-buffered OCRnx.
 # Microchip DS2549 (ATmega640/1280/1281/2560/2561), 16 MHz on the Arduino Mega.
 cpu_hz: 16_000_000
 io_voltage_v: 5.0
@@ -69,6 +98,23 @@ peripherals:
     size: "8"
     config:
       profile: "avr"
+  # USART1/USART2 hosts (Serial1/Serial2): UCSR1A 0xC8..UDR1 0xCE and
+  # UCSR2A 0xD0..UDR2 0xD6. cpu_console: false -- the CPU does not copy these
+  # to its console, so the window carries the host TX capture.
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x000100C8
+    size: "8"
+    config:
+      profile: "avr"
+      cpu_console: false
+  - id: "usart2"
+    type: "uart"
+    base_address: 0x000100D0
+    size: "8"
+    config:
+      profile: "avr"
+      cpu_console: false
   - id: "porth"
     type: "avr_gpio"
     base_address: 0x00010100
@@ -85,6 +131,14 @@ peripherals:
     type: "avr_gpio"
     base_address: 0x00010109
     size: "3"
+  # USART3 host (Serial3): UCSR3A 0x130..UDR3 0x136 in extended I/O.
+  - id: "usart3"
+    type: "uart"
+    base_address: 0x00010130
+    size: "8"
+    config:
+      profile: "avr"
+      cpu_console: false
   # ADC input side: millivolts on ADC0..ADC15, two bytes per channel. Moved past
   # the port mirrors (the 328P window at 0x1_0030 would overlap PINF..PING).
   - id: "adc"

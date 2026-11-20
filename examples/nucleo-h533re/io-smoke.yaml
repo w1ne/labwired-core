@@ -1,0 +1,13 @@
+# NUCLEO-H533RE: BME280 CHIP_ID over I2C1, USART2 VCP, and LD2 on PA5.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-nucleo-h533re-smoke"
+  system: "../../configs/systems/nucleo-h533re-bme280.yaml"
+limits:
+  max_steps: 400000
+assertions:
+  - uart_contains: "NUCLEO_H533RE_BME280_OK ID=0x60 I2C1=PB6/PB7"
+  - gpio_edges:
+      pin: "gpioa:5"
+      min_edges: 4
+  - expected_stop_reason: max_steps

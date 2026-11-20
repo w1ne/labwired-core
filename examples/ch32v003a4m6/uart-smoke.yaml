@@ -1,0 +1,9 @@
+schema_version: "1.0"
+inputs:
+  # The F4P6 USART1 hello runs unchanged: PD5 (USART1 TX) is bonded on SOP16.
+  firmware: ../../tests/fixtures/ch32v003f4p6-uart-hello.elf
+  system: ./system.yaml
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "Hello from CH32V003"

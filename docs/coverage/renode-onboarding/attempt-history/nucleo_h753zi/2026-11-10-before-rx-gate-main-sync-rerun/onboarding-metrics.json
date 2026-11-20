@@ -1,0 +1,37 @@
+{
+  "target_id": "nucleo_h753zi",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-stm32h743-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/nucleo_h753zi-smoke.yaml",
+  "system": "configs/systems/onboarding/nucleo_h753zi.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T13:02:48Z",
+  "finished_at_utc": "2026-11-10T13:02:51Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2481,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.284,
+    "build_firmware": 0.432,
+    "run_smoke": 1.754
+  },
+  "stages_ms": {
+    "build_cli": 284,
+    "build_firmware": 432,
+    "run_smoke": 1754
+  }
+}

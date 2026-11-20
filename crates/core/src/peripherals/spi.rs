@@ -60,6 +60,10 @@ pub enum SpiRegisterLayout {
     /// family; a frame is a `TXDATA` write answered on `RXDATA`. See
     /// [`Efr32s2SpiRegs`].
     Efr32s2Usart,
+    /// Renesas RA **RSPI** (RA4M1 SPI0/SPI1). Byte-wide control registers,
+    /// an SPDR that takes 8/16/32-bit accesses, SPSR.SPRF set when a frame
+    /// lands. See [`RaRspiRegs`].
+    RaRspi,
 }
 
 impl FromStr for SpiRegisterLayout {
@@ -76,8 +80,9 @@ impl FromStr for SpiRegisterLayout {
             "nrf54l" | "nrf54l_spim" | "nrf54lm20a" | "nrf54l15" => Ok(Self::Nrf54lSpim),
             "kinetis" | "dspi" | "kinetis_dspi" | "nxp_dspi" | "kw41z" => Ok(Self::KinetisDspi),
             "efr32s2" | "efr32" | "efm32" | "gecko" | "efr32s2_usart" => Ok(Self::Efr32s2Usart),
+            "ra_rspi" | "rspi" | "renesas_rspi" | "ra4m1" => Ok(Self::RaRspi),
             _ => Err(format!(
-                "unsupported SPI register layout '{}'; supported: stm32, stm32_fifo, stm32h5, nrf52, nrf54l, kinetis",
+                "unsupported SPI register layout '{}'; supported: stm32, stm32_fifo, stm32h5, nrf52, nrf54l, kinetis, efr32s2, ra_rspi",
                 value
             )),
         }
@@ -514,6 +519,8 @@ const FIFO_CR2_LDMA_TX: u16 = 1 << 14;
 /// CR2.RXDMAEN / TXDMAEN (bits 0/1 on the classic and FIFO ports alike).
 const CR2_RXDMAEN: u16 = 1 << 0;
 const CR2_TXDMAEN: u16 = 1 << 1;
+const CR2_TXEIE: u16 = 1 << 7;
+const CR2_RXNEIE: u16 = 1 << 6;
 /// SR.FRLVL[1:0] (bits 10:9) and SR.FTLVL[1:0] (bits 12:11).
 const FIFO_SR_FRLVL_SHIFT: u16 = 9;
 const FIFO_SR_FTLVL_SHIFT: u16 = 11;
@@ -1513,6 +1520,112 @@ impl Efr32s2SpiRegs {
     }
 }
 
+// ── Renesas RA RSPI (RA4M1 SPI0/SPI1, `R_SPI0_Type`) ────────────────────────
+// Offsets from `R7FA4M1AB.h` (ArduinoCore-renesas 1.6.0 FSP); reset values and
+// flag semantics from the RA4M1 User's Manual (R01UH0887EJ0110) §38.2. The
+// registers are byte-wide except SPDR (8/16/32-bit access) and SPCMD0..7
+// (16-bit). ArduinoCore-renesas drives SPI0 directly, not through FSP:
+// `configSpi` writes SPCR=0, SSLP, SPPCR, SPBR, SPDCR, SPCMD0, clears SPSR,
+// then sets SPCR.SPE; `transfer(uint8_t)` writes SPDR_BY and spins on
+// SPSR.SPRF before reading SPDR_BY back.
+const RSPI_SPCR: u64 = 0x00;
+const RSPI_SPSR: u64 = 0x03;
+const RSPI_SPDR: u64 = 0x04;
+const RSPI_SPBR: u64 = 0x0A;
+const RSPI_SPCMD0: u64 = 0x10;
+const RSPI_SPDCR2: u64 = 0x20;
+const RSPI_SIZE: usize = 0x40;
+const RSPI_SPCR_TXMD: u8 = 1 << 1;
+const RSPI_SPCR_MSTR: u8 = 1 << 3;
+const RSPI_SPCR_SPE: u8 = 1 << 6;
+const RSPI_SPSR_OVRF: u8 = 1 << 0;
+const RSPI_SPSR_SPTEF: u8 = 1 << 5;
+const RSPI_SPSR_SPRF: u8 = 1 << 7;
+/// SPSR reset value: only SPTEF (the transmit buffer is empty).
+const RSPI_SPSR_RESET: u8 = RSPI_SPSR_SPTEF;
+/// SPCMDn reset value (manual §38.2.13).
+const RSPI_SPCMD_RESET: u16 = 0x070D;
+const RSPI_SPCMD_LSBF: u16 = 1 << 12;
+const RSPI_SPDCR2_BYSW: u8 = 1 << 0;
+
+/// Renesas RA RSPI register file.
+///
+/// A frame completes inside the SPDR write (the transfer is synchronous), so
+/// SPTEF is set again at once and SPRF rises in the same access. A frame is
+/// clocked only when SPCR.SPE and SPCR.MSTR are both set: a driver that left
+/// the unit disabled, or in slave mode, gets no SPRF and spins, here and on
+/// silicon. TXMD (transmit-only) clocks the frame but never sets SPRF.
+#[derive(Debug, Clone, serde::Serialize)]
+struct RaRspiRegs {
+    /// The byte-wide control registers, stored at their own offsets. SPSR
+    /// and SPDR do not live here.
+    #[serde(skip)]
+    raw: [u8; RSPI_SIZE],
+    /// SPSR. A `Cell` because an SPDR read clears SPRF.
+    spsr: Cell<u8>,
+    /// The last received frame (the receive buffer SPDR reads).
+    rx: u32,
+}
+
+impl Default for RaRspiRegs {
+    fn default() -> Self {
+        let mut raw = [0u8; RSPI_SIZE];
+        raw[RSPI_SPBR as usize] = 0xFF;
+        for n in 0..8 {
+            let o = RSPI_SPCMD0 as usize + 2 * n;
+            raw[o..o + 2].copy_from_slice(&RSPI_SPCMD_RESET.to_le_bytes());
+        }
+        Self {
+            raw,
+            spsr: Cell::new(RSPI_SPSR_RESET),
+            rx: 0,
+        }
+    }
+}
+
+impl RaRspiRegs {
+    fn spcr(&self) -> u8 {
+        self.raw[RSPI_SPCR as usize]
+    }
+
+    fn spcmd0(&self) -> u16 {
+        let o = RSPI_SPCMD0 as usize;
+        u16::from_le_bytes([self.raw[o], self.raw[o + 1]])
+    }
+
+    /// Frame length from SPCMD0.SPB (manual §38.2.13): 0100..0111 = 8 bits,
+    /// 1000..1111 = 9..16 bits, 0000 = 20, 0001 = 24, 0010/0011 = 32.
+    fn frame_bits(&self) -> u32 {
+        match (self.spcmd0() >> 8) & 0xF {
+            0x0 => 20,
+            0x1 => 24,
+            0x2 | 0x3 => 32,
+            0x4..=0x7 => 8,
+            spb => u32::from(spb) + 1,
+        }
+    }
+
+    fn read_byte(&self, offset: u64) -> u8 {
+        match offset {
+            RSPI_SPSR => self.spsr.get(),
+            // SPDR_BY / SPDR_HA / SPDR: any lane of the receive buffer. A
+            // read clears SPRF (the receive buffer has been taken).
+            0x04..=0x07 => {
+                self.spsr.set(self.spsr.get() & !RSPI_SPSR_SPRF);
+                (self.rx >> ((offset - RSPI_SPDR) * 8)) as u8
+            }
+            // SPSSR (0x09) is a read-only sequence pointer: 0 for a
+            // one-command sequence.
+            0x09 => 0,
+            o if (o as usize) < RSPI_SIZE => self.raw[o as usize],
+            _ => {
+                crate::census_reg!("spi:RaRspiRegs", offset, "read");
+                0
+            }
+        }
+    }
+}
+
 /// Family-isolated SPI register state. STM32 and nRF register sets cannot
 /// coexist on one instance.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1522,6 +1635,7 @@ enum SpiRegs {
     Nrf52(Nrf52SpiRegs),
     KinetisDspi(KinetisDspiRegs),
     Efr32s2Usart(Efr32s2SpiRegs),
+    RaRspi(RaRspiRegs),
 }
 
 impl Default for SpiRegs {
@@ -1735,9 +1849,20 @@ pub struct Spi {
     /// families exactly as they were.
     #[serde(skip)]
     route_gate: Option<crate::peripherals::efr32::usart_route::RouteGate>,
-    /// Last sampled active-low GPIO CS level for each attached device.
+    /// Last sampled GPIO chip-select state for each attached device.
     #[serde(skip)]
     selected_devices: Vec<bool>,
+    /// STM32 layouts: each attached device's chip select as last read off its
+    /// `cs_pin` GPIO. `Some(true)` = driven low (selected), `Some(false)` =
+    /// driven high (released, so the device is skipped), `None` = the label
+    /// does not resolve to a GPIO output (hardware NSS, pad not configured
+    /// yet, no such pin). `None` keeps the old pass-through: the device sees
+    /// every frame and gets no CS edges, so a board that never wires a GPIO
+    /// CS behaves exactly as before. Refreshed by the bus after every write to
+    /// a GPIO port that owns one of these pins
+    /// (`bus/spi_cs.rs`).
+    #[serde(skip)]
+    stm32_cs: Vec<Option<bool>>,
 
     // ── World `gpio_net` mode (see `spi_net`) ───────────────────────────────
     /// Slave shift state between net edges.
@@ -1866,6 +1991,7 @@ impl Spi {
             SpiRegisterLayout::Nrf54lSpim => SpiRegs::Nrf52(Nrf52SpiRegs::new_nrf54l()),
             SpiRegisterLayout::KinetisDspi => SpiRegs::KinetisDspi(KinetisDspiRegs::default()),
             SpiRegisterLayout::Efr32s2Usart => SpiRegs::Efr32s2Usart(Efr32s2SpiRegs::default()),
+            SpiRegisterLayout::RaRspi => SpiRegs::RaRspi(RaRspiRegs::default()),
         };
         // ⚠️ The EFR32 line cell is created EAGERLY, unlike every other layout
         // here. The others get theirs when GPIO routing calls
@@ -1919,6 +2045,50 @@ impl Spi {
         }
         self.attached_devices.push(device);
         self.selected_devices.push(false);
+        self.stm32_cs.push(None);
+    }
+
+    /// `true` when this controller routes GPIO chip-select edges to its
+    /// devices: an STM32 register file with at least one device naming a
+    /// `cs_pin`. The nRF SPIM samples its CS pins itself
+    /// (`sync_nrf52_gpio_cs`); the Kinetis DSPI and EFR32 USART are not
+    /// covered here.
+    fn routes_gpio_cs(&self) -> bool {
+        matches!(self.regs, SpiRegs::Stm32(_) | SpiRegs::Stm32H5(_))
+            && self.attached_devices.iter().any(|d| !d.cs_pin().is_empty())
+    }
+
+    /// Re-read every device's CS GPIO and deliver the edges that moved:
+    /// `cs_select` when it goes low, `cs_release` when it leaves low (driven
+    /// high, or the pad stops being a GPIO output). A declarative device
+    /// closes its frame on CS↑, so the release edge is not cosmetic.
+    fn sync_stm32_gpio_cs(&mut self, bus: &dyn Bus) {
+        if !matches!(self.regs, SpiRegs::Stm32(_) | SpiRegs::Stm32H5(_)) {
+            return;
+        }
+        // `take_spi_devices` empties the device list behind our back.
+        self.stm32_cs.resize(self.attached_devices.len(), None);
+        for (index, device) in self.attached_devices.iter_mut().enumerate() {
+            let pin = device.cs_pin();
+            if pin.is_empty() {
+                continue;
+            }
+            let next = bus.read_gpio_output_by_label(pin).map(|high| !high);
+            let was_selected = self.stm32_cs[index] == Some(true);
+            let selected = next == Some(true);
+            if selected && !was_selected {
+                device.cs_select();
+            } else if was_selected && !selected {
+                device.cs_release();
+            }
+            self.stm32_cs[index] = next;
+        }
+    }
+
+    /// Whether device `index` takes part in the frame on the wire: only a CS
+    /// GPIO actually driven high takes it off the bus.
+    fn stm32_device_on_bus(stm32_cs: &[Option<bool>], index: usize) -> bool {
+        stm32_cs.get(index).copied().flatten() != Some(false)
     }
 
     fn is_nrf(&self) -> bool {
@@ -2685,6 +2855,109 @@ impl Spi {
         }
     }
 
+    /// Renesas RA RSPI byte-register write. Only called on the `RaRspi`
+    /// variant; SPDR goes through [`Self::ra_rspi_frame`] instead.
+    fn write_ra_rspi_reg(&mut self, offset: u64, value: u8) {
+        let SpiRegs::RaRspi(r) = &mut self.regs else {
+            return;
+        };
+        match offset {
+            RSPI_SPCR => {
+                let was_on = r.spcr() & RSPI_SPCR_SPE != 0;
+                r.raw[RSPI_SPCR as usize] = value;
+                // Enabling the unit with an empty transmit buffer raises
+                // SPTEF (the 32-bit `transfer(buf, n)` path polls it first).
+                if !was_on && value & RSPI_SPCR_SPE != 0 {
+                    r.spsr.set(r.spsr.get() | RSPI_SPSR_SPTEF);
+                }
+            }
+            // SPSR flags clear by writing 0 after reading 1; writing 1 has
+            // no effect. `configSpi` writes SPSR = 0 before setting SPE.
+            RSPI_SPSR => r.spsr.set(r.spsr.get() & value),
+            // SPSSR is read-only.
+            0x09 => {}
+            o if (o as usize) < RSPI_SIZE => r.raw[o as usize] = value,
+            _ => crate::census_reg!("spi:RaRspiRegs", offset, "write"),
+        }
+    }
+
+    /// One SPDR write is one frame, whatever the access width (an 8-bit
+    /// `SPDR_BY` store, a 16-bit `SPDR_HA`, or a 32-bit `SPDR`). The frame is
+    /// SPCMD0.SPB bits wide, clocked MSB first unless SPCMD0.LSBF, with
+    /// SPDCR2.BYSW swapping the bytes of a 16/32-bit frame. Each byte goes to
+    /// every attached device; the last non-zero answer is what MISO carried,
+    /// the same broadcast rule as the Kinetis and EFR32 paths.
+    fn ra_rspi_frame(&mut self, value: u32) {
+        let (spcr, bits, lsbf, bysw) = match &self.regs {
+            SpiRegs::RaRspi(r) => (
+                r.spcr(),
+                r.frame_bits(),
+                r.spcmd0() & RSPI_SPCMD_LSBF != 0,
+                r.raw[RSPI_SPDCR2 as usize] & RSPI_SPDCR2_BYSW != 0,
+            ),
+            _ => return,
+        };
+        // A disabled unit, or a slave, clocks nothing: SPRF never rises.
+        if spcr & RSPI_SPCR_SPE == 0 || spcr & RSPI_SPCR_MSTR == 0 {
+            return;
+        }
+        let swap = |w: u32| match bits {
+            16 => u32::from((w as u16).swap_bytes()),
+            32 => w.swap_bytes(),
+            _ => w,
+        };
+        let mask = if bits >= 32 {
+            u32::MAX
+        } else {
+            (1u32 << bits) - 1
+        };
+        let mut word = value & mask;
+        if bysw {
+            word = swap(word);
+        }
+        if lsbf {
+            word = word.reverse_bits() >> (32 - bits);
+        }
+        // The attached devices are byte-wide: a 9..15 or 20-bit frame is
+        // carried as whole bytes (the top byte holds the short remainder).
+        let nbytes = bits.div_ceil(8);
+        let mut rx: u32 = 0;
+        for i in (0..nbytes).rev() {
+            let mosi = (word >> (i * 8)) as u8;
+            let mut miso: u8 = 0;
+            for dev in &mut self.attached_devices {
+                let resp = dev.transfer(mosi);
+                if resp != 0 {
+                    miso = resp;
+                }
+            }
+            if self.loopback && self.attached_devices.is_empty() {
+                miso = mosi;
+            }
+            rx = (rx << 8) | u32::from(miso);
+        }
+        rx &= mask;
+        if lsbf {
+            rx = rx.reverse_bits() >> (32 - bits);
+        }
+        if bysw {
+            rx = swap(rx);
+        }
+        if let SpiRegs::RaRspi(r) = &mut self.regs {
+            let mut s = r.spsr.get() | RSPI_SPSR_SPTEF;
+            if spcr & RSPI_SPCR_TXMD == 0 {
+                if s & RSPI_SPSR_SPRF != 0 {
+                    // Overrun: the receive buffer keeps the unread frame.
+                    s |= RSPI_SPSR_OVRF;
+                } else {
+                    r.rx = rx;
+                    s |= RSPI_SPSR_SPRF;
+                }
+            }
+            r.spsr.set(s);
+        }
+    }
+
     /// EFR32 Series-2 USART (synchronous mode) register write.
     ///
     /// A `TXDATA` write clocks ONE frame out and back: the byte goes to every
@@ -2918,7 +3191,10 @@ impl Spi {
         for lane in (0..frame_bytes).rev() {
             let mosi = ((word >> (8 * lane)) & 0xFF) as u8;
             let mut miso: u8 = 0;
-            for dev in &mut self.attached_devices {
+            for (index, dev) in self.attached_devices.iter_mut().enumerate() {
+                if !Self::stm32_device_on_bus(&self.stm32_cs, index) {
+                    continue;
+                }
                 let r = dev.transfer(mosi);
                 if r != 0 {
                     miso = r;
@@ -3517,8 +3793,12 @@ impl Spi {
                 let (prev_mosi, prev_miso) = self.edge_hold;
                 let slave_rx = edge_slave_capture(&t.wire(), mosi, prev_mosi, s_cpol, s_cpha);
                 let mut resp = 0u8;
-                for dev in &mut self.attached_devices {
-                    // Last device wins; 0x00 is a valid MISO byte (MAX31855 LSB).
+                for (index, dev) in self.attached_devices.iter_mut().enumerate() {
+                    if !Self::stm32_device_on_bus(&self.stm32_cs, index) {
+                        continue;
+                    }
+                    // Last selected device wins; 0x00 is a valid MISO byte
+                    // (MAX31855 LSB).
                     resp = dev.transfer((slave_rx & 0xFF) as u8);
                 }
                 let (halves, master_rx) =
@@ -3533,9 +3813,14 @@ impl Spi {
             _ => {
                 let miso = if !self.attached_devices.is_empty() {
                     let mosi_byte = (mosi & 0xFF) as u8;
-                    // Last device wins; 0x00 is a valid MISO byte (MAX31855 LSB).
+                    // Last selected device wins; 0x00 is a valid MISO byte
+                    // (MAX31855 LSB). A device whose CS GPIO is high is off
+                    // the bus and neither sees the byte nor drives MISO.
                     let mut miso_byte = 0u8;
-                    for dev in &mut self.attached_devices {
+                    for (index, dev) in self.attached_devices.iter_mut().enumerate() {
+                        if !Self::stm32_device_on_bus(&self.stm32_cs, index) {
+                            continue;
+                        }
                         miso_byte = dev.transfer(mosi_byte);
                     }
                     miso_byte as u16
@@ -3662,9 +3947,11 @@ impl Spi {
                 // Classic F1/F4 port: no FIFO, RXNE on every frame.
                 r.sr |= 0x0001;
                 self.stm32_rxne.set(true);
-            }
-            if net_rx.is_some() && self.net_master_rx_irq() {
-                *irq = true;
+                // RXNEIE: the SPI line is TXE&TXEIE | RXNE&RXNEIE | errors
+                // (RM0008 §25.3.11), whatever drives MISO.
+                if r.cr2 & CR2_RXNEIE != 0 {
+                    *irq = true;
+                }
             }
         } else {
             // FIFO port: the frame enters the RX FIFO and RXNE follows the
@@ -3682,7 +3969,8 @@ impl Spi {
             }
             if driven {
                 self.fifo_rx_push(word);
-                if net_rx.is_some() && self.net_master_rx_irq() && self.stm32_rxne.get() {
+                let rxneie = matches!(&self.regs, SpiRegs::Stm32(r) if r.cr2 & CR2_RXNEIE != 0);
+                if rxneie && self.stm32_rxne.get() {
                     *irq = true;
                 }
             }
@@ -3800,6 +4088,20 @@ impl Spi {
         }
     }
 
+    /// Classic/FIFO STM32 SPI's configured IRQ is a live status-enable
+    /// conjunction, not a one-cycle frame-completion pulse. The modelled
+    /// sources are TXE/TXEIE and RXNE/RXNEIE; error status producers remain
+    /// outside this bounded profile.
+    fn stm32_irq_pending(&self) -> Option<bool> {
+        let SpiRegs::Stm32(r) = &self.regs else {
+            return None;
+        };
+        Some(
+            (r.cr2 & CR2_TXEIE != 0 && self.stm32_txe())
+                || (r.cr2 & CR2_RXNEIE != 0 && self.stm32_rxne.get()),
+        )
+    }
+
     /// SR with the receive-queue-dependent flags applied: RXP/DXP are live
     /// over the queue, everything else is the stored event register. CTSIZE
     /// occupies SR[31:16] on the full H5/U5 personality; the limited U575
@@ -3866,6 +4168,14 @@ impl Spi {
 }
 
 impl crate::Peripheral for Spi {
+    fn irq_line_level(&self) -> Option<bool> {
+        self.stm32_irq_pending()
+    }
+
+    fn reads_can_deassert_irq(&self) -> bool {
+        matches!(self.regs, SpiRegs::Stm32(_))
+    }
+
     fn spi_attached_devices(&self) -> Option<&Vec<Box<dyn crate::peripherals::device::SpiDevice>>> {
         Some(&self.attached_devices)
     }
@@ -3874,6 +4184,21 @@ impl crate::Peripheral for Spi {
         &mut self,
     ) -> Option<&mut Vec<Box<dyn crate::peripherals::device::SpiDevice>>> {
         Some(&mut self.attached_devices)
+    }
+
+    fn gpio_chip_select_pins(&self) -> Vec<String> {
+        if !self.routes_gpio_cs() {
+            return Vec::new();
+        }
+        self.attached_devices
+            .iter()
+            .map(|d| d.cs_pin().to_string())
+            .filter(|p| !p.is_empty())
+            .collect()
+    }
+
+    fn sync_gpio_chip_selects(&mut self, bus: &dyn Bus) {
+        self.sync_stm32_gpio_cs(bus);
     }
 
     /// This controller hosts off-chip SPI devices, so the machine's central
@@ -3955,6 +4280,9 @@ impl crate::Peripheral for Spi {
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
+        if let SpiRegs::RaRspi(r) = &self.regs {
+            return Ok(r.read_byte(offset));
+        }
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
         let reg_val = match &self.regs {
@@ -3999,6 +4327,8 @@ impl crate::Peripheral for Spi {
                 v
             }
             SpiRegs::Efr32s2Usart(r) => r.read_reg(reg_offset),
+            // Served byte-wide above.
+            SpiRegs::RaRspi(r) => u32::from(r.read_byte(offset)) << (byte_offset * 8),
             // Widen u16→u32 before the shift: byte accesses at offsets 2/3 read
             // the upper byte of the next halfword; `(u16 as u32) >> 16` is 0
             // without an overflow panic under the CI release profile.
@@ -4044,6 +4374,15 @@ impl crate::Peripheral for Spi {
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        // Renesas RSPI: byte-wide registers; an SPDR_BY store is one frame.
+        if matches!(self.regs, SpiRegs::RaRspi(_)) {
+            match offset {
+                RSPI_SPDR => self.ra_rspi_frame(u32::from(value)),
+                0x05..=0x07 => crate::census_reg!("spi:RaRspiRegs", offset, "write"),
+                _ => self.write_ra_rspi_reg(offset, value),
+            }
+            return Ok(());
+        }
         let reg_offset = offset & !3;
         let byte_offset = (offset % 4) as u32;
 
@@ -4144,6 +4483,12 @@ impl crate::Peripheral for Spi {
     /// than intended. Firmware on Cortex-M always uses STR (32-bit) for
     /// nRF register accesses — this override matches that behaviour.
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        // Renesas RSPI: a word SPDR store is ONE frame (the 32-bit
+        // `transfer(buf, n)` path); elsewhere four byte registers.
+        if matches!(self.regs, SpiRegs::RaRspi(_)) && offset == RSPI_SPDR {
+            self.ra_rspi_frame(value);
+            return Ok(());
+        }
         // H5 "SPI v3": a 32-bit register write is one transaction (TXDR's word
         // is one 32-bit frame, CFG/IER are stored atomically).
         if let SpiRegs::Stm32H5(_) = &self.regs {
@@ -4244,6 +4589,17 @@ impl crate::Peripheral for Spi {
     }
 
     fn write_u16(&mut self, offset: u64, value: u16) -> SimResult<()> {
+        // Renesas RSPI: an SPDR_HA store is ONE frame; SPCMDn is a 16-bit
+        // register and splits into its two bytes.
+        if matches!(self.regs, SpiRegs::RaRspi(_)) {
+            if offset == RSPI_SPDR {
+                self.ra_rspi_frame(u32::from(value));
+            } else {
+                self.write(offset, value as u8)?;
+                self.write(offset + 1, (value >> 8) as u8)?;
+            }
+            return Ok(());
+        }
         if self.is_nrf() {
             self.write(offset, (value & 0xFF) as u8)?;
             self.write(offset + 1, ((value >> 8) & 0xFF) as u8)?;
@@ -4724,7 +5080,9 @@ impl Spi {
             if pin.is_empty() {
                 continue;
             }
-            let selected = bus.read_gpio_output_by_label(pin) == Some(false);
+            let selected = bus
+                .read_gpio_output_by_label(pin)
+                .is_some_and(|high| device.cs_selected_at(high));
             match (self.selected_devices[index], selected) {
                 (false, true) => device.cs_select(),
                 (true, false) => device.cs_release(),
@@ -4930,6 +5288,10 @@ mod tests;
 #[cfg(test)]
 #[path = "spi_efr32s2_spi_tests.rs"]
 mod efr32s2_spi_tests;
+
+#[cfg(test)]
+#[path = "spi_ra_rspi_tests.rs"]
+mod ra_rspi_tests;
 
 #[cfg(test)]
 #[path = "spi_dma_tests.rs"]

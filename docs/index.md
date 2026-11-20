@@ -13,6 +13,7 @@ Run **real firmware** on a **digital twin** of the board — in the browser, fro
 | Door | You want to… | Start |
 |------|----------------|--------|
 | **Playground** | Try without installing | [Playground first run](tutorials/playground.md) · [app.labwired.com](https://app.labwired.com) |
+| **Circuit + PCB** | Explore firmware-controlled circuits, or check PCB import and simulation limits | [Circuit simulator](https://labwired.com/circuit-simulator/) · [KiCad PCB simulation](https://labwired.com/kicad-pcb-simulation/) |
 | **Agent (MCP)** | Let Claude / Codex / Cursor drive the twin | [Connect MCP](agent/mcp.md) · [First agent run](agent/first-run.md) |
 | **Python SDK** | Run firmware from Python and write pytest checks | [Install and run your first test](python-sdk.md) |
 | **CLI / CI** | Run locally or in a pipeline | [Run firmware](getting_started_firmware.md) · [CI](ci_integration.md) |
@@ -30,7 +31,7 @@ Run **real firmware** on a **digital twin** of the board — in the browser, fro
 | **Board / MCU** | New chip or Nucleo / Pico / ESP board | [Board playbook](board_onboarding_playbook.md) |
 | **On-chip peripheral** | New timer / UART model inside a chip | [Peripheral modeling](peripherals.md) |
 
-Declared experimental boards: [Luckfox Pico Mini A](boards/luckfox-pico-mini-a.md) · [Native QEMU-derived Cortex-A7 prototype](qemu-arm-core.md). The local-only [reduced native Linux basket](../examples/luckfox-pico-mini-a-linux/BASKET.md) has joint guest/power acceptance; default/browser, vendor BSP/SD/ROM boot and physical board acceptance remain unavailable.
+Declared experimental boards: [Luckfox Pico Mini A](boards/luckfox-pico-mini-a.md) · [Native QEMU-derived Cortex-A7 prototype](qemu-arm-core.md). The local-only [reduced native Linux basket](https://github.com/w1ne/labwired-core/blob/82a54f4e9514a3b74dec6c099d81f0e6da2df755/examples/luckfox-pico-mini-a-linux/BASKET.md) has joint guest/power acceptance; default/browser, vendor BSP/SD/ROM boot and physical board acceptance remain unavailable.
 
 Parts catalog: [Parts](parts/index.md) · Support levels: [Target rubric](target_support_rubric.md)
 
@@ -38,7 +39,7 @@ Parts catalog: [Parts](parts/index.md) · Support levels: [Target rubric](target
 
 ## Boards (popular)
 
-[Arduino Uno R3](boards/arduino-uno.md) · [ESP32-C3](boards/esp32c3.md) · [ESP32-S3](boards/esp32s3.md) · [nRF52840](boards/nrf52840.md) · [RP2040](boards/rp2040.md) · [RP2350-Zero](boards/rp2350-zero.md) · [STM32F401](boards/stm32f401.md) · [NUCLEO-U545RE-Q](boards/nucleo-u545re.md) · [NUCLEO-U575ZI-Q](boards/stm32u575.md) · [NUCLEO-U5A5ZJ-Q](boards/stm32u5a5zj.md)
+[Arduino Uno R3](boards/arduino-uno.md) · [ESP32-C3](boards/esp32c3.md) · [ESP32-S3](boards/esp32s3.md) · [nRF52840](boards/nrf52840.md) · [RP2040](boards/rp2040.md) · [RP2350-Zero](boards/rp2350-zero.md) · [STM32F103C8T6 Blue Pill](boards/stm32f103-blue-pill.md) · [STM32F401](boards/stm32f401.md) · [NUCLEO-U545RE-Q](boards/nucleo-u545re.md) · [NUCLEO-U575ZI-Q](boards/stm32u575.md) · [NUCLEO-U5A5ZJ-Q](boards/stm32u5a5zj.md)
 
 ---
 

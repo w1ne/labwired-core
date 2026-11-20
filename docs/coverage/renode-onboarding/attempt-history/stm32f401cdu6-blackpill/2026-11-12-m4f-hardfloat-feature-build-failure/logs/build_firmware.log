@@ -1,0 +1,25 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+   Compiling firmware-f401cdu6-blackpill-demo v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/firmware-f401cdu6-blackpill-demo)
+   Compiling panic-halt v0.2.0
+error: <inline asm>:22:1: instruction requires: fp registers
+vmov s0, r4
+^
+
+error: could not compile `firmware-f401cdu6-blackpill-demo` (bin "firmware-f401cdu6-blackpill-renode-smoke")
+
+Caused by:
+  process didn't exit successfully: `/home/andrii/.local/bin/sccache /home/andrii/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustc --crate-name firmware_f401cdu6_blackpill_renode_smoke --edition=2021 crates/firmware-f401cdu6-blackpill-demo/src/renode_smoke.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C panic=abort -C lto=thin -C debuginfo=2 -C overflow-checks=on --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=a25bf0c99fcf7427 -C extra-filename=-8fd54e882ca88389 --out-dir /data/worktrees/legacy-migrated/labwired-renode/target/thumbv7em-none-eabihf/release/deps --target thumbv7em-none-eabihf -L dependency=/data/worktrees/legacy-migrated/labwired-renode/target/thumbv7em-none-eabihf/release/deps -L dependency=/data/worktrees/legacy-migrated/labwired-renode/target/release/deps --extern panic_halt=/data/worktrees/legacy-migrated/labwired-renode/target/thumbv7em-none-eabihf/release/deps/libpanic_halt-d168307f0e7aba15.rlib -L /data/worktrees/legacy-migrated/labwired-renode/target/thumbv7em-none-eabihf/release/build/firmware-f401cdu6-blackpill-demo-6b32c8f7fcddf1f7/out -C link-arg=-Tminimal.ld` (exit status: 1)

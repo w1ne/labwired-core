@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="2" failures="0" errors="0" time="0.383268">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="AssertionsPassed"/>
+    <property name="firmware_hash" value="88c0a38b75aaf742d49b2aaa0f58ffcc577df5d38e6b72a283878164dd152063"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.383268">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: DEVKITC1_V11_RGB38_TX_DONE" time="0.000000">
+  </testcase>
+</testsuite>

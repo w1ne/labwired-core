@@ -6,3 +6,10 @@
 
 name: stm32h753
 chip: ../../chips/onboarding/stm32h753.yaml
+external_devices:
+  # Test fixture only: not an on-board component on the imported descriptor.
+  - id: pot_adc1_inp16
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 16

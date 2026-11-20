@@ -1,0 +1,55 @@
+{
+  "board": "arduino-zero",
+  "generated_at": "2026-11-08T14:11:53+0000",
+  "platform": "atmelsam@9.0.0 (ArduinoCore-samd)",
+  "rows": [
+    {
+      "sketch": "L0_serial_boot",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 108825
+    },
+    {
+      "sketch": "L1_serial_loop",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 157572
+    },
+    {
+      "sketch": "L2_blink_serial",
+      "status": "pass",
+      "logic_edge_count": 3,
+      "steps": 205637
+    },
+    {
+      "sketch": "L3_i2c_sensor",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 258358
+    },
+    {
+      "sketch": "L4_spi_sensor",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 158881
+    },
+    {
+      "sketch": "L5_adc",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 109980
+    },
+    {
+      "sketch": "L6_pwm",
+      "status": "pass",
+      "logic_edge_count": 45,
+      "steps": 1551471
+    },
+    {
+      "sketch": "L7_timer",
+      "status": "pass",
+      "logic_edge_count": null,
+      "steps": 265760
+    }
+  ]
+}

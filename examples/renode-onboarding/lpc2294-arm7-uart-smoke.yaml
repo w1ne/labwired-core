@@ -1,0 +1,15 @@
+# LPC2294 declared surface: SCB/PLL lock, PINSEL0, UART0 and UART1 (16550 at
+# a 4-byte stride, polled), four legacy GPIO ports, Timer0/1 match interrupts
+# through PL190, and the PL190 software IRQ path. One letter per check on
+# UART0 (see lpc2294-arm7-uart-smoke.S). The system declares no debug_uart, so
+# the capture holds both UARTs.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/lpc2294-arm7-uart-smoke.elf"
+  system: "../../configs/systems/onboarding/lpc2294.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "LPC2294 checks PPPPPPPPPP DONE"
+  - uart_contains: "LPC2294_UART1_OK"
+  - expected_stop_reason: max_steps

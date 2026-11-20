@@ -2,13 +2,11 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Data-driven factory for ESP32-C6 peripheral models.
+//! Data-driven factory for ESP32-C6 models and the narrow ESP32-C61 PCR slice.
 //!
-//! Every arm here either parameterizes a shared model with the C6's values or
-//! aliases the C3 model whose register map the C6 genuinely shares. The C6 has
-//! no C3-only `system` / `rtc_cntl` / `apb_ctrl` blocks and no C6-specific
-//! behavioral model yet; the clock/reset (PCR) and IO_MUX windows are
-//! SVD-derived `declarative` descriptors wired directly in `esp32c6.yaml`.
+//! C6 arms parameterize shared models with C6 values or alias a shared model
+//! whose register map matches. C61 uses this factory only for its separately
+//! mapped, narrow PCR clock-gate model.
 
 use crate::Peripheral;
 use labwired_config::PeripheralConfig;
@@ -45,6 +43,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // (`Peripheral::clock_gate_reg_offset`); see super::pcr for exactly
         // what is and is not enforced.
         "esp32c6_pcr" => Box::new(super::pcr::Esp32c6Pcr::new()),
+        // C61 places its I2C gate registers at +0x2C/+0x30 rather than the C6
+        // offsets. Only the UART0 and I2C0 gates in the board profile are mapped.
+        "esp32c61_pcr" => Box::new(super::pcr::Esp32c6Pcr::new_esp32c61()),
         // EXTMEM / L1 cache — launch/done handshakes for Arduino cache_hal.
         "esp32c6_extmem" => Box::new(super::extmem::Esp32c6Extmem::new()),
         // SYSTIMER — same IP as C3/S3. TARGET0 matrix source 57 on C6.
@@ -99,8 +100,21 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32c6_lp_rtc" => Box::new(super::lp_timer::Esp32c6LpTimer::new()),
         // MODEM_LPCON — sticky regs; seed clk_i2c_mst_en for fast-boot.
         "esp32c6_modem_lpcon" => Box::new(super::modem_lpcon::Esp32c6ModemLpcon::new()),
-        // Analog I2C master — sticky + instant-complete BUSY/cal bits.
-        "esp32c6_i2c_ana_mst" => Box::new(super::i2c_ana_mst::Esp32c6I2cAnaMst::new()),
+        // Analog I2C master — sticky + instant-complete BUSY/cal bits. The C2
+        // reuses it with `ana_conf0_offset: 0x40` (see the model docs).
+        "esp32c6_i2c_ana_mst" => {
+            let dev = super::i2c_ana_mst::Esp32c6I2cAnaMst::new();
+            Box::new(
+                match p_cfg
+                    .config
+                    .get("ana_conf0_offset")
+                    .and_then(|v| v.as_u64())
+                {
+                    Some(offset) => dev.with_ana_conf0_offset(offset),
+                    None => dev,
+                },
+            )
+        }
         // USB Serial/JTAG — same EP1/INT_* IP as C3/S3 (`UsbSerialJtag`), with
         // the C6 matrix source (48) and 160 MHz clock. Base is owned by the
         // chip yaml (`0x6000_F000`); see the model module docs.
@@ -134,6 +148,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
 pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_uart",
     "esp32c6_gpio",
+    "esp32c61_pcr",
     "esp32c6_pcr",
     "esp32c6_extmem",
     "esp32c6_systimer",

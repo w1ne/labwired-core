@@ -24,9 +24,8 @@
 //!   `gpio::NRF52_GPIO_PAD_LATCH`), so other pins keep their levels, and it
 //!   reaches the PAD through the pin claim, which wins over the port's own
 //!   DIR/OUT (bus wiring: `wire_nrf52_pads`).
-//! - **Event observation**: EVENTS_IN is *not* driven from GPIO input
-//!   changes (no input-pin model yet). Firmware that polls EVENTS_IN
-//!   without PPI seeing edges will never see them fire.
+//! - **Event observation**: the bus reports actual GPIO input transitions;
+//!   matching Event-mode channels latch EVENTS_IN and notify PPI/IRQ delivery.
 
 use std::sync::Arc;
 
@@ -98,11 +97,6 @@ pub struct Nrf52Gpiote {
     /// Queued GPIO writes accumulated since the last tick(); drained into
     /// the bus's cross-peripheral mmio_writes on every tick.
     pending_gpio_writes: Vec<(u32, u32)>,
-
-    /// Per-channel last-known input level, used to detect rising/falling
-    /// edges against the GPIO IN registers that the bus snapshots each
-    /// tick.  Initialized lazily when CONFIG is written.
-    channel_in_level: [u32; 8],
 
     /// EVENTS_IN[i] offsets queued by `observe_gpio_change`; drained into
     /// the next tick's fired_events so PPI sees them and IRQ is pended
@@ -452,14 +446,16 @@ impl Peripheral for Nrf52Gpiote {
                     continue;
                 }
                 let polarity = (cfg >> CONFIG_POLARITY_SHIFT) & CONFIG_POLARITY_MASK;
-                let prev = self.channel_in_level[ch] as u8;
+                // The bus supplies only changed input bits, with their new
+                // levels. Their old level is therefore the opposite level;
+                // a channel-local default cannot represent a pin that was
+                // already high when firmware enabled Event mode.
                 let edge_match = match polarity {
-                    POLARITY_LO_TO_HI => prev == 0 && new_level == 1,
-                    POLARITY_HI_TO_LO => prev == 1 && new_level == 0,
-                    POLARITY_TOGGLE => prev != new_level,
+                    POLARITY_LO_TO_HI => new_level == 1,
+                    POLARITY_HI_TO_LO => new_level == 0,
+                    POLARITY_TOGGLE => new_level <= 1,
                     _ => false,
                 };
-                self.channel_in_level[ch] = new_level as u32;
                 if edge_match {
                     self.events_in[ch] = 1;
                     self.pending_in_events
@@ -487,6 +483,48 @@ mod tests {
     // wrong about.
     const T_GPIO0_BASE: u32 = 0x5000_0000;
     const T_GPIO1_BASE: u32 = 0x5000_1000;
+
+    #[test]
+    fn first_observed_edge_uses_the_bus_transition_not_a_channel_default() {
+        let mut g = Nrf52Gpiote::default();
+        // The bus already established a high pad baseline before Event mode
+        // was enabled; its first report is a genuine falling transition.
+        g.write_u32(OFF_CONFIG_0, 1 | (25 << 8) | (POLARITY_HI_TO_LO << 16))
+            .unwrap();
+        assert!(!g.observe_gpio_change(&[(0, 24, 0)]), "unrelated pin");
+        assert!(g.observe_gpio_change(&[(0, 25, 0)]), "first falling edge");
+        assert_eq!(g.read_u32(OFF_EVENTS_IN_0).unwrap(), 1);
+        g.write_u32(OFF_EVENTS_IN_0, 0).unwrap();
+        g.tick();
+        assert!(
+            !g.observe_gpio_change(&[(0, 25, 1)]),
+            "rising edge is masked"
+        );
+        assert_eq!(g.read_u32(OFF_EVENTS_IN_0).unwrap(), 0);
+        assert!(g.observe_gpio_change(&[(0, 25, 0)]), "next falling edge");
+    }
+
+    #[test]
+    fn event_mode_reports_the_requested_direction_and_ignores_disabled_channels() {
+        let mut g = Nrf52Gpiote::default();
+        g.write_u32(OFF_CONFIG_0, 1 | (7 << 8) | (POLARITY_LO_TO_HI << 16))
+            .unwrap();
+        assert!(!g.observe_gpio_change(&[(0, 7, 0)]));
+        assert!(g.observe_gpio_change(&[(0, 7, 1)]));
+        g.write_u32(OFF_CONFIG_0, 0).unwrap();
+        assert!(!g.observe_gpio_change(&[(0, 7, 1)]));
+    }
+
+    #[test]
+    fn toggle_channel_latches_each_reported_transition() {
+        let mut g = Nrf52Gpiote::default();
+        g.write_u32(OFF_CONFIG_0, 1 | (25 << 8) | (POLARITY_TOGGLE << 16))
+            .unwrap();
+        assert!(g.observe_gpio_change(&[(0, 25, 0)]));
+        assert!(g.observe_gpio_change(&[(0, 25, 1)]));
+        assert_eq!(g.pending_in_events.len(), 2);
+        assert!(!g.observe_gpio_change(&[(1, 25, 1)]), "other port ignored");
+    }
 
     fn port_cfg(id: &str, base: u64) -> PeripheralConfig {
         PeripheralConfig {

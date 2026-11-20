@@ -12,6 +12,12 @@
 //! reports, edges and final state included, while skipping most cycles. The
 //! countdown is the negative control's target: a skip that ignored the
 //! changing register would move the last edge.
+//!
+//! `fixtures/cortex_m_idle_hook` is the same wait as an RTOS idle loop: each
+//! iteration calls a hook that pushes to the stack and enters and leaves a
+//! critical section through a RAM nesting counter, storing the bytes memory
+//! already holds. Its negative control bumps a RAM idle counter through the
+//! same hook (memory changes every iteration).
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -26,6 +32,10 @@ fn workspace_root() -> PathBuf {
 }
 
 fn run(name: &str, skip: bool) -> (serde_json::Value, String) {
+    run_fixture("cortex_m_tick_wait/tick_wait.elf", name, skip)
+}
+
+fn run_fixture(elf: &str, name: &str, skip: bool) -> (serde_json::Value, String) {
     let root = workspace_root();
     let dir = labwired_cli::test_support::unique_temp_dir(&format!("labwired-cm-poll-{name}"));
     std::fs::create_dir_all(&dir).unwrap();
@@ -34,7 +44,7 @@ fn run(name: &str, skip: bool) -> (serde_json::Value, String) {
         &script,
         format!(
             "schema_version: \"1.0\"\ninputs:\n  firmware: \"{}\"\n  system: \"{}\"\nlimits:\n  max_steps: 10000000\n  max_cycles: 400000\n",
-            root.join("crates/cli/tests/fixtures/cortex_m_tick_wait/tick_wait.elf").display(),
+            root.join("crates/cli/tests/fixtures").join(elf).display(),
             root.join("configs/systems/nucleo-l476rg.yaml").display(),
         ),
     )
@@ -92,6 +102,26 @@ fn a_skipped_tick_wait_reports_the_same_run() {
     assert!(
         skipped(&fast_err) > 300_000,
         "the waits and `b .` were not skipped:\n{fast_err}"
+    );
+    assert_eq!(
+        observable(fast),
+        observable(reference),
+        "the skip changed the run"
+    );
+}
+
+#[test]
+fn a_skipped_idle_hook_loop_that_stores_reports_the_same_run() {
+    let elf = "cortex_m_idle_hook/idle_hook.elf";
+    let (fast, fast_err) = run_fixture(elf, "idle-skip", true);
+    let (reference, _) = run_fixture(elf, "idle-ref", false);
+    let edges = fast["logic_edges"]["channels"][0]["transitions"]
+        .as_array()
+        .map_or(0, Vec::len);
+    assert_eq!(edges, 101, "100 waits and the post-counter toggle");
+    assert!(
+        skipped(&fast_err) > 300_000,
+        "the idle-hook waits and `b .` were not skipped:\n{fast_err}"
     );
     assert_eq!(
         observable(fast),

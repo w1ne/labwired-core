@@ -7,10 +7,10 @@ register it actually observed.
 
 This is the first RISC-V soft-core target in the engine. The modelled
 surface is deliberately small — CPU, memory map, the LiteX UART console path
-and the LiteX countdown timer — and everything else is declared, not faked:
-unmodelled CSR windows are `type: stub` and answer zeros, and the smoke
-prints one of those readbacks (`spi=00000000`) so the omission is visible on
-the wire.
+the LiteX countdown timer and the SPI-flash bitbang controller (MT25Q READ ID
+and status only) — and everything else is declared, not faked: unmodelled CSR
+windows are `type: stub` and answer zeros. The smoke bitbangs READ ID and
+READ STATUS and prints `spi id=20bb19 sr=00 wel=02`.
 
 ## Build
 
@@ -35,7 +35,7 @@ Expected console output (prefix):
 ```
 LITEX VEXRISCV SMOKE
 cpu=rv32im uart=litex
-spi=00000000
+spi id=20bb19 sr=00 wel=02
 timer=running
 timer=zero
 hb=0 txfull=00000000

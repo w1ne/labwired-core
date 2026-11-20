@@ -1,0 +1,8 @@
+2026-11-04T00:20:45.565309Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/efm32g222.yaml
+2026-11-04T00:20:45.566004Z  INFO labwired_loader: ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-04T00:20:45.566635Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0xfffffffe
+2026-11-04T00:20:45.566808Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "EFM32G222 USART0 smoke" }) (captured len=0)
+2026-11-04T00:20:45.566821Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }) (captured len=0)
+FAIL  0/2 checks · efm32g222-smoke · 0 steps · 0.00s

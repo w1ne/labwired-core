@@ -1,0 +1,9 @@
+2026-11-19T18:00:20.531007Z  INFO labwired_core::system::builder: Loading chip descriptor: configs/chips/atmega4809-pre-spi0.tmp.yaml
+2026-11-19T18:00:20.534289Z  INFO labwired_loader: ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-19T18:00:20.536563Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0x8c1
+2026-11-19T18:00:20.537334Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "NANO_EVERY_MAX31855" }) (captured len=0)
+2026-11-19T18:00:20.537348Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "TC=25.00 C" }) (captured len=0)
+2026-11-19T18:00:20.537351Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "CJ=22.0000 C" }) (captured len=0)
+FAIL  0/3 checks · script · 0 steps · 0.00s

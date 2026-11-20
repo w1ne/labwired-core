@@ -48,6 +48,7 @@ mod stm32f103_flash_tests {
             name: "f103-flash".to_string(),
             chip: path.to_string_lossy().into_owned(),
             cpu_hz: None,
+            max_peripheral_tick_interval: None,
             external_devices: vec![],
             cosim_models: Vec::new(),
             motor_models: Vec::new(),

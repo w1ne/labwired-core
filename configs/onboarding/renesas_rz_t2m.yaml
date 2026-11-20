@@ -5,18 +5,19 @@ family: Renesas RZ/T2M
 url: https://www.renesas.com/products/microcontrollers-microprocessors/rz-mpus/rzt2m-high-performance-multi-function-mpu-ac-servo-drives-and-industrial-networks
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 100
-verified: true
+verified: false
 system: systems/onboarding/renesas_rz_t2m.yaml
 validation:
-  method: ci-arm-fixture-simulation
-  reason: simulation-ok
+  method: renode-onboarding-inventory
+  reason: unsupported-cortex-r52-core
   checks:
     system_manifest: true
     chip_descriptor: true
-    simulation: true
-  timestamp_utc: '2026-10-18T14:40:21.630864+00:00'
+    cpu_core_supported: false
+    booted: false
+    simulation: false
+  timestamp_utc: '2026-11-06T05:32:48Z'
   run_url: ''
-  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/renesas_rz_t2m.md
+  artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/coverage/renode-onboarding/metrics/renesas_rz_t2m/
 provenance:
   generated_by: scripts/onboard_hw_targets.py

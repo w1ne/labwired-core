@@ -114,6 +114,12 @@ impl Nrf52Nvmc {
 }
 
 impl Peripheral for Nrf52Nvmc {
+    /// A latched ERASEPAGE / ERASEALL / ERASEUICR the machine boundary has
+    /// not drained yet. Lets the boundary ask without downcasting.
+    fn has_pending_op(&self) -> bool {
+        self.pending.is_some()
+    }
+
     /// Walk-independent for every firmware state: this model overrides neither
     /// `tick()` nor `tick_elapsed()` with time-driven work that the walk must
     /// deliver. Observable effects land on MMIO writes and/or the separate

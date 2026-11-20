@@ -1,0 +1,804 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-11-12T04:33:11.720347+00:00",
+  "scope": "Actual local four-MCU World construction and short coupled trace; candidate hardware source remains subject to its unchanged human silicon-review gate.",
+  "input_receipts": {
+    "input-receipt.json": "4bc3fe7ac634a4299ad75f6052ee16fcdfb7575f302586bae93d83ac56742bfe",
+    "am32-input-receipt.json": "1235431e8e5ee780a9fb277dfcafd98272139aeae76b41aef2a50c66f629d6c7"
+  },
+  "runs": [
+    {
+      "firmware": "smoke",
+      "receipt_sha256": "1a0b70cecd4306580fe60061f982e68705a5c01259b571ffa826c7ba282b10a2",
+      "command": [
+        "/data/work-scratch/at32-onboarding-20261112/labwired-combined22-6fc6e4e6",
+        "test",
+        "--script",
+        "/data/work-scratch/native-esc-capacity-runtime-20261112/smoke/probe-1.yaml",
+        "--output-dir",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/smoke-1",
+        "--analog-trace",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/smoke-1.csv"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.1648292139871046,
+      "max_rss_kib": 27648,
+      "outer_timeout": false,
+      "round_limit": 1,
+      "initial_conditions": "constant battery operating point; no cold-start claim",
+      "motor_operation_verified": false,
+      "flight_verified": false,
+      "result_sha256": "bb252097480fd20148d6bb93e538ccefd89c3cd8935b33ad883c85743abc5f46",
+      "status": "pass",
+      "steps_executed": 1,
+      "cycles": 12,
+      "instructions": 4,
+      "stop_reason": "max_steps",
+      "cosim": {
+        "completed_time_ns": 100,
+        "coupling": "interval-start-zero-order-hold",
+        "failure": null,
+        "model_id": "circuit",
+        "model_steps": 1,
+        "next_boundary_ns": 200,
+        "reset_inputs": {
+          "U2": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 100,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U5": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 100,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U7": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 100,
+            "pin": "NRST",
+            "volts": 3.3001671441476566
+          },
+          "U9": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 100,
+            "pin": "NRST",
+            "volts": 3.3001671441476557
+          }
+        },
+        "step_ns": 100
+      },
+      "observed_fidelity_gaps": [],
+      "nodes": [
+        {
+          "id": "U2",
+          "cycles": 12,
+          "pc": "0x80001ee",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U5",
+          "cycles": 12,
+          "pc": "0x80001ee",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U7",
+          "cycles": 12,
+          "pc": "0x80001ee",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U9",
+          "cycles": 12,
+          "pc": "0x80001ee",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        }
+      ],
+      "trace": {
+        "path": "/data/work-evidence/native-esc-capacity-runtime-20261112/smoke-1.csv",
+        "sha256": "e08ad5abe4d89f8ef59fb118a19b8510688ac9f093dae82f2c65d91c9a461b07",
+        "channel_count": 96,
+        "samples": 2,
+        "first_ns": 0,
+        "last_ns": 100
+      },
+      "snapshot_sha256": "d24895b94338f70ed6da23c48838c9f311a182bbba047485e0da14d4becdc470"
+    },
+    {
+      "firmware": "smoke",
+      "receipt_sha256": "2f7dda2bbf894d5c5ada3bfeba7bdf89b1da99b84e1f9874788d9dd6878d6b3d",
+      "command": [
+        "/data/work-scratch/at32-onboarding-20261112/labwired-combined22-6fc6e4e6",
+        "test",
+        "--script",
+        "/data/work-scratch/native-esc-capacity-runtime-20261112/smoke/probe-10.yaml",
+        "--output-dir",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/smoke-10",
+        "--analog-trace",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/smoke-10.csv"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.5188140660175122,
+      "max_rss_kib": 27776,
+      "outer_timeout": false,
+      "round_limit": 10,
+      "initial_conditions": "constant battery operating point; no cold-start claim",
+      "motor_operation_verified": false,
+      "flight_verified": false,
+      "result_sha256": "402d23fcef9e5459278cc106e858015ae1adb3338c4bbd6663e414f5cff7ff47",
+      "status": "pass",
+      "steps_executed": 10,
+      "cycles": 120,
+      "instructions": 40,
+      "stop_reason": "max_steps",
+      "cosim": {
+        "completed_time_ns": 1000,
+        "coupling": "interval-start-zero-order-hold",
+        "failure": null,
+        "model_id": "circuit",
+        "model_steps": 10,
+        "next_boundary_ns": 1100,
+        "reset_inputs": {
+          "U2": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 1000,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U5": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 1000,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U7": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 1000,
+            "pin": "NRST",
+            "volts": 3.3001671441475855
+          },
+          "U9": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 1000,
+            "pin": "NRST",
+            "volts": 3.3001671441475846
+          }
+        },
+        "step_ns": 100
+      },
+      "observed_fidelity_gaps": [],
+      "nodes": [
+        {
+          "id": "U2",
+          "cycles": 120,
+          "pc": "0x800058e",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U5",
+          "cycles": 120,
+          "pc": "0x800058e",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U7",
+          "cycles": 120,
+          "pc": "0x800058e",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U9",
+          "cycles": 120,
+          "pc": "0x800058e",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        }
+      ],
+      "trace": {
+        "path": "/data/work-evidence/native-esc-capacity-runtime-20261112/smoke-10.csv",
+        "sha256": "5dcaabc7cf67cddb29cf3f836bf6402d57927383aeaef9b74eccdf2a5d5a1912",
+        "channel_count": 96,
+        "samples": 11,
+        "first_ns": 0,
+        "last_ns": 1000
+      },
+      "snapshot_sha256": "654c09584984a9372c854a5a5ccc27c2f6c0e82569ad30ddf6cbecc83857faed"
+    },
+    {
+      "firmware": "smoke",
+      "receipt_sha256": "9b10ae7f8279847f3524d8b32a24b4b382f56c6a0db6d44e447f556c35705d77",
+      "command": [
+        "/data/work-scratch/at32-onboarding-20261112/labwired-combined22-6fc6e4e6",
+        "test",
+        "--script",
+        "/data/work-scratch/native-esc-capacity-runtime-20261112/smoke/probe-100.yaml",
+        "--output-dir",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/smoke-100",
+        "--analog-trace",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/smoke-100.csv"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 3.4314642940298654,
+      "max_rss_kib": 27520,
+      "outer_timeout": false,
+      "round_limit": 100,
+      "initial_conditions": "constant battery operating point; no cold-start claim",
+      "motor_operation_verified": false,
+      "flight_verified": false,
+      "result_sha256": "df170de6e2b18266a7a0529929ce65ffb377f715ef02810749dbcb0907cbb812",
+      "status": "pass",
+      "steps_executed": 100,
+      "cycles": 1200,
+      "instructions": 400,
+      "stop_reason": "max_steps",
+      "cosim": {
+        "completed_time_ns": 10000,
+        "coupling": "interval-start-zero-order-hold",
+        "failure": null,
+        "model_id": "circuit",
+        "model_steps": 100,
+        "next_boundary_ns": 10100,
+        "reset_inputs": {
+          "U2": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 10000,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U5": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 10000,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U7": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 10000,
+            "pin": "NRST",
+            "volts": 3.300167144146875
+          },
+          "U9": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 10000,
+            "pin": "NRST",
+            "volts": 3.300167144146874
+          }
+        },
+        "step_ns": 100
+      },
+      "observed_fidelity_gaps": [],
+      "nodes": [
+        {
+          "id": "U2",
+          "cycles": 1200,
+          "pc": "0x8000924",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U5",
+          "cycles": 1200,
+          "pc": "0x8000924",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U7",
+          "cycles": 1200,
+          "pc": "0x8000924",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U9",
+          "cycles": 1200,
+          "pc": "0x8000924",
+          "vtor": "0x0",
+          "adc_status": 0,
+          "adc_data": 0
+        }
+      ],
+      "trace": {
+        "path": "/data/work-evidence/native-esc-capacity-runtime-20261112/smoke-100.csv",
+        "sha256": "5701e7db6c034d44873c526660934b2dd96a024f1a448154416f2edd3f464356",
+        "channel_count": 96,
+        "samples": 101,
+        "first_ns": 0,
+        "last_ns": 10000
+      },
+      "snapshot_sha256": "5c73fff0a873cf7e8ee6594d85adfbff5b139472c22c928555e8f0722bfe9fdb",
+      "linear_extrapolation_0_6s_hours": 57.191071567164414
+    },
+    {
+      "firmware": "am32",
+      "receipt_sha256": "bb34197d29ec6bc3fe4b29966820b5e6a66d9ec3874fee2ec5e4f752385a8dd3",
+      "command": [
+        "/data/work-scratch/at32-onboarding-20261112/labwired-combined22-6fc6e4e6",
+        "test",
+        "--script",
+        "/data/work-scratch/native-esc-capacity-runtime-20261112/am32/probe-1.yaml",
+        "--output-dir",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/am32-1",
+        "--analog-trace",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/am32-1.csv"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.16537757497280836,
+      "max_rss_kib": 28336,
+      "outer_timeout": false,
+      "round_limit": 1,
+      "initial_conditions": "constant battery operating point; no cold-start claim",
+      "motor_operation_verified": false,
+      "flight_verified": false,
+      "result_sha256": "248e38c4e12ddb55e9f55b6eb36c2f7b6fe1227dd36d46ceba22eddc207e20d0",
+      "status": "pass",
+      "steps_executed": 1,
+      "cycles": 12,
+      "instructions": 4,
+      "stop_reason": "max_steps",
+      "cosim": {
+        "completed_time_ns": 100,
+        "coupling": "interval-start-zero-order-hold",
+        "failure": null,
+        "model_id": "circuit",
+        "model_steps": 1,
+        "next_boundary_ns": 200,
+        "reset_inputs": {
+          "U2": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 100,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U5": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 100,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U7": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 100,
+            "pin": "NRST",
+            "volts": 3.3001671441476566
+          },
+          "U9": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 100,
+            "pin": "NRST",
+            "volts": 3.3001671441476557
+          }
+        },
+        "step_ns": 100
+      },
+      "observed_fidelity_gaps": [],
+      "nodes": [
+        {
+          "id": "U2",
+          "cycles": 12,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U5",
+          "cycles": 12,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U7",
+          "cycles": 12,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U9",
+          "cycles": 12,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        }
+      ],
+      "trace": {
+        "path": "/data/work-evidence/native-esc-capacity-runtime-20261112/am32-1.csv",
+        "sha256": "e08ad5abe4d89f8ef59fb118a19b8510688ac9f093dae82f2c65d91c9a461b07",
+        "channel_count": 96,
+        "samples": 2,
+        "first_ns": 0,
+        "last_ns": 100
+      },
+      "snapshot_sha256": "bfed7df6d541c4e39b00362ae64a562a7dec49e51a2d2e5572c43ca146e8c072"
+    },
+    {
+      "firmware": "am32",
+      "receipt_sha256": "c9a4da0b71897868b143e7adc87808e6883d5eed9f6249f82711552f8468b320",
+      "command": [
+        "/data/work-scratch/at32-onboarding-20261112/labwired-combined22-6fc6e4e6",
+        "test",
+        "--script",
+        "/data/work-scratch/native-esc-capacity-runtime-20261112/am32/probe-10.yaml",
+        "--output-dir",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/am32-10",
+        "--analog-trace",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/am32-10.csv"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.5175562369986437,
+      "max_rss_kib": 28720,
+      "outer_timeout": false,
+      "round_limit": 10,
+      "initial_conditions": "constant battery operating point; no cold-start claim",
+      "motor_operation_verified": false,
+      "flight_verified": false,
+      "result_sha256": "ea4b48fe2d1c12f53748a5426bd68e64b652c3abf6e75bf28dd8371608961b40",
+      "status": "pass",
+      "steps_executed": 10,
+      "cycles": 120,
+      "instructions": 40,
+      "stop_reason": "max_steps",
+      "cosim": {
+        "completed_time_ns": 1000,
+        "coupling": "interval-start-zero-order-hold",
+        "failure": null,
+        "model_id": "circuit",
+        "model_steps": 10,
+        "next_boundary_ns": 1100,
+        "reset_inputs": {
+          "U2": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 1000,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U5": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 1000,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U7": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 1000,
+            "pin": "NRST",
+            "volts": 3.3001671441475855
+          },
+          "U9": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 1000,
+            "pin": "NRST",
+            "volts": 3.3001671441475846
+          }
+        },
+        "step_ns": 100
+      },
+      "observed_fidelity_gaps": [],
+      "nodes": [
+        {
+          "id": "U2",
+          "cycles": 120,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U5",
+          "cycles": 120,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U7",
+          "cycles": 120,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U9",
+          "cycles": 120,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        }
+      ],
+      "trace": {
+        "path": "/data/work-evidence/native-esc-capacity-runtime-20261112/am32-10.csv",
+        "sha256": "5dcaabc7cf67cddb29cf3f836bf6402d57927383aeaef9b74eccdf2a5d5a1912",
+        "channel_count": 96,
+        "samples": 11,
+        "first_ns": 0,
+        "last_ns": 1000
+      },
+      "snapshot_sha256": "46618eaf4b6737e476bd658169a0554b50d9eb2e468e2efce374a228b98a84b5"
+    },
+    {
+      "firmware": "am32",
+      "receipt_sha256": "5dc32d997e22e3f3a6bfa3908daf6f07df6f021aca1667f8f51d2b6f692ccb83",
+      "command": [
+        "/data/work-scratch/at32-onboarding-20261112/labwired-combined22-6fc6e4e6",
+        "test",
+        "--script",
+        "/data/work-scratch/native-esc-capacity-runtime-20261112/am32/probe-100.yaml",
+        "--output-dir",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/am32-100",
+        "--analog-trace",
+        "/data/work-evidence/native-esc-capacity-runtime-20261112/am32-100.csv"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 3.99564466701122,
+      "max_rss_kib": 28336,
+      "outer_timeout": false,
+      "round_limit": 100,
+      "initial_conditions": "constant battery operating point; no cold-start claim",
+      "motor_operation_verified": false,
+      "flight_verified": false,
+      "result_sha256": "9bcad1f4189b97b6be512ffc122272df3e7eb76e3c7b495a46fe136febf9b10e",
+      "status": "pass",
+      "steps_executed": 100,
+      "cycles": 1200,
+      "instructions": 400,
+      "stop_reason": "max_steps",
+      "cosim": {
+        "completed_time_ns": 10000,
+        "coupling": "interval-start-zero-order-hold",
+        "failure": null,
+        "model_id": "circuit",
+        "model_steps": 100,
+        "next_boundary_ns": 10100,
+        "reset_inputs": {
+          "U2": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 10000,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U5": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 10000,
+            "pin": "NRST",
+            "volts": 3.3001671441476637
+          },
+          "U7": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 10000,
+            "pin": "NRST",
+            "volts": 3.300167144146875
+          },
+          "U9": {
+            "assertions": 0,
+            "held": false,
+            "last_time_ns": 10000,
+            "pin": "NRST",
+            "volts": 3.300167144146874
+          }
+        },
+        "step_ns": 100
+      },
+      "observed_fidelity_gaps": [],
+      "nodes": [
+        {
+          "id": "U2",
+          "cycles": 1200,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U5",
+          "cycles": 1200,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U7",
+          "cycles": 1200,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        },
+        {
+          "id": "U9",
+          "cycles": 1200,
+          "pc": "0x8004916",
+          "vtor": "0x8001000",
+          "adc_status": 0,
+          "adc_data": 0
+        }
+      ],
+      "trace": {
+        "path": "/data/work-evidence/native-esc-capacity-runtime-20261112/am32-100.csv",
+        "sha256": "e5739b6f9556da41f3399b375794e1b56d92327d753e72db10c43c1c43496c27",
+        "channel_count": 96,
+        "samples": 101,
+        "first_ns": 0,
+        "last_ns": 10000
+      },
+      "snapshot_sha256": "8fe41947bb2a9c5b3b2e478427082e0e2e6d4dbeaeab814652cd99671a4bcdd6",
+      "linear_extrapolation_0_6s_hours": 66.59407778352033
+    }
+  ],
+  "acceptance": {
+    "native_world_construction": true,
+    "short_four_mcu_coupling": true,
+    "full_firmware_startup": false,
+    "native_adc_conversion": false,
+    "cold_power_sequence": false,
+    "motor_operation": false,
+    "flight": false,
+    "published_hardware_model": false
+  },
+  "timing_limit": "Observed wall times under host load, not a clean performance benchmark. Extrapolation assumes unchanged cost; no long run was attempted.",
+  "initial_conditions": "Constant16.8V battery operating point through exact shunts; no power ramp. No firmware warm start, EEPROM substitution or internal ADC test sources were added.",
+  "motor_free_deck_sha256": "40b1745f2371b54431bd161cad10f925dc64aa6cc65391a062e9fb5470f286f6",
+  "runtime_world_sha256": "12c2e665a84b2e7a187c2fd554b9649ee166ee47a1e47fdb06ea21f4e4af0129",
+  "runner_sha256": "6fc6e4e668abdb12f6995b9e3a962e92599b12054af31a37550c21ac35335b8e",
+  "prepared_inputs": {
+    "input-receipt.json": {
+      "base_world_sha256": "2e5e44f19de33617050c43dfd26ed2e31b2c006dfdea32d4410a41ad59245398",
+      "world_sha256": "12c2e665a84b2e7a187c2fd554b9649ee166ee47a1e47fdb06ea21f4e4af0129",
+      "netlist_sha256": "40b1745f2371b54431bd161cad10f925dc64aa6cc65391a062e9fb5470f286f6",
+      "overlay": {
+        "max_unknowns": 512
+      },
+      "step_ns": 100,
+      "runner_path": "/data/work-scratch/at32-onboarding-20261112/labwired-combined22-6fc6e4e6",
+      "runner_sha256": "6fc6e4e668abdb12f6995b9e3a962e92599b12054af31a37550c21ac35335b8e",
+      "source_receipt": "/data/work-scratch/at32-onboarding-20261112/combined22-source.json",
+      "source_receipt_sha256": "1edade62d3b6496a03a630a3007ef7d17490ed80d71cdf6413c6ec3f75b409a3",
+      "files_sha256": {
+        "U2/chip.yaml": "7b387f8ae4288cd639629a1282f3bc45f5ffdcf38d86e60822131f86a30a78cd",
+        "U2/firmware.bin": "19d188e89f14f3230d67e114217d5841c97ffb3cc4646d4673b951c436c1a7bd",
+        "U2/system.yaml": "0626d02ed253afbc53f0e6f271132e007bca94388286b4dc5c172abc03c95b35",
+        "U5/chip.yaml": "7b387f8ae4288cd639629a1282f3bc45f5ffdcf38d86e60822131f86a30a78cd",
+        "U5/firmware.bin": "19d188e89f14f3230d67e114217d5841c97ffb3cc4646d4673b951c436c1a7bd",
+        "U5/system.yaml": "0626d02ed253afbc53f0e6f271132e007bca94388286b4dc5c172abc03c95b35",
+        "U7/chip.yaml": "7b387f8ae4288cd639629a1282f3bc45f5ffdcf38d86e60822131f86a30a78cd",
+        "U7/firmware.bin": "19d188e89f14f3230d67e114217d5841c97ffb3cc4646d4673b951c436c1a7bd",
+        "U7/system.yaml": "0626d02ed253afbc53f0e6f271132e007bca94388286b4dc5c172abc03c95b35",
+        "U9/chip.yaml": "7b387f8ae4288cd639629a1282f3bc45f5ffdcf38d86e60822131f86a30a78cd",
+        "U9/firmware.bin": "19d188e89f14f3230d67e114217d5841c97ffb3cc4646d4673b951c436c1a7bd",
+        "U9/system.yaml": "0626d02ed253afbc53f0e6f271132e007bca94388286b4dc5c172abc03c95b35",
+        "probe-1.yaml": "718bd9a56748200f559139389fb03466b2b8277c2ad3951ae9b155b3d94109bb",
+        "probe-10.yaml": "c8f6a4b09ac9282720cf39420c39c3e2a3d7ed6bcd2ee472fd38bf5e6b27e9f6",
+        "probe-100.yaml": "c285ebc2f12c3ac11abd3c64a720ba5f0b4bef283bde915f3c8d1a9e0d50244c",
+        "shared.cir": "40b1745f2371b54431bd161cad10f925dc64aa6cc65391a062e9fb5470f286f6",
+        "world.yaml": "12c2e665a84b2e7a187c2fd554b9649ee166ee47a1e47fdb06ea21f4e4af0129"
+      },
+      "initial_conditions": "constant16.8V operating point, not a cold ramp",
+      "firmware_kind": "exact vendor smoke at flash base; no AM32 offset overlay",
+      "motor_loads": false,
+      "runtime_verified": false,
+      "silicon_ack_modified": false
+    },
+    "am32-input-receipt.json": {
+      "base_world_sha256": "2e5e44f19de33617050c43dfd26ed2e31b2c006dfdea32d4410a41ad59245398",
+      "world_sha256": "12c2e665a84b2e7a187c2fd554b9649ee166ee47a1e47fdb06ea21f4e4af0129",
+      "netlist_sha256": "40b1745f2371b54431bd161cad10f925dc64aa6cc65391a062e9fb5470f286f6",
+      "overlay": {
+        "max_unknowns": 512
+      },
+      "step_ns": 100,
+      "runner_path": "/data/work-scratch/at32-onboarding-20261112/labwired-combined22-6fc6e4e6",
+      "runner_sha256": "6fc6e4e668abdb12f6995b9e3a962e92599b12054af31a37550c21ac35335b8e",
+      "source_receipt": "/data/work-scratch/at32-onboarding-20261112/combined22-source.json",
+      "source_receipt_sha256": "1edade62d3b6496a03a630a3007ef7d17490ed80d71cdf6413c6ec3f75b409a3",
+      "files_sha256": {
+        "U2/chip.yaml": "7b387f8ae4288cd639629a1282f3bc45f5ffdcf38d86e60822131f86a30a78cd",
+        "U2/firmware.bin": "0fb1b141c3cafd006ef85017d8f90da8f61cd0c67e1aa45ca79eac570914cc44",
+        "U2/system.yaml": "159fc6c6b0365df909ef06ebd84e754855d8bb6fe5f9deb17544fa3d9259012c",
+        "U5/chip.yaml": "7b387f8ae4288cd639629a1282f3bc45f5ffdcf38d86e60822131f86a30a78cd",
+        "U5/firmware.bin": "0fb1b141c3cafd006ef85017d8f90da8f61cd0c67e1aa45ca79eac570914cc44",
+        "U5/system.yaml": "159fc6c6b0365df909ef06ebd84e754855d8bb6fe5f9deb17544fa3d9259012c",
+        "U7/chip.yaml": "7b387f8ae4288cd639629a1282f3bc45f5ffdcf38d86e60822131f86a30a78cd",
+        "U7/firmware.bin": "0fb1b141c3cafd006ef85017d8f90da8f61cd0c67e1aa45ca79eac570914cc44",
+        "U7/system.yaml": "159fc6c6b0365df909ef06ebd84e754855d8bb6fe5f9deb17544fa3d9259012c",
+        "U9/chip.yaml": "7b387f8ae4288cd639629a1282f3bc45f5ffdcf38d86e60822131f86a30a78cd",
+        "U9/firmware.bin": "0fb1b141c3cafd006ef85017d8f90da8f61cd0c67e1aa45ca79eac570914cc44",
+        "U9/system.yaml": "159fc6c6b0365df909ef06ebd84e754855d8bb6fe5f9deb17544fa3d9259012c",
+        "probe-1.yaml": "718bd9a56748200f559139389fb03466b2b8277c2ad3951ae9b155b3d94109bb",
+        "probe-10.yaml": "c8f6a4b09ac9282720cf39420c39c3e2a3d7ed6bcd2ee472fd38bf5e6b27e9f6",
+        "probe-100.yaml": "c285ebc2f12c3ac11abd3c64a720ba5f0b4bef283bde915f3c8d1a9e0d50244c",
+        "shared.cir": "40b1745f2371b54431bd161cad10f925dc64aa6cc65391a062e9fb5470f286f6",
+        "world.yaml": "12c2e665a84b2e7a187c2fd554b9649ee166ee47a1e47fdb06ea21f4e4af0129"
+      },
+      "initial_conditions": "constant16.8V operating point, not a cold ramp",
+      "firmware_kind": "Unchanged AM32_OPENESC_30_F421_2.22.elf",
+      "motor_loads": false,
+      "runtime_verified": false,
+      "silicon_ack_modified": false,
+      "firmware_sha256": "0fb1b141c3cafd006ef85017d8f90da8f61cd0c67e1aa45ca79eac570914cc44",
+      "application_vector_offset": 4096,
+      "internal_adc_test_stimuli_added": false
+    }
+  },
+  "prepared_inputs_note": "These input receipts were frozen before runtime; their runtime_verified=false fields describe preparation only. The six run receipts and acceptance fields below record the bounded observed results.",
+  "candidate_source": {
+    "base": "08f7f157d0768589835c22896c36f6ab5968ac50",
+    "utc": "2026-11-12T04:25:38.920644+00:00",
+    "features": [
+      "event-scheduler"
+    ],
+    "patch_sha256": "e011adde86340e3019fcc6d8511a8b6b8119e2c63a1d138c701e3752badeb175",
+    "new_files_sha256": "a5c5f9287361ab3a2e585553b5a5014b8a02a9d02e5770649631db5ada0da205"
+  },
+  "candidate_source_receipt_sha256": "1edade62d3b6496a03a630a3007ef7d17490ed80d71cdf6413c6ec3f75b409a3",
+  "runner_profile": {
+    "binary": "/data/work-scratch/at32-onboarding-20261112/labwired-combined22-6fc6e4e6",
+    "binary_sha256": "6fc6e4e668abdb12f6995b9e3a962e92599b12054af31a37550c21ac35335b8e",
+    "cargo_command": "cargo build -p labwired-cli --features event-scheduler",
+    "profile": "dev",
+    "opt_level": 1,
+    "debug": 0,
+    "debug_assertions": true,
+    "overflow_checks": true,
+    "panic": "abort",
+    "incremental": false,
+    "build_jobs": 2,
+    "evidence": [
+      "combined22.sh",
+      "cli-combined22.log",
+      "Cargo.toml [profile.dev]"
+    ],
+    "note": "Measurements are for this optimized dev profile under concurrent host load. A bounded release benchmark is queued; no native analog song run authorized."
+  },
+  "runner_profile_receipt_sha256": "bb9a8e2045be88b15924051212f3cf2f39334d752889fec0fd5b15112687688f"
+}

@@ -1,0 +1,560 @@
+{
+  "result": "approved fixture correction proposal; native/app test reruns pending owner",
+  "source_core": "a0b0a91c1868fe78e4af45e817e566807517ef1e",
+  "wasm_sha256": "72a14003a503cb2d6d769fcd8f76b4142d42dc3b1c442fd49841cdc8f3005c82",
+  "primary_reference": {
+    "title": "RM0351 Rev10",
+    "page": 976,
+    "table": 199,
+    "url": "https://www.st.com/resource/en/reference_manual/rm0351-stm32l47xxx-stm32l48xxx-stm32l49xxx-and-stm32l4axxx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf",
+    "verified_rule": "For CCxE=0, CCxNE=1, MOE=1: OCxN=OCxREF xor CCxNP. Complementary output and dead time require both output enables."
+  },
+  "native_assertion_replay": {
+    "exact_fields": 25,
+    "numeric_fields": 40,
+    "all_pass": true,
+    "inverter_fault_decreases_phase_current_magnitude": true,
+    "worst_fraction_of_numeric_tolerance": 0.07681679052576756,
+    "checks": [
+      {
+        "sample": 0,
+        "field": "id",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "kind",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "commutation_sector",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "control_state",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "faults",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "position_rad",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 5.551115123125783e-17,
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "speed_rpm",
+        "type": "numeric",
+        "tolerance": 4.247631058080654e-09,
+        "delta": -5.4569682106375694e-12,
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "torque_nm",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": -6.106226635438361e-16,
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "current_a",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 0,
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "bus_voltage_v",
+        "type": "numeric",
+        "tolerance": 2.4e-11,
+        "delta": 0.0,
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "phase_currents_a[0]",
+        "type": "numeric",
+        "tolerance": 2.299595483889271e-12,
+        "delta": -8.43769498715119e-15,
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "phase_currents_a[1]",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 3.608224830031759e-15,
+        "pass": true
+      },
+      {
+        "sample": 0,
+        "field": "phase_currents_a[2]",
+        "type": "numeric",
+        "tolerance": 2.5206020562102575e-12,
+        "delta": 4.884981308350689e-15,
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "id",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "kind",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "commutation_sector",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "control_state",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "faults",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "position_rad",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": -2.7755575615628914e-16,
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "speed_rpm",
+        "type": "numeric",
+        "tolerance": 2.6982560544324925e-09,
+        "delta": 3.637978807091713e-12,
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "torque_nm",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 1.5959455978986625e-16,
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "current_a",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 1.9984014443252818e-15,
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "bus_voltage_v",
+        "type": "numeric",
+        "tolerance": 2.4e-11,
+        "delta": 0.0,
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "phase_currents_a[0]",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 0.0,
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "phase_currents_a[1]",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 1.9984014443252818e-15,
+        "pass": true
+      },
+      {
+        "sample": 1,
+        "field": "phase_currents_a[2]",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": -1.9984014443252818e-15,
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "id",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "kind",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "commutation_sector",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "control_state",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "faults",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "position_rad",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": -3.3306690738754696e-16,
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "speed_rpm",
+        "type": "numeric",
+        "tolerance": 3.86277279293369e-09,
+        "delta": -3.9108272176235914e-11,
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "torque_nm",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 1.3600232051658168e-15,
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "current_a",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 0,
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "bus_voltage_v",
+        "type": "numeric",
+        "tolerance": 2.4e-11,
+        "delta": 0.0,
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "phase_currents_a[0]",
+        "type": "numeric",
+        "tolerance": 6.710845805155307e-12,
+        "delta": 1.1546319456101628e-14,
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "phase_currents_a[1]",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 3.552713678800501e-15,
+        "pass": true
+      },
+      {
+        "sample": 2,
+        "field": "phase_currents_a[2]",
+        "type": "numeric",
+        "tolerance": 6.920251168130632e-12,
+        "delta": -1.509903313490213e-14,
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "id",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "kind",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "commutation_sector",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "control_state",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "faults",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "position_rad",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 2.1649348980190553e-15,
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "speed_rpm",
+        "type": "numeric",
+        "tolerance": 1.9582804365491355e-09,
+        "delta": 8.981260180007666e-11,
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "torque_nm",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": -5.689893001203927e-16,
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "current_a",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 0,
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "bus_voltage_v",
+        "type": "numeric",
+        "tolerance": 2.4e-11,
+        "delta": 0.0,
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "phase_currents_a[0]",
+        "type": "numeric",
+        "tolerance": 1.9906221273756113e-12,
+        "delta": 4.218847493575595e-15,
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "phase_currents_a[1]",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 1.9061141554033156e-14,
+        "pass": true
+      },
+      {
+        "sample": 3,
+        "field": "phase_currents_a[2]",
+        "type": "numeric",
+        "tolerance": 2.052737538939628e-12,
+        "delta": -2.3092638912203256e-14,
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "id",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "kind",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "commutation_sector",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "control_state",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "faults",
+        "type": "exact",
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "position_rad",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 3.1086244689504383e-15,
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "speed_rpm",
+        "type": "numeric",
+        "tolerance": 2.5842005440887428e-09,
+        "delta": -2.2737367544323206e-11,
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "torque_nm",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": -5.48172618408671e-16,
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "current_a",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": 0,
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "bus_voltage_v",
+        "type": "numeric",
+        "tolerance": 2.4e-11,
+        "delta": 0.0,
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "phase_currents_a[0]",
+        "type": "numeric",
+        "tolerance": 1e-12,
+        "delta": -1.2656542480726785e-14,
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "phase_currents_a[1]",
+        "type": "numeric",
+        "tolerance": 1.4395057707542863e-12,
+        "delta": 1.1057821325266559e-13,
+        "pass": true
+      },
+      {
+        "sample": 4,
+        "field": "phase_currents_a[2]",
+        "type": "numeric",
+        "tolerance": 2.2926467327669812e-12,
+        "delta": -9.769962616701378e-14,
+        "pass": true
+      }
+    ]
+  },
+  "convergence": {
+    "position_rad": {
+      "subdivisions": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "values": [
+        0.2877425637693264,
+        0.28774134891788244,
+        0.28774074138385897,
+        0.28774043758989953
+      ],
+      "consecutive_delta_ratios": [
+        1.999643471797574,
+        1.9998225922982373
+      ],
+      "richardson_limit": 0.2877401337959401,
+      "base_normalized_error": 2.429973386286477e-06
+    },
+    "speed_rpm": {
+      "subdivisions": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "values": [
+        4247.631058080654,
+        4247.796957562338,
+        4247.879905514185,
+        4247.921378949133
+      ],
+      "consecutive_delta_ratios": [
+        2.0000431353671293,
+        2.000026087814272
+      ],
+      "richardson_limit": 4247.962852384081,
+      "base_normalized_error": 7.810668665356776e-05
+    }
+  },
+  "scope": "Independent gate/winding/shaft replay of captured firmware MMIO schedule. Not an independent CPU or controller implementation, not a hardware capture. No checkout edits, native builds, runtime changes or relaxed thresholds.",
+  "files": {
+    "capture-current.mjs": {
+      "bytes": 3163,
+      "sha256": "af5d779d4f49ee13ce2a4c299793de0e7e3587a01ab53a4593a57ce84d78f3e7"
+    },
+    "current-wasm-trace.json": {
+      "bytes": 51193,
+      "sha256": "f1f2f15b7af770d4b843bda56debfc23710cae8c1241a1764ce575fffd93c02c"
+    },
+    "independent-replay.py": {
+      "bytes": 5760,
+      "sha256": "0bb538857f0b6f30306133324209d11bc64d5c2822da4b2a5d98938b083763ee"
+    },
+    "independent-replay-results.json": {
+      "bytes": 12108,
+      "sha256": "fb01f52ba48d3ba0af9073303eb7023cf3ebf6a3413dcedf51967761c26cdfca"
+    },
+    "proposed-motor-parity-native.json": {
+      "bytes": 1987,
+      "sha256": "eb182430f184396bfc737171e2a5e0d5476df8cd421441987d7202296223d59e"
+    },
+    "motor-parity-reference.patch": {
+      "bytes": 3459,
+      "sha256": "2fb79dfda3682f39e3df5f9aab78190a0f00b7640e5c623ec1d47ae44820b2ec"
+    }
+  }
+}

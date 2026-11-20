@@ -26,6 +26,17 @@
 //! completes while the receiver is off (`CTRL.RE` = 0) is lost, as on the pin;
 //! one that completes with the FIFO full sets `STAT.OR` and is lost.
 //! Test-script injections (`rx_buffer`) wait until the receiver is on.
+//!
+//! The same LPUART sits inside the LP_FLEXCOMM of the i.MX RT700 (Renode
+//! `NXP_FLEXCOMM`, which wraps `NXP_LPUART`). [`ImxrtLpuart::with_lp_flexcomm`]
+//! adds that wrapper's two registers: `PSELID` @ 0xFF8 (PERSEL \[2:0\]
+//! writable until LOCK \[3\] is set, LOCK held until reset, read-only
+//! present bits \[6:4\] and ID \[31:12\] = 0x00103) and `ISTAT` @ 0xFF4
+//! (UARTTX \[0\] = TIE/TCIE sources, UARTRX \[1\] = RIE/ILIE/ORIE sources).
+//! The LPUART registers only respond while PERSEL selects LPUART (1);
+//! otherwise they read zero and ignore writes, as in Renode. The LPI2C/LPSPI
+//! functions are not modelled, so combined UART+I2C selection (7) does not
+//! expose UART registers here.
 
 use super::{byte_of, Timebase};
 use crate::bus::bus_trace::{BusDir, BusPayload, BusTrace};
@@ -50,6 +61,16 @@ const FIFO: u32 = 0x28;
 const WATER: u32 = 0x2C;
 
 const FIFO_DEPTH: usize = 4;
+
+// LP_FLEXCOMM wrapper (see the module doc).
+const LPFC_ISTAT: u32 = 0xFF4;
+const LPFC_PSELID: u32 = 0xFF8;
+const PSELID_PERSEL: u32 = 0x7;
+const PSELID_LOCK: u32 = 1 << 3;
+/// PSELID.ID \[31:12\], Renode `NXP_FLEXCOMM` reset value.
+const PSELID_ID: u32 = 0x0010_3000;
+/// PSELID present bits: LPUART \[4\], LPSPI \[5\], LPI2C \[6\].
+pub const LPFC_PRESENT_ALL: u32 = 0x70;
 
 /// Longest time between two polls of the attached peers, µs.
 const PEER_POLL_US: u64 = 1_000;
@@ -193,12 +214,54 @@ impl Inner {
         s
     }
     fn irq(&self) -> bool {
+        self.tx_irq() || self.rx_irq()
+    }
+    fn tx_irq(&self) -> bool {
         let s = self.stat_view();
         (self.ctrl & CT_TIE != 0 && s & ST_TDRE != 0)
             || (self.ctrl & CT_TCIE != 0 && s & ST_TC != 0)
-            || (self.ctrl & CT_RIE != 0 && s & ST_RDRF != 0)
+    }
+    fn rx_irq(&self) -> bool {
+        let s = self.stat_view();
+        (self.ctrl & CT_RIE != 0 && s & ST_RDRF != 0)
             || (self.ctrl & CT_ILIE != 0 && s & ST_IDLE != 0)
             || (self.ctrl & CT_ORIE != 0 && s & ST_OR != 0)
+    }
+}
+
+/// LP_FLEXCOMM function select state (see the module doc).
+#[derive(Debug, Clone, Copy)]
+struct LpFlexcomm {
+    /// Read-only present bits \[6:4\].
+    present: u32,
+    /// PERSEL | LOCK.
+    sel: u32,
+}
+
+impl LpFlexcomm {
+    fn pselid(&self) -> u32 {
+        PSELID_ID | self.present | self.sel
+    }
+    fn uart_selected(&self) -> bool {
+        self.sel & PSELID_PERSEL == 1
+    }
+    fn write(&mut self, v: u32) {
+        if self.sel & PSELID_LOCK != 0 {
+            return;
+        }
+        let persel = v & PSELID_PERSEL;
+        let need = match persel {
+            0 => 0,
+            1 => 1 << 4,
+            2 => 1 << 5,
+            3 => 1 << 6,
+            7 => (1 << 4) | (1 << 6),
+            _ => u32::MAX,
+        };
+        if need != u32::MAX && self.present & need == need {
+            self.sel = persel;
+        }
+        self.sel |= v & PSELID_LOCK;
     }
 }
 
@@ -219,6 +282,8 @@ pub struct ImxrtLpuart {
     /// Host injection queue (test scripts, interactive input). Its bytes go
     /// onto the RX wire when the receiver is on.
     rx_inject: Arc<Mutex<VecDeque<u8>>>,
+    /// LP_FLEXCOMM wrapper, when this LPUART sits in one.
+    lp_flexcomm: Option<LpFlexcomm>,
 }
 
 impl std::fmt::Debug for ImxrtLpuart {
@@ -253,7 +318,18 @@ impl ImxrtLpuart {
             streams: Vec::new(),
             peer_cycles: 0,
             rx_inject: Arc::new(Mutex::new(VecDeque::new())),
+            lp_flexcomm: None,
         }
+    }
+
+    /// Put this LPUART inside an LP_FLEXCOMM with the given PSELID present
+    /// bits \[6:4\]; PERSEL resets to 0 (no function selected).
+    pub fn with_lp_flexcomm(mut self, present: u32) -> Self {
+        self.lp_flexcomm = Some(LpFlexcomm {
+            present: present & LPFC_PRESENT_ALL,
+            sel: 0,
+        });
+        self
     }
 
     /// The host injection queue (see the module doc).
@@ -452,6 +528,17 @@ impl ImxrtLpuart {
 
     pub fn read_reg(&self, off: u32) -> u32 {
         self.sync();
+        if let Some(fc) = self.lp_flexcomm {
+            match off & !3 {
+                LPFC_PSELID => return fc.pselid(),
+                LPFC_ISTAT => {
+                    let i = self.inner.borrow();
+                    return u32::from(i.tx_irq()) | (u32::from(i.rx_irq()) << 1);
+                }
+                _ if !fc.uart_selected() => return 0,
+                _ => {}
+            }
+        }
         let mut i = self.inner.borrow_mut();
         match off & !3 {
             VERID => 0x0401_0003,
@@ -488,6 +575,18 @@ impl ImxrtLpuart {
 
     pub fn write_reg(&mut self, off: u32, value: u32, mask: u32) {
         self.sync();
+        if let Some(fc) = self.lp_flexcomm.as_mut() {
+            match off & !3 {
+                LPFC_PSELID => {
+                    let v = (fc.pselid() & !mask) | (value & mask);
+                    fc.write(v);
+                    return;
+                }
+                LPFC_ISTAT => return,
+                _ if !fc.uart_selected() => return,
+                _ => {}
+            }
+        }
         {
             let mut i = self.inner.borrow_mut();
             let v = value & mask;
@@ -749,6 +848,7 @@ impl Peripheral for ImxrtLpuart {
             "stat": i.stat_view(),
             "tx_bytes": self.tx_log.len(),
             "rx_lost": i.rx_lost,
+            "pselid": self.lp_flexcomm.map(|fc| fc.pselid()),
         })
     }
 }
@@ -780,6 +880,39 @@ mod tests {
         assert_ne!(u.read_reg(STAT) & ST_TC, 0);
         u.write_reg(CTRL, CT_TE | CT_RE, u32::MAX);
         assert_eq!(u.tx_log(), b"A");
+    }
+
+    #[test]
+    fn lp_flexcomm_gates_lpuart_on_persel_and_locks() {
+        let mut u = ImxrtLpuart::new(DEFAULT_UART_CLK_HZ).with_lp_flexcomm(LPFC_PRESENT_ALL);
+        u.attach_cycle_clock(CycleClock::default());
+        assert_eq!(u.read_reg(LPFC_PSELID), 0x0010_3070);
+        // No function selected: LPUART reads zero and ignores writes.
+        assert_eq!(u.read_reg(VERID), 0);
+        u.write_reg(CTRL, CT_TE, u32::MAX);
+        u.write_reg(LPFC_PSELID, 1, u32::MAX);
+        assert_eq!(u.read_reg(CTRL), 0, "write before PERSEL was dropped");
+        assert_eq!(u.read_reg(VERID), 0x0401_0003);
+        // TIE with TDRE set raises UARTTX; RIE alone with no data does not.
+        u.write_reg(CTRL, CT_TE | CT_TIE | CT_RIE, u32::MAX);
+        assert_eq!(u.read_reg(LPFC_ISTAT), 1);
+        // Unsupported PERSEL is ignored; LOCK sticks and freezes PERSEL.
+        u.write_reg(LPFC_PSELID, 5, u32::MAX);
+        assert_eq!(u.read_reg(LPFC_PSELID) & 0xF, 1);
+        u.write_reg(LPFC_PSELID, 1 | PSELID_LOCK, u32::MAX);
+        u.write_reg(LPFC_PSELID, 3, u32::MAX);
+        assert_eq!(u.read_reg(LPFC_PSELID) & 0xF, 1 | PSELID_LOCK);
+        // Without the I2C present bit, PERSEL 7 is refused.
+        let mut v = ImxrtLpuart::new(DEFAULT_UART_CLK_HZ).with_lp_flexcomm(0x10);
+        v.write_reg(LPFC_PSELID, 7, u32::MAX);
+        assert_eq!(v.read_reg(LPFC_PSELID), 0x0010_3010);
+        // The wrapper accepts combined UART+I2C selection when both are
+        // present, but this model does not expose the UART register bank in
+        // that mode.
+        let mut w = ImxrtLpuart::new(DEFAULT_UART_CLK_HZ).with_lp_flexcomm(LPFC_PRESENT_ALL);
+        w.write_reg(LPFC_PSELID, 7, u32::MAX);
+        assert_eq!(w.read_reg(LPFC_PSELID), 0x0010_3077);
+        assert_eq!(w.read_reg(VERID), 0);
     }
 
     /// A peer that answers every byte with the byte + 1 after 100 µs, and

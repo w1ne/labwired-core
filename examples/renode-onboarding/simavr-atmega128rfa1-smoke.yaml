@@ -1,0 +1,13 @@
+# GPIO smoke against the imported ATmega128RFA1 profile (no USART is used).
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/avr/atmega128rfa1-io-smoke.elf"
+  system: "../../configs/systems/onboarding/simavr-atmega128rfa1.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - memory_value: {address: 0x0230, expected_value: 0x7F, size: 1}
+  - gpio_edges:
+      pin: "portb:0"
+      min_edges: 2
+  - expected_stop_reason: max_steps

@@ -1,5 +1,7 @@
 pub mod aarch64;
 pub mod arch_policy;
+#[cfg(all(feature = "qemu-arm-system", not(target_arch = "wasm32")))]
+pub mod arm7;
 pub mod builder;
 #[cfg(all(feature = "qemu-arm", not(target_arch = "wasm32")))]
 pub mod cortex_a;

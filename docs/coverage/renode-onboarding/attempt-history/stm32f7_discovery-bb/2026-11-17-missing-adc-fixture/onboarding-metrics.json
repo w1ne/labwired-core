@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f7_discovery-bb",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 6000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-stm32f746g-disco-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f7_discovery-bb.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-17T04:09:01Z",
+  "finished_at_utc": "2026-11-17T04:09:03Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2176,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "1 stimulus/stimuli could not be applied, so the run proved nothing about them: pot_adc1_in1.position = 25: no attached input device exposes channel 'pot_adc1_in1/position'",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.655,
+    "build_firmware": 0.941,
+    "run_smoke": 0.532
+  },
+  "stages_ms": {
+    "build_cli": 655,
+    "build_firmware": 941,
+    "run_smoke": 532
+  }
+}

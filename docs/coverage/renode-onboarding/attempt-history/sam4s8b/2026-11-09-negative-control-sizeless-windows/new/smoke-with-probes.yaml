@@ -1,0 +1,38 @@
+# SAM4S8B smoke over three boots (firmware-sam4s-smoke/src/family.rs):
+# power-on EEFC (FMR, GETD, GPNVM/lock bits, FCMDE) + RSTC/WDT reset state,
+# an RSTC software reset, a WDT_MR-armed watchdog reset, then the WDT window
+# error interrupt, write-once WDT_MR, PMC clocks, PIO latches and TC0's RC
+# compare. Summary word 0x5A400FFF = all twelve checks.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-sam4s8b-smoke"
+  system: "../../configs/systems/onboarding/sam4s8b.yaml"
+limits:
+  max_steps: 1500000
+assertions:
+  - uart_ordered:
+      - "SAM4S8B RENODE SMOKE"
+      - "eefc fmr=00000500 ok"
+      - "eefc getd size="
+      - "eefc gpnvm=2 set=3 glb=2 clb=0 ok"
+      - "eefc fsr badkey=3 after=1 ok"
+      - "rstc sr=00010000 wdt mr=3fff2fff ok"
+      - "rstc software reset"
+      - "SAM4S8B RENODE SMOKE"
+      - "rstc rsttyp=3 ok"
+      - "wdt arm wdv=2"
+      - "SAM4S8B RENODE SMOKE"
+      - "wdt rsttyp=2 mr=3fff2fff ok"
+      - "wdt window sr=2 pended released ok"
+      - "wdt mr once=00801100 ok"
+      - "pmc pcsr0="
+      - "pio ports=2 ok"
+      - "tc0 rc pend=1 ok"
+      - "SAM4S8B PASS"
+  - memory_value:
+      address: 0x2001FF00
+      expected_value: 0x5A400FFF
+      size: 4
+  - expected_stop_reason: max_steps
+  - memory_value: { address: 0x400E123C, expected_value: 0 }
+  - memory_value: { address: 0x400E0C00, expected_value: 0 }

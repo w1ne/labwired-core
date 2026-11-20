@@ -6,3 +6,24 @@
 
 name: stk3200
 chip: ../../chips/onboarding/stk3200.yaml
+# Board LEDs. Gecko SDK hardware/kit/EFM32ZG_STK3200/config/bspconfig.h
+# BSP_GPIO_LED0/1 = C10/C11; no BSP_LED_POLARITY override, so
+# hardware/kit/common/bsp/bsp_stk_leds.c default 1 = active high. Renode
+# stk3200.repl wires LEDs to gpioPort 66/67 (PE2/PE3) and buttons to 64/65
+# (PE0/PE1), copied from the larger kits. The Gecko SDK BSP
+# (hardware/kit/EFM32ZG_STK3200/config/bspconfig.h) puts LED0/LED1 on
+# PC10/PC11 and PB0/PB1 on PC8/PC9. LEDs follow the vendor BSP; buttons are
+# not declared (polarity not confirmed by a second source).
+board_io:
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 10
+    signal: "output"
+    active_high: true
+  - id: "led1"
+    kind: "led"
+    peripheral: "gpioc"
+    pin: 11
+    signal: "output"
+    active_high: true

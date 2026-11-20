@@ -1,0 +1,5 @@
+2026-11-16T07:47:02.143520Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/nuvoton_npcx9.yaml
+2026-11-16T07:47:02.145713Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-16T07:47:02.436408Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "uarts tbe=3 rx=3 drained=3 isolated=1 ok" }) (captured len=267)
+FAIL  7/8 checks · b · 400000 steps · 0.29s

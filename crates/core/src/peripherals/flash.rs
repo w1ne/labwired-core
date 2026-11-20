@@ -64,6 +64,11 @@ pub enum FlashRegisterLayout {
     /// ACR=0x13, OPTCR=1, NSCR=1, OPTSR_CUR=0x2D30EDF8 (this part's option
     /// bytes, representative).
     Stm32H5,
+    /// STM32H723/H735 (RM0468): FLASH_ACR latency/frequency read-back only.
+    /// Programming, erase, option bytes and other registers are unmodelled
+    /// and refuse access. Reset is specified by ST RM0468 section 4.9.1; no H723
+    /// silicon capture is claimed.
+    Stm32H7Boot,
     /// STM32F4 (RM0368 §3.8, STM32F401). Distinct from both F1 and L4: the
     /// prefetch/cache ACR has NO PRFTBE→PRFTBS read-back mirror (bits read back
     /// as written), and the reset values differ from every other family —
@@ -81,6 +86,12 @@ pub enum FlashRegisterLayout {
     /// (AND semantics: flash only flips 1→0). Reset values from the SVD:
     /// ACR=0, NSCR=0xC000_0000 (LOCK|OPTLOCK), OPTR=0, NSSR=0.
     Stm32U5,
+    /// Artery AT32F421 (RM_AT32F421 V2.05 §5.2, §5.8): PSR/UNLOCK/STS/CTRL/
+    /// ADDR/USD/EPPS, 64 KiB main flash in 1 KiB sectors, sector and bank
+    /// erase as pending ops, byte/half-word/word programming through CPU
+    /// stores while FPRGM is set. User system data, sLib and the CRC unit
+    /// are not modelled and their registers refuse access.
+    At32F421,
 }
 
 impl FromStr for FlashRegisterLayout {
@@ -90,10 +101,12 @@ impl FromStr for FlashRegisterLayout {
             "stm32l4" | "l4" => Ok(Self::Stm32L4),
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "stm32h5" | "h5" => Ok(Self::Stm32H5),
+            "stm32h7_boot" => Ok(Self::Stm32H7Boot),
             "stm32f4" | "f4" => Ok(Self::Stm32F4),
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
+            "at32f421" => Ok(Self::At32F421),
             _ => Err(format!(
-                "unsupported FLASH register layout '{}'; supported: stm32l4, stm32f1, stm32f4, stm32h5, stm32u5",
+                "unsupported FLASH register layout '{}'; supported: stm32l4, stm32f1, stm32f4, stm32h5, stm32h7_boot, stm32u5, at32f421",
                 value
             )),
         }
@@ -116,9 +129,21 @@ pub enum FlashOp {
     EraseBothBanks,
 }
 
+/// AT32F421x8 main flash (RM_AT32F421 V2.05 Table 2-1: one 64 KiB bank of
+/// 64 sectors, 1 KiB each).
+const AT32F421_FLASH_BASE: u32 = 0x0800_0000;
+const AT32F421_FLASH_SIZE: u32 = 64 * 1024;
+const AT32F421_SECTOR: u32 = 1024;
+
+fn is_zero(value: &u32) -> bool {
+    *value == 0
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Flash {
     layout: FlashRegisterLayout,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    at32_addr: u32,
     acr: u32,
     pdkeyr: u32,
     keyr: u32,
@@ -318,10 +343,12 @@ impl Flash {
         // Per-layout reset values — verified against real silicon per family.
         // Touching the F1 branch must not change L4 reset values.
         let (acr_reset, cr_reset, optr_reset) = match layout {
+            FlashRegisterLayout::At32F421 => (0x30, 0x0002_0080, 0x03ff_fffc),
             FlashRegisterLayout::Stm32L4 => (0x0000_0600u32, 0xC000_0000u32, 0xFFEF_F8AAu32),
             FlashRegisterLayout::Stm32F1 => (0x0000_0030u32, 0x0000_0080u32, 0x0000_0000u32),
             // NSCR (the only modeled control reg) reset 0x1; OPTSR_CUR via optr.
             FlashRegisterLayout::Stm32H5 => (0x0000_0013u32, 0x0000_0001u32, 0x2D30_EDF8u32),
+            FlashRegisterLayout::Stm32H7Boot => (0x37, 0, 0),
             // F401 (RM0368 §3.8 / STM32F401 CMSIS SVD): ACR=0 (no
             // prefetch/cache/latency out of reset), CR=0x8000_0000 (LOCK bit
             // 31), OPTCR=0x0000_0014. NB: RM0368 §3.8.6 prints the option-byte-
@@ -335,6 +362,7 @@ impl Flash {
         };
         Self {
             layout,
+            at32_addr: 0,
             acr: acr_reset,
             pdkeyr: 0,
             keyr: 0,
@@ -623,6 +651,9 @@ impl Flash {
             // One bank: an F1 EraseSector is always bank 0, so only the page
             // size matters.
             FlashRegisterLayout::Stm32F1 => (h5::BANK_SIZE, f1::PAGE_SIZE),
+            FlashRegisterLayout::At32F421 => {
+                (u64::from(AT32F421_FLASH_SIZE), u64::from(AT32F421_SECTOR))
+            }
             _ => (h5::BANK_SIZE, h5::SECTOR_SIZE),
         }
     }
@@ -783,6 +814,7 @@ impl Flash {
     fn _new_l4_legacy() -> Self {
         Self {
             layout: FlashRegisterLayout::Stm32L4,
+            at32_addr: 0,
             acr: 0x0000_0600,
             pdkeyr: 0,
             keyr: 0,
@@ -813,7 +845,83 @@ impl Flash {
         }
     }
 
+    /// Refuse an unlocked AT32 FLASH_CTRL value this model cannot carry out:
+    /// user-system-data program/erase (USDPRGM/USDERS), FAP_HL_DIS, an
+    /// erase start that names no erase or a sector outside main flash.
+    fn check_at32_write(&self, offset: u64, value: u32) -> SimResult<()> {
+        if self.layout != FlashRegisterLayout::At32F421 || offset != 0x10 || self.cr & (1 << 7) != 0
+        {
+            return Ok(());
+        }
+        let refuse = |why: &str| {
+            Err(crate::SimulationError::Other(format!(
+                "AT32F421 FLASH_CTRL {value:#x}: {why}"
+            )))
+        };
+        if value & ((1 << 4) | (1 << 5) | (1 << 16)) != 0 {
+            return refuse("user system data and access-protection changes are not modelled");
+        }
+        if value & (1 << 6) != 0 {
+            let main = AT32F421_FLASH_BASE..AT32F421_FLASH_BASE + AT32F421_FLASH_SIZE;
+            match value & 6 {
+                2 if main.contains(&self.at32_addr) => {}
+                4 => {}
+                _ => return refuse("erase start needs SECERS on a main-flash sector or BANKERS"),
+            }
+        }
+        Ok(())
+    }
+
+    /// After an AT32 FLASH_UNLOCK write: a wrong key sequence is a bus error.
+    fn check_at32_key_lockout(&self, offset: u64) -> SimResult<()> {
+        if self.layout == FlashRegisterLayout::At32F421 && offset == 0x04 && self.key_locked_out {
+            return Err(crate::SimulationError::Other(
+                "AT32F421 FLASH: wrong unlock key sequence (bus error; locked until reset)".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn check_supported_offset(&self, offset: u64) -> SimResult<()> {
+        if self.layout == FlashRegisterLayout::Stm32H7Boot && offset != 0 {
+            return Err(crate::SimulationError::Other(format!(
+                "STM32H7 FLASH: register offset {offset:#x} is not modelled"
+            )));
+        }
+        if self.layout == FlashRegisterLayout::At32F421
+            && !matches!(
+                offset,
+                0x00 | 0x04 | 0x08 | 0x0c | 0x10 | 0x14 | 0x1c | 0x20
+            )
+        {
+            return Err(crate::SimulationError::Other(format!(
+                "AT32F421 FLASH: unsupported register {offset:#x}"
+            )));
+        }
+        Ok(())
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
+        if self.layout == FlashRegisterLayout::Stm32H7Boot {
+            return self.acr;
+        }
+        if self.layout == FlashRegisterLayout::At32F421 {
+            return match offset {
+                // PSR PFT_ENF/PFT_ENF2 mirror prefetch enable, not writable flags.
+                0x00 => (self.acr & !0xa0) | ((self.acr & 0x50) << 1),
+                0x04 | 0x08 => 0,
+                0x0c => self.sr,
+                0x10 => self.cr,
+                0x14 => 0, // FLASH_ADDR is write-only.
+                0x1c => self.optr,
+                0x20 => 0xffff_ffff,
+                _ => {
+                    crate::census_reg!("flash:At32F421", offset, "read");
+                    0
+                }
+            };
+        }
+
         // ─── F1 layout (isolated; no fall-through to L4) ────────────────
         if matches!(self.layout, FlashRegisterLayout::Stm32F1) {
             return match offset {
@@ -921,6 +1029,67 @@ impl Flash {
     }
 
     fn write_reg(&mut self, offset: u64, value: u32) {
+        if self.layout == FlashRegisterLayout::Stm32H7Boot {
+            self.acr = value & 0x3f;
+            return;
+        }
+        if self.layout == FlashRegisterLayout::At32F421 {
+            match offset {
+                0x00 => self.acr = value & 0x15f,
+                // RM_AT32F421 §5.2.1: KEY1 then KEY2 clears OPLK; a wrong
+                // key sequence is a bus error and locks the flash until the
+                // next reset (`key_locked_out`, reported by the MMIO path).
+                0x04 => {
+                    if self.key_locked_out {
+                        return;
+                    }
+                    self.key_state = match (self.key_state, value) {
+                        (KeyUnlockState::Locked, FLASH_KEY1) => KeyUnlockState::HalfUnlocked,
+                        (KeyUnlockState::HalfUnlocked, FLASH_KEY2) => {
+                            self.cr &= !(1 << 7);
+                            KeyUnlockState::Unlocked
+                        }
+                        (KeyUnlockState::Unlocked, _) => KeyUnlockState::Unlocked,
+                        _ => {
+                            self.key_locked_out = true;
+                            KeyUnlockState::Locked
+                        }
+                    };
+                }
+                0x0c => self.sr &= !(value & 0x34),
+                0x14 => self.at32_addr = value,
+                0x10 => {
+                    if self.cr & (1 << 7) != 0 {
+                        return;
+                    }
+                    // Controls that cannot be modelled were refused before
+                    // this store ([`Self::check_at32_write`]).
+                    self.cr = value & 0x0002_14c7;
+                    if value & (1 << 7) != 0 {
+                        self.key_state = KeyUnlockState::Locked;
+                    }
+                    if value & (1 << 6) != 0 {
+                        // The erase completes at the batch boundary; OBF never
+                        // reads busy, so ODF is set together with the request.
+                        self.pending_op.set(Some(if value & 2 != 0 {
+                            FlashOp::EraseSector {
+                                bank: 0,
+                                sector: (self.at32_addr - AT32F421_FLASH_BASE) / AT32F421_SECTOR,
+                            }
+                        } else {
+                            FlashOp::EraseBothBanks
+                        }));
+                        self.sr |= 1 << 5;
+                        self.cr &= !(1 << 6);
+                    }
+                }
+                _ => {
+                    crate::census_reg!("flash:At32F421", offset, "write");
+                }
+            }
+            return;
+        }
+
         // ─── H5 layout (isolated) ───────────────────────────────────────
         if matches!(self.layout, FlashRegisterLayout::Stm32H5) {
             let unlocked = matches!(self.key_state, KeyUnlockState::Unlocked);
@@ -1237,7 +1406,9 @@ impl Flash {
     pub fn models_ops(&self) -> bool {
         matches!(
             self.layout,
-            FlashRegisterLayout::Stm32H5 | FlashRegisterLayout::Stm32U5
+            FlashRegisterLayout::Stm32H5
+                | FlashRegisterLayout::Stm32U5
+                | FlashRegisterLayout::At32F421
         )
     }
 }
@@ -1249,6 +1420,58 @@ impl Default for Flash {
 }
 
 impl crate::Peripheral for Flash {
+    fn on_node_reset(&mut self) {
+        if self.layout == FlashRegisterLayout::At32F421 {
+            *self = Self::new_with_layout(self.layout);
+        }
+    }
+    fn on_supply_reset(&mut self, _cause: crate::power::SupplyResetCause) {
+        self.on_node_reset();
+    }
+    fn on_system_reset(&mut self) {
+        self.on_node_reset();
+    }
+    fn owns_flash_stores(&self) -> bool {
+        self.layout == FlashRegisterLayout::At32F421
+    }
+
+    /// AT32F421 programming (RM_AT32F421 V2.05 §5.2.3): with FPRGM set, a
+    /// word, half-word or byte store programs the array and sets ODF. A
+    /// location that is not erased is left alone with PRGMERR, unless the
+    /// data is all zeros. Stores outside that procedure are refused.
+    fn flash_cpu_store(
+        &mut self,
+        offset: u64,
+        width: u8,
+        value: u32,
+        existing: u32,
+    ) -> crate::FlashStoreOutcome {
+        if self.layout != FlashRegisterLayout::At32F421 {
+            return crate::FlashStoreOutcome::Commit;
+        }
+        if self.cr & (1 << 7) != 0 || self.cr & 1 == 0 {
+            return crate::FlashStoreOutcome::Unsupported(
+                "AT32F421 FLASH: store without an unlocked FPRGM program operation",
+            );
+        }
+        if offset % u64::from(width) != 0 {
+            return crate::FlashStoreOutcome::Unsupported(
+                "AT32F421 FLASH: unaligned program store is not modelled",
+            );
+        }
+        let mask = if width >= 4 {
+            u32::MAX
+        } else {
+            (1u32 << (8 * u32::from(width))) - 1
+        };
+        if existing & mask != mask && value & mask != 0 {
+            self.sr |= 1 << 2; // PRGMERR: target not erased.
+            return crate::FlashStoreOutcome::Consumed;
+        }
+        self.sr |= 1 << 5; // ODF
+        crate::FlashStoreOutcome::Program
+    }
+
     // Inert walk: tick() is the trait-default no-op. H5/U5 erase/bank-swap ops
     // are recorded as pending and drained by `Machine::apply_pending_flash_op`
     // at the boundary the Cortex-M batch ends on — see `has_pending_op` below
@@ -1265,6 +1488,7 @@ impl crate::Peripheral for Flash {
 
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
+        self.check_supported_offset(reg)?;
         let byte = (offset % 4) as u32;
         Ok(((self.read_reg(reg) >> (byte * 8)) & 0xFF) as u8)
     }
@@ -1272,12 +1496,14 @@ impl crate::Peripheral for Flash {
         // KEYR/OPTKEYR sequence works on full-word writes only. For
         // byte-level access (rare), update word and re-trigger.
         let reg = offset & !3;
+        self.check_supported_offset(reg)?;
         let byte = (offset % 4) as u32;
         let mut v = self.read_reg(reg);
         let mask: u32 = 0xFF << (byte * 8);
         v = (v & !mask) | ((value as u32) << (byte * 8));
+        self.check_at32_write(reg, v)?;
         self.write_reg(reg, v);
-        Ok(())
+        self.check_at32_key_lockout(reg)
     }
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
         // Bypass the byte-decompose path for 32-bit register writes so that
@@ -1285,8 +1511,10 @@ impl crate::Peripheral for Flash {
         // a single write_reg call. The byte path is correct for data regs but
         // would fragment each 32-bit key write into 4 independent sub-word
         // triggers, none of which match FLASH_KEY1 / FLASH_KEY2.
+        self.check_supported_offset(offset & !3)?;
+        self.check_at32_write(offset & !3, value)?;
         self.write_reg(offset & !3, value);
-        Ok(())
+        self.check_at32_key_lockout(offset & !3)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
@@ -1913,5 +2141,21 @@ mod f1_program_gate_tests {
         f.write_u32(0x04, super::FLASH_KEY1).unwrap();
         f.write_u32(0x04, super::FLASH_KEY2).unwrap();
         assert_eq!(f.read_reg(0x10) & f1::CR_LOCK, 0);
+    }
+}
+
+#[cfg(test)]
+mod h7_boot_acr_tests {
+    use super::{Flash, FlashRegisterLayout};
+    use crate::Peripheral;
+
+    #[test]
+    fn h723_boot_acr_round_trips_and_rejects_unmodelled_flash_registers() {
+        let mut flash = Flash::new_with_layout(FlashRegisterLayout::Stm32H7Boot);
+        assert_eq!(flash.read_u32(0).unwrap() & 0x3f, 0x37);
+        flash.write_u32(0, 0x21).unwrap();
+        assert_eq!(flash.read_u32(0).unwrap() & 0x3f, 0x21);
+        assert!(flash.read_u32(4).is_err());
+        assert!(flash.write_u32(4, 0x1234).is_err());
     }
 }

@@ -1,0 +1,1 @@
+2026-11-16T23:27:03.847586Z ERROR labwired_cli::commands::test: Failed to read firmware "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke": No such file or directory (os error 2)

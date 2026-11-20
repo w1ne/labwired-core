@@ -1,0 +1,30 @@
+# Browser demo: real Elecrow display GPIOs and virtual button proxies for touch.
+# The physical CrowPanel has capacitive touch, not these two buttons.
+name: "elecrow-crowpanel-advance-28-hmi"
+chip: "../../../configs/chips/esp32s3.yaml"
+external_devices:
+  - id: "lcd"
+    type: "st7789-170x320"
+    connection: "spi2_s3"
+    config:
+      cs_pin: "GPIO40"
+      dc_pin: "GPIO41"
+board_io:
+  - id: "touch_on_proxy"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 9
+    signal: "input"
+    active_high: false
+  - id: "touch_off_proxy"
+    kind: "button"
+    peripheral: "gpio"
+    pin: 10
+    signal: "input"
+    active_high: false
+  - id: "lamp_output"
+    kind: "led"
+    peripheral: "gpio"
+    pin: 18
+    signal: "output"
+    active_high: true

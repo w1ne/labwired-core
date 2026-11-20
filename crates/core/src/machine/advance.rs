@@ -79,7 +79,10 @@ impl<C: Cpu> Machine<C> {
     /// `SupplySupervisor::set_vdd`), so `is_routed` covers both.
     #[inline(always)]
     fn supply_gate(&mut self, request: &AdvanceRequest) -> SimResult<Option<AdvanceReport>> {
-        if self.bus.supply.is_routed() || !self.unpowered_rail_noted {
+        if self.bus.supply.is_routed()
+            || self.bus.reset_input.is_routed()
+            || !self.unpowered_rail_noted
+        {
             return self.supply_boundary(request);
         }
         Ok(None)
@@ -92,12 +95,15 @@ impl<C: Cpu> Machine<C> {
     #[cold]
     #[inline(never)]
     fn supply_boundary(&mut self, request: &AdvanceRequest) -> SimResult<Option<AdvanceReport>> {
+        if self.bus.reset_input.take_assertion() {
+            self.reset_node()?;
+        }
         self.apply_supply_release()?;
         if !self.bus.supply.is_routed() && !self.unpowered_rail_noted {
             self.unpowered_rail_noted = true;
             crate::fidelity::record_unpowered_rail_assumed(self.bus.io_voltage_v);
         }
-        if !self.bus.supply.is_held() {
+        if !self.bus.supply.is_held() && !self.bus.reset_input.is_held() {
             return Ok(None);
         }
         // Held in reset: no instruction runs, but time does — the circuit
@@ -145,8 +151,19 @@ impl<C: Cpu> Machine<C> {
     /// Callers must arrange an honored breakpoint, CPU progress termination,
     /// or external termination when issuing such a request.
     pub fn advance(&mut self, request: AdvanceRequest) -> SimResult<AdvanceReport> {
+        self.enforce_peripheral_tick_cap();
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
+        }
+        let cache_device_time_presence = !request.is_single();
+        if cache_device_time_presence {
+            self.central_device_time_cache_enabled = true;
+            self.central_device_time_attached_cache = None;
+        } else if self.central_device_time_cache_enabled {
+            // Recover only if a caller caught a panic from a previous advance.
+            // The ordinary single-step path leaves this state untouched.
+            self.central_device_time_cache_enabled = false;
+            self.central_device_time_attached_cache = None;
         }
         let report = self.advance_inner(request, None);
         // Flush the derived device clock at the run boundary; the per-step
@@ -164,6 +181,10 @@ impl<C: Cpu> Machine<C> {
         // A deferred secondary never outlives the call: whoever looks at the
         // machine next sees the core where lockstep would have left it.
         self.end_secondary_defer(self.total_cycles);
+        if cache_device_time_presence {
+            self.central_device_time_cache_enabled = false;
+            self.central_device_time_attached_cache = None;
+        }
         report
     }
 
@@ -197,8 +218,15 @@ impl<C: Cpu> Machine<C> {
             u32,
         ) -> SimResult<u32>,
     {
+        self.enforce_peripheral_tick_cap();
         if let Some(report) = self.supply_gate(&request)? {
             return Ok(report);
+        }
+        // A caught panic from an earlier in-tree advance must not suppress the
+        // runner's per-window attachment probes.
+        if self.central_device_time_cache_enabled {
+            self.central_device_time_cache_enabled = false;
+            self.central_device_time_attached_cache = None;
         }
         let report = self.advance_inner(request, Some(&mut run_window));
         if report.is_err() {
@@ -341,10 +369,12 @@ impl<C: Cpu> Machine<C> {
                 // a pc, and the pc it leaves was checked above. A debugged run
                 // that stepped through every idle cycle took a billion steps
                 // to get past one `delay(1000)`.
-                let skipped = self.try_idle_fast_forward(skip_limit, 0);
-                if skipped > 0 {
-                    state.fuel_consumed += skipped;
-                    state.idle_cycles += skipped;
+                if let Some(skipped) = self.try_idle_fast_forward(skip_limit, 0) {
+                    state.fuel_consumed += skipped.cycles;
+                    state.idle_cycles += skipped.cycles;
+                    state.primary_steps += skipped.primary_steps;
+                    state.secondary_steps += skipped.secondary_steps;
+                    self.step_profile.cpu_instructions += skipped.primary_steps;
                     self.logic_observe(self.total_cycles);
                     self.pace_realtime(start_cycles, start_wall);
                     if self.net_drive_stop_hit {
@@ -428,11 +458,12 @@ impl<C: Cpu> Machine<C> {
                         (Some(a), None) | (None, Some(a)) => Some(a),
                         (None, None) => None,
                     };
-                    let before = self.total_cycles;
-                    let skipped = self.try_idle_fast_forward(limit, 0);
-                    if skipped > 0 && self.total_cycles > before {
-                        state.fuel_consumed += skipped;
-                        state.idle_cycles += skipped;
+                    if let Some(skipped) = self.try_idle_fast_forward(limit, 0) {
+                        state.fuel_consumed += skipped.cycles;
+                        state.idle_cycles += skipped.cycles;
+                        state.primary_steps += skipped.primary_steps;
+                        state.secondary_steps += skipped.secondary_steps;
+                        self.step_profile.cpu_instructions += skipped.primary_steps;
                         self.logic_observe(self.total_cycles);
                         self.pace_realtime(start_cycles, start_wall);
                         if self.net_drive_stop_hit {
@@ -447,7 +478,7 @@ impl<C: Cpu> Machine<C> {
                 return Ok(state.report(AdvanceStop::NoProgress, self.total_cycles - start_cycles));
             }
 
-            self.commit_advance_boundary(mode, batch_start, progress)?;
+            self.commit_advance_boundary(mode, batch_start, progress, run_window.is_some())?;
             if self.sd_hle.is_some() {
                 self.service_sd_hle()?;
             }

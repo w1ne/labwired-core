@@ -1,10 +1,11 @@
-# LabWired - NUCLEO-F767ZI IO/UART smoke test
-schema_version: "1.0"
+# Stock STM32duino NUCLEO-F767ZI UART and PB0 LED smoke.
+schema_version: "1.2"
 inputs:
-  firmware: "../../target/thumbv7em-none-eabi/release/firmware-f401-demo"
+  firmware: "../../tests/fixtures/stm32f767-stock-arduino.elf"
   system: "./system.yaml"
 limits:
-  max_steps: 64
+  max_steps: 30000000
 assertions:
-  - uart_contains: "OK"
+  - uart_contains: "F767_OK"
+  - gpio_edges: { pin: "gpiob:0", min_edges: 4 }
   - expected_stop_reason: max_steps

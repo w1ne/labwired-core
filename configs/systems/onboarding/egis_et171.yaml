@@ -6,3 +6,4 @@
 
 name: egis_et171
 chip: ../../chips/onboarding/egis_et171.yaml
+debug_uart: uart0

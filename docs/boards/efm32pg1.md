@@ -1,38 +1,29 @@
-# Validation Report: efm32pg1
+# EFM32PG1 Renode onboarding smoke
 
 **Architecture:** ARM Cortex-M4F.
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+## Imported execution profile
 
-```text
-[2m2026-10-18T14:39:54.732605Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:39:54.736201Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/efm32pg1.yaml
-[2m2026-10-18T14:39:54.737130Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:39:54.737220Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:39:54.737232Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:39:54.737237Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:39:54.737878Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:39:54.737891Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:39:54.737902Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:39:54.737970Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:39:54.737992Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:39:54.737996Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:39:54.738000Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:39:54.738004Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:39:54.738008Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2631.20
-```
+`configs/chips/onboarding/efm32pg1.yaml` keeps the imported 256 KiB flash and
+32 KiB RAM map and exposes the modeled USART0 at `0x4000c000`. Other generated
+peripheral windows are omitted because this smoke does not exercise them.
 
+## Current evidence
 
-## Hardware Coverage Report
+The exact imported-system smoke in
+`examples/renode-onboarding/efm32pg1-smoke.yaml` executed 100,000 instructions.
+USART0 emitted `EFM32PG1 USART0 smoke` and execution reached the configured
+`max_steps` limit; both assertions passed.
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `usart0` | `0x40010000` | `efm32_uart` |
-| `usart1` | `0x40010400` | `efm32_uart` |
-| `leUart0` | `0x4004a000` | `leuart` |
-| `bitband` | `0x42000000` | `bitbanding` |
-| `cmuStatusOscillator` | `0x400c802c` | `pythonperipheral` |
-| `vcmpStatus` | `0x40000008` | `pythonperipheral` |
+Build and simulator logs, UART output, JUnit assertions, result JSON, and a
+snapshot are recorded under
+[`docs/coverage/renode-onboarding/metrics/efm32pg1/`](../coverage/renode-onboarding/metrics/efm32pg1/).
+The initial wrong-address firmware attempt, which faulted at unmapped MMIO and
+emitted no UART bytes, is preserved under
+[`docs/coverage/renode-onboarding/attempt-history/efm32pg1/`](../coverage/renode-onboarding/attempt-history/efm32pg1/).
+The full imported inventory is summarized in the
+[`Renode onboarding scoreboard`](../coverage/renode-onboarding-scoreboard.md).
 
-**Total Peripherals:** 6
+This is repository CLI smoke evidence for the imported Cortex-M4F target's
+memory map and USART0 path. It does not establish full EFM32PG1 peripheral
+coverage, hosted `labwired_verify` model verification, or hardware confirmation.

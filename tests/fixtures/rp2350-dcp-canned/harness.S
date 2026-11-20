@@ -1,5 +1,5 @@
 /* RP2350 DCP canned-sequence harness (fixture for
- * crates/core/tests/rp2350_dcp_canned.rs).
+ * crates/core/tests/rp/rp2350_dcp_canned.rs).
  *
  * Every t_* body below is the pico-sdk double/float routine body verbatim:
  * the dcp_*_m macro invocation from pico_double/double_aeabi_dcp.S (and the

@@ -92,7 +92,10 @@ pub(crate) fn check_browser_models(
             {
                 Some(NETLIST_FILE_IN_BROWSER)
             }
-            CosimAdapter::Analog | CosimAdapter::Mock | CosimAdapter::Fmi => None,
+            CosimAdapter::Analog
+            | CosimAdapter::Behavior
+            | CosimAdapter::Mock
+            | CosimAdapter::Fmi => None,
         };
         if let Some(refusal) = refusal {
             return Err(format!("co-sim model '{}': {refusal}", model.id));

@@ -88,8 +88,14 @@ impl ArmCpu {
             .tempdir()
             .map_err(|e| e.to_string())?;
         let path = directory.path().join("libarm.so");
-        std::fs::write(&path, include_bytes!(env!("LABWIRED_ARM_SYSTEM_LIBRARY")))
-            .map_err(|e| e.to_string())?;
+        // Cortex-R52 is only in tlib's arm64 target (AArch32 execution);
+        // every other model is the arm32 build.
+        let image: &[u8] = if model == crate::ArmModel::CortexR52 {
+            include_bytes!(env!("LABWIRED_ARM64_SYSTEM_LIBRARY"))
+        } else {
+            include_bytes!(env!("LABWIRED_ARM_SYSTEM_LIBRARY"))
+        };
+        std::fs::write(&path, image).map_err(|e| e.to_string())?;
         // A distinct file inode is required: dlopen caches handles by inode, so
         // loading the same file twice would share mutable CPU and TCG globals.
         let library = unsafe { Library::open(Some(&path), RTLD_NOW | RTLD_LOCAL) }

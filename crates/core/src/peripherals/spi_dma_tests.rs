@@ -211,6 +211,7 @@ fn g071_spi1_moves_a_buffer_through_dmamux_and_dma1() {
     let path = root.join("configs/chips/stm32g071.yaml");
     let chip = labwired_config::ChipDescriptor::from_file(&path).unwrap();
     let manifest = labwired_config::SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         cosim_models: Vec::new(),
         motor_models: Vec::new(),

@@ -2,7 +2,7 @@
  * Copyright (C) 2026 Andrii Shylenko
  * SPDX-License-Identifier: MIT
  *
- * STM32F103RB: 128 KB flash @ 0x08000000, 20 KB SRAM @ 0x20000000.
+ * STM32F103C8: 64 KB flash @ 0x08000000, 20 KB SRAM @ 0x20000000.
  *
  * Reset's symbol value already has bit 0 set by rustc (Thumb function),
  * so the vector-table entry is the literal `Reset` address — no `+1`
@@ -12,7 +12,7 @@
 
 MEMORY
 {
-  FLASH : ORIGIN = 0x08000000, LENGTH = 128K
+  FLASH : ORIGIN = 0x08000000, LENGTH = 64K
   RAM   : ORIGIN = 0x20000000, LENGTH = 20K
 }
 
@@ -24,6 +24,17 @@ SECTIONS
   {
     LONG(0x20005000); /* Initial SP — top of F103RB's 20 KiB SRAM */
     LONG(Reset);      /* Reset handler (Thumb bit already in symbol) */
+    LONG(0);           /* NMI */
+    LONG(0);           /* HardFault */
+    LONG(0);           /* MemManage */
+    LONG(0);           /* BusFault */
+    LONG(0);           /* UsageFault */
+    LONG(0); LONG(0); LONG(0); LONG(0); /* Reserved */
+    LONG(0);           /* SVCall */
+    LONG(0);           /* Debug monitor */
+    LONG(0);           /* Reserved */
+    LONG(0);           /* PendSV */
+    LONG(SysTick_Handler); /* SysTick (exception 15) */
   } > FLASH
 
   .text :

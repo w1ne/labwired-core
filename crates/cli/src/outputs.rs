@@ -41,9 +41,11 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
     logic_edges: Option<labwired_core::logic_capture::LogicEdgesResult>,
     gpio_pins: Option<Vec<labwired_core::logic_capture::GpioPinState>>,
     uart_lines: Option<crate::uart_lines::UartLinesResult>,
+    i2c_trace: crate::i2c_trace::I2cTraceSummary,
     motors: Vec<labwired_core::bus::MotorSnapshot>,
     analog_series: Option<labwired_core::analog::AnalogSeries>,
     stimuli: Vec<StimulusOutcome>,
+    uart_injection_errors: &[String],
     footprint: Option<artifacts::FootprintReport>,
     memory: Option<labwired_core::stack_paint::MainStackReport>,
     memory_policy: Option<labwired_core::bus::MemoryPolicyReport>,
@@ -91,13 +93,22 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
         .filter(|o| o.is_rejected())
         .map(|o| o.describe())
         .collect();
-    let message = (!rejected.is_empty()).then(|| {
-        format!(
+    let mut messages = Vec::new();
+    if !rejected.is_empty() {
+        messages.push(format!(
             "{} stimulus/stimuli could not be applied, so the run proved nothing about them: {}",
             rejected.len(),
             rejected.join("; ")
-        )
-    });
+        ));
+    }
+    if !uart_injection_errors.is_empty() {
+        messages.push(format!(
+            "{} UART injection(s) could not be delivered; the run is invalid: {}",
+            uart_injection_errors.len(),
+            uart_injection_errors.join("; ")
+        ));
+    }
+    let message = (!messages.is_empty()).then(|| messages.join("; "));
 
     let assertions_for_junit = assertions.clone();
     let result = TestResult {
@@ -125,6 +136,8 @@ pub(crate) fn write_outputs<C: labwired_core::Cpu>(
         logic_edges,
         gpio_pins,
         uart_lines,
+        i2c_addresses: i2c_trace.addresses,
+        i2c_trace_evicted: i2c_trace.evicted,
         motors,
         analog_series,
         stimuli,
@@ -507,6 +520,8 @@ pub(crate) fn write_config_error_outputs(
         logic_edges: None,
         gpio_pins: None,
         uart_lines: None,
+        i2c_addresses: Vec::new(),
+        i2c_trace_evicted: false,
         // Nor any motor evidence: the run was rejected before a machine existed.
         motors: Vec::new(),
         analog_series: None,

@@ -1,0 +1,10 @@
+# Exact imported EFM32TG840 system: Cortex-M3 code execution and USART0 output.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-efm32tg840-smoke"
+  system: "../../configs/systems/onboarding/efm32tg840.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "EFM32TG840 USART0 smoke"
+  - expected_stop_reason: max_steps

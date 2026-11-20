@@ -10,6 +10,10 @@ cargo run -q -p labwired-cli -- test \
   --script examples/mpfs-disco-kit/zephyr-hello.yaml \
   --output-dir "$OUT/zephyr-hello" \
   --no-uart-stdout
+cargo run -q -p labwired-cli -- test \
+  --script examples/mpfs-disco-kit/mss-peripherals-smoke.yaml \
+  --output-dir "$OUT/mss-peripherals-smoke" \
+  --no-uart-stdout
 # synchronization busy-waits 100 ms per round (60 M instructions at 600 MHz)
 # and kernel/common boots after a 500 ms busy-wait, so both get a release CLI.
 for t in sync kernel-common; do

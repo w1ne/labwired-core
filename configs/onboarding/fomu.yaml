@@ -1,6 +1,6 @@
 name: fomu
-description: 'Fomu tiny USB form factor FPGA board running RISC-V softcore. Architecture:
-  RISC-V RV32I.'
+description: 'Fomu tiny USB form factor FPGA board running the LiteX VexRiscv softcore. Architecture:
+  RISC-V RV32IM.'
 url: https://tomu.im/fomu.html
 family: Lattice iCE40
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
