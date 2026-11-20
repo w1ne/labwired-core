@@ -486,7 +486,10 @@ Jacobian. `C` is read back from the backward-Euler transient stamp, so every
 element that stores charge or flux in a transient gets its small-signal
 admittance with no per-device AC code. The tests check C, L, diode depletion
 and diffusion charge, BJT `CJC`, MOSFET `CGDO` and a `LAPLACE` biquad against
-closed forms. Transmission lines, BJT
+closed forms. A lossless `T` line couples its ports through the exact phasor
+`e^{-jωTD}`, not through lumped sections; the tests check a matched line, a
+mismatched line with a reactive load against the reflection formula, and a
+line with a floating port reference against ngspice-42. BJT
 `PTF` excess phase, diode soft recovery (`VP`) and op-amp `SR`/`IOLIM` are
 refused by name. The co-simulation run ignores the `AC` values. The closed-form
 proofs are in `crates/core/tests/analog_ac.rs`.

@@ -7,9 +7,9 @@
 //! The analysis has no per-device AC code: `G` is the operating-point Newton
 //! Jacobian and `C` is read back from the backward-Euler transient stamp. So
 //! each test below takes a different element family (R/C, L/C, diode charge,
-//! BJT and MOSFET with a Miller capacitance, a `LAPLACE` source) and holds the
-//! sweep to a closed form written from the device equations, not from the
-//! engine. Operating points come from the solver; everything derived from
+//! BJT and MOSFET with a Miller capacitance, a `LAPLACE` source, a lossless `T`
+//! line) and holds the sweep to a closed form written from the device
+//! equations, not from the engine. Operating points come from the solver; everything derived from
 //! them (`gm`, `gd`, junction capacitance) is computed here.
 
 mod analog {
@@ -403,6 +403,203 @@ mod analog {
         }
     }
 
+    fn mul(a: C64, b: C64) -> C64 {
+        C64::new(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re)
+    }
+
+    fn add(a: C64, b: C64) -> C64 {
+        C64::new(a.re + b.re, a.im + b.im)
+    }
+
+    /// `e^{-jθ}`.
+    fn delay(theta: f64) -> C64 {
+        C64::new(theta.cos(), -theta.sin())
+    }
+
+    #[test]
+    fn matched_line_delays_the_wave_and_never_reflects() {
+        let td = 1e-9;
+        let mut solver = build(
+            "V1 in 0 AC 1\n\
+             R1 in a 50\n\
+             T1 a 0 b 0 Z0=50 TD=1n\n\
+             R2 b 0 50\n",
+        );
+        // Up to 1.7 GHz the phase wraps more than once: a lumped stand-in
+        // for the delay would drift from the exact phasor long before that.
+        let frequencies = [0.0, 1e6, 125e6, 250e6, 500e6, 999e6, 1.7e9];
+        let response = solver.ac_analysis(&frequencies).unwrap();
+        let (a, b) = (node(&solver, "a"), node(&solver, "b"));
+        for (point, &f) in frequencies.iter().enumerate() {
+            let theta = 2.0 * PI * f * td;
+            assert_phasor(
+                &format!("V(a) at {f} Hz"),
+                response.node_voltage(point, a),
+                C64::new(0.5, 0.0),
+                1e-12,
+            );
+            let wave = delay(theta);
+            assert_phasor(
+                &format!("V(b) at {f} Hz"),
+                response.node_voltage(point, b),
+                C64::new(0.5 * wave.re, 0.5 * wave.im),
+                1e-12,
+            );
+        }
+    }
+
+    #[test]
+    fn mismatched_line_with_a_reactive_load_follows_the_reflection_formula() {
+        // Z0 = 75 between a 50 ohm source and 150 ohm || 10 pF: the input
+        // impedance and the transfer both come from the load's reflection
+        // coefficient carried round the line, `Γ·e^{-2jθ}`.
+        let (z0, td, rs, rl, cl) = (75.0, 2e-9, 50.0, 150.0, 10e-12);
+        let mut solver = build(
+            "V1 in 0 DC 1 AC 1\n\
+             R1 in a 50\n\
+             T1 a 0 b 0 Z0=75 TD=2n\n\
+             R2 b 0 150\n\
+             C2 b 0 10p\n\
+             .ac lin 25 1Meg 481Meg\n",
+        );
+        assert!(
+            (dc(&solver, "b") - rl / (rs + rl)).abs() < 1e-12,
+            "at DC the line is a wire"
+        );
+        let response = solver.ac_sweep().unwrap();
+        let (a, b) = (node(&solver, "a"), node(&solver, "b"));
+        let one = C64::new(1.0, 0.0);
+        for (point, &f) in response.frequencies().iter().enumerate() {
+            let omega = 2.0 * PI * f;
+            let load = C64::new(rl, 0.0).div(C64::new(1.0, omega * rl * cl));
+            let gamma = add(load, C64::new(-z0, 0.0)).div(add(load, C64::new(z0, 0.0)));
+            let round_trip = mul(gamma, delay(2.0 * omega * td));
+            let z_in = mul(
+                C64::new(z0, 0.0),
+                add(one, round_trip).div(add(one, C64::new(-round_trip.re, -round_trip.im))),
+            );
+            let v_a = z_in.div(add(z_in, C64::new(rs, 0.0)));
+            let v_b = mul(
+                v_a,
+                mul(add(one, gamma), delay(omega * td)).div(add(one, round_trip)),
+            );
+            assert_phasor(
+                &format!("V(a) at {f} Hz"),
+                response.node_voltage(point, a),
+                v_a,
+                1e-10,
+            );
+            assert_phasor(
+                &format!("V(b) at {f} Hz"),
+                response.node_voltage(point, b),
+                v_b,
+                1e-10,
+            );
+        }
+    }
+
+    #[test]
+    fn line_with_a_floating_reference_matches_ngspice() {
+        // ngspice-42, `.options reltol=1e-9 abstol=1e-18 vntol=1e-12`. Port
+        // 2's reference `r` sits on a divider, so the far-port `-` terms
+        // carry signal; the delay is given as `NL / F`.
+        let mut solver = build(
+            "V1 in 0 DC 0 AC 1\n\
+             R1 in a 30\n\
+             T1 a 0 b r Z0=50 F=100Meg NL=0.25\n\
+             R2 b r 100\n\
+             C2 b r 5p\n\
+             R3 r 0 20\n\
+             R4 in r 100\n\
+             .ac lin 6 10Meg 260Meg\n",
+        );
+        let response = solver.ac_sweep().unwrap();
+        let reference = [
+            (
+                7.621585266987e-01,
+                -4.68407280669e-02,
+                9.316542642342e-01,
+                -1.08275047044e-01,
+            ),
+            (
+                5.472339950326e-01,
+                -1.46356261264e-01,
+                6.856639094927e-01,
+                -6.96518372775e-01,
+            ),
+            (
+                5.063951049873e-01,
+                1.286537422697e-01,
+                -1.24333982704e-01,
+                -8.32672212122e-01,
+            ),
+            (
+                7.595373041392e-01,
+                8.715295602015e-02,
+                -5.33190623981e-01,
+                -3.06075599786e-01,
+            ),
+            (
+                7.149042192339e-01,
+                -1.49752687284e-01,
+                -5.78480031186e-01,
+                2.222403264524e-01,
+            ),
+            (
+                4.214806175715e-01,
+                -7.21267112376e-02,
+                -1.78326316368e-01,
+                8.224483704284e-01,
+            ),
+        ];
+        let (a, b, r) = (node(&solver, "a"), node(&solver, "b"), node(&solver, "r"));
+        for (point, &(a_re, a_im, b_re, b_im)) in reference.iter().enumerate() {
+            let f = response.frequencies()[point];
+            assert_phasor(
+                &format!("V(a) at {f} Hz"),
+                response.node_voltage(point, a),
+                C64::new(a_re, a_im),
+                1e-9,
+            );
+            assert_phasor(
+                &format!("V(b) at {f} Hz"),
+                response.node_voltage(point, b),
+                C64::new(b_re, b_im),
+                1e-9,
+            );
+            assert_phasor(
+                &format!("V(r) at {f} Hz"),
+                response.node_voltage(point, r),
+                C64::new(1.0 / 6.0, 0.0),
+                1e-12,
+            );
+        }
+    }
+
+    #[test]
+    fn ac_analysis_leaves_a_line_transient_bit_identical() {
+        let deck = "V1 in 0 PULSE(0 1 0 1n 1n 20n 50n) AC 1\n\
+                    R1 in a 50\n\
+                    T1 a 0 b 0 Z0=75 TD=3n\n\
+                    R2 b 0 200\n";
+        let mut plain = build(deck);
+        let mut probed = build(deck);
+        for step in 0..300 {
+            if step % 41 == 0 {
+                probed.ac_analysis(&[1e6, 1e8]).expect("AC mid-run");
+            }
+            plain.advance(2e-10).unwrap();
+            probed.advance(2e-10).unwrap();
+            for name in ["a", "b"] {
+                assert_eq!(
+                    dc(&plain, name).to_bits(),
+                    dc(&probed, name).to_bits(),
+                    "step {step}"
+                );
+            }
+        }
+    }
+
     fn config_error(deck: &str) -> String {
         match build(deck).ac_analysis(&[1e3]) {
             Err(AnalogError::Config(message)) => message,
@@ -412,8 +609,6 @@ mod analog {
 
     #[test]
     fn ac_refuses_terms_it_cannot_linearise_by_name() {
-        let line = config_error("V1 in 0 AC 1\nR1 in a 50\nT1 a 0 b 0 Z0=50 TD=1n\nR2 b 0 50\n");
-        assert!(line.contains("T1"), "{line}");
         let excess = config_error(
             "VCC vcc 0 DC 5\nVB b 0 DC 0.7 AC 1\nRC vcc c 1k\nQ1 c b 0 QX\n\
              .model QX NPN(IS=1e-15 TF=1n PTF=30)\n",

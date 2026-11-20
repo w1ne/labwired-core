@@ -60,9 +60,12 @@
 //! gets it without an AC stamp of its own. Two step lengths are stamped and
 //! compared; a transient term that is not proportional to `1/h` (BJT excess
 //! phase, diode soft recovery, op-amp slew or current limits) is refused by
-//! name rather than mis-modelled, as are transmission lines, whose delay is
-//! not a capacitance. `b` holds the `AC <mag> [<phase>]` values of the
-//! independent sources; every other source is a small-signal zero.
+//! name rather than mis-modelled. A transmission line's delay is not a
+//! capacitance, so its far-port coupling is taken out of both stamps and put
+//! back per frequency as the exact phasor `e^{-jωTD}`: the lossless line is
+//! not approximated by lumped sections. `b` holds the `AC <mag> [<phase>]`
+//! values of the independent sources; every other source is a small-signal
+//! zero.
 //!
 //! ## Determinism
 //!
@@ -2240,12 +2243,6 @@ impl Solver {
     /// [`Solver::advance`] produces the same bits it would have without
     /// this call.
     pub fn ac_analysis(&mut self, frequencies: &[f64]) -> Result<AcResponse, AnalogError> {
-        if let Some(line) = self.circuit.transmission_lines.first() {
-            return Err(AnalogError::Config(format!(
-                "`.ac` does not model transmission line `{}`: its delay is not a capacitance",
-                line.name
-            )));
-        }
         if let Some(bad) = frequencies.iter().find(|f| !(f.is_finite() && **f >= 0.0)) {
             return Err(AnalogError::Config(format!(
                 "`.ac` frequency {bad} Hz must be finite and not negative"
@@ -2266,6 +2263,7 @@ impl Solver {
         self.cached_stamp = None;
         self.settled = false;
         let (g, c, excitation) = result?;
+        let couplings = self.line_couplings();
 
         let mut values = Vec::with_capacity(frequencies.len() * dim);
         let size = 2 * dim;
@@ -2282,6 +2280,15 @@ impl Solver {
                     system[(dim + row) * size + column] = susceptance;
                     system[(dim + row) * size + dim + column] = conductance;
                 }
+            }
+            // Each port sees the other's wave `TD` later: `e^{-jωTD}`.
+            for &(row, column, coefficient, delay) in &couplings {
+                let re = coefficient * libm::cos(omega * delay);
+                let im = -coefficient * libm::sin(omega * delay);
+                system[row * size + column] += re;
+                system[row * size + dim + column] -= im;
+                system[(dim + row) * size + column] += im;
+                system[(dim + row) * size + dim + column] += re;
             }
             let mut rhs: Vec<f64> = excitation
                 .iter()
@@ -2310,12 +2317,23 @@ impl Solver {
         // checks that the difference really is `C/h`.
         const STEP: f64 = 1e-15;
         let dim = self.dim();
-        let stamp = |solver: &mut Self, stamp: Stamp| {
+        let raw = |solver: &mut Self, stamp: Stamp| {
             solver.build(stamp);
             match solver.behavioural_error.take() {
                 Some(error) => Err(error),
                 None => Ok(solver.matrix[..dim * dim].to_vec()),
             }
+        };
+        // The far-port coupling of a `T` line is `alpha` times a fixed
+        // pattern, with `alpha` set by the stamp; take it out of each matrix
+        // so that what is left is the line's frequency-independent part.
+        let couplings = self.line_couplings();
+        let stamp = |solver: &mut Self, kind: Stamp| {
+            let mut matrix = raw(solver, kind)?;
+            for &(row, column, coefficient, delay) in &couplings {
+                matrix[row * dim + column] -= line_alpha(delay, kind) * coefficient;
+            }
+            Ok::<_, AnalogError>(matrix)
         };
         let g = stamp(self, Stamp::OperatingPoint)?;
         let short = stamp(self, Stamp::Transient(STEP, Integration::BackwardEuler))?;
@@ -2340,6 +2358,31 @@ impl Solver {
             c[cell] = first * STEP;
         }
         Ok((g, c))
+    }
+
+    /// The far-port terms of every `T` line, per unit of the coupling
+    /// factor: `(row, column, coefficient, TD)`. [`Solver::stamp_lines`]
+    /// writes `alpha · coefficient` at each; in `.ac` the factor is
+    /// `e^{-jωTD}`.
+    fn line_couplings(&self) -> Vec<(usize, usize, f64, f64)> {
+        let mut couplings = Vec::new();
+        for (index, line) in self.circuit.transmission_lines.iter().enumerate() {
+            let row1 = self.nodes + self.circuit.transmission_line_branch(index);
+            let row2 = row1 + 1;
+            for (row, far_p, far_n, far_row) in [
+                (row1, line.p2, line.n2, row2),
+                (row2, line.p1, line.n1, row1),
+            ] {
+                if let Some(column) = far_p {
+                    couplings.push((row, column, -1.0, line.delay));
+                }
+                if let Some(column) = far_n {
+                    couplings.push((row, column, 1.0, line.delay));
+                }
+                couplings.push((row, far_row, -line.z0, line.delay));
+            }
+        }
+        couplings
     }
 
     /// The `AC` phasor of every independent source, on the MNA right-hand
