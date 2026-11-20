@@ -101,6 +101,17 @@ pub fn merged_peripheral_configs(
     let mut merged = chip.peripherals.clone();
     for manifest_cfg in &manifest.peripherals {
         if let Some(existing) = merged.iter_mut().find(|p| p.id == manifest_cfg.id) {
+            // A different `type` replaces the model: the board decides which
+            // role a multi-role block plays (a SERCOM is the USART, the SPI
+            // or the I2C controller the firmware makes it). The chip's
+            // `config` and `irq` belong to the model it named (models differ
+            // in the lines they take), so neither carries over; the window
+            // (base, size) does unless given.
+            if manifest_cfg.r#type != existing.r#type {
+                existing.r#type = manifest_cfg.r#type.clone();
+                existing.config.clear();
+                existing.irq = None;
+            }
             for (key, value) in &manifest_cfg.config {
                 existing.config.insert(key.clone(), value.clone());
             }
@@ -1825,6 +1836,60 @@ impl SystemBus {
             .or_else(|| ext.config.get(alt_key))
             .and_then(|v| v.as_str())?;
         Self::parse_esp32s3_gpio_pin(label).or_else(|| Self::parse_esp32_gpio_pin(label))
+    }
+}
+
+#[cfg(test)]
+mod manifest_peripheral_merge_tests {
+    use super::*;
+
+    /// A manifest entry with the chip's `type` patches it; one with another
+    /// `type` replaces the model and inherits neither `config` nor `irq`.
+    #[test]
+    fn a_different_type_replaces_the_model_and_drops_the_chip_config() {
+        let chip: ChipDescriptor = serde_yaml::from_str(
+            r#"
+name: "test-merge"
+arch: "arm"
+flash: { base: 0x0, size: "1KB" }
+ram: { base: 0x20000000, size: "1KB" }
+peripherals:
+  - { id: "sercom1", type: "sam_sercom_usart", base_address: 0x42000C00, size: "64B", irq: 10 }
+  - id: "sercom4"
+    type: "sam_sercom_spi"
+    base_address: 0x42001800
+    size: "64B"
+    config: { sck_bit: 11, dopo: 1 }
+"#,
+        )
+        .expect("parse chip");
+        let manifest: SystemManifest = serde_yaml::from_str(
+            r#"
+name: "test-merge-system"
+chip: "test-merge"
+peripherals:
+  - { id: "sercom1", type: "sam_sercom_spi", base_address: 0, config: { sck_bit: 17 } }
+  - { id: "sercom4", type: "sam_sercom_spi", base_address: 0, config: { dopo: 0 } }
+"#,
+        )
+        .expect("parse manifest");
+        let merged = merged_peripheral_configs(&chip, &manifest);
+        let by_id = |id: &str| merged.iter().find(|p| p.id == id).unwrap();
+
+        let sercom1 = by_id("sercom1");
+        assert_eq!(sercom1.r#type, "sam_sercom_spi");
+        assert_eq!(sercom1.base_address, 0x42000C00, "window kept");
+        assert_eq!(sercom1.irq, None, "the IRQ went with the old model");
+        assert_eq!(sercom1.config.len(), 1);
+        assert_eq!(sercom1.config["sck_bit"].as_u64(), Some(17));
+
+        let sercom4 = by_id("sercom4");
+        assert_eq!(
+            sercom4.config["sck_bit"].as_u64(),
+            Some(11),
+            "same type merges"
+        );
+        assert_eq!(sercom4.config["dopo"].as_u64(), Some(0));
     }
 }
 

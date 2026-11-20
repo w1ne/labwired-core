@@ -1,0 +1,14 @@
+# Control: the same board and sketch with nothing attached to SERCOM4.
+name: arduino-nano-33-iot-bme280-no-sensor
+chip: ../../../configs/chips/atsamd21g18a.yaml
+external_devices: []
+peripherals:
+  - id: "usb"
+    type: "samd21_usb"
+    base_address: 0x41005000
+    config:
+      host: true
+  - id: "sercom4"
+    type: "samd21_sercom_i2cm"
+    base_address: 0x42001800
+board_io: []

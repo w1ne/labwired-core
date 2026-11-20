@@ -1,0 +1,23 @@
+# Value control: the same board and sketch, with the BME280 model placed in a
+# different environment. The printed readings must follow these inputs.
+name: arduino-nano-33-iot-bme280-warm-room
+chip: ../../../configs/chips/atsamd21g18a.yaml
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "sercom4"
+    config:
+      i2c_address: 0x77
+      temperature: 31.5
+      humidity: 40.0
+      pressure: 990.0
+peripherals:
+  - id: "usb"
+    type: "samd21_usb"
+    base_address: 0x41005000
+    config:
+      host: true
+  - id: "sercom4"
+    type: "samd21_sercom_i2cm"
+    base_address: 0x42001800
+board_io: []

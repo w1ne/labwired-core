@@ -177,6 +177,10 @@ peripherals:
   # ─── STM32F103C8 silicon (Blue Pill, ST-LINK V2, 2026-06-04). ──────────
   # Each `profile` selects the chip-family layout in the peripheral model
   # so adding F1 entries here cannot regress L4/F4/V2 deployments.
+  # `error_flags: true` arms the F1 program gate: PG half-word programming,
+  # PER page erase (1 KiB, address in AR) and MER mass erase reach the flash
+  # backing store, as RM0008 §3.3 / PM0075 §2.3 describe. Stock STM32duino
+  # EEPROM.h and HAL_FLASH_Program / HAL_FLASHEx_Erase depend on it.
   - id: "flash_ctrl"
     type: "flash"
     base_address: 0x40022000
@@ -184,6 +188,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32f103/flash.yaml"
       profile: "stm32f1"
+      error_flags: true
   - id: "dbgmcu"
     type: "dbgmcu"
     base_address: 0xE0042000
