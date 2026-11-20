@@ -356,24 +356,24 @@
       "script": "examples/renode-onboarding/arduino_nano_33_ble-smoke.yaml",
       "system": "configs/systems/onboarding/arduino_nano_33_ble.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-19T17:36:51Z",
-      "finished_at_utc": "2026-11-19T17:36:53Z",
-      "elapsed_seconds": 3,
-      "elapsed_ms": 2104,
+      "started_at_utc": "2026-11-20T02:34:12Z",
+      "finished_at_utc": "2026-11-20T02:34:15Z",
+      "elapsed_seconds": 4,
+      "elapsed_ms": 3432,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 0.367,
-        "build_firmware": 0.351,
-        "run_smoke": 1.326
+        "build_cli": 0.603,
+        "build_firmware": 1.248,
+        "run_smoke": 1.523
       },
       "stages_ms": {
-        "build_cli": 367,
-        "build_firmware": 351,
-        "run_smoke": 1326
+        "build_cli": 603,
+        "build_firmware": 1248,
+        "run_smoke": 1523
       },
       "_artifact_path": "arduino_nano_33_ble",
       "zero_answering_windows": [],
@@ -5252,24 +5252,24 @@
       "script": "examples/renode-onboarding/msp430f5437-uart-smoke.yaml",
       "system": "configs/systems/onboarding/mspsim-msp430f5437.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-20T01:13:47Z",
-      "finished_at_utc": "2026-11-20T01:18:07Z",
-      "elapsed_seconds": 261,
-      "elapsed_ms": 260103,
+      "started_at_utc": "2026-11-20T01:50:17Z",
+      "finished_at_utc": "2026-11-20T01:53:23Z",
+      "elapsed_seconds": 187,
+      "elapsed_ms": 186380,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 257.566,
+        "build_cli": 185.56,
         "build_firmware": null,
-        "run_smoke": 2.475
+        "run_smoke": 0.78
       },
       "stages_ms": {
-        "build_cli": 257566,
+        "build_cli": 185560,
         "build_firmware": null,
-        "run_smoke": 2475
+        "run_smoke": 780
       },
       "prebuilt_firmware": "tests/fixtures/msp430f5437-uart-smoke.elf",
       "_artifact_path": "mspsim-msp430f5437",
@@ -5389,24 +5389,24 @@
       "script": "examples/renode-onboarding/nrf52840-smoke.yaml",
       "system": "configs/systems/onboarding/nrf52840.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-19T17:55:53Z",
-      "finished_at_utc": "2026-11-19T17:55:57Z",
-      "elapsed_seconds": 5,
-      "elapsed_ms": 4122,
+      "started_at_utc": "2026-11-20T02:46:10Z",
+      "finished_at_utc": "2026-11-20T02:46:19Z",
+      "elapsed_seconds": 9,
+      "elapsed_ms": 8727,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 1.793,
-        "build_firmware": 0.725,
-        "run_smoke": 1.542
+        "build_cli": 5.526,
+        "build_firmware": 1.439,
+        "run_smoke": 1.72
       },
       "stages_ms": {
-        "build_cli": 1793,
-        "build_firmware": 725,
-        "run_smoke": 1542
+        "build_cli": 5526,
+        "build_firmware": 1439,
+        "run_smoke": 1720
       },
       "_artifact_path": "nrf52840",
       "zero_answering_windows": [],

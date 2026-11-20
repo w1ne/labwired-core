@@ -2212,6 +2212,12 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf52840/2026-11-17-saadc-schema-version-mismatch/onboarding-summary/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf52840/2026-11-20-negative-control-ecb-removed/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf52840/2026-11-20-negative-control-twim-tmp102-removed/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf52840dk_nrf52840/2026-11-09-pre-fix-gpiote-event-polarity/NOTE/</loc>
     </url>
     <url>
