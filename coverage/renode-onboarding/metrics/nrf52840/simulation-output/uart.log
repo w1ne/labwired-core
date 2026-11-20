@@ -14,4 +14,5 @@ ecb fips197 ct=69c4e0d8..70b4c55a end=1 ok
 twim0 tmp102 cfg=fff0 temp=1900 anack=1 held=1 w1c=1 ok
 pwm0 p0.15 seqend=1 duty=1 rises=1 stop=1 idle=0 ok
 pwm0 samples high=07d0/1f40 rises=003c
+gpio p1 in=02 drive=1 pull=1 gpiote=1 p0=1 ok
 NRF52840 PASS

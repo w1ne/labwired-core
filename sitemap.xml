@@ -2215,6 +2215,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf52840/2026-11-20-negative-control-ecb-removed/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf52840/2026-11-20-negative-control-p1-parked-0x50001000/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf52840/2026-11-20-negative-control-pwm-1hz-core-clock/</loc>
     </url>
     <url>
