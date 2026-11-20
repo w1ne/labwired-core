@@ -79,5 +79,5 @@ target/release/labwired test \
 - The touch threshold and baseline of the original are not exercised.
 - J1, R1, R2, C1, C2 and the test points are not modeled. This is not full-board coverage.
 - This fixture has no physical measurement.
-- There is no browser run of this fixture. The edge windows and the exact long-run counts are a function of `labwired test`; the browser runtime has the 65,536-edge capture only.
+- The three `test-*.yaml` scripts also run in Chromium through `WasmFlexTestRun`, with the same result text and edge windows as `labwired test`; the receipt is `../browser-flex-scripts.json`. `long-focus-and-break.yaml` was not run in a browser.
 - No comparable CH32V003 Rust-model onboarding time was measured. This fixture makes no speed claim against chip-specific model work.

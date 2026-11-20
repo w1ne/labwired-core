@@ -2408,3 +2408,96 @@ fn flex_script_binding_reports_bad_scripts_and_limits_without_a_pass() {
     assert_eq!(result["status"], "fail");
     assert_eq!(result["time_ns"], 299_996_000_u64);
 }
+
+/// The Chromium receipt of `scripts/test_browser_flex_scripts.mjs` covers
+/// every committed `test-*.yaml`, and the shared runner still gives the
+/// result text that Chromium and the CLI gave.
+#[test]
+fn flex_browser_script_receipt_covers_every_script_and_matches_the_shared_runner() {
+    use sha2::{Digest, Sha256};
+
+    fn sha256(bytes: &[u8]) -> String {
+        format!("{:x}", Sha256::digest(bytes))
+    }
+
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let receipt: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(fixtures.join("browser-flex-scripts.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["status"], "passed");
+    assert_eq!(receipt["cpu_emulation"], false);
+    assert_eq!(receipt["execution_path"], "flex_portable_wasm");
+    assert!(!receipt["browser"].as_str().unwrap().is_empty());
+    let core_commit = receipt["core_commit"].as_str().unwrap();
+    assert_eq!(core_commit.len(), 40);
+    assert!(core_commit.bytes().all(|byte| byte.is_ascii_hexdigit()));
+
+    let mut on_disk = BTreeSet::new();
+    for fixture in std::fs::read_dir(&fixtures).unwrap() {
+        let fixture = fixture.unwrap();
+        let name = fixture.file_name().into_string().unwrap();
+        if !name.starts_with("flex-") || !fixture.path().is_dir() {
+            continue;
+        }
+        for script in std::fs::read_dir(fixture.path()).unwrap() {
+            let script = script.unwrap().file_name().into_string().unwrap();
+            if script.starts_with("test-") && script.ends_with(".yaml") {
+                on_disk.insert((name.clone(), script));
+            }
+        }
+    }
+    let rows = receipt["scripts"].as_array().unwrap();
+    let listed: BTreeSet<(String, String)> = rows
+        .iter()
+        .map(|row| {
+            (
+                row["fixture"].as_str().unwrap().to_owned(),
+                row["script"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        listed, on_disk,
+        "the browser receipt must list every committed Flex test script; rerun scripts/test_browser_flex_scripts.mjs"
+    );
+    assert_eq!(rows.len(), listed.len(), "a script is listed twice");
+    assert!(rows.len() >= 32);
+
+    let mut suspended_steps = 0;
+    for row in rows {
+        let name = row["script"].as_str().unwrap();
+        let dir = fixtures.join(row["fixture"].as_str().unwrap());
+        let label = format!("{}/{name}", row["fixture"].as_str().unwrap());
+        let script_text = std::fs::read_to_string(dir.join(name)).unwrap();
+        let script: labwired_config::FlexTestScript = serde_yaml::from_str(&script_text).unwrap();
+        let manifest = std::fs::read_to_string(dir.join(&script.inputs.flex)).unwrap();
+        let firmware = std::fs::read(dir.join(&script.inputs.firmware)).unwrap();
+        assert_eq!(
+            row["script_sha256"],
+            sha256(script_text.as_bytes()),
+            "{label}"
+        );
+        assert_eq!(
+            row["manifest_sha256"],
+            sha256(manifest.as_bytes()),
+            "{label}"
+        );
+        assert_eq!(row["firmware_sha256"], sha256(&firmware), "{label}");
+
+        let run = crate::flex::run_test_script(name, &script_text, &manifest, &firmware).unwrap();
+        assert_eq!(run.result.status, "pass", "{label}");
+        assert_eq!(row["status"], "pass", "{label}");
+        let text = serde_json::to_string_pretty(&run.result).unwrap();
+        assert_eq!(
+            row["result_sha256"],
+            sha256(text.as_bytes()),
+            "{label}: the runner no longer gives the result text of the browser receipt; rerun scripts/test_browser_flex_scripts.mjs"
+        );
+        suspended_steps += row["suspended_steps"].as_u64().unwrap();
+    }
+    assert!(
+        suspended_steps >= 13,
+        "the receipt must include the endless-`main` scripts"
+    );
+}

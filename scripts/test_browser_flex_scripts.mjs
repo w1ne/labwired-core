@@ -7,7 +7,7 @@
 //   wasm-pack build crates/wasm --target web --dev --out-dir pkg-flex-web
 //   LABWIRED_PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs \
 //     node scripts/test_browser_flex_scripts.mjs --cli /path/to/labwired \
-//     > crates/wasm/tests/fixtures/flex-browser-scripts.json
+//     > crates/wasm/tests/fixtures/browser-flex-scripts.json
 //
 // `--fixture <dir>` limits the run to one fixture directory. The receipt test
 // in crates/wasm/src/flex_tests.rs needs the run of all fixtures.

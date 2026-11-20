@@ -15,7 +15,7 @@ At 33 °C the sensor reads 1932 mV in both scripts. The fan is on in the heat cy
 
 ## Scope
 
-This is functional behavior against a reusable analog source. It is not original target firmware, target ADC fidelity, component tolerance, a thermal model, a physical measurement, or a full-board simulation. One `loop` call is one 1 µs control period; the period is a test value. There is no browser run and no `native.json` for this fixture: the evidence is the command-line runner only.
+This is functional behavior against a reusable analog source. It is not original target firmware, target ADC fidelity, component tolerance, a thermal model, a physical measurement, or a full-board simulation. One `loop` call is one 1 µs control period; the period is a test value. There is no `native.json` for this fixture. Both scripts also run in Chromium through `WasmFlexTestRun` with the same result text as the command-line runner; the receipt is `../browser-flex-scripts.json`.
 
 ## Reproduce
 

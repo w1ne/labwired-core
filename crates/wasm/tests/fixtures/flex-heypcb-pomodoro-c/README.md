@@ -62,6 +62,18 @@ Values that the run measured: the ring lights at 269,026,000 ns (the first 20 ms
 
 All three pass on a dev build of the CLI: 13, 10 and 13 assertions. The 3.00 s script used 603,967,166 WebAssembly fuel units and 4.84 s wall time on the lane machine; the 0.30 s scripts used 0.5 s. A release build was not measured.
 
+## Browser
+
+`WasmFlexTestRun.run` in the browser package runs these scripts with the runner of `labwired test`. The receipt `../browser-flex-scripts.json` is one run of `scripts/test_browser_flex_scripts.mjs` on Chromium 156.0.8078.79 with a dev build of the package. For each of the three scripts the result text is the same as the CLI `result.json` apart from the three input names, and the logic-analyzer capture is the same.
+
+| Script | Suspended steps | WebAssembly fuel | Edges in capture | CLI wall time | Browser wall time |
+|---|---:|---:|---:|---:|---:|
+| `test-pause-and-hold-reset.yaml` | 7 | 603,967,166 | 4,868 | 4.85 s | 7.25 s |
+| `test-tap-starts-focus.yaml` | 3 | 34,441,883 | 1,854 | 0.88 s | 0.62 s |
+| `test-untouched-stays-idle.yaml` | 3 | 34,658,708 | 1,828 | 0.51 s | 0.56 s |
+
+In this path the firmware module runs in the wasmi interpreter inside the browser package. The wall times are single runs on the lane machine and are not a benchmark.
+
 ## Defect found by this fixture
 
 `labwired test` on a dev build stopped with a host stack overflow on the first long firmware call. The CLI built wasmi without its `auto-dispatch` feature, so wasmi used its tail-call dispatch in a build profile that does not make tail calls. The CLI now enables `auto-dispatch`: a dev build uses the loop dispatch, a release build keeps the tail-call dispatch.
@@ -90,5 +102,5 @@ cargo run -p labwired-cli --bin labwired -- test \
 - The touch counts (100 and 200 for each iteration) are an assumption. The firmware README says the threshold is not tuned on hardware.
 - The 25-minute focus phase and the break were not run with this fixture: at 5,000 ns for each pass they need about 360 million passes. `flex-heypcb-pomodoro-timer` has that run for the Rust port.
 - J1, R1, R2, C1, C2 and the test points are not modeled. This is not full-board coverage.
-- This fixture has no physical measurement and no browser run. `until_ns` and `resume` are a function of `labwired test`; the browser runtime does not have them.
+- This fixture has no physical measurement.
 - No comparable CH32V003 Rust-model onboarding time was measured. This fixture makes no speed claim against chip-specific model work.

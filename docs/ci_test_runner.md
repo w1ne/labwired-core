@@ -299,7 +299,9 @@ const samples = runtime.analog_trace_snapshot(0); // oscilloscope
 
 `scripts/test_browser_flex_scripts.mjs` runs each `test-*.yaml` of the Flex
 fixtures in Chromium and in the CLI and compares the result text and both
-instrument captures.
+instrument captures. `crates/wasm/tests/fixtures/browser-flex-scripts.json` is
+the receipt of that run; a unit test of `labwired-wasm` fails when a script is
+missing from it or when the runner gives a different result text.
 
 ## Exit Codes
 
