@@ -187,6 +187,14 @@ const DIGITAL_PORTS_NOT_MODELLED: &[(&str, &[&str], &str)] = &[
         &["RA0", "RA1", "RA2", "RA3", "RA5", "RE0", "RE1", "RE2"],
         "PORTA/PORTE are SFRs inside the PIC16 core, with no external pin drive",
     ),
+    (
+        "pic18f4520",
+        &[
+            "RA0", "RA1", "RA2", "RA3", "RA5", "RE0", "RE1", "RE2", "RB2", "RB3", "RB1", "RB4",
+            "RB0",
+        ],
+        "PORTA/PORTB/PORTE are SFRs inside the PIC18 core, with no external pin drive",
+    ),
 ];
 
 /// A mock model that holds `level` on `board.gpio_in.<pad>` for each of `pads`.

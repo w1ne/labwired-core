@@ -11,8 +11,10 @@
 # L1 slice: boot + EUSART TX + PORTB latch. The UART, port and interrupt
 # SFRs are CPU-internal in the PIC18 model (crates/core/src/cpu/pic18.rs),
 # so no bus-side peripherals are declared. Not modelled: oscillator/CONFIG
-# decoding, timers, CCP/ECCP, MSSP, ADC, comparators, EEPROM, WDT, EUSART RX,
-# baud timing and the extended (XINST) instruction set.
+# decoding, timers, CCP/ECCP, MSSP, comparators, EEPROM, WDT, EUSART RX,
+# baud timing, external digital pin drive and the extended (XINST)
+# instruction set. The 10-bit A/D module is modelled (also CPU-internal) and
+# converts the routed AN0-AN12 pad levels declared below.
 #
 # - program memory: byte-addressed, reset vector 0x0000, high/low interrupt
 #   vectors 0x0008/0x0018; config words at 0x300000
@@ -30,17 +32,31 @@ flash:
 ram:
   base: 0x000000
   size: "1536"
-# Simulation-only analog co-simulation endpoints. PIC18 PORTA/PORTE external
-# sampling and the ADC are not modeled; these inputs exercise generic device
-# solving and threshold routing, not firmware-visible PIC pin behavior.
-io_voltage_v: 5.0
-gpio_input_thresholds:
-  vil: 0.3
-  vih: 0.7
+# A/D inputs (DS39631E Table 1-3): AN0-AN3 on RA0-RA3, AN4 on RA5, AN5-AN7
+# on RE0-RE2 and AN8-AN12 on RB2, RB3, RB1, RB4, RB0.
+# `board.analog.<pad>_volts` and `adc.adc.<n>_volts` routes land on the
+# `pic24_adc_pads` window, which the core's 10-bit A/D module converts
+# against VDD/VSS or the AN3/AN2 references (ADCON1 VCFG).
+analog_pins:
+  RA0: { peripheral: "adc", channel: 0 }
+  RA1: { peripheral: "adc", channel: 1 }
+  RA2: { peripheral: "adc", channel: 2 }
+  RA3: { peripheral: "adc", channel: 3 }
+  RA5: { peripheral: "adc", channel: 4 }
+  RE0: { peripheral: "adc", channel: 5 }
+  RE1: { peripheral: "adc", channel: 6 }
+  RE2: { peripheral: "adc", channel: 7 }
+  RB2: { peripheral: "adc", channel: 8 }
+  RB3: { peripheral: "adc", channel: 9 }
+  RB1: { peripheral: "adc", channel: 10 }
+  RB4: { peripheral: "adc", channel: 11 }
+  RB0: { peripheral: "adc", channel: 12 }
 peripherals:
-  - id: "analog_inputs"
-    type: "input_pin_bank"
-    base_address: 0x00001000
-    size: "2B"
-    config:
-      pin_count: 2
+  # Not silicon: the routed AN pin levels the A/D module converts (see
+  # `peripherals::pic24_adc_pads`). The data space is CPU-internal, so the
+  # window sits on the bus past the program image. `vref_mv` is VDD.
+  - id: "adc"
+    type: "pic24_adc_pads"
+    base_address: 0x01000000
+    size: "38"
+    config: { channels: 0x1FFF, vref_mv: 5000 }

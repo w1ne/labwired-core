@@ -2632,6 +2632,7 @@ pub(crate) fn run_interactive_pic18(
     chip_name: &str,
 ) -> ExitCode {
     let mut cpu = labwired_core::cpu::Pic18::for_chip_name(chip_name);
+    cpu.bind_adc_pads(&bus);
     cpu.load_program_image(&program);
     // The EUSART TX register is on the CPU; keep the bytes for the console.
     let uart_sink: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));

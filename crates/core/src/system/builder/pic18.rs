@@ -61,6 +61,10 @@ pub(super) fn build(
         .map_err(|e| anyhow!("Loader Error: {e}"))?;
 
     let mut cpu = new_core(&chip.name, uart_sink.clone());
+    // The A/D module converts routed AN levels only when the chip declares
+    // the pad window.
+    cpu.bind_adc_pads(&bus);
+    cpu.set_adc_instruction_hz(manifest.cpu_hz.unwrap_or(chip.cpu_hz));
     cpu.load_program_image(&program_image);
 
     let boxed: Box<dyn Cpu> = Box::new(cpu);

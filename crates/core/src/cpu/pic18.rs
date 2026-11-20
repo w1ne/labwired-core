@@ -152,6 +152,54 @@ const TXSTA_TXEN: u8 = 1 << 5;
 const TXSTA_TRMT: u8 = 1 << 1;
 const RCSTA_SPEN: u8 = 1 << 7;
 const PIR1_TXIF: u8 = 1 << 4;
+/// PIC18F2420/2520/4420/4520 10-bit A/D module (DS39631E Table 5-1).
+pub const SFR_ADCON2: u16 = 0xFC0;
+pub const SFR_ADCON1: u16 = 0xFC1;
+pub const SFR_ADCON0: u16 = 0xFC2;
+pub const SFR_ADRESL: u16 = 0xFC3;
+pub const SFR_ADRESH: u16 = 0xFC4;
+/// OSCCON<7> IDLEN: `SLEEP` enters an Idle mode, which keeps the
+/// peripherals clocked (DS39631E Register 2-2).
+pub const SFR_OSCCON: u16 = 0xFD3;
+const OSCCON_IDLEN: u8 = 1 << 7;
+const PIR1_ADIF: u8 = 1 << 6;
+const ADCON0_ADON: u8 = 1 << 0;
+const ADCON0_GO: u8 = 1 << 1;
+const ADCON1_VCFG0: u8 = 1 << 4;
+const ADCON1_VCFG1: u8 = 1 << 5;
+const ADCON2_ADFM: u8 = 1 << 7;
+/// CONFIG3H<1> PBADEN: PCFG<2:0> reset to 000 when set, to 111 when clear
+/// (DS39631E Register 19-2 note 1).
+const CONFIG3H_PBADEN: u8 = 1 << 1;
+/// AN0-AN12 on the 40/44-pin PIC18F4420/4520.
+pub const PIC18_ADC_CHANNELS: usize = 13;
+/// AN`n` as `(port, bit)`: RA0-RA3, RA5, RE0-RE2, RB2, RB3, RB1, RB4, RB0
+/// (DS39631E Table 1-3).
+const ADC_PADS: [(u16, u8); PIC18_ADC_CHANNELS] = [
+    (0, 0),
+    (0, 1),
+    (0, 2),
+    (0, 3),
+    (0, 5),
+    (4, 0),
+    (4, 1),
+    (4, 2),
+    (1, 2),
+    (1, 3),
+    (1, 1),
+    (1, 4),
+    (1, 0),
+];
+/// Bus address of the routed AN pad levels (`peripherals::pic24_adc_pads`).
+/// The PIC18 data space is CPU-internal, so the window is not silicon; it
+/// sits past every image address a PIC18 part uses (program memory, IDLOC at
+/// 0x200000, CONFIG at 0x300000 and data EEPROM at 0xF00000).
+pub const PIC18_ADC_PAD_BASE: u64 = 0x0100_0000;
+/// A conversion is 11 TAD (DS39631E section 19.3).
+const ADC_CONVERSION_TAD: u32 = 11;
+/// Instruction rate assumed for the A/D RC oscillator until the board gives
+/// one ([`Pic18::set_adc_instruction_hz`]): the 40 MHz Fosc maximum.
+const ADC_INSTRUCTION_HZ_DEFAULT: u64 = 10_000_000;
 
 /// Table pointer width (TBLPTRU<5:0>:TBLPTRH:TBLPTRL).
 pub const PIC18_TBLPTR_MASK: u32 = 0x3F_FFFF;
@@ -417,6 +465,29 @@ pub struct Pic18 {
     config: [u8; 16],
     /// EUSART TX bytes, when a console is attached.
     serial_sink: Option<Arc<Mutex<Vec<u8>>>>,
+    /// Whether the board has a `pic24_adc_pads` window at
+    /// [`PIC18_ADC_PAD_BASE`] ([`Pic18::set_adc_pad_window`]). Without it
+    /// ADCON0/ADCON1/ADCON2/ADRESH/ADRESL stay plain registers.
+    adc_pad_window: bool,
+    /// Last pad-window generation pulled; `None` before the first pull.
+    adc_pad_generation: Option<u16>,
+    /// VDD in millivolts, from the pad window.
+    adc_vdd_mv: u16,
+    adc_pad_held: u16,
+    adc_pad_mv: [u16; PIC18_ADC_CHANNELS],
+    /// Oscillator periods (TOSC, a quarter instruction cycle) left before
+    /// the holding capacitor disconnects: the programmed acquisition time
+    /// and the A/D RC start delay.
+    adc_acquire_tosc: u32,
+    /// TOSC left in the running conversion, acquisition excluded; 0 when
+    /// the module is idle.
+    adc_convert_tosc: u32,
+    /// GO/DONE was set in the instruction now executing, whose own cycles
+    /// do not count.
+    adc_fresh: bool,
+    /// The 10-bit code held when the holding capacitor disconnected.
+    adc_sample: u16,
+    adc_instruction_hz: u64,
 }
 
 impl Default for Pic18 {
@@ -458,6 +529,16 @@ impl Pic18 {
             idloc: [0xFF; 8],
             config: [0xFF; 16],
             serial_sink: None,
+            adc_pad_window: false,
+            adc_pad_generation: None,
+            adc_vdd_mv: 5000,
+            adc_pad_held: 0,
+            adc_pad_mv: [0; PIC18_ADC_CHANNELS],
+            adc_acquire_tosc: 0,
+            adc_convert_tosc: 0,
+            adc_fresh: false,
+            adc_sample: 0,
+            adc_instruction_hz: ADC_INSTRUCTION_HZ_DEFAULT,
         };
         cpu.reset_core();
         cpu
@@ -483,6 +564,230 @@ impl Pic18 {
     /// Route EUSART TX bytes to `sink` (the console / `uart_contains` buffer).
     pub fn set_serial_sink(&mut self, sink: Arc<Mutex<Vec<u8>>>) {
         self.serial_sink = Some(sink);
+    }
+
+    /// Declare that the bus carries a `pic24_adc_pads` window at
+    /// [`PIC18_ADC_PAD_BASE`]. This turns on the PIC18F2420/2520/4420/4520
+    /// 10-bit A/D module (DS39631E section 19): ADCON0 GO/DONE, the ADCS
+    /// conversion clock, the ACQT programmed acquisition time, VCFG
+    /// reference selection, ADFM justification and ADIF. Other PIC18
+    /// families place or lay out these registers differently, so only a
+    /// chip that declares the window gets the module.
+    pub fn set_adc_pad_window(&mut self, present: bool) {
+        self.adc_pad_window = present;
+        if present {
+            self.data[usize::from(SFR_ADCON1)] = self.adcon1_reset();
+        }
+    }
+
+    /// Turn the A/D module on when `bus` carries a peripheral at
+    /// [`PIC18_ADC_PAD_BASE`], as a chip that declares the pad window does.
+    pub fn bind_adc_pads(&mut self, bus: &crate::bus::SystemBus) {
+        self.set_adc_pad_window(bus.peripherals.iter().any(|p| p.base == PIC18_ADC_PAD_BASE));
+    }
+
+    /// Whether the A/D module is modelled ([`Pic18::set_adc_pad_window`]).
+    pub fn has_adc(&self) -> bool {
+        self.adc_pad_window
+    }
+
+    /// Instruction rate (Fosc / 4), which sets how many instruction cycles
+    /// one TAD of the A/D RC oscillator takes (typically 1.2 us, DS39631E
+    /// Table 19-1 note 1).
+    pub fn set_adc_instruction_hz(&mut self, cpu_hz: u64) {
+        if cpu_hz > 0 {
+            self.adc_instruction_hz = cpu_hz;
+        }
+    }
+
+    /// ADCON1 at reset: `--00 0qqq`, where PCFG<2:0> follow the PBADEN
+    /// configuration bit (DS39631E Register 19-2 note 1).
+    fn adcon1_reset(&self) -> u8 {
+        if self.config[5] & CONFIG3H_PBADEN != 0 {
+            0x00
+        } else {
+            0x07
+        }
+    }
+
+    /// Pull the routed AN0-AN12 levels when the pad model reports a change.
+    /// One bus read per step on a board that declares the window.
+    fn pull_adc_pads(&mut self, bus: &dyn Bus) {
+        use crate::peripherals::pic24_adc_pads as pads;
+        if !self.adc_pad_window {
+            return;
+        }
+        let Ok(generation) = bus.read_u16(PIC18_ADC_PAD_BASE + pads::OFF_GENERATION) else {
+            return;
+        };
+        if self.adc_pad_generation == Some(generation) {
+            return;
+        }
+        self.adc_pad_generation = Some(generation);
+        self.adc_vdd_mv = bus
+            .read_u16(PIC18_ADC_PAD_BASE + pads::OFF_VREF_MV)
+            .unwrap_or(5000)
+            .max(1);
+        self.adc_pad_held = bus
+            .read_u16(PIC18_ADC_PAD_BASE + pads::OFF_HELD)
+            .unwrap_or(0);
+        for ch in 0..PIC18_ADC_CHANNELS {
+            self.adc_pad_mv[ch] = if self.adc_pad_held & (1 << ch) != 0 {
+                bus.read_u16(PIC18_ADC_PAD_BASE + pads::OFF_CHANNEL_MV + 2 * ch as u64)
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+        }
+    }
+
+    /// The level on AN`ch` in millivolts. A pin whose TRIS bit is cleared
+    /// converts its own output level (DS39631E section 19.5); an input that
+    /// no route drives reads 0 V.
+    fn adc_pin_mv(&self, ch: usize) -> u32 {
+        let (port, bit) = ADC_PADS[ch];
+        let tris = self.data[usize::from(SFR_TRISA + port)];
+        if tris & (1 << bit) == 0 {
+            return if self.data[usize::from(SFR_LATA + port)] & (1 << bit) != 0 {
+                u32::from(self.adc_vdd_mv)
+            } else {
+                0
+            };
+        }
+        u32::from(self.adc_pad_mv[ch])
+    }
+
+    /// The 10-bit code for the channel CHS<3:0> selects against the VCFG
+    /// references (DS39631E Register 19-2): VREF+ is AN3 or VDD, VREF- is
+    /// AN2 or VSS. PCFG does not gate the converter: a pin configured as
+    /// digital still converts (section 19.5 note 1). CHS 1101-1111 are
+    /// unimplemented and measure a floating input, which is 0 V here.
+    fn adc_convert(&self) -> u16 {
+        let adcon1 = self.data[usize::from(SFR_ADCON1)];
+        let high = if adcon1 & ADCON1_VCFG0 != 0 {
+            self.adc_pin_mv(3)
+        } else {
+            u32::from(self.adc_vdd_mv)
+        };
+        let low = if adcon1 & ADCON1_VCFG1 != 0 {
+            self.adc_pin_mv(2)
+        } else {
+            0
+        };
+        let ch = usize::from((self.data[usize::from(SFR_ADCON0)] >> 2) & 0x0F);
+        let input = if ch < PIC18_ADC_CHANNELS {
+            self.adc_pin_mv(ch)
+        } else {
+            0
+        };
+        if input <= low {
+            return 0;
+        }
+        if high <= low {
+            return 1023;
+        }
+        ((input - low) * 1024 / (high - low)).min(1023) as u16
+    }
+
+    /// The A/D clock is the internal RC oscillator (ADCS<1:0> = 11).
+    fn adc_clock_is_rc(&self) -> bool {
+        self.data[usize::from(SFR_ADCON2)] & 0x03 == 0x03
+    }
+
+    /// `tad` A/D clock periods in oscillator periods. TAD is 2/8/32 TOSC,
+    /// or 4/16/64 TOSC with ADCS2 set (DS39631E Register 19-3). On the RC
+    /// oscillator one TAD is typically 1.2 us (Table 19-1 note 1); the span
+    /// rounds up to whole instruction cycles there.
+    fn adc_tad_to_tosc(&self, tad: u32) -> u32 {
+        let adcs = self.data[usize::from(SFR_ADCON2)] & 0x07;
+        if self.adc_clock_is_rc() {
+            let cycles = (u64::from(tad) * self.adc_instruction_hz * 12).div_ceil(10_000_000);
+            return (cycles.min(u64::from(u32::MAX / 4)) as u32) * 4;
+        }
+        let tosc_per_tad = match adcs {
+            0b000 => 2,
+            0b001 => 8,
+            0b010 => 32,
+            0b100 => 4,
+            0b101 => 16,
+            _ => 64,
+        };
+        tad * tosc_per_tad
+    }
+
+    /// Start an acquisition and conversion (GO/DONE set with ADON = 1).
+    /// ACQT<2:0> keeps the holding capacitor on the pin for 0-20 TAD first
+    /// (DS39631E section 19.2); on the A/D RC oscillator the clock starts
+    /// one instruction cycle late (Register 19-3 note 1). The input is
+    /// sampled when the capacitor disconnects.
+    fn start_adc(&mut self) {
+        const ACQT_TAD: [u32; 8] = [0, 2, 4, 6, 8, 12, 16, 20];
+        let acqt = ACQT_TAD[usize::from((self.data[usize::from(SFR_ADCON2)] >> 3) & 0x07)];
+        self.adc_acquire_tosc = self.adc_tad_to_tosc(acqt);
+        if self.adc_clock_is_rc() {
+            self.adc_acquire_tosc += 4;
+        }
+        self.adc_convert_tosc = self.adc_tad_to_tosc(ADC_CONVERSION_TAD);
+        if self.adc_acquire_tosc == 0 {
+            self.adc_sample = self.adc_convert();
+        }
+        self.adc_fresh = true;
+    }
+
+    /// An ADCON0 write: setting GO/DONE with the module on starts a
+    /// conversion; clearing GO/DONE or ADON aborts one without touching
+    /// ADRESH:ADRESL (DS39631E section 19.6). The data sheet defines
+    /// GO/DONE only for ADON = 1; with the module off the bit is stored and
+    /// nothing converts.
+    fn write_adcon0(&mut self, value: u8) {
+        let old = self.data[usize::from(SFR_ADCON0)];
+        let value = value & 0x3F;
+        self.data[usize::from(SFR_ADCON0)] = value;
+        let running = value & ADCON0_ADON != 0 && value & ADCON0_GO != 0;
+        if !running {
+            self.adc_acquire_tosc = 0;
+            self.adc_convert_tosc = 0;
+        } else if self.adc_convert_tosc == 0 || old & ADCON0_GO == 0 {
+            self.start_adc();
+        }
+    }
+
+    /// Advance the running acquisition and conversion by `cycles`
+    /// instruction cycles. At the end ADRESH:ADRESL load with the ADFM
+    /// justification, GO/DONE clears and ADIF sets (DS39631E Figures 19-4
+    /// and 19-5).
+    fn tick_adc(&mut self, cycles: u32) {
+        if self.adc_convert_tosc == 0 {
+            return;
+        }
+        if self.adc_fresh {
+            self.adc_fresh = false;
+            return;
+        }
+        let mut tosc = cycles.saturating_mul(4);
+        if self.adc_acquire_tosc != 0 {
+            let used = tosc.min(self.adc_acquire_tosc);
+            self.adc_acquire_tosc -= used;
+            tosc -= used;
+            if self.adc_acquire_tosc != 0 {
+                return;
+            }
+            self.adc_sample = self.adc_convert();
+        }
+        self.adc_convert_tosc = self.adc_convert_tosc.saturating_sub(tosc);
+        if self.adc_convert_tosc != 0 {
+            return;
+        }
+        let code = self.adc_sample;
+        let (high, low) = if self.data[usize::from(SFR_ADCON2)] & ADCON2_ADFM != 0 {
+            ((code >> 8) as u8, code as u8)
+        } else {
+            ((code >> 2) as u8, (code << 6) as u8)
+        };
+        self.data[usize::from(SFR_ADRESH)] = high;
+        self.data[usize::from(SFR_ADRESL)] = low;
+        self.data[usize::from(SFR_ADCON0)] &= !ADCON0_GO;
+        self.data[usize::from(SFR_PIR1)] |= PIR1_ADIF;
     }
 
     /// First Access Bank offset that maps to the SFR window (`0x80` on
@@ -522,7 +827,21 @@ impl Pic18 {
         self.shadow = None;
         self.exception_pending = None;
         self.asleep = false;
+        // A reset turns the A/D module off and aborts a conversion; it does
+        // not modify ADRESH:ADRESL (DS39631E section 19.0, Table 4-4).
+        let adres = (
+            self.data[usize::from(SFR_ADRESL)],
+            self.data[usize::from(SFR_ADRESH)],
+        );
+        self.adc_acquire_tosc = 0;
+        self.adc_convert_tosc = 0;
+        self.adc_fresh = false;
         self.data.fill(0);
+        if self.adc_pad_window {
+            self.data[usize::from(SFR_ADRESL)] = adres.0;
+            self.data[usize::from(SFR_ADRESH)] = adres.1;
+            self.data[usize::from(SFR_ADCON1)] = self.adcon1_reset();
+        }
         // DS39631 power-on reset values. Every `PIC18_DEVICES` row gets these
         // PIC18F4520 port/IPR values (TRISE<2:0>, PORTD/E present, IPR2 bit 5
         // unimplemented); gate them per device before a part whose ports or
@@ -618,6 +937,10 @@ impl Pic18 {
     pub fn load_program_image(&mut self, image: &crate::memory::ProgramImage) {
         for seg in &image.segments {
             self.load_flash(seg.start_addr as u32, &seg.data);
+        }
+        if self.adc_pad_window {
+            // PCFG<2:0> follow the PBADEN bit the image just programmed.
+            self.data[usize::from(SFR_ADCON1)] = self.adcon1_reset();
         }
         self.pc = 0;
     }
@@ -729,6 +1052,10 @@ impl Pic18 {
             // instantly in this model).
             SFR_TXSTA => self.data[usize::from(SFR_TXSTA)] = value | TXSTA_TRMT,
             SFR_PIR1 => self.data[usize::from(SFR_PIR1)] = value & !PIR1_TXIF,
+            SFR_ADCON0 if self.adc_pad_window => self.write_adcon0(value),
+            // ADCON1 bits 7-6 and ADCON2 bit 6 are unimplemented.
+            SFR_ADCON1 if self.adc_pad_window => self.data[usize::from(addr)] = value & 0x3F,
+            SFR_ADCON2 if self.adc_pad_window => self.data[usize::from(addr)] = value & 0xBF,
             SFR_TXREG => {
                 self.data[usize::from(SFR_TXREG)] = value;
                 let txsta = self.data[usize::from(SFR_TXSTA)];
@@ -1908,6 +2235,14 @@ impl Cpu for Pic18 {
             // vector is taken (DS39631, "Wake-up from Sleep and Idle").
             self.cycles += 1;
             crate::advance_batch_cycle(bus, 1);
+            // In Sleep only the A/D RC oscillator runs; an Idle mode
+            // (OSCCON IDLEN) keeps the Fosc-derived A/D clock too (DS39631E
+            // section 19.4). The data sheet does not say what a conversion
+            // on a stopped clock does; here it waits for the clock.
+            if self.adc_clock_is_rc() || self.data[usize::from(SFR_OSCCON)] & OSCCON_IDLEN != 0 {
+                self.pull_adc_pads(bus);
+                self.tick_adc(1);
+            }
             if !self.wake_pending() {
                 return Ok(());
             }
@@ -1918,6 +2253,7 @@ impl Cpu for Pic18 {
             return Ok(());
         }
 
+        self.pull_adc_pads(bus);
         let pc = self.pc;
         let word = self.fetch_word(pc);
         let observed = !observers.is_empty();
@@ -1931,6 +2267,7 @@ impl Cpu for Pic18 {
         let cycles = self.execute(word, pc)?;
         self.cycles += u64::from(cycles);
         crate::advance_batch_cycle(bus, u64::from(cycles));
+        self.tick_adc(cycles);
 
         // Interrupts are sampled between instructions: the instruction that
         // just retired completes, then a pending enabled source vectors and
@@ -3023,6 +3360,334 @@ mod tests {
         assert_eq!(cpu.flash.len(), 32 * 1024);
         // The generic core keeps the 0x60 split.
         assert_eq!(Pic18::new().file_address(0x70, false), 0xF70);
+    }
+
+    /// `BSF f, b` / `BCF f, b` on the Access Bank.
+    fn bsf(f: u8, bit: u16) -> u16 {
+        0x8000 | (bit << 9) | u16::from(f)
+    }
+
+    fn bcf(f: u8, bit: u16) -> u16 {
+        0x9000 | (bit << 9) | u16::from(f)
+    }
+
+    /// `BSF ADCON0, GO` then NOPs.
+    fn go_then_nops() -> Vec<u16> {
+        let mut program = vec![0u16; 512];
+        program[0] = bsf(0xC2, 1);
+        program
+    }
+
+    /// A PIC18F4520 with the routed-pad window on its bus, as a chip that
+    /// declares `pic24_adc_pads` builds it, and `pads` (AN, mV) driven.
+    fn adc_cpu(words: &[u16], pads: &[(u8, u16)]) -> (Pic18, crate::bus::SystemBus) {
+        use crate::peripherals::pic24_adc_pads::{Pic24AdcPads, WINDOW_BYTES};
+        let mut bus = crate::bus::SystemBus::new();
+        bus.add_peripheral(
+            "adc",
+            PIC18_ADC_PAD_BASE,
+            WINDOW_BYTES,
+            None,
+            Box::new(Pic24AdcPads::new(0x1FFF, 5000)),
+        );
+        let window = bus.peripherals.len() - 1;
+        for &(channel, mv) in pads {
+            assert!(bus.peripherals[window]
+                .dev
+                .set_adc_channel_input(channel, mv));
+        }
+        let mut cpu = Pic18::for_chip_name("pic18f4520");
+        cpu.load_words(words);
+        cpu.bind_adc_pads(&bus);
+        assert!(cpu.has_adc());
+        (cpu, bus)
+    }
+
+    fn step_on(cpu: &mut Pic18, bus: &mut crate::bus::SystemBus, count: usize) {
+        let config = SimulationConfig::default();
+        for _ in 0..count {
+            cpu.step(bus, &[], &config).expect("step");
+        }
+    }
+
+    /// ADRESH:ADRESL as one right-justified value.
+    fn adres(cpu: &Pic18) -> u16 {
+        (u16::from(cpu.read_data(SFR_ADRESH)) << 8) | u16::from(cpu.read_data(SFR_ADRESL))
+    }
+
+    fn adc_busy(cpu: &Pic18) -> bool {
+        cpu.read_data(SFR_ADCON0) & ADCON0_GO != 0
+    }
+
+    /// DS39631E section 19.3 and Register 19-3: a conversion is 11 TAD, and
+    /// TAD is 2/8/32 TOSC, or 4/16/64 TOSC with ADCS2. One TCY is 4 TOSC, so
+    /// 11 TAD of 2 TOSC ends inside the sixth instruction cycle.
+    #[test]
+    fn adc_conversion_takes_eleven_tad_of_the_selected_clock() {
+        for (adcs, cycles) in [
+            (0b000u8, 6usize),
+            (0b100, 11),
+            (0b001, 22),
+            (0b101, 44),
+            (0b010, 88),
+            (0b110, 176),
+        ] {
+            let (mut cpu, mut bus) = adc_cpu(&go_then_nops(), &[(0, 2500)]);
+            cpu.write_data(SFR_ADCON2, ADCON2_ADFM | adcs);
+            cpu.write_data(SFR_ADCON0, ADCON0_ADON);
+            step_on(&mut cpu, &mut bus, 1);
+            assert!(adc_busy(&cpu));
+            step_on(&mut cpu, &mut bus, cycles - 1);
+            assert!(adc_busy(&cpu), "ADCS {adcs:#05b}: one cycle early");
+            assert_eq!(cpu.read_data(SFR_PIR1) & PIR1_ADIF, 0);
+            assert_eq!(adres(&cpu), 0);
+            step_on(&mut cpu, &mut bus, 1);
+            assert!(!adc_busy(&cpu), "ADCS {adcs:#05b}: GO/DONE clears");
+            assert_ne!(cpu.read_data(SFR_PIR1) & PIR1_ADIF, 0, "ADIF sets");
+            // 2.5 V of 5 V.
+            assert_eq!(adres(&cpu), 512);
+        }
+    }
+
+    /// DS39631E Register 19-3: ACQT<2:0> adds 0/2/4/6/8/12/16/20 TAD of
+    /// acquisition before the 11 TAD conversion. FOSC/4 makes one TAD one
+    /// instruction cycle.
+    #[test]
+    fn adc_programmed_acquisition_time_precedes_the_conversion() {
+        for (acqt, tad) in [0usize, 2, 4, 6, 8, 12, 16, 20].into_iter().enumerate() {
+            let (mut cpu, mut bus) = adc_cpu(&go_then_nops(), &[(0, 2500)]);
+            cpu.write_data(SFR_ADCON2, ADCON2_ADFM | ((acqt as u8) << 3) | 0b100);
+            cpu.write_data(SFR_ADCON0, ADCON0_ADON);
+            step_on(&mut cpu, &mut bus, 1 + tad + 10);
+            assert!(adc_busy(&cpu), "ACQT {acqt}: one cycle early");
+            step_on(&mut cpu, &mut bus, 1);
+            assert!(!adc_busy(&cpu), "ACQT {acqt}: {tad} + 11 TAD");
+            assert_eq!(adres(&cpu), 512);
+        }
+    }
+
+    /// DS39631E section 19.2: with ACQT = 000 setting GO/DONE stops the
+    /// sampling at once; with a programmed acquisition time the module keeps
+    /// sampling the pin until that time ends.
+    #[test]
+    fn adc_samples_when_the_holding_capacitor_disconnects() {
+        for (acqt, expected) in [(0u8, 512u16), (2, 256)] {
+            let (mut cpu, mut bus) = adc_cpu(&go_then_nops(), &[(0, 2500)]);
+            cpu.write_data(SFR_ADCON2, ADCON2_ADFM | (acqt << 3) | 0b100);
+            cpu.write_data(SFR_ADCON0, ADCON0_ADON);
+            step_on(&mut cpu, &mut bus, 2);
+            // One TAD after GO: inside the 4 TAD acquisition when ACQT = 010.
+            let window = bus.peripherals.len() - 1;
+            bus.peripherals[window].dev.set_adc_channel_input(0, 1250);
+            step_on(&mut cpu, &mut bus, 20);
+            assert!(!adc_busy(&cpu));
+            assert_eq!(adres(&cpu), expected, "ACQT {acqt}");
+        }
+    }
+
+    /// DS39631E Register 19-3: ADFM = 1 right-justifies the 10 bits, ADFM = 0
+    /// left-justifies them; the six spare bits read 0.
+    #[test]
+    fn adc_result_justification_follows_adfm() {
+        // 1234 mV * 1024 / 5000 mV = 252 = 0x0FC, on AN4 (RA5).
+        for (adfm, expected) in [(ADCON2_ADFM, (0x00u8, 0xFCu8)), (0x00, (0x3F, 0x00))] {
+            let (mut cpu, mut bus) = adc_cpu(&go_then_nops(), &[(4, 1234)]);
+            cpu.write_data(SFR_ADCON2, adfm);
+            cpu.write_data(SFR_ADCON0, (4 << 2) | ADCON0_ADON);
+            step_on(&mut cpu, &mut bus, 7);
+            assert_eq!(
+                (cpu.read_data(SFR_ADRESH), cpu.read_data(SFR_ADRESL)),
+                expected,
+                "ADFM {adfm:#04x}"
+            );
+        }
+    }
+
+    /// DS39631E Register 19-2: VCFG0 picks AN3 as VREF+ and VCFG1 picks AN2
+    /// as VREF-; PCFG does not change what the converter measures.
+    #[test]
+    fn adc_references_follow_vcfg() {
+        let pads = [(0, 2500), (2, 1000), (3, 4000)];
+        for (adcon1, expected) in [
+            // VDD / VSS: 2500 * 1024 / 5000.
+            (0x00u8, 512u16),
+            // AN3 / VSS: 2500 * 1024 / 4000.
+            (ADCON1_VCFG0, 640),
+            // VDD / AN2: 1500 * 1024 / 4000.
+            (ADCON1_VCFG1, 384),
+            // AN3 / AN2: 1500 * 1024 / 3000.
+            (ADCON1_VCFG1 | ADCON1_VCFG0, 512),
+            // All pins digital (PCFG = 1111): AN0 still converts.
+            (0x0F, 512),
+        ] {
+            let (mut cpu, mut bus) = adc_cpu(&go_then_nops(), &pads);
+            cpu.write_data(SFR_ADCON1, adcon1);
+            cpu.write_data(SFR_ADCON2, ADCON2_ADFM);
+            cpu.write_data(SFR_ADCON0, ADCON0_ADON);
+            step_on(&mut cpu, &mut bus, 7);
+            assert_eq!(adres(&cpu), expected, "ADCON1 {adcon1:#04x}");
+        }
+        // An input below VREF- reads 0 and one above VREF+ reads full scale.
+        for (input, expected) in [(500u16, 0u16), (4500, 1023)] {
+            let (mut cpu, mut bus) = adc_cpu(&go_then_nops(), &[(0, input), (2, 1000), (3, 4000)]);
+            cpu.write_data(SFR_ADCON1, ADCON1_VCFG1 | ADCON1_VCFG0);
+            cpu.write_data(SFR_ADCON2, ADCON2_ADFM);
+            cpu.write_data(SFR_ADCON0, ADCON0_ADON);
+            step_on(&mut cpu, &mut bus, 7);
+            assert_eq!(adres(&cpu), expected);
+        }
+    }
+
+    /// DS39631E Register 19-1: CHS<3:0> selects AN0-AN12; 1101-1111 are
+    /// unimplemented. Each input carries its own level here, so a wrong
+    /// channel decode shows.
+    #[test]
+    fn adc_channel_select_reaches_all_thirteen_inputs() {
+        let pads: Vec<(u8, u16)> = (0..13u8)
+            .map(|ch| (ch, 300 * (u16::from(ch) + 1)))
+            .collect();
+        for chs in 0..16u8 {
+            let (mut cpu, mut bus) = adc_cpu(&go_then_nops(), &pads);
+            cpu.write_data(SFR_ADCON2, ADCON2_ADFM);
+            cpu.write_data(SFR_ADCON0, (chs << 2) | ADCON0_ADON);
+            step_on(&mut cpu, &mut bus, 7);
+            let expected = if chs < 13 {
+                300 * (u32::from(chs) + 1) * 1024 / 5000
+            } else {
+                0
+            };
+            assert_eq!(u32::from(adres(&cpu)), expected, "CHS {chs}");
+            assert_ne!(cpu.read_data(SFR_PIR1) & PIR1_ADIF, 0);
+        }
+    }
+
+    /// DS39631E section 19.5: a pin whose TRIS bit is cleared converts its
+    /// own output level. AN12 is RB0 and AN5 is RE0 (Table 1-3).
+    #[test]
+    fn an_output_pin_converts_its_own_level() {
+        for (chs, port, latch, expected) in [
+            (12u8, 1u16, 0x01u8, 1023u16),
+            (12, 1, 0x00, 0),
+            (5, 4, 0x01, 1023),
+        ] {
+            let (mut cpu, mut bus) = adc_cpu(&go_then_nops(), &[(chs, 2500)]);
+            cpu.write_data(SFR_TRISA + port, 0xFE);
+            cpu.write_data(SFR_LATA + port, latch);
+            cpu.write_data(SFR_ADCON2, ADCON2_ADFM);
+            cpu.write_data(SFR_ADCON0, (chs << 2) | ADCON0_ADON);
+            step_on(&mut cpu, &mut bus, 7);
+            assert_eq!(adres(&cpu), expected, "AN{chs} latch {latch}");
+        }
+    }
+
+    /// DS39631E section 19.6: clearing GO/DONE aborts the conversion and
+    /// ADRESH:ADRESL keep the last value.
+    #[test]
+    fn clearing_go_aborts_and_keeps_the_last_result() {
+        let mut program = go_then_nops();
+        program[3] = bcf(0xC2, 1);
+        let (mut cpu, mut bus) = adc_cpu(&program, &[(0, 2500)]);
+        cpu.write_data(SFR_ADRESH, 0x01);
+        cpu.write_data(SFR_ADRESL, 0x23);
+        cpu.write_data(SFR_ADCON2, ADCON2_ADFM);
+        cpu.write_data(SFR_ADCON0, ADCON0_ADON);
+        step_on(&mut cpu, &mut bus, 12);
+        assert!(!adc_busy(&cpu));
+        assert_eq!(cpu.read_data(SFR_PIR1) & PIR1_ADIF, 0, "no ADIF on abort");
+        assert_eq!(adres(&cpu), 0x0123);
+    }
+
+    /// DS39631E section 19.4 and Register 19-3 note 1: on the A/D RC
+    /// oscillator the conversion starts one instruction cycle late, runs
+    /// through Sleep, and ADIF wakes the part. An Fosc-derived A/D clock
+    /// stops in Sleep and runs in an Idle mode (OSCCON IDLEN).
+    #[test]
+    fn rc_clock_converts_in_sleep_and_idle_keeps_the_fosc_clock() {
+        const SLEEP: u16 = 0x0003;
+        let program = [bsf(0xC2, 1), SLEEP, 0x0E5A, 0, 0];
+        let (mut cpu, mut bus) = adc_cpu(&program, &[(0, 2500)]);
+        cpu.write_data(SFR_ADCON2, ADCON2_ADFM | 0b111);
+        cpu.write_data(SFR_ADCON0, ADCON0_ADON);
+        cpu.write_data(SFR_PIE1, PIR1_ADIF);
+        step_on(&mut cpu, &mut bus, 2);
+        assert!(cpu.is_asleep());
+        // 11 TAD of 1.2 us at 10 MIPS is 132 cycles, after the one-cycle
+        // delay that the SLEEP instruction covers.
+        step_on(&mut cpu, &mut bus, 131);
+        assert!(cpu.is_asleep(), "still converting");
+        step_on(&mut cpu, &mut bus, 1);
+        assert!(!cpu.is_asleep(), "ADIF wakes the part");
+        assert_eq!(adres(&cpu), 512);
+        step_on(&mut cpu, &mut bus, 1);
+        assert_eq!(cpu.wreg(), 0x5A);
+
+        // The RC period follows the instruction rate: 4 MIPS gives
+        // ceil(13.2 us * 4 MHz) = 53 cycles.
+        let (mut cpu, mut bus) = adc_cpu(&program, &[(0, 2500)]);
+        cpu.set_adc_instruction_hz(4_000_000);
+        cpu.write_data(SFR_ADCON2, ADCON2_ADFM | 0b011);
+        cpu.write_data(SFR_ADCON0, ADCON0_ADON);
+        cpu.write_data(SFR_PIE1, PIR1_ADIF);
+        step_on(&mut cpu, &mut bus, 2 + 52);
+        assert!(cpu.is_asleep());
+        step_on(&mut cpu, &mut bus, 1);
+        assert!(!cpu.is_asleep());
+
+        for (osccon, wakes) in [(0x00u8, false), (OSCCON_IDLEN, true)] {
+            let (mut cpu, mut bus) = adc_cpu(&program, &[(0, 2500)]);
+            cpu.write_data(SFR_OSCCON, osccon);
+            cpu.write_data(SFR_ADCON2, ADCON2_ADFM | 0b010);
+            cpu.write_data(SFR_ADCON0, ADCON0_ADON);
+            cpu.write_data(SFR_PIE1, PIR1_ADIF);
+            step_on(&mut cpu, &mut bus, 600);
+            assert_eq!(!cpu.is_asleep(), wakes, "OSCCON {osccon:#04x}");
+            assert_eq!(adres(&cpu), if wakes { 512 } else { 0 });
+        }
+    }
+
+    /// DS39631E Table 4-4 and Register 19-2 note 1: a reset turns the module
+    /// off, keeps ADRESH:ADRESL, and loads PCFG<2:0> from the PBADEN
+    /// configuration bit (CONFIG3H<1>).
+    #[test]
+    fn adc_reset_state_follows_pbaden_and_keeps_the_result() {
+        const RESET: u16 = 0x00FF;
+        let mut program = go_then_nops();
+        program[8] = RESET;
+        let (mut cpu, mut bus) = adc_cpu(&program, &[(0, 2500)]);
+        // An erased CONFIG3H has PBADEN = 1: PORTB<4:0> reset as analog.
+        assert_eq!(cpu.read_data(SFR_ADCON1), 0x00);
+        cpu.write_data(SFR_ADCON1, 0xFF);
+        assert_eq!(cpu.read_data(SFR_ADCON1), 0x3F, "bits 7-6 unimplemented");
+        // Back to the VDD/VSS references, all pins digital.
+        cpu.write_data(SFR_ADCON1, 0x0F);
+        cpu.write_data(SFR_ADCON2, 0xFF);
+        assert_eq!(cpu.read_data(SFR_ADCON2), 0xBF, "bit 6 unimplemented");
+        cpu.write_data(SFR_ADCON2, ADCON2_ADFM);
+        cpu.write_data(SFR_ADCON0, 0xC0 | ADCON0_ADON);
+        assert_eq!(cpu.read_data(SFR_ADCON0), ADCON0_ADON, "bits 7-6");
+        step_on(&mut cpu, &mut bus, 9);
+        assert_eq!(cpu.read_data(SFR_ADCON0), 0, "RESET turns the module off");
+        assert_eq!(cpu.read_data(SFR_ADCON1), 0x00);
+        assert_eq!(cpu.read_data(SFR_ADCON2), 0x00);
+        assert_eq!(adres(&cpu), 512, "RESET does not modify the result");
+
+        // PBADEN = 0: PCFG<2:0> = 111.
+        cpu.load_flash(PIC18_CONFIG_BASE + 5, &[0x81]);
+        cpu.reset(&mut bus).unwrap();
+        assert_eq!(cpu.read_data(SFR_ADCON1), 0x07);
+    }
+
+    /// A chip that declares no pad window keeps the A/D registers plain.
+    #[test]
+    fn without_the_pad_window_there_is_no_adc() {
+        let mut cpu = Pic18::for_chip_name("pic18f4520");
+        cpu.load_words(&go_then_nops());
+        assert!(!cpu.has_adc());
+        cpu.write_data(SFR_ADCON0, ADCON0_ADON);
+        run(&mut cpu, 200);
+        assert_eq!(cpu.read_data(SFR_ADCON0), ADCON0_ADON | ADCON0_GO);
+        assert_eq!(cpu.read_data(SFR_PIR1) & PIR1_ADIF, 0);
+        assert_eq!(cpu.read_data(SFR_ADCON1), 0);
     }
 
     #[test]

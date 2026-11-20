@@ -375,6 +375,8 @@ fn build_pic18_node(
     let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
         .with_context(|| format!("node '{id}': build bus"))?;
     let mut cpu = crate::cpu::Pic18::for_chip_name(&chip.name);
+    cpu.bind_adc_pads(&bus);
+    cpu.set_adc_instruction_hz(system.cpu_hz.unwrap_or(chip.cpu_hz));
     cpu.load_program_image(&image);
     let machine = Machine::new(cpu, bus);
     Ok(Box::new(machine))

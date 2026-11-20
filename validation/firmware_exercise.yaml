@@ -924,7 +924,7 @@ chips:
 
   - id: pic18f4520
     arch: pic18
-    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. First PIC18 part: exact PIC18F4520 descriptor (DS39631E) with 32 KB flash, a 31-level stack and the 0x80 Access Bank split. Real SDCC 4.4.0 C firmware boots through its C runtime: the FSR1/FSR2 software stack via MOVFF on the indirect aliases, TBLRD string reads and MULLW. It prints a banner on the EUSART TXREG (0xFAD), sets RB0 through LATB, reads it back and toggles it (crates/core/tests/pic18f4520_smoke.rs, examples/pic18f4520/io-smoke.yaml). EUSART RX and baud timing, timers, CCP/ECCP, MSSP, ADC, data EEPROM, WDT, CONFIG decoding and XINST are not modelled."
+    headline: "L1 smoke, SIM-DERIVED; no beyond-rubric content. First PIC18 part: exact PIC18F4520 descriptor (DS39631E) with 32 KB flash, a 31-level stack and the 0x80 Access Bank split. Real SDCC 4.4.0 C firmware boots through its C runtime: the FSR1/FSR2 software stack via MOVFF on the indirect aliases, TBLRD string reads and MULLW. It prints a banner on the EUSART TXREG (0xFAD), sets RB0 through LATB, reads it back and toggles it (crates/core/tests/pic18f4520_smoke.rs, examples/pic18f4520/io-smoke.yaml). A gpasm 1.4.0 program converts AN0/AN1 on the 10-bit A/D module from routed pad levels (crates/core/tests/cosim_pic18f4520_analog.rs). EUSART RX and baud timing, timers, CCP/ECCP, MSSP, data EEPROM, WDT, digital pin sampling, CONFIG decoding (PBADEN excepted) and XINST are not modelled."
     functional: []
     advanced_unit_only: []
     advanced_dead: []

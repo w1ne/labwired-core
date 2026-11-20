@@ -2806,6 +2806,7 @@ pub(crate) fn run_test(
                     String::new()
                 });
             let mut cpu = labwired_core::cpu::Pic18::for_chip_name(&pic18_chip_name);
+            cpu.bind_adc_pads(&bus);
             cpu.load_program_image(&program);
             cpu.set_serial_sink(uart_tx.clone());
             let machine = labwired_core::Machine::new(cpu, bus);

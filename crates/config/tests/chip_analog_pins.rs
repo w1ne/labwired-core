@@ -187,6 +187,10 @@ const PORTS_NOT_MODELLED: &[(&str, &str)] = &[
         "pic16f877a",
         "PORTA/PORTE are SFRs inside the PIC16 core, not bus port blocks",
     ),
+    (
+        "pic18f4520",
+        "PORTA/PORTB/PORTE are SFRs inside the PIC18 core, not bus port blocks",
+    ),
 ];
 
 /// Pads that one ADC input really reaches twice. S32K388 RTD 7.0.1

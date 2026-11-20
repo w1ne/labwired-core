@@ -977,8 +977,8 @@ const CHIPS: &[ChipConf] = &[
     },
     // PIC18F4520 (DS39631E), the first PIC18 part. The gate boots real SDCC
     // 4.4.0 C firmware (software stack, TBLRD string reads, EUSART TX,
-    // PORTB latch). Timers, CCP, MSSP, ADC, EEPROM, EUSART RX and XINST are
-    // not exercised, so this is L1, not full-device parity.
+    // PORTB latch). Timers, CCP, MSSP, EEPROM, EUSART RX and XINST are not
+    // exercised by the gate, so this is L1, not full-device parity.
     ChipConf {
         name: "pic18f4520",
         yaml: "configs/chips/pic18f4520.yaml",

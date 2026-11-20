@@ -74,3 +74,44 @@ fn pic18_boots_only_from_an_elf() {
         );
     }
 }
+
+/// The builder binds the A/D module to the descriptor's pad window: the gpasm
+/// A/D firmware waits on GO/DONE, so it prints only when a conversion ends.
+/// Nothing is routed here, so both inputs convert 0 V.
+#[test]
+fn pic18f4520_adc_firmware_converts_through_build_machine() {
+    let fw = common::committed("examples/pic18f4520/firmware/pic18f4520-gpasm-adc-ntc-diode.elf");
+    let mut s = open(FirmwareSource::Elf(&fw), BootMode::FastBoot).unwrap();
+    let r = s.expect("N=000 D=000", Duration::from_secs(2));
+    let transcript = s.uart_transcript();
+    r.unwrap_or_else(|e| panic!("{e}\n--- console ---\n{transcript}"));
+}
+
+/// The whole loop in one `Session`: the example's NTC divider and diode
+/// netlists are solved by the session's co-simulation, routed to RA0/AN0 and
+/// RA1/AN1, and converted by the firmware. The NTC is set to 25 °C before
+/// the first instruction: 2.5 V and 0.649 V of 5 V are the codes 0x200 and
+/// 0x084.
+#[test]
+fn pic18f4520_adc_firmware_converts_the_solved_netlists_in_a_session() {
+    let (chip, manifest) = common::system("examples/pic18f4520/analog-ntc-diode-system.yaml");
+    assert_eq!(manifest.cosim_models.len(), 2);
+    let blobs = BlobMap::new();
+    let fw = common::committed("examples/pic18f4520/firmware/pic18f4520-gpasm-adc-ntc-diode.elf");
+    let mut s = Session::open(
+        BuildRequest {
+            chip: &chip,
+            system: &manifest,
+            firmware: FirmwareSource::Elf(&fw),
+            boot: BootMode::FastBoot,
+            blobs: &blobs,
+            options: BuildOptions::default(),
+        },
+        OpenOptions::default(),
+    )
+    .unwrap();
+    s.set_signal("ui.ntc.temperature_c", 25.0).unwrap();
+    let r = s.expect("N=200 D=084", Duration::from_secs(2));
+    let transcript = s.uart_transcript();
+    r.unwrap_or_else(|e| panic!("{e}\n--- console ---\n{transcript}"));
+}

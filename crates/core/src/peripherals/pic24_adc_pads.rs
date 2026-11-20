@@ -23,7 +23,8 @@
 //!
 //! The PIC16F87XA A/D module is CPU-internal as well (`cpu::pic16`), and its
 //! core pulls AN0-AN7 from the same window at `cpu::pic16::PIC16_ADC_PAD_BASE`;
-//! there [`OFF_VREF_MV`] is VDD.
+//! there [`OFF_VREF_MV`] is VDD. The PIC18F4520 A/D module (`cpu::pic18`)
+//! pulls AN0-AN12 the same way at `cpu::pic18::PIC18_ADC_PAD_BASE`.
 //!
 //! A released channel (never routed, or cleared) leaves the core's harness
 //! code (`Pic24::set_adc_analog`) in charge of that input.

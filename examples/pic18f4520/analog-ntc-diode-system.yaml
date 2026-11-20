@@ -1,6 +1,6 @@
 # Generic Beta NTC divider and Shockley diode for the PIC18F4520 profile.
-# These route to simulation-only threshold endpoints; PIC18 port sampling and
-# ADC conversion are not modeled yet.
+# The NTC divider is on RA0/AN0 and the diode on RA1/AN1; the 10-bit A/D
+# module converts both against VDD (ADCON1 VCFG = 00).
 name: "pic18f4520-demo-analog"
 chip: "../../configs/chips/pic18f4520.yaml"
 external_devices: []
@@ -12,7 +12,7 @@ cosim_models:
     inputs:
       temperature: "ui.ntc.temperature_c"
     outputs:
-      v_sense: "board.gpio_in.analog_inputs.0"
+      v_sense: "board.analog.RA0_volts"
     config:
       netlist_text: |
         Vcc vcc 0 dc 5.0
@@ -27,7 +27,7 @@ cosim_models:
     adapter: "analog"
     step_ns: 1000
     outputs:
-      v_diode: "board.gpio_in.analog_inputs.1"
+      v_diode: "board.analog.RA1_volts"
     config:
       netlist_text: |
         Vcc supply 0 dc 5.0
