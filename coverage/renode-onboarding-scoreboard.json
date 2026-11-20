@@ -5389,24 +5389,24 @@
       "script": "examples/renode-onboarding/nrf52840-smoke.yaml",
       "system": "configs/systems/onboarding/nrf52840.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-20T07:02:08Z",
-      "finished_at_utc": "2026-11-20T07:07:16Z",
-      "elapsed_seconds": 308,
-      "elapsed_ms": 307123,
+      "started_at_utc": "2026-11-20T08:04:45Z",
+      "finished_at_utc": "2026-11-20T08:09:39Z",
+      "elapsed_seconds": 294,
+      "elapsed_ms": 293702,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 301.953,
-        "build_firmware": 1.775,
-        "run_smoke": 3.348
+        "build_cli": 285.431,
+        "build_firmware": 2.543,
+        "run_smoke": 5.587
       },
       "stages_ms": {
-        "build_cli": 301953,
-        "build_firmware": 1775,
-        "run_smoke": 3348
+        "build_cli": 285431,
+        "build_firmware": 2543,
+        "run_smoke": 5587
       },
       "_artifact_path": "nrf52840",
       "zero_answering_windows": [],
@@ -5436,24 +5436,24 @@
       "script": "examples/renode-onboarding/nrf52840dk_nrf52840-smoke.yaml",
       "system": "configs/systems/onboarding/nrf52840dk_nrf52840.yaml",
       "profile": "release",
-      "started_at_utc": "2026-11-20T07:20:51Z",
-      "finished_at_utc": "2026-11-20T07:21:00Z",
-      "elapsed_seconds": 9,
-      "elapsed_ms": 8442,
+      "started_at_utc": "2026-11-20T08:26:25Z",
+      "finished_at_utc": "2026-11-20T08:29:25Z",
+      "elapsed_seconds": 180,
+      "elapsed_ms": 179639,
       "failure_stage": "",
       "first_error_signature": "",
       "failure_hint": "",
       "threshold_seconds": 3600,
       "threshold_met": true,
       "stages_seconds": {
-        "build_cli": 2.962,
-        "build_firmware": 2.897,
-        "run_smoke": 2.521
+        "build_cli": 176.672,
+        "build_firmware": 0.336,
+        "run_smoke": 2.579
       },
       "stages_ms": {
-        "build_cli": 2962,
-        "build_firmware": 2897,
-        "run_smoke": 2521
+        "build_cli": 176672,
+        "build_firmware": 336,
+        "run_smoke": 2579
       },
       "_artifact_path": "nrf52840dk_nrf52840",
       "zero_answering_windows": [],

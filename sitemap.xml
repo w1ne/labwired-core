@@ -2221,6 +2221,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf52840/2026-11-20-negative-control-pwm-1hz-core-clock/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf52840/2026-11-20-negative-control-pwm-irq-old-descriptor/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf52840/2026-11-20-negative-control-twim-anack-old-model/</loc>
     </url>
     <url>
