@@ -1,4 +1,5 @@
 id: nrf52840
+# 2026-11-20 (onboarding/nano-33-ble): stock ArduinoCore-mbed sketches for the Arduino Nano 33 BLE Rev2 run. usbd.rs is now a behavioural USB device model with a scripted host (usb_host.rs); the chip default is `host: false` (no cable), where it holds the registers the 2026-08-09 sweep read, plus the anomaly 187 gate on ENABLE that sweep recorded. twim.rs gained the TWI master personality (twi_legacy.rs, ENABLE = 5); ENABLE = 6 paths are unchanged. clock.rs reports the USB supply events and status in POWER; rtc.rs: an event enabled in INTEN alone now latches its EVENTS register (before, EVTEN was needed), and queued scheduler wakes are deduplicated. uarte.rs: TASKS_STOPRX on a started receiver now raises RXTO; `bootloader_rx_running` is an opt-in key. ficr.rs: the words at 0x130/0x134 come from the opt-in keys `part_code` and `part_revision`, which nrf52840.yaml sets (0x08, revision 3: an assumption, not a bench reading). None of the new behaviour was captured on silicon: no bench board ran it.
 # 2026-09-16 (#1128): Cortex-M browser JIT rides `Machine::advance_with_window_runner` — the advance loop now plans and commits the window (tick cadence, reset drains, idle fast forward) and a compiled backend only supplies the instruction stream; the JIT batch gates (takeable exception, SysTick crossing, SYSRESETREQ latch) become public for `jit-framework` so the browser adapter refuses the same windows `run_jit_loop` does. In `cortex_m.rs`: `note_chained` only counts a chain that retired instructions, `sysreset_latched` is pub. Interpreter path unchanged — the gates are the ones `run_jit_loop` already used; pinned by `cortex_m_jit_alu_lockstep` and new window-runner cadence tests. No silicon capture pins JIT.
 # 2026-09-16 (#1125): Cortex-M JIT follow-ups (block chaining, floor 4, IT-predicated ALU, VFP S-ALU, VLDR/VSTR, LDR.W PC), plus two model fixes that ride along: the bit-band alias decode no longer swallows peripherals vendors place inside 0x4200_0000 (SAMD51 QSPI/SERCOM), and the STM32 timer's scheduled compare pend lands on the latch tick like the walk. JIT is opt-in (`cortex_m_jit_enabled` default off); interpreter path unchanged, JIT-on vs off lockstep in cortex_m_jit_nrf_differential; both fixes pinned by bus-level gates. No silicon capture pins JIT.
 # 2026-09-15: Cortex-M JIT SysTick countdown clamp (`block_would_cross_irq`). ticks_until_fire math unchanged; consume_cycles is JIT-only and no-ops in scheduler mode. Interpreter/silicon path unchanged.
@@ -389,6 +390,8 @@ models:
   - crates/core/src/decoder/arm.rs
   - crates/core/src/decoder/arm_thumb32.rs
   - crates/core/src/peripherals/nrf52
+  # 2026-11-20: the scripted host of the USB device model (Nano 33 BLE).
+  - crates/core/src/peripherals/usb_host.rs
   - configs/chips/nrf52840.yaml
 
 # 2026-09-18: decode_thumb_32 split into per-encoding-group functions in a new

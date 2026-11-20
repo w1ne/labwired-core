@@ -252,6 +252,8 @@ pub struct Nrf52Twim {
     clock: Option<crate::CycleClock>,
     /// The bit-level engine used on a world `gpio_net` (see `twim_net`).
     net: net::TwimNet,
+    /// The TWI master personality, `ENABLE = 5` (see `twi_legacy`).
+    twi: twi::TwiLegacy,
 }
 
 impl std::fmt::Debug for Nrf52Twim {
@@ -300,6 +302,7 @@ impl Default for Nrf52Twim {
             wire_overflow: false,
             clock: None,
             net: net::TwimNet::default(),
+            twi: twi::TwiLegacy::default(),
         }
     }
 }
@@ -361,13 +364,14 @@ impl Nrf52Twim {
     /// Republish both claims from the live registers. Called after every write
     /// that can move a pad — `PSEL.SCL`, `PSEL.SDA` and `ENABLE`.
     ///
-    /// The gate is `ENABLE == 6` (TWIM master), not merely "nonzero": the
+    /// The gate is `ENABLE == 6` (TWIM master) or `5` (TWI master, the same
+    /// two pins), not merely "nonzero": the
     /// window at 0x40003000 hosts SPIM0/SPIS0/SPI0/TWIM0/TWI0/TWIS0 and ENABLE
     /// picks which one owns it (nRF52840 PS v1.11 §6.31.7.18, p798). With
     /// ENABLE = 7 the SPIM half is driving those pins and this controller must
     /// not claim them.
     fn sync_pin_claims(&mut self) {
-        let live = self.enable & ENABLE_MASK == ENABLE_TWIM;
+        let live = self.enable & ENABLE_MASK == ENABLE_TWIM || self.twi_mode();
         self.claim_scl.update(self.psel_scl, live);
         self.claim_sda.update(self.psel_sda, live);
     }
@@ -629,14 +633,16 @@ impl Nrf52Twim {
             (&self.events_lastrx, INTEN_LASTRX, OFF_EVENTS_LASTRX),
             (&self.events_lasttx, INTEN_LASTTX, OFF_EVENTS_LASTTX),
         ];
-        let mut irq = false;
         let mut fired: Vec<u32> = Vec::new();
         for &(ev, mask, off) in events {
             if *ev != 0 && self.inten & mask != 0 {
-                irq = true;
                 fired.push(off as u32);
             }
         }
+        if self.twi_mode() {
+            self.twi_irq_events(&mut fired);
+        }
+        let irq = !fired.is_empty();
         PeripheralTickResult {
             irq,
             fired_events: fired,
@@ -655,6 +661,12 @@ impl Nrf52Twim {
             return;
         }
         self.pending = PENDING_NONE;
+        if pending == twi::PENDING_TWI {
+            // TWI publishes its waveform at STOP, not when the wire goes idle
+            // between two bytes.
+            self.twi_complete();
+            return;
+        }
         let addr7 = (self.address & ADDRESS_MASK) as u8;
         match pending {
             PENDING_STOP => {
@@ -751,6 +763,11 @@ impl Peripheral for Nrf52Twim {
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        if self.twi_mode() {
+            if let Some(value) = self.twi_read(offset) {
+                return Ok(value);
+            }
+        }
         Ok(match offset {
             // TASKs: read as 0 (write-only strobes on silicon).
             OFF_TASKS_STARTRX | OFF_TASKS_STARTTX | OFF_TASKS_STOP | OFF_TASKS_RESUME
@@ -799,6 +816,9 @@ impl Peripheral for Nrf52Twim {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if self.twi_mode() && self.twi_write(offset, value) {
+            return Ok(());
+        }
         // On a world `gpio_net` the tasks drive the bit engine (`twim_net`).
         if value != 0
             && matches!(
@@ -880,6 +900,9 @@ impl Peripheral for Nrf52Twim {
             // ENABLE and PSEL both move which pad this controller's wire
             // reaches, so both re-publish the claim. See `sync_pin_claims`.
             OFF_ENABLE => {
+                if self.enable != value & ENABLE_MASK {
+                    self.twi_enable_changed();
+                }
                 self.enable = value & ENABLE_MASK;
                 self.sync_pin_claims();
                 self.net_after_pins();
@@ -933,6 +956,8 @@ impl Peripheral for Nrf52Twim {
 
     fn tick(&mut self) -> PeripheralTickResult {
         self.net_tick();
+        // A TWI receive goes on once firmware has read RXD.
+        self.twi_kick();
         self.irq_from_events()
     }
 
@@ -980,7 +1005,11 @@ impl Peripheral for Nrf52Twim {
         if event_token == net::NET_TOKEN {
             return self.net_on_sched(_sched.now(), bus);
         }
-        if event_token == 1 && self.pending != PENDING_NONE {
+        let twi_early = self.pending == twi::PENDING_TWI && self.twi_remaining(_sched.now()) > 0;
+        if twi_early {
+            // An event left over from an earlier byte: this one is not done.
+            self.busy_cycles = self.twi_remaining(_sched.now()) as u32;
+        } else if event_token == 1 && self.pending != PENDING_NONE {
             // Consume the latency in one shot (event fires at the deadline).
             self.busy_cycles = 0;
             self.run_pending_transfer(bus);
@@ -1049,6 +1078,8 @@ impl Nrf52Twim {
 
 #[path = "twim_net.rs"]
 mod net;
+#[path = "twi_legacy.rs"]
+pub(crate) mod twi;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 

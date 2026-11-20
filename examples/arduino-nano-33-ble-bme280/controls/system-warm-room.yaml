@@ -1,0 +1,27 @@
+# Value control: the same board and sketch, with the BME280 model placed in a
+# different environment. The printed readings must follow these inputs.
+name: arduino-nano-33-ble-bme280-warm-room
+chip: ../../../configs/chips/nrf52840.yaml
+memory_overrides:
+  reset_vector_offset: "0x10000"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x77
+      temperature: 31.5
+      humidity: 40.0
+      pressure: 990.0
+peripherals:
+  - id: "uart0"
+    type: "nrf52840_uart"
+    base_address: 0x40002000
+    config:
+      bootloader_rx_running: true
+  - id: "usbd"
+    type: "nrf52840_usbd"
+    base_address: 0x40027000
+    config:
+      host: true
+board_io: []

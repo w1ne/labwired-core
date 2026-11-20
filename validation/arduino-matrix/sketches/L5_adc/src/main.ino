@@ -27,6 +27,9 @@
 // adds A0 to pins below it), but name it: A0 = PA02 = AIN0, the input the
 // matrix board drives.
 #    define LW_ADC_PIN A0
+#  elif defined(ARDUINO_ARDUINO_NANO33BLE)
+// Same trap in ArduinoCore-mbed: A0 (P0.04 = AIN2) is a `static const`.
+#    define LW_ADC_PIN A0
 #  elif defined(ARDUINO_NANO_ESP32)
 // Same trap on the Nano ESP32: A0 (GPIO1 = ADC1_CH0) is a `static constexpr`.
 // With the pin remap, analogRead(0) would read D0 = GPIO44, which has no ADC.
@@ -46,6 +49,7 @@ static void logBegin() {
   Serial.begin(115200);
 #if (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) || defined(__AVR_ATmega32U4__) || \
     defined(ARDUINO_SAMD_NANO_33_IOT) || \
+    defined(ARDUINO_ARDUINO_NANO33BLE) || \
     ((defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32S2)) && \
      defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE)
   // arduino-pico (Pico 2) and the ATmega32U4 (Leonardo): Serial is native USB
@@ -55,6 +59,8 @@ static void logBegin() {
   // TinyUSB CDC on USB-OTG, which drops writes until DTR the same way.
   // ArduinoCore-samd on the Nano 33 IoT: Serial is SerialUSB, native USB CDC,
   // and operator bool() is false until the host raises DTR.
+  // ArduinoCore-mbed on the Nano 33 BLE: Serial is USB CDC on the nRF52840
+  // USBD and drops writes until the host raises DTR.
   while (!Serial) delay(1);
 #endif
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT)
@@ -129,6 +135,13 @@ static bool samples_ok(int v0, int v1) {
   // DIV2 against INTVCC1 (VDDANA / 2), so full scale is 3.3 V and the 10-bit
   // code is 512. Exact; a 0 here means no conversion, or the pad was never
   // handed to the ADC.
+  return v0 == 512 && v1 == 512;
+
+#elif defined(ARDUINO_ARDUINO_NANO33BLE)
+  // nrf52 SAADC: the matrix system holds A0 (P0.04 = AIN2) at 1650 mV. Mbed
+  // converts at 12 bits, gain 1/4 against VDD/4 (full scale 3.3 V): 2048,
+  // which analogRead's default 10 bits makes 512. Exact; the idle unseeded
+  // input reads 0.
   return v0 == 512 && v1 == 512;
 
 #elif defined(ARDUINO_XIAO_ESP32S3) || defined(ARDUINO_NANO_ESP32)

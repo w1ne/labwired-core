@@ -2,7 +2,7 @@
 
 The **Arduino Nano 33 BLE** (ABX00030): an **nRF52840** (Cortex-M4F, 64 MHz), 1 MiB of flash at `0x0`, 256 KiB of RAM at `0x20000000`, a **4-channel RGB LED** (active low) on `P0.24`/`P0.16`/`P0.06`, the built-in D13 LED on `P0.13`, and `Serial1` on **UARTE0** (`D0/TX = P1.03`, `D1/RX = P1.10`). The board also carries an **LSM9DS1** IMU on TWI0 (`0x6B`/`0x1E`) and the nRF52840's USB CDC (`Serial`).
 
-This is an **L1 (smoke)** target: boot + the UARTE console and the active-low RGB GPIO mapping are proven by a committed smoke fixture and an `io-smoke.yaml`. The nRF52840 chip is the shipped model (same silicon as the nRF52840-DK); the board adds the board-level pin map. The LSM9DS1 IMU and the USB CDC are **not modelled** — the smoke touches neither, and no silicon capture exists: **SIM-DERIVED**, no executing-fidelity differential of its own.
+This is an **L1 (smoke)** target: boot + the UARTE console and the active-low RGB GPIO mapping are proven by a committed smoke fixture and an `io-smoke.yaml`. The nRF52840 chip is the shipped model (same silicon as the nRF52840-DK); the board adds the board-level pin map. The LSM9DS1 IMU is **not modelled** and the smoke does not use the USB port; no silicon capture exists: **SIM-DERIVED**, no executing-fidelity differential of its own.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:
@@ -35,13 +35,34 @@ This is an **L1 (smoke)** target: boot + the UARTE console and the active-low RG
 | RGB LED red / green / blue | `P0.24` / `P0.16` / `P0.06` | modelled GPIO; **active low** |
 | Built-in LED (D13) | `P0.13` | modelled GPIO; active high |
 | LSM9DS1 IMU | TWI0, `0x6B` / `0x1E` | **not modelled** (TWI0 controller is modelled; the sensor is not) |
-| USB CDC (`Serial`) | nRF52840 USBD | **not modelled** — the console is UARTE0 (`Serial1`) |
+| USB CDC (`Serial`) | nRF52840 USBD | modelled (`nrf52840_usbd` and a scripted host); this smoke leaves the port empty and prints on UARTE0 (`Serial1`). See *Stock Arduino sketches* |
 
 ## Boot path
 
 **Fast boot.** The engine loads the ELF and enters it at its entry point
 (the flash base, `0x0`) with SP seeded at the top of RAM. The nRF52840 boot
 flow (bootloader/DFU) is not modelled.
+
+## Stock Arduino sketches
+
+The smoke above is bare-metal firmware linked at `0x0`. Stock ArduinoCore-mbed
+sketches for the Nano 33 BLE Rev2 (ABX00071) run on a second manifest,
+[`configs/systems/arduino-nano-33-ble-bme280.yaml`](../../configs/systems/arduino-nano-33-ble-bme280.yaml):
+
+- `Serial` is the native USB port. The `nrf52840_usbd` model and a scripted
+  host enumerate the board and open its CDC port.
+- The image is linked at `0x10000`, above the board's bootloader. The
+  bootloader is not modelled: the manifest enters the application's vector
+  table (`memory_overrides.reset_vector_offset`) and starts UARTE0 as the
+  bootloader leaves it.
+- `Wire` runs on the TWI0 master with byte registers (`ENABLE = 5`), the
+  controller Mbed OS uses.
+
+Example with wiring, a copy-paste sketch and controls:
+[`examples/arduino-nano-33-ble-bme280/`](../../examples/arduino-nano-33-ble-bme280/README.md).
+Arduino matrix row: `validation/arduino-matrix/boards/nano-33-ble.yaml`
+(8 pass / 1 skip on 2026-11-20; L6 does not prove the PWM pad).
+The BMI270, the BMM150 and the BLE stack are not attached or exercised.
 
 ## Validation
 

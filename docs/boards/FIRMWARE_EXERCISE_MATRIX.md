@@ -112,8 +112,9 @@ _TWIM/PWM are firmware-proven via the rubric fixture; the PR-gated OBD2 scanner 
 
 **Functional device/protocol reads** (real driver, decoded value):
 - BME280 temperature read (~25 °C) via an unmodified Zephyr sensor driver — `zephyr-bme280-ztest` · external west build (not in core cargo test) (on-demand)
+- Stock ArduinoCore-mbed sketch on the Arduino Nano 33 BLE Rev2: the scripted USB host enumerates the native port (nrf52840_usbd) and opens its CDC serial port; the Adafruit BME280 library reads the sensor over Wire (TWI0 master, byte registers) and prints 25.00 C, 1013.25 hPa, 50.00 %RH on Serial (USB CDC) — `arduino-nano-33-ble-bme280` · crates/core/tests/nrf/arduino_nano_33_ble_bme280.rs (tests/fixtures/nrf52/arduino-nano-33-ble-bme280.elf) (PR gate)
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `TWIS`, `SPIS`, `CCM`, `RNG`, `TEMP`, `ECB`, `GPIOTE`, `PPI`, `NVMC`, `FICR`, `UICR`, `NFCT`, `PDM`, `EGU`, `QSPI`, `USBD`
+**Advanced peripherals — unit-tested only** (no firmware drives them): `TWIS`, `SPIS`, `CCM`, `RNG`, `TEMP`, `ECB`, `GPIOTE`, `PPI`, `NVMC`, `FICR`, `UICR`, `NFCT`, `PDM`, `EGU`, `QSPI`
 
 **Dead** (8 modeled, never exercised): `QDEC`, `AAR`, `ACL`, `COMP`, `CRYPTOCELL`, `I2S`, `LPCOMP`, `MWU`
 

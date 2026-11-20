@@ -72,7 +72,6 @@ const OFF_ERRORSRC: u64 = 0x480;
 // Enable — 4 selects the legacy UART personality, 8 selects UARTE (EasyDMA).
 const OFF_ENABLE: u64 = 0x500;
 const ENABLE_UART_LEGACY: u32 = 4;
-#[cfg(test)]
 const ENABLE_UARTE: u32 = 8;
 
 // Legacy UART single-byte data registers (PS §6.34.13). Present only in the
@@ -188,6 +187,9 @@ pub struct Nrf52Uarte {
     /// Set by a STARTRX task write (UARTE personality); consumed by
     /// `do_easydma_rx` once the RX queue has bytes to drain.
     rx_pending: bool,
+    /// The receiver is started (STARTRX seen, STOPRX not yet). STOPRX on a
+    /// started receiver raises RXTO; on an idle one it does nothing.
+    rx_running: bool,
     /// Scheduler-side ownership: one bounded capture/completion pair is queued.
     /// `collect_scheduled_events` runs after
     /// every MMIO write; without this guard each STARTTX-pending poll arms
@@ -305,6 +307,17 @@ impl Nrf52Uarte {
             echo_stdout: true,
             ..Self::default()
         }
+    }
+
+    /// The state a resident bootloader that used this UARTE hands over:
+    /// enabled as UARTE with the receiver started. For boards whose
+    /// application expects it (the Arduino Nano 33 BLE core stops the
+    /// receiver and waits for RXTO before `setup()`); the bootloader itself
+    /// is not modelled, and the pins it selected stay disconnected.
+    pub fn with_bootloader_rx_running(mut self) -> Self {
+        self.enable = ENABLE_UARTE;
+        self.rx_running = true;
+        self
     }
 
     /// Attach a capture sink and/or toggle stdout echo. Mirrors `Uart::set_sink`
@@ -633,9 +646,20 @@ impl Peripheral for Nrf52Uarte {
             OFF_TASKS_STOPTX => self.stop_transmitter(),
             // STARTRX (UARTE personality) arms an EasyDMA drain of the RX
             // injection queue; the RAM write happens in `do_easydma_rx`.
-            OFF_TASKS_STARTRX if self.enable != ENABLE_UART_LEGACY => self.rx_pending = true,
-            // Legacy-personality STARTRX and the stop/flush tasks: accepted,
-            // no modelled effect (legacy RX is byte-pull driven by RXD reads).
+            OFF_TASKS_STARTRX if self.enable != ENABLE_UART_LEGACY => {
+                self.rx_pending = true;
+                self.rx_running = true;
+            }
+            // STOPRX (UARTE personality) stops a started receiver at once:
+            // RXTO. The ENDRX that precedes it on silicon is not raised.
+            OFF_TASKS_STOPRX if self.rx_running => {
+                self.rx_running = false;
+                self.rx_pending = false;
+                self.events_rxto = 1;
+            }
+            // Legacy-personality STARTRX, STOPRX on an idle receiver and the
+            // flush task: accepted, no modelled effect (legacy RX is
+            // byte-pull driven by RXD reads).
             OFF_TASKS_STARTRX | OFF_TASKS_STOPRX | OFF_TASKS_FLUSHRX => {}
             // EVENTS: hardware-generated; SW write-1 ignored, write-0 clears
             OFF_EVENTS_CTS if value == 0 => self.events_cts = 0,
@@ -659,6 +683,9 @@ impl Peripheral for Nrf52Uarte {
             // TXD pin "behaves as a regular GPIO" (PS v1.11 §6.34.8, p836).
             OFF_ENABLE => {
                 self.enable = value & 0xF;
+                if self.enable == 0 {
+                    self.rx_running = false;
+                }
                 self.sync_pin_claims();
             }
             // Legacy UART TXD (PS §6.34): writing a byte transmits it through the
@@ -1009,6 +1036,26 @@ impl Nrf52Uarte {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stoprx_raises_rxto_only_on_a_started_receiver() {
+        let mut u = Nrf52Uarte::new();
+        u.write_u32(OFF_ENABLE, ENABLE_UARTE).unwrap();
+        u.write_u32(OFF_TASKS_STOPRX, 1).unwrap();
+        assert_eq!(u.read_u32(OFF_EVENTS_RXTO).unwrap(), 0, "idle receiver");
+        u.write_u32(OFF_TASKS_STARTRX, 1).unwrap();
+        u.write_u32(OFF_TASKS_STOPRX, 1).unwrap();
+        assert_eq!(u.read_u32(OFF_EVENTS_RXTO).unwrap(), 1);
+        u.write_u32(OFF_EVENTS_RXTO, 0).unwrap();
+        u.write_u32(OFF_TASKS_STOPRX, 1).unwrap();
+        assert_eq!(u.read_u32(OFF_EVENTS_RXTO).unwrap(), 0, "already stopped");
+
+        // A bootloader hand-over starts enabled with the receiver running.
+        let mut handed = Nrf52Uarte::new().with_bootloader_rx_running();
+        assert_eq!(handed.read_u32(OFF_ENABLE).unwrap(), ENABLE_UARTE);
+        handed.write_u32(OFF_TASKS_STOPRX, 1).unwrap();
+        assert_eq!(handed.read_u32(OFF_EVENTS_RXTO).unwrap(), 1);
+    }
 
     #[test]
     fn scheduled_tx_captures_descriptor_and_bytes_without_early_publication() {
