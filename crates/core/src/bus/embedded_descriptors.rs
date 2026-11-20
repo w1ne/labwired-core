@@ -437,11 +437,13 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("rp2040/rtc.yaml", packed!("rp2040/rtc.yaml")),
     ("rp2040/sio.yaml", packed!("rp2040/sio.yaml")),
     ("rp2040/spi0.yaml", packed!("rp2040/spi0.yaml")),
+    ("rp2040/spi1.yaml", packed!("rp2040/spi1.yaml")),
     ("rp2040/ssi.yaml", packed!("rp2040/ssi.yaml")),
     ("rp2040/sysinfo.yaml", packed!("rp2040/sysinfo.yaml")),
     ("rp2040/tbman.yaml", packed!("rp2040/tbman.yaml")),
     ("rp2040/timer.yaml", packed!("rp2040/timer.yaml")),
     ("rp2040/uart0.yaml", packed!("rp2040/uart0.yaml")),
+    ("rp2040/uart1.yaml", packed!("rp2040/uart1.yaml")),
     ("rp2040/usb_dpram.yaml", packed!("rp2040/usb_dpram.yaml")),
     (
         "rp2040/vreg_and_chip_reset.yaml",
