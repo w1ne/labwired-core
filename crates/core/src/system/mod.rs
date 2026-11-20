@@ -10,6 +10,7 @@ pub mod cortex_m;
 pub mod cortex_r;
 pub mod efuse;
 pub mod mips;
+pub mod msp430;
 pub mod node;
 pub mod riscv;
 pub mod rx;

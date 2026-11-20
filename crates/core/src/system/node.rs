@@ -242,6 +242,15 @@ pub fn build_node_with_options(
             let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
             Ok(Box::new(crate::system::mips::load_elf(bus, &bytes)?))
         }
+        MachineFamily::Msp430 => {
+            let NodeFirmware::Elf(bytes) = firmware else {
+                anyhow::bail!("node '{id}': MSP430 takes an ELF");
+            };
+            let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+            Ok(Box::new(crate::system::msp430::load_elf(
+                bus, chip, &bytes,
+            )?))
+        }
         MachineFamily::Aarch64 => {
             let NodeFirmware::Elf(bytes) = firmware else {
                 anyhow::bail!("node '{id}': AArch64 takes an ELF");
@@ -970,6 +979,8 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
     Ok(image)
 }
 
+const EM_MSP430: u16 = 105;
+
 /// Split a `PT_LOAD` file image into the byte ranges that real sections own.
 ///
 /// A `SHT_NOBITS` section has no file content, yet a linker can still place
@@ -983,6 +994,9 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
 /// Returns `(offset, len)` pieces relative to the segment's file image. With
 /// no NOBITS section inside `p_filesz` (every ordinary ELF: `.bss` sits past
 /// it) this is the whole segment, unchanged.
+///
+/// An MSP430 segment that starts at file offset 0 also loses the ELF and
+/// program headers in front of its first section.
 ///
 /// Shared with the `loader` crate, so `labwired test`, the browser, the
 /// builder and a world node load the same bytes.
@@ -1012,6 +1026,22 @@ pub fn file_backed_pieces(
             (lo < hi).then_some((lo, hi))
         })
         .collect();
+    // msp430-elf ld starts the first segment at file offset 0, so it covers
+    // the ELF and program headers; their load address is below the flash and
+    // on some parts not mapped at all. A programmer writes sections, not
+    // headers: skip up to the first allocated section in the segment.
+    if elf.header.e_machine == EM_MSP430 && ph.p_offset == 0 {
+        let first = elf
+            .section_headers
+            .iter()
+            .filter(|sh| sh.sh_flags & u64::from(SHF_ALLOC) != 0 && sh.sh_type != SHT_NOBITS)
+            .filter(|sh| sh.sh_size != 0 && sh.sh_offset < ph.p_filesz)
+            .map(|sh| sh.sh_offset as usize)
+            .min();
+        if let Some(first) = first.filter(|f| *f > 0) {
+            holes.push((0, first));
+        }
+    }
     holes.sort_unstable();
     let mut pieces = Vec::new();
     let mut cursor = 0usize;

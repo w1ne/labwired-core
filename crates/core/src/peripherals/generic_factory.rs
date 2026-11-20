@@ -475,6 +475,26 @@ pub const MODEL_TYPES: &[&str] = &[
     "megaavr_adc",
     "megaavr_twi",
     "megaavr_spi",
+    // Texas Instruments MSP430x1xx/x2xx: special function registers, USART
+    // and USCI_A (UART mode), watchdog control, 16x16 hardware multiplier,
+    // basic clock module (+).
+    "msp430_sfr",
+    "msp430_usart",
+    "msp430_usci_a",
+    "msp430_wdt",
+    "msp430_mpy",
+    "msp430_bcm",
+    "msp430_bcm_plus",
+    "msp430_bcsctl3",
+    // Texas Instruments MSP430x5xx: SFRIE1/SFRIFG1/SFRRPCR, USCI_A (UART
+    // mode, own UCAxIE/UCAxIFG/UCAxIV), WDT_A control, 32-bit hardware
+    // multiplier, unified clock system, power management module.
+    "msp430_sfr_x5",
+    "msp430_usci_a_x5",
+    "msp430_wdt_a",
+    "msp430_mpy32",
+    "msp430_ucs",
+    "msp430_pmm",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -2427,6 +2447,133 @@ pub fn try_build(
                 irqs[0], irqs[1], irqs[2], irqs[3],
             ]))
         }
+        // `ie1_lines` / `ie2_lines` / `uc1_lines`: the interrupt line behind
+        // each bit (0 to 7) of IE1/IFG1, IE2/IFG2 and UC1IE/UC1IFG; 0 = not
+        // an interrupt bit. `uc1_lines` is optional.
+        "msp430_sfr" => {
+            msp430_keys(p_cfg, &["ie1_lines", "ie2_lines", "uc1_lines"])?;
+            let lines = |key: &str, required: bool| -> anyhow::Result<[u32; 8]> {
+                match u32_list(p_cfg, key, 8) {
+                    Some(v) => Ok(std::array::from_fn(|i| v[i])),
+                    None if !required && !p_cfg.config.contains_key(key) => Ok([0; 8]),
+                    None => anyhow::bail!(
+                        "msp430_sfr '{}' needs `{key}`: eight line numbers",
+                        p_cfg.id
+                    ),
+                }
+            };
+            Box::new(crate::peripherals::msp430::Msp430Sfr::new([
+                lines("ie1_lines", true)?,
+                lines("ie2_lines", true)?,
+                lines("uc1_lines", false)?,
+            ]))
+        }
+        // `flags`: [IFG register (1 or 2), URXIFG bit, UTXIFG bit];
+        // `module_enable`: [ME register (1 or 2), URXE bit, UTXE bit].
+        "msp430_usart" => {
+            msp430_keys(p_cfg, &["flags", "module_enable"])?;
+            let triple = |key: &str| -> anyhow::Result<[u32; 3]> {
+                let v = u32_list(p_cfg, key, 3).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "msp430_usart '{}' needs `{key}: [register, rx_bit, tx_bit]`",
+                        p_cfg.id
+                    )
+                })?;
+                Ok([v[0], v[1], v[2]])
+            };
+            Box::new(crate::peripherals::msp430::Msp430Usart::new(
+                triple("flags")?,
+                triple("module_enable")?,
+            ))
+        }
+        // `flags`: [flag register (2 = IFG2, 3 = UC1IFG), UCAxRXIFG bit,
+        // UCAxTXIFG bit].
+        "msp430_usci_a" => {
+            msp430_keys(p_cfg, &["flags"])?;
+            let v = u32_list(p_cfg, "flags", 3).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "msp430_usci_a '{}' needs `flags: [register, rx_bit, tx_bit]`",
+                    p_cfg.id
+                )
+            })?;
+            Box::new(crate::peripherals::msp430::Msp430Usart::usci_a([
+                v[0], v[1], v[2],
+            ]))
+        }
+        "msp430_wdt" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Wdt::new())
+        }
+        "msp430_mpy" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Mpy::new())
+        }
+        "msp430_bcm" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Bcm::new())
+        }
+        "msp430_bcm_plus" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Bcm::plus())
+        }
+        "msp430_bcsctl3" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Bcm::bcsctl3())
+        }
+        // `lines`: the interrupt line behind each bit (0 to 7) of
+        // SFRIE1/SFRIFG1; 0 = the bit requests no interrupt.
+        "msp430_sfr_x5" => {
+            msp430_keys(p_cfg, &["lines"])?;
+            let v = u32_list(p_cfg, "lines", 8).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "msp430_sfr_x5 '{}' needs `lines`: eight line numbers",
+                    p_cfg.id
+                )
+            })?;
+            Box::new(crate::peripherals::msp430::Msp430SfrX5::new(
+                std::array::from_fn(|i| v[i]),
+            ))
+        }
+        // `unit`: the number of this USCI module on the chip (it selects the
+        // interrupt sources, so each module needs its own); `line`: the
+        // request line UCRXIFG and UCTXIFG share.
+        "msp430_usci_a_x5" => {
+            msp430_keys(p_cfg, &["unit", "line"])?;
+            let number = |key: &str, limit: u64| -> anyhow::Result<u32> {
+                p_cfg
+                    .config
+                    .get(key)
+                    .and_then(|v| v.as_u64())
+                    .filter(|v| *v < limit)
+                    .map(|v| v as u32)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "msp430_usci_a_x5 '{}' needs `{key}`: a number below {limit}",
+                            p_cfg.id
+                        )
+                    })
+            };
+            Box::new(crate::peripherals::msp430::Msp430Usart::usci_a_x5(
+                number("unit", u64::from(crate::peripherals::msp430::X5_USCI_UNITS))?,
+                number("line", 64)?,
+            ))
+        }
+        "msp430_wdt_a" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Wdt::wdt_a())
+        }
+        "msp430_mpy32" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Mpy32::new())
+        }
+        "msp430_ucs" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Ucs::new())
+        }
+        "msp430_pmm" => {
+            msp430_keys(p_cfg, &[])?;
+            Box::new(crate::peripherals::msp430::Msp430Pmm::new())
+        }
         // `vdd_mv`: the board's VDD (the VDDREF reference, default 5000);
         // `input_mv: { <ain>: <mV> }`: static levels on AIN0..AIN15.
         "megaavr_adc" => {
@@ -3035,6 +3182,22 @@ pub fn try_build(
         _ => return Ok(None),
     };
     Ok(Some(dev))
+}
+
+/// Refuse a config key an MSP430 module does not define, and an `irq:`: the
+/// modules request interrupts on their own lines, not through an NVIC number.
+fn msp430_keys(p_cfg: &PeripheralConfig, allowed: &[&str]) -> anyhow::Result<()> {
+    if let Some(k) = p_cfg.config.keys().find(|k| !allowed.contains(&k.as_str())) {
+        anyhow::bail!("{} '{}' admits no config key '{k}'", p_cfg.r#type, p_cfg.id);
+    }
+    if p_cfg.irq.is_some() {
+        anyhow::bail!(
+            "{} '{}': interrupts use the request lines in the `msp430_sfr` config, not `irq`",
+            p_cfg.r#type,
+            p_cfg.id
+        );
+    }
+    Ok(())
 }
 
 /// `config.<key>`: exactly `len` unsigned integers, or `None`.

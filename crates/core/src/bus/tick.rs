@@ -1095,7 +1095,16 @@ impl SystemBus {
             // Forced mode walks a fixed one-shot snapshot. Refresh the normal
             // cache for future production ticks, but always advance this
             // snapshot cursor even when a dynamic entry just became inactive.
-            if force_scheduler_walk || still_active {
+            //
+            // An inactive dynamic entry normally leaves the cache, and the
+            // next one takes its slot. It stays when the walk was deleted
+            // earlier in this same pass (two dynamic models going idle
+            // together, e.g. after a system reset): step over it, or the
+            // walk would tick it forever.
+            if force_scheduler_walk
+                || still_active
+                || self.legacy_tick_indices.get(tick_pos) == Some(&peripheral_index)
+            {
                 tick_pos += 1;
             }
         }

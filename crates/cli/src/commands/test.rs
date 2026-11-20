@@ -2403,6 +2403,13 @@ pub(crate) fn run_test(
                     Err(e) => error!("{e:#}"),
                 }
             }
+            // MSP430 starts at the address in the reset vector (0xFFFE).
+            if matches!(program.arch, labwired_core::Arch::Msp430) {
+                use labwired_core::Cpu as _;
+                if let Err(e) = machine.cpu.reset(&mut machine.bus) {
+                    error!("MSP430 reset vector: {e:#}");
+                }
+            }
             // RISC-V Arduino-ESP32 images enter at `call_start_cpu0`, which
             // assumes the second-stage bootloader already left a DRAM stack.
             // Cortex-M gets SP from the vector table in `load_firmware`; RISC-V
@@ -3075,6 +3082,16 @@ pub(crate) fn run_test(
             // PIC32MZ: physical bus (RAM, program and boot flash, SFRs); the
             // EVIC is part of the core.
             setup_and_run!(labwired_core::cpu::Mips32::new())
+        }
+        labwired_core::Arch::Msp430 => {
+            // The chip selects the 16-bit CPU or the CPUX; the core shares
+            // the interrupt sources with the modules on the bus.
+            let chip = resolved_system.as_ref().and_then(|s| {
+                s.chip_with_plugins(&|name| plugins.iter().find_map(|p| p.chip_yaml(name)))
+                    .ok()
+            });
+            let cpu = labwired_core::system::msp430::cpu_for(&mut bus, chip.as_ref());
+            setup_and_run!(cpu)
         }
         labwired_core::Arch::Aarch64 => {
             // The PE's GICv3 and generic timer are part of the core; its

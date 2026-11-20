@@ -1,0 +1,7 @@
+[2m2026-11-19T21:03:13.619870Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/mspsim-msp430f149.yaml
+[2m2026-11-19T21:03:13.621197Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x1212
+labwired-cli test: idle_ff=on (event_scheduler=on)
+[2m2026-11-19T21:03:13.634425Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'usart0'
+labwired-cli test: idle_ff skipped 44 of 400044 device cycles (400000 interpreted)
+[2m2026-11-19T21:03:13.670799Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["MSP430F149 boot", "MSP430F149 checks PPPPPPPP DONE rx=52", "MSP430F149 PUC WDTIFG=1", "MSP430F149 smoke complete"] }) (captured len=132)
+FAIL  2/3 checks · msp430f149-uart-smoke · 400000 steps · 0.05s

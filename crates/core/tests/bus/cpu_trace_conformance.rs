@@ -22,7 +22,7 @@
 
 use crate::src_roots;
 use labwired_core::cpu::{
-    Aarch64, Avr, CortexM, Mips32, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7,
+    Aarch64, Avr, CortexM, Mips32, Msp430, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7,
 };
 use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
@@ -389,6 +389,21 @@ fn cores() -> Vec<CoreUnderTest> {
             sp: 0x8000,
             build: |_entry, _program| {
                 let mut cpu = Mips32::new();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
+            name: "Msp430",
+            entry: 0x100,
+            // `add #1, r5` ×4 (`15 53`; the constant generator supplies the
+            // immediate, so the instruction is one word).
+            program: std::iter::repeat_n([0x15u8, 0x53], 4).flatten().collect(),
+            step_len: 2,
+            opcode_bytes: 2,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = Msp430::new();
                 cpu.set_sp(0x8000);
                 Box::new(cpu)
             },
