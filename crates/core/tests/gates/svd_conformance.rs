@@ -54,6 +54,22 @@ const PAIRS: &[(&str, &str)] = &[
     ("mkw41z4", "tests/fixtures/real_world/mkw41z4.svd"),
     ("nrf52832", "tests/fixtures/real_world/nrf52832.svd"),
     ("nrf52840", "tests/fixtures/real_world/nrf52840.svd"),
+    // Renode-imported descriptors are separate files from the hand-written
+    // ones above. The 2026-07-27 NVIC fix (PDM 29, PWM1 33, PWM2 34) landed
+    // only in `nrf52840.yaml`; the onboarding copy kept PWM1 on PDM's vector
+    // because no gate read it.
+    (
+        "onboarding/nrf52840",
+        "tests/fixtures/real_world/nrf52840.svd",
+    ),
+    (
+        "onboarding/stm32f103",
+        "tests/fixtures/real_world/stm32f103.svd",
+    ),
+    (
+        "onboarding/stm32wba52",
+        "tests/fixtures/real_world/stm32wba52.svd",
+    ),
     ("nrf5340", "tests/fixtures/real_world/nrf5340.svd"),
     ("nrf54l15", "tests/fixtures/real_world/nrf54l15.svd"),
     ("nrf54lm20a", "tests/fixtures/real_world/nrf54lm20a.svd"),
@@ -109,6 +125,13 @@ const ALLOWED: &[(&str, &str, Deviation, &str)] = &[
         "ACL's registers live in the NVMC page (0x4001E000), which `nvmc` \
          already maps; the stub gets a private window at reserved 0x4002E000 \
          instead (0x4002F000 is SPIM3's).",
+    ),
+    (
+        "onboarding/nrf52840",
+        "acl",
+        Deviation::Base,
+        "Same as nrf52840: ACL shares the NVMC page (0x4001E000) that `nvmc` \
+         maps, so the stub sits at reserved 0x4002E000.",
     ),
     (
         "nrf5340",

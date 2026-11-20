@@ -29,6 +29,11 @@
 # P0 OUT and PIN_CNF[31] do not change. Before P1 mapped its compact window
 # at 0x50000800, P1 was parked at 0x50001000 and these writes fell into
 # gpio0's 4 KB window.
+# PWM1/PWM2 interrupt routing: INTEN.SEQEND0 on a one-step sequence must pend
+# NVIC line 33 (PWM1) / 34 (PWM2) and no other line in 28..35, and clearing
+# EVENTS_SEQEND0 must drop it. The lines stay disabled; ISPR is the readout.
+# Before, this descriptor put PWM1 on 29 (PDM's line) and PWM2 on 30, and the
+# PWM model raised no interrupt at all.
 # Not exercised: radio, USBD, QSPI,
 # SPIM, UART1, WDT. GPIOTE on a pin whose PIN_CNF.DIR = output is a known
 # engine gap (IN shows OUT, not the GPIOTE drive) — see
@@ -61,6 +66,7 @@ assertions:
       - "twim0 tmp102 cfg=fff0 temp=1900 anack=1 held=1 w1c=1 ok"
       - "pwm0 p0.15 seqend=1 duty=1 rises=1 stop=1 idle=0 ok"
       - "gpio p1 in=02 drive=1 pull=1 gpiote=1 p0=1 ok"
+      - "pwm irq lines 28..35 pwm1=20 pwm2=40 ok"
       - "NRF52840 PASS"
   - gpio_edges:
       pin: "gpio0:13"
@@ -76,6 +82,6 @@ assertions:
       min_edges: 2
   - memory_value:
       address: 0x2003FF00
-      expected_value: 0x52847FFF
+      expected_value: 0x5284FFFF
       size: 4
   - expected_stop_reason: max_steps
