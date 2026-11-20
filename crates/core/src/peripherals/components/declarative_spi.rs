@@ -36,6 +36,18 @@ pub struct GenericSpiDevice {
     chain_index: u32,
     framing: SpiFraming,
     registers: Vec<RegisterSpec>,
+    /// Declared `timers:` and `register_file:`, kept so a power-on reset can
+    /// rebuild the chip's initial state through [`ChipState::initial`], the same
+    /// call the constructor makes.
+    timer_specs: Vec<labwired_config::DeviceTimer>,
+    file_spec: Option<SpiRegisterFile>,
+    /// `behavior.power`: the required rails (names interned to `'static`)
+    /// and the start-up interval. Empty rails ⇒ no power-control capability.
+    rails: Vec<crate::peripherals::device::DeviceSupplyRail>,
+    startup_us: u64,
+    /// Device time still to elapse before the part answers after a power-on
+    /// reset. Zero outside a start-up interval.
+    startup_left_us: u64,
 
     slots: HashMap<String, f64>,
     reg_values: HashMap<String, u32>,
@@ -49,6 +61,8 @@ pub struct GenericSpiDevice {
 
     // Per-frame state.
     cmd_consumed: u8,
+    read_dummy_left: u8,
+    spi_activated: bool,
     is_read: Option<bool>,
     cur_addr: Option<u16>,
     /// The command byte selected a register. False only when
@@ -195,6 +209,9 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
         .spi
         .as_ref()
         .context("declarative spi device is missing behavior.spi")?;
+    if let Some(power) = &descriptor.behavior.power {
+        power.validate()?;
+    }
     if spec.registers.is_empty() && spec.register_file.is_none() {
         // ⚠️ ONE exception, and it is a shape rather than a loophole: a part
         // whose unit of work is a MESSAGE. A MAX7219 is written and never read;
@@ -358,6 +375,37 @@ pub(crate) fn validate_descriptor(descriptor: &DeviceDescriptor) -> Result<()> {
     Ok(())
 }
 
+/// The part of a chip's state that a power-on reset returns to its initial
+/// value. ONE constructor for it, called by [`GenericSpiDevice::from_descriptor`]
+/// and by the power-on reset, so the two cannot disagree about what "initial"
+/// means. Sensor inputs (`slots`) are the physical world, not chip state, and
+/// are deliberately not here.
+struct ChipState {
+    reg_values: HashMap<String, u32>,
+    spi_activated: bool,
+    timers: TimerBank,
+    file: Option<Vec<u8>>,
+}
+
+impl ChipState {
+    fn initial(
+        registers: &[RegisterSpec],
+        framing: &SpiFraming,
+        timers: &[labwired_config::DeviceTimer],
+        file: Option<&SpiRegisterFile>,
+    ) -> Self {
+        Self {
+            reg_values: registers
+                .iter()
+                .map(|r| (r.name.clone(), r.reset))
+                .collect(),
+            spi_activated: !framing.activate_on_first_cs_release,
+            timers: TimerBank::new(timers),
+            file: file.map(build_file),
+        }
+    }
+}
+
 impl GenericSpiDevice {
     pub fn from_descriptor(
         descriptor: &DeviceDescriptor,
@@ -376,18 +424,28 @@ impl GenericSpiDevice {
                 slots.insert(input.key.clone(), input.default.unwrap_or(0.0));
             }
         }
-        let reg_values = spec
-            .registers
-            .iter()
-            .map(|r| (r.name.clone(), r.reset))
-            .collect();
+        let init = ChipState::initial(
+            &spec.registers,
+            &spec.framing,
+            &descriptor.behavior.timers,
+            spec.register_file.as_ref(),
+        );
         let device = Self {
             cs_pin,
             chain_index: 0,
             framing: spec.framing.clone(),
             registers: spec.registers.clone(),
+            timer_specs: descriptor.behavior.timers.clone(),
+            file_spec: spec.register_file.clone(),
+            rails: super::supply_domain::device_rails(descriptor.behavior.power.as_ref()),
+            startup_us: descriptor
+                .behavior
+                .power
+                .as_ref()
+                .map_or(0, |p| p.startup_us),
+            startup_left_us: 0,
             slots,
-            reg_values,
+            reg_values: init.reg_values,
             evaluation_fault: std::cell::RefCell::new(None),
             derived: compile_derived(
                 &descriptor.behavior.derived,
@@ -398,6 +456,8 @@ impl GenericSpiDevice {
                     .unwrap_or_default(),
             )?,
             cmd_consumed: 0,
+            read_dummy_left: 0,
+            spi_activated: init.spi_activated,
             is_read: None,
             cur_addr: None,
             addressed: true,
@@ -416,7 +476,7 @@ impl GenericSpiDevice {
             component_id: None,
             sampling: SpiSampling::Byte,
             elapsed_us: 0,
-            timers: TimerBank::new(&descriptor.behavior.timers),
+            timers: init.timers,
             rules: RuleMachine::from_behavior(&descriptor.behavior)?,
             frame_only: spec.registers.is_empty()
                 && spec.register_file.is_none()
@@ -427,7 +487,7 @@ impl GenericSpiDevice {
             frame_buf: Vec::new(),
             frame_closed: false,
             powered: true,
-            file: spec.register_file.as_ref().map(build_file),
+            file: init.file,
             artifact: super::declarative_artifact::CompiledArtifact::from_descriptor(descriptor)?,
         };
         if device.derived.iter().any(CompiledDerived::is_exact) {
@@ -865,6 +925,50 @@ impl GenericSpiDevice {
         self.powered
     }
 
+    /// Powered AND past its start-up interval: the only state in which the part
+    /// decodes the bus. Everything the unpowered gates refuse, a part still in
+    /// start-up refuses too.
+    fn answering(&self) -> bool {
+        self.powered && self.startup_left_us == 0
+    }
+
+    /// Power-on reset: every chip register, the bus mode, per-frame state,
+    /// timers and rule state return to their initial values, and the start-up
+    /// interval begins. `slots` (sensor inputs) are the physical world and keep
+    /// their values.
+    fn power_on_reset(&mut self) {
+        let init = ChipState::initial(
+            &self.registers,
+            &self.framing,
+            &self.timer_specs,
+            self.file_spec.as_ref(),
+        );
+        self.reg_values = init.reg_values;
+        self.spi_activated = init.spi_activated;
+        self.timers = init.timers;
+        self.file = init.file;
+        self.elapsed_us = 0;
+        if let Some(rules) = self.rules.as_mut() {
+            rules.reset();
+        }
+        self.cmd_consumed = 0;
+        self.read_dummy_left = 0;
+        self.is_read = None;
+        self.cur_addr = None;
+        self.addressed = true;
+        self.read_buf.clear();
+        self.read_ends.clear();
+        self.read_idx = 0;
+        self.latched = false;
+        self.cs_held = false;
+        self.write_acc.clear();
+        self.frame_bytes = 0;
+        self.frame_buf.clear();
+        self.frame_closed = false;
+        *self.evaluation_fault.borrow_mut() = None;
+        self.startup_left_us = self.startup_us;
+    }
+
     /// Daisy-chain position (0 = closest to MOSI). See [`SpiDevice::chain_index`].
     pub fn set_chain_index(&mut self, index: u32) {
         self.chain_index = index;
@@ -962,6 +1066,17 @@ impl SpiDevice for GenericSpiDevice {
         if !self.powered {
             return;
         }
+        // Start-up elapses on device time; the chip's own clocks begin when it ends.
+        let us = if self.startup_left_us > 0 {
+            let used = us.min(self.startup_left_us);
+            self.startup_left_us -= used;
+            us - used
+        } else {
+            us
+        };
+        if us == 0 {
+            return;
+        }
         self.elapsed_us = self.elapsed_us.saturating_add(us);
         self.advance_rule_time(us);
         if !self.timers.is_empty() {
@@ -981,7 +1096,7 @@ impl SpiDevice for GenericSpiDevice {
         // pad wherever the board's pull leaves it, which is what a dead chip
         // does. (Nothing can be queued anyway, since `transfer` is refused; this
         // is the belt to that braces.)
-        if !self.powered {
+        if !self.answering() {
             return Vec::new();
         }
         match self.rules.as_mut() {
@@ -1006,6 +1121,26 @@ impl SpiDevice for GenericSpiDevice {
         self.cs_held
     }
 
+    fn supports_power_control(&self) -> bool {
+        !self.rails.is_empty()
+    }
+
+    fn required_supply_rails(&self) -> &[crate::peripherals::device::DeviceSupplyRail] {
+        &self.rails
+    }
+
+    /// Routed supply transition. `false` darkens the part (the existing
+    /// unpowered behaviour); `true` is a power-on reset followed by the
+    /// descriptor's `startup_us` interval.
+    fn power_state_changed(&mut self, powered: bool) {
+        self.powered = powered;
+        if powered {
+            self.power_on_reset();
+        } else {
+            self.cs_held = false;
+        }
+    }
+
     fn clocks_when_deselected(&self) -> bool {
         self.frames.as_ref().is_some_and(|f| f.shift_register)
     }
@@ -1016,7 +1151,7 @@ impl SpiDevice for GenericSpiDevice {
         // at its power-on defaults BY CONSTRUCTION rather than masking the
         // readback at report time. Same argument, same placement as the
         // hand-written MAX7219's gate in `transfer`.
-        if !self.powered {
+        if !self.answering() {
             return;
         }
         // Transaction-framed devices start fresh on CS↓. A continuous shift
@@ -1032,6 +1167,7 @@ impl SpiDevice for GenericSpiDevice {
             self.frame_closed = false;
         }
         self.cmd_consumed = 0;
+        self.read_dummy_left = 0;
         self.is_read = None;
         self.cur_addr = None;
         self.addressed = true;
@@ -1049,7 +1185,7 @@ impl SpiDevice for GenericSpiDevice {
     }
 
     fn cs_release(&mut self) {
-        if !self.powered {
+        if !self.answering() {
             return;
         }
         // A shift register latches on a real LOAD rising edge only. Repeated
@@ -1059,6 +1195,8 @@ impl SpiDevice for GenericSpiDevice {
         }
         self.cs_held = false;
         self.write_acc.clear();
+        // BMA400 powers up in I2C mode. The first CS rising edge selects SPI.
+        self.spi_activated = true;
         self.raise_and_settle(Event::CsRelease, 0);
         // CS↑ always closes a frame, the SPI twin of the I²C STOP: a short
         // message is delivered rather than swallowed.
@@ -1099,7 +1237,7 @@ impl SpiDevice for GenericSpiDevice {
         // THE SUPPLY GATE. Every state change this device has arrives through
         // here, so refusing the bus leaves digit RAM, latches and rule state at
         // their power-on values rather than blanking them at readback.
-        if !self.powered {
+        if !self.answering() {
             return UNPOWERED_MISO;
         }
         let shift_register = self.frames.as_ref().is_some_and(|f| f.shift_register);
@@ -1174,6 +1312,11 @@ impl GenericSpiDevice {
     /// The wire exchange itself, split out so the framing counter above can
     /// raise `frame` once the byte has been processed.
     fn transfer_inner(&mut self, mosi: u8) -> u8 {
+        // Until the first CS rising edge, an I2C/SPI auto-selecting device
+        // does not decode SPI commands or return register contents.
+        if !self.spi_activated {
+            return 0xFF;
+        }
         // Soft-CS / matrix path: when CS was never held (or has been released),
         // enter the read-only data phase and re-frame after a full word so a
         // CS-high dummy flush does not permanently desync multi-byte reads.
@@ -1198,6 +1341,11 @@ impl GenericSpiDevice {
             self.cmd_consumed += 1;
             if self.cmd_consumed == self.framing.command_bytes {
                 self.decode_command(mosi);
+                self.read_dummy_left = if self.is_read == Some(true) {
+                    self.framing.read_dummy_bytes
+                } else {
+                    0
+                };
             }
             // `command_response:` is the word a part clocks out WHILE the master
             // clocks the command in (nRF24L01+ §8.3.1). Absent ⇒ 0x00, which is
@@ -1211,6 +1359,10 @@ impl GenericSpiDevice {
         // writes: a payload burst must not land on the register file.
         if !self.addressed {
             return self.command_response_byte().unwrap_or(0xFF);
+        }
+        if self.is_read == Some(true) && self.read_dummy_left > 0 {
+            self.read_dummy_left -= 1;
+            return 0x00;
         }
         let addr = self.cur_addr.unwrap_or(0);
         // Writes require an explicit rw_bit in the framing; a part with rw_bit: None never leaves is_read == None, so every data byte is a read.
@@ -1486,6 +1638,14 @@ impl PeripheralKit for LazyLock<DeclarativeSpiKit> {
     }
 }
 
+/// Bosch BMA400 accelerometer (public declarative register model).
+pub static BMA400_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
+    DeclarativeSpiKit::from_yaml(
+        labwired_config::embedded_device_yaml("bma400").expect("bma400 descriptor embedded"),
+    )
+    .expect("bma400.yaml is a valid declarative spi descriptor")
+});
+
 /// Analog Devices ADXL345 accelerometer (declarative `adxl345_spi.yaml`).
 pub static ADXL345_KIT: LazyLock<DeclarativeSpiKit> = LazyLock::new(|| {
     DeclarativeSpiKit::from_yaml(
@@ -1585,6 +1745,68 @@ mod tests {
     use crate::peripherals::spi::SpiDevice;
 
     const FIXTURE: &str = include_str!("declarative_spi_fixture.yaml");
+
+    fn bma400_read(dev: &mut GenericSpiDevice, reg: u8, count: usize) -> Vec<u8> {
+        dev.cs_select();
+        assert_eq!(dev.transfer(0x80 | reg), 0);
+        assert_eq!(dev.transfer(0), 0, "BMA400 read must clock the dummy byte");
+        let data = (0..count).map(|_| dev.transfer(0)).collect();
+        dev.cs_release();
+        data
+    }
+
+    fn bma400_write(dev: &mut GenericSpiDevice, reg: u8, data: u8) {
+        dev.cs_select();
+        dev.transfer(reg & 0x7f);
+        dev.transfer(data);
+        dev.cs_release();
+    }
+
+    #[test]
+    fn bma400_id_requires_spi_activation_and_dummy_on_every_read() {
+        let mut d = GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("bma400").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+        d.cs_select();
+        assert_eq!(
+            d.transfer(0x80),
+            0xFF,
+            "first SPI command ignored after power-up"
+        );
+        assert_eq!(d.transfer(0), 0xFF, "first SPI read data invalid");
+        d.cs_release(); // CS rising edge changes I2C to SPI mode
+        assert_eq!(bma400_read(&mut d, 0, 1), vec![0x90]);
+        assert_eq!(bma400_read(&mut d, 0, 2), vec![0x90, 0x88]);
+    }
+
+    #[test]
+    fn bma400_spi_real_12bit_axes_and_range_stimulus() {
+        let mut d = GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("bma400").unwrap(),
+            "PA4",
+        )
+        .unwrap();
+        d.cs_select();
+        d.cs_release(); // activate SPI
+        d.set_input("accel_x", 1.0).unwrap();
+        d.set_input("accel_y", -1.0).unwrap();
+        d.set_input("accel_z", 0.5).unwrap();
+        // default 0x49 selects +-4 g; 512 counts/g.
+        assert_eq!(
+            bma400_read(&mut d, 0x04, 6),
+            vec![0x00, 0x02, 0x00, 0x0E, 0x00, 0x01]
+        );
+        // +-2g: 1024 counts/g, zero-filled upper nibble for negative X.
+        bma400_write(&mut d, 0x1A, 0x09);
+        assert_eq!(
+            bma400_read(&mut d, 0x04, 6),
+            vec![0x00, 0x04, 0x00, 0x0C, 0x00, 0x02]
+        );
+        bma400_write(&mut d, 0x19, 0x02);
+        assert_eq!(bma400_read(&mut d, 0x03, 1), vec![0x04]);
+    }
 
     const EXACT_FAULT_FIXTURE: &str = r#"
 type: exact_spi_fault
@@ -2436,5 +2658,102 @@ behavior:
             art[0].bytes.as_deref(),
             Some(&[0x3C, 0, 0, 0, 0, 0, 0, 0][..])
         );
+    }
+    fn bma400_device() -> GenericSpiDevice {
+        GenericSpiDevice::from_yaml(
+            labwired_config::embedded_device_yaml("bma400").unwrap(),
+            "PA4",
+        )
+        .unwrap()
+    }
+
+    /// CS pulse that selects SPI mode on a part with `activate_on_first_cs_release`.
+    fn cs_pulse(d: &mut GenericSpiDevice) {
+        d.cs_select();
+        d.cs_release();
+    }
+
+    #[test]
+    fn power_control_capability_is_off_without_a_power_block() {
+        let d = GenericSpiDevice::from_yaml(FIXTURE, "PA4").unwrap();
+        assert!(!d.supports_power_control());
+        assert!(d.required_supply_rails().is_empty());
+    }
+
+    #[test]
+    fn declared_power_block_exposes_rails_and_capability() {
+        let d = bma400_device();
+        assert!(d.supports_power_control());
+        let rails: Vec<_> = d
+            .required_supply_rails()
+            .iter()
+            .map(|r| (r.name, r.min_v, r.max_v))
+            .collect();
+        assert_eq!(rails, [("vdd", 1.72, 3.6), ("vddio", 1.2, 3.6)]);
+        // Interned: a second instance hands back the same static string.
+        let again = bma400_device();
+        assert!(std::ptr::eq(
+            d.required_supply_rails()[0].name,
+            again.required_supply_rails()[0].name
+        ));
+    }
+
+    #[test]
+    fn power_on_reset_restores_registers_and_returns_to_i2c_mode() {
+        let mut d = bma400_device();
+        d.power_state_changed(true);
+        d.advance_time_us(1_000);
+        cs_pulse(&mut d);
+        bma400_write(&mut d, 0x1A, 0x09);
+        assert_eq!(bma400_read(&mut d, 0x1A, 1), vec![0x09]);
+        d.power_state_changed(false);
+        d.cs_select();
+        assert_eq!(d.transfer(0x80), 0xFF, "unpowered part answers 0xFF");
+        d.cs_release();
+        d.power_state_changed(true);
+        d.advance_time_us(1_000);
+        // Back in I2C mode: no CSB rising edge since power-up.
+        d.cs_select();
+        assert_eq!(d.transfer(0x80), 0xFF);
+        assert_eq!(d.transfer(0), 0xFF);
+        d.cs_release();
+        assert_eq!(bma400_read(&mut d, 0x1A, 1), vec![0x49], "reset value");
+        assert_eq!(bma400_read(&mut d, 0x00, 1), vec![0x90]);
+    }
+
+    #[test]
+    fn startup_window_ignores_cs_rising_edge_and_answers_ff() {
+        let mut d = bma400_device();
+        d.power_state_changed(true);
+        d.advance_time_us(999);
+        cs_pulse(&mut d); // inside ts_up: must NOT select SPI mode
+        d.advance_time_us(1);
+        d.cs_select();
+        assert_eq!(d.transfer(0x80), 0xFF);
+        assert_eq!(d.transfer(0), 0xFF);
+        d.cs_release(); // first edge after start-up: selects SPI now
+        assert_eq!(bma400_read(&mut d, 0x00, 1), vec![0x90]);
+        // And during start-up the wire itself reads 0xFF.
+        d.power_state_changed(false);
+        d.power_state_changed(true);
+        d.advance_time_us(500);
+        d.cs_select();
+        assert_eq!(d.transfer(0x80), 0xFF);
+        d.cs_release();
+    }
+
+    #[test]
+    fn sim_inputs_survive_a_power_cycle() {
+        let mut d = bma400_device();
+        d.power_state_changed(true);
+        d.advance_time_us(1_000);
+        cs_pulse(&mut d);
+        d.set_input("accel_x", 1.0).unwrap();
+        assert_eq!(bma400_read(&mut d, 0x04, 2), vec![0x00, 0x02]);
+        d.power_state_changed(false);
+        d.power_state_changed(true);
+        d.advance_time_us(1_000);
+        cs_pulse(&mut d);
+        assert_eq!(bma400_read(&mut d, 0x04, 2), vec![0x00, 0x02]);
     }
 }

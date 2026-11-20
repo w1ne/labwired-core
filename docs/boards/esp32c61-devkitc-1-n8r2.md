@@ -2,39 +2,59 @@
 
 **Demand rank:** ESP32 family is rank 1 in the JetBrains State of Embedded
 2025 MCU survey (38%). The survey does not report a C61-specific percentage.
-The current C61 variant is listed in Espressif's live board guide and
-distributor catalog; see the [availability receipt](../../examples/esp32c61-devkitc-1-n8r2/vendor-status.md).
+The current C61 variant is listed in Espressif's live board guide and catalog;
+see the [live board and BME280 availability receipt](../../examples/esp32c61-devkitc-1-n8r2-bme280/vendor-status.md).
 
 | Artifact | Path |
 |---|---|
 | Chip descriptor | [`configs/chips/esp32c61.yaml`](../../configs/chips/esp32c61.yaml) |
 | Board system | [`configs/systems/esp32c61-devkitc-1-n8r2.yaml`](../../configs/systems/esp32c61-devkitc-1-n8r2.yaml) |
-| Firmware and smoke | [`examples/esp32c61-devkitc-1-n8r2`](../../examples/esp32c61-devkitc-1-n8r2/README.md) |
+| Firmware and smokes | [`examples/esp32c61-devkitc-1-n8r2`](../../examples/esp32c61-devkitc-1-n8r2/README.md) |
 
 ## Pin map and profile
 
 | Board pin | SoC signal | LabWired profile |
 |---|---|---|
-| J3 TX | UART0 TX, GPIO11 | UART0 FIFO is modeled; pad routing is not |
+| J3 TX | UART0 TX, GPIO11 | UART0 FIFO and PCR clock gate are modeled; pad routing is not |
 | J3 RX | UART0 RX, GPIO10 | UART0 receive and pad routing are not modeled |
-| J1 pin 9 | GPIO8, addressable RGB LED | Not modeled |
+| J1 pin 3 | GPIO4 | Output latch and enable register are modeled; IO_MUX and electrical behavior are not |
+| J1 pin 5 | GPIO6 | I2C0 SDA for the BME280 smoke; GPIO matrix route is modeled |
+| J3 pin 6 | GPIO22 | I2C0 SCL for the BME280 smoke; GPIO matrix route is modeled |
+| J1 pin 9 | GPIO8, addressable RGB LED | GPIO output and WS2812 decode are checked by the BME280 board smoke |
 
-The smoke profile includes only the C61 UART0 FIFO/status head and captures
-transmitted bytes in the host console. It fast-loads an ELF directly, without
-executing the mask ROM or bootloader. GPIO, PCR, IO_MUX, the physical bridge,
-PSRAM, USB, Wi-Fi and Bluetooth LE are outside the profile.
+The GPIO output smoke checks bit 4 in `GPIO_OUT_REG` and `GPIO_ENABLE_REG` after
+firmware sets GPIO4. The BME280 smoke configures GPIO6/GPIO22 for I2C0 and reads
+the device ID (`0x60`) plus a deterministic raw-temperature test vector. It
+then bit-bangs a red WS2812 frame on GPIO8 and requires the attached NeoPixel
+model to decode one lit pixel. The GPIO model covers the C61 I2C0 matrix
+selectors and direct output path; it does not cover other peripheral matrix
+routes, GPIO26..29, GPIO interrupts, or electrical pad behavior. IO_MUX values
+are stored but not enforced. GPIO8 strap sampling during reset and the RMT
+peripheral are outside scope.
 
-## Copy-paste example
+The board profile fast-loads a bare ELF directly; it does not execute the
+mask-ROM boot path or Espressif bootloader. The UART test captures FIFO output
+in the host console but does not model the physical USB-to-UART bridge.
+
+## GPIO copy-paste example
 
 ```rust
-const UART0_FIFO: *mut u32 = 0x6000_0000 as *mut u32;
+const GPIO_OUT_W1TS: *mut u32 = 0x6009_1008 as *mut u32;
+const GPIO_ENABLE_W1TS: *mut u32 = 0x6009_1038 as *mut u32;
+const GPIO4: u32 = 1 << 4;
 
-for &byte in b"C61_N8R2_OK\n" {
-    unsafe { core::ptr::write_volatile(UART0_FIFO, u32::from(byte)); }
+unsafe {
+    core::ptr::write_volatile(GPIO_ENABLE_W1TS, GPIO4);
+    core::ptr::write_volatile(GPIO_OUT_W1TS, GPIO4);
 }
 ```
 
 The full firmware and build/test commands are in
 [`examples/esp32c61-devkitc-1-n8r2`](../../examples/esp32c61-devkitc-1-n8r2/README.md).
-The UART smoke expects `C61_N8R2_OK`; its committed logs and structured result
-are under that example's `evidence/` directory.
+The GPIO smoke expects bits 4 in `GPIO_OUT_REG` and `GPIO_ENABLE_REG`; the UART
+smoke expects `C61_N8R2_OK`. Logs and structured results are under the example's
+`evidence/` directory.
+
+The BME280 wiring, copy-paste ESP-IDF example, GPIO8 LED smoke, fresh smoke,
+scope, and live availability receipt are documented in
+[`examples/esp32c61-devkitc-1-n8r2-bme280`](../../examples/esp32c61-devkitc-1-n8r2-bme280/README.md).

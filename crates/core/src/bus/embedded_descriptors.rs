@@ -36,6 +36,25 @@ macro_rules! packed {
 
 /// Every embedded descriptor, sorted by key so `lookup` can binary-search it.
 static DESCRIPTORS: &[(&str, &[u8])] = &[
+    ("atmega4809/bod.yaml", packed!("atmega4809/bod.yaml")),
+    (
+        "atmega4809/clkctrl.yaml",
+        packed!("atmega4809/clkctrl.yaml"),
+    ),
+    (
+        "atmega4809/portmux.yaml",
+        packed!("atmega4809/portmux.yaml"),
+    ),
+    (
+        "atmega4809/rstctrl.yaml",
+        packed!("atmega4809/rstctrl.yaml"),
+    ),
+    ("atmega4809/sigrow.yaml", packed!("atmega4809/sigrow.yaml")),
+    (
+        "atmega4809/slpctrl.yaml",
+        packed!("atmega4809/slpctrl.yaml"),
+    ),
+    ("atmega4809/vref.yaml", packed!("atmega4809/vref.yaml")),
     ("atsamd21g18a/dac.yaml", packed!("atsamd21g18a/dac.yaml")),
     ("atsamd21g18a/gclk.yaml", packed!("atsamd21g18a/gclk.yaml")),
     (
@@ -76,6 +95,31 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("esp32/uart1.yaml", packed!("esp32/uart1.yaml")),
     ("esp32/uart2.yaml", packed!("esp32/uart2.yaml")),
     ("esp32/uhci0.yaml", packed!("esp32/uhci0.yaml")),
+    ("esp32c2/apb_ctrl.yaml", packed!("esp32c2/apb_ctrl.yaml")),
+    (
+        "esp32c2/assist_debug.yaml",
+        packed!("esp32c2/assist_debug.yaml"),
+    ),
+    ("esp32c2/bb.yaml", packed!("esp32c2/bb.yaml")),
+    ("esp32c2/efuse.yaml", packed!("esp32c2/efuse.yaml")),
+    ("esp32c2/extmem.yaml", packed!("esp32c2/extmem.yaml")),
+    (
+        "esp32c2/interrupt_core0.yaml",
+        packed!("esp32c2/interrupt_core0.yaml"),
+    ),
+    ("esp32c2/io_mux.yaml", packed!("esp32c2/io_mux.yaml")),
+    (
+        "esp32c2/modem_clkrst.yaml",
+        packed!("esp32c2/modem_clkrst.yaml"),
+    ),
+    ("esp32c2/radio_fe.yaml", packed!("esp32c2/radio_fe.yaml")),
+    ("esp32c2/radio_fe2.yaml", packed!("esp32c2/radio_fe2.yaml")),
+    ("esp32c2/radio_nrx.yaml", packed!("esp32c2/radio_nrx.yaml")),
+    ("esp32c2/rtc_cntl.yaml", packed!("esp32c2/rtc_cntl.yaml")),
+    ("esp32c2/sensitive.yaml", packed!("esp32c2/sensitive.yaml")),
+    ("esp32c2/spi0.yaml", packed!("esp32c2/spi0.yaml")),
+    ("esp32c2/spi1.yaml", packed!("esp32c2/spi1.yaml")),
+    ("esp32c2/system.yaml", packed!("esp32c2/system.yaml")),
     ("esp32c3/aes.yaml", packed!("esp32c3/aes.yaml")),
     ("esp32c3/apb_ctrl.yaml", packed!("esp32c3/apb_ctrl.yaml")),
     (
@@ -379,6 +423,8 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
         packed!("nrf54l15/global_wdt31_s.yaml"),
     ),
     ("nrf54l15/icache_s.yaml", packed!("nrf54l15/icache_s.yaml")),
+    ("r7fa6m5bh/mstp.yaml", packed!("r7fa6m5bh/mstp.yaml")),
+    ("r7fa8m1ah/mstp.yaml", packed!("r7fa8m1ah/mstp.yaml")),
     ("rp2040/adc.yaml", packed!("rp2040/adc.yaml")),
     ("rp2040/clocks.yaml", packed!("rp2040/clocks.yaml")),
     ("rp2040/dma.yaml", packed!("rp2040/dma.yaml")),
@@ -614,6 +660,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("stm32f411/usart6.yaml", packed!("stm32f411/usart6.yaml")),
     ("stm32f411/wwdg.yaml", packed!("stm32f411/wwdg.yaml")),
     ("stm32f767/adc1.yaml", packed!("stm32f767/adc1.yaml")),
+    ("stm32f767/crc.yaml", packed!("stm32f767/crc.yaml")),
     ("stm32f767/dbg.yaml", packed!("stm32f767/dbg.yaml")),
     ("stm32f767/dma1.yaml", packed!("stm32f767/dma1.yaml")),
     ("stm32f767/dma2.yaml", packed!("stm32f767/dma2.yaml")),
@@ -632,6 +679,8 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("stm32f767/tim2.yaml", packed!("stm32f767/tim2.yaml")),
     ("stm32f767/usart1.yaml", packed!("stm32f767/usart1.yaml")),
     ("stm32f767/usart2.yaml", packed!("stm32f767/usart2.yaml")),
+    ("stm32f767/usart3.yaml", packed!("stm32f767/usart3.yaml")),
+    ("stm32f767/usart6.yaml", packed!("stm32f767/usart6.yaml")),
     ("stm32g474re/adc1.yaml", packed!("stm32g474re/adc1.yaml")),
     ("stm32g474re/crc.yaml", packed!("stm32g474re/crc.yaml")),
     (
@@ -701,6 +750,10 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("stm32h563/usart2.yaml", packed!("stm32h563/usart2.yaml")),
     ("stm32h563/usart3.yaml", packed!("stm32h563/usart3.yaml")),
     ("stm32h563/wwdg.yaml", packed!("stm32h563/wwdg.yaml")),
+    (
+        "stm32h723zg/flash-acr.yaml",
+        packed!("stm32h723zg/flash-acr.yaml"),
+    ),
     ("stm32h735/adc1.yaml", packed!("stm32h735/adc1.yaml")),
     ("stm32h735/adc2.yaml", packed!("stm32h735/adc2.yaml")),
     ("stm32h735/crc.yaml", packed!("stm32h735/crc.yaml")),
@@ -843,6 +896,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("stm32l476/tsc.yaml", packed!("stm32l476/tsc.yaml")),
     ("stm32l476/uart4.yaml", packed!("stm32l476/uart4.yaml")),
     ("stm32l476/uart5.yaml", packed!("stm32l476/uart5.yaml")),
+    ("stm32l476/uid.yaml", packed!("stm32l476/uid.yaml")),
     ("stm32l476/usart1.yaml", packed!("stm32l476/usart1.yaml")),
     ("stm32l476/usart2.yaml", packed!("stm32l476/usart2.yaml")),
     ("stm32l476/usart3.yaml", packed!("stm32l476/usart3.yaml")),

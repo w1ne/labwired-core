@@ -543,6 +543,8 @@ models:
   - crates/core/src/peripherals/adc.rs
   - crates/core/src/peripherals/bxcan.rs
   - crates/core/src/peripherals/rtc_f1.rs
+  - crates/core/src/peripherals/bkp_f1.rs
+  - crates/core/src/peripherals/pwr.rs
   - crates/core/src/peripherals/iwdg.rs
   - crates/core/src/peripherals/wwdg.rs
   - configs/chips/stm32f103.yaml

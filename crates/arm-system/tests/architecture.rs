@@ -1052,3 +1052,37 @@ fn cortex_a7_neon_half_conversion_roundtrips_all_lanes() {
     assert_eq!(ram_words(&b, 0x400, 2), [0xc0003e00, 0x00003400]);
     assert_eq!(ram_words(&b, 0x408, 4), input);
 }
+
+#[test]
+fn cortex_r52_runs_armv8r_aarch32_from_its_own_engine() {
+    let mut b = Bus::new();
+    b.words(
+        0x100,
+        &[
+            0xee100f10, // mrc p15, 0, r0, c0, c0, 0  (MIDR)
+            0xee104f90, // mrc p15, 0, r4, c0, c0, 4  (MPUIR)
+            0xe3a01601, // mov r1, #0x100000
+            0xe5810000, // str r0, [r1]
+            0xe1913c9f, // lda r3, [r1]  (ARMv8 load-acquire)
+        ],
+    );
+    let mut c = ArmCpu::with_model(labwired_arm_system::ArmModel::CortexR52).unwrap();
+    c.executable_range(0, 0x10000).unwrap();
+    // ARMv8-R resets into Hyp mode (EL2), not SVC.
+    assert_eq!(c.register(16).unwrap() & 0x1f, 0x1a);
+    c.set_register(15, 0x100).unwrap();
+    assert_eq!(c.execute(&mut b, 5).unwrap().retired, 5);
+    let midr = c.register(0).unwrap();
+    assert_eq!(
+        (midr >> 24, (midr >> 4) & 0xfff),
+        (0x41, 0xd13),
+        "MIDR {midr:#x}"
+    );
+    assert_eq!((c.register(4).unwrap() >> 8) & 0xff, 16);
+    assert_eq!(c.register(3).unwrap(), midr);
+    assert_eq!(b.io, u64::from(midr));
+    assert_eq!(c.register(15).unwrap(), 0x114);
+    // Reset recreates the same arm64-hosted model, not the arm32 default.
+    c.reset().unwrap();
+    assert_eq!(c.register(16).unwrap() & 0x1f, 0x1a);
+}

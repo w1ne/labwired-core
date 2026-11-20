@@ -15,9 +15,47 @@
   ],
   "firmware_release": "firmware-demos-v3",
   "chips": {
-    "ch32v003f4p6": {
+    "at32f421g8u7": {
       "how": "needs-build",
-      "why": "Requires unreleased CH32V003/RV32E core support from PR #1698; the installed LabWired CLI v0.25.0 cannot run this branch-only model yet."
+      "why": "Exact AT32F421G8U7 descriptor added after the current released CLI. Its committed Artery SDK smoke (examples/at32f421g8u7/io-smoke.yaml) is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
+    "ch32l103c8t6": {
+      "how": "needs-build",
+      "why": "New CH32L103 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
+    "ch32v003f4p6": {
+      "how": "committed",
+      "firmware": "tests/fixtures/ch32v003f4p6-uart-hello.elf",
+      "expect": "Hello from CH32V003",
+      "note": "The CH32V003/RV32E support from #1698 is included in v0.26.0. The candidate runs this committed RV32EC UART fixture without a cross toolchain. This entry proves polled USART1 output, not full CH32V003 peripheral coverage."
+    },
+    "ch32v003f4u6": {
+      "how": "needs-build",
+      "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
+    },
+    "ch32v003a4m6": {
+      "how": "needs-build",
+      "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
+    },
+    "ch32v003j4m6": {
+      "how": "needs-build",
+      "why": "Package variant of ch32v003f4p6 (same die); requires the same unreleased CH32V003/RV32E core support, which the installed LabWired CLI v0.25.0 cannot run yet."
+    },
+    "ch32v005f6p6": {
+      "how": "needs-build",
+      "why": "New CH32V005 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
+    "ch32x035c8t6": {
+      "how": "needs-build",
+      "why": "New CH32X035 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
+    "ch32v006k8u6": {
+      "how": "needs-build",
+      "why": "New CH32V006 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
+    },
+    "ch32v203c8t6": {
+      "how": "needs-build",
+      "why": "New CH32V203 descriptor on this branch; the installed LabWired CLI v0.25.0 does not ship it yet. Committed ELFs under tests/fixtures run with a source build."
     },
     "dspic33fj32mc204": {
       "how": "committed",
@@ -55,6 +93,10 @@
       "firmware": "tests/fixtures/tier1/esp32c3.elf",
       "expect": "TIER1 gpio PASS"
     },
+    "esp32c2": {
+      "how": "needs-build",
+      "why": "ESP32-C2/ESP8684 descriptor and UART/GPIO adapters are newer than the installed CLI this gate checks. The source-tree board smoke passes in examples/esp8684-devkitm-1-h4x; switch this row after a release carries C2 support."
+    },
     "esp32c6": {
       "how": "committed",
       "firmware": "tests/fixtures/esp32c6-demo.elf",
@@ -71,7 +113,7 @@
     },
     "esp32c61": {
       "how": "needs-build",
-      "why": "ESP32-C61 descriptor and UART0 model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32c61-devkitc-1-n8r2; switch this row after a release carries C61 support."
+      "why": "ESP32-C61 descriptor, UART0 model and narrow GPIO4 output model are newer than the installed CLI this gate checks. The source-tree firmware and simulator smoke pass in examples/esp32c61-devkitc-1-n8r2; switch this row after a release carries C61 support."
     },
     "esp32p4": {
       "how": "needs-build",
@@ -130,6 +172,10 @@
       "expect": "map rram=ffffffff ram=54120000 p3cnf=00000003",
       "note": "Snake on an RM67162 AMOLED over SPIM22. Firmware is committed (tests/fixtures/nrf54lm20a-snake.elf), so a clone plus the CLI is the whole prerequisite. The expected map is read back from the model: each value reaches memory or GPIO3 outside the nRF54L15 sibling's map."
     },
+    "mspm0g3507": {
+      "how": "needs-build",
+      "why": "The LP-MSPM0G3507 UART0 smoke is built from crates/firmware-lp-mspm0g3507-smoke; its passing source-tree evidence is under examples/lp-mspm0g3507-launchpad/evidence/. No firmware ELF is committed for a clean install, so this chip is not yet a released-CLI runnable entry."
+    },
     "rp2040": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/rp2040.elf",
@@ -185,11 +231,10 @@
       "why": "Exact orderable geometry slice on the shared medium-density STM32F103 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f103 and exact geometry is checked by stm32_variant_geometry."
     },
     "stm32f401": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f401.elf expect='TIER1 clock PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f401.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
     },
     "stm32f401cb": {
       "how": "needs-build",
@@ -245,12 +290,19 @@
       "expect": "STM32F446RE_OK",
       "note": "Small real-register RCC/GPIOA/USART2 boot and LED test; this simulator evidence is not physical silicon validation. Stock STM32duino requires the newer source model for the PWR over-drive and PLLI2S ready handshake."
     },
+    "stm32f411re": {
+      "how": "needs-build",
+      "why": "Exact STM32F411RET6 (NUCLEO-F411RE) descriptor added after the current released CLI. Its raw-register smoke (examples/nucleo-f411re) and stock stm32duino Arduino matrix row are validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
     "stm32f411ceu6": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f411.elf expect='TIER1 clock PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f411.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
+    },
+    "stm32h533re": {
+      "how": "needs-build",
+      "why": "NUCLEO-H533RE descriptor and USART2/GPIOA model are newer than the installed CLI this gate checks. The committed source-tree smoke boots and prints NUCLEO_H533RE_OK in examples/nucleo-h533re; clean-install release support starts with a release containing this chip model."
     },
     "stm32h563": {
       "how": "committed",
@@ -308,6 +360,10 @@
       "sha256": "b2d4fb48ec3585334760d03bf941bf8bc9a448e8d941b9017922643e0035fff5",
       "expect": "RP2350_SMOKE_OK"
     },
+    "esp32s3-devkitc-1-n16r8-adc": {
+      "how": "needs-build",
+      "why": "The ESP32-S3-DevKitC-1 N16R8 ADC1_CH3 profile is newer than the installed CLI this gate checks. The GPIO4 potentiometer smoke passes from source in examples/esp32-s3-devkitc-1-n16r8 (built by the onboarding smoke workflow); switch this row after a release carries the descriptor."
+    },
     "esp32s3-zero": {
       "how": "committed",
       "firmware": "tests/fixtures/tier1/esp32s3.elf",
@@ -315,25 +371,22 @@
       "note": "Board variant of esp32s3; runs the same TIER1 image."
     },
     "stm32f401cdu6": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f401.elf expect='TIER1 clock PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/stm32f401cdu6-blackpill-demo.elf",
+      "expect": "OK",
+      "note": "Dedicated Black Pill UART smoke, verified with the v0.26.0 candidate. This proves installed-CLI execution and UART output only. The shared stm32f401 TIER1 fixture still reports timer-gated, spi-gated, adc-gated, wdt-unprotected, rtc-dr-reset, dma-ndtr and pwm-gated failures on this descriptor; it is not full peripheral qualification."
     },
     "stm32f405": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f405.elf expect='TIER1 i2c PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f405.elf",
+      "expect": "TIER1 i2c PASS",
+      "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
     },
     "stm32f407": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f407.elf expect='TIER1 clock PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f407.elf",
+      "expect": "TIER1 clock PASS",
+      "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
     },
     "stm32f407ie": {
       "how": "needs-build",
@@ -360,11 +413,10 @@
       "why": "Exact orderable geometry slice on the shared STM32F407 engine; no per-orderable firmware fixture is committed. Family firmware evidence is recorded under stm32f407 and exact geometry is checked by stm32_variant_geometry."
     },
     "stm32f767": {
-      "how": "blocked",
-      "firmware": "demo-nucleo-f401.elf",
-      "sha256": "eee67caf8ded9f9385981ce43220b4d6677d1cd34c49f528f964b7462b558674",
-      "expect": null,
-      "note": "v0.25.0 refuses adc1 profile 'stm32f4' (unsupported ADC register layout; supported: stm32f1, stm32l4, stm32h5, stm32h7, stm32u5). Fixed on main by #1222 (AdcRegisterLayout::Stm32F4). This entry flips back to committed in the first release that carries that fix; the gate fails if it starts passing while still marked blocked. Prior map: how=committed firmware=tests/fixtures/tier1/stm32f767.elf expect='TIER1 i2c PASS'."
+      "how": "committed",
+      "firmware": "tests/fixtures/tier1/stm32f767.elf",
+      "expect": "TIER1 i2c PASS",
+      "note": "Restored for v0.26.0 after #1222 added the STM32F4 ADC register layout. The v0.26.0 candidate runs this committed fixture with the expected transcript and no TIER1 FAIL lines."
     },
     "stm32g474re": {
       "how": "committed",
@@ -374,6 +426,10 @@
     "stm32g431rb": {
       "how": "needs-build",
       "why": "Exact STM32G431RBT6 descriptor added after the current released CLI. Its tier-1 fixture smoke (examples/stm32g431rb) is validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
+    },
+    "stm32l432kc": {
+      "how": "needs-build",
+      "why": "Exact STM32L432KCU6 (NUCLEO-L432KC) descriptor added after the current released CLI. Its raw-register smoke (examples/nucleo-l432kc) and stock stm32duino Arduino matrix row are validated from this Core source tree; clean-install release-runner support starts with a release containing this chip model."
     },
     "stm32l073": {
       "how": "committed",
@@ -415,6 +471,10 @@
       "expect": "1/1 checks",
       "note": "64-pin ATmega2561 on the shared public AVR core. The committed tiny ELF prints `2561 OK` through USART0 and drives PB5; the script verdict is asserted because `labwired test` does not echo the AVR console."
     },
+    "atmega32u4": {
+      "how": "needs-build",
+      "why": "The ATmega32U4 profile (Arduino Leonardo) prints over native USB CDC on the CPU's USB device model with a scripted host, which is newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix arduino-leonardo row (L0-L7) passes from source; switch this row after a release carries the atmega32u4 descriptor."
+    },
     "atmega2560": {
       "how": "example",
       "script": "examples/arduino-mega-2560-io/io-smoke.yaml",
@@ -426,6 +486,10 @@
       "script": "examples/arduino-nano-blinky/io-smoke.yaml",
       "expect": null,
       "note": "AVR runs through a system manifest, not `labwired run`. The script asserts the sketch's `nano-ok` banner on USART0 and that it then executes its whole step budget without faulting."
+    },
+    "atmega4809": {
+      "how": "needs-build",
+      "why": "The ATmega4809 (Arduino Nano Every) model and its AVRxt core are newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix arduino-nano-every row (L0/L1/L2/L3/L4/L5/L7) passes from source on stock ArduinoCore-megaavr; switch this row after a release carries the atmega4809 descriptor."
     },
     "atmega328pb": {
       "how": "needs-build",
@@ -509,6 +573,10 @@
       "expect": "OK",
       "note": "Teensy 4.1 UART/LED smoke. Serial1 is LPUART6. Image is DTCM-linked."
     },
+    "mimxrt1062-teensy41": {
+      "how": "needs-build",
+      "why": "The Teensy 4.1 profile boots stock Teensyduino from the FlexSPI NOR IVT and prints over a USB CDC scripted host; both are newer than the installed v0.25.0 CLI this gate checks. The arduino-matrix teensy41 row (L0-L3, L5, L7) passes from source; switch this row after a release carries the mimxrt1062-teensy41 descriptor."
+    },
     "stm32f746": {
       "how": "committed",
       "firmware": "tests/fixtures/stm32f746-discovery-smoke.elf",
@@ -526,6 +594,10 @@
       "script": "examples/stm32g0b1re/io-smoke.yaml",
       "expect": "exti0 port=B falling imr=1",
       "note": "In-repo USART1 PA9 AF1, TIM2 PSC, and G0 EXTI examples. The customer IO-Link ELF is still built by iolinki-reference.yml; see docs/iolinki-g0-prerequisites.md."
+    },
+    "stm32c031c6": {
+      "how": "needs-build",
+      "why": "New in this PR: the STM32C0 RCC profile (`stm32c0`) and the C0 timer pad table are newer than the released CLI this gate installs. The stock-stm32duino Arduino matrix row stm32c031c6 runs it on a source-built CLI; switch to `committed` once a release carries the model"
     },
     "litex-vexriscv": {
       "how": "needs-build",

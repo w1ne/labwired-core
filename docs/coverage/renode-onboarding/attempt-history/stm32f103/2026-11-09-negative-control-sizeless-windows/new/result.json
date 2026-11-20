@@ -1,0 +1,1347 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 50000000,
+  "cycles": 50000000,
+  "instructions": 50000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 50000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 50000000
+    }
+  },
+  "limits": {
+    "max_steps": 50000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073811456,
+          "expected_value": 0,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1073764352,
+          "expected_value": 0,
+          "mask": null,
+          "size": null
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "uart_contains": "F103 I2C"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "I2C_NACK_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "I2C_IDLE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102=00001900"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_READ_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_CONFIG=0000FFF0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_CONFIG_WRITE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_TLOW=00003450"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_TLOW_WRITE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_THIGH=00006788"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_THIGH_WRITE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_TLOW_SHORT=00002250"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "TMP102_TLOW_SHORT_WRITE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_ID=00000060"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_ID_READ_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_T2=00006743"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_CALIBRATION_READ_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_CALIBRATION_MAP_READ_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_SKIPPED_PRESS_RAW=00080000"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_SKIPPED_TEMP_RAW=00080000"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_SKIPPED_HUM_RAW=00008000"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_OVERSAMPLING_SKIP_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_MEASUREMENT_SETUP_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_PRESS_RAW=0005883F"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_TEMP_RAW=0008E910"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_HUM_RAW=0000853F"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_SEEDED_ENVIRONMENT_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_SEEDED_TEMP_CENTI=00000FA0"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_SEEDED_PRESS_Q8=01731804"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_SEEDED_HUM_Q10=00014005"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_SEEDED_COMPENSATION_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_TEMP_RAW=0009A510"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_TEMPERATURE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_TEMP_CENTI=0000157C"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_TEMP_COMPENSATION_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_HUMIDITY_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_HUM_RAW=000064D2"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_HUM_TEMP_CENTI=0000157C"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_HUM_PRESS_Q8=0173180D"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_HUM_Q10=00008BFD"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_HUM_COMPENSATION_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_PRESSURE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_PRESS_RAW=0005305F"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_PRESS_TEMP_CENTI=0000157C"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_PRESS_Q8=018B81EE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_PRESS_HUM_Q10=00008BFD"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_DYNAMIC_PRESS_COMPENSATION_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_CTRL_HUM_STORAGE=00000001"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_CTRL_HUM_STORAGE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_CTRL_MEAS_STORAGE=00000027"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "BME280_CTRL_MEAS_STORAGE_OK"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "DONE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      10,
+      3221225472,
+      75,
+      3,
+      39,
+      25810,
+      3221225472,
+      536891376,
+      632080,
+      1073763348,
+      999999,
+      1073759232,
+      999999,
+      536891200,
+      134249910,
+      134244858
+    ],
+    "pc": 134244858,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "firmware_hash": "fecb2d6be9781d7b9072e5c722e105f51889cc932e1cd90dea25a608a72bbe93",
+  "config": {
+    "firmware": "target/thumbv7m-none-eabi/release/firmware-f103-i2c-demo",
+    "system": "configs/systems/onboarding/stm32f103.yaml",
+    "script": "stm32f103-new.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "rcc",
+        "kind": "native",
+        "base": 1073876992,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortA",
+        "kind": "native",
+        "base": 1073809408,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpioPortB",
+        "kind": "native",
+        "base": 1073810432,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart2",
+        "kind": "native",
+        "base": 1073759232,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "i2c",
+        "base": 1073763328,
+        "registers": [],
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x48",
+            "meta": {
+              "inputs": {},
+              "powered": true,
+              "registers": {
+                "CONFIG": 65520,
+                "TEMP": 6528,
+                "T_HIGH": 26504,
+                "T_LOW": 8784
+              },
+              "supply_generation": null
+            }
+          },
+          {
+            "kind": "i2c_registers",
+            "id": "i2c@0x76",
+            "meta": {
+              "inputs": {
+                "humidity": 35.0,
+                "pressure": 1012.5,
+                "temperature": 55.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 1,
+                "CTRL_MEAS": 39,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 25810,
+                "PRESS": 5441008,
+                "STATUS": 0,
+                "TEMP": 10113280
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      },
+      {
+        "name": "scb",
+        "kind": "native",
+        "base": 3758157056,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "nvic",
+        "kind": "native",
+        "base": 3758153984,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "dwt",
+        "kind": "native",
+        "base": 3758100480,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "itm",
+        "kind": "native",
+        "base": 3758096384,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "tmp102",
+        "device_type": "tmp102",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c1",
+          "address": 72
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "tmp102",
+            "meta": {
+              "inputs": {},
+              "powered": true,
+              "registers": {
+                "CONFIG": 65520,
+                "TEMP": 6528,
+                "T_HIGH": 26504,
+                "T_LOW": 8784
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "bme280",
+        "device_type": "bme280",
+        "declared": true,
+        "attachment": {
+          "transport": "i2c",
+          "bus": "i2c1",
+          "address": 118
+        },
+        "artifacts": [
+          {
+            "kind": "i2c_registers",
+            "id": "bme280",
+            "meta": {
+              "inputs": {
+                "humidity": 35.0,
+                "pressure": 1012.5,
+                "temperature": 55.0
+              },
+              "powered": true,
+              "registers": {
+                "CHIP_ID": 96,
+                "CONFIG": 0,
+                "CTRL_HUM": 1,
+                "CTRL_MEAS": 39,
+                "DIG_H1": 75,
+                "DIG_H2": 350,
+                "DIG_H3": 0,
+                "DIG_H4_H5_LOW": 5,
+                "DIG_H4_HIGH": 19,
+                "DIG_H5_HIGH": 0,
+                "DIG_H6": 30,
+                "DIG_P1": 38221,
+                "DIG_P2": 54959,
+                "DIG_P3": 3024,
+                "DIG_P4": 7421,
+                "DIG_P5": 65351,
+                "DIG_P6": 65529,
+                "DIG_P7": 9900,
+                "DIG_P8": 55306,
+                "DIG_P9": 4285,
+                "DIG_T1": 28528,
+                "DIG_T2": 26435,
+                "DIG_T3": 64536,
+                "HUM": 25810,
+                "PRESS": 5441008,
+                "STATUS": 0,
+                "TEMP": 10113280
+              },
+              "supply_generation": null
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x40005800",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x40011000",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "F103 I2C",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "INIT",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CR1=00000001",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CR2=00000008",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CCR=00000028",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "TRISE=00000009",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "OAR1=00004000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SR1=00000000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SR2=00000000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "START",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CR1=00000001",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CR2=00000008",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CCR=00000028",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "TRISE=00000009",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "OAR1=00004000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SR1=00000001",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SR2=00000000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "ADDR",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CR1=00000001",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CR2=00000008",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CCR=00000028",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "TRISE=00000009",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "OAR1=00004000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SR1=00000400",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SR2=00000003",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "I2C_NACK_OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "STOP",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CR1=00000001",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CR2=00000008",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "CCR=00000028",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "TRISE=00000009",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "OAR1=00004000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SR1=00000400",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "SR2=00000000",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "I2C_IDLE_OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "TMP102=00001900",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "TMP102_READ_OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "TMP102_CONFIG=0000FFF0",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "TMP102_CONFIG_WRITE_OK",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "TMP102_TLOW=00003450",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "TMP102_TLOW_WRITE_OK",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "TMP102_THIGH=00006788",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "TMP102_THIGH_WRITE_OK",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "TMP102_TLOW_SHORT=00002250",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "TMP102_TLOW_SHORT_WRITE_OK",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "BME280_ID=00000060",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "BME280_ID_READ_OK",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "BME280_T2=00006743",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "BME280_CALIBRATION_READ_OK",
+        "cycle_lo": 10000,
+        "cycle": 20000,
+        "end_cycle": 20000
+      },
+      {
+        "text": "BME280_CALIBRATION_MAP_READ_OK",
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
+      },
+      {
+        "text": "BME280_WAITING_FOR_OVERSAMPLING_SKIP",
+        "cycle_lo": 40000,
+        "cycle": 50000,
+        "end_cycle": 50000
+      },
+      {
+        "text": "BME280_SKIPPED_PRESS_RAW=00080000",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "BME280_SKIPPED_TEMP_RAW=00080000",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "BME280_SKIPPED_HUM_RAW=00008000",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "BME280_OVERSAMPLING_SKIP_OK",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "BME280_MEASUREMENT_SETUP_OK",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "BME280_PRESS_RAW=0005883F",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 60000
+      },
+      {
+        "text": "BME280_TEMP_RAW=0008E910",
+        "cycle_lo": 50000,
+        "cycle": 60000,
+        "end_cycle": 70000
+      },
+      {
+        "text": "BME280_HUM_RAW=0000853F",
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
+      },
+      {
+        "text": "BME280_SEEDED_ENVIRONMENT_OK",
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
+      },
+      {
+        "text": "BME280_SEEDED_TEMP_CENTI=00000FA0",
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
+      },
+      {
+        "text": "BME280_SEEDED_PRESS_Q8=01731804",
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
+      },
+      {
+        "text": "BME280_SEEDED_HUM_Q10=00014005",
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
+      },
+      {
+        "text": "BME280_SEEDED_COMPENSATION_OK",
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
+      },
+      {
+        "text": "BME280_WAITING_FOR_TEMPERATURE_STIMULUS",
+        "cycle_lo": 60000,
+        "cycle": 70000,
+        "end_cycle": 70000
+      },
+      {
+        "text": "BME280_DYNAMIC_TEMP_RAW=0009A510",
+        "cycle_lo": 1000000,
+        "cycle": 1010000,
+        "end_cycle": 1010000
+      },
+      {
+        "text": "BME280_DYNAMIC_TEMPERATURE_OK",
+        "cycle_lo": 1000000,
+        "cycle": 1010000,
+        "end_cycle": 1010000
+      },
+      {
+        "text": "BME280_DYNAMIC_TEMP_CENTI=0000157C",
+        "cycle_lo": 1000000,
+        "cycle": 1010000,
+        "end_cycle": 1010000
+      },
+      {
+        "text": "BME280_DYNAMIC_PRESS_Q8=0173180D",
+        "cycle_lo": 1000000,
+        "cycle": 1010000,
+        "end_cycle": 1010000
+      },
+      {
+        "text": "BME280_DYNAMIC_HUM_Q10=00013FFF",
+        "cycle_lo": 1000000,
+        "cycle": 1010000,
+        "end_cycle": 1010000
+      },
+      {
+        "text": "BME280_DYNAMIC_TEMP_COMPENSATION_OK",
+        "cycle_lo": 1000000,
+        "cycle": 1010000,
+        "end_cycle": 1020000
+      },
+      {
+        "text": "BME280_WAITING_FOR_HUMIDITY_STIMULUS",
+        "cycle_lo": 1010000,
+        "cycle": 1020000,
+        "end_cycle": 1020000
+      },
+      {
+        "text": "BME280_DYNAMIC_HUM_RAW=000064D2",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "BME280_DYNAMIC_HUMIDITY_OK",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "BME280_HUM_TEMP_CENTI=0000157C",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "BME280_HUM_PRESS_Q8=0173180D",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "BME280_HUM_Q10=00008BFD",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "BME280_DYNAMIC_HUM_COMPENSATION_OK",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "BME280_WAITING_FOR_PRESSURE_STIMULUS",
+        "cycle_lo": 2000000,
+        "cycle": 2010000,
+        "end_cycle": 2010000
+      },
+      {
+        "text": "BME280_DYNAMIC_PRESS_RAW=0005305F",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_DYNAMIC_PRESSURE_OK",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_PRESS_TEMP_CENTI=0000157C",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_PRESS_Q8=018B81EE",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_PRESS_HUM_Q10=00008BFD",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_DYNAMIC_PRESS_COMPENSATION_OK",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_CTRL_HUM_STORAGE=00000001",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_CTRL_HUM_STORAGE_OK",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3010000
+      },
+      {
+        "text": "BME280_CTRL_MEAS_STORAGE=00000027",
+        "cycle_lo": 3000000,
+        "cycle": 3010000,
+        "end_cycle": 3020000
+      },
+      {
+        "text": "BME280_CTRL_MEAS_STORAGE_OK",
+        "cycle_lo": 3010000,
+        "cycle": 3020000,
+        "end_cycle": 3020000
+      },
+      {
+        "text": "DONE",
+        "cycle_lo": 3010000,
+        "cycle": 3020000,
+        "end_cycle": 3020000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "stimuli": [
+    {
+      "channel": "temperature",
+      "component": "bme280",
+      "value": 55.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 1000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 1000000
+    },
+    {
+      "channel": "humidity",
+      "component": "bme280",
+      "value": 35.0,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 2000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 2000000
+    },
+    {
+      "channel": "pressure",
+      "component": "bme280",
+      "value": 1012.5,
+      "trigger": {
+        "after_cycles": {
+          "cycles": 3000000
+        }
+      },
+      "outcome": "applied",
+      "at_cycle": 3000000
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 32242,
+    "data_bytes": 0,
+    "bss_bytes": 0,
+    "flash_used_bytes": 32242,
+    "ram_static_bytes": 0,
+    "flash_total_bytes": 65536,
+    "ram_total_bytes": 20480,
+    "flash_used_pct": 49.2,
+    "ram_static_pct": 0.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 20480,
+    "main_stack_high_water_bytes": 188,
+    "main_stack_free_min_bytes": 20140,
+    "main_stack_base": 536870912,
+    "main_stack_top": 536891392,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 20480,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 20140,
+    "heap_base": 536870912,
+    "heap_top": 536891392
+  },
+  "metrics": {
+    "cycles": 50000000,
+    "instructions": 50000000,
+    "steps_executed": 50000000,
+    "memory_reads": 112038,
+    "memory_writes": 54058,
+    "peripheral_accesses": 709635,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134244858,
+        "count": 183555,
+        "symbol": "firmware_f103_i2c_demo::main"
+      },
+      {
+        "pc": 134219738,
+        "count": 432,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219750,
+        "count": 430,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134219814,
+        "count": 430,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219728,
+        "count": 390,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134219756,
+        "count": 351,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219792,
+        "count": 351,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134219802,
+        "count": 351,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219796,
+        "count": 313,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219734,
+        "count": 312,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134219624,
+        "count": 274,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219762,
+        "count": 273,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134219786,
+        "count": 273,
+        "symbol": "<core::ops::range::Range<T> as core::iter::range::RangeIteratorImpl>::spec_next"
+      },
+      {
+        "pc": 134219820,
+        "count": 273,
+        "symbol": "firmware_f103_i2c_demo::wait_sr1"
+      },
+      {
+        "pc": 134219788,
+        "count": 235,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 134219638,
+        "count": 234,
+        "symbol": "core::ptr::read_volatile"
+      }
+    ]
+  }
+}

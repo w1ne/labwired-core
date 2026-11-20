@@ -5,6 +5,17 @@
 //! SystemBus construction, peripheral install, UART/IO-Link sinks, bit-band/atomic helpers.
 
 use super::*;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_NATIVE_CODE_IDENTITY: AtomicU64 = AtomicU64::new(1);
+
+pub(super) fn next_native_code_identity() -> u64 {
+    NEXT_NATIVE_CODE_IDENTITY
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            value.checked_add(1)
+        })
+        .expect("native code identity space exhausted")
+}
 
 impl SystemBus {
     pub fn new() -> Self {
@@ -65,7 +76,12 @@ impl SystemBus {
             // A bare test bus has no chip descriptor; the historical default
             // profile is the ESP32-C3's (the engine's `RiscV::new` default).
             riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
+            riscv_clint: None,
+            riscv_plic: None,
+            native_code_identity: next_native_code_identity(),
             bit_band_enabled: true,
+            armv6m: false,
+            armv8m_baseline: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             esp32c3_io_mux_idx: None,
@@ -83,6 +99,8 @@ impl SystemBus {
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             scheduler_driver_indices: Vec::new(),
+            irq_input_receiver_indices: Vec::new(),
+            exti_line_driver_indices: Vec::new(),
             matrix_source_scratch: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
@@ -94,8 +112,10 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
             timer_poll_carry: std::cell::Cell::new(0),
+            timer_poll_sites: std::cell::Cell::new([None; 8]),
             side_effecting_mmio: std::cell::Cell::new(0),
             batch_stop: Default::default(),
             memory_reads: std::cell::Cell::new(0),
@@ -104,6 +124,7 @@ impl SystemBus {
             poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
             legacy_walk_pinned_on: false,
+            max_peripheral_tick_interval: None,
             legacy_tick_candidate_mask: Vec::new(),
             legacy_tick_peer_write_indices: Vec::new(),
             reset_vector_offset: 0,
@@ -124,6 +145,7 @@ impl SystemBus {
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
             analog_muxes: Vec::new(),
+            spi_cs_watches: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -135,7 +157,7 @@ impl SystemBus {
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
             flash_models_ops: false,
-            nordic_gpio_service: false,
+            gpio_edge_observers: false,
             timer_capture_wired: false,
             wire_inputs_live: false,
             resident_scheduling_disabled: false,
@@ -183,7 +205,12 @@ impl SystemBus {
             config: crate::SimulationConfig::default(),
             cpu_hz: 0,
             riscv_profile: crate::cpu::RiscVCoreProfile::Esp32C3,
+            riscv_clint: None,
+            riscv_plic: None,
+            native_code_identity: next_native_code_identity(),
             bit_band_enabled: false,
+            armv6m: false,
+            armv8m_baseline: false,
             pending_cpu_irqs: [0; 2],
             dport_idx: None,
             esp32c3_io_mux_idx: None,
@@ -201,6 +228,8 @@ impl SystemBus {
             legacy_tick_indices: Vec::new(),
             bus_tick_indices: Vec::new(),
             scheduler_driver_indices: Vec::new(),
+            irq_input_receiver_indices: Vec::new(),
+            exti_line_driver_indices: Vec::new(),
             matrix_source_scratch: Vec::new(),
             peripheral_hint: Cell::new(None),
             last_route: Cell::new(None),
@@ -212,8 +241,10 @@ impl SystemBus {
             current_cycle: 0,
             cycle_clock: crate::CycleClock::default(),
             pending_schedule: Vec::new(),
+            parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: std::cell::Cell::new(0),
             timer_poll_carry: std::cell::Cell::new(0),
+            timer_poll_sites: std::cell::Cell::new([None; 8]),
             side_effecting_mmio: std::cell::Cell::new(0),
             batch_stop: Default::default(),
             memory_reads: std::cell::Cell::new(0),
@@ -222,6 +253,7 @@ impl SystemBus {
             poll_streak: std::cell::Cell::new((u32::MAX, 0, 0, 0)),
             legacy_walk_disabled: false,
             legacy_walk_pinned_on: false,
+            max_peripheral_tick_interval: None,
             legacy_tick_candidate_mask: Vec::new(),
             legacy_tick_peer_write_indices: Vec::new(),
             reset_vector_offset: 0,
@@ -242,6 +274,7 @@ impl SystemBus {
             motor_cycle_anchor: 0,
             analog_inputs: Vec::new(),
             analog_muxes: Vec::new(),
+            spi_cs_watches: Vec::new(),
             can_diagnostic_testers: Vec::new(),
             can_uds_testers: Vec::new(),
             can_log_players: Vec::new(),
@@ -253,7 +286,7 @@ impl SystemBus {
             pms_write_bypass: false,
             esp32c3_pms_armed: false,
             flash_models_ops: false,
-            nordic_gpio_service: false,
+            gpio_edge_observers: false,
             timer_capture_wired: false,
             wire_inputs_live: false,
             resident_scheduling_disabled: false,
@@ -576,6 +609,11 @@ impl SystemBus {
             {
                 continue;
             }
+            // A USB device controller with a scripted host (ESP32-S3 USB-OTG,
+            // TinyUSB CDC `Serial`): the console is its bulk IN data.
+            if p.dev.attach_usb_cdc_console(Some(sink.clone())) {
+                continue;
+            }
             let Some(any) = p.dev.as_any_mut() else {
                 continue;
             };
@@ -635,6 +673,12 @@ impl SystemBus {
             // USB CDC, so the console text arrives on the USB bulk-IN endpoint,
             // not UART0. Route it into the same capture sink.
             if let Some(usb) = any.downcast_mut::<crate::peripherals::rp2040::usb::Rp2040Usb>() {
+                usb.set_sink(Some(sink.clone()));
+                continue;
+            }
+            // i.MX RT USB1 device CDC (Teensy 4.x `Serial`): the console is
+            // the bulk IN endpoint once the scripted host has enumerated.
+            if let Some(usb) = any.downcast_mut::<crate::peripherals::imxrt::usb::ImxrtUsb>() {
                 usb.set_sink(Some(sink.clone()));
                 continue;
             }
@@ -1003,6 +1047,8 @@ impl SystemBus {
         echo_stdout: bool,
     ) -> bool {
         for p in &mut self.peripherals {
+            // A named UART is the console: no USB CDC data joins it.
+            p.dev.attach_usb_cdc_console(None);
             if p.dev
                 .as_uart_stream_host()
                 .is_some_and(|u| u.attach_console_sink(None, false))
@@ -1033,12 +1079,7 @@ impl SystemBus {
         // by `configure_xtensa_esp32s3` names UART0 `uart0_s3`; the manifest
         // (and the chip yaml) call it `uart0`. Without the alias, the S3 flash
         // boot path refused `debug_uart: uart0` although the UART is there.
-        let index = self.find_peripheral_index_by_name(name).or_else(|| {
-            super::attach::ESP32S3_UART_INSTANCE_NAMES
-                .iter()
-                .find(|[_, yaml]| *yaml == name)
-                .and_then(|[programmatic, _]| self.find_peripheral_index_by_name(programmatic))
-        });
+        let index = self.uart_index_by_name(name);
         if let Some(p) = index.map(|i| &mut self.peripherals[i]) {
             if p.dev.as_uart_stream_host().is_some_and(|u| {
                 !u.hosts_protocol_peer() && u.attach_console_sink(Some(sink.clone()), echo_stdout)
@@ -1126,8 +1167,25 @@ impl SystemBus {
         sources
     }
 
-    /// Push `bytes` into the named UART's external RX queue and re-arm its
-    /// scheduler wake.
+    /// Resolve a named UART consistently for console, RX and peer operations.
+    /// Exact registered names win when both spellings are present. The fallback
+    /// is the same bounded S3 instance table already used by console wiring.
+    fn uart_index_by_name(&self, name: &str) -> Option<usize> {
+        self.find_peripheral_index_by_name(name).or_else(|| {
+            super::attach::ESP32S3_UART_INSTANCE_NAMES
+                .iter()
+                .find(|names| names.contains(&name))
+                .and_then(|names| {
+                    names
+                        .iter()
+                        .find_map(|alias| self.find_peripheral_index_by_name(alias))
+                })
+        })
+    }
+
+    /// Deliver `bytes` from the named UART's external peer and re-arm its
+    /// scheduler wake. STM32v2 UARTs keep input on the wire until UE and RE
+    /// are both enabled; other UART models keep their established queue path.
     ///
     /// Test-script `uart_injections` (and interactive serial) used to only
     /// `extend` the shared queue. Under the event-scheduler an idle EspUart
@@ -1137,20 +1195,24 @@ impl SystemBus {
     /// so `EspUart::take_scheduled_events` can wake, ingest, and raise
     /// `RXFIFO_TOUT` / `RXFIFO_FULL`.
     pub fn deliver_uart_rx_named(&mut self, name: &str, bytes: &[u8]) -> Result<usize, String> {
-        let index = self.find_peripheral_index_by_name(name).ok_or_else(|| {
+        let index = self.uart_index_by_name(name).ok_or_else(|| {
             format!("uart_injection: UART peripheral '{name}' not found on the bus")
         })?;
-        let rx = self.attach_uart_rx_source_named(name).ok_or_else(|| {
-            format!("uart_injection: UART peripheral '{name}' not found on the bus")
-        })?;
-        {
+        let delivered = if let Some(result) = self.peripherals[index].dev.inject_uart_rx(bytes) {
+            result.map_err(|e| format!("uart_injection '{name}': {e}"))?
+        } else {
+            let rx = self.attach_uart_rx_source_named(name).ok_or_else(|| {
+                format!("uart_injection: UART peripheral '{name}' not found on the bus")
+            })?;
             let mut guard = rx
                 .lock()
                 .map_err(|e| format!("uart_injection '{name}': RX buffer poisoned: {e}"))?;
             guard.extend(bytes.iter().copied());
-        }
+            bytes.len()
+        };
         self.collect_scheduled_events(index);
-        Ok(bytes.len())
+        self.reconcile_irq_levels_after_write(index);
+        Ok(delivered)
     }
 
     /// Give `bytes` to the far side of the external device `device` that is
@@ -1162,7 +1224,7 @@ impl SystemBus {
         bytes: &[u8],
     ) -> Result<(), String> {
         let index = self
-            .find_peripheral_index_by_name(uart)
+            .uart_index_by_name(uart)
             .ok_or_else(|| format!("UART peripheral '{uart}' not found on the bus"))?;
         self.peripherals[index]
             .dev
@@ -1174,7 +1236,7 @@ impl SystemBus {
     /// Check that the UART `uart` hosts an external device `device`.
     pub fn check_uart_peer(&mut self, uart: &str, device: &str) -> Result<(), String> {
         let index = self
-            .find_peripheral_index_by_name(uart)
+            .uart_index_by_name(uart)
             .ok_or_else(|| format!("UART peripheral '{uart}' not found on the bus"))?;
         let ids = self.peripherals[index]
             .dev
@@ -1202,42 +1264,29 @@ impl SystemBus {
     /// in the queue rather than being dropped (see `Uart::read`: RX presence
     /// is derived from the queue being non-empty, with no enable gating).
     pub fn attach_uart_rx_source_named(&self, name: &str) -> Option<Arc<Mutex<VecDeque<u8>>>> {
-        for p in &self.peripherals {
-            if p.name != name {
-                continue;
-            }
-            // i.MX RT LPUART (the queue feeds the RX wire once RE is on) and
-            // any later UART answer through the named capability.
-            if let Some(rx) = p.dev.uart_rx_source() {
-                return Some(rx);
-            }
-            let any = p.dev.as_any()?;
-            if let Some(uart) = any.downcast_ref::<Uart>() {
-                return Some(uart.rx_buffer());
-            }
-            // nRF52 UARTE/legacy-UART twin: same injection queue, drained by
-            // EasyDMA (UARTE personality) or RXD pops (legacy personality).
-            if let Some(uarte) = any.downcast_ref::<crate::peripherals::nrf52::uarte::Nrf52Uarte>()
-            {
-                return Some(uarte.rx_buffer());
-            }
-            // nRF54L UARTE: DMA.RX-cluster generation, same queue contract.
-            if let Some(uarte) =
-                any.downcast_ref::<crate::peripherals::nrf54l::uarte::Nrf54lUarte>()
-            {
-                return Some(uarte.rx_buffer());
-            }
-            // Microchip SERCOM in USART mode: same injection queue contract.
-            if let Some(sercom) =
-                any.downcast_ref::<crate::peripherals::sam::sercom_usart::SamSercomUsart>()
-            {
-                return Some(sercom.rx_buffer());
-            }
-            return any
-                .downcast_ref::<crate::peripherals::esp_uart::EspUart>()
-                .map(|uart| uart.rx_buffer());
+        let p = self.peripherals.get(self.uart_index_by_name(name)?)?;
+        // Capability-based UARTs, including i.MX RT LPUART, use the same
+        // instance resolution as the legacy concrete models below.
+        if let Some(rx) = p.dev.uart_rx_source() {
+            return Some(rx);
         }
-        None
+        let any = p.dev.as_any()?;
+        if let Some(uart) = any.downcast_ref::<Uart>() {
+            return Some(uart.rx_buffer());
+        }
+        if let Some(uarte) = any.downcast_ref::<crate::peripherals::nrf52::uarte::Nrf52Uarte>() {
+            return Some(uarte.rx_buffer());
+        }
+        if let Some(uarte) = any.downcast_ref::<crate::peripherals::nrf54l::uarte::Nrf54lUarte>() {
+            return Some(uarte.rx_buffer());
+        }
+        if let Some(sercom) =
+            any.downcast_ref::<crate::peripherals::sam::sercom_usart::SamSercomUsart>()
+        {
+            return Some(sercom.rx_buffer());
+        }
+        any.downcast_ref::<crate::peripherals::esp_uart::EspUart>()
+            .map(|uart| uart.rx_buffer())
     }
 
     /// Whether this chip's core implements the Cortex-M bit-band feature.
@@ -1269,6 +1318,26 @@ impl SystemBus {
             }
             None => matches!(chip.arch, labwired_config::Arch::Arm),
         }
+    }
+
+    /// True when the chip declares an ARMv6-M core (Cortex-M0, M0+, M1).
+    /// An absent `core` keeps the ARMv7-M fault register file, as before.
+    pub(crate) fn chip_is_armv6m(chip: &ChipDescriptor) -> bool {
+        chip.core.as_deref().is_some_and(|core| {
+            let c = core.trim().to_ascii_lowercase();
+            let c = c.strip_prefix("cortex-").unwrap_or(&c);
+            matches!(c, "m0" | "m0+" | "m0plus" | "m1")
+        })
+    }
+
+    /// True for ARMv8-M Baseline cores, whose AIRCR does not implement
+    /// PRIGROUP. The Cortex-M23 is the in-tree core in this profile.
+    pub(crate) fn chip_is_armv8m_baseline(chip: &ChipDescriptor) -> bool {
+        chip.core.as_deref().is_some_and(|core| {
+            let c = core.trim().to_ascii_lowercase();
+            let c = c.strip_prefix("cortex-").unwrap_or(&c);
+            c == "m23"
+        })
     }
 
     /// Decode an atomic register-alias access. Returns the aligned base
@@ -1450,6 +1519,7 @@ impl SystemBus {
                     controller_idx,
                     reg_offset,
                     bit: gate.bit,
+                    active_low: gate.active_low,
                 });
             }
             let gclk_id = p_cfg
@@ -1480,6 +1550,7 @@ impl SystemBus {
                 requires,
                 gclk_id,
                 gclk_idx,
+                reset_asserted: false,
             });
         }
         Ok(())
@@ -1643,9 +1714,11 @@ mod tests {
                 controller_idx: 0,
                 reg_offset: 0x18,
                 bit: 3,
+                active_low: false,
             }],
             gclk_id: None,
             gclk_idx: None,
+            reset_asserted: false,
         });
 
         // Gates are resolved before `configure_cortex_m` swaps the core-tied

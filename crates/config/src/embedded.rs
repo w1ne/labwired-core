@@ -22,6 +22,9 @@ impl DeviceDescriptor {
                 meta.inputs = meta.inputs.iter().flat_map(|i| i.expand()).collect();
             }
         }
+        if let Some(power) = &desc.behavior.power {
+            power.validate()?;
+        }
         Ok(desc)
     }
 
@@ -114,6 +117,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["adxl345_spi"],
         include_str!("../../../configs/devices/adxl345_spi.yaml"),
+    ),
+    (
+        &["bma400"],
+        include_str!("../../../configs/devices/bma400.yaml"),
     ),
     (
         &["max31855"],
@@ -274,6 +281,10 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["gc9a01"],
         include_str!("../../../configs/devices/gc9a01.yaml"),
+    ),
+    (
+        &["ft5x06"],
+        include_str!("../../../configs/devices/ft5x06.yaml"),
     ),
     (
         &["oled-ssd1309"],
@@ -583,6 +594,18 @@ pub static EMBEDDED_DEVICES: &[(&[&str], &str)] = &[
     (
         &["tm1638"],
         include_str!("../../../configs/devices/tm1638.yaml"),
+    ),
+    (
+        &[
+            "ir_receiver_tsop38238",
+            "ir-receiver-tsop38238",
+            "tsop38238",
+        ],
+        include_str!("../../../configs/devices/ir_receiver_tsop38238.yaml"),
+    ),
+    (
+        &["ir_remote_nec", "ir-remote-nec"],
+        include_str!("../../../configs/devices/ir_remote_nec.yaml"),
     ),
 ];
 

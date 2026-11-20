@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32l552",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 2000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-l552ze-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/renode-onboarding/stm32l552-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32l552.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T05:19:50Z",
+  "finished_at_utc": "2026-11-10T05:19:51Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1295,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.265,
+    "build_firmware": 0.171,
+    "run_smoke": 0.849
+  },
+  "stages_ms": {
+    "build_cli": 265,
+    "build_firmware": 171,
+    "run_smoke": 849
+  }
+}

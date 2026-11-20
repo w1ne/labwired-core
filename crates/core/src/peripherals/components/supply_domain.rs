@@ -405,6 +405,10 @@ impl GatedI2cDevice {
     }
 }
 impl I2cDevice for GatedI2cDevice {
+    fn is_i2c_mux(&self) -> bool {
+        self.inner.is_i2c_mux()
+    }
+
     fn address(&self) -> u8 {
         self.inner.address()
     }
@@ -472,6 +476,15 @@ impl I2cDevice for GatedI2cDevice {
     fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
         self.inner.logs()
     }
+    /// Forward the controller pulse query only while its supply is powered.
+    /// Output-enable wiring is not modeled by this query.
+    fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
+        if self.gate.powered() {
+            self.inner.pwm_channel_pulse_us(channel)
+        } else {
+            None
+        }
+    }
     fn wrapped_device(&self) -> Option<&dyn I2cDevice> {
         Some(self.inner.as_ref())
     }
@@ -487,4 +500,39 @@ impl I2cDevice for GatedI2cDevice {
     ) -> bool {
         self.inner.for_each_sim_input(f)
     }
+}
+
+/// Intern a rail name as `&'static str` once per distinct name, because
+/// [`DeviceSupplyRail::name`] is `'static` and descriptors are data. Leaks one
+/// string per distinct name for the life of the process, never one per device.
+fn intern_rail_name(name: &str) -> &'static str {
+    use std::collections::HashSet;
+    use std::sync::{Mutex, OnceLock};
+    static NAMES: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
+    let mut names = NAMES
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(existing) = names.get(name) {
+        return existing;
+    }
+    let leaked: &'static str = Box::leak(name.to_owned().into_boxed_str());
+    names.insert(leaked);
+    leaked
+}
+
+/// The required rails a descriptor's `behavior.power` block declares, shared by
+/// every declarative engine. Empty when the block is absent.
+pub(crate) fn device_rails(
+    power: Option<&labwired_config::DevicePowerSpec>,
+) -> Vec<crate::peripherals::device::DeviceSupplyRail> {
+    power
+        .into_iter()
+        .flat_map(|p| &p.rails)
+        .map(|r| crate::peripherals::device::DeviceSupplyRail {
+            name: intern_rail_name(&r.name),
+            min_v: r.min_v,
+            max_v: r.max_v,
+        })
+        .collect()
 }

@@ -1,0 +1,9 @@
+2026-11-17T19:59:50.004530Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/stm32f429.yaml
+2026-11-17T19:59:50.064620Z  INFO labwired_loader: ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-17T19:59:50.066123Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'usart2'
+2026-11-17T19:59:50.066472Z  INFO labwired_cli::execute: stimulus: position = 25 applied
+2026-11-17T19:59:50.066491Z  INFO labwired_cli::execute: stimulus: position = 50 applied
+2026-11-17T19:59:50.201470Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "adc1 scan=000003FF,000007FF irq=1,1 end=1 ok" }) (captured len=598)
+FAIL  12/13 checks · stm32f429-smoke · 800000 steps · 0.14s

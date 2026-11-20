@@ -7,25 +7,16 @@ name: Core Coverage Matrix Smoke
 # about a run they can neither see nor stop. Pushes and manual dispatch are
 # untouched — a fork still gets this workflow on its own changes.
 on:
-  # Slow gates: nightly + main tip + manual. Not on PRs (PR merge target <1 min).
+  # CI cut O11: nightly + manual only. Push-to-main ran this on every merge
+  # touching crates/core or configs; nothing blocks on it, and the nightly run
+  # names the offending range. Not on PRs.
   schedule:
     - cron: "0 2 * * *"
-  push:
-    branches:
-      - main
-    paths:
-      - "configs/chips/**"
-      - "configs/systems/**"
-      - "examples/**"
-      - "crates/core/**"
-      - "crates/cli/**"
-      - "crates/labwired-models-**"
-      - ".github/workflows/core-coverage-matrix-smoke.yml"
   workflow_dispatch:
 
 concurrency:
   group: core-coverage-matrix-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   coverage-matrix-smoke:
@@ -118,6 +109,12 @@ jobs:
             profile_dir: release
             script: examples/arduino-uno-r4-minima/uart-smoke.yaml
             system: examples/arduino-uno-r4-minima/system.yaml
+          # Arduino kit rank 3 (37%): bare-metal RA4M1 reset entry and a BME280
+          # IIC1/A4-A5 chip-ID read on the UNO R4 Minima.
+          - id: arduino-uno-r4-minima-bme280
+            script: examples/arduino-uno-r4-minima-bme280/bme280-smoke.yaml
+            system: configs/systems/arduino-uno-r4-minima-bme280.yaml
+            firmware_build_script: examples/arduino-uno-r4-minima-bme280/ci/build-bme280-firmware.sh
           - id: teensy-41
             target: thumbv7em-none-eabi
             crate: firmware-imxrt1064-demo
@@ -144,6 +141,16 @@ jobs:
             profile_dir: release
             script: examples/esp32c6-devkitc/uart-smoke.yaml
             system: examples/esp32c6-devkitc/system.yaml
+          # Rank-1 ESP32-family board coverage: C6-Zero-M header route to a BME280.
+          # The descriptor limits this system to the stocked 4 MB C6FH4 profile.
+          - id: esp32c6-zero-m-bme280
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32c6-devkitc-bme280-smoke
+            profile: release
+            profile_dir: release
+            script: examples/esp32c6-zero-m-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32c6-zero-m-bme280.yaml
+            firmware_build_script: examples/esp32c6-zero-m-bme280/ci/build.sh
           # ESP32-H2-DevKitM-1-N4S. The exact active H2 board gets its own
           # UART0 profile; only the H2/C6-common UART head and PCR prefix are
           # exposed, and the USB bridge/pad route are explicitly out of scope.
@@ -152,7 +159,7 @@ jobs:
             crate: firmware-esp32h2-demo
             profile: release
             profile_dir: release
-            script: examples/esp32h2-devkitm-1-n4s/uart-smoke.yaml
+            script: examples/esp32h2-devkitm-1-n4s/io-smoke.yaml
             system: configs/systems/esp32h2-devkitm-1-n4s.yaml
           # Demand rank 1 ESP32-family coverage: C5-specific survey demand is
           # unmeasured, but the current C5-DevKitC-1 adds a new family SKU.
@@ -163,14 +170,35 @@ jobs:
             profile_dir: release
             script: examples/esp32c5-devkitc-1-n8r8/uart-smoke.yaml
             system: configs/systems/esp32c5-devkitc-1-n8r8.yaml
-          # Current C61 DevKitC-1 N8R2; the narrow profile tests UART0 only.
+          - id: esp32c5-devkitc-1-n8r8-bme280
+            target: riscv32imac-unknown-none-elf
+            crate: firmware-esp32c5-devkitc-1-bme280-smoke
+            profile: release
+            profile_dir: release
+            script: examples/esp32c5-devkitc-1-bme280-smoke/io-smoke.yaml
+            system: configs/systems/esp32c5-devkitc-1-n8r8-bme280.yaml
+            firmware_build_script: examples/esp32c5-devkitc-1-bme280-smoke/ci/build.sh
+            firmware_path: examples/esp32c5-devkitc-1-bme280-smoke/build/firmware.elf
+          # Current C61 DevKitC-1 N8R2; assert UART0 and the GPIO4 output latch.
           - id: esp32c61-devkitc-1-n8r2
             target: riscv32imc-unknown-none-elf
             crate: firmware-esp32c61-demo
             profile: release
             profile_dir: release
-            script: examples/esp32c61-devkitc-1-n8r2/uart-smoke.yaml
+            script: examples/esp32c61-devkitc-1-n8r2/gpio-smoke.yaml
             system: configs/systems/esp32c61-devkitc-1-n8r2.yaml
+            firmware_build_script: examples/esp32c61-devkitc-1-n8r2/ci/build.sh
+            firmware_path: examples/esp32c61-devkitc-1-n8r2/build/firmware.elf
+          # C61 GPIO-matrix I2C0 route and BME280 register reads.
+          - id: esp32c61-devkitc-1-n8r2-bme280
+            target: riscv32imc-unknown-none-elf
+            crate: firmware-esp32c61-bme280-smoke
+            profile: release
+            profile_dir: release
+            script: examples/esp32c61-devkitc-1-n8r2-bme280/bme280-smoke.yaml
+            system: configs/systems/esp32c61-devkitc-1-n8r2-bme280.yaml
+            firmware_build_script: examples/esp32c61-devkitc-1-n8r2-bme280/ci/build.sh
+            firmware_path: examples/esp32c61-devkitc-1-n8r2-bme280/build/firmware.elf
           # Current P4X-C5 Function EV board: UART0 FIFO only; the second HP core,
           # C5 module, and multimedia/connectivity peripherals remain out of scope.
           - id: esp32p4x-c5-function-ev-board
@@ -197,6 +225,10 @@ jobs:
           - id: esp32s3-devkitc-1-n16r8-bme280
             script: examples/esp32s3-devkitc-1-n16r8-bme280/bme280-smoke.yaml
             system: configs/systems/esp32s3-devkitc-1-n16r8-bme280.yaml
+          # LCD-EV v1.5 SUB2 + FT5x06 one-point I2C touch profile.
+          - id: esp32s3-lcd-ev-board-v1-5-touch
+            script: examples/esp32s3-lcd-ev-board/touch-smoke.yaml
+            system: configs/systems/esp32s3-lcd-ev-board-v1-5-touch.yaml
           # XIAO ESP32C3 with a BME280 breakout; the stock Arduino build boots in
           # full and prints the compensated temperature on the USB console.
           - id: seeed-xiao-esp32c3-bme280
@@ -207,6 +239,11 @@ jobs:
           - id: arduino-nano-esp32-gpio
             script: examples/arduino-nano-esp32/io-smoke.yaml
             system: configs/systems/arduino-nano-esp32.yaml
+          # Maintenance for existing demand-rank 1 ESP32 / Arduino-kit rank 3
+          # coverage: rerun its A4/A5-to-BME280 I2C smoke from the fixture.
+          - id: arduino-nano-esp32-bme280
+            script: examples/arduino-nano-esp32-bme280/bme280-smoke.yaml
+            system: configs/systems/arduino-nano-esp32-bme280.yaml
           # nRF52833 / micro:bit v2 — nRF52-family UART smoke on its own board.
           # Same firmware as tests/fixtures/microbit-v2-smoke.elf, rebuilt here.
           - id: microbit-v2
@@ -388,6 +425,27 @@ jobs:
             profile_dir: release
             script: examples/pico2/io-smoke.yaml
             system: configs/systems/pico2.yaml
+          # Pico 2 W + BME280: read the real sensor model's chip ID on I2C0
+          # using the RP2350 map. Build from the crate directory so its
+          # cortex-m-rt linker configuration is loaded.
+          - id: rpi-pico-2-w-bme280
+            target: thumbv8m.main-none-eabi
+            crate: firmware-pico2w-bme280-smoke
+            build_dir: crates/firmware-pico2w-bme280-smoke
+            profile: release
+            profile_dir: release
+            script: examples/rpi-pico-2-w-bme280/io-smoke.yaml
+            system: configs/systems/rpi-pico-2-w-bme280.yaml
+          # Original Pico W/RP2040 with the BME280 on I2C0 GP4/GP5; radio and
+          # the CYW43439-controlled LED remain outside the claimed profile.
+          - id: pico-w-bme280
+            target: thumbv6m-none-eabi
+            crate: firmware-pico-w-bme280-smoke
+            profile: release
+            profile_dir: release
+            script: examples/pico-w-bme280/io-smoke.yaml
+            system: configs/systems/pico-w-bme280.yaml
+            firmware_build_script: examples/pico-w-bme280/ci/build.sh
           # atsamd21g18a's only CLI proof — the first Microchip part in the
           # engine. Same shape as the rp2350 cell above, `build_dir` included
           # and for the same reason: this crate's `-Tlink.x` comes from its own
@@ -560,9 +618,52 @@ jobs:
           # profiles is the RV32E guard in riscv.rs, pinned separately by
           # crates/core/src/cpu/riscv_ch32v003_tests.rs. This cell proves the
           # chip boots real firmware end to end and drives a real peripheral.
+          # ESP32-C2 (ESP8684H4X): committed RV32IMC ELF from examples/esp32c2
+          # prints on UART0 and sets GPIO10 as an output.
+          - id: esp32c2-smoke
+            script: examples/esp32c2/uart-smoke.yaml
+            system: examples/esp32c2/system.yaml
           - id: ch32v003f4p6-blink
             script: examples/ch32v003f4p6/io-smoke.yaml
             system: examples/ch32v003f4p6/system.yaml
+          # CH32L103C8T6 (LQFP48, RV32IMAC): blinks PC13 through GPIOC_CFGHR.
+          - id: ch32l103c8t6-blink
+            script: examples/ch32l103c8t6/io-smoke.yaml
+            system: examples/ch32l103c8t6/system.yaml
+          # CH32V005F6P6 (TSSOP20, RV32EmC): blinks PC0.
+          - id: ch32v005f6p6-blink
+            script: examples/ch32v005f6p6/io-smoke.yaml
+            system: examples/ch32v005f6p6/system.yaml
+          # CH32X035C8T6 (LQFP48, RV32IMAC): blinks PB12 through GPIOB_CFGHR.
+          - id: ch32x035c8t6-blink
+            script: examples/ch32x035c8t6/io-smoke.yaml
+            system: examples/ch32x035c8t6/system.yaml
+          # CH32V006K8U6 (QFN32, RV32EmC): blinks PB0 on GPIOB.
+          - id: ch32v006k8u6-blink
+            script: examples/ch32v006k8u6/io-smoke.yaml
+            system: examples/ch32v006k8u6/system.yaml
+          # CH32V203C8T6 (LQFP48, RV32IMAC): blinks PC13 through GPIOC_CFGHR.
+          - id: ch32v203c8t6-blink
+            script: examples/ch32v203c8t6/io-smoke.yaml
+            system: examples/ch32v203c8t6/system.yaml
+          # CH32V003J4M6 (SOP-8). PC0 has no pad on this package, so the
+          # committed examples/ch32v003j4m6 fixture blinks PC4 (pin 7).
+          - id: ch32v003j4m6-blink
+            script: examples/ch32v003j4m6/io-smoke.yaml
+            system: examples/ch32v003j4m6/system.yaml
+          # CH32V003F4U6 (QFN20) and CH32V003A4M6 (SOP16) bond PC0, so the
+          # F4P6 blink fixture runs unchanged on each descriptor.
+          - id: ch32v003f4u6-blink
+            script: examples/ch32v003f4u6/io-smoke.yaml
+            system: examples/ch32v003f4u6/system.yaml
+          - id: ch32v003a4m6-blink
+            script: examples/ch32v003a4m6/io-smoke.yaml
+            system: examples/ch32v003a4m6/system.yaml
+          # AT32F421G8U7: committed Artery SDK smoke (PLL, flash erase/program,
+          # DMA M2M copy, TMR6 IRQ toggling PA5) on the bare-chip descriptor.
+          - id: at32f421g8u7-sdk-smoke
+            script: examples/at32f421g8u7/io-smoke.yaml
+            system: examples/at32f421g8u7/system.yaml
 
     steps:
       - uses: actions/checkout@v4
@@ -570,7 +671,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.95.0
         with:
-          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32im-unknown-none-elf
+          targets: thumbv6m-none-eabi,thumbv7m-none-eabi,thumbv7em-none-eabi,thumbv7em-none-eabihf,thumbv8m.main-none-eabi,riscv32i-unknown-none-elf,riscv32imc-unknown-none-elf,riscv32im-unknown-none-elf,riscv32imac-unknown-none-elf
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -594,7 +695,7 @@ jobs:
         run: make -C ${{ matrix.make }}
 
       - name: Build matrix firmware
-        if: matrix.crate != ''
+        if: matrix.crate != '' && matrix.firmware_build_script == ''
         # `build_dir` (default: the workspace root) is the directory cargo runs
         # IN, which is not the same question as which package it builds. A crate
         # whose linker script comes from its own .cargo/config.toml must be
@@ -607,13 +708,17 @@ jobs:
             cargo build -p "${{ matrix.crate }}" --target "${{ matrix.target }}"
           fi
 
+      - name: Build staged firmware
+        if: matrix.firmware_build_script != ''
+        run: ${{ matrix.firmware_build_script }}
+
       # A firmware that linked with entry 0x0 boots nowhere and prints nothing,
       # so the smoke below fails with an empty UART and no clue why. Say it here.
       - name: Firmware must not have linked with entry 0x0
         if: matrix.crate != '' && matrix.entry_zero_ok != true
         run: |
           set -euo pipefail
-          elf="target/${{ matrix.target }}/${{ matrix.profile_dir }}/${{ matrix.crate }}"
+          elf="${{ matrix.firmware_path || format('target/{0}/{1}/{2}', matrix.target, matrix.profile_dir, matrix.crate) }}"
           entry=$(python3 -c "import struct,sys;print(struct.unpack_from('<I',open(sys.argv[1],'rb').read(),0x18)[0])" "$elf")
           if [ "$entry" -eq 0 ]; then
             echo "::error::$elf linked with entry 0x0 — its linker script was not applied."
@@ -628,7 +733,7 @@ jobs:
         if: matrix.crate != '' && matrix.entry_zero_ok == true
         run: |
           set -euo pipefail
-          elf="target/${{ matrix.target }}/${{ matrix.profile_dir }}/${{ matrix.crate }}"
+          elf="${{ matrix.firmware_path || format('target/{0}/{1}/{2}', matrix.target, matrix.profile_dir, matrix.crate) }}"
           entry=$(python3 -c "import struct,sys;print(struct.unpack_from('<I',open(sys.argv[1],'rb').read(),0x18)[0])" "$elf")
           if [ "$entry" -ne 0 ]; then
             echo "::error::$elf declares entry_zero_ok but entry is 0x$(printf '%08x' "$entry")."
@@ -645,6 +750,10 @@ jobs:
         if: matrix.id == 'esp32s3-devkitc-1-n16r8-bme280'
         run: examples/esp32s3-devkitc-1-n16r8-bme280/verify-fixture.sh
 
+      - name: Verify LCD-EV FT5x06 fixture
+        if: matrix.id == 'esp32s3-lcd-ev-board-v1-5-touch'
+        run: examples/esp32s3-lcd-ev-board/ci/verify-fixture.sh
+
       - name: Verify XIAO ESP32C3 BME280 fixture
         if: matrix.id == 'seeed-xiao-esp32c3-bme280'
         run: examples/xiao-esp32c3-bme280/verify-fixture.sh
@@ -652,6 +761,10 @@ jobs:
       - name: Verify Arduino Nano ESP32 GPIO fixture
         if: matrix.id == 'arduino-nano-esp32-gpio'
         run: examples/arduino-nano-esp32/verify-fixture.sh
+
+      - name: Verify Arduino Nano ESP32 BME280 fixture
+        if: matrix.id == 'arduino-nano-esp32-bme280'
+        run: examples/arduino-nano-esp32-bme280/verify-fixture.sh
 
       - name: Run matrix smoke
         if: matrix.id != 'stm32-exact-catalog'
@@ -679,6 +792,24 @@ jobs:
             "out/coverage-matrix/${{ matrix.id }}/result.json"
           python3 examples/esp32s3-devkitc-1/rgb-smoke/verify-rgb-evidence.py \
             examples/esp32s3-devkitc-1/evidence/rgb/hosted-verify.json
+
+      - name: Check decoded ESP32-C5 onboard RGB evidence
+        if: matrix.id == 'esp32c5-devkitc-1-n8r8-bme280'
+        run: |
+          python3 examples/esp32c5-devkitc-1-bme280-smoke/ci/verify-rgb-evidence.py \
+            "out/coverage-matrix/${{ matrix.id }}/result.json"
+
+      - name: Check decoded ESP32-C61 onboard RGB evidence
+        if: matrix.id == 'esp32c61-devkitc-1-n8r2-bme280'
+        run: |
+          python3 examples/esp32c61-devkitc-1-n8r2-bme280/ci/verify-rgb-evidence.py \
+            "out/coverage-matrix/${{ matrix.id }}/result.json"
+
+      - name: Check decoded ESP32-H2 onboard RGB evidence
+        if: matrix.id == 'esp32h2-devkitm-1-n4s'
+        run: |
+          python3 examples/esp32h2-devkitm-1-n4s/ci/verify-rgb-evidence.py \
+            "out/coverage-matrix/${{ matrix.id }}/result.json"
 
       - name: Run exact STM32 catalog variants
         if: matrix.id == 'stm32-exact-catalog'

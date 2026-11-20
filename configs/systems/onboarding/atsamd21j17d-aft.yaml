@@ -6,3 +6,7 @@
 
 name: atsamd21j17d-aft
 chip: ../../chips/onboarding/atsamd21j17d-aft.yaml
+connectors:
+- type: uart
+  peripheral: usart0
+  endpoint: host_console

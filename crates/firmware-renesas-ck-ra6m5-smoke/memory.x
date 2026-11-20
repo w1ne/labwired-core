@@ -1,0 +1,6 @@
+/* Renesas RA6M5 code flash @ 0 and SRAM @ 0x20000000. */
+MEMORY
+{
+  FLASH : ORIGIN = 0x00000000, LENGTH = 2M
+  RAM   : ORIGIN = 0x20000000, LENGTH = 512K
+}

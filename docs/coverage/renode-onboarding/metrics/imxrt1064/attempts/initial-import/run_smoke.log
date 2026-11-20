@@ -1,0 +1,8 @@
+2026-11-03T21:13:01.132640Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/imxrt1064.yaml
+2026-11-03T21:13:01.135198Z  INFO labwired_loader: ELF Entry Point: 0x20000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-03T21:13:01.137265Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0xfffffffe
+2026-11-03T21:13:01.137514Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "OK" }) (captured len=0)
+2026-11-03T21:13:01.137528Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpio2:3", min_edges: 1 } }) (captured len=0)
+2026-11-03T21:13:01.137532Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }) (captured len=0)
+FAIL  0/3 checks · imxrt1064-smoke · 0 steps · 0.00s

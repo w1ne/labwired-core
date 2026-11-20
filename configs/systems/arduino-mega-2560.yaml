@@ -1,6 +1,13 @@
 name: arduino-mega-2560
 chip: ../chips/atmega2560.yaml
 # Arduino Mega 2560 R3: ATmega2560, 16 MHz crystal, LED on D13 (PB7).
+# Serial (USART0, D0/D1 through the USB bridge), Serial1 (D19/D18), Serial2
+# (D17/D16) and Serial3 (D15/D14) run with their interrupts at line-rate
+# timing; host bytes go in and out through the usart0..usart3 windows. The
+# 4 KB EEPROM (EEPROM.h) is modelled and survives reset.
+# attachInterrupt pins D2 D3 D18..D21 (INT4 INT5 INT3..INT0), pin-change on
+# D10..D13 D50..D53 D0 D14 D15 A8..A15, timed analogRead and the hardware SPI
+# header D50..D53 (MISO MOSI SCK SS) are modelled (configs/chips/atmega2560.yaml).
 cpu_hz: 16000000
 board_io:
   - id: "status_led"

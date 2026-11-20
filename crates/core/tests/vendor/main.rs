@@ -18,9 +18,17 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod at32_am32_bidir;
+mod at32_am32_protocol;
+mod at32f421_contract;
 mod cc2538_rom;
 mod cc2538_sleep_timer_irq;
+mod ch32l103_compiled_firmware;
 mod ch32v003_compiled_firmware;
+mod ch32v005_compiled_firmware;
+mod ch32v006_compiled_firmware;
+mod ch32v203_compiled_firmware;
+mod ch32x035_compiled_firmware;
 mod efr32_deck_behavior;
 mod efr32_msc_persistence;
 mod efr32_onboarded_parts;
@@ -32,6 +40,7 @@ mod efr32mg26_instances;
 mod efr32mg26_pwm_pad;
 mod efr32mg26_timer_compare_level;
 mod ek_rx261_zephyr;
+mod esp32c2_compiled_firmware;
 mod kw41z_clock_boot;
 mod modulshop_49213;
 mod ra6m5_adc12_icu;

@@ -1,0 +1,24 @@
+[package]
+name = "esp32c2-esp-hal-uart-async"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[workspace]
+
+[dependencies]
+esp-hal          = { version = "1.2", features = ["esp32c2", "unstable"] }
+esp-rtos         = { version = "0.4", features = ["esp32c2", "embassy"] }
+esp-println      = { version = "0.17", default-features = false, features = ["esp32c2", "uart", "critical-section"] }
+esp-backtrace    = { version = "0.19", features = ["esp32c2", "panic-handler", "println"] }
+embassy-executor = "0.10"
+embassy-time     = "0.5"
+embassy-sync     = "0.8"
+critical-section = "1.2"
+
+[profile.release]
+opt-level     = "s"
+lto           = "thin"
+codegen-units = 1
+debug         = false

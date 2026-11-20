@@ -180,6 +180,13 @@ pub struct Esp32s3SarAdc {
     int_ena: u32,
     int_raw: u32,
 
+    /// Analog source inputs for ADC1 channels 0..9 (GPIO1..10). Unset channels
+    /// continue using the deterministic entropy fallback used by the bootloader.
+    /// Input scaling is a *nominal idealized* 0..3300 mV to 12-bit range, NOT
+    /// silicon calibration or a claim about per-channel attenuation accuracy.
+    #[serde(default)]
+    adc1_input_mv: [Option<u16>; 10],
+
     // --- deterministic sample source (xorshift32, seeded once) ---
     lfsr: u32,
 
@@ -234,6 +241,8 @@ impl Esp32s3SarAdc {
             int_ena: 0,
             int_raw: 0,
 
+            adc1_input_mv: [None; 10],
+
             // Same constant seed family as rng.rs — fixed for reproducibility.
             lfsr: 0xACE1_5EED,
 
@@ -271,11 +280,19 @@ impl Esp32s3SarAdc {
         (((channel & 0xF) << 13) | (data12 & 0x0FFF)) & DATA_RESULT_MASK
     }
 
-    /// Perform a complete ADC1 one-time/forced conversion immediately:
-    /// latch a deterministic sample, set the data-valid status, and raise
-    /// the ADC1_DONE raw interrupt. Never blocks.
+    /// Perform a complete ADC1 one-time/forced conversion immediately.
+    /// When a board analog source has explicitly set this channel, the
+    /// conversion is controlled by that voltage rather than random data.
+    /// This ideal ADC transfer is deliberately not silicon-calibrated: the
+    /// attenuation setting, transfer curve, input impedance and noise are not
+    /// modeled. Missing channels retain the historical deterministic fallback.
     fn complete_adc1_conversion(&mut self, channel: u32) {
-        let sample = self.next_sample_12bit();
+        let sample = self
+            .adc1_input_mv
+            .get(channel as usize)
+            .and_then(|input| *input)
+            .map(|mv| (u32::from(mv).min(3300) * 4095 + 1650) / 3300)
+            .unwrap_or_else(|| self.next_sample_12bit());
         let packed = Self::pack_result(channel, sample);
         self.adc1_data = packed;
         self.sar1_status = packed;
@@ -421,6 +438,30 @@ impl Default for Esp32s3SarAdc {
 }
 
 impl Peripheral for Esp32s3SarAdc {
+    /// ADC1 channels 0..9 correspond to GPIO1..GPIO10. ADC2 is not exposed
+    /// through the board analog-source seam until its routing is verified.
+    fn adc_channel_count(&self) -> Option<u8> {
+        Some(10)
+    }
+
+    fn set_adc_channel_input(&mut self, channel: u8, millivolts: u16) -> bool {
+        if let Some(input) = self.adc1_input_mv.get_mut(channel as usize) {
+            *input = Some(millivolts);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn clear_adc_channel_input(&mut self, channel: u8) -> bool {
+        if let Some(input) = self.adc1_input_mv.get_mut(channel as usize) {
+            *input = None;
+            true
+        } else {
+            false
+        }
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let reg = offset & !3;
         let byte = (offset % 4) as u32;
@@ -551,6 +592,101 @@ mod tests {
         assert!(data12 <= 4095, "data not 12-bit: {data12}");
         // Status register mirrors the result.
         assert_eq!(a.read_u32(SAR1_STATUS).unwrap(), result);
+    }
+
+    #[test]
+    fn adc1_voltage_source_drives_correct_channel_and_bounds() {
+        let mut adc = Esp32s3SarAdc::new(SRC);
+        assert_eq!(adc.adc_channel_count(), Some(10));
+        assert!(
+            !adc.set_adc_channel_input(10, 1500),
+            "ADC1 has only 10 channels"
+        );
+        assert!(!adc.clear_adc_channel_input(10));
+
+        for (mv, expected) in [(0, 0), (1650, 2048), (3300, 4095), (5000, 4095)] {
+            assert!(adc.set_adc_channel_input(7, mv));
+            adc.write_u32(INT_CLR, INT_ADC1_DONE).unwrap();
+            adc.write_u32(
+                ONETIME_SAMPLE,
+                ONETIME_SAMPLE1_EN | ONETIME_START | (7 << ONETIME_CHANNEL_S),
+            )
+            .unwrap();
+            let packed = adc.read_u32(SARADC1_DATA_STATUS).unwrap();
+            assert_eq!((packed >> 13) & 15, 7, "channel tag");
+            assert_eq!(packed & 0xFFF, expected, "sample at {mv} mV");
+            assert_ne!(adc.read_u32(INT_RAW).unwrap() & INT_ADC1_DONE, 0);
+        }
+
+        // A different, unset channel must not inherit channel 7's voltage.
+        let mut reference = Esp32s3SarAdc::new(SRC);
+        let ch8 = ONETIME_SAMPLE1_EN | ONETIME_START | (8 << ONETIME_CHANNEL_S);
+        adc.write_u32(ONETIME_SAMPLE, ch8).unwrap();
+        reference.write_u32(ONETIME_SAMPLE, ch8).unwrap();
+        assert_eq!(
+            adc.read_u32(SARADC1_DATA_STATUS).unwrap(),
+            reference.read_u32(SARADC1_DATA_STATUS).unwrap()
+        );
+        assert!(adc.clear_adc_channel_input(7));
+        adc.write_u32(
+            ONETIME_SAMPLE,
+            ONETIME_SAMPLE1_EN | ONETIME_START | (7 << ONETIME_CHANNEL_S),
+        )
+        .unwrap();
+        reference
+            .write_u32(
+                ONETIME_SAMPLE,
+                ONETIME_SAMPLE1_EN | ONETIME_START | (7 << ONETIME_CHANNEL_S),
+            )
+            .unwrap();
+        assert_eq!(
+            adc.read_u32(SARADC1_DATA_STATUS).unwrap(),
+            reference.read_u32(SARADC1_DATA_STATUS).unwrap()
+        );
+    }
+
+    #[test]
+    fn adc1_board_input_snapshot_restores_voltage_and_legacy_fallback() {
+        let mut original = Esp32s3SarAdc::new(SRC);
+        assert!(original.set_adc_channel_input(1, 1650));
+        assert!(original.set_adc_channel_input(9, 3300));
+
+        // Reopening a board must restore its distinct physical stimulus
+        // inputs. A channel that is not driven must not inherit either one.
+        let saved = original.snapshot();
+        let mut restored = Esp32s3SarAdc::new(SRC);
+        restored.restore(saved).unwrap();
+        for (channel, expected) in [(1, 2048), (9, 4095)] {
+            restored
+                .write_u32(
+                    ONETIME_SAMPLE,
+                    ONETIME_SAMPLE1_EN | ONETIME_START | (channel << ONETIME_CHANNEL_S),
+                )
+                .unwrap();
+            let packed = restored.read_u32(SARADC1_DATA_STATUS).unwrap();
+            assert_eq!((packed >> 13) & 0xF, channel);
+            assert_eq!(packed & 0xFFF, expected);
+        }
+
+        // After a source is cleared, the converter returns to the same
+        // deterministic unset-channel path as a fresh instance.
+        assert!(restored.clear_adc_channel_input(9));
+        let mut reference = Esp32s3SarAdc::new(SRC);
+        let ch9 = ONETIME_SAMPLE1_EN | ONETIME_START | (9 << ONETIME_CHANNEL_S);
+        restored.write_u32(ONETIME_SAMPLE, ch9).unwrap();
+        reference.write_u32(ONETIME_SAMPLE, ch9).unwrap();
+        assert_eq!(
+            restored.read_u32(SARADC1_DATA_STATUS).unwrap(),
+            reference.read_u32(SARADC1_DATA_STATUS).unwrap(),
+        );
+
+        // Pre-ADC-source snapshots have no adc1_input_mv field. The
+        // backward-compatible restore must not synthesize a voltage.
+        let mut legacy = Esp32s3SarAdc::new(SRC).snapshot();
+        legacy.as_object_mut().unwrap().remove("adc1_input_mv");
+        let mut from_legacy = Esp32s3SarAdc::new(SRC);
+        from_legacy.restore(legacy).unwrap();
+        assert_eq!(from_legacy.adc1_input_mv, [None; 10]);
     }
 
     #[test]

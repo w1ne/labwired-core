@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="8" failures="2" errors="0" time="0.001876">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="c7a9af07d67f420b9117696a043f7235465dcdc2cb71a363fb84f34a7ee65c4d"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.001876">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: UT32M0R500 Cortex-M0+ UART0 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: UT32 checks PPPPPPPPPPPP DONE" time="0.000000">
+    <failure message="assertion failed">assertion 2: uart_contains: UT32 checks PPPPPPPPPPPP DONE
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=200000
+stop_reason_details.observed.steps_executed=207985
+steps_executed=207985
+cycles=111000
+instructions=207985
+limits:
+  - max_steps=200000
+firmware_hash=c7a9af07d67f420b9117696a043f7235465dcdc2cb71a363fb84f34a7ee65c4d
+firmware=examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-ut32m0r500-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/ut32m0r500.yaml
+script=examples/renode-onboarding/ut32m0r500-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;UT32M0R500 Cortex-M0+ UART0 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;UT32 checks PPPPPPPPPPPP DONE&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;UT32 UART1 line&quot; }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536968960, expected_value: 1580339199, mask: None, size: Some(4), node: None } }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio_bank2:13&quot;, min_edges: 6 } }): true
+  - FidelityClean(FidelityCleanAssertion { fidelity_clean: true }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: UT32 UART1 line" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x20017f00=0x5e320fff" time="0.000000">
+    <failure message="assertion failed">assertion 4: memory_value: @0x20017f00=0x5e320fff
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=200000
+stop_reason_details.observed.steps_executed=207985
+steps_executed=207985
+cycles=111000
+instructions=207985
+limits:
+  - max_steps=200000
+firmware_hash=c7a9af07d67f420b9117696a043f7235465dcdc2cb71a363fb84f34a7ee65c4d
+firmware=examples/renode-onboarding/../../target/thumbv6m-none-eabi/release/firmware-ut32m0r500-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/ut32m0r500.yaml
+script=examples/renode-onboarding/ut32m0r500-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;UT32M0R500 Cortex-M0+ UART0 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;UT32 checks PPPPPPPPPPPP DONE&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;UT32 UART1 line&quot; }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536968960, expected_value: 1580339199, mask: None, size: Some(4), node: None } }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio_bank2:13&quot;, min_edges: 6 } }): true
+  - FidelityClean(FidelityCleanAssertion { fidelity_clean: true }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: gpio_bank2:13 &gt;= 6 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: fidelity_clean: true" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

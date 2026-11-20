@@ -62,6 +62,7 @@ pub(crate) enum Op {
     StepBatch(u32),
     StepEsp32Aids(u32),
     FeedUart(Vec<u8>),
+    FeedUartNamed(String, Vec<u8>),
     FeedRtt(Vec<u8>),
     WriteRttDown(Vec<u8>),
     WriteSemihosting(Vec<u8>),
@@ -232,6 +233,7 @@ impl WasmSimulator {
                 self.feed_uart_input(b);
                 Ok(())
             }
+            Op::FeedUartNamed(name, b) => self.feed_uart_input_named(name, b).map(|_| ()),
             Op::FeedRtt(b) => self.feed_rtt_input(b),
             Op::WriteRttDown(b) => self.write_rtt_down(b).map(|_| ()),
             Op::WriteSemihosting(b) => self.write_semihosting_input(b),
@@ -703,6 +705,27 @@ mod tests {
             blobs: HashMap::new(),
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn uart_input_named_replay_preserves_port_and_payload() {
+        let mut sim = ring();
+        assert_eq!(sim.feed_uart_input_named("uart30", b"selected").unwrap(), 8);
+        let journal = sim.tools.borrow().journal.clone();
+        assert_eq!(
+            journal,
+            vec![(Op::FeedUartNamed("uart30".into(), b"selected".to_vec()), 1)]
+        );
+        let mut rebuilt = sim.rebuild_s(&journal, None).unwrap();
+        let bus = &mut rebuilt.machine.as_mut().unwrap().bus;
+        let selected = bus.attach_uart_rx_source_named("uart30").unwrap();
+        let other = bus.attach_uart_rx_source_named("uart20").unwrap();
+        assert_eq!(
+            selected.lock().unwrap().iter().copied().collect::<Vec<_>>(),
+            b"selected"
+        );
+        assert!(other.lock().unwrap().is_empty());
+        assert_eq!(rebuilt.tools.borrow().journal, journal);
     }
 
     #[test]

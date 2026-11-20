@@ -1,78 +1,47 @@
-# Validation Report: alif_ae822fa0e5597bs0
+# Alif Ensemble E8 imported profile
 
-**Architecture:** ARM Cortex-M.
+## Measured profile
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+The imported Alif E8 descriptor is narrowed to one Cortex-M55 core with
+256 KiB of local ITCM at `0x00000000` and 1 MiB of local DTCM at
+`0x20000000`. The descriptor's `flash` slot serves as the executable ITCM load
+window; it does not model the device's MRAM or boot copy process. Alif documents
+the E8 device as having Cortex-M55 cores and these local memory windows
+([E8 series](https://alifsemi.com/ensemble-e8-series/),
+[memory map](https://swrm.alifsemi.com/Content/2.6%20Shared%20Memory.htm?TocPath=Overview+of+the+Device+System+Architecture%7C_____5)).
 
-```text
-[2m2026-10-18T14:39:49.928895Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:39:49.929210Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/alif_ae822fa0e5597bs0.yaml
-[2m2026-10-18T14:39:49.933916Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio0') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.933959Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio1') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.933971Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio2') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.933981Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio3') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.933992Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio4') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934002Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio5') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934013Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio6') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934022Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio7') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934032Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio8') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934043Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio9') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934053Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio10') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934063Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio11') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934074Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio12') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934084Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio13') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934094Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'gpio14') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934104Z[0m [33m WARN[0m [2mlabwired_core::bus::profiles[0m[2m:[0m GPIO type 'designware_apb_gpio' (peripheral 'lpgpio') has no dedicated register model; falling back to the STM32F1 placeholder layout. This is a known-incomplete onboarding model — set `config.profile` or add a real model for correct behaviour.
-[2m2026-10-18T14:39:49.934298Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:39:49.934366Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:39:49.934373Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:39:49.934377Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:39:49.935672Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:39:49.939452Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:39:49.939475Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:39:49.939565Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:39:49.939583Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:39:49.939588Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:39:49.939592Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:39:49.939596Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:39:49.939600Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 383.22
-```
+UART0-7 are mapped at `0x49018000 + n*0x1000`, the addresses in Renode's
+[Alif E8 platform description](https://github.com/renode/renode/blob/master/platforms/cpus/alif_ae822fa0e5597bs0.repl).
+Renode maps them as `UART.NS16550` with `wideRegisters: true`. LabWired uses
+its `dw_apb_uart` profile for them: a Synopsys DW_apb_uart, which is a 16550
+with a 4-byte register stride, and DLL/DLM sit behind LCR.DLAB. No UART
+interrupt is declared, so NVIC lines 124-131 are not claimed.
 
+These are not mapped, because LabWired has no model for them: the DesignWare
+APB GPIO ports (gpio0-14, lpgpio), the DesignWare I2C0-3, CAST CAN-FD, SRAM0/1,
+MRAM, and the clock and pinctrl windows. The second Cortex-M55, both Cortex-A32
+cores, Helium/MVE and boot firmware are also outside the profile.
 
-## Hardware Coverage Report
+## Smoke evidence
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `gpio0` | `0x49000000` | `designware_apb_gpio` |
-| `gpio1` | `0x49001000` | `designware_apb_gpio` |
-| `gpio2` | `0x49002000` | `designware_apb_gpio` |
-| `gpio3` | `0x49003000` | `designware_apb_gpio` |
-| `gpio4` | `0x49004000` | `designware_apb_gpio` |
-| `gpio5` | `0x49005000` | `designware_apb_gpio` |
-| `gpio6` | `0x49006000` | `designware_apb_gpio` |
-| `gpio7` | `0x49007000` | `designware_apb_gpio` |
-| `gpio8` | `0x49008000` | `designware_apb_gpio` |
-| `gpio9` | `0x49009000` | `designware_apb_gpio` |
-| `gpio10` | `0x4900a000` | `designware_apb_gpio` |
-| `gpio11` | `0x4900b000` | `designware_apb_gpio` |
-| `gpio12` | `0x4900c000` | `designware_apb_gpio` |
-| `gpio13` | `0x4900d000` | `designware_apb_gpio` |
-| `gpio14` | `0x4900e000` | `designware_apb_gpio` |
-| `lpgpio` | `0x42002000` | `designware_apb_gpio` |
-| `i2c0` | `0x49010000` | `stub` |
-| `i2c1` | `0x49011000` | `stub` |
-| `i2c2` | `0x49012000` | `stub` |
-| `i2c3` | `0x49013000` | `stub` |
-| `uart0` | `0x49018000` | `ns16550` |
-| `uart1` | `0x49019000` | `ns16550` |
-| `uart2` | `0x4901a000` | `ns16550` |
-| `uart3` | `0x4901b000` | `ns16550` |
-| `uart4` | `0x4901c000` | `ns16550` |
-| `uart5` | `0x4901d000` | `ns16550` |
-| `uart6` | `0x4901e000` | `ns16550` |
-| `uart7` | `0x4901f000` | `ns16550` |
-| `fdcan` | `0x49036000` | `stub` |
-| `dwt` | `0xe0001000` | `dwt` |
+The smoke firmware (`examples/renode-onboarding/alif-e8-m55-cpu-smoke.S`,
+built by `scripts/build_alif_e8_m55_cpu_smoke.sh`) is loaded into ITCM. It
+sets UART0 LCR to `0x83` (DLAB, 8N1) and reads it back. It writes the divisor
+latches (DLL `0x1B`, DLM `0x02`), then gives UART7 its own divisor (`0x05`).
+It reads both back, clears DLAB, and checks the LSR idle flags (THRE|TEMT). It
+then transmits the results on UART0, polling LSR.THRE. The exact imported
+system ran 100,000 instructions and passed 4/4 assertions: the UART0 lines
+`ALIF E8 M55 SMOKE`, `uart0 dl=021b`, `uart7 dll=05` and `pass=1f`, the result
+word `0xA1E8001F` at `0x200FFFF0`, and the `max_steps` stop.
 
-**Total Peripherals:** 30
+Negative control: the same firmware on the previous CPU-only chip profile fails
+0/4. It takes a BusFault at UART0 LCR (`0x4901800C`).
+
+The fixture is assembled for a Cortex-M33-compatible Thumb subset. This is
+local LabWired CLI evidence. It does not cover the full Cortex-M55 ISA,
+Helium, interrupts, FIFOs, baud timing, DMA, multicore behavior, boot
+firmware, Renode execution or physical hardware.
+
+Evidence: `docs/coverage/renode-onboarding/metrics/alif_ae822fa0e5597bs0/`
+contains the per-target metric, JUnit result, simulator result, snapshot, and
+run log.

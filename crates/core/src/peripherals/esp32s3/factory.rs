@@ -72,13 +72,13 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
             Box::new(gpspi::Esp32s3Spi::new(src(irq)))
         }
         "esp32s3_i2s" => Box::new(i2s::Esp32s3I2s::new(src(25))),
-        "esp32s3_mcpwm" => Box::new(mcpwm::Esp32s3Mcpwm::new(src(38))),
+        "esp32s3_mcpwm" => Box::new(mcpwm::Esp32s3Mcpwm::new(src(31))),
         "esp32s3_rmt" => Box::new(rmt::Esp32s3Rmt::new(src(40))),
         "esp32s3_pcnt" => Box::new(pcnt::Esp32s3Pcnt::new(src(41))),
         "esp32s3_lcd_cam" => Box::new(lcd_cam::Esp32s3LcdCam::new(src(24))),
         "esp32s3_sdmmc" => Box::new(sdmmc::Esp32s3Sdmmc::new(src(36))),
         "esp32s3_twai" => Box::new(twai::Esp32s3Twai::new(src(37))),
-        "esp32s3_usb_otg" => Box::new(usb_otg::Esp32s3UsbOtg::new(src(23))),
+        "esp32s3_usb_otg" => Box::new(usb_otg::Esp32s3UsbOtg::new(src(38))),
         "esp32s3_sar_adc" => Box::new(sar_adc::Esp32s3SarAdc::new(src(64))),
         "esp32s3_aes" => Box::new(aes::Esp32s3Aes::new(src(77))),
         "esp32s3_rsa" => Box::new(rsa::Esp32s3Rsa::new(src(76))),

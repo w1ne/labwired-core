@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f4_discovery-kit",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 4000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-f4-discovery-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/stm32f4_discovery-kit-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f4_discovery-kit.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-13T11:10:31Z",
+  "finished_at_utc": "2026-11-13T11:11:03Z",
+  "elapsed_seconds": 33,
+  "elapsed_ms": 32180,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-13T11:11:03.239539Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: [\"hb=0 ld4=on odr=00001000\", \"hb=1 ld4=off odr=00000000\", \"hb=2 ld3=on odr=00002000\", \"hb=3 ld3=off odr=00000000\"] }",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 25.286,
+    "build_firmware": 2.347,
+    "run_smoke": 4.481
+  },
+  "stages_ms": {
+    "build_cli": 25286,
+    "build_firmware": 2347,
+    "run_smoke": 4481
+  }
+}

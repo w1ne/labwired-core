@@ -128,14 +128,29 @@ impl SystemBus {
             .iter()
             .any(|d| d.needs_per_cycle_service())
             || (self.has_grid_gpio_schedules() && self.resident_scheduling_disabled)
+            // These off-board testers still advance in tick_peripherals_fully,
+            // not by scheduler deadlines. A wider grid changes FC delivery and
+            // the tick-counted response budget even when the CAN controller
+            // itself is scheduler-driven. Keep their existing service contract.
+            || !self.can_uds_testers.is_empty()
+            || !self.can_diagnostic_testers.is_empty()
         {
             return 1;
         }
-        if cfg!(feature = "event-scheduler") && self.legacy_walk_disabled {
+        let recommended = if cfg!(feature = "event-scheduler") && self.legacy_walk_disabled {
             RECOMMENDED_TICK_INTERVAL
         } else {
             1
-        }
+        };
+        self.clamp_peripheral_tick_interval(recommended)
+    }
+
+    /// Apply only the explicit manifest bound. Uncapped systems retain their
+    /// deliberate diagnostic intervals as well as their production defaults.
+    pub fn clamp_peripheral_tick_interval(&self, requested: u32) -> u32 {
+        let requested = requested.max(1);
+        self.max_peripheral_tick_interval
+            .map_or(requested, |cap| requested.min(cap.get()))
     }
 
     /// True when the per-cycle tick (`tick_peripherals_fully`) has no orchestration
@@ -179,7 +194,6 @@ impl SystemBus {
         cfg!(feature = "event-scheduler")
             && self.legacy_walk_disabled
             && self.bus_tick_indices.is_empty()
-            && !self.nordic_gpio_service
             && self
                 .irq_fabric
                 .per_cycle_aggregation_free(self.legacy_walk_disabled)

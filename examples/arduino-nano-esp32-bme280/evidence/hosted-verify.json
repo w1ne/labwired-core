@@ -1,0 +1,72 @@
+{
+  "checkedAt": "2026-11-17",
+  "board": "arduino-nano-esp32",
+  "target": "arduino-nano-esp32",
+  "language": "arduino",
+  "entryPath": "src/main.ino",
+  "diagram": {
+    "version": 1,
+    "board": "arduino-nano-esp32",
+    "parts": [
+      { "id": "mcu", "type": "esp32-s3-devkitc-1" },
+      { "id": "bme", "type": "bme280" }
+    ],
+    "wires": [
+      {
+        "from": { "part": "mcu", "pin": "GPIO11" },
+        "to": { "part": "bme", "pin": "SDA" }
+      },
+      {
+        "from": { "part": "mcu", "pin": "GPIO12" },
+        "to": { "part": "bme", "pin": "SCL" }
+      },
+      {
+        "from": { "part": "mcu", "pin": "3V3" },
+        "to": { "part": "bme", "pin": "VCC" }
+      },
+      {
+        "from": { "part": "mcu", "pin": "3V3" },
+        "to": { "part": "bme", "pin": "SDO" }
+      },
+      {
+        "from": { "part": "mcu", "pin": "GND" },
+        "to": { "part": "bme", "pin": "GND" }
+      }
+    ]
+  },
+  "source": "#include <Arduino.h>\n#include <Wire.h>\nconstexpr uint8_t SDA_PIN=11, SCL_PIN=12, BME280_ADDR=0x77;\nvoid setup(){ Serial.begin(115200); Wire.begin(SDA_PIN,SCL_PIN,100000); Wire.beginTransmission(BME280_ADDR); Wire.write(0xD0); if(Wire.endTransmission(false)==0 && Wire.requestFrom(BME280_ADDR,1)==1) Serial.printf(\"NANO_ESP32_BME280_ID=0x%02X\\n\",Wire.read()); else Serial.println(\"NANO_ESP32_BME280_I2C_ERROR\"); }\nvoid loop(){}\n",
+  "oracle": {
+    "serial": [
+      { "contains": "NANO_ESP32_BME280_ID=0x60" }
+    ]
+  },
+  "validation": {
+    "ok": true,
+    "error_count": 0,
+    "warning_count": 2,
+    "warning_codes": ["I2C_NO_PULLUP", "I2C_NO_PULLUP"],
+    "note": "The hosted diagram validator warned that the modeled SDA/SCL nets omit pull-up parts; the hosted verification still observed the ID marker. The local system smoke is digital register-level I2C and does not model analog pull-up behavior."
+  },
+  "result": {
+    "status": "model_verified",
+    "run_status": "pass",
+    "stop_reason": "assertions_passed",
+    "verification": "serial contains \"NANO_ESP32_BME280_ID=0x60\". Model-verified deterministically.",
+    "oracle_results": [
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial contains \"NANO_ESP32_BME280_ID=0x60\""
+      }
+    ],
+    "gaps": [
+      {
+        "code": "approximation",
+        "scope": "model",
+        "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated",
+        "address": "0x0",
+        "pc": "0x0"
+      }
+    ]
+  }
+}

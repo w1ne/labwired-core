@@ -1,0 +1,22 @@
+# ESP32-S3-LCD-EV-Board v1.5 mainboard + SUB2 v1.5 3.95-inch touchscreen.
+# Narrow profile: UART0 and the FT5x06 touch controller on I2C0 only.
+name: "esp32s3-lcd-ev-board-v1-5-touch"
+chip: "../chips/esp32s3.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "touch"
+    type: "ft5x06"
+    connection: "i2c0"
+    route:
+      sda: "GPIO47"
+      scl: "GPIO48"
+    config:
+      i2c_address: 0x38
+      # Deterministic one-contact input used by the committed smoke.
+      touch_count: 1
+      x: 301
+      y: 77
+      touch1_id_yh: 0x00
+      pressure: 127
+      area: 0

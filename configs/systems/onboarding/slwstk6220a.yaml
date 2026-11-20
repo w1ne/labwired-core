@@ -6,3 +6,20 @@
 
 name: slwstk6220a
 chip: ../../chips/onboarding/slwstk6220a.yaml
+# Renode slwstk6220a.repl: led0 @ gpioPort 66, led1 @ gpioPort 67
+# (EFMGPIOPort numbers pins port*16+pin, so PE2/PE3), plain LEDs (not
+# inverted) -> active high. The two buttons (gpioPort 64/65 = PE0/PE1) are
+# not declared: their electrical polarity is not confirmed by a second source.
+board_io:
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpioe"
+    pin: 2
+    signal: "output"
+    active_high: true
+  - id: "led1"
+    kind: "led"
+    peripheral: "gpioe"
+    pin: 3
+    signal: "output"
+    active_high: true

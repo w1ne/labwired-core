@@ -6,3 +6,4 @@
 
 name: mimxrt798s
 chip: ../../chips/onboarding/mimxrt798s.yaml
+debug_uart: flexcomm0

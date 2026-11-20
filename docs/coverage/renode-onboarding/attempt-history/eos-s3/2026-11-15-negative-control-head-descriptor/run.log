@@ -1,0 +1,12 @@
+2026-11-15T21:42:23.971907Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/eos-s3.yaml
+2026-11-15T21:42:24.319155Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-15T21:42:24.539211Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "EOS S3 Cortex-M4F PL011 smoke" }) (captured len=0)
+2026-11-15T21:42:24.539236Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "EOS S3 checks PPPPPPPPPP DONE" }) (captured len=0)
+2026-11-15T21:42:24.539240Z ERROR labwired_cli::execute: Memory assertion failed at 0x2007ff00 (size 4): expected 0xe05303ff, got 0x0 (mask 0xffffffff)
+2026-11-15T21:42:24.539243Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537394944, expected_value: 3763536895, mask: None, size: Some(4), node: None } }) (captured len=0)
+2026-11-15T21:42:24.539253Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "gpio:4", min_edges: 6 } }) (captured len=0)
+FAIL  1/5 checks · eos-s3-smoke · 100000 steps · 0.10s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x4000_4840 (BFAR valid), at PC 0x0000_0646 in `core::ptr::write_volatile` (mod.rs:2178).
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x40004840

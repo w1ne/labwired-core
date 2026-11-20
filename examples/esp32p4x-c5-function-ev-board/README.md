@@ -1,52 +1,75 @@
-# ESP32-P4X-C5-Function-EV-Board UART0 smoke
+# ESP32-P4X-C5-Function-EV-Board + BME280
 
-**Demand rank:** ESP32 is rank 1 in the measured MCU list (38%). The survey
-does not rank ESP32-P4 separately. This covers Espressif's newer P4 board; it
-does not claim the family-wide 38% as P4-specific demand. Live vendor status
-and the exact board variant are recorded in [`vendor-status.md`](vendor-status.md).
+**Demand rank:** ESP32 is #1 in the measured MCU list (38%). The survey does
+not score ESP32-P4 separately; this adds a tested peripheral path to one board
+in the highest-demand family. Vendor status is recorded in
+[`vendor-status.md`](vendor-status.md).
 
-## Copy-paste firmware example
+## Connect the sensor
 
-On the board's J1 header, pin 8 is GPIO37/U0TXD and pin 10 is GPIO38/U0RXD.
-The bare-metal example writes a marker to UART0's FIFO at `0x500C_A000`:
+Use an Adafruit BME280 STEMMA QT breakout (or a compatible BME280 I2C module).
+The P4 board guide maps these J1 pins:
+
+| ESP32-P4 board | BME280 breakout |
+| --- | --- |
+| J1 pin 1, 3V3 | VIN / 3V |
+| J1 pin 6, GND | GND |
+| J1 pin 3, GPIO7 | SDA |
+| J1 pin 5, GPIO8 | SCL |
+
+The system descriptor uses I2C address `0x77`. Set a breakout's address jumper
+to `0x77` if it defaults to `0x76`.
+
+## Copy-paste example
+
+[`firmware/src/main.rs`](firmware/src/main.rs) is a complete bare-metal Rust
+example for configuring the GPIO matrix, initializing HP I2C0, and reading the
+BME280 chip ID and raw temperature registers. This excerpt goes in `main`
+after the GPIO/I2C setup calls in the full source file:
 
 ```rust
-#![no_std]
-#![no_main]
-
-use panic_halt as _;
-use riscv_rt::entry;
-
-const UART0_FIFO: *mut u32 = 0x500C_A000 as *mut u32;
-
-#[entry]
-fn main() -> ! {
-    unsafe {
-        for &byte in b"P4X_C5_FUNCTION_EV_OK\n" {
-            core::ptr::write_volatile(UART0_FIFO, u32::from(byte));
-        }
+unsafe {
+    let mut chip_id = [0u8; 1];
+    if !read_bme280_registers(0xD0, &mut chip_id) || chip_id[0] != 0x60 {
+        uart_str(b"P4_BME280_FAIL CHIP_ID\n");
+        wait_forever();
     }
-    loop { core::hint::spin_loop(); }
+
+    let mut temperature = [0u8; 3];
+    if !read_bme280_registers(0xFA, &mut temperature) {
+        uart_str(b"P4_BME280_FAIL TEMP_READ\n");
+        wait_forever();
+    }
+    let raw_temperature = (u32::from(temperature[0]) << 12)
+        | (u32::from(temperature[1]) << 4)
+        | (u32::from(temperature[2]) >> 4);
+    if raw_temperature != 0x082DC0 {
+        uart_str(b"P4_BME280_FAIL TEMP\n");
+        wait_forever();
+    }
 }
 ```
 
-Run from the repository root:
+Run the same firmware build and simulator smoke used for the committed evidence:
 
 ```bash
 examples/esp32p4x-c5-function-ev-board/ci/build.sh
 examples/esp32p4x-c5-function-ev-board/ci/test.sh
 ```
 
-## Verified scope
+The smoke prints `P4_BME280_ID=0x60_RAW_TEMP=0x082DC0_GPIO7_GPIO8` and
+`P4X_C5_FUNCTION_EV_OK` on UART0 after checking both values.
 
-The simulator loads this bare ELF at its entry point. The chip descriptor maps
-the P4 HP RISC-V core's RV32IMAC subset, the 16 MB flash window, one 512 KiB
-high-SRAM window, and the UART0 FIFO/status head. The smoke requires UART0 to
-emit `P4X_C5_FUNCTION_EV_OK`.
+## Modeled scope
 
-This profile does not model reset ROM or the Espressif bootloader; the second
-HP core; P4 floating-point or vector instructions; low HP SRAM; USB
-Serial/JTAG; GPIO or IO_MUX pad routing; the ESP32-C5 module/radio; PSRAM; the
-display, touch controller, camera, audio codec/amplifier, Ethernet PHY, USB
-OTG, or MicroSD. UART0 output is captured inside the twin; the test does not
-prove output on the physical header or USB port.
+The simulator starts a bare ELF on the P4 HP RISC-V core. This profile models
+UART0 output, the GPIO data/enable/input head, the GPIO7/8 I2C matrix selector
+registers, HP I2C0 command-list behavior, and a BME280 slave. The IO_MUX block
+stores the two pad setup registers; electrical pad behavior is not simulated.
+The smoke proves the internal UART console and a BME280 register transaction,
+not the physical header or USB output.
+
+Reset ROM and the second HP core are not run. The C5 radio module, LP core,
+SPI flash boot, PSRAM, display, touch controller, camera, audio, Ethernet, USB,
+MicroSD, other I2C routes, and other GPIO matrix signals remain outside this
+profile.

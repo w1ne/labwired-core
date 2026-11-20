@@ -1,0 +1,22 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+   Compiling labwired-config v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/config)
+   Compiling labwired-core v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/core)
+   Compiling labwired-loader v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/loader)
+   Compiling labwired-fuzz v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/labwired-fuzz)
+error: failed to write bytecode to /home/andrii/worktrees/labwired-core/renode/target/native-system/deps/labwired_fuzz-958b4e4ef624f001.labwired_fuzz.7ff4a06623650859-cgu.01.rcgu.bc: No space left on device (os error 28)
+
+error: could not compile `labwired-fuzz` (lib) due to 1 previous error

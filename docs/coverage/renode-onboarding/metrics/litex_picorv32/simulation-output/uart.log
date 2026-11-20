@@ -1,0 +1,5 @@
+LITEX PICORV32 SMOKE
+cpu=rv32imc uart=litex
+mul=00000143
+timer=running
+timer=zero

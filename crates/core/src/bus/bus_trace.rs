@@ -343,6 +343,10 @@ impl TracingI2cDevice {
 }
 
 impl I2cDevice for TracingI2cDevice {
+    fn is_i2c_mux(&self) -> bool {
+        self.inner.is_i2c_mux()
+    }
+
     fn transaction_generation(&self) -> Option<u64> {
         self.inner.transaction_generation()
     }
@@ -363,6 +367,12 @@ impl I2cDevice for TracingI2cDevice {
     }
     fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
         self.inner.logs()
+    }
+    /// Forwarded: every attached slave is trace-wrapped, so a wrapper that
+    /// fell through to the trait default would leave every servo wired to a
+    /// PWM controller output without a pulse.
+    fn pwm_channel_pulse_us(&self, channel: u8) -> Option<f64> {
+        self.inner.pwm_channel_pulse_us(channel)
     }
     fn claims_address(&self, addr: u8) -> bool {
         self.inner.claims_address(addr)
@@ -564,6 +574,12 @@ impl SpiDevice for TracingSpiDevice {
     }
     fn clocks_when_deselected(&self) -> bool {
         self.inner.clocks_when_deselected()
+    }
+    fn cs_active_high(&self) -> bool {
+        self.inner.cs_active_high()
+    }
+    fn next_miso(&self) -> Option<u8> {
+        self.inner.next_miso()
     }
     fn dc_pin(&self) -> Option<&str> {
         self.inner.dc_pin()

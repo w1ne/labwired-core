@@ -162,6 +162,9 @@ impl Avr {
     /// Sample every watched port at an instruction boundary and latch flags
     /// for the edges since the last sample.
     pub(super) fn sample_ext_pins(&mut self, bus: &dyn Bus) {
+        if self.is_mega() {
+            return self.mega_sample_ext_pins(bus);
+        }
         for group in 0..3 {
             if self.ext_watch & (1 << group) == 0 {
                 continue;
@@ -203,6 +206,9 @@ impl Avr {
     /// `true` when a watched pad moved since the last sample (an edge the core
     /// has not looked at yet).
     pub(super) fn ext_pins_moved(&self, bus: &dyn Bus) -> bool {
+        if self.is_mega() {
+            return self.mega_ext_pins_moved(bus);
+        }
         (0..3).any(|group| {
             self.ext_watch & (1 << group) != 0
                 && self.pad_levels(group, bus) != self.ext_last[group]
@@ -643,10 +649,16 @@ mod tests {
         cpu.load_words(0x100, &[0x9A1D, 0xCFFF]);
         cpu.set_pc(0x100);
         run(&mut cpu, &mut bus, 1);
+        // The CPU owns the latch: PB5 toggles low, PB0 stays high.
         assert_eq!(
-            bus.mem[&(AVR_IO_MIRROR_BASE + u64::from(PB))],
-            1 << 5,
-            "the PINB write carries bit 5 only"
+            read(&cpu, &bus, PB + 2),
+            0x01,
+            "PORTB: PB5 toggled, PB0 kept"
+        );
+        assert_eq!(
+            bus.mem[&(AVR_IO_MIRROR_BASE + u64::from(PB + 2))],
+            0x01,
+            "the bus-side PORTB follows the toggled latch"
         );
     }
 

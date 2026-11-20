@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="1" errors="0" time="0.421127">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="744f6d40fbddf5b1fef36065f21acb04b352667c52e4fd82b72047ccd3d03138"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.421127">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: NPCX9 UART1 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfcl…" time="0.000000">
+    <failure message="assertion failed">assertion 2: uart_contains: itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfcl…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=100000
+stop_reason_details.observed.steps_executed=100000
+steps_executed=100000
+cycles=100000
+instructions=100000
+limits:
+  - max_steps=100000
+firmware_hash=744f6d40fbddf5b1fef36065f21acb04b352667c52e4fd82b72047ccd3d03138
+firmware=examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nuvoton-npcx9-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/nuvoton_npcx9.yaml
+script=examples/renode-onboarding/nuvoton_npcx9-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;NPCX9 UART1 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;itim regs=1 en=1 run=1 stop=1 irq=3 sts_cleared=1 sts=1 masked=1 pend=1 rel=1 each=6 w64=1 borrow=1 lfclk=1 ok&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

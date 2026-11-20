@@ -364,6 +364,11 @@ pub fn validate_part_pack(pack: &DeviceDescriptor, origin: &str) -> Result<()> {
     if pack.r#type.trim().is_empty() {
         anyhow::bail!("part pack {origin} has an empty `type:`");
     }
+    if let Some(power) = &pack.behavior.power {
+        power
+            .validate()
+            .with_context(|| format!("part pack {origin}"))?;
+    }
     if pack.behavior.primitive.trim().is_empty() {
         anyhow::bail!(
             "part pack '{}' ({origin}) has an empty `behavior.primitive:`",
@@ -700,6 +705,13 @@ pub struct I2cSpec {
     /// byte-addressable `register_file:`.
     #[serde(default = "default_pointer_width")]
     pub pointer_width: u8,
+    /// A register-mode device may accept a frame containing only the first
+    /// data byte for a wider big-endian register. When true, that byte updates
+    /// the register's most-significant byte when the frame ends at STOP or a
+    /// repeated START, preserving all lower bytes. This is opt-in because most
+    /// devices require a complete register word.
+    #[serde(default)]
+    pub update_msb_on_short_write: bool,
     /// **Write page size in bytes** for a memory-like part. A sequential write
     /// that runs past a page boundary wraps to the START of the same page
     /// instead of spilling into the next one — the single most surprising real
@@ -1238,6 +1250,56 @@ pub struct LinearMap {
     pub clamp: Option<(f64, f64)>,
 }
 
+/// `behavior.power`: the supply rails a declarative device requires and how
+/// long it takes to start answering after power-on. Bus-agnostic: every
+/// declarative primitive that supports routed supply reads this one block.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct DevicePowerSpec {
+    /// Required supply rails and their operating envelopes (datasheet
+    /// electrical characteristics). A rail's `name` is the key a placement's
+    /// `supply_rails` and a `board.device.<id>.power.<name>_volts` route use.
+    pub rails: Vec<DevicePowerRail>,
+    /// Power-up time in microseconds: after a power-on reset the part ignores
+    /// the bus (as if unpowered) until this much device time has elapsed.
+    #[serde(default)]
+    pub startup_us: u64,
+}
+
+impl DevicePowerSpec {
+    /// Static checks every consumer of the block needs: at least one rail, named
+    /// uniquely, with `0 <= min_v < max_v`.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(!self.rails.is_empty(), "behavior.power declares no rails");
+        for (i, rail) in self.rails.iter().enumerate() {
+            anyhow::ensure!(
+                !rail.name.is_empty() && rail.min_v >= 0.0 && rail.max_v > rail.min_v,
+                "behavior.power.rails[{i}] '{}' needs a name and 0 <= min_v < max_v",
+                rail.name
+            );
+            anyhow::ensure!(
+                !self.rails[..i].iter().any(|r| r.name == rail.name),
+                "behavior.power.rails[{i}]: duplicate rail '{}'",
+                rail.name
+            );
+        }
+        Ok(())
+    }
+}
+
+/// One required supply rail of a [`DevicePowerSpec`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct DevicePowerRail {
+    pub name: String,
+    /// Package/canvas pin that feeds this rail (e.g. `VDD`). Not interpreted by
+    /// the SPI engine; carried for the diagram compiler.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pin: Option<String>,
+    pub min_v: f64,
+    pub max_v: f64,
+}
+
 /// The `behavior.spi` section of a declarative `spi_device` — datasheet-shaped
 /// wire framing for a register-style SPI sensor, interpreted by the engine's
 /// generic device. The measurement→word machinery (`endian`/`source`/`encode`/
@@ -1339,6 +1401,14 @@ pub struct SpiFraming {
     /// one; false ⇒ only the selected register is served.
     #[serde(default = "default_true")]
     pub auto_increment: bool,
+    /// SPI devices such as BMA400 clock one or more invalid bytes after a
+    /// read command before the first register byte. Writes have no dummy byte.
+    #[serde(default)]
+    pub read_dummy_bytes: u8,
+    /// Some dual-I2C/SPI devices (BMA400) only enable SPI on the first CS
+    /// rising edge after power-up. The whole first transaction is ignored.
+    #[serde(default)]
+    pub activate_on_first_cs_release: bool,
     /// **The command byte is an OPCODE plus an address**, not one direction
     /// bit: `mosi & op_mask` selects the operation and is compared against
     /// [`op_read`](Self::op_read) and [`op_write`](Self::op_write). Absent ⇒
@@ -1390,6 +1460,8 @@ impl Default for SpiFraming {
             addr_mask: default_addr_mask(),
             addr_shift: 0,
             auto_increment: true,
+            read_dummy_bytes: 0,
+            activate_on_first_cs_release: false,
             op_mask: None,
             op_read: None,
             op_write: None,
@@ -2566,6 +2638,14 @@ pub struct DeviceBehavior {
     /// clock of its own, which is every descriptor written before this existed.
     #[serde(default)]
     pub timers: Vec<DeviceTimer>,
+    /// **Routed supply and power-on reset.** Present ⇒ the part can take its
+    /// powered state from routed rail voltages (`board.device.<id>.power.<rail>_volts`):
+    /// each power-up is a power-on reset (registers, bus mode, timers and rule
+    /// state back to their descriptor initial values) followed by a start-up
+    /// interval during which the part does not answer. Absent ⇒ the part does
+    /// not support routed supply, exactly as before this key existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<DevicePowerSpec>,
     /// **What this part SHOWS** — the artifact a reader (the browser, `inspect`,
     /// `panel_artifact_evidence`) can paint, rendered from the part's own RAM
     /// by the engine rather than by a hand-written model. See [`ArtifactSpec`].

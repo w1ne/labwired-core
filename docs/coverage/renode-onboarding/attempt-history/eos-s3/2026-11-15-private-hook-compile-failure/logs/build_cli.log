@@ -1,0 +1,67 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /data/worktrees/legacy-migrated/labwired-renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /data/worktrees/legacy-migrated/labwired-renode/Cargo.toml
+   Compiling labwired-config v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/config)
+   Compiling labwired-core v0.25.0 (/data/worktrees/legacy-migrated/labwired-renode/crates/core)
+error[E0624]: method `route_irq_input_level` is private
+   --> crates/core/src/bus/device_hooks.rs:165:26
+    |
+165 |                 && !self.route_irq_input_level(idx, irq, false)
+    |                          ^^^^^^^^^^^^^^^^^^^^^ private method
+    |
+   ::: crates/core/src/bus/tick.rs:124:5
+    |
+124 |     fn route_irq_input_level(&mut self, source_idx: usize, source: u32, level: bool) -> bool {
+    |     ---------------------------------------------------------------------------------------- private method defined here
+
+error[E0596]: cannot borrow `*self` as mutable, as it is behind a `&` reference
+   --> crates/core/src/bus/accessors.rs:716:17
+    |
+716 |                 self.reconcile_level_after_read(idx);
+    |                 ^^^^ `self` is a `&` reference, so it cannot be borrowed as mutable
+
+error[E0596]: cannot borrow `*self` as mutable, as it is behind a `&` reference
+   --> crates/core/src/bus/accessors.rs:732:17
+    |
+732 |                 self.reconcile_level_after_read(idx);
+    |                 ^^^^ `self` is a `&` reference, so it cannot be borrowed as mutable
+
+error[E0596]: cannot borrow `*self` as mutable, as it is behind a `&` reference
+    --> crates/core/src/bus/accessors.rs:1049:17
+     |
+1049 |                 self.reconcile_level_after_read(idx);
+     |                 ^^^^ `self` is a `&` reference, so it cannot be borrowed as mutable
+
+error[E0596]: cannot borrow `*self` as mutable, as it is behind a `&` reference
+    --> crates/core/src/bus/accessors.rs:1061:17
+     |
+1061 |                 self.reconcile_level_after_read(idx);
+     |                 ^^^^ `self` is a `&` reference, so it cannot be borrowed as mutable
+
+error[E0596]: cannot borrow `*self` as mutable, as it is behind a `&` reference
+    --> crates/core/src/bus/accessors.rs:1178:17
+     |
+1178 |                 self.reconcile_level_after_read(idx);
+     |                 ^^^^ `self` is a `&` reference, so it cannot be borrowed as mutable
+
+error[E0596]: cannot borrow `*self` as mutable, as it is behind a `&` reference
+    --> crates/core/src/bus/accessors.rs:1190:17
+     |
+1190 |                 self.reconcile_level_after_read(idx);
+     |                 ^^^^ `self` is a `&` reference, so it cannot be borrowed as mutable
+
+Some errors have detailed explanations: E0596, E0624.
+For more information about an error, try `rustc --explain E0596`.
+error: could not compile `labwired-core` (lib) due to 7 previous errors

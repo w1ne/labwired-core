@@ -9,6 +9,13 @@ on:
       - '.github/workflows/iolinki-c3-reference.yml'
   push:
     branches: [main]
+    paths:
+      - 'configs/chips/esp32c3.yaml'
+      - '.github/workflows/iolinki-c3-reference.yml'
+      - 'crates/core/**'
+      - 'crates/cli/**'
+      - 'crates/config/**'
+      - 'Cargo.*'
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

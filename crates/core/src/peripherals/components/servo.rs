@@ -38,6 +38,25 @@
 
 use std::sync::{Arc, Mutex};
 
+/// Current modeled source qualification, independent of the last commanded
+/// servo position. This is not a measurement of a physical signal or power.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModeledServoSourceStatus {
+    Unknown,
+    Disabled,
+    ModeledPwm,
+}
+
+impl ModeledServoSourceStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Disabled => "disabled",
+            Self::ModeledPwm => "modeled_pwm",
+        }
+    }
+}
+
 /// Pulse-width ↔ angle calibration for a hobby servo.
 #[derive(Debug, Clone, Copy)]
 pub struct ServoCal {
@@ -175,6 +194,12 @@ pub struct Servo {
     /// Known GPIO cycle clock (Hz). `None` keeps the duty-ratio contract
     /// for observers that have no timebase.
     cycle_hz: Option<u64>,
+    /// `(I2C address, channel)` of the PWM-controller output wired to this
+    /// servo's signal pin. When set the servo follows that channel's pulse
+    /// (see [`Self::apply_pulse_us`]) instead of watching a GPIO pad.
+    source: Option<(u8, u8)>,
+    /// Optional MCU pad wired to the controller active-low output enable.
+    source_oe: Option<(u64, u8)>,
     state: Mutex<ServoState>,
 }
 
@@ -193,8 +218,39 @@ impl Servo {
             cal,
             pin,
             cycle_hz: None,
+            source: None,
+            source_oe: None,
             state: Mutex::new(ServoState::default()),
         }
+    }
+
+    /// A servo wired to output `channel` of the PWM controller at I2C
+    /// `address` (PCA9685 and compatibles). It follows the pulse the firmware
+    /// wrote there, through `cal`.
+    pub fn with_source(id: impl Into<String>, cal: ServoCal, address: u8, channel: u8) -> Self {
+        let mut servo = Self::with_id(id, cal, 0);
+        servo.source = Some((address, channel));
+        servo
+    }
+
+    /// `(I2C address, channel)` of the PWM controller output driving this servo.
+    pub fn source(&self) -> Option<(u8, u8)> {
+        self.source
+    }
+
+    /// GPIO pad controlling the source's active-low output enable, if wired.
+    pub fn source_oe(&self) -> Option<(u64, u8)> {
+        self.source_oe
+    }
+
+    /// Take a control pulse of `pulse_us` microseconds from a PWM controller.
+    pub fn apply_pulse_us(&self, pulse_us: f64) {
+        let pulse_us = pulse_us as f32;
+        let angle = self.cal.pulse_to_angle(pulse_us);
+        let mut s = self.state.lock().unwrap();
+        s.pulse_us = pulse_us;
+        s.angle = angle;
+        s.commanded = true;
     }
 
     /// Convenience: a standard 1–2 ms / 0–180° servo on `pin`.
@@ -479,6 +535,21 @@ static SERVO_METADATA: KitMetadata = KitMetadata {
             doc: std::borrow::Cow::Borrowed("Calibration: sg90 | mg996r | mg995 | mg90s | standard. Defaults from type alias when omitted."),
         },
         ConfigKey {
+            name: std::borrow::Cow::Borrowed("source_address"),
+            ty: ConfigType::Int,
+            doc: std::borrow::Cow::Borrowed("I2C address of a PWM controller (PCA9685) whose output drives this servo. With source_channel, replaces the GPIO/LEDC drive path."),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("source_channel"),
+            ty: ConfigType::Int,
+            doc: std::borrow::Cow::Borrowed("Output channel (0..15) of the PWM controller at source_address."),
+        },
+        ConfigKey {
+            name: std::borrow::Cow::Borrowed("source_oe_pin"),
+            ty: ConfigType::Str,
+            doc: std::borrow::Cow::Borrowed("Optional MCU GPIO wired to the PWM controller active-low OE. Only a known driven-low GPIO allows new commands; last position may persist when disabled."),
+        },
+        ConfigKey {
             name: std::borrow::Cow::Borrowed("ledc_channel"),
             ty: ConfigType::Int,
             doc: std::borrow::Cow::Borrowed("Optional ESP32 LEDC channel (0..15). When omitted, the servo follows the channel the GPIO matrix routes to its pad."),
@@ -493,6 +564,70 @@ impl PeripheralKit for ServoKit {
     }
 
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> anyhow::Result<()> {
+        if ctx.ext.config.contains_key("source_oe_pin") {
+            anyhow::ensure!(
+                ctx.config_i64("source_address").is_some()
+                    && ctx.config_i64("source_channel").is_some(),
+                "servo '{}' source_oe_pin requires source_address and source_channel",
+                ctx.device_id()
+            );
+        }
+        if let (Some(address), Some(channel)) = (
+            ctx.config_i64("source_address"),
+            ctx.config_i64("source_channel"),
+        ) {
+            anyhow::ensure!(
+                (0..=0x7f).contains(&address) && (0..16).contains(&channel),
+                "servo '{}' source_address must be a 7-bit I2C address and source_channel 0..15",
+                ctx.device_id()
+            );
+            let model = ctx.config_str("model").unwrap_or(ctx.device_type());
+            let cal = match model {
+                "sg90" => ServoCal::sg90(),
+                "mg996r" => ServoCal::mg996r(),
+                "mg995" => ServoCal::mg995(),
+                "mg90s" => ServoCal::mg90s(),
+                _ => ServoCal::standard(),
+            };
+            let source_oe = if ctx.ext.config.contains_key("source_oe_pin") {
+                let pin = ctx.config_str("source_oe_pin").ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "servo '{}' source_oe_pin must be a GPIO pin label",
+                        ctx.device_id()
+                    )
+                })?;
+                let (addr, bit) = crate::bus::SystemBus::resolve_pin_odr_pub(ctx.bus, pin)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "servo '{}' source_oe_pin '{}' does not resolve to a GPIO",
+                            ctx.device_id(),
+                            pin
+                        )
+                    })?;
+                let supported = ctx
+                    .bus
+                    .find_peripheral_index(addr)
+                    .is_some_and(|idx| ctx.bus.peripherals[idx].dev.gpio_routing(bit).is_some());
+                anyhow::ensure!(
+                    supported,
+                    "servo '{}' source_oe_pin '{}' is not a modeled GPIO pad",
+                    ctx.device_id(),
+                    pin
+                );
+                Some((addr, bit))
+            } else {
+                None
+            };
+            let mut servo = Servo::with_source(
+                ctx.device_id().to_string(),
+                cal,
+                address as u8,
+                channel as u8,
+            );
+            servo.source_oe = source_oe;
+            ctx.bus.observe_device(Arc::new(servo));
+            return Ok(());
+        }
         let pin_label = ctx
             .config_str("signal_pin")
             .or_else(|| ctx.config_str("control_pin"))

@@ -44,8 +44,15 @@ def write_test_script(
     system: Path,
     marker: str,
     max_steps: int,
+    wall_time_ms: int | None = None,
 ) -> None:
-    """Write a schema 1.0 labwired test script (UART marker oracle)."""
+    """Write a schema 1.0 labwired test script (UART marker oracle).
+
+    `wall_time_ms` bounds the run by host time. `labwired test` refuses a
+    `max_steps` above 50M unless one is set (the guard catches CI
+    misconfiguration), so a board whose stock core legitimately spends more
+    than that before `setup()` declares it.
+    """
     doc = {
         "schema_version": "1.0",
         "inputs": {
@@ -58,6 +65,7 @@ def write_test_script(
             "stop_when_assertions_pass": True,
             "stop_when_assertions_pass_settle_steps": 1000,
             "stop_when_assertions_pass_min_steps": 0,
+            **({"wall_time_ms": wall_time_ms} if wall_time_ms else {}),
         },
         "assertions": [
             {"uart_contains": marker},

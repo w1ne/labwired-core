@@ -12,6 +12,12 @@
     "name": "arty-litex-vexriscv"
   },
   {
+    "buses": [
+      "UART"
+    ],
+    "name": "at32f421g8u7"
+  },
+  {
     "buses": [],
     "name": "atmega1281"
   },
@@ -30,6 +36,14 @@
   {
     "buses": [],
     "name": "atmega328pb"
+  },
+  {
+    "buses": [],
+    "name": "atmega32u4"
+  },
+  {
+    "buses": [],
+    "name": "atmega4809"
   },
   {
     "buses": [],
@@ -97,7 +111,39 @@
   },
   {
     "buses": [],
+    "name": "ch32l103c8t6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v003a4m6"
+  },
+  {
+    "buses": [],
     "name": "ch32v003f4p6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v003f4u6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v003j4m6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v005f6p6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v006k8u6"
+  },
+  {
+    "buses": [],
+    "name": "ch32v203c8t6"
+  },
+  {
+    "buses": [],
+    "name": "ch32x035c8t6"
   },
   {
     "buses": [],
@@ -133,6 +179,10 @@
       "UART"
     ],
     "name": "esp32-devkitc-32e-uart1"
+  },
+  {
+    "buses": [],
+    "name": "esp32c2"
   },
   {
     "buses": [
@@ -184,6 +234,10 @@
   },
   {
     "buses": [],
+    "name": "esp32s3-devkitc-1-n16r8-adc"
+  },
+  {
+    "buses": [],
     "name": "esp32s3-zero"
   },
   {
@@ -193,6 +247,10 @@
   {
     "buses": [],
     "name": "litex-vexriscv"
+  },
+  {
+    "buses": [],
+    "name": "mimxrt1062-teensy41"
   },
   {
     "buses": [],
@@ -353,6 +411,14 @@
   {
     "buses": [],
     "name": "same70q21b"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32c031c6"
   },
   {
     "buses": [
@@ -645,6 +711,14 @@
       "SPI",
       "UART"
     ],
+    "name": "stm32f411re"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
     "name": "stm32f446re"
   },
   {
@@ -722,6 +796,14 @@
       "UART"
     ],
     "name": "stm32l073"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32l432kc"
   },
   {
     "buses": [

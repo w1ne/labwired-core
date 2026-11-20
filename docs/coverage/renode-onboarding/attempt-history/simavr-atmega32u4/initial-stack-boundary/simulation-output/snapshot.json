@@ -1,0 +1,69 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      255,
+      10,
+      0,
+      0
+    ],
+    "pc": 188,
+    "sp": 2815,
+    "sreg": 0
+  },
+  "steps_executed": 0,
+  "cycles": 9,
+  "instructions": 8,
+  "stop_reason": "memory_violation",
+  "stop_reason_details": {
+    "triggered_stop_condition": "memory_violation",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 1000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "4d70788a32665fc1bf5a2127f2b9cd64412a5387ad996ea3999f8dc944b8ba64",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega32u4-gpio-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-atmega32u4.yaml",
+    "script": "examples/renode-onboarding/simavr-atmega32u4-smoke.yaml"
+  }
+}

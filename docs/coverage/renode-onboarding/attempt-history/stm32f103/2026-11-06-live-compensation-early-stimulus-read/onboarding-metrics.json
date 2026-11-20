@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f103",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 50000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-f103-i2c-demo",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f103.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T14:15:20Z",
+  "finished_at_utc": "2026-11-06T14:15:22Z",
+  "elapsed_seconds": 3,
+  "elapsed_ms": 2629,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-06T14:15:22.817221Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: \"BME280_SEEDED_COMPENSATION_OK\" }) (captured len=1720)",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.323,
+    "build_firmware": 1.428,
+    "run_smoke": 0.831
+  },
+  "stages_ms": {
+    "build_cli": 323,
+    "build_firmware": 1428,
+    "run_smoke": 831
+  }
+}

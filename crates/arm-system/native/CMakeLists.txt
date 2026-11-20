@@ -5,6 +5,10 @@ target_sources(tlib PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bridge.c)
 target_include_directories(tlib PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/tlib/include)
 target_link_options(tlib PRIVATE -Wl,-Bsymbolic -Wl,--wrap=free_code_gen_buf)
 
+get_target_property(tlib_sources tlib SOURCES)
+# arm64 builds the pinned AArch32 Cortex-R52 (TARGET_ARCH=arm64). Its decoder
+# and helper are separate sources; the arm32-only derivations below do not apply.
+if(TARGET_ACTUAL_ARCH STREQUAL "arm")
 # Preserve the pinned vendor bytes. Renode's decoder treats both unconditional
 # branch-to-self encodings as WFI; Linux busy loops must keep retiring instead.
 # Build a derived decoder in OUT_DIR, disabling only these two special cases so
@@ -23,7 +27,6 @@ foreach(opcode IN ITEMS 0xeafffffe 0xe7fe)
 endforeach()
 set(derived_decoder "${CMAKE_CURRENT_BINARY_DIR}/arm-translate.c")
 file(WRITE "${derived_decoder}" "${arm_decoder_source}")
-get_target_property(tlib_sources tlib SOURCES)
 # GLOB resolves source paths; normalize our parent-relative path for removal.
 get_filename_component(arm_decoder_absolute "${arm_decoder}" ABSOLUTE)
 list(FIND tlib_sources "${arm_decoder_absolute}" decoder_index)
@@ -32,6 +35,8 @@ if(decoder_index EQUAL -1)
 endif()
 list(REMOVE_AT tlib_sources ${decoder_index})
 list(APPEND tlib_sources "${derived_decoder}")
+
+endif()
 
 # code_gen_free releases tbs before growth. If BOTH subsequent mappings fail,
 # native fatal containment returns to Rust and Drop disposes the engine again.
@@ -54,6 +59,7 @@ if(exec_index EQUAL -1)
 endif()
 list(REMOVE_AT tlib_sources ${exec_index})
 list(APPEND tlib_sources "${derived_exec}")
+if(TARGET_ACTUAL_ARCH STREQUAL "arm")
 # The pinned Cortex-A7 declares NEON/VFP4, but omits their VFP3/FP16
 # decoder prerequisites and advertises the FPU-only D16 MVFR profile.
 # Build a derived helper with the NEON MPE profile (ARM DDI 0462E).
@@ -116,4 +122,5 @@ if(helper_index EQUAL -1)
 endif()
 list(REMOVE_AT tlib_sources ${helper_index})
 list(APPEND tlib_sources "${derived_helper}")
+endif()
 set_property(TARGET tlib PROPERTY SOURCES "${tlib_sources}")

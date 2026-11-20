@@ -272,6 +272,7 @@ fn rig_for_chip(chip_name: &str, device_type: &str, config: &[(&str, &str)]) -> 
         cfg.insert(k.to_string(), serde_yaml::Value::from(*v));
     }
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         cosim_models: Vec::new(),
         motor_models: Vec::new(),
         walk_deleted: Some(false),

@@ -1475,6 +1475,14 @@ impl PinPort for Esp32s3Gpio {
 }
 
 impl Peripheral for Esp32s3Gpio {
+    fn register_esp_gpio_observer(
+        &mut self,
+        observer: std::sync::Arc<dyn crate::peripherals::device::GpioObserver>,
+    ) -> bool {
+        self.add_observer(observer);
+        true
+    }
+
     // Inert walk: pin level changes are write-settled; tick() only advances an
     // observer cycle stamp. When the walk is deleted, stamps come from the
     // attached cycle clock (stamp_cycle). bus_tick consumers (RMT) use

@@ -84,6 +84,21 @@ pub trait I2cDevice: Send {
     fn start(&mut self) {}
     fn stop(&mut self) {}
 
+    /// Whether this device is an I2C bus switch with downstream devices.
+    /// This describes its topology even when a supply wrapper is off.
+    fn is_i2c_mux(&self) -> bool {
+        false
+    }
+
+    /// Modeled pulse width in microseconds for PWM output `channel`. `None`
+    /// includes static, absent, unsupported, and unknown outputs; it is not
+    /// proof of silence. The query does not establish output-enable, servo
+    /// power, or physical signal delivery.
+    /// A servo declared with `source_address` / `source_channel` reads this.
+    fn pwm_channel_pulse_us(&self, _channel: u8) -> Option<f64> {
+        None
+    }
+
     /// Nanoseconds this device holds SCL low after acknowledging each byte it
     /// receives and before each byte it sends (clock stretching). Default: none.
     /// Only controllers that model bus timing add it to the transfer.
@@ -340,6 +355,33 @@ pub trait SpiDevice: Send {
     /// MAX7219 LOAD only latches data; unlike MAX7221 CS, it does not gate CLK.
     fn clocks_when_deselected(&self) -> bool {
         false
+    }
+
+    /// Level of the CS pin that selects this device. Most SPI slaves select
+    /// on CS low (the default); a few, such as the ST7920 in serial mode,
+    /// select on CS high. Buses that derive selection from a GPIO level ask
+    /// [`cs_selected_at`](Self::cs_selected_at) instead of assuming low.
+    fn cs_active_high(&self) -> bool {
+        false
+    }
+
+    /// Whether a CS pin driven to `high` selects this device.
+    fn cs_selected_at(&self, high: bool) -> bool {
+        high == self.cs_active_high()
+    }
+
+    /// The byte this device shifts out on MISO during the next frame, when it
+    /// is fixed before that frames MOSI bits arrive, as a slaves shift
+    /// register is loaded before the first clock. The next
+    /// [`transfer`](Self::transfer) must return this same byte.
+    ///
+    /// A controller that exchanges whole bytes never asks. A bit-level master
+    /// on GPIO pads ([`crate::peripherals::spi_gpio`]) must put MISO bits on
+    /// the pad while MOSI is still arriving, so it asks first. `None` (the
+    /// default): the device does not say, and its read-back cannot be put on
+    /// a pad bit by bit.
+    fn next_miso(&self) -> Option<u8> {
+        None
     }
 
     /// What this device can show of itself — its own inspect evidence.

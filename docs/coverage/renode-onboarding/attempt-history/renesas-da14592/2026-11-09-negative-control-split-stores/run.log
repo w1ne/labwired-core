@@ -1,0 +1,9 @@
+2026-11-09T15:51:54.100547Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/chip.yaml
+2026-11-09T15:51:54.102250Z  INFO labwired_loader: ELF Entry Point: 0x801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+labwired-cli test: idle_ff skipped 99225 of 100000 device cycles (775 interpreted)
+2026-11-09T15:51:54.105006Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "DA14592 checks PPPPPPPPPP DONE" }) (captured len=77)
+2026-11-09T15:51:54.105026Z ERROR labwired_cli::execute: Memory assertion failed at 0x20017f00 (size 4): expected 0xda1403ff, got 0xda14007f (mask 0xffffffff)
+2026-11-09T15:51:54.105031Z ERROR labwired_cli::execute: Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536968960, expected_value: 3658744831, mask: None, size: Some(4), node: None } }) (captured len=77)
+FAIL  4/6 checks · script · 100000 steps · 0.00s

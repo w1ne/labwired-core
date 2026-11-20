@@ -96,6 +96,7 @@ impl<C: Cpu> Machine<C> {
         use crate::machine::quantum_trace::clause;
 
         self.service_resident_edges_at_boundary();
+        self.sync_exact_window_with_walk();
         let tick_interval = u64::from(self.config.peripheral_tick_interval.max(1));
         // Every clamp below that is measured in cycles is turned into a step
         // count. One step is one cycle on most cores; on a core whose step

@@ -1,0 +1,19 @@
+# Bounded RV32IMC smoke on the imported Verilated Ibex system map.
+# The direct-ELF run does not exercise Renode's external Verilated CPU model.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-litex-ibex-smoke"
+  system: "../../configs/systems/onboarding/verilated_ibex.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "LITEX IBEX SMOKE"
+  - uart_ordered:
+      - "cpu=rv32imc uart=litex"
+      - "mul=00000143"
+      - "timer=cleared"
+      - "load=00004e20"
+      - "timer=counting"
+      - "timer=running"
+      - "timer=zero"
+  - expected_stop_reason: max_steps

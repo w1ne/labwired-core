@@ -1,0 +1,4 @@
+ALIF E8 M55 SMOKE
+uart0 dl=021b
+uart7 dll=05
+pass=1f

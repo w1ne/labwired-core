@@ -36,6 +36,9 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
   * SPI: AVR from_config SPI is generic type:spi without PadLines cell
   * UART: USART1 emits bytes in the CPU smoke, but this edge gate has no AVR UART waveform bring-up
+* **atmega32u4**
+  * I2C: AVR from_config I2C is generic type:i2c without PadLines cell
+  * SPI: AVR from_config SPI is generic type:spi without PadLines cell
 * **atsamd21**
   * UART: Nano 33 IoT twin uses generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
 * **atsamd51**
@@ -44,12 +47,30 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: PyBadge variant of the atsamd51 twin: generic type:uart (sercom layout); no UART bring-up for this chip family in the edge gate yet
 * **cc2538sf53**
   * UART: no UART0 bring-up in this harness; bytes are proven by the cc2538dk survival smoke
+* **ch32l103c8t6**
+  * UART: no UART bring-up for the WCH L103 family in this harness yet; USART1 bytes are proven by ch32l103_compiled_firmware
+* **ch32v003a4m6**
+  * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
 * **ch32v003f4p6**
   * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v003_compiled_firmware
+* **ch32v003f4u6**
+  * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
+* **ch32v003j4m6**
+  * UART: F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes are proven by ch32v003_compiled_firmware
+* **ch32v005f6p6**
+  * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v005_compiled_firmware
+* **ch32v006k8u6**
+  * UART: pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this harness yet; bytes are proven by ch32v006_compiled_firmware
+* **ch32v203c8t6**
+  * UART: no UART bring-up for the WCH V20x family in this harness yet; USART1 bytes are proven by ch32v203_compiled_firmware
+* **ch32x035c8t6**
+  * UART: no UART bring-up for the WCH X035 family in this harness yet; USART1 bytes are proven by ch32x035_compiled_firmware
 * **efr32mg26**
   * UART: the Efr32s2 layout models the console TX/RX byte path but captures no baud divisor (CLKDIV), so bit_time_cycles() is None and no wire waveform is narrated — there are no edges to decode
 * **esp32**
   * SPI: Esp32Spi does not implement line_names()/wire_lines(); pad bindings exist but the wire channel is unpublished on this model
+* **esp32c2**
+  * UART: no UART bring-up for the ESP32-C2 family in this harness yet; UART0 bytes are proven by esp32c2_compiled_firmware
 * **esp32c5**
   * UART: esp32c5_uart is a TX FIFO/console model with no PadLines wire cell; bytes are proven by the esp32c5-devkitc-1-n8r8 board smoke
 * **esp32c61**
@@ -64,6 +85,8 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * I2C: esp32s3.yaml is an address-map stub; from_config has no S3 I2C model
   * SPI: esp32s3.yaml is an address-map stub; from_config has no S3 SPI model
   * UART: esp32s3.yaml is an address-map stub; from_config has no S3 UART model
+* **esp32s3-devkitc-1-n16r8-adc**
+  * UART: narrow N16R8 ADC profile of the S3 address-map stub; no UART bring-up for this family in the harness yet
 * **esp32s3-zero**
   * I2C: esp32s3-zero.yaml inherits the S3 address-map stub
   * SPI: esp32s3-zero.yaml inherits the S3 address-map stub
@@ -107,6 +130,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
   * UART: no SCI9 bring-up in this harness; bytes are proven by the ek-ra8m1 survival smoke
 * **ra4m1**
   * UART: Uno R4 Minima SCI2 uses generic type:uart (sci layout); no UART bring-up for this chip family in the edge gate yet
+  * SPI: RA RSPI (profile ra_rspi) hands each frame straight to the attached device and installs no PadLines cell, so no wire waveform is narrated; frames are proven by the UNO R4 WiFi Arduino matrix L4 cell
 * **rp2350**
   * I2C: rp2350 from_config bus not yet edge-gated (no line cells)
   * SPI: rp2350 from_config bus not yet edge-gated (no line cells)
@@ -135,11 +159,14 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | am6234 | — | — | — |
 | amap42kp | — | — | — |
 | arty-litex-vexriscv | — | — | — |
+| at32f421g8u7 | — | — | ✓ |
 | atmega1281 | — | — | — |
 | atmega2560 | — | — | — |
 | atmega2561 | — | — | — |
 | atmega328p | — | — | — |
 | atmega328pb | — | — | — |
+| atmega32u4 | — | — | — |
+| atmega4809 | — | — | — |
 | atsamd21 | — | — | — |
 | atsamd21e15a | — | — | — |
 | atsamd21e16a | — | — | — |
@@ -156,13 +183,22 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | atsamd51 | — | — | — |
 | atsamd51-pybadge | — | — | — |
 | cc2538sf53 | — | — | — |
+| ch32l103c8t6 | — | — | — |
+| ch32v003a4m6 | — | — | — |
 | ch32v003f4p6 | — | — | — |
+| ch32v003f4u6 | — | — | — |
+| ch32v003j4m6 | — | — | — |
+| ch32v005f6p6 | — | — | — |
+| ch32v006k8u6 | — | — | — |
+| ch32v203c8t6 | — | — | — |
+| ch32x035c8t6 | — | — | — |
 | dspic33fj32mc202 | — | — | — |
 | dspic33fj32mc204 | — | — | — |
 | efr32mg26 | ✓ | ✓ | — |
 | esp32 | ✓ | — | ✓ |
 | esp32-devkitc-32e-gpio-smoke | ✓ | — | ✓ |
 | esp32-devkitc-32e-uart1 | — | — | ✓ |
+| esp32c2 | — | — | — |
 | esp32c3 | ✓ | ✓ | ✓ |
 | esp32c5 | — | — | — |
 | esp32c6 | ✓ | ✓ | ✓ |
@@ -172,9 +208,11 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | esp32p4 | — | — | — |
 | esp32s2 | — | — | — |
 | esp32s3 | — | — | — |
+| esp32s3-devkitc-1-n16r8-adc | — | — | — |
 | esp32s3-zero | — | — | — |
 | imxrt1064 | — | — | — |
 | litex-vexriscv | — | — | — |
+| mimxrt1062-teensy41 | — | — | — |
 | mimxrt595s | — | — | — |
 | mk64f12 | — | — | — |
 | mkw41z4 | — | — | — |
@@ -210,6 +248,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | s32k388 | — | — | — |
 | sam4s16c | — | — | — |
 | same70q21b | — | — | — |
+| stm32c031c6 | ✓ | ✓ | ✓ |
 | stm32f072 | ✓ | ✓ | — |
 | stm32f103 | ✓ | ✓ | ✓ |
 | stm32f103c4 | ✓ | ✓ | ✓ |
@@ -246,6 +285,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32f407ze | ✓ | ✓ | ✓ |
 | stm32f407zg | ✓ | ✓ | ✓ |
 | stm32f411ceu6 | ✓ | ✓ | ✓ |
+| stm32f411re | ✓ | ✓ | ✓ |
 | stm32f446re | ✓ | ✓ | ✓ |
 | stm32f746 | — | — | ✓ |
 | stm32f767 | ✓ | ✓ | ✓ |
@@ -257,6 +297,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32h723zg | — | — | ✓ |
 | stm32h735 | ✓ | ✓ | ✓ |
 | stm32l073 | ✓ | ✓ | ✓ |
+| stm32l432kc | ✓ | ✓ | ✓ |
 | stm32l476 | ✓ | ✓ | ✓ |
 | stm32l552 | ✓ | ✓ | — |
 | stm32u545 | ✓ | ✓ | ✓ |

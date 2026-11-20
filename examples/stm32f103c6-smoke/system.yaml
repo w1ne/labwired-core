@@ -1,6 +1,13 @@
-# STM32F103C6 bare-chip smoke manifest (low-density F103, demand rank #3:
-# STM32F103 is 17% of measured MCU use, JetBrains State of Embedded 2025).
-# No board: USART2 on PA2/PA3 carries the banner, PA5 toggles.
+# STM32F103C6 customer minimum-system example: USART2 on PA2/PA3 and an
+# off-board LED + current-limiting resistor on PA5. GPIO logic is modeled;
+# electrical current and LED brightness are not.
 name: "stm32f103c6-smoke"
 chip: "../../configs/chips/stm32f103c6.yaml"
 external_devices: []
+board_io:
+  - id: "led_pa5"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true

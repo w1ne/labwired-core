@@ -1,0 +1,14 @@
+# Control for L4: the matrix system with no MAX31855 on SPI0. The stock
+# sketch must report the idle-bus frame.
+name: "arduino-matrix-arduino-nano-every"
+chip: "../../../../../../configs/chips/atmega4809.yaml"
+external_devices: []
+peripherals:
+  - id: "adc0"
+    type: "megaavr_adc"
+    base_address: 0x00010600
+    size: "24"
+    config:
+      vdd_mv: 5000
+      input_mv: { 3: 2500 }
+board_io: []

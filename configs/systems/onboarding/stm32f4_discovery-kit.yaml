@@ -6,3 +6,21 @@
 
 name: stm32f4_discovery-kit
 chip: ../../chips/onboarding/stm32f4_discovery-kit.yaml
+external_devices:
+  # External smoke fixture, not an on-board STM32F4DISCOVERY component.
+  - id: pot_adc1_in1
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 1
+  # External smoke fixture, not an on-board STM32F4DISCOVERY component.
+  - id: pot_adc1_in9
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 9
+  - id: tc_spi1
+    type: max31855
+    connection: spi1
+    config:
+      cs_pin: PA4

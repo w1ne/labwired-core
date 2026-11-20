@@ -94,6 +94,15 @@ const PAYLOAD: [u8; 3] = [0x53, 0x1C, 0xE1];
 /// drive to decodable edges, with the reason. Adding a silent `continue` instead
 /// of a row here is the same failure as the binding-only gate this replaced.
 const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
+    // ESP32-C2 (ESP8684H4X): the harness UART bring-up is per family and has
+    // none for the C2. UART0 bytes are proven by
+    // esp32c2_compiled_firmware::esp32c2_compiled_rv32imc_firmware_prints_on_uart0_and_toggles_gpio10.
+    (
+        "esp32c2",
+        BusKind::Uart,
+        "no UART bring-up for the ESP32-C2 family in this harness yet; UART0 \
+         bytes are proven by esp32c2_compiled_firmware",
+    ),
     // ESP32-H2: UART0 has no bring-up arm for the H2 family in this harness.
     // Bytes are proven by the esp32h2-devkitm-1-n4s board smoke (uart_contains).
     (
@@ -148,6 +157,72 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         BusKind::Uart,
         "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
          harness yet; bytes are proven by ch32v003_compiled_firmware",
+    ),
+    // CH32L103C8T6: the bring-up has no UART drive for the WCH L103 family.
+    // USART1 bytes are proven by
+    // ch32l103_compiled_firmware::ch32l103_compiled_rv32imac_firmware_prints_on_usart1.
+    (
+        "ch32l103c8t6",
+        BusKind::Uart,
+        "no UART bring-up for the WCH L103 family in this harness yet; USART1 \
+         bytes are proven by ch32l103_compiled_firmware",
+    ),
+    // CH32V005F6P6: same pad-gated USART1 (TX=PD5) as the CH32V003. USART1
+    // bytes are proven by
+    // ch32v005_compiled_firmware::ch32v005_compiled_rv32ec_zmmul_firmware_prints_on_usart1.
+    (
+        "ch32v005f6p6",
+        BusKind::Uart,
+        "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
+         harness yet; bytes are proven by ch32v005_compiled_firmware",
+    ),
+    // CH32X035C8T6: no UART bring-up for the WCH X035 family in this harness.
+    // USART1 bytes are proven by
+    // ch32x035_compiled_firmware::ch32x035_compiled_rv32imac_firmware_prints_on_usart1.
+    (
+        "ch32x035c8t6",
+        BusKind::Uart,
+        "no UART bring-up for the WCH X035 family in this harness yet; USART1 \
+         bytes are proven by ch32x035_compiled_firmware",
+    ),
+    // CH32V006K8U6: same pad-gated USART1 (TX=PD5) as the CH32V003. USART1
+    // bytes are proven by
+    // ch32v006_compiled_firmware::ch32v006_compiled_rv32ec_zmmul_firmware_prints_on_usart1.
+    (
+        "ch32v006k8u6",
+        BusKind::Uart,
+        "pad-gated F1-style USART1 (TX=PD5) produces no analyzer edges in this \
+         harness yet; bytes are proven by ch32v006_compiled_firmware",
+    ),
+    // CH32V203C8T6: the bring-up has no UART drive for the WCH V20x family.
+    // USART1 bytes are proven by
+    // ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_prints_on_usart1.
+    (
+        "ch32v203c8t6",
+        BusKind::Uart,
+        "no UART bring-up for the WCH V20x family in this harness yet; USART1 \
+         bytes are proven by ch32v203_compiled_firmware",
+    ),
+    // F4U6 (QFN20), A4M6 (SOP16) and J4M6 (SOP8) are package variants of the
+    // F4P6 die with the same pad-gated USART1 on PD5. Bytes are proven by
+    // ch32v003_compiled_firmware::ch32v003_package_variants_print_on_usart1_pd5.
+    (
+        "ch32v003f4u6",
+        BusKind::Uart,
+        "F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes \
+         are proven by ch32v003_compiled_firmware",
+    ),
+    (
+        "ch32v003a4m6",
+        BusKind::Uart,
+        "F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes \
+         are proven by ch32v003_compiled_firmware",
+    ),
+    (
+        "ch32v003j4m6",
+        BusKind::Uart,
+        "F4P6-die package variant: same pad-gated USART1 (TX=PD5) gap; bytes \
+         are proven by ch32v003_compiled_firmware",
     ),
     // nRF51822: the bring-up drives the nRF52 EasyDMA personalities (UARTE
     // ENABLE=8, TWIM), which the nRF51 does not have; its UART0 is the legacy
@@ -322,7 +397,8 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "USART0 registers live on the AVR CPU and are forwarded to the bus-side host; \
          this harness drives bus MMIO, not the CPU, so no bring-up exists here",
     ),
-    // ATmega2560: same USART0 model and addresses as the 328P.
+    // ATmega2560: USART0..3 live on the AVR CPU (cpu/avr/usart.rs), which hands
+    // finished frames to the bus-side hosts; the harness drives bus MMIO only.
     (
         "atmega2560",
         BusKind::Uart,
@@ -372,6 +448,11 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "esp32s3",
         BusKind::Uart,
         "esp32s3.yaml is an address-map stub; from_config has no S3 UART model",
+    ),
+    (
+        "esp32s3-devkitc-1-n16r8-adc",
+        BusKind::Uart,
+        "narrow N16R8 ADC profile of the S3 address-map stub; no UART bring-up for this family in the harness yet",
     ),
     (
         "esp32s3-zero",
@@ -543,6 +624,16 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "AVR from_config SPI is generic type:spi without PadLines cell",
     ),
     (
+        "atmega32u4",
+        BusKind::I2c,
+        "AVR from_config I2C is generic type:i2c without PadLines cell",
+    ),
+    (
+        "atmega32u4",
+        BusKind::Spi,
+        "AVR from_config SPI is generic type:spi without PadLines cell",
+    ),
+    (
         "atmega1281",
         BusKind::I2c,
         "AVR from_config I2C is generic type:i2c without PadLines cell",
@@ -577,6 +668,13 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
          bring-up for this chip family in the edge gate yet",
     ),
     (
+        "ra4m1",
+        BusKind::Spi,
+        "RA RSPI (profile ra_rspi) hands each frame straight to the attached \
+         device and installs no PadLines cell, so no wire waveform is narrated; \
+         frames are proven by the UNO R4 WiFi Arduino matrix L4 cell",
+    ),
+    (
         "imxrt1064",
         BusKind::Uart,
         "no edge bring-up path for i.MX LPUART in this gate yet",
@@ -601,6 +699,7 @@ fn is_excluded(chip: &str, kind: BusKind) -> Option<&'static str> {
 /// so both boards measure the same construction path.
 fn dummy_manifest(path: &str) -> SystemManifest {
     SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),
@@ -978,6 +1077,12 @@ fn family_of(chip: &str) -> Family {
         Family::Esp32
     } else if chip.starts_with("efr32") {
         Family::Efr32s2
+    } else if chip == "at32f421g8u7" {
+        // usart1/usart2 are the classic F1 STS/DT/BAUDR/CTRL1 subset
+        // (`profile: stm32f1`), audited against at32f421_usart.h. This
+        // descriptor has no SPI/I2C instances, so the classification only
+        // selects the existing STM32 UART F1/V2 drive.
+        Family::Stm32F1
     } else {
         Family::Unknown
     }
