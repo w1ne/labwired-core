@@ -1,0 +1,178 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 20000000,
+  "cycles": 20000000,
+  "instructions": 20000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 20000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 20000000
+    }
+  },
+  "limits": {
+    "max_steps": 20000000,
+    "max_cycles": null,
+    "max_uart_bytes": 65536,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "LW_L5_VAL"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "arm",
+    "registers": [
+      5,
+      1,
+      3758153984,
+      0,
+      536872320,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      24,
+      536969208,
+      134235607,
+      134235606
+    ],
+    "pc": 134235606,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 134217728,
+    "waiting_for_event": false,
+    "event_register": true
+  },
+  "firmware_hash": "bb63c92839588972ad26a36c5196605b99e70068e70e820eccb711c1cddcf025",
+  "config": {
+    "firmware": "/tmp/lw-l4adc-after/stm32l476/L5_adc/firmware.elf",
+    "system": "/tmp/lw-l4adc-controls/a0-2000mv/system.yaml",
+    "script": "/tmp/lw-l4adc-controls/a0-2000mv/test.yaml"
+  },
+  "fidelity": [
+    {
+      "kind": "derived_device_time",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "device time derived from cpu_hz (80000000 Hz); PLL reconfiguration is not tracked"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal 3.3 V rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "LW_L5_BOOT",
+        "cycle_lo": 80000,
+        "cycle": 90000,
+        "end_cycle": 90000
+      },
+      {
+        "text": "LW_L5_FAIL",
+        "cycle_lo": 100000,
+        "cycle": 110000,
+        "end_cycle": 110000
+      },
+      {
+        "text": "LW_L5_VAL 620 620",
+        "cycle_lo": 100000,
+        "cycle": 110000,
+        "end_cycle": 120000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 20784,
+    "data_bytes": 328,
+    "bss_bytes": 2616,
+    "flash_used_bytes": 21112,
+    "ram_static_bytes": 2944,
+    "flash_total_bytes": 1048576,
+    "ram_total_bytes": 98304,
+    "flash_used_pct": 2.01,
+    "ram_static_pct": 2.99,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "paint",
+    "main_stack_limit_bytes": 96896,
+    "main_stack_high_water_bytes": 332,
+    "main_stack_free_min_bytes": 96564,
+    "main_stack_base": 536872320,
+    "main_stack_top": 536969216,
+    "main_stack_overflow_suspected": false,
+    "heap_method": "paint",
+    "heap_limit_bytes": 96896,
+    "heap_high_water_bytes": 0,
+    "heap_free_min_bytes": 96564,
+    "heap_base": 536872320,
+    "heap_top": 536969216
+  },
+  "metrics": {
+    "cycles": 20000000,
+    "instructions": 20000000,
+    "steps_executed": 20000000,
+    "memory_reads": 33016,
+    "memory_writes": 8833,
+    "peripheral_accesses": 1139,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 134235606,
+        "count": 39008
+      },
+      {
+        "pc": 134235602,
+        "count": 38688
+      },
+      {
+        "pc": 134235798,
+        "count": 312
+      },
+      {
+        "pc": 134218986,
+        "count": 78
+      },
+      {
+        "pc": 134235516,
+        "count": 39
+      }
+    ]
+  }
+}

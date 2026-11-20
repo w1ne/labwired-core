@@ -1,0 +1,12 @@
+schema_version: '1.0'
+inputs:
+  firmware: <run_matrix.py out>/stm32g071rb/L5_adc/firmware.elf
+  system: validation/arduino-matrix/systems/stm32g071rb.yaml
+limits:
+  max_steps: 8000000
+  max_uart_bytes: 65536
+  stop_when_assertions_pass: false
+  stop_when_assertions_pass_settle_steps: 1000
+  stop_when_assertions_pass_min_steps: 0
+assertions:
+- uart_contains: LW_L5_VAL

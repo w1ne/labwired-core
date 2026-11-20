@@ -1,0 +1,18 @@
+==> stm32l073 × L0_serial_boot
+run: pass
+==> stm32l073 × L1_serial_loop
+run: pass
+==> stm32l073 × L2_blink_serial
+run: pass
+==> stm32l073 × L3_i2c_sensor
+run: pass
+==> stm32l073 × L4_spi_sensor
+run: pass
+==> stm32l073 × L5_adc
+run: pass
+==> stm32l073 × L6_pwm
+run: pass
+==> stm32l073 × L7_timer
+run: pass
+==> stm32l073 × L8_can: skip (No CAN peripheral on L0 series)
+Done in 53s — 8 pass / 1 skip / 0 fail (cells 9; gate treats skip as non-fail)
