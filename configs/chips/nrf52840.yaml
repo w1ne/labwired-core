@@ -5,6 +5,17 @@ core: "cortex-m4"
 # scale their datasheet microseconds by it; a slower board overrides it.
 # nRF52840 runs its Cortex-M4F at a fixed 64 MHz.
 cpu_hz: 64_000_000
+# GPIO pad output resistance, ohms: a driven pad is VDD (or 0 V) behind it.
+# nRF52840 Product Specification v1.11 (4413_417), section 6.9.3.1 "GPIO
+# Electrical Specification", standard drive (PIN_CNF[n].DRIVE reset value
+# S0S1), VDD >= 1.7 V: IOH,SD = 1 / 2 / 4 mA (min / typ / max) at VDD - 0.4 V,
+# and IOL,SD the same at VSS + 0.4 V. Typical: 0.4 V / 2 mA = 200 ohm (the
+# minimum current bounds it at 0.4 V / 1 mA = 400 ohm).
+# Read by the diagram compiler, which places it as the pad driver's
+# on-resistance in the analog netlist.
+gpio_output_ohms: 200
+# gpio_abs_max_ma is not stated: section 9, Table 101 "Absolute maximum
+# ratings" gives no GPIO pin current (only the NFC antenna pins, 80 mA).
 
 flash:
   base: 0x00000000

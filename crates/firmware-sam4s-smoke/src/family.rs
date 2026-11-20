@@ -24,7 +24,8 @@
 //! in .bss, which cortex-m-rt zeroes on every boot). Summary =
 //! 0x5A40_0000 | bits; 0x5A40_0FFF means all twelve base checks passed.
 //! Parts with `check_usart0_irq` set bit 12; those with `check_usart1_irq`
-//! set bit 13.
+//! set bit 13. Parts with `check_uart_irq` set bits 14 (UART0, IRQ 8) and
+//! 15 (UART1, IRQ 9).
 
 use core::ptr::{read_volatile, write_volatile};
 
@@ -36,6 +37,8 @@ pub struct Part {
     pub check_usart0_irq: bool,
     /// Check USART1 TXRDY IRQ 15 for parts whose imported profile wires it.
     pub check_usart1_irq: bool,
+    /// Check UART0/UART1 TXRDY IRQs 8/9 (bits 14/15).
+    pub check_uart_irq: bool,
     /// RAM end - 0x100.
     pub summary: u32,
     /// Board-level checks, run after the family summary on the watchdog
@@ -76,6 +79,8 @@ const NVIC_ICPR0: u32 = 0xE000_E280;
 const IRQ_WDT: u32 = 4;
 const IRQ_USART0: u32 = 14;
 const IRQ_USART1: u32 = 15;
+const UART0: u32 = 0x400E_0600;
+const UART1: u32 = 0x400E_0800;
 const USART0: u32 = 0x4002_4000;
 const USART1: u32 = 0x4002_8000;
 
@@ -312,6 +317,42 @@ fn peripherals(part: &Part, state: u32) {
     if part.check_usart1_irq {
         check_usart_txrdy_irq(USART1, IRQ_USART1, "usart1", 13, state);
     }
+    if part.check_uart_irq {
+        check_uart_txrdy_irq(UART0, ID_UART0, "uart0", 14, state);
+        check_uart_txrdy_irq(UART1, ID_UART1, "uart1", 15, state);
+    }
+}
+
+fn check_uart_txrdy_irq(base: u32, irq: u32, label: &str, bit: u32, state: u32) {
+    // UART0 carries the console and is already enabled; UART1 is set up here.
+    // Only lines 8..15 are sampled, so the check also fails when the UART
+    // pends a neighbour's line (for example a USART line).
+    if base != UART0 {
+        wr(base, (1 << 2) | (1 << 3)); // RSTRX | RSTTX
+        wr(base + 0x04, 0x800); // no parity, normal mode
+        wr(base + 0x20, 2);
+        wr(base, (1 << 4) | (1 << 6)); // RXEN | TXEN
+    }
+    while rd(base + 0x14) & 2 == 0 {}
+    wr(NVIC_ICPR0, 0xFF << 8);
+    wr(base + 0x08, 1 << 1); // IER TXRDY
+    let imr = rd(base + 0x10);
+    let window = (rd(NVIC_ISPR0) >> 8) & 0xFF;
+    wr(base + 0x0C, 1 << 1); // IDR TXRDY
+    let released = rd(base + 0x10) == 0 && rd(NVIC_ISPR0) & (1 << irq) == 0;
+    wr(NVIC_ICPR0, 0xFF << 8);
+    puts(label);
+    puts(" txrdy imr=");
+    put_hex(imr, 1);
+    puts(" ispr8=");
+    put_hex(window, 2);
+    puts(if released { " rel=1" } else { " rel=0" });
+    finish(
+        "",
+        imr == (1 << 1) && window == 1 << (irq - 8) && released,
+        bit,
+        state,
+    );
 }
 
 fn check_usart_txrdy_irq(base: u32, irq: u32, label: &str, bit: u32, state: u32) {
@@ -371,7 +412,8 @@ pub fn run(part: &Part) -> ! {
     let bits = rd(state);
     let expected_bits = 0x0FFF
         | (u32::from(part.check_usart0_irq) << 12)
-        | (u32::from(part.check_usart1_irq) << 13);
+        | (u32::from(part.check_usart1_irq) << 13)
+        | (u32::from(part.check_uart_irq) * (3 << 14));
     wr(part.summary, 0x5A40_0000 | bits);
     puts(part.name);
     puts(if bits == expected_bits {

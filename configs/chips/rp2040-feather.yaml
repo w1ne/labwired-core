@@ -5,6 +5,19 @@ core: "cortex-m0+"
 registers_count: 240
 # Feather RP2040 board default system clock, 133 MHz.
 cpu_hz: 133_000_000
+# GPIO pad output resistance, ohms: a driven pad is IOVDD (or 0 V) behind it.
+# RP2040 Datasheet (Raspberry Pi, release 13), section 5.5.3.4 "IO Electrical
+# Characteristics", Table 646, IOVDD = 3.3 V: VOH min 2.62 V and VOL max 0.5 V
+# at IOH / IOL equal to the selected drive strength; section 5.5.2.1: the
+# default drive strength is 4 mA. Source side (3.3 - 2.62) V / 4 mA = 170 ohm
+# (sink side 0.5 V / 4 mA = 125 ohm). These are guaranteed limits; Figure 172
+# shows a typical pad stiffer than this.
+# Read by the diagram compiler, which places it as the pad driver's
+# on-resistance in the analog netlist.
+gpio_output_ohms: 170
+# gpio_abs_max_ma is not stated: Table 643 "Absolute maximum ratings for
+# digital IO" gives no per-pin current; Table 646 limits only the bank totals
+# IIOVDD_MAX and IIOVSS_MAX (50 mA each).
 
 flash:
   base: 0x10000000
@@ -110,11 +123,22 @@ peripherals:
     size: "160KB"
     config:
       debug_schema: "../peripherals/rp2040/clocks.yaml"
+  # UART0/UART1: ARM PL011 (datasheet §4.2). UART0_IRQ = 20, UART1_IRQ = 21
+  # (§2.3.2). Arduino-Pico Serial1/Serial2, pico-sdk uart_*_irq and the Mbed
+  # core's buffered serial take RX through these lines.
   - id: "uart0"
     type: "uart"
     base_address: 0x40034000
+    irq: 20
     config:
       debug_schema: "../peripherals/rp2040/uart0.yaml"
+      profile: "pl011"
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x40038000
+    irq: 21
+    config:
+      debug_schema: "../peripherals/rp2040/uart1.yaml"
       profile: "pl011"
   # ROSC (ring oscillator): same model, separate window above UART0. Models
   # ROSC.STATUS.STABLE so the ROSC start-up poll terminates.
@@ -208,6 +232,13 @@ peripherals:
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2040/spi0.yaml"
+  # SPI1: second PL022 instance (datasheet §4.4), same behavioural model.
+  - id: "spi1"
+    type: "rp2040_spi"
+    base_address: 0x40040000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/rp2040/spi1.yaml"
   # I2C0: Synopsys DW_apb_i2c (datasheet §4.3). Behavioural master engine — a
   # command to an unconnected target raises TX_ABRT with a 7-bit address NACK,
   # the genuine no-slave bus response.

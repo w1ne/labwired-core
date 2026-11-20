@@ -83,6 +83,7 @@ pub mod step_dir_motor;
 pub mod supply;
 pub mod supply_domain;
 pub mod tca9548a;
+pub mod tcs3200;
 pub mod tiol112;
 pub mod tm1637_trace;
 pub mod unipolar_stepper;

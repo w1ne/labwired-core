@@ -174,7 +174,6 @@ impl WasmSimulator {
             "__retarget_lock_release_recursive",
             "_esp_error_check_failed",
             "setCpuFrequencyMhz",
-            "delay",
             "xQueueGiveMutexRecursive",
             "xQueueTakeMutexRecursive",
             "esp_ipc_init",

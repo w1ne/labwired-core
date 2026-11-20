@@ -1753,11 +1753,8 @@ impl World {
             .and_then(|v| v.as_str())
             .map(str::to_owned)
             .unwrap_or_else(|| format!("can{}", self.can_buses.len()));
-        let bitrate = ic
-            .config
-            .get("bitrate")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(crate::network::timed_can::DEFAULT_BITRATE);
+        // No `config.bitrate`: a timed bus runs at its controllers' rate.
+        let bitrate = ic.config.get("bitrate").and_then(|v| v.as_u64());
         let timed = members
             .iter()
             .all(|(node, endpoint)| self.machines[node].can_timed_capable(endpoint));
@@ -1772,7 +1769,10 @@ impl World {
                     .with_context(|| format!("can_bus node '{node_id}'"))?;
             }
             self.add_interconnect(Box::new(can_bus));
-            self.can_buses.push(Err((id, bitrate)));
+            self.can_buses.push(Err((
+                id,
+                bitrate.unwrap_or(crate::network::timed_can::DEFAULT_BITRATE),
+            )));
             return Ok(());
         }
         if self.ble.is_some() {
