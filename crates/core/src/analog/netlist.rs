@@ -383,6 +383,13 @@
 //! nonzero `KF`. The parts this engine adds for a macromodel
 //! (op-amp, comparator, regulator) and a BJT's substrate junction are
 //! noiseless.
+//! `.tf v(<out>[,<ref>])|i(<element>) <src>` is kept as
+//! [`Circuit::transfer_function`] and run by
+//! [`crate::analog::Solver::transfer_analysis`]: the DC small-signal gain from
+//! the independent source `<src>` to the output, the resistance `<src>` sees,
+//! and the resistance seen at the output, linearised at the operating point.
+//! `i(<element>)` may name any element with a branch current, not only the
+//! `V` source ngspice takes.
 //! `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` is kept
 //! as [`Circuit::dc_sweep`] and run by [`crate::analog::Solver::dc_analysis`];
 //! `<src>` must be a `V`, `I` or `R` element or `TEMP`, and the second source
@@ -1012,6 +1019,32 @@ pub struct NoiseSweep {
     pub input: String,
     /// The analysed frequencies.
     pub sweep: AcSweep,
+}
+
+/// What a `.tf` card measures.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TransferOutput {
+    /// `v(<node>[,<ref>])`: a node voltage, or the difference of two.
+    Voltage {
+        /// Output node.
+        node: String,
+        /// Reference node, ground when absent.
+        reference: Option<String>,
+    },
+    /// `i(<element>)`: the branch current of a `V`, `L`, `E`, `H` or
+    /// behavioural voltage source, flowing from its first terminal to its
+    /// second through the element.
+    Current(String),
+}
+
+/// `.tf v(<out>[,<ref>])|i(<element>) <src>`: ngspice's DC small-signal
+/// transfer function. The names are resolved when the analysis runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransferFunction {
+    /// The measured output.
+    pub output: TransferOutput,
+    /// Independent `V` or `I` source the output is referred to.
+    pub input: String,
 }
 
 /// `V<name> n+ n- <source>`.
@@ -3465,6 +3498,9 @@ pub struct Circuit {
     /// The deck's `.noise` analysis, if it has one; see
     /// [`crate::analog::Solver::noise_analysis`].
     pub noise_sweep: Option<NoiseSweep>,
+    /// The deck's `.tf` card, if it has one; see
+    /// [`crate::analog::Solver::transfer_analysis`].
+    pub transfer_function: Option<TransferFunction>,
     /// The deck's `.temp` (or `.options temp=`) in °C, if it gives one.
     /// `.noise` takes the thermal noise of a resistor without its own
     /// temperature law, and of a switch, at this temperature.
@@ -5215,6 +5251,12 @@ fn parse_lines_at(
                         return Err(ctx.parse_err("only one `.noise` analysis is supported"));
                     }
                     circuit.noise_sweep = Some(parse_noise_sweep(&ctx, &tokens[1..])?);
+                }
+                "tf" => {
+                    if circuit.transfer_function.is_some() {
+                        return Err(ctx.parse_err("only one `.tf` card is supported"));
+                    }
+                    circuit.transfer_function = Some(parse_transfer_function(&ctx, &tokens[1..])?);
                 }
                 "model" => parse_model(
                     &mut models,
@@ -7753,36 +7795,14 @@ fn parse_ac_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<AcSweep, AnalogE
 fn parse_noise_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<NoiseSweep, AnalogError> {
     const SHAPE: &str = "expected `.noise v(<out>[,<ref>]) <src> dec|oct|lin <points> <fstart> \
                          <fstop> [<pts_per_summary>]`";
-    // `v(out, ref)` may have been split at the blank after the comma.
-    let close = tokens
-        .iter()
-        .position(|token| token.contains(')'))
-        .ok_or_else(|| ctx.parse_err(SHAPE))?;
-    let probe: String = tokens[..=close].concat();
-    let inner = probe
-        .strip_prefix("v(")
-        .or_else(|| probe.strip_prefix("V("))
-        .and_then(|rest| rest.strip_suffix(')'))
-        .ok_or_else(|| ctx.parse_err(SHAPE))?;
-    let mut nodes = inner.split(',').map(str::trim);
-    let output = nodes.next().filter(|node| !node.is_empty());
-    let reference = nodes.next();
-    let (Some(output), None) = (output, nodes.next()) else {
+    let (probe, rest) = split_probe(ctx, tokens, SHAPE)?;
+    let ('v', output, reference) = probe else {
         return Err(ctx.parse_err(SHAPE));
     };
-    if reference.is_some_and(str::is_empty) {
-        return Err(ctx.parse_err(SHAPE));
-    }
-    let rest = &tokens[close + 1..];
     if rest.len() != 5 && rest.len() != 6 {
         return Err(ctx.parse_err(SHAPE));
     }
-    let input = rest[0];
-    if !(input.len() >= 2 && matches!(input.as_bytes()[0].to_ascii_uppercase(), b'V' | b'I')) {
-        return Err(ctx.parse_err(format!(
-            "`.noise` refers the noise to an independent `V` or `I` source; `{input}` is not one"
-        )));
-    }
+    let input = independent_source(ctx, rest[0], ".noise", "refers the noise")?;
     if let Some(summary) = rest.get(5) {
         let count = ctx.value(summary, "noise points per summary")?;
         if !(count >= 0.0 && count.fract() == 0.0) {
@@ -7790,11 +7810,89 @@ fn parse_noise_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<NoiseSweep, A
         }
     }
     Ok(NoiseSweep {
-        output: output.to_string(),
-        reference: reference.map(str::to_string),
-        input: input.to_string(),
+        output,
+        reference,
+        input,
         sweep: parse_frequency_sweep(ctx, &rest[1..5], ".noise", SHAPE)?,
     })
+}
+
+/// Parse `.tf v(<out>[,<ref>])|i(<element>) <src>`.
+fn parse_transfer_function(
+    ctx: &LineCtx<'_>,
+    tokens: &[&str],
+) -> Result<TransferFunction, AnalogError> {
+    const SHAPE: &str = "expected `.tf v(<out>[,<ref>])|i(<element>) <src>`";
+    let (probe, rest) = split_probe(ctx, tokens, SHAPE)?;
+    let output = match probe {
+        ('v', node, reference) => TransferOutput::Voltage { node, reference },
+        ('i', element, None) => TransferOutput::Current(element),
+        _ => return Err(ctx.parse_err(SHAPE)),
+    };
+    let [input] = rest else {
+        return Err(ctx.parse_err(SHAPE));
+    };
+    Ok(TransferFunction {
+        output,
+        input: independent_source(ctx, input, ".tf", "refers the output")?,
+    })
+}
+
+/// A `v(<a>[,<b>])` or `i(<a>)` probe: its lower-case letter and its names.
+type Probe = (char, String, Option<String>);
+
+/// Split the leading `v(<a>[,<b>])` or `i(<a>)` probe off an analysis card,
+/// returning its lower-case letter, its names and the tokens after it.
+/// `v(out, ref)` may have been split at the blank after the comma.
+fn split_probe<'t, 'a>(
+    ctx: &LineCtx<'_>,
+    tokens: &'t [&'a str],
+    shape: &str,
+) -> Result<(Probe, &'t [&'a str]), AnalogError> {
+    let close = tokens
+        .iter()
+        .position(|token| token.contains(')'))
+        .ok_or_else(|| ctx.parse_err(shape))?;
+    let probe: String = tokens[..=close].concat();
+    let letter = probe
+        .chars()
+        .next()
+        .map(|c| c.to_ascii_lowercase())
+        .filter(|c| matches!(c, 'v' | 'i'))
+        .ok_or_else(|| ctx.parse_err(shape))?;
+    let inner = probe[1..]
+        .strip_prefix('(')
+        .and_then(|rest| rest.strip_suffix(')'))
+        .ok_or_else(|| ctx.parse_err(shape))?;
+    let mut names = inner.split(',').map(str::trim);
+    let first = names.next().filter(|name| !name.is_empty());
+    let second = names.next();
+    let (Some(first), None) = (first, names.next()) else {
+        return Err(ctx.parse_err(shape));
+    };
+    if second.is_some_and(str::is_empty) {
+        return Err(ctx.parse_err(shape));
+    }
+    Ok((
+        (letter, first.to_string(), second.map(str::to_string)),
+        &tokens[close + 1..],
+    ))
+}
+
+/// Check that `name` can name an independent `V` or `I` source.
+fn independent_source(
+    ctx: &LineCtx<'_>,
+    name: &str,
+    card: &str,
+    verb: &str,
+) -> Result<String, AnalogError> {
+    if name.len() >= 2 && matches!(name.as_bytes()[0].to_ascii_uppercase(), b'V' | b'I') {
+        Ok(name.to_string())
+    } else {
+        Err(ctx.parse_err(format!(
+            "`{card}` {verb} to an independent `V` or `I` source; `{name}` is not one"
+        )))
+    }
 }
 
 /// The `dec|oct|lin <points> <fstart> <fstop>` tail shared by `.ac` and

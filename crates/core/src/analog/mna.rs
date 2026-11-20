@@ -77,7 +77,7 @@ use super::behavioural::Control as BehaviouralControl;
 use super::device;
 use super::netlist::{
     AnalogError, Bjt, BjtModel, Circuit, DcSweep, DiodeModel, MosChannelChargeModel, Mosfet,
-    NodeRef, SwitchSense, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
+    NodeRef, SwitchSense, TransferOutput, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
 };
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
@@ -194,6 +194,22 @@ impl NoiseSource {
             self.density
         }
     }
+}
+
+/// The result of [`Solver::transfer_analysis`], ngspice's `.tf` output.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TransferResponse {
+    /// Output per unit input: V/V, A/V, V/A or A/A for a voltage or current
+    /// output and a `V` or `I` input source. ngspice's `transfer_function`.
+    pub transfer: f64,
+    /// Small-signal resistance the input source sees, ohms. ngspice's
+    /// `<src>#input_impedance`.
+    pub input_impedance: f64,
+    /// Small-signal resistance seen at the output with the input source at
+    /// rest (a `V` shorted, an `I` open), ohms: across the output nodes for
+    /// `v(...)`, or in series with the element for `i(...)`. ngspice's
+    /// `output_impedance_at_v(...)` and `<element>#output_impedance`.
+    pub output_impedance: f64,
 }
 
 /// The result of [`Solver::noise_analysis`].
@@ -2617,6 +2633,104 @@ impl Solver {
         })
     }
 
+    /// Run the netlist's own `.tf` card; see [`Solver::transfer_analysis`].
+    pub fn transfer_function(&mut self) -> Result<TransferResponse, AnalogError> {
+        let card = self.circuit.transfer_function.clone().ok_or_else(|| {
+            AnalogError::Config("netlist has no `.tf v(<out>)|i(<element>) <src>` card".to_string())
+        })?;
+        self.transfer_analysis(&card.output, &card.input)
+    }
+
+    /// DC small-signal transfer function, as ngspice's `.tf`: the circuit
+    /// linearised about the solver's present solution (the DC operating
+    /// point on a fresh solver) and driven by a unit change of `input`, an
+    /// independent `V` or `I` source. One solve gives the gain and the input
+    /// resistance; a second, driven at the output with the input at rest,
+    /// gives the output resistance.
+    ///
+    /// Two differences from ngspice-42 are deliberate. An `i(<element>)`
+    /// output's resistance is `−1/I` for the branch current `I` a unit
+    /// voltage in series with the element drives, the formula ngspice uses
+    /// for a `V` input; ngspice's `tfanal.c` takes `1/max(1e-20, I)` and so
+    /// prints 1e20 whenever that current is negative. A resistance with no
+    /// current to define it is `f64::INFINITY`, where ngspice prints 1e20.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn transfer_analysis(
+        &mut self,
+        output: &TransferOutput,
+        input: &str,
+    ) -> Result<TransferResponse, AnalogError> {
+        let input_port = if let Some(index) = self.voltage_source_index(input) {
+            Port::Branch(self.nodes + index)
+        } else if let Some(index) = self.current_source_index(input) {
+            let source = &self.circuit.current_sources[index];
+            Port::Nodes(source.p, source.n)
+        } else {
+            return Err(AnalogError::Config(format!(
+                "`.tf` input `{input}` is not an independent `V` or `I` source"
+            )));
+        };
+        let output_port = match output {
+            TransferOutput::Voltage { node, reference } => {
+                let resolve = |name: &str| {
+                    self.circuit.node(name).ok_or_else(|| {
+                        AnalogError::Config(format!(
+                            "`.tf` output node `{name}` is not in the netlist"
+                        ))
+                    })
+                };
+                let node = resolve(node)?;
+                let reference = reference.as_deref().map(resolve).transpose()?.flatten();
+                if node == reference {
+                    return Err(AnalogError::Config(
+                        "`.tf` output and reference are the same node".to_string(),
+                    ));
+                }
+                // A unit current drawn from the reference into the output.
+                Port::Nodes(reference, node)
+            }
+            TransferOutput::Current(element) => {
+                let index = self.circuit.branch_index(element).ok_or_else(|| {
+                    AnalogError::Config(format!(
+                        "`.tf` output `i({element})` names no `V`, `L`, `E`, `H` or \
+                         behavioural voltage source"
+                    ))
+                })?;
+                Port::Branch(self.nodes + index)
+            }
+        };
+        let dim = self.dim();
+        let mut g = self.linearised(|solver| {
+            let couplings = solver.delayed_couplings();
+            let (mut g, _) = solver.ac_matrices(&couplings)?;
+            // At DC every delayed term is at its full value.
+            for coupling in &couplings {
+                g[coupling.row * dim + coupling.column] += coupling.coefficient;
+            }
+            Ok(g)
+        })?;
+        let solve = |g: &mut [f64], port: Port| {
+            let mut rhs = vec![0.0; dim];
+            port.excite(&mut rhs);
+            solve_dense(g, &mut rhs, dim).map_err(|row| AnalogError::Singular { row })?;
+            Ok::<_, AnalogError>(rhs)
+        };
+        let forward = solve(&mut g.clone(), input_port)?;
+        let input_impedance = input_port.impedance(&forward);
+        let output_impedance = if output_port == input_port {
+            input_impedance
+        } else {
+            output_port.impedance(&solve(&mut g, output_port)?)
+        };
+        Ok(TransferResponse {
+            transfer: output_port.response(&forward),
+            input_impedance,
+            output_impedance,
+        })
+    }
+
     /// Run `body` with every nonlinear device linearised at the present
     /// solution, then put the linearisation back so the next transient step
     /// is unchanged.
@@ -4795,6 +4909,47 @@ fn conductance(matrix: &mut [f64], dim: usize, a: NodeRef, b: NodeRef, g: f64) {
     add(matrix, dim, b, b, g);
     add(matrix, dim, a, b, -g);
     add(matrix, dim, b, a, -g);
+}
+
+/// One port of a `.tf` analysis.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Port {
+    /// A branch row, driven by a unit voltage in series with its element; the
+    /// response is the branch current.
+    Branch(usize),
+    /// A node pair `(p, n)`, driven by 1 A taken from `p` and delivered to
+    /// `n`, as an `I` source drives; the response is `v(n) − v(p)`.
+    Nodes(NodeRef, NodeRef),
+}
+
+impl Port {
+    fn excite(self, rhs: &mut [f64]) {
+        match self {
+            Port::Branch(row) => rhs[row] = 1.0,
+            Port::Nodes(p, n) => {
+                inject(rhs, p, -1.0);
+                inject(rhs, n, 1.0);
+            }
+        }
+    }
+
+    fn response(self, solution: &[f64]) -> f64 {
+        let at = |node: NodeRef| node.map_or(0.0, |n| solution[n]);
+        match self {
+            Port::Branch(row) => solution[row],
+            Port::Nodes(p, n) => at(n) - at(p),
+        }
+    }
+
+    /// The resistance the port's own drive sees.
+    fn impedance(self, solution: &[f64]) -> f64 {
+        match self {
+            // ngspice's `tfanal.c` threshold for no current.
+            Port::Branch(row) if solution[row].abs() < 1e-20 => f64::INFINITY,
+            Port::Branch(row) => -1.0 / solution[row],
+            Port::Nodes(..) => self.response(solution),
+        }
+    }
 }
 
 fn inject(rhs: &mut [f64], node: NodeRef, amps: f64) {
