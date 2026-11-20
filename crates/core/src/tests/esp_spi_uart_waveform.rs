@@ -59,7 +59,7 @@
 //! Classic ESP32 needs both because its two builders disagree:
 //! `configure_xtensa_esp32` registers the peripheral bank in Rust and is what
 //! every real lab runs, while `configs/chips/esp32.yaml` is what
-//! `crates/core/tests/bus_visibility.rs` scores the fleet on.
+//! `crates/core/tests/bus/bus_visibility.rs` scores the fleet on.
 
 #[cfg(test)]
 mod esp_spi_uart_waveform_tests {
@@ -1110,9 +1110,10 @@ mod esp_spi_uart_waveform_tests {
             .join("../..")
             .join("configs/chips/esp32c3.yaml");
         let chip = ChipDescriptor::from_file(&path).expect("load esp32c3.yaml");
-        // The same minimal manifest `crates/core/tests/bus_visibility.rs` uses,
+        // The same minimal manifest `crates/core/tests/bus/bus_visibility.rs` uses,
         // so this test and the scoreboard measure the same construction path.
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),
@@ -1172,7 +1173,7 @@ mod esp_spi_uart_waveform_tests {
     }
 
     /// And of `from_config`, which is the path
-    /// `crates/core/tests/bus_visibility.rs` scores the fleet on — so the board
+    /// `crates/core/tests/bus/bus_visibility.rs` scores the fleet on — so the board
     /// and this file can never disagree about whether the classic part can show
     /// its buses.
     ///
@@ -1190,6 +1191,7 @@ mod esp_spi_uart_waveform_tests {
             .join("configs/chips/esp32.yaml");
         let chip = ChipDescriptor::from_file(&path).expect("load esp32.yaml");
         let manifest = SystemManifest {
+            max_peripheral_tick_interval: None,
             parts: Vec::new(),
             walk_deleted: Some(false),
             schema_version: "1.0".to_string(),

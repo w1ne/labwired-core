@@ -1,0 +1,8 @@
+LITEX IBEX SMOKE
+cpu=rv32imc uart=litex
+mul=00000143
+timer=pending_kept
+load=00000220
+value=00000000
+timer=running
+timer=zero

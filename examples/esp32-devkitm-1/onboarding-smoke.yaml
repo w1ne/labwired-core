@@ -1,0 +1,13 @@
+# ESP32-DevKitM-1: boot UART0 firmware and toggle an external LED on GPIO23.
+schema_version: "1.2"
+inputs:
+  firmware: "firmware/.pio/build/devkitm1/firmware.elf"
+  system: "../../configs/systems/esp32-devkitm-1.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "ESP32_DEVKITM1_UART0_OK"
+  - gpio_edges:
+      pin: "gpio:23"
+      min_edges: 16
+  - expected_stop_reason: max_steps

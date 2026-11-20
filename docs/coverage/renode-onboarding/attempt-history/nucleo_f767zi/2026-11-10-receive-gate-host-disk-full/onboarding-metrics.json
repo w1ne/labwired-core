@@ -1,0 +1,33 @@
+{
+  "target_id": "nucleo_f767zi",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "firmware-stm32f767-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/nucleo_f767zi-smoke.yaml",
+  "system": "configs/systems/onboarding/nucleo_f767zi.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T12:42:26Z",
+  "finished_at_utc": "2026-11-10T12:42:59Z",
+  "elapsed_seconds": 33,
+  "elapsed_ms": 32887,
+  "failure_stage": "build_cli",
+  "first_error_signature": "error: failed to write to `/home/andrii/worktrees-legacy-20261109/labwired-core/renode/target/debug/deps/rmeta4NtoPg/full.rmeta`: No space left on device (os error 28)",
+  "failure_hint": "Fix host toolchain first: run `rustup show` and ensure CLI dependencies build on this runner.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 32.877,
+    "build_firmware": null,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 32877,
+    "build_firmware": null,
+    "run_smoke": null
+  }
+}

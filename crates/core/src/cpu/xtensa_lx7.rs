@@ -2957,7 +2957,7 @@ impl Cpu for XtensaLx7 {
         self.poll_loop_budget(bus, limit)
     }
 
-    fn fast_forward_poll_loop(&mut self, cycles: u64) -> bool {
+    fn fast_forward_poll_loop(&mut self, cycles: u64) -> Option<u64> {
         self.apply_poll_loop_skip(cycles)
     }
 

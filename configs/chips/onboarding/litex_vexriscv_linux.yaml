@@ -1,26 +1,27 @@
+# Bounded direct-ELF RV32IM profile of Renode's Linux-capable LiteX/VexRiscv
+# platform. It models the 32 KiB ROM, 32 KiB SRAM, LiteX UART and timer used by
+# this bare-metal smoke; Linux boot, DRAM, emulator RAM, CPU timer, and SPI are
+# outside this profile. Upstream platform:
+# https://github.com/renode/renode/blob/master/platforms/cpus/litex_vexriscv_linux.repl.
 name: litex_vexriscv_linux
-arch: arm
+arch: riscv
+core: rv32im
 flash:
-  base: 536870912
-  size: 1048576
+  # The Renode profile's 32 KiB boot ROM at address zero.
+  base: 0
+  size: 32768B
+flash_boot_alias: false
 ram:
+  # The Renode profile's 32 KiB SRAM. The Linux DRAM and emulator RAM are
+  # intentionally outside this bounded bare-metal smoke profile.
   base: 268435456
   size: 32768B
 peripherals:
-- id: timer0
-  type: litex_timer
-  bus: sysbus
-  base_address: 4026537984
 - id: uart
   type: litex_uart
   bus: sysbus
   base_address: 4026535936
-- id: cpu_timer
-  type: litex_cputimer
+- id: timer0
+  type: litex_timer
   bus: sysbus
-  base_address: 4026533888
-- id: spi
-  type: stub
-  renode_type: litex_spi
-  bus: sysbus
-  base_address: 4026564608
+  base_address: 4026537984

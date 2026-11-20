@@ -2,90 +2,74 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! ESP32-S3 USB-OTG (DWC_otg / Synopsys DesignWare USB 2.0 OTG) controller.
+//! ESP32-S3 USB-OTG (DWC_otg / Synopsys DesignWare USB 2.0 OTG) controller
+//! in device mode, with a scripted USB host on the other end of the cable.
 //!
-//! This is the *second* USB block on the S3. It is the full-speed
-//! Synopsys DWC2 OTG core (the same IP behind TinyUSB's `dwc2` port and
-//! esp-idf's USB-OTG / TinyUSB driver), mapped by esp-idf at
+//! This is the *second* USB block on the S3: the full-speed Synopsys DWC2
+//! OTG core behind TinyUSB's `dwc2` port (arduino-esp32 builds with
+//! `ARDUINO_USB_MODE=0`, e.g. the Arduino Nano ESP32), mapped at
 //! `0x6008_0000`. It is **distinct** from the [`UsbSerialJtag`] CDC/JTAG
-//! bridge at `0x6003_8000` — do not confuse the two.
+//! bridge at `0x6003_8000`.
 //!
 //! - Base address: `0x6008_0000`
-//! - Modelled window: `0x1000` bytes (core global regs + device-mode core)
-//! - Interrupt source: `ETS_USB_INTR_SOURCE = 23` (DWC OTG core interrupt),
-//!   delivered through [`PeripheralTickResult::explicit_irqs`].
+//! - Modelled window: [`WINDOW_SIZE`] — the CSRs plus the per-endpoint data
+//!   FIFO pages (`0x1000 * (n + 1)` for endpoint `n`, DWC2 databook §5.3)
+//! - Interrupt source: `ETS_USB_INTR_SOURCE = 38`, level, through the
+//!   interrupt matrix.
 //!
-//! ## What is modelled
+//! ## Data path: slave (FIFO) mode
 //!
-//! The Core Global register block and the start of the device-mode core,
-//! enough that a polling DWC2 driver (esp-idf `usb_phy` + TinyUSB, or a
-//! bare-metal probe) can:
-//!   * read the Synopsys release id ([`GSNPSID`]) and the four hardware
-//!     capability words ([`GHWCFG1`]..[`GHWCFG4`]) — all read-only constants;
-//!   * issue a core soft reset via `GRSTCTL.CSRST` (bit 0), which
-//!     **self-clears** and always reads back `AHBIDLE` (bit 31) = 1;
-//!   * enable interrupts (`GAHBCFG.GINTMSK` global bit 0 + per-source
-//!     `GINTMSK`) and observe / W1-clear `GINTSTS`;
-//!   * read live device status (`DSTS`) and drive `DCTL.SFTDISCON`.
+//! TinyUSB runs the core without DMA on the ESP32-S3
+//! (`CFG_TUD_DWC2_DMA_ENABLE` = 0), so all data moves through the FIFO
+//! pages, which is what this model implements:
 //!
-//! Every other offset inside the `0x1000` window round-trips losslessly
-//! through a sparse map, so a driver that pokes registers we did not give
-//! explicit semantics still reads back what it wrote and nothing is
-//! silently dropped.
+//! * **OUT and SETUP** — the host side pushes packets into the shared
+//!   receive FIFO. Each entry is a status word popped through `GRXSTSP`
+//!   (`EPNUM`, `BCNT`, `PKTSTS`) followed by `BCNT` bytes read from the
+//!   endpoint-0 FIFO page. `GINTSTS.RXFLVL` is set while the FIFO holds an
+//!   entry. A SETUP arrives as `SETUP_RX` (8 bytes) + `SETUP_DONE`; OUT data
+//!   as `RX_DATA` + `RX_COMPLETE`, and the core has already counted the
+//!   packet out of `DOEPTSIZn` when the entry is visible, as on silicon.
+//! * **IN** — firmware sets `DIEPTSIZn` and `DIEPCTLn.EPENA`, then writes the
+//!   packet into the endpoint's FIFO page. The host takes one packet
+//!   (`min(XFRSIZ, MPS)` bytes) per IN token; when `PKTCNT` reaches 0 the
+//!   core clears `EPENA` and raises `DIEPINTn.XFRC`. `DIEPINTn.TXFE` reads 1
+//!   whenever the endpoint FIFO is empty, and `DTXFSTSn` reports the free
+//!   space, in words.
+//! * Endpoint interrupts reach `DAINT` through `DIEPMSK`/`DOEPMSK` (TXFE
+//!   through `DIEPEMPMSK`), and `GINTSTS.IEPINT/OEPINT` through `DAINTMSK`.
 //!
-//! ## Register layout (ESP32-S3 TRM "USB OTG" + Synopsys DWC2 map)
+//! ## The host
 //!
-//! | Offset | Name      | Dir | Behaviour |
-//! |-------:|-----------|-----|-----------|
-//! | 0x000  | GOTGCTL   | R/W | OTG control; round-trips, `BSESVLD|ASESVLD|CONIDSTS` forced for liveness |
-//! | 0x004  | GOTGINT   | R/W1C | OTG interrupt; W1C |
-//! | 0x008  | GAHBCFG   | R/W | AHB config; bit 0 = global interrupt enable (GINTMSK) |
-//! | 0x00C  | GUSBCFG   | R/W | USB config; round-trips |
-//! | 0x010  | GRSTCTL   | R/W | bit 0 CSRST self-clears; bit 31 AHBIDLE reads 1 |
-//! | 0x014  | GINTSTS   | R/W1C | interrupt status (CURMOD/USBRST/ENUMDONE/RXFLVL...) |
-//! | 0x018  | GINTMSK   | R/W | interrupt mask |
-//! | 0x01C  | GRXSTSR   | RO  | receive status debug read (top of FIFO, 0 — no PHY) |
-//! | 0x020  | GRXSTSP   | RO  | receive status pop (0 — no PHY) |
-//! | 0x024  | GRXFSIZ   | R/W | receive FIFO size |
-//! | 0x028  | GNPTXFSIZ | R/W | non-periodic TX FIFO size |
-//! | 0x02C  | GNPTXSTS  | RO  | non-periodic TX FIFO/queue status (always "space available") |
-//! | 0x040  | GSNPSID   | RO  | Synopsys release id constant ([`GSNPSID_VALUE`]) |
-//! | 0x044  | GHWCFG1   | RO  | endpoint-direction capability word |
-//! | 0x048  | GHWCFG2   | RO  | architecture / HS-PHY / #endpoints |
-//! | 0x04C  | GHWCFG3   | RO  | FIFO depth / feature word |
-//! | 0x050  | GHWCFG4   | RO  | misc capability word |
-//! | 0x800  | DCFG      | R/W | device config |
-//! | 0x804  | DCTL      | R/W | device control; bit 1 SFTDISCON |
-//! | 0x808  | DSTS      | RO  | device status; ENUMSPD = full speed, not suspended |
-//! | 0x818  | DAINT     | RO  | device all-endpoints interrupt (0 — no traffic) |
-//! | 0x81C  | DAINTMSK  | R/W | device all-endpoints interrupt mask |
-//! | 0x820  | DAENA*    | R/W | (alias kept for round-trip; see note) |
+//! Once the core is configured (`GAHBCFG.GINTMSK` set, `DCTL.SDIS` clear),
+//! the host attaches, waits a debounce, drives a bus reset (`USBRST`, then
+//! `ENUMDNE` with `DSTS.ENUMSPD` = full speed 48 MHz) and enumerates the
+//! device the way an OS does ([`crate::peripherals::usb_host`]). When a
+//! console reader is attached (`labwired test` / `run` capture), it then
+//! does what a terminal does when it opens the first CDC-ACM port it finds
+//! in the configuration descriptor — `SET_LINE_CODING` 115200 8N1 and
+//! `SET_CONTROL_LINE_STATE` DTR|RTS — and reads every bulk IN endpoint into
+//! the console. Nothing about the device is assumed: a firmware that never
+//! connects, or that describes no CDC interface, is never read.
 //!
-//! ## Liveness / no-PHY limitation
+//! Not modelled: DMA mode, isochronous and interrupt-IN timing (frames are
+//! not scheduled; IN tokens are served as soon as data is in the FIFO),
+//! data-toggle errors, suspend/resume and remote wakeup, OTG host mode.
 //!
-//! **There is no real USB host, cable, or PHY attached in the simulator.**
-//! We therefore model only *register liveness*, not packet traffic:
-//!   * `GRSTCTL.CSRST` completes instantly (`AHBIDLE` always 1) so a reset
-//!     poll loop exits immediately;
-//!   * `GSNPSID`/`GHWCFG*` are fixed constants so capability probing works;
-//!   * `GNPTXSTS`/`DSTS` advertise idle-but-ready status so a driver never
-//!     spins waiting on FIFO space or a speed-enumeration that will not come
-//!     from a phantom host;
-//!   * after a core soft reset we *optionally* latch a benign
-//!     `USBRST → ENUMDONE` sequence into `GINTSTS` (gated on `GINTMSK`) so a
-//!     driver's enumeration state machine progresses one step instead of
-//!     hanging. This is **synthetic** liveness, not a modelled bus reset.
-//!
-//! No FIFO data path, no actual endpoint transfers, and no token/SOF timing
-//! are modelled. The block never touches any other peripheral.
+//! [`UsbSerialJtag`]: crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag
 
+use crate::peripherals::usb_host::{
+    after_control, enumeration_script, HostStep, Setup, UsbHostLog,
+};
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
-use std::collections::HashMap;
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
 
-const DEFERRED_WAKE_TOKEN: u32 = 1;
+const HOST_EVENT_TOKEN: u32 = 1;
 
 /// `ETS_USB_INTR_SOURCE` — DWC OTG core interrupt (interrupt matrix source).
-pub const USB_OTG_SOURCE: u32 = 23;
+pub const USB_OTG_SOURCE: u32 = 38;
 
 // ── Core Global register offsets (Synopsys DWC2 map; S3 TRM "USB OTG") ──
 const GOTGCTL: u64 = 0x000;
@@ -98,93 +82,251 @@ const GINTMSK: u64 = 0x018;
 const GRXSTSR: u64 = 0x01C;
 const GRXSTSP: u64 = 0x020;
 const GRXFSIZ: u64 = 0x024;
-const GNPTXFSIZ: u64 = 0x028;
+const GNPTXFSIZ: u64 = 0x028; // also DIEPTXF0
 const GNPTXSTS: u64 = 0x02C;
 const GSNPSID: u64 = 0x040;
 const GHWCFG1: u64 = 0x044;
 const GHWCFG2: u64 = 0x048;
 const GHWCFG3: u64 = 0x04C;
 const GHWCFG4: u64 = 0x050;
+const DIEPTXF1: u64 = 0x104;
 
 // ── Device-mode core register offsets ──
 const DCFG: u64 = 0x800;
 const DCTL: u64 = 0x804;
 const DSTS: u64 = 0x808;
+const DIEPMSK: u64 = 0x810;
+const DOEPMSK: u64 = 0x814;
 const DAINT: u64 = 0x818;
 const DAINTMSK: u64 = 0x81C;
+const DIEPEMPMSK: u64 = 0x834;
+/// IN endpoint `n` registers: `DIEP_BASE + 0x20 * n` + {CTL 0, INT 8,
+/// TSIZ 0x10, TXFSTS 0x18}. OUT endpoints: `DOEP_BASE + 0x20 * n` + {CTL 0,
+/// INT 8, TSIZ 0x10}.
+const DIEP_BASE: u64 = 0x900;
+const DOEP_BASE: u64 = 0xB00;
+const EP_STRIDE: u64 = 0x20;
+/// First data FIFO page (endpoint 0); endpoint `n` is at `FIFO_BASE + 0x1000 * n`.
+const FIFO_BASE: u64 = 0x1000;
+const FIFO_PAGE: u64 = 0x1000;
 
-/// Size of the modelled MMIO window (one 4 KiB page from the core regs).
-pub const WINDOW_SIZE: u64 = 0x1000;
+/// Device endpoints (GHWCFG2.NUMDEVEPS + 1 = 7 on the S3).
+const NUM_EPS: usize = 7;
+
+/// Size of the modelled MMIO window: CSRs + one FIFO page per endpoint.
+pub const WINDOW_SIZE: u64 = FIFO_BASE + FIFO_PAGE * NUM_EPS as u64;
 
 // ── GRSTCTL bits ──
 const GRSTCTL_CSRST: u32 = 1 << 0; // core soft reset (self-clearing)
+const GRSTCTL_RXFFLSH: u32 = 1 << 4;
+const GRSTCTL_TXFFLSH: u32 = 1 << 5;
+const GRSTCTL_TXFNUM_SHIFT: u32 = 6;
 const GRSTCTL_AHBIDLE: u32 = 1 << 31; // AHB master idle (reads 1)
 
 // ── GAHBCFG bits ──
 const GAHBCFG_GINTMSK: u32 = 1 << 0; // global interrupt enable
 
-// ── GINTSTS / GINTMSK bits (subset we name) ──
-// CURMOD/RXFLVL are part of the documented register-bit map; named for the
-// integrator and tests even though the no-PHY model never latches them itself.
-#[allow(dead_code)]
-const GINTSTS_CURMOD: u32 = 1 << 0; // current mode of operation (1 = host)
-#[allow(dead_code)]
-const GINTSTS_RXFLVL: u32 = 1 << 4; // RX FIFO non-empty
+// ── GINTSTS / GINTMSK bits ──
+const GINTSTS_RXFLVL: u32 = 1 << 4; // RX FIFO non-empty (RO)
+const GINTSTS_NPTXFE: u32 = 1 << 5; // non-periodic TX FIFO empty (RO)
+const GINTSTS_GINAKEFF: u32 = 1 << 6; // global IN NAK effective (RO)
+const GINTSTS_BOUTNAKEFF: u32 = 1 << 7; // global OUT NAK effective (RO)
 const GINTSTS_USBRST: u32 = 1 << 12; // USB reset detected
 const GINTSTS_ENUMDONE: u32 = 1 << 13; // enumeration done
+const GINTSTS_IEPINT: u32 = 1 << 18; // IN endpoint interrupt (RO)
+const GINTSTS_OEPINT: u32 = 1 << 19; // OUT endpoint interrupt (RO)
+/// Bits the core derives from other state; writes do not clear them.
+const GINTSTS_DERIVED: u32 = GINTSTS_RXFLVL
+    | GINTSTS_NPTXFE
+    | GINTSTS_GINAKEFF
+    | GINTSTS_BOUTNAKEFF
+    | GINTSTS_IEPINT
+    | GINTSTS_OEPINT;
 
-/// Synopsys release id reported by `GSNPSID`. A plausible DWC2 release
-/// ("OT" + version 4.00a) matching what TinyUSB's dwc2 port accepts.
+// ── DCTL bits ──
+const DCTL_SDIS: u32 = 1 << 1; // soft disconnect
+const DCTL_SGINAK: u32 = 1 << 7;
+const DCTL_CGINAK: u32 = 1 << 8;
+const DCTL_SGONAK: u32 = 1 << 9;
+const DCTL_CGONAK: u32 = 1 << 10;
+/// Write-only strobes: never stored.
+const DCTL_STROBES: u32 = DCTL_SGINAK | DCTL_CGINAK | DCTL_SGONAK | DCTL_CGONAK;
+
+// ── DIEPCTLn / DOEPCTLn bits ──
+const EPCTL_EPENA: u32 = 1 << 31;
+const EPCTL_EPDIS: u32 = 1 << 30;
+const EPCTL_SNAK: u32 = 1 << 27;
+const EPCTL_CNAK: u32 = 1 << 26;
+const EPCTL_STALL: u32 = 1 << 21;
+const EPCTL_NAKSTS: u32 = 1 << 17;
+const EPCTL_TYPE_SHIFT: u32 = 18;
+const EPCTL_TYPE_BULK: u32 = 2;
+
+// ── DIEPINTn / DOEPINTn bits ──
+const EPINT_XFRC: u32 = 1 << 0;
+const EPINT_EPDISD: u32 = 1 << 1;
+const DOEPINT_STUP: u32 = 1 << 3;
+const DIEPINT_INEPNE: u32 = 1 << 6;
+const DIEPINT_TXFE: u32 = 1 << 7; // RO: TX FIFO empty
+
+// ── DIEPTSIZn / DOEPTSIZn fields ──
+const TSIZ_XFRSIZ_MASK: u32 = 0x7_FFFF;
+const TSIZ_PKTCNT_SHIFT: u32 = 19;
+const TSIZ_PKTCNT_MASK: u32 = 0x3FF;
+
+// ── GRXSTSP fields / packet status ──
+const PKTSTS_RX_DATA: u32 = 2;
+const PKTSTS_RX_COMPLETE: u32 = 3;
+const PKTSTS_SETUP_DONE: u32 = 4;
+const PKTSTS_SETUP_RX: u32 = 6;
+
+/// Synopsys release id reported by `GSNPSID` ("OT" + 4.00a). TinyUSB's dwc2
+/// port asserts the "OT" id and, below 4.20a, polls `GRSTCTL.CSRST` clear.
 pub const GSNPSID_VALUE: u32 = 0x4F54_400A;
 
-// Hardware-capability words. Plausible full-speed S3 OTG values: device+host
-// capable internal FS PHY core. The exact bitfields are vendor-configured;
-// these are stable read-back constants for capability probing, not a claim
-// of bit-perfect TRM fidelity.
+// Hardware-capability words of the S3 full-speed OTG core. GHWCFG2 carries
+// what the driver reads back: NUMDEVEPS[13:10] = 6 (7 endpoints), FS PHY
+// type 1 (bits 9:8), no HS PHY (bits 7:6), internal-DMA architecture.
 pub const GHWCFG1_VALUE: u32 = 0x0000_0000;
 pub const GHWCFG2_VALUE: u32 = 0x224D_D930;
 pub const GHWCFG3_VALUE: u32 = 0x0200_1E58;
 pub const GHWCFG4_VALUE: u32 = 0xDFF0_5E08;
 
-/// `DSTS` value: ENUMSPD = full speed (`0b01` in bits[2:1]), not suspended.
-const DSTS_FULL_SPEED: u32 = 0b01 << 1;
+/// `DSTS.ENUMSPD` (bits 2:1) = 3: full speed, 48 MHz PHY clock.
+const DSTS_ENUMSPD_FS48: u32 = 0b11 << 1;
 
-/// `GNPTXSTS` value: report ample non-periodic TX FIFO space + free queue
-/// slots so a driver never blocks waiting on a phantom host to drain.
-const GNPTXSTS_READY: u32 = 0x0008_0200;
+/// Control endpoint max packet size used by every arduino-esp32 build.
+const EP0_MPS: usize = 64;
 
-/// ESP32-S3 DWC_otg USB 2.0 OTG core (full-speed), register-level twin.
+/// Host timing (shortened from the USB 2.0 minimums to save simulated time).
+const ATTACH_DEBOUNCE_US: u64 = 2_000;
+const BUS_RESET_US: u64 = 1_000;
+const HOST_GAP_US: u64 = 20;
+const HOST_TIMEOUT_US: u64 = 500_000;
+/// While the host waits on the device it looks again this often, as a host
+/// controller retries a NAKed token within the frame. The one armed wake is
+/// not pulled earlier by MMIO writes, so this bounds the reaction time.
+const HOST_POLL_US: u64 = 50;
+/// Fallback core clock when the bus does not publish one (S3 = 240 MHz).
+const DEFAULT_CPU_HZ: u64 = 240_000_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    /// Waiting for the device to connect (core configured, SDIS clear).
+    Detached,
+    Debounce {
+        until: u64,
+    },
+    /// Bus reset in progress; ENUMDNE follows at `until`.
+    Resetting {
+        until: u64,
+    },
+    /// Reset signalled; waiting for firmware to service USBRST/ENUMDNE.
+    AwaitReset {
+        started: u64,
+    },
+    /// Between transactions.
+    Idle {
+        until: u64,
+    },
+    /// Control transfer in progress.
+    Ctl {
+        stage: CtlStage,
+        started: u64,
+    },
+    /// Script done; only the console reader runs.
+    Done,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CtlStage {
+    /// SETUP queued; waiting for firmware to pop SETUP_DONE.
+    Setup,
+    Data,
+    Status,
+}
+
+/// One entry of the shared receive FIFO.
+#[derive(Debug, Clone)]
+struct RxEntry {
+    status: u32,
+    data: Vec<u8>,
+}
+
+#[derive(Debug, Default, Clone)]
+struct InEp {
+    ctl: u32,
+    int: u32,
+    tsiz: u32,
+    /// Bytes written into this endpoint's TX FIFO page, as words.
+    fifo: VecDeque<u8>,
+    /// FIFO depth in words (DIEPTXFn.INEPTXFD), 0 = not allocated.
+    depth_words: u32,
+}
+
+#[derive(Debug, Default, Clone)]
+struct OutEp {
+    ctl: u32,
+    int: u32,
+    tsiz: u32,
+}
+
+/// ESP32-S3 DWC_otg USB 2.0 OTG core (full-speed), device mode.
 pub struct Esp32s3UsbOtg {
-    /// Interrupt-matrix source raised via `explicit_irqs` (= 23).
+    /// Interrupt-matrix source raised via `explicit_irqs` (= 38).
     source_id: u32,
 
-    // ── Named global registers with semantics ──
     gotgctl: u32,
     gotgint: u32,
     gahbcfg: u32,
     gusbcfg: u32,
+    /// Latched (W1C) GINTSTS bits; RXFLVL/IEPINT/OEPINT are derived.
     gintsts: u32,
     gintmsk: u32,
     grxfsiz: u32,
     gnptxfsiz: u32,
-
-    // ── Named device registers with semantics ──
     dcfg: u32,
     dctl: u32,
+    diepmsk: u32,
+    doepmsk: u32,
     daintmsk: u32,
+    diepempmsk: u32,
+    gonak: bool,
+    ginak: bool,
+    ep_in: [InEp; NUM_EPS],
+    ep_out: [OutEp; NUM_EPS],
+    /// Shared receive FIFO. Interior mutability: popping `GRXSTSP` and
+    /// reading the FIFO page are read side effects, as on silicon.
+    rx_fifo: RefCell<VecDeque<RxEntry>>,
+    /// Data of the entry last popped through `GRXSTSP`, read out of the FIFO.
+    rx_data: RefCell<VecDeque<u8>>,
+    /// Upper bytes of a FIFO word read one byte at a time.
+    rx_word_latch: Cell<u32>,
+    /// Set when firmware pops a SETUP_DONE entry (the SETUP was taken).
+    setup_taken: Cell<bool>,
 
     /// Lossless round-trip store for every other in-window word offset.
     other: HashMap<u64, u32>,
 
-    /// Synthetic-liveness flag: a core soft reset was just performed; the
-    /// next `tick()` latches the benign USBRST→ENUMDONE sequence.
-    pending_reset_seq: bool,
-    /// Has the ENUMDONE half of the synthetic sequence been latched yet?
-    enumdone_latched: bool,
+    // ── Host ──
+    host_enabled: bool,
+    phase: Phase,
+    script: VecDeque<HostStep>,
+    /// Requests queued once enumeration has run dry (the terminal opening
+    /// the CDC port).
+    after_enum: VecDeque<HostStep>,
+    current: Option<Setup>,
+    ctl_buf: Vec<u8>,
+    out_sent: usize,
+    log: UsbHostLog,
+    cdc_opened: bool,
+    sink: Option<Arc<Mutex<Vec<u8>>>>,
 
-    /// Bus-published cycle clock (walk-free deferred work).
+    // ── Time ──
     clock: Option<CycleClock>,
-    /// Event armed for one-tick deferred work.
+    ticked: u64,
+    cpu_hz: u64,
+    /// A host event is armed in the scheduler.
     scheduled: bool,
 }
 
@@ -192,42 +334,195 @@ impl std::fmt::Debug for Esp32s3UsbOtg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Esp32s3UsbOtg(src={}, gintsts=0x{:08x}, gintmsk=0x{:08x}, gahbcfg=0x{:08x})",
-            self.source_id, self.gintsts, self.gintmsk, self.gahbcfg,
+            "Esp32s3UsbOtg(src={}, gintsts=0x{:08x}, gintmsk=0x{:08x}, phase={:?})",
+            self.source_id,
+            self.gintsts_view(),
+            self.gintmsk,
+            self.phase,
         )
+    }
+}
+
+fn tsiz_pktcnt(tsiz: u32) -> u32 {
+    (tsiz >> TSIZ_PKTCNT_SHIFT) & TSIZ_PKTCNT_MASK
+}
+
+fn tsiz_xfrsiz(tsiz: u32) -> u32 {
+    tsiz & TSIZ_XFRSIZ_MASK
+}
+
+fn tsiz_set(tsiz: u32, xfrsiz: u32, pktcnt: u32) -> u32 {
+    (tsiz & !(TSIZ_XFRSIZ_MASK | (TSIZ_PKTCNT_MASK << TSIZ_PKTCNT_SHIFT)))
+        | (xfrsiz & TSIZ_XFRSIZ_MASK)
+        | ((pktcnt & TSIZ_PKTCNT_MASK) << TSIZ_PKTCNT_SHIFT)
+}
+
+/// Endpoint max packet size from DxEPCTLn (EP0 uses a 2-bit code).
+fn ep_mps(ep: usize, ctl: u32) -> usize {
+    if ep == 0 {
+        match ctl & 3 {
+            0 => 64,
+            1 => 32,
+            2 => 16,
+            _ => 8,
+        }
+    } else {
+        (ctl & 0x7FF) as usize
     }
 }
 
 impl Esp32s3UsbOtg {
     /// Construct the OTG core. `source_id` is the interrupt-matrix source the
-    /// core asserts (the integrator passes `ETS_USB_INTR_SOURCE = 23`).
+    /// core asserts (the integrator passes `ETS_USB_INTR_SOURCE = 38`).
     pub fn new(source_id: u32) -> Self {
         Self {
             source_id,
-            // Liveness defaults: force valid-session + device-mode connection
-            // id so OTG capability reads look like an attached B-session.
-            // CONIDSTS(bit16) | BSESVLD(bit19) | ASESVLD(bit18).
+            // CONIDSTS(bit16) = B-device, ASESVLD(18) | BSESVLD(19): the
+            // board's VBUS is present (bus-powered from the host).
             gotgctl: (1 << 16) | (1 << 18) | (1 << 19),
             gotgint: 0,
             gahbcfg: 0,
             gusbcfg: 0,
-            // CURMOD reflects current mode; default device mode (0). We keep a
-            // stable value here and never spuriously toggle it.
             gintsts: 0,
             gintmsk: 0,
             grxfsiz: 0x0000_0100,
             gnptxfsiz: 0x0100_0100,
             dcfg: 0,
-            dctl: 0,
+            // Soft-disconnected until firmware connects (DCTL reset value).
+            dctl: DCTL_SDIS,
+            diepmsk: 0,
+            doepmsk: 0,
             daintmsk: 0,
+            diepempmsk: 0,
+            gonak: false,
+            ginak: false,
+            ep_in: Default::default(),
+            ep_out: Default::default(),
+            rx_fifo: RefCell::new(VecDeque::new()),
+            rx_data: RefCell::new(VecDeque::new()),
+            rx_word_latch: Cell::new(0),
+            setup_taken: Cell::new(false),
             other: HashMap::new(),
-            pending_reset_seq: false,
-            enumdone_latched: false,
-
+            host_enabled: true,
+            phase: Phase::Detached,
+            script: enumeration_script(),
+            after_enum: VecDeque::new(),
+            current: None,
+            ctl_buf: Vec::new(),
+            out_sent: 0,
+            log: UsbHostLog::default(),
+            cdc_opened: false,
+            sink: None,
             clock: None,
+            ticked: 0,
+            cpu_hz: DEFAULT_CPU_HZ,
             scheduled: false,
         }
     }
+
+    /// Route bytes the device sends on its bulk IN endpoints (CDC data) to a
+    /// console capture sink. With a sink attached the host also opens the
+    /// device's first CDC-ACM port after enumeration, as a terminal does.
+    pub fn set_sink(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>) {
+        self.sink = sink;
+    }
+
+    /// Disconnect the simulated host (no enumeration will happen).
+    pub fn set_host_enabled(&mut self, on: bool) {
+        self.host_enabled = on;
+    }
+
+    pub fn host_log(&self) -> &UsbHostLog {
+        &self.log
+    }
+
+    // ── Time ──
+
+    fn now(&self) -> u64 {
+        match &self.clock {
+            Some(c) => c.now().max(self.ticked),
+            None => self.ticked,
+        }
+    }
+
+    fn us(&self, us: u64) -> u64 {
+        (self.cpu_hz / 1_000_000).max(1) * us
+    }
+
+    /// The next look while waiting on the device: one poll interval from
+    /// `now`, or the `deadline` if that comes first.
+    fn poll_until(&self, now: u64, deadline: u64) -> u64 {
+        deadline.min(now + self.us(HOST_POLL_US))
+    }
+
+    // ── Derived status ──
+
+    fn ep_in_int_view(&self, n: usize) -> u32 {
+        let ep = &self.ep_in[n];
+        let txfe = if ep.fifo.is_empty() { DIEPINT_TXFE } else { 0 };
+        ep.int | txfe
+    }
+
+    fn daint(&self) -> u32 {
+        let mut v = 0;
+        for n in 0..NUM_EPS {
+            let mut mask = self.diepmsk & !DIEPINT_TXFE;
+            if self.diepempmsk & (1 << n) != 0 {
+                mask |= DIEPINT_TXFE;
+            }
+            if self.ep_in_int_view(n) & mask != 0 {
+                v |= 1 << n;
+            }
+            if self.ep_out[n].int & self.doepmsk != 0 {
+                v |= 1 << (16 + n);
+            }
+        }
+        v
+    }
+
+    fn gintsts_view(&self) -> u32 {
+        let mut v = self.gintsts & !GINTSTS_DERIVED;
+        if !self.rx_fifo.borrow().is_empty() {
+            v |= GINTSTS_RXFLVL;
+        }
+        if self.ep_in[0].fifo.is_empty() {
+            v |= GINTSTS_NPTXFE;
+        }
+        if self.ginak {
+            v |= GINTSTS_GINAKEFF;
+        }
+        if self.gonak {
+            v |= GINTSTS_BOUTNAKEFF;
+        }
+        let daint = self.daint() & self.daintmsk;
+        if daint & 0xFFFF != 0 {
+            v |= GINTSTS_IEPINT;
+        }
+        if daint >> 16 != 0 {
+            v |= GINTSTS_OEPINT;
+        }
+        v
+    }
+
+    fn irq_pending(&self) -> bool {
+        self.gahbcfg & GAHBCFG_GINTMSK != 0 && self.gintsts_view() & self.gintmsk != 0
+    }
+
+    fn connected(&self) -> bool {
+        self.gahbcfg & GAHBCFG_GINTMSK != 0 && self.dctl & DCTL_SDIS == 0
+    }
+
+    fn tx_fifo_free_words(&self, n: usize) -> u32 {
+        let ep = &self.ep_in[n];
+        let depth = if ep.depth_words != 0 {
+            ep.depth_words
+        } else {
+            (EP0_MPS / 4) as u32
+        };
+        depth.saturating_sub(ep.fifo.len().div_ceil(4) as u32)
+    }
+
+    // ── Register file ──
 
     /// Side-effect-free 32-bit register read.
     fn read_word(&self, offset: u64) -> u32 {
@@ -236,17 +531,15 @@ impl Esp32s3UsbOtg {
             GOTGINT => self.gotgint,
             GAHBCFG => self.gahbcfg,
             GUSBCFG => self.gusbcfg,
-            // CSRST always reads back cleared (self-clearing); AHBIDLE = 1.
+            // Resets and flushes complete at once; AHB master always idle.
             GRSTCTL => GRSTCTL_AHBIDLE,
-            GINTSTS => self.gintsts,
+            GINTSTS => self.gintsts_view(),
             GINTMSK => self.gintmsk,
-            // No PHY: the receive-status FIFO is always empty.
-            GRXSTSR | GRXSTSP => 0,
+            GRXSTSR | GRXSTSP => self.rx_fifo.borrow().front().map(|e| e.status).unwrap_or(0),
             GRXFSIZ => self.grxfsiz,
             GNPTXFSIZ => self.gnptxfsiz,
-            // RO: always report TX space + queue slots available.
-            GNPTXSTS => GNPTXSTS_READY,
-            // RO capability constants.
+            // EP0 TX FIFO space (words) + 8 free request-queue slots.
+            GNPTXSTS => (8 << 16) | self.tx_fifo_free_words(0),
             GSNPSID => GSNPSID_VALUE,
             GHWCFG1 => GHWCFG1_VALUE,
             GHWCFG2 => GHWCFG2_VALUE,
@@ -254,106 +547,693 @@ impl Esp32s3UsbOtg {
             GHWCFG4 => GHWCFG4_VALUE,
             DCFG => self.dcfg,
             DCTL => self.dctl,
-            // RO: full-speed, not suspended.
-            DSTS => DSTS_FULL_SPEED,
-            // RO: no endpoint interrupts pending (no traffic).
-            DAINT => 0,
+            // Full speed, not suspended; FNSOF[21:8] from the 1 ms frame clock.
+            DSTS => {
+                let frame = (self.now() / self.us(1000)) as u32 & 0x3FFF;
+                DSTS_ENUMSPD_FS48 | (frame << 8)
+            }
+            DIEPMSK => self.diepmsk,
+            DOEPMSK => self.doepmsk,
+            DAINT => self.daint(),
             DAINTMSK => self.daintmsk,
+            DIEPEMPMSK => self.diepempmsk,
+            o if (DIEP_BASE..DIEP_BASE + EP_STRIDE * NUM_EPS as u64).contains(&o) => {
+                let n = ((o - DIEP_BASE) / EP_STRIDE) as usize;
+                let ep = &self.ep_in[n];
+                match (o - DIEP_BASE) % EP_STRIDE {
+                    0x00 => {
+                        let nak = if ep.ctl & EPCTL_SNAK != 0 {
+                            EPCTL_NAKSTS
+                        } else {
+                            0
+                        };
+                        (ep.ctl & !(EPCTL_SNAK | EPCTL_CNAK)) | nak
+                    }
+                    0x08 => self.ep_in_int_view(n),
+                    0x10 => ep.tsiz,
+                    0x18 => self.tx_fifo_free_words(n),
+                    _ => self.other.get(&o).copied().unwrap_or(0),
+                }
+            }
+            o if (DOEP_BASE..DOEP_BASE + EP_STRIDE * NUM_EPS as u64).contains(&o) => {
+                let n = ((o - DOEP_BASE) / EP_STRIDE) as usize;
+                let ep = &self.ep_out[n];
+                match (o - DOEP_BASE) % EP_STRIDE {
+                    0x00 => {
+                        let nak = if ep.ctl & EPCTL_SNAK != 0 {
+                            EPCTL_NAKSTS
+                        } else {
+                            0
+                        };
+                        (ep.ctl & !(EPCTL_SNAK | EPCTL_CNAK)) | nak
+                    }
+                    0x08 => ep.int,
+                    0x10 => ep.tsiz,
+                    _ => self.other.get(&o).copied().unwrap_or(0),
+                }
+            }
             _ => self.other.get(&offset).copied().unwrap_or(0),
         }
+    }
+
+    /// Pop one word out of the receive FIFO (endpoint-0 FIFO page read).
+    fn pop_rx_word(&self) -> u32 {
+        let mut data = self.rx_data.borrow_mut();
+        let mut w = 0u32;
+        for i in 0..4 {
+            if let Some(b) = data.pop_front() {
+                w |= (b as u32) << (8 * i);
+            }
+        }
+        w
+    }
+
+    /// Pop the receive-status word (`GRXSTSP`), exposing its data.
+    fn pop_rx_status(&self) -> u32 {
+        let Some(entry) = self.rx_fifo.borrow_mut().pop_front() else {
+            return 0;
+        };
+        let pktsts = (entry.status >> 17) & 0xF;
+        if pktsts == PKTSTS_SETUP_DONE {
+            self.setup_taken.set(true);
+        }
+        *self.rx_data.borrow_mut() = entry.data.into();
+        entry.status
+    }
+
+    /// Read with side effects (GRXSTSP pop, FIFO pop). `byte` selects the
+    /// byte lane for a byte-wide access (`None` = whole word).
+    fn read_access(&self, offset: u64, byte: Option<u64>) -> u32 {
+        let word_off = offset & !3;
+        let lane = byte.unwrap_or(0);
+        if word_off >= FIFO_BASE {
+            // Every FIFO page reads the shared receive FIFO.
+            if lane == 0 {
+                self.rx_word_latch.set(self.pop_rx_word());
+            }
+            return self.rx_word_latch.get();
+        }
+        if word_off == GRXSTSP {
+            if lane == 0 {
+                self.rx_word_latch.set(self.pop_rx_status());
+            }
+            return self.rx_word_latch.get();
+        }
+        self.read_word(word_off)
+    }
+
+    fn flush_tx(&mut self, txfnum: u32) {
+        if txfnum == 0x10 {
+            self.ep_in.iter_mut().for_each(|e| e.fifo.clear());
+        } else if let Some(ep) = self.ep_in.get_mut(txfnum as usize) {
+            ep.fifo.clear();
+        }
+    }
+
+    fn write_in_ctl(&mut self, n: usize, value: u32) {
+        let ep = &mut self.ep_in[n];
+        let mut ctl = value & !(EPCTL_SNAK | EPCTL_CNAK | EPCTL_EPDIS | EPCTL_NAKSTS);
+        // NAK state is sticky: SNAK sets it, CNAK clears it.
+        let mut nak = ep.ctl & EPCTL_SNAK;
+        if value & EPCTL_SNAK != 0 {
+            nak = EPCTL_SNAK;
+            ep.int |= DIEPINT_INEPNE;
+        }
+        if value & EPCTL_CNAK != 0 {
+            nak = 0;
+        }
+        ctl |= nak;
+        if value & EPCTL_EPDIS != 0 && ep.ctl & EPCTL_EPENA != 0 {
+            ctl &= !EPCTL_EPENA;
+            ep.int |= EPINT_EPDISD;
+        }
+        ep.ctl = ctl;
+    }
+
+    fn write_out_ctl(&mut self, n: usize, value: u32) {
+        let ep = &mut self.ep_out[n];
+        let mut ctl = value & !(EPCTL_SNAK | EPCTL_CNAK | EPCTL_EPDIS | EPCTL_NAKSTS);
+        let mut nak = ep.ctl & EPCTL_SNAK;
+        if value & EPCTL_SNAK != 0 {
+            nak = EPCTL_SNAK;
+        }
+        if value & EPCTL_CNAK != 0 {
+            nak = 0;
+        }
+        ctl |= nak;
+        if value & EPCTL_EPDIS != 0 && ep.ctl & EPCTL_EPENA != 0 {
+            ctl &= !EPCTL_EPENA;
+            ep.int |= EPINT_EPDISD;
+        }
+        ep.ctl = ctl;
     }
 
     /// 32-bit register write with the per-register semantics.
     fn write_word(&mut self, offset: u64, value: u32) {
         match offset {
-            // Keep the forced liveness bits asserted regardless of writes.
-            GOTGCTL => {
-                self.gotgctl = value | (1 << 16) | (1 << 18) | (1 << 19);
-            }
-            // GOTGINT is W1C.
+            // VBUS stays present regardless of writes.
+            GOTGCTL => self.gotgctl = value | (1 << 16) | (1 << 18) | (1 << 19),
             GOTGINT => self.gotgint &= !value,
             GAHBCFG => self.gahbcfg = value,
             GUSBCFG => self.gusbcfg = value,
             GRSTCTL => {
-                // CSRST self-clears: accept the request, schedule the benign
-                // USBRST→ENUMDONE liveness sequence, but never store the bit.
                 if value & GRSTCTL_CSRST != 0 {
-                    self.pending_reset_seq = true;
-                    self.enumdone_latched = false;
+                    self.core_soft_reset();
                 }
-                // All other GRSTCTL bits are momentary/self-clearing too; we
-                // intentionally do not retain them (reads return AHBIDLE only).
+                if value & GRSTCTL_RXFFLSH != 0 {
+                    self.rx_fifo.borrow_mut().clear();
+                    self.rx_data.borrow_mut().clear();
+                }
+                if value & GRSTCTL_TXFFLSH != 0 {
+                    self.flush_tx((value >> GRSTCTL_TXFNUM_SHIFT) & 0x1F);
+                }
             }
-            // GINTSTS is W1C: writing 1 clears the corresponding pending bit.
-            GINTSTS => self.gintsts &= !value,
+            GINTSTS => self.gintsts &= !(value & !GINTSTS_DERIVED),
             GINTMSK => self.gintmsk = value,
             GRXFSIZ => self.grxfsiz = value,
-            GNPTXFSIZ => self.gnptxfsiz = value,
+            GNPTXFSIZ => {
+                self.gnptxfsiz = value;
+                self.ep_in[0].depth_words = value >> 16;
+            }
             DCFG => self.dcfg = value,
-            DCTL => self.dctl = value,
+            DCTL => {
+                if value & DCTL_SGONAK != 0 {
+                    self.gonak = true;
+                }
+                if value & DCTL_CGONAK != 0 {
+                    self.gonak = false;
+                }
+                if value & DCTL_SGINAK != 0 {
+                    self.ginak = true;
+                }
+                if value & DCTL_CGINAK != 0 {
+                    self.ginak = false;
+                }
+                self.dctl = value & !DCTL_STROBES;
+            }
+            DIEPMSK => self.diepmsk = value,
+            DOEPMSK => self.doepmsk = value,
             DAINTMSK => self.daintmsk = value,
-            // Read-only registers: ignore writes (no error, no store) so a
-            // driver that does a blind read-modify-write does not corrupt them.
-            GRXSTSR | GRXSTSP | GNPTXSTS | GSNPSID | GHWCFG1 | GHWCFG2 | GHWCFG3 | GHWCFG4
-            | DSTS | DAINT => {}
-            // Everything else in-window: lossless round-trip.
+            DIEPEMPMSK => self.diepempmsk = value,
+            GRXSTSR | GRXSTSP | GSNPSID | GHWCFG1 | GHWCFG2 | GHWCFG3 | GHWCFG4 | DSTS | DAINT
+            | GNPTXSTS => {}
+            o if (DIEPTXF1..DIEPTXF1 + 4 * (NUM_EPS as u64 - 1)).contains(&o) => {
+                let n = 1 + ((o - DIEPTXF1) / 4) as usize;
+                self.ep_in[n].depth_words = value >> 16;
+                self.other.insert(o, value);
+            }
+            o if (DIEP_BASE..DIEP_BASE + EP_STRIDE * NUM_EPS as u64).contains(&o) => {
+                let n = ((o - DIEP_BASE) / EP_STRIDE) as usize;
+                match (o - DIEP_BASE) % EP_STRIDE {
+                    0x00 => self.write_in_ctl(n, value),
+                    // W1C; TXFE is read-only.
+                    0x08 => self.ep_in[n].int &= !(value & !DIEPINT_TXFE),
+                    0x10 => self.ep_in[n].tsiz = value,
+                    0x18 => {}
+                    _ => {
+                        self.other.insert(o, value);
+                    }
+                }
+            }
+            o if (DOEP_BASE..DOEP_BASE + EP_STRIDE * NUM_EPS as u64).contains(&o) => {
+                let n = ((o - DOEP_BASE) / EP_STRIDE) as usize;
+                match (o - DOEP_BASE) % EP_STRIDE {
+                    0x00 => self.write_out_ctl(n, value),
+                    0x08 => self.ep_out[n].int &= !value,
+                    0x10 => self.ep_out[n].tsiz = value,
+                    _ => {
+                        self.other.insert(o, value);
+                    }
+                }
+            }
             _ => {
                 self.other.insert(offset, value);
             }
+        }
+    }
+
+    /// `GRSTCTL.CSRST`: clears the interrupt and FIFO state of the core
+    /// (the CSRs that configure the PHY and AHB survive, databook §5.3.4).
+    fn core_soft_reset(&mut self) {
+        self.gintsts = 0;
+        self.rx_fifo.borrow_mut().clear();
+        self.rx_data.borrow_mut().clear();
+        for ep in self.ep_in.iter_mut() {
+            ep.fifo.clear();
+            ep.ctl &= !EPCTL_EPENA;
+            ep.int = 0;
+        }
+        for ep in self.ep_out.iter_mut() {
+            ep.ctl &= !EPCTL_EPENA;
+            ep.int = 0;
+        }
+        self.gonak = false;
+        self.ginak = false;
+    }
+
+    /// A word (or byte) written into endpoint `n`'s TX FIFO page.
+    fn push_tx(&mut self, n: usize, bytes: &[u8]) {
+        if let Some(ep) = self.ep_in.get_mut(n) {
+            ep.fifo.extend(bytes.iter().copied());
+        }
+    }
+
+    // ── Host-side bus transactions ──
+
+    /// Bus reset: what the core does on its own when it detects reset.
+    fn bus_reset(&mut self) {
+        self.gintsts |= GINTSTS_USBRST;
+        self.rx_fifo.borrow_mut().clear();
+        self.rx_data.borrow_mut().clear();
+        for ep in self.ep_in.iter_mut() {
+            ep.int = 0;
+        }
+        for ep in self.ep_out.iter_mut() {
+            ep.int = 0;
+        }
+        self.log.resets += 1;
+    }
+
+    /// SETUP token + 8 data bytes to endpoint 0 (always ACKed by the core).
+    fn deliver_setup(&mut self, setup: &Setup) {
+        // A SETUP clears an EP0 protocol stall (USB 2.0 §8.5.3.4).
+        self.ep_in[0].ctl &= !EPCTL_STALL;
+        self.ep_out[0].ctl &= !EPCTL_STALL;
+        self.setup_taken.set(false);
+        let mut rx = self.rx_fifo.borrow_mut();
+        rx.push_back(RxEntry {
+            status: (PKTSTS_SETUP_RX << 17) | (8 << 4),
+            data: setup.bytes().to_vec(),
+        });
+        rx.push_back(RxEntry {
+            status: PKTSTS_SETUP_DONE << 17,
+            data: Vec::new(),
+        });
+        drop(rx);
+        self.ep_out[0].int |= DOEPINT_STUP;
+    }
+
+    /// IN token to endpoint `n`: the next packet if the endpoint is enabled
+    /// and its FIFO holds the whole packet; `None` = NAK.
+    fn take_in(&mut self, n: usize) -> Option<Vec<u8>> {
+        let ep = &mut self.ep_in[n];
+        if ep.ctl & EPCTL_EPENA == 0 || ep.ctl & (EPCTL_SNAK | EPCTL_STALL) != 0 {
+            return None;
+        }
+        let pktcnt = tsiz_pktcnt(ep.tsiz);
+        if pktcnt == 0 {
+            return None;
+        }
+        let xfrsiz = tsiz_xfrsiz(ep.tsiz) as usize;
+        let len = xfrsiz.min(ep_mps(n, ep.ctl));
+        if ep.fifo.len() < len {
+            return None;
+        }
+        let data: Vec<u8> = ep.fifo.drain(..len).collect();
+        // The packet was pushed as whole words: drop the padding of the last.
+        let pad = (4 - len % 4) % 4;
+        let pad = pad.min(ep.fifo.len());
+        ep.fifo.drain(..pad);
+        ep.tsiz = tsiz_set(ep.tsiz, (xfrsiz - len) as u32, pktcnt - 1);
+        if pktcnt - 1 == 0 {
+            ep.ctl &= !EPCTL_EPENA;
+            ep.int |= EPINT_XFRC;
+        }
+        Some(data)
+    }
+
+    /// OUT token + data (one packet) to endpoint `n`; `None` = NAK.
+    fn give_out(&mut self, n: usize, data: &[u8]) -> Option<usize> {
+        let ep = &mut self.ep_out[n];
+        if ep.ctl & EPCTL_EPENA == 0 || ep.ctl & (EPCTL_SNAK | EPCTL_STALL) != 0 || self.gonak {
+            return None;
+        }
+        let pktcnt = tsiz_pktcnt(ep.tsiz);
+        if pktcnt == 0 {
+            return None;
+        }
+        let mps = ep_mps(n, ep.ctl);
+        let len = data.len().min(mps);
+        let xfrsiz = tsiz_xfrsiz(ep.tsiz) as usize;
+        let pktcnt = pktcnt - 1;
+        ep.tsiz = tsiz_set(ep.tsiz, xfrsiz.saturating_sub(len) as u32, pktcnt);
+        let done = pktcnt == 0 || len < mps;
+        if done {
+            ep.ctl &= !EPCTL_EPENA;
+        }
+        let mut rx = self.rx_fifo.borrow_mut();
+        rx.push_back(RxEntry {
+            status: (PKTSTS_RX_DATA << 17) | ((len as u32) << 4) | n as u32,
+            data: data[..len].to_vec(),
+        });
+        if done {
+            rx.push_back(RxEntry {
+                status: (PKTSTS_RX_COMPLETE << 17) | n as u32,
+                data: Vec::new(),
+            });
+        }
+        drop(rx);
+        if done {
+            self.ep_out[n].int |= EPINT_XFRC;
+        }
+        Some(len)
+    }
+
+    fn ep0_stalled(&self) -> bool {
+        (self.ep_in[0].ctl | self.ep_out[0].ctl) & EPCTL_STALL != 0
+    }
+
+    /// The first CDC-ACM communications interface (class 02, subclass 02)
+    /// in the configuration descriptor the host read.
+    fn cdc_acm_interface(&self) -> Option<u16> {
+        let cfg = &self.log.config_descriptor;
+        let mut i = 0;
+        while i + 1 < cfg.len() && cfg[i] >= 2 {
+            let d = &cfg[i..(i + cfg[i] as usize).min(cfg.len())];
+            if d[1] == 4 && d.len() >= 9 && d[5] == 0x02 && d[6] == 0x02 {
+                return Some(d[2] as u16);
+            }
+            i += cfg[i] as usize;
+        }
+        None
+    }
+
+    /// What a terminal does when it opens the port: SET_LINE_CODING
+    /// 115200 8N1, then SET_CONTROL_LINE_STATE DTR|RTS.
+    fn open_cdc_port(&mut self) {
+        if self.cdc_opened || self.sink.is_none() {
+            return;
+        }
+        let Some(itf) = self.cdc_acm_interface() else {
+            return;
+        };
+        self.cdc_opened = true;
+        self.after_enum.push_back(HostStep::Control(Setup {
+            bm_request_type: 0x21,
+            b_request: 0x20,
+            w_value: 0,
+            w_index: itf,
+            w_length: 7,
+            data: vec![0x00, 0xC2, 0x01, 0x00, 0x00, 0x00, 0x08],
+        }));
+        self.after_enum.push_back(HostStep::Control(Setup {
+            bm_request_type: 0x21,
+            b_request: 0x22,
+            w_value: 0x0003,
+            w_index: itf,
+            w_length: 0,
+            data: Vec::new(),
+        }));
+    }
+
+    /// The host side of the serial port: read every bulk IN endpoint.
+    fn service_console(&mut self) {
+        if self.sink.is_none() || !self.cdc_opened {
+            return;
+        }
+        for n in 1..NUM_EPS {
+            if (self.ep_in[n].ctl >> EPCTL_TYPE_SHIFT) & 3 != EPCTL_TYPE_BULK {
+                continue;
+            }
+            while let Some(data) = self.take_in(n) {
+                if let Some(sink) = &self.sink {
+                    if let Ok(mut s) = sink.lock() {
+                        s.extend_from_slice(&data);
+                    }
+                }
+            }
+        }
+    }
+
+    fn finish_control(&mut self, ok: bool) {
+        let Some(setup) = self.current.take() else {
+            return;
+        };
+        let data = std::mem::take(&mut self.ctl_buf);
+        if ok {
+            after_control(&mut self.log, &mut self.script, setup, data);
+            if self.script.is_empty() {
+                self.open_cdc_port();
+            }
+        } else {
+            self.log.control.push((setup, data, false));
+        }
+    }
+
+    fn abandon_control(&mut self, why: &str, now: u64) {
+        if let Some(s) = &self.current {
+            self.log.notes.push(format!(
+                "control {:02x} {:02x} {:04x} {why}",
+                s.bm_request_type, s.b_request, s.w_value
+            ));
+        }
+        self.finish_control(false);
+        self.phase = Phase::Idle {
+            until: now + self.us(HOST_GAP_US),
+        };
+    }
+
+    /// Advance the host as far as it can go now. Returns the cycle of the
+    /// next timed step, or `None` when it waits on the device (an MMIO write
+    /// wakes it) or has nothing left to do.
+    fn host_step(&mut self) -> Option<u64> {
+        if !self.host_enabled {
+            return None;
+        }
+        let now = self.now();
+        if !self.connected() {
+            self.phase = Phase::Detached;
+            return None;
+        }
+        // Several transitions can happen at one instant; bound the loop.
+        for _ in 0..16 {
+            match self.phase {
+                Phase::Detached => {
+                    self.phase = Phase::Debounce {
+                        until: now + self.us(ATTACH_DEBOUNCE_US),
+                    };
+                }
+                Phase::Debounce { until } | Phase::Resetting { until } if now < until => {
+                    return Some(until);
+                }
+                Phase::Debounce { .. } => {
+                    self.bus_reset();
+                    self.phase = Phase::Resetting {
+                        until: now + self.us(BUS_RESET_US),
+                    };
+                }
+                Phase::Resetting { .. } => {
+                    self.gintsts |= GINTSTS_ENUMDONE;
+                    self.phase = Phase::AwaitReset { started: now };
+                }
+                Phase::AwaitReset { started } => {
+                    if self.gintsts & (GINTSTS_USBRST | GINTSTS_ENUMDONE) != 0 {
+                        if now.saturating_sub(started) > self.us(HOST_TIMEOUT_US) {
+                            self.log
+                                .notes
+                                .push("device never serviced bus reset".into());
+                            self.phase = Phase::Done;
+                            return None;
+                        }
+                        return Some(self.poll_until(now, started + self.us(HOST_TIMEOUT_US) + 1));
+                    }
+                    self.phase = Phase::Idle {
+                        until: now + self.us(HOST_GAP_US),
+                    };
+                }
+                Phase::Idle { until } if now < until => return Some(until),
+                Phase::Idle { .. } => {
+                    let step = self
+                        .script
+                        .pop_front()
+                        .or_else(|| self.after_enum.pop_front());
+                    match step {
+                        Some(HostStep::Control(setup)) => {
+                            self.deliver_setup(&setup);
+                            self.current = Some(setup);
+                            self.ctl_buf.clear();
+                            self.out_sent = 0;
+                            self.phase = Phase::Ctl {
+                                stage: CtlStage::Setup,
+                                started: now,
+                            };
+                        }
+                        Some(HostStep::Wait { us }) => {
+                            self.phase = Phase::Idle {
+                                until: now + self.us(us),
+                            };
+                        }
+                        Some(other) => {
+                            self.log
+                                .notes
+                                .push(format!("{other:?}: not supported by this host"));
+                        }
+                        None => {
+                            self.phase = Phase::Done;
+                            self.service_console();
+                            return None;
+                        }
+                    }
+                }
+                Phase::Ctl { stage, started } => {
+                    let deadline = started + self.us(HOST_TIMEOUT_US);
+                    if now > deadline {
+                        self.abandon_control(&format!("timed out in {stage:?}"), now);
+                        continue;
+                    }
+                    if stage != CtlStage::Setup && self.ep0_stalled() {
+                        self.abandon_control("stalled", now);
+                        continue;
+                    }
+                    let Some(setup) = self.current.clone() else {
+                        self.phase = Phase::Idle { until: now };
+                        continue;
+                    };
+                    match stage {
+                        CtlStage::Setup => {
+                            if !self.setup_taken.get() {
+                                return Some(self.poll_until(now, deadline + 1));
+                            }
+                            self.phase = Phase::Ctl {
+                                stage: if setup.w_length == 0 {
+                                    CtlStage::Status
+                                } else {
+                                    CtlStage::Data
+                                },
+                                started,
+                            };
+                        }
+                        CtlStage::Data if setup.dir_in() => {
+                            let Some(chunk) = self.take_in(0) else {
+                                return Some(self.poll_until(now, deadline + 1));
+                            };
+                            let short = chunk.len() < EP0_MPS;
+                            self.ctl_buf.extend(chunk);
+                            if short || self.ctl_buf.len() >= setup.w_length as usize {
+                                self.phase = Phase::Ctl {
+                                    stage: CtlStage::Status,
+                                    started,
+                                };
+                            }
+                        }
+                        CtlStage::Data => {
+                            let rest = &setup.data[self.out_sent..];
+                            let Some(n) = self.give_out(0, rest) else {
+                                return Some(self.poll_until(now, deadline + 1));
+                            };
+                            self.ctl_buf.extend_from_slice(&rest[..n]);
+                            self.out_sent += n;
+                            if self.out_sent >= setup.data.len() {
+                                self.phase = Phase::Ctl {
+                                    stage: CtlStage::Status,
+                                    started,
+                                };
+                            }
+                        }
+                        CtlStage::Status => {
+                            // Opposite direction to the data stage (IN for
+                            // no-data requests).
+                            let done = if setup.dir_in() && setup.w_length > 0 {
+                                self.give_out(0, &[]).is_some()
+                            } else {
+                                self.take_in(0).is_some()
+                            };
+                            if !done {
+                                return Some(self.poll_until(now, deadline + 1));
+                            }
+                            self.finish_control(true);
+                            self.phase = Phase::Idle {
+                                until: now + self.us(HOST_GAP_US),
+                            };
+                        }
+                    }
+                }
+                Phase::Done => {
+                    self.service_console();
+                    return None;
+                }
+            }
+        }
+        Some(now + self.us(1))
+    }
+
+    /// Host work exists that an MMIO access may have unblocked.
+    fn host_live(&self) -> bool {
+        self.host_enabled && (self.connected() || self.phase != Phase::Detached)
+    }
+
+    fn tick_result(&self) -> PeripheralTickResult {
+        PeripheralTickResult {
+            explicit_irqs: self.irq_pending().then(|| vec![self.source_id]),
+            ..PeripheralTickResult::default()
         }
     }
 }
 
 impl Peripheral for Esp32s3UsbOtg {
     fn read(&self, offset: u64) -> SimResult<u8> {
-        let word_off = offset & !3;
-        let byte_off = (offset & 3) * 8;
-        let word = self.read_word(word_off);
-        Ok(((word >> byte_off) & 0xFF) as u8)
+        let word = self.read_access(offset, Some(offset & 3));
+        Ok(((word >> ((offset & 3) * 8)) & 0xFF) as u8)
+    }
+
+    fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        Ok(self.read_access(offset, None))
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
+        if offset >= FIFO_BASE {
+            let n = ((offset - FIFO_BASE) / FIFO_PAGE) as usize;
+            self.push_tx(n, &[value]);
+            return Ok(());
+        }
         let word_off = offset & !3;
-        let byte_off = (offset & 3) * 8;
-        // Byte-granular RMW into the coherent 32-bit view: reconstruct the
-        // current word, splice in this byte, re-apply word semantics. This
-        // makes W1C and self-clearing bits behave correctly under both byte
-        // and word access.
-        let mut word = self.read_word(word_off);
-        word &= !(0xFFu32 << byte_off);
-        word |= (value as u32) << byte_off;
+        let shift = (offset & 3) * 8;
+        // W1C registers must only see this byte's ones; everything else
+        // splices the byte into the current value.
+        let w1c = matches!(word_off, GINTSTS | GOTGINT)
+            || (DIEP_BASE..DOEP_BASE + EP_STRIDE * NUM_EPS as u64).contains(&word_off)
+                && word_off % EP_STRIDE == 0x08;
+        let word = if w1c || word_off == GRSTCTL {
+            (value as u32) << shift
+        } else {
+            let mut w = self.read_word(word_off);
+            w &= !(0xFFu32 << shift);
+            w | ((value as u32) << shift)
+        };
         self.write_word(word_off, word);
         Ok(())
     }
 
-    fn tick(&mut self) -> PeripheralTickResult {
-        // Synthetic liveness: after a core soft reset, drive the enumeration
-        // state machine forward one step per tick so a polling driver does not
-        // hang waiting for a phantom host. USBRST first, then ENUMDONE.
-        if self.pending_reset_seq {
-            if !self.enumdone_latched {
-                self.gintsts |= GINTSTS_USBRST;
-                self.enumdone_latched = true;
-            } else {
-                self.gintsts |= GINTSTS_ENUMDONE;
-                self.pending_reset_seq = false;
-            }
+    fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if offset >= FIFO_BASE {
+            let n = ((offset - FIFO_BASE) / FIFO_PAGE) as usize;
+            self.push_tx(n, &value.to_le_bytes());
+            return Ok(());
         }
+        self.write_word(offset & !3, value);
+        Ok(())
+    }
 
-        // Level-sensitive IRQ: assert source 23 while any unmasked status bit
-        // is pending AND the global interrupt enable (GAHBCFG.GINTMSK) is set.
-        let pending = self.gintsts & self.gintmsk;
-        let global_enabled = self.gahbcfg & GAHBCFG_GINTMSK != 0;
-        let explicit_irqs = if pending != 0 && global_enabled {
-            Some(vec![self.source_id])
+    fn peek(&self, offset: u64) -> Option<u8> {
+        let word = if offset >= FIFO_BASE {
+            0
         } else {
-            None
+            self.read_word(offset & !3)
         };
+        Some(((word >> ((offset & 3) * 8)) & 0xFF) as u8)
+    }
 
-        PeripheralTickResult {
-            explicit_irqs,
-            ..PeripheralTickResult::default()
+    fn tick(&mut self) -> PeripheralTickResult {
+        self.tick_elapsed(1)
+    }
+
+    /// Legacy-walk path (no event scheduler): advance the host clock.
+    fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
+        self.ticked = self.ticked.saturating_add(cycles);
+        if self.host_live() {
+            let _ = self.host_step();
         }
+        self.tick_result()
     }
 
     fn uses_scheduler(&self) -> bool {
@@ -368,23 +1248,26 @@ impl Peripheral for Esp32s3UsbOtg {
         self.clock = Some(clock);
     }
 
+    fn attach_cpu_hz(&mut self, hz: u64) {
+        if hz > 0 {
+            self.cpu_hz = hz;
+        }
+    }
+
     fn matrix_irq_sources_into(&self, out: &mut Vec<u32>) {
-        let pending = self.gintsts & self.gintmsk;
-        let global_enabled = self.gahbcfg & GAHBCFG_GINTMSK != 0;
-        if pending != 0 && global_enabled {
+        if self.irq_pending() {
             out.push(self.source_id);
         }
     }
 
+    /// After an MMIO write: the device may have connected, taken a SETUP,
+    /// armed an endpoint or filled a FIFO, so let the host look again.
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
-        if !self.uses_scheduler() {
+        if !self.uses_scheduler() || self.scheduled || !self.host_live() {
             return Vec::new();
         }
-        if self.pending_reset_seq && !self.scheduled {
-            self.scheduled = true;
-            return vec![(1, DEFERRED_WAKE_TOKEN)];
-        }
-        Vec::new()
+        self.scheduled = true;
+        vec![(self.us(1), HOST_EVENT_TOKEN)]
     }
 
     fn on_event(
@@ -393,22 +1276,23 @@ impl Peripheral for Esp32s3UsbOtg {
         _sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
-        // Same one-tick transition the legacy walk performed.
-        let _ = self.tick();
         self.scheduled = false;
+        let now = self.now();
+        let next = self.host_step();
         let mut explicit_irqs = Vec::new();
         self.matrix_irq_sources_into(&mut explicit_irqs);
-        let reschedule = if self.pending_reset_seq {
-            self.scheduled = true;
-            Some(1)
-        } else {
-            None
-        };
+        let reschedule_delay = next.map(|at| at.saturating_sub(now).max(1));
+        self.scheduled = reschedule_delay.is_some();
         crate::sched::EventResult {
             explicit_irqs,
-            reschedule_delay: reschedule,
+            reschedule_delay,
             ..Default::default()
         }
+    }
+
+    fn attach_usb_cdc_console(&mut self, sink: Option<Arc<Mutex<Vec<u8>>>>) -> bool {
+        self.set_sink(sink);
+        true
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -418,184 +1302,15 @@ impl Peripheral for Esp32s3UsbOtg {
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
+
+    fn logs(&self) -> Vec<crate::peripheral_log::PeripheralLog> {
+        vec![crate::peripheral_log::PeripheralLog::new(
+            "host",
+            self.log.lines(),
+        )]
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn dev() -> Esp32s3UsbOtg {
-        Esp32s3UsbOtg::new(USB_OTG_SOURCE)
-    }
-
-    #[test]
-    fn source_id_is_23() {
-        assert_eq!(USB_OTG_SOURCE, 23);
-        assert_eq!(dev().source_id, 23);
-    }
-
-    #[test]
-    fn grstctl_csrst_self_clears_and_ahbidle_reads_1() {
-        let mut p = dev();
-        // Request core soft reset.
-        p.write_word(GRSTCTL, GRSTCTL_CSRST);
-        let v = p.read_word(GRSTCTL);
-        // CSRST must read back 0 (self-cleared), AHBIDLE (bit31) must be 1.
-        assert_eq!(v & GRSTCTL_CSRST, 0, "CSRST should self-clear");
-        assert_eq!(v & GRSTCTL_AHBIDLE, GRSTCTL_AHBIDLE, "AHBIDLE must read 1");
-        // And AHBIDLE is set even with no reset issued.
-        assert_eq!(dev().read_word(GRSTCTL), GRSTCTL_AHBIDLE);
-    }
-
-    #[test]
-    fn gsnpsid_and_ghwcfg_are_readonly_constants() {
-        let mut p = dev();
-        assert_eq!(p.read_word(GSNPSID), GSNPSID_VALUE);
-        assert_eq!(p.read_word(GHWCFG1), GHWCFG1_VALUE);
-        assert_eq!(p.read_word(GHWCFG2), GHWCFG2_VALUE);
-        assert_eq!(p.read_word(GHWCFG3), GHWCFG3_VALUE);
-        assert_eq!(p.read_word(GHWCFG4), GHWCFG4_VALUE);
-        // Writes must not change them.
-        p.write_word(GSNPSID, 0xDEAD_BEEF);
-        p.write_word(GHWCFG2, 0x0);
-        assert_eq!(p.read_word(GSNPSID), GSNPSID_VALUE);
-        assert_eq!(p.read_word(GHWCFG2), GHWCFG2_VALUE);
-    }
-
-    #[test]
-    fn gintsts_is_w1c() {
-        let mut p = dev();
-        // Simulate pending bits by driving the synthetic reset sequence.
-        p.gintsts = GINTSTS_USBRST | GINTSTS_ENUMDONE | GINTSTS_RXFLVL;
-        // Writing 1s clears only the written bits.
-        p.write_word(GINTSTS, GINTSTS_USBRST);
-        assert_eq!(p.read_word(GINTSTS) & GINTSTS_USBRST, 0, "USBRST cleared");
-        assert_eq!(
-            p.read_word(GINTSTS) & GINTSTS_ENUMDONE,
-            GINTSTS_ENUMDONE,
-            "ENUMDONE still set"
-        );
-        // Writing 0 must NOT clear a pending bit (W1C semantics).
-        p.write_word(GINTSTS, 0);
-        assert_eq!(p.read_word(GINTSTS) & GINTSTS_ENUMDONE, GINTSTS_ENUMDONE);
-    }
-
-    #[test]
-    fn irq_only_when_globally_and_locally_unmasked() {
-        let mut p = dev();
-        p.gintsts = GINTSTS_ENUMDONE;
-
-        // Neither global nor local enable: no IRQ.
-        assert!(p.tick().explicit_irqs.is_none());
-
-        // Local mask set, global enable clear: still no IRQ.
-        p.gintmsk = GINTSTS_ENUMDONE;
-        assert!(p.tick().explicit_irqs.is_none(), "global GINTMSK gates it");
-
-        // Global enable set, but local mask for a different bit: no IRQ.
-        p.gahbcfg = GAHBCFG_GINTMSK;
-        p.gintmsk = GINTSTS_RXFLVL;
-        assert!(p.tick().explicit_irqs.is_none(), "local mask gates it");
-
-        // Both global + local unmasked and bit pending: IRQ on source 23.
-        p.gintmsk = GINTSTS_ENUMDONE;
-        let r = p.tick();
-        assert_eq!(r.explicit_irqs.as_deref(), Some(&[USB_OTG_SOURCE][..]));
-
-        // Clear the pending bit (W1C): IRQ deasserts.
-        p.write_word(GINTSTS, GINTSTS_ENUMDONE);
-        assert!(p.tick().explicit_irqs.is_none(), "deasserts after W1C ack");
-    }
-
-    #[test]
-    fn enumdone_latch_on_tick_after_reset() {
-        let mut p = dev();
-        assert_eq!(p.read_word(GINTSTS), 0);
-        // Issue a core soft reset.
-        p.write_word(GRSTCTL, GRSTCTL_CSRST);
-        // First tick latches USBRST.
-        p.tick();
-        assert_eq!(
-            p.read_word(GINTSTS) & GINTSTS_USBRST,
-            GINTSTS_USBRST,
-            "USBRST latched on first tick after reset"
-        );
-        // Second tick latches ENUMDONE.
-        p.tick();
-        assert_eq!(
-            p.read_word(GINTSTS) & GINTSTS_ENUMDONE,
-            GINTSTS_ENUMDONE,
-            "ENUMDONE latched on second tick"
-        );
-        // Sequence complete: a third tick adds nothing new.
-        let before = p.read_word(GINTSTS);
-        p.tick();
-        assert_eq!(p.read_word(GINTSTS), before);
-    }
-
-    #[test]
-    fn round_trip_unmodelled_offsets_lossless() {
-        let mut p = dev();
-        // A bunch of in-window offsets with no explicit semantics.
-        for off in [0x100u64, 0x200, 0x500, 0x900, 0xA00, 0xFFC] {
-            p.write_word(off, 0xCAFE_0000 | off as u32);
-            assert_eq!(p.read_word(off), 0xCAFE_0000 | off as u32, "off 0x{off:x}");
-        }
-        // R/W named registers round-trip too.
-        p.write_word(GUSBCFG, 0x1234_5678);
-        assert_eq!(p.read_word(GUSBCFG), 0x1234_5678);
-        p.write_word(DCFG, 0x0000_0A55);
-        assert_eq!(p.read_word(DCFG), 0x0000_0A55);
-    }
-
-    #[test]
-    fn byte_access_composes_into_word() {
-        let mut p = dev();
-        // Write GINTMSK one byte at a time.
-        p.write(GINTMSK, 0x78).unwrap();
-        p.write(GINTMSK + 1, 0x56).unwrap();
-        p.write(GINTMSK + 2, 0x34).unwrap();
-        p.write(GINTMSK + 3, 0x12).unwrap();
-        assert_eq!(p.read_word(GINTMSK), 0x1234_5678);
-        // And byte reads decompose the word (little-endian).
-        assert_eq!(p.read(GINTMSK).unwrap(), 0x78);
-        assert_eq!(p.read(GINTMSK + 1).unwrap(), 0x56);
-        assert_eq!(p.read(GINTMSK + 2).unwrap(), 0x34);
-        assert_eq!(p.read(GINTMSK + 3).unwrap(), 0x12);
-        // GSNPSID read via the byte path returns the constant LE bytes.
-        assert_eq!(p.read(GSNPSID).unwrap(), (GSNPSID_VALUE & 0xFF) as u8);
-        assert_eq!(
-            p.read(GSNPSID + 3).unwrap(),
-            ((GSNPSID_VALUE >> 24) & 0xFF) as u8
-        );
-    }
-
-    #[test]
-    fn byte_w1c_clears_correct_bits() {
-        let mut p = dev();
-        p.gintsts = 0xFFFF_FFFF;
-        // Clear bit 12 (USBRST) via a byte write to GINTSTS+1 (bits 8..15).
-        p.write(GINTSTS + 1, 1 << (12 - 8)).unwrap();
-        assert_eq!(p.read_word(GINTSTS) & GINTSTS_USBRST, 0);
-        // Bit 13 (ENUMDONE) in the same byte was written 0 -> untouched.
-        assert_eq!(p.read_word(GINTSTS) & GINTSTS_ENUMDONE, GINTSTS_ENUMDONE);
-    }
-
-    #[test]
-    fn dsts_and_gnptxsts_report_ready() {
-        let p = dev();
-        // Full speed enum, not suspended.
-        assert_eq!(p.read_word(DSTS), DSTS_FULL_SPEED);
-        // Non-periodic TX FIFO reports space available.
-        assert_eq!(p.read_word(GNPTXSTS), GNPTXSTS_READY);
-    }
-
-    #[test]
-    fn no_irq_without_pending_even_if_enabled() {
-        let mut p = dev();
-        p.gahbcfg = GAHBCFG_GINTMSK;
-        p.gintmsk = 0xFFFF_FFFF;
-        // GINTSTS is 0 -> no pending -> no IRQ.
-        assert!(p.tick().explicit_irqs.is_none());
-    }
-}
+#[path = "usb_otg_tests.rs"]
+mod tests;

@@ -1,0 +1,21 @@
+# ESP32-C5-DevKitC-1-N8R8 with a BME280 breakout and its onboard RGB LED.
+name: "esp32c5-devkitc-1-n8r8-bme280"
+chip: "../chips/esp32c5.yaml"
+cpu_hz: 240_000_000
+debug_uart: "uart0"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    route:
+      sda: "GPIO8"
+      scl: "GPIO9"
+    config:
+      i2c_address: 0x77
+  - id: "rgb_led"
+    type: "neopixel"
+    connection: "gpio"
+    config:
+      data_pin: "GPIO27"
+      num_pixels: 1
+      cpu_hz: 240000000

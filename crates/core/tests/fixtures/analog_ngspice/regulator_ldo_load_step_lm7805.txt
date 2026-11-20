@@ -1,4 +1,4 @@
-# ngspice-47 reference for `regulator_ldo_load_step_lm7805` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `regulator_ldo_load_step_lm7805` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(out) at every 5e-6 s, t = 0 excluded
 # deck e6841cc8075131ef
 4.99968286157824338e0

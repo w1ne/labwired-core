@@ -1,6 +1,5 @@
 name: zedboard
-description: 'Digilent ZedBoard development board featuring the AMD Xilinx Zynq-7020
-  SoC FPGA. Architecture: Dual ARM Cortex-A9.'
+description: 'Imported Digilent ZedBoard (Zynq-7020). The measured subset runs one Cortex-A9 PE from a 64 KiB DDR aperture at 0x00100000 and exercises polled TX on PS UART1 (Cadence). OCM, the BootROM, the second PE, SCU, GIC, timers, other PS peripherals and the PL are not modeled.'
 url: https://digilent.com/shop/zedboard-zynq-7000-arm-fpga-soc-development-board/
 family: AMD Xilinx Zynq-7000
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\

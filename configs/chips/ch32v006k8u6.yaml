@@ -1,0 +1,131 @@
+# WCH CH32V006K8U6 in QFN32 (QingKe V2C, RV32EmC).
+#
+# Geometry, package and maximum clock: WCH CH32V006DS0 V2.0, product table
+# (K8: 62 KB flash, 8 KB SRAM, 31 GPIOs, QFN32, 48 MHz max) and Table 2-1-1
+# (QFN32 pins: PA0..PA7, PB0..PB6, PC0..PC7, PD0..PD7). The DS0 V2.0 table
+# lists the 105 C grade K8U7; K8U6 is the 85 C grade of the same die and is
+# the part on WCH's CH32V006K8U6 EVT board.
+#
+# Peripheral bases and register layouts: WCH's
+# openwch/ch32v002_004_005_006_007 ch32v00X.h and ch32v00X_rcc.h. They are
+# the CH32V003 layouts (RCC_TypeDef, GPIO_TypeDef with one reserved word and
+# no CFGHR, USART1 at 0x40013800), with one more port: GPIOB at 0x40010C00,
+# clock gate PB2PCENR bit 3. The clock tree is the CH32V003 one (24 MHz HSI,
+# PLL x2, CH32V00XRM section 3), so this part runs the `wch` RCC and GPIO
+# profiles.
+#
+# Core: QingKe V2C is RV32E with compressed instructions and Zmmul
+# (multiply, no divide). The simulator's RV32E profile limits the register
+# file to x0..x15; it does not trap on DIV/REM, which the silicon lacks.
+#
+# KNOWN LIMITATIONS, STATED PLAINLY:
+#   - No PFIC, SysTick, timers, ADC, OPA, I2C, SPI, DMA or USART2. USART1 TX
+#     is polled only; no `irq` is wired because no interrupt controller exists.
+#
+# Buyability screen (2026-11-15): LCSC C48393430 lists CH32V006K8U6
+# "In Stock". WCH's product page has no lifecycle field; this descriptor is
+# not a lifecycle claim and is not included in the Proteus parity gate.
+# Sources:
+#   https://github.com/openwch/ch32v002_004_005_006_007
+#   https://www.wch-ic.com/downloads/CH32V006DS0_PDF.html
+#   https://www.wch-ic.com/downloads/CH32V00XRM_PDF.html
+#   https://www.lcsc.com/search?q=CH32V006K8U6
+
+name: "ch32v006k8u6"
+arch: "riscv"
+core: "rv32emc"
+cpu_hz: 48_000_000
+
+# WCH's flash view at 0x08000000 is also aliased at address 0 for reset fetch.
+flash:
+  base: 0x08000000
+  size: "62KB"
+ram:
+  base: 0x20000000
+  size: "8KB"
+flash_boot_alias: true
+
+# QFN32 bonds 31 GPIOs (DS0 Table 2-1-1). PinLoc labels are the GPIO names.
+package: "QFN32"
+pin_count: 32
+pins:
+  PA0: { gpio: "gpioa", bit: 0 }
+  PA1: { gpio: "gpioa", bit: 1 }
+  PA2: { gpio: "gpioa", bit: 2 }
+  PA3: { gpio: "gpioa", bit: 3 }
+  PA4: { gpio: "gpioa", bit: 4 }
+  PA5: { gpio: "gpioa", bit: 5 }
+  PA6: { gpio: "gpioa", bit: 6 }
+  PA7: { gpio: "gpioa", bit: 7 }
+  PB0: { gpio: "gpiob", bit: 0 }
+  PB1: { gpio: "gpiob", bit: 1 }
+  PB2: { gpio: "gpiob", bit: 2 }
+  PB3: { gpio: "gpiob", bit: 3 }
+  PB4: { gpio: "gpiob", bit: 4 }
+  PB5: { gpio: "gpiob", bit: 5 }
+  PB6: { gpio: "gpiob", bit: 6 }
+  PC0: { gpio: "gpioc", bit: 0 }
+  PC1: { gpio: "gpioc", bit: 1 }
+  PC2: { gpio: "gpioc", bit: 2 }
+  PC3: { gpio: "gpioc", bit: 3 }
+  PC4: { gpio: "gpioc", bit: 4 }
+  PC5: { gpio: "gpioc", bit: 5 }
+  PC6: { gpio: "gpioc", bit: 6 }
+  PC7: { gpio: "gpioc", bit: 7 }
+  PD0: { gpio: "gpiod", bit: 0 }
+  PD1: { gpio: "gpiod", bit: 1 }
+  PD2: { gpio: "gpiod", bit: 2 }
+  PD3: { gpio: "gpiod", bit: 3 }
+  PD4: { gpio: "gpiod", bit: 4 }
+  PD5: { gpio: "gpiod", bit: 5 }
+  PD6: { gpio: "gpiod", bit: 6 }
+  PD7: { gpio: "gpiod", bit: 7 }
+
+peripherals:
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      profile: "wch"
+
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x40010800
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 2 }
+    config:
+      profile: "wch"
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x40010C00
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 3 }
+    config:
+      profile: "wch"
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x40011000
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 4 }
+    config:
+      profile: "wch"
+
+  - id: "gpiod"
+    type: "gpio"
+    base_address: 0x40011400
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 5 }
+    config:
+      profile: "wch"
+
+  # USART1 (ch32v00X.h): USART1_BASE = PB2PERIPH_BASE + 0x3800, RCC_USART1EN =
+  # PB2PCENR bit 14. USART_TypeDef is the STM32F1 USART layout, so the default
+  # `stm32f1` UART layout serves it. No `irq`: the PFIC is not modelled.
+  - id: "usart1"
+    type: "uart"
+    base_address: 0x40013800
+    size: "1KB"
+    clock: { reg: "apb2pcenr", bit: 14 }

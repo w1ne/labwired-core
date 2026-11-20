@@ -14,7 +14,7 @@ Sensirion SHT40 I²C temperature and humidity sensor (±0.2 °C / ±1.8 %RH clas
 | Address | 0x44 (SHT40-AD1B); 0x45 / 0x46 for the -BD1B / -CD1B variants |
 | Source | [`configs/devices/sht40.yaml`](../../configs/devices/sht40.yaml) (declarative, no Rust model) |
 | Datasheet | Sensirion *Datasheet SHT4x* (v6.x): I2C command overview, conversion formulas, system timing table |
-| Tier | smoke-proven (register-level tests: `crates/core/tests/everyday_sensor_set.rs`) |
+| Tier | smoke-proven (register-level tests: `crates/core/tests/misc/everyday_sensor_set.rs`) |
 
 ## Pins / attachment
 
@@ -49,7 +49,7 @@ Host inputs: `temperature` (°C), `humidity` (%RH).
        connection: "i2c0"   # the bus id your chip system uses
    ```
 2. Agent: `labwired_list` → `labwired_describe id=sht40` → wire → `labwired_validate` → `labwired_run` / `labwired_verify`.
-3. Register-level smoke: `cargo test -p labwired-core --test everyday_sensor_set` — 0xFD → T word 0x6666 at 25 °C, RH word 0x72B0 at 50 %RH, both CRCs valid; serial 0x0F4E 0x2A71. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF.
+3. Register-level smoke: `cargo test -p labwired-core --test misc everyday_sensor_set::` — 0xFD → T word 0x6666 at 25 °C, RH word 0x72B0 at 50 %RH, both CRCs valid; serial 0x0F4E 0x2A71. The same file's negative control proves the check fails against a part that answers only 0x00 or only 0xFF.
 
 ## Limitations
 

@@ -1,0 +1,29 @@
+{
+  "target_id": "esp32c61-devkitc-1-n8r2-bme280",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/esp32c61-devkitc-1-n8r2-bme280/bme280-smoke.yaml",
+  "system": "configs/systems/esp32c61-devkitc-1-n8r2-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-18T01:38:06Z",
+  "finished_at_utc": "2026-11-18T01:38:13Z",
+  "elapsed_seconds": 7,
+  "elapsed_ms": 6488,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 2.092,
+    "build_firmware": 2.585,
+    "run_smoke": 1.762
+  },
+  "stages_ms": {
+    "build_cli": 2092,
+    "build_firmware": 2585,
+    "run_smoke": 1762
+  },
+  "firmware_build_script": "examples/esp32c61-devkitc-1-n8r2-bme280/ci/build.sh"
+}

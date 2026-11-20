@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      10,
+      3221225472,
+      4294867296,
+      4294867296,
+      0,
+      1,
+      1,
+      537198576,
+      1,
+      32767,
+      0,
+      1073811484,
+      70,
+      537198504,
+      70,
+      134236978
+    ],
+    "pc": 134236978,
+    "xpsr": 16777216,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 6002828,
+  "cycles": 3492830,
+  "instructions": 6002828,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 6000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 6002828
+    }
+  },
+  "limits": {
+    "max_steps": 6000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "7a254561d0343e28ba95c78203eb06aa85f5700b7fb9152cae5111f6eb24b9b3",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-stm32f746g-disco-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/stm32f7_discovery-bb.yaml",
+    "script": "examples/renode-onboarding/stm32f7_discovery-bb-smoke.yaml"
+  }
+}

@@ -35,6 +35,11 @@ impl Default for SpiLoopback {
 }
 
 impl SpiDevice for SpiLoopback {
+    // A physical SDO-to-SDI jumper is always connected; it has no CS gate.
+    fn is_selected(&self) -> bool {
+        true
+    }
+
     fn transfer(&mut self, mosi: u8) -> u8 {
         mosi
     }

@@ -1,0 +1,9 @@
+schema_version: "1.0"
+inputs:
+  firmware: ../../tests/fixtures/esp32c2-esp-hal-delay.elf
+  system: ./system.yaml
+limits:
+  max_steps: 3000000
+assertions:
+  - uart_contains: "LW-C2 boot"
+  - uart_contains: "LW-C2 done"

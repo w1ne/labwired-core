@@ -107,6 +107,11 @@ impl SupplySupervisor {
         self.routed
     }
 
+    /// The latest circuit-observed supply, absent before its first observation.
+    pub fn vdd_volts(&self) -> Option<f64> {
+        self.vdd
+    }
+
     /// A circuit now drives VDD. The core starts unpowered and held in reset;
     /// the first VDD the circuit delivers decides when it comes out. Calling
     /// it again does nothing.

@@ -12,7 +12,7 @@ on:
       - crates/config/src/peripherals.rs
       - crates/core/tests/fixtures/st7735r-memory.yaml
       - crates/core/src/inspect.rs
-      - crates/core/tests/st7735_sam_guest.rs
+      - crates/core/tests/samd/st7735_sam_guest.rs
       - .github/workflows/st7735-color-controls.yml
   workflow_dispatch:
 

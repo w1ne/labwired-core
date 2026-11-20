@@ -1,0 +1,30 @@
+# CPU, SRAM and timer0 smoke for the iCE40 UltraPlus MDP. The board REPL
+# includes Renode `cpus/fomu.repl`, so this reuses the Fomu timer0 firmware:
+# RV32IM MUL result plus LiteX_Timer @ 0x60002800 in Foboot's
+# csr_data_width = 8 layout — byte-sliced load readback, a 2000-cycle one-shot
+# whose latched value is mid-count, the zero-event level/pending latch, and
+# ev_pending write-1-to-clear. No I2C sensors, SPI flash, USB or IRQ delivery.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-fomu-smoke"
+  system: "../../configs/systems/onboarding/ice40up5k-mdp-evn.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - memory_value:
+      address: 0x10000000
+      expected_value: 0x00000143
+      size: 4
+  - memory_value:
+      address: 0x10000004
+      expected_value: 0x00012345
+      size: 4
+  - memory_value:
+      address: 0x1000000C
+      expected_value: 0x0000003F
+      size: 4
+  - memory_value:
+      address: 0x10000010
+      expected_value: 0xF0A0003F
+      size: 4
+  - expected_stop_reason: max_steps

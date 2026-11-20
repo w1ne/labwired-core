@@ -1,0 +1,1 @@
+This intermediate H753 run passed all smoke assertions with the receiver-gate checks enabled. It was archived before moving the pre-banner UE-only/TE-only TDR writes earlier, so the existing anchored UART assertion continues to verify that those writes do not leak to capture.

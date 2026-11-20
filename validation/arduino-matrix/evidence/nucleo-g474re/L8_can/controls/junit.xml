@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="2" failures="1" errors="0" time="3.200527">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="ab4668534e8010ff36b431fae2e4780d153cb364b4936ebc984e091e4fdcda3f"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="3.200527">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: LW_L8_OK" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_contains: LW_L8_OK
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=20000000
+stop_reason_details.observed.steps_executed=20000000
+steps_executed=20000000
+cycles=20000000
+instructions=20000000
+limits:
+  - max_steps=20000000
+  - max_uart_bytes=65536
+firmware_hash=ab4668534e8010ff36b431fae2e4780d153cb364b4936ebc984e091e4fdcda3f
+firmware=validation/arduino-matrix/out-control/stm32g474re/L8_can/firmware.elf
+system=validation/arduino-matrix/systems/stm32g474re.yaml
+script=validation/arduino-matrix/out-control/stm32g474re/L8_can/test.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;LW_L8_OK&quot; }): false
+</failure>
+  </testcase>
+</testsuite>

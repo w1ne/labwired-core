@@ -6,3 +6,11 @@
 
 name: stm32h7
 chip: ../../chips/onboarding/stm32h7.yaml
+# External potentiometer is a smoke fixture for ADC1_INP16 on PA0, not a
+# component mounted on a specific H7 board.
+external_devices:
+  - id: pot_adc1_inp16
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 16

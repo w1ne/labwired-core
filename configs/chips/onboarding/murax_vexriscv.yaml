@@ -5,7 +5,11 @@
 # See the LICENSE file in the project root for full license information.
 
 name: murax_vexriscv
-arch: arm
+# Narrowed to the Renode VexRiscv RV32IM core, its two 256 KiB memory windows,
+# and the modeled Murax UART. GPIO and timer are omitted until LabWired has
+# dedicated models for them.
+arch: riscv
+core: "rv32im_zicsr_zifencei"
 flash:
   base: 2147483648
   size: 262144B
@@ -17,11 +21,3 @@ peripherals:
   type: murax_uart
   bus: sysbus
   base_address: 4026597376
-- id: gpioA
-  type: murax_gpio
-  bus: sysbus
-  base_address: 4026531840
-- id: timer
-  type: murax_timer
-  bus: sysbus
-  base_address: 4026662912

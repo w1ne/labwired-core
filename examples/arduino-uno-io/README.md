@@ -13,7 +13,7 @@ The sketch prints `D2=<level> A0=<counts>` every loop over USART0.
 
 ```bash
 examples/arduino-uno-io/build-firmware.sh
-cargo test -p labwired-core --test avr_uno_io
+cargo test -p labwired-core --test avr avr_uno_io::
 ```
 
 The latest board smoke and its metrics are recorded in [`evidence/`](evidence/).

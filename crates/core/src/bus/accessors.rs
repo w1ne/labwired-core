@@ -54,6 +54,7 @@ impl SystemBus {
         self.note_mmio_activity(idx, off);
         #[cfg(feature = "event-scheduler")]
         self.sync_scheduler_peripheral(idx);
+        let motor_control_write = self.begin_motor_control_write(idx);
         if DMA_TX {
             // Synchronization can advance state: recheck the actual live gate
             // and readiness before latching or invoking the accepted-byte hook.
@@ -96,6 +97,9 @@ impl SystemBus {
         } else {
             self.peripherals[idx].dev.write(off, value).map(|()| true)
         };
+        if matches!(r, Ok(true)) && motor_control_write {
+            self.finish_motor_control_write(idx);
+        }
         if matches!(r, Ok(true)) && brackets {
             self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
             self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
@@ -121,6 +125,8 @@ impl SystemBus {
         self.refresh_legacy_tick_peer_write_observers(idx);
         self.refresh_bus_tick_index(idx);
         self.sync_timer_kernel_clocks(idx);
+        self.sync_peripheral_reset_holds(idx);
+        self.deliver_exti_line_edges(idx);
         self.reconcile_irq_levels_after_write(idx);
     }
 
@@ -361,14 +367,24 @@ impl SystemBus {
         } else {
             return None;
         };
+        let existing = (0..width as u64).fold(0u32, |acc, i| {
+            let byte = self
+                .flash
+                .read_u8(self.flash.base_addr + off + i)
+                .unwrap_or(0xFF);
+            acc | (u32::from(byte) << (8 * i))
+        });
         let outcome = self
             .peripherals
             .get_mut(idx)?
             .dev
-            .flash_cpu_store(off, width, value);
+            .flash_cpu_store(off, width, value, existing);
         match outcome {
             crate::FlashStoreOutcome::Commit => None,
             crate::FlashStoreOutcome::Consumed => Some(Ok(())),
+            crate::FlashStoreOutcome::Unsupported(reason) => Some(Err(
+                crate::SimulationError::Other(format!("flash store at {addr:#x}: {reason}")),
+            )),
             crate::FlashStoreOutcome::Program => {
                 for i in 0..width as u64 {
                     let a = self.flash.base_addr + off + i;
@@ -483,17 +499,19 @@ impl crate::Bus for SystemBus {
         if !self.debug_watches.is_empty() && !self.debug_watch_host_bypass.get() {
             self.note_debug_watch_read(addr);
         }
+        let (base, end, data) = self.plain_memory_slice_at(addr).ok_or_else(|| {
+            SimulationError::NotImplemented(format!(
+                "eight-byte physical access at {addr:#x} requires mapped memory; MMIO64 is unsupported"
+            ))
+        })?;
         let offset =
-            addr.checked_sub(self.ram.base_addr)
-                .and_then(|v| usize::try_from(v).ok())
-                .filter(|v| *v < self.ram.data.len())
-                .ok_or_else(|| {
-                    SimulationError::NotImplemented(format!(
-                "eight-byte physical access at {addr:#x} requires RAM; MMIO64 is unsupported"))
-                })?;
+            usize::try_from(addr - base).map_err(|_| SimulationError::MemoryViolation(addr))?;
+        let end_offset =
+            usize::try_from(end - base).map_err(|_| SimulationError::MemoryViolation(addr))?;
         let bytes = offset
             .checked_add(8)
-            .and_then(|end| self.ram.data.get(offset..end))
+            .filter(|finish| *finish <= end_offset)
+            .and_then(|finish| data.get(offset..finish))
             .ok_or(SimulationError::MemoryViolation(addr))?;
         self.note_memory_read();
         Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
@@ -588,10 +606,15 @@ impl crate::Bus for SystemBus {
     }
 
     fn arm_code_identity(&self) -> Option<u64> {
-        self.irq_fabric.armv7.as_ref().map(|f| f.code_identity())
+        Some(
+            self.irq_fabric
+                .armv7
+                .as_ref()
+                .map_or(self.native_code_identity, |fabric| fabric.code_identity()),
+        )
     }
     fn arm_irq_fiq_levels(&self) -> Option<(bool, bool)> {
-        self.irq_fabric.armv7.as_ref().map(|f| {
+        if let Some(f) = self.irq_fabric.armv7.as_ref() {
             // The existing RX queue capability may be filled by host input
             // between instructions. Reconcile its live level before sampling
             // GIC pins; UART entries have no legacy NVIC IRQ number.
@@ -608,8 +631,20 @@ impl crate::Bus for SystemBus {
                     f.gic.lock().unwrap().set_level(intid as usize, level);
                 }
             }
-            f.gic.lock().unwrap().levels()
-        })
+            return Some(f.gic.lock().unwrap().levels());
+        }
+        let vic_index = self.irq_fabric.lpc2294_vic?;
+        let routes = &self.irq_fabric.lpc2294_irq_sources;
+        let vic = self.peripherals.get(vic_index)?;
+        for &(peripheral_index, source) in routes {
+            let level = self
+                .peripherals
+                .get(peripheral_index)
+                .and_then(|peripheral| peripheral.dev.irq_line_level())
+                .unwrap_or(false);
+            vic.dev.set_arm_irq_input_level(source, level);
+        }
+        vic.dev.arm_irq_fiq_levels()
     }
     fn arm_cp15_read(&self, key: u32, wide: bool) -> SimResult<u64> {
         self.irq_fabric
@@ -684,11 +719,12 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0); // unclocked peripheral reads 0 (silicon gating)
                 }
                 let p = &self.peripherals[idx];
                 let off = mmio_addr - p.base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = p.dev.read(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -700,11 +736,12 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0); // unclocked peripheral reads 0 (silicon gating)
                 }
                 let p = &self.peripherals[idx];
                 let off = mmio_addr - p.base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = p.dev.read(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1018,10 +1055,11 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u16(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1030,10 +1068,11 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u16(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1147,10 +1186,11 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u32(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1159,10 +1199,11 @@ impl crate::Bus for SystemBus {
             let mmio_addr = self.resolve_ns_alias(addr);
             if let Some(idx) = self.find_peripheral_index(mmio_addr) {
                 if !self.is_peripheral_clocked(idx) {
+                    self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
                     return Ok(0);
                 }
                 let off = mmio_addr - self.peripherals[idx].base;
-                self.note_mmio_activity(idx, off);
+                self.note_mmio_read(idx, off);
                 let r = self.peripherals[idx].dev.read_u32(off);
                 self.reconcile_level_after_read(idx);
                 return r;
@@ -1201,6 +1242,7 @@ impl crate::Bus for SystemBus {
         let mmio_addr = self.resolve_ns_alias(addr);
         let idx = self.find_peripheral_index(mmio_addr)?;
         if !self.is_peripheral_clocked(idx) {
+            self.note_gated_read(idx, mmio_addr - self.peripherals[idx].base);
             return Some(Ok(0));
         }
         let off = mmio_addr - self.peripherals[idx].base;
@@ -1294,6 +1336,7 @@ impl crate::Bus for SystemBus {
             }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
+            let motor_control_write = self.begin_motor_control_write(idx);
             self.maybe_latch_dc(idx);
             // One test instead of four calls. See `pad_brackets_present`.
             let brackets = self.pad_brackets_present();
@@ -1313,6 +1356,9 @@ impl crate::Bus for SystemBus {
                 p.ticks_remaining = 0;
                 p.dev.write_u16(off, value)
             };
+            if r.is_ok() && motor_control_write {
+                self.finish_motor_control_write(idx);
+            }
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
@@ -1342,6 +1388,8 @@ impl crate::Bus for SystemBus {
                 self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
                 self.sync_timer_kernel_clocks(idx);
+                self.sync_peripheral_reset_holds(idx);
+                self.deliver_exti_line_edges(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
                 self.reconcile_irq_levels_after_write(idx);
@@ -1495,6 +1543,7 @@ impl crate::Bus for SystemBus {
             }
             #[cfg(feature = "event-scheduler")]
             self.sync_scheduler_peripheral(idx);
+            let motor_control_write = self.begin_motor_control_write(idx);
             self.maybe_latch_dc(idx);
             // One test instead of four calls. See `pad_brackets_present`.
             let brackets = self.pad_brackets_present();
@@ -1514,6 +1563,9 @@ impl crate::Bus for SystemBus {
                 p.ticks_remaining = 0;
                 p.dev.write_u32(off, value)
             };
+            if r.is_ok() && motor_control_write {
+                self.finish_motor_control_write(idx);
+            }
             if r.is_ok() && brackets {
                 self.finish_esp32c3_io_mux_write(c3_io_mux_capture);
                 self.finish_rp2040_io_bank0_write(rp_io_bank0_capture);
@@ -1543,6 +1595,8 @@ impl crate::Bus for SystemBus {
                 self.refresh_legacy_tick_peer_write_observers(idx);
                 self.refresh_bus_tick_index(idx);
                 self.sync_timer_kernel_clocks(idx);
+                self.sync_peripheral_reset_holds(idx);
+                self.deliver_exti_line_edges(idx);
                 // Level reconcile at the write choke (single- and multi-line
                 // level sources): see `reconcile_irq_levels_after_write`.
                 self.reconcile_irq_levels_after_write(idx);
@@ -1588,6 +1642,22 @@ impl crate::Bus for SystemBus {
             }
         }
         self.plain_memory_slice_at(addr)
+    }
+
+    fn plain_ram_store_unobserved(&self, addr: u64, len: u64) -> bool {
+        // The conditions under which `try_plain_ram_store` commits a store
+        // as a bare RAM write, plus the batch-stop watch every store notes
+        // first. An aliased address is refused: the proof keys stores by the
+        // address the core used.
+        len > 0
+            && self.resolve_mem_alias(addr) == addr
+            && self.ram.read_u8(addr).is_some()
+            && self.ram.read_u8(addr + len - 1).is_some()
+            && self.debug_watches.is_empty()
+            && !self.memory_policy.active()
+            && !self.esp32c3_pms_armed
+            && self.observers.is_empty()
+            && !self.batch_stop.would_hit(addr, len)
     }
 
     fn fetch_slice(&self, pc: u64) -> Option<(u64, u64, &[u8])> {
@@ -1706,6 +1776,24 @@ impl crate::Bus for SystemBus {
 
     fn clock_parking_spi(&mut self, mosi: u8) -> u8 {
         Self::clock_parking_spi(self, mosi)
+    }
+
+    fn sync_parking_spi_cs(&mut self) -> bool {
+        Self::sync_parking_spi_cs(self)
+    }
+
+    fn parking_spi_accepts_clock(&self) -> bool {
+        for entry in &self.peripherals {
+            if let Some(devs) = entry.dev.spi_attached_devices() {
+                if devs
+                    .iter()
+                    .any(|d| d.is_selected() || d.clocks_when_deselected())
+                {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn device_write_bypass(&self) -> bool {
@@ -1833,9 +1921,15 @@ impl crate::Bus for SystemBus {
                 let idx = (irq / 32) as usize;
                 let bit = irq % 32;
                 if idx < 8 {
+                    // Exception entry clears the pending bit outright. A level
+                    // source that is still asserted re-pends through the bus
+                    // level sampling, as the NVIC does at exception return;
+                    // re-pending here re-entered the handler before it could
+                    // clear the source (USART RXNE storm under the scheduler).
                     nvic.ispr[idx].fetch_and(!(1 << bit), Ordering::SeqCst);
                 }
             }
+            self.unpark_level_events(exception_num - 16);
         }
     }
 

@@ -1,0 +1,20 @@
+{
+  "id": "stm32f767",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "examples/nucleo-f767zi/uart-smoke.yaml",
+    "test": "uart_contains",
+    "signal": "real firmware (firmware-f401-demo, link-compatible reuse) boots on the stm32f767 descriptor and its USART2 output matches the uart_contains 'OK' oracle; run 2026-08-05, exit 0",
+    "lane": "manual example run (examples/nucleo-f767zi) - not yet CI-wired",
+    "note": "evidence covers the F4-profile shared IP the F767 reuses; F7-only peripherals (Ethernet/LTDC/CAN/USB/SAI/QSPI) are not declared in the chip yaml"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "no fixture loads configs/chips/stm32f767.yaml and moves SPI bytes; the descriptor reuses the F4 spi model but evidence does not transfer automatically - a nucleo-f767zi SPI fixture is follow-up work"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "no fixture loads configs/chips/stm32f767.yaml and completes an I2C transaction; the F7 i2c instances run the stm32l4 (v2) profile, which IS proven on stm32l476, but per-chip evidence does not transfer - a nucleo-f767zi I2C fixture is follow-up work"
+  }
+}

@@ -25,7 +25,7 @@ Fleet goal (Arduino + Zephyr + peripherals): [`../FRAMEWORK_FLEET.md`](../FRAMEW
 
 ## Boards
 
-See `boards.yaml` — currently all chips with a `configs/chips/*.yaml` model that
+See `boards/` (one file per board) — currently all chips with a `configs/chips/*.yaml` model that
 has an Arduino PlatformIO profile (ESP32 family, nRF52, RP2040, STM32 set).
 
 ## Run
@@ -55,7 +55,7 @@ Harness contract: `docs/engineering/test_harness.md`.
 | Level | UART | GPIO |
 |-------|------|------|
 | L0 / L1 | marker string | — |
-| L2 | `LW_L2_OK` | if `boards.yaml` has `led_watch: peripheral:pin`, require ≥`led_min_edges` logic edges |
+| L2 | `LW_L2_OK` | if the board file has `led_watch: peripheral:pin`, require ≥`led_min_edges` logic edges |
 | L3 | `LW_L3_OK` | INA219 config `0x399F` + bus voltage reg `0x19CA` (exact kit defaults) |
 | L4 | `LW_L4_OK` | MAX31855 exact frame `0x01901600` |
 | L5 | `LW_L5_OK` | family-faithful ADC codes (not bare 0..4095) |

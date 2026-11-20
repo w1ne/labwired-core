@@ -1,39 +1,30 @@
-# Validation Report: renesas_rz_t2m
+# Renesas RZ/T2M validation status
 
-**Architecture:** Dual ARM Cortex-R52.
+## Current result
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+The imported RZ/T2M descriptor previously showed `verified: true` based on a
+stale run of a Thumb Cortex-M fixture. It did not validate the platform's dual
+Cortex-R52 processors.
+
+The bounded onboarding profile now identifies `core: cortex-r52`, retains the
+imported 64 MiB flash and 1.5 MiB SRAM windows, and omits the untested SCI and
+generic-timer claims. A direct ARM-state integer-loop smoke was attempted
+against the exact imported system. LabWired rejected the unsupported CPU core
+before executing instructions:
 
 ```text
-[2m2026-10-18T14:40:21.447571Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:40:21.454809Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/renesas_rz_t2m.yaml
-[2m2026-10-18T14:40:21.570242Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:40:21.570419Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:40:21.570477Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:40:21.570510Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:40:21.571225Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:40:21.571283Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:40:21.571321Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:40:21.571423Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:40:21.571494Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:40:21.571520Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:40:21.571543Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:40:21.571565Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:40:21.571588Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 1909.01
+chip 'renesas_rz_t2m': unsupported ARM real-time core 'cortex-r52'; only cortex-r5f has a native adapter
 ```
 
+The scoreboard records this as an attempted run that did not boot and did not
+pass its smoke check. Evidence, including the result JSON, JUnit report,
+snapshot, and stage logs, is under
+[`docs/coverage/renode-onboarding/metrics/renesas_rz_t2m/`](../coverage/renode-onboarding/metrics/renesas_rz_t2m/).
 
-## Hardware Coverage Report
+## Scope
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `timer` | `0x0000000f` | `arm_generictimer` |
-| `sci0` | `0x80001000` | `renesas_sci` |
-| `sci1` | `0x80001400` | `renesas_sci` |
-| `sci2` | `0x80001800` | `renesas_sci` |
-| `sci3` | `0x80001c00` | `renesas_sci` |
-| `sci4` | `0x80002000` | `renesas_sci` |
-| `sci5` | `0x81001000` | `renesas_sci` |
-
-**Total Peripherals:** 7
+This is local LabWired CLI evidence of an unsupported Cortex-R52 core. It does
+not demonstrate RZ/T2M boot, instruction support, SCI/timer behavior, Renode
+execution, hosted `labwired_verify` model verification, or hardware behavior.
+No CPU or peripheral stub was added. A real Cortex-R52 adapter is needed
+before this imported platform can boot.

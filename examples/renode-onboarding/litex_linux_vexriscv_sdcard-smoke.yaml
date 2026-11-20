@@ -1,0 +1,13 @@
+# CPU, DDR and LiteX UART smoke against the exact imported system. This does
+# not boot Linux or exercise SD-card, Ethernet, GPIO, SPI, or I2C behavior.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32im-unknown-none-elf/release/firmware-litex-vexriscv-linux-smoke"
+  system: "../../configs/systems/onboarding/litex_linux_vexriscv_sdcard.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_ordered:
+      - "LITEX VEXRISCV SDCARD PROFILE RV32IMA"
+      - "boot=direct-elf memory=ddr uart=litex"
+  - expected_stop_reason: max_steps

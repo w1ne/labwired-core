@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="9" failures="2" errors="0" time="0.387711">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="b76aa4c9015318fb9f4a90ce230a9a9056affb561231eba4dfe0e14a90b2654d"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.387711">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32L151 Cortex-M3 smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok" time="0.000000">
+    <failure message="assertion failed">assertion 2: uart_contains: usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=b76aa4c9015318fb9f4a90ce230a9a9056affb561231eba4dfe0e14a90b2654d
+firmware=examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32l151.yaml
+script=examples/renode-onboarding/stm32l151-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;STM32L151 Cortex-M3 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart2 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart3 ok&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok&quot;, &quot;gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok&quot;, &quot;exti swier masked=1 routed=1 ok&quot;, &quot;tim2 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim4 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim9 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;exti pads idle=1 presses=1 pg_quiet=1 ph1=1 pc13=1 ok&quot;, &quot;spi1 frame=0x01901600 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi1 TXEIE pend=1 released=1 ok&quot;, &quot;spi2 frame=0x06401600 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi2 TXEIE pend=1 released=1 ok&quot;, &quot;spi3 frame=0xFE701600 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi3 TXEIE pend=1 released=1 ok&quot;, &quot;dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok&quot;, &quot;i2c1 tmp102=0x00001900 oar=1 data=1 ev=1 af=1 er_pend=1 ev_quiet=1 stop=1 released=1 ok&quot;, &quot;spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok&quot;, &quot;summary 0x1517FFFF&quot;, &quot;DONE&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536903680, expected_value: 353894399, mask: None, size: Some(4), node: None } }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioh:0&quot;, min_edges: 4 } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: usart2 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: usart3 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_ordered: [&quot;usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok&quot;,…" time="0.000000">
+    <failure message="assertion failed">assertion 5: uart_ordered: [&quot;usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok&quot;,…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=b76aa4c9015318fb9f4a90ce230a9a9056affb561231eba4dfe0e14a90b2654d
+firmware=examples/renode-onboarding/../../target/thumbv7m-none-eabi/release/firmware-stm32l151-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/stm32l151.yaml
+script=examples/renode-onboarding/stm32l151-smoke.yaml
+assertions:
+  - UartContains(UartContainsAssertion { uart_contains: &quot;STM32L151 Cortex-M3 smoke&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok&quot; }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart2 ok&quot; }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;usart3 ok&quot; }): true
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;usart2 rx_gate re_off=1 ue_off=1 data=0x00005253 rxne_after_first=1 irq=isolated,asserted,released ok&quot;, &quot;gpio pa=1 pb=1 pc=1 ph=1 fg=1 ok&quot;, &quot;exti swier masked=1 routed=1 ok&quot;, &quot;tim2 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim3 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim4 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim5 arr=0xFFFFFFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim6 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim7 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim9 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim10 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;tim11 arr=0x0000FFFF width=1 count=1 uif=1 pend=1 alone=1 released=1 ok&quot;, &quot;exti pads idle=1 presses=1 pg_quiet=1 ph1=1 pc13=1 ok&quot;, &quot;spi1 frame=0x01901600 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi1 TXEIE pend=1 released=1 ok&quot;, &quot;spi2 frame=0x06401600 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi2 TXEIE pend=1 released=1 ok&quot;, &quot;spi3 frame=0xFE701600 data=1 pend=1 alone=1 released=1 ok&quot;, &quot;spi3 TXEIE pend=1 released=1 ok&quot;, &quot;dma1 spi1 frame=0x01901600 data=1 flags=1 pend=1 alone=1 released=1 ok&quot;, &quot;i2c1 tmp102=0x00001900 oar=1 data=1 ev=1 af=1 er_pend=1 ev_quiet=1 stop=1 released=1 ok&quot;, &quot;spi1 shared a=0x01901600 b=0x03201600 after_cut=0x01901600 a=1 b=1 restart=1 ok&quot;, &quot;summary 0x1517FFFF&quot;, &quot;DONE&quot;] }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536903680, expected_value: 353894399, mask: None, size: Some(4), node: None } }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpioh:0&quot;, min_edges: 4 } }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x20008000=0x1517ffff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: gpio_edges: gpioh:0 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

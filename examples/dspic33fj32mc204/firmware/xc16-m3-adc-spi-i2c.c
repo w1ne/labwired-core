@@ -21,7 +21,7 @@
  * Scratch layout: 0x0E00 = 0xBEEF when done, 0x0E02 = ADC1BUF0,
  * 0x0E04 = SPI byte, 0x0E06/0x0E07 = TMP102 temperature MSB/LSB,
  * 0x0E08 = failure code.
- * The integration test (crates/core/tests/pic24_xc16_m3.rs) boots this ELF and
+ * The integration test (crates/core/tests/pic/pic24_xc16_m3.rs) boots this ELF and
  * checks those words; the session path is exercised with `system-m3.yaml`.
  */
 

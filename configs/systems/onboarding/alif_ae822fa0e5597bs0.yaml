@@ -6,3 +6,4 @@
 
 name: alif_ae822fa0e5597bs0
 chip: ../../chips/onboarding/alif_ae822fa0e5597bs0.yaml
+debug_uart: uart0

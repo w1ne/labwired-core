@@ -1,0 +1,4 @@
+FAIL  0/1 checks · nvs-esp32 · 400000000 steps · 67.16s
+FAIL  0/1 checks · nvs-esp32c3 · 400000000 steps · 80.20s
+FAIL  0/1 checks · nvs-esp32s3 · 400000000 steps · 85.56s
+FAIL  0/1 checks · nvs-esp32c6 · 400000000 steps · 125.74s

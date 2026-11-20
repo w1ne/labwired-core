@@ -1,0 +1,22 @@
+# NUCLEO-H723ZG: default ST-LINK VCP USART3 plus active-high LD1 on PB0.
+schema_version: "1.2"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-nucleo-h723zg-smoke"
+  system: "../../configs/systems/nucleo-h723zg.yaml"
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "NUCLEO-H723ZG: USART3 + LD1"
+  - memory_value:
+      address: 0x580244E0
+      expected_value: 0xA
+      mask: 0xA
+      size: 4
+  - memory_value:
+      address: 0x58020400
+      expected_value: 0xFFFFFEBD
+      size: 4
+  - gpio_edges:
+      pin: "gpiob:0"
+      min_edges: 4
+  - expected_stop_reason: max_steps

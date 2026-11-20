@@ -241,11 +241,7 @@ peripherals:
       debug_schema: "../peripherals/stm32l073/i2c3.yaml"
       profile: "stm32l4"
 
-  # --- ADC (12-bit SAR; RM0367 §14) ----------------------------------------
-  # The L0 regular group is the CHSELR bitmap @ 0x28, not the L4's SQR1, so
-  # the `stm32l0` profile (the G0/C0 CHSELR block, of which the L0 map is a
-  # subset) converts the selected channel. On `stm32l4` stock analogRead()
-  # returned 0.
+  # --- ADC (12-bit SAR; L0 CHSELR model, stm32f0_adc.rs) -------------------
   - id: "adc1"
     type: "adc"
     base_address: 0x40012400

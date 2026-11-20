@@ -1,0 +1,63 @@
+id: stm32u575
+doc: docs/boards/stm32u575.md
+chip: configs/chips/stm32u575.yaml
+tier: sim-validated
+note: "STM32U575ZI (NUCLEO-U575ZI-Q), first U575 target. Cortex-M33, 2 MiB flash, 768 KiB SRAM + 16 KiB SRAM4. Reuses the shared V2 RCC/GPIO/UART models plus U5 PLL1/2/3 and ready pairs, and a CRS register-surface model. GPIO models analog-reset IDR, one-shot LCKR, and per-chip SECCFGR reset; U5 USART TXFE/AUTOCR are enabled only on U5 configs. ADC1 uses the SVD-verified U5 layout and passes Arduino L5 analogRead; GPDMA1 models all 16 channels and split NVIC lines 29-36/80-87; the core-onboarding-smoke lane exercises SPI-DMA, UART-DMA and flash-to-RAM reference firmware in the LabWired simulator on main pushes, nightly and manual dispatch (not PR, silicon or Renode comparison). The U5 ICACHE profile has a limited register contract; cache contents and line effects are not simulated. The 2 KiB U5 system-memory window seeds a read-only per-part FLASHSIZE word; OTP/package/UID bytes are simplified read/write storage. FDCAN1 (0x4000A400, 4 KiB window over SRAMCAN @ +0x800, RCC_APB1ENR2.FDCAN1EN bit 9 gate) reuses Bosch M_CAN and passes Arduino L8 internal loopback; the U575 has a single FDCAN instance. HASH supports CPU-fed SHA-1, MD5, SHA-224, SHA-256 and HMAC; completion is synchronous and DMA pacing/timing are not modeled. U575 has no PKA or SAES. Rust io-smoke and a local Star Catcher smoke cover startup; the latter checks PC13 input/B1, simulated SSD1306 output and USART1 TX. Also validated by real STM32CubeU5 HAL firmware, Arduino matrix L0-L8, Zephyr matrix L0-L3, and unsupported-instruction audit. NO bench part: values are SVD/RM0456-derived; upstream Renode master has no built-in STM32U5 platform, and this work does not compare against the separate 60North reference platform. TrustZone/GTZC, OCTOSPI and USB are not modeled. Flash supports non-secure unlock, page and one-/two-bank erase, quad-word program, EOP/WRPERR and option-byte storage; residuals include secure path/SECKEYR, read-while-write stalling and option reload/SWAP_BANK. ADC4 is not declared because its SVD map is a different 12-bit class from ADC1."
+offline_tests:
+  - "strict_onboarding (io-smoke builds + runs firmware-stm32u575-demo)"
+  - "chip_conformance (estate OK)"
+  - "svd_conformance / register_coverage (SVD pinning)"
+  - "firmware_survival test_stm32u575_zephyr_survival (stock Zephyr hello)"
+  - "firmware_survival test_stm32u575_arduino_serial_survival (stock Arduino serial)"
+  - "core-onboarding-smoke (main push/nightly/manual: 60North hal-spi-dma, hal-uart-dma, st-dma-flash-to-ram in LabWired simulator; not PR/silicon/Renode)"
+  - "stm32u575_60north_registers::u575_hash_* (SHA-1/MD5/SHA-224/SHA-256 register digest vectors)"
+  - "arduino matrix L0-L8 (validation/arduino-matrix)"
+models:
+  - crates/core/src/peripherals/esp_ledc_wave.rs
+  - crates/core/src/cpu/cortex_m.rs
+  - crates/core/src/bus/from_config.rs
+  - crates/core/src/cpu/cortex_m/exec/load_store.rs
+  - crates/core/src/decoder/arm.rs
+  - crates/core/src/decoder/arm_thumb32.rs
+  - crates/core/src/peripherals/rcc.rs
+  - crates/core/src/peripherals/pwr.rs
+  - crates/core/src/peripherals/flash.rs
+  - crates/core/src/peripherals/flash_u5_regs.rs
+  - crates/core/src/peripherals/uart.rs
+  - crates/core/src/peripherals/gpio.rs
+  - crates/core/src/peripherals/i2c.rs
+  - crates/core/src/peripherals/spi.rs
+  - crates/core/src/peripherals/fdcan.rs
+  - crates/core/src/peripherals/timer.rs
+  - crates/core/src/peripherals/timer_output.rs
+  - crates/core/src/peripherals/adc.rs
+  - crates/core/src/peripherals/rtc_v3.rs
+  - crates/core/src/peripherals/iwdg.rs
+  - crates/core/src/peripherals/gpdma.rs
+  - crates/core/src/peripherals/crc.rs
+  - crates/core/src/peripherals/rng.rs
+  - crates/core/src/peripherals/dbgmcu.rs
+  - crates/core/src/peripherals/crs.rs
+  - configs/chips/stm32u575.yaml
+  # The paired descriptor is hashed because u545_u575_drift_guard compares both.
+  - configs/chips/stm32u545.yaml
+  - configs/peripherals/stm32u575
+  # 2026-09-21, model_paths_drift_gate: models this board REGISTERS that
+  # its list omitted, so they were invisible to the drift digest. This
+  # board records no silicon capture, so there is no "silicon-verified"
+  # claim for the corrected digest to invalidate — no ack is implied.
+  - crates/core/src/peripherals/stub.rs
+  - crates/core/src/peripherals/systick.rs
+  # 2026-10-02, model_paths_drift_gate: the chip descriptor registers
+  # EXTI, and this list omitted exti.rs. This board records no silicon
+  # capture and has no drift ack, so adding the path invalidates no
+  # capture claim.
+  - crates/core/src/peripherals/exti.rs
+  - crates/core/src/peripherals/mod.rs
+  - crates/core/src/peripheral.rs
+  - crates/core/src/lib.rs
+  - crates/core/src/live_numeric.rs
+  - crates/core/src/peripherals/generic_factory.rs
+  - crates/core/src/peripherals/icache.rs
+  - crates/core/src/peripherals/stm32u5_sysmem.rs
+  - crates/core/src/peripherals/stm32u5_hash.rs

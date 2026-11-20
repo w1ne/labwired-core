@@ -1,4 +1,4 @@
-# ngspice-47 reference for `opamp_noninverting_ideal` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `opamp_noninverting_ideal` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(out) at every 2e-6 s, t = 0 excluded
 # deck 3201997458a11214
 2.68537142729983414e0

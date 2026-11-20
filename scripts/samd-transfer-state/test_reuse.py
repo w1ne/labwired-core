@@ -32,7 +32,7 @@ class ReuseControls(unittest.TestCase):
     def test_every_non_allowlisted_input_requires_execution(self):
         for path in ['crates/core/src/lib.rs', 'Cargo.lock', '.cargo/config.toml',
                      gate.WORKFLOW, 'scripts/samd-transfer-state/reuse.py',
-                     'crates/core/tests/samd_transfer_state_guest.rs',
+                     'crates/core/tests/samd/samd_transfer_state_guest.rs',
                      'configs/chips/atsamd51.yaml', 'unrecognized.md']:
             self.assertFalse(self.allowed([path]), path)
 

@@ -1,0 +1,38 @@
+{
+  "target_id": "xtensa-sample-controller",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/xtensa-sample-controller-cpu-smoke.yaml",
+  "system": "configs/systems/onboarding/xtensa-sample-controller.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-08T09:29:23Z",
+  "finished_at_utc": "2026-11-08T09:35:10Z",
+  "elapsed_seconds": 348,
+  "elapsed_ms": 347012,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-08T09:35:10.126685Z ERROR labwired_cli::execute: Memory assertion failed at 0x40000000 (size 32): expected 0x5a5c003f, got 0x41e0 (mask 0xffffffff)",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 346.706,
+    "build_firmware": null,
+    "run_smoke": 0.27
+  },
+  "stages_ms": {
+    "build_cli": 346706,
+    "build_firmware": null,
+    "run_smoke": 270
+  },
+  "prebuilt_firmware": "tests/fixtures/xtensa-sample-controller-cpu-smoke.elf"
+}

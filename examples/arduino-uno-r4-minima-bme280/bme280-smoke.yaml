@@ -1,0 +1,9 @@
+# Boot the ArduinoCore-renesas image and read BME280.CHIP_ID over Wire/IIC1.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/arduino-uno-r4-minima-bme280.elf"
+  system: "../../configs/systems/arduino-uno-r4-minima-bme280.yaml"
+limits:
+  max_steps: 5000000
+assertions:
+  - uart_contains: "UNO_R4_MINIMA_BME280_ID=0x60 IIC1=A4/A5"

@@ -1,5 +1,6 @@
 name: "esp32s3-i80-doom"
 chip: "../../configs/chips/esp32s3.yaml"
+debug_uart: uart0
 external_devices:
   - id: "tft"
     type: "ili9341-16bit"
@@ -8,7 +9,7 @@ external_devices:
       cs_pin: "GPIO21"
       rs_pin: "GPIO18"
       wr_pin: "GPIO17"
-      rd_pin: "GPIO47"
+      rd_tied_high: true # MRB3205 RD is physically tied to 3V3.
       rst_pin: "GPIO38"
       db0_pin: "GPIO1"
       db1_pin: "GPIO2"

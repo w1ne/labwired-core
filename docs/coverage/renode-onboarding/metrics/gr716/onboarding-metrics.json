@@ -1,0 +1,33 @@
+{
+  "target_id": "gr716",
+  "status": "not_run",
+  "measurement_mode": "inventory_only",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": null,
+  "target_triple": null,
+  "script": "",
+  "system": "configs/systems/onboarding/gr716.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T17:54:51Z",
+  "finished_at_utc": "2026-11-06T17:54:51Z",
+  "elapsed_seconds": 0,
+  "elapsed_ms": 0,
+  "failure_stage": "not_configured",
+  "first_error_signature": "The engine has no SPARC V8 (LEON3FT) CPU core; the chip declares `arch: unknown` and is refused. No firmware run was attempted.",
+  "failure_hint": "Add a real CPU core for this ISA before adding a smoke; never run it as a Cortex-M.",
+  "threshold_seconds": 3600,
+  "threshold_met": false,
+  "stages_seconds": {
+    "build_cli": null,
+    "build_firmware": null,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": null,
+    "build_firmware": null,
+    "run_smoke": null
+  }
+}

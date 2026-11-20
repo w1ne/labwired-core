@@ -1,0 +1,42 @@
+    Finished `test` profile [optimized] target(s) in 4m 14s
+     Running tests/avr/main.rs (target/debug/deps/avr-286316642eeb8d15)
+
+running 4 tests
+test avr_nano_every_max31855::nano_every_spi_reads_an_idle_bus_without_a_converter ... ok
+test avr_nano_every_max31855::nano_every_max31855_readings_follow_the_junction_temperatures ... FAILED
+test avr_nano_every_max31855::nano_every_spi_reads_both_max31855_junctions ... FAILED
+test avr_nano_every_max31855::nano_every_max31855_on_another_chip_select_reads_an_idle_bus ... ok
+
+failures:
+
+---- avr_nano_every_max31855::nano_every_max31855_readings_follow_the_junction_temperatures stdout ----
+
+thread 'avr_nano_every_max31855::nano_every_max31855_readings_follow_the_junction_temperatures' (229035) panicked at crates/core/tests/avr/avr_nano_every_max31855.rs:90:5:
+assertion `left == right` failed: serial:
+NANO_EVERY_MAX31855
+TC=100.25 C
+CJ=-0.0625 C
+
+  left: "NANO_EVERY_MAX31855\r\nTC=100.25 C\r\nCJ=-0.0625 C\r\n"
+ right: "NANO_EVERY_MAX31855\r\nTC=100.25 C\r\nCJ=30.5000 C\r\n"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- avr_nano_every_max31855::nano_every_spi_reads_both_max31855_junctions stdout ----
+
+thread 'avr_nano_every_max31855::nano_every_spi_reads_both_max31855_junctions' (229037) panicked at crates/core/tests/avr/avr_nano_every_max31855.rs:78:5:
+assertion `left == right` failed: serial:
+NANO_EVERY_MAX31855
+TC=25.00 C
+CJ=-0.0625 C
+
+  left: "NANO_EVERY_MAX31855\r\nTC=25.00 C\r\nCJ=-0.0625 C\r\n"
+ right: "NANO_EVERY_MAX31855\r\nTC=25.00 C\r\nCJ=22.0000 C\r\n"
+
+
+failures:
+    avr_nano_every_max31855::nano_every_max31855_readings_follow_the_junction_temperatures
+    avr_nano_every_max31855::nano_every_spi_reads_both_max31855_junctions
+
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 102 filtered out; finished in 0.18s
+
+error: test failed, to rerun pass `-p labwired-core --test avr`

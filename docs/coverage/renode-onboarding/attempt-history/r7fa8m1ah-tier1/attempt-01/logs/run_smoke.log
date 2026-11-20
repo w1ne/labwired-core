@@ -1,0 +1,5 @@
+2026-11-06T23:15:18.070298Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/r7fa8m1ah.yaml
+2026-11-06T23:15:18.078822Z  INFO labwired_loader: ELF Entry Point: 0x2000801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+PASS  6/6 checks · renesas-r7fa8m1ah-tier1-smoke · 4000000 steps · 0.03s

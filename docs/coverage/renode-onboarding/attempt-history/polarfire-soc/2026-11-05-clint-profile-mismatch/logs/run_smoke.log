@@ -1,0 +1,7 @@
+2026-11-05T22:57:04.550132Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/polarfire-soc.yaml
+2026-11-05T22:57:04.551482Z  INFO labwired_loader: ELF Entry Point: 0x80000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-05T22:57:04.603993Z ERROR labwired_cli::execute: Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["*** Booting Zephyr OS build v4.1.0 ***", "Hello World! mpfs_icicle/polarfire/u54"] }) (captured len=0)
+2026-11-05T22:57:04.604022Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxCycles }) (captured len=0)
+FAIL  0/2 checks · polarfire-soc-smoke · 2000000 steps · 0.05s

@@ -1,0 +1,28 @@
+{
+  "id": "stm32f411re",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "examples/nucleo-f411re/io-smoke.yaml",
+    "test": "STM32F411RE_OK",
+    "signal": "a raw-register firmware (examples/nucleo-f411re/firmware/main.c) enables RCC AHB1ENR/APB1ENR, puts PA2 on AF7 and writes USART2 DR; the sim captures the banner and a uart_contains oracle matches it. A negative control that moves the USART2 window to 0x40004800 captures zero bytes. Stock stm32duino NUCLEO_F411RE also prints LW_L0_OK on USART2 in the Arduino matrix",
+    "lane": "core-ci board lane (configs/ci/boards.yml nucleo-f411re, gate: true) + core-arduino-matrix-smoke (nightly 02:20 UTC + push to main)",
+    "note": "examples/nucleo-f411re/evidence/, 2026-11-15"
+  },
+  "spi": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino",
+    "test": "LW_L4_OK",
+    "signal": "stock stm32duino SPI = SPI1 (PA5/PA6/PA7) clocks the MAX31855 device model and accepts ONLY the exact default kit frame 0x01901600; any other word prints LW_L4_FAIL frame=0x...; the verdict returns on USART2",
+    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+    "note": "needs ststm32@19.7.1 (the CI pin): 20.0.0 makes SPI.begin() a no-op. Evidence examples/nucleo-f411re/evidence/arduino-matrix/L4_spi_sensor, 2026-11-15"
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+    "test": "LW_L3_OK",
+    "signal": "stock stm32duino Wire = I2C1 (PB8/PB9) reads the INA219 model's config register 0x399F and bus-voltage register 0x19CA; LW_L3_OK prints only on that exact pair (STM32F411xE takes the exact tier, not the ACK-only one)",
+    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+    "note": "a full run to 12M steps prints no LW_L3_PARTIAL_NO_RX (examples/nucleo-f411re/evidence/arduino-matrix/L3_i2c_sensor/uart-full-run.log), 2026-11-15"
+  }
+}

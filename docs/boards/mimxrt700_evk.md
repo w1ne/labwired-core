@@ -1,37 +1,38 @@
-# Validation Report: mimxrt700_evk
+# Renode onboarding evidence: mimxrt700_evk
 
-**Architecture:** ARMv8-M.
+The old generated report for this descriptor used an incompatible Cortex-M7
+fixture and faulted before useful firmware execution. This report replaces that
+claim with a smoke run against the imported MIMXRT700-EVK system and its
+CPU0/flexcomm0 profile.
 
-## 1. Dynamic Simulation Validation
-**Status:** ✅ Passed (simulation-ok)
+## Measured run
 
-```text
-[2m2026-10-18T14:40:04.784833Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting LabWired Simulator
-[2m2026-10-18T14:40:04.787585Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/mimxrt700_evk.yaml
-[2m2026-10-18T14:40:05.081519Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Loading firmware: "/home/andrii/Projects/labwired-renode/core/tests/fixtures/uart-ok-thumbv7m.elf"
-[2m2026-10-18T14:40:05.081699Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x401
-[2m2026-10-18T14:40:05.081747Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Firmware Loaded Successfully!
-[2m2026-10-18T14:40:05.081778Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Entry Point: 0x401
-[2m2026-10-18T14:40:05.082422Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Starting Simulation (ARM Cortex-M)...
-[2m2026-10-18T14:40:05.082483Z[0m [32m INFO[0m [2mlabwired_cli::commands::run[0m[2m:[0m Initial PC: 0x400, SP: 0x20020000
-[2m2026-10-18T14:40:05.082518Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Running for 20000 steps...
-[2m2026-10-18T14:40:05.082623Z[0m [32m INFO[0m [2mlabwired_cli[0m[2m:[0m Simulation Error at step 2: Memory access violation at 0x2001ffe0
-[2m2026-10-18T14:40:05.082679Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Simulation loop finished.
-[2m2026-10-18T14:40:05.082714Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Final PC: 0x45c
-[2m2026-10-18T14:40:05.082747Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Instructions: 2
-[2m2026-10-18T14:40:05.082775Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Total Cycles: 2
-[2m2026-10-18T14:40:05.082804Z[0m [32m INFO[0m [2mlabwired_cli::report[0m[2m:[0m Average IPS: 2003.12
-```
+- Status: **booted and smoke-passing**.
+- Firmware: `firmware-mimxrt700-evk-smoke`, Cortex-M33, 4,000,000 instructions.
+- Stop reason: `max_steps` after all checks completed.
+- Assertions: UART banner and ordered register transcript, two SRAM values, and
+  the stop reason (5/5 passed).
+- UART output checked the LP_FLEXCOMM0 PSELID reset value, UART selection,
+  write-once lock, LPUART VERID/PARAM/BAUD/CTRL, and UARTTX interrupt status.
+- Evidence: `docs/coverage/renode-onboarding/metrics/mimxrt700_evk/` (build/run
+  logs, UART output, JUnit, result, and snapshot).
 
+The first LP_FLEXCOMM smoke attempt booted but failed two assertions because it
+read ISTAT after queueing the banner, while TX was busy. That run is preserved
+at `docs/coverage/renode-onboarding/attempt-history/mimxrt700_evk/2026-11-08-first-lp-flexcomm-run-failed-assertion/`;
+the firmware now samples the idle-TX status before sending the banner.
 
-## Hardware Coverage Report
+## Profile boundary
 
-| Peripheral ID | Base Address | Type |
-|---|---|---|
-| `micfil` | `0x4020e000` | `imxrt700_micfil` |
-| `rstctl1_i3c0` | `0x40040010` | `pythonperipheral` |
-| `i3c0_rst_cpu1` | `0x4000001c` | `pythonperipheral` |
-| `rstctl1_i3c3` | `0x40057000` | `pythonperipheral` |
-| `syscon3_nsvtor` | `0x4006209c` | `pythonperipheral` |
+The imported chip profile includes Cortex-M33 CPU0, the XIP0 flash window,
+CPU0 non-secure SRAM, and `flexcomm0` at `0x40110000`. The LP_FLEXCOMM wrapper
+models PSELID/ISTAT and the LPUART register path used by this smoke. Its
+configured 80 MHz functional clock is used for serial timing; the smoke does
+not validate an external baud rate or pin routing.
 
-**Total Peripherals:** 5
+LPI2C and LPSPI transactions, other Flexcomm instances, the secure alias,
+GPIO/pin mux, clock/reset controllers, CPU1, the DSPs, and other generated
+peripheral entries are not claimed. Simulation assumes an ideal VDD rail;
+power-on and brown-out behavior were not exercised. This is repository CLI
+simulation evidence, not hardware confirmation or a silicon-wide peripheral
+claim.

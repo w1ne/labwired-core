@@ -1,0 +1,7 @@
+[2m2026-11-19T17:59:19.878115Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f4.yaml
+[2m2026-11-19T17:59:19.939438Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+[2m2026-11-19T17:59:19.940653Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'usart2'
+[2m2026-11-19T17:59:19.940912Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 25 applied
+PASS  9/9 checks · stm32f4-smoke · 4000000 steps · 0.53s

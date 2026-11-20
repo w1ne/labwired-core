@@ -1,0 +1,1 @@
+This is the passing Round 562 STM32F072B-DISCO target measurement before tightening the HCLK/8 rate assertion. The prior smoke only checked that external SysTick ran below one quarter of processor HCLK; Round 563 narrows that to the expected 8:1 ratio with endpoint rounding tolerance.

@@ -1,0 +1,13 @@
+# Cortex-M4 UART and D13 smoke against the narrowed imported RA4M1 profile.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7em-none-eabi/release/firmware-ra4m1-demo"
+  system: "../../configs/systems/onboarding/arduino_uno_r4_minima.yaml"
+limits:
+  max_steps: 800000
+assertions:
+  - uart_contains: "OK"
+  - gpio_edges:
+      pin: "port1:11"
+      min_edges: 1
+  - expected_stop_reason: max_steps

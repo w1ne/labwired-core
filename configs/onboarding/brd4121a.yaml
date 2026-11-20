@@ -1,6 +1,6 @@
 name: brd4121a
-description: 'Silicon Labs EZR32WG 434MHz Wireless Starter Kit target board. Architecture:
-  ARM Cortex-M4F.'
+description: 'Silicon Labs BRD4121A radio board using the EFR32xG26 SoC.
+  Architecture: ARM Cortex-M33.'
 family: Silicon Labs
 url: https://www.silabs.com/
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\

@@ -1,0 +1,16 @@
+warning: method `census_name` is never used
+   --> crates/core/src/peripherals/miv.rs:123:8
+    |
+108 | impl CoreGpioLayout {
+    | ------------------- method in this implementation
+...
+123 |     fn census_name(self) -> &'static str {
+    |        ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+[2m2026-11-07T00:57:55.084349Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/beaglev-fire.yaml
+[2m2026-11-07T00:57:55.085899Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x80000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+[2m2026-11-07T00:57:56.080780Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxCycles }) (captured len=80)
+FAIL  1/2 checks · beaglev-fire-smoke · 2000000 steps · 0.99s

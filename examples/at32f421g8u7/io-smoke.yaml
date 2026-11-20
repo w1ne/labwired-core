@@ -1,0 +1,14 @@
+schema_version: "1.2"
+inputs:
+  firmware: ../../tests/fixtures/at32f421g8u7-smoke.elf
+  system: system.yaml
+limits:
+  max_steps: 200000
+assertions:
+  - uart_contains: "FLASH OK"
+  - uart_contains: "DMA OK"
+  - uart_contains: "TIMER IRQ OK"
+  - uart_contains: "AT32F421G8U7 IO OK"
+  - gpio_edges: { pin: "gpioa:5", min_edges: 8 }
+  - fidelity_clean: true
+  - expected_stop_reason: max_steps

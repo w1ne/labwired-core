@@ -5,18 +5,18 @@ family: MSP430
 url: https://www.ti.com/product/MSP430F2619
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
   \ hardware...\n    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"
-pass_rate: 100
 verified: false
 system: systems/onboarding/msp430f2619.yaml
 validation:
-  method: ci-structural
-  reason: structural-ok
+  method: capability-scope
+  reason: MSP430 CPU execution is not implemented; structural checks are not runtime evidence.
   checks:
     system_manifest: true
     chip_descriptor: true
     flash_base_present: true
     ram_base_present: true
-  timestamp_utc: '2026-10-18T14:40:06.059669+00:00'
+    msp430_cpu_supported: false
+  timestamp_utc: '2026-11-06T06:04:54+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/msp430f2619.md
 provenance:

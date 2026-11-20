@@ -95,6 +95,11 @@ peripherals:
     type: "systick"
     base_address: 0xE000E010
     size: "16B"
+    config:
+      # RM0360: the STM32F072 supplies the SysTick external source from HCLK/8.
+      # CALIB has NOREF=0 (reference source present) and SKEW=1.
+      calib: 0x40000000
+      external_clock_divider: 8
 
   - id: "dbgmcu"
     type: "dbgmcu"

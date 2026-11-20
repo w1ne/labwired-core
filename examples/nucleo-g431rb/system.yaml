@@ -1,0 +1,18 @@
+# LabWired — NUCLEO-G431RB board profile.
+# The virtual COM route is LPUART1 PA2/PA3; LD2 is PA5 and B1 is PC13.
+name: "nucleo-g431rb"
+chip: "../../configs/chips/stm32g431rb.yaml"
+external_devices: []
+board_io:
+  - id: "led_ld2"
+    kind: "led"
+    peripheral: "gpioa"
+    pin: 5
+    signal: "output"
+    active_high: true
+  - id: "button_b1"
+    kind: "button"
+    peripheral: "gpioc"
+    pin: 13
+    signal: "input"
+    active_high: false

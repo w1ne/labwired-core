@@ -29,8 +29,23 @@ Pass criteria:
 
 ## 4) Run firmware survival gate
 
+Refresh the checked-in fixture after changing the firmware source:
+
 ```bash
-cargo test -p labwired-core --test firmware_survival test_ra4m1_uno_r4_smoke_survival -- --nocapture
+examples/arduino-uno-r4-minima/ci/refresh-survival-fixture.sh
+```
+
+Then run the same board case with the feature-off graph used by PR CI:
+
+```bash
+cargo test -p labwired-core --no-default-features --test gates \
+  firmware_survival::test_ra4m1_uno_r4_smoke_survival -- --nocapture
+```
+
+The default-feature control is:
+
+```bash
+cargo test -p labwired-core --test gates firmware_survival::test_ra4m1_uno_r4_smoke_survival -- --nocapture
 ```
 
 Pass criteria:

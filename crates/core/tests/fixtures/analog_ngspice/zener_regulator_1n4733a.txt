@@ -1,4 +1,4 @@
-# ngspice-47 reference for `zener_regulator_1n4733a` (crates/core/tests/analog_ngspice_macros.rs)
+# ngspice-47 reference for `zener_regulator_1n4733a` (crates/core/tests/analog/analog_ngspice_macros.rs)
 # v(k) at every 2e-5 s, t = 0 excluded
 # deck 2b527a9912a3ec5e
 1.78217820781478770e-1

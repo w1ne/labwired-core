@@ -60,43 +60,103 @@
     "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
   },
   "stm32f767.elf": {
-    "sha256": "6510613ecb53e407960dc56a3a3a155016490337597c71de8a6f6a354bdc09e7",
-    "source_rev": "96ed4c6a01647736bd33ac8a5445b2fd0a2d4b35"
+    "sha256": "b8704bb0a7ddc4d6f74970fdee72e5a993a3b2101b737c33b0f60f4378d713bd",
+    "source_rev": "45e1e4c2d3c5726de0d8ce07b0a7911868cf0cb1"
   },
   "stm32g071.elf": {
-    "sha256": "c1782aad10f88e45e91f30ce458e8bb5391153a9c801aed42cca038b7679b321",
-    "source_rev": "d47b33294acb0b90247e52181159685cd2adf543"
+    "sha256": "706e1f6cbc37c7d81885cbe785f6962123a710597eba2c39fc4e7bd3c225e92e",
+    "source_rev": "a1c9ec61e7f4308a4fc1b371324feffe98b3ea22"
   },
   "stm32g431rb.elf": {
-    "sha256": "f81414b4fa4fc17950224f4943994c92c27dd14f8551c4063a6f9d8da4fa905c",
-    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+    "sha256": "3622625d096b8a539d92001c265dde44e32a288ea46de1cb403f9806e7bebf5c",
+    "source_rev": "9e3d7928996f6ae1940e4ac5b9baefc75a715ac9"
   },
   "stm32g474re.elf": {
-    "sha256": "1a854cbf4b3ec27f60683bb10595e9806d2b5ad69cd87d515f0a0800ea0bd6d9",
-    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+    "sha256": "3deb2b53bd1e9f488f3cc18d5faf6321502349ddfb269ac18bdbd156e512a180",
+    "source_rev": "9e3d7928996f6ae1940e4ac5b9baefc75a715ac9"
   },
   "stm32h563.elf": {
-    "sha256": "3232998875f917c00465fc360bdffc72e8b80aca2eb5627d3554523a3726f203",
-    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+    "sha256": "38ec40a552934cac91ea09bcd5613e3f1bd0c73e927af7b542ddcacbbf0e25f0",
+    "source_rev": "9e3d7928996f6ae1940e4ac5b9baefc75a715ac9"
   },
   "stm32h735.elf": {
-    "sha256": "bb305cb1bc0383b1c10f35a9c3dfef6646f59101a882341bf48ba1f4e03db7a9",
-    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+    "sha256": "8aab0a96d94bcb539f30d2fe9d6949c269ebe49e675dba54dd259f70fb2427df",
+    "source_rev": "5fd5fc595bc0009465f7a7acf3ab2da821d77444"
   },
   "stm32l073.elf": {
-    "sha256": "9454e8d92cf835d2789b212ca3510052016741e8cfca1d006b47b24c595c5819",
-    "source_rev": "48688bfcd7d5201c12cc00658456e0b42a64a2b0"
+    "sha256": "f220b4f1526bc7bfe4776b5c5c2077c7ed439564ee17aa4b2df9f9045b35de5a",
+    "source_rev": "068831e055ec5d710cd4d0a4f0ef5c4d207df72d"
   },
   "stm32l476.elf": {
-    "sha256": "45101137fb7a49c91010713ea822169e8003c3eb4720f628fc96e2fd1c986328",
-    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+    "sha256": "4488ecf243876606b6cf9b5e71aca929f904cab31ced339209a9bdef31340844",
+    "source_rev": "9e3d7928996f6ae1940e4ac5b9baefc75a715ac9"
   },
   "stm32wb55.elf": {
-    "sha256": "60597be88587ae06234fcb94b2a133c98b22f5673591a4542dc81538f577bed1",
-    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+    "sha256": "478972d9ff100c4706c81d063e1595c8b40a0ac9d20b9441600920828487ee1d",
+    "source_rev": "9e3d7928996f6ae1940e4ac5b9baefc75a715ac9"
   },
   "stm32wba52.elf": {
-    "sha256": "c10bbe2e2ffeed0dc45c8e970bc18a5ca59835cbff1aa7731f26f1be2aea71ec",
-    "source_rev": "2a7e14fb217da6d7849dea0de03f60cf4d6b175b"
+    "sha256": "4e4953b810bca2b1ff9a65383d1fb294e616cfbc6475c2d7c44f7088920348c6",
+    "source_rev": "9e3d7928996f6ae1940e4ac5b9baefc75a715ac9"
+  },
+  "esp32s3-devkitc1-rgb.elf": {
+    "sha256": "88c0a38b75aaf742d49b2aaa0f58ffcc577df5d38e6b72a283878164dd152063",
+    "source_rev": "0f9591020c91fcb83845fca5f5b31c628f9bc5dc"
+  },
+  "esp32s3-devkitc1-rgb-flash.bin": {
+    "sha256": "3979e8cc2577328530dbbe7f3e0c8e0f8bddddcd4aee0c16f339e7b87d9f571b",
+    "source_rev": "0f9591020c91fcb83845fca5f5b31c628f9bc5dc"
+  },
+  "arduino-nano-esp32-gpio.elf": {
+    "sha256": "79802dcdfe3c16811a38e8d7c94173bb0ced3d88a9926c68cf7e40b78c28bb54",
+    "source_rev": "43b62fef67018fb5b03dd81fa59e0829ff30d9b4"
+  },
+  "adafruit-feather-esp32-v2-gpio.elf": {
+    "sha256": "484593d35d394901918966faa5ca04b214e7448a7a2bd1cba81e81b9faff0e43",
+    "source_rev": "b1be150adade5986ee3cc66335cdae6df8d30c79"
+  },
+  "adafruit-feather-esp32-v2-bme280.elf": {
+    "sha256": "439037257d2a58d7378ed02690d3021dc53a5a36fa010a854217c08494179239",
+    "source_rev": "b284a170f89b0cafcec118447470b80bd07b387f"
+  },
+  "pico-bme280.elf": {
+    "sha256": "182d3d685846e3368d9d2ed2c3224ebd4cc4cc8cb89bfdf505066cf2b3876919",
+    "source_rev": "c65d24890e75fdee8df5c2a4ec578878e09a279c"
+  },
+  "esp32c6-devkitc-bme280.elf": {
+    "sha256": "2cfc7c80699af37789b724bd2137fd88cc4966911a4660474647519acf9084cf",
+    "source_rev": "c22c8886643f64d96703c68f5e62aae91807df70"
+  },
+  "feather-rp2040-bme280.elf": {
+    "sha256": "2ab12340ccb2875c64f03686d58afdfbd83e2743921c9dba43cbb95fd6d239d6",
+    "source_rev": "f396371cc8c647086a636e31d30d441b2a9d8a18"
+  },
+  "esp32s3-devkitc1-n16r8-bme280.elf": {
+    "sha256": "9731a5b51384eff99179a91d49a6919fb9cde1696009245f76763856dce8a859",
+    "source_rev": "70c26fc6c233759dc670666394cccdb86b01c5ae"
+  },
+  "seeed-xiao-esp32c3-bme280.elf": {
+    "sha256": "7d877c363ea6395666ba06b63773ea5e2801527c4e342b046ba31cc77b71bba1",
+    "source_rev": "2b8bed09df23d29a0f81dddb29c89011d2c5a522"
+  },
+  "seeed-xiao-esp32c3-bme280.partitions.bin": {
+    "sha256": "148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1",
+    "source_rev": "2b8bed09df23d29a0f81dddb29c89011d2c5a522"
+  },
+  "esp32-devkitm-1-bme280.elf": {
+    "sha256": "e558d962e50833d0de8de2ca91d0f905b2d01852f226e383a94816c4695e57f3",
+    "source_rev": "23b2cf49c5c1407e2c8fa2d5318962b96c7be0fd"
+  },
+  "arduino-nano-esp32-bme280.elf": {
+    "sha256": "2950d0a83a1e751b4cc58d6696b4606088d917aa43918d427013cfc25d6712ae",
+    "source_rev": "a371ab90c421efbbaace184e022d634bcbfa98f1"
+  },
+  "arduino-uno-r4-minima-bme280.elf": {
+    "sha256": "04bd8c84c636cba2f772ed7fc02f5b6909c0c110f364075f3b1bcb1500b92ee5",
+    "source_rev": "0fe44b1a8b0a47ed611ada3de72d618655e9d441"
+  },
+  "esp32s3-lcd-ev-ft5x06.elf": {
+    "sha256": "7ba63d2245aae0513b22f77fcb8a23650e847ca933ee3009fe19a94952038e32",
+    "source_rev": "3c304d84b3f4847bb6fa8dc0c87bd74978438c27"
   }
 }
