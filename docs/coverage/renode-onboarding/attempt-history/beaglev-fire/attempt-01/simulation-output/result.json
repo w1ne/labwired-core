@@ -1,0 +1,258 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 2000000,
+  "cycles": 2000000,
+  "instructions": 2000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 2000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 2000000
+    }
+  },
+  "limits": {
+    "max_steps": 2000000,
+    "max_cycles": 60000000,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_ordered": [
+          "*** Booting Zephyr OS build v4.1.0 ***",
+          "Hello World! mpfs_icicle/polarfire/u54"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_cycles"
+      },
+      "passed": false
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v64",
+    "x": [
+      0,
+      2147483676,
+      2155872256,
+      2147517304,
+      0,
+      2147515168,
+      18446744073709551615,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 2147484182,
+    "mstatus": 6144,
+    "mie": 0,
+    "mtvec": 2147483680,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mcycle": 2000000,
+    "minstret": 2000000,
+    "pmpcfg": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pmpaddr": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "clint": {
+      "base": null,
+      "msip": false,
+      "mtimecmp": 18446744073709551615,
+      "mtime": 2000000,
+      "divider": 1,
+      "residue": 0
+    },
+    "reservation": null
+  },
+  "firmware_hash": "3781dda7eb3ba32fe33678ec8328f65878511ffcc49741dcf96cb038387639cc",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/mpfs-zephyr-hello.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/beaglev-fire.yaml",
+    "script": "examples/renode-onboarding/beaglev-fire-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "plic",
+        "kind": "native",
+        "base": 201326592,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mss_gpio0",
+        "kind": "native",
+        "base": 538050560,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mss_gpio1",
+        "kind": "native",
+        "base": 538054656,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mss_gpio2",
+        "kind": "native",
+        "base": 538058752,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c0",
+        "kind": "native",
+        "base": 537960448,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "i2c1",
+        "kind": "native",
+        "base": 537964544,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "spi1",
+        "kind": "native",
+        "base": 537956352,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mmuart0",
+        "kind": "native",
+        "base": 536870912,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mmuart1",
+        "kind": "native",
+        "base": 537919488,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 11752,
+    "data_bytes": 3076,
+    "bss_bytes": 16784,
+    "flash_used_bytes": 14828,
+    "ram_static_bytes": 19860,
+    "flash_total_bytes": 131072,
+    "ram_total_bytes": 8388608,
+    "flash_used_pct": 11.31,
+    "ram_static_pct": 0.24,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 2000000,
+    "instructions": 2000000,
+    "steps_executed": 2000000,
+    "memory_reads": 4499991,
+    "memory_writes": 2,
+    "peripheral_accesses": 0,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 2147484182,
+        "count": 7812
+      }
+    ]
+  }
+}

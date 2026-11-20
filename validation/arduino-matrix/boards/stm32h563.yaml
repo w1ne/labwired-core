@@ -1,0 +1,15 @@
+id: stm32h563
+chip: stm32h563
+system: systems/stm32h563.yaml
+pio: { platform: ststm32, board: nucleo_h563zi, framework: arduino }
+max_steps: 20000000
+budget_reason: "L0 light; L3 Wire.begin i2c_computeTiming needs multi-M steps"
+led_watch: "gpiob:0"
+led_min_edges: 2
+# L6 drives TIM2_CH1 on PA0 (AF1): LD1/PB0's PinMap_TIM entry is
+# TIM1_CH2N, a complementary output the twin does not generate. Routed by
+# the H5 timer AF table (pad_map: stm32h5), so L6 is proven on pad edges.
+pwm_watch: "gpioa:0"
+pwm_min_edges: 20
+family: stm32
+# L5: adc profile stm32h7; L8: FDCAN enter_loopback sequence

@@ -1,0 +1,15 @@
+# Direct-ELF RISC-V smoke against the imported Renode LiteX PicoRV32 system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-litex-picorv32-smoke"
+  system: "../../configs/systems/onboarding/litex_picorv32.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "LITEX PICORV32 SMOKE"
+  - uart_ordered:
+      - "cpu=rv32imc uart=litex"
+      - "mul=00000143"
+      - "timer=running"
+      - "timer=zero"
+  - expected_stop_reason: max_steps

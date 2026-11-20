@@ -1,0 +1,11 @@
+# Direct A32 fixture against the bounded imported A20 profile: one A7 PE,
+# a 64 KiB DDR aperture at 0x40000000, and polled UART0 TX only.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/a20-a7-uart-smoke.elf"
+  system: "../../configs/systems/onboarding/a20.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "A20 A7 UART SMOKE"
+  - expected_stop_reason: max_steps

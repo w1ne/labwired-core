@@ -53,10 +53,11 @@ const USART_CMD_TXEN: u32 = 1 << 2;
 const USART_STATUS_TXBL: u32 = 1 << 6;
 const USART1_CLKDIV_115200: u32 = 2384;
 const MODE_PUSHPULL: u32 = 0x4;
-/// Series-2 mode 6 is WIREDANDPULLUP — open-drain with a pull-up, which is
-/// what an I2C line is. RM section 24.3.12.1 p.862 says it outright: "an I2C
-/// SDA should be configured as open-drain".
-const MODE_WIREDANDPULLUP: u32 = 0x6;
+/// Series-2 mode 0xA is WIREDANDPULLUP — open-drain with a pull-up, which is
+/// what an I2C line is (`_GPIO_P_MODEL_MODE0_WIREDANDPULLUP`; 0x6 is WIREDOR,
+/// the open-SOURCE stage). RM section 24.3.12.1 p.862 says it outright: "an
+/// I2C SDA should be configured as open-drain".
+const MODE_WIREDANDPULLUP: u32 = 0xA;
 
 // ── GPIO_I2C0 route, RM section 24.6 p.875 ───────────────────────────────
 // ⚠️ WITHOUT THESE THE BUS HAS NO WIRES. I2C reaches SCL/SDA only through

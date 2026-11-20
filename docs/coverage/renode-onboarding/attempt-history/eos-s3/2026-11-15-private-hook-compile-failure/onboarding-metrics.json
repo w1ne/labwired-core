@@ -1,0 +1,33 @@
+{
+  "target_id": "eos-s3",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "firmware-eos-s3-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/eos-s3-smoke.yaml",
+  "system": "configs/systems/onboarding/eos-s3.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-15T23:00:46Z",
+  "finished_at_utc": "2026-11-15T23:01:40Z",
+  "elapsed_seconds": 54,
+  "elapsed_ms": 53753,
+  "failure_stage": "build_cli",
+  "first_error_signature": "error[E0624]: method `route_irq_input_level` is private",
+  "failure_hint": "Fix host toolchain first: run `rustup show` and ensure CLI dependencies build on this runner.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 53.735,
+    "build_firmware": null,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 53735,
+    "build_firmware": null,
+    "run_smoke": null
+  }
+}

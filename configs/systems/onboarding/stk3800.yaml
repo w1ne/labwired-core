@@ -6,3 +6,21 @@
 
 name: stk3800
 chip: ../../chips/onboarding/stk3800.yaml
+# Board LEDs. Renode led0/led1 @ gpioPort 66/67 = PE2/PE3; Zephyr
+# efm32wg_stk3800.dts led0/led1 gpioe 2/3 flags 0 (active high); Gecko SDK
+# BSP_LED_POLARITY default 1 (bsp_stk_leds.c) agrees. Renode wires the
+# buttons to gpioPort 64/65 (PE0/PE1); Zephyr efm32wg_stk3800.dts puts sw0
+# on PB9. The two sources disagree, so no button is declared.
+board_io:
+  - id: "led0"
+    kind: "led"
+    peripheral: "gpioe"
+    pin: 2
+    signal: "output"
+    active_high: true
+  - id: "led1"
+    kind: "led"
+    peripheral: "gpioe"
+    pin: 3
+    signal: "output"
+    active_high: true

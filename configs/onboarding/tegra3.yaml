@@ -1,6 +1,5 @@
 name: tegra3
-description: 'NVIDIA Tegra 3 (T30) quad-core mobile processor with a 5th companion
-  core. Architecture: ARMv7-A (Cortex-A9).'
+description: 'Imported NVIDIA Tegra 3 (T30). The measured subset runs one Cortex-A9 PE from a 64 KiB SDRAM aperture at 0x0 and exercises polled TX on UARTA (16550). The boot ROM, AVP, other PEs, SCU, GIC, timers, clock/reset, other UARTs and multimedia blocks are not modeled.'
 family: NVIDIA Tegra
 url: https://developer.nvidia.com/tegra-3
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\

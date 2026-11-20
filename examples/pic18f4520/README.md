@@ -31,7 +31,7 @@ at `0x300000` (HS oscillator, WDT off, LVP off, XINST off).
 
 SDCC emits Intel HEX; `firmware/hex2elf.py` wraps it byte for byte in an
 `EM_MCHP_PIC` ELF (the machine value XC8 uses), which is what LabWired loads.
-`crates/core/tests/pic18f4520_smoke.rs` and `ci/test.sh` both check that the
+`crates/core/tests/pic/pic18f4520_smoke.rs` and `ci/test.sh` both check that the
 ELF payload equals the HEX.
 
 ## Build and run

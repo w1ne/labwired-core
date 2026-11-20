@@ -251,13 +251,7 @@ impl SystemBus {
     }
 
     fn poke_sensitive(&self, idx: usize, offset: u64, value: u32) {
-        if let Some(generic) = self.peripherals.get(idx).and_then(|p| {
-            p.dev.as_any().and_then(|a| {
-                a.downcast_ref::<crate::peripherals::declarative::GenericPeripheral>()
-            })
-        }) {
-            generic.poke_u32_raw(offset, value);
-        }
+        self.poke_cached_declarative_u32(idx, offset, value);
     }
 
     /// Number of ESP32-C3 PMS violations detected on this bus since reset.

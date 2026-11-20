@@ -270,6 +270,98 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
+    // ARMv6-M — one fault exception, no ARMv7-M fault register file.
+    // -------------------------------------------------------------------------
+
+    /// ARMv6-M ARM B3.2.2 / C1.6.3: the SCB of a Cortex-M0/M0+ has no CFSR,
+    /// HFSR, MMFAR or BFAR, and SHCSR holds only SVCALLPENDED. Firmware that
+    /// sets BUSFAULTENA anyway still takes HardFault, reads zero from the
+    /// reserved offsets, and the fault report names no ARMv7-M register.
+    #[test]
+    fn armv6m_fault_is_a_hardfault_with_no_fault_status_registers() {
+        let mut bus = crate::bus::SystemBus::new();
+        bus.armv6m = true;
+        let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
+        bus.write_u32(0x0C, HARDFAULT_HANDLER | 1).unwrap();
+        bus.write_u32(0x14, BUSFAULT_HANDLER | 1).unwrap();
+        bus.write_u16(HARDFAULT_HANDLER as u64, B_SELF).unwrap();
+        bus.write_u16(BUSFAULT_HANDLER as u64, B_SELF).unwrap();
+        bus.write_u16(CODE as u64, LDR_R0_R1).unwrap();
+        bus.write_u16((CODE + 2) as u64, B_SELF).unwrap();
+        let mut machine = Machine::new(cpu, bus);
+        machine.cpu.set_faults_enabled(true);
+        machine.cpu.set_pc(CODE);
+        machine.cpu.set_sp(STACK_TOP);
+
+        machine
+            .bus
+            .write_u32(SHCSR, SHCSR_BUSFAULTENA | (1 << 15))
+            .unwrap();
+        assert_eq!(
+            machine.bus.read_u32(SHCSR).unwrap(),
+            1 << 15,
+            "only SVCALLPENDED exists in an ARMv6-M SHCSR"
+        );
+        machine.cpu.set_register(1, UNMAPPED);
+
+        run_alive(&mut machine, 2);
+
+        assert_eq!(
+            machine.cpu.get_pc(),
+            HARDFAULT_HANDLER,
+            "ARMv6-M has no BusFault exception. pc = 0x{:08X}",
+            machine.cpu.get_pc()
+        );
+        for (name, addr) in [("CFSR", CFSR), ("HFSR", HFSR), ("BFAR", BFAR)] {
+            assert_eq!(
+                machine.bus.read_u32(addr).unwrap(),
+                0,
+                "{name} is reserved on ARMv6-M and must read zero"
+            );
+        }
+
+        let capture = machine.cpu.fault_capture().expect("the fault is recorded");
+        assert!(capture.armv6m);
+        assert_eq!(capture.regs.cfsr, CFSR_PRECISE_DATA_FAULT);
+        let verdict = crate::fault_verdict::decode_fault(&capture, None, None).unwrap();
+        assert_eq!(
+            verdict.summary,
+            "HardFault: data access at 0x9000_0000, at PC 0x0000_1000."
+        );
+        assert!(!verdict.escalated);
+
+        run_alive(&mut machine, 50);
+    }
+
+    /// The bus flag follows the chip's `core`: M0, M0+ and M1 are ARMv6-M;
+    /// M3 and M23 (ARMv8-M Baseline) are not, and neither is an absent core.
+    #[test]
+    fn armv6m_flag_follows_the_chip_core() {
+        let chip = |core: Option<&str>| {
+            let mut chip: labwired_config::ChipDescriptor = serde_yaml::from_str(
+                "name: t\narch: arm\nflash: {base: 0x0, size: \"4KB\"}\nram: {base: 0x20000000, size: \"4KB\"}\nperipherals: []\n",
+            )
+            .unwrap();
+            chip.core = core.map(str::to_string);
+            chip
+        };
+        for (core, expected) in [
+            (Some("cortex-m0"), true),
+            (Some("cortex-m0+"), true),
+            (Some("Cortex-M1"), true),
+            (Some("cortex-m3"), false),
+            (Some("cortex-m23"), false),
+            (None, false),
+        ] {
+            assert_eq!(
+                crate::bus::SystemBus::chip_is_armv6m(&chip(core)),
+                expected,
+                "{core:?}"
+            );
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // THE OTHER DIRECTION — nothing must fault that should not.
     // -------------------------------------------------------------------------
 

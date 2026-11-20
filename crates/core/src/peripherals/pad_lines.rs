@@ -27,7 +27,7 @@
 //! handled here and by whichever GPIO model routes the pad.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, Weak};
 
 use crate::logic_capture::{LogicTap, PadDrive};
 
@@ -83,6 +83,18 @@ pub struct WireInputEdge {
     pub level: bool,
 }
 
+/// A consumer of one line's transitions that is not the logic analyzer: an
+/// off-chip device observing the pad the line is routed to. Registered with
+/// [`PadLines::add_listener`]; the wire keeps only a weak reference, so the
+/// registrant owns the listener's lifetime and dropping it unregisters it.
+pub trait LineListener: Send + Sync + std::fmt::Debug {
+    /// `line` changed: its published level moved to `level`, or its output
+    /// stage was released or taken over (read [`PadLines::drives`]). `at` is
+    /// the engine cycle of the change when the owning peripheral knows it
+    /// (`None`: use the caller's clock).
+    fn line_edge(&self, line: usize, level: bool, at: Option<u64>);
+}
+
 /// Push-capture registration: which analyzer channels currently watch each
 /// line, and the tap they report to. Rebuilt by the GPIO model whenever
 /// routing changes, so a re-routed pad follows its signal.
@@ -122,6 +134,10 @@ pub struct PadLines {
     /// it knows the time of; `NO_STAMP` uses the tap's provisional clock.
     stamp: AtomicU64,
     tap: Mutex<PadTapState>,
+    /// Edge listeners (see [`LineListener`]). `any_listener` keeps the cost on
+    /// a wire nobody listens to at one relaxed load per transition.
+    listeners: Mutex<Vec<(usize, Weak<dyn LineListener>)>>,
+    any_listener: AtomicBool,
 }
 
 impl PadLines {
@@ -150,6 +166,8 @@ impl PadLines {
                 tap: None,
                 channels: vec![Vec::new(); names.len()],
             }),
+            listeners: Mutex::new(Vec::new()),
+            any_listener: AtomicBool::new(false),
         }
     }
 
@@ -249,6 +267,7 @@ impl PadLines {
             return;
         };
         if cell.swap(mode.code(), Ordering::Relaxed) != mode.code() {
+            self.notify_listeners(&[(line, self.level(line))], None);
             self.report_with(&[(line, self.level(line))], None, true);
         }
     }
@@ -262,6 +281,7 @@ impl PadLines {
         let mode_moved = m.swap(mode.code(), Ordering::Relaxed) != mode.code();
         let level_moved = l.swap(level, Ordering::Relaxed) != level;
         if mode_moved || level_moved {
+            self.notify_listeners(&[(line, level)], None);
             self.report_with(&[(line, level)], None, mode_moved);
         }
     }
@@ -368,7 +388,46 @@ impl PadLines {
     /// `at = None` stamps with the tap's provisional clock (the bit-engine
     /// path); `at = Some(cycle)` stamps explicitly (the narrated path).
     fn report_at(&self, changed: &[(usize, bool)], at: Option<u64>) {
+        self.notify_listeners(changed, at);
         self.report_with(changed, at, false);
+    }
+
+    /// Hand level transitions to the registered [`LineListener`]s.
+    #[inline]
+    fn notify_listeners(&self, changed: &[(usize, bool)], at: Option<u64>) {
+        if !self.any_listener.load(Ordering::Relaxed) {
+            return;
+        }
+        let at = at.or_else(|| self.stamp());
+        // Upgrade under the lock, call outside it: a listener may re-enter.
+        let live: Vec<(usize, std::sync::Arc<dyn LineListener>)> = {
+            let mut listeners = self.listeners.lock().unwrap();
+            listeners.retain(|(_, l)| l.strong_count() > 0);
+            if listeners.is_empty() {
+                self.any_listener.store(false, Ordering::Relaxed);
+            }
+            listeners
+                .iter()
+                .filter_map(|(line, l)| l.upgrade().map(|l| (*line, l)))
+                .collect()
+        };
+        for &(line, level) in changed {
+            for (watched, listener) in &live {
+                if *watched == line {
+                    listener.line_edge(line, level, at);
+                }
+            }
+        }
+    }
+
+    /// Subscribe `listener` to level transitions of `line`. The wire holds it
+    /// weakly; keep the `Arc` for as long as the subscription should live.
+    pub fn add_listener(&self, line: usize, listener: &std::sync::Arc<dyn LineListener>) {
+        self.listeners
+            .lock()
+            .unwrap()
+            .push((line, std::sync::Arc::downgrade(listener)));
+        self.any_listener.store(true, Ordering::Relaxed);
     }
 
     /// `with_drive` reports the drive even on a push-pull line (a mode
@@ -634,5 +693,35 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![3],
         );
+    }
+
+    #[derive(Debug, Default)]
+    struct Seen(Mutex<Vec<(usize, bool, Option<u64>)>>);
+    impl LineListener for Seen {
+        fn line_edge(&self, line: usize, level: bool, at: Option<u64>) {
+            self.0.lock().unwrap().push((line, level, at));
+        }
+    }
+
+    #[test]
+    fn a_listener_hears_level_and_drive_changes_of_its_line_only_while_alive() {
+        let lines = PadLines::new(I2C, &[true, true]);
+        let seen = std::sync::Arc::new(Seen::default());
+        let listener: std::sync::Arc<dyn LineListener> = seen.clone();
+        lines.add_listener(1, &listener);
+
+        lines.set_line(0, false); // other line: not heard
+        lines.set_line_at(1, false, 40);
+        lines.set_line(1, false); // unchanged: not an edge
+        lines.drive_line(1, LineDrive::OpenDrain, false); // drive moved
+        assert_eq!(
+            *seen.0.lock().unwrap(),
+            vec![(1, false, Some(40)), (1, false, None)]
+        );
+
+        drop(listener);
+        drop(seen);
+        lines.set_line(1, true); // the wire holds listeners weakly
+        assert!(!lines.any_listener.load(Ordering::Relaxed));
     }
 }

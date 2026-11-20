@@ -1,0 +1,10 @@
+# Control for bme280-smoke.yaml: no device answers 0x77. The assertion is the
+# passing run's marker, so this script must FAIL.
+schema_version: "1.2"
+inputs:
+  firmware: ../../../tests/fixtures/avr/arduino-nano-every-bme280.elf
+  system: ./system-no-sensor.yaml
+limits:
+  max_steps: 6000000
+assertions:
+  - uart_contains: "NANO_EVERY_BME280 ID=0x60"

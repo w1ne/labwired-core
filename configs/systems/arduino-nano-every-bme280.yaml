@@ -1,0 +1,21 @@
+# Arduino Nano Every (ATmega4809 @ 16 MHz) with an Adafruit BME280 breakout.
+# The breakout's default address is 0x77 and it carries its own I2C pull-ups
+# and a 5 V level shifter. SDA / SCL connect to A4 / A5 (PA2 / PA3, the
+# default TWI0 route). This digital system attaches the sensor model to TWI0.
+# It does not model the pads, the pull-up voltage or conversion time.
+name: arduino-nano-every-bme280
+chip: ../chips/atmega4809.yaml
+cpu_hz: 16000000
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "twi0"
+    config:
+      i2c_address: 0x77
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "porte"
+    pin: 2          # PE2 / Arduino D13 / LED_BUILTIN
+    signal: "output"
+    active_high: true

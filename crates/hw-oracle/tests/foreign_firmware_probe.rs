@@ -28,6 +28,7 @@ fn probe_foreign_firmware() {
     let chip_path = root.join("configs/chips/stm32h563.yaml");
     let chip = ChipDescriptor::from_file(&chip_path).expect("load chip");
     let manifest = SystemManifest {
+        max_peripheral_tick_interval: None,
         parts: Vec::new(),
         walk_deleted: Some(false),
         schema_version: "1.0".to_string(),

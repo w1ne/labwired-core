@@ -1,0 +1,107 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      1107296588,
+      1082654704,
+      1082132480,
+      0,
+      0,
+      7169,
+      95,
+      0,
+      0,
+      1610612736,
+      48,
+      10,
+      0,
+      120,
+      61,
+      130,
+      220,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      28929,
+      16641,
+      2305,
+      56
+    ],
+    "pc": 1107297710,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 0,
+    "mtvec": 1107296588,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 1500000,
+    "mtimecmp": 18446744073709551615,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "steps_executed": 1500000,
+  "cycles": 3286220,
+  "instructions": 1500000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 1500000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 1500000
+    }
+  },
+  "limits": {
+    "max_steps": 1500000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "fa88f446d501be86573d7d204dc0a894fc6eb885625730fc350d07c1db3453d1",
+  "config": {
+    "firmware": "examples/esp32c6-devkitc-1-n8-bme280/../../target/riscv32imc-unknown-none-elf/release/firmware-esp32c6-devkitc-bme280-smoke",
+    "system": "examples/esp32c6-devkitc-1-n8-bme280/../../configs/systems/esp32c6-devkitc-1-n8-bme280.yaml",
+    "script": "examples/esp32c6-devkitc-1-n8-bme280/bme280-smoke.yaml"
+  }
+}

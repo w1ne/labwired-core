@@ -1,0 +1,6 @@
+# Control: the same board and sketch with nothing attached to TWI0.
+name: arduino-nano-every-bme280-no-sensor
+chip: ../../../configs/chips/atmega4809.yaml
+cpu_hz: 16000000
+external_devices: []
+board_io: []

@@ -30,8 +30,8 @@ package 3.50400.0 (IDF 5.4.0), board `esp32-c3-devkitm-1`:
 ```sh
 platformio run -d ../iolinki/examples/esp32_l6362a -e esp32c3
 export IOLINKI_C3_ELF=/absolute/path/to/esp32c3/firmware.elf
-cargo test -p labwired-core --test c3_gpio_interrupts --test c3_reference_firmware -- --include-ignored
-cargo test -p labwired-core --features event-scheduler --test c3_gpio_interrupts --test c3_reference_firmware -- --include-ignored
+cargo test -p labwired-core --test esp -- --include-ignored c3_gpio_interrupts:: c3_reference_firmware::
+cargo test -p labwired-core --features event-scheduler --test esp -- --include-ignored c3_gpio_interrupts:: c3_reference_firmware::
 ```
 
 `bootloader.bin`, `partitions.bin` and `firmware.bin` must be siblings of the

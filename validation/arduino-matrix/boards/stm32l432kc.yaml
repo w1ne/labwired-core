@@ -1,0 +1,17 @@
+id: stm32l432kc
+chip: stm32l432kc
+system: systems/stm32l432kc.yaml
+# Pinned like CI (core-arduino-matrix-smoke maps stm32* to 19.7.1):
+# ststm32 20.0.0 makes SPI.begin() a no-op and L4 spins on a null SPI.
+pio: { platform: ststm32@19.7.1, board: nucleo_l432kc, framework: arduino }
+max_steps: 20000000
+budget_reason: "NUCLEO-L432KC 80 MHz, measured 2026-11-15: L0 0.08M, L2 0.24M, L5 0.11M, L6 2.48M, L3 7.74M (Wire.begin i2c_computeTiming)"
+# LD3 = PB3 = D13 (variant_NUCLEO_L432KC.h LED_BUILTIN).
+led_watch: "gpiob:3"
+led_min_edges: 2
+# L6 falls through to LED_BUILTIN: PB3 is TIM2_CH2 on AF1 (stm32duino
+# PinMap_TIM, bus/attach.rs STM32L4_TIMER_PADS) and is not a DAC pin.
+pwm_watch: "gpiob:3"
+pwm_min_edges: 20
+family: stm32
+notes: "Stock stm32duino NUCLEO_L432KC (MSI PLL 80 MHz + LSE); L8 bxCAN1 loopback"

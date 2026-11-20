@@ -1,0 +1,13 @@
+schema_version: "1.0"
+inputs:
+  firmware: ../../tests/fixtures/esp32c2-smoke.elf
+  system: ./system.yaml
+limits:
+  max_steps: 600000
+assertions:
+  - uart_contains: "Hello from ESP32-C2"
+  # GPIO_ENABLE bit 10: the smoke configured GPIO10 as an output.
+  - memory_value:
+      address: 0x60004020
+      expected_value: 0x00000400
+      mask: 0x00000400

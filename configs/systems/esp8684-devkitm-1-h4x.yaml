@@ -1,0 +1,9 @@
+# Espressif ESP8684-DevKitM-1-H4X (ESP32-C2, 4 MiB flash).
+# UART0 output is captured at the SoC UART model. GPIO0 is the board's red RGB
+# LED channel per the official v1.1 guide and schematic.
+name: "esp8684-devkitm-1-h4x"
+chip: "../chips/esp32c2.yaml"
+cpu_hz: 120_000_000
+debug_uart: "uart0"
+external_devices: []
+board_io: []

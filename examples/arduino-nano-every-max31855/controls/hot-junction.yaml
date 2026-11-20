@@ -1,0 +1,11 @@
+# Value control for max31855-smoke.yaml: 100.25 °C hot, 30.5 °C cold junction.
+schema_version: "1.2"
+inputs:
+  firmware: ../../../tests/fixtures/avr/arduino-nano-every-max31855.elf
+  system: ./system-hot-junction.yaml
+limits:
+  max_steps: 2000000
+assertions:
+  - uart_contains: "TC=100.25 C"
+  - uart_contains: "CJ=30.5000 C"
+  - expected_stop_reason: max_steps

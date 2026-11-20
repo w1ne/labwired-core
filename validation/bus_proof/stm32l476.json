@@ -1,0 +1,27 @@
+{
+  "id": "stm32l476",
+  "in_boards": true,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
+    "test": "test_stm32l476_zephyr_survival",
+    "signal": "committed ELF fixture booted in-sim; assert_uart_contains matches 'Hello World! nucleo_l476rg' on a real bus.attach_uart_tx_sink capture. Fixture absence is a hard assert!, not a skip.",
+    "lane": "core-ci / core-integrity (push to main): cargo test -p labwired-core --test gates firmware_survival::"
+  },
+  "spi": {
+    "state": "proven",
+    "file": "crates/core/tests/world_multichip.rs",
+    "test": "master_chip_reaches_operate_with_real_sensor_chip",
+    "signal": "two independent L476 chip instances run real firmware; a real SN74HC165 shift register is attached on spi1 (examples/iolink-station/sensor/system.yaml) and its 0xA5 preset is read over SPI by the sensor chip, sent across the modelled C/Q UART wire, and read back out of the master chip's RAM by ELF symbol (g_master_pd0). A specific payload byte survives the whole path.",
+    "lane": "core-board-ci / iolink-station-l476 (gate: true in configs/ci/boards.yml, runs on pull_request; path-filtered to configs|examples|hil|platformio)",
+    "note": "VACUITY WATCH: skip_or_fail_missing_elfs() returns silently unless LABWIRED_REQUIRE_IOLINK_ELFS is set. Only examples/iolink-station/ci/test.sh sets it. In any OTHER lane that runs cargo test --workspace this same file silently skips."
+  },
+  "i2c": {
+    "state": "proven",
+    "file": "validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino",
+    "test": "LW_L3_OK",
+    "signal": "real Arduino firmware writes a register-pointer byte to the INA219 model attached at 0x40 in validation/arduino-matrix/systems/<chip>.yaml and Wire.endTransmission() returns 0 (the device ACKed); the verdict LW_L3_OK then comes back as real bytes on the modelled UART, matched by a uart_contains oracle",
+    "lane": "core-arduino-matrix-smoke / arduino-matrix-gate (nightly 02:20 UTC + push to main)",
+    "note": "the ACK is meaningful because the same chips' tier-1 fixtures show an UNMATCHED address NACKs (esp32 check_i2c addr 0x20, stm32 NACKF, rp2040 ABRT_7B_ADDR_NOACK) - the bus does not blanket-ACK. LIMIT: this proves address+data out and the device's ACK back, not a payload readback. Evidence: run 30842505709, 'cells=45 expected>=45 fails=0', 2026-08-03. firmware_survival's nucleo_l476rg_i2c case and firmware-l476-demo's 'I2C1 OK' are register/status fingerprints only - no device ever ACKs there. The nokia5110 PCD8544 framebuffer tests would be strong SPI evidence but every test in those three files is #[ignore]d and no workflow passes --ignored."
+  }
+}

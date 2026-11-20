@@ -1,0 +1,5 @@
+[build]
+target = "thumbv8m.main-none-eabi"
+
+[target.thumbv8m.main-none-eabi]
+rustflags = ["-C", "link-arg=-Tlink.x"]

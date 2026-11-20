@@ -22,7 +22,7 @@ LED: **LD2** green on **PA5** (active high). Button: **B1** on **PC13** (active 
 cargo run -q -p labwired-cli -- test --script examples/nucleo-u545re/io-smoke.yaml
 
 # 2. machine-run pin proofs (LD2 PA5, B1 PC13, VCP, memory map, flash banks)
-cargo test -p labwired-core --test nucleo_u545re
+cargo test -p labwired-core --test stm32 nucleo_u545re::
 
 # 3. STM32CubeU5 HAL firmware (needs arm-none-eabi-gcc + a CubeU5 checkout)
 make -C examples/nucleo-u545re/board_firmware

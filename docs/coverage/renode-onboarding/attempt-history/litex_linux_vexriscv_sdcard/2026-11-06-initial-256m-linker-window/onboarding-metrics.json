@@ -1,0 +1,37 @@
+{
+  "target_id": "litex_linux_vexriscv_sdcard",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": "firmware-litex-vexriscv-linux-smoke",
+  "target_triple": "riscv32im-unknown-none-elf",
+  "script": "examples/renode-onboarding/litex_linux_vexriscv_sdcard-smoke.yaml",
+  "system": "configs/systems/onboarding/litex_linux_vexriscv_sdcard.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-06T00:24:06Z",
+  "finished_at_utc": "2026-11-06T00:24:14Z",
+  "elapsed_seconds": 9,
+  "elapsed_ms": 8599,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 7.774,
+    "build_firmware": 0.522,
+    "run_smoke": 0.292
+  },
+  "stages_ms": {
+    "build_cli": 7774,
+    "build_firmware": 522,
+    "run_smoke": 292
+  }
+}

@@ -6,62 +6,81 @@
 
 name: efm32jg12
 arch: arm
+# Renode efm32xg1x/efm32jg12.repl: cpuType "cortex-m3".
+core: cortex-m3
+# Flash at 0x0 as in Renode's efm32xg1x/efm32jg12.repl
+# (`flash: Memory.MappedMemory @ sysbus 0x00000000`) and the EFM32 Series 1
+# memory map.
 flash:
-  base: 134217728
+  base: 0
   size: 1048576B
 ram:
   base: 536870912
   size: 262144B
 peripherals:
-- id: i2c0
-  type: efm32ggi2ccontroller
-  bus: sysbus
-  base_address: 1073790976
-- id: i2c1
-  type: efm32ggi2ccontroller
-  bus: sysbus
-  base_address: 1073792000
-- id: timer0
-  type: efm32timer
-  bus: sysbus
-  base_address: 1073840128
-- id: timer1
-  type: efm32timer
-  bus: sysbus
-  base_address: 1073841152
+# Mapped: USART0, the GPIO ports and TIMER0/TIMER1, all exercised by the
+# Renode onboarding smoke. Other generated windows remain unclaimed.
 - id: usart0
   type: efm32_uart
   bus: sysbus
   base_address: 1073807360
-- id: usart1
-  type: efm32_uart
-  bus: sysbus
-  base_address: 1073808384
-- id: usart2
-  type: efm32_uart
-  bus: sysbus
-  base_address: 1073809408
-- id: usart3
-  type: efm32_uart
-  bus: sysbus
-  base_address: 1073810432
-- id: leUart0
-  type: leuart
-  bus: sysbus
-  base_address: 1074044928
-- id: gpioPort
-  type: efmgpioport
-  bus: sysbus
-  base_address: 1073782784
-- id: bitband
-  type: bitbanding
-  bus: sysbus
-  base_address: 1107296256
-- id: cmuStatusOscillator
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1074561068
-- id: vcmpStatus
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073741832
+  size: 1KB
+# Series-1 GPIO ports A..F (Renode: one `GPIOPort.EFMGPIOPort` at
+# 0x4000A000). GPIO_P_TypeDef at a 0x30 stride
+# (Gecko SDK efm32pg1b_gpio_p.h: P[6]); DOUTSET/DOUTCLR do not exist on
+# Series 1. The block head from 0x4000A400 (EXTI, ROUTE, INSENSE, EM4 wake)
+# is NOT mapped: no model behind it.
+- id: gpioa
+  type: efm32s1_gpioport
+  base_address: 0x4000A000
+  size: 48B
+- id: gpiob
+  type: efm32s1_gpioport
+  base_address: 0x4000A030
+  size: 48B
+- id: gpioc
+  type: efm32s1_gpioport
+  base_address: 0x4000A060
+  size: 48B
+- id: gpiod
+  type: efm32s1_gpioport
+  base_address: 0x4000A090
+  size: 48B
+- id: gpioe
+  type: efm32s1_gpioport
+  base_address: 0x4000A0C0
+  size: 48B
+- id: gpiof
+  type: efm32s1_gpioport
+  base_address: 0x4000A0F0
+  size: 48B
+# Series-1 TIMER0/TIMER1 (0x40018000/0x40018400).
+# Renode efm32xg1x/efm32jg12.repl maps `Timers.Efm32Timer` here with these IRQs
+# (Gecko SDK v4.4.0 EFM32JG12B IRQn_Type: TIMER0 11, TIMER1 19).
+# Series-1 layout (efm32pg1b_timer.h): IF/IFS/IFC/IEN at 0x0C..0x18,
+# CC0..CC3 at 0x60.
+# Counts CPU cycles / 2^PRESC; the CMU HFPERCLKEN0 gate is not modelled.
+- id: timer0
+  type: efm32s1_timer
+  base_address: 0x40018000
+  size: 1KB
+  irq: 11
+- id: timer1
+  type: efm32s1_timer
+  base_address: 0x40018400
+  size: 1KB
+  irq: 19
+# Series-1 WTIMER0/WTIMER1 (0x4001A000/0x4001A400): the TIMER layout above
+# with 32-bit TOP/CNT/CCV (_WTIMER_CNT_MASK 0xFFFFFFFF; TOP resets to 0xFFFF).
+# Renode efm32xg1x/efm32jg12.repl only tags WTIMER0/WTIMER1; Gecko SDK v4.4.0
+# EFM32JG12B IRQn_Type: WTIMER0 36, WTIMER1 37.
+- id: wtimer0
+  type: efm32s1_wtimer
+  base_address: 0x4001A000
+  size: 1KB
+  irq: 36
+- id: wtimer1
+  type: efm32s1_wtimer
+  base_address: 0x4001A400
+  size: 1KB
+  irq: 37

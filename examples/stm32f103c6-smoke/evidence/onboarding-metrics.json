@@ -1,0 +1,28 @@
+{
+  "target_id": "stm32f103c6-low-density",
+  "status": "pass",
+  "crate": "firmware-stm32f103-lowdensity-smoke",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/stm32f103c6-smoke/io-smoke.yaml",
+  "system": "examples/stm32f103c6-smoke/system.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-17T12:36:07Z",
+  "finished_at_utc": "2026-11-17T12:36:08Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1021,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.294,
+    "build_firmware": 0.331,
+    "run_smoke": 0.36
+  },
+  "stages_ms": {
+    "build_cli": 294,
+    "build_firmware": 331,
+    "run_smoke": 360
+  }
+}

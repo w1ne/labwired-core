@@ -1,0 +1,246 @@
+use labwired_config::{ChipDescriptor, SystemManifest};
+use labwired_core::{bus::SystemBus, system::riscv::configure_riscv, Machine};
+
+#[test]
+fn ch32v003_compiled_rv32e_firmware_toggles_pc0() {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let chip_path = root.join("configs/chips/ch32v003f4p6.yaml");
+    let chip = ChipDescriptor::from_file(&chip_path).expect("CH32V003 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &SystemManifest::default())
+        .expect("CH32V003 peripherals and clock gates");
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures/ch32v003f4p6-blink.elf"))
+        .expect("compiled RV32E firmware ELF");
+
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load CH32V003 ELF");
+    let gpioc = machine
+        .bus
+        .find_peripheral_index_by_name("gpioc")
+        .expect("GPIOC registered from descriptor");
+
+    let mut previous = None;
+    let mut edges = 0;
+    for _ in 0..200_000 {
+        machine.step().expect("compiled RV32E firmware instruction");
+        if let Some(state) = machine.bus.peripherals[gpioc].dev.read_gpio_output(0) {
+            if previous.is_some_and(|prior| prior != state) {
+                edges += 1;
+            }
+            previous = Some(state);
+            if edges >= 2 {
+                break;
+            }
+        }
+    }
+
+    assert!(
+        edges >= 2,
+        "compiled firmware produced only {edges} PC0 edges"
+    );
+    assert_eq!(machine.cpu.mcause, 0, "compiled firmware must not trap");
+}
+
+fn run_uart_hello(chip: &ChipDescriptor) -> (Vec<u8>, u32) {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V003 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures/ch32v003f4p6-uart-hello.elf"))
+        .expect("compiled RV32EC firmware ELF");
+
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load CH32V003 ELF");
+    for _ in 0..20_000 {
+        machine
+            .step()
+            .expect("compiled RV32EC firmware instruction");
+    }
+    let out = sink.lock().unwrap().clone();
+    (out, machine.cpu.mcause)
+}
+
+#[test]
+fn ch32v003_compiled_rv32ec_firmware_prints_on_usart1() {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let chip = ChipDescriptor::from_file(root.join("configs/chips/ch32v003f4p6.yaml"))
+        .expect("CH32V003 descriptor");
+    let (out, mcause) = run_uart_hello(&chip);
+    assert_eq!(
+        String::from_utf8_lossy(&out),
+        "Hello from CH32V003\r\n",
+        "USART1 TX stream"
+    );
+    assert_eq!(mcause, 0, "compiled firmware must not trap");
+}
+
+#[test]
+fn ch32v003_usart1_stays_silent_without_its_apb2_clock() {
+    // Negative control: move the USART1 gate to an APB2PCENR bit the firmware
+    // never sets. TXE must then never assert, so nothing reaches the sink.
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let yaml = std::fs::read_to_string(root.join("configs/chips/ch32v003f4p6.yaml"))
+        .expect("read CH32V003 descriptor");
+    let gate = "clock: { reg: \"apb2pcenr\", bit: 14 }";
+    assert_eq!(yaml.matches(gate).count(), 1, "USART1 gate is unique");
+    let chip: ChipDescriptor =
+        serde_yaml::from_str(&yaml.replace(gate, "clock: { reg: \"apb2pcenr\", bit: 11 }"))
+            .expect("parse modified descriptor");
+    let (out, _) = run_uart_hello(&chip);
+    assert!(out.is_empty(), "unclocked USART1 printed {out:?}");
+}
+
+// CH32V003 package variants. One die in four packages (WCH CH32V003DS0 V1.8,
+// Table 2-1 "Pin definitions"): each variant descriptor is the F4P6 one with
+// a different `package`, `pin_count` and bonded `pins` map.
+const PACKAGE_VARIANTS: &[(&str, &str, u32, &[&str])] = &[
+    (
+        "ch32v003f4u6",
+        "QFN20",
+        20,
+        &[
+            "PA1", "PA2", "PC0", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7", "PD0", "PD1",
+            "PD2", "PD3", "PD4", "PD5", "PD6", "PD7",
+        ],
+    ),
+    (
+        "ch32v003a4m6",
+        "SOP16",
+        16,
+        &[
+            "PA1", "PA2", "PC0", "PC1", "PC2", "PC3", "PC4", "PC6", "PC7", "PD1", "PD4", "PD5",
+            "PD6", "PD7",
+        ],
+    ),
+    (
+        "ch32v003j4m6",
+        "SOP8",
+        8,
+        &[
+            "PA1", "PA2", "PC1", "PC2", "PC4", "PD1", "PD4", "PD5", "PD6",
+        ],
+    ),
+];
+
+fn chip_yaml(name: &str) -> serde_yaml::Value {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let text = std::fs::read_to_string(root.join(format!("configs/chips/{name}.yaml")))
+        .unwrap_or_else(|e| panic!("read {name}: {e}"));
+    serde_yaml::from_str(&text).unwrap_or_else(|e| panic!("parse {name}: {e}"))
+}
+
+fn load_chip(name: &str) -> ChipDescriptor {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    ChipDescriptor::from_file(root.join(format!("configs/chips/{name}.yaml")))
+        .unwrap_or_else(|e| panic!("{name} descriptor: {e}"))
+}
+
+/// Steps `fixture` on `chip` and counts output edges on GPIOC bit `bit`.
+fn gpioc_edges(chip: &ChipDescriptor, fixture: &str, bit: u8) -> (u32, u32) {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V003 peripherals and clock gates");
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(fixture))
+        .expect("compiled RV32E firmware ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load CH32V003 ELF");
+    let gpioc = machine
+        .bus
+        .find_peripheral_index_by_name("gpioc")
+        .expect("GPIOC registered from descriptor");
+    let mut previous = None;
+    let mut edges = 0;
+    for _ in 0..200_000 {
+        machine.step().expect("compiled RV32E firmware instruction");
+        if let Some(state) = machine.bus.peripherals[gpioc].dev.read_gpio_output(bit) {
+            if previous.is_some_and(|prior| prior != state) {
+                edges += 1;
+            }
+            previous = Some(state);
+            if edges >= 2 {
+                break;
+            }
+        }
+    }
+    (edges, machine.cpu.mcause)
+}
+
+#[test]
+fn ch32v003_package_variants_match_ds0_bonding_on_the_f4p6_die() {
+    let strip = |mut v: serde_yaml::Value| {
+        let map = v.as_mapping_mut().expect("descriptor is a mapping");
+        for key in ["name", "package", "pin_count", "pins"] {
+            map.remove(key);
+        }
+        v
+    };
+    let die = strip(chip_yaml("ch32v003f4p6"));
+    for (name, package, pin_count, bonded) in PACKAGE_VARIANTS {
+        let yaml = chip_yaml(name);
+        assert_eq!(yaml["name"].as_str(), Some(*name));
+        assert_eq!(yaml["package"].as_str(), Some(*package), "{name} package");
+        assert_eq!(yaml["pin_count"].as_u64(), Some(u64::from(*pin_count)));
+        let pins: Vec<&str> = yaml["pins"]
+            .as_mapping()
+            .expect("pins map")
+            .keys()
+            .map(|k| k.as_str().expect("pin name"))
+            .collect();
+        assert_eq!(&pins, bonded, "{name} bonded GPIOs (DS0 Table 2-1)");
+        assert_eq!(
+            strip(yaml),
+            die,
+            "{name} must keep the F4P6 die: memory, clock and peripherals"
+        );
+    }
+}
+
+#[test]
+fn ch32v003_package_variants_print_on_usart1_pd5() {
+    // PD5 (USART1 TX, default mapping) is bonded on every package.
+    for (name, _, _, bonded) in PACKAGE_VARIANTS {
+        assert!(bonded.contains(&"PD5"), "{name} bonds PD5");
+        let (out, mcause) = run_uart_hello(&load_chip(name));
+        assert_eq!(
+            String::from_utf8_lossy(&out),
+            "Hello from CH32V003\r\n",
+            "{name} USART1 TX stream"
+        );
+        assert_eq!(mcause, 0, "{name}: compiled firmware must not trap");
+    }
+}
+
+#[test]
+fn ch32v003_package_variants_toggle_a_bonded_gpioc_pin() {
+    // F4U6 and A4M6 bond PC0, so the F4P6 blink runs unchanged. The SOP-8
+    // J4M6 has no PC0 pad; its own fixture blinks PC4 (package pin 7).
+    for (name, fixture, bit) in [
+        ("ch32v003f4u6", "ch32v003f4p6-blink.elf", 0u8),
+        ("ch32v003a4m6", "ch32v003f4p6-blink.elf", 0),
+        ("ch32v003j4m6", "ch32v003j4m6-blink-pc4.elf", 4),
+    ] {
+        let bonded = PACKAGE_VARIANTS
+            .iter()
+            .find(|v| v.0 == name)
+            .expect("variant listed")
+            .3;
+        assert!(
+            bonded.contains(&format!("PC{bit}").as_str()),
+            "{name} bonds PC{bit}"
+        );
+        let (edges, mcause) = gpioc_edges(&load_chip(name), fixture, bit);
+        assert!(edges >= 2, "{name}: only {edges} PC{bit} edges");
+        assert_eq!(mcause, 0, "{name}: compiled firmware must not trap");
+    }
+}
+
+#[test]
+fn ch32v003j4m6_blink_fixture_leaves_unbonded_pc0_alone() {
+    // Negative control for the PC4 fixture: PC0 must not toggle, so the
+    // edge count above is not satisfied by an unbonded pin.
+    let (edges, _) = gpioc_edges(&load_chip("ch32v003j4m6"), "ch32v003j4m6-blink-pc4.elf", 0);
+    assert_eq!(edges, 0, "PC4 fixture toggled PC0 {edges} times");
+}

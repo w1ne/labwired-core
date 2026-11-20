@@ -1,0 +1,1 @@
+[2m2026-11-15T20:51:14.612862Z[0m [31mERROR[0m [2mlabwired_cli::commands::test[0m[2m:[0m Failed to read firmware "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-ft9001-smoke": No such file or directory (os error 2)

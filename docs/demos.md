@@ -20,13 +20,15 @@ High-fidelity machine models showcasing peripheral accuracy and hardware parity.
 
 | Demo | Description | Path |
 | :--- | :--- | :--- |
-| **NUCLEO-H563ZI** | Our flagship demo: Absolute parity between simulation and the real physical board. | [`examples/nucleo-h563zi/`](../examples/nucleo-h563zi/README.md) |
+| **NUCLEO-H563ZI** | STM32H563 firmware model with documented silicon comparisons for selected behaviors; consult the board evidence and model gaps. Not a whole-board parity claim. | [`examples/nucleo-h563zi/`](../examples/nucleo-h563zi/README.md) |
 | **Demo Blinky** | The classic "Hello World" of embedded systems, running on a modeled Cortex-M3. | [`examples/demo-blinky/`](../examples/demo-blinky/) |
 | **RISC-V Virt** | Showcasing multi-architecture support via the `riscv-virt` machine. | [`examples/riscv-virt/`](../examples/riscv-virt/) |
 | **ESP32 E-Paper (Rust)** | ESP32-WROOM + SSD1680 tri-color e-paper, pure-Rust `esp-hal`. Sim partial, real hardware ✅. | [`examples/esp32-epaper-lab/`](../examples/esp32-epaper-lab/README.md) |
 | **ESP32 E-Reader (Arduino)** | Same panel via Arduino-ESP32 + GxEPD2; sim paints end-to-end through FreeRTOS + ROM-thunk pipeline in v0.15.0. | [`examples/labwired-ereader-arduino/`](../examples/labwired-ereader-arduino/README.md) |
 | **ESP32-S3 Blinky / Hello / I2C** | Minimal ESP32-S3 sketches for boot, USB-serial output, and TMP102 over I2C. | [`examples/esp32s3-blinky/`](../examples/esp32s3-blinky/), [`hello-world/`](../examples/esp32s3-hello-world/), [`i2c-tmp102/`](../examples/esp32s3-i2c-tmp102/) |
 | **STM32 Tri-color E-Paper** | STM32F103 variant of the SSD1680 e-paper demo, byte-for-byte compatible. | [`examples/epaper-tricolor-lab/`](../examples/epaper-tricolor-lab/) |
+
+See the [STM32H563 board evidence](boards/stm32h563.md) and [hardware–simulation comparison methodology](golden_reference.md) for the actual scope of the measured parity claims.
 
 ---
 

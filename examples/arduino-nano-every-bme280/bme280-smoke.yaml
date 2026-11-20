@@ -1,0 +1,18 @@
+# Arduino Nano Every + BME280: the stock Adafruit BME280 library reads the
+# sensor over Wire (TWI0) and prints compensated values on Serial (USART3).
+# LED_BUILTIN (D13 / PE2) goes high only after all three readings print.
+schema_version: "1.2"
+inputs:
+  firmware: ../../tests/fixtures/avr/arduino-nano-every-bme280.elf
+  system: ../../configs/systems/arduino-nano-every-bme280.yaml
+limits:
+  max_steps: 6000000
+assertions:
+  - uart_contains: "NANO_EVERY_BME280 ID=0x60"
+  - uart_contains: "T=25.00 C"
+  - uart_contains: "P=1013.25 hPa"
+  - uart_contains: "RH=50.00 %"
+  - gpio_edges:
+      pin: "porte:2"
+      min_edges: 1
+  - expected_stop_reason: max_steps

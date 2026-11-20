@@ -184,6 +184,10 @@ impl std::fmt::Debug for Tca9548a {
 }
 
 impl I2cDevice for Tca9548a {
+    fn is_i2c_mux(&self) -> bool {
+        true
+    }
+
     /// The switch's OWN address. Resolution never goes through this — see
     /// [`I2cDevice::claims_address`] — but the bus trace uses it to label the
     /// device and tooling uses it to identify the part.
@@ -202,6 +206,16 @@ impl I2cDevice for Tca9548a {
         self.channels.iter().enumerate().any(|(ch, devices)| {
             (self.control >> ch) & 1 != 0 && devices.iter().any(|d| d.claims_address(addr))
         })
+    }
+
+    /// Selected downstream devices share SCL: the longest hold wins.
+    fn clock_stretch_ns(&self) -> u64 {
+        self.selected
+            .downstream
+            .iter()
+            .map(|&(ch, i)| self.channels[ch][i].clock_stretch_ns())
+            .max()
+            .unwrap_or(0)
     }
 
     /// Latch what this transaction is for.

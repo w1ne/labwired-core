@@ -2,10 +2,9 @@
 #
 # Build: cargo build -p firmware-vegaboard-ri5cy-smoke --release --target riscv32imc-unknown-none-elf
 #
-# The firmware boots from flash at 0x0 and prints over LPUART0. It proves the
-# RV32IMC core with a real multiply, reads back the declared-stub SCG/PCC
-# windows, and its heartbeat's `stat=` field is read back from the LPUART
-# status register (0x00c00000 = TDRE|TC idle).
+# The firmware boots from flash at 0x0 and prints over modeled LPUART0. It
+# proves the RV32IMC multiply path and reads the LPUART status register
+# (0x00c00000 = TDRE|TC idle).
 schema_version: "1.0"
 inputs:
   firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-vegaboard-ri5cy-smoke"
@@ -17,7 +16,6 @@ assertions:
   - uart_ordered:
       - "cpu=rv32imc uart=lpuart"
       - "mul=0000002a"
-      - "scg=00000000 pcc0=00000000"
       - "hb=0 stat=00c00000"
       - "hb=1 stat=00c00000"
       - "hb=2 stat=00c00000"

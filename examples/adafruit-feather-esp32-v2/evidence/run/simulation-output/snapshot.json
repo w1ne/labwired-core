@@ -1,0 +1,55 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "xtensa_lx7",
+    "registers": [
+      0,
+      1073610704,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1073610704,
+      1072971784,
+      8192,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1074600328,
+    "ps": 31,
+    "window_base": 0,
+    "window_start": 1,
+    "vecbase": 1073741824
+  },
+  "steps_executed": 20000,
+  "cycles": 20000,
+  "instructions": 20000,
+  "stop_reason": "assertions_passed",
+  "stop_reason_details": {
+    "triggered_stop_condition": "assertions_passed",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 200000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": true,
+    "stop_when_assertions_pass_settle_steps": 100,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "484593d35d394901918966faa5ca04b214e7448a7a2bd1cba81e81b9faff0e43",
+  "config": {
+    "firmware": "examples/adafruit-feather-esp32-v2/../../tests/fixtures/tier1/adafruit-feather-esp32-v2-gpio.elf",
+    "system": "examples/adafruit-feather-esp32-v2/../../configs/systems/adafruit-feather-esp32-v2.yaml",
+    "script": "examples/adafruit-feather-esp32-v2/io-smoke.yaml"
+  }
+}

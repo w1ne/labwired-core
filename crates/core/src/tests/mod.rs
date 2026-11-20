@@ -82,6 +82,8 @@ pub mod no_vacuous_test_targets;
 pub mod nrf52;
 pub mod nrf52_nvmc;
 #[cfg(test)]
+pub mod onboarding_timer_fallback;
+#[cfg(test)]
 pub mod one_arch_policy;
 #[cfg(test)]
 pub mod one_arduino_boot_path;
@@ -119,6 +121,11 @@ pub mod source_text;
 pub mod spi_byte_level_golden;
 #[cfg(test)]
 pub mod spi_edge_sampling_lab;
+/// The one place that knows where the engine's Rust source lives (shared with
+/// the integration tests, which include the same file).
+#[cfg(test)]
+#[path = "../../tests/common/src_roots.rs"]
+pub mod src_roots;
 #[cfg(test)]
 pub mod stm32_i2c_waveform;
 #[cfg(test)]
@@ -126,6 +133,8 @@ pub mod stm32_legacy_i2c_waveform;
 pub mod stm32_spi_waveform;
 #[cfg(test)]
 pub mod stm32_uart_waveform;
+#[cfg(test)]
+pub mod stm32f103_flash;
 #[cfg(test)]
 pub mod stm32f1_bus_visibility;
 #[cfg(test)]

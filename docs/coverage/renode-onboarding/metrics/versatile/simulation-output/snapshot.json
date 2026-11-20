@@ -1,0 +1,58 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "cortex_a",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      93,
+      0,
+      270471168,
+      144,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      48
+    ],
+    "pc": 48,
+    "cpsr": 1610612947
+  },
+  "steps_executed": 100000,
+  "cycles": 100000,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "61bc8b1e29f8da6a3b603ebdb1c2ec765b87357403f3e32230eb6a3a1c94fbe4",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/versatile-arm926-uart-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/versatile.yaml",
+    "script": "examples/renode-onboarding/versatile-arm926-uart-smoke.yaml"
+  }
+}

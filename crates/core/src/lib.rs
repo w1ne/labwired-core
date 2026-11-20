@@ -19,10 +19,12 @@ pub mod debug;
 pub mod decoder;
 pub mod fault_verdict;
 pub mod fidelity;
+pub mod flex;
 pub mod hashers;
 pub mod host_time;
 pub mod inspect;
 pub mod interrupt;
+pub mod live_numeric;
 pub mod logic_capture;
 pub mod machine;
 pub mod memory;
@@ -38,6 +40,7 @@ pub mod pins;
 pub mod plugin;
 pub mod power;
 pub mod profile;
+pub mod reset_input;
 pub mod runtime_snapshot;
 pub mod sched;
 pub mod sd_hle;
@@ -64,8 +67,10 @@ pub use machine::{
 };
 pub use peripheral::{
     AnalogProbe, DmaDirection, DmaRequest, DmaRoute, DmaUnitTransform, FlashStoreOutcome,
-    MmioAccessClass, Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_RX,
-    DMA_SIGNAL_TX,
+    MmioAccessClass, Peripheral, PeripheralResetCause, PeripheralTickResult, DMA_SIGNAL_DATA,
+    DMA_SIGNAL_RX, DMA_SIGNAL_TIMER_CH1, DMA_SIGNAL_TIMER_CH2, DMA_SIGNAL_TIMER_CH3,
+    DMA_SIGNAL_TIMER_CH4, DMA_SIGNAL_TIMER_COMMUTATION, DMA_SIGNAL_TIMER_TRIGGER,
+    DMA_SIGNAL_TIMER_UPDATE, DMA_SIGNAL_TX,
 };
 
 use std::collections::HashSet;
@@ -300,6 +305,25 @@ pub enum StopReason {
     FirmwareExit(u32),
 }
 
+/// Classic ESP32 state a deep-sleep wake-up reboots into. See
+/// [`Machine::capture_esp32_deep_sleep_boot`].
+#[derive(Debug, Clone)]
+struct Esp32DeepSleepBoot {
+    /// `(start, bytes)` of every internal-SRAM segment of the app image.
+    segments: Vec<(u64, Vec<u8>)>,
+    entry_pc: u32,
+    pro_sp: u32,
+    app_sp: u32,
+}
+
+/// Classic ESP32 internal SRAM: DRAM `0x3FFA_E000..0x4000_0000` and IRAM
+/// `0x4007_0000..0x400C_0000` (ESP32 TRM §3.1.3). RTC memory
+/// (`0x3FF8_0000`, `0x400C_0000`, `0x5000_0000`) and the flash cache windows
+/// are outside both ranges.
+fn is_esp32_internal_sram(addr: u64) -> bool {
+    (0x3FFA_E000..0x4000_0000).contains(&addr) || (0x4007_0000..0x400C_0000).contains(&addr)
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 /// Counters collected during one measured machine run.
 ///
@@ -328,6 +352,13 @@ pub struct StepProfile {
 /// event-scheduler fast-forward path consults the medium poll quantum.
 #[cfg(feature = "event-scheduler")]
 const WIFI_MEDIUM_IDLE_POLL_QUANTUM: u64 = 8192;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct IdleFastForwardResult {
+    cycles: u64,
+    primary_steps: u64,
+    secondary_steps: u64,
+}
 
 pub struct Machine<C: Cpu> {
     pub cpu: C,
@@ -408,6 +439,9 @@ pub struct Machine<C: Cpu> {
     /// Off by default (the browser runs wide and quantised); `labwired test`
     /// sets it for Cortex-M, where hosted runs must be cycle-exact.
     pub exact_batch_boundaries: bool,
+    /// The wide interval set aside while the per-cycle walk is live. See
+    /// [`Machine::sync_exact_window_with_walk`].
+    exact_wide_interval: Option<u32>,
     pub config: SimulationConfig,
     /// Injectable host clock used by [`HostTimeMode::Realtime`] pacing.
     host_clock: Box<dyn host_time::HostClock + Send>,
@@ -428,6 +462,15 @@ pub struct Machine<C: Cpu> {
     /// indexed access + one downcast. `None` for configs that don't register
     /// an RTC_CNTL peripheral (every non-ESP32-classic target).
     rtc_cntl_index: Option<usize>,
+    /// Classic ESP32 only: the internal-SRAM ranges `load_firmware` filled
+    /// from the image (IRAM and DRAM segments; never RTC memory or the flash
+    /// cache windows). [`Self::capture_esp32_deep_sleep_boot`] reads them back
+    /// once the runner has finished its post-load setup.
+    esp32_sram_segments: Vec<(u64, usize)>,
+    /// Classic ESP32 only: the state the 2nd-stage bootloader leaves after a
+    /// deep-sleep wake-up. `None` until a runner captures it; a deep sleep
+    /// that ends without it halts both cores.
+    esp32_deep_sleep_boot: Option<Esp32DeepSleepBoot>,
     /// Cached bus index of the FLASH peripheral (H5 layout). Resolved once at
     /// construction; `step()` drains pending FLASH ops (sector erase,
     /// bank-swap+reset) at clean instruction boundaries without walking the
@@ -446,6 +489,10 @@ pub struct Machine<C: Cpu> {
     /// the bus), so the per-cycle drain short-circuits without a peripheral
     /// walk or downcast.
     scb_index: Option<usize>,
+    /// The SCB's SYSRESETREQ mirror (`Scb::sysreset_signal`), resolved with
+    /// [`Self::scb_index`] under the same fixed-set assumption. Lets the
+    /// boundary drain skip the downcast while no reset is latched.
+    scb_sysreset_signal: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Cached bus index of the nRF52 NVMC peripheral. Resolved once at
     /// construction; the advance boundary drains a latched erase op every
     /// instruction and used to walk the whole ~40-entry peripheral list,
@@ -574,6 +621,14 @@ pub struct Machine<C: Cpu> {
     /// expensive u128 divide (and fan-out) on every instruction when the
     /// attached devices only need one update per simulated microsecond.
     next_i2c_time_cycle: u64,
+    /// Whether the current in-tree Machine::advance call may reuse its
+    /// attached-time-device presence probe. The public window runner exposes a
+    /// mutable bus to its callback, so it keeps probing at each boundary.
+    central_device_time_cache_enabled: bool,
+    /// Cached presence for the current Machine::advance call. Attachments may
+    /// change between public calls, but not while the in-tree runner holds
+    /// &mut self across all its internal CPU windows.
+    central_device_time_attached_cache: Option<bool>,
     /// Has this machine already told the fidelity census that its device time
     /// is DERIVED from `cpu_hz` rather than read off a modelled µs counter?
     ///
@@ -924,6 +979,16 @@ impl<C: Cpu> Machine<C> {
         Some(series)
     }
 
+    /// Live native numeric observations, on a cursor independent of the analog
+    /// co-simulation ring and historical series. None when no producer exists.
+    pub fn live_numeric_capture(
+        &self,
+        cursor: u64,
+        max_points: usize,
+    ) -> Option<crate::live_numeric::LiveNumericBatch> {
+        self.bus.live_numeric_capture(cursor, max_points)
+    }
+
     /// Current engine cycle — the `nowCycle` reported alongside a logic-edge
     /// read so the UI can extend flat traces to "now".
     pub fn logic_now_cycle(&self) -> u64 {
@@ -1155,12 +1220,18 @@ impl<C: Cpu> Machine<C> {
                 .and_then(|a| a.downcast_ref::<crate::peripherals::simctl::SimCtl>())
                 .is_some()
         });
-        let scb_index = bus.peripherals.iter().position(|p| {
-            p.dev
-                .as_any()
-                .and_then(|a| a.downcast_ref::<crate::peripherals::scb::Scb>())
-                .is_some()
-        });
+        // The SCB's index and its SYSRESETREQ mirror, in the one downcast.
+        let (scb_index, scb_sysreset_signal) = bus
+            .peripherals
+            .iter()
+            .enumerate()
+            .find_map(|(i, p)| {
+                p.dev
+                    .as_any()
+                    .and_then(|a| a.downcast_ref::<crate::peripherals::scb::Scb>())
+                    .map(|scb| (i, scb.sysreset_signal()))
+            })
+            .unzip();
         let reset_request_indices: Vec<usize> = bus
             .peripherals
             .iter()
@@ -1223,15 +1294,19 @@ impl<C: Cpu> Machine<C> {
             secondary_defer: None,
             batch_watch_scratch: Vec::new(),
             exact_batch_boundaries: false,
+            exact_wide_interval: None,
             config: SimulationConfig::default(),
             host_clock: Box::new(host_time::StdHostClock::new()),
             step_profile: StepProfile::default(),
             sched: sched::EventScheduler::new(),
             clocks: sched::ClockGraph::new(),
             rtc_cntl_index,
+            esp32_sram_segments: Vec::new(),
+            esp32_deep_sleep_boot: None,
             flash_index,
             simctl_index,
             scb_index,
+            scb_sysreset_signal,
             nvmc_index,
             reset_request_indices,
             sd_hle: None,
@@ -1252,6 +1327,8 @@ impl<C: Cpu> Machine<C> {
             i2c_time_controller_indices,
             last_i2c_time_us: u64::MAX,
             next_i2c_time_cycle: 0,
+            central_device_time_cache_enabled: false,
+            central_device_time_attached_cache: None,
             derived_device_time_noted: false,
             unpowered_rail_noted: false,
             net_drive_stop_from: u64::MAX,
@@ -1286,10 +1363,24 @@ impl<C: Cpu> Machine<C> {
     ///
     /// The nRF54L TWIM is never in the controller list (it does not opt in), so
     /// its slaves are advanced exactly once — by TWIM itself, off the GRTC.
+    #[inline(always)]
     fn advance_central_i2c_time(&mut self) {
-        if self.i2c_time_controller_indices.is_empty() {
+        // Keep the no-work path outside the clock/fan-out routine's register
+        // saves. Most CPU steps do not cross a derived microsecond boundary.
+        if self.i2c_time_controller_indices.is_empty()
+            || (self.i2c_time_source_index.is_none()
+                && self.central_device_time_cache_enabled
+                && self.central_device_time_attached_cache == Some(false))
+            || (self.i2c_time_source_index.is_none()
+                && self.total_cycles < self.next_i2c_time_cycle)
+        {
             return;
         }
+        self.advance_central_device_time_due();
+    }
+
+    #[inline(never)]
+    fn advance_central_device_time_due(&mut self) {
         let (now, derived) = match self.i2c_time_source_index {
             Some(src) => match self.bus.peripherals[src].dev.sim_time_us() {
                 Some(now) => (now, false),
@@ -1299,11 +1390,6 @@ impl<C: Cpu> Machine<C> {
                 let hz = self.bus.cpu_hz;
                 if hz == 0 {
                     // No declared core clock ⇒ nothing honest to derive from.
-                    return;
-                }
-                // The derived µs clock only changes at a µs boundary. Skip the
-                // u128 divide and the device fan-out on the cycles in between.
-                if self.total_cycles < self.next_i2c_time_cycle {
                     return;
                 }
                 let cycles_per_us = (hz / 1_000_000).max(1);
@@ -1318,11 +1404,23 @@ impl<C: Cpu> Machine<C> {
                 // No attached device needs a clock: skip the divide and the
                 // controller fan-out. Re-scanned at the next µs boundary, so a
                 // device attached later is picked up without re-construction.
-                if !self
-                    .i2c_time_controller_indices
-                    .iter()
-                    .any(|&idx| self.bus.peripherals[idx].dev.has_attached_time_devices())
-                {
+                let has_attached_time_devices = if self.central_device_time_cache_enabled {
+                    match self.central_device_time_attached_cache {
+                        Some(present) => present,
+                        None => {
+                            let present = self.i2c_time_controller_indices.iter().any(|&idx| {
+                                self.bus.peripherals[idx].dev.has_attached_time_devices()
+                            });
+                            self.central_device_time_attached_cache = Some(present);
+                            present
+                        }
+                    }
+                } else {
+                    self.i2c_time_controller_indices
+                        .iter()
+                        .any(|&idx| self.bus.peripherals[idx].dev.has_attached_time_devices())
+                };
+                if !has_attached_time_devices {
                     return;
                 }
                 // u128 so a long run cannot wrap: `total_cycles * 1_000_000`
@@ -1373,6 +1471,45 @@ impl<C: Cpu> Machine<C> {
     pub fn with_host_clock(mut self, clock: Box<dyn host_time::HostClock + Send>) -> Self {
         self.host_clock = clock;
         self
+    }
+
+    /// Set both execution and bus grids, respecting the system's explicit
+    /// timing cap. Return the effective interval for host reporting.
+    pub fn set_peripheral_tick_interval(&mut self, requested: u32) -> u32 {
+        let effective = self.bus.clamp_peripheral_tick_interval(requested);
+        self.config.peripheral_tick_interval = effective;
+        self.bus.config.peripheral_tick_interval = effective;
+        effective
+    }
+
+    /// Native clients can write public config fields; apply the cap before
+    /// either authoritative execution API plans a CPU or custom-runner window.
+    #[inline]
+    fn enforce_peripheral_tick_cap(&mut self) {
+        if self.bus.max_peripheral_tick_interval.is_some() {
+            self.set_peripheral_tick_interval(self.config.peripheral_tick_interval);
+        }
+    }
+
+    /// Exact windows hold only on a walk-free bus: a boundary tick hands the
+    /// walk the whole interval as elapsed time, whatever the window's real
+    /// length. A model that wakes the walk (`legacy_tick_dynamic`, e.g. a
+    /// timer firmware just started) would then count a full interval per
+    /// device access. Run at interval 1 while the walk is live and return to
+    /// the wide interval once it is deleted again.
+    #[inline]
+    pub(crate) fn sync_exact_window_with_walk(&mut self) {
+        if !self.exact_batch_boundaries {
+            return;
+        }
+        if self.bus.legacy_walk_disabled {
+            if let Some(wide) = self.exact_wide_interval.take() {
+                self.set_peripheral_tick_interval(wide);
+            }
+        } else if self.config.peripheral_tick_interval > 1 {
+            self.exact_wide_interval = Some(self.config.peripheral_tick_interval);
+            self.set_peripheral_tick_interval(1);
+        }
     }
 
     /// The largest `peripheral_tick_interval` THIS MACHINE can run at without
@@ -1506,6 +1643,11 @@ impl<C: Cpu> Machine<C> {
         let Some((_, cycles)) = sec.poll_loop_skip_budget(&self.bus, limit) else {
             return false;
         };
+        // The primary runs beside a deferral and could read a store's
+        // intermediate value.
+        if sec.poll_loop_plan_stores() {
+            return false;
+        }
         // The step that raises CCOMPARE0 (the `edge`-th from now) runs live.
         let len = edge.map_or(cycles, |edge| cycles.min(edge.saturating_sub(1)));
         if len < 2 {
@@ -1538,7 +1680,11 @@ impl<C: Cpu> Machine<C> {
             && self.bus.idle_fast_forward_legacy_safe()
     }
 
-    fn try_idle_fast_forward(&mut self, _max_steps: Option<u64>, _steps: u64) -> u64 {
+    fn try_idle_fast_forward(
+        &mut self,
+        _max_steps: Option<u64>,
+        _steps: u64,
+    ) -> Option<IdleFastForwardResult> {
         // POLLED logic capture disables the skip: a scheduler event inside the
         // skipped window could toggle a watched pad, and the per-cycle poll
         // guarantee must hold even under this opt-in acceleration. Push-only
@@ -1546,7 +1692,7 @@ impl<C: Cpu> Machine<C> {
         // instrumented peripheral code, which pushes its own edge with the
         // post-skip tap clock (seeded below before the scheduler drain).
         if !self.config.idle_fast_forward_enabled || self.logic_capture.poll_active() {
-            return 0;
+            return None;
         }
         // A cycle-accurate bus still skips a WFI wait while every resident is
         // idle (an idle DHT22 between reads). It does not coalesce timer polls:
@@ -1557,18 +1703,40 @@ impl<C: Cpu> Machine<C> {
             && (self.bus.idle_skip_requires_cycle_accurate()
                 || self.cpu.idle_fast_forward_budget(&self.bus).is_none())
         {
-            return 0;
+            return None;
         }
 
         #[cfg(not(feature = "event-scheduler"))]
         {
-            0
+            None
         }
 
         #[cfg(feature = "event-scheduler")]
         {
             if !self.bus.idle_fast_forward_legacy_safe() {
-                return 0;
+                return None;
+            }
+
+            // The common active-core case cannot fast-forward: it has no WFI
+            // budget, no proven timer-poll loop, and no new timer-poll MMIO
+            // evidence to consume. Once bootstrap is complete and there is no
+            // due or buffered event, skip this redundant preflight drain.
+            // `plan_cpu_window` still services resident edges before execution,
+            // and the regular commit boundary still ticks peripherals and
+            // drains scheduler events.
+            if self.cpu_secondary.is_none()
+                && self.secondary_defer.is_none()
+                && self.scheduler_bootstrapped
+                && self
+                    .sched
+                    .next_event_deadline()
+                    .is_none_or(|deadline| deadline > self.total_cycles)
+                && self.bus.pending_schedule.is_empty()
+                && !self.bus.timer_poll_coalesce_has_pending_activity()
+                && self.cpu.idle_fast_forward_budget(&self.bus).is_none()
+                && !self.cpu.poll_loop_anchor_ready()
+            {
+                return None;
             }
 
             // Drain first: a due scheduler event may assert an interrupt, in
@@ -1595,15 +1763,16 @@ impl<C: Cpu> Machine<C> {
             // own wake deadline (CCOMPARE0) and its CCOUNT moves with the skip.
             //
             // A core busy in a proven cycle-counter poll loop (a CCOUNT
-            // busy-wait, `Cpu::poll_loop_skip_budget`) counts as idle too: it
-            // retires nothing but time until a known cycle, so skipping it is
-            // the same as running it. The skip is then a multiple of its loop
-            // period, and every core's timer edge clamps it.
+            // busy-wait, `Cpu::poll_loop_skip_budget`) can be skipped because
+            // its retired instructions and resulting state are known. Carry
+            // those instruction counts with the elapsed time below. The skip
+            // is a multiple of its loop period, and every core's timer edge
+            // clamps it.
             let remaining = _max_steps
                 .map(|limit| limit.saturating_sub(_steps))
                 .unwrap_or(1_000_000);
             if remaining == 0 {
-                return 0;
+                return None;
             }
             let mut secondary_wake = None;
             let mut secondary_spin: Option<(u64, u64)> = None;
@@ -1615,24 +1784,25 @@ impl<C: Cpu> Machine<C> {
                 match sec.secondary_execution_state() {
                     SecondaryExecutionState::Active => {
                         if !sec.poll_loop_anchor_ready() {
-                            return 0;
+                            return None;
                         }
                         match sec.poll_loop_skip_budget(&self.bus, remaining) {
                             Some(spin) => secondary_spin = Some(spin),
-                            None => return 0,
+                            None => return None,
                         }
                     }
                     SecondaryExecutionState::ParkedIdle => {
-                        if sec.idle_fast_forward_budget(&self.bus).is_none() {
-                            return 0;
-                        }
+                        sec.idle_fast_forward_budget(&self.bus)?;
                         secondary_wake = sec.parked_wake_deadline_cycles();
                     }
                     SecondaryExecutionState::ResetHeld => {}
                 }
             }
             let wfi_budget = self.cpu.idle_fast_forward_budget(&self.bus);
-            let timer_poll = !cycle_accurate && self.bus.take_timer_poll_coalesce_eligible();
+            let timer_poll = !cycle_accurate
+                && self
+                    .bus
+                    .take_timer_poll_coalesce_eligible(u64::from(self.cpu.get_pc()));
             let primary_spin = match wfi_budget {
                 Some(budget) if budget > 0 => None,
                 _ if self.cpu.poll_loop_anchor_ready() => {
@@ -1656,13 +1826,26 @@ impl<C: Cpu> Machine<C> {
                 }
                 _ => None,
             };
+            // A loop that stores is a fixed point only on its own: a second
+            // core running beside it could read an intermediate value.
+            let primary_stores = primary_spin.is_some() && self.cpu.poll_loop_plan_stores();
+            let secondary_stores = secondary_spin.is_some()
+                && self
+                    .cpu_secondary
+                    .as_ref()
+                    .is_some_and(|sec| sec.poll_loop_plan_stores());
+            if (primary_stores && (secondary_spin.is_some() || deferred_end.is_some()))
+                || (secondary_stores && primary_spin.is_some())
+            {
+                return None;
+            }
             let spinning =
                 primary_spin.is_some() || secondary_spin.is_some() || deferred_end.is_some();
             let mut budget = match (wfi_budget, primary_spin) {
                 (Some(budget), _) if budget > 0 => budget,
                 (_, Some((_, cycles))) => cycles,
                 _ if timer_poll => u64::MAX,
-                _ => return 0,
+                _ => return None,
             };
             // The timer-poll arm below is only the one the budget came from.
             let timer_poll = timer_poll && wfi_budget.is_none() && primary_spin.is_none();
@@ -1710,20 +1893,24 @@ impl<C: Cpu> Machine<C> {
 
             if let Some(deadline_cycle) = self.sched.next_event_deadline() {
                 if deadline_cycle <= self.total_cycles {
-                    return 0;
+                    return None;
                 }
                 budget = budget.min(deadline_cycle - self.total_cycles);
             } else if timer_poll && wfi_budget.is_none() {
-                // No scheduled event and not WFI: cap pure millis spins so a
-                // single batch cannot leap the whole step budget when the heap
-                // is empty (still advances real device time, just bounded).
-                budget = budget.min(1_000_000);
+                // Nothing queued: `sleep_until` reads TIMERAW *before* it
+                // arms the alarm pool entry. A remaining-sized leap here
+                // jumped past that pending WFE wake. Cap the skip instead
+                // of refusing it, so a SYSTIMER/millis busy-poll still
+                // advances when no alarm is ever armed. Reuse the existing
+                // 8192-cycle medium-poll quantum (65 µs at 125 MHz) rather
+                // than adding another event-scheduler cfg site.
+                budget = budget.min(WIFI_MEDIUM_IDLE_POLL_QUANTUM);
             }
 
             // Tiny windows are not worth the skip bookkeeping on the timer-poll
             // path (WFI may still skip short waits).
             if budget == 0 || (timer_poll && wfi_budget.is_none() && budget < 1024) {
-                return 0;
+                return None;
             }
             budget = budget.min(u32::MAX as u64);
             if spinning {
@@ -1746,24 +1933,29 @@ impl<C: Cpu> Machine<C> {
                 }
                 budget -= budget % step;
                 if budget == 0 {
-                    return 0;
+                    return None;
                 }
             }
             let skipped = budget as u32;
+            let mut primary_steps = 0;
             if primary_spin.is_some() {
-                let applied = self.cpu.fast_forward_poll_loop(skipped as u64);
-                debug_assert!(applied, "a proven poll-loop skip must apply");
+                primary_steps = self
+                    .cpu
+                    .fast_forward_poll_loop(skipped as u64)
+                    .expect("a proven primary poll-loop skip must apply");
             } else {
                 self.cpu.fast_forward_idle_cycles(skipped as u64);
             }
+            let mut secondary_steps = 0;
             if let Some(sec) = self
                 .cpu_secondary
                 .as_mut()
                 .filter(|_| deferred_end.is_none())
             {
                 if secondary_spin.is_some() {
-                    let applied = sec.fast_forward_poll_loop(skipped as u64);
-                    debug_assert!(applied, "a proven poll-loop skip must apply");
+                    secondary_steps = sec
+                        .fast_forward_poll_loop(skipped as u64)
+                        .expect("a proven secondary poll-loop skip must apply");
                 } else if sec.secondary_execution_state() == SecondaryExecutionState::ParkedIdle {
                     sec.fast_forward_idle_cycles(skipped as u64);
                 }
@@ -1803,7 +1995,11 @@ impl<C: Cpu> Machine<C> {
             // shared clock boundary a sleeping guest starves paced UART peers
             // and RX timeouts until unrelated CPU work resumes.
             self.advance_central_i2c_time();
-            u64::from(skipped)
+            Some(IdleFastForwardResult {
+                cycles: u64::from(skipped),
+                primary_steps,
+                secondary_steps,
+            })
         }
     }
 
@@ -1936,6 +2132,14 @@ impl<C: Cpu> Machine<C> {
 
 impl<C: Cpu> Machine<C> {
     pub fn load_firmware(&mut self, image: &memory::ProgramImage) -> SimResult<()> {
+        if self.rtc_cntl_index.is_some() {
+            self.esp32_sram_segments = image
+                .segments
+                .iter()
+                .filter(|s| is_esp32_internal_sram(s.start_addr))
+                .map(|s| (s.start_addr, s.data.len()))
+                .collect();
+        }
         for segment in &image.segments {
             // 0. A segment linked into a same-backing mirror (the RT500
             //    secure FlexSPI/SRAM views) loads into the mirror's target.
@@ -2055,6 +2259,30 @@ impl<C: Cpu> Machine<C> {
                 false
             };
 
+            // i.MX RT serial-NOR boot: at `flash_base + reset_vector_offset`
+            // sits an Image Vector Table, not a Cortex-M vector table
+            // (IMXRT1060RM §9.7.1: header tag 0xD1, version 0x40..0x43, then
+            // the entry address). The boot ROM jumps to `entry` with its own
+            // stack in OCRAM; the image sets SP and VTOR itself (Teensyduino's
+            // ResetHandler does both). Offset 0x1000 on FlexSPI NOR.
+            let relocated = relocated || {
+                let table = flash_base + offset;
+                let hdr = if offset != 0 {
+                    self.bus.read_u32(table).unwrap_or(0)
+                } else {
+                    0
+                };
+                if hdr & 0xFF == 0xD1 && (0x40..=0x43).contains(&(hdr >> 24)) {
+                    let entry = self.bus.read_u32(table + 4)? & !1;
+                    let ram_top = self.bus.ram.base_addr + self.bus.ram.data.len() as u64;
+                    self.cpu.set_sp(ram_top as u32);
+                    self.cpu.set_pc(entry);
+                    true
+                } else {
+                    false
+                }
+            };
+
             // Last-resort fallback if the vector table is missing/zero.
             if !relocated && self.cpu.get_pc() == 0 {
                 self.cpu.set_pc(image.entry_point as u32);
@@ -2112,9 +2340,77 @@ impl<C: Cpu> Machine<C> {
             0xE000_ED18,
             0xE000_ED1C,
             0xE000_ED20,
+            0xE000_ED88,
         ] {
             let _ = self.bus.write_u32(addr, 0);
         }
+    }
+
+    /// Classic ESP32: record the state a deep-sleep wake-up reboots into.
+    ///
+    /// On silicon a deep-sleep wake-up is a reset: the ROM and the 2nd-stage
+    /// bootloader load the app's IRAM and DRAM segments again but skip the
+    /// RTC segments, so `RTC_DATA_ATTR` variables survive. Fast boot has no
+    /// bootloader, so the runner calls this once its post-load setup is done.
+    /// It copies the current bytes of every SRAM segment `load_firmware`
+    /// placed, with the entry PC and the stack pointers the runner gave the
+    /// two cores. A no-op on every other target.
+    pub fn capture_esp32_deep_sleep_boot(&mut self, entry_pc: u32, pro_sp: u32, app_sp: u32) {
+        if self.rtc_cntl_index.is_none() {
+            return;
+        }
+        let mut segments = Vec::with_capacity(self.esp32_sram_segments.len());
+        for &(start, len) in &self.esp32_sram_segments {
+            let bytes: Vec<u8> = (0..len as u64)
+                .map(|i| self.bus.read_u8(start + i).unwrap_or(0))
+                .collect();
+            segments.push((start, bytes));
+        }
+        self.esp32_deep_sleep_boot = Some(Esp32DeepSleepBoot {
+            segments,
+            entry_pc,
+            pro_sp,
+            app_sp,
+        });
+    }
+
+    /// Reboot the app after a deep sleep: what the ROM and the bootloader do
+    /// on silicon. RTC_CNTL, RTC slow memory and RTC fast memory are not
+    /// touched, so the reset cause, the wake-up cause and `RTC_DATA_ATTR`
+    /// data carry over. Without a captured boot state both cores halt.
+    fn reboot_esp32_from_deep_sleep(&mut self) -> SimResult<()> {
+        let Some(boot) = self.esp32_deep_sleep_boot.take() else {
+            self.cpu.halt();
+            if let Some(cpu1) = self.cpu_secondary.as_mut() {
+                cpu1.halt();
+            }
+            tracing::warn!("ESP32 deep-sleep wake-up with no captured boot state: cores halted");
+            return Ok(());
+        };
+        self.bus.with_debug_watch_bypass(|bus| {
+            bus.with_memory_policy_bypass(|bus| {
+                for (start, bytes) in &boot.segments {
+                    for (i, b) in bytes.iter().enumerate() {
+                        let _ = bus.write_u8(start + i as u64, *b);
+                    }
+                }
+            })
+        });
+        self.reset()?;
+        self.cpu.set_pc(boot.entry_pc);
+        self.cpu.set_sp(boot.pro_sp);
+        if let Some(cpu1) = self.cpu_secondary.as_mut() {
+            // APP_CPU waits for PRO_CPU to release it, as at power-on.
+            cpu1.halt();
+            cpu1.set_sp(boot.app_sp);
+        }
+        self.system_reset_peripherals();
+        tracing::debug!(
+            "RTC_CNTL deep-sleep wake-up: app rebooted at 0x{:08X}",
+            boot.entry_pc
+        );
+        self.esp32_deep_sleep_boot = Some(boot);
+        Ok(())
     }
 
     pub fn reset(&mut self) -> SimResult<()> {
@@ -2397,11 +2693,28 @@ impl<C: Cpu> Machine<C> {
             // Phase 2B.3b: a level-triggered peripheral re-arms its own event
             // (same token) while it has active work. We own the idx the
             // scheduler needs, so we do it here.
-            if let Some(delay) = result.reschedule_delay {
-                let deadline = self.sched.now() + delay;
-                self.sched.schedule(deadline, idx as u32, ev.event_token);
-            }
+            //
+            // A level-hold re-arm (`EventResult::level_hold`) parks instead
+            // while the lines it raises already stand in the NVIC. Scheduling
+            // after `apply_event_result` is order-identical: the fan-out
+            // never touches `self.sched`.
+            let reschedule = result.reschedule_delay;
+            let hold_lines = (result.level_hold && reschedule == Some(1)).then(|| {
+                let mut lines = result.explicit_irqs.clone();
+                if result.raise_own_irq {
+                    lines.extend(self.bus.peripherals[idx].irq);
+                }
+                lines
+            });
             self.apply_event_result(idx, result);
+            if let Some(delay) = reschedule {
+                let parked = hold_lines
+                    .is_some_and(|lines| self.bus.park_level_event(idx, ev.event_token, &lines));
+                if !parked {
+                    let deadline = self.sched.now() + delay;
+                    self.sched.schedule(deadline, idx as u32, ev.event_token);
+                }
+            }
         }
         // `drain(..)` above emptied it but kept its capacity; restore for reuse.
         self.due_events_scratch = due;
@@ -2517,24 +2830,25 @@ impl<C: Cpu> Machine<C> {
         }
     }
 
-    /// Returns true (and clears the latch) if the registered RTC_CNTL
-    /// peripheral has a pending software-system-reset request. Used by
-    /// `step()` to honor OPTIONS0 bit 31 writes at a clean instruction
-    /// boundary. Uses the cached `rtc_cntl_index` resolved at construction
-    /// — non-ESP32-classic configs (no RTC_CNTL on the bus) short-circuit
-    /// to `false` without touching the peripheral vector at all.
-    fn drain_rtc_cntl_reset_request(&self) -> bool {
+    /// Drain both RTC_CNTL latches: `(sw_sys_rst, deep_sleep_wake)`. Each is
+    /// true (and cleared) if the registered RTC_CNTL peripheral latched it
+    /// since the last drain. Used by `step()` to honor OPTIONS0 bit 31 writes
+    /// and timer-ended deep sleeps at a clean instruction boundary. Uses the
+    /// cached `rtc_cntl_index` resolved at construction — non-ESP32-classic
+    /// configs (no RTC_CNTL on the bus) short-circuit to `(false, false)`
+    /// without touching the peripheral vector at all.
+    fn drain_rtc_cntl_requests(&self) -> (bool, bool) {
         let Some(idx) = self.rtc_cntl_index else {
-            return false;
+            return (false, false);
         };
         let Some(p) = self.bus.peripherals.get(idx) else {
-            return false;
+            return (false, false);
         };
         p.dev
             .as_any()
             .and_then(|a| a.downcast_ref::<crate::peripherals::esp32::rtc_cntl::RtcCntl>())
-            .map(|rtc| rtc.drain_reset_request())
-            .unwrap_or(false)
+            .map(|rtc| (rtc.drain_reset_request(), rtc.drain_deep_sleep_wake()))
+            .unwrap_or((false, false))
     }
 
     /// True while RTC_CNTL has a latched SW_SYS_RST (not yet drained).
@@ -2592,6 +2906,16 @@ impl<C: Cpu> Machine<C> {
     /// resolved at construction — non-Cortex-M configs (no SCB on the bus)
     /// short-circuit to `false` without touching the peripheral vector at all.
     pub(crate) fn drain_scb_reset_request(&self) -> bool {
+        // The SCB raises this lock-free mirror together with its latch, so a
+        // clear mirror answers "nothing pending" without the `as_any` call and
+        // `TypeId` compare a downcast costs at every boundary.
+        if self
+            .scb_sysreset_signal
+            .as_ref()
+            .is_some_and(|signal| !signal.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            return false;
+        }
         let Some(idx) = self.scb_index else {
             return false;
         };
@@ -2613,6 +2937,12 @@ impl<C: Cpu> Machine<C> {
     fn drain_flash_op(&self) -> Option<crate::peripherals::flash::FlashOp> {
         let idx = self.flash_index?;
         let p = self.bus.peripherals.get(idx)?;
+        // Runs at every boundary of every board with a FLASH model, and an
+        // op is almost never pending: ask through the trait (one call) before
+        // paying `as_any` plus a `TypeId` compare to downcast.
+        if !p.dev.has_pending_op() {
+            return None;
+        }
         p.dev
             .as_any()
             .and_then(|a| a.downcast_ref::<crate::peripherals::flash::Flash>())

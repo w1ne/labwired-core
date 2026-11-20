@@ -6,3 +6,4 @@
 
 name: vybrid
 chip: ../../chips/onboarding/vybrid.yaml
+debug_uart: "uart0"
