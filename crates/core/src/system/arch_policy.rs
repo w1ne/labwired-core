@@ -45,6 +45,7 @@ pub enum MachineFamily {
     Aarch64,
     Rx,
     Mips,
+    Msp430,
 }
 
 /// The AArch32 application-class core a [`MachineFamily::CortexA`] chip names.
@@ -139,9 +140,10 @@ pub fn machine_family(chip: &ChipDescriptor) -> anyhow::Result<MachineFamily> {
         Arch::Pic16 => Ok(MachineFamily::Pic16),
         Arch::Rx => Ok(MachineFamily::Rx),
         Arch::Mips => Ok(MachineFamily::Mips),
+        Arch::Msp430 => Ok(MachineFamily::Msp430),
         Arch::Aarch64 => Ok(MachineFamily::Aarch64),
         Arch::Unknown => anyhow::bail!(
-            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, pic18, pic16, rx, aarch64, or mips)",
+            "chip '{}' does not declare a known architecture (`arch:` must be arm, riscv, xtensa, avr, pic24, pic18, pic16, rx, aarch64, mips, or msp430)",
             chip.name
         ),
     }
@@ -173,6 +175,8 @@ pub fn elf_arch(e_machine: u16) -> Option<crate::Arch> {
         173 => Some(crate::Arch::Rx),
         // EM_MIPS (8): MIPS32 (o32) little-endian images from mips-*-elf GCC.
         goblin::elf::header::EM_MIPS => Some(crate::Arch::Mips),
+        // EM_MSP430 (105): Texas Instruments MSP430 (msp430-elf GCC).
+        105 => Some(crate::Arch::Msp430),
         _ => None,
     }
 }
