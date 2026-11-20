@@ -65,6 +65,8 @@ impl Isa {
             crate::Arch::Rx => None,
             // MIPS has no lockstep-backend ISA yet (interpreter only).
             crate::Arch::Mips => None,
+            // MSP430 has no lockstep-backend ISA yet (interpreter only).
+            crate::Arch::Msp430 => None,
             crate::Arch::Unknown => None,
         }
     }
@@ -91,6 +93,8 @@ impl Isa {
             MachineFamily::Rx => None,
             // MIPS has no lockstep-backend ISA yet (interpreter only).
             MachineFamily::Mips => None,
+            // MSP430 has no lockstep-backend ISA yet (interpreter only).
+            MachineFamily::Msp430 => None,
         }
     }
 

@@ -719,6 +719,26 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// subsequent [`Self::drive_pad_output`] edge is timestamped. Default is
     /// a no-op.
     fn sync_observer_cycle(&mut self, _now: u64) {}
+    /// Espressif GPIO-matrix output peripheral: the wire cell its outputs are
+    /// published on, and the matrix signal of line 0 (line n is signal
+    /// `first + n`). The bus hands it to the GPIO matrix through
+    /// [`Self::bind_matrix_output_lines`]. Default: publishes no wire.
+    fn matrix_output_lines(
+        &mut self,
+    ) -> Option<(u32, std::sync::Arc<crate::peripherals::pad_lines::PadLines>)> {
+        None
+    }
+    /// Espressif GPIO matrix: carry `lines` (line n = output signal
+    /// `first_signal + n`) on whichever pad `FUNCn_OUT_SEL` routes it to, so
+    /// pad reads and the logic analyzer see the peripheral's waveform.
+    /// `false`: this port does not route peripheral wires.
+    fn bind_matrix_output_lines(
+        &mut self,
+        _first_signal: u32,
+        _lines: &std::sync::Arc<crate::peripherals::pad_lines::PadLines>,
+    ) -> bool {
+        false
+    }
 
     /// GPIO capability: the pad level a logic probe clipped to `pin` would
     /// see. Shim over [`pins::PinPort::level`] (kept because many callers
@@ -1805,6 +1825,13 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// its legacy walk path (`uses_scheduler() == false`), so hand-built
     /// buses that bypass `add_peripheral` keep the old exact semantics.
     fn attach_cycle_clock(&mut self, _clock: CycleClock) {}
+
+    /// Hand this peripheral the interrupt request lines it shares with the
+    /// MSP430 core ([`peripherals::msp430::Msp430Irq`]): the module IFG/IE
+    /// bits of an MSP430 are the request lines themselves. Called once per
+    /// peripheral when an MSP430 machine is built. Default: not an MSP430
+    /// module.
+    fn attach_msp430_irq(&mut self, _irq: &Arc<peripherals::msp430::Msp430Irq>) {}
 
     /// Tell the peripheral which NVIC/matrix line it was registered with (the
     /// `irq` of its `PeripheralEntry`), or `None` when the descriptor wired

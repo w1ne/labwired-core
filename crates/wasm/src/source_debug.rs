@@ -193,6 +193,8 @@ impl WasmSimulator {
             MachineFamily::Rx => 16,
             // $0-$31.
             MachineFamily::Mips => 32,
+            // MSP430: R0-R15.
+            MachineFamily::Msp430 => 16,
         };
         let cpu = focused_cpu(machine);
         let locals: Vec<Local> = debug
@@ -274,6 +276,7 @@ impl WasmSimulator {
             MachineFamily::Aarch64 => 31,
             MachineFamily::Rx => 0,
             MachineFamily::Mips => 29,
+            MachineFamily::Msp430 => 1,
         }
     }
 

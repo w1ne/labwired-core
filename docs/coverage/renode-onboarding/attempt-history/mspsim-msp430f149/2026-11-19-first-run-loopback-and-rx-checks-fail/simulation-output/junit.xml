@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="4" failures="1" errors="0" time="0.048908">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="9734e70b2d7edf603704877ac225a38aa71de0b5e1a3b78efd30b79ddc0fc17e"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.048908">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;MSP430F149 boot&quot;, &quot;MSP430F149 checks PPPPPPPP DONE rx=52&quot;, &quot;MSP430F149 PUC WDTIFG=1&quot;, &quot;MSP430F149 smoke…" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_ordered: [&quot;MSP430F149 boot&quot;, &quot;MSP430F149 checks PPPPPPPP DONE rx=52&quot;, &quot;MSP430F149 PUC WDTIFG=1&quot;, &quot;MSP430F149 smoke…
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=400000
+stop_reason_details.observed.steps_executed=400000
+steps_executed=400000
+cycles=400044
+instructions=399999
+limits:
+  - max_steps=400000
+firmware_hash=9734e70b2d7edf603704877ac225a38aa71de0b5e1a3b78efd30b79ddc0fc17e
+firmware=examples/renode-onboarding/../../tests/fixtures/msp430f149-uart-smoke.elf
+system=examples/renode-onboarding/../../configs/systems/onboarding/mspsim-msp430f149.yaml
+script=examples/renode-onboarding/msp430f149-uart-smoke.yaml
+assertions:
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;MSP430F149 boot&quot;, &quot;MSP430F149 checks PPPPPPPP DONE rx=52&quot;, &quot;MSP430F149 PUC WDTIFG=1&quot;, &quot;MSP430F149 smoke complete&quot;] }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;MSP430F149 UART1 ok&quot; }): true
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: MSP430F149 UART1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

@@ -100,6 +100,8 @@ pub enum Arch {
     Rx,
     /// MIPS32r2 (PIC32MZ EF, M5150 class).
     Mips,
+    /// Texas Instruments MSP430 (16-bit CPU and 20-bit CPUX).
+    Msp430,
     Unknown,
 }
 

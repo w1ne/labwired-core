@@ -1,0 +1,231 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 400000,
+  "cycles": 400038,
+  "instructions": 399999,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 400000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 400000
+    }
+  },
+  "limits": {
+    "max_steps": 400000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_ordered": [
+          "MSP430F2619 boot",
+          "MSP430F2619 checks PPPPZPkPzPPP DONE rx=52",
+          "MSP430F2619 PUC WDTIFG=1",
+          "MSP430F2619 smoke complete"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "MSP430F2619 UART1 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "msp430",
+    "r": [
+      8922,
+      8432,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      8720,
+      4360,
+      0
+    ],
+    "cpux": true,
+    "requested": 0,
+    "cycles": 400038
+  },
+  "firmware_hash": "fc9ed1b73ac88c22982715bde68b8ede5d2bfe4dedf6b05b240d03ae7b1d000d",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/msp430f2619-uart-smoke.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/msp430f2619.yaml",
+    "script": "examples/renode-onboarding/msp430f2619-uart-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "sfr",
+        "kind": "native",
+        "base": 0,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "bcsctl3",
+        "kind": "native",
+        "base": 83,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "bcm",
+        "kind": "native",
+        "base": 86,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usci_a0",
+        "kind": "uart",
+        "base": 93,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usci_a1",
+        "kind": "uart",
+        "base": 205,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "wdt",
+        "kind": "native",
+        "base": 288,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "mpy",
+        "kind": "native",
+        "base": 304,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "MSP430F2619 boot",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 10000
+      },
+      {
+        "text": "MSP430F2619 checks PPPPZPkPzPPP DONE rx=52",
+        "cycle_lo": 0,
+        "cycle": 10000,
+        "end_cycle": 110000
+      },
+      {
+        "text": "MSP430F2619 UART1 ok",
+        "cycle_lo": 100000,
+        "cycle": 110000,
+        "end_cycle": 110000
+      },
+      {
+        "text": "MSP430F2619 PUC WDTIFG=1",
+        "cycle_lo": 100000,
+        "cycle": 110000,
+        "end_cycle": 110000
+      },
+      {
+        "text": "MSP430F2619 smoke complete",
+        "cycle_lo": 100000,
+        "cycle": 110000,
+        "end_cycle": 110000
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 1329,
+    "data_bytes": 108,
+    "bss_bytes": 6,
+    "flash_used_bytes": 1437,
+    "ram_static_bytes": 114,
+    "flash_total_bytes": 122624,
+    "ram_total_bytes": 4096,
+    "flash_used_pct": 1.17,
+    "ram_static_pct": 2.78,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 400038,
+    "instructions": 399999,
+    "steps_executed": 400000,
+    "memory_reads": 1166127,
+    "memory_writes": 362,
+    "peripheral_accesses": 357,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 8922,
+        "count": 1172
+      },
+      {
+        "pc": 9382,
+        "count": 155
+      },
+      {
+        "pc": 9388,
+        "count": 118
+      },
+      {
+        "pc": 9386,
+        "count": 117
+      }
+    ]
+  }
+}

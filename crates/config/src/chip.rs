@@ -37,6 +37,9 @@ pub enum Arch {
     /// MIPS32 release 2 (Microchip PIC32MZ, M5150 class).
     #[serde(alias = "mips32", alias = "mips32r2", alias = "pic32")]
     Mips,
+    /// Texas Instruments MSP430 16-bit MCU family (CPU and 20-bit CPUX).
+    #[serde(alias = "msp430x")]
+    Msp430,
     Unknown,
 }
 

@@ -127,6 +127,10 @@
       "how": "needs-build",
       "why": "ESP32-S2 descriptor and LX7 direct-ELF boot path are newer than the installed CLI this gate checks. The committed fixture smoke passes in examples/esp32s2-devkitc-1-n8r2; switch this row after a release carries S2 support."
     },
+    "esp32s2-arduino": {
+      "how": "needs-build",
+      "why": "ESP32-S2 stock Arduino-ESP32 profile (genuine mask ROM, external flash through the S2 MMU) is newer than the installed CLI this gate checks. Its nine Arduino matrix sketches pass from source (validation/arduino-matrix/boards/esp32s2.yaml); they are PlatformIO builds, not committed ELFs. Switch this row after a release carries the profile."
+    },
     "stm32h723zg": {
       "how": "needs-build",
       "why": "The STM32H723ZG NUCLEO-H723ZG slice is newer than the installed CLI this gate checks. Its LD1 + USART3 smoke passes from source in examples/nucleo-h723zg; switch this row after a release carries the H723ZG descriptor."

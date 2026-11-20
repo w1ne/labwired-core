@@ -1,0 +1,27 @@
+# MSP430F149 declared surface on the MSP430 core: SFR interrupt flags and
+# enables, x1xx USART0/USART1 (UART mode), the watchdog password and
+# the PUC it requests, the 16x16 hardware multiplier, LPM0 wake-up. One letter
+# per check on UART0 (see msp430-uart-smoke.c); the loopback bytes Z, k and z
+# of checks 5 to 7 also leave on the transmit line.
+# The host byte `R` arrives through the receive interrupt. The run ends after
+# the firmware has restarted through a WDTCTL security key violation and found
+# WDTIFG set. The system declares no debug_uart, so the capture holds both
+# UARTs.
+schema_version: "1.2"
+inputs:
+  firmware: "../../tests/fixtures/msp430f149-uart-smoke.elf"
+  system: "../../configs/systems/onboarding/mspsim-msp430f149.yaml"
+limits:
+  max_steps: 400000
+uart_injections:
+  - uart: "usart0"
+    bytes: "R"
+    trigger: !after_cycles { cycles: 100000 }
+assertions:
+  - uart_ordered:
+      - "MSP430F149 boot"
+      - "MSP430F149 checks PPPPZPkPzPP DONE rx=52"
+      - "MSP430F149 PUC WDTIFG=1"
+      - "MSP430F149 smoke complete"
+  - uart_contains: "MSP430F149 UART1 ok"
+  - expected_stop_reason: max_steps
