@@ -70,6 +70,10 @@ const OFF_POWER_DCDCEN0: u64 = 0x580;
 //   HFCLKSTARTED bit 0, LFCLKSTARTED bit 1, DONE bit 3, CTTO bit 4
 const INTEN_HFCLKSTARTED: u32 = 1 << 0;
 const INTEN_LFCLKSTARTED: u32 = 1 << 1;
+// POWER interrupt bits (PS §6.16.13): the USB supply events.
+const INTEN_USBDETECTED: u32 = 1 << 7;
+const INTEN_USBREMOVED: u32 = 1 << 8;
+const INTEN_USBPWRRDY: u32 = 1 << 9;
 
 #[derive(Debug, Default)]
 pub struct Nrf52Clock {
@@ -95,7 +99,12 @@ pub struct Nrf52Clock {
     /// Scheduler level-IRQ chain armed (see `take_scheduled_events`).
     chain_live: bool,
 
-    // POWER state (register-surface; no dynamic logic).
+    // POWER state (register-surface; no dynamic logic). The USB supply
+    // status and its events are reported by the USBD model, which owns VBUS
+    // and the regulator start (`nrf52::usbd`).
+    events_usbdetected: u32,
+    events_usbremoved: u32,
+    events_usbpwrrdy: u32,
     power_resetreas: u32,
     power_ramstatus: u32,
     power_usbregstatus: u32,
@@ -124,6 +133,9 @@ impl Nrf52Clock {
     fn irq_level_held(&self) -> bool {
         (self.events_hfclkstarted != 0 && self.inten & INTEN_HFCLKSTARTED != 0)
             || (self.events_lfclkstarted != 0 && self.inten & INTEN_LFCLKSTARTED != 0)
+            || (self.events_usbdetected != 0 && self.inten & INTEN_USBDETECTED != 0)
+            || (self.events_usbremoved != 0 && self.inten & INTEN_USBREMOVED != 0)
+            || (self.events_usbpwrrdy != 0 && self.inten & INTEN_USBPWRRDY != 0)
     }
 }
 
@@ -158,12 +170,12 @@ impl Peripheral for Nrf52Clock {
 
             // POWER reads.
             OFF_POWER_TASKS_CONSTLAT | OFF_POWER_TASKS_LOWPWR => 0,
-            OFF_POWER_EVENTS_POFWARN
-            | OFF_POWER_EVENTS_SLEEPENTER
-            | OFF_POWER_EVENTS_SLEEPEXIT
-            | OFF_POWER_EVENTS_USBDETECTED
-            | OFF_POWER_EVENTS_USBREMOVED
-            | OFF_POWER_EVENTS_USBPWRRDY => 0,
+            OFF_POWER_EVENTS_POFWARN | OFF_POWER_EVENTS_SLEEPENTER | OFF_POWER_EVENTS_SLEEPEXIT => {
+                0
+            }
+            OFF_POWER_EVENTS_USBDETECTED => self.events_usbdetected,
+            OFF_POWER_EVENTS_USBREMOVED => self.events_usbremoved,
+            OFF_POWER_EVENTS_USBPWRRDY => self.events_usbpwrrdy,
             OFF_POWER_RESETREAS => self.power_resetreas,
             OFF_POWER_RAMSTATUS => self.power_ramstatus,
             OFF_POWER_USBREGSTATUS => self.power_usbregstatus,
@@ -222,11 +234,15 @@ impl Peripheral for Nrf52Clock {
             OFF_LFRCMODE => self.lfrcmode = value & 0x1,
 
             // POWER writes.
+            OFF_POWER_EVENTS_USBDETECTED => self.events_usbdetected = value & 1,
+            OFF_POWER_EVENTS_USBREMOVED => self.events_usbremoved = value & 1,
+            OFF_POWER_EVENTS_USBPWRRDY => self.events_usbpwrrdy = value & 1,
             // RESETREAS is W1C (write 1 to clear the corresponding reason bit).
             OFF_POWER_RESETREAS => self.power_resetreas &= !value,
             // RAMSTATUS is read-only: writes are silently ignored.
             OFF_POWER_RAMSTATUS => {}
-            OFF_POWER_USBREGSTATUS => self.power_usbregstatus = value,
+            // Read-only for firmware on silicon; the USBD model writes it.
+            OFF_POWER_USBREGSTATUS => self.power_usbregstatus = value & 0x3,
             OFF_POWER_SYSTEMOFF => {} // not modeled; firmware won't recover anyway
             // POFCON: bit0 = POF enable, bits[4:1] = THRESHOLD, bit5 = COMPPOF.
             // Writable mask 0x0000_003F covers all defined fields (PS §6.16.13).
@@ -327,6 +343,27 @@ mod tests {
         c.write_u32(OFF_INTENSET, INTEN_HFCLKSTARTED).unwrap();
         c.write_u32(OFF_TASKS_HFCLKSTART, 1).unwrap();
         assert!(c.tick().irq);
+    }
+
+    #[test]
+    fn usb_supply_events_latch_and_pend_the_irq_under_their_inten_bits() {
+        let mut c = Nrf52Clock::new();
+        c.write_u32(OFF_POWER_USBREGSTATUS, 0xFFFF_FFFF).unwrap();
+        assert_eq!(c.read_u32(OFF_POWER_USBREGSTATUS).unwrap(), 3);
+        for (event, inten) in [
+            (OFF_POWER_EVENTS_USBDETECTED, INTEN_USBDETECTED),
+            (OFF_POWER_EVENTS_USBREMOVED, INTEN_USBREMOVED),
+            (OFF_POWER_EVENTS_USBPWRRDY, INTEN_USBPWRRDY),
+        ] {
+            c.write_u32(event, 1).unwrap();
+            assert_eq!(c.read_u32(event).unwrap(), 1);
+            assert!(!c.tick().irq, "masked");
+            c.write_u32(OFF_INTENSET, inten).unwrap();
+            assert!(c.tick().irq);
+            c.write_u32(event, 0).unwrap();
+            assert!(!c.tick().irq);
+            c.write_u32(OFF_INTENCLR, inten).unwrap();
+        }
     }
 
     #[test]

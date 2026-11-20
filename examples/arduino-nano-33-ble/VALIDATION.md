@@ -15,7 +15,7 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical UART streams (`diff` clean) |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | LSM9DS1 IMU | **not modelled** | the TWI0 controller is modelled; no sensor model is declared |
-| USB CDC (`Serial`) | **not modelled** | the console is UARTE0 (`Serial1`) |
+| USB CDC (`Serial`) | not used by this smoke | the console is UARTE0 (`Serial1`); the USB device model is exercised by `examples/arduino-nano-33-ble-bme280/` |
 | Silicon capture / executing-fidelity differential | **none** | SIM-DERIVED |
 
 ## Commands and evidence (verified 2026-10-23)
@@ -57,5 +57,5 @@ cargo test -p labwired-core --test gates firmware_survival::test_arduino_nano_33
   red channel's bit is cleared while green/blue stay set (active low), which
   is exactly the board's wiring.
 - UARTE0 is the board's `Serial1` on D0/D1; the USB CDC `Serial` is not
-  modelled and is not used by this firmware.
+  used by this firmware.
 - The board's LSM9DS1 IMU is not modelled; the smoke never touches TWI0.

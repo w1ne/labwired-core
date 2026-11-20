@@ -134,6 +134,35 @@ pub fn merged_peripheral_configs(
     merged
 }
 
+/// The board's `memory_overrides:`. One key is read: `reset_vector_offset`,
+/// the offset from the flash base of the vector table reset enters, for a
+/// board whose resident bootloader hands over to an application image (the
+/// Arduino Nano 33 BLE's sits at 0x10000). It replaces
+/// [`ChipDescriptor::reset_vector_offset`]. Any other key is ignored with a
+/// warning, as before this key existed: manifests in the field carry keys
+/// such as `flash` that the engine never read.
+fn manifest_reset_vector_offset(manifest: &SystemManifest) -> anyhow::Result<Option<u64>> {
+    let mut offset = None;
+    for (key, value) in &manifest.memory_overrides {
+        if key != "reset_vector_offset" {
+            tracing::warn!(
+                "memory_overrides: key `{key}` is not read by the engine (known: reset_vector_offset)"
+            );
+            continue;
+        }
+        let text = value.trim().replace('_', "");
+        let parsed = match text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+            Some(hex) => u64::from_str_radix(hex, 16),
+            None => text.parse(),
+        };
+        offset =
+            Some(parsed.map_err(|e| {
+                anyhow::anyhow!("memory_overrides.reset_vector_offset `{value}`: {e}")
+            })?);
+    }
+    Ok(offset)
+}
+
 impl SystemBus {
     /// Collect debugger-only register schemas from each peripheral's optional
     /// `config.debug_schema` path.
@@ -463,7 +492,8 @@ impl SystemBus {
             bit_band_enabled: Self::chip_has_bit_band(chip),
             armv6m: Self::chip_is_armv6m(chip),
             armv8m_baseline: Self::chip_is_armv8m_baseline(chip),
-            reset_vector_offset: chip.reset_vector_offset,
+            reset_vector_offset: manifest_reset_vector_offset(manifest)?
+                .unwrap_or(chip.reset_vector_offset),
             flash_boot_alias: chip.flash_boot_alias,
             atomic_register_aliases: chip.atomic_register_aliases,
             rp2350_dcp: chip
@@ -1895,6 +1925,40 @@ peripherals:
             "same type merges"
         );
         assert_eq!(sercom4.config["dopo"].as_u64(), Some(0));
+    }
+}
+
+#[cfg(test)]
+mod manifest_memory_override_tests {
+    use super::*;
+
+    fn manifest(overrides: &str) -> SystemManifest {
+        serde_yaml::from_str(&format!(
+            "name: t\nchip: nrf52840\nmemory_overrides: {overrides}\n"
+        ))
+        .expect("parse manifest")
+    }
+
+    /// The board's vector-table offset replaces the chip's and must be a
+    /// number. A key the engine does not read changes nothing.
+    #[test]
+    fn reset_vector_offset_is_the_one_key_read_and_must_parse() {
+        let offset = |o: &str| manifest_reset_vector_offset(&manifest(o));
+        assert_eq!(offset("{}").unwrap(), None);
+        assert_eq!(
+            offset("{ reset_vector_offset: \"0x10000\" }").unwrap(),
+            Some(0x10000)
+        );
+        assert_eq!(
+            offset("{ reset_vector_offset: \"8_192\" }").unwrap(),
+            Some(8192)
+        );
+        assert_eq!(offset("{ flash: \"2MB\" }").unwrap(), None);
+        assert_eq!(
+            offset("{ flash: \"2MB\", reset_vector_offset: \"0x4000\" }").unwrap(),
+            Some(0x4000)
+        );
+        assert!(offset("{ reset_vector_offset: \"top\" }").is_err());
     }
 }
 
