@@ -655,6 +655,9 @@
          <loc>https://docs.labwired.com/boards/msp430f2619/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/boards/mspsim-msp430f5437/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/boards/murax_vexriscv/</loc>
     </url>
     <url>
@@ -2177,6 +2180,12 @@
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/mpfs-icicle-kit/2026-11-07-stale-max-cycles/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/mspsim-msp430f149/2026-11-19-first-run-loopback-and-rx-checks-fail/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/mspsim-msp430f5437/2026-11-20-first-run-mpy32-check-fails/onboarding-summary/</loc>
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/nrf52840/2026-11-08-before-banner-only-smoke/onboarding-summary/</loc>
@@ -4022,6 +4031,21 @@
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/metrics/mpfs-icicle-kit/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/metrics/msp430f2619/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/metrics/mspsim-msp430f149/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/metrics/mspsim-msp430f1611/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/metrics/mspsim-msp430f2617/onboarding-summary/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/metrics/mspsim-msp430f5437/onboarding-summary/</loc>
     </url>
     <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/metrics/murax_vexriscv/onboarding-summary/</loc>

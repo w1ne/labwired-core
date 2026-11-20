@@ -4882,22 +4882,22 @@
 <ul>
 <li>descriptors_present: <code>245</code></li>
 <li>targets_total: <code>245</code></li>
-<li>run_attempted: <code>226</code></li>
-<li>booted: <code>226/245</code></li>
-<li>boot_and_smoke_passed: <code>226/245</code></li>
-<li>not_run: <code>19</code></li>
-<li>pass: <code>226</code></li>
+<li>run_attempted: <code>231</code></li>
+<li>booted: <code>231/245</code></li>
+<li>boot_and_smoke_passed: <code>231/245</code></li>
+<li>not_run: <code>14</code></li>
+<li>pass: <code>231</code></li>
 <li>fail: <code>0</code></li>
-<li>pass_loading_zero_answering_windows: <code>0/226</code></li>
-<li>pass_observable_assertions: <code>226/226</code></li>
-<li>pass_stop_reason_only: <code>0/226</code></li>
-<li>pass_depth_unknown: <code>0/226</code></li>
-<li>pass_claimed_peripherals_total: <code>1675</code></li>
+<li>pass_loading_zero_answering_windows: <code>0/231</code></li>
+<li>pass_observable_assertions: <code>231/231</code></li>
+<li>pass_stop_reason_only: <code>0/231</code></li>
+<li>pass_depth_unknown: <code>0/231</code></li>
+<li>pass_claimed_peripherals_total: <code>1708</code></li>
 <li>pass_claimed_peripherals_median: <code>4</code></li>
-<li>median_elapsed_ms: <code>1884</code></li>
-<li>median_elapsed_seconds: <code>1.884</code></li>
+<li>median_elapsed_ms: <code>1872</code></li>
+<li>median_elapsed_seconds: <code>1.872</code></li>
 <li>threshold_seconds: <code>3600</code></li>
-<li>threshold_met: <code>226/226</code></li>
+<li>threshold_met: <code>231/231</code></li>
 </ul>
 <blockquote>
 <p><code>booted</code> means a real run produced a result with at least one executed firmware instruction. A smoke pass proves only the assertions in that target's script, not full peripheral coverage. <code>not_run</code> means no firmware run was attempted for that descriptor. <code>Zero Windows</code> lists the peripherals in the chip the target's system actually loads that are allowlisted stubs (<code>crates/core/src/bus/known_stubs.rs</code>) and answer reads with zeros; a pass with zero windows did not exercise those blocks. <code>Smoke Depth</code> is <code>stop_reason_only</code> when the script asserts nothing but <code>expected_stop_reason</code> (the CPU stepped to its budget without faulting; no UART, memory or GPIO result is checked) and <code>observable</code> when it also checks a UART, memory, GPIO or fidelity result. <code>Claimed</code> is the number of peripheral windows the loaded chip profile declares and <code>Checks</code> the assertion kinds the smoke script uses; a smoke rarely exercises every claimed window, so a large <code>Claimed</code> next to a single <code>uart_contains</code> is a profile claim the smoke does not prove.</p>
@@ -6778,88 +6778,88 @@
 </tr>
 <tr>
 <td><code>msp430f2619</code></td>
-<td><code>not_run</code></td>
-<td><code>False</code></td>
+<td><code>pass</code></td>
+<td><code>True</code></td>
+<td><code>yes</code></td>
+<td><code>yes</code></td>
+<td style="text-align: right;"><code>981</code></td>
+<td style="text-align: right;"><code>0.981</code></td>
+<td><code>True</code></td>
+<td><code>observable</code></td>
+<td style="text-align: right;"><code>7</code></td>
+<td><code>uart_ordered</code>, <code>uart_contains</code></td>
+<td>0</td>
 <td><code>n/a</code></td>
-<td><code>n/a</code></td>
-<td style="text-align: right;"><code>0</code></td>
-<td style="text-align: right;"><code>0.0</code></td>
-<td><code>n/a</code></td>
-<td><code>n/a</code></td>
-<td style="text-align: right;"><code>4</code></td>
 <td>n/a</td>
-<td>4: <code>boot:arraymemory</code>, <code>ram_extended:arraymemory</code>, <code>code:arraymemory</code>, <code>info_mem:arraymemory</code></td>
-<td><code>not_configured</code></td>
-<td>Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub.</td>
-<td>MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage.</td>
+<td>n/a</td>
 </tr>
 <tr>
 <td><code>mspsim-msp430f149</code></td>
-<td><code>not_run</code></td>
-<td><code>False</code></td>
-<td><code>n/a</code></td>
-<td><code>n/a</code></td>
-<td style="text-align: right;"><code>0</code></td>
-<td style="text-align: right;"><code>0.0</code></td>
-<td><code>n/a</code></td>
-<td><code>n/a</code></td>
-<td style="text-align: right;"><code>0</code></td>
-<td>n/a</td>
+<td><code>pass</code></td>
+<td><code>True</code></td>
+<td><code>yes</code></td>
+<td><code>yes</code></td>
+<td style="text-align: right;"><code>1358</code></td>
+<td style="text-align: right;"><code>1.358</code></td>
+<td><code>True</code></td>
+<td><code>observable</code></td>
+<td style="text-align: right;"><code>6</code></td>
+<td><code>uart_ordered</code>, <code>uart_contains</code></td>
 <td>0</td>
-<td><code>not_configured</code></td>
-<td>Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub.</td>
-<td>MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage.</td>
+<td><code>n/a</code></td>
+<td>n/a</td>
+<td>n/a</td>
 </tr>
 <tr>
 <td><code>mspsim-msp430f1611</code></td>
-<td><code>not_run</code></td>
-<td><code>False</code></td>
-<td><code>n/a</code></td>
-<td><code>n/a</code></td>
-<td style="text-align: right;"><code>0</code></td>
-<td style="text-align: right;"><code>0.0</code></td>
-<td><code>n/a</code></td>
-<td><code>n/a</code></td>
-<td style="text-align: right;"><code>0</code></td>
-<td>n/a</td>
+<td><code>pass</code></td>
+<td><code>True</code></td>
+<td><code>yes</code></td>
+<td><code>yes</code></td>
+<td style="text-align: right;"><code>3923</code></td>
+<td style="text-align: right;"><code>3.923</code></td>
+<td><code>True</code></td>
+<td><code>observable</code></td>
+<td style="text-align: right;"><code>6</code></td>
+<td><code>uart_ordered</code>, <code>uart_contains</code></td>
 <td>0</td>
-<td><code>not_configured</code></td>
-<td>Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub.</td>
-<td>MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage.</td>
+<td><code>n/a</code></td>
+<td>n/a</td>
+<td>n/a</td>
 </tr>
 <tr>
 <td><code>mspsim-msp430f2617</code></td>
-<td><code>not_run</code></td>
-<td><code>False</code></td>
-<td><code>n/a</code></td>
-<td><code>n/a</code></td>
-<td style="text-align: right;"><code>0</code></td>
-<td style="text-align: right;"><code>0.0</code></td>
-<td><code>n/a</code></td>
-<td><code>n/a</code></td>
-<td style="text-align: right;"><code>0</code></td>
-<td>n/a</td>
+<td><code>pass</code></td>
+<td><code>True</code></td>
+<td><code>yes</code></td>
+<td><code>yes</code></td>
+<td style="text-align: right;"><code>766</code></td>
+<td style="text-align: right;"><code>0.766</code></td>
+<td><code>True</code></td>
+<td><code>observable</code></td>
+<td style="text-align: right;"><code>7</code></td>
+<td><code>uart_ordered</code>, <code>uart_contains</code></td>
 <td>0</td>
-<td><code>not_configured</code></td>
-<td>Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub.</td>
-<td>MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage.</td>
+<td><code>n/a</code></td>
+<td>n/a</td>
+<td>n/a</td>
 </tr>
 <tr>
 <td><code>mspsim-msp430f5437</code></td>
-<td><code>not_run</code></td>
-<td><code>False</code></td>
-<td><code>n/a</code></td>
-<td><code>n/a</code></td>
-<td style="text-align: right;"><code>0</code></td>
-<td style="text-align: right;"><code>0.0</code></td>
-<td><code>n/a</code></td>
-<td><code>n/a</code></td>
-<td style="text-align: right;"><code>0</code></td>
-<td>n/a</td>
+<td><code>pass</code></td>
+<td><code>True</code></td>
+<td><code>yes</code></td>
+<td><code>yes</code></td>
+<td style="text-align: right;"><code>260103</code></td>
+<td style="text-align: right;"><code>260.103</code></td>
+<td><code>True</code></td>
+<td><code>observable</code></td>
+<td style="text-align: right;"><code>7</code></td>
+<td><code>uart_ordered</code>, <code>uart_contains</code></td>
 <td>0</td>
-<td><code>not_configured</code></td>
-<td>Implement a real MSP430 CPU core and ELF architecture support before adding a smoke; do not substitute a peripheral stub.</td>
-<td>MSP430 CPU execution and MSP430 ELF architecture support are not implemented; no firmware run was attempted. A real CPU core is required before this target can enter executable coverage.</td>
+<td><code>n/a</code></td>
+<td>n/a</td>
+<td>n/a</td>
 </tr>
 <tr>
 <td><code>murax_vexriscv</code></td>
