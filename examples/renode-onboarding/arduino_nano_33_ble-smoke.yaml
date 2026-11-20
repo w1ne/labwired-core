@@ -4,7 +4,8 @@
 # row's eight blocks (shared renode_checks.rs: FICR/NVMC, CLOCK HFXO/LFXO,
 # GPIO P0.13 readback, GPIOTE task toggles at the pad, TIMER0, RTC0, RNG, PPI
 # EGU0->EGU1), then lights the active-low RGB LED one channel at a time with
-# the LED bits of GPIO0 OUT read back, and blinks D13. It does not claim a
+# the LED bits of GPIO0 OUT read back, reads TEMP (the model holds 25 degC =
+# raw 0x64), runs the FIPS-197 C.1 AES-128 vector through ECB, and blinks D13. It does not claim a
 # modeled LSM9DS1 or ArduCAM (no engine models; not declared).
 schema_version: "1.0"
 inputs:
@@ -28,10 +29,12 @@ assertions:
       - "rgb=green out=01002040"
       - "rgb=blue out=01012000"
       - "rgb off out=01012040 ok"
+      - "temp datardy=1 raw=00000064 ok"
+      - "ecb fips197 ct=69c4e0d8..70b4c55a end=1 ok"
       - "NANO33BLE PASS"
   - memory_value:
       address: 0x2003FF00
-      expected_value: 0x528401FF
+      expected_value: 0x528407FF
       size: 4
   - gpio_edges:
       pin: "gpio0:24"

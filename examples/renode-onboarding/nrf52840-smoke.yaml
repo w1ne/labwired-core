@@ -9,9 +9,15 @@
 # SAADC converts a 50% potentiometer on AIN3 through EasyDMA, checking the
 # 12-bit result and END/AMOUNT. SysTick-to-PendSV tail chaining also checks
 # exception-frame reuse and live R0 preservation on the Cortex-M4 profile.
-# Not exercised: TEMP/ECB (unmodelled residuals in the chip's silicon block),
-# radio, USBD, QSPI, PWM,
-# TWI/SPI, UART1, WDT. GPIOTE on a pin whose PIN_CNF.DIR = output is a known
+# TEMP: TASKS_START -> EVENTS_DATARDY and a value in the -40..85 degC range
+# (the model holds 25 degC = raw 0x64). ECB: the FIPS-197 C.1 AES-128 vector
+# through the EasyDMA data block, all 16 ciphertext bytes compared.
+# TWIM0: a TMP102 test fixture on twi0 (0x48). CONFIG = 0xFFFF reads back
+# 0xFFF0 through a write + repeated-START read (the TMP102 write mask keeps
+# R1:R0, AL and D3:D0), the first TEMP read is 0x1900 (25.0 degC), and an
+# empty address (0x49) sets EVENTS_ERROR + ERRORSRC.ANACK, cleared by W1C.
+# Not exercised: radio, USBD, QSPI, PWM,
+# SPIM, UART1, WDT. GPIOTE on a pin whose PIN_CNF.DIR = output is a known
 # engine gap (IN shows OUT, not the GPIOTE drive) — see
 # attempt-history/nrf52840/2026-11-08-direct-probe-failures.
 schema_version: "1.2"
@@ -37,12 +43,15 @@ assertions:
       - "ppi egu0->egu1 off=0 on=1 ok"
       - "systick-pendsv frame=1 r0=1 pending=1 priority=1 ok"
       - "saadc ain3=00000755 amount=1 end=1 ok"
+      - "temp datardy=1 raw=00000064 ok"
+      - "ecb fips197 ct=69c4e0d8..70b4c55a end=1 ok"
+      - "twim0 tmp102 cfg=fff0 temp=1900 anack=1 w1c=1 ok"
       - "NRF52840 PASS"
   - gpio_edges:
       pin: "gpio0:13"
       min_edges: 4
   - memory_value:
       address: 0x2003FF00
-      expected_value: 0x528403FF
+      expected_value: 0x52841FFF
       size: 4
   - expected_stop_reason: max_steps
