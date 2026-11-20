@@ -19,7 +19,7 @@ external_devices:
   # centred, so the SENS oneshot converts 1650 mV against 3.3 V: 2047.
   - id: "pot_a0"
     type: "potentiometer"
-    connection: "sar_adc_s3"
+    connection: "sens_s3"
     config:
       channel: 0
 board_io:
