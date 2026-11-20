@@ -1,9 +1,9 @@
 {
   "result_schema_version": "1.0",
   "status": "pass",
-  "steps_executed": 801897,
-  "cycles": 451898,
-  "instructions": 801897,
+  "steps_executed": 800000,
+  "cycles": 800000,
+  "instructions": 800000,
   "stop_reason": "max_steps",
   "stop_reason_details": {
     "triggered_stop_condition": "max_steps",
@@ -13,7 +13,7 @@
     },
     "observed": {
       "name": "steps_executed",
-      "value": 801897
+      "value": 800000
     }
   },
   "limits": {
@@ -42,6 +42,12 @@
     },
     {
       "assertion": {
+        "uart_contains": "lpuart6 tcie ispr=20 rel=00 ok"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
         "gpio_edges": {
           "pin": "gpio2:3",
           "min_edges": 1
@@ -61,22 +67,22 @@
     "registers": [
       1075412996,
       10,
-      1,
       0,
-      1,
-      3221225472,
       0,
+      0,
+      48,
+      33554432,
       537001968,
       1,
       1,
       3,
-      3758154252,
+      536936452,
       1,
       537001952,
-      536936452,
-      536875048
+      3758154240,
+      536876470
     ],
-    "pc": 536875048,
+    "pc": 536876470,
     "xpsr": 16777216,
     "primask": false,
     "pending_exceptions": 0,
@@ -89,7 +95,7 @@
     "waiting_for_event": false,
     "event_register": true
   },
-  "firmware_hash": "5ec494f0e5a7fbf933d94959a3f571f6c9bf7537fdb4ad3584d528fd71c262e4",
+  "firmware_hash": "92f4fbb99b4863664c5ca45a76e28e8827bd0e9066f54b35551ceacd23454f7a",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-imxrt1064-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt1064_evk.yaml",
@@ -188,7 +194,7 @@
   ],
   "logic_edges": {
     "dropped": 0,
-    "now_cycle": 451898,
+    "now_cycle": 800000,
     "channels": [
       {
         "ch": 0,
@@ -245,20 +251,26 @@
         "cycle_lo": 0,
         "cycle": 10000,
         "end_cycle": 110000
+      },
+      {
+        "text": "lpuart6 tcie ispr=20 rel=00 ok",
+        "cycle_lo": 100000,
+        "cycle": 110000,
+        "end_cycle": 110000
       }
     ],
     "dropped_lines": 0
   },
   "footprint": {
     "method": "elf_section_totals_v1",
-    "text_bytes": 4160,
+    "text_bytes": 5584,
     "data_bytes": 4,
     "bss_bytes": 12,
-    "flash_used_bytes": 4164,
+    "flash_used_bytes": 5588,
     "ram_static_bytes": 16,
     "flash_total_bytes": 65536,
     "ram_total_bytes": 65536,
-    "flash_used_pct": 6.35,
+    "flash_used_pct": 8.53,
     "ram_static_pct": 0.02,
     "notes": [
       "section_sum_not_bin_image",
@@ -281,48 +293,48 @@
     "heap_top": 537001984
   },
   "metrics": {
-    "cycles": 451898,
-    "instructions": 801897,
-    "steps_executed": 801897,
-    "memory_reads": 24894,
+    "cycles": 800000,
+    "instructions": 800000,
+    "steps_executed": 800000,
+    "memory_reads": 25135,
     "memory_writes": 53,
-    "peripheral_accesses": 4137,
+    "peripheral_accesses": 4209,
     "exceptions": 0,
     "pc_samples": [
       {
-        "pc": 536875048,
-        "count": 1375,
+        "pc": 536876470,
+        "count": 2735,
         "symbol": "firmware_imxrt1064_smoke::__cortex_m_rt_main"
       },
       {
-        "pc": 536873340,
+        "pc": 536873338,
         "count": 117,
         "symbol": "firmware_imxrt1064_smoke::wait"
       },
       {
-        "pc": 536873336,
+        "pc": 536873310,
         "count": 78,
         "symbol": "core::sync::atomic::atomic_load"
       },
       {
-        "pc": 536873342,
+        "pc": 536873336,
         "count": 78,
         "symbol": "firmware_imxrt1064_smoke::wait"
       },
       {
         "pc": 536873314,
         "count": 39,
-        "symbol": "core::sync::atomic::atomic_load"
+        "symbol": "firmware_imxrt1064_smoke::wait"
       },
       {
         "pc": 536874094,
         "count": 39,
-        "symbol": "firmware_imxrt1064_smoke::wait"
+        "symbol": "core::ptr::read_volatile"
       },
       {
-        "pc": 536874126,
+        "pc": 536874128,
         "count": 39,
-        "symbol": "firmware_imxrt1064_smoke::wait"
+        "symbol": "core::ptr::read_volatile"
       }
     ]
   }

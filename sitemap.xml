@@ -1897,6 +1897,12 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/imxrt1064/2026-11-17-adc-result-padding/onboarding-summary/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/imxrt1064/2026-11-20-negative-control-lpuart6-irq21/</loc>
+    </url>
+    <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/imxrt1064/2026-11-20-negative-control-lpuart6-no-irq/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/imxrt500/attempt-01/onboarding-summary/</loc>
     </url>
     <url>
