@@ -18,3 +18,9 @@ name = "firmware-litex-vexriscv-smoke"
 path = "src/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "litex-vexriscv-gpio-in"
+path = "src/bin/gpio_in.rs"
+test = false
+bench = false

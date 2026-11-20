@@ -2,15 +2,36 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic analog devices reach the LiteX profile's simulation-only inputs.
-//! The profile has no physical GPIO, pad mux or ADC model.
+//! The generic NTC divider and diode load line reach the LiteX GPIOIn `in`
+//! CSR of the Zephyr enjoydigital litex_vexriscv board (litex_vexriscv.dts
+//! `gpio_in: gpio@e0006000`, the declarative `peripherals/litex/gpio_in.yaml`
+//! model that the onboarding LiteX profiles already use):
+//! - on the bus: the solved voltages against an independent divider and
+//!   Shockley load-line reference, and the `in` bits through the descriptor's
+//!   assumed Schmitt thresholds, including the retained level at 25 °C;
+//! - the old simulation-only `cosim_inputs` bank is gone and no longer binds;
+//! - in a `Session`: the committed RV32IM firmware
+//!   (examples/litex-vexriscv/firmware/litex-vexriscv-gpio-in.elf) reads the
+//!   CSR and prints `IN=<p3..p0>` on the LiteX UART while the session solves
+//!   the netlists.
+//!
+//! The SoC has no ADC: this is a digital-input route, not a conversion.
 
 mod common;
 use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
 use labwired_core::cosim::{CosimSession, CosimSignalValue, RoutingError};
+use labwired_core::session::{OpenOptions, Session};
+use labwired_core::system::builder::*;
+use labwired_core::Bus;
 use std::path::Path;
+use std::time::Duration;
+
+/// LiteX GPIOIn `in` CSR (litex_vexriscv.dts `gpio_in: gpio@e0006000`).
+const GPIO_IN: u64 = 0xE000_6000;
+const FIRMWARE: &str = "examples/litex-vexriscv/firmware/litex-vexriscv-gpio-in.elf";
+const ANALOG_SYSTEM: &str = "examples/litex-vexriscv/analog-ntc-diode-system.yaml";
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
@@ -49,33 +70,47 @@ fn voltage(session: &CosimSession, path: &str) -> f64 {
     }
 }
 
-#[test]
-fn litex_vexriscv_ntc_and_diode_netlists_reach_simulated_input_thresholds() {
+fn board(ntc_path: &str, diode_path: &str) -> (SystemBus, CosimSession) {
     let system_path = root("configs/systems/litex-vexriscv.yaml");
     let mut profile = SystemManifest::from_file(&system_path).expect("load LiteX profile");
     assert_eq!(profile.name, "litex-vexriscv");
-    let analog_path = root("examples/litex-vexriscv/analog-ntc-diode-system.yaml");
-    let analog = SystemManifest::from_file(&analog_path)
+    let analog = SystemManifest::from_file(root(ANALOG_SYSTEM))
         .expect("load generic NTC divider and Shockley diode");
     profile.cosim_models = analog.cosim_models;
+    for model in &mut profile.cosim_models {
+        for path in model.outputs.values_mut() {
+            *path = match path.as_str() {
+                "board.gpio_in.gpio_in.0" => ntc_path.to_string(),
+                "board.gpio_in.gpio_in.1" => diode_path.to_string(),
+                other => other.to_string(),
+            };
+        }
+    }
 
+    // Absolute chip path: the declarative GPIO descriptors resolve against it.
     let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    profile.chip = chip_path.to_string_lossy().into_owned();
     let chip = ChipDescriptor::from_file(&chip_path).expect("load LiteX chip descriptor");
-    let mut bus = SystemBus::from_config(&chip, &profile).expect("build LiteX system bus");
-    let inputs = bus
-        .find_peripheral_index_by_name("cosim_inputs")
-        .expect("profile has two simulation-only input endpoints");
-    assert_eq!(bus.peripherals[inputs].dev.read_gpio_input(0), Some(false));
-    assert_eq!(bus.peripherals[inputs].dev.read_gpio_input(1), Some(false));
-
-    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+    let bus = SystemBus::from_config(&chip, &profile).expect("build LiteX system bus");
+    let session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
         .expect("build analog co-simulation")
         .expect("fixture carries both analog models");
+    (bus, session)
+}
+
+#[test]
+fn litex_vexriscv_gpio_in_csr_reads_the_solved_ntc_and_diode_through_thresholds() {
+    let (mut bus, mut session) = board("board.gpio_in.gpio_in.0", "board.gpio_in.gpio_in.1");
     assert_eq!(
         session.binding_errors(),
         &[] as &[RoutingError],
-        "both unrelated device models must bind to distinct input endpoints"
+        "both unrelated device models must bind to GPIOIn pins 0 and 1"
     );
+    assert!(
+        bus.find_peripheral_index_by_name("cosim_inputs").is_none(),
+        "the simulation-only input bank was removed"
+    );
+    assert_eq!(bus.read_u32(GPIO_IN).expect("read GPIOIn in"), 0);
 
     let expected_diode_v = diode_load_line_voltage();
     assert!(expected_diode_v < 0.99, "diode must fall below assumed VIL");
@@ -97,29 +132,95 @@ fn litex_vexriscv_ntc_and_diode_netlists_reach_simulated_input_thresholds() {
         assert_eq!(steps.len(), 2, "both device models cross the boundary");
         assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
 
-        let ntc_v = voltage(&session, "board.gpio_in.cosim_inputs.0");
+        let ntc_v = voltage(&session, "board.gpio_in.gpio_in.0");
         let resistance = ntc_resistance_ohms(temperature_c);
         let expected_ntc_v = 3.3 * resistance / (10_000.0 + resistance);
         assert!(
             (ntc_v - expected_ntc_v).abs() < 1e-9,
             "at {temperature_c} °C the NTC divider should be {expected_ntc_v} V, got {ntc_v} V"
         );
-        assert_eq!(
-            bus.peripherals[inputs].dev.read_gpio_input(0),
-            Some(expected_ntc_level),
-            "input 0 follows the solved NTC voltage through assumed thresholds and hysteresis"
-        );
-
-        let diode_v = voltage(&session, "board.gpio_in.cosim_inputs.1");
+        let diode_v = voltage(&session, "board.gpio_in.gpio_in.1");
         assert!(
             (diode_v - expected_diode_v).abs() < 2e-5,
             "the Shockley load line should be {expected_diode_v} V, got {diode_v} V"
         );
-        assert!(diode_v < 0.99, "diode voltage remains below assumed VIL");
+
         assert_eq!(
-            bus.peripherals[inputs].dev.read_gpio_input(1),
-            Some(false),
-            "input 1 reads low from the solved diode voltage"
+            bus.read_u32(GPIO_IN).expect("read GPIOIn in"),
+            expected_ntc_level as u32,
+            "at {temperature_c} °C: `in` bit 0 follows the NTC through the thresholds \
+             and hysteresis, bit 1 reads the diode low"
         );
     }
+}
+
+/// Pin 3 is a real GPIOIn pin (ngpios 4); the old bank path no longer binds.
+#[test]
+fn litex_vexriscv_ntc_on_gpio_in_pin_3_sets_in_bit_3_and_the_old_bank_is_gone() {
+    let (mut bus, mut session) = board("board.gpio_in.gpio_in.3", "board.gpio_in.gpio_in.1");
+    assert_eq!(session.binding_errors(), &[] as &[RoutingError]);
+    session
+        .set_signal_number("ui.ntc.temperature_c", -10.0)
+        .unwrap();
+    let cycles = session.cycles_until_boundary(0);
+    let (_, errors) = session.advance_to(cycles, &mut bus).unwrap();
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+    assert_eq!(bus.read_u32(GPIO_IN).unwrap(), 0b1000);
+
+    let (_, session) = board(
+        "board.gpio_in.cosim_inputs.0",
+        "board.gpio_in.cosim_inputs.1",
+    );
+    assert_eq!(
+        session.binding_errors().len(),
+        2,
+        "the removed input-bank endpoints must not bind: {:?}",
+        session.binding_errors()
+    );
+}
+
+fn open_firmware(system: &str) -> Session {
+    let (chip, manifest) = common::system(system);
+    let blobs = BlobMap::new();
+    let fw = common::committed(FIRMWARE);
+    Session::open(
+        BuildRequest {
+            chip: &chip,
+            system: &manifest,
+            firmware: FirmwareSource::Elf(&fw),
+            boot: BootMode::FastBoot,
+            blobs: &blobs,
+            options: BuildOptions::default(),
+        },
+        OpenOptions::default(),
+    )
+    .unwrap()
+}
+
+/// Nothing is routed on the plain board: every GPIOIn pin reads low.
+#[test]
+fn litex_vexriscv_gpio_in_firmware_reads_the_csr_on_the_plain_board() {
+    let mut s = open_firmware("examples/litex-vexriscv/system.yaml");
+    let r = s.expect("LITEX GPIO IN\nIN=0000\n", Duration::from_secs(1));
+    let transcript = s.uart_transcript();
+    r.unwrap_or_else(|e| panic!("{e}\n--- console ---\n{transcript}"));
+}
+
+/// The whole loop in one `Session`: the session solves the example's NTC
+/// divider and diode netlists, routes them to GPIOIn pins 0 and 1, and the
+/// firmware reads the `in` CSR and prints it. The NTC moves between -10 °C
+/// and 80 °C while the firmware runs, and the printed bit 0 follows.
+#[test]
+fn litex_vexriscv_gpio_in_firmware_reads_the_solved_netlists_in_a_session() {
+    let mut s = open_firmware(ANALOG_SYSTEM);
+    for (temperature_c, line) in [(-10.0, "IN=0001"), (80.0, "IN=0000"), (-10.0, "IN=0001")] {
+        s.set_signal("ui.ntc.temperature_c", temperature_c).unwrap();
+        let r = s.expect(line, Duration::from_secs(1));
+        let transcript = s.uart_transcript();
+        r.unwrap_or_else(|e| panic!("{temperature_c} °C: {e}\n--- console ---\n{transcript}"));
+    }
+    assert!(
+        !s.uart_transcript().contains("IN=0010"),
+        "the diode never reads high"
+    );
 }

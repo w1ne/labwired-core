@@ -1,8 +1,12 @@
-# Generic MNA devices driving the LiteX profile's simulation-only input bank
-# through assumed 3.3 V Schmitt thresholds. This is not physical pad or ADC
-# coverage.
+# Generic MNA devices on the LiteX GPIOIn pins of the Zephyr enjoydigital
+# litex_vexriscv board (gpio_in @ 0xE0006000): a Beta NTC divider on pin 0 and
+# a Shockley diode load line on pin 1, through the descriptor's assumed 3.3 V
+# Schmitt thresholds. This is a digital-input route, not an ADC claim: the SoC
+# has no ADC. The firmware (crates/firmware-litex-vexriscv-smoke, bin
+# `litex-vexriscv-gpio-in`) prints the `in` CSR on the LiteX UART.
 name: "litex-vexriscv-analog"
 chip: "../../configs/chips/litex-vexriscv.yaml"
+debug_uart: "uart"
 external_devices: []
 board_io: []
 cosim_models:
@@ -12,7 +16,7 @@ cosim_models:
     inputs:
       temperature: "ui.ntc.temperature_c"
     outputs:
-      v_sense: "board.gpio_in.cosim_inputs.0"
+      v_sense: "board.gpio_in.gpio_in.0"
     config:
       netlist_text: |
         Vcc vcc 0 dc 3.3
@@ -27,7 +31,7 @@ cosim_models:
     adapter: "analog"
     step_ns: 1000
     outputs:
-      v_diode: "board.gpio_in.cosim_inputs.1"
+      v_diode: "board.gpio_in.gpio_in.1"
     config:
       netlist_text: |
         Vcc supply 0 dc 3.3

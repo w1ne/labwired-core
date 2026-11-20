@@ -13,14 +13,14 @@ Claims, evidence, and what is explicitly **not** claimed yet.
 | LiteX timer one-shot + zero event | smoke-tested | `timer=running` then `timer=zero` (the event only latches if the countdown reached zero) |
 | Unmodelled CSR window (SPI-flash controller) answers zeros | smoke-tested | `spi=00000000` printed from 0x60005000 |
 | Determinism (same inputs → same output) | smoke-tested | two runs, identical UART streams (`diff` clean) |
-| Generic analog routing | tested | `cosim_litex_vexriscv_analog`: Beta NTC and Shockley diode netlists solve to separate `input_pin_bank` channels and assert the solved voltages, threshold states and NTC hysteresis; endpoint thresholds are simulation assumptions, not LiteX or board pad specifications |
+| Generic analog routing to LiteX GPIOIn | tested | `cosim_litex_vexriscv_analog`: Beta NTC and Shockley diode netlists solve onto GPIOIn pins 0 and 1 (0xE0006000, Zephyr `litex_vexriscv.dts` `gpio_in`); the `in` CSR read on the bus follows the thresholds and NTC hysteresis; in a `Session` the committed firmware `firmware/litex-vexriscv-gpio-in.elf` prints `IN=0001` cold and `IN=0000` hot. Thresholds are simulation assumptions, not LiteX or board pad specifications |
 | Instruction support for this firmware | audited | `unsupported_instruction_audit.sh`: 200,000 instructions, 0 unsupported |
 | Timer zero-event IRQ delivery into the CPU | **not wired** | the status/pending registers are the firmware-visible surface; the engine does not deliver external IRQs to RISC-V cores yet |
 | SPI flash controller / Ethernet MAC / MMCM | **not modelled** | declared `type: stub`; the SPI window is mapped memory, no controller behind it |
 | Main RAM (DDR, 0x40000000, 256 MiB) | **not mapped** | the engine allocates memory regions densely; a 256 MiB window is not useful to the smoke |
 | LiteX BIOS + flash-load boot flow | **not modelled** | fast boot loads the ELF and enters it directly |
 | LEDs / switches / buttons | not modelled | no board_io bindings are declared (see `EXTERNAL_COMPONENTS.md`) |
-| Physical analog pads / ADC | **not modelled** | the generic analog input bank is only a co-simulation endpoint; no gateware, pad mapping or conversion path is claimed |
+| ADC / GPIOIn IRQ events | **not modelled** | the SoC has no ADC; GPIOIn `irq_mode`/`irq_edge`/`irq_pend`/`irq_en` (+0x04..+0x14) are not modelled |
 | Silicon capture / executing-fidelity differential | **none** | SIM-DERIVED; no bitstream diff exists |
 
 ## Commands and evidence (verified 2026-10-20)
@@ -69,7 +69,16 @@ cargo test -p labwired-core --test firmware_survival test_litex_vexriscv_smoke_s
 #   1 passed — the committed fixture boots and prints the banner
 
 cargo test -p labwired-core --test cosim_litex_vexriscv_analog
-#   1 passed — NTC divider and Shockley diode route to separate thresholded inputs
+#   4 passed (2026-11-20) — NTC divider and Shockley diode on GPIOIn pins 0/1
+#   read through the `in` CSR; NTC on pin 3 sets bit 3; the removed
+#   `cosim_inputs` bank no longer binds; the gpio-in firmware prints
+#   IN=0000 on the plain board and follows the NTC in a Session
+
+# rebuild the gpio-in firmware fixture
+cargo build -p firmware-litex-vexriscv-smoke --bin litex-vexriscv-gpio-in \
+  --release --target riscv32im-unknown-none-elf
+cp $CARGO_TARGET_DIR/riscv32im-unknown-none-elf/release/litex-vexriscv-gpio-in \
+  examples/litex-vexriscv/firmware/litex-vexriscv-gpio-in.elf
 ```
 
 ## Notes

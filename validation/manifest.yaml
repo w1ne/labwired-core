@@ -9855,6 +9855,10 @@ boards:
     # MMCM CSR windows are declared stubs (the smoke prints one of those
     # readbacks). See
     # docs/boards/litex-vexriscv.md and examples/litex-vexriscv/VALIDATION.md.
+    # 2026-11-20: the simulation-only `input_pin_bank` (0xF0000000) is
+    # replaced by the LiteX GPIOOut/GPIOIn CSRs of the Zephyr enjoydigital
+    # litex_vexriscv board (gpio@e0005800, gpio@e0006000) on the declarative
+    # configs/peripherals/litex descriptors; cosim_litex_vexriscv_analog.
     doc: docs/boards/litex-vexriscv.md
     chip: configs/chips/litex-vexriscv.yaml
     tier: smoke-manual
@@ -9874,6 +9878,7 @@ boards:
       - crates/firmware-litex-vexriscv-smoke
       - configs/chips/litex-vexriscv.yaml
       - configs/systems/litex-vexriscv.yaml
+      - configs/peripherals/litex
   - id: stm32l552
     # 2026-10-29: NUCLEO-L552ZE-Q (STM32L552ZET6Q, Cortex-M33 / Armv8-M;
     # 512 KiB flash at 0x08000000, 192 KiB SRAM1 at 0x20000000 + 64 KiB SRAM2
