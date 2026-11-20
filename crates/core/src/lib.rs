@@ -816,6 +816,13 @@ impl<C: Cpu> Machine<C> {
             }
         }
 
+        // A port re-registers its watched pads with peripheral lines only
+        // inside a bracketed write. Where the PERIPHERAL names the pad (nRF
+        // `PSEL`, EFR32 route registers) the write that moves a pad lands on
+        // the peripheral, so the bus must bracket it while any pad is watched.
+        self.bus.pad_watch_live = !per_peripheral.is_empty();
+        self.bus.rebuild_pad_claim_links();
+
         // ── The WIRE half ───────────────────────────────────────────────────
         // AFTER the pad pass, never before. A GPIO port with no watched pin
         // clears the pad-route taps on the very cells wire channels register
@@ -2677,6 +2684,12 @@ impl<C: Cpu> Machine<C> {
             // `on_event` without holding two simultaneous mutable borrows.
             // Same dance the bus uses for `tick_with_bus`, but the stub stand-in
             // is reused from `event_placeholder` instead of allocated per event.
+            // A pad-naming peripheral can take or release a pad inside its
+            // event (nRF PWM loads its first step, and so claims its pad, in
+            // the EasyDMA completion after `TASKS_SEQSTART`): bracket it like
+            // a register write so a watched pad follows the claim.
+            let pad_claim_capture =
+                !self.bus.pad_claim_links.owners.is_empty() && self.bus.begin_pad_claim_write(idx);
             let stub = self
                 .event_placeholder
                 .take()
@@ -2692,6 +2705,7 @@ impl<C: Cpu> Machine<C> {
             // Put the real peripheral back and reclaim the stub for reuse.
             let stub_back = std::mem::replace(&mut self.bus.peripherals[idx].dev, dev);
             self.event_placeholder = Some(stub_back);
+            self.bus.finish_pad_claim_write(pad_claim_capture);
             // Phase 2B.3b: a level-triggered peripheral re-arms its own event
             // (same token) while it has active work. We own the idx the
             // scheduler needs, so we do it here.

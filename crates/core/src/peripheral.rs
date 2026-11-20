@@ -828,9 +828,10 @@ pub trait Peripheral: std::fmt::Debug + Send {
     /// Pin-select capability: `true` for a peripheral that names the pads it
     /// drives in its own registers (nRF `PSEL.*`), so a register write can
     /// move a pad between its GPIO latch and one of this peripheral's lines.
-    /// On a bus with a world `gpio_net` the bus brackets such writes so the
-    /// pin ports report what moved and hand the net's levels to newly routed
-    /// lines. Default: no.
+    /// On a bus with a world `gpio_net` or a logic-analyzer pad watch the bus
+    /// brackets such writes so the pin ports report what moved, re-register
+    /// watched pads with the line that now drives them and hand the net's
+    /// levels to newly routed lines. Default: no.
     fn claims_pads(&self) -> bool {
         false
     }

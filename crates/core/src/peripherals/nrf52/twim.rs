@@ -531,9 +531,12 @@ impl Nrf52Twim {
             self.wire_address(addr7, false, false);
             self.errorsrc |= ERRORSRC_ANACK;
             self.events_error = 1;
-            // Still complete the EasyDMA bookkeeping with AMOUNT = 0.
+            // No data byte started, so silicon fires no LASTTX and no
+            // LASTTX_* shortcut runs: the bus is held until the driver
+            // triggers STOP (nrfx `nrfy_twim_tx_start`: "triggering of STOP
+            // task in case of error has to be done manually"). Same as the
+            // `twim_net` bit engine.
             self.txd_amount = 0;
-            self.events_lasttx = 1;
             return true;
         }
 
@@ -578,13 +581,9 @@ impl Nrf52Twim {
             self.wire_address(addr7, true, false);
             self.errorsrc |= ERRORSRC_ANACK;
             self.events_error = 1;
-            // Fill RX buffer with 0xFF (bus release / NACK default).
-            for i in 0..rxd_maxcnt {
-                let addr = rxd_ptr + i as u64;
-                let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, 0xFF));
-            }
-            self.rxd_amount = rxd_maxcnt as u32;
-            self.events_lastrx = 1;
+            // No byte is clocked in: RAM is untouched, AMOUNT = 0, and no
+            // LASTRX or LASTRX_* shortcut fires (see `do_tx`).
+            self.rxd_amount = 0;
             return true;
         }
 
@@ -676,8 +675,10 @@ impl Nrf52Twim {
                 }
             }
             PENDING_TX => {
-                let _nack = self.do_tx(bus);
-                if self.shorts & SHORT_LASTTX_STARTRX != 0 {
+                let nack = self.do_tx(bus);
+                if nack {
+                    // Held after the address NACK; TASKS_STOP releases it.
+                } else if self.shorts & SHORT_LASTTX_STARTRX != 0 {
                     self.pending = PENDING_RX;
                     self.busy_cycles = self.transfer_cycles(self.rxd_maxcnt & MAXCNT_MASK);
                 } else if self.shorts & SHORT_LASTTX_SUSPEND != 0 {
@@ -690,8 +691,10 @@ impl Nrf52Twim {
                 }
             }
             PENDING_RX => {
-                let _nack = self.do_rx(bus);
-                if self.shorts & SHORT_LASTRX_STOP != 0 {
+                let nack = self.do_rx(bus);
+                if nack {
+                    // Held after the address NACK; TASKS_STOP releases it.
+                } else if self.shorts & SHORT_LASTRX_STOP != 0 {
                     self.events_stopped = 1;
                     if let Some(idx) = self.device_for(addr7) {
                         self.attached_devices[idx].borrow_mut().stop();
@@ -1429,9 +1432,50 @@ mod tests {
         assert_eq!(read32(&t, OFF_TXD_AMOUNT), 0, "TXD.AMOUNT = 0 on NACK");
         assert_eq!(
             read32(&t, OFF_EVENTS_LASTTX),
-            1,
-            "LASTTX still fires on NACK"
+            0,
+            "no data byte started, so no LASTTX"
         );
+    }
+
+    /// An address NACK runs no LASTTX shortcut: the bus is held (no RX leg,
+    /// no STOPPED) until the driver's TASKS_STOP, as in nrfx's error path.
+    #[test]
+    fn twim_anack_runs_no_shortcut_until_tasks_stop() {
+        for shorts in [
+            SHORT_LASTTX_STARTRX,
+            SHORT_LASTTX_STOP,
+            SHORT_LASTTX_SUSPEND,
+        ] {
+            let mut t = Nrf52Twim::new();
+            let mut bus = FlatRam::new();
+            let rx_base: u64 = 0x2000_0400;
+            bus.write_slice(rx_base, &[0xA5, 0xA5]);
+
+            write32(&mut t, OFF_ENABLE, 6);
+            write32(&mut t, OFF_ADDRESS, 0x55);
+            write32(&mut t, OFF_SHORTS, shorts);
+            write32(&mut t, OFF_TXD_PTR, 0x2000_0100);
+            write32(&mut t, OFF_TXD_MAXCNT, 1);
+            write32(&mut t, OFF_RXD_PTR, rx_base as u32);
+            write32(&mut t, OFF_RXD_MAXCNT, 2);
+            write32(&mut t, OFF_TASKS_STARTTX, 1);
+            run_leg(&mut t, &mut bus);
+
+            assert_eq!(read32(&t, OFF_EVENTS_ERROR), 1, "shorts {shorts:#x}");
+            assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 0, "shorts {shorts:#x}");
+            assert_eq!(read32(&t, OFF_EVENTS_RXSTARTED), 0, "no RX leg");
+            assert_eq!(read32(&t, OFF_EVENTS_STOPPED), 0, "no auto STOP");
+            assert_eq!(read32(&t, OFF_EVENTS_SUSPENDED), 0, "no SUSPENDED");
+            assert!(!t.needs_bus_tick(), "nothing chained");
+            assert_eq!(bus.read_slice(rx_base, 2), vec![0xA5, 0xA5]);
+
+            // nrfx: RESUME then STOP.
+            write32(&mut t, OFF_TASKS_RESUME, 1);
+            write32(&mut t, OFF_TASKS_STOP, 1);
+            run_leg(&mut t, &mut bus);
+            assert_eq!(read32(&t, OFF_EVENTS_STOPPED), 1, "shorts {shorts:#x}");
+            assert_eq!(read32(&t, OFF_EVENTS_RXSTARTED), 0, "RESUME starts no RX");
+        }
     }
 
     /// TX: bytes delivered to device are exactly the bytes from RAM.
@@ -1591,15 +1635,16 @@ mod tests {
         );
     }
 
-    /// RX with no device: RAM filled with 0xFF, ANACK fired.
+    /// RX with no device: ANACK fired, RAM untouched, no LASTRX.
     #[test]
-    fn twim_rx_no_device_fills_ff_and_fires_anack() {
+    fn twim_rx_no_device_leaves_ram_and_fires_anack() {
         let mut t = Nrf52Twim::new();
         let mut bus = FlatRam::new();
         let rx_base: u64 = 0x2000_0400;
 
         write32(&mut t, OFF_ENABLE, 6);
         write32(&mut t, OFF_ADDRESS, 0x55);
+        bus.write_slice(rx_base, &[0x11, 0x22, 0x33]);
         write32(&mut t, OFF_RXD_PTR, rx_base as u32);
         write32(&mut t, OFF_RXD_MAXCNT, 3);
         write32(&mut t, OFF_TASKS_STARTRX, 1);
@@ -1607,17 +1652,10 @@ mod tests {
 
         assert_eq!(read32(&t, OFF_ERRORSRC) & ERRORSRC_ANACK, ERRORSRC_ANACK);
         assert_eq!(read32(&t, OFF_EVENTS_ERROR), 1);
-        assert_eq!(
-            read32(&t, OFF_RXD_AMOUNT),
-            3,
-            "amount = MAXCNT even on NACK"
-        );
+        assert_eq!(read32(&t, OFF_RXD_AMOUNT), 0, "no byte clocked in");
+        assert_eq!(read32(&t, OFF_EVENTS_LASTRX), 0, "no LASTRX on ANACK");
         let rx = bus.read_slice(rx_base, 3);
-        assert_eq!(
-            rx,
-            vec![0xFF, 0xFF, 0xFF],
-            "no-device: RAM filled with 0xFF"
-        );
+        assert_eq!(rx, vec![0x11, 0x22, 0x33], "no-device: RAM untouched");
     }
 
     // ── SHORTS chaining tests ─────────────────────────────────────────────────

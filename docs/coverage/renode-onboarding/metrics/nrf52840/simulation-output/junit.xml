@@ -1,18 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="5" failures="0" errors="0" time="0.460718">
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.509688">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="9e406316bf70576bedd9034f0e9b6434c2347bcfa199d509ab9e49ef2b1a3043"/>
+    <property name="firmware_hash" value="9c51e82d0177098dc1b9b7d2d5b93f9061e83525163d62014450d9f2fe12760f"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.460718">
+  <testcase classname="labwired" name="run" time="0.509688">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;NRF52840 RENODE SMOKE&quot;, &quot;ficr part=52840 nvmc ready=1 ok&quot;, &quot;clock hfstat=00010001 lfstat=00010001 ok&quot;, …" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 2: gpio_edges: gpio0:13 &gt;= 4 edges" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 3: memory_value: @0x2003ff00=0x52843fff" time="0.000000">
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpio0:14 &gt;= 2 edges" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 4: expected_stop_reason: MaxSteps" time="0.000000">
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpio0:15 &gt;= 100 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x2003ff00=0x52843fff" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
   </testcase>
 </testsuite>

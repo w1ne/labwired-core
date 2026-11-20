@@ -126,7 +126,15 @@ fn probe_transfer(
     machine.bus.write_u32(TWIM + 0x008, 1).unwrap();
     // Poll promptly so this test can cancel a still-pending conversion;
     // an arbitrary long post-transfer run could pass its deadline first.
+    let mut stop_sent = false;
     for _ in 0..5_000 {
+        // An address NACK holds the bus with no shortcut run; nrfx then
+        // triggers RESUME + STOP itself.
+        if !stop_sent && machine.bus.read_u32(TWIM + 0x124).unwrap() != 0 {
+            machine.bus.write_u32(TWIM + 0x020, 1).unwrap();
+            machine.bus.write_u32(TWIM + 0x014, 1).unwrap();
+            stop_sent = true;
+        }
         if machine.bus.read_u32(TWIM + 0x104).unwrap() != 0 {
             return (
                 machine.bus.read_u32(TWIM + 0x124).unwrap(),
