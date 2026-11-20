@@ -137,15 +137,26 @@ pub struct Lcd1602 {
     blink_on: bool,
     /// Function set `N`: true = 2-line mode.
     two_line: bool,
-    /// Every distinct non-blank panel text seen during the run, newest last.
+    /// Every distinct *settled* non-blank panel text seen during the run, newest last.
     ///
     /// Survives a clear-display (0x01): DDRAM goes blank but prior paints stay
     /// in this ring so a DisplayClause `contains` can still prove a mid-run
     /// Status:ALARM after a later overwrite. Capped at 32 so a spinning sketch
     /// cannot grow the inspect payload without bound; DisplayClause searches
     /// this ring as well as the current `text`.
+    ///
+    /// Entries are committed after a short idle ([`Lcd1602::SETTLE_US`]) or
+    /// included at inspect time, not after every DDRAM byte. In-place
+    /// `setCursor`+`print` rewrites would otherwise fill the cap with
+    /// mid-write frames and evict earlier complete panels.
     #[serde(skip)]
     texts_seen: VecDeque<String>,
+    /// Microseconds of idle since the last visible-text change.
+    #[serde(skip)]
+    us_since_change: u64,
+    /// True when the current panel has changed and is not yet in the ring.
+    #[serde(skip)]
+    text_dirty: bool,
 }
 
 impl Default for Lcd1602 {
@@ -174,6 +185,8 @@ impl Lcd1602 {
             blink_on: false,
             two_line: false,
             texts_seen: VecDeque::new(),
+            us_since_change: 0,
+            text_dirty: false,
         }
     }
 
@@ -285,9 +298,12 @@ impl Lcd1602 {
             0x00 => { /* no instruction */ }
             // Clear display: DDRAM ← spaces, address counter ← 0, I/D unchanged.
             0x01 => {
+                self.commit_settled_text();
                 self.ddram = [BLANK; DDRAM_LEN];
                 self.addr = 0;
                 self.cgram_mode = false;
+                self.text_dirty = false;
+                self.us_since_change = 0;
             }
             // Return home: address counter ← 0, DDRAM untouched.
             0x02..=0x03 => {
@@ -299,10 +315,17 @@ impl Lcd1602 {
             0x04..=0x07 => self.entry_increment = cmd & 0x02 != 0,
             // Display on/off control: bit2 = D, bit1 = C, bit0 = B.
             0x08..=0x0F => {
-                self.display_on = cmd & 0x04 != 0;
+                let on = cmd & 0x04 != 0;
+                // Commit the last visible frame before the panel blanks.
+                if self.display_on && !on {
+                    self.commit_settled_text();
+                }
+                self.display_on = on;
                 self.cursor_on = cmd & 0x02 != 0;
                 self.blink_on = cmd & 0x01 != 0;
-                self.record_text_if_changed();
+                if on {
+                    self.mark_text_dirty();
+                }
             }
             // Cursor/display shift. Shifting the *display* only moves which
             // DDRAM window the panel shows; the readback presents the unshifted
@@ -342,7 +365,7 @@ impl Lcd1602 {
         }
         self.step_address(self.entry_increment);
         if !self.cgram_mode {
-            self.record_text_if_changed();
+            self.mark_text_dirty();
         }
     }
 
@@ -397,6 +420,38 @@ impl Lcd1602 {
         candidate.contains(':') && !existing.contains(':')
     }
 
+    /// Idle time after which a changed panel is treated as settled and
+    /// committed to [`Lcd1602::texts_seen`]. 1 ms is longer than a tight
+    /// `print` burst on a 100 kHz backpack, and shorter than a typical
+    /// `loop()` gap (sensor read, `delay`, pulse wait).
+    const SETTLE_US: u64 = 1_000;
+
+    fn mark_text_dirty(&mut self) {
+        self.text_dirty = true;
+        self.us_since_change = 0;
+    }
+
+    /// Commit the current visible panel into the ring, if it has changed.
+    fn commit_settled_text(&mut self) {
+        if !self.text_dirty {
+            return;
+        }
+        self.record_text_if_changed();
+        self.text_dirty = false;
+        self.us_since_change = 0;
+    }
+
+    fn visible_text(&self) -> Option<String> {
+        if !self.display_on {
+            return None;
+        }
+        let text = self.text();
+        if text.chars().all(|c| c.is_whitespace()) {
+            return None;
+        }
+        Some(text)
+    }
+
     /// Record the current visible text when it changes and is non-blank.
     /// Entries accumulate for the whole run (a clear does not wipe them) and
     /// the ring is capped at [`Self::TEXTS_SEEN_CAP`] (32).
@@ -406,14 +461,13 @@ impl Lcd1602 {
     /// HD44780 remaining-time UIs) do not grow the ring, so early panels
     /// survive long runs.
     fn record_text_if_changed(&mut self) {
-        if !self.display_on {
-            return;
+        if let Some(text) = self.visible_text() {
+            Self::record_text_into(&mut self.texts_seen, text);
         }
-        let text = self.text();
-        if text.chars().all(|c| c.is_whitespace()) {
-            return;
-        }
-        if let Some(prev) = self.texts_seen.back() {
+    }
+
+    fn record_text_into(ring: &mut VecDeque<String>, text: String) {
+        if let Some(prev) = ring.back() {
             if prev == &text {
                 return;
             }
@@ -421,27 +475,38 @@ impl Lcd1602 {
         // Blink or clear+reprint of a panel already on the ring: keep one slot.
         // `is_monotonic_fill(text, existing)` catches mid-repaint prefixes after
         // a clear (`"T…"` toward `"Time Remainig 00:02"`).
-        if let Some(i) = self
-            .texts_seen
+        if let Some(i) = ring
             .iter()
             .position(|p| Self::is_blink_only(p, &text) || Self::is_monotonic_fill(&text, p))
         {
-            if Self::prefer_colon(&self.texts_seen[i], &text) {
-                self.texts_seen[i] = text;
+            if Self::prefer_colon(&ring[i], &text) {
+                ring[i] = text;
             }
             return;
         }
-        if let Some(prev) = self.texts_seen.back() {
+        if let Some(prev) = ring.back() {
             if Self::is_monotonic_fill(prev, &text) {
-                self.texts_seen.pop_back();
-                self.texts_seen.push_back(text);
+                ring.pop_back();
+                ring.push_back(text);
                 return;
             }
         }
-        if self.texts_seen.len() >= Self::TEXTS_SEEN_CAP {
-            self.texts_seen.pop_front();
+        if ring.len() >= Self::TEXTS_SEEN_CAP {
+            ring.pop_front();
         }
-        self.texts_seen.push_back(text);
+        ring.push_back(text);
+    }
+
+    /// Ring plus the not-yet-idle current panel. `artifacts` is `&self`, so
+    /// inspect includes the latest frame without waiting for a trailing idle.
+    fn texts_seen_for_inspect(&self) -> Vec<String> {
+        let mut ring = self.texts_seen.clone();
+        if self.text_dirty {
+            if let Some(text) = self.visible_text() {
+                Self::record_text_into(&mut ring, text);
+            }
+        }
+        ring.into_iter().collect()
     }
 }
 
@@ -465,7 +530,7 @@ impl I2cDevice for Lcd1602 {
                 "format": crate::inspect::artifact_format::HD44780_DDRAM,
                 "generation": crate::inspect::artifact_generation(&ddram),
                 "text": text,
-                "texts_seen": self.texts_seen.iter().cloned().collect::<Vec<_>>(),
+                "texts_seen": self.texts_seen_for_inspect(),
                 "printable_chars": text.chars().filter(|c| !c.is_whitespace()).count(),
                 "display_on": self.display_on(),
                 "backlight": self.backlight(),
@@ -510,6 +575,16 @@ impl I2cDevice for Lcd1602 {
         // written state — so neither the E level nor a half-clocked byte is
         // reset here. Drivers routinely split a byte's two nibble pulses across
         // separate I²C transactions.
+    }
+
+    fn advance_time_us(&mut self, us: u64) {
+        if !self.text_dirty || us == 0 {
+            return;
+        }
+        self.us_since_change = self.us_since_change.saturating_add(us);
+        if self.us_since_change >= Self::SETTLE_US {
+            self.commit_settled_text();
+        }
     }
 
     fn as_any(&self) -> Option<&dyn Any> {
@@ -603,6 +678,17 @@ mod tests {
         command(dev, 0x0C);
     }
 
+    /// Commit a settled panel the way a bus idle of [`Lcd1602::SETTLE_US`] does.
+    fn settle(dev: &mut Lcd1602) {
+        I2cDevice::advance_time_us(dev, Lcd1602::SETTLE_US);
+    }
+
+    fn write_str(dev: &mut Lcd1602, s: &str) {
+        for b in s.bytes() {
+            data(dev, b);
+        }
+    }
+
     #[test]
     fn falling_edge_latches_nibble_and_two_nibbles_make_a_byte() {
         let mut dev = Lcd1602::new(0x27);
@@ -649,6 +735,7 @@ mod tests {
         display_on(&mut dev);
         data(&mut dev, b'H');
         data(&mut dev, b'i');
+        settle(&mut dev);
         assert!(
             dev.texts_seen.iter().any(|s| s.starts_with("Hi")),
             "first paint must land in texts_seen: {:?}",
@@ -657,6 +744,7 @@ mod tests {
         command(&mut dev, 0x02); // return home
         data(&mut dev, b'Y');
         data(&mut dev, b'o');
+        settle(&mut dev);
         let seen: Vec<_> = dev.texts_seen.iter().cloned().collect();
         assert!(
             seen.iter().any(|s| s.starts_with("Hi")) && seen.iter().any(|s| s.starts_with("Yo")),
@@ -680,6 +768,7 @@ mod tests {
         for ch in b"Current Time" {
             data(&mut dev, *ch);
         }
+        settle(&mut dev);
         assert_eq!(
             dev.texts_seen.len(),
             1,
@@ -693,6 +782,7 @@ mod tests {
         for ch in b"00" {
             data(&mut dev, *ch);
         }
+        settle(&mut dev);
         assert_eq!(
             dev.texts_seen.len(),
             1,
@@ -717,10 +807,12 @@ mod tests {
         for ch in b"00:02" {
             data(&mut dev, *ch);
         }
+        settle(&mut dev);
         assert_eq!(dev.texts_seen.len(), 1);
         // Overwrite the colon on line 1 col 2 with a space (blink off).
         command(&mut dev, 0xC0 + 2);
         data(&mut dev, b' ');
+        settle(&mut dev);
         assert_eq!(
             dev.texts_seen.len(),
             1,
@@ -751,6 +843,7 @@ mod tests {
         for ch in b"00:02" {
             data(&mut dev, *ch);
         }
+        settle(&mut dev);
         assert_eq!(dev.texts_seen.len(), 1);
         // Simulate clear + reprint with blink-off colon (firmware remaining-time loop).
         command(&mut dev, 0x01); // clear display
@@ -761,6 +854,7 @@ mod tests {
         for ch in b"00 02" {
             data(&mut dev, *ch);
         }
+        settle(&mut dev);
         assert_eq!(
             dev.texts_seen.len(),
             1,
@@ -772,6 +866,83 @@ mod tests {
             "colon frame must be retained: {:?}",
             dev.texts_seen
         );
+    }
+
+    #[test]
+    fn texts_seen_in_place_rewrite_keeps_prior_settled_panel() {
+        // Parking-style show(): setCursor + print over the previous lines.
+        // Per-character mid-write frames must not fill the cap and evict
+        // "Dist: 50 cm" / "Gate: CLOSED" once the panel shows "Gate: OPEN".
+        let mut dev = Lcd1602::new(0x27);
+        command(&mut dev, 0x28); // 2-line
+        display_on(&mut dev);
+        write_str(&mut dev, "Dist: 50 cm      ");
+        command(&mut dev, 0xC0);
+        write_str(&mut dev, "Gate: CLOSED    ");
+        settle(&mut dev);
+        assert_eq!(
+            dev.texts_seen.len(),
+            1,
+            "first settled panel: {:?}",
+            dev.texts_seen
+        );
+        assert!(
+            dev.texts_seen[0].contains("Dist: 50 cm") && dev.texts_seen[0].contains("Gate: CLOSED"),
+            "settled closed panel: {:?}",
+            dev.texts_seen
+        );
+
+        command(&mut dev, 0x80); // row 0
+        write_str(&mut dev, "Dist: ");
+        write_str(&mut dev, "6");
+        write_str(&mut dev, " cm      ");
+        command(&mut dev, 0xC0);
+        write_str(&mut dev, "Gate: OPEN      ");
+        assert_eq!(
+            dev.texts_seen.len(),
+            1,
+            "in-place rewrite must not push mid-write slots: {:?}",
+            dev.texts_seen
+        );
+        assert!(
+            dev.texts_seen[0].contains("Dist: 50 cm") && dev.texts_seen[0].contains("Gate: CLOSED"),
+            "prior settled panel must still be in the ring: {:?}",
+            dev.texts_seen
+        );
+
+        let art = I2cDevice::artifacts(&dev, "DS1", &Default::default());
+        let texts: Vec<String> = art[0]
+            .meta
+            .get("texts_seen")
+            .and_then(|v| v.as_array())
+            .expect("texts_seen in artifact meta")
+            .iter()
+            .map(|v| v.as_str().unwrap_or("").to_string())
+            .collect();
+        assert!(
+            texts
+                .iter()
+                .any(|s| s.contains("Dist: 50 cm") && s.contains("Gate: CLOSED")),
+            "inspect must still show the closed panel: {texts:?}"
+        );
+        assert!(
+            texts
+                .iter()
+                .any(|s| s.contains("Dist: 6 cm") && s.contains("Gate: OPEN")),
+            "inspect must include the current open panel: {texts:?}"
+        );
+
+        settle(&mut dev);
+        let seen: Vec<_> = dev.texts_seen.iter().cloned().collect();
+        assert!(
+            seen.iter()
+                .any(|s| s.contains("Dist: 50 cm") && s.contains("Gate: CLOSED"))
+                && seen
+                    .iter()
+                    .any(|s| s.contains("Dist: 6 cm") && s.contains("Gate: OPEN")),
+            "both settled panels must remain: {seen:?}"
+        );
+        assert!(seen.len() <= 2, "rewrite must not fill the ring: {seen:?}");
     }
 
     #[test]
