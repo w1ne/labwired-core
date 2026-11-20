@@ -20,7 +20,7 @@ IMU, microphone, and exposed XIAO castellated pins.
 | UART0 | `0x40002000` | Nordic UART TXD smoke path |
 | SPIM0 | `0x40003000` | Register/task/event smoke model |
 | GPIO0 | `0x50000000` | nRF OUT/OUTSET/OUTCLR/DIR task register subset |
-| GPIO1 | `0x50001000` | Synthetic non-overlapping LabWired mapping for P1 board I/O |
+| GPIO1 | `0x50000300` | Silicon P1 block; registers map from `0x50000800` (`reg_offset: 0x500`) |
 
 ## Validation Boundary
 

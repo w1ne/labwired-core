@@ -85,18 +85,20 @@ peripherals:
   type: nrf52840_gpio
   bus: sysbus
   base_address: 1342177280  # 0x50000000 — standard Nordic P0 base
-# Note: real Nordic P1 lives at 0x50000300 with 0x508-offset registers,
-# but its 4KB peripheral window overlaps GPIO0's. We follow the
-# production yaml's convention of placing P1 at 0x50001000 so the
-# peripheral lookup is unambiguous. Firmware that targets P0 (the only
-# port with LEDs on most demo boards) is unaffected; firmware that
-# writes to P1's standard addresses won't reach gpio1 here.
+  # P0 implements 0x504..0x77C; P1's registers start at 0x50000800.
+  size: 2048B
+# P1's silicon block base is 0x50000300 (PS v1.7 §6.9.2), but its implemented
+# registers start at block offset 0x500. Register only that compact window
+# (0x50000800..0x50000AFF) so P1 reaches firmware at its real addresses and
+# its reserved space cannot hide P0's PIN_CNF at 0x50000700..0x5000077C.
 - id: gpio1
   type: nrf52840_gpio
   bus: sysbus
-  base_address: 1342181376  # 0x50001000
+  base_address: 0x50000800
+  size: 768B
   config:
     num_pins: 16
+    reg_offset: 0x500
 - id: gpiote
   type: nrf52840_gpiotasksevents
   bus: sysbus

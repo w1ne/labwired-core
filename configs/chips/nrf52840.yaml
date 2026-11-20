@@ -57,22 +57,28 @@ peripherals:
   - id: "gpio0"
     type: "gpio"
     base_address: 0x50000000
-    size: "4KB"
+    # P0 implements 0x504..0x77C; P1's registers start at 0x50000800.
+    size: "2048B"
     config:
       debug_schema: "../peripherals/nrf52840/p0.yaml"
       profile: "nrf52"
+  # P1's silicon block base is 0x50000300, but its implemented registers start
+  # at block offset 0x500. Register only that compact window so P1 reaches
+  # firmware at its real addresses and its reserved space cannot hide P0's
+  # PIN_CNF at 0x50000700..0x5000077c.
   - id: "gpio1"
     type: "gpio"
-    base_address: 0x50001000
-    size: "4KB"
+    base_address: 0x50000800
+    size: "768B"
     config:
       debug_schema: "../peripherals/nrf52840/p1.yaml"
       profile: "nrf52"
       num_pins: 16
+      reg_offset: 0x500
   # nRF52840 peripherals — reset values verified against nRF52840 silicon
   # (Seeed XIAO nRF52840 Sense, ST-LINK V2, 2026-06-09). Verified via the
   # nrf52_onboarding_diff register sweep (21 MODELLED + WDT). Addresses are
-  # the sim memory map (P1/gpio1 remapped to 0x50001000 to avoid GPIO0's 4KB window).
+  # the silicon memory map.
   - id: "uart1"
     type: "nrf52840_uart"
     base_address: 0x40028000

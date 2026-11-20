@@ -32,6 +32,9 @@
 //!           repeated START, reset TEMP 0x1900, ANACK on an empty address
 //!   PWM0    one-step EasyDMA sequence on P0.15, 25% duty sampled at the pad
 //!           through GPIO IN; TASKS_STOP returns the pad to the GPIO latch
+//!   GPIO P1 at its silicon block base 0x50000300: P1.1 drive readback, P1.2
+//!           pull-up, GPIOTE PORT=1 toggles on P1.3; P0 OUT and PIN_CNF[31]
+//!           unchanged
 //! A summary word goes to RAM at 0x2003FF00 (one bit per block passed). The
 //! radio is not exercised.
 
@@ -64,9 +67,10 @@ fn main() -> ! {
         .s(b"/1f40 rises=")
         .hex(pwm_rises, 4)
         .send();
+    summary |= u32::from(check_gpio_p1(&mut l)) << 14;
 
     wr(RESULT, 0x5284_0000 | summary);
-    if summary == 0x3FFF {
+    if summary == 0x7FFF {
         l.s(b"NRF52840 PASS").send();
     } else {
         l.s(b"NRF52840 FAIL summary=").hex(summary, 4).send();

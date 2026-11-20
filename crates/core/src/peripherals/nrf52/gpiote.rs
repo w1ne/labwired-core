@@ -481,11 +481,10 @@ mod tests {
     use crate::peripherals::chip_map::ChipMap;
     use labwired_config::PeripheralConfig;
 
-    // Test fixture memory map. These are the addresses the nRF52840 chip YAML
-    // declares (note gpio1 = 0x5000_1000, the remap — NOT Nordic's raw-silicon
-    // P1 base 0x5000_0300, which sits inside gpio0's 4 KB window). They live
-    // here as test *inputs*, so the model has no base address of its own to be
-    // wrong about.
+    // Test fixture memory map. These are test *inputs*, so the model has no
+    // base address of its own to be wrong about. gpio1 is a plain 4 KB window
+    // here; the compact nRF52840 P1 window (`reg_offset`) is covered by
+    // `ChipMap::register_address` tests and the chip-yaml GPIOTE test.
     const T_GPIO0_BASE: u32 = 0x5000_0000;
     const T_GPIO1_BASE: u32 = 0x5000_1000;
 
