@@ -346,6 +346,11 @@ fn terminal_drive_with_pwm_on_an_in_pin_averages_both_phases() {
 }
 
 fn terminal_bus(config: &str) -> SystemBus {
+    terminal_bus_at(12.0, config)
+}
+
+/// The terminal-driven bench with the bridge's supply at `volts`.
+fn terminal_bus_at(volts: f64, config: &str) -> SystemBus {
     let chip: labwired_config::ChipDescriptor = serde_yaml::from_str(
         r#"
 name: motor-terminal-test
@@ -377,7 +382,7 @@ external_devices:
       back_emf_constant_v_per_rad_s: 0.1
       rotor_inertia_kg_m2: 0.0001
       viscous_friction_nm_per_rad_s: 0.001
-      supply_voltage_v: 12.0
+      supply_voltage_v: {volts}
       load_torque_nm: 0.0
       encoder_cpr: 16
 {config}
@@ -448,6 +453,29 @@ fn unpowered_bridge_leaves_the_plant_still() {
     let snapshot = bus.motor_snapshots()[0].clone();
     assert_eq!(snapshot.speed_rpm, 0.0, "{snapshot:?}");
     assert_eq!(snapshot.faults, vec![UNPOWERED_FAULT.to_owned()]);
+}
+
+/// The plant behind a bridge turns at the volts its motor supply holds: the
+/// compiler places a TB6612 whose VM is on 5 V at `supply_voltage_v: 5`, on a
+/// 12 V jack at 12. Same firmware, same bridge inputs, a different speed, and
+/// with a resistive winding and viscous friction the steady speed scales with
+/// the supply.
+#[test]
+fn bridge_supply_volts_set_the_steady_speed() {
+    let speed = |volts: f64| {
+        let mut bus = terminal_bus_at(
+            volts,
+            "      pwm_pin: VCC\n      in1_pin: PA0\n      in2_pin: PA1\n",
+        );
+        bus.write_u32(0x4800_0014, 0b01).unwrap(); // IN1 high, IN2 low -> forward
+        run_cycles(&mut bus, 8_000_000);
+        bus.motor_snapshots()[0].speed_rpm
+    };
+    let (at5, at12) = (speed(5.0), speed(12.0));
+    eprintln!("bridge on 5 V: {at5:.1} rpm; on 12 V: {at12:.1} rpm");
+    assert!(at5 > 0.0 && at12 > at5, "{at5} rpm vs {at12} rpm");
+    let ratio = at5 / at12;
+    assert!((ratio - 5.0 / 12.0).abs() < 0.02, "speed ratio {ratio}");
 }
 
 #[test]
