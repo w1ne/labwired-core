@@ -471,6 +471,10 @@ pub const MODEL_TYPES: &[&str] = &[
     "msp430_bcm",
     "msp430_bcm_plus",
     "msp430_bcsctl3",
+    // Texas Instruments MSP430x2xx digital I/O port, and byte registers that
+    // are storage with reset values (PxSEL2, calibration constants).
+    "msp430_port",
+    "msp430_bytes",
     // Renesas RA pin function select (PmnPFS / PWPR).
     "ra_pfs",
     // Renesas RA8 pin function select (ports 0-B, PWPR/PWPRS moved).
@@ -2465,6 +2469,67 @@ pub fn try_build(
         "msp430_bcsctl3" => {
             msp430_keys(p_cfg, &[])?;
             Box::new(crate::peripherals::msp430::Msp430Bcm::bcsctl3())
+        }
+        "msp430_port" => {
+            use crate::peripherals::msp430_port::{Msp430Port, PortRequest};
+            msp430_keys(p_cfg, &["interrupt", "sel_reset", "irq_source", "irq_line"])?;
+            let byte = |key: &str| -> anyhow::Result<Option<u32>> {
+                match p_cfg.config.get(key) {
+                    None => Ok(None),
+                    Some(v) => v.as_u64().map(|v| Some(v as u32)).ok_or_else(|| {
+                        anyhow::anyhow!("msp430_port '{}': `{key}` is not a number", p_cfg.id)
+                    }),
+                }
+            };
+            let sel_reset = byte("sel_reset")?.unwrap_or(0);
+            if sel_reset > 0xFF {
+                anyhow::bail!("msp430_port '{}': `sel_reset` is one byte", p_cfg.id);
+            }
+            let interrupt = match p_cfg.config.get("interrupt") {
+                None => false,
+                Some(v) => v.as_bool().ok_or_else(|| {
+                    anyhow::anyhow!("msp430_port '{}': `interrupt` is true or false", p_cfg.id)
+                })?,
+            };
+            let request = match (byte("irq_source")?, byte("irq_line")?) {
+                (None, None) => None,
+                (Some(source), Some(line))
+                    if interrupt && source < crate::peripherals::msp430::SOURCES && line < 64 =>
+                {
+                    Some(PortRequest { source, line })
+                }
+                _ => anyhow::bail!(
+                    "msp430_port '{}': `irq_source` (below {}) and `irq_line` (below 64) come \
+                     together, on a port with `interrupt: true`",
+                    p_cfg.id,
+                    crate::peripherals::msp430::SOURCES
+                ),
+            };
+            if interrupt {
+                Box::new(Msp430Port::with_interrupt(sel_reset as u8, request))
+            } else {
+                Box::new(Msp430Port::basic(sel_reset as u8))
+            }
+        }
+        "msp430_bytes" => {
+            msp430_keys(p_cfg, &["reset"])?;
+            let reset = p_cfg
+                .config
+                .get("reset")
+                .and_then(|v| v.as_sequence())
+                .and_then(|s| {
+                    s.iter()
+                        .map(|v| v.as_u64().and_then(|v| u8::try_from(v).ok()))
+                        .collect::<Option<Vec<u8>>>()
+                })
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "msp430_bytes '{}' needs `reset`: one byte value per register",
+                        p_cfg.id
+                    )
+                })?;
+            Box::new(crate::peripherals::msp430_port::Msp430Bytes::new(reset))
         }
         // `vdd_mv`: the board's VDD (the VDDREF reference, default 5000);
         // `input_mv: { <ain>: <mV> }`: static levels on AIN0..AIN15.
