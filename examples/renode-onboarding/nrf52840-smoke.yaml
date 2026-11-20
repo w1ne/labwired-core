@@ -19,9 +19,10 @@
 # PWM0: one Common step 0x8000 | 100 at COUNTERTOP 400 (16 MHz) on P0.15;
 # a branch-free GPIO IN sampling loop must see 20..30% high (measured 2000 of
 # 8000 samples = 25%) and >= 10 rising edges; TASKS_STOP returns the pad to
-# the GPIO OUT latch. No gpio_edges on P0.15: the logic capture misses edges
-# on pads an nRF peripheral claims without a GPIO register write (PadRoutes
-# taps re-sync only on port writes), so it records 0 transitions there.
+# the GPIO OUT latch. Logic capture also records the peripheral-driven pads:
+# gpio_edges on P0.14 (the two GPIOTE toggles) and P0.15 (the PWM0 waveform).
+# Before the pad-claim bracket covered peripheral events and logic watches,
+# both recorded 0 transitions.
 # Not exercised: radio, USBD, QSPI,
 # SPIM, UART1, WDT. GPIOTE on a pin whose PIN_CNF.DIR = output is a known
 # engine gap (IN shows OUT, not the GPIOTE drive) — see
@@ -57,6 +58,12 @@ assertions:
   - gpio_edges:
       pin: "gpio0:13"
       min_edges: 4
+  - gpio_edges:
+      pin: "gpio0:14"
+      min_edges: 2
+  - gpio_edges:
+      pin: "gpio0:15"
+      min_edges: 100
   - memory_value:
       address: 0x2003FF00
       expected_value: 0x52843FFF
