@@ -200,6 +200,7 @@ fn main() -> ! {
         has_pioc: true,
         check_usart0_irq: false,
         check_usart1_irq: false,
+        check_uart_irq: false,
         summary: 0x2001_FF00,
         board: Some(board),
     })
