@@ -159,6 +159,47 @@ unsafe fn read_register(register: u8) -> Result<u8, ()> {
     Err(())
 }
 
+unsafe fn write_register(register: u8, value: u8) -> Result<(), ()> {
+    write(I2C_FIFO_CONF, FIFO_RESET);
+    write(I2C_FIFO_CONF, FIFO_RUN);
+    write(I2C_INT_CLR, u32::MAX);
+    write(I2C_DATA, BME280_ADDRESS << 1);
+    write(I2C_DATA, u32::from(register));
+    write(I2C_DATA, u32::from(value));
+    command(0, OP_RSTART, 0, 0);
+    command(1, OP_WRITE, 3, ACK_CHECK);
+    command(2, OP_STOP, 0, 0);
+    write(
+        I2C_CTR,
+        MASTER_MODE | I2C_FORCE_OUT | I2C_CLK_EN | I2C_TRANS_START,
+    );
+
+    for _ in 0..500_000 {
+        let status = read(I2C_INT_RAW);
+        if status & INT_NACK != 0 {
+            return Err(());
+        }
+        if status & INT_TRANS_COMPLETE != 0 {
+            return Ok(());
+        }
+    }
+    Err(())
+}
+
+/// Configure the sensor as a driver does: ctrl_hum, then ctrl_meas with
+/// osrs_t = osrs_p = x1 and normal mode (datasheet 5.4.3-5.4.5), then wait
+/// until status.measuring (0xF3 bit 3) clears before reading results.
+unsafe fn start_measurement() -> Result<(), ()> {
+    write_register(0xF2, 0x01)?; // osrs_h x1 (latched by the ctrl_meas write)
+    write_register(0xF4, 0x27)?; // osrs_t x1, osrs_p x1, normal mode
+    for _ in 0..1000 {
+        if read_register(0xF3)? & 0x08 == 0 {
+            return Ok(());
+        }
+    }
+    Err(())
+}
+
 #[entry]
 fn main() -> ! {
     unsafe {
@@ -181,6 +222,11 @@ fn main() -> ! {
                 uart_str(b"BME280_I2C_ERROR\n");
                 loop {}
             }
+        }
+
+        if start_measurement().is_err() {
+            uart_str(b"BME280_I2C_ERROR\n");
+            loop {}
         }
 
         let msb = match read_register(0xFA) {
