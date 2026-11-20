@@ -529,7 +529,7 @@ pub fn jfet_parameters_at_temperature(
 }
 
 /// Vacuum permittivity ngspice uses for its level-1 process laws, F/m.
-const VACUUM_PERMITTIVITY_F_PER_M: f64 = 8.854_214_871e-12;
+pub(crate) const VACUUM_PERMITTIVITY_F_PER_M: f64 = 8.854_214_871e-12;
 
 /// Relative permittivity of silicon in ngspice's level-1 `GAMMA` law.
 const SILICON_RELATIVE_PERMITTIVITY: f64 = 11.7;

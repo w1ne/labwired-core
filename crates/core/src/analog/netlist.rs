@@ -378,8 +378,9 @@
 //! [<pts_per_summary>]` is kept as [`Circuit::noise_sweep`] and run by
 //! [`crate::analog::Solver::noise_analysis`]: thermal noise of every resistor,
 //! switch and device terminal resistance, diode and BJT shot noise, and FET
-//! channel thermal noise, as ngspice's level-1 models give them. Flicker
-//! (`KF`/`AF`) is not modelled. The parts this engine adds for a macromodel
+//! channel thermal noise, as ngspice's level-1 models give them, plus the
+//! `KF`/`AF` flicker noise of every `D`, `Q`, `J` and `M` card that sets a
+//! nonzero `KF`. The parts this engine adds for a macromodel
 //! (op-amp, comparator, regulator) and a BJT's substrate junction are
 //! noiseless.
 //! `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` is kept
@@ -1193,6 +1194,11 @@ pub struct DiodeModel {
     pub xtitun: f64,
     /// Fraction `KEG` of `EG` in the tunnel temperature law, default 1.
     pub keg: f64,
+    /// Flicker noise coefficient `KF` (default 0, no flicker noise). Used
+    /// only by `.noise`.
+    pub kf: f64,
+    /// Flicker noise exponent `AF` (default 1). Used only by `.noise`.
+    pub af: f64,
 }
 
 impl DiodeModel {
@@ -1313,6 +1319,8 @@ impl Default for DiodeModel {
             ntun: 30.0,
             xtitun: 3.0,
             keg: 1.0,
+            kf: 0.0,
+            af: 1.0,
         }
     }
 }
@@ -1725,6 +1733,8 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     ntun: 30.0,
     xtitun: 3.0,
     keg: 1.0,
+    kf: 0.0,
+    af: 1.0,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -2002,6 +2012,11 @@ pub struct BjtModel {
     /// 2.2 and 0.52 for PNP.
     pub cn: Option<f64>,
     pub d: Option<f64>,
+    /// Flicker noise coefficient `KF` (default 0, no flicker noise). Used
+    /// only by `.noise`.
+    pub kf: f64,
+    /// Flicker noise exponent `AF` (default 1). Used only by `.noise`.
+    pub af: f64,
 }
 
 impl BjtModel {
@@ -2153,6 +2168,8 @@ impl BjtModel {
             vg: 1.206,
             cn: None,
             d: None,
+            kf: 0.0,
+            af: 1.0,
         }
     }
 
@@ -2297,6 +2314,11 @@ pub struct MosModel {
     /// Parameter measurement temperature `TNOM`, in Celsius. Only used when
     /// an instance supplies `TEMP`.
     pub tnom_celsius: f64,
+    /// Flicker noise coefficient `KF` (default 0, no flicker noise). Used
+    /// only by `.noise`.
+    pub kf: f64,
+    /// Flicker noise exponent `AF` (default 1). Used only by `.noise`.
+    pub af: f64,
 }
 
 /// Resolved parameters of a `.model <name> NJF|PJF(...)` card, SPICE
@@ -2348,6 +2370,11 @@ pub struct JfetModel {
     pub eg: f64,
     /// Gate-junction saturation-current temperature exponent `XTI`.
     pub xti: f64,
+    /// Flicker noise coefficient `KF` (default 0, no flicker noise). Used
+    /// only by `.noise`.
+    pub kf: f64,
+    /// Flicker noise exponent `AF` (default 1). Used only by `.noise`.
+    pub af: f64,
 }
 
 impl JfetModel {
@@ -2389,6 +2416,8 @@ impl JfetModel {
             bex: 0.0,
             eg: 1.11,
             xti: 3.0,
+            kf: 0.0,
+            af: 1.0,
         }
     }
 }
@@ -2436,6 +2465,8 @@ impl MosModel {
             tox: None,
             channel_charge_model: MosChannelChargeModel::Meyer,
             tnom_celsius: 27.0,
+            kf: 0.0,
+            af: 1.0,
         }
     }
 }
@@ -2563,6 +2594,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             ntun: 30.0,
             xtitun: 3.0,
             keg: 1.0,
+            kf: 0.0,
+            af: 1.0,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -2612,6 +2645,8 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             ntun: 30.0,
             xtitun: 3.0,
             keg: 1.0,
+            kf: 0.0,
+            af: 1.0,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -8542,6 +8577,14 @@ fn parse_model(
                      `adapter: external_process` with `tools/cosim/labwired_ngspice.py`"
                 )))
             }
+            (ModelCard::Diode(model), "KF") => model.kf = value,
+            (ModelCard::Diode(model), "AF") => model.af = value,
+            (ModelCard::Bjt(model), "KF") => model.kf = value,
+            (ModelCard::Bjt(model), "AF") => model.af = value,
+            (ModelCard::Mos(model), "KF") => model.kf = value,
+            (ModelCard::Mos(model), "AF") => model.af = value,
+            (ModelCard::Jfet(model), "KF") => model.kf = value,
+            (ModelCard::Jfet(model), "AF") => model.af = value,
             _ => {}
         }
     }
@@ -8625,6 +8668,8 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     ntun: 30.0,
     xtitun: 3.0,
     keg: 1.0,
+    kf: 0.0,
+    af: 1.0,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V
@@ -9124,6 +9169,8 @@ fn lower_comparator(
                 tox: None,
                 channel_charge_model: MosChannelChargeModel::Meyer,
                 tnom_celsius: 27.0,
+                kf: 0.0,
+                af: 1.0,
             };
             lower.circuit.mosfets.push(Mosfet {
                 name,

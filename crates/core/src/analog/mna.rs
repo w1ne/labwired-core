@@ -162,21 +162,38 @@ pub enum NoiseMechanism {
     Shot,
     /// FET channel thermal noise `(8/3)kT·|gm|`.
     Channel,
+    /// Flicker noise `KF·|I|^AF/f` of a device current: the diode current, the
+    /// BJT base current, the JFET drain current, or the MOSFET drain current
+    /// over `W·Leff·C'ox²`.
+    Flicker,
 }
 
-/// One noise current generator: a white current density between two nodes.
+/// One noise current generator between two nodes: white, or `1/f` for
+/// [`NoiseMechanism::Flicker`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct NoiseSource {
     /// ngspice's name for the term: `r1` for a resistor or switch, else
     /// `<term>_<element>`, e.g. `rs_d1`, `id_d1`, `rb_q1`, `ic_q1`, `ib_q1`,
-    /// `rd_m1`, `id_j1`.
+    /// `rd_m1`, `id_j1`, `1overf_m1`.
     pub name: String,
     /// What makes the current.
     pub mechanism: NoiseMechanism,
-    /// Current spectral density, A²/Hz.
+    /// Current spectral density, A²/Hz; for [`NoiseMechanism::Flicker`] the
+    /// density at 1 Hz. See [`Self::density_at`].
     pub density: f64,
     a: NodeRef,
     b: NodeRef,
+}
+
+impl NoiseSource {
+    /// Current spectral density at `hertz`, A²/Hz.
+    pub fn density_at(&self, hertz: f64) -> f64 {
+        if self.mechanism == NoiseMechanism::Flicker {
+            self.density / hertz
+        } else {
+            self.density
+        }
+    }
 }
 
 /// The result of [`Solver::noise_analysis`].
@@ -256,12 +273,17 @@ impl NoiseResponse {
                 interval += if exponent.abs() < FLOOR {
                     n1 * (f1 - f0)
                 } else {
+                    // `a·(f1^e − f0^e)/e` with `e = exponent + 1`, written
+                    // as `a·f0^e·expm1(e·ln(f1/f0))/e`. A `1/f` term has
+                    // `e` within rounding of zero, where the difference form
+                    // cancels to noise; this one tends to `a·ln(f1/f0)`.
                     let a = libm::exp(ln_n1 - exponent * ln_f1);
                     let exponent = exponent + 1.0;
+                    let span = ln_f1 - ln_f0;
                     if exponent.abs() < FLOOR {
-                        a * (ln_f1 - ln_f0)
+                        a * span
                     } else {
-                        a * (libm::exp(exponent * ln_f1) - libm::exp(exponent * ln_f0)) / exponent
+                        a * libm::exp(exponent * ln_f0) * libm::expm1(exponent * span) / exponent
                     }
                 };
             }
@@ -2584,7 +2606,7 @@ impl Solver {
                 let (a_re, a_im) = at(source.a);
                 let (b_re, b_im) = at(source.b);
                 let (re, im) = (a_re - b_re, a_im - b_im);
-                contributions.push((re * re + im * im) * source.density);
+                contributions.push((re * re + im * im) * source.density_at(hertz));
             }
         }
         Ok(NoiseResponse {
@@ -2617,14 +2639,17 @@ impl Solver {
 
     /// Every noise current generator at the present linearisation, as
     /// ngspice's `resnoise.c`, `swnoise.c`, `dionoise.c`, `bjtnoise.c`,
-    /// `mos1noi.c` and `jfetnoise.c` give them, without flicker noise. A
-    /// part whose name holds `#` is one this engine added for a macromodel
-    /// or a BJT substrate junction and is noiseless.
+    /// `mos1noi.c` and `jfetnoise.c` give them. A flicker generator is added
+    /// only for a card with a nonzero `KF`. A part whose name holds `#` is one
+    /// this engine added for a macromodel or a BJT substrate junction and is
+    /// noiseless.
     fn noise_sources(&self) -> Vec<NoiseSource> {
         let kelvin = |celsius: Option<f64>| celsius.map_or(device::TEMPERATURE_K, |t| t + 273.15);
         let circuit_kelvin = kelvin(self.circuit.temperature_celsius);
         let thermal = |kelvin: f64, siemens: f64| 4.0 * device::BOLTZMANN * kelvin * siemens;
         let shot = |amps: f64| 2.0 * device::ELEMENTARY_CHARGE * amps.abs();
+        // ngspice's `KF·exp(AF·ln(max(|I|, N_MINLOG)))`, the density at 1 Hz.
+        let flicker = |kf: f64, af: f64, amps: f64| kf * libm::pow(amps.abs().max(1e-38), af);
         let user = |name: &str| !name.contains('#');
         let mut sources = Vec::new();
         let mut push = |term: &str, element: &str, mechanism, density: f64, a, b| {
@@ -2643,7 +2668,7 @@ impl Solver {
                 });
             }
         };
-        use NoiseMechanism::{Channel, Shot, Thermal};
+        use NoiseMechanism::{Channel, Flicker, Shot, Thermal};
 
         for resistor in self.circuit.resistors.iter().filter(|r| user(&r.name)) {
             let celsius = resistor.ntc.map(|ntc| ntc.temperature_celsius).or(resistor
@@ -2689,14 +2714,10 @@ impl Solver {
                 diode.temperature_celsius,
             );
             let density = shot(m * op.id);
-            push(
-                "id",
-                &diode.name,
-                Shot,
-                density,
-                diode.junction_anode,
-                diode.cathode,
-            );
+            let (a, k) = (diode.junction_anode, diode.cathode);
+            push("id", &diode.name, Shot, density, a, k);
+            let density = m * flicker(diode.model.kf, diode.model.af, op.id);
+            push("1overf", &diode.name, Flicker, density, a, k);
         }
         for (index, bjt) in self.circuit.bjts.iter().enumerate() {
             if !user(&bjt.name) {
@@ -2719,6 +2740,8 @@ impl Solver {
             let (c, b, e) = (bjt.junction_c, bjt.junction_b, bjt.junction_e);
             push("ic", &bjt.name, Shot, shot(m * op.ic), c, e);
             push("ib", &bjt.name, Shot, shot(m * op.ib), b, e);
+            let density = m * flicker(model.kf, model.af, op.ib);
+            push("1overf", &bjt.name, Flicker, density, b, e);
         }
         for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
             if !user(&mosfet.name) {
@@ -2765,6 +2788,12 @@ impl Solver {
             let density = thermal(kelvin, m * 2.0 / 3.0 * op.gm.abs());
             let (d, s) = (mosfet.junction_d, mosfet.junction_s);
             push("id", &mosfet.name, Channel, density, d, s);
+            // `mos1noi.c` takes `C'ox` as 3.9·ε0/TOX, TOX defaulting to
+            // 100 nm, not the `EPSOX` the level-1 charge uses.
+            let oxide = 3.9 * device::VACUUM_PERMITTIVITY_F_PER_M / model.tox.unwrap_or(1e-7);
+            let area = mosfet.w * mosfet.effective_length() * oxide * oxide;
+            let density = m * flicker(model.kf, model.af, op.id) / area;
+            push("1overf", &mosfet.name, Flicker, density, d, s);
         }
         for (index, jfet) in self.circuit.jfets.iter().enumerate() {
             if !user(&jfet.name) {
@@ -2797,6 +2826,8 @@ impl Solver {
             let density = thermal(kelvin, m * 2.0 / 3.0 * op.gm.abs());
             let (d, s) = (jfet.junction_d, jfet.junction_s);
             push("id", &jfet.name, Channel, density, d, s);
+            let density = m * flicker(jfet.model.kf, jfet.model.af, op.id);
+            push("1overf", &jfet.name, Flicker, density, d, s);
         }
         sources
     }

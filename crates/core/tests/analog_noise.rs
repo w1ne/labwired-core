@@ -243,6 +243,178 @@ mod analog {
         );
     }
 
+    /// `KF·|Id|^AF/f` across the junction, `m` uncorrelated copies of it. The
+    /// table is ngspice-42 on two parallel diodes: its own `m=2` diode noise
+    /// does not equal them.
+    #[test]
+    fn diode_flicker_noise_with_a_multiplier_matches_ngspice() {
+        let deck = format!(
+            "{HEADER}V1 vcc 0 DC 5 AC 1\n\
+             R1 vcc a 4.3k\n\
+             D1 a 0 dmod m=2\n\
+             .model dmod D(IS=1e-14 N=1 RS=10 KF=1e-16 AF=1.2)\n\
+             .noise v(a) V1 dec 1 1 100k\n"
+        );
+        assert_ngspice(
+            &deck,
+            &[
+                [1.000000000000e+00, 3.814435307261e-09, 5.414182886225e-07],
+                [1.000000000000e+01, 1.311182204263e-09, 1.861082881004e-07],
+                [1.000000000000e+02, 6.603991056357e-10, 9.373658871615e-08],
+                [1.000000000000e+03, 5.548151037232e-10, 7.875006908307e-08],
+                [1.000000000000e+04, 5.431289730615e-10, 7.709134784288e-08],
+                [1.000000000000e+05, 5.419465006666e-10, 7.692350853541e-08],
+            ],
+            (1.718143864009e-07, 2.438721424082e-05),
+        );
+    }
+
+    /// `KF·|Ib|^AF/f` between the internal base and emitter.
+    #[test]
+    fn bjt_base_current_flicker_noise_matches_ngspice_through_its_poles() {
+        let deck = format!(
+            "{HEADER}VCC vcc 0 DC 10\n\
+             VB bb 0 DC 0.75 AC 1\n\
+             RS bb b 1k\n\
+             Q1 c b e qm m=2\n\
+             RE e 0 100\n\
+             RC vcc c 2k\n\
+             .model qm NPN(IS=1e-15 BF=100 VAF=50 RB=50 RC=5 RE=1 CJE=2p CJC=1p TF=0.3n KF=1e-15 AF=1.3)\n\
+             .noise v(c) VB dec 1 1 100meg\n"
+        );
+        assert_ngspice(
+            &deck,
+            &[
+                [1.000000000000e+00, 1.703758845152e-07, 1.298615268946e-08],
+                [1.000000000000e+01, 7.901409249670e-08, 6.022501791858e-09],
+                [1.000000000000e+02, 6.296630282491e-08, 4.799329583271e-09],
+                [1.000000000000e+03, 6.113025511714e-08, 4.659384950199e-09],
+                [1.000000000000e+04, 6.094356847923e-08, 4.645158646351e-09],
+                [1.000000000000e+05, 6.092090573770e-08, 4.643737593199e-09],
+                [1.000000000000e+06, 6.052632419051e-08, 4.643992887261e-09],
+                [1.000000000000e+07, 4.022941470165e-08, 4.683572846146e-09],
+                [1.000000000000e+08, 8.476703846325e-09, 7.569477539704e-09],
+            ],
+            (2.110278811470e-04, 1.318891758752e-04),
+        );
+    }
+
+    /// `KF·|Id|^AF/(f·W·Leff·C'ox²)` with `C'ox = 3.9·ε0/TOX`, `m` uncorrelated
+    /// copies of it. The table is ngspice-42 on two parallel MOSFETs: its own
+    /// `m=2` divides by `m·W` with the total current, which is a `2W` device,
+    /// not two `W` devices, once `AF ≠ 1`.
+    #[test]
+    fn mosfet_flicker_noise_scales_with_gate_area_and_oxide_as_ngspice() {
+        let deck = format!(
+            "{HEADER}VDD vdd 0 DC 5\n\
+             VG g 0 DC 2 AC 1\n\
+             RD vdd d 5k\n\
+             M1 d g 0 0 nm W=10u L=2u m=2\n\
+             .model nm NMOS(VTO=1 KP=50u LAMBDA=0.02 RD=20 RS=10 LD=0.1u TOX=40n KF=1e-26 AF=1.4)\n\
+             .noise v(d) VG dec 1 1 100k\n"
+        );
+        assert_ngspice(
+            &deck,
+            &[
+                [1.000000000000e+00, 3.909782335738e-04, 1.357557541766e-04],
+                [1.000000000000e+01, 1.236381742139e-04, 4.292973916221e-05],
+                [1.000000000000e+02, 3.909782631304e-05, 1.357557644392e-05],
+                [1.000000000000e+03, 1.236382676800e-05, 4.292977161556e-06],
+                [1.000000000000e+04, 3.909812187760e-06, 1.357567907007e-06],
+                [1.000000000000e+05, 1.236476139278e-06, 4.293301682671e-07],
+            ],
+            (1.326625395682e-03, 4.606318603837e-04),
+        );
+    }
+
+    /// No `TOX`: `mos1noi.c` takes 100 nm.
+    #[test]
+    fn pmos_flicker_noise_uses_the_default_oxide_thickness_as_ngspice() {
+        let deck = format!(
+            "{HEADER}VSS vss 0 DC 5\n\
+             VG g 0 DC 3 AC 1\n\
+             RD d 0 5k\n\
+             M1 d g vss vss pm W=20u L=1u\n\
+             .model pm PMOS(VTO=-1 KP=20u LAMBDA=0.02 KF=3e-26 AF=1)\n\
+             .noise v(d) VG dec 1 1 100k\n"
+        );
+        assert_ngspice(
+            &deck,
+            &[
+                [1.000000000000e+00, 8.074433354754e-03, 3.818472957486e-03],
+                [1.000000000000e+01, 2.553360021660e-03, 1.207507172958e-03],
+                [1.000000000000e+02, 8.074433355944e-04, 3.818472958048e-04],
+                [1.000000000000e+03, 2.553360025423e-04, 1.207507174737e-04],
+                [1.000000000000e+04, 8.074433474943e-05, 3.818473014324e-05],
+                [1.000000000000e+05, 2.553360401732e-05, 1.207507352697e-05],
+            ],
+            (2.739711965068e-02, 1.295634701567e-02),
+        );
+    }
+
+    /// `KF·|Id|^AF/f` between the internal drain and source.
+    #[test]
+    fn jfet_drain_current_flicker_noise_matches_ngspice() {
+        let deck = format!(
+            "{HEADER}VDD vdd 0 DC 10\n\
+             VG g 0 DC 0 AC 1\n\
+             RD vdd d 2k\n\
+             J1 d g s jm m=2\n\
+             RS s 0 500\n\
+             .model jm NJF(VTO=-2 BETA=1m LAMBDA=0.01 RD=10 RS=10 CGS=2p CGD=1p KF=1e-17 AF=0.8)\n\
+             .noise v(d) VG dec 1 1 100meg\n"
+        );
+        assert_ngspice(
+            &deck,
+            &[
+                [1.000000000000e+00, 1.814389348843e-07, 6.891636188661e-08],
+                [1.000000000000e+01, 5.822819262519e-08, 2.211694638485e-08],
+                [1.000000000000e+02, 2.091807708274e-08, 7.945360631253e-09],
+                [1.000000000000e+03, 1.192771151874e-08, 4.530529701661e-09],
+                [1.000000000000e+04, 1.061794408026e-08, 4.033037779846e-09],
+                [1.000000000000e+05, 1.047796210310e-08, 3.979869398404e-09],
+                [1.000000000000e+06, 1.046343066049e-08, 3.974478741539e-09],
+                [1.000000000000e+07, 1.041924513376e-08, 3.970474684985e-09],
+                [1.000000000000e+08, 7.840688831171e-09, 3.687491039169e-09],
+            ],
+            (8.821894530973e-05, 4.047844608861e-05),
+        );
+    }
+
+    #[test]
+    fn flicker_generators_exist_only_with_kf_and_fall_as_one_over_f() {
+        let deck = |kf: &str| {
+            format!(
+                "{HEADER}V1 vcc 0 DC 5 AC 1\n\
+                 R1 vcc a 4.3k\n\
+                 D1 a 0 dmod\n\
+                 .model dmod D(IS=1e-14 {kf})\n\
+                 .noise v(a) V1 dec 1 1 100\n"
+            )
+        };
+        let mut solver = build(&deck(""));
+        let noise = solver.noise_sweep().unwrap();
+        assert!(noise
+            .sources()
+            .iter()
+            .all(|s| s.mechanism != NoiseMechanism::Flicker));
+
+        let mut solver = build(&deck("KF=1e-16 AF=2"));
+        let noise = solver.noise_sweep().unwrap();
+        let flicker = noise.sources().last().unwrap();
+        assert_eq!(flicker.name, "1overf_d1");
+        assert_eq!(flicker.mechanism, NoiseMechanism::Flicker);
+        // `KF·Id²` at 1 Hz, with Id = the 4.3k resistor current.
+        let id = (5.0 - solver.node_voltage(solver.circuit().node("a").unwrap())) / 4.3e3;
+        assert_close("KF·Id^AF", flicker.density, 1e-16 * id * id, 1e-6);
+        assert_close(
+            "1/f",
+            flicker.density_at(100.0),
+            flicker.density / 100.0,
+            1e-15,
+        );
+    }
+
     #[test]
     fn bjt_noise_sources_are_named_as_ngspice_and_skip_the_substrate_junction() {
         let mut solver = build(&format!(
