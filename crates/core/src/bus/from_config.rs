@@ -553,6 +553,7 @@ impl SystemBus {
             resident_tick_interval_override: None,
             gpio_devices: Vec::new(),
             device_pin_pads: Vec::new(),
+            device_output_observers: Vec::new(),
             device_open_drain_nets: Default::default(),
             observed: Vec::new(),
             motors: Vec::new(),

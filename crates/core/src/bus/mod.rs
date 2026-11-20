@@ -61,7 +61,9 @@ pub(crate) use tick::reconcile_nvic_level;
 
 pub use can_devices::*;
 pub use observed_device::ObservedDevice;
-pub use resident_device::{BusResidentDevice, DevicePinPad, DevicePins};
+pub use resident_device::{
+    BusResidentDevice, DeviceOutputObserverBinding, DevicePinPad, DevicePins,
+};
 
 pub use bus_trace::{new_log, BusPayload, BusTraceEvent, BusTraceLog, I2cSym};
 pub(crate) use ina219_circuit::CircuitIna219Lookup;
@@ -837,6 +839,11 @@ pub struct SystemBus {
     ///
     /// [`service_device_pin_drives`]: Self::service_device_pin_drives
     pub(crate) device_pin_pads: Vec<DevicePinPad>,
+    /// Direct external-device output links. These are used when one off-chip
+    /// part drives another without traversing an MCU pad (for example PCF8574
+    /// P0 -> TB6612 AIN1). Empty by default; serviced by the same queued-output
+    /// pass as [`device_pin_pads`](Self::device_pin_pads).
+    pub(crate) device_output_observers: Vec<DeviceOutputObserverBinding>,
     /// Explicitly opted-in pulled-up device-output nets.
     pub(crate) device_open_drain_nets: open_drain::OpenDrainNets,
     /// Off-chip models the bus holds ONLY so something can read them back — the
@@ -1130,6 +1137,10 @@ pub struct ExternalDeviceDecl {
     pub address: Option<u8>,
     /// `config.cs_pin`, when declared.
     pub cs_pin: Option<String>,
+    /// `(source device id, output role)` for every `device-output://` link
+    /// this device's config names. The SOURCE device reads these when it
+    /// attaches, so a role wired only to another device is still delivered.
+    pub device_output_links: Vec<(String, String)>,
 }
 
 impl ExternalDeviceDecl {
@@ -1154,6 +1165,12 @@ impl ExternalDeviceDecl {
             channel: ext.channel,
             address: addr,
             cs_pin: cs,
+            device_output_links: ext
+                .config
+                .values()
+                .filter_map(|v| v.as_str())
+                .filter_map(crate::peripherals::components::h_bridge_motor::parse_device_output_ref)
+                .collect(),
         }
     }
 }
