@@ -30,6 +30,8 @@
 //!   ECB     AES-128 FIPS-197 C.1 known-answer test through EasyDMA
 //!   TWIM0   TMP102 test fixture on twi0: CONFIG write-mask readback over a
 //!           repeated START, reset TEMP 0x1900, ANACK on an empty address
+//!   PWM0    one-step EasyDMA sequence on P0.15, 25% duty sampled at the pad
+//!           through GPIO IN; TASKS_STOP returns the pad to the GPIO latch
 //! A summary word goes to RAM at 0x2003FF00 (one bit per block passed). The
 //! radio is not exercised.
 
@@ -55,9 +57,16 @@ fn main() -> ! {
     summary |= u32::from(check_temp(&mut l)) << 10;
     summary |= u32::from(check_ecb_fips197(&mut l)) << 11;
     summary |= u32::from(check_twim0_tmp102(&mut l)) << 12;
+    let (pwm_ok, pwm_high, pwm_rises) = check_pwm0_duty(&mut l);
+    summary |= u32::from(pwm_ok) << 13;
+    l.s(b"pwm0 samples high=")
+        .hex(pwm_high, 4)
+        .s(b"/1f40 rises=")
+        .hex(pwm_rises, 4)
+        .send();
 
     wr(RESULT, 0x5284_0000 | summary);
-    if summary == 0x1FFF {
+    if summary == 0x3FFF {
         l.s(b"NRF52840 PASS").send();
     } else {
         l.s(b"NRF52840 FAIL summary=").hex(summary, 4).send();
