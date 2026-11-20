@@ -16,7 +16,13 @@
 # 0xFFF0 through a write + repeated-START read (the TMP102 write mask keeps
 # R1:R0, AL and D3:D0), the first TEMP read is 0x1900 (25.0 degC), and an
 # empty address (0x49) sets EVENTS_ERROR + ERRORSRC.ANACK, cleared by W1C.
-# Not exercised: radio, USBD, QSPI, PWM,
+# PWM0: one Common step 0x8000 | 100 at COUNTERTOP 400 (16 MHz) on P0.15;
+# a branch-free GPIO IN sampling loop must see 20..30% high (measured 2000 of
+# 8000 samples = 25%) and >= 10 rising edges; TASKS_STOP returns the pad to
+# the GPIO OUT latch. No gpio_edges on P0.15: the logic capture misses edges
+# on pads an nRF peripheral claims without a GPIO register write (PadRoutes
+# taps re-sync only on port writes), so it records 0 transitions there.
+# Not exercised: radio, USBD, QSPI,
 # SPIM, UART1, WDT. GPIOTE on a pin whose PIN_CNF.DIR = output is a known
 # engine gap (IN shows OUT, not the GPIOTE drive) — see
 # attempt-history/nrf52840/2026-11-08-direct-probe-failures.
@@ -46,12 +52,13 @@ assertions:
       - "temp datardy=1 raw=00000064 ok"
       - "ecb fips197 ct=69c4e0d8..70b4c55a end=1 ok"
       - "twim0 tmp102 cfg=fff0 temp=1900 anack=1 w1c=1 ok"
+      - "pwm0 p0.15 seqend=1 duty=1 rises=1 stop=1 idle=0 ok"
       - "NRF52840 PASS"
   - gpio_edges:
       pin: "gpio0:13"
       min_edges: 4
   - memory_value:
       address: 0x2003FF00
-      expected_value: 0x52841FFF
+      expected_value: 0x52843FFF
       size: 4
   - expected_stop_reason: max_steps

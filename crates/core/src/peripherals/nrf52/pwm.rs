@@ -569,8 +569,13 @@ impl Peripheral for Nrf52Pwm {
         self.clock = Some(clock);
     }
 
+    /// `0` means neither the chip nor the board declares a clock (see
+    /// `SystemBus::cpu_hz`); keep the 64 MHz nRF52 default then. Storing it as
+    /// 1 Hz made every period 0 cycles, so no waveform ever loaded.
     fn attach_cpu_hz(&mut self, hz: u64) {
-        self.cpu_hz = hz.max(1);
+        if hz > 0 {
+            self.cpu_hz = hz;
+        }
     }
 
     fn sync_to(&mut self, now_cycle: u64) {
@@ -895,6 +900,17 @@ mod tests {
         assert!(p.take_scheduled_events().is_empty());
         p.write_u32(OFF_TASKS_SEQSTART0, 1).unwrap();
         assert_eq!(p.take_scheduled_events(), vec![(0, 1)]);
+    }
+
+    #[test]
+    fn undeclared_cpu_hz_keeps_the_default_clock() {
+        // A chip YAML without `cpu_hz:` hands the bus's 0 to every device.
+        let mut pwm = Nrf52Pwm::new();
+        pwm.attach_cpu_hz(0);
+        // COUNTERTOP 400 at 16 MHz on the 64 MHz default core = 1600 cycles.
+        assert_eq!(pwm.ticks_to_cycles(400), 1600);
+        pwm.attach_cpu_hz(32_000_000);
+        assert_eq!(pwm.ticks_to_cycles(400), 800);
     }
 
     #[test]
