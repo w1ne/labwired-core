@@ -20,3 +20,10 @@ external_devices:
     connection: twi0
     config:
       i2c_address: 0x48
+  # Bare-platform smoke fixture: a MAX31855 on SPIM3 whose chip select is the
+  # pad SPIM3 drives through PSEL.CSN (P0.20). No GPIO write selects it.
+  - id: max31855_spi3
+    type: max31855
+    connection: spi3
+    config:
+      cs_pin: P0.20

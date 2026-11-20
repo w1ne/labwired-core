@@ -37,8 +37,11 @@
 //!           unchanged
 //!   PWM1/2  INTEN.SEQEND0 pends NVIC line 33 / 34 (and no other line in
 //!           28..35); clearing EVENTS_SEQEND0 drops it
-//! A summary word goes to RAM at 0x2003FF00 (one bit per block passed). The
-//! radio is not exercised.
+//!   SPIM3   hardware chip select (PSEL.CSN) on P0.20 selects a MAX31855
+//!           fixture: two 4-byte reads return its power-on frame, the GPIO
+//!           latch on P0.20 stays high, INTEN.END pends NVIC line 47
+//! A summary word goes to RAM at 0x2003FF00: 0x5280_0000 | one bit per block
+//! passed (17 blocks, all pass = 0x5281FFFF). The radio is not exercised.
 
 use cortex_m_rt::entry;
 use panic_halt as _;
@@ -71,12 +74,13 @@ fn main() -> ! {
         .send();
     summary |= u32::from(check_gpio_p1(&mut l)) << 14;
     summary |= u32::from(check_pwm_irq_lines(&mut l)) << 15;
+    summary |= u32::from(check_spim3_hw_csn(&mut l)) << 16;
 
-    wr(RESULT, 0x5284_0000 | summary);
-    if summary == 0xFFFF {
+    wr(RESULT, 0x5280_0000 | summary);
+    if summary == 0x1_FFFF {
         l.s(b"NRF52840 PASS").send();
     } else {
-        l.s(b"NRF52840 FAIL summary=").hex(summary, 4).send();
+        l.s(b"NRF52840 FAIL summary=").hex(summary, 5).send();
     }
 
     // Heartbeat on P0.13 for the gpio_edges check.

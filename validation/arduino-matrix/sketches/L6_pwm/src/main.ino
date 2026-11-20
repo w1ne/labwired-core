@@ -28,10 +28,10 @@
 // PinMap_TIM, so analogWrite would fall back to digitalWrite. Use TIM2_CH1
 // on PA0.
 #    define LW_PWM_PIN PA0
-#  elif defined(STM32H563xx)
-// NUCLEO-H563ZI LD1 is PB0, whose PinMap_TIM entry is TIM1_CH2N, a
-// complementary output the twin's timer does not generate. Use TIM2_CH1 on
-// PA0.
+#  elif defined(STM32H563xx) || defined(STM32H723xx)
+// NUCLEO-H563ZI / NUCLEO-H723ZG LD1 is PB0, whose PinMap_TIM entry is
+// TIM1_CH2N, a complementary output the twin's timer does not generate. Use
+// TIM2_CH1 on PA0.
 #    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_NUCLEO_F446RE)
 // NUCLEO-F446RE LD2 is PA5 = DAC_OUT2 too; stock analogWrite would take the

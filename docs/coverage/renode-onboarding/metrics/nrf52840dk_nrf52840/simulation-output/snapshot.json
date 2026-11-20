@@ -59,7 +59,7 @@
     "stop_when_assertions_pass_settle_steps": 100000,
     "stop_when_assertions_pass_min_steps": 0
   },
-  "firmware_hash": "05e4bc0c03cd1b3377b09cb155a839985b7fd3e12a5d021f66031783cda37fad",
+  "firmware_hash": "a529d75f45537368ad172386b530acc51e28b3bfb54eae3b21f10ef81d38dbc1",
   "config": {
     "firmware": "examples/renode-onboarding/../../target/thumbv7em-none-eabi/release/firmware-nrf52840dk-smoke",
     "system": "examples/renode-onboarding/../../configs/systems/onboarding/nrf52840dk_nrf52840.yaml",

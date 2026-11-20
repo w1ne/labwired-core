@@ -296,7 +296,7 @@ _Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml copies
 
 ### `stm32h723zg`
 
-_No beyond-rubric H723 peripheral is exercised: the NUCLEO-H723ZG smoke drives RCC enables, GPIOB (LD1 on PB0), GPIOD AF7 and USART3 TX only. This narrow board slice declares RCC, SysTick, GPIO B/C/D/E and USART3; it does not model PWR, the cache/MPU, FMC/OCTOSPI, Ethernet, USB OTG, FDCAN, ADC, timers, DMA, I2C, SPI or the other H723 peripherals._
+_Two firmware paths drive this die. The NUCLEO-H723ZG Rust smoke (core-onboarding-smoke) drives RCC enables, GPIOB (LD1 on PB0), GPIOD AF7 and USART3 TX. The stock stm32duino NUCLEO_H723ZG row in the Arduino matrix (core-arduino-matrix-smoke, nightly + push to main; evidence validation/arduino-matrix/evidence/nucleo-h723zg) drives PWR supply/VOS bring-up, the PLL clock tree, CRS (HAL_RCCEx_CRSConfig), USART3, GPIO, I2C1 (INA219 exact registers), SPI1 (MAX31855 exact frame), ADC1 plus the ADC12 common CCR (analogRead), TIM2 PWM on PA0 (1.000 kHz, 50.2 % duty on the pad) and SysTick (micros). FDCAN1/2, CRC, RNG, IWDG, WWDG, DBGMCU, USART1/2/6, UART4, LPUART1, I2C2/3, SPI2/3, TIM1/3/4/8 and ADC2 are declared with the H735 instance list but no H723 firmware drives them; the FDCAN message RAM is not mapped, so the L8 CAN cell is a declared skip._
 
 ### `esp32s3-zero`
 

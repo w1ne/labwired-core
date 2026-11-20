@@ -1,0 +1,65 @@
+# STM32H723/H735 ADC12 common registers (RM0468 §26.7, ADC12_Common at
+# 0x4002_2300). Offsets, access, reset values and fields come from the
+# vendored tests/fixtures/real_world/stm32h735.svd.
+#
+# Register bank only, no behaviour:
+# - CCR stores CKMODE/PRESC/DUAL/VREFEN/VSENSEEN/VBATEN. The H7 ADC model
+#   converts the same way for every CCR value, so the clock mode and the
+#   internal channels have no effect.
+# - CSR, CDR and CDR2 read 0. They do not mirror the ADC1/ADC2 ISR flags or
+#   the dual-mode data; dual mode is not modelled.
+peripheral: ADC12_Common
+version: 0.1.0
+registers:
+- id: CSR
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: CCR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DUAL
+    bit_range: [0, 4]
+    description: "Dual ADC mode selection"
+  - name: DELAY
+    bit_range: [8, 11]
+    description: "Delay between 2 sampling phases"
+  - name: DAMDF
+    bit_range: [14, 15]
+    description: "Dual ADC mode data format"
+  - name: CKMODE
+    bit_range: [16, 17]
+    description: "ADC clock mode"
+  - name: PRESC
+    bit_range: [18, 21]
+    description: "ADC prescaler"
+  - name: VREFEN
+    bit_range: [22, 22]
+    description: "VREFINT enable"
+  - name: VSENSEEN
+    bit_range: [23, 23]
+    description: "Temperature sensor enable"
+  - name: VBATEN
+    bit_range: [24, 24]
+    description: "VBAT enable"
+  side_effects: null
+- id: CDR
+  address_offset: 12
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
+- id: CDR2
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields: []
+  side_effects: null
