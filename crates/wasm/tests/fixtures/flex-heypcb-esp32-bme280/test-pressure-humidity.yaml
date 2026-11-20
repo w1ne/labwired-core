@@ -20,6 +20,7 @@ limits:
 assertions:
   - entry_result: { equals: 8000 }
   - entry_result: { equals: 0, step: 3 }
+  - console_contains: "T=-10.00 C P=90000 Pa H=80.00 %RH\n"
   - entry_result: { equals: 9000, step: 4 }
   - entry_result: { equals: 90000, step: 5 }
   - i2c_transfers: { bus: sensor_i2c, equals: 8 }

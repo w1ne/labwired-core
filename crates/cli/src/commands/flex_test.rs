@@ -15,6 +15,7 @@
 use crate::{TestArgs, EXIT_ASSERT_FAIL, EXIT_CONFIG_ERROR, EXIT_PASS, EXIT_RUNTIME_ERROR};
 use labwired_config::{FlexAssertion, FlexStep, FlexTestLimits, FlexTestScript};
 use labwired_core::flex::{FlexAnalogTraceBatch, FlexDigitalTraceBatch, FlexRuntime};
+use labwired_core::flex_console::FlexConsoleCapture;
 use labwired_core::flex_i2c::FlexI2cTraceBatch;
 use labwired_core::flex_script::{
     run_script, FlexResultConfig, FlexScriptRun, FlexStopReason, FlexTestResult,
@@ -38,6 +39,9 @@ struct FlexTraceFile {
     /// The transfers of the manifest's I2C buses. Absent without a bus.
     #[serde(skip_serializing_if = "Option::is_none")]
     i2c: Option<FlexI2cTraceBatch>,
+    /// The manifest console with the time of each write. Absent without one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    console: Option<FlexConsoleCapture>,
 }
 
 fn unsupported_option_message(args: &TestArgs) -> Option<String> {
@@ -205,6 +209,7 @@ fn write_junit(path: &Path, result: &FlexTestResult, duration: Duration) -> std:
                 ),
                 FlexAssertion::FinalTime(_) => "final_time_ns".to_owned(),
                 FlexAssertion::I2cTransfers(a) => format!("i2c_transfers {}", a.i2c_transfers.bus),
+                FlexAssertion::ConsoleContains(_) => "console_contains".to_owned(),
             }
         );
         cases.push_str(&format!(
@@ -255,6 +260,12 @@ fn write_artifacts(
         match std::fs::create_dir_all(output_dir) {
             Ok(()) => {
                 write_json(&output_dir.join("result.json"), result);
+                if let Some(console) = &result.console {
+                    let path = output_dir.join("console.log");
+                    if let Err(error) = std::fs::write(&path, console.text.as_bytes()) {
+                        tracing::error!("failed to write Flex console {path:?}: {error}");
+                    }
+                }
                 junit_paths.push(output_dir.join("junit.xml"));
                 trace_path = Some(output_dir.join("flex-trace.json"));
             }
@@ -289,6 +300,7 @@ fn write_artifacts(
             digital,
             analog: runtime.analog_trace_snapshot(0),
             i2c: Some(runtime.i2c_trace_snapshot(0)).filter(|i2c| !i2c.buses.is_empty()),
+            console: runtime.console_capture(),
         };
         write_json(&path, &trace);
     }

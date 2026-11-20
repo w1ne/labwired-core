@@ -8,7 +8,7 @@
 //! binding so one script gives one result on both hosts.
 //!
 //! The firmware is a WebAssembly module whose `labwired.read/write/advance_ns`
-//! and `labwired.i2c_transfer` imports call a [`FlexRuntime`]. A script runs one `entry` call or a
+//! `labwired.i2c_transfer` and `labwired.console_write` imports call a [`FlexRuntime`]. A script runs one `entry` call or a
 //! `sequence` of calls and test-bench stimuli on one firmware instance, so
 //! firmware state persists between steps. The module runs in `wasmi` on both
 //! hosts: its fuel is the step budget, and a resumable call is what lets an
@@ -21,6 +21,7 @@ use crate::flex::{
     FlexAnalogTraceBatch, FlexDigitalChannel, FlexDigitalEdgeTally, FlexDigitalTraceBatch,
     FlexRunReport, FlexRuntime,
 };
+use crate::flex_console::FlexConsoleCapture;
 use labwired_config::{
     FlexAssertion, FlexCrossingDirection, FlexDigitalEdgesDetails, FlexEntryArg, FlexPort,
     FlexPortAccess, FlexPortKind, FlexStep, FlexTestLimits, FlexTestScript,
@@ -157,6 +158,9 @@ pub struct FlexTestResult {
     pub traces: Option<FlexTraceSummary>,
     /// Same report the browser binding returns from `run_report()`.
     pub run_report: Option<FlexRunReport>,
+    /// What the firmware wrote to the manifest console. Absent without one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub console: Option<FlexConsoleCapture>,
 }
 
 struct Host {
@@ -274,6 +278,32 @@ fn i2c_transfer(
         return Err(wasmi::Error::new("suspended at until_ns"));
     }
     Ok(status)
+}
+
+/// `labwired.console_write(ptr, len)`: append `len` bytes of the firmware's
+/// exported `memory` to the manifest console. The call takes no virtual time.
+fn console_write(mut caller: Caller<'_, Host>, ptr: i32, len: i32) -> Result<(), wasmi::Error> {
+    let len = len as u32 as usize;
+    let limit = crate::flex_console::FLEX_CONSOLE_MAX_BYTES;
+    if len > limit {
+        let message = format!("a console write is at most {limit} bytes");
+        return Err(caller.data_mut().stop(FlexStopReason::ModelError, message));
+    }
+    let Some(memory) = caller.get_export("memory").and_then(Extern::into_memory) else {
+        let message = "labwired.console_write needs the firmware to export its memory".to_owned();
+        return Err(caller.data_mut().stop(FlexStopReason::ModelError, message));
+    };
+    let mut bytes = vec![0u8; len];
+    if memory
+        .read(&caller, ptr as u32 as usize, &mut bytes)
+        .is_err()
+    {
+        let message = "labwired.console_write buffer is outside firmware memory".to_owned();
+        return Err(caller.data_mut().stop(FlexStopReason::ModelError, message));
+    }
+    let host = caller.data_mut();
+    let written = host.runtime.console_write(&bytes);
+    host.model(written)
 }
 
 /// Settle a resumable call: `Ok(Some(trap))` is the firmware suspended at the
@@ -450,6 +480,7 @@ fn execute(
             )
         })
         .and_then(|linker| linker.func_wrap("labwired", "i2c_transfer", i2c_transfer))
+        .and_then(|linker| linker.func_wrap("labwired", "console_write", console_write))
         .map(|_| ());
     if let Err(error) = defined {
         return Err(format!(
@@ -483,7 +514,7 @@ fn execute(
             }
             Err(error) => {
                 return Err(format!(
-                    "firmware does not fit the portable Flex ABI (imports labwired.read(i32) -> f64, labwired.write(i32, f64), labwired.advance_ns(i32), labwired.i2c_transfer(i32, i32, i32, i32, i32, i32) -> i32): {error}"
+                    "firmware does not fit the portable Flex ABI (imports labwired.read(i32) -> f64, labwired.write(i32, f64), labwired.advance_ns(i32), labwired.i2c_transfer(i32, i32, i32, i32, i32, i32) -> i32, labwired.console_write(i32, i32)): {error}"
                 ))
             }
         };
@@ -929,6 +960,14 @@ fn evaluate(
                 .is_some_and(|count| within(count, details.equals, details.min, details.max));
             (i2c_transfers.map(|count| count as f64), passed)
         }
+        FlexAssertion::ConsoleContains(assertion) => {
+            // `observed` is the byte offset of the first match in the text.
+            let found = run
+                .console
+                .as_ref()
+                .and_then(|console| console.text.find(&assertion.console_contains));
+            (found.map(|offset| offset as f64), found.is_some())
+        }
     };
     FlexAssertionResult {
         assertion: assertion.clone(),
@@ -956,6 +995,13 @@ fn validate_assertion_ports(
     for (index, assertion) in script.assertions.iter().enumerate() {
         match assertion {
             FlexAssertion::EntryResult(_) | FlexAssertion::FinalTime(_) => {}
+            FlexAssertion::ConsoleContains(_) => {
+                if runtime.manifest().console.is_none() {
+                    return Err(format!(
+                        "assertions[{index}].console_contains: the Flex manifest declares no console"
+                    ));
+                }
+            }
             FlexAssertion::I2cTransfers(assertion) => {
                 runtime
                     .i2c_bus_id(&assertion.i2c_transfers.bus)
@@ -1113,6 +1159,7 @@ impl FlexTestResult {
             assertions: Vec::new(),
             traces: None,
             run_report: None,
+            console: None,
         }
     }
 }
@@ -1170,6 +1217,7 @@ pub fn run_script(
         assertions: Vec::new(),
         traces: None,
         run_report,
+        console: runtime.console_capture(),
     };
     // Cursor 0 reads the whole retained ring.
     let digital = runtime.digital_trace_snapshot(0);

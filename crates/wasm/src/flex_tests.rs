@@ -2538,9 +2538,15 @@ fn flex_browser_script_receipt_covers_every_script_and_matches_the_shared_runner
         .unwrap()
         .iter()
         .any(|check| check == "i2c-transfer-record-equality"));
+    assert!(receipt["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|check| check == "console-record-equality"));
 
     let mut suspended_steps = 0;
     let mut i2c_transfers = 0;
+    let mut console_bytes = 0;
     for row in rows {
         let name = row["script"].as_str().unwrap();
         let dir = fixtures.join(row["fixture"].as_str().unwrap());
@@ -2572,12 +2578,20 @@ fn flex_browser_script_receipt_covers_every_script_and_matches_the_shared_runner
         );
         suspended_steps += row["suspended_steps"].as_u64().unwrap();
         i2c_transfers += row["i2c_transfers"].as_u64().unwrap();
+        let runtime = run.runtime.unwrap();
         assert_eq!(
-            run.runtime.unwrap().i2c_trace_snapshot(0).next_cursor,
+            runtime.i2c_trace_snapshot(0).next_cursor,
             row["i2c_transfers"],
             "{label}"
         );
+        let bytes = runtime.console_capture().map_or(0, |console| console.bytes);
+        assert_eq!(row["console_bytes"], bytes, "{label}");
+        console_bytes += bytes;
     }
+    assert!(
+        console_bytes >= 200,
+        "the receipt must include the console scripts"
+    );
     assert!(
         i2c_transfers >= 21,
         "the receipt must include the I2C bus scripts"

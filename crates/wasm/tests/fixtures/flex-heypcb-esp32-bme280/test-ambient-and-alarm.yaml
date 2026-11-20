@@ -36,3 +36,10 @@ assertions:
   - digital_edges: { port: user_led_state, times_ns: [8081000, 14141000] }
   # 504 bit times in `setup`; 102 bit times and a 1 ms period in each `loop`.
   - final_time_ns: { equals: 15140000 }
+  # Console: one line from `setup`, one line per `loop`.
+  - console_contains: "BME280 ready at 0x76\nT=25.00 C P=101325 Pa H=50.00 %RH\nT=31.50 C"
+  # At 29 °C no pressure ADC code compensates to exactly 101325 Pa, and at
+  # 27 °C no humidity code to exactly 50.00 %RH. The sensor model gives the
+  # nearest code below the target, so the firmware prints 1 Pa and 0.01 %RH
+  # less. Observed in the first run; the temperatures are exact.
+  - console_contains: "T=29.00 C P=101324 Pa H=50.00 %RH\nT=27.00 C P=101325 Pa H=49.99 %RH\n"

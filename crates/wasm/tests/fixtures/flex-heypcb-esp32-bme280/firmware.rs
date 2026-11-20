@@ -2,8 +2,10 @@
 // Portable BME280 station: probe the sensor over I2C, read its calibration,
 // then once per period read one sample, compensate it with the fixed-point
 // reference arithmetic of the Bosch BME280 datasheet (section 4.2.3 and
-// appendix 8.2), and drive an over-temperature indicator with hysteresis.
-// Nothing here names an MCU: the bus and the indicator are host ports.
+// appendix 8.2), drive an over-temperature indicator with hysteresis, and
+// print each reading to the console.
+// Nothing here names an MCU: the bus, the indicator and the console are host
+// ports.
 #![no_std]
 
 #[link(wasm_import_module = "labwired")]
@@ -19,6 +21,73 @@ extern "C" {
         read_ptr: *mut u8,
         read_len: u32,
     ) -> u32;
+    fn console_write(ptr: *const u8, len: u32);
+}
+
+/// One console line, built without an allocator.
+struct Line {
+    bytes: [u8; 64],
+    len: usize,
+}
+
+impl Line {
+    fn new() -> Self {
+        Self { bytes: [0; 64], len: 0 }
+    }
+
+    fn text(&mut self, text: &str) -> &mut Self {
+        for &byte in text.as_bytes() {
+            self.bytes[self.len] = byte;
+            self.len += 1;
+        }
+        self
+    }
+
+    fn number(&mut self, value: u32) -> &mut Self {
+        let mut digits = [0u8; 10];
+        let (mut value, mut count) = (value, 0);
+        loop {
+            digits[count] = b'0' + (value % 10) as u8;
+            count += 1;
+            value /= 10;
+            if value == 0 {
+                break;
+            }
+        }
+        for index in (0..count).rev() {
+            self.bytes[self.len] = digits[index];
+            self.len += 1;
+        }
+        self
+    }
+
+    /// A value in hundredths, as `-12.34`.
+    fn centi(&mut self, value: i32) -> &mut Self {
+        if value < 0 {
+            self.text("-");
+        }
+        let value = value.unsigned_abs();
+        self.number(value / 100).text(".");
+        if value % 100 < 10 {
+            self.text("0");
+        }
+        self.number(value % 100)
+    }
+
+    fn hex(&mut self, value: u32) -> &mut Self {
+        const DIGITS: &[u8; 16] = b"0123456789abcdef";
+        self.text("0x");
+        for shift in [4, 0] {
+            self.bytes[self.len] = DIGITS[((value >> shift) & 0xf) as usize];
+            self.len += 1;
+        }
+        self
+    }
+
+    fn print(&mut self) {
+        self.text("\n");
+        unsafe { console_write(self.bytes.as_ptr(), self.len as u32) };
+    }
 }
 
 #[panic_handler]
@@ -122,9 +191,11 @@ pub extern "C" fn setup(bus: u32, led: u32, address: u32) -> u32 {
 
     let mut id = [0u8; 1];
     if !read_registers(station, REG_ID, &mut id) {
+        Line::new().text("no BME280 at ").hex(address).print();
         return ERR_NO_SENSOR;
     }
     if id[0] != CHIP_ID_BME280 {
+        Line::new().text("chip id ").hex(u32::from(id[0])).text(" is not a BME280").print();
         return ERR_WRONG_CHIP;
     }
     let mut tp = [0u8; 24];
@@ -157,6 +228,7 @@ pub extern "C" fn setup(bus: u32, led: u32, address: u32) -> u32 {
         return ERR_NO_SENSOR;
     }
     station.ready = true;
+    Line::new().text("BME280 ready at ").hex(address).print();
     0
 }
 
@@ -217,6 +289,15 @@ pub extern "C" fn period() -> u32 {
         station.alarm = alarm;
         unsafe { write(station.led, if alarm { 1.0 } else { 0.0 }) };
     }
+    Line::new()
+        .text("T=")
+        .centi(centi_c)
+        .text(" C P=")
+        .number(station.pressure_pa)
+        .text(" Pa H=")
+        .centi(station.humidity_centi_rh as i32)
+        .text(" %RH")
+        .print();
     unsafe { advance_ns(PERIOD_NS) };
     (centi_c + 10_000) as u32
 }

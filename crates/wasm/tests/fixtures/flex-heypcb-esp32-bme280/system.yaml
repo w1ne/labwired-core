@@ -9,10 +9,12 @@ assumptions:
   - The bus runs at 100 kHz. The pinned source contains no firmware and states no bus speed.
   - A transfer takes one SCL period for each bit, START and STOP. Firmware instructions take no virtual time.
   - The IO48 user LED is represented by digital logic state only.
+  - The console stands for the ESP32-S3 native USB serial port on J1, as the source README states for flashing. A write arrives whole at the time of the call and takes no virtual time.
 unsupported_checks:
   - Original ESP32-S3 firmware execution and target instruction or I2C controller fidelity; the pinned source contains no board firmware.
   - The SCL and SDA waveforms on IO9 and IO8, the R6 and R7 pull-ups, bus capacitance, and clock stretching.
   - BME280 measurement time, standby time, IIR filter, and oversampling noise; a sample follows its input at once.
+  - USB enumeration, CDC transfer timing and host polling of the console; text the host sends to the firmware.
   - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
   - Sensor accuracy, self-heating, and production spread of a physical BME280.
 ports:
@@ -52,3 +54,6 @@ i2c_buses:
           temperature: environment.temperature
           humidity: environment.humidity
           pressure: environment.pressure
+console:
+  # The source README: "USB-C, native USB on the ESP32-S3 (no bridge chip)".
+  name: usb_serial

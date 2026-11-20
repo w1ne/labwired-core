@@ -1,6 +1,6 @@
 # HeyPCB ESP32-S3 BME280 over a Flex I2C bus
 
-Portable Rust-to-Wasm firmware reads the BME280 of the pinned **HeyPCB ESP32-S3 BME280** board, revision A, through a Flex I2C bus. The sensor is the catalog `bme280` device model, the model that the detailed path attaches to an MCU's I2C controller. The firmware drives the IO48 user LED as an over-temperature indicator. No ESP32-S3 CPU or I2C controller is emulated.
+Portable Rust-to-Wasm firmware reads the BME280 of the pinned **HeyPCB ESP32-S3 BME280** board, revision A, through a Flex I2C bus. The sensor is the catalog `bme280` device model, the model that the detailed path attaches to an MCU's I2C controller. The firmware drives the IO48 user LED as an over-temperature indicator and prints each reading to a Flex console that stands for the board's native USB serial port. No ESP32-S3 CPU or I2C controller is emulated.
 
 ## Source
 
@@ -28,7 +28,7 @@ i2c_buses:
 
 `i2c_buses` is a generic key of the Flex manifest. The device `type` is a catalog type, built by the factory that `external_devices` uses. No code in this repository names the board.
 
-The firmware ([firmware.rs](firmware.rs), 234 lines, new for this fixture) calls `labwired.i2c_transfer`. `setup` reads the chip ID (0xD0), reads the calibration (0x88, 0xA1, 0xE1), and writes `ctrl_hum`, `ctrl_meas` and `config`. `loop` reads the eight data bytes at 0xF7 and compensates temperature, pressure and humidity with the fixed-point reference arithmetic of the Bosch BME280 datasheet. It returns the temperature in 0.01 °C plus 10,000. The indicator goes on at 30.00 °C and off below 28.00 °C.
+The firmware ([firmware.rs](firmware.rs), 315 lines, new for this fixture) calls `labwired.i2c_transfer`. `setup` reads the chip ID (0xD0), reads the calibration (0x88, 0xA1, 0xE1), and writes `ctrl_hum`, `ctrl_meas` and `config`. `loop` reads the eight data bytes at 0xF7 and compensates temperature, pressure and humidity with the fixed-point reference arithmetic of the Bosch BME280 datasheet. It returns the temperature in 0.01 °C plus 10,000. The indicator goes on at 30.00 °C and off below 28.00 °C. Through `labwired.console_write`, `setup` prints `BME280 ready at 0x76` or `no BME280 at 0x77`, and each `loop` prints one line such as `T=25.00 C P=101325 Pa H=50.00 %RH`.
 
 Assumptions and limits, also carried in `run_report`:
 
@@ -38,6 +38,7 @@ Assumptions and limits, also carried in `run_report`:
 - The path exchanges whole bytes with the device model. It does not model the SCL and SDA waveforms on IO9 and IO8, the R6 and R7 pull-ups, bus capacitance, or clock stretching. `run_report.i2c_buses[].not_modeled` lists these.
 - The BME280 model has no measurement time, standby time or IIR filter. A sample follows its input at once.
 - The model uses the catalog's shipped calibration coefficients, not those of a physical part.
+- The console (`usb_serial`) stands for the ESP32-S3 native USB serial port on J1. A write arrives whole at the time of the call and takes no virtual time. USB enumeration, CDC transfer timing and host input are not modeled; `run_report.console.not_modeled` lists these.
 
 ## Measured result
 
@@ -53,6 +54,9 @@ Assumptions and limits, also carried in `run_report`:
 - Logic analyzer, first script: `user_led_drive` rises at 8,080,000 ns, the end of the transfer that reads 31.5 °C, and falls at 14,140,000 ns, the end of the transfer that reads 27 °C. At 29 °C the indicator stays on. `user_led_state` follows 1,000 ns later.
 - Transfer time: `setup` is 7 transfers and 504 bit times, 5,040,000 ns at 100 kHz. One `loop` is 102 bit times plus a 1 ms period, 2,020,000 ns.
 - `flex-trace.json` holds each transfer with its bytes. The first is a write of `[0xD0]` and a read of `[0x60]`.
+- Console, first script: six lines, 191 bytes, written at 5,040,000 ns (end of `setup`) and then 2,020,000 ns apart from 6,060,000 ns, each after its sample transfer and before the 1 ms period. `--output-dir` receives `console.log`. The final times did not change when the firmware started to print.
+- Console, measured deviation: at 29 °C the firmware prints `P=101324 Pa`, and at 27 °C it prints `H=49.99 %RH`. The bench set 1013.25 hPa and 50 %RH. The BME280 model inverts the datasheet compensation over integer ADC codes and takes the nearest code below the target. At those temperatures, no code gives the exact target. The precomputed text expected 101325 Pa and 50.00 %RH; the script now asserts the observed text. The temperatures are exact.
+- Negative control: the 0x77 script prints `no BME280 at 0x77` and nothing else. A manifest without `console` stops this firmware with `model_error` at its first print (CLI test).
 - Sensor removed (unit test): with no device on the bus, a probe of 0x76 is refused.
 - 200 °C on `ambient_c` stops the run with `model_error`: the BME280 model takes -40 to 85 °C.
 

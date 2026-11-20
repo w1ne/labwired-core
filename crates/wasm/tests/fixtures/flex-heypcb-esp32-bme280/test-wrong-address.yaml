@@ -23,3 +23,4 @@ assertions:
   - digital_edges: { port: user_led_state, count: 0 }
   # One refused address byte: START, 9 bits and STOP at 100 kHz.
   - final_time_ns: { equals: 110000 }
+  - console_contains: "no BME280 at 0x77\n"

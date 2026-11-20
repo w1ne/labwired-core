@@ -580,8 +580,11 @@ mod tests {
             let error = error(&STATION.replace(from, to));
             assert!(error.contains(message), "{from} -> {to}: {error}");
         }
-        let twice = STATION.to_owned()
-            + "      - id: second\n        type: bme280\n        config: { i2c_address: 0x76 }\n";
+        // The second device goes at the end of the bus, before `console`.
+        let twice = STATION.replace(
+            "console:\n",
+            "      - id: second\n        type: bme280\n        config: { i2c_address: 0x76 }\nconsole:\n",
+        );
         let error = error(&twice);
         assert!(
             error.contains("both answer address 0x76 on bus 'sensor_i2c'"),

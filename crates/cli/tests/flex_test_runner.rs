@@ -1662,3 +1662,101 @@ fn i2c_contract_mismatches_and_limits_are_explicit() {
     assert_eq!(result["traces"]["i2c_transfers"], 1);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn console_output_is_kept_with_the_time_of_each_write() {
+    let dir = unique_dir("console");
+    let script = bme280_sequence(
+        &dir,
+        "  - call: { SETUP }\n  - call: { export: loop }\n",
+        "  - entry_result: { equals: 12500 }\n  - console_contains: \"T=25.00 C P=101325 Pa\"\n  - console_contains: \"T=26.00\"\n",
+    );
+    let output = run(&script, &dir, &[]);
+    // The second `console_contains` names text the firmware did not print.
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = read_result(&dir);
+    assert_eq!(result["stop_reason"], "completed");
+    let text = "BME280 ready at 0x76\nT=25.00 C P=101325 Pa H=50.00 %RH\n";
+    let console = &result["console"];
+    assert_eq!(console["name"], "usb_serial");
+    assert_eq!(console["text"], text);
+    assert_eq!(console["bytes"], text.len());
+    assert_eq!(console["dropped_bytes"], 0);
+    // `setup` prints after its seven transfers (5.04 ms). `loop` prints after
+    // its sample transfer and before its 1 ms period.
+    assert_eq!(
+        console["writes"],
+        serde_json::json!([
+            { "time_ns": 5_040_000, "offset": 0, "len": 21 },
+            { "time_ns": 6_060_000, "offset": 21, "len": 34 },
+        ])
+    );
+    assert_eq!(result["assertions"][1]["passed"], true);
+    assert_eq!(result["assertions"][1]["observed"], 21.0);
+    assert_eq!(result["assertions"][2]["passed"], false);
+    assert_eq!(result["assertions"][2]["observed"], Value::Null);
+    let report = &result["run_report"]["console"];
+    assert_eq!(report["name"], "usb_serial");
+    assert!(report["not_modeled"]
+        .as_array()
+        .unwrap()
+        .contains(&Value::from("baud_rate_and_transfer_time")));
+    assert_eq!(
+        std::fs::read_to_string(dir.join("console.log")).unwrap(),
+        text
+    );
+    let trace = json(&dir.join("flex-trace.json"));
+    assert_eq!(trace["console"], result["console"]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn console_output_needs_a_declared_console() {
+    // The same manifest and firmware without the `console` block.
+    let fixture = fixtures_root().join("flex-heypcb-esp32-bme280");
+    let manifest = std::fs::read_to_string(fixture.join("system.yaml")).unwrap();
+    let (without, _) = manifest
+        .split_once("console:\n")
+        .expect("fixture console block");
+    for (assertions, code, stop_reason, message) in [
+        (
+            "  - entry_result: { equals: 0 }\n",
+            3,
+            "model_error",
+            "labwired.console_write: the Flex manifest declares no console",
+        ),
+        (
+            "  - console_contains: \"BME280\"\n",
+            2,
+            "config_error",
+            "assertions[0].console_contains: the Flex manifest declares no console",
+        ),
+    ] {
+        let dir = unique_dir("console-missing");
+        let manifest_path = dir.join("system.yaml");
+        std::fs::write(&manifest_path, without).unwrap();
+        let script = bme280_sequence(&dir, "  - call: { SETUP }\n", assertions);
+        let text = std::fs::read_to_string(&script).unwrap().replace(
+            &fixture.join("system.yaml").display().to_string(),
+            &manifest_path.display().to_string(),
+        );
+        std::fs::write(&script, text).unwrap();
+        let output = run(&script, &dir, &[]);
+        assert_eq!(output.status.code(), Some(code), "{message}");
+        let result = read_result(&dir);
+        assert_eq!(result["stop_reason"], stop_reason);
+        assert!(
+            result["message"].as_str().unwrap().contains(message),
+            "{result:#}"
+        );
+        assert!(result.get("console").is_none());
+        assert!(!dir.join("console.log").exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

@@ -144,8 +144,9 @@ and non-negative integers; explicit YAML `null` is rejected.
 
 Use `inputs.flex` to run portable firmware against a Flex manifest. The
 firmware is a WebAssembly module that imports `labwired.read(i32) -> f64`,
-`labwired.write(i32, f64)` and `labwired.advance_ns(i32)`, and
-`labwired.i2c_transfer` if the manifest has an I2C bus. The runner calls one
+`labwired.write(i32, f64)` and `labwired.advance_ns(i32)`,
+`labwired.i2c_transfer` if the manifest has an I2C bus, and
+`labwired.console_write` if the manifest has a console. The runner calls one
 export once (`entry`), or runs a `sequence` of calls and test-bench stimuli on
 one firmware instance. This path does not emulate a target CPU, and it never falls back
 to one. A script that needs target instructions, MMIO or interrupts names
@@ -189,6 +190,7 @@ assertions:
 | `analog_window` | Every value of one oscilloscope channel with `from_ns <= time <= to_ns`, and the value the channel holds at `from_ns`. The default is the whole run. | The lowest value is at or above `min` and the highest is at or below `max`. |
 | `analog_crossings` | The times one oscilloscope channel crosses `level` in one `direction`: `rising` (from below to at or above) or `falling` (from above to at or below). `from_ns` and `to_ns` limit it as for `digital_edges`. | The crossing `count` matches, every crossing time matches `times_ns` in order, or both. |
 | `final_time_ns` | The virtual time at the end of the run | It is `equals`, or inside `min`..`max`. |
+| `console_contains` | The text the firmware wrote to the manifest `console` in the whole run | The text contains the string. `observed` is the byte offset of the first match. |
 | `i2c_transfers` | The number of `labwired.i2c_transfer` calls on one `bus` in the whole run. `address` limits it to one 7-bit address. `ack: true` counts the transfers a device acknowledged, `ack: false` those no device answered. | The count is `equals`, or inside `min`..`max`. |
 
 A port or channel that the instrument does not have is a `config_error`
@@ -255,7 +257,8 @@ or an error interrupted has no result for `entry_result`.
 | `firmware_trap` | `error` | `3` | The firmware module trapped. |
 | `config_error` | `error` | `2` | The script, manifest or module was rejected before the firmware ran. |
 
-`--output-dir` receives `result.json`, `junit.xml` and `flex-trace.json`.
+`--output-dir` receives `result.json`, `junit.xml` and `flex-trace.json`, and
+`console.log` when the manifest has a console.
 `result.json` carries the final value of each read port, each assertion with
 its observed value, and `run_report`: the execution path
 (`flex_portable_wasm`), `target_cpu_emulated: false`, the manifest SHA-256, the
@@ -334,6 +337,40 @@ controller, or device pin outputs such as an interrupt line. An unknown bus
 name, an unknown device type, an unknown input channel, a unit mismatch, or
 two devices with one address on a bus is a `config_error`.
 
+#### Console output
+
+A Flex manifest can declare one console: the place where target firmware
+prints, for example a UART or a USB serial port.
+
+```yaml
+# system.yaml
+console:
+  name: usb_serial
+```
+
+The firmware imports one more function:
+
+```
+labwired.console_write(ptr: i32, len: i32)
+```
+
+- The call appends `len` bytes of the firmware's exported `memory` to the
+  console. A write is at most 1 MiB.
+- The call takes no virtual time. Each write keeps the virtual time of the
+  call.
+- A `console_write` with no `console` in the manifest stops the run with
+  `model_error`. A `console_contains` assertion with no console is a
+  `config_error`.
+
+`result.json` and `flex-trace.json` get a `console` record: `text` (the bytes
+as UTF-8), `bytes`, `dropped_bytes`, and `writes`, each with its `time_ns`,
+`offset` and `len` in the text. `--output-dir` also receives `console.log`,
+the text alone. The console keeps the first 1 MiB of a run; later bytes count
+in `dropped_bytes`, and `console_contains` does not see them.
+`run_report.console` gives the name and `not_modeled`: the baud rate and
+transfer time, UART framing and the TX pin, USB enumeration and host polling,
+and input to the firmware.
+
 #### The same script in the browser
 
 The browser package (`labwired-wasm`) runs a Flex script with the runner that
@@ -347,6 +384,7 @@ const runtime = run.take_runtime();              // a WasmFlexRuntime
 const edges = runtime.digital_trace_snapshot(0); // logic analyzer
 const samples = runtime.analog_trace_snapshot(0); // oscilloscope
 const transfers = runtime.i2c_trace_snapshot(0);  // I2C transfer record
+const console = runtime.console_capture();        // console text, or undefined
 ```
 
 - `result_json()` is the text of `result.json`. It differs from the CLI file

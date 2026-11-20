@@ -139,6 +139,18 @@ impl WasmFlexRuntime {
         let cursor = js_trace_cursor(cursor)?;
         serde_wasm_bindgen::to_value(&self.runtime.i2c_trace_snapshot(cursor)).map_err(js_error)
     }
+
+    /// Append firmware output to the manifest console at the current virtual
+    /// time. An error when the manifest declares no console.
+    pub fn console_write(&mut self, bytes: &[u8]) -> Result<(), JsValue> {
+        self.runtime.console_write(bytes).map_err(js_error)
+    }
+
+    /// The console text and the time of each write; `undefined` without a
+    /// console.
+    pub fn console_capture(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.runtime.console_capture()).map_err(js_error)
+    }
 }
 
 /// Parse and validate a Flex test script, then run it with the shared runner.

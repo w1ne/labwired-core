@@ -11,6 +11,7 @@
 
 use crate::analog::{AnalogCrossing, AnalogSample, AnalogTraceBatch, AnalogWindowTally};
 use crate::cosim::{CosimRunner, CosimSignalValue, CosimSignals};
+use crate::flex_console::{Console, FlexConsoleCapture, FlexConsoleSummary};
 use crate::flex_i2c::{FlexI2cBusSummary, FlexI2cTraceBatch, FlexI2cTransfer, I2cBuses};
 use crate::logic_capture::{LogicCapture, PadEvent};
 use crate::{SimResult, SimulationError};
@@ -137,6 +138,9 @@ pub struct FlexRunReport {
     /// The I2C buses and their catalog device models. Absent without a bus.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub i2c_buses: Vec<FlexI2cBusSummary>,
+    /// The console and what it leaves out. Absent without a console.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub console: Option<FlexConsoleSummary>,
 }
 
 fn signal_bindings(bindings: &HashMap<String, String>) -> Vec<FlexSignalBinding> {
@@ -306,6 +310,7 @@ pub struct FlexRuntime {
     signals: CosimSignals,
     digital: DigitalCapture,
     i2c: I2cBuses,
+    console: Option<Console>,
     time_ns: u64,
     failure: Option<String>,
 }
@@ -385,6 +390,7 @@ impl FlexRuntime {
         let mut i2c = I2cBuses::new(&manifest.i2c_buses, &units)?;
         i2c.sync_inputs(&signals)?;
         let digital = DigitalCapture::new(&signals, &manifest.ports)?;
+        let console = manifest.console.as_ref().map(Console::new);
         let runtime = Self {
             manifest,
             manifest_sha256: format!("{:x}", Sha256::digest(yaml.as_bytes())),
@@ -393,6 +399,7 @@ impl FlexRuntime {
             signals,
             digital,
             i2c,
+            console,
             time_ns: 0,
             failure: None,
         };
@@ -431,6 +438,7 @@ impl FlexRuntime {
             ports: manifest.ports.clone(),
             models: manifest.cosim_models.iter().map(model_summary).collect(),
             i2c_buses: self.i2c.summaries().to_vec(),
+            console: self.console.as_ref().map(Console::summary),
         }
     }
 
@@ -617,6 +625,24 @@ impl FlexRuntime {
 
     pub fn i2c_trace_snapshot(&self, cursor: u64) -> FlexI2cTraceBatch {
         self.i2c.snapshot(cursor)
+    }
+
+    /// Append firmware output to the manifest console at the current virtual
+    /// time. Virtual time does not move. A manifest without a console rejects
+    /// the write: the output would have no declared destination.
+    pub fn console_write(&mut self, bytes: &[u8]) -> SimResult<()> {
+        self.ensure_healthy()?;
+        let time_ns = self.time_ns;
+        let console = self.console.as_mut().ok_or_else(|| {
+            error("labwired.console_write: the Flex manifest declares no console")
+        })?;
+        console.write(time_ns, bytes);
+        Ok(())
+    }
+
+    /// The console output so far. `None`: the manifest has no console.
+    pub fn console_capture(&self) -> Option<FlexConsoleCapture> {
+        self.console.as_ref().map(Console::capture)
     }
 
     pub fn digital_trace_snapshot(&mut self, cursor: u64) -> FlexDigitalTraceBatch {

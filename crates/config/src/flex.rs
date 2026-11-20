@@ -32,6 +32,19 @@ pub struct FlexManifest {
     /// MCU's I2C controller. No controller and no pad is modeled here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub i2c_buses: Vec<FlexI2cBus>,
+    /// The text output the firmware writes through `labwired.console_write`,
+    /// where target firmware prints over a UART or a USB serial port.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub console: Option<FlexConsole>,
+}
+
+/// A byte stream from the firmware to the test bench. Only the bytes and the
+/// virtual time of each write are modeled: no baud rate, framing, pin or USB
+/// transfer.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FlexConsole {
+    pub name: String,
 }
 
 /// One I2C bus with the firmware as its only controller.
@@ -297,6 +310,9 @@ impl FlexManifest {
                     consumed.insert(signal.as_str());
                 }
             }
+        }
+        if let Some(console) = &self.console {
+            token(&console.name, "console name")?;
         }
         for port in &self.ports {
             match port.access {
@@ -645,6 +661,15 @@ pub enum FlexAssertion {
     AnalogCrossings(FlexAnalogCrossingsAssertion),
     FinalTime(FlexFinalTimeAssertion),
     I2cTransfers(FlexI2cTransfersAssertion),
+    ConsoleContains(FlexConsoleContainsAssertion),
+}
+
+/// The firmware wrote this text to the manifest `console` during the run.
+/// The text can span several writes.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexConsoleContainsAssertion {
+    pub console_contains: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -1169,6 +1194,10 @@ impl FlexTestScript {
                     );
                     bounds(details.equals, details.min, details.max, &path)?;
                 }
+                FlexAssertion::ConsoleContains(assertion) => ensure!(
+                    !assertion.console_contains.is_empty(),
+                    "assertions[{index}].console_contains must not be empty"
+                ),
             }
         }
         Ok(())
