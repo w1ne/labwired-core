@@ -494,6 +494,7 @@ impl SystemBus {
             parked_level_events: Vec::new(),
             freerunning_timer_poll_mmio: Cell::new(0),
             timer_poll_carry: Cell::new(0),
+            timer_poll_sites: Cell::new([None; 8]),
             side_effecting_mmio: Cell::new(0),
             batch_stop: Default::default(),
             memory_reads: Cell::new(0),
@@ -1645,17 +1646,20 @@ impl SystemBus {
             bus.attach_private_lab_air(node);
         }
 
-        // U5: the RCC backup domain (BDCR) is write-protected until
-        // PWR_DBPR.DBP is set. The bus is the only place that knows both
-        // models, so one shared flag links them.
-        if let (Some(rcc_i), Some(pwr_i)) = (
-            bus.find_peripheral_index_by_name("rcc"),
-            bus.find_peripheral_index_by_name("pwr"),
-        ) {
+        // The backup domain is write-protected until the power controller's
+        // DBP bit is set: the U5 RCC BDCR (PWR_DBPR.DBP) and the F1 BKP data
+        // registers (PWR_CR.DBP). The bus is the only place that knows the
+        // models, so one shared flag links them. PWR is bound last so the
+        // flag starts at its DBP reset value.
+        if let Some(pwr_i) = bus.find_peripheral_index_by_name("pwr") {
             let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            bus.peripherals[rcc_i]
-                .dev
-                .bind_backup_domain_write_enable(flag.clone());
+            for name in ["rcc", "bkp"] {
+                if let Some(i) = bus.find_peripheral_index_by_name(name) {
+                    bus.peripherals[i]
+                        .dev
+                        .bind_backup_domain_write_enable(flag.clone());
+                }
+            }
             bus.peripherals[pwr_i]
                 .dev
                 .bind_backup_domain_write_enable(flag);

@@ -75,6 +75,7 @@ pub const MODEL_TYPES: &[&str] = &[
     "crs",
     "rtc",
     "rtc_f1",
+    "bkp_f1",
     "rtc_v3",
     "iwdg",
     "wwdg",
@@ -1689,6 +1690,9 @@ pub fn try_build(
                         Box::new(crate::peripherals::pwr::PwrF4::new())
                     }
                 }
+                // F1: PWR_CR/PWR_CSR, both reset 0 (RM0008 §5.4). DBP gates
+                // the F1 BKP backup registers.
+                Some("stm32f1") | Some("f1") => Box::new(crate::peripherals::pwr::PwrF1::new()),
                 _ => Box::new(crate::peripherals::pwr::Pwr::new()),
             }
         }
@@ -1799,7 +1803,23 @@ pub fn try_build(
         }
         "crs" => Box::new(crate::peripherals::crs::Crs::new()),
         "rtc" => Box::new(crate::peripherals::rtc::Rtc::new()),
-        "rtc_f1" => Box::new(crate::peripherals::rtc_f1::RtcF1::new()),
+        "rtc_f1" => {
+            let rtc = crate::peripherals::rtc_f1::RtcF1::new();
+            match p_cfg.config.get("alarm_irq").and_then(|v| v.as_u64()) {
+                Some(line) => Box::new(rtc.with_alarm_irq(line as u32)),
+                None => Box::new(rtc),
+            }
+        }
+        "bkp_f1" => {
+            // `data_registers: 10` (low/medium density, the default) or 42
+            // (high/XL density, DR11..DR42 at 0x40..0xBC).
+            let data_registers = p_cfg
+                .config
+                .get("data_registers")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(10) as usize;
+            Box::new(crate::peripherals::bkp_f1::BkpF1::new(data_registers)?)
+        }
         "rtc_v3" => Box::new(crate::peripherals::rtc_v3::RtcV3::new()),
         "iwdg" => {
             let iwdg = crate::peripherals::iwdg::Iwdg::new();

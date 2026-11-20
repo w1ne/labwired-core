@@ -760,6 +760,11 @@ pub struct SystemBus {
     /// four timer-only accesses (more than one `time_us_64`) so a one-shot
     /// timestamp cannot skip. See [`Self::take_timer_poll_coalesce_eligible`].
     timer_poll_carry: std::cell::Cell<u32>,
+    /// Sites (opaque CPU positions, most recent last) at which a split
+    /// timer-only access was seen since the last side-effecting MMIO. A
+    /// polling loop comes back to a site; straight-line code does not. See
+    /// [`Self::take_timer_poll_coalesce_eligible`].
+    timer_poll_sites: std::cell::Cell<[Option<u64>; 8]>,
     /// Batch-local count of [`MmioAccessClass::SideEffecting`] accesses.
     /// Any non-zero value disqualifies timer-poll coalesce for that batch.
     side_effecting_mmio: std::cell::Cell<u32>,

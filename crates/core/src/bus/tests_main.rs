@@ -238,22 +238,50 @@ fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     for i in 1..=3 {
         bus.note_mmio_activity(sys_idx, 0x04);
         assert!(
-            !bus.take_timer_poll_coalesce_eligible(),
+            !bus.take_timer_poll_coalesce_eligible(0x1000),
             "split time_us_64 ({i}/3 TIMERAW loads) must not skip"
         );
         bus.reset_mmio_activity_counters();
     }
     bus.note_mmio_activity(sys_idx, 0x04);
     assert!(
-        bus.take_timer_poll_coalesce_eligible(),
+        bus.take_timer_poll_coalesce_eligible(0x1000),
         "a second time_us_64 (4th consecutive timer-only access) should coalesce"
     );
+
+    // Four split reads in straight-line code (pico-sdk alarm handler:
+    // `time_us_64`, then one more TIMERAWL load in `ta_set_timeout`) never
+    // come back to a site, so they are not a polling loop.
+    for site in [0x2000, 0x2004, 0x2006, 0x2040, 0x2044] {
+        bus.reset_mmio_activity_counters();
+        bus.note_mmio_activity(sys_idx, 0x04);
+        assert!(
+            !bus.take_timer_poll_coalesce_eligible(site),
+            "a split timer read at new site {site:#x} must not skip"
+        );
+    }
+    // The same streak coalesces as soon as a read comes back to a site.
+    bus.reset_mmio_activity_counters();
+    bus.note_mmio_activity(sys_idx, 0x04);
+    assert!(bus.take_timer_poll_coalesce_eligible(0x2040));
+    // A side-effecting access ends the streak and forgets its sites.
+    bus.reset_mmio_activity_counters();
+    bus.note_mmio_activity(gpio_idx, 0x00);
+    assert!(!bus.take_timer_poll_coalesce_eligible(0x2040));
+    for i in 1..=3 {
+        bus.reset_mmio_activity_counters();
+        bus.note_mmio_activity(sys_idx, 0x04);
+        assert!(
+            !bus.take_timer_poll_coalesce_eligible(0x2040),
+            "after a side effect the loop needs four reads again ({i}/3)"
+        );
+    }
 
     bus.reset_mmio_activity_counters();
     bus.note_mmio_activity(sys_idx, 0x04); // poll class (model decides)
     bus.note_mmio_activity(sys_idx, 0x44); // poll class
     assert!(
-        bus.take_timer_poll_coalesce_eligible(),
+        bus.take_timer_poll_coalesce_eligible(0x1000),
         "pure freerunning-timer polls should coalesce"
     );
 
@@ -261,7 +289,7 @@ fn timer_poll_coalesce_uses_peripheral_access_class_not_chip_names() {
     bus.note_mmio_activity(sys_idx, 0x04);
     bus.note_mmio_activity(sys_idx, 0x44);
     bus.note_mmio_activity(gpio_idx, 0x00); // side-effecting
-    assert!(!bus.take_timer_poll_coalesce_eligible());
+    assert!(!bus.take_timer_poll_coalesce_eligible(0x1000));
 }
 
 /// Resource metrics P1: successful RAM/flash/extra_mem accesses increment
@@ -4068,6 +4096,7 @@ fn test_flash_boot_alias_read_and_write() {
         parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
+        timer_poll_sites: std::cell::Cell::new([None; 8]),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4219,6 +4248,7 @@ fn h5_flash_bus(gate: bool) -> SystemBus {
         parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
+        timer_poll_sites: std::cell::Cell::new([None; 8]),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4523,6 +4553,7 @@ fn h5_rww_bus(gate: bool) -> SystemBus {
         parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
+        timer_poll_sites: std::cell::Cell::new([None; 8]),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4823,6 +4854,7 @@ fn test_peripheral_range_index_lookup() {
         parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
+        timer_poll_sites: std::cell::Cell::new([None; 8]),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
@@ -4979,6 +5011,7 @@ fn test_dma_tick_executes_copy_and_raises_irq() {
         parked_level_events: Vec::new(),
         freerunning_timer_poll_mmio: std::cell::Cell::new(0),
         timer_poll_carry: std::cell::Cell::new(0),
+        timer_poll_sites: std::cell::Cell::new([None; 8]),
         side_effecting_mmio: std::cell::Cell::new(0),
         batch_stop: Default::default(),
         memory_reads: std::cell::Cell::new(0),
