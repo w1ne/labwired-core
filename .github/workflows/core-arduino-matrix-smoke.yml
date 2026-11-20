@@ -127,7 +127,9 @@ jobs:
             esp32c6)     platform=espressif32@8.0.0 ;;
             # The S2 row was measured on espressif32 8.0.0 (arduino-esp32 3.3).
             esp32s2)     platform=espressif32@8.0.0 ;;
-            esp32*|arduino_nano_esp32|xiao_esp32s3) platform=espressif32@7.0.1 ;;
+            esp32*) platform=espressif32@7.0.1 ;;
+            # The Nano ESP32 example pins 8.0.0 (examples/arduino-nano-esp32/platformio.ini).
+            arduino_nano_esp32|xiao_esp32s3) platform=espressif32@8.0.0 ;;
             # The Leonardo row was measured on the same pin (ArduinoCore-avr 5.4.0).
             atmega328p|atmega2560|arduino-leonardo) platform=atmelavr@5.3.0 ;;
             # The Nano Every row was measured on atmelmegaavr 1.10.0
