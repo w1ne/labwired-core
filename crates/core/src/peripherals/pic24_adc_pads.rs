@@ -21,8 +21,9 @@
 //! | [`OFF_HELD`] | bit `n` set: AN`n` carries a routed level |
 //! | [`OFF_CHANNEL_MV`] + 2·`n` | AN`n` level, mV |
 //!
-//! The PIC16F87XA A/D module is CPU-internal as well (`cpu::pic16`), and its
-//! core pulls AN0-AN7 from the same window at `cpu::pic16::PIC16_ADC_PAD_BASE`;
+//! The PIC16F87XA A/D module and the PIC16(L)F1825/9 ADC are CPU-internal as
+//! well (`cpu::pic16`), and the core pulls AN0-AN7 (AN0-AN11 on the PIC16F1829)
+//! from the same window at `cpu::pic16::PIC16_ADC_PAD_BASE`;
 //! there [`OFF_VREF_MV`] is VDD. The PIC18F4520 A/D module (`cpu::pic18`)
 //! pulls AN0-AN12 the same way at `cpu::pic18::PIC18_ADC_PAD_BASE`.
 //!

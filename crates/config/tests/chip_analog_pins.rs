@@ -188,6 +188,10 @@ const PORTS_NOT_MODELLED: &[(&str, &str)] = &[
         "PORTA/PORTE are SFRs inside the PIC16 core, not bus port blocks",
     ),
     (
+        "pic16f1829",
+        "PORTA..PORTC are SFRs inside the PIC16 core, not bus port blocks",
+    ),
+    (
         "pic18f4520",
         "PORTA/PORTB/PORTE are SFRs inside the PIC18 core, not bus port blocks",
     ),

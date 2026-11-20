@@ -1000,8 +1000,8 @@ const CHIPS: &[ChipConf] = &[
     // boots real SDCC 4.4.0 C firmware: BSR/MOVLB banking, MOVLP paging,
     // FSR/MOVIW pointers, EUSART TX, LATA, and an ISR without software
     // context save preempted into by TMR0, so the hardware shadows carry
-    // main's state. CCP, MSSP, ADC, EEPROM and EUSART RX are not exercised,
-    // so this is L1, not full-device parity.
+    // main's state. CCP, MSSP, EEPROM and EUSART RX are not exercised by the
+    // gate, so this is L1, not full-device parity.
     ChipConf {
         name: "pic16f1829",
         yaml: "configs/chips/pic16f1829.yaml",

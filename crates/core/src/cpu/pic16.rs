@@ -199,6 +199,65 @@ pub const PIC16_ADC_PAD_BASE: u64 = 0x0100_0000;
 /// Table 11-1 note 1) in instruction cycles at the 20 MHz Fosc maximum.
 const ADC_FRC_CYCLES_DEFAULT: u32 = 240;
 
+/// PIC16(L)F1825/9 10-bit ADC (DS40001440E Table 3-8, bank 1) and the Fixed
+/// Voltage Reference control register (bank 2).
+pub const SFR_E_ADRESL: u16 = 0x09B;
+pub const SFR_E_ADRESH: u16 = 0x09C;
+pub const SFR_E_ADCON0: u16 = 0x09D;
+pub const SFR_E_ADCON1: u16 = 0x09E;
+pub const SFR_E_FVRCON: u16 = 0x117;
+/// Enhanced ADCON0: GO/DONE is bit 1 and CHS<4:0> is bits 6-2 (Register 16-1).
+const ADCON0_E_GO: u8 = 1 << 1;
+/// Enhanced ADCON1: ADNREF, ADPREF<1:0> (Register 16-2).
+const ADCON1_E_ADNREF: u8 = 1 << 2;
+const FVRCON_FVREN: u8 = 1 << 7;
+/// Always set on the PIC16F1825/9, which have the LDO (Register 14-1 note 1).
+const FVRCON_FVRRDY: u8 = 1 << 6;
+/// CHS = 11111: FVR Buffer1. 11101 (temperature indicator) and 11110
+/// (DAC_output) are sources this model does not have.
+const ADC_E_CHS_FVR: usize = 31;
+/// The most AN pads one part routes (AN0-AN11 on the PIC16F1829).
+const ADC_PAD_SLOTS: usize = 12;
+/// 11.5 TAD on the ADC's FRC oscillator (typical TAD 1.6 us, DS40001440E
+/// Table 16-1 note 1) in instruction cycles at the 32 MHz Fosc maximum.
+const ADC_E_FRC_CYCLES_DEFAULT: u32 = 147;
+
+/// AN`n` as `(port, bit)` on the PIC16(L)F1825 (DS40001440E Table 1):
+/// RA0-RA2, RA4, RC0-RC3.
+const ADC_PADS_F1825: &[(usize, u8)] = &[
+    (0, 0),
+    (0, 1),
+    (0, 2),
+    (0, 4),
+    (2, 0),
+    (2, 1),
+    (2, 2),
+    (2, 3),
+];
+/// The PIC16(L)F1829 (DS40001440E Table 2) adds AN8/AN9 on RC6/RC7 and
+/// AN10/AN11 on RB4/RB5.
+const ADC_PADS_F1829: &[(usize, u8)] = &[
+    (0, 0),
+    (0, 1),
+    (0, 2),
+    (0, 4),
+    (2, 0),
+    (2, 1),
+    (2, 2),
+    (2, 3),
+    (2, 6),
+    (2, 7),
+    (1, 4),
+    (1, 5),
+];
+/// Enhanced parts whose ADC this model has: the PIC16(L)F1825/9 module with
+/// the registers above, VREF- on AN0 and VREF+ on AN1. A part not listed
+/// keeps plain registers even with a pad window on its bus.
+const ADC_ENHANCED_PADS: &[(&str, &[(usize, u8)])] = &[
+    ("pic16f1825", ADC_PADS_F1825),
+    ("pic16f1829", ADC_PADS_F1829),
+];
+
 /// Where the registers this model implements live on one SFR layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pic16SfrMap {
@@ -1408,7 +1467,14 @@ pub struct Pic16 {
     /// VDD in millivolts, from the pad window.
     adc_vdd_mv: u16,
     adc_pad_held: u16,
-    adc_pad_mv: [u16; PIC16_ADC_CHANNELS],
+    adc_pad_mv: [u16; ADC_PAD_SLOTS],
+    /// AN`n` as `(port, bit)`; empty when the part's A/D is not modelled.
+    adc_pads: &'static [(usize, u8)],
+    /// Enhanced core: instruction cycles the running conversion has had,
+    /// and one TAD as `cycles * .0 / .1` TAD per cycle, for the partial
+    /// result an abort leaves.
+    adc_elapsed: u32,
+    adc_tad: (u32, u32),
     /// Instruction cycles left in the running conversion; 0 when idle.
     adc_countdown: u32,
     /// The conversion started in the instruction now executing, whose own
@@ -1464,11 +1530,18 @@ impl Pic16 {
             adc_pad_generation: None,
             adc_vdd_mv: 5000,
             adc_pad_held: 0,
-            adc_pad_mv: [0; PIC16_ADC_CHANNELS],
+            adc_pad_mv: [0; ADC_PAD_SLOTS],
+            adc_pads: Self::adc_pads_for(device),
+            adc_elapsed: 0,
+            adc_tad: (1, 1),
             adc_countdown: 0,
             adc_fresh: false,
             adc_sample: 0,
-            adc_frc_cycles: ADC_FRC_CYCLES_DEFAULT,
+            adc_frc_cycles: if device.enhanced {
+                ADC_E_FRC_CYCLES_DEFAULT
+            } else {
+                ADC_FRC_CYCLES_DEFAULT
+            },
         };
         cpu.reset_core();
         if let Some(pcon) = cpu.map.pcon {
@@ -1493,14 +1566,28 @@ impl Pic16 {
         self.serial_sink = Some(sink);
     }
 
+    fn adc_pads_for(device: &Pic16Device) -> &'static [(usize, u8)] {
+        if !device.enhanced {
+            return &ADC_PADS;
+        }
+        match ADC_ENHANCED_PADS
+            .iter()
+            .find(|(name, _)| *name == device.name)
+        {
+            Some(&(_, pads)) => pads,
+            None => &[],
+        }
+    }
+
     /// Declare that the bus carries a `pic24_adc_pads` window at
-    /// [`PIC16_ADC_PAD_BASE`]. This turns on the PIC16F87XA 10-bit A/D
-    /// module (DS39582B section 11): ADCON0 GO/DONE, the ADCS conversion
-    /// clock, PCFG reference selection, ADFM justification and ADIF. Only
-    /// the classic core has this module; the enhanced core's ADC sits at
-    /// other addresses and is not modelled.
+    /// [`PIC16_ADC_PAD_BASE`]. On the classic core this turns on the
+    /// PIC16F87XA 10-bit A/D module (DS39582B section 11): ADCON0 GO/DONE,
+    /// the ADCS conversion clock, PCFG reference selection, ADFM
+    /// justification and ADIF. On the enhanced PIC16(L)F1825/9 it turns on
+    /// their ADC (DS40001440E section 16) with the FVR as reference and
+    /// input (section 14). Other enhanced parts keep plain registers.
     pub fn set_adc_pad_window(&mut self, present: bool) {
-        self.adc_pad_window = present && !self.enhanced;
+        self.adc_pad_window = present && !self.adc_pads.is_empty();
     }
 
     /// Turn the A/D module on when `bus` carries a peripheral at
@@ -1515,14 +1602,38 @@ impl Pic16 {
     }
 
     /// Instruction rate, for the internal A/D RC oscillator: a conversion
-    /// on it takes 12 TAD of typically 4 us (DS39582B Table 11-1 note 1).
+    /// on it takes 12 TAD of typically 4 us (DS39582B Table 11-1 note 1),
+    /// or 11.5 TAD of typically 1.6 us on the enhanced core (DS40001440E
+    /// Table 16-1 note 1).
     pub fn set_adc_instruction_hz(&mut self, cpu_hz: u64) {
         if cpu_hz > 0 {
-            self.adc_frc_cycles = (cpu_hz * 48 / 1_000_000).clamp(1, u64::from(u32::MAX)) as u32;
+            let cycles = if self.enhanced {
+                (cpu_hz * 184).div_ceil(10_000_000)
+            } else {
+                cpu_hz * 48 / 1_000_000
+            };
+            self.adc_frc_cycles = cycles.clamp(1, u64::from(u32::MAX)) as u32;
         }
     }
 
-    /// Pull the routed AN0-AN7 levels when the pad model reports a change.
+    /// ADCON0, ADCON1, ADRESH, ADRESL on this core.
+    fn adc_sfrs(&self) -> (u16, u16, u16, u16) {
+        if self.enhanced {
+            (SFR_E_ADCON0, SFR_E_ADCON1, SFR_E_ADRESH, SFR_E_ADRESL)
+        } else {
+            (SFR_ADCON0, SFR_ADCON1, SFR_ADRESH, SFR_ADRESL)
+        }
+    }
+
+    fn adc_go_bit(&self) -> u8 {
+        if self.enhanced {
+            ADCON0_E_GO
+        } else {
+            ADCON0_GO
+        }
+    }
+
+    /// Pull the routed AN levels when the pad model reports a change.
     /// One bus read per step on a board that declares the window.
     fn pull_adc_pads(&mut self, bus: &dyn Bus) {
         use crate::peripherals::pic24_adc_pads as pads;
@@ -1543,7 +1654,7 @@ impl Pic16 {
         self.adc_pad_held = bus
             .read_u16(PIC16_ADC_PAD_BASE + pads::OFF_HELD)
             .unwrap_or(0);
-        for ch in 0..PIC16_ADC_CHANNELS {
+        for ch in 0..self.adc_pads.len() {
             self.adc_pad_mv[ch] = if self.adc_pad_held & (1 << ch) != 0 {
                 bus.read_u16(PIC16_ADC_PAD_BASE + pads::OFF_CHANNEL_MV + 2 * ch as u64)
                     .unwrap_or(0)
@@ -1554,10 +1665,11 @@ impl Pic16 {
     }
 
     /// The level on AN`ch` in millivolts. A pin whose TRIS bit is cleared
-    /// converts its own output level (DS39582B section 11.3); an input that
-    /// no route drives reads 0 V.
+    /// converts its own output level (DS39582B section 11.3; DS40001440E
+    /// section 16.1.1 converts digital signals too); an input that no route
+    /// drives reads 0 V.
     fn adc_pin_mv(&self, ch: usize) -> u32 {
-        let (port, bit) = ADC_PADS[ch];
+        let (port, bit) = self.adc_pads[ch];
         let tris = self.data[usize::from(self.map.trisa) + port];
         if tris & (1 << bit) == 0 {
             return if self.latch[port] & (1 << bit) != 0 {
@@ -1569,25 +1681,74 @@ impl Pic16 {
         u32::from(self.adc_pad_mv[ch])
     }
 
-    /// The 10-bit code for the selected channel against the references
-    /// PCFG<3:0> picks (DS39582B Register 11-2): VREF+ is AN3 or VDD, VREF-
-    /// is AN2 or VSS. A pin configured as digital still converts (section
-    /// 11.3 note 1). `011x` has no reference column; it converts against
-    /// VDD/VSS here.
+    /// FVR Buffer1 in millivolts (DS40001440E Register 14-1): off, 1.024 V,
+    /// 2.048 V or 4.096 V by ADFVR<1:0> while FVREN is set, and never above
+    /// VDD (note 2).
+    fn adc_fvr_mv(&self) -> u32 {
+        let fvrcon = self.data[usize::from(SFR_E_FVRCON)];
+        if fvrcon & FVRCON_FVREN == 0 {
+            return 0;
+        }
+        let mv = match fvrcon & 0x03 {
+            0 => 0,
+            1 => 1024,
+            2 => 2048,
+            _ => 4096,
+        };
+        mv.min(u32::from(self.adc_vdd_mv))
+    }
+
+    /// The 10-bit code for the selected channel.
+    ///
+    /// Classic: against the references PCFG<3:0> picks (DS39582B Register
+    /// 11-2): VREF+ is AN3 or VDD, VREF- is AN2 or VSS. A pin configured as
+    /// digital still converts (section 11.3 note 1). `011x` has no reference
+    /// column; it converts against VDD/VSS here.
+    ///
+    /// Enhanced (DS40001440E Registers 16-1 and 16-2): ADPREF picks VDD, the
+    /// VREF+ pin (AN1) or FVR Buffer1, ADNREF picks VSS or the VREF- pin
+    /// (AN0). ADPREF = 01 is reserved and converts against VDD here. CHS
+    /// selects an AN pad or FVR Buffer1; a reserved CHS, an AN the package
+    /// lacks, the temperature indicator and DAC_output convert 0 V.
     fn adc_convert(&self) -> u16 {
-        let adcon0 = self.data[usize::from(SFR_ADCON0)];
-        let pcfg = self.data[usize::from(SFR_ADCON1)] & 0x0F;
-        let high = if matches!(pcfg, 1 | 3 | 5 | 8 | 10..=13 | 15) {
-            self.adc_pin_mv(3)
+        let (adcon0_addr, adcon1_addr, _, _) = self.adc_sfrs();
+        let adcon0 = self.data[usize::from(adcon0_addr)];
+        let adcon1 = self.data[usize::from(adcon1_addr)];
+        let (high, low, input) = if self.enhanced {
+            let high = match adcon1 & 0x03 {
+                2 => self.adc_pin_mv(1),
+                3 => self.adc_fvr_mv(),
+                _ => u32::from(self.adc_vdd_mv),
+            };
+            let low = if adcon1 & ADCON1_E_ADNREF != 0 {
+                self.adc_pin_mv(0)
+            } else {
+                0
+            };
+            let input = match usize::from((adcon0 >> 2) & 0x1F) {
+                ch if ch < self.adc_pads.len() => self.adc_pin_mv(ch),
+                ADC_E_CHS_FVR => self.adc_fvr_mv(),
+                _ => 0,
+            };
+            (high, low, input)
         } else {
-            u32::from(self.adc_vdd_mv)
+            let pcfg = adcon1 & 0x0F;
+            let high = if matches!(pcfg, 1 | 3 | 5 | 8 | 10..=13 | 15) {
+                self.adc_pin_mv(3)
+            } else {
+                u32::from(self.adc_vdd_mv)
+            };
+            let low = if matches!(pcfg, 8 | 11..=13 | 15) {
+                self.adc_pin_mv(2)
+            } else {
+                0
+            };
+            (
+                high,
+                low,
+                self.adc_pin_mv(usize::from((adcon0 >> 3) & 0x07)),
+            )
         };
-        let low = if matches!(pcfg, 8 | 11..=13 | 15) {
-            self.adc_pin_mv(2)
-        } else {
-            0
-        };
-        let input = self.adc_pin_mv(usize::from((adcon0 >> 3) & 0x07));
         if input <= low {
             return 0;
         }
@@ -1597,53 +1758,118 @@ impl Pic16 {
         ((input - low) * 1024 / (high - low)).min(1023) as u16
     }
 
-    /// The A/D clock is the internal RC oscillator (ADCS1:ADCS0 = 11).
+    /// The A/D clock is the internal RC oscillator: ADCS1:ADCS0 = 11, which
+    /// is ADCON0<7:6> on the classic core and ADCON1<5:4> on the enhanced.
     fn adc_clock_is_rc(&self) -> bool {
-        self.data[usize::from(SFR_ADCON0)] >> 6 == 0b11
+        if self.enhanced {
+            (self.data[usize::from(SFR_E_ADCON1)] >> 4) & 0x03 == 0b11
+        } else {
+            self.data[usize::from(SFR_ADCON0)] >> 6 == 0b11
+        }
     }
 
-    /// Instruction cycles for one conversion: 12 TAD (DS39582B section
-    /// 11.2), with TAD = 2/8/32 TOSC, or 4/16/64 TOSC with ADCS2 set, and
-    /// TCY = 4 TOSC. On the RC oscillator the module first waits one
-    /// instruction cycle (section 11.5).
-    fn adc_conversion_cycles(&self) -> u32 {
-        if self.adc_clock_is_rc() {
-            return self.adc_frc_cycles + 1;
-        }
-        let adcs2 = self.data[usize::from(SFR_ADCON1)] & ADCON1_ADCS2 != 0;
-        let tosc_per_tad = match (self.data[usize::from(SFR_ADCON0)] >> 6, adcs2) {
+    /// TOSC per TAD for ADCS<2:0> = `adcs2:adcs10` on a system clock.
+    fn adc_tosc_per_tad(adcs10: u8, adcs2: bool) -> u32 {
+        match (adcs10, adcs2) {
             (0, false) => 2,
             (1, false) => 8,
             (_, false) => 32,
             (0, true) => 4,
             (1, true) => 16,
             (_, true) => 64,
+        }
+    }
+
+    /// Instruction cycles for one conversion, with TCY = 4 TOSC.
+    ///
+    /// Classic: 12 TAD (DS39582B section 11.2), with TAD = 2/8/32 TOSC, or
+    /// 4/16/64 TOSC with ADCS2 set. Enhanced: 11.5 TAD (DS40001440E section
+    /// 16.1.4 and Figure 16-2), rounded up to a whole instruction cycle. On
+    /// the RC oscillator the module first waits one instruction cycle
+    /// (DS39582B section 11.5, DS40001440E section 16.2.4).
+    fn adc_conversion_cycles(&mut self) -> u32 {
+        if self.adc_clock_is_rc() {
+            self.adc_tad = (23, self.adc_frc_cycles);
+            return self.adc_frc_cycles + 1;
+        }
+        if self.enhanced {
+            let adcon1 = self.data[usize::from(SFR_E_ADCON1)];
+            let tosc_per_tad = Self::adc_tosc_per_tad((adcon1 >> 4) & 0x03, adcon1 & 0x40 != 0);
+            self.adc_tad = (8, tosc_per_tad);
+            return (23 * tosc_per_tad).div_ceil(8);
+        }
+        let adcs2 = self.data[usize::from(SFR_ADCON1)] & ADCON1_ADCS2 != 0;
+        12 * Self::adc_tosc_per_tad(self.data[usize::from(SFR_ADCON0)] >> 6, adcs2) / 4
+    }
+
+    /// Load ADRESH:ADRESL with `code` in the ADFM justification.
+    fn adc_load_result(&mut self, code: u16) {
+        let (_, adcon1, adresh, adresl) = self.adc_sfrs();
+        let (high, low) = if self.data[usize::from(adcon1)] & ADCON1_ADFM != 0 {
+            ((code >> 8) as u8, code as u8)
+        } else {
+            ((code >> 2) as u8, (code << 6) as u8)
         };
-        12 * tosc_per_tad / 4
+        self.data[usize::from(adresh)] = high;
+        self.data[usize::from(adresl)] = low;
+    }
+
+    /// Enhanced core, GO/DONE cleared mid-conversion: ADRESH:ADRESL take
+    /// the partial result, with the bits not yet converted equal to the last
+    /// one converted (DS40001440E section 16.2.3). Bit 9 is ready at the end
+    /// of TAD2, half a TAD of synchronisation after GO (Figure 16-2). Before
+    /// that no bit exists and the registers keep their value; the data sheet
+    /// does not say what they hold then.
+    fn adc_load_partial(&mut self) {
+        let (per_cycle, tad) = self.adc_tad;
+        let elapsed = if self.adc_clock_is_rc() {
+            self.adc_elapsed.saturating_sub(1)
+        } else {
+            self.adc_elapsed
+        };
+        let done = ((per_cycle * elapsed).saturating_sub(3 * tad) / (2 * tad)).min(10);
+        if done == 0 {
+            return;
+        }
+        let todo = 10 - done;
+        let mut code = (self.adc_sample >> todo) << todo;
+        if code & (1 << todo) != 0 {
+            code |= (1 << todo) - 1;
+        }
+        self.adc_load_result(code);
     }
 
     /// An ADCON0 write: setting GO/DONE with the module on disconnects the
     /// holding capacitor and starts a conversion; clearing GO/DONE or ADON
-    /// aborts one without touching ADRESH:ADRESL (DS39582B section 11.4).
-    /// The data sheet defines GO/DONE only for ADON = 1; with the module
-    /// off the bit is stored and nothing converts.
+    /// aborts one. The classic core then leaves ADRESH:ADRESL alone
+    /// (DS39582B section 11.4); the enhanced core loads the partial result
+    /// when GO/DONE is cleared ([`Pic16::adc_load_partial`]). The data
+    /// sheets define GO/DONE only for ADON = 1; with the module off the bit
+    /// is stored and nothing converts.
     fn write_adcon0(&mut self, value: u8) {
-        let old = self.data[usize::from(SFR_ADCON0)];
-        let value = value & 0xFD;
-        self.data[usize::from(SFR_ADCON0)] = value;
-        let running = value & ADCON0_ADON != 0 && value & ADCON0_GO != 0;
+        let (adcon0, _, _, _) = self.adc_sfrs();
+        let go = self.adc_go_bit();
+        let old = self.data[usize::from(adcon0)];
+        // Classic bit 1 and enhanced bit 7 are unimplemented.
+        let value = value & if self.enhanced { 0x7F } else { 0xFD };
+        self.data[usize::from(adcon0)] = value;
+        let running = value & ADCON0_ADON != 0 && value & go != 0;
         if !running {
+            if self.enhanced && self.adc_countdown != 0 && value & ADCON0_ADON != 0 {
+                self.adc_load_partial();
+            }
             self.adc_countdown = 0;
-        } else if self.adc_countdown == 0 || old & ADCON0_GO == 0 {
+        } else if self.adc_countdown == 0 || old & go == 0 {
             self.adc_sample = self.adc_convert();
             self.adc_countdown = self.adc_conversion_cycles().max(1);
+            self.adc_elapsed = 0;
             self.adc_fresh = true;
         }
     }
 
     /// Advance the running conversion. At the end ADRESH:ADRESL load with
     /// the ADFM justification, GO/DONE clears and ADIF sets (DS39582B
-    /// Figure 11-3 and 11-4).
+    /// Figure 11-3 and 11-4; DS40001440E section 16.2.2).
     fn tick_adc(&mut self, cycles: u32) {
         if self.adc_countdown == 0 {
             return;
@@ -1652,19 +1878,15 @@ impl Pic16 {
             self.adc_fresh = false;
             return;
         }
+        self.adc_elapsed = self.adc_elapsed.saturating_add(cycles);
         self.adc_countdown = self.adc_countdown.saturating_sub(cycles);
         if self.adc_countdown != 0 {
             return;
         }
-        let code = self.adc_sample;
-        let (high, low) = if self.data[usize::from(SFR_ADCON1)] & ADCON1_ADFM != 0 {
-            ((code >> 8) as u8, code as u8)
-        } else {
-            ((code >> 2) as u8, (code << 6) as u8)
-        };
-        self.data[usize::from(SFR_ADRESH)] = high;
-        self.data[usize::from(SFR_ADRESL)] = low;
-        self.data[usize::from(SFR_ADCON0)] &= !ADCON0_GO;
+        self.adc_load_result(self.adc_sample);
+        let (adcon0, _, _, _) = self.adc_sfrs();
+        let go = self.adc_go_bit();
+        self.data[usize::from(adcon0)] &= !go;
         self.data[usize::from(self.map.pir[0])] |= PIR1_ADIF;
     }
 
@@ -1793,6 +2015,13 @@ impl Pic16 {
                 // A reset turns the module off and aborts a conversion;
                 // ADRESH:ADRESL keep their value (DS39582B section 11.6).
                 self.data[usize::from(SFR_ADCON0)] = 0;
+            }
+        }
+        if self.enhanced && self.adc_pad_window {
+            // ADCON0 -000 0000, ADCON1 0000 -000, FVRCON 0q00 0000
+            // (DS40001440E Table 3-8); ADRESH:ADRESL keep their value.
+            for r in [SFR_E_ADCON0, SFR_E_ADCON1, SFR_E_FVRCON] {
+                self.data[usize::from(r)] = 0;
             }
         }
         self.adc_countdown = 0;
@@ -2063,6 +2292,9 @@ impl Pic16 {
                     pir1
                 }
             }
+            SFR_E_FVRCON if self.adc_pad_window && self.enhanced => {
+                self.data[usize::from(addr)] | FVRCON_FVRRDY
+            }
             _ => self.data[usize::from(addr)],
         }
     }
@@ -2128,9 +2360,19 @@ impl Pic16 {
                 self.data[usize::from(a)] = value;
                 self.tmr0_prescale = 0;
             }
-            SFR_ADCON0 if self.adc_pad_window => self.write_adcon0(value),
+            SFR_ADCON0 if self.adc_pad_window && !self.enhanced => self.write_adcon0(value),
             // ADCON1 bits 5-4 are unimplemented.
-            SFR_ADCON1 if self.adc_pad_window => self.data[usize::from(addr)] = value & 0xCF,
+            SFR_ADCON1 if self.adc_pad_window && !self.enhanced => {
+                self.data[usize::from(addr)] = value & 0xCF
+            }
+            SFR_E_ADCON0 if self.adc_pad_window && self.enhanced => self.write_adcon0(value),
+            // ADCON1 bit 3 is unimplemented; FVRRDY is read-only.
+            SFR_E_ADCON1 if self.adc_pad_window && self.enhanced => {
+                self.data[usize::from(addr)] = value & 0xF7
+            }
+            SFR_E_FVRCON if self.adc_pad_window && self.enhanced => {
+                self.data[usize::from(addr)] = value & !FVRCON_FVRRDY
+            }
             // TRMT is read-only and stays set.
             a if a == map.txsta => self.data[usize::from(a)] = value | TXSTA_TRMT,
             a if a == map.txreg => {
@@ -3648,7 +3890,8 @@ mod tests {
     }
 
     /// A chip that declares no pad window keeps ADCON0 and ADRESH:ADRESL as
-    /// plain registers, and the enhanced core never gets this module.
+    /// plain registers, and so does an enhanced part whose ADC is not in
+    /// `ADC_ENHANCED_PADS`.
     #[test]
     fn without_the_pad_window_there_is_no_adc() {
         let mut cpu = cpu_with(&[bsf(0x1F, 2), 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -3658,7 +3901,7 @@ mod tests {
         assert_eq!(cpu.read_data(SFR_ADCON0), ADCON0_ADON | ADCON0_GO);
         assert_eq!(cpu.read_data(SFR_PIR1) & PIR1_ADIF, 0);
 
-        let mut enhanced = Pic16::for_chip_name("pic16f1829");
+        let mut enhanced = Pic16::for_chip_name("pic16f1847");
         enhanced.set_adc_pad_window(true);
         assert!(!enhanced.has_adc());
     }
@@ -3693,6 +3936,285 @@ mod tests {
         assert_eq!(adres(&cpu), (0x02, 0x00), "the held 2.5 V");
         step_on(&mut cpu, &mut bus, 7);
         assert_eq!(adres(&cpu), (0x01, 0x00), "the new 1.25 V");
+    }
+
+    /// An enhanced `part` with the routed-pad window on its bus at `vdd_mv`
+    /// and `pads` (AN, mV) driven. BSR is 1, so file 0x1D is ADCON0.
+    fn eadc_cpu(
+        part: &str,
+        words: &[u16],
+        pads: &[(u8, u16)],
+        vdd_mv: u16,
+    ) -> (Pic16, crate::bus::SystemBus) {
+        use crate::peripherals::pic24_adc_pads::{Pic24AdcPads, WINDOW_BYTES};
+        let mut bus = crate::bus::SystemBus::new();
+        bus.add_peripheral(
+            "adc",
+            PIC16_ADC_PAD_BASE,
+            WINDOW_BYTES,
+            None,
+            Box::new(Pic24AdcPads::new(0x0FFF, vdd_mv)),
+        );
+        let window = bus.peripherals.len() - 1;
+        for &(channel, mv) in pads {
+            assert!(bus.peripherals[window]
+                .dev
+                .set_adc_channel_input(channel, mv));
+        }
+        let mut cpu = Pic16::for_chip_name(part);
+        cpu.load_words(words);
+        cpu.bind_adc_pads(&bus);
+        assert!(cpu.has_adc());
+        cpu.write_data(SFR_BSR, 1);
+        (cpu, bus)
+    }
+
+    fn eadres(cpu: &Pic16) -> u16 {
+        (u16::from(cpu.read_data(SFR_E_ADRESH)) << 8) | u16::from(cpu.read_data(SFR_E_ADRESL))
+    }
+
+    /// One FOSC/2 conversion of `chs`, right justified, with ADCON1's
+    /// reference bits `refs`.
+    fn econvert(cpu: &mut Pic16, bus: &mut crate::bus::SystemBus, chs: u8, refs: u8) -> u16 {
+        cpu.write_data(SFR_E_ADCON1, 0x80 | refs);
+        cpu.write_data(SFR_E_ADCON0, (chs << 2) | ADCON0_ADON);
+        step_on(cpu, bus, 7);
+        assert_eq!(cpu.read_data(SFR_E_ADCON0) & ADCON0_E_GO, 0);
+        eadres(cpu)
+    }
+
+    const E_PIR1: u16 = 0x011;
+    const E_PIE1: u16 = 0x091;
+
+    /// DS40001440E section 16.1.4 and Figure 16-2: a conversion is 11.5 TAD
+    /// with TAD = 2/4/8/16/32/64 TOSC by ADCS<2:0> (Register 16-2). One TCY
+    /// is 4 TOSC, and the result loads on a whole instruction cycle.
+    #[test]
+    fn enhanced_adc_conversion_takes_eleven_and_a_half_tad() {
+        for (adcs, cycles) in [
+            (0b000u8, 6usize),
+            (0b100, 12),
+            (0b001, 23),
+            (0b101, 46),
+            (0b010, 92),
+            (0b110, 184),
+        ] {
+            let mut program = vec![0u16; 256];
+            program[0] = bsf(0x1D, 1);
+            let (mut cpu, mut bus) = eadc_cpu("pic16f1829", &program, &[(0, 2500)], 5000);
+            cpu.write_data(SFR_E_ADCON1, 0x80 | (adcs << 4));
+            cpu.write_data(SFR_E_ADCON0, ADCON0_ADON);
+            step_on(&mut cpu, &mut bus, 1);
+            assert_ne!(cpu.read_data(SFR_E_ADCON0) & ADCON0_E_GO, 0);
+            step_on(&mut cpu, &mut bus, cycles - 1);
+            assert_ne!(
+                cpu.read_data(SFR_E_ADCON0) & ADCON0_E_GO,
+                0,
+                "ADCS {adcs:#05b}: still converting one cycle early"
+            );
+            assert_eq!(cpu.read_data(E_PIR1) & PIR1_ADIF, 0);
+            assert_eq!(eadres(&cpu), 0);
+            step_on(&mut cpu, &mut bus, 1);
+            assert_eq!(
+                cpu.read_data(SFR_E_ADCON0) & ADCON0_E_GO,
+                0,
+                "GO/DONE clears"
+            );
+            assert_ne!(cpu.read_data(E_PIR1) & PIR1_ADIF, 0, "ADIF sets");
+            assert_eq!(eadres(&cpu), 512, "2.5 V of 5 V");
+        }
+        // ADFM = 0 left-justifies: 512 = 0x80:0x00.
+        let (mut cpu, mut bus) = eadc_cpu("pic16f1829", &[bsf(0x1D, 1)], &[(0, 2500)], 5000);
+        cpu.write_data(SFR_E_ADCON0, ADCON0_ADON);
+        step_on(&mut cpu, &mut bus, 7);
+        assert_eq!(eadres(&cpu), 0x8000);
+        // Bit 7 of ADCON0 and bit 3 of ADCON1 are unimplemented.
+        cpu.write_data(SFR_E_ADCON0, 0x80);
+        cpu.write_data(SFR_E_ADCON1, 0xFF);
+        assert_eq!(cpu.read_data(SFR_E_ADCON0), 0);
+        assert_eq!(cpu.read_data(SFR_E_ADCON1), 0xF7);
+    }
+
+    /// DS40001440E Tables 1 and 2: AN3 is RA4, AN10/AN11 are RB4/RB5 and
+    /// exist on the PIC16F1829 only. A reserved CHS connects no channel.
+    #[test]
+    fn enhanced_adc_channels_follow_the_package() {
+        let pads = [(3, 1000), (8, 2000), (10, 3000), (11, 4000)];
+        let go = [bsf(0x1D, 1)];
+        for (part, chs, expected) in [
+            ("pic16f1829", 3u8, 204u16),
+            ("pic16f1829", 8, 409),
+            ("pic16f1829", 10, 614),
+            ("pic16f1829", 11, 819),
+            ("pic16f1829", 12, 0),
+            ("pic16f1829", 29, 0),
+            ("pic16f1825", 3, 204),
+            ("pic16f1825", 8, 0),
+            ("pic16f1825", 11, 0),
+        ] {
+            let (mut cpu, mut bus) = eadc_cpu(part, &go, &pads, 5000);
+            assert_eq!(
+                econvert(&mut cpu, &mut bus, chs, 0),
+                expected,
+                "{part} CHS {chs}"
+            );
+        }
+        // RA4 driven high as an output converts VDD on AN3.
+        let (mut cpu, mut bus) = eadc_cpu("pic16f1829", &go, &pads, 5000);
+        cpu.write_data(0x08C, 0xEF);
+        cpu.write_data(0x10C, 0x10);
+        assert_eq!(econvert(&mut cpu, &mut bus, 3, 0), 1023);
+    }
+
+    /// DS40001440E Register 16-2: ADPREF picks VDD, the VREF+ pin (AN1) or
+    /// the FVR; ADNREF picks VSS or the VREF- pin (AN0). Register 14-1: FVR
+    /// Buffer1 is 1.024/2.048/4.096 V by ADFVR while FVREN is set, never
+    /// above VDD, and CHS = 11111 converts it.
+    #[test]
+    fn enhanced_adc_references_and_fvr() {
+        let pads = [(0, 1000), (1, 4000), (2, 2500)];
+        let go = [bsf(0x1D, 1)];
+        for (refs, fvrcon, expected) in [
+            // VDD / VSS: 2500 * 1024 / 5000.
+            (0b000u8, 0x00u8, 512u16),
+            // The reserved ADPREF = 01 converts against VDD.
+            (0b001, 0x00, 512),
+            // AN1 / VSS: 2500 * 1024 / 4000.
+            (0b010, 0x00, 640),
+            // AN1 / AN0: 1500 * 1024 / 3000.
+            (0b110, 0x00, 512),
+            // FVR 4.096 V / VSS: 2500 * 1024 / 4096.
+            (0b011, 0x83, 625),
+            // FVR 2.048 V: 2.5 V is past full scale.
+            (0b011, 0x82, 1023),
+            // FVR 4.096 V / AN0: 1500 * 1024 / 3096.
+            (0b111, 0x83, 496),
+        ] {
+            let (mut cpu, mut bus) = eadc_cpu("pic16f1829", &go, &pads, 5000);
+            cpu.write_data(SFR_E_FVRCON, fvrcon);
+            assert_eq!(
+                econvert(&mut cpu, &mut bus, 2, refs),
+                expected,
+                "ADNREF:ADPREF {refs:#05b} FVRCON {fvrcon:#04x}"
+            );
+        }
+        // FVR Buffer1 as the input against VDD measures VDD.
+        for (vdd_mv, fvrcon, expected) in [
+            (5000u16, 0x81u8, 209u16),
+            (5000, 0x82, 419),
+            (5000, 0x83, 838),
+            (3300, 0x81, 317),
+            // 4.096 V cannot exceed a 3.3 V VDD.
+            (3300, 0x83, 1023),
+            // ADFVR = 00 and FVREN = 0 both switch the buffer off.
+            (5000, 0x80, 0),
+            (5000, 0x03, 0),
+        ] {
+            let (mut cpu, mut bus) = eadc_cpu("pic16f1829", &go, &pads, vdd_mv);
+            cpu.write_data(SFR_E_FVRCON, fvrcon);
+            assert_eq!(
+                econvert(&mut cpu, &mut bus, 31, 0),
+                expected,
+                "VDD {vdd_mv} mV FVRCON {fvrcon:#04x}"
+            );
+            // FVRRDY always reads 1 on the parts with the LDO.
+            assert_eq!(cpu.read_data(SFR_E_FVRCON), fvrcon | 0x40);
+        }
+    }
+
+    /// DS40001440E section 16.2.3 and Figure 16-2: clearing GO/DONE loads
+    /// the bits converted so far, and the rest copy the last one. At FOSC/64
+    /// one TAD is 16 TCY; bit 9 is ready 2.5 TAD after GO. 3.506 V converts
+    /// to 718 = 0b10_1100_1110.
+    #[test]
+    fn enhanced_adc_abort_loads_the_partial_result() {
+        for (nops, expected) in [
+            (20usize, 0x0123u16),
+            (39, 0x0123),
+            (40, 0b11_1111_1111),
+            (56, 0b10_0000_0000),
+            (72, 0b10_1111_1111),
+            (88, 0b10_1111_1111),
+            (104, 0b10_1100_0000),
+        ] {
+            let mut program = vec![0u16; 256];
+            program[0] = bsf(0x1D, 1);
+            program[nops + 1] = bcf(0x1D, 1);
+            let (mut cpu, mut bus) = eadc_cpu("pic16f1829", &program, &[(0, 3506)], 5000);
+            cpu.write_data(SFR_E_ADRESH, 0x01);
+            cpu.write_data(SFR_E_ADRESL, 0x23);
+            cpu.write_data(SFR_E_ADCON1, 0xE0);
+            cpu.write_data(SFR_E_ADCON0, ADCON0_ADON);
+            step_on(&mut cpu, &mut bus, nops + 2);
+            assert_eq!(cpu.read_data(SFR_E_ADCON0) & ADCON0_E_GO, 0);
+            assert_eq!(eadres(&cpu), expected, "aborted after {nops} TCY");
+            step_on(&mut cpu, &mut bus, 200);
+            assert_eq!(cpu.read_data(E_PIR1) & PIR1_ADIF, 0, "no ADIF on abort");
+            assert_eq!(eadres(&cpu), expected, "nothing completes later");
+        }
+        // The full conversion of the same input.
+        let mut program = vec![0u16; 256];
+        program[0] = bsf(0x1D, 1);
+        let (mut cpu, mut bus) = eadc_cpu("pic16f1829", &program, &[(0, 3506)], 5000);
+        cpu.write_data(SFR_E_ADCON1, 0xE0);
+        cpu.write_data(SFR_E_ADCON0, ADCON0_ADON);
+        step_on(&mut cpu, &mut bus, 185);
+        assert_eq!(eadres(&cpu), 718);
+        // Turning the module off mid-conversion loads nothing.
+        program[41] = bcf(0x1D, 0);
+        let (mut cpu, mut bus) = eadc_cpu("pic16f1829", &program, &[(0, 3506)], 5000);
+        cpu.write_data(SFR_E_ADCON1, 0xE0);
+        cpu.write_data(SFR_E_ADCON0, ADCON0_ADON);
+        step_on(&mut cpu, &mut bus, 300);
+        assert_eq!(eadres(&cpu), 0);
+        assert_eq!(cpu.read_data(E_PIR1) & PIR1_ADIF, 0);
+    }
+
+    /// DS40001440E section 16.2.4: on FRC the module waits one instruction,
+    /// converts through Sleep and ADIF wakes the part; on a system clock
+    /// SLEEP aborts the conversion. 11.5 TAD of 1.6 us is 74 TCY at 4 MIPS.
+    #[test]
+    fn enhanced_adc_frc_converts_in_sleep_and_other_clocks_abort() {
+        const SLEEP: u16 = 0x0063;
+        let program = [bsf(0x1D, 1), SLEEP, movlw(0x5A), movwf(0x20)];
+        for (adcon1, wakes) in [(0xF0u8, true), (0xA0, false)] {
+            let (mut cpu, mut bus) = eadc_cpu("pic16f1829", &program, &[(0, 2500)], 5000);
+            cpu.set_adc_instruction_hz(4_000_000);
+            cpu.write_data(SFR_E_ADCON1, adcon1);
+            cpu.write_data(SFR_E_ADCON0, ADCON0_ADON);
+            cpu.write_data(E_PIE1, PIR1_ADIF);
+            cpu.write_data(SFR_INTCON, INTCON_PEIE);
+            step_on(&mut cpu, &mut bus, 2);
+            assert!(cpu.is_asleep());
+            // The SLEEP instruction itself covers the one-cycle wait.
+            step_on(&mut cpu, &mut bus, 73);
+            assert!(cpu.is_asleep(), "still converting");
+            if wakes {
+                step_on(&mut cpu, &mut bus, 1);
+                assert!(!cpu.is_asleep(), "ADIF wakes the part");
+                assert_eq!(eadres(&cpu), 512);
+                step_on(&mut cpu, &mut bus, 2);
+                assert_eq!(cpu.read_data(0x0A0), 0x5A);
+            } else {
+                step_on(&mut cpu, &mut bus, 600);
+                assert!(cpu.is_asleep(), "the aborted conversion never raises ADIF");
+                assert_eq!(eadres(&cpu), 0);
+            }
+        }
+    }
+
+    /// An enhanced part with the window but no reset in between keeps its
+    /// EUSART and ports; a reset turns the module off and keeps the result.
+    #[test]
+    fn enhanced_adc_reset_turns_the_module_off() {
+        let (mut cpu, mut bus) = eadc_cpu("pic16f1829", &[bsf(0x1D, 1)], &[(0, 2500)], 5000);
+        cpu.write_data(SFR_E_FVRCON, 0x83);
+        assert_eq!(econvert(&mut cpu, &mut bus, 0, 0), 512);
+        cpu.reset(&mut bus).expect("reset");
+        assert_eq!(cpu.read_data(SFR_E_ADCON0), 0);
+        assert_eq!(cpu.read_data(SFR_E_ADCON1), 0);
+        assert_eq!(cpu.read_data(SFR_E_FVRCON), 0x40);
+        assert_eq!(eadres(&cpu), 512);
     }
 
     #[test]

@@ -35,6 +35,7 @@ const NOT_TRANSCRIBED: &[&str] = &[
     "nrf52840",
     "nrf54l15",
     // Ports are SFRs inside the PIC16 core; the ANx pads are analog routes.
+    "pic16f1829",
     "pic16f877a",
     // Same on the PIC18 core.
     "pic18f4520",
