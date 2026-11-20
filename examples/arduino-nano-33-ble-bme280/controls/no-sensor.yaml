@@ -1,0 +1,11 @@
+# Control for bme280-smoke.yaml: no device answers 0x77. The sketch must say
+# so on the USB serial port and must not print the passing run's marker.
+schema_version: "1.2"
+inputs:
+  firmware: ../../../tests/fixtures/nrf52/arduino-nano-33-ble-bme280.elf
+  system: ./system-no-sensor.yaml
+limits:
+  max_steps: 30000000
+assertions:
+  - uart_contains: "BME280 not found at 0x77"
+  - expected_stop_reason: max_steps

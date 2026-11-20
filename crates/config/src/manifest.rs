@@ -115,6 +115,9 @@ pub struct SystemManifest {
     /// including custom runners. Omit to keep existing defaults. Zero is invalid.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_peripheral_tick_interval: Option<std::num::NonZeroU32>,
+    /// Board overrides of the chip's memory layout. The engine reads one key,
+    /// `reset_vector_offset` (see [`crate::ChipDescriptor::reset_vector_offset`]),
+    /// and ignores any other with a warning.
     #[serde(default)]
     pub memory_overrides: HashMap<String, String>,
     #[serde(default)]

@@ -28,6 +28,8 @@ const OFF_DEVICEADDRTYPE: u64 = 0x0A0;
 const OFF_DEVICEADDR0: u64 = 0x0A4;
 const OFF_DEVICEADDR1: u64 = 0x0A8;
 const OFF_INFO_PART: u64 = 0x100;
+const OFF_PART_CODE: u64 = 0x130;
+const OFF_PART_REVISION: u64 = 0x134;
 const OFF_INFO_VARIANT: u64 = 0x104;
 const OFF_INFO_PACKAGE: u64 = 0x108;
 const OFF_INFO_RAM: u64 = 0x10C;
@@ -59,6 +61,11 @@ pub struct Nrf52Ficr {
     nfc_tagheader: [u32; 4],
     codepagesize: u32,
     codesize: u32,
+    /// The undocumented words at 0x130 and 0x134 that nrfx and the nRF5 SDK
+    /// read to tell the part and its revision apart when they pick anomaly
+    /// workarounds (`nrf52_erratas.h`: 0x08 at 0x130 is the nRF52840).
+    part_code: u32,
+    part_revision: u32,
 }
 
 impl Default for Nrf52Ficr {
@@ -86,6 +93,8 @@ impl Default for Nrf52Ficr {
             nfc_tagheader: [0xFFFF_FFFF; 4],
             codepagesize: 4096,
             codesize: 256, // pages of 4 KiB → 1 MiB
+            part_code: 0,
+            part_revision: 0,
         }
     }
 }
@@ -93,6 +102,13 @@ impl Default for Nrf52Ficr {
 impl Nrf52Ficr {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set the part and revision words (0x130, 0x134).
+    pub fn with_part_revision(mut self, part_code: u32, part_revision: u32) -> Self {
+        self.part_code = part_code;
+        self.part_revision = part_revision;
+        self
     }
 
     /// nRF51822 QFAA (BBC micro:bit V1, Calliope mini 1): 1 KiB pages x 256 =
@@ -148,6 +164,8 @@ impl Peripheral for Nrf52Ficr {
             OFF_DEVICEADDRTYPE => self.deviceaddrtype,
             OFF_DEVICEADDR0 => self.deviceaddr[0],
             OFF_DEVICEADDR1 => self.deviceaddr[1],
+            OFF_PART_CODE => self.part_code,
+            OFF_PART_REVISION => self.part_revision,
             OFF_INFO_PART => self.info_part,
             OFF_INFO_VARIANT => self.info_variant,
             OFF_INFO_PACKAGE => self.info_package,
