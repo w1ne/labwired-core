@@ -174,10 +174,10 @@
 | `riscv_verilated_uartlite` | `pass` | `True` | `yes` | `yes` | `1603` | `1.603` | `True` | `observable` | `1` | `memory_value`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `riscv_virt` | `pass` | `True` | `yes` | `yes` | `1120` | `1.12` | `True` | `observable` | `1` | `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `s32k118` | `pass` | `True` | `yes` | `yes` | `2855` | `2.855` | `True` | `observable` | `6` | `uart_contains`, `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `sam4s` | `pass` | `True` | `yes` | `yes` | `2688` | `2.688` | `True` | `observable` | `13` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `sam4s16c` | `pass` | `True` | `yes` | `yes` | `2233` | `2.233` | `True` | `observable` | `13` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `sam4s8b` | `pass` | `True` | `yes` | `yes` | `6865` | `6.865` | `True` | `observable` | `12` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
-| `sam4s_xplained` | `pass` | `True` | `yes` | `yes` | `6968` | `6.968` | `True` | `observable` | `13` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `sam4s` | `pass` | `True` | `yes` | `yes` | `4448` | `4.448` | `True` | `observable` | `13` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `sam4s16c` | `pass` | `True` | `yes` | `yes` | `332072` | `332.072` | `True` | `observable` | `13` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `sam4s8b` | `pass` | `True` | `yes` | `yes` | `4491` | `4.491` | `True` | `observable` | `12` | `uart_ordered`, `memory_value` | 0 | `n/a` | n/a | n/a |
+| `sam4s_xplained` | `pass` | `True` | `yes` | `yes` | `7209` | `7.209` | `True` | `observable` | `13` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sam_e70` | `pass` | `True` | `yes` | `yes` | `4512` | `4.512` | `True` | `observable` | `19` | `uart_ordered`, `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
 | `sifive-fe310` | `pass` | `True` | `yes` | `yes` | `3191` | `3.191` | `True` | `observable` | `2` | `uart_contains`, `uart_ordered`, `gpio_edges` | 0 | `n/a` | n/a | n/a |
 | `sifive-fu540` | `pass` | `True` | `yes` | `yes` | `2299` | `2.299` | `True` | `observable` | `1` | `uart_contains`, `memory_value` | 0 | `n/a` | n/a | n/a |
