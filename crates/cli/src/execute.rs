@@ -952,7 +952,6 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         // back, so the firmware's next instruction sees the model's answer to
         // the levels it had just driven. Without models this is the plain
         // `Machine::advance` the loop always issued.
-        let poll_skipped_before = ctx.machine.poll_loop_cycles_skipped;
         let advanced = match cosim.as_mut() {
             Some(session) => session.advance(ctx.machine, request),
             None => ctx
@@ -987,25 +986,23 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         };
 
         // On the counter-metrics path a step is a machine cycle, retired or
-        // skipped (one instruction is one cycle on that core). Fuel counts
+        // skipped (one instruction is one cycle on that core): fuel counts
         // both, so every call ends on the same cycle as a run without any
-        // skip, and so do the checks between calls: assertions, settling,
-        // `max_steps`. The wide-fuel arm above is off there for that reason.
-        // A skipped poll-loop iteration is instructions the core would have
-        // retired, so it counts as steps and `max_steps` stops where it does
-        // without the skip. (Cortex-M retires one per cycle; on the
-        // counter-metrics path idle cycles, poll skips included, already
-        // count.)
-        let poll_skipped = ctx
-            .machine
-            .poll_loop_cycles_skipped
-            .saturating_sub(poll_skipped_before);
-        step += report.primary_steps
-            + if ctx.counter_metrics {
-                report.idle_cycles
-            } else {
-                poll_skipped
-            };
+        // skip, and so do the checks between calls (assertions, settling,
+        // `max_steps`). The wide-fuel arm above is off there for that reason.
+        //
+        // Otherwise a step is a retired instruction. A skipped poll-loop
+        // iteration is instructions the core would have retired, and
+        // `primary_steps` already carries them (`Machine::advance` adds the
+        // skip's instruction count), so `max_steps` stops where it does
+        // without the skip. Adding `poll_loop_cycles_skipped` on top counted
+        // every skipped poll-loop instruction twice and halved the device
+        // time a `max_steps` budget buys on a `delay()` sketch.
+        step += if ctx.counter_metrics {
+            report.fuel_consumed
+        } else {
+            report.primary_steps
+        };
         steps_executed = step;
         // Statistical PC sampling: one histogram hit every
         // PC_SAMPLE_EVERY retired primary steps, using the post-batch
