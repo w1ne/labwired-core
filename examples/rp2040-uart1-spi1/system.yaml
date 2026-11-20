@@ -1,0 +1,4 @@
+# LabWired - RP2040 UART1 + SPI1 smoke system (bare Raspberry Pi Pico silicon).
+name: "rp2040-uart1-spi1"
+chip: "../../configs/chips/rp2040.yaml"
+external_devices: []
