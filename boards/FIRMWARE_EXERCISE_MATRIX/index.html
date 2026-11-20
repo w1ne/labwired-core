@@ -5242,6 +5242,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#esp32s2-arduino" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        esp32s2-arduino
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#esp32s2" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -7146,6 +7157,8 @@
 <p><em>The P4X-C5 Function EV board smoke checks BME280 chip ID 0x60 and the model's raw-temperature vector 0x082DC0 over HP I2C0 routed through GPIO7/8, then reports over UART0. The profile models the GPIO data/enable/input head, four matrix selectors, I2C0 transaction registers, and IO_MUX setup words without pad electricals. It does not model mask ROM, the second HP core, the LP core, MIPI-CSI/DSI, the H.264/JPEG/PPA media blocks, USB, Ethernet, the companion ESP32-C5 radio or the other P4 peripherals.</em></p>
 <p><strong>Functional device/protocol checks</strong> (register-level firmware asserts observable behavior):
 - BME280 ID and raw-temperature register read through GPIO7/8-routed HP I2C0 (register-level firmware) — <code>firmware-esp32p4-demo</code> · examples/esp32p4x-c5-function-ev-board/evidence/run/logs/run_smoke.log (ungated)</p>
+<h3 id="esp32s2-arduino"><code>esp32s2-arduino</code></h3>
+<p><em>Arduino matrix profile of the ESP32-S2 on its genuine mask ROM: stock Arduino-ESP32 runs L0-L8 (UART0, SYSTIMER, RMT WS2812, I2C0, GP-SPI2, SENS ADC, LEDC, TWAI). Those are rubric classes, so no beyond-rubric firmware exercise is recorded in this ledger. Wi-Fi, USB OTG, PSRAM and the ULP are not modelled.</em></p>
 <h3 id="esp32s2"><code>esp32s2</code></h3>
 <p><em>No beyond-rubric S2 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO through host_console. This direct-ELF profile declares UART0 only; it does not model mask ROM, flash-cache/MMU boot, PSRAM, the GPIO matrix, the RGB LED, USB OTG, Wi-Fi or the other S2 peripherals.</em></p>
 <h3 id="rp2040-feather"><code>rp2040-feather</code></h3>
