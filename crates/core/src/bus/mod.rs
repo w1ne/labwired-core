@@ -940,6 +940,11 @@ pub struct SystemBus {
     /// from then on the post-write and external-input hooks hand outside pad
     /// levels to the peripheral lines they are routed to. False elsewhere.
     pub(crate) wire_inputs_live: bool,
+    /// Set while the logic analyzer watches at least one pad
+    /// ([`crate::Machine::logic_watch`]). A pad-claim write must then be
+    /// bracketed even without a `gpio_net`, or a port never re-registers a
+    /// watched pad with the peripheral line that just claimed it.
+    pub(crate) pad_watch_live: bool,
     /// Test/diagnostic override: force conservative resident execution
     /// even under the `event-scheduler` feature. Deadline semantics remain
     /// identical; only CPU batching changes for differential tests.

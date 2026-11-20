@@ -411,6 +411,12 @@ impl Nrf52Pwm {
 }
 
 impl Peripheral for Nrf52Pwm {
+    /// `PSEL.OUT[n]` names the pad; `TASKS_SEQSTART`/`TASKS_STOP` take and
+    /// release it.
+    fn claims_pads(&self) -> bool {
+        true
+    }
+
     /// Dual-path EasyDMA: scheduler delay-0 (`on_event`) under Machine +
     /// walk-free + batched tick interval, and `tick_with_bus` for bare-bus
     /// unit tests. No time-driven walk work — SEQSTART completes on the next

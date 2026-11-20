@@ -2144,10 +2144,11 @@ impl SystemBus {
 
     /// Resolve the [`PadClaimLinks`](super::PadClaimLinks): every peripheral
     /// that names its own pads and every pin port that follows those names.
-    /// Called when a world `gpio_net` joins a pad; empty without one.
+    /// Called when a world `gpio_net` joins a pad and when the logic analyzer
+    /// arms or disarms a pad watch; empty while neither is live.
     pub(crate) fn rebuild_pad_claim_links(&mut self) {
         let mut links = super::PadClaimLinks::default();
-        if self.wire_inputs_live {
+        if self.wire_inputs_live || self.pad_watch_live {
             for (i, p) in self.peripherals.iter().enumerate() {
                 if p.dev.claims_pads() {
                     links.owners.push(i);
@@ -2163,8 +2164,8 @@ impl SystemBus {
         self.pad_claim_links = links;
     }
 
-    /// Bracket a write to a peripheral that names its own pads (nRF
-    /// `PSEL`, `ENABLE`): snapshot every claim-reading port. `true` when
+    /// Bracket a write, event or bus tick of a peripheral that names its own
+    /// pads (nRF `PSEL`, `ENABLE`): snapshot every claim-reading port. `true` when
     /// `idx` is such a peripheral, for [`Self::finish_pad_claim_write`].
     pub(crate) fn begin_pad_claim_write(&mut self, idx: usize) -> bool {
         if !self.pad_claim_links.owners.contains(&idx) {
@@ -3793,14 +3794,15 @@ impl SystemBus {
                     .dev
                     .as_any()
                     .and_then(|a| a.downcast_ref::<GpioPort>())?;
-                // nRF52833 P1 uses a compact window at its first implemented
-                // registers. It still has the nRF52 PSEL encoding; an offset
-                // alone does not make that port an nRF53/nRF54 peripheral.
-                let nrf52833_p1 = port == 1
+                // nRF52833/nRF52840 P1 uses a compact window at its first
+                // implemented registers. It still has the nRF52 PSEL encoding;
+                // an offset alone does not make that port an nRF53/nRF54
+                // peripheral.
+                let nrf52_p1 = port == 1
                     && self.peripherals[idx].base == 0x5000_0800
                     && gpio.window_offset() == 0x500;
                 (gpio.register_layout() == GpioRegisterLayout::Nrf52
-                    && (gpio.window_offset() == 0 || nrf52833_p1))
+                    && (gpio.window_offset() == 0 || nrf52_p1))
                     .then_some((idx, port))
             })
             .collect();

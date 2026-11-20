@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="8" failures="2" errors="0" time="0.489693">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="1e5d689dfe1c17e372263a46e38df295bd01f969e9cd716c883e2a5cb3dc24ed"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.489693">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;NRF52840 RENODE SMOKE&quot;, &quot;ficr part=52840 nvmc ready=1 ok&quot;, &quot;clock hfstat=00010001 lfstat=00010001 ok&quot;, …" time="0.000000">
+    <failure message="assertion failed">assertion 1: uart_ordered: [&quot;NRF52840 RENODE SMOKE&quot;, &quot;ficr part=52840 nvmc ready=1 ok&quot;, &quot;clock hfstat=00010001 lfstat=00010001 ok&quot;, …
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=1e5d689dfe1c17e372263a46e38df295bd01f969e9cd716c883e2a5cb3dc24ed
+firmware=/data/cargo-pool/labwired-core/lanes/renode/thumbv7em-none-eabi/release/firmware-nrf52840-renode-smoke
+system=/tmp/r749-neg/systems/onboarding/nrf52840.yaml
+script=/tmp/r749-neg/ex/smoke.yaml
+assertions:
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;NRF52840 RENODE SMOKE&quot;, &quot;ficr part=52840 nvmc ready=1 ok&quot;, &quot;clock hfstat=00010001 lfstat=00010001 ok&quot;, &quot;gpio p0.13 in=00002000/00000000 ok&quot;, &quot;gpiote out0 p0.14 in=10 out=0 ok&quot;, &quot;timer0 cmp=1 cap&gt;=50 1 clear=00000000 ok&quot;, &quot;rtc0 cmp=1 counter&gt;=4 1 ok&quot;, &quot;rng valrdy=11 bytes&lt;=ff ok&quot;, &quot;ppi egu0-&gt;egu1 off=0 on=1 ok&quot;, &quot;systick-pendsv frame=1 r0=1 pending=1 priority=1 ok&quot;, &quot;saadc ain3=00000755 amount=1 end=1 ok&quot;, &quot;temp datardy=1 raw=00000064 ok&quot;, &quot;ecb fips197 ct=69c4e0d8..70b4c55a end=1 ok&quot;, &quot;twim0 tmp102 cfg=fff0 temp=1900 anack=1 held=1 w1c=1 ok&quot;, &quot;pwm0 p0.15 seqend=1 duty=1 rises=1 stop=1 idle=0 ok&quot;, &quot;gpio p1 in=02 drive=1 pull=1 gpiote=1 p0=1 ok&quot;, &quot;NRF52840 PASS&quot;] }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio0:13&quot;, min_edges: 4 } }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio0:14&quot;, min_edges: 2 } }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio0:15&quot;, min_edges: 100 } }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio1:3&quot;, min_edges: 2 } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537132800, expected_value: 1384415231, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: gpio_edges: gpio0:13 &gt;= 4 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: gpio_edges: gpio0:14 &gt;= 2 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: gpio_edges: gpio0:15 &gt;= 100 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: gpio_edges: gpio1:3 &gt;= 2 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: memory_value: @0x2003ff00=0x52847fff" time="0.000000">
+    <failure message="assertion failed">assertion 6: memory_value: @0x2003ff00=0x52847fff
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=4000000
+stop_reason_details.observed.steps_executed=4000000
+steps_executed=4000000
+cycles=4000000
+instructions=4000000
+limits:
+  - max_steps=4000000
+firmware_hash=1e5d689dfe1c17e372263a46e38df295bd01f969e9cd716c883e2a5cb3dc24ed
+firmware=/data/cargo-pool/labwired-core/lanes/renode/thumbv7em-none-eabi/release/firmware-nrf52840-renode-smoke
+system=/tmp/r749-neg/systems/onboarding/nrf52840.yaml
+script=/tmp/r749-neg/ex/smoke.yaml
+assertions:
+  - UartOrdered(UartOrderedAssertion { uart_ordered: [&quot;NRF52840 RENODE SMOKE&quot;, &quot;ficr part=52840 nvmc ready=1 ok&quot;, &quot;clock hfstat=00010001 lfstat=00010001 ok&quot;, &quot;gpio p0.13 in=00002000/00000000 ok&quot;, &quot;gpiote out0 p0.14 in=10 out=0 ok&quot;, &quot;timer0 cmp=1 cap&gt;=50 1 clear=00000000 ok&quot;, &quot;rtc0 cmp=1 counter&gt;=4 1 ok&quot;, &quot;rng valrdy=11 bytes&lt;=ff ok&quot;, &quot;ppi egu0-&gt;egu1 off=0 on=1 ok&quot;, &quot;systick-pendsv frame=1 r0=1 pending=1 priority=1 ok&quot;, &quot;saadc ain3=00000755 amount=1 end=1 ok&quot;, &quot;temp datardy=1 raw=00000064 ok&quot;, &quot;ecb fips197 ct=69c4e0d8..70b4c55a end=1 ok&quot;, &quot;twim0 tmp102 cfg=fff0 temp=1900 anack=1 held=1 w1c=1 ok&quot;, &quot;pwm0 p0.15 seqend=1 duty=1 rises=1 stop=1 idle=0 ok&quot;, &quot;gpio p1 in=02 drive=1 pull=1 gpiote=1 p0=1 ok&quot;, &quot;NRF52840 PASS&quot;] }): false
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio0:13&quot;, min_edges: 4 } }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio0:14&quot;, min_edges: 2 } }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio0:15&quot;, min_edges: 100 } }): true
+  - GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: &quot;gpio1:3&quot;, min_edges: 2 } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 537132800, expected_value: 1384415231, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

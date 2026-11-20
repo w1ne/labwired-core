@@ -283,16 +283,20 @@ impl Nrf54lTwim {
         Pending::None
     }
 
-    fn do_tx(&mut self, bus: &mut dyn Bus) {
+    /// Run the TX leg. Returns `true` on an address NACK.
+    fn do_tx(&mut self, bus: &mut dyn Bus) -> bool {
         let len = (self.dma_tx_maxcnt & MAXCNT_MASK) as usize;
         let addr = (self.address & 0x7F) as u8;
         let Some(idx) = self.slave_index(addr) else {
             // No device at this address: NACK on the address byte, exactly as
-            // silicon reports an unpopulated bus.
+            // silicon reports an unpopulated bus. No data byte started, so
+            // there is no LASTTX and no STOPPED: the bus is held until the
+            // driver triggers STOP (nrfx `nrfy_twim_tx_start`: "triggering of
+            // STOP task in case of error has to be done manually").
             self.errorsrc |= 1 << 1; // ANACK
             self.events_error = 1;
-            self.events_stopped = 1;
-            return;
+            self.dma_tx_amount = 0;
+            return true;
         };
 
         self.advance_slave_to_now(idx, bus);
@@ -314,16 +318,20 @@ impl Nrf54lTwim {
         if self.shorts & SHORT_LASTTX_DMA_RX_START == 0 {
             self.slaves[idx].stop();
         }
+        false
     }
 
-    fn do_rx(&mut self, bus: &mut dyn Bus) {
+    /// Run the RX leg. Returns `true` on an address NACK.
+    fn do_rx(&mut self, bus: &mut dyn Bus) -> bool {
         let len = (self.dma_rx_maxcnt & MAXCNT_MASK) as usize;
         let addr = (self.address & 0x7F) as u8;
         let Some(idx) = self.slave_index(addr) else {
+            // No byte is clocked in: RAM untouched, AMOUNT 0, no LASTRX and
+            // no STOPPED (see `do_tx`).
             self.errorsrc |= 1 << 1; // ANACK
             self.events_error = 1;
-            self.events_stopped = 1;
-            return;
+            self.dma_rx_amount = 0;
+            return true;
         };
 
         self.advance_slave_to_now(idx, bus);
@@ -351,6 +359,7 @@ impl Nrf54lTwim {
         self.events_dma_rx_ready = 1;
         self.events_lastrx = 1;
         self.slaves[idx].stop();
+        false
     }
 
     /// Pin this TWIM onto the legacy per-cycle walk. See
@@ -410,13 +419,17 @@ impl Nrf54lTwim {
         for _ in 0..2 {
             match std::mem::take(&mut self.pending) {
                 Pending::None => return,
+                // After an address NACK no shortcut runs: the bus is held
+                // until TASKS_STOP.
                 Pending::Tx => {
-                    self.do_tx(bus);
-                    self.pending = self.apply_shorts_after_tx();
+                    if !self.do_tx(bus) {
+                        self.pending = self.apply_shorts_after_tx();
+                    }
                 }
                 Pending::Rx => {
-                    self.do_rx(bus);
-                    self.pending = self.apply_shorts_after_rx();
+                    if !self.do_rx(bus) {
+                        self.pending = self.apply_shorts_after_rx();
+                    }
                 }
             }
         }
@@ -978,6 +991,54 @@ mod tests {
             0,
             "ANACK must be set for an unpopulated address"
         );
+    }
+
+    /// An address NACK fires only ERROR + ANACK: no LASTTX/LASTRX, no
+    /// shortcut, no STOPPED, AMOUNT 0 and RAM untouched. The bus is held until
+    /// the driver's TASKS_STOP (nrfx error path: RESUME then STOP).
+    #[test]
+    fn anack_runs_no_shortcut_until_tasks_stop() {
+        let cases = [
+            (
+                OFF_TASKS_DMA_TX_START,
+                SHORT_LASTTX_DMA_RX_START | SHORT_LASTRX_STOP,
+            ),
+            (OFF_TASKS_DMA_TX_START, SHORT_LASTTX_STOP),
+            (OFF_TASKS_DMA_TX_START, SHORT_LASTTX_SUSPEND),
+            (OFF_TASKS_DMA_RX_START, SHORT_LASTRX_STOP),
+            (OFF_TASKS_DMA_RX_START, SHORT_LASTRX_DMA_TX_START),
+        ];
+        for (task, shorts) in cases {
+            let (mut twim, mut bus) = rig();
+            bus.write_u8(0x2000_0010, 0xA5).unwrap();
+            twim.write_u32(OFF_ENABLE, ENABLE_TWIM).unwrap();
+            twim.write_u32(OFF_ADDRESS, 0x42).unwrap(); // nothing there
+            twim.write_u32(OFF_SHORTS, shorts).unwrap();
+            twim.write_u32(OFF_DMA_TX_PTR, 0x2000_0000).unwrap();
+            twim.write_u32(OFF_DMA_TX_MAXCNT, 1).unwrap();
+            twim.write_u32(OFF_DMA_RX_PTR, 0x2000_0010).unwrap();
+            twim.write_u32(OFF_DMA_RX_MAXCNT, 1).unwrap();
+            twim.write_u32(task, 1).unwrap();
+            twim.tick_with_bus(&mut bus);
+
+            let ctx = format!("task {task:#x} shorts {shorts:#x}");
+            assert_eq!(twim.read_u32(OFF_EVENTS_ERROR).unwrap(), 1, "{ctx}");
+            assert_ne!(twim.read_u32(OFF_ERRORSRC).unwrap() & (1 << 1), 0, "{ctx}");
+            assert_eq!(twim.read_u32(OFF_EVENTS_LASTTX).unwrap(), 0, "{ctx}");
+            assert_eq!(twim.read_u32(OFF_EVENTS_LASTRX).unwrap(), 0, "{ctx}");
+            assert_eq!(twim.read_u32(OFF_EVENTS_STOPPED).unwrap(), 0, "{ctx}");
+            assert_eq!(twim.read_u32(OFF_EVENTS_SUSPENDED).unwrap(), 0, "{ctx}");
+            assert_eq!(twim.read_u32(OFF_DMA_TX_AMOUNT).unwrap(), 0, "{ctx}");
+            assert_eq!(twim.read_u32(OFF_DMA_RX_AMOUNT).unwrap(), 0, "{ctx}");
+            assert!(!twim.has_transfer_work(), "{ctx}: nothing chained");
+            assert_eq!(bus.read_u8(0x2000_0010).unwrap(), 0xA5, "{ctx}");
+
+            twim.write_u32(OFF_TASKS_RESUME, 1).unwrap();
+            twim.write_u32(OFF_TASKS_STOP, 1).unwrap();
+            twim.tick_with_bus(&mut bus);
+            assert_eq!(twim.read_u32(OFF_EVENTS_STOPPED).unwrap(), 1, "{ctx}");
+            assert_eq!(twim.read_u32(OFF_EVENTS_LASTRX).unwrap(), 0, "{ctx}");
+        }
     }
 
     #[test]
