@@ -33,4 +33,5 @@ pub mod tc;
 pub mod tc21;
 pub mod tc4s;
 pub mod tcc;
+pub mod usb21;
 pub mod usb_device;
