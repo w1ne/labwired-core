@@ -18,9 +18,9 @@
 //! Two confirmed instances, both of which cost real time:
 //!
 //! * **nRF52 GPIOTE** hardcoded `GPIO1_BASE = 0x5000_0300`, Nordic's
-//!   real-silicon P1 base. Every nRF52840 chip YAML deliberately remaps `gpio1`
-//!   to `0x5000_1000`, because the silicon base sits *inside* GPIO0's 4 KB
-//!   window and a flat bus cannot host both. So a port-1 GPIOTE task wrote
+//!   real-silicon P1 base, while the nRF52840 chip YAMLs then parked `gpio1`
+//!   at `0x5000_1000` (it now maps P1's compact window at `0x5000_0800`, via
+//!   `reg_offset: 0x500`). So a port-1 GPIOTE task wrote
 //!   `0x5000_0810` — inside **gpio0's** window, where it vanished. The model's
 //!   own unit test asserted the wrong base, so it passed while the behaviour
 //!   was broken.
@@ -1097,8 +1097,8 @@ fn rule2_scanner_is_not_vacuous() {
         "expected >400 declared peripheral windows across all chips, found \
          {total} — Rule 2 is vacuous"
     );
-    // nRF52840 is the chip the GPIOTE defect lived on; its remapped gpio1 must
-    // be visible to the scanner, otherwise the fix's premise is unverified.
+    // nRF52840 is the chip the GPIOTE defect lived on; its compact gpio1 window
+    // must be visible to the scanner, otherwise the fix's premise is unverified.
     let (_, nrf) = windows
         .iter()
         .find(|(f, _)| f == "nrf52840.yaml")
@@ -1108,10 +1108,11 @@ fn rule2_scanner_is_not_vacuous() {
         .find(|w| w.id == "gpio1")
         .expect("nrf52840.yaml must declare gpio1");
     assert_eq!(
-        gpio1.base, 0x5000_1000,
-        "nrf52840.yaml gpio1 is remapped off Nordic's silicon P1 base; if this \
-         ever changes, Nrf52Gpiote follows it via ChipMap and this contract's \
-         premise needs revisiting"
+        (gpio1.base, gpio1.size),
+        (0x5000_0800, Some(0x300)),
+        "nrf52840.yaml gpio1 maps P1's compact window (block base 0x5000_0300 + \
+         reg_offset 0x500); Nrf52Gpiote follows it via ChipMap::register_address. \
+         If this changes, this contract's premise needs revisiting"
     );
 }
 

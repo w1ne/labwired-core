@@ -19,7 +19,8 @@ use labwired_core::{AdvanceRequest, AdvanceStop, Bus, Machine};
 
 const CODE: u64 = 0x2000_0000;
 const P0: u64 = 0x5000_0000;
-const P1: u64 = 0x5000_1000;
+// Nordic's P1 block base; its registers start at 0x5000_0804.
+const P1: u64 = 0x5000_0300;
 const IN: u64 = 0x510;
 const OUT: u64 = 0x504;
 const DIR: u64 = 0x514;

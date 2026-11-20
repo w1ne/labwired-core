@@ -1006,11 +1006,10 @@ fn xiao_nrf52840_spim0_start_sets_end_event_and_amount() {
 /// GPIOTE task-mode drive must land in the port the chip YAML declares — for
 /// **both** ports.
 ///
-/// The nRF52840 chip YAML deliberately remaps P1/`gpio1` from its silicon base
-/// (0x5000_0300) to 0x5000_1000, because the real P1 base sits *inside* GPIO0's
-/// 4 KB window and the two peripherals would otherwise collide on the bus. A
-/// GPIOTE model that hardcodes the silicon base therefore writes 0x5000_0810,
-/// which lands in gpio0's window and is swallowed with no error and no warning.
+/// The nRF52840 chip YAML maps P1/`gpio1` as a compact window at 0x5000_0800
+/// (block base 0x5000_0300 + `reg_offset: 0x500`), because P1's block base
+/// sits inside P0's register range. A GPIOTE model that ignores the window
+/// offset writes the wrong address, which the bus swallows with no error.
 ///
 /// This asserts both ports so a "fix" that merely moves the breakage from
 /// port 1 to port 0 fails here.
@@ -1029,12 +1028,20 @@ fn gpiote_task_drive_reaches_the_port_the_chip_yaml_declares() {
     // The bases under test come from the chip descriptor, not from this test's
     // own opinion about Nordic silicon: if the YAML remap ever changes, this
     // test follows it instead of encoding a second copy of the memory map.
+    // Block base: a compact window (`reg_offset`) starts that far into the
+    // port's register map, so the register offsets below stay Nordic's.
     let base_of = |id: &str| -> u64 {
-        chip.peripherals
+        let p = chip
+            .peripherals
             .iter()
             .find(|p| p.id == id)
-            .unwrap_or_else(|| panic!("chip yaml declares no peripheral '{id}'"))
-            .base_address
+            .unwrap_or_else(|| panic!("chip yaml declares no peripheral '{id}'"));
+        let reg_offset = p
+            .config
+            .get("reg_offset")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        p.base_address - reg_offset
     };
     let gpio0_base = base_of("gpio0");
     let gpio1_base = base_of("gpio1");

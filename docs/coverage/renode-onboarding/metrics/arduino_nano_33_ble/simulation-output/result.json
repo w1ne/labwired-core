@@ -225,7 +225,7 @@
       {
         "name": "gpio1",
         "kind": "native",
-        "base": 1342181376,
+        "base": 1342179328,
         "registers": [],
         "artifacts": []
       },

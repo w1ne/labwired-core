@@ -490,6 +490,9 @@ pub const MODEL_TYPES: &[&str] = &[
     // are storage with reset values (PxSEL2, calibration constants).
     "msp430_port",
     "msp430_bytes",
+    // Texas Instruments MSP430x2xx Universal Serial Interface (SPI and I2C
+    // master).
+    "msp430_usi",
     // Texas Instruments MSP430x2xx Timer_A and its TAIV register.
     "msp430_timer_a",
     "msp430_timer_a_iv",
@@ -2601,6 +2604,51 @@ pub fn try_build(
                     )
                 })?;
             Box::new(crate::peripherals::msp430_port::Msp430Bytes::new(reset))
+        }
+        // `irq_sources`: USIIFG, then USISTTIFG; `irq_line`: the USI vector;
+        // `aclk_hz` (default 32768) and `cpu_hz` clock ACLK.
+        "msp430_usi" => {
+            use crate::peripherals::msp430_usi::{Msp430Usi, UsiConfig, UsiRequest};
+            msp430_keys(p_cfg, &["irq_sources", "irq_line", "aclk_hz", "cpu_hz"])?;
+            let number = |key: &str| -> anyhow::Result<Option<u64>> {
+                match p_cfg.config.get(key) {
+                    None => Ok(None),
+                    Some(v) => v.as_u64().map(Some).ok_or_else(|| {
+                        anyhow::anyhow!("msp430_usi '{}': `{key}` is not a number", p_cfg.id)
+                    }),
+                }
+            };
+            let request = match (p_cfg.config.get("irq_sources"), number("irq_line")?) {
+                (None, None) => None,
+                (Some(_), Some(line)) if line < 64 => {
+                    let sources = u32_list(p_cfg, "irq_sources", 2)
+                        .filter(|v| v.iter().all(|s| *s < crate::peripherals::msp430::SOURCES))
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "msp430_usi '{}': `irq_sources` is USIIFG, then USISTTIFG \
+                                 (two sources below {})",
+                                p_cfg.id,
+                                crate::peripherals::msp430::SOURCES
+                            )
+                        })?;
+                    Some(UsiRequest {
+                        counter_source: sources[0],
+                        start_source: sources[1],
+                        line: line as u32,
+                    })
+                }
+                _ => anyhow::bail!(
+                    "msp430_usi '{}': `irq_sources` and `irq_line` (below 64) come together",
+                    p_cfg.id
+                ),
+            };
+            Box::new(Msp430Usi::new(
+                request,
+                UsiConfig {
+                    aclk_hz: number("aclk_hz")?.unwrap_or(32_768),
+                    cpu_hz: number("cpu_hz")?.unwrap_or(0),
+                },
+            ))
         }
         // `blocks`: capture/compare blocks (default 3); `irq_sources`:
         // CCIFG0 ... CCIFGn-1, then TAIFG; `irq_lines`: the TACCR0 line, then
