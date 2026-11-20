@@ -21,6 +21,11 @@ io_voltage_v: 3.3
 gpio_input_thresholds:
   vil: 0.35
   vih: 0.65
+# Absolute maximum current sunk or sourced by any I/O and control pin, mA.
+# DS5319 Rev 20, section 5.2, Table 7 "Current characteristics": IIO 25 mA
+# (sunk) and -25 mA (sourced). A run reports a pad whose simulated current went
+# past it; the simulation does not stop or clamp it.
+gpio_abs_max_ma: 25
 
 flash:
   base: 0x08000000
