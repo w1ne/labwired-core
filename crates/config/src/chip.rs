@@ -586,21 +586,6 @@ where
     }
 }
 
-/// `gpio_output_ohms`: a positive, finite resistance.
-pub(crate) fn deserialize_gpio_output_ohms<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::Error as _;
-    let ohms = Option::<f64>::deserialize(deserializer)?;
-    match ohms {
-        Some(r) if !(r.is_finite() && r > 0.0) => Err(D::Error::custom(format!(
-            "gpio_output_ohms must be a positive number of ohms; got {r}"
-        ))),
-        other => Ok(other),
-    }
-}
-
 /// Which family's atomic register aliases a chip implements.
 ///
 /// Both families alias every peripheral register three more times at a 0x1000
@@ -866,21 +851,6 @@ pub struct ChipDescriptor {
         skip_serializing_if = "Option::is_none"
     )]
     pub io_voltage_v: Option<f64>,
-    /// Output resistance of a GPIO pad driving high or low, in ohms: the slope
-    /// of the datasheet's VOH-vs-IOH / VOL-vs-IOL curves. With it a pad is a
-    /// Thevenin source (`io_voltage_v` or 0 behind this resistance), so a load
-    /// that draws more than a pin can give (a motor straight off a pin) pulls
-    /// the pad voltage down the way silicon does. The diagram compiler places
-    /// it in the analog netlist as the pad driver's on-resistance.
-    ///
-    /// Absent means "not transcribed": the compiler then assumes a nominal
-    /// value and reports the assumption.
-    #[serde(
-        default,
-        deserialize_with = "deserialize_gpio_output_ohms",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub gpio_output_ohms: Option<f64>,
     /// Datasheet digital input limits, as supply slopes plus optional offsets.
     ///
     /// Co-simulation needs them to turn a voltage routed to
@@ -1578,7 +1548,6 @@ impl From<labwired_ir::IrDevice> for ChipDescriptor {
             pins: std::collections::BTreeMap::new(),
             analog_pins: Default::default(),
             io_voltage_v: None,
-            gpio_output_ohms: None,
             gpio_input_thresholds: None,
             reset_input: None,
             supply_monitor: None,

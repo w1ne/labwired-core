@@ -572,7 +572,6 @@ fn validate_circuit_armature(config: &BrushedMotorConfig, issues: &mut Vec<Strin
         ("enable2_pin", config.enable2_pin.is_some()),
         ("timer_name", config.timer_name.is_some()),
         ("timer_channel", config.timer_channel.is_some()),
-        ("powered", config.powered.is_some()),
     ] {
         if set {
             present.push(field);

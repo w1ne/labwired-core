@@ -23,6 +23,8 @@ gpio_input_thresholds:
 # 0.5 V of droop at 20 mA at 25 C, i.e. 25 ohm. Table 30-1 bounds it: VOH min
 # 4.2 V at IOH = -20 mA and VOL max 0.9 V at IOL = 20 mA (VCC = 5 V), at most
 # 40-45 ohm over temperature. Absolute maximum DC current per I/O pin: 40 mA.
+# Read by the diagram compiler, which places it as the pad driver's
+# on-resistance in the analog netlist.
 gpio_output_ohms: 25
 
 # Microchip DS40002061B, "System and Reset Characteristics":
