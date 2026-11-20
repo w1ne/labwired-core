@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.734197">
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.719618">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="c889f7a748afaf07a7196bc72f911fdfa54e07decbc10ab652bd38189edcfa1f"/>
+    <property name="firmware_hash" value="37ad0654b045604db9ccaee2f1fc643f243d9899a4a5a54a3ab08f5f89b939d4"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.734197">
+  <testcase classname="labwired" name="run" time="0.719618">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;ARDUINO NANO 33 BLE SMOKE&quot;, &quot;cpu=nrf52840 uart=uarte0&quot;, &quot;ficr part=52840 nvmc ready=1 ok&quot;, &quot;clock hfsta…" time="0.000000">
   </testcase>

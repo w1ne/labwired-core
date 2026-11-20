@@ -4092,6 +4092,38 @@ impl Spi {
     /// conjunction, not a one-cycle frame-completion pulse. The modelled
     /// sources are TXE/TXEIE and RXNE/RXNEIE; error status producers remain
     /// outside this bounded profile.
+    /// nRF52 / nRF54L SPIM: any event set whose INTEN bit is set (the level
+    /// `tick` reports). `None` on other register maps.
+    fn nrf_irq_pending(&self) -> Option<bool> {
+        let SpiRegs::Nrf52(r) = &self.regs else {
+            return None;
+        };
+        let (stopped, end, endrx, endtx, started) = if r.map == NrfSpimMap::Nrf54l {
+            (
+                NRF54L_INTEN_STOPPED,
+                NRF54L_INTEN_END,
+                NRF54L_INTEN_DMA_RX_END,
+                NRF54L_INTEN_DMA_TX_END,
+                NRF54L_INTEN_STARTED,
+            )
+        } else {
+            (
+                INTEN_STOPPED,
+                INTEN_END,
+                INTEN_ENDRX,
+                INTEN_ENDTX,
+                nrf_net::INTEN_STARTED,
+            )
+        };
+        Some(
+            (r.events_stopped != 0 && r.inten & stopped != 0)
+                || (r.events_end != 0 && r.inten & end != 0)
+                || (r.events_endrx != 0 && r.inten & endrx != 0)
+                || (r.events_endtx != 0 && r.inten & endtx != 0)
+                || (r.events_started != 0 && r.inten & started != 0),
+        )
+    }
+
     fn stm32_irq_pending(&self) -> Option<bool> {
         let SpiRegs::Stm32(r) = &self.regs else {
             return None;
@@ -4169,7 +4201,7 @@ impl Spi {
 
 impl crate::Peripheral for Spi {
     fn irq_line_level(&self) -> Option<bool> {
-        self.stm32_irq_pending()
+        self.stm32_irq_pending().or_else(|| self.nrf_irq_pending())
     }
 
     fn reads_can_deassert_irq(&self) -> bool {
@@ -4748,10 +4780,16 @@ impl crate::Peripheral for Spi {
             return self.nrf_net_on_event(sched.now(), bus);
         }
         if event_token == SPI_NRF52_EASYDMA_TOKEN {
-            if self.nrf52_pending_start {
+            let ran = self.nrf52_pending_start;
+            if ran {
                 self.do_nrf52_easydma(bus);
             }
-            return crate::sched::EventResult::default();
+            // END/ENDRX/ENDTX land here, outside any MMIO write, so the event
+            // path pends the level line itself.
+            return crate::sched::EventResult {
+                raise_own_irq: ran && self.nrf_irq_pending() == Some(true),
+                ..Default::default()
+            };
         }
         if event_token == SPI_NET_IRQ_TOKEN {
             self.net_irq_scheduled = false;
@@ -5142,7 +5180,7 @@ impl Spi {
             return;
         };
 
-        // ── Hardware D/C and hardware chip select (nRF54L only) ─────────────
+        // ── Hardware D/C and hardware chip select (nRF54L, nRF52 SPIM3) ─────
         //
         // The nRF54L SPIM drives the display's data/command line ITSELF from
         // `PSEL.DCX`, holding it LOW for the first `DCXCNT` bytes of the
@@ -5165,16 +5203,48 @@ impl Spi {
         // the previous transfer left it at, which is LOW after any command —
         // so a pixel burst would be fed to the panel as commands, and only
         // after a transfer that happened to end high would it ever look right.
+        //
+        // The nRF52840 SPIM3 has the same two outputs (PS v1.x §6.25.7:
+        // PSEL.CSN, CSNPOL, PSELDCX, DCXCNT), but its CSN is one pad, not the
+        // whole bus: only a device whose `cs_pin` names the `PSEL.CSN` pad is
+        // selected, and only when the driven level (CSNPOL) is its active
+        // level. Other devices keep their GPIO chip select. On SPIM3, DCXCNT
+        // 0xF means every byte is a command byte.
         let (dcx_bytes, dcx_live, hw_csn) = match &self.regs {
             SpiRegs::Nrf52(r) if r.map == NrfSpimMap::Nrf54l => (
                 r.dcxcnt as usize,
                 r.psel_dcx & 0x8000_0000 == 0,
-                r.psel_csn & 0x8000_0000 == 0,
+                if r.psel_csn & 0x8000_0000 == 0 {
+                    u64::MAX
+                } else {
+                    0
+                },
             ),
-            _ => (0, false, false),
+            SpiRegs::Nrf52(r) if self.nrf52_hw_select => {
+                let dcx_bytes = match r.dcxcnt & 0xF {
+                    0xF => usize::MAX,
+                    n => n as usize,
+                };
+                let mut hw_csn = 0u64;
+                if r.psel_csn & 0x8000_0000 == 0 {
+                    let pad = r.psel_csn & 0x3F;
+                    let level = r.csnpol & 1 != 0;
+                    for (index, dev) in self.attached_devices.iter().enumerate().take(64) {
+                        if !self.selected_devices[index]
+                            && nrf_pad_of_label(dev.cs_pin()) == Some(pad)
+                            && dev.cs_selected_at(level)
+                        {
+                            hw_csn |= 1 << index;
+                        }
+                    }
+                }
+                (dcx_bytes, r.psel_dcx & 0x8000_0000 == 0, hw_csn)
+            }
+            _ => (0, false, 0),
         };
-        if hw_csn {
-            for dev in self.attached_devices.iter_mut() {
+        let hw_selected = |index: usize| index < 64 && hw_csn & (1 << index) != 0;
+        for (index, dev) in self.attached_devices.iter_mut().enumerate() {
+            if hw_selected(index) {
                 dev.cs_select();
             }
         }
@@ -5221,7 +5291,10 @@ impl Spi {
                 // Hardware D/C: LOW for the first DCXCNT bytes, HIGH after.
                 let dc_high = i >= dcx_bytes;
                 for (index, dev) in self.attached_devices.iter_mut().enumerate() {
-                    if !hw_csn && !dev.cs_pin().is_empty() && !self.selected_devices[index] {
+                    if !hw_selected(index)
+                        && !dev.cs_pin().is_empty()
+                        && !self.selected_devices[index]
+                    {
                         continue;
                     }
                     if dcx_live {
@@ -5247,10 +5320,10 @@ impl Spi {
             }
         }
 
-        if hw_csn {
-            // CS rises at the end of the transfer. A panel flushes its pending
-            // command on the rising edge, so this is not cosmetic.
-            for dev in self.attached_devices.iter_mut() {
+        // CS rises at the end of the transfer. A panel flushes its pending
+        // command on the rising edge, so this is not cosmetic.
+        for (index, dev) in self.attached_devices.iter_mut().enumerate() {
+            if hw_selected(index) {
                 dev.cs_release();
             }
         }
@@ -5273,6 +5346,15 @@ impl Spi {
         // so this is where the burst becomes narratable.
         self.nrf52_wire_flush(&mosi_wire);
     }
+}
+
+/// The flat `port * 32 + pin` pad an nRF pin label names ("P0.20", "p1_03"),
+/// in the `PSEL` encoding (`PSEL.PORT` at bit 5). `None` for any other label.
+fn nrf_pad_of_label(label: &str) -> Option<u32> {
+    let rest = label.strip_prefix(['P', 'p'])?;
+    let (port, pin) = rest.split_once(['.', '_'])?;
+    let (port, pin) = (port.parse::<u32>().ok()?, pin.parse::<u32>().ok()?);
+    (port < 2 && pin < 32).then_some(port << 5 | pin)
 }
 
 #[path = "spi_net.rs"]

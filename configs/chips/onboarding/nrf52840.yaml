@@ -281,6 +281,16 @@ peripherals:
   type: nrf52840_acl
   bus: sysbus
   base_address: 1073930240  # 0x4002E000
+# SPIM3: the 32 MHz SPI master with hardware chip select (PSEL.CSN, CSNPOL,
+# IFTIMING.CSNDUR) and D/CX (PSELDCX, DCXCNT), PS v1.x §6.25. Renode's
+# platform omits it; the silicon (and configs/chips/nrf52840.yaml) has it.
+- id: spi3
+  type: nrf52840_spi
+  config:
+    profile: "nrf52_spim"
+  bus: sysbus
+  base_address: 1073934336  # 0x4002F000
+  irq: 47  # SPIM3
 - id: cryptocell
   type: nrf52840_cryptocell
   bus: sysbus

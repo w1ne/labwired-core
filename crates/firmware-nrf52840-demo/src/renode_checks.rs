@@ -1025,3 +1025,101 @@ pub fn check_gpio_p1(l: &mut Line) -> bool {
         .send();
     pass
 }
+
+pub const SPIM3: u32 = 0x4002_F000;
+const SPIM3_IRQ: u32 = 47;
+/// SPIM3 pads on the bare chip row; no other block uses them. P0.20 is the
+/// MAX31855 fixture's chip select (`configs/systems/onboarding/nrf52840.yaml`).
+const SPIM3_SCK: u32 = 19;
+const SPIM3_CSN: u32 = 20;
+const SPIM3_MOSI: u32 = 22;
+const SPIM3_MISO: u32 = 23;
+/// MAX31855 power-on frame: 25 degC hot junction (100 << 18) and 22 degC
+/// internal (352 << 4), no fault bits.
+const MAX31855_FRAME: u32 = 0x0190_1600;
+
+#[repr(C, align(4))]
+struct SpimRx([u8; 4]);
+static mut SPIM3_RX: SpimRx = SpimRx([0; 4]);
+
+/// One 4-byte RX-only SPIM3 transfer; returns (END seen, RXD.AMOUNT, frame).
+fn spim3_read_frame() -> (bool, u32, u32) {
+    let rx = core::ptr::addr_of_mut!(SPIM3_RX) as *mut u8;
+    for i in 0..4 {
+        unsafe { write_volatile(rx.add(i), 0) };
+    }
+    wr(SPIM3 + 0x118, 0); // EVENTS_END
+    wr(SPIM3 + 0x534, rx as u32); // RXD.PTR
+    wr(SPIM3 + 0x538, 4); // RXD.MAXCNT
+    wr(SPIM3 + 0x548, 0); // TXD.MAXCNT: MOSI carries ORC
+    wr(SPIM3 + 0x010, 1); // TASKS_START
+    let end = wait_set(SPIM3 + 0x118);
+    let b = |i| u32::from(unsafe { read_volatile(rx.add(i)) });
+    (
+        end,
+        rd(SPIM3 + 0x53C),
+        b(0) << 24 | b(1) << 16 | b(2) << 8 | b(3),
+    )
+}
+
+/// SPIM3 (PS v1.x §6.25) at 0x4002F000 with the hardware chip select on
+/// P0.20 (PSEL.CSN, CSNPOL active low). P0.20 is also a GPIO output held
+/// high, as nrfx sets the idle level, so only SPIM3's own CSN can select the
+/// MAX31855 there. Two reads must each return the full power-on frame (CSN
+/// rises between them, so the second one is reframed), the GPIO OUT latch
+/// must stay high, and INTEN.END must pend NVIC line 47. Before, the bare
+/// chip row had no SPIM3, and the model honoured PSEL.CSN on nRF54L only.
+pub fn check_spim3_hw_csn(l: &mut Line) -> bool {
+    wr(GPIO_PIN_CNF + 4 * SPIM3_CSN, 3); // output, input buffer connected
+    wr(GPIO_OUTSET, 1 << SPIM3_CSN);
+    wr(SPIM3 + 0x508, SPIM3_SCK);
+    wr(SPIM3 + 0x50C, SPIM3_MOSI);
+    wr(SPIM3 + 0x510, SPIM3_MISO);
+    wr(SPIM3 + 0x514, SPIM3_CSN); // PSEL.CSN
+    wr(SPIM3 + 0x568, 0); // CSNPOL active low
+    wr(SPIM3 + 0x524, 0x8000_0000); // FREQUENCY M8
+    wr(SPIM3 + 0x554, 0); // CONFIG mode 0, MSB first
+    wr(SPIM3 + 0x500, 7); // ENABLE = SPIM
+    let csn_ok = rd(SPIM3 + 0x514) == SPIM3_CSN;
+
+    let (end1, amount1, frame1) = spim3_read_frame();
+    wr(NVIC_ICPR1, 1 << (SPIM3_IRQ - 32));
+    wr(SPIM3 + 0x304, 1 << 6); // INTENSET.END
+    let (end2, amount2, frame2) = spim3_read_frame();
+    settle();
+    let irq = rd(NVIC_ISPR1) & (1 << (SPIM3_IRQ - 32)) != 0;
+    wr(SPIM3 + 0x308, 0xFFFF_FFFF); // INTENCLR
+    let gpio_high = rd(GPIO_OUT) & (1 << SPIM3_CSN) != 0;
+
+    for ev in [0x104, 0x110, 0x118, 0x120] {
+        wr(SPIM3 + ev, 0);
+    }
+    wr(SPIM3 + 0x500, 0);
+    for psel in [0x508, 0x50C, 0x510, 0x514] {
+        wr(SPIM3 + psel, 0xFFFF_FFFF);
+    }
+    wr(NVIC_ICPR1, 1 << (SPIM3_IRQ - 32));
+
+    let pass = csn_ok
+        && end1
+        && end2
+        && amount1 == 4
+        && amount2 == 4
+        && frame1 == MAX31855_FRAME
+        && frame2 == MAX31855_FRAME
+        && gpio_high
+        && irq;
+    l.s(b"spim3 csn max31855=")
+        .hex(frame1, 8)
+        .s(b"/")
+        .hex(frame2, 8)
+        .s(b" n=")
+        .hex(amount1 + amount2, 1)
+        .s(b" gpio=")
+        .hex(gpio_high as u32, 1)
+        .s(b" irq47=")
+        .hex(irq as u32, 1)
+        .ok(pass)
+        .send();
+    pass
+}
