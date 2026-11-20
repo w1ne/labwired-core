@@ -292,15 +292,15 @@ peripherals:
     size: "64B"
     irq: 14
 
-  # ── Analog and USB — register banks the Arduino core touches at boot ───────
+  # ── Analog and USB — blocks the Arduino core touches at boot ───────────────
   # ArduinoCore-samd's init() calibrates and configures the ADC and DAC, and
   # its main() calls USBDevice.init()/attach() on EVERY board, including a
   # Zero whose `Serial` is the EDBG UART. Without these windows the first
   # access bus-faults before setup() runs.
   #
-  # ⚠️ Declarative register banks from the SVD, not behavioural models: the
-  # DAC drives no pad and the USB block enumerates nothing (`SerialUSB` prints
-  # nothing here). The ADC is a behavioural model, below.
+  # ⚠️ The DAC is a declarative register bank from the SVD, not a behavioural
+  # model: it drives no pad. The ADC and the USB device are behavioural
+  # models, below.
   - id: "dac"
     type: "declarative"
     base_address: 0x42004800
@@ -310,15 +310,21 @@ peripherals:
       path: "../peripherals/atsamd21g18a/dac.yaml"
       profile: "sam"
       num_pins: 32
+  # USB in device mode (`samd21_usb`): the RAM endpoint descriptor table,
+  # control / bulk / interrupt endpoints, and a scripted host that resets the
+  # bus, enumerates, opens a CDC ACM port and reads it into the console.
+  # `host: false` is the chip default: the native port has no cable in it, so
+  # nothing enumerates and no start of frame arrives. A board whose console is
+  # the native port (`Serial` = `SerialUSB`) plugs it in with `host: true`.
+  # Host mode, high speed, isochronous and dual-bank endpoints, LPM and remote
+  # wakeup are refused, not ignored; suspend is not modelled.
   - id: "usb"
-    type: "declarative"
+    type: "samd21_usb"
     base_address: 0x41005000
     size: "4KB"
     irq: 7
     config:
-      path: "../peripherals/atsamd21g18a/usb.yaml"
-      profile: "sam"
-      num_pins: 32
+      host: false
   # The ADC converts (`samd21_adc`): single-ended AINn against GND, software
   # START, 8/10/12-bit, gain 1x..16x and DIV2, internal references. That is
   # every path stock analogRead() takes (AR_DEFAULT = GAIN DIV2 against

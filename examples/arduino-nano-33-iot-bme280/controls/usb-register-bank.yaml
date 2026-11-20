@@ -1,0 +1,12 @@
+# Control for bme280-smoke.yaml: the USB block as a plain register bank, as
+# the chip descriptor declared it before this change. Nothing enumerates, so
+# the sketch prints nothing. The assertion is the passing run's marker, so
+# this script must FAIL.
+schema_version: "1.2"
+inputs:
+  firmware: ../../../tests/fixtures/samd/arduino-nano-33-iot-bme280.elf
+  system: ./system-usb-register-bank.yaml
+limits:
+  max_steps: 30000000
+assertions:
+  - uart_contains: "NANO_33_IOT_BME280 ID=0x60"
