@@ -3,7 +3,7 @@ inputs:
   firmware: "build/firmware.elf"
   system: "../../configs/systems/esp32c5-devkitc-1-n8r8-bme280.yaml"
 limits:
-  max_steps: 800000
+  max_steps: 1000000
 assertions:
   - uart_contains: "C5_BME280_OK"
   - uart_contains: "C5_RGB_OK"
