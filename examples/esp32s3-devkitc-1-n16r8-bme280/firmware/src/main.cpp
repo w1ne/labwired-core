@@ -139,6 +139,40 @@ bool readRegister(uint8_t reg, uint8_t &value) {
   return false;
 }
 
+bool writeRegister(uint8_t reg, uint8_t value) {
+  writeReg(kI2cFifoConf, kFifoReset);
+  writeReg(kI2cFifoConf, kFifoRun);
+  writeReg(kI2cIntClear, 0xFFFFFFFFu);
+  writeReg(kI2cData, uint32_t(kBme280Address) << 1);
+  writeReg(kI2cData, reg);
+  writeReg(kI2cData, value);
+  i2cCommand(0, kOpRestart, 0, 0);
+  i2cCommand(1, kOpWrite, 3, kAckCheck);
+  i2cCommand(2, kOpStop, 0, 0);
+  writeReg(kI2cCtr,
+           kMasterMode | kForceOut | kClockEnable | kTransStart);
+
+  for (uint32_t i = 0; i < 500000; ++i) {
+    const uint32_t status = readReg(kI2cIntRaw);
+    if (status & kIntNack) return false;
+    if (status & kIntTransComplete) return true;
+  }
+  return false;
+}
+
+// Configure the sensor as a driver does: ctrl_hum, then ctrl_meas with
+// osrs_t = osrs_p = x1 and normal mode (datasheet 5.4.3-5.4.5), then wait
+// until status.measuring (0xF3 bit 3) clears before reading results.
+bool startMeasurement() {
+  if (!writeRegister(0xF2, 0x01) || !writeRegister(0xF4, 0x27)) return false;
+  for (uint32_t i = 0; i < 1000; ++i) {
+    uint8_t status = 0;
+    if (!readRegister(0xF3, status)) return false;
+    if ((status & 0x08) == 0) return true;
+  }
+  return false;
+}
+
 bool readRawTemperature(uint32_t &raw) {
   uint8_t msb, lsb, xlsb;
   if (!readRegister(0xFA, msb) || !readRegister(0xFB, lsb) ||
@@ -166,7 +200,7 @@ void printFastBootResult() {
   uartText("\n");
 
   uint32_t raw = 0;
-  if (!readRawTemperature(raw)) {
+  if (!startMeasurement() || !readRawTemperature(raw)) {
     uartText("BME280_I2C_ERROR\n");
     return;
   }
