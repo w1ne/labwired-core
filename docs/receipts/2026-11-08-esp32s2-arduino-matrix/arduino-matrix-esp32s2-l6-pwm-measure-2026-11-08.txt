@@ -1,0 +1,4 @@
+pad GPIO2 func=LEDC_LS_CH6 mode=af edges=58
+high widths us: [500.0] low widths us: [500.0]
+period us: 1000.0 freq Hz: 1000.0 duty: 0.5
+first rising edge cycle 862609 = 3.5942041666666666 ms

@@ -156,6 +156,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | nrf54l10 | open | L0 | 6 | 808.5 | 1.2 | ≥1× (CI) | [doc](docs/boards/nrf54l10.md) |
 | esp32p4 | open | L0 | 4 | — | — | ≥1× (CI) | — |
 | esp32s2 | open | L0 | 2 | — | — | ≥1× (CI) | — |
+| esp32s2-arduino | open | L1 | 32 | — | — | ≥1× (CI) | — |
 | rp2040-feather | open | L0 | 24 | 906.8 | 1.6 | ≥1× (CI) | — |
 | rp2350-feather | open | L0 | 27 | 906.8 | 1.7 | ≥1× (CI) | — |
 | stm32h723zg | open | L0 | 9 | 808.5 | 1.5 | ≥1× (CI) | — |
