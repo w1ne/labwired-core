@@ -337,6 +337,84 @@ pub fn chip_checks(l: &mut Line) -> u32 {
     summary
 }
 
+pub const TEMP: u32 = 0x4000_C000;
+pub const TEMP_TASKS_START: u32 = TEMP;
+pub const TEMP_TASKS_STOP: u32 = TEMP + 0x004;
+pub const TEMP_EVENTS_DATARDY: u32 = TEMP + 0x100;
+pub const TEMP_TEMP: u32 = TEMP + 0x508;
+
+pub const ECB: u32 = 0x4000_E000;
+pub const ECB_TASKS_STARTECB: u32 = ECB;
+pub const ECB_EVENTS_ENDECB: u32 = ECB + 0x100;
+pub const ECB_EVENTS_ERRORECB: u32 = ECB + 0x104;
+pub const ECB_ECBDATAPTR: u32 = ECB + 0x504;
+
+/// ECBDATAPTR block: key[16], cleartext[16], ciphertext[16] (PS v1.7 §6.5).
+#[repr(C, align(4))]
+struct EcbData([u8; 48]);
+static mut ECB_DATA: EcbData = EcbData([0; 48]);
+
+/// TEMP: TASKS_START -> EVENTS_DATARDY, then TEMP holds a signed value in
+/// 0.25 degC steps (PS v1.7 §6.32). The range check is the chip's operating
+/// range, -40..85 degC; the UART line prints the raw value the model gives.
+pub fn check_temp(l: &mut Line) -> bool {
+    wr(TEMP_EVENTS_DATARDY, 0);
+    let idle = rd(TEMP_EVENTS_DATARDY) == 0;
+    wr(TEMP_TASKS_START, 1);
+    let ready = wait_set(TEMP_EVENTS_DATARDY);
+    let raw = rd(TEMP_TEMP) as i32;
+    wr(TEMP_TASKS_STOP, 1);
+    wr(TEMP_EVENTS_DATARDY, 0);
+    let pass = idle && ready && (-160..=340).contains(&raw);
+    l.s(b"temp datardy=")
+        .hex(ready as u32, 1)
+        .s(b" raw=")
+        .hex(raw as u32, 8)
+        .ok(pass)
+        .send();
+    pass
+}
+
+/// ECB: AES-128 known-answer test from FIPS-197 Appendix C.1 through the
+/// EasyDMA data block. key = 000102..0f, plaintext = 00112233..ff,
+/// ciphertext = 69c4e0d86a7b0430d8cdb78070b4c55a.
+pub fn check_ecb_fips197(l: &mut Line) -> bool {
+    const CT: [u8; 16] = [
+        0x69, 0xc4, 0xe0, 0xd8, 0x6a, 0x7b, 0x04, 0x30, 0xd8, 0xcd, 0xb7, 0x80, 0x70, 0xb4, 0xc5,
+        0x5a,
+    ];
+    let data = core::ptr::addr_of_mut!(ECB_DATA) as *mut u8;
+    for i in 0..16u8 {
+        unsafe {
+            write_volatile(data.add(i as usize), i);
+            write_volatile(data.add(16 + i as usize), i * 0x11);
+            write_volatile(data.add(32 + i as usize), 0);
+        }
+    }
+    wr(ECB_EVENTS_ENDECB, 0);
+    wr(ECB_EVENTS_ERRORECB, 0);
+    wr(ECB_ECBDATAPTR, data as u32);
+    wr(ECB_TASKS_STARTECB, 1);
+    let ended = wait_set(ECB_EVENTS_ENDECB);
+    let error = rd(ECB_EVENTS_ERRORECB);
+    let mut ct = [0u8; 16];
+    for (i, b) in ct.iter_mut().enumerate() {
+        *b = unsafe { read_volatile(data.add(32 + i)) };
+    }
+    let be = |b: &[u8]| u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
+    let pass = ended && error == 0 && ct == CT;
+    l.s(b"ecb fips197 ct=")
+        .hex(be(&ct[0..4]), 8)
+        .s(b"..")
+        .hex(be(&ct[12..16]), 8)
+        .s(b" end=")
+        .hex(ended as u32, 1)
+        .ok(pass)
+        .send();
+    wr(ECB_EVENTS_ENDECB, 0);
+    pass
+}
+
 /// Convert the held 1.65 V input on AIN3 into one 12-bit EasyDMA sample.
 /// CONFIG=0 selects single-ended, gain 1/6 and the 600 mV internal reference:
 /// floor(1650 mV * (1/6) * 4096 / 600 mV) = 1877 (0x755).

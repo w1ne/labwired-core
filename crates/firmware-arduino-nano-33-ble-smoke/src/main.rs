@@ -20,6 +20,8 @@
 //! * the RGB sequence with the LED bits of GPIO0 OUT read back from the model
 //!   (`rgb=red out=00012040` — red's bit cleared, the other channels and D13
 //!   set) — bit 8,
+//! * the chip's TEMP sensor (DATARDY, value in range) — bit 9, and an ECB
+//!   AES-128 FIPS-197 known-answer test through EasyDMA — bit 10,
 //! * a heartbeat on D13.
 //!
 //! A summary word goes to RAM at 0x2003FF00. The LSM9DS1 IMU and the ArduCAM
@@ -86,9 +88,11 @@ fn main() -> ! {
     pass &= leds() == LED_MASK;
     l.s(b"rgb off out=").hex(leds(), 8).ok(pass).send();
     summary |= (pass as u32) << 8;
+    summary |= u32::from(check_temp(&mut l)) << 9;
+    summary |= u32::from(check_ecb_fips197(&mut l)) << 10;
 
     wr(RESULT, 0x5284_0000 | summary);
-    if summary == 0x1FF {
+    if summary == 0x7FF {
         l.s(b"NANO33BLE PASS").send();
     } else {
         l.s(b"NANO33BLE FAIL summary=").hex(summary, 3).send();
