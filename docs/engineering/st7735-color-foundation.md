@@ -89,7 +89,7 @@ qualification receipt. No guest or performance result is implied.
 
 ## Authored SAM SPI guest — hosted qualification pending
 
-`crates/core/tests/st7735_sam_guest.rs` loads authored Thumb instructions, vector
+`crates/core/tests/samd/st7735_sam_guest.rs` loads authored Thumb instructions, vector
 bytes and literals into the actual Cortex-M machine with the PyBadge chip/system
 descriptors. The host attaches the prototype and sets a **fixture-only** visible
 2×2 crop; it does not configure guest MMIO, write pixel RAM, replace the guest's

@@ -1,0 +1,2 @@
+[2m2026-11-08T12:03:42.655893Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/atsamd21j17d-aft.yaml
+[2m2026-11-08T12:03:42.660286Z[0m [31mERROR[0m [2mlabwired_cli::commands::test[0m[2m:[0m samd21_tc admits no config overrides

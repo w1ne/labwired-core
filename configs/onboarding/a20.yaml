@@ -1,6 +1,8 @@
 name: a20
-description: 'Allwinner A20 Dual-Core ARM Cortex-A7 System-on-Chip. Architecture:
-  ARMv7-A. Used in Cubieboard2 and Olinuxino.'
+description: 'Imported Allwinner A20 profile. The measured subset runs one Cortex-A7 PE from a
+  64 KiB DDR aperture and exercises polled TX on UART0. The boot ROM, full DDR size,
+  internal SRAM, second PE, interrupt controller, timers, MMC, USB, and other UARTs
+  are not modeled.'
 url: https://linux-sunxi.org/A20
 family: Allwinner
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\
@@ -15,7 +17,7 @@ validation:
     system_manifest: true
     chip_descriptor: true
     simulation: true
-  timestamp_utc: '2026-10-18T14:39:49.863306+00:00'
+  timestamp_utc: '2026-11-06T19:16:10+00:00'
   run_url: ''
   artifacts_url: https://github.com/w1ne/labwired-core/blob/main/docs/boards/a20.md
 provenance:

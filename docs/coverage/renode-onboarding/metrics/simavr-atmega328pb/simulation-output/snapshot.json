@@ -1,0 +1,75 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      255,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      10,
+      98,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 134,
+    "sp": 2303,
+    "sreg": 0
+  },
+  "steps_executed": 100000,
+  "cycles": 200018,
+  "instructions": 100000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 100000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 100000
+    }
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "8bd65d7654b4fe14024ce7dbed199d31f158148d98bcceeb0c4a5bd88ff28cf8",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/atmega328pb-usart1.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-atmega328pb.yaml",
+    "script": "examples/renode-onboarding/simavr-atmega328pb-smoke.yaml"
+  }
+}

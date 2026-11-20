@@ -1,0 +1,12 @@
+# The examples/esp32c2/esp-hal-gpio-async crate built for the ESP32-C3, on the
+# bare-ELF fast boot. Fixture and build:
+# tests/fixtures/esp32c3-esp-hal-interrupts.md.
+schema_version: "1.0"
+inputs:
+  firmware: ../../tests/fixtures/esp32c3-esp-hal-gpio-async.elf
+  system: ../../configs/systems/esp32c3-devkit.yaml
+limits:
+  max_steps: 3000000
+assertions:
+  - uart_contains: "LW-C3 gpio-async boot"
+  - uart_contains: "LW-C3 gpio-async PASS"

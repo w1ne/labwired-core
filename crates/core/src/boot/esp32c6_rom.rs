@@ -78,9 +78,16 @@ pub fn app_stack_top() -> u32 {
     APP_SRAM_END & !0xF
 }
 
-/// True when `chip` is an ESP32-C6 (name match, same style as `is_esp32c3`).
+/// True when `chip` is an ESP32-C6 variant.
+///
+/// C61 has the same textual prefix (`esp32c61`) but a different memory map and
+/// no C6 ROM fast-boot state. Do not classify a digit immediately following
+/// `esp32c6` as a C6 variant suffix.
 pub fn is_esp32c6(chip: &ChipDescriptor) -> bool {
-    chip.name.to_ascii_lowercase().contains("esp32c6")
+    chip.name
+        .to_ascii_lowercase()
+        .strip_prefix("esp32c6")
+        .is_some_and(|suffix| suffix.is_empty() || !suffix.as_bytes()[0].is_ascii_digit())
 }
 
 /// Seed `partitions` (or the default Arduino 4 MiB table) at flash offset
@@ -188,6 +195,117 @@ pub fn write_mmu_entry(bus: &mut SystemBus, entry_id: u32, phys_page: u32) {
     );
 }
 
+/// Offset into an ESP flash data window of the 64 KiB page that holds
+/// `.flash.appdesc`, IDF's `_rodata_reserved_start`.
+///
+/// ESP-IDF 5 places rodata after the text in the MMU address space, and
+/// `system_early_init` reads the image magic at that page base. On silicon the
+/// bootloader maps the factory image header there. The page moves with the
+/// text size. Returns `None` for an ELF with no such section (bare-metal
+/// images). The window is 0x4200_0000 on the C6 (unified) and 0x3C00_0000 on
+/// the C3 (DROM).
+pub fn appdesc_page_offset(elf: &[u8], window: u64) -> Option<usize> {
+    const PAGE: u64 = 0x1_0000;
+    let elf = goblin::elf::Elf::parse(elf).ok()?;
+    let sh = elf
+        .section_headers
+        .iter()
+        .find(|sh| elf.shdr_strtab.get_at(sh.sh_name) == Some(".flash.appdesc"))?;
+    let page = sh.sh_addr.checked_sub(window)? & !(PAGE - 1);
+    Some(page as usize)
+}
+
+/// Bootloader-equivalent factory layout for a loaded C6 ELF: copy the app
+/// from the bare `0x4200_0000` image into the SPI NOR backing at the factory
+/// offset, program the SPI0 MMU, then put the FlashXip window over it.
+///
+/// IROM and DROM share `0x4200_0000`; the MMU lives in SPI0
+/// MMU_ITEM_INDEX/CONTENT (VALID = BIT(9), 256 x 64 KiB). Entries with no ELF
+/// payload stay invalid so `spi_flash_mmap` can allocate free pages for the
+/// partition table at flash `0x8000`.
+///
+/// Call after ELF load. One home for `labwired test`, the RISC-V builder, a
+/// world node and the browser, so the four cannot diverge. Returns the mapped
+/// virtual pages.
+pub fn map_factory_app(bus: &mut SystemBus, elf: &[u8], partitions: Option<&[u8]>) -> Vec<u32> {
+    const PAGE: usize = 64 * 1024;
+    let factory_off = FACTORY_APP_OFFSET as usize;
+    let factory_page = (factory_off / PAGE) as u32; // 1
+    let flash_page_has_payload = |page: &[u8]| -> bool {
+        !(page.iter().all(|&b| b == 0) || page.iter().all(|&b| b == 0xFF))
+    };
+    let mut virt_pages: Vec<u32> = Vec::new();
+    let irom_len = bus.flash.data.len();
+    for page in 0..irom_len.div_ceil(PAGE) {
+        if page >= 256 {
+            break;
+        }
+        let start = page * PAGE;
+        let end = (start + PAGE).min(irom_len);
+        if flash_page_has_payload(&bus.flash.data[start..end]) {
+            virt_pages.push(page as u32);
+        }
+    }
+    // Re-install for (flash, mmu) handles — avoids a new as_any/downcast
+    // site. The fresh backing is then filled from bus.flash.
+    let (flash, mmu) = install_arduino_flash(bus, partitions);
+    {
+        let mut f = flash.lock().unwrap();
+        // Full page copy — unlike C3 (execute stays on bus.flash), C6
+        // FlashXip serves fetches from this backing, so a sparse skip-0x00
+        // copy would corrupt code.
+        for page in &virt_pages {
+            let start = *page as usize * PAGE;
+            let end = (start + PAGE).min(irom_len);
+            let dst = factory_off + start;
+            if start >= irom_len || dst >= f.len() {
+                continue;
+            }
+            let n = (end - start).min(f.len() - dst);
+            f[dst..dst + n].copy_from_slice(&bus.flash.data[start..start + n]);
+        }
+        // App image magic at start of factory partition. VA 0x4200_0000 maps
+        // here, so only stamp the 0x20-byte image-header slot when the ELF
+        // left it empty (IDF/Arduino). A bare-metal ELF linked at 0x4200_0000
+        // owns it — stamping would clobber its first instruction.
+        let header_slot_free = !flash_page_has_payload(&bus.flash.data[..irom_len.min(0x20)]);
+        if header_slot_free && f.len() > factory_off {
+            f[factory_off] = 0xE9;
+        }
+        // IDF 5 links rodata into the same window after the text, and
+        // `system_early_init` checks the magic at the page base of
+        // `_rodata_reserved_start` (the start of `.flash.appdesc`, VA
+        // 0x4203_0000 on an Arduino L0 sketch). On silicon the bootloader
+        // maps the image header there. Stamp it only into an empty header slot.
+        if let Some(page_off) = appdesc_page_offset(elf, XIP_BASE) {
+            let dst = factory_off + page_off;
+            let src = page_off.min(irom_len);
+            let slot = &bus.flash.data[src..(src + 0x20).min(irom_len)];
+            if page_off != 0 && !flash_page_has_payload(slot) && dst < f.len() {
+                f[dst] = 0xE9;
+            }
+        }
+    }
+    for vp in &virt_pages {
+        write_mmu_entry(bus, *vp, factory_page + *vp);
+    }
+    install_xip_window(bus, flash, mmu);
+    virt_pages
+}
+
+/// Post-load half of the C6 ELF fast boot: ROM `.data` re-seed (a segment or
+/// the reset path can leave the interface pointers stale) and the factory
+/// map. Returns the stack top the caller must seed. No-op on other chips,
+/// which get `None`.
+pub fn finish_elf_fast_boot(bus: &mut SystemBus, chip: &ChipDescriptor, elf: &[u8]) -> Option<u32> {
+    if !is_esp32c6(chip) {
+        return None;
+    }
+    seed_rom_data(bus);
+    map_factory_app(bus, elf, None);
+    Some(app_stack_top())
+}
+
 /// C6 mask-ROM `.data` the fast-boot path must seed because it skips the ROM
 /// `unpackloop` (12-byte `{dst_start,dst_end,src}` records at `_data_table_start`).
 /// Without this, `rom_cache_internal_table_ptr` @ `0x4087_ffc8` stays null and
@@ -230,7 +348,19 @@ fn c6_rom_data_init_writes() -> &'static [(u32, &'static [u8])] {
     ]
 }
 
+/// `rom_default_spiflash_legacy_data` in `esp32c6_rev0_rom.elf`: the
+/// `esp_rom_spiflash_chip_t` that `rom_spiflash_legacy_data` points at, i.e.
+/// what ESP-IDF calls `g_rom_flashchip`.
+pub const ROM_DEFAULT_SPIFLASH_LEGACY_DATA: u32 = 0x4087_FA08;
+
 /// Write ROM `.data` interface pointers into HP SRAM (fast-boot only).
+///
+/// Also fills the ROM flash-chip descriptor. On silicon the 2nd-stage
+/// bootloader sets it from the image header; fast boot does not run one, so
+/// `chip_size` stayed 0. `esp_flash_init_default_chip` copies that size into
+/// `esp_flash_default_chip`, and every later `esp_flash_read` (partition
+/// reads, `nvs_flash_init`, `Preferences.begin`) then failed with
+/// `ESP_ERR_INVALID_ARG`.
 pub fn seed_rom_data(bus: &mut SystemBus) {
     use crate::Bus;
     for (dst, bytes) in c6_rom_data_init_writes() {
@@ -241,6 +371,7 @@ pub fn seed_rom_data(bus: &mut SystemBus) {
             }
         }
     }
+    super::esp_partition_table::seed_rom_flashchip(bus, ROM_DEFAULT_SPIFLASH_LEGACY_DATA);
 }
 
 /// Install the C6 Arduino flash substrate when `chip` is a C6; no-op otherwise.
@@ -252,7 +383,7 @@ pub fn maybe_install_arduino_flash(bus: &mut SystemBus, chip: &ChipDescriptor) {
         // Fast-boot skips mask-ROM unpackloop — seed the ROM `.data` tables
         // Arduino cache_hal / Preferences dispatch through.
         seed_rom_data(bus);
-        // FlashXip is installed later (after ELF → factory map) by the CLI.
+        // FlashXip is installed later, after ELF load: `map_factory_app`.
     }
 }
 
@@ -340,16 +471,36 @@ mod tests {
         for (i, byte) in e.iter_mut().enumerate() {
             *byte = bus.read_u8(0x4004_d0d0 + 52 + i as u64).expect("rom");
         }
-        // The ROM image is not committed: without LABWIRED_ESP32C6_ROM the
-        // region stays zero; with Espressif's esp32c6_rev0_rom image the tlsf
-        // table entry at +0x34 is the ROM function 0x400210b2.
+        // The flattened esp32c6_rev0_rom image is in-tree
+        // (crates/core/roms/esp32c6/) and resolves without
+        // LABWIRED_ESP32C6_ROM; its tlsf table entry at +0x34 is the ROM
+        // function 0x400210b2.
         let v = u32::from_le_bytes(e);
-        let expected = if std::env::var_os("LABWIRED_ESP32C6_ROM").is_some() {
-            0x4002_10b2
-        } else {
-            0
+        assert_eq!(v, 0x4002_10b2, "tlsf table entry @ ROM+0x34");
+    }
+
+    /// `rom_spiflash_legacy_data` points at the ROM flash-chip descriptor, and
+    /// that descriptor's `chip_size` is what `esp_flash_default_chip.size`
+    /// becomes. Left 0, every `esp_flash_read` (so `Preferences.begin`) fails.
+    #[test]
+    fn seed_rom_data_fills_the_rom_flash_chip_size() {
+        let mut bus = c6_bus();
+        seed_rom_data(&mut bus);
+        let word = |bus: &SystemBus, at: u64| {
+            let mut b = [0u8; 4];
+            for (i, byte) in b.iter_mut().enumerate() {
+                *byte = bus.read_u8(at + i as u64).expect("read");
+            }
+            u32::from_le_bytes(b)
         };
-        assert_eq!(v, expected, "tlsf table entry @ ROM+0x34");
+        let chip = word(&bus, 0x4087_ffec);
+        assert_eq!(chip, ROM_DEFAULT_SPIFLASH_LEGACY_DATA);
+        assert_eq!(
+            word(&bus, chip as u64 + 4),
+            MODELLED_FLASH_SIZE,
+            "chip_size"
+        );
+        assert_eq!(word(&bus, chip as u64 + 12), 4 * 1024, "sector_size");
     }
 
     #[test]
@@ -419,18 +570,17 @@ mod tests {
         const FLASH_PP: u32 = 1 << 25;
         const ADDR: u64 = 0x04;
         const USER2: u64 = 0x20;
-        const MOSI_DLEN: u64 = 0x24;
         const MISO_DLEN: u64 = 0x28;
         const W0: u64 = 0x58;
         const CMD: u64 = 0x00;
 
+        // `spi_flash_hal_program_page`: ADDR = (addr & 0xFFFFFF) | (len << 24),
+        // no MOSI_DLEN.
         let payload: u32 = 0xA1B2_C3D4;
         bus.write_u32(SPI0_BASE + CMD, FLASH_WREN).expect("WREN");
-        bus.write_u32(SPI0_BASE + ADDR, nvs_off as u32)
+        bus.write_u32(SPI0_BASE + ADDR, nvs_off as u32 | (4 << 24))
             .expect("ADDR");
         bus.write_u32(SPI0_BASE + W0, payload).expect("W0");
-        bus.write_u32(SPI0_BASE + MOSI_DLEN, 32 - 1)
-            .expect("MOSI_DLEN");
         bus.write_u32(SPI0_BASE + CMD, FLASH_PP).expect("PP");
         assert_eq!(
             bus.read_u32(SPI0_BASE + CMD).expect("CMD after PP"),

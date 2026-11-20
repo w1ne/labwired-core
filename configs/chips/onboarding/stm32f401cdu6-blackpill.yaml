@@ -34,22 +34,6 @@ peripherals:
     base_address: 0x40000C00
     size: "1KB"
     irq: 50
-  - id: "rtc"
-    type: "stub"
-    base_address: 0x40002800
-    size: "1KB"
-  - id: "wwdg"
-    type: "stub"
-    base_address: 0x40002C00
-    size: "1KB"
-  - id: "iwdg"
-    type: "stub"
-    base_address: 0x40003000
-    size: "1KB"
-  - id: "i2s2ext"
-    type: "stub"
-    base_address: 0x40003400
-    size: "1KB"
   - id: "spi2"
     type: "spi"
     base_address: 0x40003800
@@ -60,10 +44,6 @@ peripherals:
     base_address: 0x40003C00
     size: "1KB"
     irq: 51
-  - id: "i2s3ext"
-    type: "stub"
-    base_address: 0x40004000
-    size: "1KB"
   - id: "usart2"
     type: "uart"
     base_address: 0x40004400
@@ -74,20 +54,21 @@ peripherals:
     base_address: 0x40005400
     size: "1KB"
     irq: 31
+    config:
+      # F1I2c's separate error output is routed through this explicit vector.
+      irq_error: 32
   - id: "i2c2"
     type: "stm32f1_i2c"
     base_address: 0x40005800
     size: "1KB"
     irq: 33
+    config:
+      irq_error: 34
   - id: "i2c3"
     type: "stm32f1_i2c"
     base_address: 0x40005C00
     size: "1KB"
     irq: 72
-  - id: "pwr"
-    type: "stub"
-    base_address: 0x40007000
-    size: "1KB"
   - id: "tim1"
     type: "timer"
     base_address: 0x40010000
@@ -109,11 +90,6 @@ peripherals:
     irq: 18
     config:
       profile: "stm32f4"
-  - id: "sdio"
-    type: "stub"
-    base_address: 0x40012C00
-    size: "1KB"
-    irq: 49
   - id: "spi1"
     type: "spi"
     base_address: 0x40013000
@@ -124,10 +100,6 @@ peripherals:
     base_address: 0x40013400
     size: "1KB"
     irq: 84
-  - id: "syscfg"
-    type: "stub"
-    base_address: 0x40013800
-    size: "1KB"
   - id: "exti"
     type: "exti"
     base_address: 0x40013C00
@@ -150,22 +122,6 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32f4"
-  - id: "crc"
-    type: "stub"
-    base_address: 0x40023000
-    size: "1KB"
-  - id: "flash_ctrl"
-    type: "stub"
-    base_address: 0x40023C00
-    size: "1KB"
-  - id: "dma1"
-    type: "stub"
-    base_address: 0x40026000
-    size: "1KB"
-  - id: "dma2"
-    type: "stub"
-    base_address: 0x40026400
-    size: "1KB"
   - id: "gpioa"
     type: "gpio"
     base_address: 0x40020000
@@ -202,26 +158,17 @@ peripherals:
     size: "1KB"
     config:
       profile: "stm32v2"
-  - id: "otg_fs_global"
-    type: "stub"
-    base_address: 0x50000000
-    size: "1KB"
-  - id: "otg_fs_host"
-    type: "stub"
-    base_address: 0x50000400
-    size: "1KB"
-  - id: "otg_fs_device"
-    type: "stub"
-    base_address: 0x50000800
-    size: "1KB"
-  - id: "otg_fs_pwrclk"
-    type: "stub"
-    base_address: 0x50000E00
-    size: "512B"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
-  - id: "dbg"
-    type: "stub"
-    base_address: 0xE0042000
-    size: "1KB"
+    size: "16B"
+  - id: "fpu"
+    type: "cortex_m_fpu"
+    base_address: 0xE000EF30
+    size: "28B"
+    # Arm Cortex-M4F TRM DDI 0439B, Table 7-4. The F401 implements the
+    # single-precision FPv4 register set; MVFR2 is not implemented.
+    config:
+      mvfr0: 0x10110021
+      mvfr1: 0x11000011
+      mvfr2: 0x00000000

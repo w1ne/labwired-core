@@ -4,14 +4,53 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+use crate::peripherals::pad_lines::{LineDrive, PadLines};
 use crate::CycleClock;
 use crate::Peripheral;
 use crate::PeripheralTickResult;
 use crate::SimResult;
 use anyhow::Result;
+use std::sync::Arc;
 
 /// Event-token for the self-perpetuating SM step chain under `event-scheduler`.
 const EVT_SM_STEP: u32 = 1;
+
+/// `SHIFTCTRL` reset value (RP2040 datasheet §3.7): IN_SHIFTDIR and
+/// OUT_SHIFTDIR set (shift right), thresholds 0 (= 32), no autopush/pull.
+const SHIFTCTRL_RESET: u32 = 0x000c_0000;
+/// `PINCTRL` reset value: SET_COUNT = 5, everything else 0.
+const PINCTRL_RESET: u32 = 0x1400_0000;
+const SHIFTCTRL_AUTOPUSH: u32 = 1 << 16;
+const SHIFTCTRL_AUTOPULL: u32 = 1 << 17;
+const SHIFTCTRL_IN_SHIFTDIR: u32 = 1 << 18;
+const SHIFTCTRL_OUT_SHIFTDIR: u32 = 1 << 19;
+const SHIFTCTRL_FJOIN_TX: u32 = 1 << 30;
+const SHIFTCTRL_FJOIN_RX: u32 = 1 << 31;
+const EXECCTRL_SIDE_PINDIR: u32 = 1 << 29;
+const EXECCTRL_SIDE_EN: u32 = 1 << 30;
+
+/// One wire line per GPIO the block can drive: line `n` is the PIO's output
+/// to GPIOn (datasheet §3.5.6 — every state machine's pin mapping lands on
+/// the same 32 outputs, and IO_BANK0 FUNCSEL picks which pads listen).
+pub const LINE_NAMES: [&str; 32] = [
+    "PIO_GP0", "PIO_GP1", "PIO_GP2", "PIO_GP3", "PIO_GP4", "PIO_GP5", "PIO_GP6", "PIO_GP7",
+    "PIO_GP8", "PIO_GP9", "PIO_GP10", "PIO_GP11", "PIO_GP12", "PIO_GP13", "PIO_GP14", "PIO_GP15",
+    "PIO_GP16", "PIO_GP17", "PIO_GP18", "PIO_GP19", "PIO_GP20", "PIO_GP21", "PIO_GP22", "PIO_GP23",
+    "PIO_GP24", "PIO_GP25", "PIO_GP26", "PIO_GP27", "PIO_GP28", "PIO_GP29", "PIO_GP30", "PIO_GP31",
+];
+
+/// Write `count` bits of `data` into `word` starting at pin `base`, wrapping
+/// past GPIO31 back to GPIO0 (datasheet §3.5.6).
+fn write_pin_field(word: &mut u32, base: u32, count: u32, data: u32) {
+    for k in 0..count.min(32) {
+        let pin = (base + k) & 31;
+        if data & (1 << k) != 0 {
+            *word |= 1 << pin;
+        } else {
+            *word &= !(1 << pin);
+        }
+    }
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct StateMachine {
@@ -67,8 +106,21 @@ pub struct Pio {
     write_acc: u32,
     write_acc_mask: u8, // bitmask of which bytes have been written (0b1111 = complete)
     write_acc_offset: u64, // register offset being accumulated
+    /// The block's 32 pin outputs and output enables, shared by all four
+    /// state machines (a later SM wins a same-cycle write, as on silicon).
+    pub pin_out: u32,
+    pub pin_dir: u32,
+    /// Output wire to the pads ([`LINE_NAMES`]), created when the bus binds
+    /// a pad to this block; `wired` starts publishing on it.
+    lines: Option<Arc<PadLines>>,
+    wired: bool,
     /// True while a delay-1 SM step event is live (event-scheduler).
     chain_live: bool,
+    /// Cycle of the last executed step when the chain went to sleep because
+    /// every enabled state machine was quiescent (see
+    /// [`Pio::all_enabled_sms_quiescent`]). The only state a skipped tick would
+    /// have advanced is each divider's phase; [`Pio::catch_up`] replays it.
+    sleep_anchor: Option<u64>,
     /// Bus cycle clock, handed over at `add_peripheral`/`push_peripheral` time.
     /// Its presence is the model's proof that it is attached to a bus whose
     /// owning `Machine` actually drains the event scheduler — see
@@ -88,6 +140,8 @@ impl Pio {
         for item in &mut sm {
             item.clkdiv_int = 1;
             item.exec_ctrl = 0x0001f000; // wrap_top=31, wrap_bottom=0
+            item.shift_ctrl = SHIFTCTRL_RESET;
+            item.pin_ctrl = PINCTRL_RESET;
         }
         Self {
             instruction_mem: [0; 32],
@@ -104,7 +158,12 @@ impl Pio {
             write_acc: 0,
             write_acc_mask: 0,
             write_acc_offset: 0xFFFF_FFFF,
+            pin_out: 0,
+            pin_dir: 0,
+            lines: None,
+            wired: false,
             chain_live: false,
+            sleep_anchor: None,
             clock: None,
         }
     }
@@ -129,24 +188,551 @@ impl Pio {
         self.sm.iter().any(|s| s.enabled)
     }
 
-    /// True when every enabled state machine is parked on an unconditional
-    /// `jmp` to its own address, with no delay pending and a 1.0 clock
-    /// divider. A tick then changes nothing: the pc, the divider counter, the
-    /// scratch registers and the FIFOs stay the same, so `fstat` recomputes to
-    /// the same value. The scheduler step chain may stop; any PIO write
-    /// re-arms it through `take_scheduled_events` at the same cycle the live
-    /// delay-1 chain would have ticked.
-    fn all_enabled_sms_parked(&self) -> bool {
-        self.sm.iter().filter(|s| s.enabled).all(|s| {
-            let instr = self.instruction_mem[(s.pc & 0x1F) as usize];
-            // JMP (opcode 0), condition "always" (0), delay/side-set 0.
-            instr & 0xFFE0 == 0
-                && (instr & 0x1F) as u8 == s.pc
-                && s.delay_cycles == 0
-                && !s.stalled
-                && s.clkdiv_int == 1
-                && s.clkdiv_frac == 0
+    /// True when `sm` is parked on an unconditional `jmp` to its own address,
+    /// with no delay pending and a 1.0 clock divider. A tick then changes
+    /// nothing: the pc, the divider counter, the scratch registers and the
+    /// FIFOs stay the same, so `fstat` recomputes to the same value.
+    fn sm_parked(&self, sm: &StateMachine) -> bool {
+        let instr = self.instruction_mem[(sm.pc & 0x1F) as usize];
+        // JMP (opcode 0), condition "always" (0), delay/side-set 0.
+        instr & 0xFFE0 == 0
+            && (instr & 0x1F) as u8 == sm.pc
+            && sm.delay_cycles == 0
+            && !sm.stalled
+            && sm.clkdiv_int == 1
+            && sm.clkdiv_frac == 0
+    }
+
+    /// `CLKDIV` as the divider accumulator sees it: 8.8 fixed point, with an
+    /// integer part of 0 meaning 65536.
+    fn div_total(sm: &StateMachine) -> u32 {
+        let div_int = if sm.clkdiv_int == 0 {
+            65536
+        } else {
+            u32::from(sm.clkdiv_int)
+        };
+        (div_int << 8) | u32::from(sm.clkdiv_frac)
+    }
+
+    /// A copy of the state `execute` reads and writes, with no pad wire and no
+    /// bus clock, to ask "would this instruction stall?" without disturbing
+    /// the live block.
+    fn scratch(&self) -> Pio {
+        let mut p = Pio::new();
+        p.instruction_mem = self.instruction_mem;
+        p.sm = self.sm.clone();
+        p.irq = self.irq;
+        p.pin_out = self.pin_out;
+        p.pin_dir = self.pin_dir;
+        p.tx_fifo = self.tx_fifo.clone();
+        p.rx_fifo = self.rx_fifo.clone();
+        p
+    }
+
+    /// True when state machine `i` is blocked on its current instruction
+    /// (empty TX FIFO under `pull`/autopull, full RX FIFO under `push`/
+    /// autopush, an unmet `wait`) and re-issuing it again would change
+    /// nothing: a stalled `execute` mutates no register, FIFO or flag, and the
+    /// side-set it re-applies is checked separately. Asked of `execute`
+    /// itself on a scratch copy, so it cannot drift from the real stall rules.
+    fn stalled_and_idle(&self, i: usize) -> bool {
+        let sm = &self.sm[i];
+        if !sm.stalled || sm.delay_cycles != 0 {
+            return false;
+        }
+        let instr = self.instruction_mem[(sm.pc & 0x1F) as usize];
+        // Re-applying the side-set must leave the pad state untouched, else
+        // an SM that issues a side-set while stalled still drives pins when
+        // another SM's write lands between two of its re-issues.
+        if let (Some((data, bits)), _) = Self::side_and_delay(sm, instr) {
+            let base = (sm.pin_ctrl >> 10) & 0x1F;
+            let (mut word, cur) = if sm.exec_ctrl & EXECCTRL_SIDE_PINDIR != 0 {
+                (self.pin_dir, self.pin_dir)
+            } else {
+                (self.pin_out, self.pin_out)
+            };
+            write_pin_field(&mut word, base, bits, data);
+            if word != cur {
+                return false;
+            }
+        }
+        let mut scratch = self.scratch();
+        let mut smc = sm.clone();
+        let (_, stalled) = scratch.execute(i, &mut smc, instr);
+        stalled
+    }
+
+    /// True when ticking again would change nothing observable except each
+    /// enabled divider's phase: every enabled state machine is either parked
+    /// (see [`Self::sm_parked`]) or blocked and idle
+    /// ([`Self::stalled_and_idle`]). Those can only be released by an MMIO
+    /// write (FIFO, IRQ, instruction, config) — which re-arms the chain through
+    /// `take_scheduled_events` — because the only input pad this block reads
+    /// is its own output. A divider accumulator at or past its period never
+    /// happens after a tick of a settled divider; it keeps the chain awake so
+    /// [`Self::catch_up`] can stay a closed form.
+    fn all_enabled_sms_quiescent(&self) -> bool {
+        let mut any = false;
+        for (i, sm) in self.sm.iter().enumerate() {
+            if !sm.enabled {
+                continue;
+            }
+            any = true;
+            if sm.clk_counter >= Self::div_total(sm) {
+                return false;
+            }
+            if !self.sm_parked(sm) && !self.stalled_and_idle(i) {
+                return false;
+            }
+        }
+        any
+    }
+
+    /// Replay `ticks` skipped ticks of the enabled state machines' clock
+    /// dividers. One tick adds 256 to the accumulator and takes one period off
+    /// when it reaches it; with the accumulator below the period and the period
+    /// at least 256 that is `(c + 256) mod period`, which composes.
+    fn catch_up(&mut self, ticks: u64) {
+        if ticks == 0 {
+            return;
+        }
+        for sm in self.sm.iter_mut().filter(|s| s.enabled) {
+            let total = u64::from(Self::div_total(sm));
+            sm.clk_counter = ((u64::from(sm.clk_counter) + 256 * ticks) % total) as u32;
+        }
+    }
+
+    /// TX FIFO depth of state machine `i`: 8 when RX is joined into it, 0
+    /// when it is joined into RX, else 4 (datasheet §3.5.2).
+    fn tx_depth(&self, i: usize) -> usize {
+        let shift = self.sm[i].shift_ctrl;
+        if shift & SHIFTCTRL_FJOIN_TX != 0 {
+            8
+        } else if shift & SHIFTCTRL_FJOIN_RX != 0 {
+            0
+        } else {
+            4
+        }
+    }
+
+    fn rx_depth(&self, i: usize) -> usize {
+        let shift = self.sm[i].shift_ctrl;
+        if shift & SHIFTCTRL_FJOIN_RX != 0 {
+            8
+        } else if shift & SHIFTCTRL_FJOIN_TX != 0 {
+            0
+        } else {
+            4
+        }
+    }
+
+    /// `FSTAT`, from the FIFOs as they are now (a TX write between two SM
+    /// steps must already read back as TXFULL to `pio_sm_put_blocking`).
+    fn fstat_value(&self) -> u32 {
+        let mut v = 0;
+        for i in 0..4 {
+            let (tx, rx) = (self.tx_fifo[i].len(), self.rx_fifo[i].len());
+            if tx == 0 {
+                v |= 1 << (24 + i);
+            }
+            if tx >= self.tx_depth(i) {
+                v |= 1 << (16 + i);
+            }
+            if rx == 0 {
+                v |= 1 << (8 + i);
+            }
+            if rx >= self.rx_depth(i) {
+                v |= 1 << i;
+            }
+        }
+        v
+    }
+
+    /// `FLEVEL`: TX level in bits [8i+3:8i], RX level in [8i+7:8i+4].
+    fn flevel_value(&self) -> u32 {
+        (0..4).fold(0, |acc, i| {
+            acc | ((self.tx_fifo[i].len() as u32 & 0xF) << (8 * i))
+                | ((self.rx_fifo[i].len() as u32 & 0xF) << (8 * i + 4))
         })
+    }
+
+    /// Level the state machines see on the GPIO inputs. Only the pads this
+    /// block drives itself are known here: an input pad reads 0 (the block
+    /// has no view of the outside world yet).
+    fn pins_in(&self) -> u32 {
+        self.pin_out & self.pin_dir
+    }
+
+    /// Side-set value (data, bit count) and delay encoded in `instr`'s
+    /// delay/side-set field under `sm`'s PINCTRL/EXECCTRL (datasheet §3.4.1).
+    fn side_and_delay(sm: &StateMachine, instr: u16) -> (Option<(u32, u32)>, u8) {
+        let field = u32::from((instr >> 8) & 0x1F);
+        let ss_count = (sm.pin_ctrl >> 29) & 0x7; // includes the enable bit
+        let delay_bits = 5u32.saturating_sub(ss_count);
+        let delay = (field & ((1 << delay_bits) - 1)) as u8;
+        if ss_count == 0 {
+            return (None, delay);
+        }
+        let side = field >> delay_bits;
+        let (enabled, data_bits) = if sm.exec_ctrl & EXECCTRL_SIDE_EN != 0 {
+            ((side >> (ss_count - 1)) & 1 != 0, ss_count - 1)
+        } else {
+            (true, ss_count)
+        };
+        let data = side & ((1 << data_bits) - 1);
+        (enabled.then_some((data, data_bits)), delay)
+    }
+
+    /// Drive a side-set value onto the side-set pins (or their directions,
+    /// with `SIDE_PINDIR`). Side-set takes effect when the instruction issues,
+    /// stalled or not.
+    fn apply_side_set(&mut self, sm: &StateMachine, data: u32, bits: u32) {
+        let base = (sm.pin_ctrl >> 10) & 0x1F;
+        if sm.exec_ctrl & EXECCTRL_SIDE_PINDIR != 0 {
+            write_pin_field(&mut self.pin_dir, base, bits, data);
+        } else {
+            write_pin_field(&mut self.pin_out, base, bits, data);
+        }
+    }
+
+    fn thresh(field: u32) -> u32 {
+        if field == 0 {
+            32
+        } else {
+            field
+        }
+    }
+
+    fn pull_thresh(sm: &StateMachine) -> u32 {
+        Self::thresh((sm.shift_ctrl >> 25) & 0x1F)
+    }
+
+    fn push_thresh(sm: &StateMachine) -> u32 {
+        Self::thresh((sm.shift_ctrl >> 20) & 0x1F)
+    }
+
+    /// Output shift count: bits shifted out of the OSR since the last refill
+    /// (`osr_count` holds the bits still in it).
+    fn osr_shifted(sm: &StateMachine) -> u32 {
+        32 - u32::from(sm.osr_count.min(32))
+    }
+
+    fn refill_osr(&mut self, i: usize, sm: &mut StateMachine) -> bool {
+        if self.tx_fifo[i].is_empty() {
+            return false;
+        }
+        sm.osr = self.tx_fifo[i].remove(0);
+        sm.osr_count = 32;
+        true
+    }
+
+    fn push_isr(&mut self, i: usize, sm: &mut StateMachine) -> bool {
+        if self.rx_fifo[i].len() >= self.rx_depth(i) {
+            return false;
+        }
+        self.rx_fifo[i].push(sm.isr);
+        sm.isr = 0;
+        sm.isr_count = 0;
+        true
+    }
+
+    /// Execute one instruction on state machine `i` (whose live copy is
+    /// `sm`). Returns `(pc_overridden, stalled)`. Side-set and delay are the
+    /// caller's.
+    fn execute(&mut self, i: usize, sm: &mut StateMachine, instr: u16) -> (bool, bool) {
+        let opcode = (instr >> 13) & 0x7;
+        let mut pc_overridden = false;
+        let mut stalled = false;
+        let pins_in = self.pins_in();
+        let in_base = (sm.pin_ctrl >> 15) & 0x1F;
+        let bit_count = |instr: u16| -> u32 {
+            match u32::from(instr & 0x1F) {
+                0 => 32,
+                n => n,
+            }
+        };
+        let low_bits = |v: u32, n: u32| if n >= 32 { v } else { v & ((1 << n) - 1) };
+
+        match opcode {
+            0 => {
+                // JMP
+                let cond = (instr >> 5) & 0x7;
+                let target = instr & 0x1F;
+                let should_jump = match cond {
+                    0 => true,
+                    1 => sm.x == 0,
+                    2 => {
+                        let tmp = sm.x != 0;
+                        sm.x = sm.x.wrapping_sub(1);
+                        tmp
+                    }
+                    3 => sm.y == 0,
+                    4 => {
+                        let tmp = sm.y != 0;
+                        sm.y = sm.y.wrapping_sub(1);
+                        tmp
+                    }
+                    5 => sm.x != sm.y,
+                    6 => pins_in & (1 << ((sm.exec_ctrl >> 24) & 0x1F)) != 0,
+                    // !OSRE: output shift count below the pull threshold.
+                    _ => Self::osr_shifted(sm) < Self::pull_thresh(sm),
+                };
+                if should_jump {
+                    sm.pc = target as u8;
+                    pc_overridden = true;
+                }
+            }
+            1 => {
+                // WAIT
+                let pol = (instr >> 7) & 0x1 != 0;
+                let source = (instr >> 5) & 0x3;
+                let index = u32::from(instr & 0x1F);
+
+                let val = match source {
+                    0 => pins_in & (1 << index) != 0,
+                    1 => pins_in & (1 << ((in_base + index) & 31)) != 0,
+                    2 => (self.irq & (1 << (index & 7))) != 0,
+                    _ => false,
+                };
+
+                if val != pol {
+                    stalled = true;
+                } else if source == 2 && pol {
+                    // `wait 1 irq` clears the flag it waited for.
+                    self.irq &= !(1 << (index & 7));
+                }
+            }
+            2 => {
+                // IN
+                let src = (instr >> 5) & 0x7;
+                let count = bit_count(instr);
+                let autopush = sm.shift_ctrl & SHIFTCTRL_AUTOPUSH != 0;
+                let thresh = Self::push_thresh(sm);
+                if autopush && u32::from(sm.isr_count) >= thresh && !self.push_isr(i, sm) {
+                    stalled = true;
+                } else {
+                    let val = match src {
+                        0 => pins_in.rotate_right(in_base),
+                        1 => sm.x,
+                        2 => sm.y,
+                        6 => sm.isr,
+                        7 => sm.osr,
+                        _ => 0,
+                    };
+                    let data = low_bits(val, count);
+                    sm.isr = if count == 32 {
+                        data
+                    } else if sm.shift_ctrl & SHIFTCTRL_IN_SHIFTDIR != 0 {
+                        (sm.isr >> count) | (data << (32 - count))
+                    } else {
+                        (sm.isr << count) | data
+                    };
+                    sm.isr_count = (u32::from(sm.isr_count) + count).min(32) as u8;
+                    if autopush && u32::from(sm.isr_count) >= thresh {
+                        self.push_isr(i, sm);
+                    }
+                }
+            }
+            3 => {
+                // OUT
+                let dest = (instr >> 5) & 0x7;
+                let count = bit_count(instr);
+                let autopull = sm.shift_ctrl & SHIFTCTRL_AUTOPULL != 0;
+                let thresh = Self::pull_thresh(sm);
+                if autopull && Self::osr_shifted(sm) >= thresh && !self.refill_osr(i, sm) {
+                    stalled = true;
+                } else {
+                    let val = if sm.shift_ctrl & SHIFTCTRL_OUT_SHIFTDIR != 0 {
+                        let d = low_bits(sm.osr, count);
+                        sm.osr = if count == 32 { 0 } else { sm.osr >> count };
+                        d
+                    } else {
+                        let d = if count == 32 {
+                            sm.osr
+                        } else {
+                            sm.osr >> (32 - count)
+                        };
+                        sm.osr = if count == 32 { 0 } else { sm.osr << count };
+                        d
+                    };
+                    sm.osr_count = u32::from(sm.osr_count).saturating_sub(count) as u8;
+                    let out_base = sm.pin_ctrl & 0x1F;
+                    let out_count = (sm.pin_ctrl >> 20) & 0x3F;
+                    match dest {
+                        0 => write_pin_field(&mut self.pin_out, out_base, out_count, val),
+                        1 => sm.x = val,
+                        2 => sm.y = val,
+                        4 => write_pin_field(&mut self.pin_dir, out_base, out_count, val),
+                        5 => {
+                            sm.pc = (val & 0x1F) as u8;
+                            pc_overridden = true;
+                        }
+                        6 => {
+                            sm.isr = val;
+                            sm.isr_count = count as u8;
+                        }
+                        _ => {}
+                    }
+                    if autopull && Self::osr_shifted(sm) >= thresh {
+                        self.refill_osr(i, sm);
+                    }
+                }
+            }
+            4 => {
+                // PUSH / PULL
+                let block = (instr >> 5) & 0x1 != 0;
+                let if_cond = (instr >> 6) & 0x1 != 0;
+                let is_pull = (instr >> 7) & 0x1 != 0;
+                if is_pull {
+                    if if_cond && Self::osr_shifted(sm) < Self::pull_thresh(sm) {
+                        // `pull ifempty` with the OSR not yet empty: no-op.
+                    } else if self.refill_osr(i, sm) {
+                    } else if block {
+                        stalled = true;
+                    } else {
+                        sm.osr = sm.x;
+                        sm.osr_count = 32;
+                    }
+                } else if if_cond && u32::from(sm.isr_count) < Self::push_thresh(sm) {
+                    // `push iffull` below the threshold: no-op.
+                } else if !self.push_isr(i, sm) && block {
+                    stalled = true;
+                }
+            }
+            5 => {
+                // MOV
+                let dest = (instr >> 5) & 0x7;
+                let op = (instr >> 3) & 0x3;
+                let src = instr & 0x7;
+                let mut val = match src {
+                    0 => pins_in.rotate_right(in_base),
+                    1 => sm.x,
+                    2 => sm.y,
+                    5 => {
+                        // STATUS: all-ones while the selected FIFO level < N.
+                        let n = (sm.exec_ctrl & 0xF) as usize;
+                        let level = if sm.exec_ctrl & 0x10 != 0 {
+                            self.rx_fifo[i].len()
+                        } else {
+                            self.tx_fifo[i].len()
+                        };
+                        if level < n {
+                            u32::MAX
+                        } else {
+                            0
+                        }
+                    }
+                    6 => sm.isr,
+                    7 => sm.osr,
+                    _ => 0,
+                };
+                match op {
+                    1 => val = !val,
+                    2 => val = val.reverse_bits(),
+                    _ => {}
+                }
+                match dest {
+                    0 => write_pin_field(
+                        &mut self.pin_out,
+                        sm.pin_ctrl & 0x1F,
+                        (sm.pin_ctrl >> 20) & 0x3F,
+                        val,
+                    ),
+                    1 => sm.x = val,
+                    2 => sm.y = val,
+                    4 => {
+                        // EXEC (MOV only): not modelled.
+                    }
+                    5 => {
+                        sm.pc = (val & 0x1F) as u8;
+                        pc_overridden = true;
+                    }
+                    6 => {
+                        sm.isr = val;
+                        sm.isr_count = 0;
+                    }
+                    7 => {
+                        sm.osr = val;
+                        sm.osr_count = 32;
+                    }
+                    _ => {}
+                }
+            }
+            6 => {
+                // IRQ
+                let set_clear = (instr >> 6) & 0x1;
+                let index = instr & 0x7;
+                if set_clear == 0 {
+                    self.irq |= 1 << index;
+                } else {
+                    self.irq &= !(1 << index);
+                }
+            }
+            _ => {
+                // SET
+                let dest = (instr >> 5) & 0x7;
+                let data = u32::from(instr & 0x1F);
+                let set_base = (sm.pin_ctrl >> 5) & 0x1F;
+                let set_count = (sm.pin_ctrl >> 26) & 0x7;
+                match dest {
+                    0 => write_pin_field(&mut self.pin_out, set_base, set_count, data),
+                    1 => sm.x = data,
+                    2 => sm.y = data,
+                    4 => write_pin_field(&mut self.pin_dir, set_base, set_count, data),
+                    _ => {}
+                }
+            }
+        }
+        (pc_overridden, stalled)
+    }
+
+    /// `SMx_INSTR` write: run `instr` on state machine `i` right away
+    /// (pico-sdk `pio_sm_exec`, which is how `pio_sm_set_consecutive_pindirs`
+    /// and `pio_sm_set_pins` reach the pins). Delay is ignored.
+    fn exec_now(&mut self, i: usize, instr: u16) {
+        let mut sm = self.sm[i].clone();
+        if let (Some((data, bits)), _) = Self::side_and_delay(&sm, instr) {
+            self.apply_side_set(&sm, data, bits);
+        }
+        let _ = self.execute(i, &mut sm, instr);
+        self.sm[i] = sm;
+        self.publish();
+    }
+
+    /// The pin-output wire ([`LINE_NAMES`]); `arm` starts publishing on it,
+    /// once the bus has bound a pad that can carry it.
+    pub fn pin_lines(&mut self, arm: bool) -> Arc<PadLines> {
+        let lines = self
+            .lines
+            .get_or_insert_with(|| {
+                let lines = PadLines::new(&LINE_NAMES, &[false; 32]);
+                for line in 0..32 {
+                    lines.set_mode(line, LineDrive::Input);
+                }
+                Arc::new(lines)
+            })
+            .clone();
+        if arm && !self.wired {
+            self.wired = true;
+            self.publish();
+        }
+        lines
+    }
+
+    /// Publish the pin outputs and enables onto the wire: an enabled output
+    /// drives its pad push-pull, a disabled one leaves it to the outside.
+    fn publish(&self) {
+        let Some(lines) = self.lines.as_deref().filter(|_| self.wired) else {
+            return;
+        };
+        for line in 0..32 {
+            let mode = if self.pin_dir & (1 << line) != 0 {
+                LineDrive::PushPull
+            } else {
+                LineDrive::Input
+            };
+            lines.drive_line(line, mode, self.pin_out & (1 << line) != 0);
+        }
     }
 
     pub fn load_program_asm(&mut self, asm: &str) -> Result<()> {
@@ -187,9 +773,9 @@ impl Pio {
         let offset = addr & 0x1FF;
         match offset {
             0x000 => self.ctrl,
-            0x004 => self.fstat,
+            0x004 => self.fstat_value(),
             0x008 => self.fdebug,
-            0x00c => self.flevel,
+            0x00c => self.flevel_value(),
             0x020..=0x02c => {
                 let idx = ((offset - 0x020) / 4) as usize;
                 if idx < 4 && !self.rx_fifo[idx].is_empty() {
@@ -200,6 +786,10 @@ impl Pio {
             }
             0x030 => self.irq as u32,
             0x038 => self.input_sync_bypass,
+            0x03c => self.pin_out,
+            0x040 => self.pin_dir,
+            // DBG_CFGINFO: IMEM_SIZE 32, SM_COUNT 4, FIFO_DEPTH 4.
+            0x044 => 0x0020_0404,
             0x048..=0x0c4 => {
                 let idx = ((offset - 0x048) / 4) as usize;
                 if idx < 32 {
@@ -218,10 +808,9 @@ impl Pio {
                         4 => sm.exec_ctrl,
                         8 => sm.shift_ctrl,
                         12 => sm.pc as u32,
-                        _ => {
-                            crate::census_reg!("pio:Pio", reg_off, "read");
-                            0
-                        }
+                        16 => self.instruction_mem[(sm.pc & 0x1F) as usize] as u32,
+                        20 => sm.pin_ctrl,
+                        _ => 0,
                     }
                 } else {
                     0
@@ -238,15 +827,27 @@ impl Pio {
         let offset = addr & 0x1FF;
         match offset {
             0x000 => {
-                self.ctrl = value;
+                // SM_RESTART [7:4] and CLKDIV_RESTART [11:8] self-clear.
+                self.ctrl = value & 0xF;
                 for i in 0..4 {
-                    self.sm[i].enabled = (value & (1 << i)) != 0;
+                    let sm = &mut self.sm[i];
+                    sm.enabled = (value & (1 << i)) != 0;
+                    if value & (1 << (4 + i)) != 0 {
+                        sm.isr = 0;
+                        sm.isr_count = 0;
+                        sm.osr_count = 0;
+                        sm.delay_cycles = 0;
+                        sm.stalled = false;
+                    }
+                    if value & (1 << (8 + i)) != 0 {
+                        sm.clk_counter = 0;
+                    }
                 }
             }
             0x008 => self.fdebug &= !value, // W1C
             0x010..=0x01c => {
                 let sm_idx = ((offset - 0x010) / 4) as usize;
-                if self.tx_fifo[sm_idx].len() < 4 {
+                if self.tx_fifo[sm_idx].len() < self.tx_depth(sm_idx) {
                     self.tx_fifo[sm_idx].push(value);
                 } else {
                     self.fdebug |= 1 << (16 + sm_idx); // TXOVER
@@ -273,9 +874,8 @@ impl Pio {
                         4 => self.sm[sm_idx].exec_ctrl = value,
                         8 => self.sm[sm_idx].shift_ctrl = value,
                         12 => self.sm[sm_idx].pc = (value & 0x1F) as u8,
-                        _ => {
-                            crate::census_reg!("pio:Pio", reg_off, "write");
-                        }
+                        16 => self.exec_now(sm_idx, value as u16),
+                        _ => self.sm[sm_idx].pin_ctrl = value,
                     }
                 }
             }
@@ -321,6 +921,7 @@ impl Peripheral for Pio {
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
+        let (out_before, dir_before) = (self.pin_out, self.pin_dir);
         for i in 0..4 {
             let mut sm = self.sm[i].clone();
             if !sm.enabled {
@@ -349,206 +950,18 @@ impl Peripheral for Pio {
             }
 
             let instr = self.instruction_mem[sm.pc as usize];
-            let opcode = (instr >> 13) & 0x7;
-            let delay_side = (instr >> 8) & 0x1F;
-
-            let mut pc_overridden = false;
-            let mut stalled = false;
-
-            // Simple Delay logic (for now, assuming all 5 bits are Delay)
-            sm.delay_cycles = delay_side as u8;
-
-            match opcode {
-                0 => {
-                    // JMP
-                    let cond = (instr >> 5) & 0x7;
-                    let target = instr & 0x1F;
-                    let should_jump = match cond {
-                        0 => true,
-                        1 => sm.x == 0,
-                        2 => {
-                            let tmp = sm.x != 0;
-                            sm.x = sm.x.saturating_sub(1);
-                            tmp
-                        }
-                        3 => sm.y == 0,
-                        4 => {
-                            let tmp = sm.y != 0;
-                            sm.y = sm.y.saturating_sub(1);
-                            tmp
-                        }
-                        5 => sm.x != sm.y,
-                        7 => sm.osr_count == 0,
-                        _ => false,
-                    };
-                    if should_jump {
-                        sm.pc = target as u8;
-                        pc_overridden = true;
-                    }
-                }
-                1 => {
-                    // WAIT
-                    let pol = (instr >> 7) & 0x1 != 0;
-                    let source = (instr >> 5) & 0x3;
-                    let index = instr & 0x1F;
-
-                    let val = match source {
-                        2 => (self.irq & (1 << index)) != 0,
-                        _ => false, // TODO: GPIO/PIN
-                    };
-
-                    if val != pol {
-                        stalled = true;
-                    }
-                }
-                2 => {
-                    // IN
-                    let src = (instr >> 5) & 0x7;
-                    let count = if (instr & 0x1F) == 0 {
-                        32
-                    } else {
-                        instr & 0x1F
-                    };
-                    let val = match src {
-                        1 => sm.x,
-                        2 => sm.y,
-                        6 => sm.isr,
-                        7 => sm.osr,
-                        _ => 0,
-                    };
-                    let mask = if count == 32 {
-                        0xFFFFFFFF
-                    } else {
-                        (1 << count) - 1
-                    };
-                    if count == 32 {
-                        sm.isr = val;
-                    } else {
-                        sm.isr = (sm.isr >> count) | ((val & mask) << (32 - count));
-                    }
-                    sm.isr_count = (sm.isr_count + count as u8).min(32);
-                }
-                3 => {
-                    // OUT
-                    let dest = (instr >> 5) & 0x7;
-                    let count = if (instr & 0x1F) == 0 {
-                        32
-                    } else {
-                        instr & 0x1F
-                    };
-                    let val = if sm.osr_count >= count as u8 {
-                        let mask = if count == 32 {
-                            0xFFFFFFFF
-                        } else {
-                            (1 << count) - 1
-                        };
-                        let tmp = sm.osr & mask;
-                        if count == 32 {
-                            sm.osr = 0;
-                        } else {
-                            sm.osr >>= count;
-                        }
-                        sm.osr_count -= count as u8;
-                        tmp
-                    } else {
-                        stalled = true;
-                        0
-                    };
-                    if !stalled {
-                        match dest {
-                            1 => sm.x = val,
-                            2 => sm.y = val,
-                            5 => {
-                                sm.pc = (val & 0x1F) as u8;
-                                pc_overridden = true;
-                            }
-                            6 => {
-                                sm.isr = val;
-                                sm.isr_count = count as u8;
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                4 => {
-                    // PUSH / PULL
-                    let block = (instr >> 5) & 0x1 != 0;
-                    let is_pull = (instr >> 7) & 0x1 != 0;
-                    if is_pull {
-                        if !self.tx_fifo[i].is_empty() {
-                            sm.osr = self.tx_fifo[i].remove(0);
-                            sm.osr_count = 32;
-                        } else if block {
-                            stalled = true;
-                        } else {
-                            sm.osr = sm.x;
-                            sm.osr_count = 32;
-                        }
-                    } else if self.rx_fifo[i].len() < 4 {
-                        self.rx_fifo[i].push(sm.isr);
-                        sm.isr = 0;
-                        sm.isr_count = 0;
-                    } else if block {
-                        stalled = true;
-                    }
-                }
-                5 => {
-                    // MOV
-                    let dest = (instr >> 5) & 0x7;
-                    let op = (instr >> 3) & 0x3;
-                    let src = instr & 0x7;
-                    let mut val = match src {
-                        1 => sm.x,
-                        2 => sm.y,
-                        6 => sm.isr,
-                        7 => sm.osr,
-                        _ => 0,
-                    };
-                    match op {
-                        1 => val = !val,
-                        2 => val = val.reverse_bits(),
-                        _ => {}
-                    }
-                    match dest {
-                        1 => sm.x = val,
-                        2 => sm.y = val,
-                        4 => {
-                            // EXEC (MOV only): execute val as instruction
-                            // Simplified placeholder
-                        }
-                        5 => {
-                            sm.pc = (val & 0x1F) as u8;
-                            pc_overridden = true;
-                        }
-                        6 => sm.isr = val,
-                        7 => sm.osr = val,
-                        _ => {}
-                    }
-                }
-                6 => {
-                    // IRQ
-                    let set_clear = (instr >> 6) & 0x1;
-                    let index = instr & 0x7;
-                    if set_clear == 0 {
-                        self.irq |= 1 << index;
-                    } else {
-                        self.irq &= !(1 << index);
-                    }
-                }
-                7 => {
-                    // SET
-                    let dest = (instr >> 5) & 0x7;
-                    let data = instr & 0x1F;
-                    match dest {
-                        1 => sm.x = data as u32,
-                        2 => sm.y = data as u32,
-                        _ => {}
-                    }
-                }
-                _ => {}
+            let (side, delay) = Self::side_and_delay(&sm, instr);
+            if let Some((data, bits)) = side {
+                self.apply_side_set(&sm, data, bits);
             }
+            let (pc_overridden, stalled) = self.execute(i, &mut sm, instr);
 
+            // A stalled instruction re-issues next cycle; its delay only
+            // starts once it completes.
             sm.stalled = stalled;
+            if !stalled {
+                sm.delay_cycles = delay;
+            }
             if !pc_overridden && !stalled {
                 let wrap_top = ((sm.exec_ctrl >> 12) & 0x1F) as u8;
                 let wrap_bottom = ((sm.exec_ctrl >> 7) & 0x1F) as u8;
@@ -561,20 +974,10 @@ impl Peripheral for Pio {
             self.sm[i] = sm;
         }
 
-        self.fstat = 0;
-        for i in 0..4 {
-            if self.tx_fifo[i].is_empty() {
-                self.fstat |= 1 << (24 + i);
-            }
-            if self.tx_fifo[i].len() == 4 {
-                self.fstat |= 1 << (16 + i);
-            }
-            if self.rx_fifo[i].is_empty() {
-                self.fstat |= 1 << (8 + i);
-            }
-            if self.rx_fifo[i].len() == 4 {
-                self.fstat |= 1 << i;
-            }
+        self.fstat = self.fstat_value();
+        self.flevel = self.flevel_value();
+        if (self.pin_out, self.pin_dir) != (out_before, dir_before) {
+            self.publish();
         }
 
         PeripheralTickResult {
@@ -582,6 +985,16 @@ impl Peripheral for Pio {
             cycles: 0,
             ..Default::default()
         }
+    }
+
+    /// The pin-output wire ([`LINE_NAMES`]), through the same capability
+    /// the RP2040 PWM publishes its A/B outputs with.
+    fn timer_output_lines(&mut self, arm: bool) -> Option<Arc<PadLines>> {
+        Some(self.pin_lines(arm))
+    }
+
+    fn wire_lines(&self) -> Option<&PadLines> {
+        self.lines.as_deref()
     }
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
@@ -602,6 +1015,19 @@ impl Peripheral for Pio {
         !self.scheduler_mode()
     }
 
+    /// Settle the divider phase a sleeping chain skipped, up to `now_cycle`,
+    /// before an MMIO write can change the divider or the enabled set. The
+    /// ticks skipped are those at cycles `anchor+1..=now_cycle`; the re-armed
+    /// chain's first step then lands at `now_cycle + 1` with no gap.
+    fn sync_to(&mut self, now_cycle: u64) {
+        if let Some(anchor) = self.sleep_anchor {
+            if now_cycle > anchor {
+                self.catch_up(now_cycle - anchor);
+                self.sleep_anchor = Some(now_cycle);
+            }
+        }
+    }
+
     fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
         if !self.scheduler_mode() {
             return Vec::new();
@@ -617,17 +1043,33 @@ impl Peripheral for Pio {
     fn on_event(
         &mut self,
         event_token: u32,
-        _sched: &mut crate::sched::EventScheduler,
+        sched: &mut crate::sched::EventScheduler,
         _bus: &mut dyn crate::Bus,
     ) -> crate::sched::EventResult {
         if !self.scheduler_mode() || event_token != EVT_SM_STEP {
             return crate::sched::EventResult::default();
         }
+        // Ticks at `anchor+1..now` were skipped while asleep; this event is the
+        // tick at `now` itself.
+        if let Some(anchor) = self.sleep_anchor.take() {
+            self.catch_up(sched.now().saturating_sub(anchor).saturating_sub(1));
+        }
+        // Pin edges land at the cycle this step belongs to.
+        if let Some(lines) = &self.lines {
+            lines.set_stamp(Some(sched.now()));
+        }
         let _ = self.tick();
-        // A parked chain stops; the next PIO write re-arms it (see
-        // `all_enabled_sms_parked`). `LABWIRED_PIO_PARK=0` keeps it ticking.
-        let active = self.any_sm_enabled() && !(park_enabled() && self.all_enabled_sms_parked());
+        if let Some(lines) = &self.lines {
+            lines.set_stamp(None);
+        }
+        // A parked or blocked chain stops; the next PIO write re-arms it (see
+        // `all_enabled_sms_quiescent`). `LABWIRED_PIO_PARK=0` keeps it ticking.
+        let sleeps = park_enabled() && self.all_enabled_sms_quiescent();
+        let active = self.any_sm_enabled() && !sleeps;
         self.chain_live = active;
+        if sleeps {
+            self.sleep_anchor = Some(sched.now());
+        }
         crate::sched::EventResult {
             reschedule_delay: active.then_some(1),
             ..Default::default()
@@ -685,6 +1127,228 @@ mod tests {
         pio.write_reg(0x048, 0x0100); // `jmp 0 [1]`: a delay is pending each loop
         let _ = pio.take_scheduled_events();
         assert_eq!(step(&mut pio), Some(1), "a delayed jmp keeps stepping");
+    }
+
+    /// Drives one `Pio` the way `Machine` does at tick interval 1: a write at
+    /// cycle `now` syncs the block, applies, and arms the wakes it asks for at
+    /// `now + 1 + delay`; a step advances to the next cycle and runs the events
+    /// that are due, rescheduling at `now + delay`.
+    struct Drive {
+        pio: Pio,
+        events: Vec<u64>,
+        now: u64,
+        sched: crate::sched::EventScheduler,
+        bus: crate::bus::SystemBus,
+        fired: u64,
+    }
+
+    impl Drive {
+        fn new() -> Self {
+            let mut pio = Pio::new();
+            pio.attach_cycle_clock(CycleClock::default());
+            Self {
+                pio,
+                events: Vec::new(),
+                now: 0,
+                sched: crate::sched::EventScheduler::new(),
+                bus: crate::bus::SystemBus::new(),
+                fired: 0,
+            }
+        }
+
+        fn write(&mut self, addr: u64, value: u32) {
+            self.pio.sync_to(self.now);
+            self.pio.write_reg(addr, value);
+            for (delay, token) in self.pio.take_scheduled_events() {
+                assert_eq!(token, EVT_SM_STEP);
+                self.events.push(self.now + 1 + delay);
+            }
+        }
+
+        fn step(&mut self) {
+            self.now += 1;
+            let due = self.events.iter().filter(|d| **d <= self.now).count();
+            self.events.retain(|d| *d > self.now);
+            self.sched.advance_to(self.now);
+            for _ in 0..due {
+                self.fired += 1;
+                let res = self
+                    .pio
+                    .on_event(EVT_SM_STEP, &mut self.sched, &mut self.bus);
+                if let Some(delay) = res.reschedule_delay {
+                    self.events.push(self.now + delay);
+                }
+            }
+        }
+    }
+
+    /// What firmware can observe of a block at a cycle.
+    fn observable(pio: &Pio) -> String {
+        format!(
+            "out={:08x} dir={:08x} irq={:02x} fstat={:08x} flevel={:08x} sm={:?}",
+            pio.pin_out,
+            pio.pin_dir,
+            pio.irq,
+            pio.fstat_value(),
+            pio.flevel_value(),
+            pio.sm
+                .iter()
+                .map(|s| (
+                    s.pc,
+                    s.x,
+                    s.y,
+                    s.osr,
+                    s.osr_count,
+                    s.isr,
+                    s.isr_count,
+                    s.delay_cycles
+                ))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// Replay `script` on a per-cycle walk (`tick()`, no clock) and on the
+    /// event path, and require the same observable state at every cycle and
+    /// the same divider phase at the end. Returns how many events the event
+    /// path fired.
+    fn assert_walk_identical(script: &[(u64, u64, u32)], cycles: u64) -> u64 {
+        let mut walk = Pio::new();
+        let mut ev = Drive::new();
+        for c in 1..=cycles {
+            for &(at, addr, value) in script {
+                if at == c {
+                    walk.write_reg(addr, value);
+                    ev.now = c - 1;
+                    ev.write(addr, value);
+                }
+            }
+            ev.now = c - 1;
+            walk.tick();
+            ev.step();
+            assert_eq!(
+                observable(&walk),
+                observable(&ev.pio),
+                "diverged at cycle {c}"
+            );
+        }
+        ev.pio.sync_to(cycles);
+        for i in 0..4 {
+            assert_eq!(
+                walk.sm[i].clk_counter, ev.pio.sm[i].clk_counter,
+                "SM{i} divider phase after {cycles} cycles"
+            );
+        }
+        ev.fired
+    }
+
+    const PULL_BLOCK: u32 = 0x80A0;
+    const OUT_PINS_8: u32 = 0x6008;
+    const JMP_0: u32 = 0x0000;
+    const WAIT_1_IRQ_0: u32 = 0x20C0;
+    const SET_PINS_31: u32 = 0xE01F;
+    const SET_PINS_0: u32 = 0xE000;
+
+    /// `pull block; out pins, 8; jmp 0` with SM0 driving 8 pins.
+    fn pull_out_program(clkdiv: u32) -> Vec<(u64, u64, u32)> {
+        vec![
+            (1, 0x048, PULL_BLOCK),
+            (1, 0x04c, OUT_PINS_8),
+            (1, 0x050, JMP_0),
+            (1, 0x0dc, 8 << 20), // SM0_PINCTRL: OUT_COUNT = 8, base 0
+            (1, 0x0c8, clkdiv),
+            (1, 0x000, 1), // CTRL: SM0 on
+        ]
+    }
+
+    /// A state machine blocked on an empty TX FIFO sleeps instead of being
+    /// stepped every cycle, and a FIFO write wakes it on the next cycle.
+    #[test]
+    fn a_stalled_pull_sleeps_and_a_fifo_write_wakes_it() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let mut d = Drive::new();
+        for (_, addr, value) in pull_out_program(0x0001_0000) {
+            d.write(addr, value);
+        }
+        for _ in 0..10_000 {
+            d.step();
+        }
+        assert!(
+            d.fired < 8,
+            "a blocked `pull` must not tick every cycle, fired {}",
+            d.fired
+        );
+        assert!(d.events.is_empty(), "nothing pending while blocked");
+        d.write(0x010, 0xA5);
+        let before = d.fired;
+        d.step(); // pull completes
+        d.step(); // out pins, 8
+        assert_eq!(d.pio.pin_out & 0xFF, 0xA5);
+        assert!(d.fired > before);
+    }
+
+    /// The divider phase a sleeping chain skipped is replayed exactly: a
+    /// fractional and an integer divider, writes landing at unaligned cycles,
+    /// a divider rewritten while asleep.
+    #[test]
+    fn a_sleeping_divided_pull_matches_the_per_cycle_walk() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let mut script = pull_out_program(0x0003_8000); // 3.5
+        script.extend([
+            (500, 0x010, 0xA5),
+            (1337, 0x010, 0x3C),
+            (3001, 0x0c8, 0x0007_0000), // 7.0
+            (3500, 0x010, 0x55),
+            (4003, 0x0c8, 0x0087_4000), // 135.25
+            (4900, 0x010, 0x0F),
+            (6001, 0x010, 0xF0),
+        ]);
+        let fired = assert_walk_identical(&script, 7000);
+        assert!(fired < 3000, "asleep most of the run, fired {fired}");
+    }
+
+    /// `wait 1 irq 0` blocks until the flag is forced; the force wakes the
+    /// chain, the program runs, and it blocks again.
+    #[test]
+    fn a_sleeping_wait_on_irq_matches_the_per_cycle_walk() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let script = vec![
+            (1, 0x048, WAIT_1_IRQ_0),
+            (1, 0x04c, SET_PINS_31),
+            (1, 0x050, SET_PINS_0),
+            (1, 0x054, JMP_0),
+            (1, 0x0c8, 0x0002_4000), // 2.25
+            (1, 0x000, 1),
+            (900, 0x034, 1), // IRQ_FORCE
+            (2501, 0x034, 1),
+        ];
+        let fired = assert_walk_identical(&script, 4000);
+        assert!(fired < 1500, "asleep most of the run, fired {fired}");
+    }
+
+    /// SM0 blocked on an empty FIFO while SM1 ping-pongs between two jumps:
+    /// the running machine needs every cycle, so the chain stays awake, and it
+    /// still matches the walk.
+    #[test]
+    fn a_running_state_machine_keeps_the_chain_awake() {
+        if !crate::cycle_clock::event_scheduler_enabled() {
+            return;
+        }
+        let script = vec![
+            (1, 0x048, PULL_BLOCK),
+            (1, 0x05c, 0x0004), // INSTR_MEM5: jmp 4
+            (1, 0x058, 0x0005), // INSTR_MEM4: jmp 5
+            (1, 0x0ec, 4),      // SM1_ADDR = 4
+            (1, 0x000, 0b11),
+            (300, 0x010, 7),
+        ];
+        let fired = assert_walk_identical(&script, 600);
+        assert!(fired >= 590, "SM1 never sleeps, fired {fired}");
     }
 
     #[test]
@@ -884,5 +1548,107 @@ mod tests {
         pio.tick(); // OUT Y, 32
         assert_eq!(pio.sm[0].y, 0xDEADBEEF);
         assert_eq!(pio.sm[0].osr_count, 0);
+    }
+
+    /// `.side_set 1 opt`: SIDESET_COUNT 2 counts the enable bit, so a
+    /// side-set only happens on instructions that set it, and the delay
+    /// field shrinks to 3 bits.
+    #[test]
+    fn optional_side_set_only_drives_when_enabled() {
+        let mut pio = Pio::new();
+        pio.sm[0].pin_ctrl = (2 << 29) | (5 << 10); // SIDESET_COUNT 2, base GP5
+        pio.sm[0].exec_ctrl |= EXECCTRL_SIDE_EN;
+        pio.pin_dir = 1 << 5;
+        // `nop side 1 [3]`: enable bit 12, data bit 11, delay 3.
+        pio.instruction_mem[0] = 0xa042 | (1 << 12) | (1 << 11) | (3 << 8);
+        // `nop [7]` with no side-set: the pin keeps its level.
+        pio.instruction_mem[1] = 0xa042 | (7 << 8);
+        pio.write_reg(0, 1);
+        pio.tick();
+        assert_eq!(pio.pin_out, 1 << 5);
+        assert_eq!(pio.sm[0].delay_cycles, 3);
+        for _ in 0..4 {
+            pio.tick();
+        }
+        assert_eq!(pio.sm[0].pc, 2);
+        assert_eq!(pio.sm[0].delay_cycles, 7, "3 delay bits, not 5");
+        assert_eq!(pio.pin_out, 1 << 5);
+    }
+
+    /// OUT shifting left with autopull at 24 bits: the MSBs of the FIFO word
+    /// come out first, and the 25th OUT stalls on an empty FIFO.
+    #[test]
+    fn out_left_autopull_takes_the_top_24_bits_then_stalls() {
+        let mut pio = Pio::new();
+        pio.sm[0].shift_ctrl = SHIFTCTRL_AUTOPULL | (24 << 25); // OUT_SHIFTDIR 0
+        pio.instruction_mem[0] = 0x6021; // out x, 1
+        pio.write_reg(0, 1);
+        pio.write_reg(0x010, 0xa500_0000 | 0xff);
+        let mut bits = 0u32;
+        for _ in 0..24 {
+            pio.tick();
+            assert!(!pio.sm[0].stalled);
+            bits = (bits << 1) | pio.sm[0].x;
+            pio.sm[0].pc = 0;
+        }
+        assert_eq!(
+            bits, 0xa5_0000,
+            "bits 31..8, MSB first; the low byte never shifts out"
+        );
+        pio.tick();
+        assert!(pio.sm[0].stalled, "the 25th OUT waits for the FIFO");
+        pio.write_reg(0x010, 0x8000_0000);
+        pio.tick();
+        assert!(!pio.sm[0].stalled);
+        assert_eq!(pio.sm[0].x, 1);
+    }
+
+    /// `jmp !osre` jumps while bits remain below the pull threshold.
+    #[test]
+    fn jmp_not_osre_follows_the_pull_threshold() {
+        let mut pio = Pio::new();
+        pio.sm[0].shift_ctrl = SHIFTCTRL_RESET | (8 << 25); // PULL_THRESH 8
+        pio.sm[0].osr_count = 32; // freshly pulled
+        pio.instruction_mem[0] = 0x00e5; // jmp !osre 5
+        pio.write_reg(0, 1);
+        pio.tick();
+        assert_eq!(pio.sm[0].pc, 5, "0 of 8 bits shifted: not empty");
+        pio.sm[0].pc = 0;
+        pio.sm[0].osr_count = 24; // 8 shifted out
+        pio.tick();
+        assert_eq!(pio.sm[0].pc, 1, "8 of 8 shifted: empty, falls through");
+    }
+
+    /// FJOIN_TX gives the TX FIFO all 8 entries, and FSTAT reports TXFULL
+    /// as soon as the write lands (no SM step in between).
+    #[test]
+    fn joined_tx_fifo_holds_eight_and_fstat_is_live() {
+        let mut pio = Pio::new();
+        pio.write_reg(0x0d0, SHIFTCTRL_RESET | SHIFTCTRL_FJOIN_TX);
+        for n in 0..8 {
+            assert_eq!(pio.read_reg(0x004) & (1 << 16), 0, "not full at {n}");
+            pio.write_reg(0x010, n);
+        }
+        assert_ne!(pio.read_reg(0x004) & (1 << 16), 0, "TXFULL after 8");
+        assert_eq!(pio.read_reg(0x00c) & 0xF, 8, "FLEVEL TX0");
+        pio.write_reg(0x010, 99);
+        assert_ne!(pio.fdebug & (1 << 16), 0, "the 9th write overflows");
+    }
+
+    /// SM_RESTART clears the shift counters and a pending delay; the PC,
+    /// X and Y survive.
+    #[test]
+    fn sm_restart_clears_shift_state_only() {
+        let mut pio = Pio::new();
+        pio.sm[1].x = 7;
+        pio.sm[1].pc = 3;
+        pio.sm[1].isr_count = 12;
+        pio.sm[1].osr_count = 20;
+        pio.sm[1].delay_cycles = 4;
+        pio.write_reg(0x000, 1 << 5);
+        assert_eq!(pio.read_reg(0x000), 0, "restart bits self-clear");
+        let sm = &pio.sm[1];
+        assert_eq!((sm.isr_count, sm.osr_count, sm.delay_cycles), (0, 0, 0));
+        assert_eq!((sm.x, sm.pc), (7, 3));
     }
 }

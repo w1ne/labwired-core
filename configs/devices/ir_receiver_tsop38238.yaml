@@ -1,0 +1,94 @@
+# Vishay TSOP38238-style IR receiver.
+#
+# Pin 1 OUT, pin 2 GND, pin 3 VS (Vishay TSOP382, Rev. 1.6, "Pinning").
+# OUT is idle HIGH. A 38 kHz burst pulls OUT LOW for the burst duration
+# (demodulated envelope; the carrier itself is not present on OUT).
+#
+# This model emits that envelope for a NEC or NEC-extended frame when
+# `command` changes to a 0..255 code. `address` > 255 is the 16-bit
+# extended form (address | command<<16 | ~command<<24). Address 0..255
+# is the 8-bit form (address | ~address<<8 | command<<16 | ~command<<24).
+# Repeat frames (9 ms + 2.25 ms + 562.5 us) start 108 ms after the
+# leader and keep firing while the key is held (`command` >= 0). Setting
+# `command` to -1 cancels the frame and stops repeats.
+type: ir_receiver_tsop38238
+behavior:
+  primitive: gpio_device
+  output_update: final_level
+  timer_clock: cycles_floor
+  input_timer_start_on_service: true
+  pins: {OUT: out_pin}
+  outputs: [OUT]
+  output_pins: {OUT: out_pin}
+  pin_config_defaults: {out_pin: PD2}
+  pin_defaults: {OUT: true}
+  params:
+    cpu_hz: {key: cpu_hz, default: 16000000}
+  vars: {frame: 0}
+  timers:
+    - {name: repeat, period_us: 108000, start: manual}
+  schedules:
+    frame:
+      output: OUT
+      idle: true
+      final: true
+      timing: exact
+      segments:
+        - hold: {level: false, us: 9000}
+        - hold: {level: true, us: 4500}
+        - bits:
+            value: "var(frame)"
+            count: 32
+            order: lsb_first
+            zero: [{level: false, us: 562.5}, {level: true, us: 562.5}]
+            one: [{level: false, us: 562.5}, {level: true, us: 1687.5}]
+        - hold: {level: false, us: 562.5}
+    repeat_frame:
+      output: OUT
+      idle: true
+      final: true
+      timing: exact
+      segments:
+        - hold: {level: false, us: 9000}
+        - hold: {level: true, us: 2250}
+        - hold: {level: false, us: 562.5}
+  rules:
+    - on: {input: command}
+      when: "input(address) > 255"
+      do:
+        - {var: frame, value: "(input(address) & 65535) | ((input(command) & 255) << 16) | ((~input(command) & 255) << 24)"}
+    - on: {input: command}
+      when: "input(address) <= 255"
+      do:
+        - {var: frame, value: "(input(address) & 255) | ((~input(address) & 255) << 8) | ((input(command) & 255) << 16) | ((~input(command) & 255) << 24)"}
+    - on: {input: command}
+      when: "input(command) >= 0"
+      do:
+        - {cancel_schedule: frame}
+        - {cancel_schedule: repeat_frame}
+        - {emit_schedule: frame}
+        - {timer: repeat, start: true}
+    - on: {input: command}
+      when: "input(command) < 0"
+      do:
+        - {cancel_schedule: frame}
+        - {cancel_schedule: repeat_frame}
+        - {timer: repeat, start: false}
+    - on: {timer: repeat}
+      when: "input(command) >= 0"
+      do:
+        - {emit_schedule: repeat_frame}
+
+metadata:
+  label: "TSOP38238 IR receiver"
+  summary: "38 kHz IR receiver; NEC demodulated envelope on OUT (idle HIGH)"
+  category: gpio
+  inputs:
+    - {key: address, label: "NEC address", unit: code, min: 0, max: 65535, default: 48896}
+    - {key: command, label: "NEC command", unit: code, min: -1, max: 255, default: -1}
+
+emit:
+  connection: gpio
+  config:
+    - {key: out_pin, from_part_pin: [OUT]}
+    - {key: cpu_hz, from: sim_cpu_hz}

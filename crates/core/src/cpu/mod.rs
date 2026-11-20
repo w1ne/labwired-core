@@ -43,9 +43,13 @@ pub use cortex_a::CortexA7;
 #[deny(clippy::let_underscore_must_use)]
 pub mod mips;
 #[deny(clippy::let_underscore_must_use)]
+pub mod msp430;
+#[deny(clippy::let_underscore_must_use)]
 pub mod riscv;
 #[deny(clippy::let_underscore_must_use)]
 pub mod riscv64;
+#[deny(clippy::let_underscore_must_use)]
+pub mod riscv64_plic;
 #[deny(clippy::let_underscore_must_use)]
 pub mod rx;
 pub mod xtensa_lockstep;
@@ -85,9 +89,10 @@ pub mod xtensa_jit_bytes;
 pub mod jit_framework;
 
 pub use aarch64::Aarch64;
-pub use avr::{Avr, AvrModel};
+pub use avr::{Avr, AvrGeometry, AvrModel};
 pub use cortex_m::CortexM;
 pub use mips::Mips32;
+pub use msp430::Msp430;
 pub use pic16::Pic16;
 pub use pic18::Pic18;
 pub use pic24::Pic24;
@@ -99,4 +104,6 @@ pub use xtensa_lx7::XtensaLx7;
 #[cfg(feature = "qemu-arm-system")]
 pub mod cortex_a_system;
 #[cfg(feature = "qemu-arm-system")]
-pub use cortex_a_system::{ArmModel, CortexA7System};
+pub use cortex_a_system::{ArmModel, ArmSystem};
+#[cfg(feature = "qemu-arm-system")]
+pub type CortexA7System = ArmSystem;

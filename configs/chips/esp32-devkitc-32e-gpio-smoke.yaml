@@ -1,0 +1,52 @@
+# Narrow ESP32-DevKitC-32E onboarding profile.
+#
+# The profiles exercise classic ESP32 GPIO23, UART0 console output, I2C0 with
+# an external BME280, and RTC_CNTL timer wake for light/deep sleep. The
+# USB-to-UART bridge and pin-level UART TX/RX signals, Wi-Fi/Bluetooth,
+# general-purpose timers, SPI, non-timer wake sources, and the 5 V power LED
+# are outside this profile.
+name: "esp32-devkitc-32e-gpio-smoke"
+arch: "xtensa-lx6"
+cpu_hz: 240000000
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.25
+  vih: 0.75
+
+flash:
+  base: 0x400D0000
+  size: "4MiB"
+ram:
+  base: 0x3FFB0000
+  size: "192KiB"
+
+pins:
+  GPIO23: { gpio: "gpio", bit: 23, functions: [{ type: gpio, peripheral: gpio }] }
+  GPIO21: { gpio: "gpio", bit: 21 }
+  GPIO22: { gpio: "gpio", bit: 22 }
+
+peripherals:
+  - id: "uart0"
+    # Real Esp32Uart model (same type parent `esp32` uses for uart1/uart2).
+    # Generic `type: uart` is an STM32-map stub; this gate's Esp32 bring-up
+    # cannot produce TX edges on that stub, and this profile does not declare
+    # uart1/uart2. debug_schema already points at the ESP32 UART0 map.
+    type: "esp32_uart"
+    base_address: 0x3FF40000
+    size: "256B"
+    config:
+      debug_schema: "../peripherals/esp32/uart0.yaml"
+
+  - id: "gpio"
+    type: "esp32_gpio"
+    base_address: 0x3FF44000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32/gpio.yaml"
+
+  - id: "i2c0"
+    type: "esp32_i2c"
+    base_address: 0x3FF53000
+    size: "4KB"
+    config:
+      debug_schema: "../peripherals/esp32/i2c0.yaml"

@@ -1,0 +1,9 @@
+STM32F072B-DISCO SMOKE
+cpu=cortex-m0 uart=usart1
+rcc reset=1 gate=1 ok
+usart irq u2=1 u3=1 u4=1 ok
+led=ld3 odr=0x00000040
+led=ld4 odr=0x00000140
+led=ld5 odr=0x00000340
+led=ld6 odr=0x000003C0
+leds walk=1 blink=1 off=1 ok

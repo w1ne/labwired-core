@@ -165,6 +165,40 @@ struct SerialColorState {
     rejected_colmod: u64,
 }
 
+/// One closed full-plane paint, kept so a later inspect can prove how the
+/// glass changed over time. `bytes` is the oriented framebuffer (same layout
+/// as the inspect payload); it is stored for the run and only serialised when
+/// the caller asked for artifact bytes.
+struct LoggedFrame {
+    generation: u64,
+    t_us: u64,
+    sha256: String,
+    ink_bytes: usize,
+    /// Oriented plane, kept only when it is small enough for Acc geometry
+    /// prove (mono OLEDs). Color panels keep sha256 / t_us only — 128 frames
+    /// of RGB888 would be a silent tens-of-MB growth per panel.
+    bytes: Option<Vec<u8>>,
+}
+
+impl LoggedFrame {
+    fn to_meta(&self, include_bytes: bool) -> serde_json::Value {
+        let mut meta = serde_json::json!({
+            "generation": self.generation,
+            "t_us": self.t_us,
+            "sha256": self.sha256,
+            "ink_bytes": self.ink_bytes,
+        });
+        if include_bytes {
+            if let Some(bytes) = &self.bytes {
+                meta["bytes"] = serde_json::Value::Array(
+                    bytes.iter().copied().map(serde_json::Value::from).collect(),
+                );
+            }
+        }
+        meta
+    }
+}
+
 /// The engine device. One per placed panel.
 pub struct GenericDisplay {
     // ── the descriptor, compiled ────────────────────────────────────────
@@ -195,6 +229,8 @@ pub struct GenericDisplay {
     // ── identity ────────────────────────────────────────────────────────
     address: u8,
     cs_pin: String,
+    /// External CS level; register resets and picture-only snapshots do not change it.
+    selected: bool,
     dc_pin: Option<String>,
     dc_source: Option<(u64, u8)>,
     dc_level: bool,
@@ -241,9 +277,11 @@ pub struct GenericDisplay {
     /// stream (capped). An oracle can prove the glass content changed across
     /// steps from one end-of-run inspect, without mid-run samples.
     generation_history: VecDeque<u64>,
-    /// Closed paints: generation + sim time + sha256 of the oriented framebuffer.
-    /// Cap matches generation_history. Used by Acc framebuffer prove clauses.
-    frames_seen: VecDeque<serde_json::Value>,
+    /// Closed paints: generation + sim time + sha256 + the oriented framebuffer
+    /// bytes (published on inspect only when `InspectOpts.include_bytes` is
+    /// set, so summary mode stays small). Cap matches generation_history.
+    /// Used by Acc framebuffer prove clauses (blink / motion / geometry).
+    frames_seen: VecDeque<LoggedFrame>,
     /// Data bytes written since the last `note_fb_generation` for
     /// `ram.stream: always` panels. Adafruit SSD1306 chunks a display() into
     /// many short I²C transactions; we only log a frame once a full plane
@@ -1032,6 +1070,7 @@ impl GenericDisplay {
             plane_names,
             address,
             cs_pin: String::new(),
+            selected: false,
             dc_pin: None,
             dc_source: None,
             dc_level: false,
@@ -1910,12 +1949,18 @@ impl GenericDisplay {
             let dig = Sha256::digest(&fb);
             dig.iter().map(|b| format!("{b:02x}")).collect::<String>()
         };
-        self.frames_seen.push_back(serde_json::json!({
-            "generation": gen,
-            "t_us": self.elapsed_us,
-            "sha256": sha,
-            "ink_bytes": fb.iter().filter(|&&b| b != 0).count(),
-        }));
+        // A 128x64 1-bpp plane is 1024 bytes; 128 of those is fine. A
+        // 170x320 RGB888 plane is ~160 KiB, and 128 of those would be ~20 MiB
+        // per panel. Keep the plane only when Acc geometry can reasonably
+        // use it.
+        const FRAME_BYTES_KEEP: usize = 4096;
+        self.frames_seen.push_back(LoggedFrame {
+            generation: gen,
+            t_us: self.elapsed_us,
+            sha256: sha,
+            ink_bytes: fb.iter().filter(|&&b| b != 0).count(),
+            bytes: (fb.len() <= FRAME_BYTES_KEEP).then_some(fb),
+        });
     }
 
     fn build_artifacts(
@@ -1957,7 +2002,12 @@ impl GenericDisplay {
         meta.insert("generation_history".into(), serde_json::json!(history));
         meta.insert(
             "frames_seen".into(),
-            serde_json::Value::Array(self.frames_seen.iter().cloned().collect()),
+            serde_json::Value::Array(
+                self.frames_seen
+                    .iter()
+                    .map(|frame| frame.to_meta(opts.include_bytes))
+                    .collect(),
+            ),
         );
         // Which panel this is. Two panels can hold the same picture (three
         // OLEDs at 0x3C behind a TCA9548A drawing one splash), and a consumer
@@ -2276,11 +2326,16 @@ impl SpiDevice for GenericDisplay {
         self.component_id.as_deref()
     }
 
+    fn is_selected(&self) -> bool {
+        self.cs_pin.is_empty() || self.selected
+    }
+
     /// What CS↓ does to a half-open stream is `cs_select:` in the descriptor,
     /// not a house rule: the ST7789 treats CS as the transaction boundary,
     /// while the ILI9341 lets a RAMWR pixel stream survive a deselect because a
     /// driver that chunks a large blit releases CS between bursts.
     fn cs_select(&mut self) {
+        self.selected = true;
         if self.spec.cs_select == DisplayCsSelect::KeepsStream {
             return;
         }
@@ -2289,6 +2344,10 @@ impl SpiDevice for GenericDisplay {
         self.param_have = 0;
         self.unit_have = 0;
         self.ram_remaining = None;
+    }
+
+    fn cs_release(&mut self) {
+        self.selected = false;
     }
 
     fn dc_pin(&self) -> Option<&str> {

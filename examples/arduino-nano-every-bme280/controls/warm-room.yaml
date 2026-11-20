@@ -1,0 +1,12 @@
+# Value control for bme280-smoke.yaml: 31.5 °C, 40 %RH, 990 hPa.
+schema_version: "1.2"
+inputs:
+  firmware: ../../../tests/fixtures/avr/arduino-nano-every-bme280.elf
+  system: ./system-warm-room.yaml
+limits:
+  max_steps: 6000000
+assertions:
+  - uart_contains: "T=31.50 C"
+  - uart_contains: "P=990.00 hPa"
+  - uart_contains: "RH=40.00 %"
+  - expected_stop_reason: max_steps

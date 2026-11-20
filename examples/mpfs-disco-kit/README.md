@@ -25,6 +25,9 @@ examples/mpfs-disco-kit/ci/test.sh
 
 Rebuild the fixtures (byte-identical): `crates/firmware-mpfs-zephyr/build.sh`.
 
-Not modelled yet: F/D, S/U modes and Sv39 (so no OpenSBI/Linux), the PLIC
-(no external interrupts), the E51 and the other three U54s, MSS GPIO/I2C/SPI,
-the HSS boot flow and DDR training. See `VALIDATION.md`.
+`mss-peripherals-smoke.yaml` runs a bare-metal fixture over MSS GPIO_0..2,
+the PLIC, I2C0 and SPI1 (master).
+
+Not modelled yet: F/D, S/U modes and Sv39 (so no OpenSBI/Linux), the E51 and
+the other three U54s, I2C/SPI slave mode and timing, SPI0, QSPI, the HSS boot
+flow and DDR training. See `VALIDATION.md`.

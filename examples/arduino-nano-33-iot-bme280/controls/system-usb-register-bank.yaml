@@ -1,0 +1,22 @@
+# Control: the descriptor before the `samd21_usb` model. The USB window is the
+# SVD register bank it used to be: registers hold what firmware writes, no
+# host, no enumeration.
+name: arduino-nano-33-iot-bme280-usb-register-bank
+chip: ../../../configs/chips/atsamd21g18a.yaml
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "sercom4"
+    config:
+      i2c_address: 0x77
+peripherals:
+  - id: "usb"
+    type: "declarative"
+    base_address: 0x41005000
+    irq: 7
+    config:
+      path: "../peripherals/atsamd21g18a/usb.yaml"
+  - id: "sercom4"
+    type: "samd21_sercom_i2cm"
+    base_address: 0x42001800
+board_io: []

@@ -175,7 +175,7 @@ impl BridgeControlSource {
     }
 }
 
-fn parse_device_output_ref(label: &str) -> Option<(String, String)> {
+pub(crate) fn parse_device_output_ref(label: &str) -> Option<(String, String)> {
     let rest = label.strip_prefix(DEVICE_OUTPUT_PREFIX)?;
     let (device_id, role) = rest.rsplit_once('/')?;
     if device_id.is_empty() || role.is_empty() {

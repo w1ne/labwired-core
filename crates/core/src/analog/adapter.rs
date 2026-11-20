@@ -17,25 +17,51 @@
 //!       vdd: 3.3
 //!       substeps: 10
 //!       integration: be            # be | trap
+//!       input_sampling: previous_boundary # optional; legacy default: current_boundary
 //!       probes:  { v_out: "v(out)" }
 //!       sources: { gpio: Vgpio, temperature_c: Rntc }
 //!       trace:   ["v(in)", "i(Vgpio)"]
 //!       trace_samples: 20000
 //! ```
 //!
-//! `netlist`, `vdd`, `probes` and `sources` are spelled exactly as the ngspice
-//! wrapper spells them, so a manifest switches engines by changing `adapter:`
-//! and nothing else.
+//! `netlist`, `vdd`, `probes` and `sources` share their spelling with the
+//! ngspice wrapper. A routed resistor is an in-core extension: its numeric
+//! input is resistance in ohms and requires a finite positive value.
+//! A bounded beta-curve NTC can instead be configured as:
+//!
+//! ```yaml
+//! thermistors:
+//!   temperature:
+//!     resistor: Rntc
+//!     r_ref_ohms: 10000
+//!     beta_kelvin: 3950
+//!     reference_c: 25
+//!     min_c: 0
+//!     max_c: 85
+//! ```
+//!
+//! The input is numeric Celsius and starts at `reference_c`. All parameters
+//! and the valid temperature range must be supplied from the chosen part's
+//! data. The initial netlist resistance must equal `r_ref_ohms`; a resistor
+//! may have only one routed owner. This beta approximation does not model
+//! tolerance, self-heating or behavior outside the declared range.
 //!
 //! ## Step semantics
 //!
 //! [`CosimStep::time_ns`] is the END of the interval being simulated, the same
-//! convention `tools/cosim/labwired_ngspice.py` follows. Inputs are applied
-//! first and hold for the whole interval, then the solver integrates from the
-//! previous boundary to `time_ns` in `substeps` equal internal steps. The
-//! operating point is solved once at construction from the netlist's own DC
-//! values, before any input exists — a pull-up sits at Vdd and a GPIO at 0,
-//! exactly as on a board that has just come out of reset.
+//! convention `tools/cosim/labwired_ngspice.py` follows. The default
+//! `input_sampling: current_boundary` applies supplied inputs before integrating
+//! the preceding interval, preserving the existing CPU/world contract.
+//! `input_sampling: previous_boundary` instead integrates with inputs held from
+//! the previous sample, publishes that interval's endpoint, then latches the
+//! supplied inputs for the next interval. A change between samples therefore
+//! takes effect at the following sample; it cannot affect elapsed time.
+//!
+//! The operating point is solved once at construction from the netlist's DC
+//! values. Previous-boundary sampling requires an explicit `(time_ns, dt_ns) =
+//! (0, 0)` initialization whose inputs agree with those initial source, resistor
+//! and open-switch values. An inconsistent initial value is an error, rather
+//! than a changed source paired with a stale operating-point voltage.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -43,7 +69,9 @@ use std::sync::{Arc, Mutex};
 
 use serde_yaml::Value;
 
-use crate::cosim::{CosimAdapter, CosimInputKind, CosimSignalValue, CosimStep, CosimStepResult};
+use crate::cosim::{
+    CosimAdapter, CosimInputKind, CosimSignalValue, CosimSignals, CosimStep, CosimStepResult,
+};
 use crate::{SimResult, SimulationError};
 
 use super::mna::Solver;
@@ -72,6 +100,61 @@ impl Probe {
     }
 }
 
+/// A bounded beta approximation for one physical NTC resistor.
+/// The caller must supply coefficients and the range in which they apply.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ThermistorConfig {
+    pub resistor: String,
+    pub r_ref_ohms: f64,
+    pub beta_kelvin: f64,
+    pub reference_c: f64,
+    pub min_c: f64,
+    pub max_c: f64,
+}
+
+impl ThermistorConfig {
+    fn validate(&self) -> Result<(), AnalogError> {
+        if self.resistor.trim().is_empty()
+            || !self.r_ref_ohms.is_finite()
+            || self.r_ref_ohms <= 0.0
+            || !self.beta_kelvin.is_finite()
+            || self.beta_kelvin <= 0.0
+            || !self.reference_c.is_finite()
+            || !self.min_c.is_finite()
+            || !self.max_c.is_finite()
+            || self.min_c <= -273.15
+            || self.min_c > self.reference_c
+            || self.reference_c > self.max_c
+        {
+            return Err(AnalogError::Config("thermistor requires positive finite coefficients and a valid temperature range containing the reference".to_string()));
+        }
+        self.resistance(self.min_c)?;
+        self.resistance(self.max_c)?;
+        Ok(())
+    }
+
+    fn resistance(&self, temperature_c: f64) -> Result<f64, AnalogError> {
+        if !temperature_c.is_finite() || temperature_c < self.min_c || temperature_c > self.max_c {
+            return Err(AnalogError::Config(format!(
+                "thermistor temperature must be within {}..{} C",
+                self.min_c, self.max_c
+            )));
+        }
+        let ohms = self.r_ref_ohms
+            * libm::exp(
+                self.beta_kelvin
+                    * (1.0 / (temperature_c + 273.15) - 1.0 / (self.reference_c + 273.15)),
+            );
+        if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+            return Err(AnalogError::Config(
+                "thermistor curve produces invalid resistance".to_string(),
+            ));
+        }
+        Ok(ohms)
+    }
+}
+
 /// The `config:` block of an `adapter: analog` model.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalogConfig {
@@ -83,8 +166,10 @@ pub struct AnalogConfig {
     pub integration: Integration,
     /// LabWired output name → node voltage or supported element-current expression.
     pub probes: BTreeMap<String, String>,
-    /// LabWired input name → circuit element (`V`, `I`, `S` or an NTC `R`).
+    /// LabWired input name → `V`, `I`, or `S`; an `R` accepts ohms, or Celsius when temperature-dependent.
     pub sources: BTreeMap<String, String>,
+    /// Input name → explicitly bounded beta-curve thermistor.
+    pub thermistors: BTreeMap<String, ThermistorConfig>,
     /// Extra trace-only expressions, beyond the routed outputs.
     pub trace: Vec<String>,
     /// Ring depth for the oscilloscope trace.
@@ -99,6 +184,7 @@ impl Default for AnalogConfig {
             integration: Integration::BackwardEuler,
             probes: BTreeMap::new(),
             sources: BTreeMap::new(),
+            thermistors: BTreeMap::new(),
             trace: Vec::new(),
             trace_samples: super::trace::DEFAULT_TRACE_SAMPLES,
         }
@@ -146,6 +232,10 @@ impl AnalogConfig {
         }
         if let Some(value) = config.get("sources") {
             parsed.sources = string_map(value, "config.sources")?;
+        }
+        if let Some(value) = config.get("thermistors") {
+            parsed.thermistors = serde_yaml::from_value(value.clone())
+                .map_err(|error| AnalogError::Config(format!("config.thermistors: {error}")))?;
         }
         if let Some(value) = config.get("trace") {
             let list = value.as_sequence().ok_or_else(|| {
@@ -198,9 +288,36 @@ fn string_map(value: &Value, what: &str) -> Result<BTreeMap<String, String>, Ana
 enum InputTarget {
     VoltageSource(usize),
     CurrentSource(usize),
-    Thermistor(usize),
+    Resistance(usize),
+    Thermistor(usize, ThermistorConfig),
+    /// A temperature-dependent resistor described directly on the SPICE line.
+    TemperatureDependentResistor(usize),
     /// Every switch sharing one control name.
     Switches(Vec<usize>),
+}
+
+/// When routed inputs take effect relative to the completed interval.
+/// Kept on the adapter so existing `AnalogConfig` / `from_netlist` callers
+/// retain their legacy sampling contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InputSampling {
+    CurrentBoundary,
+    PreviousBoundary,
+}
+
+impl InputSampling {
+    fn from_yaml(config: &HashMap<String, Value>) -> Result<Self, AnalogError> {
+        match config.get("input_sampling") {
+            None => Ok(Self::CurrentBoundary),
+            Some(Value::String(value)) if value == "current_boundary" => Ok(Self::CurrentBoundary),
+            Some(Value::String(value)) if value == "previous_boundary" => {
+                Ok(Self::PreviousBoundary)
+            }
+            Some(_) => Err(AnalogError::Config(
+                "config.input_sampling must be `current_boundary` or `previous_boundary`".into(),
+            )),
+        }
+    }
 }
 
 /// The in-core analog engine as a co-simulation adapter.
@@ -214,6 +331,8 @@ pub struct AnalogCosimAdapter {
     /// Trace-only expressions, in declaration order.
     trace_extra: Vec<(String, Probe)>,
     inputs: BTreeMap<String, InputTarget>,
+    input_sampling: InputSampling,
+    inputs_initialized: bool,
     trace: AnalogTraceHandle,
     channel_base: usize,
     channel_prefix: String,
@@ -263,14 +382,20 @@ impl AnalogCosimAdapter {
                     )));
                 }
                 InputTarget::CurrentSource(index)
-            } else if let Some(index) = solver.thermistor_index(element) {
-                InputTarget::Thermistor(index)
+            } else if let Some(index) = solver.temperature_dependent_resistor_index(element) {
+                InputTarget::TemperatureDependentResistor(index)
+            } else if let Some(index) = solver.resistor_index(element) {
+                let ohms = solver.circuit().resistors[index].ohms;
+                if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+                    return Err(AnalogError::Config(format!("routed resistor `{element}` must have a positive finite initial resistance")));
+                }
+                InputTarget::Resistance(index)
             } else if let Some(index) = solver.switch_index(element) {
                 InputTarget::Switches(vec![index])
             } else {
                 return Err(AnalogError::Config(format!(
                     "config.sources.{input} names `{element}`, which the netlist does not declare \
-                     as a V, I, S or NTC resistor"
+                     as a V, I, S, or resistor element (temperature-dependent resistors accept Celsius inputs)"
                 )));
             };
             inputs.insert(input.clone(), target);
@@ -289,6 +414,32 @@ impl AnalogCosimAdapter {
                 .or_insert(InputTarget::Switches(indices));
         }
 
+        for (input, model) in &cfg.thermistors {
+            model.validate()?;
+            if inputs.contains_key(input) {
+                return Err(AnalogError::Config(format!(
+                    "input `{input}` is assigned more than once"
+                )));
+            }
+            let index = solver.resistor_index(&model.resistor).ok_or_else(|| {
+                AnalogError::Config(format!(
+                    "thermistor `{input}` names missing resistor `{}`",
+                    model.resistor
+                ))
+            })?;
+            if inputs.values().any(|target| matches!(target, InputTarget::Resistance(i) | InputTarget::Thermistor(i, _) | InputTarget::TemperatureDependentResistor(i) if *i == index)) {
+                return Err(AnalogError::Config(format!("resistor `{}` has multiple routed owners", model.resistor)));
+            }
+            let initial = solver.circuit().resistors[index].ohms;
+            if !initial.is_finite() || (initial - model.r_ref_ohms).abs() > model.r_ref_ohms * 1e-9
+            {
+                return Err(AnalogError::Config(format!(
+                    "thermistor `{input}` initial resistor must match r_ref_ohms"
+                )));
+            }
+            inputs.insert(input.clone(), InputTarget::Thermistor(index, model.clone()));
+        }
+
         let sample_width = probes.len() + trace_extra.len();
         let mut adapter = Self {
             solver,
@@ -297,6 +448,8 @@ impl AnalogCosimAdapter {
             probes,
             trace_extra,
             inputs,
+            input_sampling: InputSampling::CurrentBoundary,
+            inputs_initialized: false,
             trace: Arc::new(Mutex::new(AnalogTrace::new(cfg.trace_samples))),
             channel_base: 0,
             channel_prefix: String::new(),
@@ -316,6 +469,7 @@ impl AnalogCosimAdapter {
         config: &labwired_config::CosimModelConfig,
         base_dir: &Path,
     ) -> Result<Self, AnalogError> {
+        let input_sampling = InputSampling::from_yaml(&config.config)?;
         let netlist = netlist_source(&config.config, base_dir)?;
         let cfg = AnalogConfig::from_yaml(&config.config)?;
         if cfg.probes.is_empty() {
@@ -324,7 +478,28 @@ impl AnalogCosimAdapter {
                     .to_string(),
             ));
         }
-        Self::from_netlist(&netlist, &cfg)
+        let mut adapter = Self::from_netlist(&netlist, &cfg)?;
+        adapter.input_sampling = input_sampling;
+        if input_sampling == InputSampling::PreviousBoundary {
+            if !cfg.vdd.is_finite() || cfg.vdd <= 0.0 {
+                return Err(AnalogError::Config(
+                    "previous_boundary sampling requires positive finite config.vdd".into(),
+                ));
+            }
+            for (name, target) in &adapter.inputs {
+                if let InputTarget::Switches(indices) = target {
+                    if indices
+                        .iter()
+                        .any(|&index| adapter.solver.circuit().switches[index].voltage.is_some())
+                    {
+                        return Err(AnalogError::Config(format!(
+                            "analog input `{name}` cannot drive a voltage-controlled switch"
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(adapter)
     }
 
     /// The channel table this adapter contributes, prefix included.
@@ -385,8 +560,109 @@ impl AnalogCosimAdapter {
         self.sample_scratch = scratch;
     }
 
+    /// Validate a whole sampled input set before advancing time or changing a
+    /// source. Initial values must preserve the already-solved operating point.
+    fn validate_held_inputs(&self, inputs: &CosimSignals, initial: bool) -> SimResult<()> {
+        for (name, value) in inputs {
+            let target = self
+                .inputs
+                .get(name)
+                .ok_or_else(|| SimulationError::Other(format!("unknown analog input `{name}`")))?;
+            let number = match value {
+                CosimSignalValue::Bool(value)
+                    if matches!(
+                        target,
+                        InputTarget::VoltageSource(_) | InputTarget::Switches(_)
+                    ) =>
+                {
+                    if *value {
+                        self.vdd
+                    } else {
+                        0.0
+                    }
+                }
+                CosimSignalValue::I64(value) => *value as f64,
+                CosimSignalValue::F64(value) if value.is_finite() => *value,
+                _ => {
+                    return Err(SimulationError::Other(format!(
+                        "analog input `{name}` requires a finite number{}",
+                        if matches!(
+                            target,
+                            InputTarget::VoltageSource(_) | InputTarget::Switches(_)
+                        ) {
+                            " or a boolean logic level"
+                        } else {
+                            ""
+                        }
+                    )));
+                }
+            };
+            let circuit = self.solver.circuit();
+            let expected = match target {
+                InputTarget::VoltageSource(index) => circuit.voltage_sources[*index].dc,
+                InputTarget::CurrentSource(index) => circuit.current_sources[*index].dc,
+                InputTarget::Resistance(index) => {
+                    validate_resistance(name, number)?;
+                    circuit.resistors[*index].ohms
+                }
+                InputTarget::Thermistor(_, model) => {
+                    model.resistance(number).map_err(|error| {
+                        SimulationError::Other(format!("analog input `{name}`: {error}"))
+                    })?;
+                    model.reference_c
+                }
+                InputTarget::TemperatureDependentResistor(index) => {
+                    let resistor = &circuit.resistors[*index];
+                    let (expected, resistance) = if let Some(mut model) = resistor.ntc {
+                        let expected = model.temperature_celsius;
+                        model.temperature_celsius = number;
+                        (expected, model.resistance_ohms(resistor.ohms))
+                    } else if let Some(mut model) = resistor.temperature_coefficients {
+                        let expected = model.temperature_celsius;
+                        model.temperature_celsius = number;
+                        (expected, model.resistance_ohms(resistor.ohms))
+                    } else {
+                        return Err(SimulationError::Other(format!(
+                            "analog input `{name}` has no resistor temperature model"
+                        )));
+                    };
+                    if number <= -273.15 {
+                        return Err(SimulationError::Other(format!(
+                            "analog input `{name}` must be above absolute zero in degC"
+                        )));
+                    }
+                    validate_resistance(name, resistance)?;
+                    expected
+                }
+                InputTarget::Switches(_) => {
+                    let closed = match value {
+                        CosimSignalValue::Bool(state) => *state,
+                        _ => number >= self.vdd / 2.0,
+                    };
+                    if initial && closed {
+                        return Err(SimulationError::Other(format!(
+                            "analog input `{name}` at t=0 must match the netlist's initial open switch (false)"
+                        )));
+                    }
+                    continue;
+                }
+            };
+            // Scale only by the compared values: a fixed absolute epsilon
+            // would accept a nonzero current against a zero-current source.
+            let tolerance = 16.0 * f64::EPSILON * number.abs().max(expected.abs());
+            if initial && (!expected.is_finite() || (number - expected).abs() > tolerance) {
+                return Err(SimulationError::Other(format!(
+                    "analog input `{name}` at t=0 is {number}; it must match the netlist initial value {expected} {}",
+                    self.input_unit(name).unwrap_or("")
+                )));
+            }
+        }
+        Ok(())
+    }
+
     fn apply_input(&mut self, name: &str, value: &CosimSignalValue) -> SimResult<()> {
-        let Some(target) = self.inputs.get(name).cloned() else {
+        let vdd = self.vdd;
+        let Some(target) = self.inputs.get(name) else {
             // Routed into the model but not a circuit source: ignore, exactly
             // like the ngspice wrapper. Manifests routinely route one signal
             // bundle into several models.
@@ -394,30 +670,58 @@ impl AnalogCosimAdapter {
         };
         match target {
             InputTarget::VoltageSource(index) => {
-                let volts = self.numeric(name, value, "volts")?;
+                let index = *index;
+                let volts = numeric(vdd, name, value, "volts")?;
                 self.solver.set_voltage_source(index, volts);
             }
             InputTarget::CurrentSource(index) => {
+                let index = *index;
                 if matches!(value, CosimSignalValue::Bool(_)) {
                     return Err(SimulationError::Other(format!(
                         "analog input `{name}` drives a current source; a boolean has no \
                          current to map to — route a number in amps"
                     )));
                 }
-                let amps = self.numeric(name, value, "amps")?;
+                let amps = numeric(vdd, name, value, "amps")?;
                 self.solver.set_current_source(index, amps);
             }
-            InputTarget::Thermistor(index) => {
+            InputTarget::Resistance(index) => {
+                let index = *index;
                 if matches!(value, CosimSignalValue::Bool(_)) {
                     return Err(SimulationError::Other(format!(
-                        "analog input `{name}` drives an NTC temperature; a boolean has no \
+                        "analog input `{name}` drives a resistor; a boolean has no resistance in ohms"
+                    )));
+                }
+                let ohms = numeric(vdd, name, value, "ohms")?;
+                self.solver.set_resistance(index, ohms).map_err(|error| {
+                    SimulationError::Other(format!("analog input `{name}`: {error}"))
+                })?;
+            }
+            InputTarget::Thermistor(index, model) => {
+                let index = *index;
+                if matches!(value, CosimSignalValue::Bool(_)) {
+                    return Err(SimulationError::Other(format!("analog input `{name}` drives a thermistor; temperature must be numeric Celsius")));
+                }
+                let celsius = numeric(vdd, name, value, "Celsius")?;
+                let ohms = model.resistance(celsius).map_err(|error| {
+                    SimulationError::Other(format!("analog input `{name}`: {error}"))
+                })?;
+                self.solver.set_resistance(index, ohms).map_err(|error| {
+                    SimulationError::Other(format!("analog input `{name}`: {error}"))
+                })?;
+            }
+            InputTarget::TemperatureDependentResistor(index) => {
+                let index = *index;
+                if matches!(value, CosimSignalValue::Bool(_)) {
+                    return Err(SimulationError::Other(format!(
+                        "analog input `{name}` drives a resistor temperature; a boolean has no \
                          temperature to map to — route a number in degrees Celsius"
                     )));
                 }
-                let celsius = self.numeric(name, value, "degrees Celsius")?;
-                if !self.solver.set_thermistor_temperature(index, celsius) {
+                let celsius = numeric(vdd, name, value, "degrees Celsius")?;
+                if !self.solver.set_resistor_temperature(index, celsius) {
                     return Err(SimulationError::Other(format!(
-                        "analog input `{name}` is not a finite NTC temperature above absolute zero"
+                        "analog input `{name}` is not a finite resistor temperature above absolute zero"
                     )));
                 }
             }
@@ -427,71 +731,162 @@ impl AnalogCosimAdapter {
                     other => {
                         // A numeric control is read as a logic level against
                         // half of Vdd, so an analog signal can gate a switch.
-                        self.numeric(name, other, "volts")? >= self.vdd / 2.0
+                        numeric(vdd, name, other, "volts")? >= vdd / 2.0
                     }
                 };
-                for index in indices {
+                for &index in indices {
                     self.solver.set_switch(index, closed);
                 }
             }
         }
         Ok(())
     }
+}
 
-    fn numeric(&self, name: &str, value: &CosimSignalValue, unit: &str) -> SimResult<f64> {
-        match value {
-            CosimSignalValue::Bool(true) => Ok(self.vdd),
-            CosimSignalValue::Bool(false) => Ok(0.0),
-            CosimSignalValue::F64(value) => Ok(*value),
-            CosimSignalValue::I64(value) => Ok(*value as f64),
-            CosimSignalValue::Text(text) => text.trim().parse::<f64>().map_err(|_| {
-                SimulationError::Other(format!(
-                    "analog input `{name}`: cannot read `{text}` as {unit}"
-                ))
-            }),
-        }
+fn validate_resistance(name: &str, ohms: f64) -> SimResult<()> {
+    if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+        return Err(SimulationError::Other(format!(
+            "analog input `{name}` must produce positive finite resistance and finite conductance"
+        )));
+    }
+    Ok(())
+}
+
+fn numeric(vdd: f64, name: &str, value: &CosimSignalValue, unit: &str) -> SimResult<f64> {
+    match value {
+        CosimSignalValue::Bool(true) => Ok(vdd),
+        CosimSignalValue::Bool(false) => Ok(0.0),
+        CosimSignalValue::F64(value) => Ok(*value),
+        CosimSignalValue::I64(value) => Ok(*value as f64),
+        CosimSignalValue::Text(text) => text.trim().parse::<f64>().map_err(|_| {
+            SimulationError::Other(format!(
+                "analog input `{name}`: cannot read `{text}` as {unit}"
+            ))
+        }),
     }
 }
 
 impl CosimAdapter for AnalogCosimAdapter {
     fn step(&mut self, step: CosimStep) -> SimResult<CosimStepResult> {
-        for (name, value) in &step.inputs {
-            self.apply_input(name, value)?;
+        let mut outputs = BTreeMap::new();
+        self.step_into(step.time_ns, step.dt_ns, &step.inputs, &mut outputs)?;
+        Ok(CosimStepResult { outputs })
+    }
+
+    fn step_into(
+        &mut self,
+        time_ns: u64,
+        dt_ns: u64,
+        inputs: &CosimSignals,
+        outputs: &mut CosimSignals,
+    ) -> SimResult<()> {
+        if self.input_sampling == InputSampling::PreviousBoundary {
+            if !self.inputs_initialized && (time_ns != 0 || dt_ns != 0) {
+                return Err(SimulationError::Other(
+                    "analog previous_boundary sampling requires t=0, dt=0 initialization before advancing time".into(),
+                ));
+            }
+            if time_ns < self.time_ns || (time_ns == 0 && dt_ns != 0) {
+                return Err(SimulationError::Other(
+                    "analog previous_boundary sampling requires monotonic time and dt=0 at t=0"
+                        .into(),
+                ));
+            }
+            self.validate_held_inputs(inputs, time_ns == 0)?;
+        } else {
+            for (name, value) in inputs {
+                self.apply_input(name, value)?;
+            }
         }
 
         // `time_ns` is the END of the step. A boundary already passed (a model
         // whose `step_ns` divides another's) re-reads the probes rather than
         // integrating backwards.
-        if step.time_ns > self.time_ns {
-            let span = (step.time_ns - self.time_ns) as f64 * 1e-9;
+        if time_ns > self.time_ns {
+            let span = (time_ns - self.time_ns) as f64 * 1e-9;
             let h = span / f64::from(self.substeps);
             for _ in 0..self.substeps {
                 self.solver
                     .advance(h)
                     .map_err(|err| SimulationError::Other(err.to_string()))?;
             }
-            self.time_ns = step.time_ns;
+            self.time_ns = time_ns;
         }
 
-        self.step_index += 1;
-        self.record_sample();
+        // A world reads the declared operating point before its first CPU
+        // instruction. That initial read is not an integration step and must
+        // not duplicate the t=0 trace row or advance its step counter.
+        if time_ns != 0 || dt_ns != 0 || self.time_ns != 0 {
+            self.step_index += 1;
+            self.record_sample();
+        }
 
-        let mut outputs = BTreeMap::new();
         for (name, probe) in &self.probes {
-            outputs.insert(name.clone(), CosimSignalValue::F64(self.read_probe(probe)));
+            let value = CosimSignalValue::F64(self.read_probe(probe));
+            match outputs.get_mut(name.as_str()) {
+                Some(slot) => *slot = value,
+                None => {
+                    outputs.insert(name.clone(), value);
+                }
+            }
         }
-        Ok(CosimStepResult { outputs })
+        if self.input_sampling == InputSampling::PreviousBoundary {
+            // Probes and the trace above describe the completed interval.
+            // Newly sampled sources take effect only when the solver next
+            // advances, including when a source directly feeds a probe.
+            for (name, value) in inputs {
+                self.apply_input(name, value)?;
+            }
+            self.inputs_initialized = true;
+        }
+        Ok(())
     }
 
-    /// A switch control is a logic level; a voltage or current source takes
-    /// its number as given. An input the circuit does not use has no kind.
+    fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {
+        match self.inputs.get(name)? {
+            InputTarget::Thermistor(_, model) => Some(CosimSignalValue::F64(model.reference_c)),
+            InputTarget::TemperatureDependentResistor(index) => {
+                let resistor = &self.solver.circuit().resistors[*index];
+                resistor
+                    .ntc
+                    .map(|ntc| ntc.temperature_celsius)
+                    .or_else(|| {
+                        resistor
+                            .temperature_coefficients
+                            .map(|model| model.temperature_celsius)
+                    })
+                    .map(CosimSignalValue::F64)
+            }
+            InputTarget::Resistance(index) => Some(CosimSignalValue::F64(
+                self.solver.circuit().resistors[*index].ohms,
+            )),
+            _ => None,
+        }
+    }
+
+    /// A switch is boolean; sources and resistors are numeric. NTC numbers are
+    /// degrees Celsius. An input the circuit does not use has no kind.
     fn input_kind(&self, name: &str) -> Option<CosimInputKind> {
         Some(match self.inputs.get(name)? {
             InputTarget::Switches(_) => CosimInputKind::Bool,
             InputTarget::VoltageSource(_)
             | InputTarget::CurrentSource(_)
-            | InputTarget::Thermistor(_) => CosimInputKind::Number,
+            | InputTarget::Resistance(_)
+            | InputTarget::Thermistor(_, _)
+            | InputTarget::TemperatureDependentResistor(_) => CosimInputKind::Number,
         })
+    }
+
+    fn input_unit(&self, name: &str) -> Option<&'static str> {
+        match self.inputs.get(name)? {
+            InputTarget::VoltageSource(_) => Some("V"),
+            InputTarget::CurrentSource(_) => Some("A"),
+            InputTarget::Resistance(_) => Some("ohm"),
+            InputTarget::Thermistor(_, _) | InputTarget::TemperatureDependentResistor(_) => {
+                Some("degC")
+            }
+            InputTarget::Switches(_) => Some("V"),
+        }
     }
 
     fn attach_analog_trace(&mut self, trace: &AnalogTraceHandle, channel_prefix: &str) {
@@ -597,4 +992,274 @@ pub fn netlist_source(
             resolved.display()
         ))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cosim::CosimRunner;
+
+    fn manifest() -> labwired_config::CosimModelConfig {
+        serde_yaml::from_str(
+            r#"
+id: circuit
+adapter: analog
+step_ns: 20
+inputs: {drive: firmware.drive}
+outputs: {volts: circuit.volts}
+config:
+  input_sampling: previous_boundary
+  substeps: 1
+  netlist_text: |
+    Vdrive in 0 dc 0
+    R1 in out 1k
+    C1 out 0 20p
+  sources: {drive: Vdrive}
+  probes: {volts: v(out)}
+  trace: [v(in)]
+"#,
+        )
+        .unwrap()
+    }
+
+    fn build(config: &labwired_config::CosimModelConfig) -> AnalogCosimAdapter {
+        AnalogCosimAdapter::from_manifest_config(config, Path::new(".")).unwrap()
+    }
+
+    fn input(value: CosimSignalValue) -> CosimSignals {
+        BTreeMap::from([("drive".into(), value)])
+    }
+
+    fn volts(signals: &CosimSignals, name: &str) -> f64 {
+        match signals[name] {
+            CosimSignalValue::F64(value) => value,
+            ref other => panic!("expected voltage, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_write_at_19_ns_cannot_charge_the_preceding_20_ns_interval() {
+        let mut runner = CosimRunner::from_configs(&[manifest()]).unwrap();
+        let mut signals =
+            BTreeMap::from([("firmware.drive".into(), CosimSignalValue::Bool(false))]);
+        runner.prime_routed_with_signals(&mut signals).unwrap();
+        runner.step_until_with_signals(19, &mut signals).unwrap();
+        signals.insert("firmware.drive".into(), CosimSignalValue::Bool(true));
+        runner.step_until_with_signals(20, &mut signals).unwrap();
+        assert_eq!(volts(&signals, "circuit.volts"), 0.0);
+
+        runner.step_until_with_signals(40, &mut signals).unwrap();
+        // One backward-Euler step with h = R*C = 20 ns gives Vdd/2.
+        assert!((volts(&signals, "circuit.volts") - 1.65).abs() < 1e-9);
+        let trace = runner.analog_trace_snapshot(0);
+        let direct_source = trace
+            .channels
+            .iter()
+            .position(|channel| channel.name == "circuit.v(in)")
+            .unwrap();
+        let at_20 = trace
+            .samples
+            .iter()
+            .find(|sample| sample.time_ns == 20)
+            .unwrap();
+        let at_40 = trace
+            .samples
+            .iter()
+            .find(|sample| sample.time_ns == 40)
+            .unwrap();
+        assert_eq!(
+            at_20.values[direct_source], 0.0,
+            "record before latching the next source"
+        );
+        assert!((at_40.values[direct_source] - 3.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_default_retains_current_boundary_sampling() {
+        for explicit in [false, true] {
+            let mut config = manifest();
+            if explicit {
+                config.config.insert(
+                    "input_sampling".into(),
+                    Value::String("current_boundary".into()),
+                );
+            } else {
+                config.config.remove("input_sampling");
+            }
+            let mut adapter = build(&config);
+            let mut outputs = CosimSignals::new();
+            // Legacy callers may start at a positive boundary without priming.
+            adapter
+                .step_into(20, 20, &input(CosimSignalValue::Bool(true)), &mut outputs)
+                .unwrap();
+            assert!((volts(&outputs, "volts") - 1.65).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn inconsistent_initial_voltage_fails_without_changing_the_operating_point() {
+        let mut adapter = build(&manifest());
+        let mut outputs = BTreeMap::from([("sentinel".into(), CosimSignalValue::I64(7))]);
+        let before = outputs.clone();
+        let error = adapter
+            .step_into(0, 0, &input(CosimSignalValue::Bool(true)), &mut outputs)
+            .unwrap_err();
+        assert!(error.to_string().contains("t=0"));
+        assert!(error.to_string().contains("netlist initial value 0 V"));
+        assert_eq!(outputs, before);
+        assert_eq!(adapter.time_ns(), 0);
+        assert!(!adapter.inputs_initialized);
+        assert_eq!(adapter.step_index, 0);
+
+        adapter
+            .step_into(0, 0, &input(CosimSignalValue::Bool(false)), &mut outputs)
+            .unwrap();
+        assert_eq!(volts(&outputs, "volts"), 0.0);
+        let snapshot = lock(&adapter.trace).snapshot(0);
+        assert_eq!(
+            snapshot.samples.len(),
+            1,
+            "initialization must not add a second t=0 row"
+        );
+    }
+
+    #[test]
+    fn boolean_initial_voltage_uses_vdd_before_comparing_to_dc() {
+        let mut config = manifest();
+        let netlist = config.config["netlist_text"]
+            .as_str()
+            .unwrap()
+            .replace("dc 0", "dc 3.3");
+        config
+            .config
+            .insert("netlist_text".into(), Value::String(netlist));
+        let mut adapter = build(&config);
+        let mut outputs = CosimSignals::new();
+        adapter
+            .step_into(0, 0, &input(CosimSignalValue::Bool(true)), &mut outputs)
+            .unwrap();
+        assert!((volts(&outputs, "volts") - 3.3).abs() < 1e-9);
+        let error = build(&config)
+            .step_into(0, 0, &input(CosimSignalValue::Bool(false)), &mut outputs)
+            .unwrap_err();
+        assert!(error.to_string().contains("netlist initial value 3.3 V"));
+    }
+
+    #[test]
+    fn sampling_requires_initialization_and_rejects_invalid_values_before_advancing() {
+        let mut adapter = build(&manifest());
+        let mut outputs = CosimSignals::new();
+        assert!(adapter
+            .step_into(20, 20, &input(CosimSignalValue::Bool(false)), &mut outputs)
+            .unwrap_err()
+            .to_string()
+            .contains("initialization"));
+        adapter
+            .step_into(0, 0, &input(CosimSignalValue::Bool(false)), &mut outputs)
+            .unwrap();
+        let before = outputs.clone();
+        for invalid in [
+            CosimSignalValue::F64(f64::NAN),
+            CosimSignalValue::F64(f64::INFINITY),
+            CosimSignalValue::Text("3.3".into()),
+        ] {
+            assert!(adapter
+                .step_into(20, 20, &input(invalid), &mut outputs)
+                .is_err());
+            assert_eq!(adapter.time_ns(), 0);
+            assert_eq!(outputs, before);
+        }
+        let unknown = BTreeMap::from([("typo".into(), CosimSignalValue::Bool(true))]);
+        assert!(adapter
+            .step_into(20, 20, &unknown, &mut outputs)
+            .unwrap_err()
+            .to_string()
+            .contains("unknown analog input"));
+        adapter
+            .step_into(20, 20, &input(CosimSignalValue::Bool(false)), &mut outputs)
+            .unwrap();
+        assert!(adapter
+            .step_into(19, 1, &input(CosimSignalValue::Bool(false)), &mut outputs)
+            .unwrap_err()
+            .to_string()
+            .contains("monotonic time"));
+    }
+
+    #[test]
+    fn initial_resistance_temperature_current_and_switch_states_are_checked_in_their_units() {
+        let netlist = "Vdrive in 0 dc 3.3\nIload out 0 dc 0.001\nRload in out 1k\nRntc out 0 10k beta=3950\nRtempco in 0 1k tc1=0.001 tnom=25 temp=25\nRbounded in 0 10k\nS1 out 0 gate ron=1 roff=1meg\n";
+        let cfg = AnalogConfig {
+            probes: BTreeMap::from([("volts".into(), "v(out)".into())]),
+            sources: BTreeMap::from([
+                ("drive".into(), "Vdrive".into()),
+                ("current".into(), "Iload".into()),
+                ("resistance".into(), "Rload".into()),
+                ("ntc".into(), "Rntc".into()),
+                ("tempco".into(), "Rtempco".into()),
+            ]),
+            thermistors: BTreeMap::from([(
+                "bounded".into(),
+                ThermistorConfig {
+                    resistor: "Rbounded".into(),
+                    r_ref_ohms: 10_000.0,
+                    beta_kelvin: 3950.0,
+                    reference_c: 25.0,
+                    min_c: 0.0,
+                    max_c: 85.0,
+                },
+            )]),
+            ..AnalogConfig::default()
+        };
+        let mut adapter = AnalogCosimAdapter::from_netlist(netlist, &cfg).unwrap();
+        adapter.input_sampling = InputSampling::PreviousBoundary;
+        let initial = BTreeMap::from([
+            ("drive".into(), CosimSignalValue::Bool(true)),
+            ("current".into(), CosimSignalValue::F64(0.001)),
+            ("resistance".into(), CosimSignalValue::F64(1_000.0)),
+            ("ntc".into(), CosimSignalValue::F64(25.0)),
+            ("tempco".into(), CosimSignalValue::F64(25.0)),
+            ("bounded".into(), CosimSignalValue::F64(25.0)),
+            ("gate".into(), CosimSignalValue::Bool(false)),
+        ]);
+        let mut outputs = CosimSignals::new();
+        adapter.step_into(0, 0, &initial, &mut outputs).unwrap();
+        for (name, unit, invalid) in [
+            ("drive", Some("V"), CosimSignalValue::Bool(false)),
+            ("current", Some("A"), CosimSignalValue::F64(0.002)),
+            ("resistance", Some("ohm"), CosimSignalValue::F64(900.0)),
+            ("ntc", Some("degC"), CosimSignalValue::F64(26.0)),
+            ("tempco", Some("degC"), CosimSignalValue::F64(26.0)),
+            ("bounded", Some("degC"), CosimSignalValue::F64(26.0)),
+            ("gate", Some("V"), CosimSignalValue::Bool(true)),
+        ] {
+            assert_eq!(adapter.input_unit(name), unit);
+            let mut inconsistent = initial.clone();
+            inconsistent.insert(name.into(), invalid);
+            let error = adapter
+                .step_into(0, 0, &inconsistent, &mut outputs)
+                .unwrap_err();
+            assert!(error.to_string().contains("t=0"), "{name}: {error}");
+        }
+        assert_eq!(adapter.input_unit("unknown"), None);
+    }
+
+    #[test]
+    fn sampling_mode_and_vdd_must_be_valid() {
+        for invalid in [Value::Bool(true), Value::String("previous".into())] {
+            let mut config = manifest();
+            config.config.insert("input_sampling".into(), invalid);
+            let error =
+                AnalogCosimAdapter::from_manifest_config(&config, Path::new(".")).unwrap_err();
+            assert!(error.to_string().contains("config.input_sampling"));
+        }
+        for value in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            let mut config = manifest();
+            config
+                .config
+                .insert("vdd".into(), serde_yaml::to_value(value).unwrap());
+            let error =
+                AnalogCosimAdapter::from_manifest_config(&config, Path::new(".")).unwrap_err();
+            assert!(error.to_string().contains("positive finite config.vdd"));
+        }
+    }
 }

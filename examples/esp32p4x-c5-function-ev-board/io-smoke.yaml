@@ -1,0 +1,12 @@
+# The P4 firmware checks the BME280 ID and raw-temperature vector over
+# GPIO7/8-routed HP I2C0, then emits the success markers on UART0.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imc-unknown-none-elf/release/firmware-esp32p4-demo"
+  system: "../../configs/systems/esp32p4x-c5-function-ev-board.yaml"
+limits:
+  max_steps: 5000000
+  stop_when_assertions_pass: true
+assertions:
+  - uart_contains: "P4_BME280_ID=0x60_RAW_TEMP=0x082DC0_GPIO7_GPIO8"
+  - uart_contains: "P4X_C5_FUNCTION_EV_OK"

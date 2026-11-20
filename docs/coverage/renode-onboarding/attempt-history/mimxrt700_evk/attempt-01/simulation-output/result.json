@@ -1,0 +1,32 @@
+{
+  "result_schema_version": "1.0",
+  "status": "error",
+  "steps_executed": 0,
+  "cycles": 0,
+  "instructions": 0,
+  "stop_reason": "config_error",
+  "stop_reason_details": {
+    "triggered_stop_condition": "config_error",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "message": "Failed to parse Chip Descriptor YAML: missing field `peripherals` at line 13 column 1",
+  "assertions": [],
+  "firmware_hash": "79d8a17f79d1b4f628c0701ecb8cf9c776ceb809f0b36a1dd387737745c71bd5",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt700-evk-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt700_evk.yaml",
+    "script": "examples/renode-onboarding/mimxrt700_evk-smoke.yaml"
+  }
+}

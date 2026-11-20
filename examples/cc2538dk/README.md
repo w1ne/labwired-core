@@ -8,7 +8,10 @@ booting through a clean-room boot ROM with the RF core and sleep timer
 modelled, the flash controller (Contiki-NG CFS/Coffee) and the AES/SHA-256
 cryptoprocessor (the Contiki-NG crypto suite), and a **three-node Contiki-NG
 RPL-UDP network** on a shared 802.15.4 air (RF core RX/TX, AUTOACK, µDMA).
-PKA, SSI, I2C, GPTimers, USB and the ADC are declared stubs.
+SSI0/1, GPTimer0-3, the I2C master and SOC_ADC (ADC, RNG, comparator) are
+modelled, with the I2C slave reachable over I2CM loopback; the PKA engine and USB
+controller are not mapped. The onboarding smoke attaches a virtual
+TMP102 as an explicit I2C test fixture; it is not fitted to the CC2538DK.
 
 ## What runs here
 
@@ -24,8 +27,11 @@ A bare-register smoke firmware (`crates/firmware-cc2538dk-smoke`) that:
 - walks **LED2 yellow PC1, LED3 green PC2, LED4 orange PC3** (active high)
   with single address-masked `GPIO_DATA` stores and prints both the pin and
   the whole LED nibble it read back,
-- prints the five keys' pad levels (released = 1 on the reset pull-up), then
-  heartbeats.
+- prints the five keys' pad levels (released = 1 on the reset pull-up),
+- runs the SSI0 loopback/FIFO checks and GPTimer0/1 timeout/match checks, and
+- runs an I2CM register-pointer/repeated-start read when the imported onboarding
+  system supplies its TMP102 fixture (the example board system has an empty
+  I2C bus and reports an address NACK), then heartbeats.
 
 LED1 (red, PC0) is **not driven**: PC0 is also the CC2538 USB D+ pull-up.
 
@@ -171,8 +177,9 @@ hb=0 yellow=1 green=0 orange=0
   but no peripheral is gated by them. Oscillator start-up timing, power modes
   and software reset are not modelled. `SYNC_32K` is a 32 768-Hz square wave
   from the cycle count.
-- **IOC** pin muxing and pad overrides are a stub. The firmware writes them as
-  §18.5 requires, but the console model does not depend on them.
+- **IOC** pin muxing and pad overrides are stored and read back at their
+  Table 9-7 reset values and field widths, but not applied: no SEL/INPUT_SEL
+  value routes a peripheral to a pad and no OVER value changes a pad's pull.
 - **GPIO interrupts** (`GPIO_RIS`/`GPIO_MIS`) are never raised; the AFSEL commit
   lock is not enforced.
 - **RF core:** the radio is alone in an empty channel. Nothing is ever
@@ -186,6 +193,15 @@ hb=0 yellow=1 green=0 orange=0
   32-kHz rate assumes the CPU runs at `clock_hz` (16 MHz).
 - **Cryptoprocessor:** the slave-interface (non-DMA) data path, `KEY2`/`KEY3`,
   pulse interrupts and processing latency are not modelled.
-- **PKA, SSI0/1, I2C, GPTimer0-3, USB, uDMA, SoC ADC** are declared stubs.
+- **I2CM** is a synchronous single-byte master: START/repeated START/STOP,
+  attached `external_devices`, NACK status and completion IRQ are modelled.
+  Transfer timing, TPR clocking, clock stretching, arbitration, loopback and
+  the I2CS slave are not modelled.
+- **SOC_ADC** conversions complete inside the ADCCON3/ADCCON1 write; the
+  temperature channel is a fixed 25 °C level. STSEL free-run/timer starts,
+  IOC channel skipping and ADC DMA are not modelled.
+- **PKA engine and USB controller** are not mapped: the profile declares no
+  window for them, so an access is an unmapped-access error, not a zero read.
+  ANA_REGS and CCTEST are register storage only.
 
 See `VALIDATION.md` for the tier table.

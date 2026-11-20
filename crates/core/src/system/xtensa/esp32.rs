@@ -120,6 +120,9 @@ pub fn attach_esp32_external_devices(
     // `SystemBus::from_config` makes after its attach loop. Without it, Xtensa
     // playground/WASM builds would claim the motor and never install it.
     bus.install_motor_models(manifest)?;
+    // Board wires from an analog output to an ADC input (`analog_links` on a
+    // `peripherals:` entry), e.g. a DAC pad jumpered to an ADC1 pad.
+    bus.wire_manifest_analog_links(manifest)?;
     Ok(())
 }
 
@@ -328,7 +331,7 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // ESP32-classic BROM function addresses (per ESP-IDF rom/esp32.rom.ld).
     // Returning 0 means "POWERON_RESET" — adequate for first-boot init.
     // ESP32-classic BROM thunks (addresses per ESP-IDF rom/esp32.rom.ld).
-    rom_bank.register(0x4000_81d4, rom_thunks::rtc_get_reset_reason);
+    rom_bank.register(0x4000_81d4, rom_thunks::esp32_rtc_get_reset_reason);
     rom_bank.register(0x4000_2a40, rom_thunks::nop_return_zero); // Cache_Read_Disable
     rom_bank.register(0x4000_29ac, rom_thunks::nop_return_zero); // Cache_Read_Enable
                                                                  // libc-equivalents the firmware links against ROM copies of:
@@ -372,7 +375,11 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
                                                                  // GPIO ROM helpers — Arduino-ESP32 uses these to set up VSPI pins.
                                                                  // No-op in sim (our Esp32Gpio/Esp32Spi peripherals accept signals
                                                                  // directly without IO_MUX-state enforcement).
-    rom_bank.register(0x4000_9edc, rom_thunks::nop_return_zero); // esp_rom_gpio_connect_in_signal
+                                                                 // GPIO input matrix — `gpio_matrix_in(gpio, signal, inv)`
+                                                                 // (`esp_rom_gpio_connect_in_signal`), what the PCNT driver's
+                                                                 // `pcnt_set_pin` and Arduino's `pinMatrixInAttach` call. It was a nop, so
+                                                                 // no input signal was ever routed: a pulse counter saw no pad at all.
+    rom_bank.register(0x4000_9edc, gpio_matrix_in); // esp_rom_gpio_connect_in_signal
     rom_bank.register(0x4000_9fdc, rom_thunks::nop_return_zero); // esp_rom_gpio_pad_select_gpio
                                                                  // MMU / cache setup helpers — discovered iteratively while booting
                                                                  // the the reference firmware Arduino-ESP32 binary in sim. All no-ops because the
@@ -553,10 +560,9 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
 
     // TIMG0 / TIMG1 — ESP32-classic Timer Group (TRM §16). Per-group
     // 64-bit T0/T1 general-purpose counters, watchdog, RTC calibration.
-    // Preserves the auto-RDY-on-START behavior of the older `TimgStub`
-    // so `rtc_clk_wait_for_slow_cycle` still completes in one iteration,
-    // and adds monotonic counter reads so ESP-IDF's timer-state probes
-    // see forward progress. Interrupt firing is intentionally deferred.
+    // Models classic T0/T1 and LACT alarms, their sticky status, and DPORT
+    // interrupt-matrix levels. The C3 factory shares the peripheral type but
+    // does not opt into this classic register layout.
 
     // EFUSE — ESP32 BROM and esp-hal read BLK0 (MAC + chip_revision)
     // during reset-handler init. Returning a coherent rev3 + non-zero
@@ -614,6 +620,12 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     // …and the LEDC channel outputs (matrix signals 71..86), so a servo or LED
     // pad attached with `ledcAttachPin` shows its PWM edges.
     bus.wire_esp32_ledc_pads();
+    // …and the other direction: the 32 PCNT input signals, so a pad routed
+    // to a pulse counter with `gpio_matrix_in` counts its edges.
+    bus.wire_esp32_pcnt_inputs();
+    // …and the DAC1/DAC2 outputs onto SAR ADC2_CH8/CH9, their own pads, so
+    // `analogRead(25)` after `dacWrite(25, v)` reads the level the DAC drives.
+    bus.wire_esp32_dac_adc();
     // AHB TX FIFO alias registered after wifi_mac_phy (see below).
 
     // SYSCON (TRM §13.2) — system controller. Owns SYSCLK_CONF, TICK_CONF,
@@ -699,8 +711,19 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
         ("i2s1", 0x3FF6_D000),
         // pwm0 (0x3FF5_E000) is now the real MCPWM0 model registered above.
         ("ledc2", 0x3FF6_8000),
-        ("rmt", 0x3FF5_6000),
-        ("pcnt", 0x3FF5_7000),
+        // rmt (0x3FF5_6000) is the real Esp32Rmt model from ESP32_PERIPHERALS:
+        // a stub at the same base registered here would win (equal starts →
+        // last registered), same defect uart1/pwm0/pcnt already had.
+        // Radio front-end and baseband (FE2, FE, NRX, BB). No radio is
+        // modelled. ESP-IDF's `rtc_sleep_init` clears their FORCE_PU bits
+        // (FE2_TX_INTERP_CTRL, FE_GEN_CTRL, NRXPD_CTRL, BBPD_CTRL) before
+        // every light or deep sleep, so the windows must decode.
+        ("fe2", 0x3FF4_5000),
+        ("fe", 0x3FF4_6000),
+        ("nrx", 0x3FF5_C000),
+        ("bb", 0x3FF5_D000),
+        // pcnt (0x3FF5_7000) is the real Esp32Pcnt model from
+        // ESP32_PERIPHERALS: a stub at the same base registered here would win.
     ] {
         bus.add_peripheral(
             name,
@@ -722,16 +745,28 @@ pub fn configure_xtensa_esp32(bus: &mut SystemBus) -> XtensaLx7 {
     );
 
     // WiFi MAC / PHY / RNG block (0x6000_0000..0x6004_3000 on real silicon).
-    // The only register esp_random() touches at boot is RNG_DATA_REG at
-    // 0x6003_5144 — a read returns 32 random bits. A round-tripping stub
-    // satisfies the access; reads return zero (deterministic, but legal
-    // — RNG semantics permit any value including all-zero).
+    // A round-tripping stub; the one word in it that firmware depends on is
+    // the RNG below.
     bus.add_peripheral(
         "wifi_mac_phy",
         0x6000_0000,
         0x4_3000,
         None,
         Box::new(crate::peripherals::esp_xtensa_common::system_stub::SystemStub::new()),
+    );
+    // Hardware RNG data register (WDEV_RND_REG, 0x6003_5144 in both the IDF 4.4
+    // and IDF 5 `soc/esp32/.../wdev_reg.h`). esp_random() XORs successive reads
+    // of it, and Arduino's random(n) is esp_random() % n. Left on the stub above
+    // it read 0, so every random() call returned 0. The register is a single
+    // read-only word that yields a fresh value per read, the same contract as the
+    // C3's, so the C3 model serves: a deterministic xorshift32 that varies.
+    // Greatest start wins, so this 4-byte window beats wifi_mac_phy.
+    bus.add_peripheral(
+        "wdev_rnd",
+        0x6003_5144,
+        0x4,
+        None,
+        Box::new(crate::peripherals::esp32c3::rng::Esp32c3Rng::new()),
     );
     // Classic ESP32 AHB FIFO aliases (`UART_FIFO_AHB_REG`). Firmware TX writes
     // here (uart_ll_write_txfifo); STATUS/INT live on APB. Registered *after*
@@ -946,6 +981,10 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     ("ledc",     "esp32_ledc",     0x3FF5_9000, 0x1000, None),
     ("twai",     "esp32_twai",     0x3FF6_B000, 0x1000, None),
     ("mcpwm0",   "esp32_mcpwm",    0x3FF5_E000, 0x1000, None),
+    // PCNT (TRM §17, `DR_REG_PCNT_BASE`): 8 pulse-counter units, inputs from
+    // the GPIO input matrix (signals 39..58, 71..82) through
+    // `wire_esp32_pcnt_inputs`; `ETS_PCNT_INTR_SOURCE` = 48.
+    ("pcnt",     "esp32_pcnt",     0x3FF5_7000, 0x1000, Some(48)),
     ("host_slc", "esp32_sdio",     0x3FF5_8000, 0x1000, None),
     // RTC IO MUX + RTC GPIO (TRM §6.11-6.13, `DR_REG_RTCIO_BASE`). The block
     // is 0xCC bytes; the window stays the 4 KiB the catch-all stub it
@@ -954,10 +993,35 @@ pub(crate) const ESP32_PERIPHERALS: &[(&str, &str, u64, u64, Option<u32>)] = &[
     // as round-trip storage. `sens_sar_adc` (0x3FF4_8800) and `io_mux`
     // (0x3FF4_9000) still win their ranges by the greatest-start rule.
     ("rtcio",    "esp32_rtc_io",   0x3FF4_8400, 0x1000, None),
+    // RMT TX (NeoPixel). ETS_RMT_INTR_SOURCE = 47.
+    ("rmt",      "esp32_rmt",      0x3FF5_6000, 0x1000, Some(47)),
 ];
 
 /// `GPIO_FUNC0_OUT_SEL_CFG_REG` (`DR_REG_GPIO_BASE` 0x3FF4_4000 + 0x530), stride 4.
 const GPIO_FUNC0_OUT_SEL_CFG: u64 = 0x3FF4_4530;
+
+/// `GPIO_FUNC0_IN_SEL_CFG_REG` (`DR_REG_GPIO_BASE` 0x3FF4_4000 + 0x130),
+/// one word per input signal 0..255.
+const GPIO_FUNC0_IN_SEL_CFG: u64 = 0x3FF4_4130;
+
+/// BROM `gpio_matrix_in(gpio, signal_idx, inv)`: write input signal
+/// `signal_idx`'s `FUNCn_IN_SEL_CFG` = `gpio` (bits 5:0: a pad, or
+/// `GPIO_MATRIX_CONST_ZERO_INPUT` 0x30 / `_ONE_INPUT` 0x38) | `inv` << 6
+/// (`IN_INV_SEL`) | `SIG_IN_SEL` (bit 7, take the matrix rather than the
+/// signal's IO_MUX pad). esp-idf `rom/gpio.h`, TRM §4.10. A signal past the
+/// 256 is ignored.
+fn gpio_matrix_in(cpu: &mut XtensaLx7, bus: &mut dyn Bus) -> crate::SimResult<()> {
+    let n = cpu.ps.callinc() * 4;
+    let gpio = cpu.regs.read_logical(n + 2) & 0x3F;
+    let signal = cpu.regs.read_logical(n + 3);
+    let inv = cpu.regs.read_logical(n + 4) & 1;
+    if signal < 256 {
+        let value = gpio | (inv << 6) | (1 << 7);
+        bus.write_u32(GPIO_FUNC0_IN_SEL_CFG + u64::from(signal) * 4, value)?;
+    }
+    rom_thunks::RomThunkBank::return_with(cpu, 0);
+    Ok(())
+}
 
 /// BROM `gpio_matrix_out(gpio, signal_idx, out_inv, oen_inv)`: write the
 /// pad's `FUNCn_OUT_SEL_CFG` = `signal_idx` (bits 8:0) | `out_inv` << 9
@@ -1129,5 +1193,88 @@ mod board_io_tests {
             matches!(err, crate::sim_input::SimInputError::NoDevice(_)),
             "expected NoDevice, got {err:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod dac_tests {
+    use super::*;
+    use crate::Bus;
+    use labwired_config::{PeripheralConfig, SystemManifest};
+
+    const PAD_DAC1: u64 = 0x3FF4_8484;
+    const SAR_DAC_CTRL2: u64 = 0x3FF4_889C;
+    const SAR_MEAS_START1: u64 = 0x3FF4_8854;
+    const SAR_MEAS_START2: u64 = 0x3FF4_8894;
+
+    /// `dacWrite(25, code)` as IDF 4.4 does it: power on, CW_EN1 off, code.
+    fn dac_write(bus: &mut crate::bus::SystemBus, code: u32) {
+        bus.write_u32(PAD_DAC1, 0x8000_0000 | (code << 19) | (1 << 18) | (1 << 10))
+            .unwrap();
+        bus.write_u32(SAR_DAC_CTRL2, 1 << 25).unwrap();
+    }
+
+    fn convert(bus: &mut crate::bus::SystemBus, start: u64, channel: u32) -> u32 {
+        bus.write_u32(start, ((1 << channel) << 19) | (1 << 18) | (1 << 17))
+            .unwrap();
+        bus.read_u32(start).unwrap() & 0xFFFF
+    }
+
+    fn manifest(links: &str) -> SystemManifest {
+        let peripheral: PeripheralConfig = serde_yaml::from_str(&format!(
+            "{{ id: sens_sar_adc, type: esp32_sar_adc, base_address: 0x3FF48800, \
+             config: {{ analog_links: {links} }} }}"
+        ))
+        .unwrap();
+        SystemManifest {
+            schema_version: "1.0".to_string(),
+            name: "esp32-dac-jumper".to_string(),
+            chip: "esp32.yaml".to_string(),
+            peripherals: vec![peripheral],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn dac1_reaches_its_own_pad_on_adc2_ch8() {
+        let mut bus = crate::bus::SystemBus::new();
+        let _cpu = configure_xtensa_esp32(&mut bus);
+        dac_write(&mut bus, 200);
+        assert_eq!(
+            convert(&mut bus, SAR_MEAS_START2, 8),
+            200 * 3300 / 255 * 4095 / 3300
+        );
+    }
+
+    #[test]
+    fn a_manifest_jumper_takes_dac1_to_adc1_ch6() {
+        let mut bus = crate::bus::SystemBus::new();
+        let _cpu = configure_xtensa_esp32(&mut bus);
+        attach_esp32_external_devices(&mut bus, &manifest("{ 6: \"sens_sar_adc:0\" }"))
+            .expect("jumper binds");
+        let before = convert(&mut bus, SAR_MEAS_START1, 6);
+        dac_write(&mut bus, 128);
+        let level = convert(&mut bus, SAR_MEAS_START1, 6);
+        assert_eq!(level, 128 * 3300 / 255 * 4095 / 3300);
+        assert_ne!(before, level);
+        dac_write(&mut bus, 255);
+        assert_eq!(convert(&mut bus, SAR_MEAS_START1, 6), 4095);
+    }
+
+    #[test]
+    fn a_jumper_that_cannot_bind_is_an_error() {
+        for links in [
+            "{ 6: \"nope:0\" }",
+            "{ 6: \"sens_sar_adc:5\" }",
+            "{ 12: \"sens_sar_adc:0\" }",
+            "{ 6: \"sens_sar_adc\" }",
+        ] {
+            let mut bus = crate::bus::SystemBus::new();
+            let _cpu = configure_xtensa_esp32(&mut bus);
+            assert!(
+                attach_esp32_external_devices(&mut bus, &manifest(links)).is_err(),
+                "{links} must not attach"
+            );
+        }
     }
 }

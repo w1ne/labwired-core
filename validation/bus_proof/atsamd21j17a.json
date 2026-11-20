@@ -1,0 +1,19 @@
+{
+  "id": "atsamd21j17a",
+  "in_boards": false,
+  "uart": {
+    "state": "none",
+    "gap": "Geometry-only descriptor reuses the atsamd21g18a engine; no per-orderable firmware UART run is claimed.",
+    "lane": "none"
+  },
+  "spi": {
+    "state": "none",
+    "gap": "SERCOM SPI mode is not modelled.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "SERCOM I2C mode is not modelled.",
+    "lane": "none"
+  }
+}

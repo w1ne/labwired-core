@@ -2,13 +2,11 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Data-driven factory for ESP32-C6 peripheral models.
+//! Data-driven factory for ESP32-C6 models and the narrow ESP32-C61 PCR slice.
 //!
-//! Every arm here either parameterizes a shared model with the C6's values or
-//! aliases the C3 model whose register map the C6 genuinely shares. The C6 has
-//! no C3-only `system` / `rtc_cntl` / `apb_ctrl` blocks and no C6-specific
-//! behavioral model yet; the clock/reset (PCR) and IO_MUX windows are
-//! SVD-derived `declarative` descriptors wired directly in `esp32c6.yaml`.
+//! C6 arms parameterize shared models with C6 values or alias a shared model
+//! whose register map matches. C61 uses this factory only for its separately
+//! mapped, narrow PCR clock-gate model.
 
 use crate::Peripheral;
 use labwired_config::PeripheralConfig;
@@ -45,6 +43,9 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         // (`Peripheral::clock_gate_reg_offset`); see super::pcr for exactly
         // what is and is not enforced.
         "esp32c6_pcr" => Box::new(super::pcr::Esp32c6Pcr::new()),
+        // C61 places its I2C gate registers at +0x2C/+0x30 rather than the C6
+        // offsets. Only the UART0 and I2C0 gates in the board profile are mapped.
+        "esp32c61_pcr" => Box::new(super::pcr::Esp32c6Pcr::new_esp32c61()),
         // EXTMEM / L1 cache — launch/done handshakes for Arduino cache_hal.
         "esp32c6_extmem" => Box::new(super::extmem::Esp32c6Extmem::new()),
         // SYSTIMER — same IP as C3/S3. TARGET0 matrix source 57 on C6.
@@ -99,13 +100,45 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
         "esp32c6_lp_rtc" => Box::new(super::lp_timer::Esp32c6LpTimer::new()),
         // MODEM_LPCON — sticky regs; seed clk_i2c_mst_en for fast-boot.
         "esp32c6_modem_lpcon" => Box::new(super::modem_lpcon::Esp32c6ModemLpcon::new()),
-        // Analog I2C master — sticky + instant-complete BUSY/cal bits.
-        "esp32c6_i2c_ana_mst" => Box::new(super::i2c_ana_mst::Esp32c6I2cAnaMst::new()),
+        // Analog I2C master — sticky + instant-complete BUSY/cal bits. The C2
+        // reuses it with `ana_conf0_offset: 0x40` (see the model docs).
+        "esp32c6_i2c_ana_mst" => {
+            let dev = super::i2c_ana_mst::Esp32c6I2cAnaMst::new();
+            Box::new(
+                match p_cfg
+                    .config
+                    .get("ana_conf0_offset")
+                    .and_then(|v| v.as_u64())
+                {
+                    Some(offset) => dev.with_ana_conf0_offset(offset),
+                    None => dev,
+                },
+            )
+        }
         // USB Serial/JTAG — same EP1/INT_* IP as C3/S3 (`UsbSerialJtag`), with
         // the C6 matrix source (48) and 160 MHz clock. Base is owned by the
         // chip yaml (`0x6000_F000`); see the model module docs.
         "esp32c6_usb_serial_jtag" => {
             Box::new(crate::peripherals::esp32s3::usb_serial_jtag::UsbSerialJtag::new_esp32c6())
+        }
+        // RMT — the C3 model: the C6 map is offset- and bit-identical
+        // (CHnCONF0 @0x10/0x14, INT_RAW..CLR @0x38..0x44, RMTMEM @+0x400; esp-idf
+        // `soc/esp32c6/register/soc/rmt_reg.h`). Only the matrix source differs:
+        // ETS_RMT_INTR_SOURCE is 49 on the C6 (interrupts.h) against 28 on the C3.
+        // Arduino-ESP32-C6 `LED_BUILTIN` is the WS2812 on GPIO8 → rgbLedWrite → RMT TX.
+        "esp32c6_rmt" => {
+            let source = p_cfg.irq.unwrap_or(RMT_INTR_SOURCE_C6);
+            Box::new(crate::peripherals::esp32c3::rmt::Esp32c3Rmt::new(source))
+        }
+        // LEDC — the C3 engine on the C6 field geometry: same offsets, but
+        // TIMERx_CONF is DUTY_RES [4:0] / CLK_DIV [22:5] / PAUSE 23 / RST 24 and
+        // CNT/HPOINT/DUTY are 20/20/25 bits (`soc/esp32c6/register/soc/ledc_reg.h`).
+        // The source clock is PCR.LEDC_SCLK_CONF, attached via `clock_select`.
+        "esp32c6_ledc" => {
+            let source = p_cfg.irq.unwrap_or(LEDC_INTR_SOURCE_C6);
+            Box::new(crate::peripherals::esp32c3::ledc::Esp32c3Ledc::new_esp32c6(
+                source,
+            ))
         }
         _ => return None,
     };
@@ -115,6 +148,7 @@ pub fn try_build(canonical_type: &str, p_cfg: &PeripheralConfig) -> Option<Box<d
 pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_uart",
     "esp32c6_gpio",
+    "esp32c61_pcr",
     "esp32c6_pcr",
     "esp32c6_extmem",
     "esp32c6_systimer",
@@ -124,4 +158,48 @@ pub const SUPPORTED_TYPES: &[&str] = &[
     "esp32c6_modem_lpcon",
     "esp32c6_i2c_ana_mst",
     "esp32c6_usb_serial_jtag",
+    "esp32c6_rmt",
+    "esp32c6_ledc",
 ];
+
+/// ETS_LEDC_INTR_SOURCE on the ESP32-C6 (`soc/esp32c6/include/soc/interrupts.h`).
+pub const LEDC_INTR_SOURCE_C6: u32 = 45;
+
+/// ETS_RMT_INTR_SOURCE on the ESP32-C6 (`soc/esp32c6/include/soc/interrupts.h`).
+pub const RMT_INTR_SOURCE_C6: u32 = 49;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn rmt_tx_start_raises_c6_matrix_source() {
+        let cfg = PeripheralConfig {
+            id: "rmt".to_string(),
+            r#type: "esp32c6_rmt".to_string(),
+            base_address: 0x6000_6000,
+            size: None,
+            irq: None,
+            irq_controller: None,
+            clock: None,
+            config: HashMap::new(),
+        };
+        let mut rmt = try_build("esp32c6_rmt", &cfg).expect("esp32c6_rmt builds");
+        // RMTMEM @ +0x400 is backed (the 1KB stub faulted there).
+        rmt.write_u32(0x400, 0x0008_8004).unwrap();
+        assert_eq!(rmt.read_u32(0x400).unwrap(), 0x0008_8004);
+        // INT_ENA CH0_TX_END, then CH0CONF0 TX_START.
+        rmt.write_u32(0x40, 1).unwrap();
+        rmt.write_u32(0x10, 1).unwrap();
+        assert_eq!(rmt.read_u32(0x3C).unwrap() & 1, 1, "INT_ST CH0_TX_END");
+        let mut sources = Vec::new();
+        rmt.matrix_irq_sources_into(&mut sources);
+        assert_eq!(sources, vec![RMT_INTR_SOURCE_C6]);
+        // INT_CLR de-asserts the level.
+        rmt.write_u32(0x44, 1).unwrap();
+        sources.clear();
+        rmt.matrix_irq_sources_into(&mut sources);
+        assert!(sources.is_empty());
+    }
+}

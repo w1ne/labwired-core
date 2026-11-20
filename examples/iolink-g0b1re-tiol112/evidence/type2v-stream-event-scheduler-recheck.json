@@ -30,7 +30,7 @@
   },
   "source_sha256": {
     "crates/core/src/peripherals/components/iolink_master.rs": "6cfe37d2929ed0efb61add7eb937ddcdd6cdc4325f6a32435a4a8e4c8a357912",
-    "crates/core/tests/iolink_master_config.rs": "9e54a0e89cb1132959ebfce67a04f3482d3a59730279833db76adb151d272f8f",
+    "crates/core/tests/gpio_logic/iolink_master_config.rs": "9e54a0e89cb1132959ebfce67a04f3482d3a59730279833db76adb151d272f8f",
     "crates/wasm/src/inspect.rs": "15483e45a245db97ad39f127ca99c2ad60d0796ccebf3191a30b68ea973f0b78",
     "examples/iolink-g0b1re-tiol112/stream-system64.yaml": "7e1e7955f2bb32771accc5ee4d5fefe4487c2b6addf079ad0e3e0b845b3fa87f"
   }

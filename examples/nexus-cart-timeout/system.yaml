@@ -1,0 +1,25 @@
+name: "nexus-cart-timeout"
+chip: "../../configs/chips/stm32f103.yaml"
+# F103 reset HSI clock (not the 72 MHz max). Must match SysTick LOAD and BRR.
+cpu_hz: 8_000_000
+debug_uart: "uart1"
+external_devices: []
+board_io:
+  - id: "operator_start"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 0
+    signal: "input"
+    active_high: true
+  - id: "operator_reset"
+    kind: "button"
+    peripheral: "gpioa"
+    pin: 1
+    signal: "input"
+    active_high: true
+  - id: "motor_enable"
+    kind: "led"
+    peripheral: "gpiob"
+    pin: 0
+    signal: "output"
+    active_high: true

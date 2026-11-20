@@ -1,0 +1,29 @@
+{
+  "target_id": "esp32s3-devkitc-1-v11-rgb",
+  "status": "pass",
+  "crate": "",
+  "target_triple": "",
+  "script": "examples/esp32s3-devkitc-1/rgb-smoke.yaml",
+  "system": "configs/systems/esp32s3-devkitc-1-v11-rgb.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T17:01:28Z",
+  "finished_at_utc": "2026-11-11T17:01:32Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3724,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.274,
+    "build_firmware": 2.596,
+    "run_smoke": 0.816
+  },
+  "stages_ms": {
+    "build_cli": 274,
+    "build_firmware": 2596,
+    "run_smoke": 816
+  },
+  "firmware_build_script": "examples/esp32s3-devkitc-1/rgb-smoke/build-firmware.sh"
+}

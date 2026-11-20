@@ -25,7 +25,7 @@ use std::sync::Arc;
 /// off changes nothing" true by construction rather than by measurement alone —
 /// no firmware can observe a new read-back, not even the `SHCSR |= BUSFAULTENA`
 /// round-trip that `cortex-m-rt` and Zephyr perform at boot.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ScbFaultState {
     /// Master switch for ARMv7-M fault escalation (ARMv7-M ARM B1.5.14) and for
     /// the fault register surface below. Default **false**.
@@ -47,6 +47,37 @@ pub struct ScbFaultState {
     /// reads this bit on SDIV/UDIV with a zero divisor to decide whether to
     /// raise UsageFault(DIVBYZERO). Written on every CCR write.
     pub ccr_div_0_trp: AtomicBool,
+    /// Mirror of `CCR.STKALIGN` (0xE000ED14 bit 9). The SCB owns CCR; the CPU
+    /// reads this bit while stacking an exception frame. Reset enables the
+    /// double-word alignment behavior.
+    pub ccr_stkalign: AtomicBool,
+    /// The core is ARMv6-M (Cortex-M0/M0+/M1). Its SCB has no CFSR, HFSR,
+    /// MMFAR or BFAR (ARMv6-M ARM B3.2.2: 0xE000ED28..0xE000ED3C reserved),
+    /// so firmware reads zero there and its writes are dropped, and SHCSR
+    /// holds only SVCALLPENDED (C1.6.3), so no MemManage/BusFault/UsageFault
+    /// enable can be set and every fault is a HardFault. The core still
+    /// records the cause in the fields above for the fault report.
+    pub armv6m: AtomicBool,
+    /// AIRCR implements priority grouping. False on ARMv6-M and ARMv8-M
+    /// Baseline, whose SCBs read PRIGROUP as zero.
+    pub priority_group_supported: AtomicBool,
+}
+
+impl Default for ScbFaultState {
+    fn default() -> Self {
+        Self {
+            enabled: AtomicBool::new(false),
+            shcsr: AtomicU32::new(0),
+            cfsr: AtomicU32::new(0),
+            hfsr: AtomicU32::new(0),
+            mmfar: AtomicU32::new(0),
+            bfar: AtomicU32::new(0),
+            ccr_div_0_trp: AtomicBool::new(false),
+            ccr_stkalign: AtomicBool::new(true),
+            armv6m: AtomicBool::new(false),
+            priority_group_supported: AtomicBool::new(true),
+        }
+    }
 }
 
 /// `SHCSR.MEMFAULTENA`, bit 16 (ARMv7-M ARM B3.2.13).
@@ -74,6 +105,15 @@ pub const CFSR_UFSR_UNDEFINSTR: u32 = 1 << 16;
 pub const CFSR_UFSR_DIVBYZERO: u32 = 1 << 25;
 /// `CCR.DIV_0_TRP`, bit 4 (B3.2.8): trap divide by zero.
 pub const CCR_DIV_0_TRP: u32 = 1 << 4;
+/// `CCR.STKALIGN`, bit 9: align exception stack frames to a double-word
+/// boundary and record the optional padding word in stacked xPSR[9].
+pub const CCR_STKALIGN: u32 = 1 << 9;
+/// CPACR.CP10/CP11 fields. These grant access to the optional FP extension.
+pub const CPACR_CP10_CP11_MASK: u32 = 0x00F0_0000;
+/// CPACR offset in the System Control Space.
+pub const CPACR_OFFSET: u64 = 0x88;
+/// `CFSR.UFSR.NOCP` — UFSR bit 3, i.e. CFSR bit 19 (B3.2.15).
+pub const CFSR_UFSR_NOCP: u32 = 1 << 19;
 /// `HFSR.FORCED`, bit 30 (B3.2.16): set when a configurable-priority fault
 /// escalates to HardFault.
 pub const HFSR_FORCED: u32 = 1 << 30;
@@ -81,6 +121,8 @@ pub const HFSR_FORCED: u32 = 1 << 30;
 /// Bits defined in SHCSR on ARMv7-M (B3.2.13); everything above bit 18 is
 /// reserved and reads as zero.
 const SHCSR_VALID: u32 = 0x0007_FFFF;
+/// The one SHCSR bit ARMv6-M defines: SVCALLPENDED, bit 15 (C1.6.3).
+const SHCSR_VALID_V6M: u32 = 1 << 15;
 
 impl ScbFaultState {
     pub fn new(enabled: bool) -> Self {
@@ -103,6 +145,9 @@ impl ScbFaultState {
         if !self.is_enabled() {
             return None;
         }
+        if self.armv6m.load(Ordering::Relaxed) && matches!(offset, 0x28 | 0x2C | 0x34 | 0x38) {
+            return Some(0);
+        }
         Some(match offset {
             0x24 => self.shcsr.load(Ordering::Relaxed),
             0x28 => self.cfsr.load(Ordering::Relaxed),
@@ -119,8 +164,13 @@ impl ScbFaultState {
         if !self.is_enabled() {
             return false;
         }
+        let armv6m = self.armv6m.load(Ordering::Relaxed);
+        if armv6m && matches!(offset, 0x28 | 0x2C | 0x34 | 0x38) {
+            return true;
+        }
+        let shcsr_valid = if armv6m { SHCSR_VALID_V6M } else { SHCSR_VALID };
         match offset {
-            0x24 => self.shcsr.store(value & SHCSR_VALID, Ordering::Relaxed),
+            0x24 => self.shcsr.store(value & shcsr_valid, Ordering::Relaxed),
             // CFSR and HFSR are write-1-to-clear (B3.2.15 / B3.2.16): a fault
             // handler acknowledges by writing back what it read. Storing the
             // value instead would make `SCB->CFSR = SCB->CFSR;` a no-op and the
@@ -152,12 +202,20 @@ pub struct SharedScbState {
     pub shpr1: Arc<AtomicU32>,
     pub shpr2: Arc<AtomicU32>,
     pub shpr3: Arc<AtomicU32>,
+    /// Live CPU-side SysTick pending state for ICSR.PENDSTSET readback.
+    pub systick_pending_live: Arc<AtomicBool>,
+    /// Live CPU-side PendSV pending state for ICSR.PENDSVSET readback.
+    pub pendsv_pending_live: Arc<AtomicBool>,
+    /// AIRCR.PRIGROUP, shared with Cortex-M exception arbitration.
+    pub priority_group: Arc<AtomicU32>,
     /// Mirror of `pending_reset` the CPU can read without reaching the bus.
     /// See the field docs on [`Scb::sysreset_signal`].
     pub sysreset_signal: Arc<AtomicBool>,
     /// The ARMv7-M fault register file, shared with the CPU. See
     /// [`ScbFaultState`].
     pub faults: Arc<ScbFaultState>,
+    /// CPACR shared with the core when the chip has an FP extension.
+    pub cpacr: Option<Arc<AtomicU32>>,
 }
 
 /// System Control Block (SCB)
@@ -178,6 +236,9 @@ pub struct Scb {
     #[serde(skip)]
     pub event_state: Option<Arc<super::nvic::NvicState>>,
     pub ccr: u32,
+    /// CPACR.CP10/CP11, present only when an FP extension is declared.
+    #[serde(skip)]
+    pub cpacr: Option<Arc<AtomicU32>>,
     #[serde(skip)]
     /// SHPR1 (offset 0x18) holds priorities for MemManage(4), BusFault(5),
     /// UsageFault(6). Shared with CortexM so its exception-dispatch path
@@ -193,6 +254,17 @@ pub struct Scb {
     /// other interrupt is active — that's the load-bearing semantics
     /// for `loopTask` to ever get CPU time.
     pub shpr3: Arc<AtomicU32>,
+    #[serde(skip)]
+    /// Live CPU pending state. The local latch below represents an ICSR write
+    /// that has not yet been drained into the CPU bitmap.
+    pub systick_pending_live: Arc<AtomicBool>,
+    /// Shared with CortexM so ICSR.PENDSVSET stays visible after the local SCB
+    /// latch is drained into the CPU's exception arbitration bitmap.
+    #[serde(skip)]
+    pub pendsv_pending_live: Arc<AtomicBool>,
+    #[serde(skip)]
+    /// AIRCR.PRIGROUP, shared with Cortex-M exception arbitration.
+    pub priority_group: Arc<AtomicU32>,
     /// PendSV exception pend bit. Set by an ICSR.PENDSVSET write
     /// (bit 28); drained into the CPU's pending_exceptions via tick().
     pub pendsv_pending: bool,
@@ -277,8 +349,12 @@ impl Scb {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            systick_pending_live: Arc::new(AtomicBool::new(false)),
+            pendsv_pending_live: Arc::new(AtomicBool::new(false)),
+            priority_group: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
             faults: Arc::new(ScbFaultState::default()),
+            cpacr: None,
         })
     }
 
@@ -289,8 +365,12 @@ impl Scb {
             shpr1: Arc::new(AtomicU32::new(0)),
             shpr2: Arc::new(AtomicU32::new(0)),
             shpr3: Arc::new(AtomicU32::new(0)),
+            systick_pending_live: Arc::new(AtomicBool::new(false)),
+            pendsv_pending_live: Arc::new(AtomicBool::new(false)),
+            priority_group: Arc::new(AtomicU32::new(0)),
             sysreset_signal: Arc::new(AtomicBool::new(false)),
             faults: Arc::new(ScbFaultState::default()),
+            cpacr: None,
         })
     }
 
@@ -303,10 +383,14 @@ impl Scb {
             aircr: 0,
             scr: 0,
             event_state: None,
-            ccr: 0,
+            ccr: CCR_STKALIGN,
+            cpacr: s.cpacr,
             shpr1: s.shpr1,
             shpr2: s.shpr2,
             shpr3: s.shpr3,
+            systick_pending_live: s.systick_pending_live,
+            pendsv_pending_live: s.pendsv_pending_live,
+            priority_group: s.priority_group,
             pendsv_pending: false,
             systick_pending: false,
             nmi_pending: false,
@@ -388,6 +472,11 @@ impl Scb {
         Arc::clone(&self.faults)
     }
 
+    /// The CPACR storage shared with the core, when this chip declares an FPU.
+    pub fn cpacr_state(&self) -> Option<Arc<AtomicU32>> {
+        self.cpacr.as_ref().map(Arc::clone)
+    }
+
     /// Write a 32-bit value to an SCB register at the given word-aligned offset.
     /// Only compiled in test builds; production MMIO goes through `Peripheral::write`.
     #[cfg(test)]
@@ -422,7 +511,10 @@ impl Scb {
                 if self.pendsv_pending {
                     v |= 1 << 28;
                 }
-                if self.systick_pending {
+                if self.pendsv_pending_live.load(Ordering::Relaxed) {
+                    v |= 1 << 28;
+                }
+                if self.systick_pending || self.systick_pending_live.load(Ordering::Relaxed) {
                     v |= 1 << 26;
                 }
                 if self.nmi_pending {
@@ -437,6 +529,10 @@ impl Scb {
             0x18 => self.shpr1.load(Ordering::Relaxed),
             0x1C => self.shpr2.load(Ordering::Relaxed),
             0x20 => self.shpr3.load(Ordering::Relaxed),
+            CPACR_OFFSET if self.cpacr.is_some() => self
+                .cpacr
+                .as_ref()
+                .map_or(0, |v| v.load(Ordering::Relaxed) & CPACR_CP10_CP11_MASK),
             // MPU (ARMv7-M, 0xE000ED90..0xE000EDA0). TYPE is read-only:
             // SEPARATE=0 (unified), DREGION=[15:8], IREGION=0.
             0x90 => (self.mpu_dregion & 0xFF) << 8,
@@ -481,15 +577,19 @@ impl Scb {
                 }
                 if value & (1 << 28) != 0 {
                     self.pendsv_pending = true;
+                    self.pendsv_pending_live.store(true, Ordering::Relaxed);
                 }
                 if value & (1 << 27) != 0 {
                     self.pendsv_pending = false;
+                    self.pendsv_pending_live.store(false, Ordering::Relaxed);
                 }
                 if value & (1 << 26) != 0 {
                     self.systick_pending = true;
+                    self.systick_pending_live.store(true, Ordering::Relaxed);
                 }
                 if value & (1 << 25) != 0 {
                     self.systick_pending = false;
+                    self.systick_pending_live.store(false, Ordering::Relaxed);
                 }
                 // The SET/CLR action bits are write-only / self-clearing: never
                 // persist them. Zephyr's arch_swap re-pends with a read-modify-
@@ -503,14 +603,28 @@ impl Scb {
             }
             0x08 => self.vtor.store(value, Ordering::Relaxed),
             0x0C => {
-                if (value >> 16) == 0x05FA && value & (1 << 2) != 0 {
-                    self.pending_reset.set(true);
-                    // Cut the CPU batch at this instruction so the machine
-                    // drains the reset on the very next boundary.
-                    self.sysreset_signal.store(true, Ordering::Relaxed);
+                // AIRCR ignores writes with a bad VECTKEY. VECTKEYSTAT reads
+                // as zero; the PRIGROUP field is also shared with the CPU so
+                // exception preemption sees the same value firmware reads.
+                if value >> 16 == 0x05FA {
+                    if value & (1 << 2) != 0 {
+                        self.pending_reset.set(true);
+                        // Cut the CPU batch at this instruction so the machine
+                        // drains the reset on the very next boundary.
+                        self.sysreset_signal.store(true, Ordering::Relaxed);
+                    }
+                    let priority_group =
+                        if !self.faults.priority_group_supported.load(Ordering::Relaxed) {
+                            // AIRCR.PRIGROUP is reserved on ARMv6-M and ARMv8-M
+                            // Baseline.
+                            0
+                        } else {
+                            (value >> 8) & 0x7
+                        };
+                    self.priority_group.store(priority_group, Ordering::Relaxed);
+                    // Store masked: VECTKEY reads as 0 (matches silicon).
+                    self.aircr = (value & 0x0000_FFFF & !0x700) | (priority_group << 8);
                 }
-                // Store masked: VECTKEY field reads back as 0 (matches silicon).
-                self.aircr = value & 0x0000_FFFF;
             }
             0x10 => {
                 self.scr = value;
@@ -521,14 +635,29 @@ impl Scb {
                 }
             }
             0x14 => {
+                let value = if self.faults.armv6m.load(Ordering::Relaxed) {
+                    // ARMv6-M implements STKALIGN as read-as-one; software
+                    // cannot disable the automatic exception-frame alignment.
+                    value | CCR_STKALIGN
+                } else {
+                    value
+                };
                 self.ccr = value;
                 self.faults
                     .ccr_div_0_trp
                     .store(value & CCR_DIV_0_TRP != 0, Ordering::Relaxed);
+                self.faults
+                    .ccr_stkalign
+                    .store(value & CCR_STKALIGN != 0, Ordering::Relaxed);
             }
             0x18 => self.shpr1.store(value, Ordering::Relaxed),
             0x1C => self.shpr2.store(value, Ordering::Relaxed),
             0x20 => self.shpr3.store(value, Ordering::Relaxed),
+            CPACR_OFFSET => {
+                if let Some(cpacr) = &self.cpacr {
+                    cpacr.store(value & CPACR_CP10_CP11_MASK, Ordering::Relaxed);
+                }
+            }
             // MPU region programming. Stored so reads round-trip and
             // z_arm_mpu_init completes; access enforcement is not modeled yet.
             // 0x90 (TYPE) is read-only — writes are ignored.
@@ -681,6 +810,27 @@ mod tests {
     use crate::Peripheral;
 
     #[test]
+    fn ccr_stkalign_tracks_the_cpu_visible_shared_state() {
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        let state = scb.fault_state();
+        assert_eq!(scb.read_register(0x14), CCR_STKALIGN);
+        assert!(state.ccr_stkalign.load(Ordering::Relaxed));
+
+        scb.write_register(0x14, 0);
+        assert_eq!(scb.read_register(0x14), 0);
+        assert!(!state.ccr_stkalign.load(Ordering::Relaxed));
+
+        scb.write_register(0x14, CCR_STKALIGN | CCR_DIV_0_TRP);
+        assert!(state.ccr_stkalign.load(Ordering::Relaxed));
+        assert!(state.ccr_div_0_trp.load(Ordering::Relaxed));
+
+        state.armv6m.store(true, Ordering::Relaxed);
+        scb.write_register(0x14, 0);
+        assert_eq!(scb.read_register(0x14) & CCR_STKALIGN, CCR_STKALIGN);
+        assert!(state.ccr_stkalign.load(Ordering::Relaxed));
+    }
+
+    #[test]
     fn cache_id_registers_follow_the_declared_m7_geometry() {
         use crate::peripherals::cortex_m7_cache::L1CacheGeometry;
         let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
@@ -702,6 +852,19 @@ mod tests {
     }
 
     #[test]
+    fn cpacr_round_trips_only_when_an_fpu_is_present() {
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        let cpacr = Arc::new(AtomicU32::new(0));
+        scb.cpacr = Some(cpacr.clone());
+        assert_eq!(scb.read_register(CPACR_OFFSET), 0);
+        scb.write_register(CPACR_OFFSET, 0xFFFF_FFFF);
+        assert_eq!(scb.read_register(CPACR_OFFSET), CPACR_CP10_CP11_MASK);
+
+        let without_fpu = Scb::new(Arc::new(AtomicU32::new(0)));
+        assert_eq!(without_fpu.read_register(CPACR_OFFSET), 0);
+    }
+
+    #[test]
     fn aircr_sysresetreq_with_vectkey_latches_reset() {
         let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
         scb.write_register(0x0C, (0x05FA << 16) | (1 << 2)); // VECTKEY + SYSRESETREQ
@@ -714,6 +877,30 @@ mod tests {
         let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
         scb.write_register(0x0C, 1 << 2); // SYSRESETREQ but no key
         assert!(!scb.drain_reset_request());
+    }
+
+    #[test]
+    fn aircr_prigroup_is_keyed_shared_and_zero_when_unsupported() {
+        let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        let priority_group = Arc::clone(&scb.priority_group);
+
+        scb.write_register(0x0C, (0x05FA << 16) | (5 << 8));
+        assert_eq!(scb.read_register(0x0C) & 0x700, 5 << 8);
+        assert_eq!(priority_group.load(Ordering::Relaxed), 5);
+
+        // A bad VECTKEY leaves both the visible register and CPU mirror as-is.
+        scb.write_register(0x0C, 3 << 8);
+        assert_eq!(scb.read_register(0x0C) & 0x700, 5 << 8);
+        assert_eq!(priority_group.load(Ordering::Relaxed), 5);
+
+        // ARMv6-M reserves PRIGROUP and reads it as zero.
+        scb.fault_state().armv6m.store(true, Ordering::Relaxed);
+        scb.fault_state()
+            .priority_group_supported
+            .store(false, Ordering::Relaxed);
+        scb.write_register(0x0C, (0x05FA << 16) | (3 << 8));
+        assert_eq!(scb.read_register(0x0C) & 0x700, 0);
+        assert_eq!(priority_group.load(Ordering::Relaxed), 0);
     }
 
     #[test]
@@ -778,12 +965,16 @@ mod tests {
     #[test]
     fn icsr_pendsvset_reads_live_pending() {
         // PENDSV [28] reads back the live pending state: set after PENDSVSET,
-        // cleared once the exception is serviced — not the written action bit.
+        // remains set when the SCB hands it to the CPU, then clears when the
+        // CPU enters the exception — not the written action bit.
         let mut scb = Scb::new(Arc::new(AtomicU32::new(0)));
+        let cpu_pending = scb.pendsv_pending_live.clone();
         scb.write_register(0x04, 1 << 28); // PENDSVSET
         assert_eq!(scb.read_register(0x04) & (1 << 28), 1 << 28, "pending");
         let _ = scb.tick(); // service PendSV
-        assert_eq!(scb.read_register(0x04) & (1 << 28), 0, "drained reads 0");
+        assert_eq!(scb.read_register(0x04) & (1 << 28), 1 << 28, "CPU pending");
+        cpu_pending.store(false, Ordering::Relaxed); // exception entry
+        assert_eq!(scb.read_register(0x04) & (1 << 28), 0, "entered reads 0");
     }
 
     #[test]

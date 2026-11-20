@@ -1,0 +1,63 @@
+{
+  "checked_at": "2026-11-11",
+  "board": "rpi-pico",
+  "target": "rp2040",
+  "diagram": {
+    "board": "rpi-pico",
+    "parts": [
+      {
+        "id": "mcu",
+        "type": "rpi-pico",
+        "attrs": {
+          "internal_pullups": "GP4,GP5"
+        }
+      },
+      {
+        "id": "bme",
+        "type": "bme280"
+      }
+    ],
+    "wires": [
+      ["mcu:GP4", "bme:SDA"],
+      ["mcu:GP5", "bme:SCL"],
+      ["mcu:3V3", "bme:VCC"],
+      ["mcu:GND", "bme:GND"],
+      ["mcu:3V3", "bme:CSB"],
+      ["mcu:3V3", "bme:SDO"]
+    ]
+  },
+  "diagram_validation": {
+    "ok": true,
+    "error_count": 0,
+    "warning_count": 0
+  },
+  "oracle": {
+    "serial_contains": "PICO_BME280_OK ID=0x60 I2C0=GP4/GP5",
+    "gpio": {
+      "pin": "GP25",
+      "state": "high"
+    }
+  },
+  "result": {
+    "status": "model_verified",
+    "run_status": "pass",
+    "stop_reason": "max_steps",
+    "oracle_results": [
+      {
+        "kind": "serial",
+        "passed": true,
+        "detail": "serial contains PICO_BME280_OK ID=0x60 I2C0=GP4/GP5"
+      },
+      {
+        "kind": "gpio",
+        "passed": true,
+        "detail": "GP25 is high"
+      }
+    ],
+    "non_blocking_approximations": [
+      "Device time is derived from cpu_hz; PLL reconfiguration is not tracked.",
+      "The Pico VDD rail is assumed ideal; power-on and brown-out reset are not simulated."
+    ],
+    "simulation_steps": 20000000
+  }
+}

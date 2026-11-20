@@ -1,0 +1,17 @@
+id: nano-33-iot
+chip: atsamd21g18a
+system: systems/nano-33-iot.yaml
+pio: { platform: atmelsam@9.0.0, board: nano_33_iot, framework: arduino }
+max_steps: 40000000
+budget_reason: "Serial is native USB CDC: ArduinoCore-samd's `while (!Serial)` returns false until millis() >= 500 (24M cycles at 48 MHz), then costs delay(10) per poll"
+led_watch: "gpio_a:17"
+led_min_edges: 2
+# L6: analogWrite(D5 = PA05) runs TCC0 WO1 in NPWM on PMUX E. LED_BUILTIN
+# (D13 = PA17) has no timer in this variant.
+pwm_watch: "gpio_a:5"
+pwm_min_edges: 4
+family: sam
+notes: "Arduino Nano 33 IoT (ArduinoCore-samd): Serial is native USB CDC on the SAMD21 USB device model and a scripted host"
+sketches_skip: [L8_can]
+sketches_skip_reason:
+  L8_can: "ATSAMD21G18A has no CAN controller"

@@ -65,6 +65,8 @@ impl Isa {
             crate::Arch::Rx => None,
             // MIPS has no lockstep-backend ISA yet (interpreter only).
             crate::Arch::Mips => None,
+            // MSP430 has no lockstep-backend ISA yet (interpreter only).
+            crate::Arch::Msp430 => None,
             crate::Arch::Unknown => None,
         }
     }
@@ -75,7 +77,7 @@ impl Isa {
         match family {
             MachineFamily::CortexM => Some(Isa::Thumb),
             // ARM/Thumb state needs a mode-aware fault decoder.
-            MachineFamily::CortexA | MachineFamily::CortexR => None,
+            MachineFamily::CortexA | MachineFamily::CortexR | MachineFamily::Arm7Tdmi => None,
             MachineFamily::RiscV => Some(Isa::RiscV),
             MachineFamily::Xtensa => Some(Isa::Xtensa),
             MachineFamily::Avr => Some(Isa::Avr),
@@ -91,6 +93,8 @@ impl Isa {
             MachineFamily::Rx => None,
             // MIPS has no lockstep-backend ISA yet (interpreter only).
             MachineFamily::Mips => None,
+            // MSP430 has no lockstep-backend ISA yet (interpreter only).
+            MachineFamily::Msp430 => None,
         }
     }
 

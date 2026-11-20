@@ -1,0 +1,12 @@
+2026-11-19T16:28:34.992801Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/atmega4809.yaml
+2026-11-19T16:28:34.996034Z  INFO labwired_loader: ELF Entry Point: 0x0
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-19T16:28:34.998416Z ERROR labwired_cli::execute: Simulation error at step 0: Memory access violation at 0x8a3
+2026-11-19T16:28:34.999638Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "NANO_EVERY_BME280 ID=0x60" }) (captured len=0)
+2026-11-19T16:28:34.999656Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "T=25.00 C" }) (captured len=0)
+2026-11-19T16:28:34.999659Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "P=1013.25 hPa" }) (captured len=0)
+2026-11-19T16:28:34.999662Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "RH=50.00 %" }) (captured len=0)
+2026-11-19T16:28:34.999665Z ERROR labwired_cli::execute: Assertion failed: GpioEdges(GpioEdgesAssertion { gpio_edges: GpioEdgesClause { pin: "porte:2", min_edges: 1 } }) (captured len=0)
+2026-11-19T16:28:34.999672Z ERROR labwired_cli::execute: Assertion failed: ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }) (captured len=0)
+FAIL  0/6 checks · smoke · 0 steps · 0.00s

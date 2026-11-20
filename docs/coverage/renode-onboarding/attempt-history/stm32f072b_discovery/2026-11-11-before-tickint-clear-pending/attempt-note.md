@@ -1,0 +1,1 @@
+Prior passing exact-import measurement before adding the assertion that clearing TICKINT after a hardware-generated SysTick request must preserve ICSR.PENDSTSET. This is retained so the current target-only rerun can replace the live metrics without losing its preceding evidence.

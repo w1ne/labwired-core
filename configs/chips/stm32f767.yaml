@@ -127,12 +127,16 @@ peripherals:
     irq: 38
     config:
       debug_schema: "../peripherals/stm32f767/usart2.yaml"
+      profile: "stm32v2"
   # Nucleo-F767ZI ST-LINK VCP is on USART3 (PD8/PD9).
   - id: "usart3"
     type: "uart"
     base_address: 0x40004800
     size: "1KB"
     irq: 39
+    config:
+      debug_schema: "../peripherals/stm32f767/usart3.yaml"
+      profile: "stm32v2"
   - id: "uart1"
     type: "uart"
     base_address: 0x40011000
@@ -140,11 +144,15 @@ peripherals:
     irq: 37
     config:
       debug_schema: "../peripherals/stm32f767/usart1.yaml"
+      profile: "stm32v2"
   - id: "usart6"
     type: "uart"
     base_address: 0x40011400
     size: "1KB"
     irq: 71
+    config:
+      debug_schema: "../peripherals/stm32f767/usart6.yaml"
+      profile: "stm32v2"
   # I2C on F7 is the modern v2 peripheral (RM0410 §26 = L4 IP), not the F1/F4
   # legacy one — stm32l4 profile. EV/ER NVIC pairs per RM0410 §10 vector table.
   - id: "i2c1"
@@ -232,6 +240,14 @@ peripherals:
       # F7 flash interface adds ART accelerator bits; the F4 profile covers
       # ACR/CR/OPTCR bring-up. F7-only ART reconfiguration is not modeled.
       profile: "stm32f4"
+  # RM0410 §12: CRC has an 8-bit independent data register.
+  - id: "crc"
+    type: "crc"
+    base_address: 0x40023000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32f767/crc.yaml"
+      idr_width: 8
   - id: "pwr"
     type: "pwr"
     base_address: 0x40007000
@@ -239,6 +255,7 @@ peripherals:
     config:
       debug_schema: "../peripherals/stm32f767/pwr.yaml"
       profile: "stm32f4"
+      over_drive: true  # RM0410 §5.4: ODEN/ODSWEN handshake
   - id: "tim2"
     type: "timer"
     base_address: 0x40000000

@@ -1,0 +1,37 @@
+{
+  "target_id": "sifive-fu540",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-sifive-fu540-smoke",
+  "target_triple": "riscv64imac-unknown-none-elf",
+  "script": "examples/renode-onboarding/sifive-fu540-smoke.yaml",
+  "system": "configs/systems/onboarding/sifive-fu540.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-12T00:16:15Z",
+  "finished_at_utc": "2026-11-12T00:16:21Z",
+  "elapsed_seconds": 6,
+  "elapsed_ms": 5911,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-12T00:16:20.786594Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: \"software IRQ mcause=8000000000000003 count=0000000000000001 mepc_in_wait=1 entry_mie=0 entry_mpie=1 entry_mpp=3 ",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 2.325,
+    "build_firmware": 1.298,
+    "run_smoke": 2.232
+  },
+  "stages_ms": {
+    "build_cli": 2325,
+    "build_firmware": 1298,
+    "run_smoke": 2232
+  }
+}

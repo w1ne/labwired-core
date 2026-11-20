@@ -1,0 +1,10 @@
+2026-11-16T07:47:07.449111Z  INFO labwired_core::system::builder: Loading chip descriptor: ../chips/nuvoton_npcx9.yaml
+2026-11-16T07:47:07.451101Z  INFO labwired_loader: ELF Entry Point: 0x401
+labwired-cli test: idle_ff=on (event_scheduler=on)
+2026-11-16T07:47:07.717629Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "uarts tbe=3 rx=3 drained=3 isolated=1 ok" }) (captured len=184)
+2026-11-16T07:47:07.717654Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "cr_uart2 tx" }) (captured len=184)
+2026-11-16T07:47:07.717658Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "cr_uart3 tx" }) (captured len=184)
+2026-11-16T07:47:07.717662Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "cr_uart4 tx" }) (captured len=184)
+FAIL  4/8 checks · a2 · 400000 steps · 0.26s
+FAULT  HardFault escalated from a precise BusFault: data access at 0x400E_2004 (BFAR valid), at PC 0x0000_15E4 in `core::ptr::read_volatile` (mod.rs:2091).
+       HFSR=0x40000000 CFSR=0x00008200 [FORCED PRECISERR] BFAR=0x400E2004

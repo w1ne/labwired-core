@@ -9,7 +9,7 @@
 #
 # Why a `formula:` and not a `curve:`: this is an exponential in 1/T, and the
 # divider around it turns over near 25 °C at ~37 mV/°C. A piecewise-linear table
-# across the part's whole -55..150 °C span would need points every ~3 °C to stay
+# across the part's whole -55..300 °C span would need points every ~3 °C to stay
 # inside one ADC LSB (0.806 mV), and the table would then be a lossy copy of
 # three constants anyone can check against the datasheet.
 #
@@ -38,7 +38,7 @@ metadata:
   config_keys:
     - { name: channel, ty: int, doc: "ADC channel index (0..N). Defaults to 0." }
   inputs:
-    - { key: temperature, label: Temperature, unit: "°C", min: -55, max: 150, default: 25 }
+    - { key: temperature, label: Temperature, unit: "°C", min: -55, max: 300, default: 25 }
   labs:
     - board_id: ntc-thermistor-lab
       chip: stm32f103

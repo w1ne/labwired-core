@@ -1,0 +1,12 @@
+# Raspberry Pi Pico 2 W (RP2350) with an Adafruit BME280 STEMMA QT breakout.
+# The external sensor is connected to I2C0 on GP4/GP5 (physical pins 6/7).
+# The CYW43439 wireless module and WL_GPIO0 user LED remain outside this profile.
+name: "rpi-pico-2-w-bme280"
+chip: "../chips/rp2350.yaml"
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "i2c0"
+    config:
+      i2c_address: 0x77
+board_io: []

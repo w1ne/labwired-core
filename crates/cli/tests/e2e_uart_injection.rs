@@ -376,4 +376,68 @@ assertions:
         "expected a clear diagnostic naming the missing peripheral\n{}",
         run.stderr
     );
+    assert_eq!(run.status, "error");
+    assert_eq!(run.result["steps_executed"], 0);
+    assert!(run.result["message"]
+        .as_str()
+        .unwrap()
+        .contains("does-not-exist"));
+}
+
+/// A timed input that cannot reach its UART invalidates an otherwise good
+/// run. Preserve its real progress and do not let an expected host halt turn
+/// the rejected input into a passing test.
+#[test]
+fn timed_unknown_uart_is_an_error_even_when_the_firmware_assertions_pass() {
+    let root = repo_root();
+    let fw = ensure_fixture_built(&root);
+    for expected_halt in [false, true] {
+        let halt_assertion = if expected_halt {
+            "  - expected_stop_reason: halt\n"
+        } else {
+            ""
+        };
+        let yaml = script(
+            &root,
+            &fw,
+            &format!(
+                r#"uart_injections:
+  - uart: "does-not-exist"
+    bytes: "A"
+    trigger: !after_cycles {{ cycles: 3000 }}
+assertions:
+  - uart_contains: "READY"
+{halt_assertion}"#,
+            ),
+        );
+        let run = run_script(&root, &yaml);
+        assert_eq!(run.exit_code, Some(2), "{}", run.stderr);
+        assert_eq!(run.status, "error");
+        assert_eq!(run.result["stop_reason"], "halt");
+        assert!(
+            run.uart.contains("READY"),
+            "firmware reached its valid baseline"
+        );
+        assert!(
+            run.result["assertions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|a| a["passed"] == true),
+            "the refused UART must be the sole reason for failure: {}",
+            run.result
+        );
+        assert!(run.result["cycles"].as_u64().unwrap() >= 3000);
+        let steps = run.result["steps_executed"].as_u64().unwrap();
+        assert!(
+            steps > 0 && steps < 20000,
+            "actual progress must survive the error"
+        );
+        let message = run.result["message"].as_str().unwrap();
+        assert!(message.contains("does-not-exist") && message.contains("could not be delivered"));
+        assert!(
+            !run.stderr.contains("byte(s) delivered"),
+            "a rejected delivery must never be logged as successful"
+        );
+    }
 }

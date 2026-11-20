@@ -6,3 +6,20 @@
 
 name: stm32f4_discovery
 chip: ../../chips/onboarding/stm32f4_discovery.yaml
+external_devices:
+  - id: pot_adc1_in1
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 1
+  # External smoke fixture on the unshared PB1/ADC1_IN9 input.
+  - id: pot_adc1_in9
+    type: potentiometer
+    connection: adc
+    config:
+      channel: 9
+  - id: tc_spi1
+    type: max31855
+    connection: spi1
+    config:
+      cs_pin: PA4

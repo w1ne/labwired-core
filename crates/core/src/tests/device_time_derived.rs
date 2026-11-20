@@ -245,6 +245,266 @@ impl SpiDevice for TimeCounter {
     }
 }
 
+impl I2cDevice for TimeCounter {
+    fn address(&self) -> u8 {
+        0x44
+    }
+    fn read(&mut self) -> u8 {
+        0xFF
+    }
+    fn write(&mut self, _data: u8) {}
+    fn advance_time_us(&mut self, us: u64) {
+        SpiDevice::advance_time_us(self, us);
+    }
+}
+
+#[test]
+fn idle_ra_iic_picks_up_late_devices_at_microsecond_boundaries() {
+    use crate::peripherals::ra_iic::{RaIic, DEFAULT_ELC_EVENT};
+    use crate::Peripheral;
+
+    const CPU_HZ: u64 = 8_000_000;
+    crate::fidelity::reset();
+    let controller = RaIic::new(CPU_HZ, CPU_HZ, DEFAULT_ELC_EVENT);
+    assert!(
+        !controller.has_attached_time_devices(),
+        "an empty RIIC must not request time conversion and empty-device fan-out"
+    );
+    let mut bus = crate::bus::SystemBus::new();
+    bus.cpu_hz = CPU_HZ;
+    bus.add_peripheral("riic0", 0x4009_0000, 0x20, None, Box::new(controller));
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+    for cycles in [0, 8] {
+        machine.total_cycles = cycles;
+        machine.advance_central_i2c_time();
+    }
+
+    assert!(
+        derived_notes().is_empty(),
+        "an empty RIIC must not claim that a device clock was derived"
+    );
+    let total = Arc::new(Mutex::new(0));
+    let calls = Arc::new(Mutex::new(0));
+    let controller = &mut machine
+        .bus
+        .peripherals
+        .iter_mut()
+        .find(|p| p.name == "riic0")
+        .unwrap()
+        .dev;
+    controller
+        .i2c_slave_host()
+        .unwrap()
+        .attach_slave(Box::new(TimeCounter {
+            total_us: total.clone(),
+            calls: calls.clone(),
+        }));
+    assert!(controller.has_attached_time_devices());
+
+    // The next microsecond boundary anchors the newly attached device. It
+    // receives no time from before attachment, no fractional microseconds,
+    // and exactly the elapsed delta at later boundaries, including the last.
+    for (cycles, expected_us, expected_calls) in [
+        (15, 0, 0),
+        (16, 0, 0),
+        (23, 0, 0),
+        (24, 1, 1),
+        (80, 8, 2),
+        (80, 8, 2),
+    ] {
+        machine.total_cycles = cycles;
+        machine.advance_central_i2c_time();
+        assert_eq!(*total.lock().unwrap(), expected_us, "at cycle {cycles}");
+        assert_eq!(*calls.lock().unwrap(), expected_calls, "at cycle {cycles}");
+    }
+    assert_eq!(derived_notes().len(), 1);
+    crate::fidelity::reset();
+}
+
+#[test]
+fn empty_time_controller_probe_is_cached_per_normal_advance_only() {
+    use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+
+    #[derive(Debug)]
+    struct TimeProbe {
+        probes: Arc<AtomicUsize>,
+        attached: Arc<AtomicBool>,
+        elapsed_us: Arc<AtomicU64>,
+    }
+
+    impl crate::Peripheral for TimeProbe {
+        fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+            Ok(0)
+        }
+
+        fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+            Ok(())
+        }
+
+        fn drives_central_device_time(&self) -> bool {
+            true
+        }
+
+        fn has_attached_time_devices(&self) -> bool {
+            self.probes.fetch_add(1, Ordering::Relaxed);
+            self.attached.load(Ordering::Relaxed)
+        }
+
+        fn advance_attached_device_time_us(&mut self, us: u64) {
+            self.elapsed_us.fetch_add(us, Ordering::Relaxed);
+        }
+    }
+
+    fn machine(
+        probes: Arc<AtomicUsize>,
+        attached: Arc<AtomicBool>,
+        elapsed_us: Arc<AtomicU64>,
+    ) -> Machine<CountingCpu> {
+        let mut bus = crate::bus::SystemBus::new();
+        bus.cpu_hz = 8_000_000;
+        bus.add_peripheral(
+            "time_probe",
+            0x4009_0000,
+            0x20,
+            None,
+            Box::new(TimeProbe {
+                probes,
+                attached,
+                elapsed_us,
+            }),
+        );
+        let mut machine = Machine::new(CountingCpu::default(), bus);
+        machine.config.peripheral_tick_interval = 16;
+        machine.bus.config.peripheral_tick_interval = 16;
+        machine
+    }
+
+    let probes = Arc::new(AtomicUsize::new(0));
+    let attached = Arc::new(AtomicBool::new(false));
+    let elapsed_us = Arc::new(AtomicU64::new(0));
+    let mut normal = machine(probes.clone(), attached.clone(), elapsed_us.clone());
+    normal.advance(AdvanceRequest::run(Some(128))).unwrap();
+    assert_eq!(normal.total_cycles, 128);
+    assert_eq!(probes.load(Ordering::Relaxed), 1);
+    assert_eq!(elapsed_us.load(Ordering::Relaxed), 0);
+
+    // A supported attachment between public calls must be seen by the next run.
+    attached.store(true, Ordering::Relaxed);
+    normal.advance(AdvanceRequest::run(Some(128))).unwrap();
+    assert_eq!(normal.total_cycles, 256);
+    assert_eq!(
+        probes.load(Ordering::Relaxed),
+        2,
+        "the next public advance must recheck devices attached between calls"
+    );
+    assert!(
+        elapsed_us.load(Ordering::Relaxed) > 0,
+        "a newly attached timed device must receive later simulated time"
+    );
+
+    // Model a cache left behind when a caller catches a panic from advance.
+    // A following single-step must clear it without carrying stale absence into
+    // the next normal run.
+    normal.central_device_time_cache_enabled = true;
+    normal.central_device_time_attached_cache = Some(false);
+    normal.advance(AdvanceRequest::single()).unwrap();
+    assert!(!normal.central_device_time_cache_enabled);
+    assert_eq!(normal.central_device_time_attached_cache, None);
+    normal.advance(AdvanceRequest::run(Some(128))).unwrap();
+    assert_eq!(probes.load(Ordering::Relaxed), 3);
+
+    let runner_probes = Arc::new(AtomicUsize::new(0));
+    let runner_attached = Arc::new(AtomicBool::new(false));
+    let runner_elapsed_us = Arc::new(AtomicU64::new(0));
+    let mut runner = machine(
+        runner_probes.clone(),
+        runner_attached.clone(),
+        runner_elapsed_us.clone(),
+    );
+    // The runner also recovers if the caller catches a panic from the prior
+    // in-tree advance and reuses the machine.
+    runner.central_device_time_cache_enabled = true;
+    runner.central_device_time_attached_cache = Some(false);
+    let runner_windows = AtomicUsize::new(0);
+    runner
+        .advance_with_window_runner(
+            AdvanceRequest::run(Some(128)),
+            |_cpu, _bus, _observers, _config, count| {
+                if runner_windows.fetch_add(1, Ordering::Relaxed) == 1 {
+                    runner_attached.store(true, Ordering::Relaxed);
+                }
+                Ok(count)
+            },
+        )
+        .unwrap();
+    assert!(
+        runner_probes.load(Ordering::Relaxed) > 1,
+        "a mutable window runner must retain per-window attachment checks"
+    );
+    assert!(
+        runner_elapsed_us.load(Ordering::Relaxed) > 0,
+        "a device attached between runner windows must receive later time"
+    );
+}
+
+#[test]
+fn absolute_source_reloads_ignore_derived_deadlines() {
+    use crate::peripherals::ra_iic::{RaIic, DEFAULT_ELC_EVENT};
+    use crate::Peripheral;
+
+    #[derive(Debug)]
+    struct Source(Arc<Mutex<u64>>);
+    impl Peripheral for Source {
+        fn read(&self, _offset: u64) -> crate::SimResult<u8> {
+            Ok(0)
+        }
+        fn write(&mut self, _offset: u64, _value: u8) -> crate::SimResult<()> {
+            Ok(())
+        }
+        fn sim_time_us(&self) -> Option<u64> {
+            Some(*self.0.lock().unwrap())
+        }
+    }
+
+    let now = Arc::new(Mutex::new(100));
+    let total = Arc::new(Mutex::new(0));
+    let calls = Arc::new(Mutex::new(0));
+    let mut controller = RaIic::new(8_000_000, 8_000_000, DEFAULT_ELC_EVENT);
+    controller.attach(Box::new(TimeCounter {
+        total_us: total.clone(),
+        calls: calls.clone(),
+    }));
+    let mut bus = crate::bus::SystemBus::new();
+    bus.cpu_hz = 8_000_000;
+    bus.add_peripheral(
+        "source",
+        0x5000_0000,
+        4,
+        None,
+        Box::new(Source(now.clone())),
+    );
+    bus.add_peripheral("riic0", 0x4009_0000, 0x20, None, Box::new(controller));
+    let mut machine = Machine::new(CountingCpu::default(), bus);
+    // A modelled absolute counter is authoritative even when a derived-clock
+    // deadline lies ahead. Reloading it backwards must re-anchor, not underflow.
+    machine.next_i2c_time_cycle = 1_000;
+    crate::fidelity::reset();
+    for (source_us, expected_us, expected_calls) in [
+        (100, 0, 0),
+        (105, 5, 1),
+        (102, 5, 1),
+        (104, 7, 2),
+        (104, 7, 2),
+    ] {
+        *now.lock().unwrap() = source_us;
+        machine.advance_central_i2c_time();
+        assert_eq!(*total.lock().unwrap(), expected_us);
+        assert_eq!(*calls.lock().unwrap(), expected_calls);
+    }
+    assert!(derived_notes().is_empty());
+    crate::fidelity::reset();
+}
+
 /// The elapsed µs an SPI device is handed must equal the elapsed µs of the run
 /// — the SAME number an I²C slave on the same machine gets, because it comes
 /// from the same drive.

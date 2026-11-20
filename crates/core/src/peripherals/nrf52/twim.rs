@@ -252,6 +252,8 @@ pub struct Nrf52Twim {
     clock: Option<crate::CycleClock>,
     /// The bit-level engine used on a world `gpio_net` (see `twim_net`).
     net: net::TwimNet,
+    /// The TWI master personality, `ENABLE = 5` (see `twi_legacy`).
+    twi: twi::TwiLegacy,
 }
 
 impl std::fmt::Debug for Nrf52Twim {
@@ -300,6 +302,7 @@ impl Default for Nrf52Twim {
             wire_overflow: false,
             clock: None,
             net: net::TwimNet::default(),
+            twi: twi::TwiLegacy::default(),
         }
     }
 }
@@ -361,13 +364,14 @@ impl Nrf52Twim {
     /// Republish both claims from the live registers. Called after every write
     /// that can move a pad — `PSEL.SCL`, `PSEL.SDA` and `ENABLE`.
     ///
-    /// The gate is `ENABLE == 6` (TWIM master), not merely "nonzero": the
+    /// The gate is `ENABLE == 6` (TWIM master) or `5` (TWI master, the same
+    /// two pins), not merely "nonzero": the
     /// window at 0x40003000 hosts SPIM0/SPIS0/SPI0/TWIM0/TWI0/TWIS0 and ENABLE
     /// picks which one owns it (nRF52840 PS v1.11 §6.31.7.18, p798). With
     /// ENABLE = 7 the SPIM half is driving those pins and this controller must
     /// not claim them.
     fn sync_pin_claims(&mut self) {
-        let live = self.enable & ENABLE_MASK == ENABLE_TWIM;
+        let live = self.enable & ENABLE_MASK == ENABLE_TWIM || self.twi_mode();
         self.claim_scl.update(self.psel_scl, live);
         self.claim_sda.update(self.psel_sda, live);
     }
@@ -527,9 +531,12 @@ impl Nrf52Twim {
             self.wire_address(addr7, false, false);
             self.errorsrc |= ERRORSRC_ANACK;
             self.events_error = 1;
-            // Still complete the EasyDMA bookkeeping with AMOUNT = 0.
+            // No data byte started, so silicon fires no LASTTX and no
+            // LASTTX_* shortcut runs: the bus is held until the driver
+            // triggers STOP (nrfx `nrfy_twim_tx_start`: "triggering of STOP
+            // task in case of error has to be done manually"). Same as the
+            // `twim_net` bit engine.
             self.txd_amount = 0;
-            self.events_lasttx = 1;
             return true;
         }
 
@@ -574,13 +581,9 @@ impl Nrf52Twim {
             self.wire_address(addr7, true, false);
             self.errorsrc |= ERRORSRC_ANACK;
             self.events_error = 1;
-            // Fill RX buffer with 0xFF (bus release / NACK default).
-            for i in 0..rxd_maxcnt {
-                let addr = rxd_ptr + i as u64;
-                let _ = crate::with_device_write_bypass(bus, |bus| bus.write_u8(addr, 0xFF));
-            }
-            self.rxd_amount = rxd_maxcnt as u32;
-            self.events_lastrx = 1;
+            // No byte is clocked in: RAM is untouched, AMOUNT = 0, and no
+            // LASTRX or LASTRX_* shortcut fires (see `do_tx`).
+            self.rxd_amount = 0;
             return true;
         }
 
@@ -629,14 +632,16 @@ impl Nrf52Twim {
             (&self.events_lastrx, INTEN_LASTRX, OFF_EVENTS_LASTRX),
             (&self.events_lasttx, INTEN_LASTTX, OFF_EVENTS_LASTTX),
         ];
-        let mut irq = false;
         let mut fired: Vec<u32> = Vec::new();
         for &(ev, mask, off) in events {
             if *ev != 0 && self.inten & mask != 0 {
-                irq = true;
                 fired.push(off as u32);
             }
         }
+        if self.twi_mode() {
+            self.twi_irq_events(&mut fired);
+        }
+        let irq = !fired.is_empty();
         PeripheralTickResult {
             irq,
             fired_events: fired,
@@ -655,6 +660,12 @@ impl Nrf52Twim {
             return;
         }
         self.pending = PENDING_NONE;
+        if pending == twi::PENDING_TWI {
+            // TWI publishes its waveform at STOP, not when the wire goes idle
+            // between two bytes.
+            self.twi_complete();
+            return;
+        }
         let addr7 = (self.address & ADDRESS_MASK) as u8;
         match pending {
             PENDING_STOP => {
@@ -664,8 +675,10 @@ impl Nrf52Twim {
                 }
             }
             PENDING_TX => {
-                let _nack = self.do_tx(bus);
-                if self.shorts & SHORT_LASTTX_STARTRX != 0 {
+                let nack = self.do_tx(bus);
+                if nack {
+                    // Held after the address NACK; TASKS_STOP releases it.
+                } else if self.shorts & SHORT_LASTTX_STARTRX != 0 {
                     self.pending = PENDING_RX;
                     self.busy_cycles = self.transfer_cycles(self.rxd_maxcnt & MAXCNT_MASK);
                 } else if self.shorts & SHORT_LASTTX_SUSPEND != 0 {
@@ -678,8 +691,10 @@ impl Nrf52Twim {
                 }
             }
             PENDING_RX => {
-                let _nack = self.do_rx(bus);
-                if self.shorts & SHORT_LASTRX_STOP != 0 {
+                let nack = self.do_rx(bus);
+                if nack {
+                    // Held after the address NACK; TASKS_STOP releases it.
+                } else if self.shorts & SHORT_LASTRX_STOP != 0 {
                     self.events_stopped = 1;
                     if let Some(idx) = self.device_for(addr7) {
                         self.attached_devices[idx].borrow_mut().stop();
@@ -751,6 +766,11 @@ impl Peripheral for Nrf52Twim {
     }
 
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        if self.twi_mode() {
+            if let Some(value) = self.twi_read(offset) {
+                return Ok(value);
+            }
+        }
         Ok(match offset {
             // TASKs: read as 0 (write-only strobes on silicon).
             OFF_TASKS_STARTRX | OFF_TASKS_STARTTX | OFF_TASKS_STOP | OFF_TASKS_RESUME
@@ -799,6 +819,9 @@ impl Peripheral for Nrf52Twim {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        if self.twi_mode() && self.twi_write(offset, value) {
+            return Ok(());
+        }
         // On a world `gpio_net` the tasks drive the bit engine (`twim_net`).
         if value != 0
             && matches!(
@@ -880,6 +903,9 @@ impl Peripheral for Nrf52Twim {
             // ENABLE and PSEL both move which pad this controller's wire
             // reaches, so both re-publish the claim. See `sync_pin_claims`.
             OFF_ENABLE => {
+                if self.enable != value & ENABLE_MASK {
+                    self.twi_enable_changed();
+                }
                 self.enable = value & ENABLE_MASK;
                 self.sync_pin_claims();
                 self.net_after_pins();
@@ -933,6 +959,8 @@ impl Peripheral for Nrf52Twim {
 
     fn tick(&mut self) -> PeripheralTickResult {
         self.net_tick();
+        // A TWI receive goes on once firmware has read RXD.
+        self.twi_kick();
         self.irq_from_events()
     }
 
@@ -980,7 +1008,11 @@ impl Peripheral for Nrf52Twim {
         if event_token == net::NET_TOKEN {
             return self.net_on_sched(_sched.now(), bus);
         }
-        if event_token == 1 && self.pending != PENDING_NONE {
+        let twi_early = self.pending == twi::PENDING_TWI && self.twi_remaining(_sched.now()) > 0;
+        if twi_early {
+            // An event left over from an earlier byte: this one is not done.
+            self.busy_cycles = self.twi_remaining(_sched.now()) as u32;
+        } else if event_token == 1 && self.pending != PENDING_NONE {
             // Consume the latency in one shot (event fires at the deadline).
             self.busy_cycles = 0;
             self.run_pending_transfer(bus);
@@ -1049,6 +1081,8 @@ impl Nrf52Twim {
 
 #[path = "twim_net.rs"]
 mod net;
+#[path = "twi_legacy.rs"]
+pub(crate) mod twi;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -1398,9 +1432,50 @@ mod tests {
         assert_eq!(read32(&t, OFF_TXD_AMOUNT), 0, "TXD.AMOUNT = 0 on NACK");
         assert_eq!(
             read32(&t, OFF_EVENTS_LASTTX),
-            1,
-            "LASTTX still fires on NACK"
+            0,
+            "no data byte started, so no LASTTX"
         );
+    }
+
+    /// An address NACK runs no LASTTX shortcut: the bus is held (no RX leg,
+    /// no STOPPED) until the driver's TASKS_STOP, as in nrfx's error path.
+    #[test]
+    fn twim_anack_runs_no_shortcut_until_tasks_stop() {
+        for shorts in [
+            SHORT_LASTTX_STARTRX,
+            SHORT_LASTTX_STOP,
+            SHORT_LASTTX_SUSPEND,
+        ] {
+            let mut t = Nrf52Twim::new();
+            let mut bus = FlatRam::new();
+            let rx_base: u64 = 0x2000_0400;
+            bus.write_slice(rx_base, &[0xA5, 0xA5]);
+
+            write32(&mut t, OFF_ENABLE, 6);
+            write32(&mut t, OFF_ADDRESS, 0x55);
+            write32(&mut t, OFF_SHORTS, shorts);
+            write32(&mut t, OFF_TXD_PTR, 0x2000_0100);
+            write32(&mut t, OFF_TXD_MAXCNT, 1);
+            write32(&mut t, OFF_RXD_PTR, rx_base as u32);
+            write32(&mut t, OFF_RXD_MAXCNT, 2);
+            write32(&mut t, OFF_TASKS_STARTTX, 1);
+            run_leg(&mut t, &mut bus);
+
+            assert_eq!(read32(&t, OFF_EVENTS_ERROR), 1, "shorts {shorts:#x}");
+            assert_eq!(read32(&t, OFF_EVENTS_LASTTX), 0, "shorts {shorts:#x}");
+            assert_eq!(read32(&t, OFF_EVENTS_RXSTARTED), 0, "no RX leg");
+            assert_eq!(read32(&t, OFF_EVENTS_STOPPED), 0, "no auto STOP");
+            assert_eq!(read32(&t, OFF_EVENTS_SUSPENDED), 0, "no SUSPENDED");
+            assert!(!t.needs_bus_tick(), "nothing chained");
+            assert_eq!(bus.read_slice(rx_base, 2), vec![0xA5, 0xA5]);
+
+            // nrfx: RESUME then STOP.
+            write32(&mut t, OFF_TASKS_RESUME, 1);
+            write32(&mut t, OFF_TASKS_STOP, 1);
+            run_leg(&mut t, &mut bus);
+            assert_eq!(read32(&t, OFF_EVENTS_STOPPED), 1, "shorts {shorts:#x}");
+            assert_eq!(read32(&t, OFF_EVENTS_RXSTARTED), 0, "RESUME starts no RX");
+        }
     }
 
     /// TX: bytes delivered to device are exactly the bytes from RAM.
@@ -1560,15 +1635,16 @@ mod tests {
         );
     }
 
-    /// RX with no device: RAM filled with 0xFF, ANACK fired.
+    /// RX with no device: ANACK fired, RAM untouched, no LASTRX.
     #[test]
-    fn twim_rx_no_device_fills_ff_and_fires_anack() {
+    fn twim_rx_no_device_leaves_ram_and_fires_anack() {
         let mut t = Nrf52Twim::new();
         let mut bus = FlatRam::new();
         let rx_base: u64 = 0x2000_0400;
 
         write32(&mut t, OFF_ENABLE, 6);
         write32(&mut t, OFF_ADDRESS, 0x55);
+        bus.write_slice(rx_base, &[0x11, 0x22, 0x33]);
         write32(&mut t, OFF_RXD_PTR, rx_base as u32);
         write32(&mut t, OFF_RXD_MAXCNT, 3);
         write32(&mut t, OFF_TASKS_STARTRX, 1);
@@ -1576,17 +1652,10 @@ mod tests {
 
         assert_eq!(read32(&t, OFF_ERRORSRC) & ERRORSRC_ANACK, ERRORSRC_ANACK);
         assert_eq!(read32(&t, OFF_EVENTS_ERROR), 1);
-        assert_eq!(
-            read32(&t, OFF_RXD_AMOUNT),
-            3,
-            "amount = MAXCNT even on NACK"
-        );
+        assert_eq!(read32(&t, OFF_RXD_AMOUNT), 0, "no byte clocked in");
+        assert_eq!(read32(&t, OFF_EVENTS_LASTRX), 0, "no LASTRX on ANACK");
         let rx = bus.read_slice(rx_base, 3);
-        assert_eq!(
-            rx,
-            vec![0xFF, 0xFF, 0xFF],
-            "no-device: RAM filled with 0xFF"
-        );
+        assert_eq!(rx, vec![0x11, 0x22, 0x33], "no-device: RAM untouched");
     }
 
     // ── SHORTS chaining tests ─────────────────────────────────────────────────

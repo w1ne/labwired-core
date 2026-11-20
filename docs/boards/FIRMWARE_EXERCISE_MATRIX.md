@@ -40,7 +40,7 @@ Each chip's Tier-1 fixture is **real firmware** that drives these peripheral cla
 
 ## Beyond the rubric — functional reads, advanced peripherals, shims
 
-What the rubric grid does not cover: real drivers decoding a sensor/protocol over a bus (the gold standard), chip-specific advanced peripherals, and shims (hardcoded stubs or declarative register files with no engine behind them). From `validation/firmware_exercise.yaml`.
+What the rubric grid does not cover: real sensor/protocol behavior over a bus (ideally through an unmodified driver decoding sensor values), register-level firmware checks, chip-specific advanced peripherals, and shims (hardcoded stubs or declarative register files with no engine behind them). From `validation/firmware_exercise.yaml`.
 
 ### `stm32l476`
 
@@ -55,7 +55,11 @@ _Richest ARM coverage: drives 11 rubric classes via real firmware, plus the gate
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `SYSCFG` (configs/chips/stm32l476.yaml:421 (type: stub; configs/peripherals/stm32l476/syscfg.yaml; docs/coverage/silent-path-census.md:403)) — CLOSABLE: author-declared stub — read 0, writes dropped, so EXTI source-select (the block's main job) is not modelled and nothing reads the window back: r12 gates its clock because COMP shares the window (crates/firmware-l476-demo/src/r12.rs:130), and the silent-path census records it as the live stub of examples/ci/l476-bldc-stall.yaml.
-- `WWDG` (crates/core/src/peripherals/wwdg.rs:63 (configs/chips/stm32l476.yaml:396; configs/peripherals/stm32l476/wwdg.yaml)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; the PR-gated nucleo_l476rg_misc fingerprint reads CR/CFR/SR off it (crates/core/tests/firmware_survival.rs:623), but that exercises storage only, not watchdog behaviour.
+- `WWDG` (crates/core/src/peripherals/wwdg.rs:63 (configs/chips/stm32l476.yaml:396; configs/peripherals/stm32l476/wwdg.yaml)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; the PR-gated nucleo_l476rg_misc fingerprint reads CR/CFR/SR off it (crates/core/tests/gates/firmware_survival.rs:623), but that exercises storage only, not watchdog behaviour.
+
+### `esp32c2`
+
+_No beyond-rubric content is claimed. The ESP8684-DevKitM-1-H4X smoke fast-loads firmware that checks UART0 output and the GPIO0 red LED latch; this profile does not exercise mask-ROM boot, electrical pad routing, or radio behavior._
 
 ### `esp32c3`
 
@@ -84,12 +88,23 @@ _Broad model surface (~35); the rubric grid proves ~9, plus a TMP102 functional 
 
 ### `esp32`
 
-_tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C command-list engine and a real LEDC duty-latch._
+_tier1 fixture drives 8 rubric classes incl. a BMP280 chip-id read over the I2C command-list engine and a real LEDC duty-latch. The PR-gated ESP32-DevKitM-1 profile adds a BME280 chip-id read on classic I2C0._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- ESP32-DevKitM-1 + BME280 — CHIP_ID 0x60 over I2C0 GPIO21/22, GPIO23 high on match — `esp32-devkitm-1-bme280` · examples/esp32-devkitm-1/evidence/bme280 (local smoke 5/5; fast-boot fixture) (PR gate)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `efuse`, `sha`, `syscon`, `twai`, `mcpwm`, `rtc_cntl`
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `sdio_stub` (esp32/sdio_stub.rs:5) — STRUCTURAL: hardcoded FSM_DONE so the boot ROM's SDIO bring-up poll terminates. Removing it breaks boot; the ROM blob is the only 'firmware' that touches it.
+
+### `esp32-devkitc-32e-gpio-smoke`
+
+_Narrow ESP32-DevKitC-32E onboarding profile (GPIO23, UART0, I2C0). docs/receipts/2026-11-09-esp32-deep-sleep records stock Arduino-ESP32 timer-wake deep sleep printing LW_DS_OK (bootCount 1→2→3 across DEEPSLEEP_RESET, RTC slow memory kept) and light sleep printing LW_LS_OK. Firmware is PlatformIO-built, not a committed ELF; those receipts are not a required CI lane. The committed system attaches no external I2C device. No beyond-rubric block is listed for this slice._
+
+### `esp32-devkitc-32e-uart1`
+
+_Narrow ESP32-DevKitC-32E onboarding profile that routes UART1 TX to J3 pin 12 / GPIO16. Committed evidence at examples/esp32-devkitc-32e-uart1/evidence/run shows examples/esp32-devkitc-32e-uart1/uart1-smoke.yaml passed 3/3: UART0 printed ESP32_DEVKITC32E_UART1_TX_OK, GPIO16 (UART1 TX) saw at least 32 edges from Serial1 printing UUUUUUUU, and the run stopped at max_steps. Firmware is PlatformIO-built via scripts/build-esp32-devkitc-32e-uart1-smoke.sh, not a committed ELF; no required CI lane runs this script. No beyond-rubric block is listed for this slice._
 
 ### `nrf52840`
 
@@ -97,8 +112,9 @@ _TWIM/PWM are firmware-proven via the rubric fixture; the PR-gated OBD2 scanner 
 
 **Functional device/protocol reads** (real driver, decoded value):
 - BME280 temperature read (~25 °C) via an unmodified Zephyr sensor driver — `zephyr-bme280-ztest` · external west build (not in core cargo test) (on-demand)
+- Stock ArduinoCore-mbed sketch on the Arduino Nano 33 BLE Rev2: the scripted USB host enumerates the native port (nrf52840_usbd) and opens its CDC serial port; the Adafruit BME280 library reads the sensor over Wire (TWI0 master, byte registers) and prints 25.00 C, 1013.25 hPa, 50.00 %RH on Serial (USB CDC) — `arduino-nano-33-ble-bme280` · crates/core/tests/nrf/arduino_nano_33_ble_bme280.rs (tests/fixtures/nrf52/arduino-nano-33-ble-bme280.elf) (PR gate)
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `TWIS`, `SPIS`, `CCM`, `RNG`, `TEMP`, `ECB`, `GPIOTE`, `PPI`, `NVMC`, `FICR`, `UICR`, `NFCT`, `PDM`, `EGU`, `QSPI`, `USBD`
+**Advanced peripherals — unit-tested only** (no firmware drives them): `TWIS`, `SPIS`, `CCM`, `RNG`, `TEMP`, `ECB`, `GPIOTE`, `PPI`, `NVMC`, `FICR`, `UICR`, `NFCT`, `PDM`, `EGU`, `QSPI`
 
 **Dead** (8 modeled, never exercised): `QDEC`, `AAR`, `ACL`, `COMP`, `CRYPTOCELL`, `I2S`, `LPCOMP`, `MWU`
 
@@ -133,21 +149,65 @@ _Drives all 13 rubric classes (incl. FDCAN→can) via real firmware — the broa
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `UDS bootloader/ECU (0x10/0x27/0x34/0x36/0x37/0x85/0x28 — example firmware, not gated)`
 
+### `stm32h533re`
+
+_No beyond-rubric peripheral behavior is claimed. The NUCLEO-H533RE profile exercises only USART2 output and GPIOA LED control in its committed smoke._
+
+### `ch32l103c8t6`
+
+_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32IMAC ELF that blinks PC13 through GPIOC_CFGHR (negative control: PC0 stays idle), and a second ELF that checks MUL/DIVU/AMOADD.W results and then prints an exact string on USART1 (PA9); a negative control moves the USART1 clock gate and requires silence. A datasheet product-table test pins memory, clock and the 37 LQFP48 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, LPTIM, ADC, I2C, SPI, CAN FD, USB, USB PD or low-power modes, and is not hosted model_verified or hardware confirmation._
+
 ### `ch32v003f4p6`
 
-_No tier-1 fixture or hosted model-verification gate. A compiled RV32E/ILP32E bare-metal C fixture executes from flash, configures WCH RCC/GPIOC, and toggles PC0 in the local simulator; the matching CLI smoke and core integration test require two GPIO edges. A second, RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX; its CLI smoke and integration test assert the exact string, and a negative control asserts silence when the USART1 clock gate is not set. This is local simulator evidence, not hosted model_verified or hardware confirmation._
+_No tier-1 fixture or hosted model-verification gate. The WCH-CH32V003EVT board profile maps its P4 LED1 through a configured jumper to PC0; committed RV32E/ILP32E bare-metal C firmware executes from flash and the PR-gated board smoke requires two GPIO edges. A second RV32EC (compressed) fixture clocks USART1 and prints a line through polled TX on PD5; the board smoke asserts the exact string. A negative control asserts silence when the USART1 clock gate is not set. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+
+### `ch32v005f6p6`
+
+_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32E ELF that blinks PC0 (TSSOP20 pin 10; negative control: PD0 stays idle), and a second RV32EC+Zmmul ELF that checks a MUL result and then prints an exact string on USART1 (PD5); a negative control moves the USART1 clock gate and requires silence. A DS0 test pins memory, clock and the 18 TSSOP20 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, OPA, I2C, SPI, DMA or USART2, and is not hosted model_verified or hardware confirmation._
+
+### `ch32x035c8t6`
+
+_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32IMAC ELF that blinks PB12 through GPIOB_CFGHR (negative control: PB0 stays idle), and a second ELF that checks MUL/DIVU/AMOADD.W results and then prints an exact string on USART1 (PB10); a negative control moves the USART1 clock gate and requires silence. A datasheet test pins memory, clock and the 34 modelled LQFP48 GPIOs (pins 16..23 are not modelled). This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, OPA, CMP, PIOC, I2C, SPI, DMA, USB FS or USB PD, and is not hosted model_verified or hardware confirmation._
+
+### `ch32v203c8t6`
+
+_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32IMAC ELF that blinks PC13 through GPIOC_CFGHR (negative control: PC0 stays idle), and a second ELF that checks MUL/DIVU/AMOADD.W results and then prints an exact string on USART1 (PA9); a negative control moves the USART1 clock gate and requires silence. A DS0 Table 2-1 test pins memory, clock and the 37 LQFP48 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, I2C, SPI, CAN or USB, and is not hosted model_verified or hardware confirmation._
+
+### `ch32v003f4u6`
+
+_QFN20 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+
+### `ch32v006k8u6`
+
+_No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs a committed RV32E ELF that blinks PB0 on GPIOB, the port the CH32V003 lacks (negative control: PC0 stays idle), and a second RV32EC+Zmmul ELF that checks a MUL result and then prints an exact string on USART1 (PD5); a negative control moves the USART1 clock gate and requires silence. A DS0 test pins memory, clock and the 31 QFN32 GPIOs. This local simulator evidence does not cover WCH-Link, PFIC, SysTick, timers, ADC, OPA, I2C, SPI, DMA or USART2, and is not hosted model_verified or hardware confirmation._
+
+### `ch32v003a4m6`
+
+_SOP16 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string, and runs the F4P6 blink fixture and requires GPIOC PC0 edges. A DS0 bonding test asserts the descriptor matches F4P6 except for package, pin count and bonded pins. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
+
+### `ch32v003j4m6`
+
+_SOP8 package of the ch32v003f4p6 die. No tier-1 fixture or hosted model-verification gate. The PR-gated vendor test runs the committed F4P6 RV32EC USART1 fixture unchanged and asserts the exact PD5 TX string. SOP8 has no PC0 pad, so a separate committed fixture blinks PC4 (package pin 7); the test requires PC4 edges and a negative control requires zero PC0 edges. This local simulator evidence does not cover WCH-Link, PFIC, ADC, I2C, SPI, timers, or USB, and is not hosted model_verified or hardware confirmation._
 
 ### `nrf5340`
 
-_No tier1 fixture. Boots unmodified Zephyr hello_world end-to-end: CLOCK/UARTE0/RTC1 drive the boot (firmware_survival + nrf5340_clock_boot). Nine peripheral blocks are benign boot stubs._
+_No tier1 fixture. Unmodified Zephyr v3.7 hello_world boots end-to-end through CLOCK/UARTE0/RTC1. TWIM1 is a behavioural EasyDMA model; the PR-gated nrf5340_clock_boot test attaches the declarative BMI270 model and reads CHIP_ID 0x24 with a repeated-START transaction. Nine peripheral blocks remain benign boot stubs._
 
 **Functional device/protocol reads** (real driver, decoded value):
 - Unmodified Zephyr v3.7 hello_world boots + prints over UARTE0 EasyDMA — `nrf5340-zephyr` · firmware_survival::test_nrf5340_zephyr_survival (PR gate)
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`
+**Advanced peripherals — unit-tested only** (no firmware drives them): `GPIO`, `TIMER0-2`, `RTC0`, `TWIM1 + BMI270 CHIP_ID EasyDMA transaction`
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `DCNF/FPU/CACHE/SPU/OSC_REG/CTRLAP/GPIOTE0/DPPIC/FICR` (nrf5340_*_stub) — STRUCTURAL: SystemInit pokes them once at boot and never polls them again, so a register stub is byte-faithful for the hello_world boot path.
+
+### `nrf54l05`
+
+_Minimal nRF54L05 application-core smoke using real RRAM and SRAM geometry, UARTE20 EasyDMA and GPIO P2.09. Only a synthetic board is tested; no beyond-rubric firmware function exists. Full Zephyr/SDK boot, BLE radio, TrustZone and silicon parity are untested._
+
+### `nrf54l10`
+
+_Minimal nRF54L10 application-core smoke using real RRAM and SRAM geometry, UARTE20 EasyDMA and GPIO P2.09. Only a synthetic board is tested; no beyond-rubric firmware function exists. Full Zephyr/SDK boot, BLE radio, TrustZone and silicon parity are untested._
 
 ### `nrf54l15`
 
@@ -180,8 +240,63 @@ _No tier1 fixture. The strict-onboarding snake lab is the only firmware: SPIM22 
 _Richest Espressif rubric coverage: the tier-1 fixture drives all 12 of its declared classes. clock and irq are real engines, not register stand-ins — the native PCR enforces CLK_EN (gated UART0 reads back 0, then recovers) and interrupt_core0+intpri route both the software doorbell and UART0's peripheral source into real mcause traps. Beyond the rubric only io_mux and hp_sys remain — SVD-derived declarative register files with no behavioural engine._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `io_mux` (configs/chips/esp32c6.yaml:231 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.
-- `hp_sys` (configs/chips/esp32c6.yaml:256 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)) — CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled.
+- `io_mux` (configs/chips/esp32c6.yaml:491 (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: reset-value register storage; pad function writes are recorded but never read back or electrically enforced — the DevKitC demo writes U0TXD's MCU_SEL and the tier-1 console both pass regardless of routing. The S3's real io_mux model is the port path.
+- `hp_sys` (configs/chips/esp32c6.yaml:516 (declarative; configs/peripherals/esp32c6/hp_sys.yaml)) — CLOSABLE: declarative register file with no engine; nothing drives it today, so the false-success path is latent — timeout monitor, SDIO control, ROM-table lock and memory test are not modelled.
+
+### `esp32h2`
+
+_No beyond-rubric H2 peripheral is exercised: the board smoke covers only the UART0 FIFO/console path. This narrow profile does not model mask ROM, the USB bridge, IO_MUX, WS2812/RMT, button/strap behavior, Bluetooth LE, IEEE 802.15.4, Thread, Zigbee, or the other H2 peripherals._
+
+### `esp32c5`
+
+_The C5 DevKitC-1-N8R8 smoke reads a BME280 ID and raw temperature over the C5 I2C0 command-list engine, observes GPIO5 output edges, and reports a UART0 marker. The profile does not model ROM boot, flash/XIP, PSRAM, wireless, the RGB LED, PCR clock gating, or electrical IO_MUX enforcement._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- BME280 ID and raw-temperature read over GPIO8/9-routed C5 I2C0 — `esp32c5-devkitc-1-bme280-smoke` · examples/esp32c5-devkitc-1-bme280-smoke/evidence/logs/run_smoke.log (PR gate)
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `io_mux` (configs/chips/esp32c5.yaml (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — CLOSABLE: register words are stored, but pad electrical mux behavior is not enforced; the smoke's GPIO output and I2C route use the modeled GPIO/matrix subset directly.
+
+### `esp32c61`
+
+_The DevKitC-1-N8R2 profile exercises the UART0 TX FIFO, GPIO4 output latch, and the C61 GPIO-matrix I2C0 route to a BME280 on GPIO6/GPIO22. Firmware reads the sensor ID and a raw-temperature vector. It does not model mask-ROM boot, the physical USB bridge, electrical IO_MUX, other GPIO-matrix functions, GPIO26..29, GPIO interrupts, the RGB LED, Wi-Fi 6, Bluetooth LE, PSRAM, or sensor conversion timing._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- BME280 ID and raw-temperature read over GPIO6/22-routed C61 I2C0 — `esp32c61-bme280-smoke` · examples/esp32c61-devkitc-1-n8r2-bme280/evidence/run/logs/run_smoke.log (PR gate)
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `io_mux` (configs/chips/esp32c61.yaml (declarative; configs/peripherals/esp32c6/io_mux.yaml)) — Register storage only; electrical pad muxing is not enforced.
+
+### `esp32p4`
+
+_The P4X-C5 Function EV board smoke checks BME280 chip ID 0x60 and the model's raw-temperature vector 0x082DC0 over HP I2C0 routed through GPIO7/8, then reports over UART0. The profile models the GPIO data/enable/input head, four matrix selectors, I2C0 transaction registers, and IO_MUX setup words without pad electricals. It does not model mask ROM, the second HP core, the LP core, MIPI-CSI/DSI, the H.264/JPEG/PPA media blocks, USB, Ethernet, the companion ESP32-C5 radio or the other P4 peripherals._
+
+**Functional device/protocol checks** (register-level firmware asserts observable behavior):
+- BME280 ID and raw-temperature register read through GPIO7/8-routed HP I2C0 (register-level firmware) — `firmware-esp32p4-demo` · examples/esp32p4x-c5-function-ev-board/evidence/run/logs/run_smoke.log (ungated)
+
+### `esp32s2-arduino`
+
+_Arduino matrix profile of the ESP32-S2 on its genuine mask ROM: stock Arduino-ESP32 runs L0-L8 (UART0, SYSTIMER, RMT WS2812, I2C0, GP-SPI2, SENS ADC, LEDC, TWAI). Those are rubric classes, so no beyond-rubric firmware exercise is recorded in this ledger. Wi-Fi, USB OTG, PSRAM and the ULP are not modelled._
+
+### `esp32s2`
+
+_No beyond-rubric S2 peripheral is exercised: the DevKitC-1-N8R2 board smoke covers only the UART0 TX FIFO through host_console. This direct-ELF profile declares UART0 only; it does not model mask ROM, flash-cache/MMU boot, PSRAM, the GPIO matrix, the RGB LED, USB OTG, Wi-Fi or the other S2 peripherals._
+
+### `rp2040-feather`
+
+_Board variant of the rp2040 die with the Feather's 133 MHz clock and 8 MiB flash; it reuses the rp2040 behavioural models. No beyond-rubric peripheral is exercised under this name: the Feather smoke reads BME280 CHIP_ID over I2C1 and drives D13 through SIO; both are rubric classes, not beyond-rubric content. PIO, USB and the onboard NeoPixel are not exercised on this board._
+
+### `rp2350-feather`
+
+_Board variant of the rp2350 die with the Feather's 8 MiB flash; it reuses the rp2350 behavioural models. No beyond-rubric peripheral is exercised under this name: the Feather smoke toggles red D13 (GPIO7) through SIO and writes UART0; both are rubric classes, not beyond-rubric content. PIO, USB, PSRAM and the onboard NeoPixel are not exercised on this board._
+
+### `esp32c6fh4`
+
+_Package variant of the esp32c6 die for the Seeed XIAO ESP32-C6: the yaml copies esp32c6.yaml and changes only the flash size to 4 MB, so it reuses the esp32c6 models and shims. No beyond-rubric peripheral is exercised under this name: the XIAO smoke toggles the active-low user LED on GPIO15 through the C6 GPIO block, a rubric class. The radio, RF switch, USB-Serial/JTAG console and LP core are not exercised on this board._
+
+### `stm32h723zg`
+
+_Two firmware paths drive this die. The NUCLEO-H723ZG Rust smoke (core-onboarding-smoke) drives RCC enables, GPIOB (LD1 on PB0), GPIOD AF7 and USART3 TX. The stock stm32duino NUCLEO_H723ZG row in the Arduino matrix (core-arduino-matrix-smoke, nightly + push to main; evidence validation/arduino-matrix/evidence/nucleo-h723zg) drives PWR supply/VOS bring-up, the PLL clock tree, CRS (HAL_RCCEx_CRSConfig), USART3, GPIO, I2C1 (INA219 exact registers), SPI1 (MAX31855 exact frame), ADC1 plus the ADC12 common CCR (analogRead), TIM2 PWM on PA0 (1.000 kHz, 50.2 % duty on the pad) and SysTick (micros). FDCAN1/2, CRC, RNG, IWDG, WWDG, DBGMCU, USART1/2/6, UART4, LPUART1, I2C2/3, SPI2/3, TIM1/3/4/8 and ADC2 are declared with the H735 instance list but no H723 firmware drives them; the FDCAN message RAM is not mapped, so the L8 CAN cell is a declared skip._
 
 ### `esp32s3-zero`
 
@@ -193,6 +308,10 @@ _Board variant of the esp32s3 die: same configure_xtensa_esp32s3 wiring and the 
 - `efuse_stub` (crates/core/src/system/xtensa/esp32s3.rs:647 (esp_xtensa_common/system_stub.rs:454; configs/chips/esp32s3-zero.yaml:72)) — CLOSABLE: canned MAC + chip-rev only; no eFuse state, no burn path. The ROM boot and esp-hal accept the canned values.
 - `rtc_cntl_stub` (crates/core/src/system/xtensa/esp32s3.rs:640 (esp_xtensa_common/system_stub.rs:203; configs/chips/esp32s3-zero.yaml:66)) — CLOSABLE: register round-trip plus three canned behaviours — PLL_LOCK seeded, TIME_UPDATE snapshot handshake, APP_CPU un-stall. The RTC clock tree, SWD_CONF super-watchdog and sleep domains are not modelled.
 - `wifi_thunks` (esp32s3/wifi_thunks.rs:8 (CHEAT(THUNK-LIB))) — IRREDUCIBLE: the ESP32 WiFi MAC/PHY is a closed RF-coprocessor blob with NO executable image — there is no firmware to run, so it can never be firmware-exercised. The lwIP/socket layer above is routed to a real SimNet. (Same shim as the esp32s3 entry.)
+
+### `esp32s3-devkitc-1-n16r8-adc`
+
+_Narrow DevKitC-1 v1.1 N16R8 board profile over the esp32s3 die, with no beyond-rubric content of its own: its register-level firmware starts one SENS ADC1 one-shot conversion on GPIO4 / ADC1_CH3 and asserts code 2047 for the centered 1650 mV input (the ADC rubric cell and the family shims stay as listed on the esp32s3 entry). The local analog model is deterministic; no noise, calibration or attenuation curve is modelled._
 
 ### `stm32f103`
 
@@ -214,7 +333,7 @@ _Exact low-density x4/x6 geometry slice for stm32f103c4; it reuses the shared me
 
 ### `stm32f103c6`
 
-_Exact low-density x4/x6 geometry slice for stm32f103c6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+_Exact low-density x4/x6 geometry and peripheral windows for stm32f103c6 (SPI1, I2C1, USART1/2, TIM1-3, ADC1/2, DMA1; no SPI2, I2C2, USART3 or TIM4). A dedicated smoke boots firmware, writes USART2 and toggles PA5; USB and BKP remain explicit untouched stubs. ES0348's user-mode DBGMCU_IDCODE restriction is reflected as a zero read; `stm32_variant_geometry` asserts exact geometry. This is model evidence, not a physical C6 capture._
 
 ### `stm32f103r4`
 
@@ -226,7 +345,7 @@ _Exact low-density x4/x6 geometry slice for stm32f103r4h; it reuses the shared m
 
 ### `stm32f103r6`
 
-_Exact low-density x4/x6 geometry slice for stm32f103r6; it reuses the shared medium-density STM32F103 peripheral map, so firmware-exercise claims stay under `stm32f103`. Exact memory, package, GPIO, ADC and order-code geometry is asserted by `stm32_variant_geometry`._
+_Exact low-density x4/x6 geometry for stm32f103r6 (32 KB flash, 10 KB SRAM, LQFP64, 51 GPIOs, 16 ADC channels), with only the low-density SPI1, I2C1, USART1/2, TIM1-3, ADC1/2 and DMA1 instances exposed. Its dedicated smoke runs USART2 output and PA5 edges; USB and backup-register windows remain explicit untouched stubs. Exact geometry is asserted by `stm32_variant_geometry`. This is local simulator evidence, not a physical R6 capture._
 
 ### `stm32f103r6h`
 
@@ -239,6 +358,10 @@ _Exact STM32F103R8 LQFP64 model (medium-density x8: 64 KiB flash, 20 KiB SRAM, 5
 ### `stm32f103rb`
 
 _Exact STM32F103RBT6 LQFP64 model with 128 KiB flash and 20 KiB SRAM. The NUCLEO-F103RB source smoke exercises PA5 GPIO output and USART2; firmware-exercise rubric claims remain on the STM32F103 family row until exact-part rubric coverage is added._
+
+### `stm32f103rb-nucleo-bme280-smoke`
+
+_Narrow NUCLEO-F103RB + BME280 onboarding profile (USART2/ST-LINK VCP, LD2 on PA5, I2C1 remapped to PB8/PB9). Committed evidence at examples/nucleo-f103rb-bme280/evidence shows examples/nucleo-f103rb-bme280/onboarding-smoke.yaml passed 3/3: USART2 printed NUCLEO_F103RB_BME280_OK ID=0x60 I2C1=PB8/PB9 after a firmware read of BME280.CHIP_ID (0xD0) at 0x77, gpioa:5 (LD2) saw at least 32 edges, and the run stopped at max_steps. Firmware is built from crates/firmware-nucleo-f103rb-bme280-smoke, not a committed ELF; no required CI lane runs this script. No beyond-rubric block is listed for this slice._
 
 ### `stm32f103t4`
 
@@ -362,6 +485,28 @@ _384 KiB Black-Pill package variant of the F401. Its PR-gated firmware is the UA
 - `OTG_FS global/host/device/pwrclk` (configs/chips/stm32f401cdu6.yaml:309,315,321,327 (type: stub; configs/peripherals/stm32f401/otg_fs_*.yaml)) — CLOSABLE: four zero windows — the engine's STM32 OTG FS/DWC2 model (usb_otg.rs, wired on the L476) is not wired here (the F103 USB-device window is the same stub class), no gated firmware opens them, and the declarative otg_fs_*.yaml schemas are decode-only.
 - `DBG` (configs/chips/stm32f401cdu6.yaml:336 (type: stub; configs/peripherals/stm32f401/dbg.yaml)) — CLOSABLE: zero window with no IDCODE wired even though the yaml header records the CDU6's bench-read DBGMCU IDCODE 0x10016433 — the sibling descriptor's real `dbgmcu` model (configs/chips/stm32f401.yaml:187, idcode 0x10006411) is not reused; no gated firmware reads it.
 
+### `stm32f446re`
+
+_Minimal real-register firmware smoke: reset/stack, RCC, GPIO PA5 LED and USART2 UART banner. No beyond-rubric function is exercised; the model deliberately omits F446-exclusive blocks, and no stock HAL/Zephyr or physical silicon run exists._
+
+**Dead** (2 modeled, never exercised): `PWR`, `FLASH_CTRL`
+
+### `stm32f411re`
+
+_NUCLEO-F411RE (same die and register set as stm32f411ceu6, LQFP64). PR-gated raw-register smoke (examples/nucleo-f411re/io-smoke.yaml): reset/stack, RCC, GPIOA, USART2 banner and PA5 LED edges. Stock stm32duino also runs the Arduino matrix row L0-L7 (INA219 over I2C1 at the exact tier, MAX31855 over SPI1, ADC1_IN0 at a board-held 1650 mV read at 10 bits = 511, TIM2_CH1 PWM on PA5 at 1.000 kHz), but that lane runs nightly and on main, not on PRs, so nothing is recorded as functional here. No physical silicon run exists._
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `PWR`
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `WWDG/I2S2EXT/I2S3EXT/SDIO/CRC/DMA1/DMA2/OTG_FS/DBG` (configs/chips/stm32f411re.yaml (type: stub; same windows as stm32f411ceu6)) — CLOSABLE: the same zero windows as the Black Pill descriptor; see the stm32f411ceu6 row for each one.
+
+### `stm32l432kc`
+
+_NUCLEO-L432KC. PR-gated raw-register smoke (examples/nucleo-l432kc/io-smoke.yaml): reset/stack, RCC, GPIOA/GPIOB, USART2 banner and PB3 LED edges. Stock stm32duino also runs the Arduino matrix row L0-L8 (INA219 over I2C1, MAX31855 over SPI1, ADC1_IN5 at a board-held 1650 mV, TIM2_CH2 PWM on PB3, bxCAN1 loopback), but that lane runs nightly and on main, not on PRs, so nothing is recorded as functional here. No physical silicon run exists._
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `SYSCFG` (configs/chips/stm32l432kc.yaml (type: stub; configs/peripherals/stm32l476/syscfg.yaml)) — CLOSABLE: author-declared stub shared with the L476 — read 0, writes dropped, so EXTI source-select is not modelled.
+
 ### `stm32f411ceu6`
 
 _WeAct Black Pill. Its tier-1 fixture (PR-gated `firmware_survival::test_stm32f411_tier1_survival`; nightly coverage-matrix cell examples/stm32f411ceu6-blackpill/io-smoke.yaml) drives clock/gpio/timer/i2c/spi (SPI1+SPI5)/adc/wdt/rtc over USART2, leaving dma unrecorded (the fixture never attempts it, and both stream controllers are zero stubs) and irq/pwm n/a (the fixture does not attempt either class). PWR is a real stm32f4-profile model no firmware drives; the descriptor's remaining stub windows are listed below._
@@ -408,6 +553,17 @@ _SIM-DERIVED first G0 port: its committed tier-1 fixture drives all 12 declared 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `WWDG` (configs/chips/stm32g071.yaml:349 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)) — CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it (unlike the L476, no misc fingerprint reads its CR/CFR/SR).
 - `SYSCFG` (configs/chips/stm32g071.yaml:375 (type: syscfg; crates/core/src/peripherals/generic_factory.rs:739)) — CLOSABLE: hardcoded StubPeripheral — reads return 0 (plus a canned CCCSR=READY at 0x20 that is an H7-HAL seed, meaningless on G0) and writes are dropped, so EXTI source-select is not modelled; the tier-1 fixture pends its NVIC line via ISPR0 and nothing reads the window back.
+
+### `stm32c031c6`
+
+_No tier-1 target. First STM32C0 part: the stock-STM32duino Arduino matrix row (core-arduino-matrix-smoke, board stm32c031c6) runs USART2 console, SysTick, LD4 GPIO, Wire/I2C1 (INA219 CONFIG/BUS read back exactly), SPI1 (MAX31855 frame) and TIM1_CH1 PWM measured on the PA5 pad. Those are rubric classes. Beyond the rubric nothing runs: CRC, PWR, DBGMCU and the DMAMUX are family models no firmware drives, the ADC is a register file the C0 HAL talks to without a conversion (matrix L5 is skipped, not passed), and SYSCFG is the shared stub._
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `CRC`
+
+**Dead** (2 modeled, never exercised): `PWR`, `DBGMCU`
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `SYSCFG` (configs/chips/stm32c031c6.yaml (type: syscfg); crates/core/src/peripherals/generic_factory.rs (syscfg arm)) — CLOSABLE: StubPeripheral returns zero except a canned H7-style CCCSR readiness bit at 0x20, and drops writes. GPIO source selection lives in the G0-style EXTI EXTICR registers, not here.
 
 ### `stm32g0b1re`
 
@@ -458,9 +614,12 @@ _SIM-DERIVED STM32U575 target with NO tier-1 target (absent from TIER1_TARGETS a
 
 ### `stm32u5a5zj`
 
-_SIM-DERIVED NUCLEO-U5A5ZJ-Q target with no tier-1 row or prebuilt CLI firmware. The in-process `stm32u5_exec_oracle` drives the U5A5 SystemBus registers and checks SHA-256 of `abc`, AES-128 ECB, 4^13 mod 497, and negative PKA subtraction sign extension through 4160 bits; it also rejects 4161-bit operands. Separate tests cover SHA-1/SHA-224/MD5 register vectors on the shared HASH model via U575 and an RFC 4231 HMAC unit vector; SAES unit vectors cover AES-128 ECB/CBC/CTR. The model implements AES-256 too, but no AES-256 vector currently tests it. The source-built `examples/nucleo-u5a5zj/io-smoke.yaml` checks basic UART only; no firmware test currently exercises U5A5 HASH/SAES/PKA. No physical U5A5 capture or acceptance is claimed; see `docs/boards/stm32u5a5zj.md` for model limits._
+_SIM-DERIVED NUCLEO-U5A5ZJ-Q target with no tier-1 row or prebuilt CLI firmware. The in-process `stm32u5_exec_oracle` checks SHA-256 of `abc`, AES-128 ECB, 4^13 mod 497, and negative PKA subtraction sign extension through 4160 bits; it also rejects 4161-bit operands. Separate tests cover SHA-1/SHA-224/MD5 register vectors on the shared HASH model via U575 and an RFC 4231 HMAC unit vector. The nightly board firmware smoke now drives SAES AES-128 ECB with the NIST SP 800-38A known-answer vector; other SAES unit vectors cover CBC/CTR, and the model implements AES-256 but has no AES-256 vector yet. HASH and PKA remain register-oracle-only. The SAES model does not cover GCM/CCM or TrustZone key selection. No physical U5A5 capture or acceptance is claimed; see `docs/boards/stm32u5a5zj.md` for model limits._
 
-**Advanced peripherals — unit-tested only** (no firmware drives them): `HASH`, `SAES`, `PKA`
+**Functional device/protocol reads** (real driver, decoded value):
+- NUCLEO-U5A5ZJ-Q SAES AES-128 ECB — NIST SP 800-38A known-answer block — `nucleo-u5a5-saes-smoke` · examples/nucleo-u5a5zj/evidence/saes (local smoke 2/2; CI matrix) (nightly CI)
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `HASH`, `PKA`
 
 ### `stm32u545`
 
@@ -485,11 +644,15 @@ _No tier-1 target. The PR-gated exact-part AVR-GCC smoke prints PB_USART1_OK thr
 
 ### `atmega328p`
 
-_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the PR-gated AVR golden `avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks` (core-ci.yml:688) boots the committed PlatformIO blink ELF and asserts `nano-ok` on USART0 plus a PB5 toggle (avr_nano_golden_survival.rs:100-102); strict_onboarding boots the same ELF through examples/arduino-nano-blinky/io-smoke.yaml in the nightly core-full job (cross-build-excluded from the PR shards, workspace-test-shards.json:44-48; discovery documented at strict_onboarding.rs:369), and the nightly Arduino matrix drives L0–L7 on the part — L8 CAN is skipped, the chip has no CAN controller (validation/arduino-matrix/boards.yaml:218-231); its L3/L4 cells are raw register/frame oracles (INA219 config 0x399F + bus 0x19CA, validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino:20-21,92; MAX31855 frame 0x01901600, validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino:66-67), not decoded physical values, so `functional` stays empty. Every peripheral the descriptor declares is a rubric class or kit-attach plumbing: the `spi`/`i2c` instances are parking controllers that exist only to drain attached slaves into the AVR CPU, which owns the real SPCR/SPSR/SPDR and TWI (configs/chips/atmega328p.yaml:28-39; crates/core/src/cpu/avr.rs:91-106), PORTB/C/D are `avr_gpio` and the ADC input side is `avr_adc` — so nothing beyond the rubric is declared and the lists below are empty._
+_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the PR-gated AVR golden `avr_nano_golden_survival::arduino_nano_golden_prints_and_blinks` (core-ci.yml:688) boots the committed PlatformIO blink ELF and asserts `nano-ok` on USART0 plus a PB5 toggle (avr_nano_golden_survival.rs:100-102); strict_onboarding boots the same ELF through examples/arduino-nano-blinky/io-smoke.yaml in the nightly core-full job (cross-build-excluded from the PR shards, workspace-test-shards.json:44-48; discovery documented at strict_onboarding.rs:369), and the nightly Arduino matrix drives L0–L7 on the part — L8 CAN is skipped, the chip has no CAN controller (validation/arduino-matrix/boards.yaml:306-322); its L3/L4 cells are raw register/frame oracles (INA219 config 0x399F + bus 0x19CA, validation/arduino-matrix/sketches/L3_i2c_sensor/src/main.ino:20-21,92; MAX31855 frame 0x01901600, validation/arduino-matrix/sketches/L4_spi_sensor/src/main.ino:66-67), not decoded physical values, so `functional` stays empty. Every peripheral the descriptor declares is a rubric class or kit-attach plumbing: the `spi`/`i2c` instances are parking controllers that exist only to drain attached slaves into the AVR CPU, which owns the real SPCR/SPSR/SPDR and TWI (configs/chips/atmega328p.yaml:28-39; crates/core/src/cpu/avr.rs:91-106), PORTB/C/D are `avr_gpio` and the ADC input side is `avr_adc` — so nothing beyond the rubric is declared and the lists below are empty._
 
 ### `atmega2560`
 
 _No tier-1 target. Firmware that runs: the PR-gated `avr_mega2560_io` integration test boots the committed Arduino-core ELF (tests/fixtures/avr/arduino-mega-2560-io.elf, built for arduino:avr:mega from examples/arduino-mega-2560-io) and asserts the 12 LED pins on ports E/G/F/B/H, analogRead(A8)/(A9) through ADCSRB.MUX5, millis() against simulated time, USART0 Serial and an EICALL through a function pointer. The descriptor reuses the 328P rubric classes (`avr_gpio` ports A..L, `avr_adc` with 16 channels, the parking `spi`/`i2c` controllers and the `usart0` peer host), so nothing beyond the rubric is declared and the lists below are empty._
+
+### `atmega32u4`
+
+_No tier-1 target. The Arduino Leonardo matrix row (validation/arduino-matrix/boards/arduino-leonardo.yaml) builds the stock ArduinoCore-avr sketches and runs L0-L7 on the model (8 pass, 1 skip: no CAN); `Serial` is native USB CDC on the CPU's USB device model with a scripted host that enumerates it, and the CPU-owned SPI, TWI and ADC (ADCSRB.MUX5) serve the L3/L4/L5 sensor kits. That lane needs PlatformIO and runs on the nightly/main matrix, not on pull requests; cpu::avr::usb unit tests are the PR-gated evidence. Timer3, the high-speed Timer4, INTn/PCINT and EEPROM are not modelled. No beyond-rubric behavior or physical acceptance is claimed and the lists below are empty._
 
 ### `atmega1281`
 
@@ -498,6 +661,14 @@ _No tier-1 target. The PR-gated avr_atmega1281_firmware integration test boots t
 ### `atmega2561`
 
 _64-pin sibling of the ATmega2560, so no tier-1 target. The PR-gated `avr_atmega2561` test boots the committed 3-byte-PC image tests/fixtures/avr/atmega2561-io.elf and asserts `2561 OK` on the USART0 sink plus PB5 driven high; examples/atmega2561-io/io-smoke.yaml runs the same fixture through `labwired test` and is the board entry in configs/ci/boards.yml. The descriptor deliberately narrows the shared public core to this SKU: 54 GPIO on ports A..G (PG0..PG5 only), USART0 only and eight ADC inputs. EEPROM (4 KB on silicon), USART1 and Timer3 are on silicon but are not modelled/declared in this slice; ports H..L, ADC8..ADC15 and Timer4/5 are 100-pin ATmega2560 features absent from the 64-pin part; Table 2-1 lists twelve 16-bit-resolution PWM channels for the 2560 and six for the 2561. There is no beyond-rubric content and the lists below are empty._
+
+### `atmega4809`
+
+_No tier-1 target. The Arduino Nano Every matrix row (validation/arduino-matrix/boards/arduino-nano-every.yaml) builds the stock ArduinoCore-megaavr sketches and runs L0, L1, L2, L3, L4, L5 and L7 on the model, and examples/arduino-nano-every/io-smoke.yaml runs the same Nano Every firmware through `labwired test`; both need PlatformIO and run on the nightly/main matrix, not on pull requests. PR-gated: `avr_nano_every_bme280` (crates/core/tests/avr/avr_nano_every_bme280.rs) boots the committed stock-Arduino sketch tests/fixtures/avr/arduino-nano-every-bme280.elf, in which the Adafruit BME280 library reads the sensor over Wire on the TWI0 host model (megaavr_twi) and prints 25.00 C, 1013.25 hPa and 50.00 %RH on USART3; a second case moves the sensor environment and a third removes the sensor. `avr_nano_every_max31855` (crates/core/tests/avr/avr_nano_every_max31855.rs) boots tests/fixtures/avr/arduino-nano-every-max31855.elf, in which the Adafruit MAX31855 library reads the converter over SPI on the SPI0 host model (megaavr_spi) and prints 25.00 C and 22.0000 C; a second case moves both junction temperatures, a third wires the chip select to another pad and a fourth removes the converter. The matrix L3 cell is a raw INA219 register oracle and the L4 cell an exact MAX31855 frame. The TCA0/TCB waveform outputs are not modelled, so the PWM matrix cell is skipped. TWI0 client mode, dual mode, smart mode, quick command and the bus time-out are refused, and the TWI0 pads are not routed. SPI0 Buffer mode and client mode are refused; the multi-host SS input and the SPI clock phase / polarity are not modelled. No physical acceptance is claimed._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- Adafruit BME280 library over Wire (TWI0) — compensated 25.00 C, 1013.25 hPa, 50.00 %RH on Serial (USART3) — `arduino-nano-every-bme280` · crates/core/tests/avr/avr_nano_every_bme280.rs (tests/fixtures/avr/arduino-nano-every-bme280.elf) (PR gate)
+- Adafruit MAX31855 library over SPI (SPI0) — thermocouple 25.00 C and cold junction 22.0000 C on Serial (USART3) — `arduino-nano-every-max31855` · crates/core/tests/avr/avr_nano_every_max31855.rs (tests/fixtures/avr/arduino-nano-every-max31855.elf) (PR gate)
 
 ### `atsamd21`
 
@@ -509,6 +680,9 @@ _No tier-1 target. The firmware that runs is the PR-gated `firmware_survival::te
 ### `atsamd21g18a`
 
 _No tier-1 target. The firmware that runs is the SAM D21 bring-up smoke built from `crates/firmware-samd21-demo` (committed copy at tests/fixtures/samd21-smoke.elf; the gated lanes build the crate, not that copy): examples/samd21-smoke/io-smoke.yaml asserts `OK`, `samd21 sercom0 up` and `led on` plus three PORT memory_value reads, and is executed by strict_onboarding (nightly core-full, cross-build-excluded from the PR shards, workspace-test-shards.json:44-48) and the nightly coverage-matrix cell `samd21-smoke` (core-coverage-matrix-smoke.yml:296-303). It drives the rubric classes (clock through PM/GCLK, GPIO through PORT, uart through SERCOM0) and touches both beyond-rubric declarative banks directly — the SYSCTRL.PCLKSR poll and the NVMCTRL.CTRLB wait-state write — which are register storage with no behavioural engine behind them. PM/GCLK are the clock-class banks and WDT the wdt-class bank: same declarative shape, class-owned, not listed here._
+
+**Functional device/protocol reads** (real driver, decoded value):
+- Stock ArduinoCore-samd sketch on the Arduino Nano 33 IoT: the scripted USB host enumerates the native port (samd21_usb) and opens its CDC serial port; the Adafruit BME280 library reads the sensor over Wire (SERCOM4) and prints 25.00 C, 1013.25 hPa, 50.00 %RH on Serial (USB CDC) — `arduino-nano-33-iot-bme280` · crates/core/tests/samd/arduino_nano_33_iot_bme280.rs (tests/fixtures/samd/arduino-nano-33-iot-bme280.elf) (PR gate)
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `SYSCTRL` (configs/chips/atsamd21g18a.yaml:144 (type: declarative; configs/peripherals/atsamd21g18a/sysctrl.yaml)) — CLOSABLE: declarative register file with no engine — the smoke's OSC8MRDY poll (crates/firmware-samd21-demo/src/main.rs:151-155) is bounded (`for _ in 0..10_000`) and passes even with PCLKSR reset to 0, so it does not depend on the hand-set value; that value (0x1_8ADF, configs/peripherals/atsamd21g18a/sysctrl.yaml:250-272, value at :264) is what unbounded driver spins like the Arduino SAMD core's DFLLRDY wait need, and the pin is the estate test (atsamd21_peripheral_estate.rs:116-139), the chip's `chip_conformance` behavior gate (chip_conformance.rs:86-93). No oscillator/DFLL state is modelled, and regenerating the file from the SVD drops the value. ⚠️ examples/samd21-smoke/io-smoke.yaml:17-19 and crates/firmware-samd21-demo/src/main.rs:149-150 still claim a PCLKSR=0 model hangs / never returns — those comments are STALE (the poll is bounded); do not 'correct' this note back from them.
@@ -568,7 +742,7 @@ _No tier-1 target. The firmware that runs is the PR-gated `firmware_survival::te
 
 ### `atsamd51-pybadge`
 
-_No tier-1 target and no firmware runs on this descriptor. It is the atsamd51 descriptor with the PyBadge application layout (reset_vector_offset 0x4000, UF2 bootloader resident below). Its only gate, crates/core/tests/pybadge_config.rs, builds the PyBadge bus from configs/systems/pybadge.yaml and checks the reset SP/PC fetched from a stub vector table at 0x4000; it steps no firmware. The Metro M4 smoke that exercises atsamd51 loads atsamd51.yaml, not this file. Beyond the rubric it declares the same two zero windows as atsamd51, USB and QSPI._
+_No tier-1 target and no firmware runs on this descriptor. It is the atsamd51 descriptor with the PyBadge application layout (reset_vector_offset 0x4000, UF2 bootloader resident below). Its only gate, crates/core/tests/samd/pybadge_config.rs, builds the PyBadge bus from configs/systems/pybadge.yaml and checks the reset SP/PC fetched from a stub vector table at 0x4000; it steps no firmware. The Metro M4 smoke that exercises atsamd51 loads atsamd51.yaml, not this file. Beyond the rubric it declares the same two zero windows as atsamd51, USB and QSPI._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `USB` (configs/chips/atsamd51-pybadge.yaml:159 (type: stub; crates/core/src/peripherals/stub.rs:12)) — CLOSABLE: author-declared zero window, same as atsamd51: reads return 0 and writes are dropped; the SAMD51 native-USB device is not modelled (configs/systems/pybadge.yaml lists native USB as a stub).
@@ -579,7 +753,7 @@ _No tier-1 target and no firmware runs on this descriptor. It is the atsamd51 de
 _L2 on the conformance board (silicon reset oracle, 243/243 registers — docs/coverage/chip-conformance.md:39) and no tier-1 row, so this entry carries the story. Two firmwares are gated: the bare-metal demo, rebuilt by the nightly coverage-matrix cell examples/brd2709a/uart-smoke.yaml (core-coverage-matrix-smoke.yml:207-213), and the BRD2709A agent deck, named as this chip's behavior_gate in chip_conformance.rs:350 and asserted in process by efr32_deck_behavior::the_deck_firmware_drives_every_part (advisory PR workspace shards; a superset of the nightly CLI cell examples/brd2709a/deck-smoke.yaml, core-coverage-matrix-smoke.yml:221-227 — the CLI cell asserts 100% ink + lit, while the in-process gate adds the uniform top_colour=0x001F check): the committed bare-metal deck drives CMU-gated USART0 as SPI (ST7789 panel — all 170x320 pixels carry the 0x001F the firmware wrote), USART2 as I2S (INMP441 mic — even slots driven, odd tristated), IADC0 (fader code=2048) and five GPIO contacts through the Series-2 port model plus the USART ROUTE registers. That covers the board's spi/i2s/adc/gpio path where no tier-1 fixture exists. What the deck does NOT touch: the analog-bus allocation (the fader converts without allocating — on silicon that bus reads 0), SMU, MSC and the BLE controller — those are the shims and unit-only models below, and no in-tree gated firmware drives MSC or virtual_ble (the XMODEM bootloader is bench-only; firmware-mg26-ble is wired to no lane). I2C/timer are rubric classes, not recorded here._
 
 **Functional device/protocol reads** (real driver, decoded value):
-- BRD2709A agent deck — ST7789 panel over USART0/SPI, INMP441 microphone over USART2/I2S, IADC fader and five GPIO contacts, asserted against the published display artifact (lit, every pixel inked, uniform 0x001F), the I2S slot halves (left=4 right=0), the 12-bit conversion (2048) and each contact's idle polarity — `firmware-mg26-deck` · crates/core/tests/efr32_deck_behavior.rs:138-246 (in process) + examples/brd2709a/deck-smoke.yaml (coverage-matrix cell, core-coverage-matrix-smoke.yml:221-227) (nightly CI)
+- BRD2709A agent deck — ST7789 panel over USART0/SPI, INMP441 microphone over USART2/I2S, IADC fader and five GPIO contacts, asserted against the published display artifact (lit, every pixel inked, uniform 0x001F), the I2S slot halves (left=4 right=0), the 12-bit conversion (2048) and each contact's idle polarity — `firmware-mg26-deck` · crates/core/tests/vendor/efr32_deck_behavior.rs:138-246 (in process) + examples/brd2709a/deck-smoke.yaml (coverage-matrix cell, core-coverage-matrix-smoke.yml:221-227) (nightly CI)
 
 **Advanced peripherals — unit-tested only** (no firmware drives them): `MSC (14 msc.rs unit tests plus efr32_msc_persistence.rs, which drives WREN/ADDRB/WDATA/BUSY and reads the word back through ordinary memory; the only firmware that drives it, firmware-mg26-bootloader, is bench-only — docs/boards/brd2709a.md:58-63)`, `virtual_ble (LabWired's DECLARED controller at 0x4F000000, NOT silicon — the EFR32 radio is a closed RAIL blob with no register documentation; 13 virtual_ble.rs unit tests plus efr32mg26_ble.rs two-machine advertising/scanning through this descriptor; firmware-mg26-ble exists but no lane runs it)`
 
@@ -594,6 +768,22 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
 - `iomuxc` (configs/chips/imxrt1064.yaml:37-41 (type imx_iomuxc; crates/core/src/peripherals/imx_iomuxc.rs:7-11)) — CLOSABLE: sticky register stub — every SW_MUX_CTL/SW_PAD_CTL/SELECT_INPUT word is stored and read back (2 unit tests pin only that read-back), but no alternate-function routing follows; the smoke never opens the window and a DTCM-linked image cannot reveal a pin-mux mistake.
 - `flexspi` (configs/chips/imxrt1064.yaml:59-62 (type stub; no schema)) — CLOSABLE: zero window at 0x402A8000 — the FlexSPI controller and XIP are not modelled and the descriptor claims no 4 MiB SiP flash; firmware is linked into DTCM because XIP cannot boot here, and nothing opens the window.
+
+### `mimxrt1062-teensy41`
+
+_No tier-1 target. Stock Teensyduino (PJRC core, PlatformIO teensy@6.0.0) boots the Teensy 4.1 profile from the FlexSPI NOR IVT (FlexRAM, PLLs, DCDC, SysTick on the 100 kHz reference, USB1 device controller) and prints through USB CDC to a scripted host; the arduino-matrix row validation/arduino-matrix/boards/teensy41.yaml runs L0-L3, L5 and L7 on it (6 pass, 3 skip: no LPSPI, QuadTimer or FlexCAN model). That lane needs PlatformIO and runs on the nightly/main matrix, not on pull requests. LPI2C1 is a real model (an INA219 is read through stock Wire); the declared stubs are listed as shims. No physical acceptance is claimed._
+
+**Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
+- `iomuxc_gpr` (configs/chips/mimxrt1062-teensy41.yaml:150-152 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `flexram` (configs/chips/mimxrt1062-teensy41.yaml:153 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `snvs` (configs/chips/mimxrt1062-teensy41.yaml:154 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `pit` (configs/chips/mimxrt1062-teensy41.yaml:155 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `ocotp` (configs/chips/mimxrt1062-teensy41.yaml:156 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `src` (configs/chips/mimxrt1062-teensy41.yaml:157 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `gpc` (configs/chips/mimxrt1062-teensy41.yaml:158 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `tmr1..tmr4 (QuadTimer1-4)` (configs/chips/mimxrt1062-teensy41.yaml:159-162 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `pwm1..pwm4 (eFlexPWM1-4)` (configs/chips/mimxrt1062-teensy41.yaml:163-166 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
+- `scs_debug (CoreDebug DHCSR..DEMCR)` (configs/chips/mimxrt1062-teensy41.yaml:174 (type stub)) — CLOSABLE: declared stub (reads 0, writes dropped), documented in the chip header; the Teensyduino startup writes it and the model does not act on it.
 
 ### `mkw41z4`
 
@@ -611,10 +801,12 @@ _No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware th
 
 ### `ra4m1`
 
-_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the bare-metal Uno R4 Minima smoke, PR-gated as firmware_survival::test_ra4m1_uno_r4_smoke_survival (case firmware_survival.rs:1346-1358) and rebuilt by the nightly coverage-matrix cell examples/arduino-uno-r4-minima/uart-smoke.yaml (core-coverage-matrix-smoke.yml:89-95); it waits on the ra_sysc HOCO/OSCSF handshake, drives P111 through PORT1 PCNTR1/PCNTR3 and prints OK over SCI2 TDR, and board_config_gates.rs builds the descriptor. Beyond the rubric the descriptor declares exactly one block — the out-of-scope USB CDC serial._
+_No tier-1 target (absent from TIER1_TARGETS and tier1-matrix.json). Firmware that runs: the bare-metal Uno R4 Minima smoke, PR-gated as firmware_survival::test_ra4m1_uno_r4_smoke_survival (case firmware_survival.rs:1346-1358) and rebuilt by the nightly coverage-matrix cell examples/arduino-uno-r4-minima/uart-smoke.yaml (core-coverage-matrix-smoke.yml:89-95); it waits on the ra_sysc HOCO/OSCSF handshake, drives P111 through PORT1 PCNTR1/PCNTR3 and prints OK over SCI2 TDR, and board_config_gates.rs builds the descriptor. Since 2026-11-07 stock ArduinoCore-renesas sketches also run on it through the UNO R4 WiFi row of the Arduino matrix (validation/arduino-matrix/boards.yaml `uno-r4-wifi`, nightly core-arduino-matrix-smoke.yml, not PR-gated): Serial on SCI9 through the ICU event link, millis()/micros() on AGT0, Wire on IIC1 (INA219 exact), SPI on RSPI SPI0 (MAX31855), analogRead on ADC0 at 14 bits, analogWrite on GPT2 GTIOC2B (P102 pad edges), and CAN0 in internal loopback on ra_can (L8_can, register-level; validation/arduino-matrix/evidence/uno-r4-wifi/L8_can with a stubbed-CAN0 negative control). The CPU-visible stubs it adds are listed below._
 
 **Shims** (hardcoded stubs or engine-less declarative register files — not real fidelity):
-- `usbfs` (configs/chips/ra4m1.yaml:63-66 (type stub; crates/core/src/peripherals/stub.rs)) — CLOSABLE: zero window at 0x40090000 — the R7FA4M1AB USB FS device (the board's USB CDC console) is not modelled; the PR-gated smoke drives SCI2 on the D0/D1 header only, and no gated firmware opens the window (docs/boards/arduino-uno-r4-minima.md:25).
+- `usbfs` (configs/chips/ra4m1.yaml usbfs (type stub; crates/core/src/peripherals/stub.rs)) — CLOSABLE: zero window at 0x40090000 — the R7FA4M1AB USB FS device (the Minima's USB CDC console) is not modelled; the PR-gated smoke drives SCI2 on the D0/D1 header only, and the UNO R4 WiFi matrix row prints on SCI9 (docs/boards/arduino-uno-r4-minima.md:25).
+- `mpu_spmon` (configs/chips/ra4m1.yaml mpu_spmon (type stub)) — CLOSABLE: FSP SystemInit arms the stack pointer monitor; its bounds are dropped and no NMI is raised.
+- `adc1_reserved` (configs/chips/ra4m1.yaml adc1_reserved (type stub)) — Silicon-shaped: reserved space ArduinoCore-renesas analogReference() opens as a second ADC unit on every boot.
 
 ### `rp2350`
 
@@ -638,47 +830,47 @@ _No beyond-rubric board firmware content is recorded. The descriptor declares CP
 
 ### `dspic33fj32mc204`
 
-_M0 + M1a + M1b + M1c + M2 + M3 bring-up: boot (PC 0 -> reset GOTO) with UART1 TX, timers T1/T2/T3, the interrupt fabric (IVT/AIVT vector fetch, IFS0/IEC0/IPC0-2, IFS1/IEC1/IPC3-4, IFS3/IPC14-15 sources), GPIO ports A/B/C, PPS, input capture 1/2, output compare 1/2, the DSP MAC class (MAC/MPY/MPY.N/MSC/CLR/MOVSAC/LAC/SAC/SAC.R with X/Y prefetches, write-back, CORCON saturation/rounding and OA/OB/SA/SB), Motor Control PWM 1 (edge-aligned/single-event/center-aligned time base, three duty generators with buffering, complementary/independent pairs with dead time, P1OVDCON override, FLTA1 fault states, PWM1IF postscaling), QEI1 (x2/x4 decoding, POS1CNT/MAX1CNT, match/index resets with IMV, UPDN, CNTERR/CEID, digital filter, 16-bit timer), ADC1 (10/12-bit, FORM formats, SAMP/DONE/ASAM, manual/TMR3/PWM1/internal triggers, CHPS, CSCNA scan, BUFM, SMPI, TAD/SAMC), SPI1 (master/slave, 8/16-bit, prescalers, SPIROV, loopback device) and I2C1 (master start/restart/stop, ACKSTAT, BRG, TMP102 attach, slave register/test seams). Four committed XC16 v1.70 firmwares boot on the model: xc16-uart-smoke.c prints `HI` (crates/core/tests/pic24_xc16_elf_boot.rs), xc16-dsp-mac.c runs the DS70000157G example-1 MAC sequence (crates/core/tests/pic24_xc16_dsp.rs), xc16-m2-pwm-qei.c configures PWM1+QEI1 with injected quadrature edges (crates/core/tests/pic24_xc16_m2.rs) and xc16-m3-adc-spi-i2c.c samples AN4, loops SPI1 and reads the TMP102 (crates/core/tests/pic24_xc16_m3.rs); the hand fixture runs in the PR shards (crates/core/tests/pic24_m0_smoke.rs) and through examples/dspic33fj32mc204/io-smoke.yaml in strict_onboarding. The DSP accumulator arithmetic (ADD/SUB on ACCA/ACCB) and PSV/EDS remain unmodeled (docs/pic24-m0-reference.md), so no advanced blocks exist to list._
+_M0 + M1a + M1b + M1c + M2 + M3 bring-up: boot (PC 0 -> reset GOTO) with UART1 TX, timers T1/T2/T3, the interrupt fabric (IVT/AIVT vector fetch, IFS0/IEC0/IPC0-2, IFS1/IEC1/IPC3-4, IFS3/IPC14-15 sources), GPIO ports A/B/C, PPS, input capture 1/2, output compare 1/2, the DSP MAC class (MAC/MPY/MPY.N/MSC/CLR/MOVSAC/LAC/SAC/SAC.R with X/Y prefetches, write-back, CORCON saturation/rounding and OA/OB/SA/SB), Motor Control PWM 1 (edge-aligned/single-event/center-aligned time base, three duty generators with buffering, complementary/independent pairs with dead time, P1OVDCON override, FLTA1 fault states, PWM1IF postscaling), QEI1 (x2/x4 decoding, POS1CNT/MAX1CNT, match/index resets with IMV, UPDN, CNTERR/CEID, digital filter, 16-bit timer), ADC1 (10/12-bit, FORM formats, SAMP/DONE/ASAM, manual/TMR3/PWM1/internal triggers, CHPS, CSCNA scan, BUFM, SMPI, TAD/SAMC), SPI1 (master/slave, 8/16-bit, prescalers, SPIROV, loopback device) and I2C1 (master start/restart/stop, ACKSTAT, BRG, TMP102 attach, slave register/test seams). Four committed XC16 v1.70 firmwares boot on the model: xc16-uart-smoke.c prints `HI` (crates/core/tests/pic/pic24_xc16_elf_boot.rs), xc16-dsp-mac.c runs the DS70000157G example-1 MAC sequence (crates/core/tests/pic/pic24_xc16_dsp.rs), xc16-m2-pwm-qei.c configures PWM1+QEI1 with injected quadrature edges (crates/core/tests/pic/pic24_xc16_m2.rs) and xc16-m3-adc-spi-i2c.c samples AN4, loops SPI1 and reads the TMP102 (crates/core/tests/pic/pic24_xc16_m3.rs); the hand fixture runs in the PR shards (crates/core/tests/pic/pic24_m0_smoke.rs) and through examples/dspic33fj32mc204/io-smoke.yaml in strict_onboarding. The DSP accumulator arithmetic (ADD/SUB on ACCA/ACCB) and PSV/EDS remain unmodeled (docs/pic24-m0-reference.md), so no advanced blocks exist to list._
 
 ### `dspic33fj32mc202`
 
-_M0 + M1 + M2 + M3 bring-up on the 28-pin sibling of the dsPIC33FJ32MC204: boot (PC 0 -> reset GOTO) and UART1 TX; the 28-pin GPIO package (RA0-RA4, RB0-RB15, no PORTC; TRIS/LAT/ODC masks derived from the descriptor's pic24_gpio pads); the shared T1 timer, Motor Control PWM 1 (complementary pair with dead time on RB14/RB15) and QEI1 (x4 index reset, QEA/QEB/INDX on RB0/RB1/RB2) on 202 package pins; and the shared ADC1/SPI1/I2C1 models on the 202's AN0-AN5 analog set (AN0=RA0, AN1=RA1, AN2=RB0..AN5=RB3; AN6-AN8 are RC0-RC2 and absent on the 28-pin package), SPI1 loopback and I2C1 TMP102 at 0x48. Four real XC16 v1.70 firmwares: xc16-uart-smoke.c prints `HI` and toggles LATB0 (crates/core/tests/pic24_xc16_202_smoke.rs); xc16-m1-gpio.c prints `G1`, makes PORTA/PORTB outputs and toggles RA0/RB0 (crates/core/tests/pic24_xc16_202_m1.rs), including the reset masks and pad levels; xc16-m2-pwm-qei.c waits on T1IF and configures PWM1+QEI1 (crates/core/tests/pic24_xc16_202_m2.rs), with injected quadrature edges, PWM pad checks and the direction-aware index reset; xc16-m3-adc-spi-i2c.c samples AN4 (RB2), shifts 0xA5 through SPI1, reads the TMP102 at 0x48 and prints `M3 OK` (crates/core/tests/pic24_xc16_202_m3.rs), with the 0xBEEF completion marker. The 202 shares the 204's PIC24/dsPIC33F core, 32 KB flash / 2 KB SRAM, UART1 and instruction set. The 202 track now covers M0-M3 with nothing left in that range; there is no silicon capture, so the results are simulation-derived only._
+_M0 + M1 + M2 + M3 bring-up on the 28-pin sibling of the dsPIC33FJ32MC204: boot (PC 0 -> reset GOTO) and UART1 TX; the 28-pin GPIO package (RA0-RA4, RB0-RB15, no PORTC; TRIS/LAT/ODC masks derived from the descriptor's pic24_gpio pads); the shared T1 timer, Motor Control PWM 1 (complementary pair with dead time on RB14/RB15) and QEI1 (x4 index reset, QEA/QEB/INDX on RB0/RB1/RB2) on 202 package pins; and the shared ADC1/SPI1/I2C1 models on the 202's AN0-AN5 analog set (AN0=RA0, AN1=RA1, AN2=RB0..AN5=RB3; AN6-AN8 are RC0-RC2 and absent on the 28-pin package), SPI1 loopback and I2C1 TMP102 at 0x48. Four real XC16 v1.70 firmwares: xc16-uart-smoke.c prints `HI` and toggles LATB0 (crates/core/tests/pic/pic24_xc16_202_smoke.rs); xc16-m1-gpio.c prints `G1`, makes PORTA/PORTB outputs and toggles RA0/RB0 (crates/core/tests/pic/pic24_xc16_202_m1.rs), including the reset masks and pad levels; xc16-m2-pwm-qei.c waits on T1IF and configures PWM1+QEI1 (crates/core/tests/pic/pic24_xc16_202_m2.rs), with injected quadrature edges, PWM pad checks and the direction-aware index reset; xc16-m3-adc-spi-i2c.c samples AN4 (RB2), shifts 0xA5 through SPI1, reads the TMP102 at 0x48 and prints `M3 OK` (crates/core/tests/pic/pic24_xc16_202_m3.rs), with the 0xBEEF completion marker. The 202 shares the 204's PIC24/dsPIC33F core, 32 KB flash / 2 KB SRAM, UART1 and instruction set. The 202 track now covers M0-M3 with nothing left in that range; there is no silicon capture, so the results are simulation-derived only._
 
 ### `pic16f1829`
 
-_L1 smoke, SIM-DERIVED; no beyond-rubric content. First enhanced mid-range PIC16 part, on the PIC16 core's new enhanced mode (49 instructions: MOVLB/MOVLP, BRA/BRW/CALLW, ADDFSR, MOVIW/MOVWI in all forms, LSLF/LSRF/ASRF, ADDWFC/SUBWFB, RESET): exact PIC16F1829 descriptor (DS40001440E) with 8K words of flash, 32 BSR banks with the core registers and 0x70-0x7F common RAM in each, FSR access to banked, linear (0x2000) and program-flash (0x8000) space, a 16-level stack with STKPTR/TOS and STVREN overflow/underflow reset, and hardware context save into the bank-31 shadows. Real SDCC 4.4.0 C firmware boots through its C runtime and prints a banner on the EUSART TXREG (0x19A), sets LATA5, reads RA5 back and toggles it, sums a stack buffer through FSR/MOVIW, takes three software INT interrupts and then TMR0 overflow interrupts that preempt a checked work loop. Its ISR has no software context save, so wrong shadow restore fails the run (crates/core/tests/pic16f1829_smoke.rs, examples/pic16f1829/io-smoke.yaml). EUSART RX and baud timing, TMR1/2/4/6, CCP/ECCP, MSSP, ADC, comparators, DAC, CPS, data EEPROM, WDT, IOC, clock switching and CONFIG decoding beyond STVREN are not modelled._
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. First enhanced mid-range PIC16 part, on the PIC16 core's new enhanced mode (49 instructions: MOVLB/MOVLP, BRA/BRW/CALLW, ADDFSR, MOVIW/MOVWI in all forms, LSLF/LSRF/ASRF, ADDWFC/SUBWFB, RESET): exact PIC16F1829 descriptor (DS40001440E) with 8K words of flash, 32 BSR banks with the core registers and 0x70-0x7F common RAM in each, FSR access to banked, linear (0x2000) and program-flash (0x8000) space, a 16-level stack with STKPTR/TOS and STVREN overflow/underflow reset, and hardware context save into the bank-31 shadows. Real SDCC 4.4.0 C firmware boots through its C runtime and prints a banner on the EUSART TXREG (0x19A), sets LATA5, reads RA5 back and toggles it, sums a stack buffer through FSR/MOVIW, takes three software INT interrupts and then TMR0 overflow interrupts that preempt a checked work loop. Its ISR has no software context save, so wrong shadow restore fails the run (crates/core/tests/pic/pic16f1829_smoke.rs, examples/pic16f1829/io-smoke.yaml). EUSART RX and baud timing, TMR1/2/4/6, CCP/ECCP, MSSP, ADC, comparators, DAC, CPS, data EEPROM, WDT, IOC, clock switching and CONFIG decoding beyond STVREN are not modelled._
 
 ### `pic16f877a`
 
-_L1 smoke, SIM-DERIVED; no beyond-rubric content. First PIC16 part, on a new PIC16 classic mid-range core (35 instructions): exact PIC16F877A descriptor (DS39582B) with 8K words of flash, 368 B SRAM in four banks with the 0x70-0x7F shared block, and an 8-level circular stack. Real SDCC 4.4.0 pic14 C firmware boots through its C runtime: bank switching via STATUS.RP0, shared-RAM locals, and generic-pointer string reads as computed MOVWF PCLATH, MOVWF PCL jumps into RETLW tables. It prints a banner on the USART TXREG (0x19), sets RB0, reads it back and toggles it (crates/core/tests/pic16f877a_smoke.rs, examples/pic16f877a/io-smoke.yaml). USART RX and baud timing, TMR1/2 (TMR0 timer mode is modelled but unused by this smoke), CCP, MSSP, ADC, comparators, data EEPROM, WDT, PSP and CONFIG decoding are not modelled._
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. First PIC16 part, on a new PIC16 classic mid-range core (35 instructions): exact PIC16F877A descriptor (DS39582B) with 8K words of flash, 368 B SRAM in four banks with the 0x70-0x7F shared block, and an 8-level circular stack. Real SDCC 4.4.0 pic14 C firmware boots through its C runtime: bank switching via STATUS.RP0, shared-RAM locals, and generic-pointer string reads as computed MOVWF PCLATH, MOVWF PCL jumps into RETLW tables. It prints a banner on the USART TXREG (0x19), sets RB0, reads it back and toggles it (crates/core/tests/pic/pic16f877a_smoke.rs, examples/pic16f877a/io-smoke.yaml). USART RX and baud timing, TMR1/2 (TMR0 timer mode is modelled but unused by this smoke), CCP, MSSP, ADC, comparators, data EEPROM, WDT, PSP and CONFIG decoding are not modelled._
 
 ### `pic18f4520`
 
-_L1 smoke, SIM-DERIVED; no beyond-rubric content. First PIC18 part: exact PIC18F4520 descriptor (DS39631E) with 32 KB flash, a 31-level stack and the 0x80 Access Bank split. Real SDCC 4.4.0 C firmware boots through its C runtime: the FSR1/FSR2 software stack via MOVFF on the indirect aliases, TBLRD string reads and MULLW. It prints a banner on the EUSART TXREG (0xFAD), sets RB0 through LATB, reads it back and toggles it (crates/core/tests/pic18f4520_smoke.rs, examples/pic18f4520/io-smoke.yaml). EUSART RX and baud timing, timers, CCP/ECCP, MSSP, ADC, data EEPROM, WDT, CONFIG decoding and XINST are not modelled._
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. First PIC18 part: exact PIC18F4520 descriptor (DS39631E) with 32 KB flash, a 31-level stack and the 0x80 Access Bank split. Real SDCC 4.4.0 C firmware boots through its C runtime: the FSR1/FSR2 software stack via MOVFF on the indirect aliases, TBLRD string reads and MULLW. It prints a banner on the EUSART TXREG (0xFAD), sets RB0 through LATB, reads it back and toggles it (crates/core/tests/pic/pic18f4520_smoke.rs, examples/pic18f4520/io-smoke.yaml). EUSART RX and baud timing, timers, CCP/ECCP, MSSP, ADC, data EEPROM, WDT, CONFIG decoding and XINST are not modelled._
 
 ### `pic24f04ka200`
 
-_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F04KA200 descriptor (DS30009937C): 14-pin package, 4 KB flash, 512 B SRAM, PORTA 0x007F / PORTB 0xC310 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f04ka200/io-smoke.yaml). Data EEPROM (absent), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F04KA200 descriptor (DS30009937C): 14-pin package, 4 KB flash, 512 B SRAM, PORTA 0x007F / PORTB 0xC310 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic/pic24_ka_smoke.rs, examples/pic24f04ka200/io-smoke.yaml). Data EEPROM (absent), UART2, timers, ADC, SPI and I2C are not exercised for this part._
 
 ### `pic24f04ka201`
 
-_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F04KA201 descriptor (DS30009937C): 20-pin package, 4 KB flash, 512 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f04ka201/io-smoke.yaml). Data EEPROM (absent), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F04KA201 descriptor (DS30009937C): 20-pin package, 4 KB flash, 512 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic/pic24_ka_smoke.rs, examples/pic24f04ka201/io-smoke.yaml). Data EEPROM (absent), UART2, timers, ADC, SPI and I2C are not exercised for this part._
 
 ### `pic24f08ka101`
 
-_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F08KA101 descriptor (DS39927C): 20-pin package, 8 KB flash, 1536 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f08ka101/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F08KA101 descriptor (DS39927C): 20-pin package, 8 KB flash, 1536 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic/pic24_ka_smoke.rs, examples/pic24f08ka101/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
 
 ### `pic24f08ka102`
 
-_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F08KA102 descriptor (DS39927C): 28-pin package, 8 KB flash, 1536 B SRAM, PORTA 0x00FF / PORTB 0xFFFF / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f08ka102/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F08KA102 descriptor (DS39927C): 28-pin package, 8 KB flash, 1536 B SRAM, PORTA 0x00FF / PORTB 0xFFFF / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic/pic24_ka_smoke.rs, examples/pic24f08ka102/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
 
 ### `pic24f16ka101`
 
-_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F16KA101 descriptor (DS39927C): 20-pin package, 16 KB flash, 1536 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f16ka101/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F16KA101 descriptor (DS39927C): 20-pin package, 16 KB flash, 1536 B SRAM, PORTA 0x007F / PORTB 0xF397 / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic/pic24_ka_smoke.rs, examples/pic24f16ka101/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
 
 ### `pic24f16ka102`
 
-_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F16KA102 descriptor (DS39927C): 28-pin package, 16 KB flash, 1536 B SRAM, PORTA 0x00FF / PORTB 0xFFFF / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic24_ka_smoke.rs, examples/pic24f16ka102/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
+_L1 smoke, SIM-DERIVED; no beyond-rubric content. Exact PIC24F16KA102 descriptor (DS39927C): 28-pin package, 16 KB flash, 1536 B SRAM, PORTA 0x00FF / PORTB 0xFFFF / no PORTC, UART1 at 0x0220. A real XC16 v1.70 ELF prints `HI` on UART1 and toggles RA0 (crates/core/tests/pic/pic24_ka_smoke.rs, examples/pic24f16ka102/io-smoke.yaml). Data EEPROM (512 B at 0x7FFE00), UART2, timers, ADC, SPI and I2C are not exercised for this part._
 
 ### `litex-vexriscv`
 
@@ -690,15 +882,15 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot from 0x08000000, the new 
 
 ### `cc2538sf53`
 
-_L1 smoke plus a stock Contiki-NG boot, SIM-DERIVED (not yet L2: no repeated-CI history); beyond the rubric the flash controller and the AES/SHA-256 cryptoprocessor are firmware-driven. UNMODIFIED upstream Contiki-NG v4.9 examples/hello-world (TARGET=cc2538dk, full RPL Lite / 6LoWPAN / CSMA netstack) boots and prints its banner, the link-layer address from the info page's primary IEEE address and "Hello, world" every 10 s (tests/fixtures/cc2538dk-contiki-hello.elf, examples/cc2538dk/contiki-hello.yaml). It runs through the in-tree clean-room ROM (SWRU333A CCA boot to VTOR 0x0020_2000, the 0x48 utility API memcpy/memset; NOT a TI dump), SYS_CTRL CLOCK_STA.SYNC_32K, the RF core alone in an empty channel (ISRXON, timed FSM, RSSI_VALID/CCA, RFRND, MTCTRL), the sleep-timer count and SysTick; the sleep-timer compare IRQ is not used by this firmware and is covered by cc2538_sleep_timer_irq. The flash controller (FLASH_CTRL page erase and FCTL/FADDR/FWDATA write sequence, NOR AND rule, CCA lock bits) behind the ROM's PageErase/ProgramFlash runs UNMODIFIED Contiki-NG examples/storage/cfs-coffee test-cfs (CFS test 1/2 completed with 0 errors) and example-coffee (examples/cc2538dk/contiki-test-cfs.yaml, contiki-coffee.yaml), and the steps of Renode's cc2538_flash_controller.robot (examples/cc2538dk/flash-controller.yaml). The AES/SHA-256 cryptoprocessor (two-channel DMA, key store, AES ECB/CBC/CTR/CBC-MAC/CCM/GCM at 128/192/256 bits, SHA-256, level IRQ 143) runs the UNMODIFIED Contiki-NG cc2538-common/crypto suite, every vector OK (examples/cc2538dk/crypto-{ecb,cbc,ctr,cbc-mac,gcm,ccm,sha256}.yaml); cbc, cbc-mac, ctr and ccm are a superset of Renode's cc2538_cryptoprocessor.robot. Three nodes on a shared 802.15.4 air run the UNMODIFIED Contiki-NG examples/rpl-udp (one udp-server RPL root, two udp-clients; tests/fixtures/cc2538dk-contiki-udp-{server,client}.elf, crates/core/tests/cc2538_rpl_udp.rs), the topology of Renode's cc2538_rpl-udp.robot: both clients join the DODAG and get three requests echoed, through the RF core's TX/RX FIFOs, frame filtering, AUTOACK and FIFOP IRQ 141 and the uDMA (software transfers, IRQ 46). The L1 smoke (tests/fixtures/cc2538dk-smoke.elf, examples/cc2538dk/io-smoke.yaml) still proves the SYS_CTRL reset clock and RCGCUART gate, the PL011 UART0 console and the LED2-LED4 address-masked GPIO_DATA walk plus the key pull-ups. The air is lossless (no path loss, range or collisions) and the RF error IRQ, CSP and MAC-timer count are not modelled; the uDMA moves only on software requests; SYS_CTRL gating, the IOC, GPIO interrupts and the watchdog are not modelled; PKA, SSI, I2C, GPTimers, USB and ADC are declared stubs (examples/cc2538dk/VALIDATION.md)._
+_L1 smoke plus a stock Contiki-NG boot, SIM-DERIVED (not yet L2: no repeated-CI history); beyond the rubric the flash controller and the AES/SHA-256 cryptoprocessor are firmware-driven. UNMODIFIED upstream Contiki-NG v4.9 examples/hello-world (TARGET=cc2538dk, full RPL Lite / 6LoWPAN / CSMA netstack) boots and prints its banner, the link-layer address from the info page's primary IEEE address and "Hello, world" every 10 s (tests/fixtures/cc2538dk-contiki-hello.elf, examples/cc2538dk/contiki-hello.yaml). It runs through the in-tree clean-room ROM (SWRU333A CCA boot to VTOR 0x0020_2000, the 0x48 utility API memcpy/memset; NOT a TI dump), SYS_CTRL CLOCK_STA.SYNC_32K, the RF core alone in an empty channel (ISRXON, timed FSM, RSSI_VALID/CCA, RFRND, MTCTRL), the sleep-timer count and SysTick; the sleep-timer compare IRQ is not used by this firmware and is covered by cc2538_sleep_timer_irq. The flash controller (FLASH_CTRL page erase and FCTL/FADDR/FWDATA write sequence, NOR AND rule, CCA lock bits) behind the ROM's PageErase/ProgramFlash runs UNMODIFIED Contiki-NG examples/storage/cfs-coffee test-cfs (CFS test 1/2 completed with 0 errors) and example-coffee (examples/cc2538dk/contiki-test-cfs.yaml, contiki-coffee.yaml), and the steps of Renode's cc2538_flash_controller.robot (examples/cc2538dk/flash-controller.yaml). The AES/SHA-256 cryptoprocessor (two-channel DMA, key store, AES ECB/CBC/CTR/CBC-MAC/CCM/GCM at 128/192/256 bits, SHA-256, level IRQ 143) runs the UNMODIFIED Contiki-NG cc2538-common/crypto suite, every vector OK (examples/cc2538dk/crypto-{ecb,cbc,ctr,cbc-mac,gcm,ccm,sha256}.yaml); cbc, cbc-mac, ctr and ccm are a superset of Renode's cc2538_cryptoprocessor.robot. Three nodes on a shared 802.15.4 air run the UNMODIFIED Contiki-NG examples/rpl-udp (one udp-server RPL root, two udp-clients; tests/fixtures/cc2538dk-contiki-udp-{server,client}.elf, crates/core/tests/cc2538_rpl_udp.rs), the topology of Renode's cc2538_rpl-udp.robot: both clients join the DODAG and get three requests echoed, through the RF core's TX/RX FIFOs, frame filtering, AUTOACK and FIFOP IRQ 141 and the uDMA (software transfers, IRQ 46). The L1 smoke (tests/fixtures/cc2538dk-smoke.elf, examples/cc2538dk/io-smoke.yaml) still proves the SYS_CTRL reset clock and RCGCUART gate, the PL011 UART0 console and the LED2-LED4 address-masked GPIO_DATA walk plus the key pull-ups. The air is lossless (no path loss, range or collisions) and the RF error IRQ, CSP and MAC-timer count are not modelled; the uDMA moves only on software requests; SYS_CTRL gating, the IOC, GPIO interrupts and the watchdog are not modelled; SSI0/SSI1 are modelled in master mode only and the L1 smoke runs an SSI0 loopback self-test (TX-FIFO queueing, 8/16-bit frames, RX overrun); I2CM (byte-command master) and GPTimer0-3 (one-shot/periodic, split 16-bit, prescale) are modelled and exercised by the imported-system onboarding smoke, as is a full PKA SRAM fill/readback (plain RAM); the PKA engine, I2CS, USB and ADC are declared stubs (examples/cc2538dk/VALIDATION.md)._
 
 ### `r7fa6m5bh`
 
-_L1 UART+LED smoke, SIM-DERIVED; no beyond-rubric content. Boot from the 0x0 code-flash vector table, the SCI0 console (P411/P410, 9600 from BRR 25), the LED1-LED3 walk (P006-P008) with PCNTR1 PODR readback and the PWPR-gated PmnPFS PCR pull-up that drives the S1/S2 levels are proven by tests/fixtures/ek-ra6m5-smoke.elf and examples/ek-ra6m5/io-smoke.yaml. The firmware also executes the PRCR-guarded SCKDIVCR write on the reset 8-MHz MOCO, the MSTPB31 release and the PmnPFS PSEL/PMR mux writes, but none of them is checked: clock generation, module stop, ICU event linking and the PFS peripheral mux are not modelled; MSTP, ICU, DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS/USBHS, IIC, CANFD, AGT, ETHERC, SPI, GPT, ADC12 and FACI are declared stubs and SCI1-9 and the other blocks are not mapped (examples/ek-ra6m5/VALIDATION.md), so no advanced blocks exist to list._
+_L1 UART+LED smoke, SIM-DERIVED; no beyond-rubric content. Boot from the 0x0 code-flash vector table, the SCI0 console (P411/P410, 9600 from BRR 25), the LED1-LED3 walk (P006-P008) with PCNTR1 PODR readback and the PWPR-gated PmnPFS PCR pull-up that drives the S1/S2 levels are proven by tests/fixtures/ek-ra6m5-smoke.elf and examples/ek-ra6m5/io-smoke.yaml. The exact-system smoke `examples/renode-onboarding/renesas-r7fa6m5bh-tier1-smoke.yaml` also checks the SVD-derived MSTPCRA reset, MSTPCRB write/readback and MSTPCRE reset. Module-stop gating, clock generation, ICU event linking and the PFS peripheral mux are not modelled; ICU, DMAC/DTC, ELC, RTC, IWDT/WDT, USBFS/USBHS, IIC, CANFD, AGT, ETHERC, SPI, GPT, ADC12 and FACI remain declared stubs, and SCI1-9 and the other blocks are not mapped (examples/ek-ra6m5/VALIDATION.md)._
 
 ### `r7fa8m1ah`
 
-_L1 UART+LED smoke, SIM-DERIVED; no beyond-rubric content. Boot from the 0x02000000 code-flash vector table, the SCICKCR CKSREQ/CKSRDY clock-switch handshake (SCICKCR reads back 01 = MOCO), the PWPRS-gated PmnPFS PCR pull-up that drives the S1/S2 levels, the SCI9 SCI_B console (PA14/PA15, 9600 from CCR2.BRR 25, CCR3 8N1 LSB-first readback, CESR.TIST/RIST after CCR0.TE/RE) and the LED1-LED3 walk (P600/P414/P107) with PCNTR1 PODR readback are proven by tests/fixtures/ek-ra8m1-smoke.elf and examples/ek-ra8m1/io-smoke.yaml. The firmware also executes the PRCR write, the MSTPB22 release and the PmnPFS PSEL/PMR mux writes, but none of them is checked: clock generation (no rate is derived from SCICKCR), module stop, ICU event linking, TrustZone and the PFS peripheral mux are not modelled; MSTP, ICU, DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, AGT, USBFS/USBHS, IIC, GPT, ADC12, ETHERC, SPI and CANFD are declared stubs and SCI0-8 and the other blocks are not mapped (examples/ek-ra8m1/VALIDATION.md), so no advanced blocks exist to list._
+_L1 UART+LED smoke, SIM-DERIVED; no beyond-rubric content. Boot from the 0x02000000 code-flash vector table, the SCICKCR CKSREQ/CKSRDY clock-switch handshake (SCICKCR reads back 01 = MOCO), the PWPRS-gated PmnPFS PCR pull-up that drives the S1/S2 levels, the SCI9 SCI_B console (PA14/PA15, 9600 from CCR2.BRR 25, CCR3 8N1 LSB-first readback, CESR.TIST/RIST after CCR0.TE/RE) and the LED1-LED3 walk (P600/P414/P107) with PCNTR1 PODR readback are proven by tests/fixtures/ek-ra8m1-smoke.elf and examples/ek-ra8m1/io-smoke.yaml. The exact-system smoke `examples/renode-onboarding/renesas-r7fa8m1ah-tier1-smoke.yaml` also checks the SVD-derived MSTPCRA reset, MSTPCRB write/readback and MSTPCRE reset. Module-stop gating, clock generation (no rate is derived from SCICKCR), ICU event linking, TrustZone and the PFS peripheral mux are not modelled; ICU, DMAC/DTC, FCACHE, FACI, ELC, RTC, IWDT/WDT, AGT, USBFS/USBHS, IIC, GPT, ADC12, ETHERC, SPI and CANFD remain declared stubs, and SCI0-8 and the other blocks are not mapped (examples/ek-ra8m1/VALIDATION.md)._
 
 ### `same70q21b`
 
@@ -706,7 +898,7 @@ _L1 USART+LED smoke, SIM-DERIVED; no beyond-rubric content. Boot from the 0x0040
 
 ### `amap42kp`
 
-_L1 UART+LED smoke plus stock Zephyr v3.7.0 hello_world (tests/fixtures/amap42kp-zephyr-hello.elf, examples/apollo4p-evb/zephyr-hello.yaml: the AmbiqSuite HAL low-power init through PWRCTRL, the CPU block DAXI flush with DAXIREADY, SYNC_READ, and the clean-room boot-ROM br_util_delay_cycles), SIM-DERIVED; no beyond-rubric content. Boot from the post-SBL vector table at 0x00018000 (reset_vector_offset; the secure bootloader is not modelled, the boot ROM only as a clean-room helper table), the PWRCTRL UART0 power-domain handshake (DEVPWREN write, DEVPWRSTATUS polled until PWRSTUART0) and the LP performance mode read from MCUPERFREQ, the PADKEY-gated PINCFG writes, the PL011-layout UART0 console (115200 from IBRD 13 / FBRD 1) and the LED0-LED2 walk (GPIO30/90/97, active low) through single-bit WTC/WTS strobes with RD readback and the WT latch check, plus the BTN0/BTN1 PULLCFG pull-up levels, are proven by tests/fixtures/apollo4p-evb-smoke.elf and examples/apollo4p-evb/io-smoke.yaml. The firmware also executes the UART0 CR.CLKEN/CLKSEL (24 MHz) write and the GPIO60/GPIO47 FNCSEL 4 UART mux, but neither is checked: the PL011 model does not store CR and the GPIO model does not route non-GPIO functions; power domains have no effect on their peripherals; CLKGEN, MCUCTRL, RSTGEN, IOM0-7, MSPI0-2, ADC, timers, STIMER, RTC, WDT, security, crypto, GPU/display, SDIO, USB and audio are declared stubs (examples/apollo4p-evb/VALIDATION.md), so no advanced blocks exist to list._
+_L1 UART+LED smoke plus stock Zephyr v3.7.0 hello_world (tests/fixtures/amap42kp-zephyr-hello.elf, examples/apollo4p-evb/zephyr-hello.yaml: the AmbiqSuite HAL low-power init through PWRCTRL, the CPU block DAXI flush with DAXIREADY, SYNC_READ, and the clean-room boot-ROM br_util_delay_cycles), SIM-DERIVED; no beyond-rubric content. Boot from the post-SBL vector table at 0x00018000 (reset_vector_offset; the secure bootloader is not modelled, the boot ROM only as a clean-room helper table), the PWRCTRL UART0 power-domain handshake (DEVPWREN write, DEVPWRSTATUS polled until PWRSTUART0) and the LP performance mode read from MCUPERFREQ, the PADKEY-gated PINCFG writes, the PL011-layout UART0 console (115200 from IBRD 13 / FBRD 1; UARTCR readback) and the LED0-LED2 walk (GPIO30/90/97, active low) through single-bit WTC/WTS strobes with RD readback and the WT latch check, plus the BTN0/BTN1 PULLCFG pull-up levels, are proven by tests/fixtures/apollo4p-evb-smoke.elf and examples/apollo4p-evb/io-smoke.yaml. The source-built `examples/apollo4p-evb/io-smoke.yaml` and exact imported-system `examples/renode-onboarding/ambiq-apollo4-smoke.yaml` inject UART byte R, check PL011 RIS=0x30/MIS=0x10 and NVIC IRQ 15 pending, then read DR and check deassertion. The GPIO60/GPIO47 FNCSEL 4 UART mux is stored but the GPIO model does not route non-GPIO functions; power domains have no effect on their peripherals; CLKGEN, MCUCTRL, RSTGEN, IOM0-7, MSPI0-2, ADC, timers, STIMER, RTC, WDT, security, crypto, GPU/display, SDIO, USB and audio are declared stubs (examples/apollo4p-evb/VALIDATION.md), so no advanced blocks exist to list._
 
 ### `mk64f12`
 
@@ -755,3 +947,13 @@ _L1 smoke, SIM-DERIVED; no beyond-rubric content. Boot, the RV32IMC core (a real
 ### `xck26-rpu`
 
 _L1 + stock RTOS, SIM-DERIVED. First Cortex-R part: the Zynq UltraScale+ XCK26 RPU core 0 (Cortex-R5F, PMSAv7 16-region MPU, VFPv3-D16 on the pinned tlib engine) runs unmodified Zephyr v4.1.0 hello_world, synchronization (TTC0 match IRQs through the RPU GIC, WFI idle) and tests/kernel/common (12 suites, 61 pass / 2 skip / 0 fail of 63, userspace syscalls through the MPU) on the PS UART1 console (examples/kv260-r5, native CLI). Only the GIC, Cadence UART0/1 and TTC0 are installed (native_rpu_peripherals), so no advanced blocks exist to list._
+
+### `at32f421g8u7`
+
+_Bare AT32F421G8U7 (QFN28), reference-derived, no silicon capture. The committed Artery BSP 2.1.9 SDK smoke (examples/at32f421g8u7/io-smoke.yaml, PR-gated coverage-matrix cell, and the vendor::at32f421_contract Rust gate) switches CRM to the 120 MHz PLL, erases and programs the last flash sector, copies four words by DMA1 memory-to-memory and toggles PA5 from real TMR6 interrupts over USART2. The comparator/EXINT line-21 path, ADC ordinary scan with DMA handshake and the shared IWDG expiry reset are exercised only by register-level unit tests._
+
+**Advanced peripherals — unit-tested only** (no firmware drives them): `{'p': 'CMP', 'ev': 'crates/core/src/peripherals/at32f421.rs; crates/core/tests/vendor/at32f421_contract.rs', 'note': 'Mux/polarity/lock and EXINT line-21 rising/falling routing; no firmware drives it yet.'}`
+
+### `mspm0g3507`
+
+_Local UART0 smoke; no beyond-rubric content. The LP-MSPM0G3507 profile boots a bare-metal image and captures LP_MSPM0G3507_UART0_OK through the TXDATA register path (examples/lp-mspm0g3507-launchpad/evidence/). This proves core execution and register-side TX only; GPRCM, IOMUX/pad routing, UART timing/FIFO, GPIO and the other LaunchPad peripherals are outside the profile (examples/lp-mspm0g3507-launchpad/VALIDATION.md), so no beyond-rubric blocks exist to list._

@@ -47,7 +47,7 @@ Expected memory colours and addresses do not call the model mapping or decoder.
 
 ## Acceptance and exclusions
 
-Require all eight tests in `crates/core/tests/st7735_sam_guest.rs` to execute
+Require all eight tests in `crates/core/tests/samd/st7735_sam_guest.rs` to execute
 with zero failures, ignored or filtered tests, both feature-off and
 `event-scheduler`. Preserve original capture hashes and all existing displays,
 live driver checks, workspace/browser checks and enabled gates. Record exact

@@ -1,17 +1,20 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
+# Narrowed from Renode's riscv_virt.repl: this engine models the RV32IMAC
+# execution path, NS16550 polling TX, and only the 128 KiB DRAM aperture used
+# by the onboarding smoke. The source platform maps 2 GiB of DRAM and also has
+# a PLIC and CLINT; this descriptor does not claim those unmapped surfaces or
+# the UART interrupt path.
+# Source: https://github.com/renode/renode/blob/master/platforms/cpus/riscv_virt.repl
 
 name: riscv_virt
-arch: arm
+arch: riscv
+core: rv32imac
+flash_boot_alias: false
 flash:
-  base: 2147483648
-  size: 2147483648B
+  base: 0
+  size: 0B
 ram:
   base: 2147483648
-  size: 2147483648B
+  size: 128KB
 peripherals:
 - id: uart0
   type: ns16550

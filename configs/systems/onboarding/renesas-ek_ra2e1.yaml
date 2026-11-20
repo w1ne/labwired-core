@@ -6,3 +6,39 @@
 
 name: renesas-ek_ra2e1
 chip: ../../chips/onboarding/renesas-ek_ra2e1.yaml
+# Board wiring from Renode platforms/boards/renesas-ek_ra2e1.repl: LED1 blue
+# P915, LED2 green P914, LED3 red P913; S1 P004, S2 P015. The EK-RA2E1 buttons
+# switch to ground against a pull-up, so they are active low here (Renode's
+# Button model drives the pin high when pressed; the polarity is the board's,
+# not Renode's).
+board_io:
+  - id: "led_blue"
+    kind: "led"
+    peripheral: "port9"
+    pin: 15
+    signal: "output"
+    active_high: true
+  - id: "led_green"
+    kind: "led"
+    peripheral: "port9"
+    pin: 14
+    signal: "output"
+    active_high: true
+  - id: "led_red"
+    kind: "led"
+    peripheral: "port9"
+    pin: 13
+    signal: "output"
+    active_high: true
+  - id: "s1"
+    kind: "button"
+    peripheral: "port0"
+    pin: 4
+    signal: "input"
+    active_high: false
+  - id: "s2"
+    kind: "button"
+    peripheral: "port0"
+    pin: 15
+    signal: "input"
+    active_high: false

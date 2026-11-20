@@ -7,36 +7,36 @@ registers:
   access: READ_WRITE
   reset_value: 117440512
   fields:
-  - name: TIME
-    bit_range:
-    - 23
-    - 0
-    description: Indicates the number of ticks / 2 (see errata RP2040-E1) before a watchdog reset will be triggered
-  - name: PAUSE_JTAG
-    bit_range:
-    - 24
-    - 24
-    description: Pause the watchdog timer when JTAG is accessing the bus fabric
-  - name: PAUSE_DBG0
-    bit_range:
-    - 25
-    - 25
-    description: Pause the watchdog timer when processor 0 is in debug mode
-  - name: PAUSE_DBG1
-    bit_range:
-    - 26
-    - 26
-    description: Pause the watchdog timer when processor 1 is in debug mode
-  - name: ENABLE
-    bit_range:
-    - 30
-    - 30
-    description: When not enabled the watchdog timer is paused
   - name: TRIGGER
     bit_range:
     - 31
     - 31
     description: Trigger a watchdog reset
+  - name: ENABLE
+    bit_range:
+    - 30
+    - 30
+    description: When not enabled the watchdog timer is paused
+  - name: PAUSE_DBG1
+    bit_range:
+    - 26
+    - 26
+    description: Pause the watchdog timer when processor 1 is in debug mode
+  - name: PAUSE_DBG0
+    bit_range:
+    - 25
+    - 25
+    description: Pause the watchdog timer when processor 0 is in debug mode
+  - name: PAUSE_JTAG
+    bit_range:
+    - 24
+    - 24
+    description: Pause the watchdog timer when JTAG is accessing the bus fabric
+  - name: TIME
+    bit_range:
+    - 23
+    - 0
+    description: Indicates the time in usec before a watchdog reset will be triggered
   side_effects: null
 - id: LOAD
   address_offset: 4
@@ -48,7 +48,6 @@ registers:
     bit_range:
     - 23
     - 0
-    description: null
   side_effects: null
 - id: REASON
   address_offset: 8
@@ -56,16 +55,14 @@ registers:
   access: READ_WRITE
   reset_value: 0
   fields:
-  - name: TIMER
-    bit_range:
-    - 0
-    - 0
-    description: null
   - name: FORCE
     bit_range:
     - 1
     - 1
-    description: null
+  - name: TIMER
+    bit_range:
+    - 0
+    - 0
   side_effects: null
 - id: SCRATCH0
   address_offset: 12
@@ -77,7 +74,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: SCRATCH1
   address_offset: 16
@@ -89,7 +85,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: SCRATCH2
   address_offset: 20
@@ -101,7 +96,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: SCRATCH3
   address_offset: 24
@@ -113,7 +107,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: SCRATCH4
   address_offset: 28
@@ -125,7 +118,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: SCRATCH5
   address_offset: 32
@@ -137,7 +129,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: SCRATCH6
   address_offset: 36
@@ -149,7 +140,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
   side_effects: null
 - id: SCRATCH7
   address_offset: 40
@@ -161,34 +151,6 @@ registers:
     bit_range:
     - 31
     - 0
-    description: null
-  side_effects: null
-- id: TICK
-  address_offset: 44
-  size: 32
-  access: READ_WRITE
-  reset_value: 512
-  fields:
-  - name: CYCLES
-    bit_range:
-    - 8
-    - 0
-    description: Total number of clk_tick cycles before the next tick.
-  - name: ENABLE
-    bit_range:
-    - 9
-    - 9
-    description: start / stop tick generation
-  - name: RUNNING
-    bit_range:
-    - 10
-    - 10
-    description: Is the tick generator running?
-  - name: COUNT
-    bit_range:
-    - 19
-    - 11
-    description: 'Count down timer: the remaining number clk_tick cycles before the next tick is generated.'
   side_effects: null
 interrupts: null
 timing: null

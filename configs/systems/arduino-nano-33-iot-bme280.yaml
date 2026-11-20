@@ -1,0 +1,35 @@
+# Arduino Nano 33 IoT (ATSAMD21G18A @ 48 MHz) with an Adafruit BME280
+# breakout. The breakout's default address is 0x77 and it carries its own I2C
+# pull-ups. SDA / SCL connect to A4 / A5 (PB08 / PB09), the variant's Wire
+# pins on SERCOM4. `Serial` is the native USB port as a CDC serial device; the
+# scripted host enumerates it and opens the port as a terminal does.
+#
+# SERCOM roles follow ArduinoCore-samd variants/nano_33_iot: SERCOM4 is the
+# I2C controller here (the chip descriptor carries the Arduino Zero roles).
+# This digital system attaches the sensor model to SERCOM4. It does not model
+# the pull-up voltage or the conversion time. The on-board NINA-W102,
+# ATECC608A and LSM6DS3 are not attached.
+name: arduino-nano-33-iot-bme280
+chip: ../chips/atsamd21g18a.yaml
+external_devices:
+  - id: "bme280"
+    type: "bme280"
+    connection: "sercom4"
+    config:
+      i2c_address: 0x77
+peripherals:
+  - id: "usb"
+    type: "samd21_usb"
+    base_address: 0x41005000
+    config:
+      host: true
+  - id: "sercom4"
+    type: "samd21_sercom_i2cm"
+    base_address: 0x42001800
+board_io:
+  - id: "status_led"
+    kind: "led"
+    peripheral: "gpio_a"
+    pin: 17         # PA17 / Arduino D13 / LED_BUILTIN
+    signal: "output"
+    active_high: true

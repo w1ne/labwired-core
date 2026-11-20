@@ -1,0 +1,10 @@
+# Direct-ELF CPU/RAM/LiteX UART smoke against the exact imported system.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/riscv32imac-unknown-none-elf/release/firmware-litex-zephyr-i2s-smoke"
+  system: "../../configs/systems/onboarding/litex_zephyr_vexriscv_i2s.yaml"
+limits:
+  max_steps: 100000
+assertions:
+  - uart_contains: "LITEX ZEPHYR RV32IMAC UART mul=323 amo=19"
+  - expected_stop_reason: max_steps

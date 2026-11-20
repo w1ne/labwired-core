@@ -16,7 +16,7 @@ MODEL_FILES = [
     "crates/core/src/peripherals/rcc.rs",
     "crates/core/src/peripherals/uart.rs",
     "crates/core/src/peripherals/uart/timed.rs",
-    "crates/core/tests/g0_customer_timing.rs",
+    "crates/core/tests/stm32/g0_customer_timing.rs",
 ]
 
 

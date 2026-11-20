@@ -180,6 +180,18 @@ pub trait Bus {
         0
     }
 
+    /// Sync parking-SPI chip-selects from live GPIO (active-low).
+    /// Return true if a CS/LOAD rising edge was observed.
+    /// AVR calls this after every PORT mirror write, including hardware SPI.
+    fn sync_parking_spi_cs(&mut self) -> bool {
+        false
+    }
+
+    /// True if a parking device accepts CLK, including LOAD-only shift registers.
+    fn parking_spi_accepts_clock(&self) -> bool {
+        false
+    }
+
     /// Is an instruction fetch at `pc` permitted by a memory-protection unit
     /// the bus models? Called by the core only when its 256-byte fetch window
     /// does not already cover `pc`, i.e. once per window refill. That is exact
@@ -519,6 +531,15 @@ pub trait Bus {
     /// nothing. Used by poll-loop proofs. Default: [`Self::fetch_slice`].
     fn plain_memory_slice(&self, addr: u64) -> Option<(u64, u64, &[u8])> {
         self.fetch_slice(addr)
+    }
+
+    /// True when a CPU store of `len` bytes at `addr` would only change the
+    /// bytes [`Self::plain_memory_slice`] serves there: plain RAM, with no
+    /// watch, observer, memory policy or batch stop that a store reaches, and
+    /// no alias in between. Used by poll-loop proofs that allow stores.
+    /// Default: `false` (every store is observable).
+    fn plain_ram_store_unobserved(&self, _addr: u64, _len: u64) -> bool {
+        false
     }
 
     fn fetch_slice(&self, _pc: u64) -> Option<(u64, u64, &[u8])> {

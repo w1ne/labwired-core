@@ -1,0 +1,43 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/h735-telematics-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/rc-oscilloscope-lab/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52832/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/nrf52840/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/andrii/worktrees/labwired-core/renode/examples/tier1-fixture/rp2040/Cargo.toml
+workspace: /home/andrii/worktrees/labwired-core/renode/Cargo.toml
+   Compiling glob v0.3.3
+   Compiling clang-sys v1.9.1
+   Compiling prettyplease v0.2.37
+   Compiling minimal-lexical v0.2.1
+   Compiling nom v7.1.3
+   Compiling libloading v0.8.9
+   Compiling bindgen v0.71.1
+   Compiling cexpr v0.6.0
+   Compiling rustc-hash v2.1.2
+   Compiling bitflags v2.11.1
+   Compiling cmake v0.1.58
+   Compiling pkg-config v0.3.33
+   Compiling unicorn-engine-sys v2.1.5
+   Compiling labwired-config v0.25.0 (/home/andrii/worktrees/labwired-core/renode/crates/config)
+error: failed to run custom build command for `unicorn-engine-sys v2.1.5`
+
+Caused by:
+  process didn't exit successfully: `/home/andrii/worktrees/labwired-core/renode/target/native-system/build/unicorn-engine-sys-05fd64f1d5e9ca18/build-script-build` (exit status: 101)
+  --- stdout
+  cargo:rerun-if-changed=/home/andrii/.cargo/registry/uc.c
+  cargo:rerun-if-changed=/home/andrii/.cargo/registry/list.c
+
+  --- stderr
+  /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicorn-engine-sys-2.1.5/include/unicorn/platform.h:54:10: fatal error: 'stdbool.h' file not found
+
+  thread 'main' (957217) panicked at /home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicorn-engine-sys-2.1.5/build.rs:351:10:
+  Failed to generate bindings: ClangDiagnostic("/home/andrii/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicorn-engine-sys-2.1.5/include/unicorn/platform.h:54:10: fatal error: 'stdbool.h' file not found\n")
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

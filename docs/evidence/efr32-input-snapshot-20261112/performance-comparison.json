@@ -1,0 +1,1445 @@
+{
+  "passing-main": {
+    "run_id": 43287187879,
+    "artifact_id": 13977839033,
+    "archive_sha256": "444e3fd2ffec2ee8adf027164e66532a8fd1963becc338fa4ebfd121d2918686",
+    "members": {
+      "perf-report.txt": {
+        "bytes": 40174,
+        "sha256": "701ac0b03b04137e2741a4b9368f2b51d35186fba8f8840f81f8be0269e17091"
+      },
+      "rtx-report.txt": {
+        "bytes": 16809,
+        "sha256": "754088e31997ee1b349ac53a565bdcf9b17ddd33570ccb198564f7e5a6f97c71"
+      },
+      "perf-status.json": {
+        "bytes": 24945,
+        "sha256": "8848015f6492f2b1fc63a7d41c2370e323cc107f008c8703b793c2b15826d7cb"
+      },
+      "rtx-status.json": {
+        "bytes": 141536,
+        "sha256": "186849a6d24381441493f06b78abe39e1212ae6e3c05e9f8647ccf6409939a40"
+      }
+    },
+    "efr32mg26": {
+      "batch": 2.2,
+      "step": 1509.7
+    },
+    "ok": true,
+    "matched": 97,
+    "measured": 97,
+    "waived": 25,
+    "regressions": [],
+    "contract_failures": []
+  },
+  "failing-a0": {
+    "run_id": 43306965051,
+    "artifact_id": 13986658714,
+    "archive_sha256": "ecb0ba2669c70ffba86a93d3c4e03a8908d42021217a5dda5ea5f66cddeea1b5",
+    "members": {
+      "perf-report.txt": {
+        "bytes": 40423,
+        "sha256": "67f29cb71fcdd89058489d7b9c4683fc48e44c42509fe87647fae6d9a4968bc4"
+      },
+      "rtx-report.txt": {
+        "bytes": 16810,
+        "sha256": "a75431100ef2d2e4022e63889bc829238fa991517f0d3528f62dbbd4155b8f81"
+      },
+      "perf-status.json": {
+        "bytes": 25085,
+        "sha256": "588f1c4c4bdaeb2f7b84bf2f3d2fe99c05816a50ddf93c5d4911b270cd405d22"
+      },
+      "rtx-status.json": {
+        "bytes": 141420,
+        "sha256": "1359661ec2e3f84498a3f7f52fbcb3c2cc58c92c85436bd2043555e78f322d80"
+      }
+    },
+    "efr32mg26": {
+      "batch": 2.3,
+      "step": 1605.7
+    },
+    "ok": false,
+    "matched": 97,
+    "measured": 97,
+    "waived": 25,
+    "regressions": [
+      {
+        "baseline": 1513.7,
+        "board": "efr32mg26",
+        "delta": 0.0608,
+        "measured": 1605.7,
+        "mode": "step"
+      }
+    ],
+    "contract_failures": []
+  },
+  "comparison": {
+    "efr_step_delta_ir": 96.0,
+    "efr_step_delta_pct": 6.358879247532623,
+    "other_step_max_abs_delta_ir": 0.1,
+    "measurements": [
+      {
+        "board": "amap42kp",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "amap42kp",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atmega328p",
+        "mode": "batch",
+        "main": 7.7,
+        "a0": 7.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atmega328p",
+        "mode": "step",
+        "main": 1018.0,
+        "a0": 1018.0,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atmega328pb",
+        "mode": "batch",
+        "main": 7.7,
+        "a0": 7.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atmega328pb",
+        "mode": "step",
+        "main": 1018.0,
+        "a0": 1018.0,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21e15a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21e15a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21e16a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21e16a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21e17a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21e17a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21e18a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21e18a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21g15a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21g15a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21g16a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21g16a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21g17a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21g17a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21g18a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21g18a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21j15a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21j15a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21j16a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21j16a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21j17a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21j17a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21j18a",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd21j18a",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd51",
+        "mode": "batch",
+        "main": 1.8,
+        "a0": 1.8,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd51",
+        "mode": "step",
+        "main": 1246.5,
+        "a0": 1246.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd51-pybadge",
+        "mode": "batch",
+        "main": 1.9,
+        "a0": 1.9,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "atsamd51-pybadge",
+        "mode": "step",
+        "main": 1252.6,
+        "a0": 1252.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "cc2538sf53",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "cc2538sf53",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "efr32mg26",
+        "mode": "batch",
+        "main": 2.2,
+        "a0": 2.3,
+        "delta_ir": 0.1
+      },
+      {
+        "board": "efr32mg26",
+        "mode": "step",
+        "main": 1509.7,
+        "a0": 1605.7,
+        "delta_ir": 96.0
+      },
+      {
+        "board": "esp32",
+        "mode": "batch",
+        "main": 1.4,
+        "a0": 1.4,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "esp32",
+        "mode": "step",
+        "main": 983.8,
+        "a0": 983.8,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "esp32-devkitc-32e-gpio-smoke",
+        "mode": "batch",
+        "main": 1.4,
+        "a0": 1.4,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "esp32-devkitc-32e-gpio-smoke",
+        "mode": "step",
+        "main": 983.8,
+        "a0": 983.7,
+        "delta_ir": -0.1
+      },
+      {
+        "board": "esp32-devkitc-32e-uart1",
+        "mode": "batch",
+        "main": 1.4,
+        "a0": 1.4,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "esp32-devkitc-32e-uart1",
+        "mode": "step",
+        "main": 983.7,
+        "a0": 983.8,
+        "delta_ir": 0.1
+      },
+      {
+        "board": "esp32c3",
+        "mode": "batch",
+        "main": 2.3,
+        "a0": 2.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "esp32c6",
+        "mode": "batch",
+        "main": 3.8,
+        "a0": 3.8,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "esp32s3",
+        "mode": "batch",
+        "main": 2.4,
+        "a0": 2.4,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "esp32s3",
+        "mode": "step",
+        "main": 1000.4,
+        "a0": 1000.4,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "esp32s3-zero",
+        "mode": "batch",
+        "main": 2.4,
+        "a0": 2.4,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "esp32s3-zero",
+        "mode": "step",
+        "main": 1000.4,
+        "a0": 1000.4,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "imxrt1064",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "imxrt1064",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "mimxrt595s",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "mimxrt595s",
+        "mode": "step",
+        "main": 908.8,
+        "a0": 908.7,
+        "delta_ir": -0.1
+      },
+      {
+        "board": "mk64f12",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "mk64f12",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "mkw41z4",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "mkw41z4",
+        "mode": "step",
+        "main": 907.4,
+        "a0": 907.4,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf51822",
+        "mode": "batch",
+        "main": 2.0,
+        "a0": 2.0,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf51822",
+        "mode": "step",
+        "main": 1328.8,
+        "a0": 1328.7,
+        "delta_ir": -0.1
+      },
+      {
+        "board": "nrf52832",
+        "mode": "batch",
+        "main": 2.0,
+        "a0": 2.0,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf52832",
+        "mode": "step",
+        "main": 1321.4,
+        "a0": 1321.4,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf52833",
+        "mode": "batch",
+        "main": 2.1,
+        "a0": 2.1,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf52833",
+        "mode": "step",
+        "main": 1358.8,
+        "a0": 1358.8,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf52840",
+        "mode": "batch",
+        "main": 2.1,
+        "a0": 2.1,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf52840",
+        "mode": "step",
+        "main": 1358.8,
+        "a0": 1358.8,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf5340",
+        "mode": "batch",
+        "main": 2.0,
+        "a0": 2.0,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf5340",
+        "mode": "step",
+        "main": 1324.5,
+        "a0": 1324.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf54l15",
+        "mode": "batch",
+        "main": 1.9,
+        "a0": 1.9,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf54l15",
+        "mode": "step",
+        "main": 1358.5,
+        "a0": 1358.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf54lm20a",
+        "mode": "batch",
+        "main": 2.0,
+        "a0": 2.0,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "nrf54lm20a",
+        "mode": "step",
+        "main": 1400.2,
+        "a0": 1400.2,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "r7fa6m5bh",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "r7fa6m5bh",
+        "mode": "step",
+        "main": 918.2,
+        "a0": 918.3,
+        "delta_ir": 0.1
+      },
+      {
+        "board": "r7fa8m1ah",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "r7fa8m1ah",
+        "mode": "step",
+        "main": 916.4,
+        "a0": 916.4,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "ra4m1",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "ra4m1",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "rp2040",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "rp2040",
+        "mode": "step",
+        "main": 906.7,
+        "a0": 906.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "rp2350",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "rp2350",
+        "mode": "step",
+        "main": 906.8,
+        "a0": 906.8,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "s32k388",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "s32k388",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "same70q21b",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "same70q21b",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f072",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f072",
+        "mode": "step",
+        "main": 939.2,
+        "a0": 939.2,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103",
+        "mode": "step",
+        "main": 938.3,
+        "a0": 938.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103c4",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103c4",
+        "mode": "step",
+        "main": 938.3,
+        "a0": 938.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103c6",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103c6",
+        "mode": "step",
+        "main": 938.3,
+        "a0": 938.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103r4",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103r4",
+        "mode": "step",
+        "main": 938.3,
+        "a0": 938.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103r4h",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103r4h",
+        "mode": "step",
+        "main": 938.3,
+        "a0": 938.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103r6",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103r6",
+        "mode": "step",
+        "main": 938.3,
+        "a0": 938.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103r6h",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103r6h",
+        "mode": "step",
+        "main": 938.3,
+        "a0": 938.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103r8",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103r8",
+        "mode": "step",
+        "main": 938.3,
+        "a0": 938.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103rb",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103rb",
+        "mode": "step",
+        "main": 938.3,
+        "a0": 938.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103rb-nucleo-bme280-smoke",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103rb-nucleo-bme280-smoke",
+        "mode": "step",
+        "main": 915.2,
+        "a0": 915.3,
+        "delta_ir": 0.1
+      },
+      {
+        "board": "stm32f103t4",
+        "mode": "batch",
+        "main": 1.3,
+        "a0": 1.6,
+        "delta_ir": 0.3
+      },
+      {
+        "board": "stm32f103t4",
+        "mode": "step",
+        "main": 938.3,
+        "a0": 938.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103t6",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f103t6",
+        "mode": "step",
+        "main": 938.3,
+        "a0": 938.3,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401cb",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401cb",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401cc",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401cc",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401cd",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401cd",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401cdu6",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401cdu6",
+        "mode": "step",
+        "main": 938.6,
+        "a0": 938.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401ce",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401ce",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401rb",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401rb",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401rc",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401rc",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401rd",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401rd",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401re",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401re",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401vb",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401vb",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401vc",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401vc",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401vd",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401vd",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401ve",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f401ve",
+        "mode": "step",
+        "main": 937.6,
+        "a0": 937.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f405",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f405",
+        "mode": "step",
+        "main": 937.1,
+        "a0": 937.1,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407",
+        "mode": "step",
+        "main": 937.5,
+        "a0": 937.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407ie",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407ie",
+        "mode": "step",
+        "main": 937.5,
+        "a0": 937.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407ig",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407ig",
+        "mode": "step",
+        "main": 937.5,
+        "a0": 937.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407ve",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407ve",
+        "mode": "step",
+        "main": 937.5,
+        "a0": 937.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407vg",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407vg",
+        "mode": "step",
+        "main": 937.5,
+        "a0": 937.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407ze",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407ze",
+        "mode": "step",
+        "main": 937.5,
+        "a0": 937.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407zg",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f407zg",
+        "mode": "step",
+        "main": 937.5,
+        "a0": 937.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f411ceu6",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f411ceu6",
+        "mode": "step",
+        "main": 938.4,
+        "a0": 938.5,
+        "delta_ir": 0.1
+      },
+      {
+        "board": "stm32f746",
+        "mode": "batch",
+        "main": 1.5,
+        "a0": 1.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f746",
+        "mode": "step",
+        "main": 900.5,
+        "a0": 900.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f767",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32f767",
+        "mode": "step",
+        "main": 937.4,
+        "a0": 937.4,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32g071",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32g071",
+        "mode": "step",
+        "main": 938.5,
+        "a0": 938.5,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32g0b1re",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32g0b1re",
+        "mode": "step",
+        "main": 945.1,
+        "a0": 945.1,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32g431rb",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32g431rb",
+        "mode": "step",
+        "main": 937.0,
+        "a0": 937.0,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32g474re",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32g474re",
+        "mode": "step",
+        "main": 937.0,
+        "a0": 937.0,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32h563",
+        "mode": "batch",
+        "main": 1.8,
+        "a0": 1.8,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32h563",
+        "mode": "step",
+        "main": 987.1,
+        "a0": 987.1,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32h735",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32h735",
+        "mode": "step",
+        "main": 936.8,
+        "a0": 936.8,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32l073",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32l073",
+        "mode": "step",
+        "main": 941.2,
+        "a0": 941.2,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32l476",
+        "mode": "batch",
+        "main": 1.7,
+        "a0": 1.7,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32l476",
+        "mode": "step",
+        "main": 938.6,
+        "a0": 938.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32l552",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32l552",
+        "mode": "step",
+        "main": 923.6,
+        "a0": 923.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32u545",
+        "mode": "batch",
+        "main": 1.8,
+        "a0": 1.8,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32u545",
+        "mode": "step",
+        "main": 987.6,
+        "a0": 987.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32u575",
+        "mode": "batch",
+        "main": 1.8,
+        "a0": 1.8,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32u575",
+        "mode": "step",
+        "main": 987.6,
+        "a0": 987.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32u5a5zj",
+        "mode": "batch",
+        "main": 1.8,
+        "a0": 1.8,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32u5a5zj",
+        "mode": "step",
+        "main": 987.6,
+        "a0": 987.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32wb55",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32wb55",
+        "mode": "step",
+        "main": 938.0,
+        "a0": 938.0,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32wba52",
+        "mode": "batch",
+        "main": 1.6,
+        "a0": 1.6,
+        "delta_ir": 0.0
+      },
+      {
+        "board": "stm32wba52",
+        "mode": "step",
+        "main": 937.4,
+        "a0": 937.4,
+        "delta_ir": 0.0
+      }
+    ]
+  },
+  "provenance": {
+    "main_head": "102f7fc9fa9dbfd3638c92332e57eb46fcb761a9",
+    "a0_head": "a0b0a91c1868fe78e4af45e817e566807517ef1e",
+    "a0_ci_merge": "90c3e0d11af1df9874dd93621827eeda8e3ece76",
+    "a0_tree": "38cd97d23bf10e17b79e9c9a80256ce60d595f3b",
+    "main_to_parent_changed_paths": [
+      "examples/seeed-xiao-nrf52840-sense/README.md"
+    ],
+    "perf_harness_or_fixture_or_gate_changed_paths": [],
+    "patch_base": "a148db88c953fdf926fcd92a09abb8289f14b9d1"
+  },
+  "limits": {
+    "per_function_profile_retained": false,
+    "profile_reason": "Workflow artifact contains only perf/RTX text and JSON; board_perf.py creates callgrind output in TemporaryDirectory and deletes it after scalar extraction.",
+    "fixed_code_measured": false,
+    "fixed_tests_executed": false,
+    "source_attribution": "Static causal path with exact 96 Ir increase over passing main; per-function/inlining split and candidate improvement not measured."
+  }
+}

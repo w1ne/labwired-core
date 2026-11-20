@@ -1,0 +1,4 @@
+[2m2026-11-19T17:56:26.658431Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/opentitan-earlgrey-cw310.yaml
+[2m2026-11-19T17:56:26.659780Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x20000000
+labwired-cli test: idle_ff=on (event_scheduler=on)
+PASS  3/3 checks · opentitan-earlgrey-cw310-smoke · 100000 steps · 0.02s

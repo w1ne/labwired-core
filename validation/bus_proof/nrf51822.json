@@ -1,0 +1,22 @@
+{
+  "id": "nrf51822",
+  "in_boards": false,
+  "uart": {
+    "state": "proven",
+    "file": "crates/core/tests/gates/firmware_survival.rs",
+    "test": "test_nrf51822_microbit_v1_smoke_survival",
+    "signal": "committed ELF fixture (tests/fixtures/microbit-v1-smoke.elf, from crates/firmware-nrf51822-demo) linked at the S110 application base 0x18000 and run with no SoftDevice; assert_uart_contains matches 'OK\\n' on a real bus.attach_uart_tx_sink capture. The bytes go through UART0 as the nRF51 legacy UART (PSELTXD = P0.24, BAUDRATE, ENABLE = 4, STARTTX, then TXD + EVENTS_TXDRDY per byte). Fixture absence is a hard assert!, not a skip.",
+    "lane": "core-ci / pr-gate: cargo test -p labwired-core --test gates firmware_survival:: (also rebuilt from source by core-coverage-matrix-smoke / coverage-matrix-microbit-v1)",
+    "note": "thin but real: three bytes through the legacy UART path. The official MakeCode images print over the same model under crates/core/examples/sd_hle_run.rs, which no test asserts."
+  },
+  "spi": {
+    "state": "none",
+    "gap": "The descriptor declares i2c0 (the SPI0/TWI0 mux, shared nRF52 serial model), but no firmware or harness on this chip drives SPI.",
+    "lane": "none"
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "The descriptor declares i2c0 (SPI0/TWI0 mux) and twi1 (shared nRF52 TWIM model), but no firmware or harness on this chip drives I2C.",
+    "lane": "none"
+  }
+}

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="6" failures="4" errors="0" time="0.000323">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MemoryViolation"/>
+    <property name="firmware_hash" value="3d96a8687ad39511215eb6873d510d4e302e7d1cf417d658932506f309581a56"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000323">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x1c000000=0x143" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x1c000004=0x0" time="0.000000">
+    <failure message="assertion failed">assertion 2: memory_value: @0x1c000004=0x0
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=60
+instructions=18
+limits:
+  - max_steps=100000
+firmware_hash=3d96a8687ad39511215eb6873d510d4e302e7d1cf417d658932506f309581a56
+firmware=examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-cv32e40p-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/core-v-mcu.yaml
+script=examples/renode-onboarding/core-v-mcu-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762048, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762052, expected_value: 0, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762064, expected_value: 3235796737, mask: None, size: Some(4), node: None } }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;CORE-V stdout ok&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x1c000010=0xc0de5701" time="0.000000">
+    <failure message="assertion failed">assertion 3: memory_value: @0x1c000010=0xc0de5701
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=60
+instructions=18
+limits:
+  - max_steps=100000
+firmware_hash=3d96a8687ad39511215eb6873d510d4e302e7d1cf417d658932506f309581a56
+firmware=examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-cv32e40p-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/core-v-mcu.yaml
+script=examples/renode-onboarding/core-v-mcu-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762048, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762052, expected_value: 0, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762064, expected_value: 3235796737, mask: None, size: Some(4), node: None } }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;CORE-V stdout ok&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: CORE-V stdout ok" time="0.000000">
+    <failure message="assertion failed">assertion 4: uart_contains: CORE-V stdout ok
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=60
+instructions=18
+limits:
+  - max_steps=100000
+firmware_hash=3d96a8687ad39511215eb6873d510d4e302e7d1cf417d658932506f309581a56
+firmware=examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-cv32e40p-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/core-v-mcu.yaml
+script=examples/renode-onboarding/core-v-mcu-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762048, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762052, expected_value: 0, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762064, expected_value: 3235796737, mask: None, size: Some(4), node: None } }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;CORE-V stdout ok&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: expected_stop_reason: MaxSteps" time="0.000000">
+    <failure message="assertion failed">assertion 5: expected_stop_reason: MaxSteps
+
+result_schema_version=1.0
+stop_reason=MemoryViolation
+stop_reason_details.triggered_stop_condition=MemoryViolation
+steps_executed=0
+cycles=60
+instructions=18
+limits:
+  - max_steps=100000
+firmware_hash=3d96a8687ad39511215eb6873d510d4e302e7d1cf417d658932506f309581a56
+firmware=examples/renode-onboarding/../../target/riscv32imc-unknown-none-elf/release/firmware-cv32e40p-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/core-v-mcu.yaml
+script=examples/renode-onboarding/core-v-mcu-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762048, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762052, expected_value: 0, mask: None, size: Some(4), node: None } }): false
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 469762064, expected_value: 3235796737, mask: None, size: Some(4), node: None } }): false
+  - UartContains(UartContainsAssertion { uart_contains: &quot;CORE-V stdout ok&quot; }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): false
+</failure>
+  </testcase>
+</testsuite>

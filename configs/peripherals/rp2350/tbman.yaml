@@ -5,18 +5,23 @@ registers:
   address_offset: 0
   size: 32
   access: READ_WRITE
-  reset_value: 5
+  reset_value: 1
   fields:
-  - name: ASIC
+  - name: HDLSIM
     bit_range:
-    - 0
-    - 0
-    description: Indicates the platform is an ASIC
+    - 2
+    - 2
+    description: Indicates the platform is a simulation
   - name: FPGA
     bit_range:
     - 1
     - 1
     description: Indicates the platform is an FPGA
+  - name: ASIC
+    bit_range:
+    - 0
+    - 0
+    description: Indicates the platform is an ASIC
   side_effects: null
 interrupts: null
 timing: null

@@ -1,0 +1,213 @@
+// LabWired - Firmware Simulation Platform
+// Copyright (C) 2026 Andrii Shylenko
+
+use labwired_config::{Arch, ChipDescriptor};
+use labwired_core::system;
+use labwired_core::Bus;
+use labwired_core::Cpu;
+use labwired_core::Machine;
+use std::fs;
+use std::path::PathBuf;
+
+#[test]
+fn test_register_compliance_all_chips() -> anyhow::Result<()> {
+    // Locate the `core/configs/chips` directory
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // Go up two levels from crates/core to reach core/
+    let chips_dir = manifest_dir
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("configs/chips");
+
+    println!("Scanning for chips in: {:?}", chips_dir);
+
+    for entry in fs::read_dir(chips_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+            println!("Testing chip: {:?}", path);
+            validate_chip(&path)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
+    let chip = ChipDescriptor::from_file(path)?;
+
+    // Configure Memory (Flash/RAM)
+    // Note: SystemBus::new() creates default memories. We resize them.
+    // Actually, SystemBus::from_config uses chip.flash/ram directly, so we don't need to manually resize here.
+    // We just need to ensure the values are valid.
+    let _flash_size = chip.flash.size as usize;
+    let _ram_size = chip.ram.size as usize;
+
+    // Create Manual System Manifest
+    let dummy_manifest = labwired_config::SystemManifest {
+        max_peripheral_tick_interval: None,
+        parts: Vec::new(),
+        walk_deleted: Some(false),
+        schema_version: "1.0".to_string(),
+        name: "test-bench".to_string(),
+        chip: path.to_string_lossy().to_string(),
+        cpu_hz: None,
+        external_devices: vec![],
+        cosim_models: Vec::new(),
+        motor_models: Vec::new(),
+        board_io: vec![],
+        debug_uart: None,
+        wifi_ap: None,
+        peripherals: vec![],
+        memory_overrides: Default::default(),
+    };
+
+    // Using from_config is the best way to get peripherals instantiated correctly
+    let mut bus = labwired_core::bus::SystemBus::from_config(&chip, &dummy_manifest)?;
+
+    // Override memory sizes if needed (from_config does it based on chip!)
+    // So we don't need manual resize.
+
+    match chip.arch {
+        Arch::Arm => {
+            let (cpu, _nvic) = system::cortex_m::configure_cortex_m(&mut bus);
+            let mut machine = Machine::new(cpu, bus);
+            validate_registers(&mut machine, &chip)?;
+        }
+        Arch::RiscV => {
+            let cpu = system::riscv::configure_riscv(&mut bus);
+            let mut machine = Machine::new(cpu, bus);
+            validate_registers(&mut machine, &chip)?;
+        }
+        Arch::Xtensa => {
+            // Two Xtensa families exist today: the classic ESP32 (LX6,
+            // memory map starts at 0x4000_0000 ROM + 0x4008_0000 IRAM)
+            // and the ESP32-S3 (LX7, memory map starts at 0x4037_0000
+            // IRAM).  `configure_xtensa` defaults to S3 wiring, which
+            // leaves the ESP32 addresses unmapped and trips
+            // MemoryViolation in the smoke validator.  Dispatch on the
+            // canonical family selector so the DevKitC profiles use the
+            // classic map and S3 variants use the S3 map, just like the CLI.
+            if chip.is_esp32s3() {
+                let cpu = system::xtensa::configure_xtensa(&mut bus);
+                let mut machine = Machine::new(cpu, bus);
+                validate_registers(&mut machine, &chip)?;
+            } else {
+                let cpu = system::xtensa::configure_xtensa_esp32(&mut bus);
+                let mut machine = Machine::new(cpu, bus);
+                validate_registers(&mut machine, &chip)?;
+            }
+        }
+        Arch::Avr => {
+            // P0 AVR has no SVD-backed peripheral list on the chip yaml yet
+            // (peripherals: []). Nothing to validate beyond load.
+            println!(
+                "Skipping AVR register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Pic24 => {
+            // M0 PIC24 has no SVD-backed peripheral list on the chip yaml yet
+            // (peripherals: []). Nothing to validate beyond load.
+            println!(
+                "Skipping PIC24 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Pic18 => {
+            // M0 PIC18 has no SVD-backed peripheral list yet.
+            println!(
+                "Skipping PIC18 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Pic16 => {
+            // PIC16 SFRs are CPU-internal; there is no SVD-backed list.
+            println!(
+                "Skipping PIC16 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Rx => {
+            // No SVD-backed register list for the RX parts yet.
+            println!(
+                "Skipping RX register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Msp430 => {
+            // No SVD-backed register list for the MSP430 parts yet.
+            println!(
+                "Skipping MSP430 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Mips => {
+            // No SVD-backed register list for the PIC32MZ parts yet.
+            println!(
+                "Skipping MIPS register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Aarch64 => {
+            // No SVD-backed register list for the AArch64 parts yet.
+            println!(
+                "Skipping AArch64 register compliance for {:?} (no SVD map)",
+                path
+            );
+        }
+        Arch::Unknown => {
+            println!("Skipping unknown architecture for {:?}", path);
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_registers<C: Cpu>(
+    machine: &mut Machine<C>,
+    chip: &ChipDescriptor,
+) -> anyhow::Result<()> {
+    for p in &chip.peripherals {
+        println!("  Validating peripheral: {} @ 0x{:x}", p.id, p.base_address);
+
+        // Smoke Test: Try to read the base address.
+        // Even if it's WriteOnly, the bus/peripheral usually treats read as 0 or 0xDEADBEEF,
+        // but crucially NOT MemoryViolation (which means unmapped).
+
+        let addr = p.base_address;
+
+        // We use machine.bus directly.
+        // We expect Ok(_) or maybe Err(SimulationError::DecodeError) but NOT MemoryViolation.
+        // Actually labwired-core usually returns Err(SimulationError::MemoryViolation) if unmapped.
+        // Peripheral::read usually returns Ok(val).
+
+        match machine.bus.read_u32(addr) {
+            Ok(_val) => {
+                // Success
+            }
+            Err(labwired_core::SimulationError::MemoryViolation(a)) => {
+                println!(
+                    "    ERROR: MemoryViolation at 0x{:x} for peripheral {}",
+                    a, p.id
+                );
+                return Err(anyhow::anyhow!(
+                    "Peripheral {} failed smoke test: MemoryViolation",
+                    p.id
+                ));
+            }
+            Err(e) => {
+                // Other errors like DecodeError are possible if peripheral handles it explicitly,
+                // but usually that means "present but error", which is technically "compliant" in terms of mapping.
+                // But generally we expect Ok for offset 0.
+                println!(
+                    "    WARNING: Error reading 0x{:x} for {}: {:?}",
+                    addr, p.id, e
+                );
+            }
+        }
+    }
+    Ok(())
+}

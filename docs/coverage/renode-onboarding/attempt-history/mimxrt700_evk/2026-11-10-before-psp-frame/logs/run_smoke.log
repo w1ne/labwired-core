@@ -1,0 +1,6 @@
+2026-11-10T16:55:46.958917Z  INFO labwired_core::system::builder: Loading chip descriptor: ../../chips/onboarding/mimxrt700_evk.yaml
+2026-11-10T16:55:47.032800Z  INFO labwired_loader: ELF Entry Point: 0x38000801
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+2026-11-10T16:55:47.045201Z  INFO labwired_cli::execute: uart_injection: 2 byte(s) delivered to 'flexcomm0'
+PASS  7/7 checks · mimxrt700_evk-smoke · 5000000 steps · 0.53s

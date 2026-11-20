@@ -15,6 +15,7 @@
 //! controller depending on `CTRLA.MODE`.
 
 pub mod adc;
+pub mod adc21;
 pub mod clock_tree;
 pub mod cmcc;
 pub mod dac;
@@ -23,9 +24,14 @@ pub mod eic;
 pub mod nvmctrl;
 pub mod oscctrl;
 pub mod pac;
+pub mod rtc21;
 pub mod sercom_i2cm;
 pub mod sercom_spi;
 pub mod sercom_usart;
+pub mod sysc4s;
 pub mod tc;
+pub mod tc21;
+pub mod tc4s;
 pub mod tcc;
+pub mod usb21;
 pub mod usb_device;

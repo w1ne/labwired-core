@@ -1,0 +1,15 @@
+# MIMXRT1062 Teensy 4.1 descriptor (configs/chips/mimxrt1062-teensy41.yaml).
+# Narrow official profile: onboard LED on D13 (GPIO7_IO03), as already recorded
+# on that yaml and on the PJRC Teensy 4.1 pin 13 / LED_BUILTIN assignment.
+# This does not replace configs/systems/teensy-41.yaml, which still uses the
+# RT1064-class cousin.
+name: "mimxrt1062-teensy41"
+chip: "../chips/mimxrt1062-teensy41.yaml"
+external_devices: []
+board_io:
+  - id: "led_d13"
+    kind: "led"
+    peripheral: "gpio7"
+    pin: 3
+    signal: "output"
+    active_high: true

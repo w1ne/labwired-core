@@ -174,6 +174,11 @@ impl Efr32s2TimerRoute {
 }
 
 impl crate::Peripheral for Efr32s2TimerRoute {
+    /// `CCnROUTE` names the pad a timer channel drives.
+    fn claims_pads(&self) -> bool {
+        true
+    }
+
     fn read(&self, offset: u64) -> SimResult<u8> {
         let word = self.read_word(offset & !3);
         Ok(((word >> ((offset % 4) * 8)) & 0xFF) as u8)

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="7" failures="1" errors="0" time="0.025983">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="916fa42c0a78ab74ec718f6797dd43242b8c367d21dd4ac74d87eac69d5fb00b"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.025983">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: memory_value: @0x40001000=0x143" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: CrossLink-NX litex ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: memory_value: @0x40001004=0x12345" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: memory_value: @0x4000100c=0x2a55" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: memory_value: @0x40001014=0xc205007f" time="0.000000">
+    <failure message="assertion failed">assertion 5: memory_value: @0x40001014=0xc205007f
+
+result_schema_version=1.0
+stop_reason=MaxSteps
+stop_reason_details.triggered_stop_condition=MaxSteps
+stop_reason_details.triggered_limit.max_steps=100000
+stop_reason_details.observed.steps_executed=100000
+steps_executed=100000
+cycles=400000
+instructions=100000
+limits:
+  - max_steps=100000
+firmware_hash=916fa42c0a78ab74ec718f6797dd43242b8c367d21dd4ac74d87eac69d5fb00b
+firmware=examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-andes-ae350-n25-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/crosslink-nx-evn.yaml
+script=examples/renode-onboarding/crosslink-nx-evn-smoke.yaml
+assertions:
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073745920, expected_value: 323, mask: None, size: Some(4), node: None } }): true
+  - UartContains(UartContainsAssertion { uart_contains: &quot;CrossLink-NX litex ok&quot; }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073745924, expected_value: 74565, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073745932, expected_value: 10837, mask: None, size: Some(4), node: None } }): true
+  - MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 1073745940, expected_value: 3255107711, mask: None, size: Some(4), node: None } }): false
+  - ExpectedStopReason(StopReasonAssertion { expected_stop_reason: MaxSteps }): true
+</failure>
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

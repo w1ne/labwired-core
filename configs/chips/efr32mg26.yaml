@@ -42,11 +42,13 @@
 #     `scripts/hw-oracle/captures/efr32mg26/` and `docs/coverage/`.
 #   - GPIO is modelled with the dedicated Series-2 port layout (CTRL/MODEL/
 #     MODEH/DOUT/DIN per port): DOUT drives pins, DIN reads pin state, the
-#     4-bit mode nibble gates input vs output (open-drain WIREDOR pins only
-#     pull LOW). NOT modelled: the ROUTE pin-mux registers are a stub window
-#     (`gpio_route` below — a deliberate sim no-op, load-bearing on silicon),
-#     EM4WU wake, drive-strength/slew fields (stored, no behaviour), and the
-#     WIREDAND open-source analog niceties (treated as push-pull).
+#     4-bit mode nibble gates input vs output (WIREDOR is open-source and
+#     drives only a 1, WIREDAND open-drain and drives only a 0; the
+#     WIREDORPULLDOWN / WIREDAND*PULLUP* pulls hold a released pin). NOT
+#     modelled: the ROUTE pin-mux registers are a stub window (`gpio_route`
+#     below — a deliberate sim no-op, load-bearing on silicon), EM4WU wake,
+#     drive-strength/slew fields (stored, no behaviour), and the glitch
+#     filters.
 #   - (FIXED) The EXTI interrupt path IS modelled — this list said it was not,
 #     for long enough that "can I do an interrupt-driven button on this board?"
 #     had a wrong answer written down. `peripherals/efr32/gpio_exti.rs` is a

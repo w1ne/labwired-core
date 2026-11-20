@@ -191,7 +191,14 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                     "Found Loadable Segment: Addr={:#x}, Size={} bytes, Offset={:#x}",
                     start_addr, size, offset
                 );
-                program_image.add_segment(start_addr, segment_data);
+                for (piece_off, piece_len) in
+                    labwired_core::system::node::file_backed_pieces(&elf, ph)
+                {
+                    program_image.add_segment(
+                        start_addr + piece_off as u64,
+                        segment_data[piece_off..piece_off + piece_len].to_vec(),
+                    );
+                }
             }
         }
     }
@@ -993,6 +1000,89 @@ mod tests {
         }
         sh(&mut out, 8, 3, 0, 0, shstr_off, shstr.len() as u32);
         out
+    }
+
+    /// The ESP-IDF 5 / ESP32-C6 shape: two `PT_LOAD` segments at the same
+    /// address. The second starts with a NOBITS placeholder that still sits
+    /// inside its `p_filesz` (zero filler in the file), then real rodata.
+    fn shared_window_elf() -> Vec<u8> {
+        const VA: u32 = 0x4200_0020;
+        let text = [0xAAu8; 16];
+        let dummy_len = 0x20u32;
+        let rodata = [0xBBu8; 8];
+        let shstr = b"\x00.text\x00.dummy\x00.rodata\x00.shstrtab\x00";
+        let text_off = 52 + 2 * 32;
+        let seg2_off = text_off + text.len() as u32;
+        let rodata_off = seg2_off + dummy_len;
+        let shstr_off = rodata_off + rodata.len() as u32;
+        let shoff = shstr_off + shstr.len() as u32;
+
+        let mut out = vec![0x7f, b'E', b'L', b'F', 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        out.extend_from_slice(&2u16.to_le_bytes()); // ET_EXEC
+        out.extend_from_slice(&243u16.to_le_bytes()); // EM_RISCV
+        out.extend_from_slice(&1u32.to_le_bytes());
+        out.extend_from_slice(&VA.to_le_bytes());
+        out.extend_from_slice(&52u32.to_le_bytes()); // e_phoff
+        out.extend_from_slice(&shoff.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes()); // e_flags
+        for half in [52u16, 32, 2, 40, 5, 4] {
+            out.extend_from_slice(&half.to_le_bytes());
+        }
+        let seg2_len = dummy_len + rodata.len() as u32;
+        for (off, len) in [(text_off, text.len() as u32), (seg2_off, seg2_len)] {
+            for w in [1u32, off, VA, VA, len, len, 5, 0x1000] {
+                out.extend_from_slice(&w.to_le_bytes());
+            }
+        }
+        out.extend_from_slice(&text);
+        out.extend_from_slice(&vec![0u8; dummy_len as usize]);
+        out.extend_from_slice(&rodata);
+        out.extend_from_slice(shstr);
+        let sh = |out: &mut Vec<u8>, name: u32, typ: u32, addr: u32, off: u32, size: u32| {
+            for w in [name, typ, 0x2, addr, off, size, 0u32, 0, 4, 0] {
+                out.extend_from_slice(&w.to_le_bytes());
+            }
+        };
+        sh(&mut out, 0, 0, 0, 0, 0);
+        sh(&mut out, 1, 1, VA, text_off, text.len() as u32); // .text
+        sh(&mut out, 7, 8, VA, seg2_off, dummy_len); // .dummy, SHT_NOBITS
+        sh(
+            &mut out,
+            14,
+            1,
+            VA + dummy_len,
+            rodata_off,
+            rodata.len() as u32,
+        );
+        sh(&mut out, 22, 3, 0, shstr_off, shstr.len() as u32);
+        out
+    }
+
+    #[test]
+    fn nobits_filler_inside_filesz_does_not_overwrite_a_shared_window() {
+        let image = load_elf_bytes(&shared_window_elf()).unwrap();
+        let mut window = [0u8; 0x40];
+        for seg in &image.segments {
+            let at = (seg.start_addr - 0x4200_0020) as usize;
+            window[at..at + seg.data.len()].copy_from_slice(&seg.data);
+        }
+        assert_eq!(
+            &window[..16],
+            &[0xAA; 16],
+            ".text was clobbered by the NOBITS filler"
+        );
+        assert_eq!(
+            &window[0x20..0x28],
+            &[0xBB; 8],
+            "rodata after the placeholder is lost"
+        );
+        // Text segment whole; the second segment loses only its filler.
+        let spans: Vec<_> = image
+            .segments
+            .iter()
+            .map(|s| (s.start_addr, s.data.len()))
+            .collect();
+        assert_eq!(spans, vec![(0x4200_0020, 16), (0x4200_0040, 8)]);
     }
 
     #[test]

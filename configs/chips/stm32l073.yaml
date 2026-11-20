@@ -241,7 +241,7 @@ peripherals:
       debug_schema: "../peripherals/stm32l073/i2c3.yaml"
       profile: "stm32l4"
 
-  # --- ADC (12-bit SAR; L0 layout approximated by the l4 ADC model) ---------
+  # --- ADC (12-bit SAR; L0 CHSELR model, stm32f0_adc.rs) -------------------
   - id: "adc1"
     type: "adc"
     base_address: 0x40012400
@@ -249,7 +249,7 @@ peripherals:
     irq: 12
     config:
       debug_schema: "../peripherals/stm32l073/adc.yaml"
-      profile: "stm32l4"
+      profile: "stm32l0"
     # ADC1 is clocked from RCC_APB2ENR.ADCEN (bit 9). Unclocked out of reset
     # (RM0367 §7.3.13) — the converter is dead until the clock is enabled.
     clock: { reg: "apb2enr", bit: 9 }
@@ -283,6 +283,9 @@ peripherals:
     size: "1KB"
     irq: 15
     config:
+      # Channel outputs reach the pads through the L0 AF table
+      # (bus/attach.rs STM32L0_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32l0"
       debug_schema: "../peripherals/stm32l073/tim2.yaml"
       width: 16
     # TIM2 is clocked from RCC_APB1ENR.TIM2EN (bit 0). Unclocked out of reset
@@ -296,6 +299,9 @@ peripherals:
     size: "1KB"
     irq: 16
     config:
+      # Channel outputs reach the pads through the L0 AF table
+      # (bus/attach.rs STM32L0_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32l0"
       debug_schema: "../peripherals/stm32l073/tim3.yaml"
 
   # TIM6 / TIM7 — 16-bit basic timers (HAL time-base candidates).

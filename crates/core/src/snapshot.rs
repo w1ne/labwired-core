@@ -46,13 +46,16 @@ pub struct MachineSnapshot {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CpuSnapshot {
     Arm(ArmCpuSnapshot),
-    /// Diagnostic visible state only; native Cortex-A restore is unsupported.
+    /// Diagnostic visible state only; native ARM restore is unsupported.
     CortexA(CortexACpuSnapshot),
+    /// Diagnostic visible ARMv4T state only; restore is unsupported.
+    Arm7Tdmi(CortexACpuSnapshot),
     RiscV(RiscVCpuSnapshot),
     RiscV64(Box<crate::cpu::riscv64::RiscV64CpuSnapshot>),
     Aarch64(Box<crate::cpu::aarch64::Aarch64CpuSnapshot>),
     Rx(Box<crate::cpu::rx::RxCpuSnapshot>),
     Mips(Box<crate::cpu::mips::MipsCpuSnapshot>),
+    Msp430(Box<crate::cpu::msp430::Msp430CpuSnapshot>),
     XtensaLx7(XtensaLx7CpuSnapshot),
     Avr(AvrCpuSnapshot),
     Pic24(Box<Pic24CpuSnapshot>),

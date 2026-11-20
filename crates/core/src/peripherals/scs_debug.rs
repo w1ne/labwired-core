@@ -8,6 +8,10 @@
 //! The key is checked only on a word write. `DCRSR` and `DCRDR` read as
 //! zero and ignore writes. `DEMCR` stores the vector-catch bits and
 //! `TRCENA`. `MON_*` stays zero. The CPU shares this `Arc`.
+//! Firmware can access the four-byte DEMCR window before a debugger attaches;
+//! DHCSR/DCRSR/DCRDR remain outside the bus map until SWD attachment.
+//! TRCENA retains the existing stored-bit contract: DWT/ITM global gating is
+//! not modeled here, and this mapping change does not claim that behavior.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -29,7 +33,7 @@ pub(crate) const DEMCR_VC_STATERR: u32 = 1 << 7;
 pub(crate) const DEMCR_VC_BUSERR: u32 = 1 << 8;
 pub(crate) const DEMCR_VC_HARDERR: u32 = 1 << 10;
 pub(crate) const DEMCR_VC_MMERR: u32 = 1 << 4;
-const DEMCR_VC_NOCPERR: u32 = 1 << 5;
+pub(crate) const DEMCR_VC_NOCPERR: u32 = 1 << 5;
 const DEMCR_VC_INTERR: u32 = 1 << 9;
 const DEMCR_TRCENA: u32 = 1 << 24;
 const DEMCR_WRITABLE: u32 = DEMCR_VC_CORERESET
@@ -209,15 +213,37 @@ impl DebugHaltState {
 #[derive(Debug)]
 pub struct ScsDebug {
     pub state: Arc<DebugHaltState>,
+    demcr_only: bool,
 }
 
 impl ScsDebug {
     pub fn new(state: Arc<DebugHaltState>) -> Self {
-        Self { state }
+        Self {
+            state,
+            demcr_only: false,
+        }
+    }
+
+    /// The architectural trace-control register is accessible to firmware
+    /// independently of an external SWD transport or C_DEBUGEN. The caller
+    /// maps exactly four bytes at 0xE000_EDFC, keeping halt registers absent.
+    pub fn demcr_only(state: Arc<DebugHaltState>) -> Self {
+        Self {
+            state,
+            demcr_only: true,
+        }
+    }
+
+    fn register_offset(&self, aligned: u64) -> u64 {
+        if self.demcr_only {
+            DEMCR + aligned
+        } else {
+            aligned
+        }
     }
 
     fn read_word(&self, aligned: u64) -> u32 {
-        match aligned {
+        match self.register_offset(aligned) {
             DHCSR => self.state.read_dhcsr(),
             DCRSR | DCRDR => 0,
             DEMCR => self.state.read_demcr(),
@@ -238,7 +264,7 @@ impl crate::Peripheral for ScsDebug {
     }
 
     fn write(&mut self, offset: u64, value: u8) -> SimResult<()> {
-        let aligned = offset & !3;
+        let aligned = self.register_offset(offset & !3);
         let lane = (offset & 3) * 8;
         if aligned == DEMCR {
             let current = self.state.read_demcr();
@@ -254,7 +280,7 @@ impl crate::Peripheral for ScsDebug {
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
-        match offset & !3 {
+        match self.register_offset(offset & !3) {
             DHCSR => self.state.write_dhcsr(value),
             DEMCR => self.state.write_demcr(value),
             _ => {}

@@ -5,8 +5,9 @@
 # See the LICENSE file in the project root for full license information.
 
 name: mspsim-msp430f1611
-description: 'msp430f1611 (Texas Instruments MSP430). Declared from the mspsim chip-config - metadata-only
-  T3 entry, not runnable. Memory geometry: flash 48KB @ 0x4000, ram 10KB @ 0x1100.'
+description: 'msp430f1611 (Texas Instruments MSP430). Declared from the mspsim chip-config. Memory
+  geometry: flash 48KB @ 0x4000, ram 10KB @ 0x1100. Runs on the LabWired MSP430 core with USART0/USART1 (UART mode),
+  watchdog control, hardware multiplier and clock registers; see docs/boards/msp430f2619.md.'
 family: Texas Instruments MSP430
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize hardware...\n\
   \    while(1) {\n        // Idle loop\n    }\n    return 0;\n}"

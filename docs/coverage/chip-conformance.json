@@ -10,6 +10,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "esp32c2",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "esp32c6",
     "reg_match": 0
   },
@@ -259,6 +266,27 @@
     "reg_match": 0
   },
   {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32s3-devkitc-1-n16r8-adc",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "esp32-devkitc-32e-gpio-smoke",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32-devkitc-32e-uart1",
+    "reg_match": 0
+  },
+  {
     "behavior": true,
     "excluded": 0,
     "level": 1,
@@ -270,6 +298,20 @@
     "excluded": 0,
     "level": 1,
     "name": "stm32f411ceu6",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32f411re",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32f446re",
     "reg_match": 0
   },
   {
@@ -326,6 +368,13 @@
     "excluded": 0,
     "level": 0,
     "name": "stm32f103rb",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32f103rb-nucleo-bme280-smoke",
     "reg_match": 0
   },
   {
@@ -584,6 +633,13 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "stm32h533re",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "stm32u575",
     "reg_match": 0
   },
@@ -609,11 +665,25 @@
     "reg_match": 0
   },
   {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32c031c6",
+    "reg_match": 0
+  },
+  {
     "behavior": true,
     "excluded": 6,
     "level": 2,
     "name": "stm32l073",
     "reg_match": 54
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32l432kc",
+    "reg_match": 0
   },
   {
     "behavior": true,
@@ -682,6 +752,27 @@
     "behavior": true,
     "excluded": 0,
     "level": 1,
+    "name": "atmega4809",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "atmega32u4",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "mimxrt1062-teensy41",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
     "name": "atmega1281",
     "reg_match": 0
   },
@@ -704,6 +795,13 @@
     "excluded": 0,
     "level": 0,
     "name": "atsamd51-pybadge",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "mspm0g3507",
     "reg_match": 0
   },
   {
@@ -816,6 +914,153 @@
     "excluded": 0,
     "level": 1,
     "name": "ch32v003f4p6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32l103c8t6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v005f6p6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32x035c8t6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v006k8u6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v203c8t6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v003f4u6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v003a4m6",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "at32f421g8u7",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "ch32v003j4m6",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32h2",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32c5",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32c61",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "nrf54l05",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "nrf54l10",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32p4",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32s2",
+    "reg_match": 0
+  },
+  {
+    "behavior": true,
+    "excluded": 0,
+    "level": 1,
+    "name": "esp32s2-arduino",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "rp2040-feather",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "rp2350-feather",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "stm32h723zg",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
+    "name": "esp32c6fh4",
     "reg_match": 0
   }
 ]

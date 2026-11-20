@@ -41,6 +41,15 @@ ram:
   size: "96KB"
 
 peripherals:
+  # RM0351 / CMSIS UID_BASE: exactly 96 read-only bits. The descriptor
+  # documents its unspecified simulated identity; it is not a silicon UID.
+  - id: "uid"
+    type: "declarative"
+    base_address: 0x1FFF7590
+    size: "12B"
+    config:
+      path: "../peripherals/stm32l476/uid.yaml"
+
   - id: "rcc"
     type: "rcc"
     base_address: 0x40021000
@@ -306,6 +315,9 @@ peripherals:
     size: "1KB"
     irq: 28
     config:
+      # Channel outputs reach the pads through the L4 AF table
+      # (bus/attach.rs STM32L4_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32l4"
       debug_schema: "../peripherals/stm32l476/tim2.yaml"
       width: 32
 
@@ -316,6 +328,9 @@ peripherals:
     size: "1KB"
     irq: 50
     config:
+      # Channel outputs reach the pads through the L4 AF table
+      # (bus/attach.rs STM32L4_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32l4"
       debug_schema: "../peripherals/stm32l476/tim5.yaml"
       width: 32
 
@@ -326,6 +341,9 @@ peripherals:
     size: "1KB"
     irq: 29
     config:
+      # Channel outputs reach the pads through the L4 AF table
+      # (bus/attach.rs STM32L4_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32l4"
       debug_schema: "../peripherals/stm32l476/tim3.yaml"
 
   - id: "tim4"
@@ -334,6 +352,9 @@ peripherals:
     size: "1KB"
     irq: 30
     config:
+      # Channel outputs reach the pads through the L4 AF table
+      # (bus/attach.rs STM32L4_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32l4"
       debug_schema: "../peripherals/stm32l476/tim4.yaml"
 
   # 16-bit basic timers TIM6, TIM7 — used by HAL as time base.
@@ -367,6 +388,9 @@ peripherals:
     size: "1KB"
     irq: 27
     config:
+      # Channel outputs reach the pads through the L4 AF table
+      # (bus/attach.rs STM32L4_TIMER_PADS, from stm32duino PinMap_TIM).
+      pad_map: "stm32l4"
       debug_schema: "../peripherals/stm32l476/tim1.yaml"
       advanced: true
 

@@ -184,7 +184,10 @@ pub fn build_node_with_options(
                 };
                 let bus =
                     crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
-                Ok(Box::new(crate::system::cortex_a::load_elf(bus, &bytes)?))
+                let core = crate::system::arch_policy::cortex_a_core(chip)?;
+                Ok(Box::new(crate::system::cortex_a::load_elf_for_core(
+                    bus, &bytes, core,
+                )?))
             }
             #[cfg(not(all(feature = "qemu-arm", not(target_arch = "wasm32"))))]
             anyhow::bail!("node '{id}': Cortex-A7 needs a native build with --features qemu-arm; browser execution is unavailable")
@@ -203,6 +206,19 @@ pub fn build_node_with_options(
             }
             #[cfg(not(all(feature = "qemu-arm-system", not(target_arch = "wasm32"))))]
             anyhow::bail!("node '{id}': Cortex-R5F needs a native build with --features qemu-arm-system; browser execution is unavailable")
+        }
+        MachineFamily::Arm7Tdmi => {
+            #[cfg(all(feature = "qemu-arm-system", not(target_arch = "wasm32")))]
+            {
+                let NodeFirmware::Elf(bytes) = firmware else {
+                    anyhow::bail!("node '{id}': ARM7TDMI takes a bare-metal ELF");
+                };
+                let bus =
+                    crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+                Ok(Box::new(crate::system::arm7::load_elf(bus, chip, &bytes)?))
+            }
+            #[cfg(not(all(feature = "qemu-arm-system", not(target_arch = "wasm32"))))]
+            anyhow::bail!("node '{id}': ARM7TDMI needs a native build with --features qemu-arm-system; browser execution is unavailable")
         }
         MachineFamily::RiscV => {
             build_riscv_node(id, chip, system, firmware, opts.plugins, opts.fab, blobs)
@@ -225,6 +241,15 @@ pub fn build_node_with_options(
             };
             let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
             Ok(Box::new(crate::system::mips::load_elf(bus, &bytes)?))
+        }
+        MachineFamily::Msp430 => {
+            let NodeFirmware::Elf(bytes) = firmware else {
+                anyhow::bail!("node '{id}': MSP430 takes an ELF");
+            };
+            let bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, opts.plugins)?;
+            Ok(Box::new(crate::system::msp430::load_elf(
+                bus, chip, &bytes,
+            )?))
         }
         MachineFamily::Aarch64 => {
             let NodeFirmware::Elf(bytes) = firmware else {
@@ -302,6 +327,8 @@ fn build_avr_node(
         .with_context(|| format!("node '{id}': build bus"))?;
     let mut cpu = crate::cpu::Avr::for_chip_name(&chip.name);
     cpu.load_program_image(&image);
+    // EEPROM programming time is in microseconds; count it in this clock.
+    cpu.set_cpu_hz(bus.cpu_hz);
     // SPI kits stay on the bus parking controller (SPDR clocks via
     // SystemBus::clock_parking_spi) so inspect can see the panel. I²C
     // slaves still move onto the CPU TWI model.
@@ -310,7 +337,18 @@ fn build_avr_node(
             cpu.push_i2c_slave(dev);
         }
     }
-    let machine = Machine::new(cpu, bus);
+    let mut machine = Machine::new(cpu, bus);
+    // Same run setting the C3 rom-boot / CLI hosted-fast paths apply: widen
+    // to the bus's max-safe interval once residents are walk-free (e.g.
+    // edge-serviced displays). A keypad keeps per-cycle service (#1787), so
+    // boards carrying one stay at interval 1. Exact batch boundaries keep
+    // peripheral event cadence identical to interval-1.
+    let interval = machine.max_safe_tick_interval();
+    machine.config.peripheral_tick_interval = interval;
+    machine.bus.config.peripheral_tick_interval = interval;
+    if interval > 1 {
+        machine.exact_batch_boundaries = true;
+    }
     Ok(Box::new(machine))
 }
 
@@ -470,8 +508,11 @@ fn build_riscv_node(
     fab: Option<&crate::system::efuse::FactoryMacAllocator>,
     blobs: &crate::system::builder::BlobMap,
 ) -> anyhow::Result<Box<dyn MachineTrait>> {
-    let mut bus = crate::bus::SystemBus::from_config_with_plugins(chip, system, plugins)
-        .with_context(|| format!("node '{id}': build bus"))?;
+    // A blob named after an `image_env` region fills it (the C6 mask ROM is
+    // `rom`): a process with no core checkout has no in-tree image to find.
+    let mut bus =
+        crate::bus::SystemBus::from_config_with_region_images(chip, system, plugins, blobs)
+            .with_context(|| format!("node '{id}': build bus"))?;
 
     match firmware {
         // Faithful ROM boot: the mask ROM reads the image through the flash
@@ -546,33 +587,39 @@ fn build_riscv_node(
             // that calls into the ROM jumps through a zeroed function table.
             // No ROM resolvable (the browser with no blobs) leaves the windows
             // zero, exactly as the single-chip engine does then.
-            if is_esp32c3(chip) {
-                if let Some(images) =
-                    crate::boot::esp32c3_rom::rom_images_from_blobs_or_provisioned(blobs)
-                {
-                    crate::boot::esp32c3_rom::install_fast_boot_rom(&mut bus, &images);
-                }
-            }
+            let faithful_c3_rom = is_esp32c3(chip)
+                && crate::boot::esp32c3_rom::rom_images_from_blobs_or_provisioned(blobs)
+                    .is_some_and(|images| {
+                        crate::boot::esp32c3_rom::install_fast_boot_rom(&mut bus, &images)
+                    });
             // C6 Arduino Preferences/NVS substrate (SPI_MEM + partitions @ 0x8000).
             crate::boot::esp32c6_rom::maybe_install_arduino_flash(&mut bus, chip);
-            let cpu = crate::system::riscv::configure_riscv(&mut bus);
+            let mut cpu = crate::system::riscv::configure_riscv(&mut bus);
+            if crate::boot::esp32c2_rom::is_esp32c2(chip) {
+                crate::boot::esp32c2_rom::prepare_fast_boot_cpu(&mut cpu);
+            }
+            if faithful_c3_rom {
+                crate::boot::esp32c3_rom::prepare_fast_boot_cpu(&mut cpu);
+            }
             let mut machine = Machine::new(cpu, bus);
             machine
                 .load_firmware(&image)
                 .map_err(|e| anyhow::anyhow!("node '{id}': load firmware: {e:?}"))?;
-            // Re-seed ROM .data after ELF load (mask-ROM unpack never ran).
-            if crate::boot::esp32c6_rom::is_esp32c6(chip) {
-                crate::boot::esp32c6_rom::seed_rom_data(&mut machine.bus);
+            // C2 fast boot: replay the ROM `.data` unpack and arm the matrix.
+            if crate::boot::esp32c2_rom::is_esp32c2(chip) {
+                crate::boot::esp32c2_rom::seed_rom_data(&mut machine.bus);
+                crate::boot::esp32c2_rom::arm_interrupt_matrix(&mut machine.bus);
+                crate::boot::esp32c2_rom::seed_console_uart(&mut machine.bus);
             }
             // Fast boot skips the ROM/2nd-stage bootloader that would normally
             // set the stack pointer, so seed it at the top of app SRAM (16-byte
             // aligned, RISC-V ABI) or the first prologue store faults.
-            // C6: below ROM-reserved HP SRAM (esp32c6_rom::APP_SRAM_END).
-            let sp_top = if crate::boot::esp32c6_rom::is_esp32c6(chip) {
-                crate::boot::esp32c6_rom::app_stack_top()
-            } else {
-                (chip.ram.base + chip.ram.size) as u32
-            };
+            // C6: ROM .data re-seed and the bootloader's factory map first
+            // (mask-ROM unpack never ran); its stack stays below ROM-reserved
+            // HP SRAM (esp32c6_rom::APP_SRAM_END).
+            let sp_top =
+                crate::boot::esp32c6_rom::finish_elf_fast_boot(&mut machine.bus, chip, &bytes)
+                    .unwrap_or((chip.ram.base + chip.ram.size) as u32);
             machine.cpu.set_sp(sp_top & !0xF);
             machine.cpu.set_pc(image.entry_point as u32);
             Ok(Box::new(machine))
@@ -909,7 +956,6 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
             continue;
         }
         let off = ph.p_offset as usize;
-        let n = ph.p_filesz as usize;
         check_load_segment(ph, bytes.len())?;
         let addr = if arch == crate::Arch::Mips {
             // MIPS ELFs name KSEG0/KSEG1 addresses; the bus is physical.
@@ -922,9 +968,93 @@ pub fn parse_elf_image(bytes: &[u8]) -> anyhow::Result<crate::memory::ProgramIma
         } else {
             ph.p_paddr
         };
-        image.add_segment(addr, bytes[off..off + n].to_vec());
+        for (piece_off, piece_len) in file_backed_pieces(&elf, ph) {
+            let start = off + piece_off;
+            image.add_segment(
+                addr + piece_off as u64,
+                bytes[start..start + piece_len].to_vec(),
+            );
+        }
     }
     Ok(image)
+}
+
+const EM_MSP430: u16 = 105;
+
+/// Split a `PT_LOAD` file image into the byte ranges that real sections own.
+///
+/// A `SHT_NOBITS` section has no file content, yet a linker can still place
+/// one inside a segment's `p_filesz` range. ESP-IDF 5 does exactly this on the
+/// ESP32-C6, where IROM and DROM share the 0x4200_0000 window: the rodata
+/// segment starts with `.flash_rodata_dummy`, a 192 KiB NOBITS placeholder at
+/// the *same* address as `.flash.text`. esptool drops it and the bootloader
+/// maps text and rodata through separate MMU pages, so on silicon the code is
+/// intact. Copying the filler as data would zero `.flash.text` instead.
+///
+/// Returns `(offset, len)` pieces relative to the segment's file image. With
+/// no NOBITS section inside `p_filesz` (every ordinary ELF: `.bss` sits past
+/// it) this is the whole segment, unchanged.
+///
+/// An MSP430 segment that starts at file offset 0 also loses the ELF and
+/// program headers in front of its first section.
+///
+/// Shared with the `loader` crate, so `labwired test`, the browser, the
+/// builder and a world node load the same bytes.
+pub fn file_backed_pieces(
+    elf: &goblin::elf::Elf<'_>,
+    ph: &goblin::elf::ProgramHeader,
+) -> Vec<(usize, usize)> {
+    use goblin::elf::section_header::{SHF_ALLOC, SHT_NOBITS};
+    let filesz = ph.p_filesz as usize;
+    let mut holes: Vec<(usize, usize)> = elf
+        .section_headers
+        .iter()
+        .filter(|sh| {
+            sh.sh_type == SHT_NOBITS && sh.sh_flags & u64::from(SHF_ALLOC) != 0 && sh.sh_size != 0
+        })
+        .filter_map(|sh| {
+            // The section belongs to THIS segment only when its address and
+            // its file position sit at the same offset into it. Matching on
+            // the address alone is wrong for the C6 case: the dummy shares
+            // its address with `.flash.text`, which is a different segment.
+            let at = sh.sh_addr.checked_sub(ph.p_vaddr)?;
+            if sh.sh_offset.checked_sub(ph.p_offset)? != at {
+                return None;
+            }
+            let lo = at as usize;
+            let hi = (at + sh.sh_size).min(filesz as u64) as usize;
+            (lo < hi).then_some((lo, hi))
+        })
+        .collect();
+    // msp430-elf ld starts the first segment at file offset 0, so it covers
+    // the ELF and program headers; their load address is below the flash and
+    // on some parts not mapped at all. A programmer writes sections, not
+    // headers: skip up to the first allocated section in the segment.
+    if elf.header.e_machine == EM_MSP430 && ph.p_offset == 0 {
+        let first = elf
+            .section_headers
+            .iter()
+            .filter(|sh| sh.sh_flags & u64::from(SHF_ALLOC) != 0 && sh.sh_type != SHT_NOBITS)
+            .filter(|sh| sh.sh_size != 0 && sh.sh_offset < ph.p_filesz)
+            .map(|sh| sh.sh_offset as usize)
+            .min();
+        if let Some(first) = first.filter(|f| *f > 0) {
+            holes.push((0, first));
+        }
+    }
+    holes.sort_unstable();
+    let mut pieces = Vec::new();
+    let mut cursor = 0usize;
+    for (lo, hi) in holes {
+        if lo > cursor {
+            pieces.push((cursor, lo - cursor));
+        }
+        cursor = cursor.max(hi);
+    }
+    if cursor < filesz {
+        pieces.push((cursor, filesz - cursor));
+    }
+    pieces
 }
 
 /// Load a PIC24 XC16 ELF from its **section** table (see [`parse_elf_image`]).

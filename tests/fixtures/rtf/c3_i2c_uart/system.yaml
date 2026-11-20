@@ -1,0 +1,12 @@
+# Realtime-factor workload system: ESP32-C3 + INA219 on I2C0 (GPIO4/GPIO5, 0x40).
+name: "rtf-c3-i2c-uart"
+chip: "../../../../configs/chips/esp32c3.yaml"
+cpu_hz: 160_000_000
+external_devices:
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c0"
+    route: { sda: "GPIO4", scl: "GPIO5" }
+    config:
+      i2c_address: 0x40
+board_io: []

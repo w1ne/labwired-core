@@ -1,0 +1,10 @@
+# Read BME280 CHIP_ID and raw temperature through S3 I2C0 on GPIO8/GPIO9.
+schema_version: "1.0"
+inputs:
+  firmware: "../../tests/fixtures/tier1/esp32s3-devkitc1-n16r8-bme280.elf"
+  system: "../../configs/systems/esp32s3-devkitc-1-n16r8-bme280.yaml"
+limits:
+  max_steps: 1800000
+assertions:
+  - uart_contains: "BME280_ID=0x60"
+  - uart_contains: "BME280_TEMP_RAW=0x082DC0"

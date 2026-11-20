@@ -11,7 +11,7 @@ inputs:
   version:
     description: "Immutable LabWired Core release tag to install."
     required: false
-    default: "v0.25.0"
+    default: "v0.26.0"
   output-dir:
     description: "Directory for run artifacts (result.json, uart.log, junit.xml, and reports)."
     required: false
@@ -125,7 +125,7 @@ runs:
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: labwired-${{ github.job }}-${{ github.run_id }}-${{ github.action }}
+        name: labwired-${{ github.job }}-${{ github.run_id }}-${{ github.action }}-${{ runner.arch }}
         path: ${{ inputs.output-dir }}
         if-no-files-found: error
 

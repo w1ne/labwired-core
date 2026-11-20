@@ -1,0 +1,1299 @@
+diff --git a/.github/workflows/core-ci.yml b/.github/workflows/core-ci.yml
+index 564d360e5..1c9275d2c 100644
+--- a/.github/workflows/core-ci.yml
++++ b/.github/workflows/core-ci.yml
+@@ -796 +796 @@ jobs:
+-      - name: UARTE stack-lifetime guest (FEATURE-OFF)
++      - name: UARTE and sensor interrupt guests (FEATURE-OFF)
+@@ -798,0 +799 @@ jobs:
++          LABWIRED_REQUIRE_SENSOR_FEATURE_OFF: "1"
+@@ -801 +802,5 @@ jobs:
+-          -p labwired-core --no-default-features --test microbit_v2_uarte_stack_guest
++          -p labwired-core --no-default-features
++          --test microbit_v2_uarte_stack_guest
++          --test microbit_v2_open_drain_guest
++          --test microbit_v2_mag_drdy_guest
++          --test microbit_v2_sensor_drdy_guest
+diff --git a/configs/systems/microbit-v2.yaml b/configs/systems/microbit-v2.yaml
+index f5a231647..a25fc356b 100644
+--- a/configs/systems/microbit-v2.yaml
++++ b/configs/systems/microbit-v2.yaml
+@@ -26 +26,4 @@ external_devices:
+-  # open-drain sensor interrupt P0.25 is not connected by this bounded model.
++  # magnetometer DRDY reaches P0.25 through the V2.0 inverting collector.
++  # Accelerometer INT1 uses its own collector; the KL27 participant is absent.
++  # This digital net assumes an enabled pull-up. Physical firmware must set
++  # P0.25 PIN_CNF.PULL; missing pull configuration is not enforced here.
+@@ -29,0 +33,4 @@ external_devices:
++    config:
++      int1_pin: "P0.25"
++      open_drain_pullups: [INT1]
++      inverting_collectors: [INT1]
+@@ -32,0 +40,4 @@ external_devices:
++    config:
++      drdy_pin: "P0.25"
++      open_drain_pullups: [DRDY]
++      inverting_collectors: [DRDY]
+diff --git a/crates/core/src/peripherals/nrf52/gpiote.rs b/crates/core/src/peripherals/nrf52/gpiote.rs
+index 7d488359d..ee17ce625 100644
+--- a/crates/core/src/peripherals/nrf52/gpiote.rs
++++ b/crates/core/src/peripherals/nrf52/gpiote.rs
+@@ -27,3 +27,2 @@
+-//! - **Event observation**: EVENTS_IN is *not* driven from GPIO input
+-//!   changes (no input-pin model yet). Firmware that polls EVENTS_IN
+-//!   without PPI seeing edges will never see them fire.
++//! - **Event observation**: the bus reports actual GPIO input transitions;
++//!   matching Event-mode channels latch EVENTS_IN and notify PPI/IRQ delivery.
+@@ -102,5 +100,0 @@ pub struct Nrf52Gpiote {
+-    /// Per-channel last-known input level, used to detect rising/falling
+-    /// edges against the GPIO IN registers that the bus snapshots each
+-    /// tick.  Initialized lazily when CONFIG is written.
+-    channel_in_level: [u32; 8],
+-
+@@ -455 +449,4 @@ impl Peripheral for Nrf52Gpiote {
+-                let prev = self.channel_in_level[ch] as u8;
++                // The bus supplies only changed input bits, with their new
++                // levels. Their old level is therefore the opposite level;
++                // a channel-local default cannot represent a pin that was
++                // already high when firmware enabled Event mode.
+@@ -457,3 +454,3 @@ impl Peripheral for Nrf52Gpiote {
+-                    POLARITY_LO_TO_HI => prev == 0 && new_level == 1,
+-                    POLARITY_HI_TO_LO => prev == 1 && new_level == 0,
+-                    POLARITY_TOGGLE => prev != new_level,
++                    POLARITY_LO_TO_HI => new_level == 1,
++                    POLARITY_HI_TO_LO => new_level == 0,
++                    POLARITY_TOGGLE => new_level <= 1,
+@@ -462 +458,0 @@ impl Peripheral for Nrf52Gpiote {
+-                self.channel_in_level[ch] = new_level as u32;
+@@ -490,0 +487,42 @@ mod tests {
++    #[test]
++    fn first_observed_edge_uses_the_bus_transition_not_a_channel_default() {
++        let mut g = Nrf52Gpiote::default();
++        // The bus already established a high pad baseline before Event mode
++        // was enabled; its first report is a genuine falling transition.
++        g.write_u32(OFF_CONFIG_0, 1 | (25 << 8) | (POLARITY_HI_TO_LO << 16))
++            .unwrap();
++        assert!(!g.observe_gpio_change(&[(0, 24, 0)]), "unrelated pin");
++        assert!(g.observe_gpio_change(&[(0, 25, 0)]), "first falling edge");
++        assert_eq!(g.read_u32(OFF_EVENTS_IN_0).unwrap(), 1);
++        g.write_u32(OFF_EVENTS_IN_0, 0).unwrap();
++        g.tick();
++        assert!(
++            !g.observe_gpio_change(&[(0, 25, 1)]),
++            "rising edge is masked"
++        );
++        assert_eq!(g.read_u32(OFF_EVENTS_IN_0).unwrap(), 0);
++        assert!(g.observe_gpio_change(&[(0, 25, 0)]), "next falling edge");
++    }
++
++    #[test]
++    fn event_mode_reports_the_requested_direction_and_ignores_disabled_channels() {
++        let mut g = Nrf52Gpiote::default();
++        g.write_u32(OFF_CONFIG_0, 1 | (7 << 8) | (POLARITY_LO_TO_HI << 16))
++            .unwrap();
++        assert!(!g.observe_gpio_change(&[(0, 7, 0)]));
++        assert!(g.observe_gpio_change(&[(0, 7, 1)]));
++        g.write_u32(OFF_CONFIG_0, 0).unwrap();
++        assert!(!g.observe_gpio_change(&[(0, 7, 1)]));
++    }
++
++    #[test]
++    fn toggle_channel_latches_each_reported_transition() {
++        let mut g = Nrf52Gpiote::default();
++        g.write_u32(OFF_CONFIG_0, 1 | (25 << 8) | (POLARITY_TOGGLE << 16))
++            .unwrap();
++        assert!(g.observe_gpio_change(&[(0, 25, 0)]));
++        assert!(g.observe_gpio_change(&[(0, 25, 1)]));
++        assert_eq!(g.pending_in_events.len(), 2);
++        assert!(!g.observe_gpio_change(&[(1, 25, 1)]), "other port ignored");
++    }
++
+diff --git a/crates/core/tests/common/microbit_sensor_guest.rs b/crates/core/tests/common/microbit_sensor_guest.rs
+new file mode 100644
+index 000000000..164eddc11
+--- /dev/null
++++ b/crates/core/tests/common/microbit_sensor_guest.rs
+@@ -0,0 +1,154 @@
++// SPDX-License-Identifier: MIT
++//! Source-built micro:bit DRDY guest support. No prebuilt firmware or skip path.
++#![allow(dead_code)]
++
++use labwired_config::{ChipDescriptor, SystemManifest};
++use labwired_core::bus::SystemBus;
++use labwired_core::cpu::CortexM;
++use labwired_core::system::cortex_m::configure_cortex_m;
++use labwired_core::{Bus, DebugControl, Machine};
++use sha2::{Digest, Sha256};
++use std::path::PathBuf;
++use std::process::Command;
++use std::sync::atomic::{AtomicU64, Ordering};
++
++pub type Guest = Machine<CortexM>;
++pub const RAM: u64 = 0x2000_0100;
++
++pub fn profiles() -> &'static [u32] {
++    if labwired_core::cycle_clock::event_scheduler_enabled() {
++        &[1, 512]
++    } else {
++        &[1]
++    }
++}
++
++/// Build a pinned source fixture, then construct a fresh machine. A missing
++/// compiler fails the test; CI must install gcc-arm-none-eabi.
++pub fn machine(source: &str, interval: u32, configure: impl FnOnce(&mut SystemManifest)) -> Guest {
++    let scheduler = labwired_core::cycle_clock::event_scheduler_enabled();
++    if std::env::var("LABWIRED_REQUIRE_SENSOR_FEATURE_OFF").as_deref() == Ok("1") {
++        assert!(
++            !scheduler,
++            "feature-off guest must not enable event-scheduler"
++        );
++        assert_eq!(
++            interval, 1,
++            "feature-off guest must use the per-cycle profile"
++        );
++    }
++    assert!(
++        scheduler || interval == 1,
++        "the feature-off walk requires interval 1"
++    );
++    println!("MICROBIT_DRDY_GUEST_PROFILE source={source} event_scheduler={scheduler} interval={interval}");
++
++    static NEXT: AtomicU64 = AtomicU64::new(0);
++    let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
++    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
++    let stem = source.strip_suffix(".S").expect("assembly fixture");
++    let elf = std::env::temp_dir().join(format!(
++        "microbit-{stem}-{}-{interval}-{sequence}.elf",
++        std::process::id()
++    ));
++    let output = Command::new("arm-none-eabi-gcc")
++        .current_dir(root.join("crates/core/tests/fixtures/microbit-drdy"))
++        .args(["-mcpu=cortex-m4", "-mthumb", "-nostdlib", "-Wl,-T,guest.ld", "-o"])
++        .arg(&elf)
++        .arg(source)
++        .output()
++        .expect("arm-none-eabi-gcc is required; install gcc-arm-none-eabi for source-built guest acceptance");
++    assert!(
++        output.status.success(),
++        "{source} must compile from source: {}\n{}",
++        String::from_utf8_lossy(&output.stdout),
++        String::from_utf8_lossy(&output.stderr)
++    );
++    let bytes = std::fs::read(&elf).expect("compiled guest ELF");
++    let hash = format!("{:x}", Sha256::digest(&bytes));
++    println!("MICROBIT_DRDY_GUEST_SHA256={hash};source={source};interval={interval}");
++    if let Ok(directory) = std::env::var("LABWIRED_GUEST_ARTIFACT_DIR") {
++        std::fs::create_dir_all(&directory).expect("guest artifact directory");
++        std::fs::write(
++            PathBuf::from(directory).join(format!("{stem}-{hash}-{interval}-{sequence}.elf")),
++            &bytes,
++        )
++        .expect("retain guest ELF");
++    }
++    let firmware = labwired_loader::load_elf(&elf).expect("load guest ELF");
++    std::fs::remove_file(&elf).expect("remove temporary guest ELF");
++
++    let system = root.join("configs/systems/microbit-v2.yaml");
++    let mut manifest = SystemManifest::from_file(&system).expect("micro:bit board manifest");
++    let chip_path = system.parent().unwrap().join(&manifest.chip);
++    let chip = ChipDescriptor::from_file(&chip_path).expect("nRF52833 chip descriptor");
++    manifest.chip = chip_path.to_string_lossy().into_owned();
++    configure(&mut manifest);
++    let mut bus = SystemBus::from_config(&chip, &manifest).expect("guest board construction");
++    assert_eq!(bus.cpu_hz, 64_000_000, "guest timing assumes 64 MHz");
++    let (cpu, _) = configure_cortex_m(&mut bus);
++    let mut guest = Machine::new(cpu, bus);
++    guest.config.peripheral_tick_interval = interval;
++    guest.bus.config.peripheral_tick_interval = interval;
++    guest
++        .load_firmware(&firmware)
++        .expect("install guest firmware");
++    guest
++}
++
++pub fn observed(guest: &mut Guest, level: u32, falls: u32) {
++    assert_eq!(guest.bus.read_u32(RAM).unwrap(), level, "guest GPIO P0.25");
++    assert_eq!(
++        guest.bus.read_u32(RAM + 8).unwrap(),
++        falls,
++        "guest falling events"
++    );
++    assert!(
++        guest.bus.read_u32(RAM + 4).unwrap() > 0,
++        "guest sampled the pad"
++    );
++    assert_eq!(guest.bus.read_u32(RAM + 12).unwrap(), 0, "guest bus errors");
++}
++
++/// The host supplies firmware intent in RAM. Firmware owns every TWIM write
++/// and read. Wait for completion and a subsequent pad sample, with a finite
++/// 1-ms simulated-cycle budget that cannot mask the 10-ms sensor conversion.
++pub fn command(guest: &mut Guest, code: u32) {
++    guest.bus.write_u32(RAM + 0x14, 0).unwrap();
++    guest.bus.write_u32(RAM + 0x10, code).unwrap();
++    let start = guest.total_cycles;
++    loop {
++        assert!(
++            guest.total_cycles - start < 64_000,
++            "guest command {code} timed out"
++        );
++        guest.run(Some(32)).unwrap();
++        if guest.bus.read_u32(RAM + 0x14).unwrap() == code
++            && guest.bus.read_u32(RAM + 0x10).unwrap() == 0
++        {
++            break;
++        }
++    }
++    let samples = guest.bus.read_u32(RAM + 4).unwrap();
++    // Pin drives drain on one peripheral tick and Nordic input changes are
++    // observed on the next. Leave two tick intervals plus one guest loop,
++    // without allowing the following 10-ms conversion to hide an ack release.
++    let settle_until =
++        guest.total_cycles + 2 * u64::from(guest.config.peripheral_tick_interval.max(1)) + 256;
++    while guest.total_cycles < settle_until {
++        assert!(
++            guest.total_cycles - start < 64_000,
++            "guest did not sample after command {code}"
++        );
++        guest.run(Some(32)).unwrap();
++    }
++    assert!(
++        guest.bus.read_u32(RAM + 4).unwrap() > samples,
++        "fresh sample after command {code}"
++    );
++    assert_eq!(
++        guest.bus.read_u32(RAM + 12).unwrap(),
++        0,
++        "guest command {code} bus errors"
++    );
++}
+diff --git a/crates/core/tests/fixtures/microbit-drdy/README.md b/crates/core/tests/fixtures/microbit-drdy/README.md
+new file mode 100644
+index 000000000..44447a3ac
+--- /dev/null
++++ b/crates/core/tests/fixtures/microbit-drdy/README.md
+@@ -0,0 +1,96 @@
++# Source-built micro:bit DRDY acceptance fixtures
++
++These are core regression fixtures. They do not depend on an examples checkout
++or a committed ELF. Each test builds its Cortex-M4 assembly with
++`arm-none-eabi-gcc`, loads the ELF through `labwired-loader`, and runs the real
++nRF52833 TWIM/EasyDMA, GPIO and GPIOTE models. A missing compiler fails the test.
++
++## Provenance
++
++The source behavior comes from
++[CrispStrobe/labwired-core at d543a46bba894f9e7e3aa31cdba6feb561b2d08e](https://github.com/CrispStrobe/labwired-core/tree/d543a46bba894f9e7e3aa31cdba6feb561b2d08e).
++All fixture source retains the MIT SPDX identifier. Explicit `.file` directives
++make ELF symbol metadata deterministic across GCC temporary object names; they
++do not change the loadable image.
++
++| Fixture | Fork source and extraction |
++| --- | --- |
++| `mag-drdy.S` | `examples/microbit-v2/mag-drdy.S`; local include path and P0.25 pull-up initialization changed |
++| `motion-drdy.S` | `examples/microbit-v2/motion-drdy.S`; local include path and P0.25 pull-up initialization changed |
++| `twim-register.inc` | Register-transfer and bounded-wait routines from `examples/microbit-v2/motion-polled.inc`; sample-polling and initialization routines omitted |
++| `shared-gpiote.S` | Default P0.25 observer from `examples/microbit-v2/shared-gpiote.S`; unrelated optional nRF52840 fixture driver omitted; P0.25 pull-up initialized |
++| `guest.ld` | `examples/microbit-v2/board-io.ld` |
++
++The first-edge assertion requires the behavior corrected by fork commit
++[295a01c7ef497767d8ba3507f841585e0bd3c171](https://github.com/CrispStrobe/labwired-core/commit/295a01c7ef497767d8ba3507f841585e0bd3c171).
++It must not be satisfied by priming the input with an artificial edge.
++
++## Test contracts
++
++- `microbit_v2_open_drain_guest` places two generic PCF8574 outputs on P0.25.
++  Host writes go through TWIM/EasyDMA; the host never writes the pad. Firmware
++  samples the line and counts falling GPIOTE events. It checks held-low state
++  when either participant releases, both participant orders, explicit collector
++  inversion, first falling edge, an absent I2C address, and cold reconstruction.
++- Its autonomous fixture adds a 1,000-us conversion. No device-register read
++  occurs between START and the first edge. Cancellation must finish within
++  500 us, and acknowledgement must be observed released within 500 us, before
++  the next conversion. A ready conversion cannot emit duplicate edges.
++- `microbit_v2_mag_drdy_guest` and `microbit_v2_sensor_drdy_guest` use the shipped
++  LSM303AGR descriptors and board placement. Firmware owns TWIM and all sensor
++  register accesses. Host writes change only RAM command intent. The assertions
++  cover route masking, completed samples, high-byte acknowledgement, enabled
++  axis groups, a retained shared low, polarity, cancellation and recurrence.
++- Every fixture enables the P0.25 internal pull-up. The board model still
++  assumes an ideal, permanently biased pulled-up net; these tests do not
++  reject firmware that omits pull configuration. The physical requirement
++  is documented in the [Foundation I2C notes](https://tech.microbit.org/hardware/i2c/).
++- CPU reset retains off-chip output state. A newly constructed SystemBus starts
++  every open-drain driver released. These tests do not claim an external-device
++  power-reset API or peripheral reset fidelity.
++- Observer-only device buses and additional output-pad fanout belong to their
++  separate bus integration tests. These guests do not add those APIs.
++
++The helper selects interval 1 without `event-scheduler`, and intervals 1 and 512
++with it. Both runs are required. The 512 profile asserts guest observations and
++edge counts; it does not claim single-cycle interrupt delivery. Sensor command
++receipts allow two peripheral service ticks and a guest sample while retaining
++a 1-ms command deadline, shorter than the modeled 10-ms sensor conversion.
++
++## Execution
++
++Work-1 has ARM GCC 13.2.1, Rust 1.95.0 and Cargo 1.95.0. CI needs the
++`gcc-arm-none-eabi` package; these assembly fixtures do not need vendor firmware,
++newlib or the Rust ARM target. The existing PR workspace and feature-off UARTE
++lanes install that compiler. The workspace shards discover these integration
++targets automatically with the scheduler enabled. The feature-off step names
++all three targets explicitly.
++
++From the repository root, with the integration owner's chosen Cargo target:
++
++```sh
++LABWIRED_REQUIRE_SENSOR_FEATURE_OFF=1 \
++  cargo test --locked -p labwired-core --no-default-features \
++  --test microbit_v2_open_drain_guest \
++  --test microbit_v2_mag_drdy_guest \
++  --test microbit_v2_sensor_drdy_guest -- --nocapture
++
++LABWIRED_REQUIRE_SENSOR_FEATURE_OFF=0 \
++  cargo test --locked -p labwired-core --no-default-features --features event-scheduler \
++  --test microbit_v2_open_drain_guest \
++  --test microbit_v2_mag_drdy_guest \
++  --test microbit_v2_sensor_drdy_guest -- --nocapture
++```
++
++Do not use `microbit-board-io-test` for the feature-off run: that feature implies
++`event-scheduler`. Each build prints the scheduler profile and ELF SHA-256.
++Set `LABWIRED_GUEST_ARTIFACT_DIR` to retain the compiled ELFs as receipts.
++
++For negative controls, use an isolated source copy. Disable autonomous completion
++while retaining read-driven readiness: `guest_sees_autonomous_data_ready_without_polling`
++must fail. Restore the old GPIOTE input-cache implementation while retaining the
++new resolver: `guest_observes_first_gpiote_falling_edge_after_channel_enable` must
++fail. Bypass retained resolution with the newest raw driver level: the two-driver
++sequence must fail when A releases while B still holds low. Restore each change
++before recording the corrected pass. No control needs a baseline or validation
++acknowledgement edit.
+diff --git a/crates/core/tests/fixtures/microbit-drdy/guest.ld b/crates/core/tests/fixtures/microbit-drdy/guest.ld
+new file mode 100644
+index 000000000..fb9a86759
+--- /dev/null
++++ b/crates/core/tests/fixtures/microbit-drdy/guest.ld
+@@ -0,0 +1,8 @@
++/* SPDX-License-Identifier: MIT */
++ENTRY(reset)
++SECTIONS {
++    . = 0;
++    .vectors : { KEEP(*(.vectors)) }
++    . = 0x100;
++    .text : { *(.text*) *(.rodata*) }
++}
+diff --git a/crates/core/tests/fixtures/microbit-drdy/mag-drdy.S b/crates/core/tests/fixtures/microbit-drdy/mag-drdy.S
+new file mode 100644
+index 000000000..c079556f5
+--- /dev/null
++++ b/crates/core/tests/fixtures/microbit-drdy/mag-drdy.S
+@@ -0,0 +1,116 @@
++/* SPDX-License-Identifier: MIT
++ * Original TWIM0 EasyDMA driver and falling-edge GPIOTE observer.
++ * RAM +00 line, +04 loops, +08 falls, +0c bus errors, +10 host command,
++ * +14 completed command, +18 last read byte, +1c identity.
++ * Commands change only firmware intent; the host never writes sensor/GPIO.
++ */
++.file "mag-drdy.S"
++.syntax unified
++.cpu cortex-m4
++.thumb
++.section .vectors,"a"
++.word 0x20020000
++.word reset
++.section .text,"ax"
++.thumb_func
++.global reset
++reset:
++    ldr r0, =0x50000764    /* GPIO0.PIN_CNF[25] */
++    movs r1, #0x0c        /* input connected, internal pull-up enabled */
++    str r1, [r0]
++    ldr r8, =0x40003000
++    ldr r9, =0x20000200
++    ldr r10, =0x20000100
++    movs r0, #8
++    str r0, [r8, #0x508]
++    movs r0, #16
++    str r0, [r8, #0x50c]
++    ldr r0, =0x06400000
++    str r0, [r8, #0x524]
++    movs r0, #6
++    str r0, [r8, #0x500]
++    ldr r0, =0x40006510
++    ldr r1, =0x00021901 /* P0.25 event, high to low */
++    str r1, [r0]
++    movs r0, #0x1e
++    movs r1, #0x4f
++    movs r2, #1
++    add r3, r10, #0x1c
++    bl motion_read
++    movs r1, #0x60
++    movs r2, #0x8c /* continuous 100 Hz, route remains reset off */
++    bl motion_write
++loop:
++    ldr r0, =0x50000510
++    ldr r1, [r0]
++    lsrs r1, #25
++    and r1, r1, #1
++    str r1, [r10]
++    ldr r1, [r10, #4]
++    adds r1, #1
++    str r1, [r10, #4]
++    ldr r0, =0x40006100
++    ldr r1, [r0]
++    cbz r1, command
++    movs r1, #0
++    str r1, [r0]
++    ldr r1, [r10, #8]
++    adds r1, #1
++    str r1, [r10, #8]
++command:
++    ldr r7, [r10, #0x10]
++    cmp r7, #0
++    beq loop
++    movs r0, #0x1e
++    cmp r7, #1
++    beq enable_route
++    cmp r7, #2
++    beq mask_route
++    cmp r7, #3
++    beq low_read
++    cmp r7, #4
++    beq high_read
++    cmp r7, #5
++    beq idle
++    cmp r7, #6
++    beq start
++    cmp r7, #7
++    beq status_read
++    movs r1, #0x64 /* command 8: threshold source, not DRDY ack */
++    b read_byte
++status_read:
++    movs r1, #0x67
++    b read_byte
++low_read:
++    movs r1, #0x68
++    b read_byte
++high_read:
++    movs r1, #0x69
++read_byte:
++    movs r2, #1
++    add r3, r10, #0x18
++    bl motion_read
++    b complete
++idle:
++    movs r1, #0x60
++    movs r2, #0x8f
++    b write_byte
++start:
++    movs r1, #0x60
++    movs r2, #0x8c
++    b write_byte
++mask_route:
++    movs r1, #0x62
++    movs r2, #0
++    b write_byte
++enable_route:
++    movs r1, #0x62
++    movs r2, #1
++write_byte:
++    bl motion_write
++complete:
++    str r7, [r10, #0x14]
++    movs r0, #0
++    str r0, [r10, #0x10]
++    b loop
++.include "twim-register.inc"
+diff --git a/crates/core/tests/fixtures/microbit-drdy/motion-drdy.S b/crates/core/tests/fixtures/microbit-drdy/motion-drdy.S
+new file mode 100644
+index 000000000..a85542cd6
+--- /dev/null
++++ b/crates/core/tests/fixtures/microbit-drdy/motion-drdy.S
+@@ -0,0 +1,185 @@
++/* SPDX-License-Identifier: MIT
++ * Original TWIM0 EasyDMA driver and falling-edge GPIOTE observer.
++ * RAM +00 line, +04 loops, +08 falls, +0c bus errors, +10 host command,
++ * +14 completed command, +18 last read byte, +1c identity.
++ * Commands change only firmware intent; the host never writes sensor/GPIO.
++ */
++.file "motion-drdy.S"
++.syntax unified
++.cpu cortex-m4
++.thumb
++.section .vectors,"a"
++.word 0x20020000
++.word reset
++.section .text,"ax"
++.thumb_func
++.global reset
++reset:
++    ldr r0, =0x50000764    /* GPIO0.PIN_CNF[25] */
++    movs r1, #0x0c        /* input connected, internal pull-up enabled */
++    str r1, [r0]
++    ldr r8, =0x40003000
++    ldr r9, =0x20000200
++    ldr r10, =0x20000100
++    movs r0, #8
++    str r0, [r8, #0x508]
++    movs r0, #16
++    str r0, [r8, #0x50c]
++    ldr r0, =0x06400000
++    str r0, [r8, #0x524]
++    movs r0, #6
++    str r0, [r8, #0x500]
++    ldr r0, =0x40006510
++    ldr r1, =0x00021901 /* P0.25 event, high to low */
++    str r1, [r0]
++    movs r0, #0x1e
++    movs r1, #0x4f
++    movs r2, #1
++    add r3, r10, #0x1c
++    bl motion_read
++    movs r1, #0x60
++    movs r2, #0x8c /* continuous 100 Hz, route remains reset off */
++    bl motion_write
++loop:
++    ldr r0, =0x50000510
++    ldr r1, [r0]
++    lsrs r1, #25
++    and r1, r1, #1
++    str r1, [r10]
++    ldr r1, [r10, #4]
++    adds r1, #1
++    str r1, [r10, #4]
++    ldr r0, =0x40006100
++    ldr r1, [r0]
++    cbz r1, command
++    movs r1, #0
++    str r1, [r0]
++    ldr r1, [r10, #8]
++    adds r1, #1
++    str r1, [r10, #8]
++command:
++    ldr r7, [r10, #0x10]
++    cmp r7, #0
++    beq loop
++    movs r0, #0x1e
++    cmp r7, #1
++    beq enable_route
++    cmp r7, #2
++    beq mask_route
++    cmp r7, #3
++    beq low_read
++    cmp r7, #4
++    beq high_read
++    cmp r7, #5
++    beq idle
++    cmp r7, #6
++    beq start
++    cmp r7, #7
++    beq status_read
++    cmp r7, #9
++    bhs accel_command
++    movs r1, #0x64 /* command 8: threshold source, not DRDY ack */
++    b read_byte
++status_read:
++    movs r1, #0x67
++    b read_byte
++low_read:
++    movs r1, #0x68
++    b read_byte
++high_read:
++    movs r1, #0x69
++read_byte:
++    movs r2, #1
++    add r3, r10, #0x18
++    bl motion_read
++    b complete
++idle:
++    movs r1, #0x60
++    movs r2, #0x8f
++    b write_byte
++start:
++    movs r1, #0x60
++    movs r2, #0x8c
++    b write_byte
++mask_route:
++    movs r1, #0x62
++    movs r2, #0
++    b write_byte
++enable_route:
++    movs r1, #0x62
++    movs r2, #1
++write_byte:
++    bl motion_write
++    b complete
++accel_command:
++    movs r0, #0x19
++    cmp r7, #9
++    beq accel_enable
++    cmp r7, #10
++    beq accel_mask
++    cmp r7, #11
++    beq accel_start
++    cmp r7, #12
++    beq accel_low_x
++    cmp r7, #13
++    beq accel_high_x
++    cmp r7, #14
++    beq accel_high_y
++    cmp r7, #15
++    beq accel_high_z
++    cmp r7, #16
++    beq accel_active_low
++    cmp r7, #17
++    beq accel_active_high
++    cmp r7, #18
++    beq accel_xy
++    cmp r7, #19
++    beq accel_idle
++    movs r1, #0x27 /* command 20 reads acceleration status */
++    b read_byte
++accel_enable:
++    movs r1, #0x22
++    movs r2, #0x10
++    b write_byte
++accel_mask:
++    movs r1, #0x22
++    movs r2, #0
++    b write_byte
++accel_start:
++    movs r1, #0x20
++    movs r2, #0x57
++    b write_byte
++accel_xy:
++    movs r1, #0x20
++    movs r2, #0x53
++    b write_byte
++accel_idle:
++    movs r1, #0x20
++    movs r2, #7
++    b write_byte
++accel_low_x:
++    movs r1, #0x28
++    b read_byte
++accel_high_x:
++    movs r1, #0x29
++    b read_byte
++accel_high_y:
++    movs r1, #0x2b
++    b read_byte
++accel_high_z:
++    movs r1, #0x2d
++    b read_byte
++accel_active_low:
++    movs r1, #0x25
++    movs r2, #2
++    b write_byte
++accel_active_high:
++    movs r1, #0x25
++    movs r2, #0
++    b write_byte
++complete:
++    str r7, [r10, #0x14]
++    movs r0, #0
++    str r0, [r10, #0x10]
++    b loop
++.include "twim-register.inc"
+diff --git a/crates/core/tests/fixtures/microbit-drdy/shared-gpiote.S b/crates/core/tests/fixtures/microbit-drdy/shared-gpiote.S
+new file mode 100644
+index 000000000..a6c058cae
+--- /dev/null
++++ b/crates/core/tests/fixtures/microbit-drdy/shared-gpiote.S
+@@ -0,0 +1,44 @@
++/* SPDX-License-Identifier: MIT
++ * Sample P0.25 and count falling-edge GPIOTE channel events in guest RAM.
++ * The host performs real TWIM transfers; it never writes the input pad.
++ */
++.file "shared-gpiote.S"
++.syntax unified
++.cpu cortex-m4
++.thumb
++.section .vectors,"a"
++.word 0x20020000
++.word reset
++.section .text,"ax"
++.thumb_func
++.global reset
++reset:
++    ldr r0, =0x50000764    /* GPIO0.PIN_CNF[25] */
++    movs r1, #0x0c        /* input connected, internal pull-up enabled */
++    str r1, [r0]
++    ldr r0, =0x50000000
++    ldr r1, =0x20000100
++    ldr r4, =0x40006100    /* EVENTS_IN[0] */
++    ldr r6, =0x40006510    /* CONFIG[0] */
++    movs r2, #0
++    str r2, [r4]
++    ldr r2, =0x00021901   /* P0.25 Event mode, high to low */
++    str r2, [r6]
++    movs r3, #0
++    movs r5, #0
++    str r5, [r1, #8]
++loop:
++    ldr r2, [r0, #0x510]
++    lsrs r2, r2, #25
++    and r2, r2, #1
++    str r2, [r1]
++    adds r3, #1
++    str r3, [r1, #4]
++    ldr r2, [r4]
++    cbz r2, no_event
++    adds r5, #1
++    str r5, [r1, #8]
++    movs r2, #0
++    str r2, [r4]
++no_event:
++    b loop
+diff --git a/crates/core/tests/fixtures/microbit-drdy/twim-register.inc b/crates/core/tests/fixtures/microbit-drdy/twim-register.inc
+new file mode 100644
+index 000000000..9928843ae
+--- /dev/null
++++ b/crates/core/tests/fixtures/microbit-drdy/twim-register.inc
+@@ -0,0 +1,78 @@
++/* SPDX-License-Identifier: MIT
++ * Source-built TWIM0 register transfers shared by the DRDY guests.
++ * r8=TWIM, r9=TX buffer, r10=receipt RAM. No status-polling sample loop.
++ */
++.align 2
++/* r0=slave,r1=register,r2=value. */
++.thumb_func
++motion_write:
++    push {r0-r6,lr}
++    str r0, [r8, #0x588]
++    strb r1, [r9]
++    strb r2, [r9, #1]
++    str r9, [r8, #0x544]
++    movs r4, #2
++    str r4, [r8, #0x548]
++    movw r4, #0x200 /* LASTTX -> STOP */
++    str r4, [r8, #0x200]
++    bl motion_clear_events
++    movs r4, #1
++    str r4, [r8, #8]
++    bl motion_wait
++    pop {r0-r6,pc}
++
++/* r0=slave,r1=SUB,r2=length,r3=guest RAM destination. */
++.thumb_func
++motion_read:
++    push {r0-r6,lr}
++    str r0, [r8, #0x588]
++    strb r1, [r9]
++    str r9, [r8, #0x544]
++    movs r4, #1
++    str r4, [r8, #0x548]
++    str r3, [r8, #0x534]
++    str r2, [r8, #0x538]
++    movw r4, #0x1080 /* LASTTX -> STARTRX; LASTRX -> STOP */
++    str r4, [r8, #0x200]
++    bl motion_clear_events
++    movs r4, #1
++    str r4, [r8, #8]
++    bl motion_wait
++    pop {r0-r6,pc}
++
++.thumb_func
++motion_clear_events:
++    movs r4, #0
++    str r4, [r8, #0x104]
++    str r4, [r8, #0x124]
++    movs r4, #7
++    str r4, [r8, #0x4c4] /* ERRORSRC W1C */
++    bx lr
++
++/* Bounded wait. Errors/timeouts are persistent guest receipts, never ignored. */
++.thumb_func
++motion_wait:
++    push {r4-r6,lr}
++    movw r4, #60000
++motion_wait_loop:
++    ldr r5, [r8, #0x124]
++    cbnz r5, motion_bus_error
++    ldr r5, [r8, #0x104]
++    cbnz r5, motion_wait_done
++    subs r4, #1
++    bne motion_wait_loop
++    ldr r6, [r10, #0x0c]
++    orr r6, r6, #0x80000000
++    b motion_record_error
++motion_bus_error:
++    ldr r5, [r8, #0x4c4]
++    ldr r6, [r10, #0x0c]
++    orrs r6, r5
++    orr r6, r6, #0x10000
++motion_record_error:
++    str r6, [r10, #0x0c]
++    movs r5, #1
++    str r5, [r8, #0x14]
++motion_wait_done:
++    pop {r4-r6,pc}
++.ltorg
+diff --git a/crates/core/tests/microbit_v2_mag_drdy_guest.rs b/crates/core/tests/microbit_v2_mag_drdy_guest.rs
+new file mode 100644
+index 000000000..169c4fb9c
+--- /dev/null
++++ b/crates/core/tests/microbit_v2_mag_drdy_guest.rs
+@@ -0,0 +1,48 @@
++// SPDX-License-Identifier: MIT
++//! Guest owns TWIM0, sensor routing/acknowledgement and GPIO/GPIOTE reads.
++//! Source fixtures live under tests/fixtures; ARM GCC is required.
++use labwired_core::{Bus, DebugControl};
++
++#[path = "common/microbit_sensor_guest.rs"]
++mod guest;
++use guest::{command, observed, RAM};
++
++fn proof(interval: u32) {
++    let mut m = guest::machine("mag-drdy.S", interval, |_| {});
++    m.run(Some(2_000_000)).unwrap(); // conversion without sensor/status reads
++    assert_eq!(m.bus.read_u8(RAM + 0x1c).unwrap(), 0x40);
++    observed(&mut m, 1, 0); // ready but route default masked
++    command(&mut m, 1); // expose an already-ready sample
++    observed(&mut m, 0, 1);
++    command(&mut m, 7); // status is not acknowledgement
++    assert_eq!(m.bus.read_u8(RAM + 0x18).unwrap() & 8, 8);
++    observed(&mut m, 0, 1);
++    command(&mut m, 8); // threshold source is not acknowledgement
++    command(&mut m, 3); // low byte is not acknowledgement
++    observed(&mut m, 0, 1);
++    command(&mut m, 2); // routing mask releases collector
++    observed(&mut m, 1, 1);
++    command(&mut m, 1); // sample still ready
++    observed(&mut m, 0, 2);
++    command(&mut m, 4); // high-byte-only acknowledges
++    observed(&mut m, 1, 2);
++    command(&mut m, 7);
++    assert_eq!(m.bus.read_u8(RAM + 0x18).unwrap() & 8, 0);
++    m.run(Some(2_000_000)).unwrap(); // second autonomous conversion
++    observed(&mut m, 0, 3);
++    command(&mut m, 5); // idle preserves unread ready sample
++    observed(&mut m, 0, 3);
++    command(&mut m, 4);
++    m.run(Some(2_000_000)).unwrap();
++    observed(&mut m, 1, 3); // no new conversion in idle
++    command(&mut m, 6);
++    command(&mut m, 5); // cancel in-flight conversion
++    m.run(Some(2_000_000)).unwrap();
++    observed(&mut m, 1, 3);
++}
++#[test]
++fn guest_observes_mag_drdy_profiles() {
++    for &interval in guest::profiles() {
++        proof(interval);
++    }
++}
+diff --git a/crates/core/tests/microbit_v2_open_drain_guest.rs b/crates/core/tests/microbit_v2_open_drain_guest.rs
+new file mode 100644
+index 000000000..ac4a5d687
+--- /dev/null
++++ b/crates/core/tests/microbit_v2_open_drain_guest.rs
+@@ -0,0 +1,335 @@
++// SPDX-License-Identifier: MIT
++//! Real TWIM/EasyDMA drives declarative outputs; source-built firmware samples
++//! the resolved P0.25 pad and falling-edge GPIOTE events. No host pad injection.
++use labwired_config::ExternalDevice;
++use labwired_core::{Bus, DebugControl};
++
++#[path = "common/microbit_sensor_guest.rs"]
++mod guest;
++use guest::{observed, RAM};
++
++fn machine(autonomous: bool, invert_a: bool, interval: u32) -> guest::Guest {
++    guest::machine("shared-gpiote.S", interval, |manifest| {
++        // This is a generic wiring fixture, independent of the onboard sensor
++        // descriptors. Only the explicitly placed test participants drive P0.25.
++        manifest.external_devices.clear();
++        for (id, address) in [("probe-a", 0x20), ("probe-b", 0x21)] {
++            manifest.external_devices.push(ExternalDevice {
++                id: id.into(),
++                r#type: "pcf8574".into(),
++                connection: "i2c0".into(),
++                channel: None,
++                route: Default::default(),
++                config: [
++                    ("i2c_address".into(), serde_yaml::Value::from(address)),
++                    ("p0_pin".into(), serde_yaml::Value::from("P0.25")),
++                    (
++                        "open_drain_pullups".into(),
++                        serde_yaml::from_str("[P0]").unwrap(),
++                    ),
++                ]
++                .into_iter()
++                .collect(),
++            });
++            if invert_a && id == "probe-a" {
++                manifest.external_devices.last_mut().unwrap().config.insert(
++                    "inverting_collectors".into(),
++                    serde_yaml::from_str("[P0]").unwrap(),
++                );
++            }
++        }
++        if autonomous {
++            let desc = labwired_config::DeviceDescriptor::from_yaml(r#"
++schema: labwired.part/v1
++type: autonomous_ready_probe
++behavior:
++  primitive: i2c_device
++  i2c:
++    default_address: 0x22
++    registers:
++      - { name: START, addr: 0, width: 1, endian: be, access: rw, reset: 0 }
++      - { name: STATUS, addr: 1, width: 1, endian: be, access: r, reset: 0 }
++      - { name: RESULT, addr: 2, width: 1, endian: be, access: r, reset: 0 }
++    data_ready:
++      - { name: sample, start_register: START, start_mask: 1, ready_register: STATUS, ready_mask: 1, conversion_us: 1000, clear_on_read: [RESULT] }
++  outputs: [INT]
++  output_pins: { INT: int_pin }
++  rules:
++    - on: { data_ready: sample }
++      do: [ { pin: INT, level: 0 } ]
++    - on: { read: RESULT }
++      do: [ { pin: INT, level: 1 } ]
++"#).unwrap();
++            manifest
++                .parts
++                .push(labwired_config::PartPack::Inline(Box::new(desc)));
++            manifest.external_devices.push(ExternalDevice {
++                id: "autonomous-probe".into(),
++                r#type: "autonomous_ready_probe".into(),
++                connection: "i2c0".into(),
++                channel: None,
++                route: Default::default(),
++                config: [
++                    ("int_pin".into(), serde_yaml::Value::from("P0.25")),
++                    (
++                        "open_drain_pullups".into(),
++                        serde_yaml::from_str("[INT]").unwrap(),
++                    ),
++                ]
++                .into_iter()
++                .collect(),
++            });
++        }
++    })
++}
++
++/// Host-configure the actual TWIM and EasyDMA while the guest samples GPIO.
++/// A read uses the controller's repeated-START shortcut after the pointer.
++fn probe_transfer(
++    machine: &mut guest::Guest,
++    address: u8,
++    bytes: &[u8],
++    read: bool,
++) -> (u32, u32, u32, u32) {
++    const TWIM: u64 = 0x4000_3000;
++    const TX: u64 = 0x2000_0200;
++    const RX: u64 = 0x2000_0210;
++    for (index, byte) in bytes.iter().enumerate() {
++        machine.bus.write_u8(TX + index as u64, *byte).unwrap();
++    }
++    machine.bus.write_u32(TWIM + 0x508, 8).unwrap();
++    machine.bus.write_u32(TWIM + 0x50c, 16).unwrap();
++    machine.bus.write_u32(TWIM + 0x524, 0x0640_0000).unwrap();
++    machine.bus.write_u32(TWIM + 0x500, 6).unwrap();
++    machine.bus.write_u32(TWIM + 0x104, 0).unwrap();
++    machine.bus.write_u32(TWIM + 0x124, 0).unwrap();
++    machine.bus.write_u32(TWIM + 0x4c4, 6).unwrap();
++    machine
++        .bus
++        .write_u32(
++            TWIM + 0x200,
++            if read { (1 << 7) | (1 << 12) } else { 1 << 9 },
++        )
++        .unwrap();
++    machine
++        .bus
++        .write_u32(TWIM + 0x588, u32::from(address))
++        .unwrap();
++    machine.bus.write_u32(TWIM + 0x544, TX as u32).unwrap();
++    machine
++        .bus
++        .write_u32(TWIM + 0x548, bytes.len() as u32)
++        .unwrap();
++    if read {
++        machine.bus.write_u32(TWIM + 0x534, RX as u32).unwrap();
++        machine.bus.write_u32(TWIM + 0x538, 1).unwrap();
++    }
++    machine.bus.write_u32(TWIM + 0x008, 1).unwrap();
++    // Poll promptly so this test can cancel a still-pending conversion;
++    // an arbitrary long post-transfer run could pass its deadline first.
++    for _ in 0..5_000 {
++        if machine.bus.read_u32(TWIM + 0x104).unwrap() != 0 {
++            return (
++                machine.bus.read_u32(TWIM + 0x124).unwrap(),
++                machine.bus.read_u32(TWIM + 0x4c4).unwrap(),
++                machine.bus.read_u32(TWIM + 0x54c).unwrap(),
++                if read {
++                    machine.bus.read_u32(TWIM + 0x53c).unwrap()
++                } else {
++                    0
++                },
++            );
++        }
++        machine.run(Some(32)).unwrap();
++    }
++    panic!("TWIM transfer did not stop");
++}
++
++fn write_probe(machine: &mut guest::Guest, address: u8, value: u8) {
++    assert_eq!(
++        probe_transfer(machine, address, &[value], false),
++        (0, 0, 1, 0)
++    );
++}
++
++fn write_probe_register(machine: &mut guest::Guest, register: u8, value: u8) {
++    assert_eq!(
++        probe_transfer(machine, 0x22, &[register, value], false),
++        (0, 0, 2, 0)
++    );
++}
++
++fn read_probe_register(machine: &mut guest::Guest, register: u8) -> u8 {
++    assert_eq!(
++        probe_transfer(machine, 0x22, &[register], true),
++        (0, 0, 1, 1)
++    );
++    machine.bus.read_u8(0x2000_0210).unwrap()
++}
++
++#[test]
++fn twim_probe_rejects_an_absent_address() {
++    for &interval in guest::profiles() {
++        let mut m = machine(false, false, interval);
++        let (error, source, tx, rx) = probe_transfer(&mut m, 0x26, &[0xff], false);
++        assert_eq!((error, source & 2, tx, rx), (1, 2, 0, 0));
++    }
++}
++
++#[test]
++fn guest_observes_two_independent_retained_drivers() {
++    for &interval in guest::profiles() {
++        let mut m = machine(false, false, interval);
++        m.run(Some(10_000)).unwrap();
++        observed(&mut m, 1, 0);
++        for (address, value, level, falls) in [
++            (0x20, 0xff, 1, 0),
++            (0x20, 0xfe, 0, 1),
++            (0x21, 0xfe, 0, 1),
++            (0x20, 0xff, 0, 1),
++            (0x21, 0xff, 1, 1),
++            (0x21, 0xfe, 0, 2),
++            (0x20, 0xfe, 0, 2),
++            (0x21, 0xff, 0, 2),
++            (0x20, 0xff, 1, 2),
++        ] {
++            let samples = m.bus.read_u32(RAM + 4).unwrap();
++            write_probe(&mut m, address, value);
++            m.run(Some(10_000)).unwrap();
++            assert!(
++                m.bus.read_u32(RAM + 4).unwrap() > samples,
++                "fresh guest sample"
++            );
++            observed(&mut m, level, falls);
++        }
++    }
++}
++
++/// The host starts a conversion over TWIM. Between START and the first falling
++/// edge neither the host nor firmware reads a device register. Firmware reads
++/// only GPIO/GPIOTE; host receipts come from TWIM registers and guest RAM.
++#[test]
++fn guest_sees_autonomous_data_ready_without_polling() {
++    for &interval in guest::profiles() {
++        let mut m = machine(true, false, interval);
++        m.run(Some(1_000)).unwrap();
++        observed(&mut m, 1, 0);
++        write_probe_register(&mut m, 0, 1);
++        let cancel_started = m.total_cycles;
++        m.run(Some(100)).unwrap();
++        observed(&mut m, 1, 0);
++        write_probe_register(&mut m, 0, 0);
++        let cancel_cycles = m.total_cycles - cancel_started;
++        assert!(
++            cancel_cycles < 32_000,
++            "cancel before the 1,000-us deadline: {cancel_cycles} cycles"
++        );
++        println!("MICROBIT_READY_CANCEL_CYCLES={cancel_cycles};interval={interval}");
++        m.run(Some(200_000)).unwrap();
++        observed(&mut m, 1, 0);
++
++        write_probe_register(&mut m, 0, 1);
++        m.run(Some(100)).unwrap();
++        observed(&mut m, 1, 0);
++        m.run(Some(200_000)).unwrap();
++        observed(&mut m, 0, 1);
++        m.run(Some(100_000)).unwrap();
++        observed(&mut m, 0, 1); // a ready conversion emits only one edge
++
++        // RESULT acknowledges and starts the next conversion. Require a fresh
++        // guest observation of release within 500 us, before it can assert again.
++        let before_read = m.total_cycles;
++        let before_sample = m.bus.read_u32(RAM + 4).unwrap();
++        read_probe_register(&mut m, 2);
++        let mut released = false;
++        for _ in 0..1_000 {
++            let elapsed = m.total_cycles - before_read;
++            assert!(
++                elapsed < 32_000,
++                "release must precede the next conversion: {elapsed} cycles"
++            );
++            let samples = m.bus.read_u32(RAM + 4).unwrap();
++            let level = m.bus.read_u32(RAM).unwrap();
++            if samples > before_sample && level == 1 {
++                println!("MICROBIT_READY_RELEASE_CYCLES={elapsed};interval={interval}");
++                released = true;
++                break;
++            }
++            m.run(Some(32)).unwrap();
++        }
++        assert!(released, "guest must observe the result-read release");
++        observed(&mut m, 1, 1);
++        m.run(Some(200_000)).unwrap();
++        observed(&mut m, 0, 2);
++    }
++}
++
++#[test]
++fn guest_observes_inverting_collector_and_direct_shared_driver() {
++    for &interval in guest::profiles() {
++        let mut m = machine(false, true, interval);
++        m.run(Some(10_000)).unwrap();
++        observed(&mut m, 1, 0);
++        for (address, value, level, falls) in [
++            (0x20, 0xfe, 1, 0),
++            (0x21, 0xff, 1, 0),
++            (0x20, 0xff, 0, 1),
++            (0x21, 0xfe, 0, 1),
++            (0x20, 0xfe, 0, 1),
++            (0x21, 0xff, 1, 1),
++            (0x21, 0xfe, 0, 2),
++            (0x20, 0xff, 0, 2),
++            (0x21, 0xff, 0, 2),
++            (0x20, 0xfe, 1, 2),
++        ] {
++            write_probe(&mut m, address, value);
++            m.run(Some(10_000)).unwrap();
++            observed(&mut m, level, falls);
++        }
++    }
++}
++
++/// Do not prime GPIOTE with a fake edge: its first real falling transition
++/// after firmware enables Event mode must be observed from the pulled-up pad.
++#[test]
++fn guest_observes_first_gpiote_falling_edge_after_channel_enable() {
++    for &interval in guest::profiles() {
++        let mut m = machine(false, true, interval);
++        m.run(Some(10_000)).unwrap();
++        observed(&mut m, 1, 0);
++        write_probe(&mut m, 0x20, 0xff);
++        m.run(Some(10_000)).unwrap();
++        observed(&mut m, 0, 1);
++        write_probe(&mut m, 0x20, 0xfe);
++        m.run(Some(10_000)).unwrap();
++        observed(&mut m, 1, 1); // the channel masks the rising edge
++        write_probe(&mut m, 0x21, 0xfe);
++        m.run(Some(10_000)).unwrap();
++        observed(&mut m, 0, 2);
++    }
++}
++
++/// CPU reset does not power-cycle off-chip devices. A new SystemBus does:
++/// every registered driver starts released, independent of the old machine.
++#[test]
++fn cpu_reset_retains_external_low_and_cold_construction_releases_it() {
++    for &interval in guest::profiles() {
++        let mut m = machine(false, false, interval);
++        m.run(Some(10_000)).unwrap();
++        write_probe(&mut m, 0x20, 0xfe);
++        m.run(Some(10_000)).unwrap();
++        observed(&mut m, 0, 1);
++        m.reset().unwrap();
++        m.run(Some(10_000)).unwrap();
++        assert_eq!(
++            m.bus.read_u32(RAM).unwrap(),
++            0,
++            "CPU reset retains the external sink"
++        );
++        assert!(m.bus.read_u32(RAM + 4).unwrap() > 0);
++
++        let mut cold = machine(false, false, interval);
++        cold.run(Some(10_000)).unwrap();
++        observed(&mut cold, 1, 0);
++    }
++}
+diff --git a/crates/core/tests/microbit_v2_sensor_drdy_guest.rs b/crates/core/tests/microbit_v2_sensor_drdy_guest.rs
+new file mode 100644
+index 000000000..0dfa83be1
+--- /dev/null
++++ b/crates/core/tests/microbit_v2_sensor_drdy_guest.rs
+@@ -0,0 +1,65 @@
++// SPDX-License-Identifier: MIT
++//! Guest owns TWIM0, sensor routing/acknowledgement and GPIO/GPIOTE reads.
++//! Source fixtures live under tests/fixtures; ARM GCC is required.
++use labwired_core::{Bus, DebugControl};
++
++#[path = "common/microbit_sensor_guest.rs"]
++mod guest;
++use guest::{command, observed, RAM};
++
++fn proof(interval: u32) {
++    let mut m = guest::machine("motion-drdy.S", interval, |_| {});
++    m.run(Some(2_000_000)).unwrap();
++    observed(&mut m, 1, 0);
++    command(&mut m, 11); // start acceleration XYZ, route off
++    m.run(Some(2_000_000)).unwrap();
++    observed(&mut m, 1, 0);
++    command(&mut m, 9); // expose already-ready acceleration
++    observed(&mut m, 0, 1);
++    command(&mut m, 12); // acceleration low byte not acknowledgement
++    command(&mut m, 13); // X high only: Y/Z still pending
++    observed(&mut m, 0, 1);
++    command(&mut m, 20);
++    assert_eq!(m.bus.read_u8(RAM + 0x18).unwrap(), 0x0e);
++    command(&mut m, 13); // duplicate X high cannot clear another axis
++    command(&mut m, 14);
++    observed(&mut m, 0, 1);
++    command(&mut m, 1); // second sensor now drives same collector line
++    observed(&mut m, 0, 1); // cannot release acceleration
++    command(&mut m, 15); // last accel high; magnetometer still holds line
++    observed(&mut m, 0, 1);
++    command(&mut m, 4); // mag high-only acknowledgement releases final driver
++    observed(&mut m, 1, 1);
++    command(&mut m, 2); // keep magnetometer masked for accel controls
++    m.run(Some(2_000_000)).unwrap();
++    observed(&mut m, 0, 2); // autonomous acceleration recurrence
++    command(&mut m, 10); // accel route mask releases, does not ack
++    observed(&mut m, 1, 2);
++    command(&mut m, 9);
++    observed(&mut m, 0, 3);
++    command(&mut m, 13);
++    command(&mut m, 14);
++    command(&mut m, 15);
++    observed(&mut m, 1, 3);
++    command(&mut m, 19); // cancel new conversion
++    command(&mut m, 16); // active-low inactive raw high pulls collector low
++    observed(&mut m, 0, 4);
++    command(&mut m, 18); // start only X/Y
++    m.run(Some(2_000_000)).unwrap();
++    observed(&mut m, 1, 4); // active raw low releases board collector
++    command(&mut m, 13);
++    observed(&mut m, 1, 4);
++    command(&mut m, 14); // Z disabled: only X/Y required
++    observed(&mut m, 0, 5); // inactive raw high asserts collector
++    command(&mut m, 17); // return default polarity
++    observed(&mut m, 1, 5);
++    command(&mut m, 19);
++    m.run(Some(2_000_000)).unwrap();
++    observed(&mut m, 1, 5); // no stale completion in power-down
++}
++#[test]
++fn guest_observes_sensor_drdy_profiles() {
++    for &interval in guest::profiles() {
++        proof(interval);
++    }
++}

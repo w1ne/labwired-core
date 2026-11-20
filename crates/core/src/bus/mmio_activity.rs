@@ -17,15 +17,70 @@ impl SystemBus {
         self.side_effecting_mmio.set(0);
     }
 
+    /// True when the idle preflight still has batch-local MMIO evidence to
+    /// consume for timer-poll coalescing. The preflight must run in that case;
+    /// otherwise a split `time_us_64` read could be lost at the next window.
+    #[allow(dead_code)]
+    #[inline]
+    pub(crate) fn timer_poll_coalesce_has_pending_activity(&self) -> bool {
+        self.freerunning_timer_poll_mmio.get() != 0
+            || self.side_effecting_mmio.get() != 0
+            || self.timer_poll_carry.get() != 0
+    }
+
     /// True when the just-finished batch only performed freerunning-timer
     /// polls (no side-effecting MMIO). Consumes and clears the counters.
     /// Chip-specific which regs count as polls — decided by each peripheral.
+    ///
+    /// Hosted Cortex-M windows often retire one MMIO and stop, so RP2040
+    /// `time_us_64` (TIMERAWH, TIMERAWL, TIMERAWH) is split across batches.
+    /// A same-batch pair (`timer >= 2`, e.g. ESP SYSTIMER) still coalesces
+    /// immediately. Split reads accumulate in `timer_poll_carry` until four
+    /// timer-only accesses land with no side-effecting MMIO — more than one
+    /// complete `time_us_64`, so a one-shot timestamp cannot skip. Skipping
+    /// after two loads jumped toward a background 1 ms alarm pool tick and
+    /// `pico_oled_pwm` never reached `Serial1.println("RTF_READY")`.
+    ///
+    /// Four split reads alone do not make a loop. The pico-sdk alarm handler
+    /// runs `time_us_64` (three loads) and then `ta_set_timeout` loads
+    /// TIMERAWL once more before it arms the alarm: four timer-only accesses
+    /// in straight-line code. A skip there put the handler up to 7.4 ms
+    /// behind the time it had just read, and every Arduino-Pico `delay()`
+    /// returned that late. So the fourth split read must also land on a
+    /// `site` (an opaque CPU position, the caller passes its PC) that a split
+    /// read already ended on since the last side-effecting MMIO. A polling
+    /// loop comes back to its sites; straight-line code does not.
     #[inline]
-    pub fn take_timer_poll_coalesce_eligible(&self) -> bool {
+    pub fn take_timer_poll_coalesce_eligible(&self, site: u64) -> bool {
         let timer = self.freerunning_timer_poll_mmio.replace(0);
         let side = self.side_effecting_mmio.replace(0);
-        // At least two poll accesses (e.g. OP update + value read).
-        timer >= 2 && side == 0
+        if side != 0 {
+            self.timer_poll_carry.set(0);
+            self.timer_poll_sites.set([None; 8]);
+            return false;
+        }
+        if timer >= 2 {
+            self.timer_poll_carry.set(0);
+            self.timer_poll_sites.set([None; 8]);
+            return true;
+        }
+        if timer == 0 {
+            return false;
+        }
+        let carry = self.timer_poll_carry.get().saturating_add(timer).min(4);
+        let mut sites = self.timer_poll_sites.get();
+        let revisited = sites.contains(&Some(site));
+        if !revisited {
+            sites.rotate_left(1);
+            sites[sites.len() - 1] = Some(site);
+            self.timer_poll_sites.set(sites);
+        }
+        if carry >= 4 && revisited {
+            self.timer_poll_carry.set(0);
+            return true;
+        }
+        self.timer_poll_carry.set(carry);
+        false
     }
 
     /// `(memory_reads, memory_writes, peripheral_accesses)` — run-lifetime
@@ -48,6 +103,37 @@ impl SystemBus {
         let (idx, off, n, cycle) = self.poll_streak.get();
         let p = self.peripherals.get(idx as usize)?;
         (n > 0).then(|| (p.name.clone(), u64::from(off), n, cycle))
+    }
+
+    /// Extend (or restart) the back-to-back register streak that
+    /// [`Self::mmio_poll_streak`] reports.
+    #[inline]
+    fn note_poll_streak(&self, peri_idx: usize, offset: u64, count: u32) {
+        let (i, o, n, _) = self.poll_streak.get();
+        let (idx, off) = (peri_idx as u32, offset as u32);
+        let n = if i == idx && o == off { n } else { 0 };
+        self.poll_streak.set((
+            idx,
+            off,
+            n.saturating_add(u64::from(count)),
+            self.current_cycle,
+        ));
+    }
+
+    /// A CPU read of a clock-gated peripheral: it returns 0 and never reaches
+    /// the model, but a firmware waiting on a status bit of an unclocked block
+    /// is the commonest wait that never ends, so the read still counts toward
+    /// the poll streak. Nothing else is bookkept: the block saw no access.
+    #[cold]
+    pub(crate) fn note_gated_read(&self, peri_idx: usize, offset: u64) {
+        self.note_poll_streak(peri_idx, offset, 1);
+    }
+
+    /// Whether the named peripheral is clocked right now (`None` when no
+    /// peripheral has that name). For end-of-run diagnosis.
+    pub fn peripheral_clocked(&self, name: &str) -> Option<bool> {
+        let idx = self.peripherals.iter().position(|p| p.name == name)?;
+        Some(self.is_peripheral_clocked(idx))
     }
 
     /// Snapshot and zero the run-lifetime access counters.
@@ -248,13 +334,26 @@ impl SystemBus {
     /// (resource metrics P1) — every peri MMIO, regardless of access class.
     #[inline]
     pub(crate) fn note_mmio_activity(&self, peri_idx: usize, offset: u64) {
-        self.note_mmio_activities(peri_idx, offset, 1);
+        self.note_mmio_accesses::<false>(peri_idx, offset, 1);
+    }
+
+    /// [`Self::note_mmio_activity`] for a CPU read. A read the device
+    /// declares pure ([`crate::Peripheral::read_is_pure`]) does not end an
+    /// armed batch: it changes nothing a boundary would have to observe.
+    #[inline]
+    pub(crate) fn note_mmio_read(&self, peri_idx: usize, offset: u64) {
+        self.note_mmio_accesses::<true>(peri_idx, offset, 1);
     }
 
     /// Bulk form used only after a peripheral has explicitly promised that
     /// repeated reads are stable and side-effect-free until the next event.
     #[inline]
     pub(crate) fn note_mmio_activities(&self, peri_idx: usize, offset: u64, count: u32) {
+        self.note_mmio_accesses::<true>(peri_idx, offset, count);
+    }
+
+    #[inline]
+    fn note_mmio_accesses<const READ: bool>(&self, peri_idx: usize, offset: u64, count: u32) {
         // Before the bounds check: a model that lazily advances off the clock
         // must see "now" even if the index lookup below bails.
         //
@@ -274,20 +373,15 @@ impl SystemBus {
             self.batch_stop.note_device_access();
             return;
         };
-        if self.batch_stop.armed() && !p.dev.is_plain_memory() {
+        if self.batch_stop.armed()
+            && !p.dev.is_plain_memory()
+            && !(READ && p.dev.read_is_pure(offset))
+        {
             self.batch_stop.note_device_access();
         }
         let class = p.dev.mmio_access_class(offset);
         if !matches!(class, crate::MmioAccessClass::FreerunningTimerPoll) {
-            let (i, o, n, _) = self.poll_streak.get();
-            let (idx, off) = (peri_idx as u32, offset as u32);
-            let n = if i == idx && o == off { n } else { 0 };
-            self.poll_streak.set((
-                idx,
-                off,
-                n.saturating_add(u64::from(count)),
-                self.current_cycle,
-            ));
+            self.note_poll_streak(peri_idx, offset, count);
         }
         match class {
             crate::MmioAccessClass::FreerunningTimerPoll => {
