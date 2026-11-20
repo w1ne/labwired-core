@@ -117,6 +117,13 @@ pub(crate) struct I2cBuses {
     recorded: u64,
     /// Nanoseconds not yet handed to the device clocks, which count in µs.
     clock_remainder_ns: u64,
+    /// Nanoseconds the device clocks already ran inside transfers, ahead of
+    /// the `advance_ns` that the caller makes for each transfer.
+    clock_ahead_ns: u64,
+}
+
+fn device_model(buses: &mut [Bus], bus_id: u32, index: usize) -> &mut dyn I2cDevice {
+    buses[bus_id as usize].devices[index].model.as_mut()
 }
 
 fn error(message: impl Into<String>) -> SimulationError {
@@ -231,6 +238,7 @@ impl I2cBuses {
             ring: VecDeque::new(),
             recorded: 0,
             clock_remainder_ns: 0,
+            clock_ahead_ns: 0,
         })
     }
 
@@ -278,8 +286,23 @@ impl I2cBuses {
         Ok(())
     }
 
-    /// Advance the free-running clock of every device model.
+    /// Advance the free-running clock of every device model. Time that the
+    /// clocks already ran inside a transfer is not counted twice.
     pub(crate) fn advance_ns(&mut self, delta_ns: u64) {
+        let ahead = self.clock_ahead_ns.min(delta_ns);
+        self.clock_ahead_ns -= ahead;
+        self.run_clocks(delta_ns - ahead);
+    }
+
+    /// Advance the device clocks inside a transfer, from `*at_ns` to
+    /// `to_ns` after its START.
+    fn run_clocks_in_transfer(&mut self, at_ns: &mut u64, to_ns: u64) {
+        self.run_clocks(to_ns - *at_ns);
+        self.clock_ahead_ns += to_ns - *at_ns;
+        *at_ns = to_ns;
+    }
+
+    fn run_clocks(&mut self, delta_ns: u64) {
         let total = self.clock_remainder_ns + delta_ns;
         self.clock_remainder_ns = total % 1_000;
         let us = total / 1_000;
@@ -303,7 +326,7 @@ impl I2cBuses {
     ) -> SimResult<FlexI2cTransfer> {
         let bus = self
             .buses
-            .get_mut(bus_id as usize)
+            .get(bus_id as usize)
             .ok_or_else(|| error(format!("unknown Flex I2C bus id {bus_id}")))?;
         if address > 0x7f {
             return Err(error(format!(
@@ -316,41 +339,60 @@ impl I2cBuses {
                 "an I2C transfer writes and reads at most {FLEX_I2C_MAX_TRANSFER_BYTES} bytes each"
             )));
         }
+        let frequency_hz = u64::from(bus.frequency_hz);
+        let bit_ns = |bits: u64| bits * 1_000_000_000 / frequency_hz;
         // A transfer with no read has a write phase, even with no data byte:
         // that is the address probe of a bus scan.
         let write_phase = !write.is_empty() || read_len == 0;
         let device = bus
             .devices
-            .iter_mut()
-            .find(|device| device.model.claims_address(address));
+            .iter()
+            .position(|device| device.model.claims_address(address));
         let ack = device.is_some();
         let mut read = Vec::new();
         // START, address byte and its ACK bit; STOP at the end.
         let mut bits = 10 + 1;
-        if let Some(device) = device {
-            let model = &mut device.model;
-            model.select_address(address);
+        if let Some(index) = device {
+            // The device sees each event at its bit time on the bus: a
+            // written byte after its ACK bit, a read byte at its first bit,
+            // the STOP at the end. Its clock runs between the events, so a
+            // command's delay counts from the command byte, not the START.
+            let mut at_ns = 0;
+            let mut position = 10;
+            device_model(&mut self.buses, bus_id, index).select_address(address);
             if write_phase {
-                model.start();
+                device_model(&mut self.buses, bus_id, index).start();
                 for byte in write {
-                    model.write(*byte);
+                    position += 9;
+                    self.run_clocks_in_transfer(&mut at_ns, bit_ns(position));
+                    device_model(&mut self.buses, bus_id, index).write(*byte);
                 }
                 bits += 9 * write.len() as u64;
             }
             if read_len > 0 {
-                model.start();
-                read.extend((0..read_len).map(|_| model.read()));
                 // A repeated START and address byte follow a write phase.
+                if write_phase {
+                    position += 10;
+                }
+                device_model(&mut self.buses, bus_id, index).start();
+                for _ in 0..read_len {
+                    self.run_clocks_in_transfer(&mut at_ns, bit_ns(position));
+                    read.push(device_model(&mut self.buses, bus_id, index).read());
+                    position += 9;
+                }
                 bits += 9 * read_len as u64 + if write_phase { 10 } else { 0 };
             }
+            self.run_clocks_in_transfer(&mut at_ns, bit_ns(bits));
+            let model = device_model(&mut self.buses, bus_id, index);
             model.stop();
             // Device pin outputs (INT, DRDY) have no pad to reach here.
             model.take_pin_drives();
         }
+        let bus = &mut self.buses[bus_id as usize];
         let transfer = FlexI2cTransfer {
             bus: bus_id,
             time_ns,
-            duration_ns: bits * 1_000_000_000 / u64::from(bus.frequency_hz),
+            duration_ns: bit_ns(bits),
             address,
             ack,
             write: if ack { write.to_vec() } else { Vec::new() },
@@ -507,6 +549,30 @@ mod tests {
             "{error}"
         );
         assert!(runtime.i2c_transfer(bus, 0x76, &[0xFA], 3).is_err());
+    }
+
+    /// A device sees each byte at its bit time, not at the START. The SHT40
+    /// model answers 8.3 ms after its measurement command; at 100 kHz that
+    /// byte is complete 190 µs after the START, and the first byte of a
+    /// later read is sampled 100 µs after that read's START.
+    #[test]
+    fn a_command_delay_counts_from_the_command_byte_not_the_start() {
+        const MONITOR: &str =
+            include_str!("../../wasm/tests/fixtures/flex-heypcb-esp32-sht40/system.yaml");
+        // Wait after the command transfer, then read; true: data is ready.
+        let ready_after = |wait_ns: u64| {
+            let mut runtime = FlexRuntime::from_yaml(MONITOR).unwrap();
+            let bus = runtime.i2c_bus_id("sensor_i2c").unwrap();
+            let command = runtime.i2c_transfer(bus, 0x44, &[0xFD], 0).unwrap();
+            assert_eq!(command.duration_ns, 200_000);
+            runtime.advance_ns(command.duration_ns + wait_ns).unwrap();
+            let read = runtime.i2c_transfer(bus, 0x44, &[], 6).unwrap();
+            assert_eq!(read.time_ns, 200_000 + wait_ns);
+            read.read != [0xFF; 6]
+        };
+        // 190 µs + 8300 µs = 200 µs + wait + 100 µs.
+        assert!(!ready_after(8_189_000));
+        assert!(ready_after(8_190_000));
     }
 
     #[test]
