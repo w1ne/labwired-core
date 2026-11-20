@@ -193,6 +193,7 @@ static DESCRIPTORS: &[(&str, &[u8])] = &[
     ("esp32c6/timg1.yaml", packed!("esp32c6/timg1.yaml")),
     ("esp32c6/uart0.yaml", packed!("esp32c6/uart0.yaml")),
     ("esp32c6/uart1.yaml", packed!("esp32c6/uart1.yaml")),
+    ("esp32s2/extmem.yaml", packed!("esp32s2/extmem.yaml")),
     ("esp32s3/dma.yaml", packed!("esp32s3/dma.yaml")),
     ("esp32s3/efuse.yaml", packed!("esp32s3/efuse.yaml")),
     ("esp32s3/gpio.yaml", packed!("esp32s3/gpio.yaml")),

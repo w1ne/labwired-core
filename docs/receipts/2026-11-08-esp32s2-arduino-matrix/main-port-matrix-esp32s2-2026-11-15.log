@@ -1,0 +1,36 @@
+labwired: <tmp>
+boards:   esp32s2
+sketches: L0_serial_boot, L1_serial_loop, L2_blink_serial, L3_i2c_sensor, L4_spi_sensor, L5_adc, L6_pwm, L7_timer, L8_can
+out:      <tmp>
+
+==> esp32s2 × L0_serial_boot
+    compile: ok (firmware.elf)
+    run: pass
+==> esp32s2 × L1_serial_loop
+    compile: ok (firmware.elf)
+    run: pass
+==> esp32s2 × L2_blink_serial
+    compile: ok (firmware.elf)
+    run: pass
+==> esp32s2 × L3_i2c_sensor
+    compile: ok (firmware.elf)
+    run: pass
+==> esp32s2 × L4_spi_sensor
+    compile: ok (firmware.elf)
+    run: pass
+==> esp32s2 × L5_adc
+    compile: ok (firmware.elf)
+    run: pass
+==> esp32s2 × L6_pwm
+    compile: ok (firmware.elf)
+    run: pass
+==> esp32s2 × L7_timer
+    compile: ok (firmware.elf)
+    run: pass
+==> esp32s2 × L8_can
+    compile: ok (firmware.elf)
+    run: pass
+
+Done in 81s — 9 pass / 0 skip / 0 fail (cells 9; gate treats skip as non-fail)
+Scoreboard: <tmp>
+Docs scoreboard unchanged (partial run; not full 26×9)
