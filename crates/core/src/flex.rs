@@ -389,7 +389,14 @@ impl FlexRuntime {
             }
         }
         for model in &manifest.cosim_models {
-            if model.adapter == CosimAdapter::Behavior && model.config.contains_key("device_type") {
+            let analog_source = model
+                .config
+                .get("device_type")
+                .and_then(serde_yaml::Value::as_str)
+                .is_some_and(|device_type| {
+                    !matches!(crate::cosim::catalog_gpio_device(device_type), Ok(Some(_)))
+                });
+            if model.adapter == CosimAdapter::Behavior && analog_source {
                 for signal in model.outputs.values() {
                     units.insert(signal.clone(), "mV".to_owned());
                 }

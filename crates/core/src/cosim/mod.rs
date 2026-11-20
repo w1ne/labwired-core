@@ -7,6 +7,8 @@
 mod analog_source;
 mod behavior;
 mod external_process;
+mod gpio_device;
+pub(crate) use gpio_device::catalog_gpio_device;
 mod registry;
 pub mod routing;
 pub mod shm;

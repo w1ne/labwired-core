@@ -2606,6 +2606,66 @@ fn flex_heypcb_tmp117_bus_matches_the_pinned_source_nets() {
     );
 }
 
+/// The DHT11 fixture is a single-wire board of the same pinned repository:
+/// U4 is the catalog `dht11` pins-only model on the `behavior` adapter, its
+/// DATA role on the SNS_IO1 net of the pinned PCB, with the R6 pull-up.
+#[test]
+fn flex_heypcb_dht11_line_matches_the_pinned_source_nets() {
+    const SOURCE_MAP: &str =
+        include_str!("../tests/fixtures/flex-heypcb-esp32-dht11/source-map.json");
+    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-dht11/system.yaml");
+
+    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
+    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+    for key in ["repository", "revision", "license_spdx"] {
+        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
+    }
+    assert_eq!(
+        source_map["source"]["files"]["license"],
+        sibling["source"]["files"]["license"]
+    );
+    assert_eq!(
+        source_map["source"]["asset"],
+        "boards/dht11/kicad/esp32_dht11"
+    );
+    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
+        let entry = &source_map["source"]["files"][file];
+        assert!(entry["path"].as_str().unwrap().starts_with("boards/dht11/"));
+        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
+    }
+
+    let elements = &source_map["sensor_line"]["elements"];
+    assert_eq!(elements[0]["source_ref"], "U4");
+    assert_eq!(elements[0]["source_part"], "DHT11");
+    assert_eq!(elements[0]["pads"]["2"], "SNS_IO1");
+    assert_eq!(elements[1]["source_ref"], "R6");
+    assert_eq!(
+        elements[1]["pads"]["2"], "SNS_IO1",
+        "R6 pulls the data line up"
+    );
+    assert_eq!(elements[1]["pads"]["1"], "3V3");
+
+    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
+    let model = &yaml["cosim_models"][0];
+    let binding = &source_map["runtime_bindings"]["device"];
+    assert_eq!(model["id"], binding["id"].as_str().unwrap());
+    assert_eq!(model["adapter"], "behavior");
+    assert_eq!(model["config"]["device_type"], "dht11");
+    assert_eq!(model["inputs"]["DATA"], "source.U3.GPIO4");
+    assert_eq!(model["outputs"]["DATA"], "source.net.SNS_IO1");
+
+    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
+    let report = runtime.run_report();
+    assert!(report.scope_notes_complete);
+    assert!(!report.execution_scope.original_target_firmware_executed);
+    assert_eq!(report.execution_scope.chip_parity, "not_established");
+    let ports = &source_map["runtime_bindings"]["ports"];
+    for port in ports.as_object().unwrap().keys() {
+        runtime.port_id(port).unwrap();
+    }
+    assert_eq!(report.ports.len(), ports.as_object().unwrap().len());
+}
+
 /// The Chromium receipt of `scripts/test_browser_flex_scripts.mjs` covers
 /// every committed `test-*.yaml`, and the shared runner still gives the
 /// result text that Chromium and the CLI gave.
