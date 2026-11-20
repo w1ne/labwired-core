@@ -64,6 +64,11 @@ pub struct Esp32s3IntMatrix {
     /// the same raw source-assertion bitmap (assertion is core-independent;
     /// only routing differs).
     intr_status: [u32; 4],
+    /// Offset of `PRO_INTR_STATUS_REG_0` (S3: 0x18C; S2: 0x17C), which is
+    /// also where the per-source map registers end.
+    status_base: u64,
+    /// Number of interrupt sources (S3: 99; S2: 95, `ETS_MAX_INTR_SOURCE`).
+    num_sources: usize,
 }
 
 impl Esp32s3IntMatrix {
@@ -72,6 +77,20 @@ impl Esp32s3IntMatrix {
             cpu0_route: [None; NUM_SOURCES],
             cpu1_route: [None; NUM_SOURCES],
             intr_status: [0u32; 4],
+            status_base: INTR_STATUS_BASE,
+            num_sources: NUM_SOURCES,
+        }
+    }
+
+    /// ESP32-S2 interrupt matrix (`DR_REG_INTERRUPT_BASE` 0x3F4C_2000,
+    /// `soc/esp32s2/include/soc/interrupt_reg.h`): one core, 95 sources with
+    /// `DPORT_PRO_<source>_MAP_REG` at `4 * source`, and
+    /// `DPORT_PRO_INTR_STATUS_0..2_REG` at 0x17C..0x188.
+    pub fn new_esp32s2() -> Self {
+        Self {
+            status_base: 0x17C,
+            num_sources: 95,
+            ..Self::new()
         }
     }
 
@@ -85,7 +104,7 @@ impl Esp32s3IntMatrix {
     /// (0 = PRO_CPU, 1 = APP_CPU). Returns None if unbound or out of range.
     pub fn route_for_core(&self, source_id: u32, core_id: u8) -> Option<u8> {
         let idx = source_id as usize;
-        if idx >= NUM_SOURCES {
+        if idx >= self.num_sources {
             return None;
         }
         if core_id == 0 {
@@ -141,7 +160,7 @@ impl Peripheral for Esp32s3IntMatrix {
         } else {
             (0u8, offset)
         };
-        if rel < INTR_STATUS_BASE {
+        if rel < self.status_base {
             let word_off = rel & !3;
             let byte_off = (rel & 3) * 8;
             let src = (word_off / 4) as usize;
@@ -150,14 +169,14 @@ impl Peripheral for Esp32s3IntMatrix {
             } else {
                 &self.cpu1_route
             };
-            let slot = if src < NUM_SOURCES {
+            let slot = if src < self.num_sources {
                 table[src].unwrap_or(0) as u32
             } else {
                 0
             };
             Ok(((slot >> byte_off) & 0xFF) as u8)
-        } else if rel < INTR_STATUS_END {
-            let s = rel - INTR_STATUS_BASE;
+        } else if rel < self.status_base + (INTR_STATUS_END - INTR_STATUS_BASE) {
+            let s = rel - self.status_base;
             let word_off = (s & !3) / 4;
             let byte_off = (s & 3) * 8;
             let word = self.intr_status[word_off as usize];
@@ -176,13 +195,13 @@ impl Peripheral for Esp32s3IntMatrix {
         } else {
             (0u8, offset)
         };
-        if rel >= INTR_STATUS_BASE {
+        if rel >= self.status_base {
             return Ok(());
         }
         let word_off = rel & !3;
         let byte_off = (rel & 3) * 8;
         let src = (word_off / 4) as usize;
-        if src >= NUM_SOURCES {
+        if src >= self.num_sources {
             return Ok(());
         }
         let table = if core_id == 0 {
@@ -209,6 +228,19 @@ impl Peripheral for Esp32s3IntMatrix {
 
 #[cfg(test)]
 mod tests {
+    /// ESP32-S2: map registers stop at 0x17C, where PRO_INTR_STATUS_0 sits,
+    /// and only sources 0..94 exist.
+    #[test]
+    fn esp32s2_layout_maps_below_0x17c_and_reports_status_there() {
+        let mut m = Esp32s3IntMatrix::new_esp32s2();
+        m.write(28 * 4, 9).unwrap(); // FROM_CPU_INTR0 -> CPU int 9
+        assert_eq!(m.route(28), Some(9));
+        m.write(95 * 4, 3).unwrap(); // 0x17C: STATUS_0, not a source
+        assert_eq!(m.route(95), None);
+        m.set_pending_sources([1 << 28, 0, 0, 0]);
+        assert_eq!(m.read(0x17C + 3).unwrap(), 0x10);
+    }
+
     use super::*;
 
     #[test]

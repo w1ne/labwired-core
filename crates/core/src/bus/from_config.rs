@@ -70,6 +70,9 @@ fn default_region_image_path(env: &str) -> Option<PathBuf> {
         // Flattened esp32c2_rev200_rom.elf (roms/esp32c2/README.md). esp-hal
         // links memcpy and the regi2c clock helpers to ROM addresses.
         "LABWIRED_ESP32C2_ROM" => "roms/esp32c2/esp32c2_rom.bin",
+        "LABWIRED_ESP32S2_ROM" => "roms/esp32s2/esp32s2_rom.bin",
+        "LABWIRED_ESP32S2_DROM" => "roms/esp32s2/esp32s2_drom.bin",
+        "LABWIRED_ESP32S2_ROM_DATA" => "roms/esp32s2/esp32s2_rom_data.bin",
         // Same image as `embedded_region_image`; kept so an operator can
         // still point the env var at a replacement file. Bare-metal ELFs
         // that need the Cortex-M flash boot alias at 0 (PIO onboarding) set
@@ -1568,6 +1571,8 @@ impl SystemBus {
         bus.wire_esp32_uart_pads();
         // …and its LEDC outputs (signals 71..86).
         bus.wire_esp32_ledc_pads();
+        // Matrix output wires published through capabilities (S2 RMT).
+        bus.wire_matrix_output_lines();
         // RP2040: bind I²C wires to the pads IO_BANK0's FUNCSEL can route them to.
         bus.wire_rp2040_i2c_pads();
         // Same for the RP2040 UARTs' TX/RX, so serial output is a waveform on
