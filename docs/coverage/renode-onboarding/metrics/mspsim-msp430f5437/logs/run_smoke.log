@@ -1,6 +1,6 @@
-[2m2026-11-20T01:18:07.027713Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/mspsim-msp430f5437.yaml
-[2m2026-11-20T01:18:07.030262Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x5d20
+[2m2026-11-20T01:53:23.671089Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/mspsim-msp430f5437.yaml
+[2m2026-11-20T01:53:23.675826Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x5d20
 labwired-cli test: idle_ff=on (event_scheduler=on)
-[2m2026-11-20T01:18:07.051102Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'usci_a0'
+[2m2026-11-20T01:53:23.700854Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'usci_a0'
 labwired-cli test: idle_ff skipped 33 of 400033 device cycles (400000 interpreted)
 PASS  3/3 checks · msp430f5437-uart-smoke · 400000 steps · 0.09s

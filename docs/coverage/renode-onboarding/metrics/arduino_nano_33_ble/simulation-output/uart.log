@@ -12,4 +12,6 @@ rgb=red out=00012040
 rgb=green out=01002040
 rgb=blue out=01012000
 rgb off out=01012040 ok
+temp datardy=1 raw=00000064 ok
+ecb fips197 ct=69c4e0d8..70b4c55a end=1 ok
 NANO33BLE PASS

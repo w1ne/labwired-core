@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.729317">
+<testsuite name="labwired" tests="7" failures="0" errors="0" time="0.781037">
   <properties>
     <property name="result_schema_version" value="1.0"/>
     <property name="stop_reason" value="MaxSteps"/>
-    <property name="firmware_hash" value="cfa0b945d234de3972b7fc3cab6cde95780a158f4b3385b89d74d90be11c0763"/>
+    <property name="firmware_hash" value="4e746776df7ec9e429fb534b22514e3db619fa330c8e98456b2de2e128517ebe"/>
   </properties>
-  <testcase classname="labwired" name="run" time="0.729317">
+  <testcase classname="labwired" name="run" time="0.781037">
   </testcase>
   <testcase classname="labwired" name="assertion 1: uart_ordered: [&quot;ARDUINO NANO 33 BLE SMOKE&quot;, &quot;cpu=nrf52840 uart=uarte0&quot;, &quot;ficr part=52840 nvmc ready=1 ok&quot;, &quot;clock hfsta…" time="0.000000">
   </testcase>
-  <testcase classname="labwired" name="assertion 2: memory_value: @0x2003ff00=0x528401ff" time="0.000000">
+  <testcase classname="labwired" name="assertion 2: memory_value: @0x2003ff00=0x528407ff" time="0.000000">
   </testcase>
   <testcase classname="labwired" name="assertion 3: gpio_edges: gpio0:24 &gt;= 2 edges" time="0.000000">
   </testcase>

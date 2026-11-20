@@ -1,0 +1,15 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: nrf52840
+chip: <repo>/configs/chips/onboarding/nrf52840.yaml
+external_devices:
+  # A mid-position potentiometer drives physical SAADC input AIN3 (P0.05).
+  - id: pot_saadc_ain3
+    type: potentiometer
+    connection: saadc
+    config:
+      channel: 3
