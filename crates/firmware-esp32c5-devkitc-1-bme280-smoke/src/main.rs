@@ -89,6 +89,11 @@ pub extern "C" fn _start() -> ! {
             wait_forever();
         }
 
+        if !start_bme280_measurement() {
+            uart_str(b"C5_BME280_FAIL CONFIG\n");
+            wait_forever();
+        }
+
         let mut temperature = [0u8; 3];
         if !read_bme280_registers(0xFA, &mut temperature) {
             uart_str(b"C5_BME280_FAIL TEMP_READ\n");
@@ -187,6 +192,54 @@ unsafe fn setup_i2c0() {
     write_volatile(I2C_SCL_RSTART_SETUP, 10);
     write_volatile(I2C_SCL_STOP_HOLD, 10);
     write_volatile(I2C_SCL_STOP_SETUP, 10);
+}
+
+unsafe fn write_bme280_register(register: u8, value: u8) -> bool {
+    write_volatile(I2C_FIFO_CONF, FIFO_RX_RST | FIFO_TX_RST);
+    write_volatile(I2C_INT_CLR, u32::MAX);
+
+    let command = |op: u32, count: u32| (op << 11) | count;
+    write_volatile(I2C_CMD0, command(CMD_RSTART, 0));
+    write_volatile(I2C_CMD0.add(1), command(CMD_WRITE, 3));
+    write_volatile(I2C_CMD0.add(2), command(CMD_STOP, 0));
+
+    write_volatile(I2C_DATA, u32::from(I2C_ADDRESS << 1));
+    write_volatile(I2C_DATA, u32::from(register));
+    write_volatile(I2C_DATA, u32::from(value));
+    write_volatile(I2C_CTR, CTR_TRANS_START);
+
+    let mut complete = false;
+    for _ in 0..SPIN_LIMIT {
+        if read_volatile(I2C_INT_RAW) & INT_TRANS_COMPLETE != 0 {
+            complete = true;
+            break;
+        }
+    }
+    if !complete {
+        return false;
+    }
+    let status = read_volatile(I2C_INT_RAW);
+    write_volatile(I2C_INT_CLR, status);
+    status & INT_NACK == 0
+}
+
+/// Configure the sensor as a driver does: ctrl_hum, then ctrl_meas with
+/// osrs_t = osrs_p = x1 and normal mode (datasheet 5.4.3-5.4.5), then wait
+/// until status.measuring (0xF3 bit 3) clears before reading results.
+unsafe fn start_bme280_measurement() -> bool {
+    if !write_bme280_register(0xF2, 0x01) || !write_bme280_register(0xF4, 0x27) {
+        return false;
+    }
+    for _ in 0..1000 {
+        let mut status = [0u8; 1];
+        if !read_bme280_registers(0xF3, &mut status) {
+            return false;
+        }
+        if status[0] & 0x08 == 0 {
+            return true;
+        }
+    }
+    false
 }
 
 unsafe fn read_bme280_registers(register: u8, destination: &mut [u8]) -> bool {
