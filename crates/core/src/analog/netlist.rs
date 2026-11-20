@@ -6,7 +6,7 @@
 //!
 //! The subset is deliberately small, because everything in it has to stay
 //! deterministic in the browser with no dependencies. Unsupported elements
-//! and circuit constructs such as AC/DC sweeps are not approximated or
+//! and circuit constructs such as DC sweeps are not approximated or
 //! silently dropped: they are a hard error that names the line and points at
 //! the ngspice adapter, which supports a much larger SPICE subset.
 //!
@@ -369,6 +369,11 @@
 //! Plus `*` comments, `;`/`$` trailing comments, `.end`, `.ic V(node)=<v>` and
 //! `.options`/`.print`/`.tran`/`.save`/`.control`…`.endc`, which are accepted
 //! and ignored so that one deck can be handed to both this engine and ngspice.
+//! `.ac dec|oct|lin <points> <fstart> <fstop>` is kept as
+//! [`Circuit::ac_sweep`], and a `V`/`I` value may carry `AC <mag> [<phase>]`
+//! (degrees) before or after its DC or transient part; `V1 in 0 AC 1` alone
+//! is a 0 V source. Both feed [`crate::analog::Solver::ac_analysis`] and do
+//! not change the DC or transient run.
 //! `+` continuation lines and `.subckt`…`.ends` blocks are rewritten before
 //! any of this, as described at the top.
 //!
@@ -878,6 +883,69 @@ impl Waveform {
     }
 }
 
+/// The `AC <mag> [<phase>]` part of a `V`/`I` line: the phasor the source
+/// injects in a `.ac` analysis. It does not change the DC or transient value.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AcStimulus {
+    /// Amplitude, volts or amps.
+    pub magnitude: f64,
+    /// Phase, degrees, as SPICE writes it.
+    pub phase_degrees: f64,
+}
+
+/// How a `.ac` sweep spaces its frequencies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AcSweepKind {
+    /// `dec`: `points` per decade.
+    Decade,
+    /// `oct`: `points` per octave.
+    Octave,
+    /// `lin`: `points` in total, evenly spaced.
+    Linear,
+}
+
+/// `.ac dec|oct|lin <points> <fstart> <fstop>`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AcSweep {
+    /// Spacing rule.
+    pub kind: AcSweepKind,
+    /// Points per decade or octave, or the total for `lin`.
+    pub points: usize,
+    /// First frequency, hertz.
+    pub start_hz: f64,
+    /// Last frequency, hertz.
+    pub stop_hz: f64,
+}
+
+impl AcSweep {
+    /// The swept frequencies in hertz, as ngspice spaces them: `dec`/`oct`
+    /// step by `10^(1/points)` / `2^(1/points)` from `start_hz` and stop at
+    /// the last point not above `stop_hz`; `lin` puts `points` points on
+    /// `[start_hz, stop_hz]`, both ends included.
+    pub fn frequencies(&self) -> Vec<f64> {
+        let ratio = match self.kind {
+            AcSweepKind::Decade => 10.0,
+            AcSweepKind::Octave => 2.0,
+            AcSweepKind::Linear => {
+                if self.points == 1 {
+                    return vec![self.start_hz];
+                }
+                let step = (self.stop_hz - self.start_hz) / (self.points - 1) as f64;
+                return (0..self.points)
+                    .map(|k| self.start_hz + step * k as f64)
+                    .collect();
+            }
+        };
+        // The tolerance keeps the end point that rounding puts a hair above
+        // `stop_hz`, e.g. 10 Hz to 1 MHz at 10 per decade.
+        let limit = self.stop_hz * (1.0 + 1e-9);
+        (0..)
+            .map(|k| self.start_hz * libm::pow(ratio, k as f64 / self.points as f64))
+            .take_while(|f| *f <= limit)
+            .collect()
+    }
+}
+
 /// `V<name> n+ n- <source>`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoltageSource {
@@ -891,6 +959,8 @@ pub struct VoltageSource {
     pub dc: f64,
     /// Time dependence. `Dc` sources are the ones a routed input may drive.
     pub wave: Waveform,
+    /// Small-signal excitation for `.ac`, from `AC <mag> [<phase>]`.
+    pub ac: Option<AcStimulus>,
 }
 
 /// `I<name> n+ n- <source>`. Positive current flows from `p` through the
@@ -907,6 +977,8 @@ pub struct CurrentSource {
     pub dc: f64,
     /// Time dependence. `Dc` sources are the ones a routed input may drive.
     pub wave: Waveform,
+    /// Small-signal excitation for `.ac`, from `AC <mag> [<phase>]`.
+    pub ac: Option<AcStimulus>,
 }
 
 /// Which way round a three-terminal device's junctions face.
@@ -3282,6 +3354,9 @@ pub struct Circuit {
     /// instead of from a solved operating point (see
     /// [`crate::analog::Solver::solve_operating_point`]).
     pub uic: bool,
+    /// The deck's `.ac` sweep, if it has one; see
+    /// [`crate::analog::Solver::ac_analysis`].
+    pub ac_sweep: Option<AcSweep>,
 }
 
 impl Circuit {
@@ -4971,6 +5046,12 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                 "tran" => {
                     circuit.uic |= tokens[1..].iter().any(|t| t.eq_ignore_ascii_case("uic"));
                 }
+                "ac" => {
+                    if circuit.ac_sweep.is_some() {
+                        return Err(ctx.parse_err("only one `.ac` sweep is supported"));
+                    }
+                    circuit.ac_sweep = Some(parse_ac_sweep(&ctx, &tokens[1..])?);
+                }
                 "model" => parse_model(
                     &mut models,
                     &ctx,
@@ -5215,7 +5296,13 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                     return Err(ctx.parse_err(format!("expected `{shape}`")));
                 }
                 let (np, nn) = (rest[0], rest[1]);
-                let wave = parse_source(&ctx, &rest[2..], shape)?;
+                let (value, ac) = split_ac_stimulus(&ctx, &rest[2..])?;
+                let wave = if value.is_empty() {
+                    // `V1 in 0 AC 1`: SPICE's DC value defaults to zero.
+                    Waveform::Dc(0.0)
+                } else {
+                    parse_source(&ctx, &value, shape)?
+                };
                 let dc = wave.at(0.0);
                 let p = circuit.intern(np);
                 let n = circuit.intern(nn);
@@ -5226,6 +5313,7 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                         n,
                         dc,
                         wave,
+                        ac,
                     });
                 } else {
                     circuit.current_sources.push(CurrentSource {
@@ -5234,6 +5322,7 @@ fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
                         n,
                         dc,
                         wave,
+                        ac,
                     });
                 }
             }
@@ -7450,6 +7539,70 @@ fn bind_models(
     Ok(())
 }
 
+/// Take `AC <mag> [<phase>]` out of the value part of a `V`/`I` line and
+/// return what is left for [`parse_source`]. The phase is the token after the
+/// magnitude when it reads as a number; SPICE defaults both to zero phase.
+fn split_ac_stimulus<'a>(
+    ctx: &LineCtx<'_>,
+    tokens: &[&'a str],
+) -> Result<(Vec<&'a str>, Option<AcStimulus>), AnalogError> {
+    let Some(at) = tokens.iter().position(|t| t.eq_ignore_ascii_case("ac")) else {
+        return Ok((tokens.to_vec(), None));
+    };
+    let magnitude = tokens
+        .get(at + 1)
+        .ok_or_else(|| ctx.parse_err("expected `AC <magnitude> [<phase>]`"))
+        .and_then(|raw| ctx.value(raw, "AC magnitude"))?;
+    let phase = tokens
+        .get(at + 2)
+        .and_then(|raw| ctx.value(raw, "AC phase").ok());
+    let end = at + 2 + usize::from(phase.is_some());
+    if !magnitude.is_finite() || !phase.unwrap_or(0.0).is_finite() {
+        return Err(ctx.parse_err("AC magnitude and phase must be finite"));
+    }
+    if tokens[end..].iter().any(|t| t.eq_ignore_ascii_case("ac")) {
+        return Err(ctx.parse_err("`AC` is given twice"));
+    }
+    let mut rest = tokens[..at].to_vec();
+    rest.extend_from_slice(&tokens[end..]);
+    Ok((
+        rest,
+        Some(AcStimulus {
+            magnitude,
+            phase_degrees: phase.unwrap_or(0.0),
+        }),
+    ))
+}
+
+/// Parse `.ac dec|oct|lin <points> <fstart> <fstop>`.
+fn parse_ac_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<AcSweep, AnalogError> {
+    const SHAPE: &str = "expected `.ac dec|oct|lin <points> <fstart> <fstop>`";
+    if tokens.len() != 4 {
+        return Err(ctx.parse_err(SHAPE));
+    }
+    let kind = match tokens[0].to_ascii_lowercase().as_str() {
+        "dec" => AcSweepKind::Decade,
+        "oct" => AcSweepKind::Octave,
+        "lin" => AcSweepKind::Linear,
+        _ => return Err(ctx.parse_err(SHAPE)),
+    };
+    let points = ctx.value(tokens[1], "AC point count")?;
+    let start_hz = ctx.value(tokens[2], "AC start frequency")?;
+    let stop_hz = ctx.value(tokens[3], "AC stop frequency")?;
+    if !(points >= 1.0 && points.fract() == 0.0 && points <= 100_000.0) {
+        return Err(ctx.parse_err("`.ac` point count must be a whole number from 1 to 100000"));
+    }
+    if !(start_hz.is_finite() && stop_hz.is_finite() && start_hz > 0.0 && stop_hz >= start_hz) {
+        return Err(ctx.parse_err("`.ac` needs 0 < fstart <= fstop, both finite"));
+    }
+    Ok(AcSweep {
+        kind,
+        points: points as usize,
+        start_hz,
+        stop_hz,
+    })
+}
+
 /// Parse the value part of a `V`/`I` line: `[dc] <value>`, `SIN(...)`,
 /// `SFFM(...)`, `EXP(...)`, `PULSE(...)`, or `PWL(...)`.
 ///
@@ -8303,6 +8456,7 @@ impl Lowering<'_> {
             n,
             dc: amps,
             wave: Waveform::Dc(amps),
+            ac: None,
         });
     }
 
@@ -8314,6 +8468,7 @@ impl Lowering<'_> {
             n,
             dc: volts,
             wave: Waveform::Dc(volts),
+            ac: None,
         });
     }
 

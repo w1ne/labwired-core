@@ -47,6 +47,23 @@
 //! trapezoidal resumes from the consistent state it leaves. This is what SPICE
 //! does at a breakpoint, and it brings the same fixture to 0.002 %.
 //!
+//! ## Small-signal AC
+//!
+//! [`Solver::ac_analysis`] linearises the circuit about its present solution
+//! and solves `(G + jωC)·x = b` at each frequency. `G` is the Newton Jacobian
+//! of the operating-point stamp. `C` is not written per device: it is read
+//! back from the backward-Euler transient stamp, whose matrix is exactly
+//! `G + C/h` for every element whose reactive part is a charge (capacitors,
+//! diode, BJT, JFET and MOSFET charge) or a flux (inductors, mutual
+//! inductance). So every device that integrates in a transient gets its
+//! small-signal admittance from the same code, and a device model added later
+//! gets it without an AC stamp of its own. Two step lengths are stamped and
+//! compared; a transient term that is not proportional to `1/h` (BJT excess
+//! phase, diode soft recovery, op-amp slew or current limits) is refused by
+//! name rather than mis-modelled, as are transmission lines, whose delay is
+//! not a capacitance. `b` holds the `AC <mag> [<phase>]` values of the
+//! independent sources; every other source is a small-signal zero.
+//!
 //! ## Determinism
 //!
 //! `f64` throughout, `Vec` indices in the hot path, `BTreeMap` only for name
@@ -74,6 +91,103 @@ pub enum Integration {
     /// Trapezoidal — second order, far more accurate per step, can ring on a
     /// hard step input.
     Trapezoidal,
+}
+
+/// A complex small-signal value: volts at a node, amps in a branch.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Phasor {
+    /// Real part.
+    pub re: f64,
+    /// Imaginary part.
+    pub im: f64,
+}
+
+impl Phasor {
+    /// `|x|`.
+    pub fn magnitude(&self) -> f64 {
+        libm::hypot(self.re, self.im)
+    }
+
+    /// `arg(x)` in degrees, in `(−180, 180]`.
+    pub fn phase_degrees(&self) -> f64 {
+        libm::atan2(self.im, self.re).to_degrees()
+    }
+
+    /// `20·log10|x|`.
+    pub fn db(&self) -> f64 {
+        20.0 * libm::log10(self.magnitude())
+    }
+}
+
+/// The result of [`Solver::ac_analysis`]: one phasor per unknown per
+/// frequency.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AcResponse {
+    frequencies: Vec<f64>,
+    nodes: usize,
+    dim: usize,
+    values: Vec<Phasor>,
+}
+
+impl AcResponse {
+    /// The analysed frequencies, hertz, in the order given.
+    pub fn frequencies(&self) -> &[f64] {
+        &self.frequencies
+    }
+
+    /// Node voltage phasor at frequency index `point`; ground is zero.
+    pub fn node_voltage(&self, point: usize, node: NodeRef) -> Phasor {
+        node.map_or(Phasor::default(), |node| {
+            self.values[point * self.dim + node]
+        })
+    }
+
+    /// Branch current phasor `index` at frequency index `point`, in the order
+    /// [`Solver::branch_current`] uses.
+    pub fn branch_current(&self, point: usize, index: usize) -> Phasor {
+        self.values[point * self.dim + self.nodes + index]
+    }
+}
+
+/// Gaussian elimination with partial pivoting, in place: `rhs` becomes the
+/// solution. A pivot below `1e-30` returns its column.
+fn solve_dense(matrix: &mut [f64], rhs: &mut [f64], size: usize) -> Result<(), usize> {
+    for column in 0..size {
+        let pivot_row = (column..size)
+            .max_by(|a, b| {
+                matrix[a * size + column]
+                    .abs()
+                    .total_cmp(&matrix[b * size + column].abs())
+            })
+            .expect("non-empty range");
+        if matrix[pivot_row * size + column].abs() < 1e-30 {
+            return Err(column);
+        }
+        if pivot_row != column {
+            for index in 0..size {
+                matrix.swap(pivot_row * size + index, column * size + index);
+            }
+            rhs.swap(pivot_row, column);
+        }
+        let pivot = matrix[column * size + column];
+        for row in (column + 1)..size {
+            let factor = matrix[row * size + column] / pivot;
+            if factor == 0.0 {
+                continue;
+            }
+            for index in column..size {
+                matrix[row * size + index] -= factor * matrix[column * size + index];
+            }
+            rhs[row] -= factor * rhs[column];
+        }
+    }
+    for row in (0..size).rev() {
+        let tail: f64 = ((row + 1)..size)
+            .map(|index| matrix[row * size + index] * rhs[index])
+            .sum();
+        rhs[row] = (rhs[row] - tail) / matrix[row * size + row];
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1894,6 +2008,161 @@ impl Solver {
     /// True when the circuit needs Newton iteration.
     pub fn is_nonlinear(&self) -> bool {
         self.nonlinear
+    }
+
+    /// Run the netlist's own `.ac` sweep; see [`Solver::ac_analysis`].
+    pub fn ac_sweep(&mut self) -> Result<AcResponse, AnalogError> {
+        let sweep = self.circuit.ac_sweep.ok_or_else(|| {
+            AnalogError::Config("netlist has no `.ac dec|oct|lin ...` sweep".to_string())
+        })?;
+        self.ac_analysis(&sweep.frequencies())
+    }
+
+    /// Small-signal AC analysis at each of `frequencies` (hertz), linearised
+    /// about the solver's present solution — the DC operating point on a
+    /// fresh solver. The stimulus is every source's `AC <mag> [<phase>]`.
+    ///
+    /// The transient state is left exactly as it was: the next
+    /// [`Solver::advance`] produces the same bits it would have without
+    /// this call.
+    pub fn ac_analysis(&mut self, frequencies: &[f64]) -> Result<AcResponse, AnalogError> {
+        if let Some(line) = self.circuit.transmission_lines.first() {
+            return Err(AnalogError::Config(format!(
+                "`.ac` does not model transmission line `{}`: its delay is not a capacitance",
+                line.name
+            )));
+        }
+        if let Some(bad) = frequencies.iter().find(|f| !(f.is_finite() && **f >= 0.0)) {
+            return Err(AnalogError::Config(format!(
+                "`.ac` frequency {bad} Hz must be finite and not negative"
+            )));
+        }
+        let dim = self.dim();
+        if self.nonlinear {
+            self.save_linearisation();
+            self.relinearise();
+        }
+        let result = self.ac_matrices().map(|(g, c)| {
+            let excitation = self.ac_excitation();
+            (g, c, excitation)
+        });
+        if self.nonlinear {
+            self.restore_linearisation();
+        }
+        self.cached_stamp = None;
+        self.settled = false;
+        let (g, c, excitation) = result?;
+
+        let mut values = Vec::with_capacity(frequencies.len() * dim);
+        let size = 2 * dim;
+        let mut system = vec![0.0; size * size];
+        for &hertz in frequencies {
+            let omega = 2.0 * std::f64::consts::PI * hertz;
+            // [G −ωC; ωC G]·[re; im] = [b_re; b_im].
+            for row in 0..dim {
+                for column in 0..dim {
+                    let conductance = g[row * dim + column];
+                    let susceptance = omega * c[row * dim + column];
+                    system[row * size + column] = conductance;
+                    system[row * size + dim + column] = -susceptance;
+                    system[(dim + row) * size + column] = susceptance;
+                    system[(dim + row) * size + dim + column] = conductance;
+                }
+            }
+            let mut rhs: Vec<f64> = excitation
+                .iter()
+                .map(|p| p.re)
+                .chain(excitation.iter().map(|p| p.im))
+                .collect();
+            solve_dense(&mut system, &mut rhs, size)
+                .map_err(|row| AnalogError::Singular { row: row % dim })?;
+            values.extend((0..dim).map(|k| Phasor {
+                re: rhs[k],
+                im: rhs[dim + k],
+            }));
+        }
+        Ok(AcResponse {
+            frequencies: frequencies.to_vec(),
+            nodes: self.nodes,
+            dim,
+            values,
+        })
+    }
+
+    /// `G` and `C` of the small-signal system, row-major `dim × dim`.
+    fn ac_matrices(&mut self) -> Result<(Vec<f64>, Vec<f64>), AnalogError> {
+        // A step far below any time constant a netlist carries keeps `C/h`
+        // well above `G`, so the subtraction loses little; the second step
+        // checks that the difference really is `C/h`.
+        const STEP: f64 = 1e-15;
+        let dim = self.dim();
+        let stamp = |solver: &mut Self, stamp: Stamp| {
+            solver.build(stamp);
+            match solver.behavioural_error.take() {
+                Some(error) => Err(error),
+                None => Ok(solver.matrix[..dim * dim].to_vec()),
+            }
+        };
+        let g = stamp(self, Stamp::OperatingPoint)?;
+        let short = stamp(self, Stamp::Transient(STEP, Integration::BackwardEuler))?;
+        let long = stamp(
+            self,
+            Stamp::Transient(2.0 * STEP, Integration::BackwardEuler),
+        )?;
+        let mut c = vec![0.0; dim * dim];
+        for cell in 0..dim * dim {
+            let first = short[cell] - g[cell];
+            let second = long[cell] - g[cell];
+            let tolerance = 1e-9 * (first.abs() + g[cell].abs()) + f64::MIN_POSITIVE;
+            if (first - 2.0 * second).abs() > tolerance {
+                return Err(AnalogError::Config(format!(
+                    "`.ac` cannot linearise row `{}`, column `{}`: an element there has a \
+                     transient term that is not a capacitance or inductance (BJT `PTF`, \
+                     diode soft recovery `VP`, op-amp `SR`/`IOLIM`)",
+                    self.unknown_name(cell / dim),
+                    self.unknown_name(cell % dim),
+                )));
+            }
+            c[cell] = first * STEP;
+        }
+        Ok((g, c))
+    }
+
+    /// The `AC` phasor of every independent source, on the MNA right-hand
+    /// side.
+    fn ac_excitation(&self) -> Vec<Phasor> {
+        let mut b = vec![Phasor::default(); self.dim()];
+        let phasor = |ac: Option<super::netlist::AcStimulus>| {
+            ac.map_or(Phasor::default(), |ac| {
+                let radians = ac.phase_degrees.to_radians();
+                Phasor {
+                    re: ac.magnitude * libm::cos(radians),
+                    im: ac.magnitude * libm::sin(radians),
+                }
+            })
+        };
+        for (index, source) in self.circuit.voltage_sources.iter().enumerate() {
+            b[self.nodes + index] = phasor(source.ac);
+        }
+        for source in &self.circuit.current_sources {
+            let amps = phasor(source.ac);
+            for (node, sign) in [(source.p, -1.0), (source.n, 1.0)] {
+                if let Some(node) = node {
+                    b[node].re += sign * amps.re;
+                    b[node].im += sign * amps.im;
+                }
+            }
+        }
+        b
+    }
+
+    /// A node name, or the element whose branch current an unknown is.
+    fn unknown_name(&self, index: usize) -> String {
+        if index < self.nodes {
+            format!("v({})", self.circuit.node_name(index))
+        } else {
+            format!("i({})", self.circuit.branch_name(index - self.nodes))
+        }
     }
 
     /// Re-evaluate every source that carries a transient function at `time`.

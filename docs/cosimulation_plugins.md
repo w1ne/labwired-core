@@ -475,6 +475,22 @@ handed to this engine and to ngspice unchanged. This engine takes its run length
 manifest. Any other directive is still a hard error naming the ngspice adapter,
 so a typo cannot quietly drop an element line.
 
+### Small-signal AC (`.ac`)
+
+`.ac dec|oct|lin <points> <fstart> <fstop>` and a source value's
+`AC <mag> [<phase°>]` (for example `V1 in 0 DC 0.65 AC 1` or
+`I1 0 a SIN(0 1m 1k) AC 1m -45`) feed `Solver::ac_sweep` /
+`Solver::ac_analysis`. The analysis linearises the circuit about its present
+solution and solves `(G + jωC)·x = b`. `G` is the operating-point Newton
+Jacobian. `C` is read back from the backward-Euler transient stamp, so every
+element that stores charge or flux in a transient gets its small-signal
+admittance with no per-device AC code. The tests check C, L, diode depletion
+and diffusion charge, BJT `CJC`, MOSFET `CGDO` and a `LAPLACE` biquad against
+closed forms. Transmission lines, BJT
+`PTF` excess phase, diode soft recovery (`VP`) and op-amp `SR`/`IOLIM` are
+refused by name. The co-simulation run ignores the `AC` values. The closed-form
+proofs are in `crates/core/tests/analog_ac.rs`.
+
 ### Independent sources
 
 `<source>` is one of:
@@ -778,7 +794,7 @@ device charge terms and temperature effects. `+` continuation lines and
 flattened with ngspice's names (`R.X1.R1`, node `X1.mid`), and a `.model`
 inside a body is local to it. Parameterised subcircuits (`params:`), nested
 `.subckt` definitions, `.include` / `.lib` device libraries, other MOSFET or
-JFET levels, other JFET `B` values, and AC/DC sweeps are not supported by
+JFET levels, other JFET `B` values, and DC sweeps are not supported by
 the in-core engine. Unsupported netlist constructs fail validation with guidance
 to use the native ngspice adapter.
 
