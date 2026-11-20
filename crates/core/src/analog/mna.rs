@@ -152,6 +152,129 @@ impl AcResponse {
     }
 }
 
+/// What makes a [`NoiseSource`]'s current.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoiseMechanism {
+    /// Johnson noise `4kT/R` of a resistor, a switch or a device's terminal
+    /// resistance.
+    Thermal,
+    /// Shot noise `2q|I|` of a junction current.
+    Shot,
+    /// FET channel thermal noise `(8/3)kT·|gm|`.
+    Channel,
+}
+
+/// One noise current generator: a white current density between two nodes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NoiseSource {
+    /// ngspice's name for the term: `r1` for a resistor or switch, else
+    /// `<term>_<element>`, e.g. `rs_d1`, `id_d1`, `rb_q1`, `ic_q1`, `ib_q1`,
+    /// `rd_m1`, `id_j1`.
+    pub name: String,
+    /// What makes the current.
+    pub mechanism: NoiseMechanism,
+    /// Current spectral density, A²/Hz.
+    pub density: f64,
+    a: NodeRef,
+    b: NodeRef,
+}
+
+/// The result of [`Solver::noise_analysis`].
+///
+/// Densities are power spectral densities: V²/Hz at the output, and V²/Hz
+/// or A²/Hz at the input for a `V` or an `I` input source. Take the square
+/// root for ngspice's `onoise_spectrum`/`inoise_spectrum`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NoiseResponse {
+    frequencies: Vec<f64>,
+    sources: Vec<NoiseSource>,
+    /// Output-referred density of each source, `point * sources + k`.
+    contributions: Vec<f64>,
+    /// `1/|H|²` from the input source to the output, per point.
+    gain_square_inverse: Vec<f64>,
+}
+
+impl NoiseResponse {
+    /// The analysed frequencies, hertz, in the order given.
+    pub fn frequencies(&self) -> &[f64] {
+        &self.frequencies
+    }
+
+    /// Every noise generator, in the order [`Self::contribution`] uses.
+    pub fn sources(&self) -> &[NoiseSource] {
+        &self.sources
+    }
+
+    /// Output density from source `source` at frequency index `point`, V²/Hz.
+    pub fn contribution(&self, point: usize, source: usize) -> f64 {
+        self.contributions[point * self.sources.len() + source]
+    }
+
+    /// Total output density at frequency index `point`, V²/Hz.
+    pub fn output_density(&self, point: usize) -> f64 {
+        (0..self.sources.len())
+            .map(|source| self.contribution(point, source))
+            .sum()
+    }
+
+    /// Input-referred density at frequency index `point`: the output density
+    /// over the squared gain from the input source.
+    pub fn input_density(&self, point: usize) -> f64 {
+        self.output_density(point) * self.gain_square_inverse[point]
+    }
+
+    /// RMS output noise over the sweep, volts: ngspice's `onoise_total`.
+    pub fn output_total(&self) -> f64 {
+        libm::sqrt(self.integrate(false))
+    }
+
+    /// RMS input-referred noise over the sweep: ngspice's `inoise_total`.
+    pub fn input_total(&self) -> f64 {
+        libm::sqrt(self.integrate(true))
+    }
+
+    /// ngspice's `Nintegrate`: each source's output density is taken as a
+    /// power of frequency between two points and integrated exactly; the sum
+    /// is over sources and intervals. For the input-referred total ngspice
+    /// divides each interval by the squared gain at its upper end only.
+    fn integrate(&self, input: bool) -> f64 {
+        // ngspice's `N_MINLOG`.
+        const FLOOR: f64 = 1e-38;
+        let mut total = 0.0;
+        for point in 1..self.frequencies.len() {
+            let (f0, f1) = (self.frequencies[point - 1], self.frequencies[point]);
+            let (ln_f0, ln_f1) = (libm::log(f0), libm::log(f1));
+            if ln_f1 == ln_f0 {
+                continue;
+            }
+            let mut interval = 0.0;
+            for source in 0..self.sources.len() {
+                let n1 = self.contribution(point, source);
+                let ln_n0 = libm::log(self.contribution(point - 1, source).max(FLOOR));
+                let ln_n1 = libm::log(n1.max(FLOOR));
+                let exponent = (ln_n1 - ln_n0) / (ln_f1 - ln_f0);
+                interval += if exponent.abs() < FLOOR {
+                    n1 * (f1 - f0)
+                } else {
+                    let a = libm::exp(ln_n1 - exponent * ln_f1);
+                    let exponent = exponent + 1.0;
+                    if exponent.abs() < FLOOR {
+                        a * (ln_f1 - ln_f0)
+                    } else {
+                        a * (libm::exp(exponent * ln_f1) - libm::exp(exponent * ln_f0)) / exponent
+                    }
+                };
+            }
+            total += if input {
+                interval * self.gain_square_inverse[point]
+            } else {
+                interval
+            };
+        }
+        total
+    }
+}
+
 /// The result of [`Solver::dc_analysis`]: the full solution at every point
 /// of a `.dc` sweep. Points run inner-fastest: point `k` has inner index
 /// `k % inner_len()` and outer index `k / inner_len()`.
@@ -243,6 +366,47 @@ fn solve_dense(matrix: &mut [f64], rhs: &mut [f64], size: usize) -> Result<(), u
         rhs[row] = (rhs[row] - tail) / matrix[row * size + row];
     }
     Ok(())
+}
+
+/// The realified complex system `[G −ωC; ωC G]` at `hertz`, with each
+/// delayed term multiplied by `e^{-jωTD}`, into `system` (`2·dim` square).
+fn small_signal_system(
+    system: &mut [f64],
+    dim: usize,
+    g: &[f64],
+    c: &[f64],
+    couplings: &[DelayedCoupling],
+    hertz: f64,
+) {
+    let size = 2 * dim;
+    let omega = 2.0 * std::f64::consts::PI * hertz;
+    for row in 0..dim {
+        for column in 0..dim {
+            let conductance = g[row * dim + column];
+            let susceptance = omega * c[row * dim + column];
+            system[row * size + column] = conductance;
+            system[row * size + dim + column] = -susceptance;
+            system[(dim + row) * size + column] = susceptance;
+            system[(dim + row) * size + dim + column] = conductance;
+        }
+    }
+    // Each port of a line sees the other's wave `TD` later, and a BJT's
+    // transport current lags its B-E voltage by `td`: `e^{-jωTD}`.
+    for &DelayedCoupling {
+        row,
+        column,
+        coefficient,
+        delay,
+        ..
+    } in couplings
+    {
+        let re = coefficient * libm::cos(omega * delay);
+        let im = -coefficient * libm::sin(omega * delay);
+        system[row * size + column] += re;
+        system[row * size + dim + column] -= im;
+        system[(dim + row) * size + column] += im;
+        system[(dim + row) * size + dim + column] += re;
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1086,6 +1250,7 @@ impl Solver {
         self.circuit.bjts = lowered.bjts;
         self.circuit.mosfets = lowered.mosfets;
         self.circuit.jfets = lowered.jfets;
+        self.circuit.temperature_celsius = lowered.temperature_celsius;
         self.cached_stamp = None;
         self.restart = true;
         self.settled = false;
@@ -2279,56 +2444,17 @@ impl Solver {
             )));
         }
         let dim = self.dim();
-        if self.nonlinear {
-            self.save_linearisation();
-            self.relinearise();
-        }
-        let couplings = self.delayed_couplings();
-        let result = self.ac_matrices(&couplings).map(|(g, c)| {
-            let excitation = self.ac_excitation();
-            (g, c, excitation)
-        });
-        if self.nonlinear {
-            self.restore_linearisation();
-        }
-        self.cached_stamp = None;
-        self.settled = false;
-        let (g, c, excitation) = result?;
+        let (g, c, couplings, excitation) = self.linearised(|solver| {
+            let couplings = solver.delayed_couplings();
+            let (g, c) = solver.ac_matrices(&couplings)?;
+            Ok((g, c, couplings, solver.ac_excitation()))
+        })?;
 
         let mut values = Vec::with_capacity(frequencies.len() * dim);
         let size = 2 * dim;
         let mut system = vec![0.0; size * size];
         for &hertz in frequencies {
-            let omega = 2.0 * std::f64::consts::PI * hertz;
-            // [G −ωC; ωC G]·[re; im] = [b_re; b_im].
-            for row in 0..dim {
-                for column in 0..dim {
-                    let conductance = g[row * dim + column];
-                    let susceptance = omega * c[row * dim + column];
-                    system[row * size + column] = conductance;
-                    system[row * size + dim + column] = -susceptance;
-                    system[(dim + row) * size + column] = susceptance;
-                    system[(dim + row) * size + dim + column] = conductance;
-                }
-            }
-            // Each port of a line sees the other's wave `TD` later, and a
-            // BJT's transport current lags its B-E voltage by `td`:
-            // `e^{-jωTD}`.
-            for &DelayedCoupling {
-                row,
-                column,
-                coefficient,
-                delay,
-                ..
-            } in &couplings
-            {
-                let re = coefficient * libm::cos(omega * delay);
-                let im = -coefficient * libm::sin(omega * delay);
-                system[row * size + column] += re;
-                system[row * size + dim + column] -= im;
-                system[(dim + row) * size + column] += im;
-                system[(dim + row) * size + dim + column] += re;
-            }
+            small_signal_system(&mut system, dim, &g, &c, &couplings, hertz);
             let mut rhs: Vec<f64> = excitation
                 .iter()
                 .map(|p| p.re)
@@ -2347,6 +2473,332 @@ impl Solver {
             dim,
             values,
         })
+    }
+
+    /// Run the netlist's own `.noise` analysis; see
+    /// [`Solver::noise_analysis`].
+    pub fn noise_sweep(&mut self) -> Result<NoiseResponse, AnalogError> {
+        let noise = self.circuit.noise_sweep.clone().ok_or_else(|| {
+            AnalogError::Config("netlist has no `.noise v(<out>) <src> ...` analysis".to_string())
+        })?;
+        self.noise_analysis(
+            &noise.output,
+            noise.reference.as_deref(),
+            &noise.input,
+            &noise.sweep.frequencies(),
+        )
+    }
+
+    /// Small-signal noise analysis, as ngspice's `.noise`: every noise
+    /// generator of the circuit linearised about the solver's present
+    /// solution (the DC operating point on a fresh solver), carried to
+    /// `v(output) − v(reference)` at each of `frequencies` (hertz). The
+    /// generators are uncorrelated, so their output powers add.
+    ///
+    /// The input-referred density divides by the squared gain from `input`,
+    /// an independent `V` or `I` source, driven at unit magnitude whatever
+    /// its `AC` value, as ngspice does. Thermal noise uses each element's own
+    /// temperature: a device's or resistor's `temp=`, else `.temp`, else the
+    /// engine's fixed 300 K.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn noise_analysis(
+        &mut self,
+        output: &str,
+        reference: Option<&str>,
+        input: &str,
+        frequencies: &[f64],
+    ) -> Result<NoiseResponse, AnalogError> {
+        if let Some(bad) = frequencies.iter().find(|f| !(f.is_finite() && **f > 0.0)) {
+            return Err(AnalogError::Config(format!(
+                "`.noise` frequency {bad} Hz must be finite and positive"
+            )));
+        }
+        let node = |name: &str| {
+            self.circuit.node(name).ok_or_else(|| {
+                AnalogError::Config(format!(
+                    "`.noise` output node `{name}` is not in the netlist"
+                ))
+            })
+        };
+        let output = node(output)?;
+        let reference = reference.map(node).transpose()?.flatten();
+        if output == reference {
+            return Err(AnalogError::Config(
+                "`.noise` output and reference are the same node".to_string(),
+            ));
+        }
+        let dim = self.dim();
+        let mut stimulus = vec![0.0; dim];
+        if let Some(index) = self.voltage_source_index(input) {
+            stimulus[self.nodes + index] = 1.0;
+        } else if let Some(index) = self.current_source_index(input) {
+            let source = &self.circuit.current_sources[index];
+            inject(&mut stimulus, source.p, -1.0);
+            inject(&mut stimulus, source.n, 1.0);
+        } else {
+            return Err(AnalogError::Config(format!(
+                "`.noise` input `{input}` is not an independent `V` or `I` source"
+            )));
+        }
+        let (g, c, couplings, sources) = self.linearised(|solver| {
+            let couplings = solver.delayed_couplings();
+            let (g, c) = solver.ac_matrices(&couplings)?;
+            Ok((g, c, couplings, solver.noise_sources()))
+        })?;
+
+        // ngspice's `N_MINGAIN`.
+        const MIN_GAIN: f64 = 1e-20;
+        let size = 2 * dim;
+        let mut system = vec![0.0; size * size];
+        let mut transpose = vec![0.0; size * size];
+        let mut contributions = Vec::with_capacity(frequencies.len() * sources.len());
+        let mut gain_square_inverse = Vec::with_capacity(frequencies.len());
+        for &hertz in frequencies {
+            small_signal_system(&mut system, dim, &g, &c, &couplings, hertz);
+            for row in 0..size {
+                for column in 0..size {
+                    transpose[column * size + row] = system[row * size + column];
+                }
+            }
+            // The realified transpose is the conjugate transpose `Yᴴ`, so the
+            // solution is `w = conj(Y⁻ᵀ·e)`: one solve gives the transfer
+            // from a current injected at any node pair to the output.
+            let mut adjoint = vec![0.0; size];
+            for (node, sign) in [(output, 1.0), (reference, -1.0)] {
+                if let Some(node) = node {
+                    adjoint[node] = sign;
+                }
+            }
+            solve_dense(&mut transpose, &mut adjoint, size)
+                .map_err(|row| AnalogError::Singular { row: row % dim })?;
+            let at = |node: NodeRef| node.map_or((0.0, 0.0), |n| (adjoint[n], adjoint[dim + n]));
+            let (mut gain_re, mut gain_im) = (0.0, 0.0);
+            for (k, &value) in stimulus.iter().enumerate() {
+                gain_re += adjoint[k] * value;
+                gain_im += adjoint[dim + k] * value;
+            }
+            gain_square_inverse.push(1.0 / (gain_re * gain_re + gain_im * gain_im).max(MIN_GAIN));
+            for source in &sources {
+                let (a_re, a_im) = at(source.a);
+                let (b_re, b_im) = at(source.b);
+                let (re, im) = (a_re - b_re, a_im - b_im);
+                contributions.push((re * re + im * im) * source.density);
+            }
+        }
+        Ok(NoiseResponse {
+            frequencies: frequencies.to_vec(),
+            sources,
+            contributions,
+            gain_square_inverse,
+        })
+    }
+
+    /// Run `body` with every nonlinear device linearised at the present
+    /// solution, then put the linearisation back so the next transient step
+    /// is unchanged.
+    fn linearised<T>(
+        &mut self,
+        body: impl FnOnce(&mut Self) -> Result<T, AnalogError>,
+    ) -> Result<T, AnalogError> {
+        if self.nonlinear {
+            self.save_linearisation();
+            self.relinearise();
+        }
+        let result = body(self);
+        if self.nonlinear {
+            self.restore_linearisation();
+        }
+        self.cached_stamp = None;
+        self.settled = false;
+        result
+    }
+
+    /// Every noise current generator at the present linearisation, as
+    /// ngspice's `resnoise.c`, `swnoise.c`, `dionoise.c`, `bjtnoise.c`,
+    /// `mos1noi.c` and `jfetnoise.c` give them, without flicker noise. A
+    /// part whose name holds `#` is one this engine added for a macromodel
+    /// or a BJT substrate junction and is noiseless.
+    fn noise_sources(&self) -> Vec<NoiseSource> {
+        let kelvin = |celsius: Option<f64>| celsius.map_or(device::TEMPERATURE_K, |t| t + 273.15);
+        let circuit_kelvin = kelvin(self.circuit.temperature_celsius);
+        let thermal = |kelvin: f64, siemens: f64| 4.0 * device::BOLTZMANN * kelvin * siemens;
+        let shot = |amps: f64| 2.0 * device::ELEMENTARY_CHARGE * amps.abs();
+        let user = |name: &str| !name.contains('#');
+        let mut sources = Vec::new();
+        let mut push = |term: &str, element: &str, mechanism, density: f64, a, b| {
+            if density > 0.0 && a != b {
+                let element = element.to_ascii_lowercase();
+                sources.push(NoiseSource {
+                    name: if term.is_empty() {
+                        element
+                    } else {
+                        format!("{term}_{element}")
+                    },
+                    mechanism,
+                    density,
+                    a,
+                    b,
+                });
+            }
+        };
+        use NoiseMechanism::{Channel, Shot, Thermal};
+
+        for resistor in self.circuit.resistors.iter().filter(|r| user(&r.name)) {
+            let celsius = resistor.ntc.map(|ntc| ntc.temperature_celsius).or(resistor
+                .temperature_coefficients
+                .map(|tc| tc.temperature_celsius));
+            let kelvin = celsius.map_or(circuit_kelvin, |t| t + 273.15);
+            let density = thermal(kelvin, 1.0 / resistor.resistance_ohms());
+            push("", &resistor.name, Thermal, density, resistor.a, resistor.b);
+        }
+        for (index, switch) in self.circuit.switches.iter().enumerate() {
+            if !user(&switch.name) {
+                continue;
+            }
+            let ohms = if self.switch_closed[index] {
+                switch.ron
+            } else {
+                switch.roff
+            };
+            let density = thermal(circuit_kelvin, 1.0 / ohms);
+            push("", &switch.name, Thermal, density, switch.a, switch.b);
+        }
+        for (index, diode) in self.circuit.diodes.iter().enumerate() {
+            if !user(&diode.name) {
+                continue;
+            }
+            let m = diode.multiplier;
+            let kelvin = kelvin(diode.temperature_celsius);
+            if diode.series_resistance_ohms > 0.0 {
+                let density = thermal(kelvin, m / diode.series_resistance_ohms);
+                push(
+                    "rs",
+                    &diode.name,
+                    Thermal,
+                    density,
+                    diode.anode,
+                    diode.junction_anode,
+                );
+            }
+            let op = diode_model_op(
+                self.diode_vj[index],
+                diode.model,
+                diode.breakdown,
+                diode.temperature_celsius,
+            );
+            let density = shot(m * op.id);
+            push(
+                "id",
+                &diode.name,
+                Shot,
+                density,
+                diode.junction_anode,
+                diode.cathode,
+            );
+        }
+        for (index, bjt) in self.circuit.bjts.iter().enumerate() {
+            if !user(&bjt.name) {
+                continue;
+            }
+            let m = bjt.multiplier;
+            let model = bjt.operating_model;
+            let kelvin = kelvin(bjt.temperature_celsius);
+            let op = bjt_op(bjt, self.bjt_vbe[index], self.bjt_vbc[index]);
+            let rb = device::bjt_base_resistance(model, op.ib);
+            for (term, ohms, a, b) in [
+                ("rc", model.rc, bjt.c, bjt.junction_cx),
+                ("rb", rb, bjt.b, bjt.junction_b),
+                ("re", model.re, bjt.e, bjt.junction_e),
+            ] {
+                if ohms > 0.0 {
+                    push(term, &bjt.name, Thermal, thermal(kelvin, m / ohms), a, b);
+                }
+            }
+            let (c, b, e) = (bjt.junction_c, bjt.junction_b, bjt.junction_e);
+            push("ic", &bjt.name, Shot, shot(m * op.ic), c, e);
+            push("ib", &bjt.name, Shot, shot(m * op.ib), b, e);
+        }
+        for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
+            if !user(&mosfet.name) {
+                continue;
+            }
+            let m = mosfet.multiplier;
+            let model = mosfet.operating_model;
+            let kelvin = kelvin(mosfet.temperature_celsius);
+            for (term, ohms, a, b) in [
+                (
+                    "rd",
+                    mosfet.drain_resistance_ohms,
+                    mosfet.d,
+                    mosfet.junction_d,
+                ),
+                (
+                    "rs",
+                    mosfet.source_resistance_ohms,
+                    mosfet.s,
+                    mosfet.junction_s,
+                ),
+            ] {
+                if ohms > 0.0 {
+                    push(term, &mosfet.name, Thermal, thermal(kelvin, m / ohms), a, b);
+                }
+            }
+            let (vgs, vds) = (self.mos_vgs[index], self.mos_vds[index]);
+            let (vgs, vds, vbs) = if vds < 0.0 {
+                (vgs - vds, -vds, self.mos_vbd[index])
+            } else {
+                (vgs, vds, self.mos_vbs[index])
+            };
+            let sign = model.polarity.sign();
+            let op = device::mos_op(
+                vgs,
+                vds,
+                sign * model.vto,
+                mosfet.beta,
+                model.lambda,
+                model.gamma,
+                model.phi,
+                vbs,
+            );
+            let density = thermal(kelvin, m * 2.0 / 3.0 * op.gm.abs());
+            let (d, s) = (mosfet.junction_d, mosfet.junction_s);
+            push("id", &mosfet.name, Channel, density, d, s);
+        }
+        for (index, jfet) in self.circuit.jfets.iter().enumerate() {
+            if !user(&jfet.name) {
+                continue;
+            }
+            let m = jfet.multiplier;
+            let kelvin = kelvin(jfet.temperature_celsius);
+            for (term, ohms, a, b) in [
+                ("rd", jfet.model.rd, jfet.d, jfet.junction_d),
+                ("rs", jfet.model.rs, jfet.s, jfet.junction_s),
+            ] {
+                if ohms > 0.0 {
+                    push(term, &jfet.name, Thermal, thermal(kelvin, m / ohms), a, b);
+                }
+            }
+            let vgs = if self.jfet_vds[index] < 0.0 {
+                self.jfet_vgd[index]
+            } else {
+                self.jfet_vgs[index]
+            };
+            let op = device::jfet_op_with_b(
+                vgs,
+                self.jfet_vds[index].abs(),
+                jfet.model.polarity.sign() * jfet.operating_model.vto,
+                jfet.operating_model.beta,
+                jfet.model.lambda,
+                jfet.model.b,
+                jfet.operating_model.pb,
+            );
+            let density = thermal(kelvin, m * 2.0 / 3.0 * op.gm.abs());
+            let (d, s) = (jfet.junction_d, jfet.junction_s);
+            push("id", &jfet.name, Channel, density, d, s);
+        }
+        sources
     }
 
     /// `G` and `C` of the small-signal system, row-major `dim × dim`.

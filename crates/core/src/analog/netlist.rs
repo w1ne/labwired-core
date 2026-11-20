@@ -374,6 +374,14 @@
 //! (degrees) before or after its DC or transient part; `V1 in 0 AC 1` alone
 //! is a 0 V source. Both feed [`crate::analog::Solver::ac_analysis`] and do
 //! not change the DC or transient run.
+//! `.noise v(<out>[,<ref>]) <src> dec|oct|lin <points> <fstart> <fstop>
+//! [<pts_per_summary>]` is kept as [`Circuit::noise_sweep`] and run by
+//! [`crate::analog::Solver::noise_analysis`]: thermal noise of every resistor,
+//! switch and device terminal resistance, diode and BJT shot noise, and FET
+//! channel thermal noise, as ngspice's level-1 models give them. Flicker
+//! (`KF`/`AF`) is not modelled. The parts this engine adds for a macromodel
+//! (op-amp, comparator, regulator) and a BJT's substrate junction are
+//! noiseless.
 //! `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` is kept
 //! as [`Circuit::dc_sweep`] and run by [`crate::analog::Solver::dc_analysis`];
 //! `<src>` must be a `V`, `I` or `R` element or `TEMP`, and the second source
@@ -988,6 +996,21 @@ pub struct DcSweep {
     pub inner: DcSweepSource,
     /// Outer (slow) sweep.
     pub outer: Option<DcSweepSource>,
+}
+
+/// `.noise v(<out>[,<ref>]) <src> dec|oct|lin <points> <fstart> <fstop>
+/// [<pts_per_summary>]`. The nodes and the source are names, resolved when
+/// the analysis runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NoiseSweep {
+    /// Output node.
+    pub output: String,
+    /// Reference node, ground when absent.
+    pub reference: Option<String>,
+    /// Independent `V` or `I` source the input-referred noise is referred to.
+    pub input: String,
+    /// The analysed frequencies.
+    pub sweep: AcSweep,
 }
 
 /// `V<name> n+ n- <source>`.
@@ -3404,6 +3427,13 @@ pub struct Circuit {
     /// The deck's `.dc` sweep, if it has one; see
     /// [`crate::analog::Solver::dc_analysis`].
     pub dc_sweep: Option<DcSweep>,
+    /// The deck's `.noise` analysis, if it has one; see
+    /// [`crate::analog::Solver::noise_analysis`].
+    pub noise_sweep: Option<NoiseSweep>,
+    /// The deck's `.temp` (or `.options temp=`) in °C, if it gives one.
+    /// `.noise` takes the thermal noise of a resistor without its own
+    /// temperature law, and of a switch, at this temperature.
+    pub temperature_celsius: Option<f64>,
     /// The deck's lines after `.include` expansion, kept only when a `.dc`
     /// card is present, so that a `TEMP` sweep can lower the deck again at
     /// each temperature (see [`Circuit::at_temperature`]).
@@ -5087,6 +5117,7 @@ fn parse_lines_at(
         temperatures.temperature = temperature;
     }
     let circuit_temperature = temperatures.temperature;
+    circuit.temperature_celsius = circuit_temperature;
     let declared_models: Vec<String> = lines
         .iter()
         .filter_map(|line| {
@@ -5143,6 +5174,12 @@ fn parse_lines_at(
                         return Err(ctx.parse_err("only one `.dc` sweep is supported"));
                     }
                     circuit.dc_sweep = Some(parse_dc_sweep(&ctx, &tokens[1..])?);
+                }
+                "noise" => {
+                    if circuit.noise_sweep.is_some() {
+                        return Err(ctx.parse_err("only one `.noise` analysis is supported"));
+                    }
+                    circuit.noise_sweep = Some(parse_noise_sweep(&ctx, &tokens[1..])?);
                 }
                 "model" => parse_model(
                     &mut models,
@@ -7672,20 +7709,83 @@ fn parse_ac_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<AcSweep, AnalogE
     if tokens.len() != 4 {
         return Err(ctx.parse_err(SHAPE));
     }
+    parse_frequency_sweep(ctx, tokens, ".ac", SHAPE)
+}
+
+/// Parse `.noise v(<out>[,<ref>]) <src> dec|oct|lin <points> <fstart> <fstop>
+/// [<pts_per_summary>]`. The summary count only selects ngspice's per-device
+/// printout, so it is accepted and ignored.
+fn parse_noise_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<NoiseSweep, AnalogError> {
+    const SHAPE: &str = "expected `.noise v(<out>[,<ref>]) <src> dec|oct|lin <points> <fstart> \
+                         <fstop> [<pts_per_summary>]`";
+    // `v(out, ref)` may have been split at the blank after the comma.
+    let close = tokens
+        .iter()
+        .position(|token| token.contains(')'))
+        .ok_or_else(|| ctx.parse_err(SHAPE))?;
+    let probe: String = tokens[..=close].concat();
+    let inner = probe
+        .strip_prefix("v(")
+        .or_else(|| probe.strip_prefix("V("))
+        .and_then(|rest| rest.strip_suffix(')'))
+        .ok_or_else(|| ctx.parse_err(SHAPE))?;
+    let mut nodes = inner.split(',').map(str::trim);
+    let output = nodes.next().filter(|node| !node.is_empty());
+    let reference = nodes.next();
+    let (Some(output), None) = (output, nodes.next()) else {
+        return Err(ctx.parse_err(SHAPE));
+    };
+    if reference.is_some_and(str::is_empty) {
+        return Err(ctx.parse_err(SHAPE));
+    }
+    let rest = &tokens[close + 1..];
+    if rest.len() != 5 && rest.len() != 6 {
+        return Err(ctx.parse_err(SHAPE));
+    }
+    let input = rest[0];
+    if !(input.len() >= 2 && matches!(input.as_bytes()[0].to_ascii_uppercase(), b'V' | b'I')) {
+        return Err(ctx.parse_err(format!(
+            "`.noise` refers the noise to an independent `V` or `I` source; `{input}` is not one"
+        )));
+    }
+    if let Some(summary) = rest.get(5) {
+        let count = ctx.value(summary, "noise points per summary")?;
+        if !(count >= 0.0 && count.fract() == 0.0) {
+            return Err(ctx.parse_err("`.noise` points per summary must be a whole number"));
+        }
+    }
+    Ok(NoiseSweep {
+        output: output.to_string(),
+        reference: reference.map(str::to_string),
+        input: input.to_string(),
+        sweep: parse_frequency_sweep(ctx, &rest[1..5], ".noise", SHAPE)?,
+    })
+}
+
+/// The `dec|oct|lin <points> <fstart> <fstop>` tail shared by `.ac` and
+/// `.noise`.
+fn parse_frequency_sweep(
+    ctx: &LineCtx<'_>,
+    tokens: &[&str],
+    card: &str,
+    shape: &str,
+) -> Result<AcSweep, AnalogError> {
     let kind = match tokens[0].to_ascii_lowercase().as_str() {
         "dec" => AcSweepKind::Decade,
         "oct" => AcSweepKind::Octave,
         "lin" => AcSweepKind::Linear,
-        _ => return Err(ctx.parse_err(SHAPE)),
+        _ => return Err(ctx.parse_err(shape)),
     };
     let points = ctx.value(tokens[1], "AC point count")?;
     let start_hz = ctx.value(tokens[2], "AC start frequency")?;
     let stop_hz = ctx.value(tokens[3], "AC stop frequency")?;
     if !(points >= 1.0 && points.fract() == 0.0 && points <= 100_000.0) {
-        return Err(ctx.parse_err("`.ac` point count must be a whole number from 1 to 100000"));
+        return Err(ctx.parse_err(format!(
+            "`{card}` point count must be a whole number from 1 to 100000"
+        )));
     }
     if !(start_hz.is_finite() && stop_hz.is_finite() && start_hz > 0.0 && stop_hz >= start_hz) {
-        return Err(ctx.parse_err("`.ac` needs 0 < fstart <= fstop, both finite"));
+        return Err(ctx.parse_err(format!("`{card}` needs 0 < fstart <= fstop, both finite")));
     }
     Ok(AcSweep {
         kind,

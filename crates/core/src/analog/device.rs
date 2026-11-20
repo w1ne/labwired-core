@@ -83,10 +83,10 @@ use super::netlist::{JfetModel, MosChannelChargeModel, MosModel, Mosfet};
 pub const TEMPERATURE_K: f64 = 300.0;
 
 /// Boltzmann's constant, J/K (CODATA 2019, exact by definition).
-const BOLTZMANN: f64 = 1.380_649e-23;
+pub(crate) const BOLTZMANN: f64 = 1.380_649e-23;
 
 /// Elementary charge, C (CODATA 2019, exact by definition).
-const ELEMENTARY_CHARGE: f64 = 1.602_176_634e-19;
+pub(crate) const ELEMENTARY_CHARGE: f64 = 1.602_176_634e-19;
 
 /// `kT/q` at [`TEMPERATURE_K`]: about 25.852 mV.
 pub const THERMAL_VOLTAGE: f64 = BOLTZMANN * TEMPERATURE_K / ELEMENTARY_CHARGE;
