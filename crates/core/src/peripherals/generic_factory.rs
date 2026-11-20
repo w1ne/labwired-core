@@ -1846,7 +1846,18 @@ pub fn try_build(
                 // Absent/anything else: the RP2040 map.
                 _ => crate::peripherals::rp2040::sio::SioLayout::Rp2040,
             };
-            Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new().with_layout(layout))
+            let mut sio = crate::peripherals::rp2040::sio::Rp2040Sio::new().with_layout(layout);
+            // The PADS_BANK0 block holding the pads' PUE/PDE pulls.
+            if let Some(block) = p_cfg.config.get("pad_control") {
+                let block = block.as_str().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "SIO peripheral '{}': `pad_control` must name a peripheral id",
+                        p_cfg.id
+                    )
+                })?;
+                sio = sio.with_pad_control(block);
+            }
+            Box::new(sio)
         }
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
