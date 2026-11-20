@@ -136,7 +136,7 @@
 | `mspsim-msp430f149` | `pass` | `True` | `yes` | `yes` | `1358` | `1.358` | `True` | `observable` | `6` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `mspsim-msp430f1611` | `pass` | `True` | `yes` | `yes` | `3923` | `3.923` | `True` | `observable` | `6` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `mspsim-msp430f2617` | `pass` | `True` | `yes` | `yes` | `766` | `0.766` | `True` | `observable` | `7` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
-| `mspsim-msp430f5437` | `pass` | `True` | `yes` | `yes` | `260103` | `260.103` | `True` | `observable` | `7` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
+| `mspsim-msp430f5437` | `pass` | `True` | `yes` | `yes` | `186380` | `186.38` | `True` | `observable` | `7` | `uart_ordered`, `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `murax_vexriscv` | `pass` | `True` | `yes` | `yes` | `3037` | `3.037` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `murax_vexriscv_verilated_uart` | `pass` | `True` | `yes` | `yes` | `2455` | `2.455` | `True` | `observable` | `1` | `uart_contains` | 0 | `n/a` | n/a | n/a |
 | `nrf52840` | `pass` | `True` | `yes` | `yes` | `4122` | `4.122` | `True` | `observable` | `50` | `uart_ordered`, `gpio_edges`, `memory_value` | 0 | `n/a` | n/a | n/a |
