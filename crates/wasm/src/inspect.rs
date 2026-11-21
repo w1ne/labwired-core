@@ -76,6 +76,12 @@ pub(crate) fn motor_states_json(
                 ),
                 ("faults".to_owned(), serde_json::json!(snapshot.faults)),
             ]);
+            if let Some(coefficient) = snapshot.quadratic_drag_nm_per_rad_s2 {
+                state.insert(
+                    "quadratic_drag_nm_per_rad_s2".to_owned(),
+                    serde_json::json!(coefficient),
+                );
+            }
             if let Some(coupling) = snapshot.coupling {
                 state.insert("coupling".to_owned(), serde_json::json!(coupling));
             }
@@ -1454,6 +1460,7 @@ mod motor_state_tests {
                 bus_voltage_v: Some(12.0),
                 commutation_sector: None,
                 control_state: "forward".into(),
+                quadratic_drag_nm_per_rad_s2: Some(9e-7),
                 coupling: None,
                 faults: vec!["stalled".into()],
             },
@@ -1471,6 +1478,7 @@ mod motor_state_tests {
                 bus_voltage_v: Some(24.0),
                 commutation_sector: Some(4),
                 control_state: "sector:4".into(),
+                quadratic_drag_nm_per_rad_s2: Some(9e-7),
                 coupling: None,
                 faults: vec!["open-phase-a".into()],
             },
@@ -1487,6 +1495,8 @@ mod motor_state_tests {
             serde_json::json!([1.0, -0.25, -0.75])
         );
         assert_eq!(states[1]["commutation_sector"], 4);
+        assert_eq!(states[0]["quadratic_drag_nm_per_rad_s2"], 9e-7);
+        assert_eq!(states[1]["quadratic_drag_nm_per_rad_s2"], 9e-7);
         assert_eq!(states[1]["faults"], serde_json::json!(["open-phase-a"]));
     }
     #[test]
@@ -1505,6 +1515,7 @@ mod motor_state_tests {
             bus_voltage_v: None,
             commutation_sector: Some(0),
             control_state: "circuit".into(),
+            quadratic_drag_nm_per_rad_s2: Some(9e-7),
             coupling: Some(labwired_core::bus::MotorCoupling {
                 mode: "interval-start-zero-order-hold",
                 step_ns: Some(100),

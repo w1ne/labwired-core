@@ -275,6 +275,15 @@ impl BrushedDcMotor {
         self.faults = faults;
     }
 
+    /// Continuous passive shaft drag evaluated by the native shaft integrator.
+    pub fn set_quadratic_drag_nm_per_rad_s2(&mut self, value: f64) -> Result<(), ModelError> {
+        self.shaft.set_quadratic_drag_nm_per_rad_s2(value)
+    }
+
+    pub fn quadratic_drag_nm_per_rad_s2(&self) -> f64 {
+        self.shaft.quadratic_drag_nm_per_rad_s2()
+    }
+
     /// Atomically updates signed shaft load torque.
     pub fn set_load_torque_nm(&mut self, load_torque_nm: f64) -> Result<(), ModelError> {
         let mut candidate = self.clone();

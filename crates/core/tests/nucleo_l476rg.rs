@@ -237,3 +237,108 @@ fn l476_bldc_inverter_fault_sim_input_disables_inverter() {
         "PB0 enable"
     );
 }
+
+#[test]
+fn l476_quadratic_shaft_drag_is_discoverable_validated_and_observable() {
+    let (mut machine, _) = fixture(false);
+    let channel = "quadratic-drag-nm-per-rad-s2";
+    let coefficient = 1e-8 * (60.0 / std::f64::consts::TAU).powi(2);
+    let metadata = machine
+        .bus
+        .resolve_input(Some("drive_motor"), channel)
+        .unwrap();
+    assert_eq!(metadata.unit, "N m/(rad/s)^2");
+    assert_eq!(metadata.min, 0.0);
+    assert_eq!(metadata.default, Some(0.0));
+    assert_eq!(
+        machine.bus.motor_snapshots()[0].quadratic_drag_nm_per_rad_s2,
+        Some(0.0)
+    );
+    // The single-simulator WASM bridge qualifies a component by sending a
+    // one-element batch. It must resolve the same virtual motor as set_input.
+    machine
+        .bus
+        .set_inputs(&[(Some("drive_motor"), channel, coefficient)])
+        .unwrap();
+    assert_eq!(
+        machine.bus.motor_snapshots()[0].quadratic_drag_nm_per_rad_s2,
+        Some(coefficient)
+    );
+    let before = machine.bus.motor_snapshots();
+    for invalid in [-1.0, f64::NAN, f64::INFINITY] {
+        assert!(machine
+            .bus
+            .set_inputs(&[(Some("drive_motor"), channel, invalid)])
+            .is_err());
+        assert_eq!(machine.bus.motor_snapshots(), before);
+    }
+    assert!(machine
+        .bus
+        .set_inputs(&[(Some("unknown-motor"), channel, coefficient)])
+        .is_err());
+    // Motor batch transactions remain unsupported and must fail before any
+    // mutation; adding the one-set route does not weaken that guarantee.
+    assert!(machine
+        .bus
+        .set_inputs(&[
+            (Some("drive_motor"), channel, 0.0),
+            (Some("drive_motor"), "undervoltage_fault", 1.0),
+        ])
+        .is_err());
+    assert_eq!(machine.bus.motor_snapshots(), before);
+    machine.set_input(channel, 0.0).unwrap();
+    assert_eq!(
+        machine.bus.motor_snapshots()[0].quadratic_drag_nm_per_rad_s2,
+        Some(0.0)
+    );
+}
+
+#[test]
+fn l476_named_motor_faults_drive_the_actual_output_pins_and_preserve_the_latch() {
+    let (mut machine, _) = fixture(false);
+    for _ in 0..5000 {
+        machine.step().unwrap();
+    }
+    let overcurrent = machine
+        .bus
+        .resolve_input(Some("drive_motor"), "overcurrent_fault")
+        .unwrap();
+    assert_eq!((overcurrent.min, overcurrent.max), (1.0, 1.0));
+    machine
+        .set_input_on("drive_motor", "undervoltage_fault", 1.0)
+        .unwrap();
+    for _ in 0..1000 {
+        machine.step().unwrap();
+    }
+    assert_ne!(machine.bus.read_u32(0x4800_0810).unwrap() & (1 << 7), 0);
+    assert!(machine.bus.motor_snapshots()[0]
+        .faults
+        .iter()
+        .any(|f| f == "undervoltage"));
+    machine
+        .set_input_on("drive_motor", "undervoltage_fault", 0.0)
+        .unwrap();
+    for _ in 0..1000 {
+        machine.step().unwrap();
+    }
+    assert_eq!(machine.bus.read_u32(0x4800_0810).unwrap() & (1 << 7), 0);
+
+    machine
+        .set_input_on("drive_motor", "overcurrent_fault", 1.0)
+        .unwrap();
+    for _ in 0..1000 {
+        machine.step().unwrap();
+    }
+    assert_ne!(machine.bus.read_u32(0x4800_0410).unwrap() & (1 << 6), 0);
+    assert!(machine.bus.motor_snapshots()[0]
+        .faults
+        .iter()
+        .any(|f| f == "overcurrent"));
+    assert!(machine
+        .set_input_on("drive_motor", "overcurrent_fault", 0.0)
+        .is_err());
+    assert!(machine.bus.motor_snapshots()[0]
+        .faults
+        .iter()
+        .any(|f| f == "overcurrent"));
+}
