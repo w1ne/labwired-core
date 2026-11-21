@@ -27,6 +27,7 @@ mod rotary_fixture;
 
 mod board_io_button_stimulus;
 mod e2e_iolink_dido;
+mod firmware_reads_board_io_input;
 mod gpio_devices_drive_read_only_inputs;
 mod gpio_devices_walk_free;
 mod gpio_list_roles;
