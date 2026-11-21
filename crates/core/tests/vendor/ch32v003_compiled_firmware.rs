@@ -248,12 +248,18 @@ fn ch32v003j4m6_blink_fixture_leaves_unbonded_pc0_alone() {
 /// Runs the stock WCH noneos-sdk fixture (PlatformIO `ch32v`,
 /// `-march=rv32ecxw`) until it prints `CH32V003_DONE` or `max_steps` pass.
 fn run_noneos_sdk(chip: &ChipDescriptor, max_steps: u64) -> (String, u64, u32) {
+    run_sdk_fixture(chip, "ch32v003f4p6-noneos-sdk.elf", max_steps)
+}
+
+/// Runs a stock noneos-sdk `fixture` until its output holds a complete `DONE`
+/// line or `max_steps` pass.
+fn run_sdk_fixture(chip: &ChipDescriptor, fixture: &str, max_steps: u64) -> (String, u64, u32) {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
         .expect("CH32V003 peripherals and clock gates");
     let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     bus.attach_uart_tx_sink(sink.clone(), false);
-    let image = labwired_loader::load_elf(&root.join("tests/fixtures/ch32v003f4p6-noneos-sdk.elf"))
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures").join(fixture))
         .expect("noneos-sdk ELF");
     let cpu = configure_riscv(&mut bus);
     let mut machine = Machine::new(cpu, bus);
@@ -264,8 +270,11 @@ fn run_noneos_sdk(chip: &ChipDescriptor, max_steps: u64) -> (String, u64, u32) {
             break;
         }
         steps += 1;
-        if steps % 10_000 == 0 && String::from_utf8_lossy(&sink.lock().unwrap()).contains("DONE") {
-            break;
+        if steps % 10_000 == 0 {
+            let out = sink.lock().unwrap();
+            if String::from_utf8_lossy(&out).contains("DONE") && out.ends_with(b"\n") {
+                break;
+            }
         }
     }
     let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
@@ -311,4 +320,50 @@ fn ch32v003_noneos_sdk_delay_stalls_without_the_stk_block() {
     let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor without stk");
     let (out, _, _) = run_noneos_sdk(&chip, 4_000_000);
     assert_eq!(out, "CH32V003_BOOT clk=48000000\r\n");
+}
+
+const STK_IRQ_FIXTURE: &str = "ch32v003f4p6-noneos-sdk-stk-irq.elf";
+
+#[test]
+fn ch32v003_stock_sdk_systick_interrupt_runs_through_the_pfic() {
+    // mtvec = _start | 3 (absolute vector table), INTSYSCR = HWSTKEN |
+    // INESTEN, NVIC_EnableIRQ(SysTicK_IRQn) and a 1 kHz STK match with STIE.
+    // The `WCH-Interrupt-fast` handler clobbers a5 without saving it; the
+    // hardware prologue/epilogue keeps main's loop registers intact.
+    let chip = load_chip("ch32v003f4p6");
+    let (out, steps, mcause) = run_sdk_fixture(&chip, STK_IRQ_FIXTURE, 2_000_000);
+    assert_eq!(
+        out, "STK_IRQ_BOOT\r\nSTK_IRQ_TICKS 5\r\nSTK_IRQ_MASKED ok\r\nSTK_IRQ_DONE 1\r\n",
+        "USART1 TX stream"
+    );
+    assert_eq!(mcause, 0x8000_000C, "last trap was SysTick_IRQn");
+    // Five 1 ms ticks (240,000 cycles) plus the 3 ms masked delay (144,000).
+    assert!(
+        (384_000..700_000).contains(&steps),
+        "five ticks and Delay_Ms(3) took {steps} steps"
+    );
+}
+
+#[test]
+fn ch32v003_systick_interrupt_never_enters_without_the_stk_irq_line() {
+    // Negative control: drop `irq: 12` from the STK. The match still sets
+    // CNTIF, but nothing pends the PFIC, so `ticks` stays 0 and the wait
+    // loop never ends.
+    let mut yaml = chip_yaml("ch32v003f4p6");
+    let stk = yaml["peripherals"]
+        .as_sequence_mut()
+        .expect("peripherals list")
+        .iter_mut()
+        .find(|p| p["id"].as_str() == Some("stk"))
+        .expect("stk block");
+    assert_eq!(
+        stk["irq"].as_u64(),
+        Some(12),
+        "descriptor wires SysTick_IRQn"
+    );
+    stk.as_mapping_mut().unwrap().remove("irq");
+    let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor without irq");
+    let (out, _, mcause) = run_sdk_fixture(&chip, STK_IRQ_FIXTURE, 1_000_000);
+    assert_eq!(out, "STK_IRQ_BOOT\r\n");
+    assert_eq!(mcause, 0, "no trap");
 }

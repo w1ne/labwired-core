@@ -24,8 +24,13 @@
 //! register write re-anchors the count, so the HCLK/8 prescaler phase
 //! restarts at that write.
 //!
-//! NOT modelled: the interrupt (the PFIC is not modelled, so `STIE` and
-//! `SWIE` raise nothing) and the QingKe V4 64-bit layout (CNTH/CMPH).
+//! Interrupt: with `STIE` set, each compare match (and enabling `STIE` while
+//! `CNTIF` is already set) pends the descriptor's `irq` (SysTick_IRQn = 12) in
+//! the PFIC once. The interrupt is a pulse per match, not a level: a handler
+//! that leaves `CNTIF` set is not re-entered until the next match.
+//!
+//! NOT modelled: `SWIE` (software interrupt 14) and the QingKe V4 64-bit
+//! layout (CNTH/CMPH).
 
 use crate::{CycleClock, Peripheral, PeripheralTickResult, SimResult};
 
@@ -56,6 +61,14 @@ pub struct QingKeStk {
     anchor_cycle: u64,
     /// The time base when no cycle clock is attached (hand-built buses).
     walk_cycles: u64,
+    /// Matches since the last anchor already delivered as an interrupt
+    /// (legacy walk, used when the event scheduler is off).
+    walk_irq_matches: u64,
+    /// Bumped on every reschedule; an event whose token no longer matches
+    /// was superseded and is dropped.
+    generation: u32,
+    #[serde(skip)]
+    pending_events: Vec<(u64, u32)>,
     #[serde(skip)]
     clock: Option<CycleClock>,
 }
@@ -64,6 +77,8 @@ impl QingKeStk {
     pub fn new() -> Self {
         Self::default()
     }
+
+    crate::cycle_clock::scheduler_mode!();
 
     fn now(&self) -> u64 {
         self.clock
@@ -109,6 +124,68 @@ impl QingKeStk {
         }
     }
 
+    /// CPU cycles per counter tick.
+    fn scale(&self) -> u64 {
+        if self.ctlr & CTLR_STCLK != 0 {
+            1
+        } else {
+            8
+        }
+    }
+
+    /// Compare matches since the last anchor.
+    fn matches(&self, elapsed: u64) -> u64 {
+        if !self.matched(elapsed) {
+            return 0;
+        }
+        let after = elapsed - self.ticks_to_match();
+        let period = if self.ctlr & CTLR_STRE != 0 {
+            u64::from(self.cmp) + 1
+        } else {
+            1 << 32
+        };
+        1 + after / period
+    }
+
+    /// CPU cycles from now to the next compare match, `None` when the counter
+    /// is stopped or (without auto-reload) has already matched.
+    fn cycles_to_next_match(&self) -> Option<u64> {
+        if !self.running() {
+            return None;
+        }
+        let elapsed = self.elapsed();
+        let ttm = self.ticks_to_match();
+        let target = if elapsed < ttm {
+            ttm
+        } else if self.ctlr & CTLR_STRE != 0 {
+            let period = u64::from(self.cmp) + 1;
+            elapsed + period - (elapsed - ttm) % period
+        } else {
+            return None;
+        };
+        let cycle = self.anchor_cycle + target * self.scale();
+        Some(cycle.saturating_sub(self.now()).max(1))
+    }
+
+    /// Cancel any scheduled interrupt and, while `STIE` is set, arm one for
+    /// the next match (or at once when `CNTIF` is already set).
+    fn reschedule(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.pending_events.clear();
+        if !self.scheduler_mode() || self.ctlr & CTLR_STIE == 0 {
+            return;
+        }
+        // The bus adds one cycle to every write-scheduled delay.
+        let delay = if self.cntif_now() {
+            0
+        } else if let Some(cycles) = self.cycles_to_next_match() {
+            cycles - 1
+        } else {
+            return;
+        };
+        self.pending_events.push((delay, self.generation));
+    }
+
     fn cntif_now(&self) -> bool {
         self.cntif || self.matched(self.elapsed())
     }
@@ -117,6 +194,7 @@ impl QingKeStk {
         self.cntif = self.cntif_now();
         self.cnt_base = self.cnt();
         self.anchor_cycle = self.now();
+        self.walk_irq_matches = 0;
     }
 
     fn read_reg(&self, offset: u64) -> u32 {
@@ -153,8 +231,12 @@ impl QingKeStk {
                 self.anchor();
                 self.cmp = value;
             }
-            _ => crate::census_reg!("qingke_stk", offset, "write"),
+            _ => {
+                crate::census_reg!("qingke_stk", offset, "write");
+                return;
+            }
         }
+        self.reschedule();
     }
 }
 
@@ -191,7 +273,9 @@ impl Peripheral for QingKeStk {
     }
 
     fn legacy_tick_active(&self) -> bool {
-        self.clock.is_none() && self.running()
+        // Without the event scheduler, the walk also delivers the interrupt.
+        self.running()
+            && (self.clock.is_none() || (!self.scheduler_mode() && self.ctlr & CTLR_STIE != 0))
     }
 
     fn tick(&mut self) -> PeripheralTickResult {
@@ -199,10 +283,40 @@ impl Peripheral for QingKeStk {
     }
 
     fn tick_elapsed(&mut self, cycles: u64) -> PeripheralTickResult {
+        if self.scheduler_mode() {
+            return PeripheralTickResult::default();
+        }
         if self.clock.is_none() {
             self.walk_cycles = self.walk_cycles.wrapping_add(cycles);
         }
-        PeripheralTickResult::default()
+        let matches = self.matches(self.elapsed());
+        let fired = matches > self.walk_irq_matches;
+        self.walk_irq_matches = matches;
+        PeripheralTickResult::with_irq(fired && self.ctlr & CTLR_STIE != 0)
+    }
+
+    fn uses_scheduler(&self) -> bool {
+        self.scheduler_mode()
+    }
+
+    fn take_scheduled_events(&mut self) -> Vec<(u64, u32)> {
+        std::mem::take(&mut self.pending_events)
+    }
+
+    fn on_event(
+        &mut self,
+        event_token: u32,
+        _sched: &mut crate::sched::EventScheduler,
+        _bus: &mut dyn crate::Bus,
+    ) -> crate::sched::EventResult {
+        if event_token != self.generation || self.ctlr & CTLR_STIE == 0 {
+            return crate::sched::EventResult::default();
+        }
+        crate::sched::EventResult {
+            raise_own_irq: self.cntif_now(),
+            reschedule_delay: self.cycles_to_next_match(),
+            ..Default::default()
+        }
     }
 
     fn attach_cycle_clock(&mut self, clock: CycleClock) {
@@ -213,13 +327,17 @@ impl Peripheral for QingKeStk {
     fn on_system_reset(&mut self) {
         let clock = self.clock.take();
         let walk = self.walk_cycles;
+        let generation = self.generation;
         *self = Self::default();
         self.walk_cycles = walk;
+        self.generation = generation;
         if let Some(clock) = clock {
             self.attach_cycle_clock(clock);
         } else {
             self.anchor_cycle = walk;
         }
+        // Drop any interrupt armed before the reset.
+        self.reschedule();
     }
 
     fn snapshot(&self) -> serde_json::Value {
