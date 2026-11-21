@@ -20,5 +20,8 @@ pub fn configure_riscv(bus: &mut SystemBus) -> RiscV {
     if let Some(plic) = bus.riscv_plic {
         cpu.attach_plic(plic);
     }
+    if bus.riscv_pfic {
+        cpu.attach_pfic();
+    }
     cpu
 }

@@ -145,8 +145,11 @@ peripherals:
     type: "timer"
     base_address: 0x40012C00
     size: "1KB"
-    irq: 24
+    # TIM1_UP_TIM16_IRQn = 25, TIM1_CC_IRQn = 27 (stm32g4xx CMSIS).
+    # BRK (24) and TRG/COM (26) are not routed.
+    irq: 25
     config:
+      capture_compare_irq: 27
       debug_schema: "../peripherals/stm32g474re/tim1.yaml"
       advanced: true
       pad_map: "stm32g4"
