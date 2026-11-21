@@ -59,6 +59,8 @@ Negative controls (`/tmp` copies, not committed):
 - B = 3950 K, the catalog `ntc-thermistor` value, instead of 3380 K: 9 of 15 alarm-script assertions fail. The firmware reads 1084 mV at a 42 °C ambient and prints `T=45.0 C`.
 - Without the manifest-check fix the manifest stops with `unsupported config key 'thermistors'`; without the unit fix it stops with `requires unit degC; signal 'environment.temperature' declares Some("°C")`.
 
+Browser run: Chromium 156.0.8078.79 runs all three scripts at `1a59956f12` with the same result text, logic, oscilloscope, analog series and console records as the CLI. See [browser-flex-scripts.json](../browser-flex-scripts.json).
+
 ## Onboarding effort
 
 Measured once on 2026-11-21, from command times in one lane session. About 27 min wall time from the clone of the pinned board folder (04:34 UTC) to three passing scripts (05:01 UTC), including the catalog search, both shared-code fixes and two debug CLI builds (8 min 11 s for the first). No comparable time exists for a chip-specific model of this board, so these numbers support no speed claim.
