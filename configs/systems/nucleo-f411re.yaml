@@ -3,6 +3,9 @@
 # virtual COM port (stm32duino variant_NUCLEO_F411RE.h).
 name: "nucleo-f411re"
 chip: "../chips/stm32f411re.yaml"
+# ST-LINK VCP = USART2 PA2/PA3 (UM1724 §6.8). Without this line every run tapped all UARTs
+# into one console, so Serial1 traffic spliced into the Serial pane.
+debug_uart: "usart2"
 external_devices: []
 board_io:
   - { id: "ld2_pa5", kind: "led", peripheral: "gpioa", pin: 5, signal: "output", active_high: true }

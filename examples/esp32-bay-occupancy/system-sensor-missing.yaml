@@ -10,6 +10,7 @@
 # declared on its own channel and nothing is duplicated onto the trunk.
 name: "ryan-bay-occupancy-bay3-missing"
 chip: "../../configs/chips/esp32.yaml"
+debug_uart: "uart0"
 external_devices:
   - id: "mux"
     type: "tca9548a"

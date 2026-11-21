@@ -28,8 +28,8 @@
 // PinMap_TIM, so analogWrite would fall back to digitalWrite. Use TIM2_CH1
 // on PA0.
 #    define LW_PWM_PIN PA0
-#  elif defined(STM32H563xx) || defined(STM32H723xx)
-// NUCLEO-H563ZI / NUCLEO-H723ZG LD1 is PB0, whose PinMap_TIM entry is
+#  elif defined(STM32H563xx) || defined(STM32H723xx) || defined(STM32H753xx)
+// NUCLEO-H563ZI / NUCLEO-H723ZG / NUCLEO-H753ZI LD1 is PB0, whose PinMap_TIM entry is
 // TIM1_CH2N, a complementary output the twin's timer does not generate. Use
 // TIM2_CH1 on PA0.
 #    define LW_PWM_PIN PA0
@@ -53,6 +53,10 @@
 #  elif defined(ARDUINO_BLUEPILL_F103C8)
 // Blue Pill LED is PC13, which has no timer channel on F103, so analogWrite
 // would fall back to digitalWrite. Use TIM2_CH1 on PA0 (no remap).
+#    define LW_PWM_PIN PA0
+#  elif defined(ARDUINO_NUCLEO_F103RB)
+// NUCLEO-F103RB LD2 is PA5, which has no timer channel on F103 either
+// (SPI1_SCK / ADC12_IN5 only). Use TIM2_CH1 on PA0 (no remap).
 #    define LW_PWM_PIN PA0
 #  elif defined(ARDUINO_ARCH_AVR) && defined(__AVR_ATmega328P__)
 // Uno/Nano LED_BUILTIN is D13 = PB5, which has no timer output on the

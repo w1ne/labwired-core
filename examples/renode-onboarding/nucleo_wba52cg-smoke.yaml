@@ -7,6 +7,7 @@ limits:
   max_steps: 4000000
 assertions:
   - uart_contains: "NUCLEO-WBA52CG ready"
+  - uart_contains: "usart1 tcie ispr40=40 rel=00 ok"
   - uart_ordered:
       - "hb=0 ld1=on"
       - "hb=1 ld1=off"
