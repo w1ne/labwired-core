@@ -1125,14 +1125,18 @@ impl SystemBus {
                         *control_state = format!("{state:?}").to_ascii_lowercase();
                         if let Ok(command) = command {
                             let params = plant.params();
-                            for step_s in stable_substeps(
-                                dt_s,
+                            match plant.service_timestep_s(
                                 0.25 * params.inductance_h / params.resistance_ohm,
                             ) {
-                                if let Err(error) = plant.step(command, step_s) {
-                                    series.live_error = Some(error.to_string());
-                                    break;
+                                Ok(max_step_s) => {
+                                    for step_s in stable_substeps(dt_s, max_step_s) {
+                                        if let Err(error) = plant.step(command, step_s) {
+                                            series.live_error = Some(error.to_string());
+                                            break;
+                                        }
+                                    }
                                 }
+                                Err(error) => series.live_error = Some(error.to_string()),
                             }
                         } else if let Err(error) = command {
                             series.live_error = Some(error.to_string());
@@ -2314,8 +2318,12 @@ fn service_circuit_winding(
         CIRCUIT_NO_CURRENT.clone_into(control_state);
         return;
     };
+    let Ok(max_step_s) = plant.service_timestep_s(CIRCUIT_WINDING_MAX_STEP_S) else {
+        "circuit:fault".clone_into(control_state);
+        return;
+    };
     CIRCUIT_DRIVEN.clone_into(control_state);
-    for step_s in stable_substeps(dt_s, CIRCUIT_WINDING_MAX_STEP_S) {
+    for step_s in stable_substeps(dt_s, max_step_s) {
         if plant.step_with_winding_current(current_a, step_s).is_err() {
             "circuit:fault".clone_into(control_state);
             break;
