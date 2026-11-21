@@ -1,0 +1,50 @@
+# `labwired test --script test-open-dq.yaml`. U4's DQ connection opens
+# between two readings and closes again (`probe_connected`, the catalog
+# model's `connected` input). With DQ open the reset sees no presence pulse,
+# so `loop` returns 0x8000 (no sensor) after one 960 µs reset, prints nothing
+# and leaves the indicator as it was. With DQ closed again the next `loop`
+# converts and reads 31.0625 °C. U4 stays powered, so the 12-bit resolution
+# written in `setup` is kept and the conversion still takes 701 polls. A
+# final `peek` reads the scratchpad without a conversion; it also lets D1
+# follow the drive, 1,000 ns after the write.
+# All expected values were calculated from the DS18B20 descriptor and AN126
+# slot times before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: dq_drive }, { port: dq }, { port: user_led_drive }, { number: 0x28 }, { number: 12 }] }
+  - call: { export: loop }
+  - set: { port: probe_connected, value: 0 }
+  - set: { port: probe_c, value: 31.0625 }
+  - call: { export: loop }
+  - set: { port: probe_connected, value: 1 }
+  - call: { export: loop }
+  - call: { export: peek }
+limits:
+  max_steps: 50000000
+  max_time_ns: 2000000000
+assertions:
+  # 31.0625 °C = 497 counts.
+  - entry_result: { equals: 497 }
+  - entry_result: { equals: 66033, step: 6 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 400, step: 1 }
+  - entry_result: { equals: 32768, step: 4 }
+  # WRITE and READ SCRATCHPAD in `setup`, CONVERT T and READ SCRATCHPAD in
+  # the two `loop` calls that saw a presence pulse, READ SCRATCHPAD in `peek`.
+  - device_state: { device: source-u4-ds18b20, key: functions_run, equals: 7 }
+  - device_state: { device: source-u4-ds18b20, key: last_function, equals: READ_SCRATCHPAD }
+  # 16.88 ms `setup`, 759.34 ms `loop`, 0.96 ms reset without presence, then
+  # 759.34 ms `loop`; the indicator goes on at its end. `peek` takes
+  # 7.12 ms: one reset, SKIP ROM + READ SCRATCHPAD + 9 bytes.
+  # With DQ open, the line falls only for IO4's 480 µs reset pulse: no
+  # presence pulse follows it.
+  - digital_edges: { port: dq, from_ns: 776220000, to_ns: 777180000, times_ns: [776221000, 776701000] }
+  - digital_edges: { port: user_led_drive, times_ns: [1536520000] }
+  - digital_edges: { port: user_led_state, times_ns: [1536521000] }
+  - port_value: { port: user_led_state, equals: 1 }
+  - final_time_ns: { equals: 1543640000 }
+  - console_contains: "DS18B20 12-bit, TH 30 C, TL 28 C\nT=25.0000 C after 701 polls\nT=31.0625 C after 701 polls HIGH\nscratchpad T=31.0625 C\n"
