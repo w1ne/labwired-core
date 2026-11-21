@@ -524,6 +524,13 @@ fn small_signal_system(
     }
 }
 
+/// Which node values [`Solver::stamp_node_values`] holds.
+#[derive(Clone, Copy)]
+enum NodeHold {
+    Nodeset,
+    InitialCondition,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Stamp {
     /// t = 0: capacitors open, inductors short.
@@ -1131,6 +1138,11 @@ pub struct Solver {
     /// held cut off and every `.nodeset` node is held at its value (ngspice's
     /// `MODEINITFIX`).
     holding: bool,
+
+    /// The transient operating point is being solved: every `.ic` node is
+    /// held at its value in every Newton phase (ngspice's `MODETRANOP`
+    /// without `MODEUIC`).
+    holding_ic: bool,
 }
 
 impl Solver {
@@ -1278,6 +1290,7 @@ impl Solver {
             settled: false,
             restart: true,
             holding: false,
+            holding_ic: false,
         };
         solver.solve_operating_point()?;
         Ok(solver)
@@ -1636,6 +1649,33 @@ impl Solver {
             // so the OP may need a few passes until the contacts stop flipping.
             8
         };
+        self.holding_ic = !self.circuit.node_ic.is_empty();
+        let solved = self.solve_operating_point_passes(passes);
+        self.holding_ic = false;
+        solved?;
+        for index in 0..self.circuit.capacitors.len() {
+            let capacitor = &self.circuit.capacitors[index];
+            self.cap_v[index] = node_diff(&self.node_v, capacitor.a, capacitor.b);
+            self.cap_i[index] = 0.0;
+        }
+        for index in 0..self.circuit.inductors.len() {
+            self.ind_i[index] = self.branch_i[self.circuit.voltage_sources.len() + index];
+            self.ind_v[index] = 0.0;
+        }
+        self.apply_initial_conditions();
+        // A line at its operating point has carried the same two waves for
+        // ever.
+        for index in 0..self.circuit.transmission_lines.len() {
+            let [w1, w2] = self.line_waves(index, &self.node_v, &self.branch_i);
+            self.line_history[index] = vec![[0.0, w1, w2]];
+        }
+        self.restart = true;
+        Ok(())
+    }
+
+    /// The operating-point solve itself: up to `passes` solves, each
+    /// followed by a voltage-switch update, stopping once no contact flips.
+    fn solve_operating_point_passes(&mut self, passes: usize) -> Result<(), AnalogError> {
         for _ in 0..passes {
             self.cached_stamp = None;
             self.settled = false;
@@ -1656,23 +1696,6 @@ impl Solver {
                 break;
             }
         }
-        for index in 0..self.circuit.capacitors.len() {
-            let capacitor = &self.circuit.capacitors[index];
-            self.cap_v[index] = node_diff(&self.node_v, capacitor.a, capacitor.b);
-            self.cap_i[index] = 0.0;
-        }
-        for index in 0..self.circuit.inductors.len() {
-            self.ind_i[index] = self.branch_i[self.circuit.voltage_sources.len() + index];
-            self.ind_v[index] = 0.0;
-        }
-        self.apply_initial_conditions();
-        // A line at its operating point has carried the same two waves for
-        // ever.
-        for index in 0..self.circuit.transmission_lines.len() {
-            let [w1, w2] = self.line_waves(index, &self.node_v, &self.branch_i);
-            self.line_history[index] = vec![[0.0, w1, w2]];
-        }
-        self.restart = true;
         Ok(())
     }
 
@@ -2494,6 +2517,9 @@ impl Solver {
 
         let mut work = self.clone();
         work.circuit.uic = false;
+        // `.ic` belongs to the transient's operating point (`MODETRANOP`);
+        // ngspice's `.dc` neither holds nor reports it.
+        work.circuit.node_ic.clear();
         let set = |work: &mut Self, swept: Swept, value: f64| match swept {
             Swept::Voltage(index) => {
                 work.set_voltage_source(index, value);
@@ -4161,18 +4187,27 @@ impl Solver {
             }
         }
         if self.holding {
-            self.stamp_nodesets();
+            self.stamp_node_values(NodeHold::Nodeset);
+        }
+        if self.holding_ic {
+            self.stamp_node_values(NodeHold::InitialCondition);
         }
     }
 
-    /// Replace each `.nodeset` node's row with `v(node) = value`, as ngspice's
-    /// `CKTload` does in `MODEINITJCT`/`MODEINITFIX`: every node column of the
-    /// row is zeroed (`ZeroNoncurRow`). A branch current left in the row —
-    /// a voltage source or inductor on the node — would pull the node off its
-    /// value, so then the diagonal is 1e10 instead of 1 to outweigh it.
-    fn stamp_nodesets(&mut self) {
+    /// Replace each held node's row with `v(node) = value`, as ngspice's
+    /// `CKTload` does for a `.nodeset` in `MODEINITJCT`/`MODEINITFIX` and for
+    /// an `.ic` in `MODETRANOP`: every node column of the row is zeroed
+    /// (`ZeroNoncurRow`). A branch current left in the row — a voltage source
+    /// or inductor on the node — would pull the node off its value, so then
+    /// the diagonal is 1e10 instead of 1 to outweigh it. Nodesets are stamped
+    /// before `.ic`, so an `.ic` on the same node wins, as in `CKTload`.
+    fn stamp_node_values(&mut self, hold: NodeHold) {
         let dim = self.dim();
-        for &(node, value) in &self.circuit.node_nodeset {
+        let values = match hold {
+            NodeHold::Nodeset => &self.circuit.node_nodeset,
+            NodeHold::InitialCondition => &self.circuit.node_ic,
+        };
+        for &(node, value) in values {
             let row = &mut self.matrix[node * dim..(node + 1) * dim];
             row[..self.nodes].fill(0.0);
             let scale = if row[self.nodes..].iter().any(|cell| *cell != 0.0) {
