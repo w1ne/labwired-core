@@ -2677,6 +2677,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stm32f072/2026-11-13-before-stm32v2-irq-level/metrics/onboarding-summary/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stm32f072/2026-11-21-tim1-brk-trg-com-lines/NOTE/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stm32f072/2026-11-21-tim1-cc-line-and-shared-line-level/NOTE/</loc>
     </url>
     <url>
