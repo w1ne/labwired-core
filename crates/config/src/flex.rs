@@ -487,6 +487,7 @@ fn validate_analog(model: &CosimModelConfig) -> Result<()> {
                 "substeps",
                 "integration",
                 "input_sampling",
+                "thermistors",
                 "photoresistors"
             ]
             .contains(&key.as_str()),
@@ -537,21 +538,25 @@ fn validate_analog(model: &CosimModelConfig) -> Result<()> {
             "{path} config.integration must be be or trap"
         );
     }
-    // A photoresistor entry binds its input by key, in place of a `sources`
-    // entry. The analog adapter validates the model parameters themselves.
+    // A thermistor or photoresistor entry binds its input by key, in place of
+    // a `sources` entry. The analog adapter validates the model parameters
+    // themselves.
     let mut source_routes = model.inputs.clone();
-    if let Some(value) = model.config.get("photoresistors") {
+    for key in ["thermistors", "photoresistors"] {
+        let Some(value) = model.config.get(key) else {
+            continue;
+        };
         let Value::Mapping(models) = value else {
-            bail!("{path} config.photoresistors must be a mapping");
+            bail!("{path} config.{key} must be a mapping");
         };
         for name in models.keys() {
             let Value::String(name) = name else {
-                bail!("{path} config.photoresistors names must be strings");
+                bail!("{path} config.{key} names must be strings");
             };
-            token(name, &format!("{path} config.photoresistors"))?;
+            token(name, &format!("{path} config.{key}"))?;
             ensure!(
                 source_routes.remove(name).is_some(),
-                "{path} config.photoresistors.{name} has no declared model route"
+                "{path} config.{key}.{name} has no declared model route"
             );
         }
     }
@@ -1920,6 +1925,49 @@ cosim_models:
                 bound.replace(
                     "photoresistors:",
                     "sources: { drive: Vdrive }\n      photoresistors:",
+                ),
+                "config.sources.drive has no declared model route",
+            ),
+        ] {
+            let error = format!("{:#}", FlexManifest::from_yaml(&yaml).unwrap_err());
+            assert!(error.contains(expected), "{name}: {error}");
+        }
+    }
+
+    /// The analog adapter's beta-curve NTC binds its input the same way; a
+    /// board network with a thermistor must not be refused as unsupported.
+    #[test]
+    fn thermistor_entries_bind_analog_inputs_in_place_of_sources() {
+        let bound = RC
+            .replace(
+                "kind: bool, initial: 0",
+                "kind: number, unit: \"°C\", initial: 25",
+            )
+            .replace(
+                "sources: { drive: Vdrive }",
+                "thermistors: { drive: { resistor: R1 } }",
+            );
+        assert_ne!(bound, RC);
+        FlexManifest::from_yaml(&bound).unwrap();
+        for (name, yaml, expected) in [
+            (
+                "undeclared route",
+                bound.replace("thermistors: { drive:", "thermistors: { typo:"),
+                "config.thermistors.typo has no declared model route",
+            ),
+            (
+                "not a mapping",
+                bound.replace(
+                    "thermistors: { drive: { resistor: R1 } }",
+                    "thermistors: [R1]",
+                ),
+                "config.thermistors must be a mapping",
+            ),
+            (
+                "two owners",
+                bound.replace(
+                    "thermistors:",
+                    "sources: { drive: Vdrive }\n      thermistors:",
                 ),
                 "config.sources.drive has no declared model route",
             ),

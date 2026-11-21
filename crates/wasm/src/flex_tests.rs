@@ -2790,6 +2790,102 @@ fn flex_heypcb_mcp9701a_output_matches_the_pinned_source_nets() {
     assert_eq!(report.ports.len(), ports.as_object().unwrap().len());
 }
 
+/// The NTC fixture solves the board's own divider: R6 from 3V3 to SNS_AN1,
+/// U4 and C7 from SNS_AN1 to GND, as the pinned PCB routes them. U4 is a
+/// netlist resistor bound to the analog adapter's beta-curve thermistor with
+/// the Murata catalog values and a declared range inside the catalog table.
+#[test]
+fn flex_heypcb_ntc_network_matches_the_pinned_source_nets() {
+    const SOURCE_MAP: &str =
+        include_str!("../tests/fixtures/flex-heypcb-esp32-ntc/source-map.json");
+    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-ntc/system.yaml");
+
+    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
+    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+    for key in ["repository", "revision", "license_spdx"] {
+        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
+    }
+    assert_eq!(
+        source_map["source"]["files"]["license"],
+        sibling["source"]["files"]["license"]
+    );
+    assert_eq!(source_map["source"]["asset"], "boards/ntc/kicad/esp32_ntc");
+    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
+        let entry = &source_map["source"]["files"][file];
+        assert!(entry["path"].as_str().unwrap().starts_with("boards/ntc/"));
+        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
+    }
+
+    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
+    let model = &yaml["cosim_models"][0];
+    let binding = &source_map["runtime_bindings"]["network"];
+    assert_eq!(model["id"], binding["id"].as_str().unwrap());
+    assert_eq!(model["adapter"], "analog");
+    assert_eq!(model["outputs"]["voltage"], "source.net.SNS_AN1");
+
+    // Every netlist element sits between the nets its source pads are on.
+    let netlist = model["config"]["netlist_text"].as_str().unwrap();
+    let net = |name: &str| match name {
+        "3V3" => "3v3",
+        "SNS_AN1" => "sns_an1",
+        "GND" => "0",
+        other => panic!("unexpected net {other}"),
+    };
+    for element in source_map["sensor_line"]["elements"].as_array().unwrap() {
+        let reference = element["source_ref"].as_str().unwrap();
+        let name = if reference == "U4" {
+            "RU4".to_string()
+        } else {
+            reference.to_string()
+        };
+        let line = netlist
+            .lines()
+            .find(|line| line.split_whitespace().next() == Some(name.as_str()))
+            .unwrap_or_else(|| panic!("{name} is not in the netlist"));
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        let pads = &element["pads"];
+        assert_eq!(fields[1], net(pads["1"].as_str().unwrap()), "{reference}");
+        assert_eq!(fields[2], net(pads["2"].as_str().unwrap()), "{reference}");
+    }
+
+    // The thermistor uses the catalog values; its range stays where the beta
+    // equation is within 1.7 % of the catalog table.
+    let facts = &source_map["part_source"]["facts"];
+    let ntc = &model["config"]["thermistors"]["temperature"];
+    assert_eq!(
+        ntc["resistor"],
+        binding["thermistor_resistor"].as_str().unwrap()
+    );
+    assert_eq!(ntc["r_ref_ohms"].as_f64(), facts["R25_ohm"].as_f64());
+    assert_eq!(ntc["beta_kelvin"].as_f64(), facts["B25_50_K"].as_f64());
+    let table = facts["center_value_table_kohm"].as_object().unwrap();
+    let (min_c, max_c) = (
+        ntc["min_c"].as_f64().unwrap(),
+        ntc["max_c"].as_f64().unwrap(),
+    );
+    for (celsius, kohm) in table {
+        let celsius: f64 = celsius.parse().unwrap();
+        let beta = 10.0 * (3380.0 * (1.0 / (celsius + 273.15) - 1.0 / 298.15)).exp();
+        let deviation = (beta / kohm.as_f64().unwrap() - 1.0).abs();
+        if (min_c..=max_c).contains(&celsius) {
+            assert!(deviation <= 0.0171, "{celsius} C deviates {deviation}");
+        } else {
+            assert!(deviation > 0.0171, "{celsius} C could be inside the range");
+        }
+    }
+
+    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
+    let report = runtime.run_report();
+    assert!(report.scope_notes_complete);
+    assert!(!report.execution_scope.original_target_firmware_executed);
+    assert_eq!(report.execution_scope.chip_parity, "not_established");
+    let ports = &source_map["runtime_bindings"]["ports"];
+    for port in ports.as_object().unwrap().keys() {
+        runtime.port_id(port).unwrap();
+    }
+    assert_eq!(report.ports.len(), ports.as_object().unwrap().len());
+}
+
 /// The Chromium receipt of `scripts/test_browser_flex_scripts.mjs` covers
 /// every committed `test-*.yaml`, and the shared runner still gives the
 /// result text that Chromium and the CLI gave.

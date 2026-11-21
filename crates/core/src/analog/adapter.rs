@@ -1032,8 +1032,10 @@ impl CosimAdapter for AnalogCosimAdapter {
             InputTarget::VoltageSource(_) => Some("V"),
             InputTarget::CurrentSource(_) => Some("A"),
             InputTarget::Resistance(_) => Some("ohm"),
+            // The spelling of the catalog `analog_source` temperature
+            // channels, so one Flex port can feed either model.
             InputTarget::Thermistor(_, _) | InputTarget::TemperatureDependentResistor(_) => {
-                Some("degC")
+                Some("°C")
             }
             InputTarget::Photoresistor(_, _) => Some("lx"),
             InputTarget::Switches(_) => Some("V"),
@@ -1378,9 +1380,9 @@ config:
             ("drive", Some("V"), CosimSignalValue::Bool(false)),
             ("current", Some("A"), CosimSignalValue::F64(0.002)),
             ("resistance", Some("ohm"), CosimSignalValue::F64(900.0)),
-            ("ntc", Some("degC"), CosimSignalValue::F64(26.0)),
-            ("tempco", Some("degC"), CosimSignalValue::F64(26.0)),
-            ("bounded", Some("degC"), CosimSignalValue::F64(26.0)),
+            ("ntc", Some("°C"), CosimSignalValue::F64(26.0)),
+            ("tempco", Some("°C"), CosimSignalValue::F64(26.0)),
+            ("bounded", Some("°C"), CosimSignalValue::F64(26.0)),
             ("gate", Some("V"), CosimSignalValue::Bool(true)),
         ] {
             assert_eq!(adapter.input_unit(name), unit);
