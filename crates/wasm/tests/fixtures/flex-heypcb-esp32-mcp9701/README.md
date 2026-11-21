@@ -58,7 +58,7 @@ Negative controls (`/tmp` copies, not committed):
 - -11 °C instead of -10 °C in the range script: exit 3, `stop_reason: model_error`, message `analog-source input 'temperature': value -11 for channel 'temperature' is out of range [-10, 125]`; 11 of 12 assertions fail.
 - The wrong part, `device_type: mcp9700`, on this board: 13 of 16 alarm-script assertions fail. `sensor_mv` is 750 mV at 0 ns and peaks at 920 mV, so the indicator never turns on.
 
-Browser run: see [browser-flex-scripts.json](../browser-flex-scripts.json).
+Browser run: Chromium 156.0.8078.79 runs all three scripts at `aa085c7c51` with the same result text, logic, oscilloscope, analog series and console records as the CLI. See [browser-flex-scripts.json](../browser-flex-scripts.json).
 
 ## Onboarding effort
 
