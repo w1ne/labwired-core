@@ -1,0 +1,153 @@
+# Pomodoro Pal: the whole indicator face, the piezo drive and the touch pad.
+# Nets, pads and references are those of the pinned PCB; see source-map.json.
+schema_version: 1
+name: flex-heypcb-pomodoro-timer
+assumptions:
+  - Each LED model reports the logic level of its MCU pin one 21,333 ns model step later. LED current, the 1 kΩ series resistors and light output are not modeled.
+  - The piezo model reports the logic level of the BUZZ pin. R4 (100 Ω) and sound are not modeled.
+  - The touch pad is one Boolean. The test bench sets it. The firmware port reads it in place of the charge-time measurement and drifting baseline of the original.
+  - One firmware `loop` call is one pass of the original main loop and takes 21,333 ns, one step of the original soft-PWM phase (1024 counts at 48 MHz, rounded down). The original loop runs more passes per phase step.
+unsupported_checks:
+  - The original CH32V003 binary, its instructions, GPIO, SysTick, ADC and touch peripherals are not executed.
+  - Supply current, USB-C power, LED brightness and piezo sound pressure are not modeled.
+ports:
+  - { name: min0, signal: source.U1.PD3, access: write, kind: bool, initial: 0 }
+  - { name: min1, signal: source.U1.PD2, access: write, kind: bool, initial: 0 }
+  - { name: min2, signal: source.U1.PC7, access: write, kind: bool, initial: 0 }
+  - { name: min3, signal: source.U1.PC6, access: write, kind: bool, initial: 0 }
+  - { name: min4, signal: source.U1.PC5, access: write, kind: bool, initial: 0 }
+  - { name: min5, signal: source.U1.PC4, access: write, kind: bool, initial: 0 }
+  - { name: min6, signal: source.U1.PC3, access: write, kind: bool, initial: 0 }
+  - { name: min7, signal: source.U1.PC2, access: write, kind: bool, initial: 0 }
+  - { name: min8, signal: source.U1.PC1, access: write, kind: bool, initial: 0 }
+  - { name: min9, signal: source.U1.PC0, access: write, kind: bool, initial: 0 }
+  - { name: min10, signal: source.U1.PD0, access: write, kind: bool, initial: 0 }
+  - { name: min11, signal: source.U1.PD4, access: write, kind: bool, initial: 0 }
+  - { name: leaf, signal: source.U1.PD6, access: write, kind: bool, initial: 0 }
+  - { name: buzz, signal: source.U1.PA1, access: write, kind: bool, initial: 0 }
+  - { name: touch_contact, signal: bench.TP4.contact, access: write, kind: bool, initial: 0 }
+  - { name: touch, signal: source.U1.PA2.touched, access: read, kind: bool }
+  - { name: d3, signal: source.D3.logic_state, access: read, kind: bool }
+  - { name: d4, signal: source.D4.logic_state, access: read, kind: bool }
+  - { name: d5, signal: source.D5.logic_state, access: read, kind: bool }
+  - { name: d6, signal: source.D6.logic_state, access: read, kind: bool }
+  - { name: d7, signal: source.D7.logic_state, access: read, kind: bool }
+  - { name: d8, signal: source.D8.logic_state, access: read, kind: bool }
+  - { name: d9, signal: source.D9.logic_state, access: read, kind: bool }
+  - { name: d10, signal: source.D10.logic_state, access: read, kind: bool }
+  - { name: d11, signal: source.D11.logic_state, access: read, kind: bool }
+  - { name: d12, signal: source.D12.logic_state, access: read, kind: bool }
+  - { name: d13, signal: source.D13.logic_state, access: read, kind: bool }
+  - { name: d14, signal: source.D14.logic_state, access: read, kind: bool }
+  - { name: d1, signal: source.D1.logic_state, access: read, kind: bool }
+  - { name: d2, signal: source.D2.logic_state, access: read, kind: bool }
+  - { name: bz1, signal: source.BZ1.logic_state, access: read, kind: bool }
+cosim_models:
+  - id: d3
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PD3 }
+    outputs: { state: source.D3.logic_state }
+    config: &follower
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [state]
+        pin_defaults: { state: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: state, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: state, level: 0 }]
+  - id: d4
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PD2 }
+    outputs: { state: source.D4.logic_state }
+    config: *follower
+  - id: d5
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PC7 }
+    outputs: { state: source.D5.logic_state }
+    config: *follower
+  - id: d6
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PC6 }
+    outputs: { state: source.D6.logic_state }
+    config: *follower
+  - id: d7
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PC5 }
+    outputs: { state: source.D7.logic_state }
+    config: *follower
+  - id: d8
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PC4 }
+    outputs: { state: source.D8.logic_state }
+    config: *follower
+  - id: d9
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PC3 }
+    outputs: { state: source.D9.logic_state }
+    config: *follower
+  - id: d10
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PC2 }
+    outputs: { state: source.D10.logic_state }
+    config: *follower
+  - id: d11
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PC1 }
+    outputs: { state: source.D11.logic_state }
+    config: *follower
+  - id: d12
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PC0 }
+    outputs: { state: source.D12.logic_state }
+    config: *follower
+  - id: d13
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PD0 }
+    outputs: { state: source.D13.logic_state }
+    config: *follower
+  - id: d14
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PD4 }
+    outputs: { state: source.D14.logic_state }
+    config: *follower
+  - id: d1
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PD6 }
+    outputs: { state: source.D1.logic_state }
+    config: *follower
+  - id: d2
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PD6 }
+    outputs: { state: source.D2.logic_state }
+    config: *follower
+  - id: bz1
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: source.U1.PA1 }
+    outputs: { state: source.BZ1.logic_state }
+    config: *follower
+  - id: touch_pad
+    adapter: behavior
+    step_ns: 21333
+    inputs: { drive: bench.TP4.contact }
+    outputs: { state: source.U1.PA2.touched }
+    config: *follower

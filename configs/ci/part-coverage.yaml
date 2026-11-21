@@ -22,3 +22,12 @@ parts:
       Not exercised outside the model: the multiplexing, persistence and font
       behaviour is unit-tested in declarative_segment_display.rs, but no lab
       and no integration test attaches the descriptor through a manifest.
+  mcp9700:
+    kind: tested
+    reason: >-
+      Attached as a flex analog-source model (`device_type: mcp9700`, not a
+      `type:` manifest row), so the derivation does not see it. The flex test
+      runner loads the pinned HeyPCB ESP32-S3 fixture and asserts the
+      500 mV + 10 mV/degC output trace.
+    tests:
+      - crates/cli/tests/flex_test_runner.rs

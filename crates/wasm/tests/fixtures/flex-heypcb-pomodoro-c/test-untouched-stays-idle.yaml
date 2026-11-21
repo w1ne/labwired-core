@@ -1,0 +1,44 @@
+# `labwired test --script test-untouched-stays-idle.yaml`. Negative control
+# for test-tap-starts-focus.yaml: the same 300 ms with no tap stay idle.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  # The board: each MCU pin (ch32fun pin number = port * 16 + bit) and its net.
+  - call: { export: flex_bind_output, args: [{ number: 51 }, { port: min0 }] }   # PD3
+  - call: { export: flex_bind_output, args: [{ number: 50 }, { port: min1 }] }   # PD2
+  - call: { export: flex_bind_output, args: [{ number: 39 }, { port: min2 }] }   # PC7
+  - call: { export: flex_bind_output, args: [{ number: 38 }, { port: min3 }] }   # PC6
+  - call: { export: flex_bind_output, args: [{ number: 37 }, { port: min4 }] }   # PC5
+  - call: { export: flex_bind_output, args: [{ number: 36 }, { port: min5 }] }   # PC4
+  - call: { export: flex_bind_output, args: [{ number: 35 }, { port: min6 }] }   # PC3
+  - call: { export: flex_bind_output, args: [{ number: 34 }, { port: min7 }] }   # PC2
+  - call: { export: flex_bind_output, args: [{ number: 33 }, { port: min8 }] }   # PC1
+  - call: { export: flex_bind_output, args: [{ number: 32 }, { port: min9 }] }   # PC0
+  - call: { export: flex_bind_output, args: [{ number: 48 }, { port: min10 }] }  # PD0
+  - call: { export: flex_bind_output, args: [{ number: 52 }, { port: min11 }] }  # PD4
+  - call: { export: flex_bind_output, args: [{ number: 54 }, { port: leaf }] }   # PD6
+  - call: { export: flex_bind_output, args: [{ number: 1 }, { port: buzz }] }    # PA1
+  - call: { export: flex_bind_touch, args: [{ number: 2 }, { port: touch }] }    # PA2
+  # `int main(void)` of the unchanged pomodoro.c.
+  - call: { export: __main_void, until_ns: 200000000 }
+  - resume: { until_ns: 250000000 }
+  - resume: { until_ns: 300000000 }
+limits:
+  max_steps: 200000000
+  max_time_ns: 300000000
+assertions:
+  - entry_result: { equals: 15, step: 14 }      # all 15 pins are bound
+  # Start-up chirp: 237 cycles of 2637 Hz, each half cycle 189,000 ns, from
+  # 20,000 ns (four SysTick uses in systick_init).
+  - digital_edges: { port: buzz, count: 474, from_ns: 20000, to_ns: 89417000 }
+  - digital_edges: { port: buzz, count: 474 }
+  - digital_edges: { port: leaf, count: 0 }
+  - digital_edges: { port: min1, count: 0 }
+  - digital_edges: { port: min11, count: 0 }
+  - port_value: { port: d4, equals: 0 }
+  - port_value: { port: d14, equals: 0 }
+  - port_value: { port: bz1, equals: 0 }
+  - final_time_ns: { equals: 300000000 }

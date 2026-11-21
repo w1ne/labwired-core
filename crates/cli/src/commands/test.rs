@@ -904,6 +904,21 @@ pub(crate) fn run_test(
             }
             return outcome.exit_code;
         }
+        LoadedTestScript::Flex(script) => {
+            let outcome = super::flex_test::run_flex_test(&args, script);
+            if let Some(ref key) = api_key_opt {
+                let duration_ms = run_start.elapsed().as_millis() as u64;
+                // No target CPU is emulated on this path, so no cycles ran.
+                api_client::record_run(
+                    key,
+                    &outcome.firmware_hash,
+                    0,
+                    duration_ms,
+                    metering_exit_status(&outcome.exit_code),
+                );
+            }
+            return outcome.exit_code;
+        }
     };
 
     // Fault injection (schema_version 1.1): the verdict's safe_when entries are

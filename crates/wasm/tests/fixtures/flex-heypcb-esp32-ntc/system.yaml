@@ -1,0 +1,74 @@
+# Source-grounded sensor network of HeyPCB's ESP32-S3 NTC board: R6 from 3V3
+# to SNS_AN1, U4 (NCP18XH103F03RB) and C7 from SNS_AN1 to GND, solved by the
+# in-core analog engine. Portable firmware runs in WasmFlexRuntime; the ESP32
+# CPU and its ADC peripheral are not emulated.
+schema_version: 1
+name: heypcb-esp32-s3-ntc-sensor-network
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - "U4 follows the beta equation R = 10 kΩ * exp(3380 K * (1/T - 1/298.15 K)) with R25 = 10 kΩ and B25/50 = 3380 K of the NCP18XH103F03RB row in Murata catalog R44E. From 10 °C to 60 °C this equation is within 1.7 % of the catalog's center-value resistance table (0.4 °C); the model refuses other temperatures."
+  - "3V3 is an ideal 3.3 V source. R6 (10 kΩ), U4 at 25 °C (10 kΩ) and C7 (100 nF) use their nominal values."
+  - "IO1 is an ideal voltage probe on SNS_AN1 with no input current or sampling capacitance. The firmware takes whole millivolts from the sensor_v port, as Arduino-ESP32 analogReadMilliVolts() returns them; ESP32-S3 ADC conversion is not modeled."
+  - The thermistor follows a temperature step at once; the analog engine integrates the R6/U4/C7 network every 100 µs with 10 backward-Euler substeps.
+  - Firmware instructions take no virtual time. The firmware samples ten times a second, 10 ms into each period.
+  - The IO48 user LED is represented by digital logic state only.
+  - The console stands for the ESP32-S3 native USB serial port on J1, as the source README states for flashing. A write arrives whole at the time of the call and takes no virtual time.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or ADC peripheral fidelity; the pinned source contains no board firmware.
+  - ESP32-S3 ADC quantization, attenuation range, calibration error and noise on IO1.
+  - "Temperatures outside 10..60 °C. The run stops with an explicit range error; the beta equation leaves the catalog table by 3.0 °C at -40 °C and by 4.2 °C at 125 °C, so the part's -40..125 °C operating range is not covered."
+  - "NCP18XH103F03RB resistance (±1 %) and B-constant (±1 %) tolerance, R6, C7 and 3V3 tolerance, self-heating (1 mW/°C dissipation constant) and the thermal time constant of the 0603 part."
+  - USB enumeration, CDC transfer timing and host polling of the console; text the host sends to the firmware.
+  - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+  - "The generic importer does not produce this network. The netlist is written from the pinned source nets."
+ports:
+  - { name: ambient_c, signal: environment.temperature, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: sensor_v, signal: source.net.SNS_AN1, access: read, kind: number, unit: V }
+  - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
+  - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  # Source net SNS_AN1: R6 pad 2, U4 pad 1, C7 pad 1, U3 pad 39 (IO1).
+  - id: source-sns-an1
+    adapter: analog
+    step_ns: 100000
+    inputs: { temperature: environment.temperature }
+    outputs: { voltage: source.net.SNS_AN1 }
+    config:
+      # Integrate the completed interval before latching this boundary's temperature.
+      input_sampling: previous_boundary
+      netlist_text: |
+        V3V3 3v3 0 dc 3.3
+        R6 3v3 sns_an1 10k
+        RU4 sns_an1 0 10k
+        C7 sns_an1 0 100n
+      vdd: 3.3
+      probes: { voltage: "v(sns_an1)" }
+      thermistors:
+        temperature:
+          resistor: RU4
+          r_ref_ohms: 10000
+          beta_kelvin: 3380
+          reference_c: 25
+          min_c: 10
+          max_c: 60
+  - id: source-d1-user-led
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U3.GPIO48 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: led, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: led, level: 0 }]
+console:
+  # The source README: "USB-C, native USB on the ESP32-S3 (no bridge chip)".
+  name: usb_serial

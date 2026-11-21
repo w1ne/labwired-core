@@ -1,0 +1,23 @@
+# `labwired test --script test-untouched-stays-idle.yaml`. Negative control for
+# test-tap-starts-focus.yaml: the same firmware calls with no tap. The face
+# stays idle and no minute LED after LED 0 lights.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: min0 }, { port: leaf }, { port: buzz }, { port: touch }] }
+  - call: { export: loop, repeat: 7032 }
+limits:
+  max_steps: 100000000
+  max_time_ns: 1000000000
+assertions:
+  - entry_result: { equals: 0 }
+  - digital_edges: { port: buzz, count: 474 }
+  - digital_edges: { port: leaf, count: 0 }
+  - digital_edges: { port: min11, count: 0 }
+  - digital_edges: { port: min1, count: 0 }
+  - port_value: { port: d14, equals: 0 }
+  - port_value: { port: d4, equals: 0 }
+  - final_time_ns: { equals: 299599656 }
