@@ -1,0 +1,26 @@
+# `labwired test --script test-both-far.yaml`. Negative control. Both targets beyond the threshold distance.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: left_distance_mm }
+    - { port: left_distance_mv }
+    - { port: left_near_drive }
+    - { port: right_distance_mm }
+    - { port: right_distance_mv }
+    - { port: right_near_drive }
+    - { number: 700 }
+    - { number: 200 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 4401300 }
+  - port_value: { port: left_near_led, equals: 0 }
+  - port_value: { port: right_near_led, equals: 0 }
+  - digital_edges: { port: left_near_led, count: 0 }
+  - digital_edges: { port: right_near_led, count: 0 }

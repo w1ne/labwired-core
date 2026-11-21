@@ -1,0 +1,65 @@
+{
+  "source": {
+    "repository": "HeyPCB/esp32-sensors-1",
+    "revision": "57a2122a19ac1aa9c092e43fb5b123c461508752",
+    "asset": "boards/ldr/kicad/esp32_ldr",
+    "title": "HeyPCB ESP32-S3 LDR - GL5528 photoresistor light sensor",
+    "board_revision": "A",
+    "license_spdx": "CERN-OHL-S-2.0",
+    "files": {
+      "schematic": { "path": "boards/ldr/kicad/esp32_ldr.kicad_sch", "git_blob": "64667760dad1369a130b8935718b7a262d746d66" },
+      "pcb": { "path": "boards/ldr/kicad/esp32_ldr.kicad_pcb", "git_blob": "54b05837a3e254b6a424b2ea2eb97a4b8318e578" },
+      "bom": { "path": "boards/ldr/fab/esp32_ldr_bom.csv", "git_blob": "c42c7209415891c84ec8ed2a44922763c36a6134" },
+      "board_json": { "path": "boards/ldr/board.json", "git_blob": "409e43b9a6afe61c082635c30461e433e8d39772" },
+      "board_readme": { "path": "boards/ldr/README.md", "git_blob": "e41508ce5052097c2e6ab1a11ba6b31a1d37cbd6" },
+      "license": { "path": "LICENSE", "git_blob": "0f1092207caa645ff426e0cc40b7eaad69caecb1" }
+    },
+    "fabrication_status": "source README says not fabricated, assembled, or powered",
+    "original_board_firmware": "none found for this board in the pinned source"
+  },
+  "sensor_network": {
+    "evidence": "pad nets read from the pinned PCB blob; values and MPNs from the pinned BOM blob",
+    "elements": [
+      { "netlist": "V3V3", "source": "3V3 rail", "nodes": ["3V3", "GND"], "value": "3.3 V", "note": "ideal source; U2 AP2112K-3.3 is not modeled" },
+      { "netlist": "RU4", "source_ref": "U4", "source_part": "GL5528(10-20)", "lcsc": "C10081", "pads": { "1": "3V3", "2": "SNS_AN1" }, "value": "15 kΩ at 10 lx, routed power law" },
+      { "netlist": "R6", "source_ref": "R6", "source_part": "0603WAF1002T5E", "lcsc": "C25804", "pads": { "1": "SNS_AN1", "2": "GND" }, "value": "10k" },
+      { "netlist": "C7", "source_ref": "C7", "source_part": "CL05B104KO5NNNC", "lcsc": "C1525", "pads": { "1": "SNS_AN1", "2": "GND" }, "value": "100nF" }
+    ],
+    "probe": { "netlist_node": "sns_an1", "source_net": "SNS_AN1", "mcu_endpoint": "U3.GPIO1", "evidence": "board.json maps U3 pin 39 to SNS_AN1; README says SNS_AN1 is on IO1" },
+    "user_led": { "source_net": "IO48", "endpoints": ["U3.GPIO48", "R4.1"], "indicator": "D1", "modeled_as": "digital logic state only" }
+  },
+  "photoresistor_data": {
+    "document": "GL55 Series CdS Photoresistor Manual, SENBA OPTICAL & ELECTRONIC CO.,LTD., 6 pages",
+    "retrieved_from": "https://cdn.shopify.com/s/files/1/0699/1344/4452/files/GL55_Series_Photoresistor.pdf",
+    "retrieved_on": "2026-11-19",
+    "pdf_sha256": "99b0c494c8695f36461cadaaee50dcc91fba7d6c2f782f323e190e456458b230",
+    "gl5528_row": {
+      "light_resistance_10lx_kohm": [10, 20],
+      "dark_resistance_min_mohm": 1,
+      "gamma_100_10": 0.6,
+      "response_time_ms": { "increase": 20, "decrease": 30 },
+      "max_voltage_v": 150,
+      "max_power_mw": 100,
+      "spectrum_peak_nm": 540,
+      "illuminance_resistance_figure": 3
+    },
+    "definitions": {
+      "gamma": "Lg(R10/R100) / Lg(100/10), with R10 and R100 the resistances under 10 lx and 100 lx",
+      "light_resistance": "irradiated by 400-600 lx for two hours, then tested at 10 lx under standard light source A (2856 K)",
+      "dark_resistance": "resistance ten seconds after the 10 lx light is shut off"
+    },
+    "model_parameters": { "r_ref_ohms": 15000, "reference_lux": 10, "gamma": 0.6, "min_lux": 1, "max_lux": 100 },
+    "parameter_notes": [
+      "r_ref_ohms is the midpoint of the 10-20 kΩ range; the manual gives no typical value.",
+      "The gamma definition spans 10-100 lx. The 1-10 lx part of the modeled range follows the straight band of the manual's Fig. 3 and is an assumption.",
+      "The board BOM names LCSC C10081. On 2026-11-19 the LCSC listing for C10081 named JCHL as manufacturer with 8-20 kΩ and gamma 0.65; those seller parameters differ from this manual and are not used.",
+      "LabWired Part Knowledge returned NOT_FOUND for GL5528 on 2026-11-19; these values are not cross-checked facts in that corpus."
+    ]
+  },
+  "runtime_bindings": {
+    "manifest": "system.yaml",
+    "sensor_model": { "id": "source-sns-an1", "adapter": "analog", "input": "environment.lux", "input_unit": "lx", "output": "source.U3.GPIO1", "output_unit": "V" },
+    "led_model": { "id": "source-d1-user-led", "adapter": "behavior", "input": "source.U3.GPIO48", "output": "source.D1.logic_state", "behavior_primitive": "gpio_device" },
+    "firmware_ports": { "lux_write": "lux", "sensor_read": "sensor_v", "user_led_write": "user_led_drive", "led_state_read": "user_led_state" }
+  }
+}

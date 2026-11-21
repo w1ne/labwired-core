@@ -1,0 +1,30 @@
+# `labwired test --script test-mild.yaml`. Negative control. The temperature
+# goes 25 -> 33 -> 25 °C and never reaches the 2000 mV turn-on threshold. At the
+# same 33 °C at which the heat cycle keeps the fan on, the fan stays off.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: temperature_mv }, { port: fan_drive }] }
+  - call: { export: loop, repeat: 2 }
+  - set: { port: temperature_c, value: 33 }
+  - call: { export: loop, repeat: 2 }
+  - set: { port: temperature_c, value: 25 }
+  - call: { export: loop, repeat: 2 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 0, step: 1 }
+  - entry_result: { equals: 0, step: 3 }
+  - entry_result: { equals: 0 }
+  - port_value: { port: temperature_mv, equals: 1650 }
+  - port_value: { port: fan_state, equals: 0 }
+  - digital_edges: { port: fan_drive, count: 0 }
+  - digital_edges: { port: fan_state, count: 0 }
+  - analog_sample: { port: temperature_mv, at_ns: 3000, equals: 1932 }
+  - analog_crossings: { port: temperature_mv, level: 2000, direction: rising, count: 0 }
+  - analog_window: { port: temperature_mv, min: 1650, max: 1932 }
+  - final_time_ns: { equals: 6000 }

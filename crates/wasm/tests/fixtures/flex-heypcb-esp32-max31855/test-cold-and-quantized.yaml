@@ -1,0 +1,30 @@
+# `labwired test --script test-cold-and-quantized.yaml`. Negative
+# temperatures and the 0.25 °C step. At -200.25 °C the 14-bit field holds
+# -801 and at a -10.0625 °C cold junction the 12-bit field holds -161; both
+# decode exactly. 1000.1 °C encodes to the nearest count, 4000, and decodes
+# as 1000.00 °C, which turns the indicator on.
+# All expected values were calculated before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - set: { port: thermocouple_c, value: -200.25 }
+  - set: { port: cold_junction_c, value: -10.0625 }
+  - call: { export: setup, args: [{ bus: sensor_spi }, { port: user_led_drive }, { number: 10 }] }
+  - call: { export: loop }
+  - set: { port: thermocouple_c, value: 1000.1 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 1000000000
+assertions:
+  - entry_result: { equals: 200000 }
+  - entry_result: { equals: 0, step: 2 }
+  - entry_result: { equals: 79975, step: 3 }
+  - spi_transfers: { bus: sensor_spi, cs: 10, selected: true, equals: 3 }
+  - digital_edges: { port: user_led_drive, times_ns: [100096000] }
+  - port_value: { port: user_led_state, equals: 1 }
+  - final_time_ns: { equals: 200096000 }
+  - console_contains: "MAX31855 on CS 10 CJ=-10.0625 C\nTC=-200.25 C CJ=-10.0625 C\nTC=1000.00 C CJ=-10.0625 C\n"

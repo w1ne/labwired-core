@@ -310,6 +310,10 @@ pub struct GenericDisplay {
     /// I²C only: the control byte latched at the start of this transaction.
     /// `None` = the next byte IS the control byte.
     control: Option<u8>,
+    /// Strobed-nibble bus only: the E level of the previous port byte, and
+    /// the high nibble waiting for its low half with the RS it was sent on.
+    nibble_e: bool,
+    nibble_pending: Option<(u8, bool)>,
 
     glass: Option<GlassWindow>,
     elapsed_us: u64,
@@ -533,6 +537,40 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                 bail!("a control-byte panel sits on I²C and needs a default_address");
             }
         }
+        DisplayDcSource::StrobedNibbles => {
+            let bus = spec.dc.nibble.context(
+                "dc.source strobed_nibbles needs dc.nibble (which port bit is RS, RW, E and D4)",
+            )?;
+            if spec.default_address.is_none() {
+                bail!("a strobed-nibble panel sits behind an I²C port expander and needs a default_address");
+            }
+            let data = (0..4).map(|i| bus.data_shift + i);
+            let mut bits: Vec<u8> = vec![bus.rs_bit, bus.rw_bit, bus.e_bit];
+            bits.extend(data);
+            if bits.iter().any(|b| *b > 7) {
+                bail!("dc.nibble names a port bit past bit 7 of an 8-bit expander");
+            }
+            let mut unique = bits.clone();
+            unique.sort_unstable();
+            unique.dedup();
+            if unique.len() != bits.len() {
+                bail!("dc.nibble puts two lines on one port bit");
+            }
+            if let Some(cmd) = spec.commands.iter().find(|c| c.args > 0) {
+                bail!(
+                    "command 0x{:02X} declares {} parameter bytes, but a strobed-nibble bus \
+                     carries every byte after a command as data",
+                    cmd.opcode,
+                    cmd.args
+                );
+            }
+        }
+    }
+    if spec.dc.nibble.is_some() && spec.dc.source != DisplayDcSource::StrobedNibbles {
+        bail!(
+            "dc.nibble describes a strobed-nibble bus, and dc.source is {:?}",
+            spec.dc.source
+        );
     }
 
     if !spec.addressing.modes.contains(&spec.addressing.default) {
@@ -720,6 +758,24 @@ fn validate_spec(spec: &DisplaySpec) -> Result<()> {
                     "artifact_meta publishes var '{var}', which is not declared — the key would \
                      read a cell nothing can write and report a constant forever"
                 );
+            }
+            continue;
+        }
+        if let Some(rows) = field.text() {
+            if rows.is_empty() {
+                bail!("artifact_meta text lists no rows");
+            }
+            for row in rows {
+                if row.len == 0
+                    || u64::from(row.offset) + u64::from(row.len) > u64::from(spec.ram.bytes)
+                {
+                    bail!(
+                        "artifact_meta text row at offset {} and {} bytes is not inside the {}-byte frame memory",
+                        row.offset,
+                        row.len,
+                        spec.ram.bytes
+                    );
+                }
             }
             continue;
         }
@@ -1019,7 +1075,10 @@ impl GenericDisplay {
         let Some(spec) = descriptor.behavior.display.as_ref() else {
             return Ok(None);
         };
-        if spec.dc.source != DisplayDcSource::ControlByte {
+        if !matches!(
+            spec.dc.source,
+            DisplayDcSource::ControlByte | DisplayDcSource::StrobedNibbles
+        ) {
             return Ok(None);
         }
         let default = spec.default_address.unwrap_or(0);
@@ -1112,6 +1171,8 @@ impl GenericDisplay {
             plane: 0,
             ram_remaining: None,
             control: None,
+            nibble_e: false,
+            nibble_pending: None,
             glass: None,
             elapsed_us: 0,
             spec,
@@ -1730,6 +1791,37 @@ impl GenericDisplay {
         }
     }
 
+    /// One port byte of a strobed-nibble bus. The controller latches RS, RW
+    /// and the data nibble on the falling edge of E; a byte that does not end
+    /// an E pulse moves no data. Nibbles pair high-then-low on one RS. A
+    /// nibble on a different RS than the pending half drops that half: RS
+    /// cannot change inside one byte, so the pending half was an orphan. The
+    /// 4-bit init sequence (single nibbles 3, 3, 3, 2) pairs into 0x33 and
+    /// 0x32, both function sets, and leaves nothing pending.
+    fn port_byte(&mut self, port: u8) {
+        let bus = self.spec.dc.nibble.expect("validated strobed-nibble bus");
+        let bit = |n: u8| port >> n & 1 == 1;
+        let e = bit(bus.e_bit);
+        let falling = self.nibble_e && !e;
+        self.nibble_e = e;
+        if !falling || bit(bus.rw_bit) {
+            return;
+        }
+        let rs = bit(bus.rs_bit);
+        let nibble = (port >> bus.data_shift) & 0x0F;
+        match self.nibble_pending.take() {
+            Some((high, pending_rs)) if pending_rs == rs => {
+                let byte = (high << 4) | nibble;
+                if rs {
+                    self.data_byte(byte);
+                } else {
+                    self.command_byte(byte);
+                }
+            }
+            _ => self.nibble_pending = Some((nibble, rs)),
+        }
+    }
+
     /// True when command PARAMETERS ride the data line — the 4-wire SPI panel,
     /// whose D/C pad goes high for a command's arguments as much as for pixels.
     fn args_on_data_stream(&self) -> bool {
@@ -2070,6 +2162,26 @@ impl GenericDisplay {
                 meta.insert(field.key().to_string(), serde_json::json!(n));
                 continue;
             }
+            if let Some(rows) = field.text() {
+                let lines: Vec<String> = rows
+                    .iter()
+                    .map(|row| {
+                        let start = row.offset as usize;
+                        self.ram[start..start + row.len as usize]
+                            .iter()
+                            .map(|&b| {
+                                if (0x20..0x7F).contains(&b) {
+                                    b as char
+                                } else {
+                                    '?'
+                                }
+                            })
+                            .collect()
+                    })
+                    .collect();
+                meta.insert(field.key().to_string(), serde_json::json!(lines));
+                continue;
+            }
             if let Some(var) = field.var() {
                 let n = self.vars.get(var).copied().unwrap_or(0);
                 let value = match field.format() {
@@ -2265,8 +2377,16 @@ impl I2cDevice for GenericDisplay {
         self.control = None;
     }
 
+    // A strobed-nibble panel's I²C transactions belong to its port expander:
+    // the controller never sees a START or a STOP, only E edges, so neither
+    // may close its RAM stream.
+
     fn write(&mut self, data: u8) {
         if !self.powered {
+            return;
+        }
+        if self.spec.dc.source == DisplayDcSource::StrobedNibbles {
+            self.port_byte(data);
             return;
         }
         let Some(control) = self.control else {
@@ -2281,6 +2401,9 @@ impl I2cDevice for GenericDisplay {
     }
 
     fn stop(&mut self) {
+        if self.spec.dc.source == DisplayDcSource::StrobedNibbles {
+            return;
+        }
         // `ram.stream: always` paints are logged from `data_byte` once a full
         // plane has been written (chunked I²C STOPs must not each count as a
         // frame). Windowed RAM streams still close on STOP.
@@ -2526,7 +2649,9 @@ fn owned_metadata(descriptor: &DeviceDescriptor) -> KitMetadata {
             .collect::<Vec<_>>(),
     );
     let (transport, category) = match spec.dc.source {
-        DisplayDcSource::ControlByte => (Transport::I2c, Category::I2c),
+        DisplayDcSource::ControlByte | DisplayDcSource::StrobedNibbles => {
+            (Transport::I2c, Category::I2c)
+        }
         DisplayDcSource::Pin | DisplayDcSource::HwDcx => (Transport::Spi, Category::Spi),
     };
     KitMetadata {
@@ -2550,7 +2675,7 @@ impl PeripheralKit for DeclarativeDisplayKit {
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
         let spec = self.spec();
         match spec.dc.source {
-            DisplayDcSource::ControlByte => {
+            DisplayDcSource::ControlByte | DisplayDcSource::StrobedNibbles => {
                 let address = ctx.i2c_address_or(spec.default_address.unwrap_or(0))?;
                 let mut dev = GenericDisplay::from_descriptor_i2c(&self.descriptor, Some(address))?
                     .context("a control-byte panel always has an I²C model")?;

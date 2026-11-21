@@ -1,36 +1,38 @@
 # Sharp GP2Y0A21YK0F infrared distance sensor — declarative `analog_source`
 # device. The part's whole interface is one analogue voltage: Vo falls with
 # distance over the specified 10–80 cm band. There are no registers and no
-# configuration, so the descriptor is the datasheet's typical-output graph and
-# nothing else.
+# configuration, so the descriptor is a rounded read-off of the datasheet's
+# typical white-paper output graph.
 #
-# Curve provenance: Sharp GP2Y0A21YK0F datasheet, "Typical output voltage
-# vs. distance" graph, read off as a piecewise-linear table:
+# Curve provenance: Sharp GP2Y0A21YK0F datasheet, Fig. 2, "Example of distance
+# measuring characteristics (output)" (VCC=5 V, white paper, 90% reflectance):
+# https://global.sharp/products/device/lineup/data/pdf/datasheet/gp2y0a21yk_e.pdf
+# The 80 cm typical output is 0.4 V and the typical 10-to-80 cm differential
+# is 1.9 V in the characteristics table, anchoring the graph at 400 and 2300 mV.
+# Intermediate points are rounded graph read-offs, not guaranteed limits.
 #
 #   distance (mm) | 10   15   20   30   40   50   60   70   80
-#   Vo (mV, typ.) | 3100 2300 1900 1300 1000 800  650  550  500
+#   Vo (mV, typ.) | 2300 1650 1300 930  730  600  510  440  400
 #
-# Out-of-band behaviour, stated rather than faked:
-#   * beyond 80 cm the real output settles on a ~0.4 V floor (far is NOT
-#     zero — a classic firmware bug) — `above_last.floor_mv: 400`;
-#   * below 10 cm the real output FALLS again (the "mirror region" —
-#     triangulation breaks down at contact). Out of spec: the descriptor
-#     clamps to the 10 cm value rather than inventing a curve.
+# Out-of-band behaviour is an explicit model assumption, not a data-sheet
+# claim: hold the 80 cm value beyond 80 cm; clamp below 10 cm to the 10 cm
+# endpoint. The actual close-range curve rises to about 3.1 V near 5–6 cm and
+# then falls, so this descriptor does not model distances below 10 cm.
 type: gp2y0a21
 
 behavior:
   primitive: analog_source
   analog:
     curve:
-      - [100, 3100]
-      - [150, 2300]
-      - [200, 1900]
-      - [300, 1300]
-      - [400, 1000]
-      - [500, 800]
-      - [600, 650]
-      - [700, 550]
-      - [800, 500]
+      - [100, 2300]
+      - [150, 1650]
+      - [200, 1300]
+      - [300, 930]
+      - [400, 730]
+      - [500, 600]
+      - [600, 510]
+      - [700, 440]
+      - [800, 400]
     below_first: clamp
     above_last: { floor_mv: 400 }
 
@@ -38,13 +40,14 @@ metadata:
   label: Sharp GP2Y0A21 IR Distance Sensor
   summary: Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC).
   detail: >-
-    Triangulation IR ranger: Vo falls with distance over the specified 10–80 cm
-    band, following the datasheet typical-output curve (3.1 V at 10 cm down to
-    0.5 V at 80 cm). Drive the `distance` channel (mm) at runtime and the ADC
-    channel follows. Beyond 80 cm the output holds a ~0.4 V floor (far is NOT
-    zero); below 10 cm the real part's output falls again (mirror region) and
-    this model clamps to the 10 cm value instead.
+    Triangulation IR ranger: Vo follows a rounded read-off of Sharp's typical
+    white-paper graph over 10–80 cm (about 2.3 V at 10 cm and 0.4 V at 80 cm).
+    Drive `distance` in mm and the ADC channel follows. The model holds 0.4 V
+    beyond 80 cm and clamps below 10 cm to the 10 cm endpoint; neither rule
+    claims the physical out-of-range response. The roughly 38 ms measurement
+    cadence, up-to-5 ms output delay, reflectance/angle variation, noise, and
+    target-MCU ADC behavior are not modeled.
   config_keys:
     - { name: channel, ty: int, doc: "ADC channel index (0..N). Defaults to 0." }
   inputs:
-    - { key: distance, label: Distance, unit: mm, min: 0, max: 800 }
+    - { key: distance, label: Distance, unit: mm, min: 100, max: 800, default: 100 }

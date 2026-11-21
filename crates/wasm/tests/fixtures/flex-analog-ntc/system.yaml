@@ -1,0 +1,39 @@
+# Held-out portable workload using the existing registered NTC analog source.
+schema_version: 1
+name: Reusable NTC over-temperature alarm
+assumptions:
+  - The registered 10 kΩ B3950 NTC model and its 10 kΩ pull-down divider provide the sensor millivolts.
+  - Portable firmware asserts the alarm above a fixed 2000 mV threshold; it does not run a target ADC driver.
+unsupported_checks:
+  - Original target-MCU firmware, ADC peripheral behavior, thermistor tolerance, divider tolerance, and physical measurement are not modeled.
+ports:
+  - { name: temperature_c, signal: environment.temperature_c, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: temperature_mv, signal: sensor.output_mv, access: read, kind: number, unit: mV }
+  - { name: hot_alarm_drive, signal: alarm.drive, access: write, kind: bool, initial: 0 }
+  - { name: hot_alarm_state, signal: alarm.state, access: read, kind: bool }
+cosim_models:
+  - id: ntc-sensor
+    adapter: behavior
+    step_ns: 1000
+    inputs: { temperature: environment.temperature_c }
+    outputs: { voltage_mv: sensor.output_mv }
+    config:
+      device_type: ntc-thermistor
+  - id: alarm-indicator
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: alarm.drive }
+    outputs: { state: alarm.state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [state]
+        pin_defaults: { state: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: state, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: state, level: 0 }]

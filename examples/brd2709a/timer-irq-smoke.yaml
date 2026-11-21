@@ -1,0 +1,17 @@
+# LabWired - BRD2709A (xG26-EK2709A) TIMER0..9 interrupt-line smoke
+#
+# After the IO phase, firmware-mg26-demo sets IF.OF and IEN.OF on each TIMER
+# in turn, with NVIC lines 4..13 disabled and cleared, and prints the pending
+# window (ISPR0 & 0x3FF0). Silicon: TIMERn_IRQn = 4 + n
+# (efr32mg26b510f3200im48.h; Renode efr32xg26.repl `-> nvic@4..13`). Each
+# window must be only that timer's own bit, and ICPR must release it.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv7m-none-eabi/release/firmware-mg26-demo"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - uart_contains: "MG26-IO DONE"
+  - uart_contains: "MG26-TIMER-IRQ 0010 0020 0040 0080 0100 0200 0400 0800 1000 2000 ok"
+  - expected_stop_reason: max_steps

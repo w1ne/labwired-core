@@ -87,9 +87,11 @@ static int tgtX = W / 2, tgtY = H / 2;
 static int drawLeftY = H / 2 - PADDLE_H / 2, drawRightY = H / 2 - PADDLE_H / 2;
 
 // ── Sharp GP2Y0A21: Vo is a distance-keyed analogue voltage ────────────────
-// 10 cm ≈ 3.1 V (~3847 counts), 80 cm ≈ 0.5 V (~620 counts); beyond 80 cm it
-// holds a ~0.4 V floor (far is NOT zero). Monotonic nearer→higher.
+// The shared catalog model uses Sharp's typical white-paper graph: 10 cm ≈
+// 2.3 V (~2854 counts), 80 cm ≈ 0.4 V (~496 counts). Its 0.4 V far clamp is
+// a model assumption beyond the datasheet's 80 cm measuring range.
 #define SHARP_PIN 1
+// These are app-level normalization endpoints, not predicted sensor outputs.
 #define RAW_NEAR 3600
 #define RAW_FAR   650
 #define RAW_NOISE  60

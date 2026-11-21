@@ -1,0 +1,38 @@
+# The two ends of the declared 10..60 °C range, the 25 °C reference and one
+# value between. Calculated before the first run: SNS_AN1 settles at 2.131089,
+# 0.769167, 1.650000 and 1.398660 V; the firmware reads 2131, 769, 1650 and
+# 1398 mV and recovers 10.0, 60.0, 25.0 and 33.3 °C. The indicator is on only
+# at 60 °C.
+# One prediction was wrong. The first run read 1649 mV at 25 °C, not 1650 mV:
+# 1.650000 V is exactly on a millivolt boundary, and after the rise from
+# 0.769 V the backward-Euler node is still about 2.7 nV below it 10 ms later
+# (0.881 V x (1/1.02)^990). The firmware reads the f64 value and truncates;
+# 1649 mV still converts to 25.0 °C. The f32 oscilloscope sample shows 1.65 V.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: sensor_v }, { port: user_led_drive }] }
+  - set: { port: ambient_c, value: 10 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 60 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 25 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 33.3 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 1000000000
+assertions:
+  - entry_result: { equals: 101000, step: 2 }
+  - entry_result: { equals: 106001, step: 4 }
+  - entry_result: { equals: 102500, step: 6 }
+  - entry_result: { equals: 103330, step: 8 }
+  - analog_sample: { port: sensor_v, at_ns: 10000000, min: 2.13108, max: 2.13110 }
+  - analog_sample: { port: sensor_v, at_ns: 110000000, min: 0.76916, max: 0.76918 }
+  - analog_sample: { port: sensor_v, at_ns: 310000000, min: 1.39865, max: 1.39867 }
+  - digital_edges: { port: user_led_drive, times_ns: [110000000, 210000000] }
+  - final_time_ns: { equals: 400000000 }
+  - console_contains: "T=10.0 C mV=2131\nT=60.0 C mV=769 ALARM\nT=25.0 C mV=1649\nT=33.3 C mV=1398\n"

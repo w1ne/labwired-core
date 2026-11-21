@@ -1,0 +1,20 @@
+# `labwired test --script test-full.yaml`. 100 % charge without USB.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: soc_pct }
+    - { port: usb_present }
+    - { port: battery_mv }
+    - { number: 100 }
+    - { number: 0 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 2100 }
+  - port_value: { port: battery_mv, equals: 2100 }
