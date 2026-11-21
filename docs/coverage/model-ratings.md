@@ -97,7 +97,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f407zg | open | L0 | 34 | 834.5 | 1.6 | ≥1× (CI) | — |
 | stm32g0b1re | open | L0 | 21 | 842.2 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32g0b1re.md) |
 | stm32g474re | open | L1 | 23 | 834.1 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32g474re.md) |
-| stm32g431rb | open | L0 | 22 | 834.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32g431rb.md) |
+| stm32g431rb | open | L0 | 23 | 834.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32g431rb.md) |
 | stm32h563 | open | L1 | 37 | 839.1 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32h563.md) |
 | stm32h533re | open | L1 | 5 | 809.2 | 1.2 | ≥1× (CI) | — |
 | stm32u575 | open | L1 | 43 | 839.6 | 1.8 | ≥1× (CI) | [doc](docs/boards/stm32u575.md) |
@@ -107,6 +107,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32c031c6 | open | L0 | 29 | 835.5 | 1.6 | ≥1× (CI) | — |
 | stm32l073 | open | L2 | 42 | 838.2 | 1.6 | ≥1× (CI) | — |
 | stm32l432kc | open | L0 | 42 | 835.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32l432kc.md) |
+| stm32l031k6 | open | L0 | 18 | 863.2 | 1.3 | ≥1× (CI) | — |
 | stm32l476 | open | L1 | 59 | 835.6 | 1.6 | ≥1× (CI) | — |
 | stm32wb55 | open | L1 | 22 | 835.0 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32wb55.md) |
 | stm32wba52 | open | L1 | 21 | 834.4 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32wba52.md) |

@@ -839,6 +839,12 @@ fn every_shipped_descriptor_is_ratcheted() {
         // board and has no silicon oracle or executing-fidelity differential.
         // Same bar as stm32f446re above.
         "stm32l432kc",
+        // NUCLEO-L031K6 (STM32L031K6, RM0377 L0x1). Runs a PR-gated raw-register
+        // USART2 / LD3 smoke (examples/nucleo-l031k6) on the dedicated L031
+        // models, but it is not a bundled-configs.ts catalog board and has no
+        // silicon oracle or executing-fidelity differential. Same bar as
+        // stm32l432kc above.
+        "stm32l031k6",
         "stm32g474re", // G4 peripheral models in progress, not shipped
         "stm32wb55",   // BLE not modelled, not shipped
         "stm32wba52",  // WBA early onboarding, not shipped
