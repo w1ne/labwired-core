@@ -52,7 +52,7 @@ impl DevicePins for Pads {
 }
 
 enum Model {
-    Strip(GenericLedStrip),
+    Strip(Box<GenericLedStrip>),
     Gpio {
         device: Box<DeclarativeGpioDevice>,
         pads: Pads,
@@ -123,7 +123,7 @@ fn strip(config: &FlexSink, descriptor: &DeviceDescriptor) -> SimResult<Model> {
     strip.keep_frame_history(FRAME_HISTORY_CAPACITY);
     strip.set_component_id(config.id.clone());
     strip.set_data_pin(0);
-    Ok(Model::Strip(strip))
+    Ok(Model::Strip(Box::new(strip)))
 }
 
 fn gpio(config: &FlexSink, descriptor: &DeviceDescriptor) -> SimResult<(Model, Vec<String>)> {
