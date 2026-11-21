@@ -40,6 +40,7 @@
 pub mod adapter;
 pub mod behavioural;
 pub mod device;
+mod eigen;
 pub mod mna;
 pub mod netlist;
 mod numparam;
@@ -49,18 +50,18 @@ pub use adapter::{AnalogConfig, AnalogCosimAdapter, Probe};
 pub use behavioural::{BehaviouralKind, BehaviouralSource, Expression};
 pub use mna::{
     AcResponse, AcSensitivityResponse, DcResponse, Integration, NoiseMechanism, NoiseResponse,
-    NoiseSource, Phasor, SensitivityResponse, Solver, TransferResponse, MAX_STEP_CUTS,
-    MAX_UNKNOWNS,
+    NoiseSource, Phasor, PoleZeroResponse, SensitivityResponse, Solver, TransferResponse,
+    MAX_STEP_CUTS, MAX_UNKNOWNS,
 };
 pub use netlist::{
     parse_netlist, parse_netlist_with_files, parse_spice_value, AcStimulus, AcSweep, AcSweepKind,
     AnalogError, Bjt, BjtModel, Capacitor, Cccs, Ccvs, Circuit, ComparatorModel, ComparatorOutput,
     CurrentSource, DcSweep, DcSweepSource, Diode, DiodeModel, Inductor, ModelCard,
     MosChannelChargeModel, MosModel, Mosfet, MutualInductor, NodeRef, NoiseSweep, NtcModel,
-    OpAmpModel, Polarity, PowerSink, RegulatorKind, RegulatorModel, Resistor,
-    ResistorTemperatureModel, Sensitivity, Switch, SwitchModel, SwitchSense,
-    ThresholdSwitchControl, TransferFunction, TransferOutput, TransmissionLine, Vccs, Vcvs,
-    VoltageSource, VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE,
+    OpAmpModel, Polarity, PoleZero, PoleZeroFind, PoleZeroInput, PowerSink, RegulatorKind,
+    RegulatorModel, Resistor, ResistorTemperatureModel, Sensitivity, Switch, SwitchModel,
+    SwitchSense, ThresholdSwitchControl, TransferFunction, TransferOutput, TransmissionLine, Vccs,
+    Vcvs, VoltageSource, VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE,
     MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
 };
 pub use trace::{

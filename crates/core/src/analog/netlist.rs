@@ -399,6 +399,11 @@
 //! [`crate::analog::Solver::ac_sensitivity_analysis`]: the derivative of the
 //! `.ac` output phasor with respect to each `R`, `C`, `L`, `K` and gain value
 //! and each source's `AC` magnitude and phase, at the held operating point.
+//! `.pz <in+> <in-> <out+> <out-> cur|vol pol|zer|pz` is kept as
+//! [`Circuit::pole_zero`] and run by
+//! [`crate::analog::Solver::pole_zero_analysis`]: the poles and zeros, in
+//! rad/s, of the transfer function from the input port to the output
+//! voltage, linearised at the operating point.
 //! `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` is kept
 //! as [`Circuit::dc_sweep`] and run by [`crate::analog::Solver::dc_analysis`];
 //! `<src>` must be a `V`, `I` or `R` element or `TEMP`, and the second source
@@ -1065,6 +1070,42 @@ pub struct Sensitivity {
     pub output: TransferOutput,
     /// The frequency sweep of the AC form; `None` for the DC form.
     pub ac: Option<AcSweep>,
+}
+
+/// The drive of a `.pz` input port.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoleZeroInput {
+    /// `cur`: a current into the port; the transfer function is
+    /// `v(out+, out-) / i(in)`.
+    Current,
+    /// `vol`: a voltage across the port; the transfer function is
+    /// `v(out+, out-) / v(in+, in-)`.
+    Voltage,
+}
+
+/// What a `.pz` card asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoleZeroFind {
+    /// `pol`: the poles only.
+    Poles,
+    /// `zer`: the zeros only.
+    Zeros,
+    /// `pz`: both.
+    Both,
+}
+
+/// `.pz <in+> <in-> <out+> <out-> cur|vol pol|zer|pz`: ngspice's pole-zero
+/// analysis. The node names are resolved when the analysis runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PoleZero {
+    /// The input port, `(in+, in-)`.
+    pub input: (String, String),
+    /// The output port, `(out+, out-)`.
+    pub output: (String, String),
+    /// How the input port is driven.
+    pub drive: PoleZeroInput,
+    /// Poles, zeros or both.
+    pub find: PoleZeroFind,
 }
 
 /// `V<name> n+ n- <source>`.
@@ -3525,6 +3566,9 @@ pub struct Circuit {
     /// [`crate::analog::Solver::sensitivity_analysis`] for the DC form and
     /// [`crate::analog::Solver::ac_sensitivity_analysis`] for the AC form.
     pub sensitivity: Option<Sensitivity>,
+    /// The deck's `.pz` card, if it has one; see
+    /// [`crate::analog::Solver::pole_zero_analysis`].
+    pub pole_zero: Option<PoleZero>,
     /// The deck's `.temp` (or `.options temp=`) in °C, if it gives one.
     /// `.noise` takes the thermal noise of a resistor without its own
     /// temperature law, and of a switch, at this temperature.
@@ -5287,6 +5331,12 @@ fn parse_lines_at(
                         return Err(ctx.parse_err("only one `.sens` card is supported"));
                     }
                     circuit.sensitivity = Some(parse_sensitivity(&ctx, &tokens[1..])?);
+                }
+                "pz" => {
+                    if circuit.pole_zero.is_some() {
+                        return Err(ctx.parse_err("only one `.pz` card is supported"));
+                    }
+                    circuit.pole_zero = Some(parse_pole_zero(&ctx, &tokens[1..])?);
                 }
                 "model" => parse_model(
                     &mut models,
@@ -7889,6 +7939,31 @@ fn parse_sensitivity(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<Sensitivity, 
         }
         _ => Err(ctx.parse_err(SHAPE)),
     }
+}
+
+/// Parse `.pz <in+> <in-> <out+> <out-> cur|vol pol|zer|pz`.
+fn parse_pole_zero(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<PoleZero, AnalogError> {
+    const SHAPE: &str = "expected `.pz <in+> <in-> <out+> <out-> cur|vol pol|zer|pz`";
+    let [in_p, in_n, out_p, out_n, drive, find] = tokens else {
+        return Err(ctx.parse_err(SHAPE));
+    };
+    let drive = match drive.to_ascii_lowercase().as_str() {
+        "cur" => PoleZeroInput::Current,
+        "vol" => PoleZeroInput::Voltage,
+        _ => return Err(ctx.parse_err(SHAPE)),
+    };
+    let find = match find.to_ascii_lowercase().as_str() {
+        "pol" => PoleZeroFind::Poles,
+        "zer" => PoleZeroFind::Zeros,
+        "pz" => PoleZeroFind::Both,
+        _ => return Err(ctx.parse_err(SHAPE)),
+    };
+    Ok(PoleZero {
+        input: (in_p.to_string(), in_n.to_string()),
+        output: (out_p.to_string(), out_n.to_string()),
+        drive,
+        find,
+    })
 }
 
 /// A `v(<a>[,<b>])` or `i(<a>)` probe: its lower-case letter and its names.

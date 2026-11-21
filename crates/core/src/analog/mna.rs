@@ -75,9 +75,11 @@
 
 use super::behavioural::Control as BehaviouralControl;
 use super::device;
+use super::eigen::{self, PencilError};
 use super::netlist::{
     AnalogError, Bjt, BjtModel, Circuit, DcSweep, DiodeModel, MosChannelChargeModel, Mosfet,
-    NodeRef, SwitchSense, TransferOutput, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
+    NodeRef, PoleZero, PoleZeroFind, PoleZeroInput, SwitchSense, TransferOutput,
+    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
 };
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
@@ -254,6 +256,16 @@ impl AcSensitivityResponse {
             .find(|(entry, _)| entry.eq_ignore_ascii_case(name))
             .map(|(_, values)| values.as_slice())
     }
+}
+
+/// The result of [`Solver::pole_zero_analysis`], ngspice's `.pz` output.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PoleZeroResponse {
+    /// The poles, rad/s, as `re + j·im`; empty for a `zer` card. In
+    /// increasing magnitude, a complex pair negative imaginary part first.
+    pub poles: Vec<Phasor>,
+    /// The finite zeros, rad/s, in the same order; empty for a `pol` card.
+    pub zeros: Vec<Phasor>,
 }
 
 /// The result of [`Solver::noise_analysis`].
@@ -2808,6 +2820,137 @@ impl Solver {
             })
             .collect();
         Ok(SensitivityResponse { entries })
+    }
+
+    /// Run the netlist's own `.pz` card; see [`Solver::pole_zero_analysis`].
+    pub fn pole_zero(&mut self) -> Result<PoleZeroResponse, AnalogError> {
+        let card = self.circuit.pole_zero.clone().ok_or_else(|| {
+            AnalogError::Config(
+                "netlist has no `.pz <in+> <in-> <out+> <out-> cur|vol pol|zer|pz` card"
+                    .to_string(),
+            )
+        })?;
+        self.pole_zero_analysis(&card)
+    }
+
+    /// Pole-zero analysis, as ngspice's `.pz`: the poles and finite zeros,
+    /// in rad/s, of the transfer function from the input port to
+    /// `v(out+) − v(out-)`, with the circuit linearised about the solver's
+    /// present solution (the DC operating point on a fresh solver). A `cur`
+    /// port is driven by a current, a `vol` port by a voltage. Every other
+    /// independent source is at rest (a `V` shorted, an `I` open); a `V`
+    /// source connected straight across the input port is taken out, as
+    /// ngspice takes it out, and the port drive stands in its place.
+    ///
+    /// With `Y(s) = G + s·C` the `.ac` system, the `cur` poles are the roots
+    /// of `det Y`, the `vol` poles those of `Y` bordered by the input
+    /// current and input voltage, and the zeros of either those of `Y`
+    /// bordered by the input current and the output voltage. A mode the
+    /// input cannot excite or the output cannot see is a root of both, and
+    /// is reported as both a pole and a zero, as ngspice reports it. The
+    /// roots are found as generalised eigenvalues (see the `eigen` module),
+    /// not by ngspice's Muller search, so a `jω`-axis zero pair ngspice
+    /// gives up on is found here.
+    ///
+    /// A `T` line or a BJT with `PTF` is refused: its delay `e^{−sTD}` has
+    /// no finite set of poles and zeros.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn pole_zero_analysis(&mut self, card: &PoleZero) -> Result<PoleZeroResponse, AnalogError> {
+        let node = |name: &str| {
+            self.circuit.node(name).ok_or_else(|| {
+                AnalogError::Config(format!("`.pz` node `{name}` is not in the netlist"))
+            })
+        };
+        let (in_p, in_n) = (node(&card.input.0)?, node(&card.input.1)?);
+        let (out_p, out_n) = (node(&card.output.0)?, node(&card.output.1)?);
+        if in_p == in_n || out_p == out_n {
+            return Err(AnalogError::Config(
+                "`.pz` port has the same node on both sides".to_string(),
+            ));
+        }
+        let dim = self.dim();
+        let (mut g, mut c, couplings) = self.linearised(|solver| {
+            let couplings = solver.delayed_couplings();
+            let (g, c) = solver.ac_matrices(&couplings)?;
+            Ok((g, c, couplings))
+        })?;
+        if !couplings.is_empty() {
+            return Err(AnalogError::Config(
+                "`.pz` cannot take a `T` line or a BJT with `PTF`: a delay `e^{-sTD}` has no \
+                 finite set of poles and zeros"
+                    .to_string(),
+            ));
+        }
+        for (index, source) in self.circuit.voltage_sources.iter().enumerate() {
+            if (source.p, source.n) == (in_p, in_n) || (source.p, source.n) == (in_n, in_p) {
+                // An open branch: its row says only that its current is zero.
+                let k = self.nodes + index;
+                for other in 0..dim {
+                    for cell in [other * dim + k, k * dim + other] {
+                        g[cell] = 0.0;
+                        c[cell] = 0.0;
+                    }
+                }
+                g[k * dim + k] = 1.0;
+            }
+        }
+        // `Y` with a last column taking 1 A into `in+` out of `in-`, and a
+        // last row reading `v(a) − v(b)`.
+        let bordered = |(a, b): (NodeRef, NodeRef)| {
+            let n = dim + 1;
+            let (mut a0, mut a1) = (vec![0.0; n * n], vec![0.0; n * n]);
+            for row in 0..dim {
+                a0[row * n..row * n + dim].copy_from_slice(&g[row * dim..(row + 1) * dim]);
+                a1[row * n..row * n + dim].copy_from_slice(&c[row * dim..(row + 1) * dim]);
+            }
+            for (node, sign) in [(in_p, 1.0), (in_n, -1.0)] {
+                if let Some(index) = node {
+                    a0[index * n + dim] = sign;
+                }
+            }
+            for (node, sign) in [(a, 1.0), (b, -1.0)] {
+                if let Some(index) = node {
+                    a0[dim * n + index] = sign;
+                }
+            }
+            (a0, a1, n)
+        };
+        let roots = |(a0, a1, n): (Vec<f64>, Vec<f64>, usize), what: &str| {
+            let mut roots: Vec<Phasor> = eigen::pencil_roots(&a0, &a1, n)
+                .map_err(|error| {
+                    AnalogError::Config(match error {
+                        PencilError::Singular => format!(
+                            "`.pz` has no {what}: the determinant is zero at every frequency \
+                             (the output does not depend on the input, or the input port is \
+                             shorted)"
+                        ),
+                        PencilError::NoConvergence => {
+                            format!("`.pz` {what}: the QR iteration did not converge")
+                        }
+                    })
+                })?
+                .into_iter()
+                .map(|(re, im)| Phasor { re, im })
+                .collect();
+            roots.sort_by(|a, b| {
+                a.magnitude()
+                    .total_cmp(&b.magnitude())
+                    .then(a.im.total_cmp(&b.im))
+            });
+            Ok::<_, AnalogError>(roots)
+        };
+        let poles = match (card.find, card.drive) {
+            (PoleZeroFind::Zeros, _) => Vec::new(),
+            (_, PoleZeroInput::Current) => roots((g.clone(), c.clone(), dim), "poles")?,
+            (_, PoleZeroInput::Voltage) => roots(bordered((in_p, in_n)), "poles")?,
+        };
+        let zeros = match card.find {
+            PoleZeroFind::Poles => Vec::new(),
+            _ => roots(bordered((out_p, out_n)), "zeros")?,
+        };
+        Ok(PoleZeroResponse { poles, zeros })
     }
 
     /// Run the netlist's own `.sens ... ac` card; see
