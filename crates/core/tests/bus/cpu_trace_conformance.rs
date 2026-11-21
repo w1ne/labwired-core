@@ -22,7 +22,7 @@
 
 use crate::src_roots;
 use labwired_core::cpu::{
-    Aarch64, Avr, CortexM, Mips32, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7,
+    Aarch64, Avr, CortexM, Mips32, Msp430, Pic16, Pic18, Pic24, RiscV, RiscV64, Rx, XtensaLx7,
 };
 use labwired_core::{
     trace_sp_pc, Bus, Cpu, DmaRequest, SimResult, SimulationConfig, SimulationObserver,
@@ -172,8 +172,11 @@ fn cores() -> Vec<CoreUnderTest> {
     vec![
         #[cfg(feature = "qemu-arm-system")]
         CoreUnderTest {
-            name: "CortexA7System",
+            // `CortexA7System` is a public alias; the sole `Cpu` impl is
+            // `ArmSystem`. Exercise its ARM7TDMI profile, used by LPC2294.
+            name: "ArmSystem",
             entry: 0x100,
+            // `mov r0, #1` ×4 (ARM state, 4 bytes each).
             program: std::iter::repeat_n(0xe3a00001u32, 4)
                 .flat_map(u32::to_le_bytes)
                 .collect(),
@@ -181,7 +184,10 @@ fn cores() -> Vec<CoreUnderTest> {
             opcode_bytes: 4,
             sp: 0x8000,
             build: |_entry, _program| {
-                let mut cpu = labwired_core::cpu::CortexA7System::new().unwrap();
+                let mut cpu = labwired_core::cpu::ArmSystem::with_model(
+                    labwired_core::cpu::ArmModel::Arm7Tdmi,
+                )
+                .unwrap();
                 cpu.executable_range(0, 0x10000).unwrap();
                 cpu.set_sp(0x8000);
                 Box::new(cpu)
@@ -388,6 +394,21 @@ fn cores() -> Vec<CoreUnderTest> {
             },
         },
         CoreUnderTest {
+            name: "Msp430",
+            entry: 0x100,
+            // `add #1, r5` ×4 (`15 53`; the constant generator supplies the
+            // immediate, so the instruction is one word).
+            program: std::iter::repeat_n([0x15u8, 0x53], 4).flatten().collect(),
+            step_len: 2,
+            opcode_bytes: 2,
+            sp: 0x8000,
+            build: |_entry, _program| {
+                let mut cpu = Msp430::new();
+                cpu.set_sp(0x8000);
+                Box::new(cpu)
+            },
+        },
+        CoreUnderTest {
             name: "XtensaLx7",
             entry: 0x100,
             // `movi.n a2, 1` ×4 (narrow, 2 bytes each).
@@ -549,7 +570,7 @@ fn every_cpu_core_is_covered_by_this_file() {
                     {
                         continue;
                     }
-                    if name == "CortexA7System" && !cfg!(feature = "qemu-arm-system") {
+                    if name == "ArmSystem" && !cfg!(feature = "qemu-arm-system") {
                         continue;
                     }
                     found.push(name.to_string());

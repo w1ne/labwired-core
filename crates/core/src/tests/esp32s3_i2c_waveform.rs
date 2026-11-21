@@ -63,7 +63,9 @@ mod esp32s3_i2c_waveform_tests {
         fn write(&mut self, _data: u8) {}
     }
 
-    fn machine() -> Machine<crate::cpu::CortexM> {
+    fn machine_with_route(
+        route: Option<&std::collections::BTreeMap<String, String>>,
+    ) -> Machine<crate::cpu::CortexM> {
         let mut bus = crate::bus::SystemBus::new();
         let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
         bus.add_peripheral(
@@ -74,7 +76,8 @@ mod esp32s3_i2c_waveform_tests {
             Box::new(Esp32s3Gpio::new()),
         );
         bus.add_peripheral("i2c0", I2C0_BASE, 0x1000, None, Box::new(Esp32s3I2c::new()));
-        bus.attach_i2c_slave("i2c0", Box::new(Sink)).unwrap();
+        bus.attach_i2c_slave_with_route("i2c0", Box::new(Sink), route)
+            .unwrap();
         bus.wire_esp32s3_i2c_pads();
 
         let mut machine = Machine::new(cpu, bus);
@@ -88,6 +91,10 @@ mod esp32s3_i2c_waveform_tests {
         machine.bus.write_u8(RAM_BASE + 1023, 0xE5).unwrap();
         machine.cpu.pc = RAM_BASE as u32;
         machine
+    }
+
+    fn machine() -> Machine<crate::cpu::CortexM> {
+        machine_with_route(None)
     }
 
     /// Route the two pads through the output matrix and program a real SCL
@@ -243,6 +250,46 @@ mod esp32s3_i2c_waveform_tests {
             "the bytes must survive even with no history to lay the waveform in",
         );
     }
+    #[test]
+    fn a_manifest_sensor_nacks_on_wrong_pads_and_acks_only_when_routed() {
+        // This reproduces the pinned HeyPCB ESP32-S3 BME280 wrong-pin proof.
+        // A named I2C0 attachment alone must never certify physical wiring.
+        let route = [
+            ("scl".to_string(), "GPIO9".to_string()),
+            ("sda".to_string(), "GPIO8".to_string()),
+        ]
+        .into_iter()
+        .collect();
+        let mut machine = machine_with_route(Some(&route));
+        let raw = I2C0_BASE + 0x20;
+        let clr = I2C0_BASE + 0x24;
+        let nack = crate::peripherals::esp32s3::i2c::INT_NACK;
+
+        // Negative: no matrix route. The slave must not answer even when the
+        // manifest says it is on the controller.
+        write_transfer(&mut machine, &[0x01]);
+        assert_ne!(machine.bus.read_u32(raw).unwrap() & nack, 0);
+
+        // Positive: real SCL and SDA both routed to the original board pads.
+        configure(&mut machine);
+        machine.bus.write_u32(clr, nack).unwrap();
+        write_transfer(&mut machine, &[0x02]);
+        assert_eq!(machine.bus.read_u32(raw).unwrap() & nack, 0);
+
+        // Negative: moving just SDA to a wrong pad must NACK, not report the
+        // same sensor read as a genuine correctly wired board.
+        machine.bus.write_u32(clr, nack).unwrap();
+        machine
+            .bus
+            .write_u32(
+                GPIO_BASE + FUNC0_OUT_SEL_CFG + u64::from(SDA_PIN) * 4,
+                0x100, // disconnected output signal
+            )
+            .unwrap();
+        write_transfer(&mut machine, &[0x03]);
+        assert_ne!(machine.bus.read_u32(raw).unwrap() & nack, 0);
+    }
+
     /// The bus a REAL S3 lab is built from must have its I²C pads routed.
     ///
     /// Every other test in this file hand-builds a bus and calls

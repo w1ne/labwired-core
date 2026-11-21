@@ -519,8 +519,8 @@ const FIFO_CR2_LDMA_TX: u16 = 1 << 14;
 /// CR2.RXDMAEN / TXDMAEN (bits 0/1 on the classic and FIFO ports alike).
 const CR2_RXDMAEN: u16 = 1 << 0;
 const CR2_TXDMAEN: u16 = 1 << 1;
-const CR2_RXNEIE: u16 = 1 << 6;
 const CR2_TXEIE: u16 = 1 << 7;
+const CR2_RXNEIE: u16 = 1 << 6;
 /// SR.FRLVL[1:0] (bits 10:9) and SR.FTLVL[1:0] (bits 12:11).
 const FIFO_SR_FRLVL_SHIFT: u16 = 9;
 const FIFO_SR_FTLVL_SHIFT: u16 = 11;
@@ -1852,6 +1852,17 @@ pub struct Spi {
     /// Last sampled GPIO chip-select state for each attached device.
     #[serde(skip)]
     selected_devices: Vec<bool>,
+    /// STM32 layouts: each attached device's chip select as last read off its
+    /// `cs_pin` GPIO. `Some(true)` = driven low (selected), `Some(false)` =
+    /// driven high (released, so the device is skipped), `None` = the label
+    /// does not resolve to a GPIO output (hardware NSS, pad not configured
+    /// yet, no such pin). `None` keeps the old pass-through: the device sees
+    /// every frame and gets no CS edges, so a board that never wires a GPIO
+    /// CS behaves exactly as before. Refreshed by the bus after every write to
+    /// a GPIO port that owns one of these pins
+    /// (`bus/spi_cs.rs`).
+    #[serde(skip)]
+    stm32_cs: Vec<Option<bool>>,
 
     // ── World `gpio_net` mode (see `spi_net`) ───────────────────────────────
     /// Slave shift state between net edges.
@@ -2034,6 +2045,50 @@ impl Spi {
         }
         self.attached_devices.push(device);
         self.selected_devices.push(false);
+        self.stm32_cs.push(None);
+    }
+
+    /// `true` when this controller routes GPIO chip-select edges to its
+    /// devices: an STM32 register file with at least one device naming a
+    /// `cs_pin`. The nRF SPIM samples its CS pins itself
+    /// (`sync_nrf52_gpio_cs`); the Kinetis DSPI and EFR32 USART are not
+    /// covered here.
+    fn routes_gpio_cs(&self) -> bool {
+        matches!(self.regs, SpiRegs::Stm32(_) | SpiRegs::Stm32H5(_))
+            && self.attached_devices.iter().any(|d| !d.cs_pin().is_empty())
+    }
+
+    /// Re-read every device's CS GPIO and deliver the edges that moved:
+    /// `cs_select` when it goes low, `cs_release` when it leaves low (driven
+    /// high, or the pad stops being a GPIO output). A declarative device
+    /// closes its frame on CS↑, so the release edge is not cosmetic.
+    fn sync_stm32_gpio_cs(&mut self, bus: &dyn Bus) {
+        if !matches!(self.regs, SpiRegs::Stm32(_) | SpiRegs::Stm32H5(_)) {
+            return;
+        }
+        // `take_spi_devices` empties the device list behind our back.
+        self.stm32_cs.resize(self.attached_devices.len(), None);
+        for (index, device) in self.attached_devices.iter_mut().enumerate() {
+            let pin = device.cs_pin();
+            if pin.is_empty() {
+                continue;
+            }
+            let next = bus.read_gpio_output_by_label(pin).map(|high| !high);
+            let was_selected = self.stm32_cs[index] == Some(true);
+            let selected = next == Some(true);
+            if selected && !was_selected {
+                device.cs_select();
+            } else if was_selected && !selected {
+                device.cs_release();
+            }
+            self.stm32_cs[index] = next;
+        }
+    }
+
+    /// Whether device `index` takes part in the frame on the wire: only a CS
+    /// GPIO actually driven high takes it off the bus.
+    fn stm32_device_on_bus(stm32_cs: &[Option<bool>], index: usize) -> bool {
+        stm32_cs.get(index).copied().flatten() != Some(false)
     }
 
     fn is_nrf(&self) -> bool {
@@ -3136,7 +3191,10 @@ impl Spi {
         for lane in (0..frame_bytes).rev() {
             let mosi = ((word >> (8 * lane)) & 0xFF) as u8;
             let mut miso: u8 = 0;
-            for dev in &mut self.attached_devices {
+            for (index, dev) in self.attached_devices.iter_mut().enumerate() {
+                if !Self::stm32_device_on_bus(&self.stm32_cs, index) {
+                    continue;
+                }
                 let r = dev.transfer(mosi);
                 if r != 0 {
                     miso = r;
@@ -3735,8 +3793,12 @@ impl Spi {
                 let (prev_mosi, prev_miso) = self.edge_hold;
                 let slave_rx = edge_slave_capture(&t.wire(), mosi, prev_mosi, s_cpol, s_cpha);
                 let mut resp = 0u8;
-                for dev in &mut self.attached_devices {
-                    // Last device wins; 0x00 is a valid MISO byte (MAX31855 LSB).
+                for (index, dev) in self.attached_devices.iter_mut().enumerate() {
+                    if !Self::stm32_device_on_bus(&self.stm32_cs, index) {
+                        continue;
+                    }
+                    // Last selected device wins; 0x00 is a valid MISO byte
+                    // (MAX31855 LSB).
                     resp = dev.transfer((slave_rx & 0xFF) as u8);
                 }
                 let (halves, master_rx) =
@@ -3751,9 +3813,14 @@ impl Spi {
             _ => {
                 let miso = if !self.attached_devices.is_empty() {
                     let mosi_byte = (mosi & 0xFF) as u8;
-                    // Last device wins; 0x00 is a valid MISO byte (MAX31855 LSB).
+                    // Last selected device wins; 0x00 is a valid MISO byte
+                    // (MAX31855 LSB). A device whose CS GPIO is high is off
+                    // the bus and neither sees the byte nor drives MISO.
                     let mut miso_byte = 0u8;
-                    for dev in &mut self.attached_devices {
+                    for (index, dev) in self.attached_devices.iter_mut().enumerate() {
+                        if !Self::stm32_device_on_bus(&self.stm32_cs, index) {
+                            continue;
+                        }
                         miso_byte = dev.transfer(mosi_byte);
                     }
                     miso_byte as u16
@@ -3880,9 +3947,11 @@ impl Spi {
                 // Classic F1/F4 port: no FIFO, RXNE on every frame.
                 r.sr |= 0x0001;
                 self.stm32_rxne.set(true);
-            }
-            if net_rx.is_some() && self.net_master_rx_irq() {
-                *irq = true;
+                // RXNEIE: the SPI line is TXE&TXEIE | RXNE&RXNEIE | errors
+                // (RM0008 §25.3.11), whatever drives MISO.
+                if r.cr2 & CR2_RXNEIE != 0 {
+                    *irq = true;
+                }
             }
         } else {
             // FIFO port: the frame enters the RX FIFO and RXNE follows the
@@ -3900,7 +3969,8 @@ impl Spi {
             }
             if driven {
                 self.fifo_rx_push(word);
-                if net_rx.is_some() && self.net_master_rx_irq() && self.stm32_rxne.get() {
+                let rxneie = matches!(&self.regs, SpiRegs::Stm32(r) if r.cr2 & CR2_RXNEIE != 0);
+                if rxneie && self.stm32_rxne.get() {
                     *irq = true;
                 }
             }
@@ -4018,6 +4088,52 @@ impl Spi {
         }
     }
 
+    /// Classic/FIFO STM32 SPI's configured IRQ is a live status-enable
+    /// conjunction, not a one-cycle frame-completion pulse. The modelled
+    /// sources are TXE/TXEIE and RXNE/RXNEIE; error status producers remain
+    /// outside this bounded profile.
+    /// nRF52 / nRF54L SPIM: any event set whose INTEN bit is set (the level
+    /// `tick` reports). `None` on other register maps.
+    fn nrf_irq_pending(&self) -> Option<bool> {
+        let SpiRegs::Nrf52(r) = &self.regs else {
+            return None;
+        };
+        let (stopped, end, endrx, endtx, started) = if r.map == NrfSpimMap::Nrf54l {
+            (
+                NRF54L_INTEN_STOPPED,
+                NRF54L_INTEN_END,
+                NRF54L_INTEN_DMA_RX_END,
+                NRF54L_INTEN_DMA_TX_END,
+                NRF54L_INTEN_STARTED,
+            )
+        } else {
+            (
+                INTEN_STOPPED,
+                INTEN_END,
+                INTEN_ENDRX,
+                INTEN_ENDTX,
+                nrf_net::INTEN_STARTED,
+            )
+        };
+        Some(
+            (r.events_stopped != 0 && r.inten & stopped != 0)
+                || (r.events_end != 0 && r.inten & end != 0)
+                || (r.events_endrx != 0 && r.inten & endrx != 0)
+                || (r.events_endtx != 0 && r.inten & endtx != 0)
+                || (r.events_started != 0 && r.inten & started != 0),
+        )
+    }
+
+    fn stm32_irq_pending(&self) -> Option<bool> {
+        let SpiRegs::Stm32(r) = &self.regs else {
+            return None;
+        };
+        Some(
+            (r.cr2 & CR2_TXEIE != 0 && self.stm32_txe())
+                || (r.cr2 & CR2_RXNEIE != 0 && self.stm32_rxne.get()),
+        )
+    }
+
     /// SR with the receive-queue-dependent flags applied: RXP/DXP are live
     /// over the queue, everything else is the stored event register. CTSIZE
     /// occupies SR[31:16] on the full H5/U5 personality; the limited U575
@@ -4085,13 +4201,7 @@ impl Spi {
 
 impl crate::Peripheral for Spi {
     fn irq_line_level(&self) -> Option<bool> {
-        let SpiRegs::Stm32(regs) = &self.regs else {
-            return None;
-        };
-        Some(
-            (regs.cr2 & CR2_TXEIE != 0 && self.stm32_txe())
-                || (regs.cr2 & CR2_RXNEIE != 0 && self.stm32_rxne.get()),
-        )
+        self.stm32_irq_pending().or_else(|| self.nrf_irq_pending())
     }
 
     fn reads_can_deassert_irq(&self) -> bool {
@@ -4106,6 +4216,21 @@ impl crate::Peripheral for Spi {
         &mut self,
     ) -> Option<&mut Vec<Box<dyn crate::peripherals::device::SpiDevice>>> {
         Some(&mut self.attached_devices)
+    }
+
+    fn gpio_chip_select_pins(&self) -> Vec<String> {
+        if !self.routes_gpio_cs() {
+            return Vec::new();
+        }
+        self.attached_devices
+            .iter()
+            .map(|d| d.cs_pin().to_string())
+            .filter(|p| !p.is_empty())
+            .collect()
+    }
+
+    fn sync_gpio_chip_selects(&mut self, bus: &dyn Bus) {
+        self.sync_stm32_gpio_cs(bus);
     }
 
     /// This controller hosts off-chip SPI devices, so the machine's central
@@ -4655,10 +4780,16 @@ impl crate::Peripheral for Spi {
             return self.nrf_net_on_event(sched.now(), bus);
         }
         if event_token == SPI_NRF52_EASYDMA_TOKEN {
-            if self.nrf52_pending_start {
+            let ran = self.nrf52_pending_start;
+            if ran {
                 self.do_nrf52_easydma(bus);
             }
-            return crate::sched::EventResult::default();
+            // END/ENDRX/ENDTX land here, outside any MMIO write, so the event
+            // path pends the level line itself.
+            return crate::sched::EventResult {
+                raise_own_irq: ran && self.nrf_irq_pending() == Some(true),
+                ..Default::default()
+            };
         }
         if event_token == SPI_NET_IRQ_TOKEN {
             self.net_irq_scheduled = false;
@@ -5049,7 +5180,7 @@ impl Spi {
             return;
         };
 
-        // ── Hardware D/C and hardware chip select (nRF54L only) ─────────────
+        // ── Hardware D/C and hardware chip select (nRF54L, nRF52 SPIM3) ─────
         //
         // The nRF54L SPIM drives the display's data/command line ITSELF from
         // `PSEL.DCX`, holding it LOW for the first `DCXCNT` bytes of the
@@ -5072,16 +5203,48 @@ impl Spi {
         // the previous transfer left it at, which is LOW after any command —
         // so a pixel burst would be fed to the panel as commands, and only
         // after a transfer that happened to end high would it ever look right.
+        //
+        // The nRF52840 SPIM3 has the same two outputs (PS v1.x §6.25.7:
+        // PSEL.CSN, CSNPOL, PSELDCX, DCXCNT), but its CSN is one pad, not the
+        // whole bus: only a device whose `cs_pin` names the `PSEL.CSN` pad is
+        // selected, and only when the driven level (CSNPOL) is its active
+        // level. Other devices keep their GPIO chip select. On SPIM3, DCXCNT
+        // 0xF means every byte is a command byte.
         let (dcx_bytes, dcx_live, hw_csn) = match &self.regs {
             SpiRegs::Nrf52(r) if r.map == NrfSpimMap::Nrf54l => (
                 r.dcxcnt as usize,
                 r.psel_dcx & 0x8000_0000 == 0,
-                r.psel_csn & 0x8000_0000 == 0,
+                if r.psel_csn & 0x8000_0000 == 0 {
+                    u64::MAX
+                } else {
+                    0
+                },
             ),
-            _ => (0, false, false),
+            SpiRegs::Nrf52(r) if self.nrf52_hw_select => {
+                let dcx_bytes = match r.dcxcnt & 0xF {
+                    0xF => usize::MAX,
+                    n => n as usize,
+                };
+                let mut hw_csn = 0u64;
+                if r.psel_csn & 0x8000_0000 == 0 {
+                    let pad = r.psel_csn & 0x3F;
+                    let level = r.csnpol & 1 != 0;
+                    for (index, dev) in self.attached_devices.iter().enumerate().take(64) {
+                        if !self.selected_devices[index]
+                            && nrf_pad_of_label(dev.cs_pin()) == Some(pad)
+                            && dev.cs_selected_at(level)
+                        {
+                            hw_csn |= 1 << index;
+                        }
+                    }
+                }
+                (dcx_bytes, r.psel_dcx & 0x8000_0000 == 0, hw_csn)
+            }
+            _ => (0, false, 0),
         };
-        if hw_csn {
-            for dev in self.attached_devices.iter_mut() {
+        let hw_selected = |index: usize| index < 64 && hw_csn & (1 << index) != 0;
+        for (index, dev) in self.attached_devices.iter_mut().enumerate() {
+            if hw_selected(index) {
                 dev.cs_select();
             }
         }
@@ -5128,7 +5291,10 @@ impl Spi {
                 // Hardware D/C: LOW for the first DCXCNT bytes, HIGH after.
                 let dc_high = i >= dcx_bytes;
                 for (index, dev) in self.attached_devices.iter_mut().enumerate() {
-                    if !hw_csn && !dev.cs_pin().is_empty() && !self.selected_devices[index] {
+                    if !hw_selected(index)
+                        && !dev.cs_pin().is_empty()
+                        && !self.selected_devices[index]
+                    {
                         continue;
                     }
                     if dcx_live {
@@ -5154,10 +5320,10 @@ impl Spi {
             }
         }
 
-        if hw_csn {
-            // CS rises at the end of the transfer. A panel flushes its pending
-            // command on the rising edge, so this is not cosmetic.
-            for dev in self.attached_devices.iter_mut() {
+        // CS rises at the end of the transfer. A panel flushes its pending
+        // command on the rising edge, so this is not cosmetic.
+        for (index, dev) in self.attached_devices.iter_mut().enumerate() {
+            if hw_selected(index) {
                 dev.cs_release();
             }
         }
@@ -5180,6 +5346,15 @@ impl Spi {
         // so this is where the burst becomes narratable.
         self.nrf52_wire_flush(&mosi_wire);
     }
+}
+
+/// The flat `port * 32 + pin` pad an nRF pin label names ("P0.20", "p1_03"),
+/// in the `PSEL` encoding (`PSEL.PORT` at bit 5). `None` for any other label.
+fn nrf_pad_of_label(label: &str) -> Option<u32> {
+    let rest = label.strip_prefix(['P', 'p'])?;
+    let (port, pin) = rest.split_once(['.', '_'])?;
+    let (port, pin) = (port.parse::<u32>().ok()?, pin.parse::<u32>().ok()?);
+    (port < 2 && pin < 32).then_some(port << 5 | pin)
 }
 
 #[path = "spi_net.rs"]

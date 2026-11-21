@@ -47,8 +47,14 @@
 //! * Edges are published with their exact cycle (`PadLines::set_line_at`),
 //!   and a scheduler wake lands on each one so live pad reads follow too.
 //!
+//! # Interrupt
+//!
+//! The instance's NVIC line is a level: high while any event is set and its
+//! INTEN bit is on (bit = (event offset - 0x100) / 4, PS §6.17.5 INTEN), low
+//! once firmware clears the event or the INTEN bit.
+//!
 //! Not modelled: multi-step playback timing (REFRESH/ENDDELAY/LOOP; the events
-//! still fire at once, as before), SHORTS, interrupts, and NEXTSTEP stepping.
+//! still fire at once, as before), SHORTS, and NEXTSTEP stepping.
 //!
 //! # EVENTS write semantics
 //!
@@ -411,12 +417,30 @@ impl Nrf52Pwm {
 }
 
 impl Peripheral for Nrf52Pwm {
+    /// `PSEL.OUT[n]` names the pad; `TASKS_SEQSTART`/`TASKS_STOP` take and
+    /// release it.
+    fn claims_pads(&self) -> bool {
+        true
+    }
+
     /// Dual-path EasyDMA: scheduler delay-0 (`on_event`) under Machine +
     /// walk-free + batched tick interval, and `tick_with_bus` for bare-bus
     /// unit tests. No time-driven walk work — SEQSTART completes on the next
     /// cycle via the scheduler under `rec_tick=512`, not at the bus-tick quantum.
     fn needs_legacy_walk(&self) -> bool {
         false
+    }
+
+    // Nordic event interrupt bits correspond to (event offset - 0x100) / 4.
+    fn irq_line_level(&self) -> Option<bool> {
+        let events = (self.events_stopped << 1)
+            | (self.events_seqstarted[0] << 2)
+            | (self.events_seqstarted[1] << 3)
+            | (self.events_seqend[0] << 4)
+            | (self.events_seqend[1] << 5)
+            | (self.events_pwmperiodend << 6)
+            | (self.events_loopsdone << 7);
+        Some(events & self.inten != 0)
     }
 
     fn read(&self, _offset: u64) -> SimResult<u8> {
@@ -569,8 +593,13 @@ impl Peripheral for Nrf52Pwm {
         self.clock = Some(clock);
     }
 
+    /// `0` means neither the chip nor the board declares a clock (see
+    /// `SystemBus::cpu_hz`); keep the 64 MHz nRF52 default then. Storing it as
+    /// 1 Hz made every period 0 cycles, so no waveform ever loaded.
     fn attach_cpu_hz(&mut self, hz: u64) {
-        self.cpu_hz = hz.max(1);
+        if hz > 0 {
+            self.cpu_hz = hz;
+        }
     }
 
     fn sync_to(&mut self, now_cycle: u64) {
@@ -604,7 +633,8 @@ impl Peripheral for Nrf52Pwm {
             return crate::sched::EventResult::default();
         }
         let now = sched.now().max(self.anchor);
-        if self.pending != PENDING_NONE {
+        let played = self.pending != PENDING_NONE;
+        if played {
             self.do_easydma_seq(bus, now);
         }
         self.advance_to(now);
@@ -612,6 +642,9 @@ impl Peripheral for Nrf52Pwm {
         self.armed_target = self.wake_target();
         crate::sched::EventResult {
             reschedule_delay: self.armed_target.map(|t| t - now),
+            // The sequence events land here, outside any MMIO write, so the
+            // event path pends the level line itself.
+            raise_own_irq: played && self.irq_line_level() == Some(true),
             ..Default::default()
         }
     }
@@ -853,6 +886,31 @@ mod tests {
     }
 
     #[test]
+    fn irq_line_follows_enabled_events() {
+        let mut p = Nrf52Pwm::new();
+        let mut bus = FlatRam::new();
+        let base: u64 = 0x2000_0000;
+        bus.write_slice(base, &[0x10, 0x80]);
+        p.write_u32(OFF_ENABLE, 1).unwrap();
+        p.write_u32(OFF_SEQ_FIRST, base as u32).unwrap();
+        p.write_u32(OFF_SEQ_FIRST + 4, 1).unwrap();
+        p.write_u32(OFF_TASKS_SEQSTART0, 1).unwrap();
+        p.tick_with_bus(&mut bus);
+        assert_eq!(p.irq_line_level(), Some(false), "events set, INTEN off");
+
+        p.write_u32(OFF_INTENSET, 1 << 4).unwrap(); // SEQEND0
+        assert_eq!(p.irq_line_level(), Some(true), "SEQEND0 enabled");
+        p.write_u32(OFF_EVENTS_SEQEND0, 0).unwrap();
+        assert_eq!(p.irq_line_level(), Some(false), "SEQEND0 cleared");
+
+        p.write_u32(OFF_INTENSET, 1 << 1).unwrap(); // STOPPED
+        p.write_u32(OFF_TASKS_STOP, 1).unwrap();
+        assert_eq!(p.irq_line_level(), Some(true), "STOPPED enabled");
+        p.write_u32(OFF_INTENCLR, 1 << 1).unwrap();
+        assert_eq!(p.irq_line_level(), Some(false), "STOPPED masked");
+    }
+
+    #[test]
     fn seqstart1_uses_seq1_block() {
         let mut p = Nrf52Pwm::new();
         let mut bus = FlatRam::new();
@@ -895,6 +953,17 @@ mod tests {
         assert!(p.take_scheduled_events().is_empty());
         p.write_u32(OFF_TASKS_SEQSTART0, 1).unwrap();
         assert_eq!(p.take_scheduled_events(), vec![(0, 1)]);
+    }
+
+    #[test]
+    fn undeclared_cpu_hz_keeps_the_default_clock() {
+        // A chip YAML without `cpu_hz:` hands the bus's 0 to every device.
+        let mut pwm = Nrf52Pwm::new();
+        pwm.attach_cpu_hz(0);
+        // COUNTERTOP 400 at 16 MHz on the 64 MHz default core = 1600 cycles.
+        assert_eq!(pwm.ticks_to_cycles(400), 1600);
+        pwm.attach_cpu_hz(32_000_000);
+        assert_eq!(pwm.ticks_to_cycles(400), 800);
     }
 
     #[test]

@@ -94,6 +94,13 @@ use crate::{CycleClock, MmioAccessClass, Peripheral, PeripheralTickResult, SimRe
 
 const SYSTIMER_CLOCK_HZ: u64 = 16_000_000;
 
+fn gcd(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    a
+}
+
 /// SYSTIMER interrupt-matrix source ID for TARGET0 (per esp32s3-pac
 /// `Interrupt::SYSTIMER_TARGET0 = 57`).  TARGET1/2 follow at +1/+2.
 const SYSTIMER_TARGET0_SOURCE: u32 = 57;
@@ -173,8 +180,10 @@ pub struct Systimer {
     unit0: UnitState,
     unit1: UnitState,
     cpu_clock_hz: u32,
-    /// Accumulated CPU cycles since last counter update; flushed when ≥ 1
-    /// SYSTIMER tick worth of CPU cycles have elapsed.
+    /// CPU cycles since the last counter update not yet worth one SYSTIMER
+    /// tick, scaled by the tick-ratio numerator (see [`Self::tick_ratio`]).
+    /// For a core clock that is a whole multiple of 16 MHz (C3 160, S3 240)
+    /// the numerator is 1, so this is a plain cycle count.
     cpu_cycle_accum: u64,
     /// Three alarm comparators. Each may be configured to compare against
     /// UNIT0 or UNIT1 via TARGETx_CONF bit 31.
@@ -213,6 +222,41 @@ pub struct Systimer {
     /// re-attached by the bus on restore.
     #[serde(skip)]
     clock: Option<CycleClock>,
+    /// Register layout the firmware sees. Chip identity, fixed at
+    /// construction like `scheduler_enabled`, and kept across a restore.
+    #[serde(skip)]
+    layout: SystimerLayout,
+    /// Counter rate in Hz (S3/C3: 16 MHz XTAL-derived; S2: 80 MHz APB).
+    #[serde(skip, default = "default_tick_hz")]
+    tick_hz: u64,
+    /// ESP32-S2 `SYSTIMER_CONF` and `SYSTIMER_STEP` as written. The S2
+    /// counter always runs, so CONF only gates the register clock (CLK_EN),
+    /// which this model does not gate.
+    #[serde(skip)]
+    s2_conf: u32,
+    #[serde(skip, default = "default_s2_step")]
+    s2_step: u32,
+}
+
+fn default_tick_hz() -> u64 {
+    SYSTIMER_CLOCK_HZ
+}
+
+/// `SYSTIMER_STEP` reset: XTAL_STEP = 80 (bits 9:0), PLL_STEP = 1 (bits 19:10).
+fn default_s2_step() -> u32 {
+    80 | (1 << 10)
+}
+
+/// Which SYSTIMER register map a [`Systimer`] decodes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SystimerLayout {
+    /// ESP32-S3 / C3: two units, UNITx_OP snapshot, COMPx_LOAD commit.
+    #[default]
+    S3,
+    /// ESP32-S2 (`soc/esp32s2/include/soc/systimer_reg.h`): one 64-bit
+    /// counter, UPDATE/VALUE snapshot at 0x38..0x40, targets take effect on
+    /// write (no COMPx_LOAD), WORK_EN in each TARGETx_CONF bit 31.
+    S2,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -281,6 +325,10 @@ impl SystimerSnapshotV2 {
             value_valid: [true; 2],
             scheduler_enabled: true,
             clock: None,
+            layout: SystimerLayout::S3,
+            tick_hz: SYSTIMER_CLOCK_HZ,
+            s2_conf: 0,
+            s2_step: default_s2_step(),
         }
     }
 }
@@ -301,6 +349,10 @@ impl SystimerSnapshotV1 {
             value_valid: [true; 2],
             scheduler_enabled: true,
             clock: None,
+            layout: SystimerLayout::S3,
+            tick_hz: SYSTIMER_CLOCK_HZ,
+            s2_conf: 0,
+            s2_step: default_s2_step(),
         }
     }
 }
@@ -341,6 +393,10 @@ impl Systimer {
             last_tick: 0,
             scheduler_enabled: true,
             clock: None,
+            layout: SystimerLayout::S3,
+            tick_hz: SYSTIMER_CLOCK_HZ,
+            s2_conf: 0,
+            s2_step: default_s2_step(),
         }
     }
 
@@ -351,6 +407,17 @@ impl Systimer {
     pub fn new_with_source_legacy_tick(cpu_clock_hz: u32, target0_source: u32) -> Self {
         let mut timer = Self::new_with_source(cpu_clock_hz, target0_source);
         timer.scheduler_enabled = false;
+        timer
+    }
+
+    /// ESP32-S2 SYSTIMER: the S2 register map over the same counter and
+    /// comparator engine. The counter ticks at 80 MHz (`SYSTIMER_LL_TICKS_PER_US`
+    /// = 80, PLL_STEP = 1 on the 80 MHz APB clock) and the comparators raise
+    /// interrupt-matrix sources 71/72/73 (`ETS_SYSTIMER_TARGETn_INTR_SOURCE`).
+    pub fn new_esp32s2(cpu_clock_hz: u32) -> Self {
+        let mut timer = Self::new_with_source(cpu_clock_hz, 71);
+        timer.layout = SystimerLayout::S2;
+        timer.tick_hz = 80_000_000;
         timer
     }
 
@@ -398,8 +465,9 @@ impl Systimer {
             if let Some(clock) = &self.clock {
                 let now = clock.now();
                 if now > self.last_tick {
-                    let pending = self.cpu_cycle_accum + (now - self.last_tick);
-                    counter = counter.wrapping_add(pending / self.cpu_per_systimer());
+                    let (num, den) = self.tick_ratio();
+                    let pending = self.cpu_cycle_accum + (now - self.last_tick) * num;
+                    counter = counter.wrapping_add(pending / den);
                 }
             }
         }
@@ -443,23 +511,33 @@ impl Systimer {
         self.conf & (1 << 29) != 0
     }
 
-    fn cpu_per_systimer(&self) -> u64 {
-        (self.cpu_clock_hz as u64)
-            .saturating_div(SYSTIMER_CLOCK_HZ)
-            .max(1)
+    /// SYSTIMER ticks per CPU cycle as a reduced fraction `num / den`.
+    /// 160 MHz gives 1/10; the ESP32-C2's 120 MHz gives 2/15 (7.5 cycles per
+    /// tick), which a whole-cycle divisor would truncate to 7 and run the
+    /// counter 7% fast. A core clock at or below the counter rate keeps one
+    /// tick per cycle. The ESP32-S2 counter runs at 80 MHz (240 MHz gives 1/3).
+    fn tick_ratio(&self) -> (u64, u64) {
+        let cpu = self.cpu_clock_hz as u64;
+        if cpu <= self.tick_hz {
+            return (1, 1);
+        }
+        let g = gcd(cpu, self.tick_hz);
+        (self.tick_hz / g, cpu / g)
     }
 
     fn advance_cycles(&mut self, cycles: u64) {
         if cycles == 0 {
             return;
         }
-        self.cpu_cycle_accum = self.cpu_cycle_accum.saturating_add(cycles);
-        let cpu_per_systimer = self.cpu_per_systimer();
-        if self.cpu_cycle_accum < cpu_per_systimer {
+        let (num, den) = self.tick_ratio();
+        self.cpu_cycle_accum = self
+            .cpu_cycle_accum
+            .saturating_add(cycles.saturating_mul(num));
+        if self.cpu_cycle_accum < den {
             return;
         }
-        let ticks = self.cpu_cycle_accum / cpu_per_systimer;
-        self.cpu_cycle_accum %= cpu_per_systimer;
+        let ticks = self.cpu_cycle_accum / den;
+        self.cpu_cycle_accum %= den;
         if self.unit0_running() {
             self.unit0.counter = self.unit0.counter.wrapping_add(ticks);
         }
@@ -511,7 +589,7 @@ impl Systimer {
     }
 
     fn next_alarm_delay_cycles(&self) -> Option<u64> {
-        let cpu_per_systimer = self.cpu_per_systimer();
+        let (num, den) = self.tick_ratio();
         let mut best: Option<u64> = None;
         for (i, alarm) in self.unit0_alarms.iter().enumerate() {
             if alarm.pending && (self.int_ena & (1 << i) != 0) {
@@ -537,9 +615,12 @@ impl Systimer {
             let cycles = if systimer_ticks == 0 {
                 0
             } else {
+                // First cycle at which accum + cycles * num reaches
+                // systimer_ticks * den (ceiling division).
                 systimer_ticks
-                    .saturating_mul(cpu_per_systimer)
-                    .saturating_sub(self.cpu_cycle_accum.min(cpu_per_systimer - 1))
+                    .saturating_mul(den)
+                    .saturating_sub(self.cpu_cycle_accum.min(den - 1))
+                    .div_ceil(num)
             };
             best = Some(best.map_or(cycles, |cur| cur.min(cycles)));
         }
@@ -547,6 +628,9 @@ impl Systimer {
     }
 
     fn read_word(&self, offset: u64) -> u32 {
+        if self.layout == SystimerLayout::S2 {
+            return self.s2_read_word(offset);
+        }
         use regs::*;
         match offset {
             CONF => self.conf,
@@ -645,6 +729,9 @@ impl Systimer {
     }
 
     fn write_word(&mut self, offset: u64, value: u32) {
+        if self.layout == SystimerLayout::S2 {
+            return self.s2_write_word(offset, value);
+        }
         use regs::*;
         match offset {
             CONF => {
@@ -717,6 +804,124 @@ impl Systimer {
     }
 }
 
+/// ESP32-S2 register map (`systimer_reg.h`), decoded onto the shared state.
+mod s2_regs {
+    pub const CONF: u64 = 0x00;
+    pub const LOAD: u64 = 0x04;
+    pub const LOAD_HI: u64 = 0x08;
+    pub const LOAD_LO: u64 = 0x0C;
+    pub const STEP: u64 = 0x10;
+    /// TARGET0_HI; TARGETn_HI/LO pairs follow at +8 per comparator.
+    pub const TARGET0_HI: u64 = 0x14;
+    /// TARGET0_CONF; TARGETn_CONF follow at +4.
+    pub const TARGET0_CONF: u64 = 0x2C;
+    pub const UPDATE: u64 = 0x38;
+    pub const VALUE_HI: u64 = 0x3C;
+    pub const VALUE_LO: u64 = 0x40;
+    pub const INT_ENA: u64 = 0x44;
+    pub const INT_RAW: u64 = 0x48;
+    pub const INT_CLR: u64 = 0x4C;
+    pub const DATE: u64 = 0xFC;
+    /// LOAD bit 31 / UPDATE bit 31: TIMER_LOAD / TIMER_UPDATE.
+    pub const TRIGGER: u32 = 1 << 31;
+    /// UPDATE bit 30: TIMER_VALUE_VALID.
+    pub const VALUE_VALID: u32 = 1 << 30;
+    /// TARGETn_CONF: WORK_EN bit 31, PERIOD_MODE bit 30, PERIOD bits 29:0.
+    pub const WORK_EN: u32 = 1 << 31;
+    pub const PERIOD_MODE: u32 = 1 << 30;
+    pub const PERIOD_MASK: u32 = 0x3FFF_FFFF;
+}
+
+impl Systimer {
+    fn s2_read_word(&self, offset: u64) -> u32 {
+        use s2_regs::*;
+        match offset {
+            CONF => self.s2_conf,
+            LOAD_HI => self.unit0.load_hi,
+            LOAD_LO => self.unit0.load_lo,
+            STEP => self.s2_step,
+            o if (TARGET0_HI..TARGET0_CONF).contains(&o) => {
+                let alarm = &self.unit0_alarms[((o - TARGET0_HI) / 8) as usize];
+                if (o - TARGET0_HI) % 8 == 0 {
+                    (alarm.pending_target >> 32) as u32
+                } else {
+                    alarm.pending_target as u32
+                }
+            }
+            o if (TARGET0_CONF..UPDATE).contains(&o) => {
+                let alarm = &self.unit0_alarms[((o - TARGET0_CONF) / 4) as usize];
+                let mut v = alarm.pending_period as u32 & PERIOD_MASK;
+                if alarm.period_mode {
+                    v |= PERIOD_MODE;
+                }
+                if alarm.enabled {
+                    v |= WORK_EN;
+                }
+                v
+            }
+            UPDATE if self.value_valid[0] => VALUE_VALID,
+            VALUE_HI => (self.unit0.snapshot >> 32) as u32,
+            VALUE_LO => self.unit0.snapshot as u32,
+            INT_ENA => self.int_ena,
+            INT_RAW => self.int_raw_word(),
+            DATE => self.date,
+            _ => 0,
+        }
+    }
+
+    fn s2_write_word(&mut self, offset: u64, value: u32) {
+        use s2_regs::*;
+        match offset {
+            CONF => self.s2_conf = value,
+            LOAD if value & TRIGGER != 0 => {
+                self.sync_counters_from_clock();
+                self.unit0.counter =
+                    ((self.unit0.load_hi as u64) << 32) | self.unit0.load_lo as u64;
+            }
+            LOAD_HI => self.unit0.load_hi = value,
+            LOAD_LO => self.unit0.load_lo = value,
+            STEP => self.s2_step = value,
+            // A target or its CONF takes effect as written: the S2 has no
+            // COMPx_LOAD, the comparator reads the register directly.
+            o if (TARGET0_HI..TARGET0_CONF).contains(&o) => {
+                let idx = ((o - TARGET0_HI) / 8) as usize;
+                if (o - TARGET0_HI) % 8 == 0 {
+                    set_pending_target_hi(&mut self.unit0_alarms[idx], value);
+                } else {
+                    set_pending_target_lo(&mut self.unit0_alarms[idx], value);
+                }
+                self.sync_counters_from_clock();
+                self.commit_alarm(idx);
+            }
+            o if (TARGET0_CONF..UPDATE).contains(&o) => {
+                let idx = ((o - TARGET0_CONF) / 4) as usize;
+                let alarm = &mut self.unit0_alarms[idx];
+                alarm.pending_period = (value & PERIOD_MASK) as u64;
+                alarm.period_mode = value & PERIOD_MODE != 0;
+                alarm.unit_sel = false;
+                alarm.enabled = value & WORK_EN != 0;
+                self.sync_counters_from_clock();
+                self.commit_alarm(idx);
+            }
+            UPDATE if value & TRIGGER != 0 => {
+                self.sync_counters_from_clock();
+                self.unit0.snapshot = self.unit0.counter;
+                self.value_valid[0] = true;
+            }
+            INT_ENA => self.int_ena = value & 0x7,
+            INT_CLR => {
+                for (i, alarm) in self.unit0_alarms.iter_mut().enumerate() {
+                    if value & (1 << i) != 0 {
+                        alarm.pending = false;
+                    }
+                }
+            }
+            DATE => self.date = value,
+            _ => {}
+        }
+    }
+}
+
 /// Compose TARGETx_CONF readback exposing the *pending* period (real
 /// silicon would expose live, but esp-hal's RMW patterns expect to read
 /// back what they just wrote before the COMP_LOAD commit).
@@ -754,7 +959,7 @@ impl Peripheral for Systimer {
     /// I²C data-ready timing off it is self-consistent with firmware's own
     /// timekeeping. Fresh from the published clock (see `current_unit0_ticks`).
     fn sim_time_us(&self) -> Option<u64> {
-        Some(self.current_unit0_ticks() / (SYSTIMER_CLOCK_HZ / 1_000_000))
+        Some(self.current_unit0_ticks() / (self.tick_hz / 1_000_000))
     }
 
     /// Freerunning snapshot path only — offsets from [`regs::FREERUNNING_POLL`].
@@ -906,6 +1111,21 @@ impl Peripheral for Systimer {
     fn restore_runtime_snapshot(&mut self, bytes: &[u8]) -> SimResult<()> {
         let scheduler_enabled = self.scheduler_enabled;
         let clock = self.clock.clone();
+        let (layout, tick_hz) = (self.layout, self.tick_hz);
+        let result = self.restore_runtime_snapshot_inner(bytes, scheduler_enabled, clock);
+        self.layout = layout;
+        self.tick_hz = tick_hz;
+        result
+    }
+}
+
+impl Systimer {
+    fn restore_runtime_snapshot_inner(
+        &mut self,
+        bytes: &[u8],
+        scheduler_enabled: bool,
+        clock: Option<CycleClock>,
+    ) -> SimResult<()> {
         // Newest first: an older, shorter layout cannot decode as a newer one,
         // but a newer one does decode as an older prefix.
         if let Ok(restored) = bincode::deserialize::<SystimerSnapshotV3>(bytes) {
@@ -934,6 +1154,47 @@ impl Peripheral for Systimer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ESP32-S2 map (`systimer_reg.h`): UPDATE (0x38) bit 31 latches the
+    /// counter into VALUE_HI/LO (0x3C/0x40) and sets VALUE_VALID (bit 30);
+    /// the counter runs at 80 MHz, so 240 CPU cycles at 240 MHz are 80 ticks.
+    #[test]
+    fn esp32s2_update_latches_80mhz_counter() {
+        let mut t = Systimer::new_esp32s2(240_000_000);
+        t.force_legacy_walk();
+        assert_eq!(
+            t.read_u32(0x38).unwrap() & (1 << 30),
+            0,
+            "not valid before UPDATE"
+        );
+        t.tick_elapsed(240);
+        t.write_u32(0x38, 1 << 31).unwrap();
+        assert_ne!(t.read_u32(0x38).unwrap() & (1 << 30), 0);
+        assert_eq!(t.read_u32(0x3C).unwrap(), 0);
+        assert_eq!(t.read_u32(0x40).unwrap(), 80);
+        // The S3 offsets mean nothing here: 0x44 is INT_ENA on the S2.
+        t.write_u32(0x44, 0x7).unwrap();
+        assert_eq!(t.read_u32(0x44).unwrap(), 0x7);
+    }
+
+    /// An S2 target takes effect as written (no COMPx_LOAD) and its comparator
+    /// raises source 71 once the counter reaches it.
+    #[test]
+    fn esp32s2_target0_fires_source_71_without_comp_load() {
+        let mut t = Systimer::new_esp32s2(240_000_000);
+        t.force_legacy_walk();
+        t.write_u32(0x14, 0).unwrap(); // TARGET0_HI
+        t.write_u32(0x18, 100).unwrap(); // TARGET0_LO
+        t.write_u32(0x2C, 1 << 31).unwrap(); // TARGET0_CONF.WORK_EN
+        t.write_u32(0x44, 1).unwrap(); // INT0_ENA
+        let early = t.tick_elapsed(3 * 99);
+        assert!(early.explicit_irqs.is_none(), "fired before the target");
+        let r = t.tick_elapsed(3);
+        assert_eq!(r.explicit_irqs, Some(vec![71]));
+        assert_eq!(t.read_u32(0x48).unwrap() & 1, 1, "INT0_RAW");
+        t.write_u32(0x4C, 1).unwrap(); // INT0_CLR
+        assert_eq!(t.read_u32(0x48).unwrap() & 1, 0);
+    }
 
     #[test]
     fn defaults() {
@@ -973,6 +1234,37 @@ mod tests {
             0x4600_0000,
             "CONF reset must match SVD/silicon value"
         );
+    }
+
+    /// ESP32-C2: 120 MHz core, 16 MHz SYSTIMER = 7.5 cycles per tick. A
+    /// whole-cycle divisor (7) ran the counter 7% fast.
+    #[test]
+    fn a_120mhz_core_counts_two_ticks_per_fifteen_cycles() {
+        let mut s = Systimer::new(120_000_000);
+        for _ in 0..7 {
+            s.tick();
+        }
+        assert_eq!(s.unit0.counter, 0, "7 cycles is less than one tick");
+        s.tick();
+        assert_eq!(s.unit0.counter, 1, "8th cycle completes tick 1 (7.5)");
+        for _ in 8..120_000 {
+            s.tick();
+        }
+        assert_eq!(
+            s.unit0.counter, 16_000,
+            "1 ms = 120000 cycles = 16000 ticks"
+        );
+
+        // An alarm 3 ticks ahead lands 22.5 cycles away: 23 whole cycles.
+        s.unit0_alarms[0].enabled = true;
+        s.unit0_alarms[0].target = s.unit0.counter + 3;
+        assert_eq!(s.next_alarm_delay_cycles(), Some(23));
+        for _ in 0..22 {
+            s.tick();
+        }
+        assert_eq!(s.unit0.counter, 16_002);
+        s.tick();
+        assert_eq!(s.unit0.counter, 16_003, "the predicted cycle reaches it");
     }
 
     #[test]

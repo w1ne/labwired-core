@@ -306,6 +306,213 @@ void setup() {
 void loop() {}
 ```
 
+### Arduino Nano Every + Adafruit BME280
+
+Arduino lists the Nano Every as orderable SKU ABX00028, and Microchip's live
+page reported ATMEGA4809 as In Production on 2026-11-19. The Adafruit BME280
+breakout was in stock on the same date. The ATmega4809 is not ranked
+separately; the Nano Every is the in-production Arduino board in the classic
+Nano form factor. This adds a TWI0 host model to the ATmega4809, so stock
+`Wire` runs.
+
+- [Wiring, scope, copy-paste sketch, and smoke instructions](../examples/arduino-nano-every-bme280/README.md)
+- [Live vendor status receipt](../examples/arduino-nano-every-bme280/vendor-status.md)
+- [Committed local smoke evidence and controls](../examples/arduino-nano-every-bme280/evidence/)
+
+The sketch uses the stock Adafruit BME280 library on A4/A5 and prints
+compensated readings on USB `Serial`: `T=25.00 C`, `P=1013.25 hPa`,
+`RH=50.00 %` with the sensor model at its defaults. Timer pad outputs and
+the TWI0 pads are not modelled. No physical board test was run.
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_BME280.h>
+
+Adafruit_BME280 bme;
+
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  Serial.begin(115200);
+  if (!bme.begin(0x77)) {
+    Serial.println("BME280 not found at 0x77");
+    return;
+  }
+  Serial.print("NANO_EVERY_BME280 ID=0x");
+  Serial.println(bme.sensorID(), HEX);
+  Serial.print("T=");
+  Serial.print(bme.readTemperature(), 2);
+  Serial.println(" C");
+  Serial.print("P=");
+  Serial.print(bme.readPressure() / 100.0F, 2);
+  Serial.println(" hPa");
+  Serial.print("RH=");
+  Serial.print(bme.readHumidity(), 2);
+  Serial.println(" %");
+  digitalWrite(LED_BUILTIN, HIGH);
+}
+
+void loop() {}
+```
+
+### Arduino Nano 33 IoT + Adafruit BME280
+
+Arduino lists the Nano 33 IoT as orderable SKU ABX00027, and Microchip's live
+page reported ATSAMD21G18 as In Production on 2026-11-19. The ATSAMD21G18A is
+not ranked separately; the board is on the Arduino kits line (37%). This adds
+a USB device model to the ATSAMD21G18A with a scripted host, so a stock
+sketch whose `Serial` is the native USB port prints.
+
+- [Wiring, scope, copy-paste sketch, and smoke instructions](../examples/arduino-nano-33-iot-bme280/README.md)
+- [Live vendor status receipt](../examples/arduino-nano-33-iot-bme280/vendor-status.md)
+- [Committed local smoke evidence and controls](../examples/arduino-nano-33-iot-bme280/evidence/)
+
+The sketch waits for the terminal (`while (!Serial)`), reads the sensor with
+the stock Adafruit BME280 library on A4/A5 and prints compensated readings on
+USB `Serial`: `T=25.00 C`, `P=1013.25 hPa`, `RH=50.00 %` with the sensor
+model at its defaults. The on-board Wi-Fi module, crypto chip and IMU are not
+attached. No physical board test was run.
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_BME280.h>
+
+Adafruit_BME280 bme;
+
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  Serial.begin(115200);
+  // Native USB: wait until a terminal opens the port (DTR), or the first
+  // lines are lost.
+  while (!Serial) {
+    delay(1);
+  }
+  if (!bme.begin(0x77)) {
+    Serial.println("BME280 not found at 0x77");
+    return;
+  }
+  Serial.print("NANO_33_IOT_BME280 ID=0x");
+  Serial.println(bme.sensorID(), HEX);
+  Serial.print("T=");
+  Serial.print(bme.readTemperature(), 2);
+  Serial.println(" C");
+  Serial.print("P=");
+  Serial.print(bme.readPressure() / 100.0F, 2);
+  Serial.println(" hPa");
+  Serial.print("RH=");
+  Serial.print(bme.readHumidity(), 2);
+  Serial.println(" %");
+  digitalWrite(LED_BUILTIN, HIGH);
+}
+
+void loop() {}
+```
+
+### Arduino Nano 33 BLE Rev2 + Adafruit BME280
+
+Arduino lists the Nano 33 BLE Rev2 as SKU ABX00071; on 2026-11-20 its own
+store showed it sold out and one authorized distributor listed 100 in stock.
+The nRF52840 is not ranked separately; the board is on the Arduino kits line
+(37%). This adds a USB device model to the nRF52840 with a scripted host, and
+the TWI master that Mbed OS uses for `Wire`, so a stock ArduinoCore-mbed
+sketch whose `Serial` is the native USB port prints.
+
+- [Wiring, scope, copy-paste sketch, and smoke instructions](../examples/arduino-nano-33-ble-bme280/README.md)
+- [Live vendor status receipt](../examples/arduino-nano-33-ble-bme280/vendor-status.md)
+- [Committed local smoke evidence and controls](../examples/arduino-nano-33-ble-bme280/evidence/)
+
+The sketch waits for the terminal (`while (!Serial)`), reads the sensor with
+the stock Adafruit BME280 library on A4/A5 and prints compensated readings on
+USB `Serial`: `T=25.00 C`, `P=1013.25 hPa`, `RH=50.00 %` with the sensor
+model at its defaults. The board's bootloader is not modelled; the on-board
+IMU and the BLE stack are not attached or exercised. No physical board test
+was run.
+
+```cpp
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_BME280.h>
+
+Adafruit_BME280 bme;
+
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  Serial.begin(115200);
+  // Native USB: wait until a terminal opens the port (DTR), or the first
+  // lines are lost.
+  while (!Serial) {
+    delay(1);
+  }
+  if (!bme.begin(0x77)) {
+    Serial.println("BME280 not found at 0x77");
+    return;
+  }
+  Serial.print("NANO_33_BLE_BME280 ID=0x");
+  Serial.println(bme.sensorID(), HEX);
+  Serial.print("T=");
+  Serial.print(bme.readTemperature(), 2);
+  Serial.println(" C");
+  Serial.print("P=");
+  Serial.print(bme.readPressure() / 100.0F, 2);
+  Serial.println(" hPa");
+  Serial.print("RH=");
+  Serial.print(bme.readHumidity(), 2);
+  Serial.println(" %");
+  digitalWrite(LED_BUILTIN, HIGH);
+}
+
+void loop() {}
+```
+
+### Arduino Nano Every + Adafruit MAX31855
+
+Same board and the same live checks on 2026-11-19: Nano Every SKU ABX00028
+orderable, ATMEGA4809 In Production. The Adafruit MAX31855 breakout was in
+stock on that date; the MAX31855 lifecycle page at Analog Devices was not
+readable. This adds an SPI0 host model to the ATmega4809, so stock `SPI`
+runs.
+
+- [Wiring, scope, copy-paste sketch, and smoke instructions](../examples/arduino-nano-every-max31855/README.md)
+- [Live vendor status receipt](../examples/arduino-nano-every-max31855/vendor-status.md)
+- [Committed local smoke evidence and controls](../examples/arduino-nano-every-max31855/evidence/)
+
+The sketch uses the stock Adafruit MAX31855 library on D13 / D12 with CS on
+D10 and prints both junction temperatures on USB `Serial`: `TC=25.00 C`,
+`CJ=22.0000 C` with the converter model at its defaults. SPI0 Buffer mode
+and client mode are refused; the SPI clock phase and polarity and timer pad
+outputs are not modelled. No physical board test was run.
+
+```cpp
+#include <Arduino.h>
+#include <SPI.h>
+#include <Adafruit_MAX31855.h>
+
+static const uint8_t kChipSelect = 10;
+
+Adafruit_MAX31855 thermocouple(kChipSelect);
+
+void setup() {
+  Serial.begin(115200);
+  thermocouple.begin();
+  Serial.println("NANO_EVERY_MAX31855");
+  double hot = thermocouple.readCelsius();
+  if (isnan(hot)) {
+    Serial.print("MAX31855 fault 0x");
+    Serial.println(thermocouple.readError(), HEX);
+    return;
+  }
+  Serial.print("TC=");
+  Serial.print(hot, 2);
+  Serial.println(" C");
+  Serial.print("CJ=");
+  Serial.print(thermocouple.readInternal(), 4);
+  Serial.println(" C");
+}
+
+void loop() {}
+```
+
 ### ESP32-C61-DevKitC-1-N8R2
 
 ESP32 is demand rank 1 (38% of reported MCU use); the survey does not score

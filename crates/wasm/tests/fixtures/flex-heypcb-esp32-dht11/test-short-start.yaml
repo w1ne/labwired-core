@@ -1,0 +1,23 @@
+# `labwired test --script test-short-start.yaml`. Negative control. The
+# firmware holds the data line low for 500 µs. The DHT11 answers only a
+# start signal of at least 1 ms (the catalog model's `min_hold_us: 1000`;
+# the datasheet asks for at least 18 ms), so the line shows only the host's
+# own low pulse and the firmware reports no response after 100 µs.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: dht_drive }, { port: dht_line }, { port: user_led_drive }, { number: 500 }] }
+  - set: { port: humidity_pct, value: 90 }
+  - call: { export: loop }
+limits:
+  max_steps: 20000000
+  max_time_ns: 10000000000
+assertions:
+  - entry_result: { equals: 1 }
+  - digital_edges: { port: dht_line, times_ns: [1000, 501000] }
+  - digital_edges: { port: user_led_drive, count: 0 }
+  - final_time_ns: { equals: 1000600000 }
+  - console_contains: "no DHT11 response\n"

@@ -1,19 +1,62 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
+# Bounded execution profile for the imported Renode imxrt500 system.
 #
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
-# SUPERSEDED: staged onboarding descriptor (a generic UART fixture on a
-# Renode-derived map with the flash window at 0x03000000 (the boot ROM) and no
-# RT500 peripherals). The promoted i.MX RT595S part is
-# configs/chips/mimxrt595s.yaml (board: configs/systems/mimxrt595-evk.yaml).
+# The imported scaffold used the boot-ROM address as a 128 KiB flash window
+# and advertised no RT500 peripherals. This profile follows the existing
+# MIMXRT595S model and covers only the Cortex-M33, FlexSPI XIP image window,
+# SRAM and the register-level clock/reset/pin-control, GPIO, and FLEXCOMM0
+# USART paths exercised by examples/renode-onboarding/imxrt500-smoke.yaml.
+# Clock selection does not alter simulated frequency; IOPCTL stores writes
+# without routing electrical pad signals; GPIO is checked through register
+# readback because the imported system has no EVK board wiring. DSP, GPU,
+# PowerQuad, secondary cores, secure aliases, boot-ROM execution, and untested
+# peripherals are outside this profile.
 name: imxrt500
 arch: arm
+core: cortex-m33
+cpu_hz: 48000000
 flash:
-  base: 50331648
-  size: 131072B
+  base: 0x08000000
+  size: 8192KB
 ram:
-  base: 536870912
-  size: 5242880B
-peripherals: []
+  base: 0x20000000
+  size: 5120KB
+flash_boot_alias: false
+reset_vector_offset: 0x1000
+pins:
+  P0_1: { gpio: gpio, bit: 1 }
+  P0_2: { gpio: gpio, bit: 2 }
+  P0_10: { gpio: gpio, bit: 10 }
+  P0_14: { gpio: gpio, bit: 14 }
+  P0_25: { gpio: gpio, bit: 25 }
+  P1_0: { gpio: gpio, bit: 32 }
+  P3_17: { gpio: gpio, bit: 113 }
+peripherals:
+  # Register/status behavior only; clock choices do not change the timebase.
+  - id: clkctl0
+    type: rt5xx_clkctl0
+    base_address: 0x40001000
+    size: 4KB
+  # Stored pin-control words; pad routing/electrical behavior is not modeled.
+  - id: iopctl
+    type: rt5xx_iopctl
+    base_address: 0x40004000
+    size: 4KB
+  - id: rstctl1
+    type: rt5xx_ctl
+    base_address: 0x40020000
+    size: 4KB
+  - id: clkctl1
+    type: rt5xx_clkctl1
+    base_address: 0x40021000
+    size: 4KB
+  # Register readback; no board_io devices are attached in this imported system.
+  - id: gpio
+    type: lpc_gpio
+    base_address: 0x40100000
+    size: 16KB
+  # Character output is captured by the smoke runner; line timing is not tested.
+  - id: flexcomm0
+    type: lpc_flexcomm_usart
+    base_address: 0x40106000
+    size: 4KB
+    irq: 14

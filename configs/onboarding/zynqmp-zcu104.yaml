@@ -1,6 +1,5 @@
 name: zynqmp-zcu104
-description: 'AMD Xilinx ZCU104 Evaluation Board emphasizing Video/Vision features
-  on Zynq UltraScale+ MPSoC. Architecture: Quad ARM Cortex-A53.'
+description: 'Imported ZCU104 Evaluation Board target. Measured profile covers one Cortex-A53 PE, low DDR and PS UART0 (Cadence, polled TX); the GIC, timers, RPU and other PS peripherals are not modeled.'
 family: AMD Xilinx Zynq UltraScale+
 url: https://www.xilinx.com/products/boards-and-kits/zcu104.html
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\

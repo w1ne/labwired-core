@@ -1,0 +1,17 @@
+# Arduino Nano Every (ATmega4809 @ 16 MHz) with an Adafruit MAX31855
+# thermocouple breakout on the hardware SPI pins. The breakout carries its own
+# 3.3 V regulator and level shifter. CLK connects to D13 (PE2), DO to D12
+# (PE1) and CS to D10 (PB1): SPI0 on its PE[3:0] route. This digital system
+# attaches the converter model to SPI0 and selects it with the PB1 output
+# level. It does not model the clock phase, the pad voltage or the
+# converter's conversion time.
+name: arduino-nano-every-max31855
+chip: ../chips/atmega4809.yaml
+cpu_hz: 16000000
+external_devices:
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi0"
+    config:
+      cs_pin: "PB1"
+board_io: []

@@ -1,0 +1,31 @@
+# Exact imported EK-RA8M1 profile: Cortex-M85 scalar firmware, RA8 SYSTEM,
+# port/PFS, and SCI_B-backed SCI9 smoke. R_MSTP is an SVD register file: the
+# readbacks below check its reset values and the firmware's MSTPB22 (SCI9)
+# clear. Module gating itself is not modelled.
+schema_version: "1.0"
+inputs:
+  firmware: "../../target/thumbv8m.main-none-eabi/release/firmware-ek-ra8m1-smoke"
+  system: "../../configs/systems/onboarding/renesas-ek_ra8m1.yaml"
+limits:
+  max_steps: 4000000
+assertions:
+  - uart_contains: "EK-RA8M1 SMOKE"
+  - uart_contains: "FPU_SUM=40400000"
+  - memory_value: {address: 0x22000000, expected_value: 0x40400000}
+  - uart_ordered:
+      - "cpu=cortex-m85 uart=sci9 (sci_b)"
+      - "clk src=moco sciclk=8000000 scickcr=01 brr=25 baud=9600"
+      - "ccr3=00001200 cesr=11"
+      - "led=blue on pin=1 port=6 podr=0001"
+      - "led=blue off pin=0 port=6 podr=0000"
+      - "led=green on pin=1 port=4 podr=4000"
+      - "led=green off pin=0 port=4 podr=0000"
+      - "led=red on pin=1 port=1 podr=0080"
+      - "led=red off pin=0 port=1 podr=0000"
+      - "s1=1 s2=1"
+      - "hb=0 podr6=0001 s1=1 s2=1"
+      - "hb=1 podr6=0001 s1=1 s2=1"
+  - memory_value: {address: 0x40203000, expected_value: 0xFFBF7FFC}  # MSTPCRA reset
+  - memory_value: {address: 0x40203004, expected_value: 0xFFBFFFFF}  # MSTPCRB & ~MSTPB22
+  - memory_value: {address: 0x40203010, expected_value: 0xFFFFFFFF}  # MSTPCRE reset
+  - expected_stop_reason: max_steps

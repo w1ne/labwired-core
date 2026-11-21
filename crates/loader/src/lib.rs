@@ -6,7 +6,7 @@
 
 use addr2line::gimli::Reader;
 use anyhow::{anyhow, Context, Result};
-use goblin::elf::program_header::{ProgramHeader, PT_LOAD};
+use goblin::elf::program_header::PT_LOAD;
 use goblin::elf::Elf;
 use labwired_core::memory::ProgramImage;
 use object::ObjectSymbol;
@@ -191,7 +191,9 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
                     "Found Loadable Segment: Addr={:#x}, Size={} bytes, Offset={:#x}",
                     start_addr, size, offset
                 );
-                for (piece_off, piece_len) in file_backed_pieces(&elf, ph) {
+                for (piece_off, piece_len) in
+                    labwired_core::system::node::file_backed_pieces(&elf, ph)
+                {
                     program_image.add_segment(
                         start_addr + piece_off as u64,
                         segment_data[piece_off..piece_off + piece_len].to_vec(),
@@ -206,57 +208,6 @@ pub fn load_elf_bytes(buffer: &[u8]) -> Result<ProgramImage> {
     }
 
     Ok(program_image)
-}
-
-/// Split a `PT_LOAD` file image into the byte ranges that real sections own.
-///
-/// A `SHT_NOBITS` section has no file content, yet a linker can still place
-/// one inside a segment's `p_filesz` range. ESP-IDF 5 does exactly this on the
-/// ESP32-C6, where IROM and DROM share the 0x4200_0000 window: the rodata
-/// segment starts with `.flash_rodata_dummy`, a 192 KiB NOBITS placeholder at
-/// the *same* address as `.flash.text`. esptool drops it and the bootloader
-/// maps text and rodata through separate MMU pages, so on silicon the code is
-/// intact. Copying the filler as data would zero `.flash.text` instead.
-///
-/// Returns `(offset, len)` pieces relative to the segment's file image. With
-/// no NOBITS section inside `p_filesz` (every ordinary ELF: `.bss` sits past
-/// it) this is the whole segment, unchanged.
-fn file_backed_pieces(elf: &Elf, ph: &ProgramHeader) -> Vec<(usize, usize)> {
-    use goblin::elf::section_header::{SHF_ALLOC, SHT_NOBITS};
-    let filesz = ph.p_filesz as usize;
-    let mut holes: Vec<(usize, usize)> = elf
-        .section_headers
-        .iter()
-        .filter(|sh| {
-            sh.sh_type == SHT_NOBITS && sh.sh_flags & u64::from(SHF_ALLOC) != 0 && sh.sh_size != 0
-        })
-        .filter_map(|sh| {
-            // The section belongs to THIS segment only when its address and
-            // its file position sit at the same offset into it. Matching on
-            // the address alone is wrong for the C6 case: the dummy shares
-            // its address with `.flash.text`, which is a different segment.
-            let at = sh.sh_addr.checked_sub(ph.p_vaddr)?;
-            if sh.sh_offset.checked_sub(ph.p_offset)? != at {
-                return None;
-            }
-            let lo = at as usize;
-            let hi = (at + sh.sh_size).min(filesz as u64) as usize;
-            (lo < hi).then_some((lo, hi))
-        })
-        .collect();
-    holes.sort_unstable();
-    let mut pieces = Vec::new();
-    let mut cursor = 0usize;
-    for (lo, hi) in holes {
-        if lo > cursor {
-            pieces.push((cursor, lo - cursor));
-        }
-        cursor = cursor.max(hi);
-    }
-    if cursor < filesz {
-        pieces.push((cursor, filesz - cursor));
-    }
-    pieces
 }
 
 pub struct SourceLocation {

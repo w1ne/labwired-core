@@ -62,10 +62,14 @@ mod stm32_timer_kernel_clock_tests {
     /// A config-built F407 running a NOP slab from RAM, so steps advance
     /// cycles and nothing else touches a register.
     fn f407_machine() -> Machine<CortexM> {
-        let path = repo_root("configs/chips/stm32f407.yaml");
-        let chip = ChipDescriptor::from_file(&path).expect("load stm32f407.yaml");
+        chip_machine("configs/chips/stm32f407.yaml")
+    }
+
+    fn chip_machine(rel: &str) -> Machine<CortexM> {
+        let path = repo_root(rel);
+        let chip = ChipDescriptor::from_file(&path).expect("load chip yaml");
         let abs = path.to_string_lossy().to_string();
-        let mut bus = SystemBus::from_config(&chip, &manifest(&abs)).expect("assemble stm32f407");
+        let mut bus = SystemBus::from_config(&chip, &manifest(&abs)).expect("assemble chip");
         let (cpu, _nvic) = crate::system::cortex_m::configure_cortex_m(&mut bus);
         let mut machine = Machine::new(cpu, bus);
         for i in 0..1022u64 {
@@ -155,5 +159,66 @@ mod stm32_timer_kernel_clock_tests {
         assert_near(counts_in(&mut m, TIM4_BASE, 16_000), 2_000, "APB1 /16");
         set_ppre(&mut m, PPRE_DIV2, 0);
         assert_near(counts_in(&mut m, TIM4_BASE, 16_000), 16_000, "APB1 /2");
+    }
+
+    // STM32H723 (RM0468). The engine counts CPU cycles, and on the H7 the
+    // CPU clock is SYSCLK / D1CPRE while the bus matrix runs on HCLK, a
+    // further / HPRE.
+    const H7_RCC: u64 = 0x5802_4400;
+    const H7_CFGR: u64 = H7_RCC + 0x10;
+    const H7_D1CFGR: u64 = H7_RCC + 0x18;
+    const H7_D2CFGR: u64 = H7_RCC + 0x1C;
+    const H7_APB1LENR: u64 = H7_RCC + 0xE8;
+    const H7_APB2ENR: u64 = H7_RCC + 0xF0;
+    /// TIM2 on APB1 (D2), TIM1 on APB2 (D2).
+    const H7_TIM2_BASE: u64 = 0x4000_0000;
+    const H7_TIM1_BASE: u64 = 0x4001_0000;
+    /// HPRE / D1CPRE encoding 1000 = /2; D2PPRE 100 = /2, 101 = /4.
+    const H7_AHB_DIV2: u32 = 0b1000;
+
+    fn h723_machine(d1cfgr: u32, d2cfgr: u32, timpre: bool) -> Machine<CortexM> {
+        let mut m = chip_machine("configs/chips/stm32h723zg.yaml");
+        m.bus.write_u32(H7_APB1LENR, 1).unwrap(); // TIM2EN
+        m.bus.write_u32(H7_APB2ENR, 1).unwrap(); // TIM1EN
+        m.bus.write_u32(H7_D1CFGR, d1cfgr).unwrap();
+        m.bus.write_u32(H7_D2CFGR, d2cfgr).unwrap();
+        if timpre {
+            let cfgr = m.bus.read_u32(H7_CFGR).unwrap();
+            m.bus.write_u32(H7_CFGR, cfgr | (1 << 15)).unwrap();
+        }
+        start_free_running(&mut m, H7_TIM2_BASE);
+        start_free_running(&mut m, H7_TIM1_BASE);
+        m
+    }
+
+    #[test]
+    fn h723_arduino_clock_tree_runs_timers_at_half_the_cpu_clock() {
+        // stm32duino NUCLEO_H723ZG SystemClock_Config: CPU 550 MHz
+        // (D1CPRE /1), HCLK 275 MHz (HPRE /2), D2PPRE1 = D2PPRE2 = /2. TIMPRE
+        // is 0, so TIMxCLK = 2 x PCLK = HCLK: one count per two CPU cycles.
+        // Before the H7 path TIM2 counted every CPU cycle and a 1 kHz
+        // analogWrite on PA0 came out at 2 kHz.
+        let mut m = h723_machine(H7_AHB_DIV2, (0b100 << 4) | (0b100 << 8), false);
+        assert_near(counts_in(&mut m, H7_TIM2_BASE, 20_000), 10_000, "TIM2");
+        assert_near(counts_in(&mut m, H7_TIM1_BASE, 20_000), 10_000, "TIM1");
+    }
+
+    #[test]
+    fn h723_timpre_quadruples_a_slow_apb() {
+        // HCLK = CPU / 2, D2PPRE1 /4. TIMPRE = 0: TIMxCLK = 2 x PCLK1 =
+        // HCLK / 2, one count per four CPU cycles. TIMPRE = 1: TIMxCLK =
+        // HCLK while D2PPRE1 is /4 or less (RM0468 §8.5.4).
+        let mut m = h723_machine(H7_AHB_DIV2, 0b101 << 4, false);
+        assert_near(counts_in(&mut m, H7_TIM2_BASE, 20_000), 5_000, "TIMPRE 0");
+        let mut m = h723_machine(H7_AHB_DIV2, 0b101 << 4, true);
+        assert_near(counts_in(&mut m, H7_TIM2_BASE, 20_000), 10_000, "TIMPRE 1");
+    }
+
+    #[test]
+    fn h723_core_prescaler_slows_timers_in_cpu_cycles() {
+        // D1CPRE /2 alone: the CPU and HCLK both run at SYSCLK / 2, so the
+        // timer still counts once per CPU cycle.
+        let mut m = h723_machine(H7_AHB_DIV2 << 8, 0, false);
+        assert_near(counts_in(&mut m, H7_TIM2_BASE, 20_000), 20_000, "D1CPRE /2");
     }
 }

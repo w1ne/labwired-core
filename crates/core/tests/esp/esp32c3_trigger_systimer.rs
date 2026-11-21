@@ -91,6 +91,51 @@ fn esp_hal_stack_guard_and_delay_behave_like_silicon_on_the_fast_boot() {
     assert!(!console.contains("GUARD WRITE NOT CAUGHT"), "{console}");
 }
 
+/// esp-println's `uart` backend prints through the ROM `uart_tx_one_char`,
+/// which drops every byte while the ROM's `g_uart_print` flag is zero. The
+/// fast boot seeds the flag the way the ROM's print init does, so the console
+/// carries the app's output. See
+/// `tests/fixtures/esp32c3-esp-hal-uart-console.md`.
+#[test]
+fn esp_hal_uart_console_prints_through_the_rom_on_the_fast_boot() {
+    let (chip, manifest) = common::system("configs/systems/esp32c3-devkit.yaml");
+    let fw = common::committed("tests/fixtures/esp32c3-esp-hal-uart-console.elf");
+    let blobs = c3_rom_blobs();
+    let mut s = Session::open(
+        BuildRequest {
+            chip: &chip,
+            system: &manifest,
+            firmware: FirmwareSource::Elf(&fw),
+            boot: BootMode::FastBoot,
+            blobs: &blobs,
+            options: BuildOptions::default(),
+        },
+        OpenOptions::default(),
+    )
+    .unwrap();
+
+    let done = s.expect("LW-C3 done", Duration::from_millis(500));
+    let console = s.uart_transcript();
+    done.unwrap_or_else(|e| panic!("{e}\n--- console ---\n{console}"));
+    assert!(console.contains("LW-C3 boot"), "{console}");
+    // Three 2 ms delays, each timed by SYSTIMER and printed through the ROM.
+    let ticks: Vec<u64> = console
+        .lines()
+        .filter(|l| l.starts_with("LW-C3 tick"))
+        .map(|l| {
+            let us = l.rsplit(' ').next().unwrap().trim_end_matches("us");
+            us.trim().parse().unwrap()
+        })
+        .collect();
+    assert_eq!(ticks.len(), 3, "{console}");
+    for us in &ticks {
+        assert!(
+            (2_000..2_100).contains(us),
+            "a 2 ms Delay measured {us} us\n{console}"
+        );
+    }
+}
+
 // --- hand-assembled -------------------------------------------------------
 
 fn lui(rd: u32, imm20: u32) -> u32 {

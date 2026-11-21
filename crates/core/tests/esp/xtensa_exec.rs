@@ -16,8 +16,9 @@
 use labwired_core::bus::SystemBus;
 use labwired_core::cpu::xtensa_lx7::XtensaLx7;
 use labwired_core::cpu::xtensa_sr::{
-    EPC1 as EPC1_ID, EPC2 as EPC2_ID, EPC3 as EPC3_ID, EPS2 as EPS2_ID, EPS3 as EPS3_ID,
-    EXCCAUSE as EXCCAUSE_ID, SAR as SAR_ID, SCOMPARE1 as SCOMPARE1_ID, VECBASE as VECBASE_ID,
+    ACCHI as ACCHI_ID, ACCLO as ACCLO_ID, EPC1 as EPC1_ID, EPC2 as EPC2_ID, EPC3 as EPC3_ID,
+    EPS2 as EPS2_ID, EPS3 as EPS3_ID, EXCCAUSE as EXCCAUSE_ID, SAR as SAR_ID,
+    SCOMPARE1 as SCOMPARE1_ID, VECBASE as VECBASE_ID,
 };
 use labwired_core::{Bus, Cpu, SimulationError};
 
@@ -5261,4 +5262,135 @@ fn test_exec_ill_n_raises_exccause_0() {
         expected_handler,
         "PC must re-vector to kernel exception vector"
     );
+}
+
+/// MAC16 AA encodings, verified with xtensa-esp32-elf-as (op0=4, op2=7, r=0).
+fn enc_mac16_aa(op1: u32, as_: u32, at: u32) -> u32 {
+    (0x7 << 20) | (op1 << 16) | (as_ << 8) | (at << 4) | 0x4
+}
+
+fn step_mac16(cpu: &mut XtensaLx7, bus: &mut SystemBus, word: u32) {
+    cpu.set_pc(TEST_PC);
+    write_insns(bus, TEST_PC as u64, &[word]);
+    cpu.step(bus, &[], &labwired_core::SimulationConfig::default())
+        .expect("MAC16 AA step");
+}
+
+/// The cactus SSD1306 drawPixel path uses `mula.aa.ll` into ACCLO (#3855).
+#[test]
+fn mac16_aa_mula_ll_accumulates_signed_halfwords() {
+    use labwired_core::decoder::xtensa::{decode, Instruction, Mac16Half, Mac16Op};
+
+    let word = enc_mac16_aa(0x8, 10, 9); // mula.aa.ll a10, a9
+    assert_eq!(word, 0x0078_0a94);
+    assert_eq!(
+        decode(word),
+        Instruction::Mac16Aa {
+            as_: 10,
+            at: 9,
+            half: Mac16Half::Ll,
+            op: Mac16Op::Mula
+        }
+    );
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+    cpu.regs.write_logical(10, 3);
+    cpu.regs.write_logical(9, 5);
+    cpu.sr.write(ACCLO_ID, 10);
+    cpu.sr.write(ACCHI_ID, 0);
+    step_mac16(&mut cpu, &mut bus, word);
+    assert_eq!(cpu.sr.read(ACCLO_ID), 25);
+    assert_eq!(cpu.sr.read(ACCHI_ID), 0);
+    assert_eq!(cpu.get_pc(), TEST_PC + 3);
+
+    // Signed low halves, and a 40-bit carry into ACCHI.
+    cpu.regs.write_logical(10, 0xFFFC); // -4
+    cpu.regs.write_logical(9, 2);
+    cpu.sr.write(ACCLO_ID, 0xFFFF_FFFE);
+    cpu.sr.write(ACCHI_ID, 0);
+    step_mac16(&mut cpu, &mut bus, word);
+    // 40-bit ACC with ACCHI=0 is +0xfffffffe, plus -8 stays in the low 32 bits.
+    assert_eq!(cpu.sr.read(ACCLO_ID), 0xFFFF_FFF6);
+    assert_eq!(cpu.sr.read(ACCHI_ID), 0);
+
+    cpu.regs.write_logical(10, 3);
+    cpu.regs.write_logical(9, 1);
+    cpu.sr.write(ACCLO_ID, 0xFFFF_FFFE);
+    cpu.sr.write(ACCHI_ID, 0);
+    step_mac16(&mut cpu, &mut bus, word);
+    // 0xfffffffe + 3 = 0x100000001 → ACCHI=1, ACCLO=1.
+    assert_eq!(cpu.sr.read(ACCLO_ID), 1);
+    assert_eq!(cpu.sr.read(ACCHI_ID), 1);
+}
+
+#[test]
+fn mac16_aa_mul_umul_muls_and_high_halves() {
+    use labwired_core::decoder::xtensa::{decode, Instruction, Mac16Half, Mac16Op};
+
+    let mut cpu = XtensaLx7::new();
+    let mut bus = SystemBus::new();
+    cpu.reset(&mut bus).unwrap();
+
+    // MUL replaces the accumulator.
+    cpu.regs.write_logical(10, 3);
+    cpu.regs.write_logical(9, 5);
+    cpu.sr.write(ACCLO_ID, 10);
+    cpu.sr.write(ACCHI_ID, 0);
+    let mul_ll = enc_mac16_aa(0x4, 10, 9);
+    assert_eq!(
+        decode(mul_ll),
+        Instruction::Mac16Aa {
+            as_: 10,
+            at: 9,
+            half: Mac16Half::Ll,
+            op: Mac16Op::Mul
+        }
+    );
+    step_mac16(&mut cpu, &mut bus, mul_ll);
+    assert_eq!(cpu.sr.read(ACCLO_ID), 15);
+
+    // MULS subtracts.
+    cpu.sr.write(ACCLO_ID, 20);
+    cpu.sr.write(ACCHI_ID, 0);
+    step_mac16(&mut cpu, &mut bus, enc_mac16_aa(0xC, 10, 9));
+    assert_eq!(cpu.sr.read(ACCLO_ID), 5);
+
+    // HL uses the high half of as.
+    cpu.regs.write_logical(10, 0x0003_0000);
+    cpu.regs.write_logical(9, 5);
+    cpu.sr.write(ACCLO_ID, 0);
+    cpu.sr.write(ACCHI_ID, 0);
+    let mul_hl = enc_mac16_aa(0x5, 10, 9);
+    assert_eq!(
+        decode(mul_hl),
+        Instruction::Mac16Aa {
+            as_: 10,
+            at: 9,
+            half: Mac16Half::Hl,
+            op: Mac16Op::Mul
+        }
+    );
+    step_mac16(&mut cpu, &mut bus, mul_hl);
+    assert_eq!(cpu.sr.read(ACCLO_ID), 15);
+
+    // UMUL zero-extends 0xFFFF × 0xFFFF = 0xFFFE0001, not a signed -1×-1.
+    cpu.regs.write_logical(10, 0xFFFF);
+    cpu.regs.write_logical(9, 0xFFFF);
+    cpu.sr.write(ACCLO_ID, 0);
+    cpu.sr.write(ACCHI_ID, 0);
+    let umul_ll = enc_mac16_aa(0x0, 10, 9);
+    assert_eq!(
+        decode(umul_ll),
+        Instruction::Mac16Aa {
+            as_: 10,
+            at: 9,
+            half: Mac16Half::Ll,
+            op: Mac16Op::Umul
+        }
+    );
+    step_mac16(&mut cpu, &mut bus, umul_ll);
+    assert_eq!(cpu.sr.read(ACCLO_ID), 0xFFFE_0001);
+    assert_eq!(cpu.sr.read(ACCHI_ID), 0);
 }

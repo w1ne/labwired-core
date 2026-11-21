@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="16" failures="0" errors="0" time="0.121777">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="MaxSteps"/>
+    <property name="firmware_hash" value="9b063a3aa4ca8855b48daa1ae74ec6fa02c984c03b4e3084f59df194acf89f4f"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.121777">
+  </testcase>
+  <testcase classname="labwired" name="assertion 1: uart_contains: STM32F4 shared profile smoke" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 2: uart_contains: systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 3: uart_contains: STM32F429 PSP tailchain PASS" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 4: uart_contains: tim2 gated=1 arr_reset=1 w32=1 ug=1 uif_clr=1 run=1 masked=1 irq=2 stop=1 rel=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 5: uart_contains: spi1 max31855=01901600 gated=1 clock=1 txeirq=1 rearm=0 rxneirq=1 released=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 6: uart_contains: i2c1 bme280_id=00000060 gated=1 clock=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 7: uart_contains: usart2 rxne=1 isolated=1 irq=1 data=00005253 released=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 8: uart_contains: fpu m4f cpacr=1 mvfr=1 add=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 9: uart_contains: adc1 in1=000003FF gated=1 clock=1 eoc=1 irq=1 clear=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 10: uart_contains: adc1 ovr=eocs:1 flag=1 irq=1 clear=1 released=1 resume=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 11: uart_contains: adc1 scan=000003FF,000007FF irq=1 pending=1 end=1 released=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 12: uart_contains: adc1 scan_cont_groups=000007FF,000007FF,000007FF groups=3 irq=1 ovr=0 stop=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 13: uart_contains: adc1 injected jdr=000003FF,000007FF jeoc=1 irq=1 clear=1 ok" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 14: gpio_edges: gpioPortD:12 &gt;= 1 edges" time="0.000000">
+  </testcase>
+  <testcase classname="labwired" name="assertion 15: expected_stop_reason: MaxSteps" time="0.000000">
+  </testcase>
+</testsuite>

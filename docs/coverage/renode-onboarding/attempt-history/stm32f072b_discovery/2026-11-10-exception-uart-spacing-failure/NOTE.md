@@ -1,0 +1,1 @@
+The Cortex-M0 took IRQ 5 and returned successfully: UART showed `hit=1 ipsr=0x00000015 active=0x00000020 returned=1`, and the summary memory assertion passed. The only failure was the ordered UART assertion because `returned=1` lacked a separating space before `ok`. The final smoke adds that separator.

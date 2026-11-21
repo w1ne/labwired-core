@@ -34,6 +34,9 @@ struct DmaChannel {
     /// Initial CNDTR value. Used to fire HTIF when the transfer crosses
     /// half-way (CNDTR == cndtr_initial / 2).
     cndtr_initial: u32,
+    /// HT is an event at the halfway crossing, not a level condition. Keep
+    /// it one-shot even if firmware clears HTIF before transfer complete.
+    half_transfer_fired: bool,
 }
 
 impl DmaChannel {
@@ -46,6 +49,8 @@ impl DmaChannel {
 
 /// `CCR.TEIE`.
 const CCR_TEIE: u32 = 1 << 3;
+/// `CCR.CIRC`: reload the transfer count and internal addresses at TC.
+const CCR_CIRC: u32 = 1 << 5;
 /// The scheduler token of the controller's arbiter event.
 const ARBITER_TOKEN: u32 = 0;
 
@@ -129,6 +134,9 @@ struct DmaObservation {
 /// - **One element per served request**: a non-mem2mem channel transfers a
 ///   single element per latched request; a mem2mem channel stays `active`
 ///   and moves one element each slot it wins.
+/// - **Peripheral circular mode**: at CNDTR zero with `CCR.CIRC` set, reload
+///   CNDTR and the internal addresses, retain `CCR.EN`, and wait for the next
+///   peripheral request (RM0008 §13.3.1). MEM2MEM does not use this path.
 /// - **One data item per element, at its programmed widths**: each element is
 ///   a [`DmaRequest`] copy reading PSIZE/MSIZE bytes from the source side and
 ///   writing the other width to the destination (zero-padded / truncated as
@@ -187,15 +195,27 @@ pub struct Dma1 {
     /// Opt-in G0 DMA1 semantics. Other families retain their existing model.
     #[serde(skip)]
     g0_channel_irqs: Option<[u32; 7]>,
+    /// Per-channel NVIC lines for the classic (F1/L1) controller, from the
+    /// chip yaml (`config: { channel_irqs: [11, ..., 17] }`). `None` keeps the
+    /// single shared line (`irq:`). G0 semantics are not implied.
+    #[serde(skip)]
+    channel_irqs: Option<[u32; 7]>,
     /// G0 count/flags commit only after the bus reports a successful copy.
     #[serde(skip)]
     g0_pending: Option<usize>,
     observations: [DmaObservation; 7],
     /// Implemented channels when the part has fewer than seven (chip yaml
     /// `config: { channels: 5 }`). `None` is the full seven-channel block.
-    /// Register blocks of absent channels refuse access instead of storing.
+    /// Register blocks of absent channels refuse access instead of storing,
+    /// unless `absent_channels_reserved` is set.
     #[serde(skip)]
     channel_limit: Option<usize>,
+    /// Absent channel blocks are reserved registers that read zero and ignore
+    /// writes (chip yaml `config: { absent_channels: reserved }`): the
+    /// F03x/F04x/F05x DMA1 keeps CCR6/CCR7 inside its decoded block
+    /// (RM0091 §10.3.2).
+    #[serde(skip)]
+    absent_channels_reserved: bool,
 }
 
 impl Dma1 {
@@ -212,11 +232,25 @@ impl Dma1 {
         }
     }
 
+    /// Route channel `n` (1..7) interrupts to NVIC line `irqs[n - 1]`
+    /// instead of one shared line: STM32F1/L1 `DMA1_Channel1..7_IRQn`.
+    pub fn with_channel_irqs(mut self, irqs: [u32; 7]) -> Self {
+        self.channel_irqs = Some(irqs);
+        self
+    }
+
     /// Declare a controller with only `count` (1..=7) channels, e.g. the
     /// five-channel DMA1 of STM32F030/F070 (RM0360 §10.3) and AT32F421.
     pub fn with_channel_count(mut self, count: usize) -> Self {
         assert!((1..=7).contains(&count), "DMA channel count {count}");
         self.channel_limit = (count < 7).then_some(count);
+        self
+    }
+
+    /// Absent channels read zero and ignore writes instead of refusing the
+    /// access, so they can never be enabled or raise a flag.
+    pub fn with_reserved_absent_channels(mut self) -> Self {
+        self.absent_channels_reserved = true;
         self
     }
 
@@ -229,9 +263,11 @@ impl Dma1 {
     /// (CCRx at 0x08 + 20 * (x - 1)) do not exist on a reduced controller.
     fn check_offset(&self, offset: u64) -> SimResult<()> {
         match self.channel_limit {
-            Some(n) if offset >= 0x08 + 20 * n as u64 => Err(crate::SimulationError::Other(
-                format!("DMA: no register at {offset:#x} on a {n}-channel controller"),
-            )),
+            Some(n) if !self.absent_channels_reserved && offset >= 0x08 + 20 * n as u64 => {
+                Err(crate::SimulationError::Other(format!(
+                    "DMA: no register at {offset:#x} on a {n}-channel controller"
+                )))
+            }
             _ => Ok(()),
         }
     }
@@ -241,8 +277,10 @@ impl Dma1 {
         serde_json::json!({"profile": if self.g0_channel_irqs.is_some() {"stm32g0"} else {"legacy"}, "channels": self.observations})
     }
 
-    fn g0_irq_levels(&self) -> Vec<(u32, bool)> {
-        let Some(irqs) = self.g0_channel_irqs else {
+    /// Each per-channel line's level: some channel on it has a flag
+    /// (TEIF/HTIF/TCIF) whose enable is set.
+    fn channel_irq_levels(&self) -> Vec<(u32, bool)> {
+        let Some(irqs) = self.g0_channel_irqs.or(self.channel_irqs) else {
             return Vec::new();
         };
         let mut levels: Vec<(u32, bool)> = Vec::new();
@@ -258,11 +296,34 @@ impl Dma1 {
         levels
     }
 
-    fn g0_pending_irqs(&self) -> Vec<u32> {
-        self.g0_irq_levels()
+    fn channel_pending_irqs(&self) -> Vec<u32> {
+        self.channel_irq_levels()
             .into_iter()
             .filter_map(|(irq, high)| high.then_some(irq))
             .collect()
+    }
+
+    fn g0_pending_irqs(&self) -> Vec<u32> {
+        if self.g0_channel_irqs.is_none() {
+            return Vec::new();
+        }
+        self.channel_irq_levels()
+            .into_iter()
+            .filter_map(|(irq, high)| high.then_some(irq))
+            .collect()
+    }
+
+    /// The per-channel lines a slot pends: on G0 every live level, every
+    /// slot; on a classic controller with `channel_irqs`, the live levels
+    /// when the slot raised an interrupt (the shared-line event, routed).
+    fn slot_explicit_irqs(&self, irq: bool) -> Option<Vec<u32>> {
+        if self.g0_channel_irqs.is_some() {
+            Some(self.g0_pending_irqs())
+        } else if self.channel_irqs.is_some() && irq {
+            Some(self.channel_pending_irqs())
+        } else {
+            None
+        }
     }
 
     crate::cycle_clock::scheduler_mode!();
@@ -312,12 +373,12 @@ impl Dma1 {
     fn tick_channels_once(&mut self) -> PeripheralTickResult {
         let (req, irq) = self.run_slot();
         PeripheralTickResult {
-            irq: irq && self.g0_channel_irqs.is_none(),
+            irq: irq && self.g0_channel_irqs.is_none() && self.channel_irqs.is_none(),
             // B4 tick-cost normalization: charge zero in every state so the
             // walk-on reference and scheduler path agree cycle-for-cycle.
             cycles: 0,
             dma_requests: req.map(|r| vec![r]),
-            explicit_irqs: self.g0_channel_irqs.map(|_| self.g0_pending_irqs()),
+            explicit_irqs: self.slot_explicit_irqs(irq),
             ..Default::default()
         }
     }
@@ -343,7 +404,7 @@ impl Dma1 {
             _ if offset >= 0x08 => {
                 let chan_idx = ((offset - 0x08) / 20) as usize;
                 let reg_off = (offset - 0x08) % 20;
-                if chan_idx < 7 {
+                if chan_idx < self.channel_count() {
                     match reg_off {
                         0x00 => self.channels[chan_idx].ccr,
                         0x04 => self.channels[chan_idx].cndtr,
@@ -383,7 +444,16 @@ impl Dma1 {
                         self.isr = (self.isr & !(0xf << (4 * i))) | (flags << (4 * i));
                     }
                 } else {
-                    self.isr &= !value;
+                    // CGIFx clears the channel's GIF, TCIF, HTIF and TEIF
+                    // together (RM0008 §13.4.2, RM0091 §10.4.2); the other
+                    // bits clear only their own flag.
+                    let mut clear = value;
+                    for i in 0..7 {
+                        if (value >> (4 * i)) & 1 != 0 {
+                            clear |= 0xf << (4 * i);
+                        }
+                    }
+                    self.isr &= !clear;
                 }
             }
             0xA8 => {
@@ -393,7 +463,7 @@ impl Dma1 {
             _ if offset >= 0x08 => {
                 let chan_idx = ((offset - 0x08) / 20) as usize;
                 let reg_off = (offset - 0x08) % 20;
-                if chan_idx < 7 {
+                if chan_idx < self.channel_count() {
                     match reg_off {
                         0x00 => {
                             let old_en = (self.channels[chan_idx].ccr & 1) != 0;
@@ -426,6 +496,7 @@ impl Dma1 {
                                 chan.cpar_ptr = chan.cpar;
                                 chan.cmar_ptr = chan.cmar;
                                 chan.cndtr_initial = chan.cndtr;
+                                chan.half_transfer_fired = false;
                                 if self.g0_channel_irqs.is_some() {
                                     chan.requests = 0;
                                 }
@@ -528,14 +599,14 @@ impl Dma1 {
 
         // HTIF: set when transfer crosses the halfway mark. Matches what
         // real silicon does for any non-trivial CNDTR.
-        if cndtr_initial >= 2
-            && cndtr_after <= cndtr_initial / 2
-            && (self.isr & (1 << (i * 4 + 2))) == 0
-        {
-            self.isr |= 1 << (i * 4 + 2); // HTIF_x
-            self.isr |= 1 << (i * 4); // GIF_x
-            if htie {
-                irq = true;
+        if cndtr_initial >= 2 && cndtr_after <= cndtr_initial / 2 && !chan.half_transfer_fired {
+            chan.half_transfer_fired = true;
+            if (self.isr & (1 << (i * 4 + 2))) == 0 {
+                self.isr |= 1 << (i * 4 + 2); // HTIF_x
+                self.isr |= 1 << (i * 4); // GIF_x
+                if htie {
+                    irq = true;
+                }
             }
         }
 
@@ -546,8 +617,21 @@ impl Dma1 {
             chan.active = chan.requests > 0;
         }
         if cndtr_after == 0 {
-            self.channels[i].active = false;
-            self.channels[i].requests = 0;
+            let chan = &mut self.channels[i];
+            if mem2mem == 0 && chan.ccr & CCR_CIRC != 0 {
+                // RM0008 §13.3.1: in peripheral circular mode the channel
+                // stays enabled, CNDTR reloads, and the internal address
+                // pointers return to their configured base for the next lap.
+                // Any already-latched peripheral requests belong to that lap.
+                chan.cndtr = chan.cndtr_initial;
+                chan.half_transfer_fired = false;
+                chan.cpar_ptr = chan.cpar;
+                chan.cmar_ptr = chan.cmar;
+                chan.active = chan.requests > 0;
+            } else {
+                chan.active = false;
+                chan.requests = 0;
+            }
             self.isr |= 1 << (i * 4 + 1); // TCIF_x
             self.isr |= 1 << (i * 4); // GIF_x — global IF tracks the
                                       // logical-OR of TCIF/HTIF/TEIF.
@@ -624,7 +708,7 @@ impl Peripheral for Dma1 {
         let chan_idx = (request_id.saturating_sub(1)) as usize;
         if chan_idx < self.channel_count() {
             let chan = &mut self.channels[chan_idx];
-            if (chan.ccr & 1) != 0 {
+            if (chan.ccr & 1) != 0 && chan.cndtr > 0 {
                 // Channel is enabled: latch the request for the arbiter. In
                 // scheduler mode the bus follows this with
                 // `collect_scheduled_events`, which arms the arbiter event.
@@ -716,8 +800,8 @@ impl Peripheral for Dma1 {
         let reschedule = self.has_work();
         self.arbiter_live = reschedule;
         crate::sched::EventResult {
-            raise_own_irq: irq && self.g0_channel_irqs.is_none(),
-            explicit_irqs: self.g0_pending_irqs(),
+            raise_own_irq: irq && self.g0_channel_irqs.is_none() && self.channel_irqs.is_none(),
+            explicit_irqs: self.slot_explicit_irqs(irq).unwrap_or_default(),
             reschedule_delay: reschedule.then_some(1),
             dma_requests: req.into_iter().collect(),
             ..Default::default()
@@ -780,7 +864,7 @@ impl Peripheral for Dma1 {
     }
 
     fn irq_line_levels(&self, report: &mut dyn FnMut(u32, bool)) {
-        for (irq, high) in self.g0_irq_levels() {
+        for (irq, high) in self.channel_irq_levels() {
             report(irq, high);
         }
     }
@@ -951,6 +1035,238 @@ mod tests {
         assert_eq!(reqs[0].addr, 0x2000_0010);
         // CH1 TCIF is bit 1.
         assert_ne!(dma.read_reg(0x00) & (1 << 1), 0);
+        assert_ne!(dma.read_reg(0x08) & 1, 0, "normal-mode TC leaves EN set");
+    }
+
+    /// RM0008 §13.3.1: a non-circular channel serves no further peripheral
+    /// requests once CNDTR reaches zero; software must disable it before
+    /// reloading the count. EN itself remains set at transfer complete.
+    #[test]
+    fn normal_mode_ignores_peripheral_requests_after_transfer_complete() {
+        let mut dma = Dma1::new();
+        dma.write_reg(0x0C, 1); // CH1 CNDTR
+        dma.write_reg(0x10, 0x4001_244C); // ADC1 DR
+        dma.write_reg(0x14, 0x2000_0100); // result
+        dma.write_reg(0x08, 1 | (1 << 1) | (1 << 7)); // EN | TCIE | MINC
+
+        dma.dma_request(1);
+        assert!(dma.tick().dma_requests.is_some());
+        assert_eq!(dma.read_reg(0x0C), 0);
+        assert_ne!(dma.read_reg(0x00) & (1 << 1), 0, "TCIF is set");
+        assert_ne!(dma.read_reg(0x08) & 1, 0, "EN remains set at TC");
+
+        dma.dma_request(1);
+        assert_eq!(dma.channels[0].requests, 0, "zero-count request is ignored");
+        assert!(!dma.channels[0].active);
+        assert!(dma.tick().dma_requests.is_none());
+        assert_eq!(dma.read_reg(0x0C), 0, "CNDTR stays at zero");
+    }
+
+    /// HTIF is a halfway event, not a level condition: clearing it must not
+    /// cause it to reassert on the remaining items of the same transfer.
+    #[test]
+    fn clearing_half_transfer_flag_does_not_reassert_before_completion() {
+        let mut dma = Dma1::new().with_channel_irqs([11, 12, 13, 14, 15, 16, 17]);
+        dma.write_reg(0x0C, 5); // Odd-length transfer: HT after the third item.
+        dma.write_reg(0x10, 0x4001_244C); // ADC1 DR
+        dma.write_reg(0x14, 0x2000_0100); // result buffer
+        dma.write_reg(0x08, 1 | (1 << 2) | (1 << 7)); // EN | HTIE | MINC
+
+        for item in 0..3 {
+            dma.dma_request(1);
+            let result = dma.tick();
+            if item == 2 {
+                assert_eq!(result.explicit_irqs, Some(vec![11]));
+                assert_eq!(dma.read_reg(0x0C), 2);
+                assert_ne!(dma.read_reg(0x00) & (1 << 2), 0, "HTIF is set");
+            } else {
+                assert!(result.explicit_irqs.is_none());
+            }
+        }
+
+        dma.write_reg(0x04, 1 << 2); // Clear HTIF while the transfer is active.
+        assert_eq!(dma.read_reg(0x00) & (1 << 2), 0);
+        dma.dma_request(1);
+        let after_clear = dma.tick();
+        assert!(after_clear.explicit_irqs.is_none());
+        assert_eq!(dma.read_reg(0x0C), 1);
+        assert_eq!(dma.read_reg(0x00) & (1 << 2), 0, "HTIF stays clear");
+
+        dma.dma_request(1);
+        let complete = dma.tick();
+        assert!(complete.explicit_irqs.is_none(), "TCIE is disabled");
+        assert_eq!(dma.read_reg(0x0C), 0);
+        assert_ne!(dma.read_reg(0x00) & (1 << 1), 0, "TCIF is set");
+        assert_eq!(dma.read_reg(0x00) & (1 << 2), 0, "HTIF stays clear");
+    }
+
+    /// Disabling and re-enabling a channel starts a new transfer, so its
+    /// halfway event must be armed again even after the previous HTIF was
+    /// cleared and its transfer completed.
+    #[test]
+    fn reenabling_channel_rearms_half_transfer_for_new_count() {
+        let mut dma = Dma1::new().with_channel_irqs([11, 12, 13, 14, 15, 16, 17]);
+        dma.write_reg(0x0C, 5); // CH1 CNDTR
+        dma.write_reg(0x10, 0x4001_244C); // ADC1 DR
+        dma.write_reg(0x14, 0x2000_0100); // result buffer
+        dma.write_reg(0x08, 1 | (1 << 2) | (1 << 7)); // EN | HTIE | MINC
+
+        for item in 0..5 {
+            dma.dma_request(1);
+            let result = dma.tick();
+            if item == 2 {
+                assert_eq!(result.explicit_irqs, Some(vec![11]));
+                assert_eq!(dma.read_reg(0x0C), 2);
+                assert_ne!(dma.read_reg(0x00) & (1 << 2), 0, "first HTIF is set");
+            } else {
+                assert!(result.explicit_irqs.is_none());
+            }
+        }
+        assert_eq!(dma.read_reg(0x0C), 0);
+
+        dma.write_reg(0x08, 0); // Disable before loading the next CNDTR.
+        dma.write_reg(0x04, 0xF); // Clear the completed transfer's flags.
+        dma.write_reg(0x0C, 3);
+        dma.write_reg(0x08, 1 | (1 << 2) | (1 << 7));
+
+        dma.dma_request(1);
+        assert!(dma.tick().explicit_irqs.is_none());
+        dma.dma_request(1);
+        let second_half = dma.tick();
+        assert_eq!(second_half.explicit_irqs, Some(vec![11]));
+        assert_eq!(dma.read_reg(0x0C), 1);
+        assert_ne!(dma.read_reg(0x00) & (1 << 2), 0, "new transfer raises HTIF");
+    }
+
+    /// Clearing the previous transfer's completion flag and starting a new
+    /// transfer on the same channel must produce a fresh TC interrupt.
+    #[test]
+    fn reenabling_channel_rearms_transfer_complete_for_new_count() {
+        let mut dma = Dma1::new().with_channel_irqs([11, 12, 13, 14, 15, 16, 17]);
+
+        for transfer in 0..2 {
+            dma.write_reg(0x0C, 1); // CH1 CNDTR
+            dma.write_reg(0x10, 0x4001_244C); // ADC1 DR
+            dma.write_reg(0x14, 0x2000_0100); // result buffer
+            dma.write_reg(0x08, 1 | (1 << 1)); // EN | TCIE
+
+            dma.dma_request(1);
+            let complete = dma.tick();
+            assert_eq!(complete.explicit_irqs, Some(vec![11]));
+            assert_eq!(dma.read_reg(0x0C), 0);
+            assert_ne!(dma.read_reg(0x00) & (1 << 1), 0, "TCIF is set");
+
+            if transfer == 0 {
+                dma.write_reg(0x08, 0); // Disable before reloading CNDTR.
+                dma.write_reg(0x04, 0xF); // Clear CH1 flags before rearming.
+                assert_eq!(dma.read_reg(0x00) & 0xF, 0);
+            }
+        }
+    }
+
+    /// RM0008 §13.3.1: peripheral circular mode reloads CNDTR and the
+    /// internal memory pointer at each completed lap while leaving CCR.EN set.
+    #[test]
+    fn peripheral_circular_mode_reloads_count_and_memory_pointer() {
+        let mut dma = Dma1::new();
+        let ccr = 1 | (1 << 1) | CCR_CIRC | (1 << 7) | (1 << 8) | (1 << 10);
+        dma.write_reg(0x0C, 2); // CH1 CNDTR
+        dma.write_reg(0x10, 0x4001_244C); // ADC1 DR
+        dma.write_reg(0x14, 0x2000_0100); // two half-word results
+        dma.write_reg(0x08, ccr); // EN | TCIE | CIRC | MINC | half-word widths
+
+        dma.dma_request(1);
+        let first = dma.tick().dma_requests.unwrap()[0];
+        assert_eq!((first.addr, first.remaining), (0x2000_0100, Some(1)));
+        dma.dma_request(1);
+        let second_tick = dma.tick();
+        let second = second_tick.dma_requests.unwrap()[0];
+        assert!(second_tick.irq, "TCIE reports the completed circular lap");
+        assert_eq!((second.addr, second.remaining), (0x2000_0102, Some(0)));
+        assert_eq!(dma.read_reg(0x0C), 2, "CNDTR reloads at TC");
+        assert_eq!(dma.read_reg(0x08) & 1, 1, "the channel remains enabled");
+        assert_ne!(dma.read_reg(0x00) & (1 << 1), 0, "TCIF is set");
+
+        dma.write_reg(0x04, 0xF); // clear CH1 flags
+        dma.dma_request(1);
+        let next_lap = dma.tick().dma_requests.unwrap()[0];
+        assert_eq!(next_lap.addr, 0x2000_0100, "CMAR pointer reloads");
+        assert_eq!(next_lap.remaining, Some(1));
+        assert_eq!(dma.read_reg(0x0C), 1);
+    }
+
+    /// MEM2MEM keeps DIR: DIR=0 (ST HAL `DMA_MEMORY_TO_MEMORY`) copies
+    /// CPAR -> CMAR, DIR=1 copies CMAR -> CPAR.
+    #[test]
+    fn mem2mem_copies_in_the_dir_direction() {
+        let mut dma = Dma1::new();
+        dma.write_reg(0x0C, 1); // CNDTR1
+        dma.write_reg(0x10, 0x2000_0100); // CPAR1
+        dma.write_reg(0x14, 0x2000_0200); // CMAR1
+        dma.write_reg(0x08, 1 | (1 << 14)); // EN | MEM2MEM, DIR = 0
+        let r = dma.tick().dma_requests.unwrap()[0];
+        assert_eq!((r.src_addr, r.addr), (0x2000_0100, 0x2000_0200));
+
+        let mut dma = Dma1::new();
+        m2m(&mut dma, 1, 1, 0x2000_0200, 0x2000_0100, 0); // DIR = 1
+        let r = dma.tick().dma_requests.unwrap()[0];
+        assert_eq!((r.src_addr, r.addr), (0x2000_0200, 0x2000_0100));
+    }
+
+    /// IFCR.CGIFx clears the channel's GIF, TCIF, HTIF and TEIF; CTCIFx
+    /// clears TCIF alone; neither touches another channel.
+    #[test]
+    fn cgif_clears_every_flag_of_its_channel_only() {
+        let mut dma = Dma1::new();
+        m2m(&mut dma, 1, 1, 0x2000_0000, 0x2000_0100, 0);
+        m2m(&mut dma, 2, 1, 0x2000_0010, 0x2000_0110, 0);
+        for _ in 0..4 {
+            dma.tick();
+        }
+        assert_eq!(dma.read_reg(0x00) & 0xFF, 0x33, "GIF|TCIF on 1 and 2");
+        dma.write_reg(0x04, 1 << 5); // CTCIF2
+        assert_eq!(dma.read_reg(0x00) & 0xFF, 0x13);
+        dma.write_reg(0x04, 1); // CGIF1
+        assert_eq!(dma.read_reg(0x00) & 0xFF, 0x10);
+    }
+
+    /// F04x DMA1 (`channels: 5`): CCR6/CCR7 are reserved, so channel 6
+    /// cannot be programmed or enabled, while channel 5 still runs.
+    #[test]
+    fn five_channel_controller_reserves_channels_6_and_7() {
+        let mut dma = Dma1::new()
+            .with_channel_count(5)
+            .with_reserved_absent_channels();
+        m2m(&mut dma, 6, 1, 0x2000_0000, 0x2000_0100, 0);
+        assert_eq!(dma.read_reg(0x08 + 5 * 20), 0, "CCR6 reads zero");
+        assert_eq!(dma.read_reg(0x08 + 5 * 20 + 0x04), 0, "CNDTR6 reads zero");
+        dma.tick();
+        assert_eq!(dma.read_reg(0x00), 0, "channel 6 never flags");
+        m2m(&mut dma, 5, 1, 0x2000_0000, 0x2000_0100, 0);
+        dma.tick();
+        assert_ne!(dma.read_reg(0x00) & (1 << 17), 0, "TCIF5");
+    }
+
+    /// F1/L1 `DMA1_Channel1..7_IRQn`: with `channel_irqs`, a channel's
+    /// interrupt pends its own line, not the shared one, and only once its
+    /// enable is set.
+    #[test]
+    fn channel_irqs_route_each_channel_to_its_own_line() {
+        let mut dma = Dma1::new().with_channel_irqs([11, 12, 13, 14, 15, 16, 17]);
+        m2m(&mut dma, 3, 1, 0x2000_0000, 0x2000_0100, 0);
+        let res = dma.tick();
+        assert!(!res.irq && res.explicit_irqs.is_none(), "TCIE clear");
+        assert_ne!(dma.read_reg(0x00) & (1 << 9), 0, "TCIF3");
+        dma.write_reg(0x04, 0xF << 8);
+        // Channel 5, TCIE set.
+        m2m(&mut dma, 5, 1, 0x2000_0000, 0x2000_0100, 0);
+        dma.write_reg(0x08 + 4 * 20, dma.read_reg(0x08 + 4 * 20) | (1 << 1));
+        let res = dma.tick();
+        assert!(!res.irq, "the shared line stays quiet");
+        assert_eq!(res.explicit_irqs, Some(vec![15]));
+        let mut levels = Vec::new();
+        dma.irq_line_levels(&mut |l, h| levels.push((l, h)));
+        assert!(levels.contains(&(15, true)) && levels.contains(&(13, false)));
     }
 
     /// Program channel `ch` (1..7) for a memory-to-memory copy of `n` bytes

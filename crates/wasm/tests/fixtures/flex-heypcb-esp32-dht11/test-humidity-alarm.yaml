@@ -1,0 +1,46 @@
+# `labwired test --script test-humidity-alarm.yaml`. The firmware sends an
+# 18 ms start signal, times the U4 answer at 1 µs per poll and decodes the
+# frame. The test bench steps the humidity 55 -> 72 -> 68 -> 60 %RH at 25 °C.
+# The indicator goes on at 72 %RH, stays on at 68 %RH (hysteresis) and goes
+# off below 65 %RH. `loop` returns 1,000,000 + RH x 1000 + T.
+# All expected values were calculated from the DHT11 model frame
+# (RH, 0, T, 0, RH + T) and the firmware timing before the first run: a read
+# ends 18,001 + 3,270 + 43 x (one bits in the frame) µs after the start
+# signal begins, then the firmware waits 1 s.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: dht_drive }, { port: dht_line }, { port: user_led_drive }, { number: 18000 }] }
+  - call: { export: loop }
+  - set: { port: humidity_pct, value: 72 }
+  - call: { export: loop }
+  - set: { port: humidity_pct, value: 68 }
+  - call: { export: loop }
+  - set: { port: humidity_pct, value: 60 }
+  - call: { export: loop }
+limits:
+  max_steps: 20000000
+  max_time_ns: 10000000000
+assertions:
+  - entry_result: { equals: 1060025 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 1055025, step: 1 }
+  - entry_result: { equals: 1072025, step: 3 }
+  - entry_result: { equals: 1068025, step: 5 }
+  # Each read: start low and release by the host, 30 µs high, the 80 µs low
+  # + 80 µs high response, 40 bits of two edges, the 50 µs end low, idle high.
+  - digital_edges: { port: dht_line, count: 344 }
+  - digital_edges: { port: dht_drive, count: 8 }
+  # First read: host low at the first boundary, release seen at 18,001 µs,
+  # then the U4 answer 30, 110 and 190 µs later.
+  - digital_edges: { port: dht_line, from_ns: 0, to_ns: 18191000, times_ns: [1000, 18001000, 18031000, 18111000, 18191000] }
+  # Frames with 10, 8, 10 and 11 one bits: reads end at 21,701, 1,043,316,
+  # 2,065,017 and 3,086,761 µs.
+  - digital_edges: { port: user_led_drive, times_ns: [1043316000, 3086761000] }
+  - digital_edges: { port: user_led_state, times_ns: [1043317000, 3086762000] }
+  - port_value: { port: user_led_state, equals: 0 }
+  - final_time_ns: { equals: 4086761000 }
+  - console_contains: "T=25 C RH=55 %\nT=25 C RH=72 %\nT=25 C RH=68 %\nT=25 C RH=60 %\n"

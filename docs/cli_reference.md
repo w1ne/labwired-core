@@ -456,6 +456,7 @@ Step a manifest-declared co-simulation model through the real runner/adapter cha
 | `--steps <N>` | Model steps to advance (default `1`). |
 | `--json` | Print routed outputs as JSON instead of a table. |
 | `--analog-trace <PATH>` | Analog waveform trace (`.csv` or VCD `real` variables); only `adapter: analog` models produce samples. |
+| `--analog-series <PATH>` | The run-long analog series as JSON, in `result.json`'s `analog_series` shape. Lets a circuit with no MCU produce the same evidence a firmware run does. |
 
 Plus the [global flags](#global-options).
 

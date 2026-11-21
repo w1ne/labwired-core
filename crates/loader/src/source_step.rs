@@ -346,6 +346,7 @@ impl SourceDebug {
             MachineFamily::CortexM
             | MachineFamily::CortexA
             | MachineFamily::CortexR
+            | MachineFamily::Arm7Tdmi
             | MachineFamily::Xtensa => 16,
             MachineFamily::RiscV | MachineFamily::Avr => 32,
             // W0-W15, PC (16), SR (17) — provisional until XC16 DWARF numbers
@@ -362,6 +363,8 @@ impl SourceDebug {
             MachineFamily::Mips => 32,
             // X0-X30, SP (31).
             MachineFamily::Aarch64 => 32,
+            // R0-R15 (PC, SP, SR, CG, R4-R15), GCC's MSP430 DWARF numbering.
+            MachineFamily::Msp430 => 16,
         };
         let cpu = target.debug_cpu();
         self.symbols
@@ -448,7 +451,10 @@ impl TargetMemory for BusMemory<'_> {
 /// unwind with CFI; Xtensa (register windows) and AVR show frame 0 only.
 fn abi(family: MachineFamily) -> Abi {
     match family {
-        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => Abi {
+        MachineFamily::CortexM
+        | MachineFamily::CortexA
+        | MachineFamily::CortexR
+        | MachineFamily::Arm7Tdmi => Abi {
             sp: 13,
             callee_saved: (4..=11).collect(),
             code_mask: !1,
@@ -539,6 +545,17 @@ fn abi(family: MachineFamily) -> Abi {
             unwind: false,
             exc_return: false,
         },
+        MachineFamily::Msp430 => Abi {
+            // R1 is the stack pointer; R4-R10 are callee-saved (MSP430 EABI).
+            // Frame 0 only until the MSP430 CFI unwind has been checked
+            // against GCC output.
+            sp: 1,
+            callee_saved: (4..=10).collect(),
+            code_mask: !0,
+            register_size: 4,
+            unwind: false,
+            exc_return: false,
+        },
     }
 }
 
@@ -551,6 +568,7 @@ fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> Regis
         MachineFamily::CortexM
         | MachineFamily::CortexA
         | MachineFamily::CortexR
+        | MachineFamily::Arm7Tdmi
         | MachineFamily::Xtensa => 16,
         MachineFamily::RiscV => 32,
         MachineFamily::Avr => 33,
@@ -562,12 +580,16 @@ fn live_registers(target: &dyn SourceStepTarget, family: MachineFamily) -> Regis
         MachineFamily::Mips => 32,
         // X0-X30, SP.
         MachineFamily::Aarch64 => 32,
+        MachineFamily::Msp430 => 16,
     };
     for r in 0..count {
         regs.set(u16::from(r), Some(u64::from(cpu.get_register(r))));
     }
     match family {
-        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => {
+        MachineFamily::CortexM
+        | MachineFamily::CortexA
+        | MachineFamily::CortexR
+        | MachineFamily::Arm7Tdmi => {
             regs.set(15, Some(u64::from(cpu.get_pc())));
         }
         MachineFamily::RiscV => regs.set(0, Some(0)),
@@ -724,7 +746,10 @@ impl SourceDebug {
 /// The stack pointer's id for `get_register`.
 fn stack_register(family: MachineFamily) -> u8 {
     match family {
-        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => 13,
+        MachineFamily::CortexM
+        | MachineFamily::CortexA
+        | MachineFamily::CortexR
+        | MachineFamily::Arm7Tdmi => 13,
         MachineFamily::RiscV => 2,
         // a1 of the current register window.
         MachineFamily::Xtensa => 1,
@@ -737,6 +762,7 @@ fn stack_register(family: MachineFamily) -> u8 {
         MachineFamily::Rx => 0,
         MachineFamily::Mips => 29,
         MachineFamily::Aarch64 => 31,
+        MachineFamily::Msp430 => 1,
     }
 }
 
@@ -887,7 +913,10 @@ pub fn step_source_line(
     let sp_id = stack_register(family);
     // Cortex-M and RISC-V find a call by its return-address register.
     let ra_id = match family {
-        MachineFamily::CortexM | MachineFamily::CortexA | MachineFamily::CortexR => Some(14),
+        MachineFamily::CortexM
+        | MachineFamily::CortexA
+        | MachineFamily::CortexR
+        | MachineFamily::Arm7Tdmi => Some(14),
         MachineFamily::RiscV => Some(1),
         _ => None,
     };

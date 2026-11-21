@@ -15,8 +15,10 @@ block's `DAXICTRL` with `DAXIREADY`).
 | PWRCTRL UART0 power handshake (`DEVPWREN` → `DEVPWRSTATUS`) | smoke-tested | `pwr perf=lp uart0_pwr=1`; unit test covers the mirror and read-only status |
 | PWRCTRL `MCUPERFREQ` reset LP mode / request ack | smoke-tested (reset) / unit-tested (ack) | `perf=lp`; `pwrctrl_status_follows_enable_and_perf_request_is_acked` |
 | Power-domain effect on peripherals | **not modelled** | UART0 works with its domain off too |
-| UART0 (PL011 layout) TX @ 115200 from a 24-MHz clock, `IBRD 13` / `FBRD 1` | smoke-tested | `uart0 clksel=1 clk=24000000 ibrd=13 fbrd=1` (IBRD/FBRD read back from the model) + heartbeat lines on the console sink |
-| UART0 `CR.CLKEN` / `CR.CLKSEL` clock select | **executed, not checked** | the PL011 model does not store `CR`; the firmware derives the divisor from its own CLKSEL constant |
+| UART0 (PL011 layout) TX @ 115200 from a 24-MHz clock, `IBRD 13` / `FBRD 1` | smoke-tested | `uart0 clksel=1 clk=24000000 ibrd=13 fbrd=1` + heartbeat lines on the console sink |
+| UART0 `CR.CLKEN` / `CR.CLKSEL` clock select | smoke-tested | the model stores and reads back `UARTCR` |
+| PL011 RX interrupt mask/status and NVIC delivery | smoke-tested | imported-system `ambiq-apollo4` run injects `R`, checks `RIS=0x30`, `MIS=0x10`, NVIC IRQ 15 pending, then reads `DR` and observes `RIS=0x20`, `MIS=0`, and the pending level dropped |
+| PL011 FIFO thresholds, RX timeout, error and modem interrupt sources | **not modelled** | only the TX-empty and RX-nonempty level conditions are represented by the byte-queue model |
 | GPIO `PADKEY` lock on PINCFG | unit-tested | `pincfg_resets_to_gpio_and_ignores_writes_while_locked`; the smoke unlocks/relocks around its PINCFG writes |
 | GPIO push-pull output via `WTS`/`WTC` strobes + `RD` read-back | smoke-tested | `led=led0 on rd=0 lit=1` … (one strobe per change; the lit mask proves no other LED moved) |
 | GPIO `WT` latch contents | smoke-tested | `wt0=1 wt2=1 wt3=1`: each LED bank's latch holds exactly its LED bit |

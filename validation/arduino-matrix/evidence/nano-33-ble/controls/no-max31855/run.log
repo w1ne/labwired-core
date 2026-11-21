@@ -1,0 +1,6 @@
+2026-11-20T02:25:19.196205Z  INFO labwired_core::system::builder: Loading chip descriptor: configs/chips/nrf52840.yaml
+2026-11-20T02:25:19.316400Z  INFO labwired_loader: ELF Entry Point: 0x193e1
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: idle_ff skipped 1 of 10000001 device cycles (10000000 interpreted)
+2026-11-20T02:25:23.000732Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: "LW_L4_OK" }) (captured len=41)
+FAIL  0/1 checks · test · 10000000 steps · 3.68s

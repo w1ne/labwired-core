@@ -1,0 +1,26 @@
+# `labwired test --script test-read-before-first-interval.yaml`. Model-gap
+# record. The firmware polls the data-ready status 1 ms after
+# start_periodic_measurement. The SCD4x datasheet gives the first result 5 s
+# after the start, so silicon reports not ready (low 11 bits 0) and `loop`
+# would return 1 with `SCD41 not ready`.
+# Deviation: the catalog `scd41` model always reports ready (0x8006), so the
+# firmware reads a measurement and `loop` returns 4500. This script asserts the
+# observed model behavior; it does not show what the part does.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x62 }, { number: 1 }] }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 1000000000
+assertions:
+  - entry_result: { equals: 4500 }
+  - entry_result: { equals: 0, step: 0 }
+  - i2c_transfers: { bus: sensor_i2c, address: 0x62, ack: true, equals: 8 }
+  # 502.79 ms `setup`, then 1 ms, two commands, two 1 ms waits and both reads.
+  - final_time_ns: { equals: 507670000 }
+  - console_contains: "SCD41 serial 0x4c454f310041 at 0x62\nCO2=450 ppm T=25.00 C RH=50.00 %\n"

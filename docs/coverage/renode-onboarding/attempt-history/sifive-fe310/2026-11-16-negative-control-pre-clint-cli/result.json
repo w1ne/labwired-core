@@ -1,0 +1,321 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 2285,
+  "cycles": 2285,
+  "instructions": 2286,
+  "stop_reason": "memory_violation",
+  "stop_reason_details": {
+    "triggered_stop_condition": "memory_violation",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 400000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "SIFIVE FE310 SMOKE"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_ordered": [
+          "cpu=rv32im uart=sifive",
+          "mul=00000143",
+          "ecall trap mcause=0000000b mepc_match=1 count=00000001 entry_mie=0 entry_mpie=1 entry_mpp=00000003 return_mie=1 ok",
+          "ebreak trap mcause=00000003 mepc_match=1 count=00000001 resumed=1 entry_mie=0 entry_mpie=1 return_mie=1 ok",
+          "ecall masked mret entry_mie=0 entry_mpie=0 return_mie=0 return_mpie=1 ok",
+          "clint mtimecmp=ffffffffffffffff ticks=00000010 clocks_per_tick=00000764 lfclk_rate=1 mtip_low=1 ok",
+          "clint mtip mcause=80000007 count=00000001 armed_low=1 wfi_wake=1 disarmed=1 ok",
+          "clint msip mcause=80000003 count=00000001 mepc_next=1 cleared=1 ok",
+          "clint msip masked pending=1 released=1 traps=00000000 ok",
+          "gpio=PASS input_en=00080000 output_en=00080000 output_val=00080000 input_val=00080000"
+        ]
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "gpio:19",
+          "min_edges": 3
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": false
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      536876244,
+      2147499968,
+      2147485696,
+      0,
+      11,
+      1,
+      2147483648,
+      1,
+      268513280,
+      268513280,
+      10,
+      0,
+      1,
+      0,
+      0,
+      0,
+      11,
+      6280,
+      33570816,
+      33603584,
+      0,
+      536875344,
+      536875344,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 536880312,
+    "mstatus": 6272,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 536871668,
+    "mscratch": 0,
+    "mepc": 536877484,
+    "mcause": 11,
+    "mtval": 0,
+    "mtime": 2279,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "b88ae8f40908179eef521a8d98f72e1b216a19d316c60e6c476b975cbdadc570",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-sifive-fe310-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/sifive-fe310.yaml",
+    "script": "examples/renode-onboarding/sifive-fe310-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "uart0",
+        "kind": "native",
+        "base": 268513280,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "gpio",
+        "kind": "native",
+        "base": 268509184,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x2004000",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 2285,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "gpio",
+        "pin": 19,
+        "transitions": [],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [],
+        "mode": "input",
+        "edge_count": 0
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "gpio",
+      "number": 19,
+      "mode": "input",
+      "func": null,
+      "output": false,
+      "input": null,
+      "pad": null,
+      "drive": "z"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "SIFIVE FE310 SMOKE",
+        "cycle_lo": 120,
+        "cycle": 121,
+        "end_cycle": 211
+      },
+      {
+        "text": "cpu=rv32im uart=sifive",
+        "cycle_lo": 215,
+        "cycle": 216,
+        "end_cycle": 326
+      },
+      {
+        "text": "mul=00000143",
+        "cycle_lo": 330,
+        "cycle": 331,
+        "end_cycle": 437
+      },
+      {
+        "text": "ecall trap mcause=0000000b mepc_match=1 count=00000001 entry_mie=0 entry_mpie=1 entry_mpp=00000003 return_mie=1 ok",
+        "cycle_lo": 491,
+        "cycle": 492,
+        "end_cycle": 1184
+      },
+      {
+        "text": "ebreak trap mcause=00000003 mepc_match=1 count=00000001 resumed=1 entry_mie=0 entry_mpie=1 return_mie=1 ok",
+        "cycle_lo": 1241,
+        "cycle": 1242,
+        "end_cycle": 1860
+      },
+      {
+        "text": "ecall masked mret entry_mie=0 entry_mpie=0 return_mie=0 return_mpie=1 ok",
+        "cycle_lo": 1911,
+        "cycle": 1912,
+        "end_cycle": 2285
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 16668,
+    "data_bytes": 0,
+    "bss_bytes": 16384,
+    "flash_used_bytes": 16668,
+    "ram_static_bytes": 16384,
+    "flash_total_bytes": 4194304,
+    "ram_total_bytes": 16384,
+    "flash_used_pct": 0.4,
+    "ram_static_pct": 100.0,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 2285,
+    "instructions": 2286,
+    "steps_executed": 2285,
+    "memory_reads": 15,
+    "memory_writes": 31,
+    "peripheral_accesses": 700,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 536871828,
+        "count": 1,
+        "symbol": "firmware_sifive_fe310_smoke::put_hex32"
+      },
+      {
+        "pc": 536871856,
+        "count": 1,
+        "symbol": "firmware_sifive_fe310_smoke::putc"
+      },
+      {
+        "pc": 536871916,
+        "count": 1,
+        "symbol": "firmware_sifive_fe310_smoke::put_hex32"
+      },
+      {
+        "pc": 536872772,
+        "count": 1,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 536873396,
+        "count": 1,
+        "symbol": "core::ptr::read_volatile"
+      },
+      {
+        "pc": 536875608,
+        "count": 1,
+        "symbol": "firmware_sifive_fe310_smoke::putc"
+      },
+      {
+        "pc": 536877072,
+        "count": 1,
+        "symbol": "firmware_sifive_fe310_smoke::putc"
+      },
+      {
+        "pc": 536878112,
+        "count": 1,
+        "symbol": "firmware_sifive_fe310_smoke::ecall_masked_mret_probe"
+      }
+    ]
+  }
+}

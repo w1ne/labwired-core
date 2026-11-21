@@ -1,0 +1,68 @@
+{
+  "type": "standard",
+  "cpu": {
+    "type": "arm",
+    "registers": [
+      1879048207,
+      536870916,
+      102,
+      0,
+      15,
+      1060976,
+      67174403,
+      542638064,
+      8912896,
+      1074855956,
+      514,
+      1060985,
+      0,
+      542638040,
+      134222967,
+      134223092
+    ],
+    "pc": 134223092,
+    "xpsr": 553648128,
+    "primask": false,
+    "pending_exceptions": 0,
+    "pending_exceptions_hi": [
+      0,
+      0,
+      0
+    ],
+    "vtor": 0,
+    "waiting_for_event": false,
+    "event_register": false
+  },
+  "steps_executed": 4000000,
+  "cycles": 4000000,
+  "instructions": 4000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 4000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 4000000
+    }
+  },
+  "limits": {
+    "max_steps": 4000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "firmware_hash": "75bd20e615eb282cf79f0c1f0462ec86d5b8649fbefaef90255ad6c4dbc0e66d",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/thumbv8m.main-none-eabi/release/firmware-mimxrt798s-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/mimxrt798s.yaml",
+    "script": "examples/renode-onboarding/mimxrt798s-smoke.yaml"
+  }
+}

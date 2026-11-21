@@ -11,5 +11,6 @@ Authoritative sources used by this example (retrieved 2026-10-23):
 | nRF52840-DK board package (`configs/systems/nrf52840-dk.yaml`) | the shipped chip | the nRF52840 chip descriptor this board reuses (the silicon is identical) |
 
 Open items: the onboard LSM9DS1 IMU is not modelled (the TWI0 controller is);
-the nRF52840 USB CDC (`Serial`) is not modelled — the modelled console is
-UARTE0 (`Serial1`).
+this smoke does not use the nRF52840 USB CDC (`Serial`) — its console is
+UARTE0 (`Serial1`). The USB device model is exercised by
+`examples/arduino-nano-33-ble-bme280/`.

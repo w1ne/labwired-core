@@ -1,0 +1,27 @@
+# Arduino matrix system — NUCLEO-G431RB (MB1367, STM32G431RBT6).
+name: "arduino-matrix-nucleo-g431rb"
+chip: "../../../configs/chips/stm32g431rb.yaml"
+external_devices:
+  # Matrix L3_i2c_sensor: INA219 at 0x40 on default Arduino Wire bus (i2c1,
+  # D15/D14 = PB8/PB9 on the NUCLEO_G431RB variant).
+  - id: "ina219"
+    type: "ina219"
+    connection: "i2c1"
+    config:
+      i2c_address: 0x40
+  # Matrix L4_spi_sensor: MAX31855 on default Arduino SPI (spi1).
+  - id: "max31855"
+    type: "max31855"
+    connection: "spi1"
+    config:
+      cs_pin: "PB6"
+# Matrix L5_adc: A0 (PA0 = ADC1_IN1, variant PeripheralPins.c) held at
+# 1651 mV. 12-bit against VREF+ = 3.3 V is 2048, and stm32duino returns the
+# 10-bit Arduino default, so stock analogRead(A0) must return exactly 512.
+peripherals:
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x50000000
+    config:
+      input_mv: { 1: 1651 }
+board_io: []

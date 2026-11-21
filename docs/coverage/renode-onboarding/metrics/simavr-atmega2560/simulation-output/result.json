@@ -1,0 +1,452 @@
+{
+  "result_schema_version": "1.0",
+  "status": "pass",
+  "steps_executed": 15000000,
+  "cycles": 23252728,
+  "instructions": 15000000,
+  "stop_reason": "max_steps",
+  "stop_reason_details": {
+    "triggered_stop_condition": "max_steps",
+    "triggered_limit": {
+      "name": "max_steps",
+      "value": 15000000
+    },
+    "observed": {
+      "name": "steps_executed",
+      "value": 15000000
+    }
+  },
+  "limits": {
+    "max_steps": 15000000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "uart_contains": "MEGA READY"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "uart_contains": "k=1 a8=512 a9=512 a0=512 ms=200 f=6"
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "gpio_edges": {
+          "pin": "portb:7",
+          "min_edges": 2
+        }
+      },
+      "passed": true
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": true
+    }
+  ],
+  "cpu_state": {
+    "type": "avr",
+    "registers": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      2,
+      0,
+      2,
+      0,
+      2,
+      0,
+      0,
+      53,
+      0,
+      0,
+      0,
+      120,
+      5,
+      0,
+      0,
+      12,
+      0,
+      193,
+      0
+    ],
+    "pc": 1384,
+    "sp": 8697,
+    "sreg": 149
+  },
+  "firmware_hash": "c8f01ff63cacb6ca376d21730c724ff59e3cb6902832b0eff53c8e3425149fe9",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../tests/fixtures/avr/arduino-mega-2560-io.elf",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/simavr-atmega2560.yaml",
+    "script": "examples/renode-onboarding/simavr-atmega2560-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [
+      {
+        "name": "portb",
+        "kind": "native",
+        "base": 65571,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porte",
+        "kind": "native",
+        "base": 65580,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portf",
+        "kind": "native",
+        "base": 65583,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "portg",
+        "kind": "native",
+        "base": 65586,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "porth",
+        "kind": "native",
+        "base": 65792,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "usart0",
+        "kind": "native",
+        "base": 65728,
+        "registers": [],
+        "artifacts": []
+      },
+      {
+        "name": "adc",
+        "kind": "native",
+        "base": 66048,
+        "registers": [],
+        "artifacts": []
+      }
+    ],
+    "devices": [
+      {
+        "id": "pot_a8",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 8
+        },
+        "artifacts": []
+      },
+      {
+        "id": "pot_a9",
+        "device_type": "potentiometer",
+        "declared": true,
+        "attachment": {
+          "transport": "analog",
+          "bus": "adc",
+          "channel": 9
+        },
+        "artifacts": []
+      }
+    ]
+  },
+  "fidelity": [
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "logic_edges": {
+    "dropped": 0,
+    "now_cycle": 23252728,
+    "channels": [
+      {
+        "ch": 0,
+        "channel": "CH0",
+        "peripheral": "portb",
+        "pin": 7,
+        "initial": 0,
+        "transitions": [
+          {
+            "cycle": 11208844,
+            "value": 1
+          },
+          {
+            "cycle": 12814529,
+            "value": 0
+          }
+        ],
+        "gaps": [],
+        "initial_state": "z",
+        "states": [
+          {
+            "cycle": 2025,
+            "state": "0"
+          },
+          {
+            "cycle": 11208844,
+            "state": "1"
+          },
+          {
+            "cycle": 12814529,
+            "state": "0"
+          }
+        ],
+        "mode": "output",
+        "edge_count": 2
+      }
+    ]
+  },
+  "gpio_pins": [
+    {
+      "pin": "CH0",
+      "peripheral": "portb",
+      "number": 7,
+      "mode": "output",
+      "func": null,
+      "output": false,
+      "input": false,
+      "pad": false,
+      "drive": "0"
+    }
+  ],
+  "uart_lines": {
+    "lines": [
+      {
+        "text": "MEGA READY",
+        "cycle_lo": 15551,
+        "cycle": 31097,
+        "end_cycle": 202045
+      },
+      {
+        "text": "k=0 a8=512 a9=512 a0=512 ms=101 f=2",
+        "cycle_lo": 1627557,
+        "cycle": 1642892,
+        "end_cycle": 2233476
+      },
+      {
+        "text": "k=1 a8=512 a9=512 a0=512 ms=200 f=6",
+        "cycle_lo": 3225526,
+        "cycle": 3239690,
+        "end_cycle": 3845788
+      },
+      {
+        "text": "k=2 a8=512 a9=512 a0=512 ms=300 f=6",
+        "cycle_lo": 4821159,
+        "cycle": 4836500,
+        "end_cycle": 5427082
+      },
+      {
+        "text": "k=3 a8=512 a9=512 a0=512 ms=400 f=12",
+        "cycle_lo": 6419437,
+        "cycle": 6433086,
+        "end_cycle": 7054734
+      },
+      {
+        "text": "k=4 a8=512 a9=512 a0=512 ms=500 f=10",
+        "cycle_lo": 8030454,
+        "cycle": 8045213,
+        "end_cycle": 8666855
+      },
+      {
+        "text": "k=5 a8=512 a9=512 a0=512 ms=600 f=18",
+        "cycle_lo": 9613002,
+        "cycle": 9626316,
+        "end_cycle": 10247960
+      },
+      {
+        "text": "k=6 a8=512 a9=512 a0=512 ms=700 f=14",
+        "cycle_lo": 11223892,
+        "cycle": 11238442,
+        "end_cycle": 11860090
+      },
+      {
+        "text": "k=7 a8=512 a9=512 a0=512 ms=800 f=24",
+        "cycle_lo": 12835045,
+        "cycle": 12850592,
+        "end_cycle": 13456720
+      },
+      {
+        "text": "k=8 a8=512 a9=512 a0=512 ms=900 f=18",
+        "cycle_lo": 14417469,
+        "cycle": 14431676,
+        "end_cycle": 15053323
+      },
+      {
+        "text": "k=9 a8=512 a9=512 a0=512 ms=1000 f=30",
+        "cycle_lo": 16028493,
+        "cycle": 16043609,
+        "end_cycle": 16665279
+      },
+      {
+        "text": "k=10 a8=512 a9=512 a0=512 ms=1101 f=22",
+        "cycle_lo": 17626501,
+        "cycle": 17639817,
+        "end_cycle": 18292554
+      },
+      {
+        "text": "k=11 a8=512 a9=512 a0=512 ms=1201 f=36",
+        "cycle_lo": 19221484,
+        "cycle": 19236044,
+        "end_cycle": 19888779
+      },
+      {
+        "text": "k=0 a8=512 a9=512 a0=512 ms=1300 f=2",
+        "cycle_lo": 20819387,
+        "cycle": 20832728,
+        "end_cycle": 21454373
+      },
+      {
+        "text": "k=1 a8=512 a9=512 a0=512 ms=1400 f=6",
+        "cycle_lo": 22430298,
+        "cycle": 22444844,
+        "end_cycle": 23066495
+      }
+    ],
+    "dropped_lines": 0
+  },
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 3370,
+    "data_bytes": 36,
+    "bss_bytes": 171,
+    "flash_used_bytes": 3406,
+    "ram_static_bytes": 207,
+    "flash_total_bytes": 262144,
+    "ram_total_bytes": 8192,
+    "flash_used_pct": 1.3,
+    "ram_static_pct": 2.53,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 23252728,
+    "instructions": 15000000,
+    "steps_executed": 15000000,
+    "memory_reads": 0,
+    "memory_writes": 1153545,
+    "peripheral_accesses": 476073,
+    "exceptions": 0,
+    "pc_samples": [
+      {
+        "pc": 2522,
+        "count": 2033,
+        "symbol": "millis"
+      },
+      {
+        "pc": 2554,
+        "count": 2029,
+        "symbol": "loop"
+      },
+      {
+        "pc": 2546,
+        "count": 1916,
+        "symbol": "loop"
+      },
+      {
+        "pc": 2536,
+        "count": 1914,
+        "symbol": "loop"
+      },
+      {
+        "pc": 1384,
+        "count": 1876,
+        "symbol": "serialEventRun"
+      },
+      {
+        "pc": 1428,
+        "count": 1835,
+        "symbol": "serialEventRun"
+      },
+      {
+        "pc": 1480,
+        "count": 1758,
+        "symbol": "serialEventRun"
+      },
+      {
+        "pc": 1402,
+        "count": 1720,
+        "symbol": "serialEventRun"
+      },
+      {
+        "pc": 2958,
+        "count": 1718,
+        "symbol": "main"
+      },
+      {
+        "pc": 2506,
+        "count": 1641,
+        "symbol": "millis"
+      },
+      {
+        "pc": 2532,
+        "count": 1604,
+        "symbol": "loop"
+      },
+      {
+        "pc": 1454,
+        "count": 1601,
+        "symbol": "serialEventRun"
+      },
+      {
+        "pc": 2518,
+        "count": 1563,
+        "symbol": "millis"
+      },
+      {
+        "pc": 1390,
+        "count": 1561,
+        "symbol": "serialEventRun"
+      },
+      {
+        "pc": 2544,
+        "count": 1561,
+        "symbol": "loop"
+      },
+      {
+        "pc": 2542,
+        "count": 1484,
+        "symbol": "loop"
+      }
+    ]
+  }
+}

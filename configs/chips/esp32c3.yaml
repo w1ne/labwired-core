@@ -87,6 +87,9 @@ peripherals:
     size: "512B"
     config:
       debug_schema: "../peripherals/esp32c3/uart0.yaml"
+      # CLK_CONF.SCLK_SEL: 1 = APB 80 MHz, 2 = RC_FAST 17.5 MHz, 3 = XTAL
+      # 40 MHz (ESP32-C3 TRM v1.1, UART chapter). esp-hal 1.2 selects XTAL.
+      uart_sclk_sel_hz: [0, 80000000, 17500000, 40000000]
   - id: "gpio"
     type: "esp32c3_gpio"
     base_address: 0x60004000
@@ -113,6 +116,9 @@ peripherals:
     size: "512B"
     config:
       debug_schema: "../peripherals/esp32c3/uart1.yaml"
+      # CLK_CONF.SCLK_SEL: 1 = APB 80 MHz, 2 = RC_FAST 17.5 MHz, 3 = XTAL
+      # 40 MHz (ESP32-C3 TRM v1.1, UART chapter). esp-hal 1.2 selects XTAL.
+      uart_sclk_sel_hz: [0, 80000000, 17500000, 40000000]
   - id: "timg1"
     type: "esp32_timg"
     base_address: 0x60020000

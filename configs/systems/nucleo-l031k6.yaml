@@ -1,0 +1,9 @@
+# ST UM1956 Nucleo-32 board signals (NUCLEO-L031K6).
+# LD3 green user LED is on D13 / PB3 (UM1956 Table 8, SB15 default ON;
+# Table 14: D13 = PB3). USART2 TX PA2 / RX PA15 go to the ST-LINK virtual
+# COM port (UM1956 Table 7, SB2/SB3 default ON).
+name: "nucleo-l031k6"
+chip: "../chips/stm32l031k6.yaml"
+external_devices: []
+board_io:
+  - { id: "ld3_pb3", kind: "led", peripheral: "gpiob", pin: 3, signal: "output", active_high: true }

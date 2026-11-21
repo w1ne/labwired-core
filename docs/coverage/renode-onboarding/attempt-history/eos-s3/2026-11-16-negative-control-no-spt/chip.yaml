@@ -1,0 +1,69 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+# QuickLogic EOS S3 Cortex-M4F profile from Renode platforms/cpus/eos-s3.repl.
+#
+# Memory: the M4 has ONE 512 KiB SRAM (Renode `m4mem`), mapped at 0x20000000
+# and mirrored at 0x0. The bootloader copies the application from SPI flash
+# into it; there is no on-chip flash. So `flash` is empty, `ram` is the SRAM,
+# and the low view is a same-backing mirror: a store at 0x0+n is the store at
+# 0x20000000+n. (The import mapped two separate 512 KiB stores, so a write
+# through one view never showed in the other.)
+#
+# Declared: SysTick (part of the Renode NVIC, systickFrequency 61.44 MHz),
+# PL011 UART (RX level on source IRQ 7 reaches INTR_CTRL OTHER_INTR
+# bit 1 and the M4 output is gated by OTHER_INTR_EN_M4 bit 1), the
+# eight M4 GPIOs in MISC_CTRL (IO_INPUT 0x40005100 / IO_OUTPUT 0x40005104;
+# qorc-sdk HAL/inc/eoss3_dev.h, HAL/src/eoss3_hal_gpio.c), the 4 KiB SDMA
+# SRAM, and INTR_CTRL at 0x40004800 (Renode EOSS3_IntrCtrl): only the two
+# software interrupts are live (SW_INTR_1 -> NVIC 1, SW_INTR_2 -> NVIC 0,
+# each gated by its EN_M4 bit). OTHER_INTR bit 1 models PL011 RX only. Its
+# GPIO/FFE/FB status words read 0; timer, watchdog and other sources are not
+# routed through it.
+# SPT at 0x40005C00 (Renode EOSS3_SimplePeriodicTimer, size 0x200): the
+# 30-bit TIMER_VAL counts once per ms of simulated time while SPT_EN is set,
+# at cpu_hz (default 61.44 MHz, the repl systickFrequency); UPDATE_TMR_VAL
+# loads it. No FFE kick-off output, no timestamps, no error compensation.
+# Not declared (no model): IO_MUX pad controls, ADC,
+# DesignWare SPI + SPI DMA, packet FIFO, uDMA + bridge, FFE and its I2C
+# masters, voice block, PMU, CRU.
+name: eos-s3
+arch: arm
+core: cortex-m4
+flash:
+  base: 0
+  size: 0
+ram:
+  base: 0x20000000
+  size: 512KB
+flash_boot_alias: false
+memory_regions:
+- name: m4mem_low
+  base: 0x0
+  size: 512KB
+  alias_of: 0x20000000
+- name: sdma_sram
+  base: 0x4000F000
+  size: 4KB
+peripherals:
+- id: systick
+  type: systick
+  base_address: 0xE000E010
+  size: 16B
+- id: uart
+  type: pl011
+  base_address: 0x40010000
+  irq: 7
+- id: intr_ctrl
+  type: eos_s3_intr_ctrl
+  base_address: 0x40004800
+  size: 1KB
+- id: gpio
+  type: gpio
+  base_address: 0x40005100
+  size: 8B
+  config:
+    profile: eos_s3

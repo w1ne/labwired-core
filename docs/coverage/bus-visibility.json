@@ -181,6 +181,10 @@
     "name": "esp32-devkitc-32e-uart1"
   },
   {
+    "buses": [],
+    "name": "esp32c2"
+  },
+  {
     "buses": [
       "I2C",
       "SPI",
@@ -189,7 +193,9 @@
     "name": "esp32c3"
   },
   {
-    "buses": [],
+    "buses": [
+      "I2C"
+    ],
     "name": "esp32c5"
   },
   {
@@ -201,7 +207,9 @@
     "name": "esp32c6"
   },
   {
-    "buses": [],
+    "buses": [
+      "I2C"
+    ],
     "name": "esp32c61"
   },
   {
@@ -223,6 +231,10 @@
   {
     "buses": [],
     "name": "esp32s2"
+  },
+  {
+    "buses": [],
+    "name": "esp32s2-arduino"
   },
   {
     "buses": [],
@@ -263,6 +275,10 @@
   {
     "buses": [],
     "name": "mpfs095t"
+  },
+  {
+    "buses": [],
+    "name": "mspm0g3507"
   },
   {
     "buses": [],
@@ -442,8 +458,7 @@
   {
     "buses": [
       "I2C",
-      "SPI",
-      "UART"
+      "SPI"
     ],
     "name": "stm32f103c6"
   },
@@ -466,8 +481,7 @@
   {
     "buses": [
       "I2C",
-      "SPI",
-      "UART"
+      "SPI"
     ],
     "name": "stm32f103r6"
   },
@@ -766,6 +780,13 @@
   {
     "buses": [
       "I2C",
+      "UART"
+    ],
+    "name": "stm32h533re"
+  },
+  {
+    "buses": [
+      "I2C",
       "SPI",
       "UART"
     ],
@@ -773,6 +794,8 @@
   },
   {
     "buses": [
+      "I2C",
+      "SPI",
       "UART"
     ],
     "name": "stm32h723zg"
@@ -784,6 +807,22 @@
       "UART"
     ],
     "name": "stm32h735"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32h753zi"
+  },
+  {
+    "buses": [
+      "I2C",
+      "SPI",
+      "UART"
+    ],
+    "name": "stm32l031k6"
   },
   {
     "buses": [

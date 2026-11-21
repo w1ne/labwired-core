@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f4_discovery",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": false,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 0,
+    "stop_reason": "config_error"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-f4-discovery-smoke",
+  "target_triple": "thumbv7em-none-eabi",
+  "script": "examples/renode-onboarding/stm32f4_discovery-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f4_discovery.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T13:21:42Z",
+  "finished_at_utc": "2026-11-10T13:23:14Z",
+  "elapsed_seconds": 93,
+  "elapsed_ms": 92062,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "'uart_injections' require schema_version '1.2' (got '1.0')",
+  "failure_hint": "Simulation failed. Inspect logs/run_smoke.log and fix the first failing operation only.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 90.961,
+    "build_firmware": 0.724,
+    "run_smoke": 0.328
+  },
+  "stages_ms": {
+    "build_cli": 90961,
+    "build_firmware": 724,
+    "run_smoke": 328
+  }
+}

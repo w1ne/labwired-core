@@ -3,33 +3,100 @@
 #
 # This software is released under the MIT License.
 # See the LICENSE file in the project root for full license information.
-
+#
+# Texas Instruments MSP430F2619 (20-bit MSP430X CPU, 120 KiB flash, 4 KiB
+# RAM). SIM-DERIVED: no MSP430F2619 bench part.
+#
+# Sources:
+#   - MSP430x2xx Family User's Guide (SLAU144): CPUX, SFRs, USCI (UART mode),
+#     watchdog timer+, hardware multiplier, basic clock module+.
+#   - MSP430F241x/MSP430F261x data sheet (SLAS541): memory map, interrupt
+#     vectors.
+#   - msp430-gcc-support-files 1.212 `msp430f2619.h`, `msp430f2619.ld`,
+#     `msp430f2619_symbols.ld`: register addresses, vector numbers, memory
+#     regions.
+#   - Renode `platforms/cpus/msp430f2619.repl`: the platform this descriptor
+#     was imported from.
+#
+# Core: `arch: msp430`, `core: msp430x` builds the MSP430 machine family with
+# the CPUX (crates/core/src/cpu/msp430.rs). Interrupt line n vectors through
+# 0xFFFE - 2n: WDT = 5, USCI A0/B0 RX = 8, USCI A0/B0 TX = 9, USCI A1/B1
+# RX = 14, USCI A1/B1 TX = 15.
+#
+# NOT modelled, and not mapped (an access is a bus error): the bootstrap
+# loader ROM at 0x0C00, digital I/O ports, Timer_A, Timer_B, USCI_B0/B1,
+# ADC12, DAC12, DMA, SVS, Comparator_A+, the flash controller.
+# Modelled with limits (crates/core/src/peripherals/msp430.rs): the watchdog
+# counter does not run; the basic clock module+ is storage and no clock rate
+# follows it; USCI_A UART mode only, immediate transmit, no receive errors;
+# every instruction takes one clock cycle. Information memory reads erased
+# (0xFF): the factory DCO calibration constants of segment A are not present.
 name: msp430f2619
-arch: arm
+arch: msp430
+core: msp430x
+# MCLK from the DCO at its reset setting (about 1.1 MHz, typical). The clock
+# registers do not change it, and every instruction takes one cycle.
+cpu_hz: 1100000
+# The SFRs sit at 0x0; the MSP430 has no Cortex-M style flash mirror there.
+flash_boot_alias: false
 flash:
-  base: 3072
-  size: 1024B
+  # 0x2100-0x1FFFF; the interrupt vectors are at 0xFFC0-0xFFFF.
+  base: 0x2100
+  size: 122624B
 ram:
-  base: 512
-  size: 2048B
+  base: 0x1100
+  size: 4KB
+memory_regions:
+  # The first 2 KiB of RAM also answer at 0x0200.
+  - name: ram_mirror
+    base: 0x0200
+    size: 2KB
+    alias_of: 0x1100
+  # Information memory, segments D to A.
+  - name: infomem
+    base: 0x1000
+    size: 256B
+    erased: true
 peripherals:
-- id: mpy
-  type: msp430f2xxx_mpy
-  bus: sysbus
-  base_address: 304
-- id: boot
-  type: arraymemory
-  bus: sysbus
-  base_address: 3072
-- id: ram_extended
-  type: arraymemory
-  bus: sysbus
-  base_address: 6400
-- id: code
-  type: arraymemory
-  bus: sysbus
-  base_address: 8448
-- id: info_mem
-  type: arraymemory
-  bus: sysbus
-  base_address: 4096
+  # IE1, IE2, IFG1, IFG2, ME1, ME2, UC1IE, UC1IFG. WDTIE/WDTIFG are bit 0 of
+  # IE1/IFG1; UCA0RXIE/UCA0TXIE/UCB0RXIE/UCB0TXIE bits 0-3 of IE2/IFG2;
+  # UCA1RXIE/UCA1TXIE/UCB1RXIE/UCB1TXIE bits 0-3 of UC1IE/UC1IFG.
+  - id: sfr
+    type: msp430_sfr
+    base_address: 0x0000
+    size: 8B
+    config:
+      ie1_lines: [5, 0, 0, 0, 0, 0, 0, 0]
+      ie2_lines: [8, 9, 8, 9, 0, 0, 0, 0]
+      uc1_lines: [14, 15, 14, 15, 0, 0, 0, 0]
+  - id: bcsctl3
+    type: msp430_bcsctl3
+    base_address: 0x0053
+    size: 1B
+  # DCOCTL, BCSCTL1, BCSCTL2.
+  - id: bcm
+    type: msp430_bcm_plus
+    base_address: 0x0056
+    size: 3B
+  # UCA0ABCTL ... UCA0TXBUF.
+  - id: usci_a0
+    type: msp430_usci_a
+    base_address: 0x005D
+    size: 11B
+    config:
+      flags: [2, 0, 1]
+  # UCA1ABCTL ... UCA1TXBUF.
+  - id: usci_a1
+    type: msp430_usci_a
+    base_address: 0x00CD
+    size: 11B
+    config:
+      flags: [3, 0, 1]
+  - id: wdt
+    type: msp430_wdt
+    base_address: 0x0120
+    size: 2B
+  - id: mpy
+    type: msp430_mpy
+    base_address: 0x0130
+    size: 16B

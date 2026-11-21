@@ -1,0 +1,41 @@
+# `labwired test --script test-overtemp-alarm.yaml`. The firmware reads U4 on
+# CS 10 once in `setup` and once in each `loop`. The test bench steps the
+# thermocouple 25 -> 310 -> 290 -> 279.75 °C. The indicator goes on at
+# 300 °C, stays on at 290 °C (hysteresis) and goes off below 280 °C.
+# `loop` returns the thermocouple temperature in 0.01 °C plus 100,000.
+# All expected values were calculated from the MAX31855 model encoding and the
+# firmware arithmetic before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ bus: sensor_spi }, { port: user_led_drive }, { number: 10 }] }
+  - call: { export: loop }
+  - set: { port: thermocouple_c, value: 310 }
+  - call: { export: loop }
+  - set: { port: thermocouple_c, value: 290 }
+  - call: { export: loop }
+  - set: { port: thermocouple_c, value: 279.75 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 1000000000
+assertions:
+  - entry_result: { equals: 127975 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 102500, step: 1 }
+  - entry_result: { equals: 131000, step: 3 }
+  - entry_result: { equals: 129000, step: 5 }
+  # One frame in `setup`, one in each `loop`; all reached U4.
+  - spi_transfers: { bus: sensor_spi, cs: 10, selected: true, equals: 5 }
+  - spi_transfers: { bus: sensor_spi, selected: false, equals: 0 }
+  - port_value: { port: user_led_state, equals: 0 }
+  # A frame is 32 SCK periods at 1 MHz (32 µs); a period is 100 ms. The drive
+  # changes at the end of the frame that reads 310 °C and of the one that
+  # reads 279.75 °C; D1 follows 1 µs later.
+  - digital_edges: { port: user_led_drive, times_ns: [100096000, 300160000] }
+  - digital_edges: { port: user_led_state, times_ns: [100097000, 300161000] }
+  - final_time_ns: { equals: 400160000 }
+  - console_contains: "MAX31855 on CS 10 CJ=22.0000 C\nTC=25.00 C CJ=22.0000 C\nTC=310.00 C CJ=22.0000 C\nTC=290.00 C CJ=22.0000 C\nTC=279.75 C CJ=22.0000 C\n"

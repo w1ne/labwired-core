@@ -10,8 +10,10 @@
 //! returns a `BootSummary` describing what was loaded.
 
 pub mod esp32_arduino;
+pub mod esp32c2_rom;
 pub mod esp32c3_rom;
 pub mod esp32c6_rom;
+pub mod esp32s2;
 pub mod esp32s3;
 pub mod esp32s3_rom;
 pub mod esp_partition_table;

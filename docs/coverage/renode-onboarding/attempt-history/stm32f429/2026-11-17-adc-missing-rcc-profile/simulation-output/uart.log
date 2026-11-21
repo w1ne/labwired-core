@@ -1,0 +1,5 @@
+STM32F4 shared profile smoke
+systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok
+STM32F429 PSP tailchain PASS
+fpu m4f cpacr=1 mvfr=1 add=1 ok
+adc1 in1=00000000 gated=1 clock=0 eoc=0 FAIL

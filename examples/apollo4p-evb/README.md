@@ -105,12 +105,15 @@ hb=1 led0=0 led1=1 led2=1
 - **Power domains** have no effect: `DEVPWRSTATUS` follows `DEVPWREN` on the
   same access and a peripheral works with its domain off.
 - The **UART clock selection** (`CR.CLKEN`/`CR.CLKSEL`) is written as on
-  silicon but not checked: the shared PL011 model does not store `CR`, so the
-  firmware derives the divisor from its own `CLKSEL` constant instead of
-  reading `CR` back.
+  silicon and read back. The imported-system smoke also injects an RX byte,
+  checks PL011 `RIS`/`MIS` and NVIC IRQ 15 pending, then reads `DR` and checks
+  that the level deasserts.
 - The **pad mux** for non-GPIO functions is not routed: `FNCSEL 4` on
   GPIO60/47 is stored, and the console model does not depend on it.
 - **GPIO interrupts** are never raised (software can only set/clear STAT).
+- PL011 interrupt coverage is limited to TX-empty and RX-nonempty level
+  sources. FIFO thresholds, receive timeout, error sources and modem signals
+  are not modelled.
 - **CLKGEN, MCUCTRL, RSTGEN, IOM0-7, MSPI0-2, ADC, timers, STIMER, RTC, WDT,
   security, crypto, GPU/display, SDIO, USB, audio** are declared stubs.
 

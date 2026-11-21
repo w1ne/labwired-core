@@ -1,0 +1,252 @@
+peripheral: DBGMCU
+version: 0.1.0
+registers:
+- id: IDC
+  address_offset: 0
+  size: 32
+  access: READ_ONLY
+  reset_value: 268461136
+  fields:
+  - name: DEV_ID
+    bit_range:
+    - 11
+    - 0
+    description: Device ID
+  - name: REV_ID
+    bit_range:
+    - 31
+    - 16
+    description: Revision
+  side_effects: null
+- id: CR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBGSLEEP_D1
+    bit_range:
+    - 0
+    - 0
+    description: Allow D1 domain debug in Sleep mode
+  - name: DBGSTOP_D1
+    bit_range:
+    - 1
+    - 1
+    description: Allow D1 domain debug in Stop mode
+  - name: DBGSTBY_D1
+    bit_range:
+    - 2
+    - 2
+    description: Allow D1 domain debug in Standby mode
+  - name: DBGSLEEP_D2
+    bit_range:
+    - 3
+    - 3
+    description: Allow D2 domain debug in Sleep mode
+  - name: DBGSTOP_D2
+    bit_range:
+    - 4
+    - 4
+    description: Allow D2 domain debug in Stop mode
+  - name: DBGSTBY_D2
+    bit_range:
+    - 5
+    - 5
+    description: Allow D2 domain debug in Standby mode
+  - name: DBGSTOP_D3
+    bit_range:
+    - 7
+    - 7
+    description: Allow debug in D3 Stop mode
+  - name: DBGSTBY_D3
+    bit_range:
+    - 8
+    - 8
+    description: Allow debug in D3 Standby mode
+  - name: TRACECLKEN
+    bit_range:
+    - 20
+    - 20
+    description: Trace port clock enable
+  - name: D1DBGCKEN
+    bit_range:
+    - 21
+    - 21
+    description: D1 debug clock enable
+  - name: D3DBGCKEN
+    bit_range:
+    - 22
+    - 22
+    description: D3 debug clock enable
+  - name: TRGOEN
+    bit_range:
+    - 28
+    - 28
+    description: External trigger output enable
+  side_effects: null
+- id: APB3FZ1
+  address_offset: 52
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: WWDG1
+    bit_range:
+    - 6
+    - 6
+    description: WWDG1 stop in debug
+  side_effects: null
+- id: APB1LFZ1
+  address_offset: 60
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_TIM2
+    bit_range:
+    - 0
+    - 0
+    description: TIM2 stop in debug
+  - name: DBG_TIM3
+    bit_range:
+    - 1
+    - 1
+    description: TIM3 stop in debug
+  - name: DBG_TIM4
+    bit_range:
+    - 2
+    - 2
+    description: TIM4 stop in debug
+  - name: DBG_TIM5
+    bit_range:
+    - 3
+    - 3
+    description: TIM5 stop in debug
+  - name: DBG_TIM6
+    bit_range:
+    - 4
+    - 4
+    description: TIM6 stop in debug
+  - name: DBG_TIM7
+    bit_range:
+    - 5
+    - 5
+    description: TIM7 stop in debug
+  - name: DBG_TIM12
+    bit_range:
+    - 6
+    - 6
+    description: TIM12 stop in debug
+  - name: DBG_TIM13
+    bit_range:
+    - 7
+    - 7
+    description: TIM13 stop in debug
+  - name: DBG_TIM14
+    bit_range:
+    - 8
+    - 8
+    description: TIM14 stop in debug
+  - name: DBG_LPTIM1
+    bit_range:
+    - 9
+    - 9
+    description: LPTIM1 stop in debug
+  - name: DBG_I2C1
+    bit_range:
+    - 21
+    - 21
+    description: I2C1 SMBUS timeout stop in debug
+  - name: DBG_I2C2
+    bit_range:
+    - 22
+    - 22
+    description: I2C2 SMBUS timeout stop in debug
+  - name: DBG_I2C3
+    bit_range:
+    - 23
+    - 23
+    description: I2C3 SMBUS timeout stop in debug
+  side_effects: null
+- id: APB2FZ1
+  address_offset: 76
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_TIM1
+    bit_range:
+    - 0
+    - 0
+    description: TIM1 stop in debug
+  - name: DBG_TIM8
+    bit_range:
+    - 1
+    - 1
+    description: TIM8 stop in debug
+  - name: DBG_TIM15
+    bit_range:
+    - 16
+    - 16
+    description: TIM15 stop in debug
+  - name: DBG_TIM16
+    bit_range:
+    - 17
+    - 17
+    description: TIM16 stop in debug
+  - name: DBG_TIM17
+    bit_range:
+    - 18
+    - 18
+    description: TIM17 stop in debug
+  - name: DBG_HRTIM
+    bit_range:
+    - 29
+    - 29
+    description: HRTIM stop in debug
+  side_effects: null
+- id: APB4FZ1
+  address_offset: 84
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DBG_I2C4
+    bit_range:
+    - 7
+    - 7
+    description: I2C4 SMBUS timeout stop in debug
+  - name: DBG_LPTIM2
+    bit_range:
+    - 9
+    - 9
+    description: LPTIM2 stop in debug
+  - name: DBG_LPTIM3
+    bit_range:
+    - 10
+    - 10
+    description: LPTIM2 stop in debug
+  - name: DBG_LPTIM4
+    bit_range:
+    - 11
+    - 11
+    description: LPTIM4 stop in debug
+  - name: DBG_LPTIM5
+    bit_range:
+    - 12
+    - 12
+    description: LPTIM5 stop in debug
+  - name: DBG_RTC
+    bit_range:
+    - 16
+    - 16
+    description: RTC stop in debug
+  - name: DBG_WDGLSD1
+    bit_range:
+    - 18
+    - 18
+    description: Independent watchdog for D1 stop in debug
+  side_effects: null
+interrupts: null
+timing: null

@@ -50,6 +50,10 @@ pub struct StepDirMotor {
     id: String,
     /// Raw YAML `type:` (e.g. `nema17` / `a4988`) for actuator kind export.
     device_type: String,
+    /// False when the placement says the driver has no usable supply
+    /// (`powered: false`: a motor supply below its under-voltage lockout, or
+    /// unwired). The output stage is then off and STEP moves nothing.
+    powered: bool,
 }
 
 impl StepDirMotor {
@@ -66,7 +70,19 @@ impl StepDirMotor {
             // Kit attach always overrides via with_device_type(ctx.device_type()).
             // Default is the canonical kit id for hand-built test twins.
             device_type: "a4988".into(),
+            powered: true,
         }
+    }
+
+    /// Hold the output stage off for the whole run (no usable supply).
+    pub fn with_powered(mut self, powered: bool) -> Self {
+        self.powered = powered;
+        self
+    }
+
+    /// False when the driver has no usable supply and cannot move the shaft.
+    pub fn is_powered(&self) -> bool {
+        self.powered
     }
 
     pub fn with_config(mut self, cfg: StepDirConfig) -> Self {
@@ -140,7 +156,7 @@ impl StepDirMotor {
     /// True while the driver is currently enabled (EN active).
     pub fn is_enabled(&self) -> bool {
         let s = self.state.lock().unwrap();
-        Self::enabled_level(&self.cfg, s.en_level, self.en_pin.is_some())
+        self.powered && Self::enabled_level(&self.cfg, s.en_level, self.en_pin.is_some())
     }
 
     /// True after at least one STEP while enabled since EN last became active.
@@ -168,7 +184,8 @@ impl StepDirMotor {
             s.step_level = to;
             if to && !was {
                 // Rising STEP edge
-                let enabled = Self::enabled_level(&self.cfg, s.en_level, self.en_pin.is_some());
+                let enabled = self.powered
+                    && Self::enabled_level(&self.cfg, s.en_level, self.en_pin.is_some());
                 if enabled {
                     let delta = if s.dir_level { 1 } else { -1 };
                     let mut next = s.steps.saturating_add(delta);
@@ -273,6 +290,7 @@ static STEP_DIR_METADATA: KitMetadata = KitMetadata {
                 "Limit output polarity; false is active-low (default).",
             ),
         },
+        super::supply::POWERED_CONFIG_KEY,
     ]),
     labs: std::borrow::Cow::Borrowed(&[]),
 };
@@ -332,7 +350,9 @@ impl PeripheralKit for StepDirMotorKit {
         if let Some(initial_steps) = ctx.config_i64("initial_steps") {
             motor = motor.with_initial_steps(initial_steps);
         }
-        motor = motor.with_step_limits(min_steps, max_steps);
+        motor = motor
+            .with_step_limits(min_steps, max_steps)
+            .with_powered(super::supply::powered_from_config(ctx));
         let motor = Arc::new(motor);
         let installed_native = native && ctx.install_gpio_observer(motor.clone());
 
@@ -666,6 +686,19 @@ mod tests {
         m.on_gpio_edge(4, true, 0); // EN high = disabled
         m.on_gpio_edge(2, true, 1);
         assert_eq!(m.steps(), 0);
+        assert!(!m.is_commanded());
+    }
+
+    #[test]
+    fn unpowered_driver_ignores_step_pulses() {
+        let m = StepDirMotor::new("m", 2, 3, Some(4)).with_powered(false);
+        m.on_gpio_edge(4, false, 0); // EN low = enabled, but no supply
+        m.on_gpio_edge(3, true, 1);
+        m.on_gpio_edge(2, true, 2);
+        m.on_gpio_edge(2, false, 3);
+        m.on_gpio_edge(2, true, 4);
+        assert_eq!(m.steps(), 0);
+        assert!(!m.is_enabled());
         assert!(!m.is_commanded());
     }
 

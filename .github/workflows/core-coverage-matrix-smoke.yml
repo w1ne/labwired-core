@@ -618,8 +618,18 @@ jobs:
           # profiles is the RV32E guard in riscv.rs, pinned separately by
           # crates/core/src/cpu/riscv_ch32v003_tests.rs. This cell proves the
           # chip boots real firmware end to end and drives a real peripheral.
+          # ESP32-C2 (ESP8684H4X): committed RV32IMC ELF from examples/esp32c2
+          # prints on UART0 and sets GPIO10 as an output.
+          - id: esp32c2-smoke
+            script: examples/esp32c2/uart-smoke.yaml
+            system: examples/esp32c2/system.yaml
           - id: ch32v003f4p6-blink
             script: examples/ch32v003f4p6/io-smoke.yaml
+            system: examples/ch32v003f4p6/system.yaml
+          # Same chip, stock WCH noneos-sdk ELF (vendor startup, SystemInit,
+          # XW compressed loads, STK Delay_Ms, USART1 printf).
+          - id: ch32v003f4p6-noneos-sdk
+            script: examples/ch32v003f4p6/noneos-sdk-smoke.yaml
             system: examples/ch32v003f4p6/system.yaml
           # CH32L103C8T6 (LQFP48, RV32IMAC): blinks PC13 through GPIOC_CFGHR.
           - id: ch32l103c8t6-blink

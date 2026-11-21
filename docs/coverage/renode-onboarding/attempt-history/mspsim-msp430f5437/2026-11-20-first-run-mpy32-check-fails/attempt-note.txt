@@ -1,0 +1,17 @@
+First measured run of mspsim-msp430f5437, 2026-11-20T01:13Z. Result: booted,
+2 of 3 assertions passed, smoke FAILED.
+
+UART: "MSP430F5437 checks PPPPZPkPzPPPPF": checks 1 to 10 passed, check 11
+(MPY32 with 32-bit operands) failed. The run still reached the WDT key
+violation PUC and "smoke complete".
+
+Cause: a firmware fault, not a model fault. In mpy32_check() the compiler
+(msp430-gcc 9.3.1 -Os) loaded the operands of `(uint64_t)wa * wb`, then
+emitted the direct stores to MPYS32L/MPYS32H/OP2L/OP2H, and only then called
+__umulsidi2. The library call overwrote the MPY32 result registers, so the
+RES0..RES3 comparison of the direct signed multiply saw the compiler's
+product. The disassembly at 0x60ee-0x6130 of the fixture built from this
+source shows the order. Silicon would give the same result.
+
+Fix: the firmware stores the compiler's product to a volatile variable before
+it touches the MPY32 registers. No model or descriptor change.

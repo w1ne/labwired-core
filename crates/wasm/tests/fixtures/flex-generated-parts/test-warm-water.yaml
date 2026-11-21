@@ -1,0 +1,28 @@
+# `labwired test --script test-warm-water.yaml`. The test bench sets the water
+# to 25.25 °C before the pass: the heater stays off and the displays follow.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - set: { port: water_c, value: 25.25 }
+  - call:
+      export: run
+      args:
+        - { port: dq_drive }
+        - { port: dq }
+        - { port: heater_drive }
+        - { port: led_data }
+        - { port: tm_clk }
+        - { port: tm_dio }
+        - { bus: i2c0 }
+limits:
+  max_steps: 50000000
+  max_time_ns: 2000000000
+assertions:
+  - entry_result: { equals: 404 }
+  - port_value: { port: heater_on, equals: 0 }
+  - device_state: { device: lcd, key: text, equals: ["Water 25.25C    ", "Heater off      "] }
+  - device_state: { device: display, key: text, equals: "2525" }
+  - device_state: { device: ring, key: lit_pixels, equals: 3 }
+  - console_contains: "water 25.25 C heater off"

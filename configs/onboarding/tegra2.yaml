@@ -1,6 +1,5 @@
 name: tegra2
-description: 'NVIDIA Tegra 2 (T20) dual-core mobile processor. Architecture: ARMv7-A
-  (Cortex-A9).'
+description: 'Imported NVIDIA Tegra 2 (T20). The measured subset runs one Cortex-A9 PE from a 64 KiB SDRAM aperture at 0x0 and exercises polled TX on UARTA (16550). The boot ROM, AVP, second PE, SCU, GIC, timers, clock/reset, other UARTs and multimedia blocks are not modeled.'
 family: NVIDIA Tegra
 url: https://developer.nvidia.com/tegra-2-mobile-processor
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\

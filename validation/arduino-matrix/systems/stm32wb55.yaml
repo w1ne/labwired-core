@@ -16,4 +16,14 @@ external_devices:
     connection: "spi1"
     config:
       cs_pin: "PA4"
+# Matrix L5_adc: A0 (PC0 = ADC1_IN1, variant PeripheralPins.c) held at
+# 1651 mV. 12-bit against VREF+ = 3.3 V is 2048, and stm32duino returns the
+# 10-bit Arduino default, so stock analogRead(A0) on the P-NUCLEO-WB55 must
+# return exactly 512. The unheld fixed source would read 930; no conversion 0.
+peripherals:
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x50040000
+    config:
+      input_mv: { 1: 1651 }
 board_io: []

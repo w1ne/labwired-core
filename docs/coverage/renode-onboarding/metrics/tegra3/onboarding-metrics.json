@@ -1,0 +1,38 @@
+{
+  "target_id": "tegra3",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/tegra3-a9-uart-smoke.yaml",
+  "system": "configs/systems/onboarding/tegra3.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-19T18:18:29Z",
+  "finished_at_utc": "2026-11-19T18:18:31Z",
+  "elapsed_seconds": 2,
+  "elapsed_ms": 1531,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.449,
+    "build_firmware": null,
+    "run_smoke": 1.043
+  },
+  "stages_ms": {
+    "build_cli": 449,
+    "build_firmware": null,
+    "run_smoke": 1043
+  },
+  "prebuilt_firmware": "tests/fixtures/tegra-a9-uart-smoke.elf"
+}

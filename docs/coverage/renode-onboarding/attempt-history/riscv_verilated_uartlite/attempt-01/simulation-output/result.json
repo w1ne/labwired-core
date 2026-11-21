@@ -1,0 +1,185 @@
+{
+  "result_schema_version": "1.0",
+  "status": "fail",
+  "steps_executed": 0,
+  "cycles": 192,
+  "instructions": 49,
+  "stop_reason": "memory_violation",
+  "stop_reason_details": {
+    "triggered_stop_condition": "memory_violation",
+    "triggered_limit": null,
+    "observed": null
+  },
+  "limits": {
+    "max_steps": 100000,
+    "max_cycles": null,
+    "max_uart_bytes": null,
+    "no_progress_steps": null,
+    "wall_time_ms": null,
+    "max_vcd_bytes": null,
+    "stop_when_assertions_pass": false,
+    "stop_when_assertions_pass_settle_steps": 100000,
+    "stop_when_assertions_pass_min_steps": 0
+  },
+  "assertions": [
+    {
+      "assertion": {
+        "memory_value": {
+          "address": 1610616832,
+          "expected_value": 323,
+          "mask": null,
+          "size": 4
+        }
+      },
+      "passed": false
+    },
+    {
+      "assertion": {
+        "expected_stop_reason": "max_steps"
+      },
+      "passed": false
+    }
+  ],
+  "cpu_state": {
+    "type": "risc_v",
+    "registers": [
+      0,
+      0,
+      1715470320,
+      1610615708,
+      0,
+      0,
+      1715470336,
+      0,
+      1715470336,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "pc": 1610612932,
+    "mstatus": 0,
+    "mie": 0,
+    "mip": 128,
+    "mtvec": 0,
+    "mscratch": 0,
+    "mepc": 0,
+    "mcause": 0,
+    "mtval": 0,
+    "mtime": 48,
+    "mtimecmp": 0,
+    "triggers": {
+      "tselect": 0,
+      "tdata1": [
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624,
+        601882624
+      ],
+      "tdata2": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "tcontrol": 0
+    }
+  },
+  "firmware_hash": "7084dc25c098429dfba1c028ee6068ab54acd0f151e89b7f5fc232ab2cae388a",
+  "config": {
+    "firmware": "examples/renode-onboarding/../../target/riscv32im-unknown-none-elf/release/firmware-riscv-verilated-uartlite-smoke",
+    "system": "examples/renode-onboarding/../../configs/systems/onboarding/riscv_verilated_uartlite.yaml",
+    "script": "examples/renode-onboarding/riscv_verilated_uartlite-smoke.yaml"
+  },
+  "inspect": {
+    "peripherals": [],
+    "devices": []
+  },
+  "fidelity": [
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x4",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "read"
+    },
+    {
+      "kind": "unmapped_mmio",
+      "address": "0x663ffffc",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "write"
+    },
+    {
+      "kind": "unpowered_rail_assumed",
+      "address": "0x0",
+      "first_pc": "0x0",
+      "count": 1,
+      "detail": "no power net drives the MCU (board.power.vdd_volts is not routed); VDD assumed an ideal rail, so power-on and brown-out reset are not simulated"
+    }
+  ],
+  "footprint": {
+    "method": "elf_section_totals_v1",
+    "text_bytes": 924,
+    "data_bytes": 0,
+    "bss_bytes": 104856676,
+    "flash_used_bytes": 924,
+    "ram_static_bytes": 104856676,
+    "flash_total_bytes": 0,
+    "ram_total_bytes": 100000000,
+    "flash_used_pct": 0.0,
+    "ram_static_pct": 104.86,
+    "notes": [
+      "section_sum_not_bin_image",
+      "totals_from_chip_catalog"
+    ]
+  },
+  "memory": {
+    "main_stack_method": "unsupported",
+    "main_stack_unsupported_reason": "arch_not_implemented",
+    "heap_method": "unsupported"
+  },
+  "metrics": {
+    "cycles": 192,
+    "instructions": 49,
+    "steps_executed": 0,
+    "memory_reads": 49,
+    "memory_writes": 0,
+    "peripheral_accesses": 0,
+    "exceptions": 0
+  }
+}

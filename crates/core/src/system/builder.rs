@@ -222,10 +222,12 @@ pub fn build_esp32_system(system_path: &Path) -> anyhow::Result<(SystemBus, Xten
 
 mod aarch64;
 mod arm;
+mod arm7;
 mod avr;
 mod cortex_a;
 mod cortex_r;
 mod mips;
+mod msp430;
 mod pic16;
 mod pic18;
 mod pic24;
@@ -404,6 +406,7 @@ pub fn build_machine_with_plugins(
         MachineFamily::CortexM => arm::build(req, plugins),
         MachineFamily::CortexA => cortex_a::build(req, plugins),
         MachineFamily::CortexR => cortex_r::build(req, plugins),
+        MachineFamily::Arm7Tdmi => arm7::build(req, plugins),
         MachineFamily::RiscV => riscv::build(req, plugins),
         MachineFamily::Xtensa => xtensa::build(req, plugins),
         MachineFamily::Avr => avr::build(req, plugins),
@@ -413,6 +416,7 @@ pub fn build_machine_with_plugins(
         MachineFamily::Aarch64 => aarch64::build(req, plugins),
         MachineFamily::Rx => rx::build(req, plugins),
         MachineFamily::Mips => mips::build(req, plugins),
+        MachineFamily::Msp430 => msp430::build(req, plugins),
     }
 }
 

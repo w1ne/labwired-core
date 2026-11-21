@@ -1,6 +1,6 @@
 name: brd4117a
-description: 'Silicon Labs EFR32MG13 Mighty Gecko Mesh Networking Kit. Architecture:
-  ARM Cortex-M4F.'
+description: 'Silicon Labs BRD4117A radio board using the EFR32xG26 SoC.
+  Architecture: ARM Cortex-M33.'
 family: Silicon Labs
 url: https://www.silabs.com/
 code_example: "/* LabWired Hardware Initialization */\nint main(void) {\n    // Initialize\

@@ -1,0 +1,37 @@
+{
+  "target_id": "stm32f103",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 50000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-f103-i2c-demo",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f103.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-18T21:37:34Z",
+  "finished_at_utc": "2026-11-18T21:38:01Z",
+  "elapsed_seconds": 27,
+  "elapsed_ms": 26955,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-18T21:38:00.545394Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: \"ADC1 F1 CONTINUOUS CIRCULAR LAPS=2 FLAGS=1 IRQ=1 RELOAD=1 SEQ=1 ENABLED=1 EOC_CLEAR=1 ok\" }) (captured len=4396)",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 12.829,
+    "build_firmware": 2.245,
+    "run_smoke": 11.813
+  },
+  "stages_ms": {
+    "build_cli": 12829,
+    "build_firmware": 2245,
+    "run_smoke": 11813
+  }
+}

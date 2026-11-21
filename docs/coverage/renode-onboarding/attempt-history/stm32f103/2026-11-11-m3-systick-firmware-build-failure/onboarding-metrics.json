@@ -1,0 +1,33 @@
+{
+  "target_id": "stm32f103",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": false,
+  "booted": null,
+  "boot_evidence": null,
+  "smoke_passed": null,
+  "crate": "firmware-f103-i2c-demo",
+  "target_triple": "thumbv7m-none-eabi",
+  "script": "examples/renode-onboarding/stm32f103-i2c-smoke.yaml",
+  "system": "configs/systems/onboarding/stm32f103.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-11T11:15:36Z",
+  "finished_at_utc": "2026-11-11T11:17:42Z",
+  "elapsed_seconds": 126,
+  "elapsed_ms": 125542,
+  "failure_stage": "build_firmware",
+  "first_error_signature": "error[E0133]: call to unsafe function `smoke_systick_exception_state` is unsafe and requires unsafe function or block",
+  "failure_hint": "Firmware build failed. Start with the first compiler error in logs/build_firmware.log.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 125.057,
+    "build_firmware": 0.472,
+    "run_smoke": null
+  },
+  "stages_ms": {
+    "build_cli": 125057,
+    "build_firmware": 472,
+    "run_smoke": null
+  }
+}

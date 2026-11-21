@@ -1,19 +1,68 @@
-# LabWired - Firmware Simulation Platform
-# Copyright (C) 2026 Andrii Shylenko
-#
-# This software is released under the MIT License.
-# See the LICENSE file in the project root for full license information.
-
+# Narrow profile for the imported EFR32xG22 MCU, following Renode's
+# efr32xg22.repl and brd4402a.repl memory and USART0 map:
+# https://github.com/renode/renode/blob/master/platforms/cpus/silabs/efr32s2/efr32xg22.repl
+# https://github.com/renode/renode/blob/master/platforms/boards/silabs/brd4402a.repl
+# This exposes the primary Cortex-M33, application flash, SRAM, Series-2 CMU,
+# model-backed USART0, GPIO Port A, TIMER0 and TIMER1 only. Port A is limited
+# to the BG22 package's nine bonded pins. The secondary M0+ radio sequencer,
+# radio, and generated peripheral claims are omitted. In particular, the
+# DCDC_IF Python peripheral is a zero-answering placeholder and is not
+# advertised here.
 name: efr32xg22
 arch: arm
+core: cortex-m33
+cpu_hz: 38400000
+atomic_register_aliases: efr32s2
 flash:
-  base: 134217728
-  size: 524288B
+  base: 0x00000000
+  size: 0x7E000
 ram:
-  base: 536870912
-  size: 32768B
+  base: 0x20000000
+  size: 0x8000
 peripherals:
-- id: DCDC_IF
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1342783524
+  - id: cmu
+    type: efr32s2_cmu
+    bus: sysbus
+    base_address: 0x40008000
+    size: 16KB
+  # USART0 gate is CMU_CLKEN0 bit 8 on xG22 (efr32bg22_cmu.h); bit 9 is the
+  # xG24 position and was wrong here before.
+  - id: usart0
+    type: efr32s2_usart
+    bus: sysbus
+    base_address: 0x4005C000
+    size: 16KB
+    clock: { reg: clken0, bit: 8 }
+  # xG22 GPIO Port A starts at GPIO base; DOUT/DIN are +0x10/+0x14.
+  # EFR32xG22 Reference Manual 25.5/25.6 and 8.5.10: PA is 9 pins and
+  # CLKEN0.GPIO is bit 26. The smoke covers MODE/MODEH, DOUT aliases and DIN;
+  # CTRL slew behavior and the GPIO block routing/interrupt registers are not
+  # claimed by this port window.
+  - id: gpioa
+    type: efr32s2_gpioport
+    bus: sysbus
+    base_address: 0x4003C000
+    size: 24B
+    clock: { reg: clken0, bit: 26 }
+    config: { num_pins: 9 }
+  # TIMER0/TIMER1: bases, NVIC lines 7/8, CMU_CLKEN0 bits 4/5 and
+  # TIMER0_CNTWIDTH = 32 / TIMER1_CNTWIDTH = 16 from efr32bg22c224f512im40.h and
+  # efr32bg22_cmu.h (EFR32MG22 headers carry the same CLKEN0 bits). Renode's
+  # efr32xg22.repl maps the same bases and NVIC lines. The timebase is the
+  # 19 MHz HFRCODPLL startup clock from system_efr32bg22.c; rate is not timed.
+  - id: timer0
+    type: efr32s2_timer
+    bus: sysbus
+    base_address: 0x40048000
+    size: 4KB
+    clock: { reg: clken0, bit: 4 }
+    config: { counter_bits: 32, peripheral_hz: 19000000 }
+    irq: 7
+  - id: timer1
+    type: efr32s2_timer
+    bus: sysbus
+    base_address: 0x4004C000
+    size: 4KB
+    clock: { reg: clken0, bit: 5 }
+    config: { counter_bits: 16, peripheral_hz: 19000000 }
+    irq: 8

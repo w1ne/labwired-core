@@ -1,0 +1,37 @@
+{
+  "target_id": "mimxrt700_evk",
+  "status": "fail",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 17000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": false,
+  "crate": "firmware-mimxrt700-evk-smoke",
+  "target_triple": "thumbv8m.main-none-eabi",
+  "script": "examples/renode-onboarding/mimxrt700_evk-smoke.yaml",
+  "system": "configs/systems/onboarding/mimxrt700_evk.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-10T18:54:41Z",
+  "finished_at_utc": "2026-11-10T18:54:45Z",
+  "elapsed_seconds": 4,
+  "elapsed_ms": 3860,
+  "failure_stage": "run_smoke",
+  "first_error_signature": "2026-11-10T18:54:45.558354Z ERROR labwired_cli::execute: Assertion failed: UartContains(UartContainsAssertion { uart_contains: \"basepri=000003ff high=00000018/fffffffd threshold=00000080 active=00000100 pending=00000280 order=00000002,00000",
+  "failure_hint": "Smoke assertion mismatch. Compare expected stop/assertions with current deterministic output.",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 0.292,
+    "build_firmware": 0.9,
+    "run_smoke": 2.619
+  },
+  "stages_ms": {
+    "build_cli": 292,
+    "build_firmware": 900,
+    "run_smoke": 2619
+  }
+}

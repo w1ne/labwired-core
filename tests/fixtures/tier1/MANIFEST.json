@@ -84,8 +84,8 @@
     "source_rev": "5fd5fc595bc0009465f7a7acf3ab2da821d77444"
   },
   "stm32l073.elf": {
-    "sha256": "7c9fc5840c2b3cc28d937d6c41c078644d72b427ed1321c3317e885c3168b9b5",
-    "source_rev": "9e3d7928996f6ae1940e4ac5b9baefc75a715ac9"
+    "sha256": "f220b4f1526bc7bfe4776b5c5c2077c7ed439564ee17aa4b2df9f9045b35de5a",
+    "source_rev": "068831e055ec5d710cd4d0a4f0ef5c4d207df72d"
   },
   "stm32l476.elf": {
     "sha256": "4488ecf243876606b6cf9b5e71aca929f904cab31ced339209a9bdef31340844",
@@ -132,8 +132,8 @@
     "source_rev": "f396371cc8c647086a636e31d30d441b2a9d8a18"
   },
   "esp32s3-devkitc1-n16r8-bme280.elf": {
-    "sha256": "9731a5b51384eff99179a91d49a6919fb9cde1696009245f76763856dce8a859",
-    "source_rev": "70c26fc6c233759dc670666394cccdb86b01c5ae"
+    "sha256": "5389cffcd3c2d8decf009d4b5db57380c54199a9b8454a6500a528f16ec6a135",
+    "source_rev": "e2511bc989a099feb6a8dd46b824adc674eeff63"
   },
   "seeed-xiao-esp32c3-bme280.elf": {
     "sha256": "7d877c363ea6395666ba06b63773ea5e2801527c4e342b046ba31cc77b71bba1",

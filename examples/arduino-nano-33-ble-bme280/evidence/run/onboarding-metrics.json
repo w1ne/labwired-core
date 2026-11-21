@@ -1,0 +1,38 @@
+{
+  "target_id": "arduino-nano-33-ble-bme280",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 30000000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/arduino-nano-33-ble-bme280/bme280-smoke.yaml",
+  "system": "configs/systems/arduino-nano-33-ble-bme280.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-20T02:26:37Z",
+  "finished_at_utc": "2026-11-20T02:39:04Z",
+  "elapsed_seconds": 747,
+  "elapsed_ms": 746965,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 736.309,
+    "build_firmware": null,
+    "run_smoke": 10.616
+  },
+  "stages_ms": {
+    "build_cli": 736309,
+    "build_firmware": null,
+    "run_smoke": 10616
+  },
+  "prebuilt_firmware": "tests/fixtures/nrf52/arduino-nano-33-ble-bme280.elf"
+}

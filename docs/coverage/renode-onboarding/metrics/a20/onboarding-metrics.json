@@ -1,0 +1,38 @@
+{
+  "target_id": "a20",
+  "status": "pass",
+  "measurement_mode": "smoke",
+  "run_attempted": true,
+  "booted": true,
+  "boot_evidence": {
+    "result_path": "simulation-output/result.json",
+    "instructions": 100000,
+    "stop_reason": "max_steps"
+  },
+  "smoke_passed": true,
+  "crate": null,
+  "target_triple": null,
+  "script": "examples/renode-onboarding/a20-a7-uart-smoke.yaml",
+  "system": "configs/systems/onboarding/a20.yaml",
+  "profile": "release",
+  "started_at_utc": "2026-11-19T18:03:50Z",
+  "finished_at_utc": "2026-11-19T18:18:09Z",
+  "elapsed_seconds": 860,
+  "elapsed_ms": 859329,
+  "failure_stage": "",
+  "first_error_signature": "",
+  "failure_hint": "",
+  "threshold_seconds": 3600,
+  "threshold_met": true,
+  "stages_seconds": {
+    "build_cli": 854.998,
+    "build_firmware": null,
+    "run_smoke": 4.289
+  },
+  "stages_ms": {
+    "build_cli": 854998,
+    "build_firmware": null,
+    "run_smoke": 4289
+  },
+  "prebuilt_firmware": "tests/fixtures/a20-a7-uart-smoke.elf"
+}

@@ -1,0 +1,46 @@
+# Source-grounded functional slice of HeyPCB's ESP32-S3 LDR board.
+# Portable firmware runs in WasmFlexRuntime; the ESP32 CPU is not emulated.
+schema_version: 1
+name: heypcb-esp32-s3-ldr-gl5528
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - The registered LDR kit uses a typical 10 kΩ-at-10-lux curve and samples a static millivolt output at model boundaries.
+  - Public verified Part Knowledge returned NOT_FOUND for GL5528; this generic curve is not verified for the source part.
+  - The IO48 user LED is represented by digital logic state only.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or ADC peripheral fidelity; the pinned source contains no board firmware.
+  - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+  - "The generic importer does not model U4 as a two-terminal photoconductive device: the schematic import drops it, and the PCB import maps it as a fixed resistor."
+  - This behavior slice injects the generic LDR kit's modeled millivolts at the source-mapped GPIO1 endpoint. It does not model the GL5528 resistance, R6 divider, or C7 transient behavior.
+  - GL5528 production spread and physical optical or electrical behavior.
+ports:
+  - { name: lux, signal: environment.lux, access: write, kind: number, unit: lx, initial: 100 }
+  - { name: sensor_mv, signal: source.U3.GPIO1, access: read, kind: number, unit: mV }
+  - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
+  - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  - id: source-u4-gl5528
+    adapter: behavior
+    step_ns: 1000
+    inputs: { lux: environment.lux }
+    outputs: { voltage_mv: source.U3.GPIO1 }
+    config:
+      device_type: ldr
+  - id: source-d1-user-led
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U3.GPIO48 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: led, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: led, level: 0 }]

@@ -26,8 +26,8 @@
 | `uart3` | `0x80100300` | `gaislerapbuart` |
 | `uart4` | `0x80100400` | `gaislerapbuart` |
 | `uart5` | `0x80100500` | `gaislerapbuart` |
-| `gptimer` | `0x80000300` | `gaisler_gptimer` |
-| `grtimer` | `0x80100600` | `gaisler_gptimer` |
+| `gptimer` | `0x80000300` | `stub` |
+| `grtimer` | `0x80100600` | `stub` |
 | `gpio1` | `0x80000900` | `gaisler_gpio` |
 | `gpio2` | `0x80000a00` | `gaisler_gpio` |
 | `greth` | `0x80000e00` | `gaislereth` |

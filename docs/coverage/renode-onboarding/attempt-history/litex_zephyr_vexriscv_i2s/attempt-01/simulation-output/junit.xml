@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="labwired" tests="1" failures="0" errors="1" time="0.000000">
+  <properties>
+    <property name="result_schema_version" value="1.0"/>
+    <property name="stop_reason" value="ConfigError"/>
+    <property name="firmware_hash" value="16fea689c090cfa01720c41a6cf4da5a8e52344bb32758e23379f5fb30d4ace2"/>
+  </properties>
+  <testcase classname="labwired" name="run" time="0.000000">
+    <error message="config error">result_schema_version=1.0
+stop_reason=ConfigError
+message=Failed to parse Chip Descriptor YAML: missing field `flash` at line 4 column 1
+stop_reason_details.triggered_stop_condition=ConfigError
+steps_executed=0
+cycles=0
+instructions=0
+limits:
+  - max_steps=100000
+firmware_hash=16fea689c090cfa01720c41a6cf4da5a8e52344bb32758e23379f5fb30d4ace2
+firmware=examples/renode-onboarding/../../target/riscv32imac-unknown-none-elf/release/firmware-litex-zephyr-i2s-smoke
+system=examples/renode-onboarding/../../configs/systems/onboarding/litex_zephyr_vexriscv_i2s.yaml
+script=examples/renode-onboarding/litex_zephyr_vexriscv_i2s-smoke.yaml
+</error>
+  </testcase>
+</testsuite>

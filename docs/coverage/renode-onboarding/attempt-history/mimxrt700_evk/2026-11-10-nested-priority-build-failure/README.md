@@ -1,0 +1,1 @@
+The target-only pipeline failed at firmware compilation before simulation: the fixture used `.add()` on the NVIC register address stored as `usize`. The default Python lacked PyYAML during scoreboard generation as well. No firmware boot was attempted. Full failure metrics and logs are preserved here.

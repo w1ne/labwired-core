@@ -40,20 +40,42 @@ impl SystemBus {
     /// complete `time_us_64`, so a one-shot timestamp cannot skip. Skipping
     /// after two loads jumped toward a background 1 ms alarm pool tick and
     /// `pico_oled_pwm` never reached `Serial1.println("RTF_READY")`.
+    ///
+    /// Four split reads alone do not make a loop. The pico-sdk alarm handler
+    /// runs `time_us_64` (three loads) and then `ta_set_timeout` loads
+    /// TIMERAWL once more before it arms the alarm: four timer-only accesses
+    /// in straight-line code. A skip there put the handler up to 7.4 ms
+    /// behind the time it had just read, and every Arduino-Pico `delay()`
+    /// returned that late. So the fourth split read must also land on a
+    /// `site` (an opaque CPU position, the caller passes its PC) that a split
+    /// read already ended on since the last side-effecting MMIO. A polling
+    /// loop comes back to its sites; straight-line code does not.
     #[inline]
-    pub fn take_timer_poll_coalesce_eligible(&self) -> bool {
+    pub fn take_timer_poll_coalesce_eligible(&self, site: u64) -> bool {
         let timer = self.freerunning_timer_poll_mmio.replace(0);
         let side = self.side_effecting_mmio.replace(0);
         if side != 0 {
             self.timer_poll_carry.set(0);
+            self.timer_poll_sites.set([None; 8]);
             return false;
         }
         if timer >= 2 {
             self.timer_poll_carry.set(0);
+            self.timer_poll_sites.set([None; 8]);
             return true;
         }
-        let carry = self.timer_poll_carry.get().saturating_add(timer);
-        if carry >= 4 {
+        if timer == 0 {
+            return false;
+        }
+        let carry = self.timer_poll_carry.get().saturating_add(timer).min(4);
+        let mut sites = self.timer_poll_sites.get();
+        let revisited = sites.contains(&Some(site));
+        if !revisited {
+            sites.rotate_left(1);
+            sites[sites.len() - 1] = Some(site);
+            self.timer_poll_sites.set(sites);
+        }
+        if carry >= 4 && revisited {
             self.timer_poll_carry.set(0);
             return true;
         }

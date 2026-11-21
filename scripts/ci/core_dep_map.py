@@ -80,7 +80,7 @@ DEFAULT_LAYERS = HERE / "core_layers.json"
 DEFAULT_BASELINE = HERE / "core_layers_baseline.json"
 
 CPU_ARCHES = [
-    "aarch64", "avr", "cortex_a", "cortex_m", "mips", "pic16", "pic18",
+    "aarch64", "avr", "cortex_a", "cortex_m", "mips", "msp430", "pic16", "pic18",
     "pic24", "riscv", "rx", "xtensa", "jit_framework",
 ]
 
