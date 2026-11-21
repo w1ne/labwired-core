@@ -1,0 +1,71 @@
+peripheral: RNG
+version: 0.1.0
+registers:
+- id: CR
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: RNGEN
+    bit_range:
+    - 2
+    - 2
+    description: Random number generator enable
+  - name: IE
+    bit_range:
+    - 3
+    - 3
+    description: Interrupt enable
+  - name: CED
+    bit_range:
+    - 5
+    - 5
+    description: 'Clock error detection Note: The clock error detection can be used only when ck_rc48 or ck_pll1_q (ck_pll1_q = 48MHz) source is selected otherwise, CED bit must be equal to 1. The clock error detection cannot be enabled nor disabled on the fly when RNG peripheral is enabled, to enable or disable CED the RNG must be disabled.'
+  side_effects: null
+- id: SR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DRDY
+    bit_range:
+    - 0
+    - 0
+    description: 'Data ready Note: If IE=1 in RNG_CR, an interrupt is generated when DRDY=1. It can rise when the peripheral is disabled. When the output buffer becomes empty (after reading RNG_DR), this bit returns to 0 until a new random value is generated.'
+  - name: CECS
+    bit_range:
+    - 1
+    - 1
+    description: 'Clock error current status Note: This bit is meaningless if CED (Clock error detection) bit in RNG_CR is equal to 1.'
+  - name: SECS
+    bit_range:
+    - 2
+    - 2
+    description: Seed error current status ** More than 64 consecutive bits at the same value (0 or 1) ** More than 32 consecutive alternances of 0 and 1 (0101010101...01)
+  - name: CEIS
+    bit_range:
+    - 5
+    - 5
+    description: 'Clock error interrupt status This bit is set at the same time as CECS. It is cleared by writing it to 0. An interrupt is pending if IE = 1 in the RNG_CR register. Note: This bit is meaningless if CED (Clock error detection) bit in RNG_CR is equal to 1.'
+  - name: SEIS
+    bit_range:
+    - 6
+    - 6
+    description: Seed error interrupt status This bit is set at the same time as SECS. It is cleared by writing it to 0. ** More than 64 consecutive bits at the same value (0 or 1) ** More than 32 consecutive alternances of 0 and 1 (0101010101...01) An interrupt is pending if IE = 1 in the RNG_CR register.
+  side_effects: null
+- id: DR
+  address_offset: 8
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: RNDATA
+    bit_range:
+    - 31
+    - 0
+    description: Random data 32-bit random data which are valid when DRDY=1.
+  side_effects: null
+interrupts: null
+timing: null
