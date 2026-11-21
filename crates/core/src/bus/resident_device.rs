@@ -119,7 +119,9 @@ impl DevicePins for SystemBus {
         // each column pulse with `pinMode(INPUT)`, which clears PORT).
         if self.find_peripheral_index(addr).is_some_and(|idx| {
             let dev = &self.peripherals[idx].dev;
-            dev.gpio_input_is_released() && dev.read_gpio_is_output(bit) == Some(false)
+            let pin = dev.gpio_register_pad(addr - self.peripherals[idx].base, bit);
+            dev.gpio_input_is_released()
+                && pin.is_some_and(|pin| dev.read_gpio_is_output(pin) == Some(false))
         }) {
             return Some(true);
         }
@@ -128,15 +130,19 @@ impl DevicePins for SystemBus {
 
     fn pad_bit(&self, addr: u64, bit: u8) -> Option<bool> {
         let idx = self.find_peripheral_index(addr)?;
-        self.peripherals[idx]
+        let entry = &self.peripherals[idx];
+        let pin = entry.dev.gpio_register_pad(addr - entry.base, bit)?;
+        entry
             .dev
-            .read_gpio_pad(bit)
+            .read_gpio_pad(pin)
             .or_else(|| self.output_bit(addr, bit))
     }
 
     fn known_pad_bit(&self, addr: u64, bit: u8) -> Option<bool> {
         let idx = self.find_peripheral_index(addr)?;
-        let port = &self.peripherals[idx].dev;
+        let entry = &self.peripherals[idx];
+        let port = &entry.dev;
+        let bit = port.gpio_register_pad(addr - entry.base, bit)?;
         if port.read_gpio_pad_drive(bit) != Some(crate::logic_capture::PadDrive::Driven) {
             return None;
         }

@@ -1,0 +1,16 @@
+{
+  "id": "rp2354b",
+  "in_boards": false,
+  "uart": {
+    "state": "none",
+    "gap": "No accepted RP2354B firmware fixture proves UART traffic yet. GPIO/package tests are not a bus proof, and evidence from the RP2350 QFN60 descriptor is not transferred to this QFN80 variant."
+  },
+  "spi": {
+    "state": "none",
+    "gap": "No accepted RP2354B firmware fixture proves SPI traffic yet. GPIO/package tests are not a bus proof, and evidence from the RP2350 QFN60 descriptor is not transferred to this QFN80 variant."
+  },
+  "i2c": {
+    "state": "none",
+    "gap": "No accepted RP2354B firmware fixture proves I2C traffic yet. GPIO/package tests are not a bus proof, and evidence from the RP2350 QFN60 descriptor is not transferred to this QFN80 variant."
+  }
+}

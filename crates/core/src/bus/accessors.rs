@@ -22,7 +22,7 @@ impl SystemBus {
         self.observers.push(observer);
     }
 
-    fn dma_tx_endpoint_index(&self, addr: u64) -> Option<usize> {
+    fn canonical_dma_endpoint_index(&self, addr: u64) -> Option<usize> {
         // DMA endpoint admission must not bypass normal storage precedence.
         if self.resolve_ns_alias(addr) != addr
             || self.ram.read_u8(addr).is_some()
@@ -39,6 +39,12 @@ impl SystemBus {
         if p.dev.scheduler_wake_owner().is_some() {
             return None; // Owner-alias windows are not separate TX endpoints.
         }
+        Some(idx)
+    }
+
+    fn dma_tx_endpoint_index(&self, addr: u64) -> Option<usize> {
+        let idx = self.canonical_dma_endpoint_index(addr)?;
+        let p = &self.peripherals[idx];
         p.dev.dma_tx_request(addr - p.base)?;
         Some(idx)
     }
@@ -1826,6 +1832,11 @@ impl crate::Bus for SystemBus {
 
     fn has_mmio_window(&self, addr: u64) -> bool {
         self.find_peripheral_index(addr).is_some()
+    }
+
+    fn dma_request_active_at(&self, addr: u64, line: u8) -> Option<bool> {
+        let idx = self.canonical_dma_endpoint_index(addr)?;
+        Some(self.is_peripheral_clocked(idx) && self.peripherals[idx].dev.dma_request_active(line))
     }
 
     fn dma_rx_request(&self, addr: u64) -> Option<bool> {

@@ -1831,20 +1831,79 @@ pub fn try_build(
             };
             Box::new(crate::peripherals::rp2040::timer::Rp2040Timer::new().with_layout(layout))
         }
-        "rp2040_dma" => Box::new(crate::peripherals::rp2040::dma::Rp2040Dma::new()),
+        "rp2040_dma" => {
+            use crate::peripherals::rp2040::dma::{DmaLayout, Rp2040Dma};
+            let layout = match p_cfg.config.get("profile") {
+                None => DmaLayout::Rp2040,
+                Some(value) => match value.as_str() {
+                    Some("rp2040") => DmaLayout::Rp2040,
+                    Some("rp2350") => DmaLayout::Rp2350,
+                    _ => anyhow::bail!("{} DMA profile must be rp2040 or rp2350", p_cfg.id),
+                },
+            };
+            let mut dma = Rp2040Dma::with_layout(layout);
+            if layout == DmaLayout::Rp2350 {
+                let bases = p_cfg
+                    .config
+                    .get("pio_dreq_bases")
+                    .and_then(serde_yaml::Value::as_sequence)
+                    .filter(|v| v.len() == 3)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("{} RP2350 DMA requires three pio_dreq_bases", p_cfg.id)
+                    })?;
+                let mut parsed = [0u64; 3];
+                for (index, value) in bases.iter().enumerate() {
+                    parsed[index] = value
+                        .as_u64()
+                        .filter(|n| *n > 0 && *n <= u64::from(u32::MAX) && *n & 0xfff == 0)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "{} pio_dreq_bases must be aligned nonzero 32-bit MMIO bases",
+                                p_cfg.id
+                            )
+                        })?;
+                    if parsed[..index].contains(&parsed[index]) {
+                        anyhow::bail!("{} pio_dreq_bases must be distinct", p_cfg.id);
+                    }
+                }
+                dma = dma.with_pio_dreq_bases(parsed);
+            } else if p_cfg.config.contains_key("pio_dreq_bases") {
+                anyhow::bail!(
+                    "{} RP2040 DMA does not implement paced PIO requests",
+                    p_cfg.id
+                );
+            }
+            Box::new(dma)
+        }
         "rp2040_io_bank0" => {
-            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
-                Some("rp2350") => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2350,
-                // Absent/anything else: the RP2040 map.
-                _ => crate::peripherals::rp2040::io_bank0::IoBankLayout::Rp2040,
+            use crate::peripherals::rp2040::io_bank0::IoBankLayout;
+            let layout = match p_cfg.config.get("profile") {
+                None => IoBankLayout::Rp2040,
+                Some(value) => match value.as_str() {
+                    Some("rp2040") => IoBankLayout::Rp2040,
+                    Some("rp2350" | "rp2350a") => IoBankLayout::Rp2350,
+                    Some("rp2350b") => IoBankLayout::Rp2350B,
+                    _ => anyhow::bail!(
+                        "{} profile must be rp2040, rp2350, rp2350a or rp2350b",
+                        p_cfg.id
+                    ),
+                },
             };
             Box::new(crate::peripherals::rp2040::io_bank0::Rp2040IoBank0::new().with_layout(layout))
         }
         "rp2040_sio" => {
-            let layout = match p_cfg.config.get("profile").and_then(|v| v.as_str()) {
-                Some("rp2350") => crate::peripherals::rp2040::sio::SioLayout::Rp2350,
-                // Absent/anything else: the RP2040 map.
-                _ => crate::peripherals::rp2040::sio::SioLayout::Rp2040,
+            use crate::peripherals::rp2040::sio::SioLayout;
+            let layout = match p_cfg.config.get("profile") {
+                None => SioLayout::Rp2040,
+                Some(value) => match value.as_str() {
+                    Some("rp2040") => SioLayout::Rp2040,
+                    Some("rp2350" | "rp2350a") => SioLayout::Rp2350,
+                    Some("rp2350b") => SioLayout::Rp2350B,
+                    _ => anyhow::bail!(
+                        "{} profile must be rp2040, rp2350, rp2350a or rp2350b",
+                        p_cfg.id
+                    ),
+                },
             };
             Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new().with_layout(layout))
         }
@@ -1858,9 +1917,26 @@ pub fn try_build(
             };
             Box::new(crate::peripherals::rp2040::pwm::Rp2040Pwm::new().with_layout(layout))
         }
-        "rp2040_adc" => Box::new(
-            crate::peripherals::rp2040::adc::Rp2040Adc::new().with_irq(p_cfg.irq.unwrap_or(22)),
-        ),
+        "rp2040_adc" => {
+            use crate::peripherals::rp2040::adc::{AdcLayout, Rp2040Adc};
+            let layout = match p_cfg.config.get("profile") {
+                None => AdcLayout::Rp2040,
+                Some(value) => match value.as_str() {
+                    Some("rp2040") => AdcLayout::Rp2040,
+                    Some("rp2350" | "rp2350a") => AdcLayout::Rp2350,
+                    Some("rp2350b") => AdcLayout::Rp2350B,
+                    _ => anyhow::bail!(
+                        "{} profile must be rp2040, rp2350, rp2350a or rp2350b",
+                        p_cfg.id
+                    ),
+                },
+            };
+            Box::new(
+                Rp2040Adc::new()
+                    .with_layout(layout)
+                    .with_irq(p_cfg.irq.unwrap_or(22)),
+            )
+        }
         "rp2040_rtc" => Box::new(crate::peripherals::rp2040::rtc::Rp2040Rtc::new()),
         "rp2040_watchdog" => Box::new(crate::peripherals::rp2040::watchdog::Rp2040Watchdog::new()),
         "rp2040_xip_ssi" => Box::new(crate::peripherals::rp2040::xip_ssi::Rp2040XipSsi::new()),

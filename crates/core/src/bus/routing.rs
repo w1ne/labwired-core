@@ -89,8 +89,8 @@ impl SystemBus {
             // Generic GPIO blocks publish their latch offsets through the
             // trait (Mi-V CoreGPIO, ATmega ports, …): pin bit N is register
             // bit N.
-            let offsets = dev.gpio_port_offsets()?;
-            return Some((base + offsets.output, *bit));
+            let location = dev.gpio_pin_registers(*bit)?;
+            return Some((base + location.output, location.bit));
         }
         // 2. No chip pin map → standard STM32/Nordic label parse.
         // STM32/Nordic: "PA5" / "P0.13" → per-port GpioPort with an ODR offset.
@@ -246,7 +246,11 @@ impl SystemBus {
         let Some(idx) = self.find_peripheral_index(addr) else {
             return false;
         };
-        self.set_peripheral_gpio_input(idx, bit, level)
+        let entry = &self.peripherals[idx];
+        let Some(pin) = entry.dev.gpio_register_pad(addr - entry.base, bit) else {
+            return false;
+        };
+        self.set_peripheral_gpio_input(idx, pin, level)
     }
 
     /// Resolve a pin label to its `(IDR address, bit)` so a sensor can
@@ -269,8 +273,8 @@ impl SystemBus {
                 {
                     return Some((base + idr_off, bit));
                 }
-                let offsets = dev.gpio_port_offsets()?;
-                return Some((base + offsets.input, *bit));
+                let location = dev.gpio_pin_registers(*bit)?;
+                return Some((base + location.input, location.bit));
             }
             // Label not in map — fall through (ESP bare/GPIO labels, etc.).
         }

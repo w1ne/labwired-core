@@ -167,3 +167,43 @@ fn test_rp2040_no_relocation_when_vectors_at_flash_base() {
         "VTOR must stay at 0 when no stage-2 relocation is needed"
     );
 }
+
+/// RP2350 and a normal SDK ELF both use the top of 520 KiB SRAM. Equal SP
+/// does not make the ROM at zero an alias of the application vector table.
+#[test]
+fn same_stack_rom_and_application_still_select_application_vectors() {
+    use crate::memory::{LinearMemory, ProgramImage};
+    use crate::system::cortex_m::configure_cortex_m;
+
+    let mut bus = SystemBus::new();
+    bus.flash = LinearMemory::new(4096, 0x1000_0000);
+    bus.ram = LinearMemory::new(520 * 1024, 0x2000_0000);
+    let sp = 0x2008_2000;
+    let mut rom = LinearMemory::new(512, 0);
+    assert!(rom.write_u32(0, sp));
+    assert!(rom.write_u32(4, 0x101));
+    assert!(rom.write_u32(19 * 4, 0xe7f8_006d));
+    bus.extra_mem.push(rom);
+    let (cpu, _) = configure_cortex_m(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    let mut image = vec![0u8; 512];
+    image[0..4].copy_from_slice(&sp.to_le_bytes());
+    image[4..8].copy_from_slice(&0x1000_0101u32.to_le_bytes());
+    image[19 * 4..20 * 4].copy_from_slice(&0x1000_0121u32.to_le_bytes());
+    let mut program = ProgramImage::new(0x1000_0101, crate::Arch::Arm);
+    program.add_segment(0x1000_0000, image);
+    machine.load_firmware(&program).unwrap();
+    assert_eq!(machine.cpu.get_register(13), sp);
+    assert_eq!(machine.cpu.get_pc(), 0x1000_0100);
+    let vtor = machine.bus.read_u32(0xe000_ed08).unwrap();
+    assert_eq!(vtor, 0x1000_0000);
+    assert_eq!(
+        machine.bus.read_u32(u64::from(vtor) + 19 * 4).unwrap(),
+        0x1000_0121
+    );
+    assert_eq!(
+        machine.bus.read_u32(19 * 4).unwrap(),
+        0xe7f8_006d,
+        "the actual ROM window remains mapped for SDK ROM calls"
+    );
+}

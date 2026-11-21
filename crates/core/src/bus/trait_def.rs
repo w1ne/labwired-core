@@ -125,6 +125,13 @@ pub trait Bus {
         false
     }
 
+    /// Sample a numbered request line of the canonical peripheral at `addr`.
+    /// A DMA controller supplies its chip-defined DREQ routing. Unmapped or
+    /// shadowed endpoints return None; clock-gated/inactive lines return false.
+    fn dma_request_active_at(&self, _addr: u64, _line: u8) -> Option<bool> {
+        None
+    }
+
     /// Byte RX DMA readiness after bus routing/clock admission. Unsupported
     /// endpoints return None; supported but empty endpoints return false.
     fn dma_rx_request(&self, _addr: u64) -> Option<bool> {

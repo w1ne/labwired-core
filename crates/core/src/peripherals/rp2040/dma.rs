@@ -1,78 +1,30 @@
 // LabWired - Firmware Simulation Platform
 // Copyright (C) 2026 Andrii Shylenko
-//
-// This software is released under the MIT License.
-// See the LICENSE file in the project root for full license information.
+// SPDX-License-Identifier: MIT
 
-//! RP2040 DMA controller (datasheet §2.5, base `0x50000000`).
+//! RP2040 / RP2350 DMA transfer engine.
 //!
-//! Twelve independent channels, each a self-contained transfer engine that
-//! moves `TRANS_COUNT` beats of `DATA_SIZE` bytes from `READ_ADDR` to
-//! `WRITE_ADDR`. This model implements the memory-to-memory datapath end to
-//! end over the real chip bus (`tick_with_bus`): a beat reads `width` bytes
-//! from the source, optionally byte-swaps them, writes them to the
-//! destination, advances each address by `width` when its `INCR_*` bit is set
-//! (with optional `RING` wrapping), and decrements `TRANS_COUNT`. When the
-//! count reaches zero the channel clears `BUSY`, latches its `INTR` bit, and —
-//! if `CHAIN_TO` names a *different* channel — triggers that channel, so a
-//! programmed chain runs to completion with no CPU involvement.
+//! The default RP2040 layout retains twelve channels and IRQs 11/12. The
+//! explicit RP2350 profile has sixteen channels, IRQs 10..13, shifted CTRL
+//! fields, reverse/skip increments, and its own global register offsets.
+//! Source: Raspberry Pi pico-sdk ee68c78d, hardware/regs/dma.h for each chip.
 //!
-//! ## Register layout (datasheet §2.5.7)
+//! A beat uses one bus access of its configured width, then advances the live
+//! addresses/count. Bus errors stop the channel and latch its native error and
+//! interrupt bits. A channel completion can trigger another channel. This is
+//! a functional transfer model, not DMA arbitration or bus-pipeline timing.
 //!
-//! Each channel owns a `0x40`-byte block (`CH0` at `0x000`, `CH1` at `0x040`,
-//! …). Within a block the four *alias* windows expose the same four backing
-//! registers (READ_ADDR / WRITE_ADDR / TRANS_COUNT / CTRL) in different
-//! orders; the last register of each alias is a **trigger** — writing it
-//! applies the write and then starts the channel:
-//!
-//! | Off  | Alias 0            | Alias 1 (+0x10)          | Alias 2 (+0x20)          | Alias 3 (+0x30)          |
-//! |-----:|--------------------|--------------------------|--------------------------|--------------------------|
-//! | +0x0 | READ_ADDR          | CTRL                     | CTRL                     | CTRL                     |
-//! | +0x4 | WRITE_ADDR         | READ_ADDR                | TRANS_COUNT              | WRITE_ADDR               |
-//! | +0x8 | TRANS_COUNT        | WRITE_ADDR               | READ_ADDR                | TRANS_COUNT              |
-//! | +0xC | **CTRL_TRIG**      | **TRANS_COUNT_TRIG**     | **WRITE_ADDR_TRIG**      | **READ_ADDR_TRIG**       |
-//!
-//! Reads of any alias return the live backing register; `CTRL` reads OR in the
-//! live `BUSY` bit (24). The live `READ_ADDR` / `WRITE_ADDR` / `TRANS_COUNT`
-//! advance as the transfer runs, so firmware polling them observes progress.
-//!
-//! ## `CTRL_TRIG` bit fields (datasheet §2.5.7)
-//!
-//! `EN` [0], `HIGH_PRIORITY` [1], `DATA_SIZE` [3:2] (0=byte,1=half,2=word),
-//! `INCR_READ` [4], `INCR_WRITE` [5], `RING_SIZE` [9:6], `RING_SEL` [10],
-//! `CHAIN_TO` [14:11], `TREQ_SEL` [20:15], `IRQ_QUIET` [21], `BSWAP` [22],
-//! `SNIFF_EN` [23], `BUSY` [24, RO]. `TREQ_SEL == 0x3F` is `TREQ_PERMANENT`
-//! (unpaced) — the memory-to-memory transfer request that runs every cycle.
-//!
-//! ## Interrupts (datasheet §2.5.7)
-//!
-//! Completion latches the channel's bit in `INTR` (unless `IRQ_QUIET` is set).
-//! Two independent aggregators drive the two NVIC lines: `INTS0 =
-//! (INTR | INTF0) & INTE0` asserts `DMA_IRQ_0` (NVIC 11), `INTS1 =
-//! (INTR | INTF1) & INTE1` asserts `DMA_IRQ_1` (NVIC 12). Delivery is
-//! level-sensitive — re-pended every tick until firmware acknowledges by
-//! writing the channel bit to `INTS0`/`INTS1` (or `INTR`), matching silicon's
-//! held IRQ line. `INTF0`/`INTF1` force a line without a completed transfer.
-//!
-//! ## Deferred behaviour (documented, not diverging)
-//!
-//! * **Paced (DREQ) transfers.** Only `TREQ_PERMANENT` auto-runs. A channel
-//!   triggered with any other `TREQ_SEL` is a peripheral-paced transfer whose
-//!   throttle is the peripheral's DREQ, which this model does not yet source;
-//!   such a channel is accepted (its registers store) but does **not** begin,
-//!   rather than fabricate an un-paced copy that silicon would never perform.
-//!   Modelling per-peripheral DREQ is the documented follow-up (issue #577).
-//! * **Sniff CRC** (`SNIFF_CTRL`/`SNIFF_DATA`) is register storage only — the
-//!   checksum accumulator is not computed.
+//! RP2350 PIO requests sample the real FIFO levels through the bus.
+//! Other DREQ sources, timer pacing, sniff CRC and security/MPU enforcement
+//! are not implemented. A paced channel never fabricates an unpaced transfer.
+//! RP2350 rejects unsupported configuration before it can report success.
 
-use crate::{Bus, CycleClock, Peripheral, PeripheralTickResult, SimResult};
+use crate::{Bus, CycleClock, Peripheral, PeripheralTickResult, SimResult, SimulationError};
 
 /// Number of DMA channels on the RP2040 (datasheet §2.5).
 const NUM_CHANNELS: usize = 12;
 /// Per-channel register-block stride.
 const CHANNEL_STRIDE: u64 = 0x40;
-/// Byte span of the twelve channel blocks (`0x000..0x300`).
-const CHANNELS_END: u64 = CHANNEL_STRIDE * NUM_CHANNELS as u64;
 
 // ── Backing-register selector within an alias decode ──
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -86,11 +38,12 @@ enum Reg {
 // ── Interrupt / control block register offsets (datasheet §2.5.7) ──
 const INTR: u64 = 0x400; // raw interrupt latch (W1C)
 const INTE0: u64 = 0x404;
+#[cfg(test)]
 const INTF0: u64 = 0x408;
-const INTS0: u64 = 0x40c; // (INTR|INTF0)&INTE0; W1C acks INTR
+#[cfg(test)]
+const INTS0: u64 = 0x40c; // (INTR&INTE0)|INTF0; W1C acks INTR
+#[cfg(test)]
 const INTE1: u64 = 0x414;
-const INTF1: u64 = 0x418;
-const INTS1: u64 = 0x41c;
 const MULTI_CHAN_TRIGGER: u64 = 0x430;
 const SNIFF_CTRL: u64 = 0x434;
 const SNIFF_DATA: u64 = 0x438;
@@ -102,17 +55,19 @@ const N_CHANNELS: u64 = 0x448; // RO: channel count
 const CTRL_EN: u32 = 1 << 0;
 const CTRL_DATA_SIZE_SHIFT: u32 = 2;
 const CTRL_DATA_SIZE_MASK: u32 = 0b11;
+#[cfg(test)]
 const CTRL_INCR_READ: u32 = 1 << 4;
+#[cfg(test)]
 const CTRL_INCR_WRITE: u32 = 1 << 5;
 const CTRL_RING_SIZE_SHIFT: u32 = 6;
 const CTRL_RING_SIZE_MASK: u32 = 0b1111;
-const CTRL_RING_SEL: u32 = 1 << 10;
 const CTRL_CHAIN_TO_SHIFT: u32 = 11;
 const CTRL_CHAIN_TO_MASK: u32 = 0b1111;
 const CTRL_TREQ_SEL_SHIFT: u32 = 15;
 const CTRL_TREQ_SEL_MASK: u32 = 0b11_1111;
+#[cfg(test)]
 const CTRL_IRQ_QUIET: u32 = 1 << 21;
-const CTRL_BSWAP: u32 = 1 << 22;
+#[cfg(test)]
 const CTRL_BUSY: u32 = 1 << 24;
 
 /// `TREQ_SEL` value selecting the permanent (unpaced) transfer request — the
@@ -122,6 +77,7 @@ const TREQ_PERMANENT: u32 = 0x3F;
 /// NVIC IRQ position of `DMA_IRQ_0` (RP2040 §2.5.7 / vector table).
 const DMA_IRQ_0: u32 = 11;
 /// NVIC IRQ position of `DMA_IRQ_1`.
+#[cfg(test)]
 const DMA_IRQ_1: u32 = 12;
 
 /// Maximum beats moved per channel per `tick_with_bus` call. One beat/cycle is
@@ -130,74 +86,146 @@ const DMA_IRQ_1: u32 = 12;
 /// live `TRANS_COUNT`/address progress observable and deterministic.
 const BEATS_PER_TICK: u32 = 1;
 
-/// One DMA channel's programmable state (datasheet §2.5.7).
+/// Native register/interrupt profile. Absence of a configured profile is RP2040.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DmaLayout {
+    #[default]
+    Rp2040,
+    Rp2350,
+}
+
+impl DmaLayout {
+    fn channels(self) -> usize {
+        if self == Self::Rp2350 {
+            16
+        } else {
+            NUM_CHANNELS
+        }
+    }
+    fn irq_count(self) -> usize {
+        if self == Self::Rp2350 {
+            4
+        } else {
+            2
+        }
+    }
+    fn irq_base(self) -> u32 {
+        if self == Self::Rp2350 {
+            10
+        } else {
+            DMA_IRQ_0
+        }
+    }
+    fn shifted(self, old: u32) -> u32 {
+        if self == Self::Rp2350 {
+            old + 2
+        } else {
+            old
+        }
+    }
+    fn busy_mask(self) -> u32 {
+        1 << self.shifted(24)
+    }
+    fn count_mask(self) -> u32 {
+        if self == Self::Rp2350 {
+            0x0fff_ffff
+        } else {
+            u32::MAX
+        }
+    }
+    fn global(self, old: u64) -> u64 {
+        if self == Self::Rp2350 {
+            old + 0x20
+        } else {
+            old
+        }
+    }
+    fn channel_mask(self) -> u32 {
+        (1 << self.channels()) - 1
+    }
+}
+
+const CTRL_READ_ERROR: u32 = 1 << 30;
+const CTRL_WRITE_ERROR: u32 = 1 << 29;
+const CTRL_AHB_ERROR: u32 = 1 << 31;
+const CTRL_ERRORS: u32 = CTRL_READ_ERROR | CTRL_WRITE_ERROR;
+
+/// One DMA channel's programmable and live state.
 #[derive(Debug, Clone, Copy, Default)]
 struct Channel {
     read_addr: u32,
     write_addr: u32,
     trans_count: u32,
-    /// `CTRL` without the read-only `BUSY` bit (which lives in `busy`).
+    reload_count: u32,
     ctrl: u32,
-    /// Live `BUSY` — true while the channel is actively transferring.
+    errors: u32,
     busy: bool,
 }
 
 impl Channel {
-    fn data_size(&self) -> u32 {
-        (self.ctrl >> CTRL_DATA_SIZE_SHIFT) & CTRL_DATA_SIZE_MASK
-    }
-    /// Beat width in bytes: 1 (byte), 2 (half-word) or 4 (word).
     fn width(&self) -> u32 {
-        1 << self.data_size()
+        1 << ((self.ctrl >> CTRL_DATA_SIZE_SHIFT) & CTRL_DATA_SIZE_MASK)
     }
-    fn treq_sel(&self) -> u32 {
-        (self.ctrl >> CTRL_TREQ_SEL_SHIFT) & CTRL_TREQ_SEL_MASK
+    fn treq_sel(&self, layout: DmaLayout) -> u32 {
+        (self.ctrl >> layout.shifted(CTRL_TREQ_SEL_SHIFT)) & CTRL_TREQ_SEL_MASK
     }
-    fn chain_to(&self) -> usize {
-        ((self.ctrl >> CTRL_CHAIN_TO_SHIFT) & CTRL_CHAIN_TO_MASK) as usize
+    fn chain_to(&self, layout: DmaLayout) -> usize {
+        ((self.ctrl >> layout.shifted(CTRL_CHAIN_TO_SHIFT)) & CTRL_CHAIN_TO_MASK) as usize
     }
-    fn ring_size(&self) -> u32 {
-        (self.ctrl >> CTRL_RING_SIZE_SHIFT) & CTRL_RING_SIZE_MASK
-    }
-    /// `CTRL` as firmware reads it: stored bits with the live `BUSY` merged in.
-    fn ctrl_read(&self) -> u32 {
-        if self.busy {
-            self.ctrl | CTRL_BUSY
+    fn mode(&self, layout: DmaLayout) -> u32 {
+        if layout == DmaLayout::Rp2350 {
+            self.reload_count >> 28
         } else {
-            self.ctrl & !CTRL_BUSY
+            0
         }
     }
-    /// Advance `addr` by one beat, honouring a `RING` wrap when this direction
-    /// (`is_write`) matches `RING_SEL` and `RING_SIZE != 0`. The wrap keeps the
-    /// low `RING_SIZE` address bits circulating within a `2^RING_SIZE` window.
-    fn advance(&self, addr: u32, is_write: bool) -> u32 {
-        let width = self.width();
-        let ring_size = self.ring_size();
-        let ring_on_write = self.ctrl & CTRL_RING_SEL != 0;
+    fn ctrl_read(&self, layout: DmaLayout) -> u32 {
+        self.ctrl
+            | self.errors
+            | if self.errors != 0 { CTRL_AHB_ERROR } else { 0 }
+            | if self.busy { layout.busy_mask() } else { 0 }
+    }
+    fn advance(&self, addr: u32, is_write: bool, layout: DmaLayout) -> u32 {
+        let increment_bit = if is_write {
+            if layout == DmaLayout::Rp2350 {
+                6
+            } else {
+                5
+            }
+        } else {
+            4
+        };
+        let increment = self.ctrl & (1 << increment_bit) != 0;
+        let reverse =
+            layout == DmaLayout::Rp2350 && self.ctrl & (1 << if is_write { 7 } else { 5 }) != 0;
+        let next = match (increment, reverse) {
+            (false, false) => return addr,
+            (true, false) => addr.wrapping_add(self.width()),
+            (true, true) => addr.wrapping_sub(self.width()),
+            (false, true) => addr.wrapping_add(2 * self.width()),
+        };
+        let ring_size = (self.ctrl >> layout.shifted(CTRL_RING_SIZE_SHIFT)) & CTRL_RING_SIZE_MASK;
+        let ring_on_write = self.ctrl & (1 << layout.shifted(10)) != 0;
         if ring_size != 0 && is_write == ring_on_write {
             let mask = (1u32 << ring_size) - 1;
-            (addr & !mask) | (addr.wrapping_add(width) & mask)
+            (addr & !mask) | (next & mask)
         } else {
-            addr.wrapping_add(width)
+            next
         }
     }
 }
 
-/// RP2040 DMA controller — 12 channels + two interrupt aggregators.
 #[derive(Debug)]
 pub struct Rp2040Dma {
-    channels: [Channel; NUM_CHANNELS],
-    /// `INTR` — per-channel raw latched interrupt (bit `c`), write-1-clear.
+    layout: DmaLayout,
+    pio_dreq_bases: Option<[u64; 3]>,
+    channels: Vec<Channel>,
     intr: u32,
-    inte0: u32,
-    intf0: u32,
-    inte1: u32,
-    intf1: u32,
+    inte: [u32; 4],
+    intf: [u32; 4],
     sniff_ctrl: u32,
     sniff_data: u32,
-    /// Bus-published cycle clock: presence means scheduler mode (walk-free).
     clock: Option<CycleClock>,
-    /// True while a transfer / level-IRQ event chain is live.
     chain_live: bool,
 }
 
@@ -209,252 +237,371 @@ impl Default for Rp2040Dma {
 
 impl Rp2040Dma {
     pub fn new() -> Self {
+        Self::with_layout(DmaLayout::Rp2040)
+    }
+    pub fn with_layout(layout: DmaLayout) -> Self {
         Self {
-            channels: [Channel::default(); NUM_CHANNELS],
+            layout,
+            pio_dreq_bases: None,
+            channels: vec![Channel::default(); layout.channels()],
             intr: 0,
-            inte0: 0,
-            intf0: 0,
-            inte1: 0,
-            intf1: 0,
+            inte: [0; 4],
+            intf: [0; 4],
             sniff_ctrl: 0,
             sniff_data: 0,
             clock: None,
             chain_live: false,
         }
     }
-
+    /// The descriptor owns the three PIO MMIO windows. No silicon address
+    /// is duplicated in this engine; relocation changes routing accordingly.
+    pub fn with_pio_dreq_bases(mut self, bases: [u64; 3]) -> Self {
+        self.pio_dreq_bases = Some(bases);
+        self
+    }
+    // DREQ numbering is the native silicon contract, pico-sdk ee68c78d dreq.h.
+    fn dreq_route(&self, request: u32) -> Option<(u64, u8)> {
+        if self.layout != DmaLayout::Rp2350 || request > 23 {
+            return None;
+        }
+        self.pio_dreq_bases
+            .map(|bases| (bases[(request / 8) as usize], (request % 8) as u8))
+    }
     crate::cycle_clock::scheduler_mode!();
 
-    /// True while there is transfer work or a held IRQ level to re-pend.
-    fn needs_event_chain(&self) -> bool {
-        self.any_busy() || self.ints0() != 0 || self.ints1() != 0
+    fn ints(&self, line: usize) -> u32 {
+        (self.intr & self.inte[line]) | self.intf[line]
     }
-
-    /// Level-sensitive IRQ vector for the two DMA lines.
+    #[cfg(test)]
+    fn ints0(&self) -> u32 {
+        self.ints(0)
+    }
+    fn needs_event_chain(&self) -> bool {
+        self.any_busy() || (0..self.layout.irq_count()).any(|i| self.ints(i) != 0)
+    }
     fn level_irqs(&self) -> PeripheralTickResult {
-        let mut irqs = Vec::new();
-        if self.ints0() != 0 {
-            irqs.push(DMA_IRQ_0);
-        }
-        if self.ints1() != 0 {
-            irqs.push(DMA_IRQ_1);
-        }
+        let irqs: Vec<u32> = (0..self.layout.irq_count())
+            .filter(|&i| self.ints(i) != 0)
+            .map(|i| self.layout.irq_base() + i as u32)
+            .collect();
         PeripheralTickResult {
-            explicit_irqs: if irqs.is_empty() { None } else { Some(irqs) },
+            explicit_irqs: (!irqs.is_empty()).then_some(irqs),
             ..Default::default()
         }
     }
 
-    /// Masked status for the two IRQ lines (datasheet: `INTS = (INTR|INTF)&INTE`).
-    fn ints0(&self) -> u32 {
-        (self.intr | self.intf0) & self.inte0
-    }
-    fn ints1(&self) -> u32 {
-        (self.intr | self.intf1) & self.inte1
-    }
-
-    /// Decode a channel-block offset into `(channel, backing register, trigger?)`.
-    fn decode_channel(offset: u64) -> Option<(usize, Reg, bool)> {
-        if offset >= CHANNELS_END {
+    fn decode_channel(&self, offset: u64) -> Option<(usize, Reg, bool)> {
+        if offset >= CHANNEL_STRIDE * self.channels.len() as u64 {
             return None;
         }
         let ch = (offset / CHANNEL_STRIDE) as usize;
-        let (reg, trig) = match offset % CHANNEL_STRIDE {
-            0x00 => (Reg::ReadAddr, false),
-            0x04 => (Reg::WriteAddr, false),
-            0x08 => (Reg::TransCount, false),
-            0x0c => (Reg::Ctrl, true),  // CTRL_TRIG
-            0x10 => (Reg::Ctrl, false), // AL1_CTRL
-            0x14 => (Reg::ReadAddr, false),
-            0x18 => (Reg::WriteAddr, false),
-            0x1c => (Reg::TransCount, true), // AL1_TRANS_COUNT_TRIG
-            0x20 => (Reg::Ctrl, false),      // AL2_CTRL
-            0x24 => (Reg::TransCount, false),
-            0x28 => (Reg::ReadAddr, false),
-            0x2c => (Reg::WriteAddr, true), // AL2_WRITE_ADDR_TRIG
-            0x30 => (Reg::Ctrl, false),     // AL3_CTRL
-            0x34 => (Reg::WriteAddr, false),
-            0x38 => (Reg::TransCount, false),
-            0x3c => (Reg::ReadAddr, true), // AL3_READ_ADDR_TRIG
-            _ => return None,
+        let local = offset % CHANNEL_STRIDE;
+        let alias = local / 0x10;
+        let slot = (local % 0x10) / 4;
+        let reg = match (alias, slot) {
+            (0, 0) | (1, 1) | (2, 2) | (3, 3) => Reg::ReadAddr,
+            (0, 1) | (1, 2) | (2, 3) | (3, 1) => Reg::WriteAddr,
+            (0, 2) | (1, 3) | (2, 1) | (3, 2) => Reg::TransCount,
+            _ => Reg::Ctrl,
         };
-        Some((ch, reg, trig))
+        Some((ch, reg, slot == 3))
     }
-
+    fn irq_register(&self, offset: u64) -> Option<(usize, u64)> {
+        if offset < INTE0 {
+            return None;
+        }
+        let line = ((offset - INTE0) / 0x10) as usize;
+        let reg = (offset - INTE0) % 0x10;
+        (line < self.layout.irq_count() && reg <= 8).then_some((line, reg))
+    }
+    fn debug_register(&self, offset: u64) -> Option<(usize, u64)> {
+        if offset < 0x800 {
+            return None;
+        }
+        let ch = ((offset - 0x800) / 0x40) as usize;
+        let reg = (offset - 0x800) % 0x40;
+        (ch < self.channels.len() && reg <= 4).then_some((ch, reg))
+    }
     fn read_word(&self, offset: u64) -> u32 {
-        if let Some((ch, reg, _)) = Self::decode_channel(offset) {
+        if let Some((ch, reg, _)) = self.decode_channel(offset) {
             let c = &self.channels[ch];
             return match reg {
                 Reg::ReadAddr => c.read_addr,
                 Reg::WriteAddr => c.write_addr,
                 Reg::TransCount => c.trans_count,
-                Reg::Ctrl => c.ctrl_read(),
+                Reg::Ctrl => c.ctrl_read(self.layout),
+            };
+        }
+        if let Some((line, reg)) = self.irq_register(offset) {
+            return match reg {
+                0 => self.inte[line],
+                4 => self.intf[line],
+                _ => self.ints(line),
+            };
+        }
+        if let Some((ch, reg)) = self.debug_register(offset) {
+            return if reg == 4 {
+                self.channels[ch].reload_count
+            } else {
+                0
             };
         }
         match offset {
             INTR => self.intr,
-            INTE0 => self.inte0,
-            INTF0 => self.intf0,
-            INTS0 => self.ints0(),
-            INTE1 => self.inte1,
-            INTF1 => self.intf1,
-            INTS1 => self.ints1(),
-            SNIFF_CTRL => self.sniff_ctrl,
-            SNIFF_DATA => self.sniff_data,
-            FIFO_LEVELS => 0, // no channel FIFO is ever non-empty in this model
-            N_CHANNELS => NUM_CHANNELS as u32,
-            _ => {
-                crate::census_reg!("rp2040.dma:Rp2040Dma", offset, "read");
-                0
-            }
+            o if o == self.layout.global(SNIFF_CTRL) => self.sniff_ctrl,
+            o if o == self.layout.global(SNIFF_DATA) => self.sniff_data,
+            o if o == self.layout.global(N_CHANNELS) => self.channels.len() as u32,
+            o if o == self.layout.global(FIFO_LEVELS) => 0,
+            0x480..=0x4cc if self.layout == DmaLayout::Rp2350 => 3,
+            0x4d0 if self.layout == DmaLayout::Rp2350 => 0x3ff,
+            _ => 0,
         }
     }
-
+    fn validate_word(&self, offset: u64, value: Option<u32>) -> SimResult<()> {
+        if offset & 3 != 0 {
+            return Err(SimulationError::MemoryViolation(offset));
+        }
+        if let Some((_, reg, _)) = self.decode_channel(offset) {
+            if let Some(value) = value {
+                if reg == Reg::Ctrl && (value >> CTRL_DATA_SIZE_SHIFT) & 3 == 3 {
+                    return Err(SimulationError::NotImplemented(
+                        "RP DMA reserved DATA_SIZE=3".into(),
+                    ));
+                }
+                if self.layout == DmaLayout::Rp2350
+                    && reg == Reg::TransCount
+                    && !matches!(value >> 28, 0 | 1 | 15)
+                {
+                    return Err(SimulationError::NotImplemented(
+                        "RP2350 reserved DMA transfer-count mode".into(),
+                    ));
+                }
+                let request =
+                    (value >> self.layout.shifted(CTRL_TREQ_SEL_SHIFT)) & CTRL_TREQ_SEL_MASK;
+                if self.layout == DmaLayout::Rp2350
+                    && reg == Reg::Ctrl
+                    && value & CTRL_EN != 0
+                    && request != TREQ_PERMANENT
+                    && self.dreq_route(request).is_none()
+                {
+                    return Err(SimulationError::NotImplemented(
+                        "RP2350 DMA request source is not modeled".into(),
+                    ));
+                }
+                if self.layout == DmaLayout::Rp2350 && reg == Reg::Ctrl && value & (1 << 25) != 0 {
+                    return Err(SimulationError::NotImplemented(
+                        "RP2350 DMA sniff computation is not modeled".into(),
+                    ));
+                }
+            }
+            return Ok(());
+        }
+        if self.irq_register(offset).is_some() || self.debug_register(offset).is_some() {
+            return Ok(());
+        }
+        if self.layout == DmaLayout::Rp2040 {
+            return Ok(());
+        }
+        let known = matches!(offset, INTR | 0x440..=0x458 | 0x460..=0x468 | 0x480..=0x4d0 | 0x500);
+        if !known {
+            return Err(SimulationError::MemoryViolation(offset));
+        }
+        if let Some(value) = value {
+            let unsupported = match offset {
+                0x440..=0x44c => value != 0,
+                0x454 => value & 1 != 0,
+                0x480..=0x4cc => value != 3,
+                0x4d0 => value != 0x3ff,
+                0x500 => value != 0,
+                _ => false,
+            };
+            if unsupported {
+                return Err(SimulationError::NotImplemented(
+                    "RP2350 DMA timer pacing, sniff CRC and security/MPU changes are not modeled"
+                        .into(),
+                ));
+            }
+        }
+        Ok(())
+    }
     fn write_word(&mut self, offset: u64, value: u32) {
-        if let Some((ch, reg, trig)) = Self::decode_channel(offset) {
+        if let Some((ch, reg, trig)) = self.decode_channel(offset) {
             let c = &mut self.channels[ch];
             match reg {
                 Reg::ReadAddr => c.read_addr = value,
                 Reg::WriteAddr => c.write_addr = value,
-                Reg::TransCount => c.trans_count = value,
-                // BUSY (bit 24) is read-only; keep it out of the stored CTRL.
-                Reg::Ctrl => c.ctrl = value & !CTRL_BUSY,
+                Reg::TransCount => {
+                    c.reload_count = value;
+                    if !c.busy {
+                        c.trans_count = value;
+                    }
+                }
+                Reg::Ctrl => {
+                    c.errors &= !(value & CTRL_ERRORS);
+                    let mask = if self.layout == DmaLayout::Rp2350 {
+                        0x03ff_ffff
+                    } else {
+                        0x00ff_ffff
+                    };
+                    c.ctrl = value & mask;
+                }
             }
-            if trig {
+            if trig && value != 0 {
                 self.try_start(ch);
+            }
+            // IRQ_QUIET null triggers mark the end of a control-block chain.
+            if trig && value == 0 && c_quiet(self.channels[ch].ctrl, self.layout) {
+                self.intr |= 1 << ch;
+            }
+            return;
+        }
+        if let Some((line, reg)) = self.irq_register(offset) {
+            let value = value & self.layout.channel_mask();
+            match reg {
+                0 => self.inte[line] = value,
+                4 => self.intf[line] = value,
+                _ => self.intr &= !value,
             }
             return;
         }
         match offset {
-            // INTR is write-1-clear of the raw latch.
             INTR => self.intr &= !value,
-            INTE0 => self.inte0 = value,
-            INTF0 => self.intf0 = value,
-            // INTS0 write-1-clear acknowledges the raw interrupt (pico-sdk
-            // `dma_channel_acknowledge_irq` writes ints0).
-            INTS0 => self.intr &= !value,
-            INTE1 => self.inte1 = value,
-            INTF1 => self.intf1 = value,
-            INTS1 => self.intr &= !value,
-            MULTI_CHAN_TRIGGER => {
-                for ch in 0..NUM_CHANNELS {
+            o if o == self.layout.global(MULTI_CHAN_TRIGGER) => {
+                for ch in 0..self.channels.len() {
                     if value & (1 << ch) != 0 {
                         self.try_start(ch);
                     }
                 }
             }
-            CHAN_ABORT => {
-                for ch in 0..NUM_CHANNELS {
+            o if o == self.layout.global(CHAN_ABORT) => {
+                for ch in 0..self.channels.len() {
                     if value & (1 << ch) != 0 {
                         self.channels[ch].busy = false;
                     }
                 }
             }
-            SNIFF_CTRL => self.sniff_ctrl = value,
-            SNIFF_DATA => self.sniff_data = value,
-            _ => {
-                crate::census_reg!("rp2040.dma:Rp2040Dma", offset, "write");
-            }
+            o if o == self.layout.global(SNIFF_CTRL) => self.sniff_ctrl = value,
+            o if o == self.layout.global(SNIFF_DATA) => self.sniff_data = value,
+            _ => {}
         }
     }
-
-    /// Begin a channel if it is enabled, has work, and requests the permanent
-    /// (unpaced) TREQ. Paced (DREQ) channels are accepted but do not auto-run
-    /// (see the module-level "Deferred behaviour" note).
     fn try_start(&mut self, ch: usize) {
-        let c = &mut self.channels[ch];
-        if c.ctrl & CTRL_EN != 0 && c.trans_count > 0 && c.treq_sel() == TREQ_PERMANENT {
+        let paced = self
+            .channels
+            .get(ch)
+            .is_some_and(|c| self.dreq_route(c.treq_sel(self.layout)).is_some());
+        let Some(c) = self.channels.get_mut(ch) else {
+            return;
+        };
+        if !c.busy
+            && c.ctrl & CTRL_EN != 0
+            && c.reload_count & self.layout.count_mask() > 0
+            && (c.treq_sel(self.layout) == TREQ_PERMANENT || paced)
+        {
+            c.trans_count = c.reload_count;
             c.busy = true;
         }
     }
-
-    /// True while any channel is actively transferring — keeps the bus visiting
-    /// `tick_with_bus` so beats keep moving.
     fn any_busy(&self) -> bool {
         self.channels.iter().any(|c| c.busy)
     }
-
-    /// Advance every busy channel by up to `BEATS_PER_TICK` beats, moving real
-    /// bytes over `bus`. A channel that drains latches its interrupt and, via
-    /// `CHAIN_TO`, may trigger a successor in the same pass.
     fn run(&mut self, bus: &mut dyn Bus) {
-        // A completing channel can chain to a later-indexed channel that this
-        // same pass then advances; the bounded outer loop lets a full chain
-        // make progress per tick without unbounded work.
-        for ch in 0..NUM_CHANNELS {
-            if !self.channels[ch].busy {
-                continue;
-            }
+        for ch in 0..self.channels.len() {
             for _ in 0..BEATS_PER_TICK {
-                if !self.channels[ch].busy {
+                if !self.channels[ch].busy || self.channels[ch].ctrl & CTRL_EN == 0 {
                     break;
+                }
+                let request = self.channels[ch].treq_sel(self.layout);
+                if request != TREQ_PERMANENT {
+                    let ready = self
+                        .dreq_route(request)
+                        .and_then(|(addr, line)| bus.dma_request_active_at(addr, line));
+                    if ready != Some(true) {
+                        break;
+                    }
                 }
                 self.beat(bus, ch);
             }
         }
     }
-
-    /// Move one beat for channel `ch`; complete the channel when it reaches
-    /// `TRANS_COUNT == 0`.
+    fn bus_error(&mut self, ch: usize, read: bool) {
+        self.channels[ch].busy = false;
+        self.channels[ch].errors |= if read {
+            CTRL_READ_ERROR
+        } else {
+            CTRL_WRITE_ERROR
+        };
+        self.intr |= 1 << ch;
+    }
     fn beat(&mut self, bus: &mut dyn Bus, ch: usize) {
-        let c = &mut self.channels[ch];
+        let c = self.channels[ch];
         let width = c.width();
-        let bswap = c.ctrl & CTRL_BSWAP != 0;
-
-        // Read `width` bytes from the source.
-        let mut buf = [0u8; 4];
-        crate::with_device_write_bypass(bus, |bus| {
-            for (i, b) in buf.iter_mut().take(width as usize).enumerate() {
-                *b = bus.read_u8(c.read_addr as u64 + i as u64).unwrap_or(0);
-            }
+        let read = crate::with_device_write_bypass(bus, |bus| match width {
+            1 => bus.read_u8(c.read_addr as u64).map(u32::from),
+            2 => bus.read_u16(c.read_addr as u64).map(u32::from),
+            _ => bus.read_u32(c.read_addr as u64),
         });
-        // BSWAP reverses the bytes within a (half-word / word) beat.
-        if bswap && width > 1 {
-            buf[..width as usize].reverse();
+        let Ok(mut value) = read else {
+            self.bus_error(ch, true);
+            return;
+        };
+        if c.ctrl & (1 << self.layout.shifted(22)) != 0 {
+            value = match width {
+                2 => u32::from((value as u16).swap_bytes()),
+                4 => value.swap_bytes(),
+                _ => value,
+            };
         }
-        // Write them to the destination.
-        crate::with_device_write_bypass(bus, |bus| {
-            for (i, &b) in buf.iter().take(width as usize).enumerate() {
-                let _ = bus.write_u8(c.write_addr as u64 + i as u64, b);
-            }
+        let write = crate::with_device_write_bypass(bus, |bus| match width {
+            1 => bus.write_u8(c.write_addr as u64, value as u8),
+            2 => bus.write_u16(c.write_addr as u64, value as u16),
+            _ => bus.write_u32(c.write_addr as u64, value),
         });
-
-        if c.ctrl & CTRL_INCR_READ != 0 {
-            c.read_addr = c.advance(c.read_addr, false);
+        if write.is_err() {
+            self.bus_error(ch, false);
+            return;
         }
-        if c.ctrl & CTRL_INCR_WRITE != 0 {
-            c.write_addr = c.advance(c.write_addr, true);
+        let active = &mut self.channels[ch];
+        active.read_addr = c.advance(c.read_addr, false, self.layout);
+        active.write_addr = c.advance(c.write_addr, true, self.layout);
+        if c.mode(self.layout) == 15 {
+            return;
         }
-        c.trans_count -= 1;
-
-        if c.trans_count == 0 {
-            c.busy = false;
-            let irq_quiet = c.ctrl & CTRL_IRQ_QUIET != 0;
-            let chain_to = c.chain_to();
-            // Completion latches the raw interrupt unless IRQ_QUIET is set.
-            if !irq_quiet {
+        active.trans_count -= 1;
+        if active.trans_count & self.layout.count_mask() == 0 {
+            active.busy = false;
+            if !c_quiet(c.ctrl, self.layout) {
                 self.intr |= 1 << ch;
             }
-            // CHAIN_TO == own index means "no chain" (datasheet §2.5.2.1);
-            // any other value triggers that channel now.
-            if chain_to != ch {
-                self.try_start(chain_to);
+            let chain = c.chain_to(self.layout);
+            if chain != ch {
+                self.try_start(chain);
+            }
+            if c.mode(self.layout) == 1 {
+                self.try_start(ch);
             }
         }
     }
 }
 
+fn c_quiet(ctrl: u32, layout: DmaLayout) -> bool {
+    ctrl & (1 << layout.shifted(21)) != 0
+}
+
 impl Peripheral for Rp2040Dma {
     fn read_u32(&self, offset: u64) -> SimResult<u32> {
+        self.validate_word(offset, None)?;
         Ok(self.read_word(offset))
     }
 
     fn write_u32(&mut self, offset: u64, value: u32) -> SimResult<()> {
+        self.validate_word(offset, Some(value))?;
         self.write_word(offset, value);
         Ok(())
     }
 
     fn read(&self, offset: u64) -> SimResult<u8> {
+        self.validate_word(offset & !3, None)?;
         let word = self.read_word(offset & !0x3);
         Ok((word >> ((offset & 0x3) * 8)) as u8)
     }
@@ -466,6 +613,7 @@ impl Peripheral for Rp2040Dma {
         let shift = (offset & 0x3) * 8;
         let cur = self.read_word(aligned);
         let new = (cur & !(0xFF << shift)) | ((value as u32) << shift);
+        self.validate_word(aligned, Some(new))?;
         self.write_word(aligned, new);
         Ok(())
     }
@@ -556,6 +704,14 @@ impl Peripheral for Rp2040Dma {
         }
     }
 
+    fn on_system_reset(&mut self) {
+        let clock = self.clock.clone();
+        let pio_dreq_bases = self.pio_dreq_bases;
+        *self = Self::with_layout(self.layout);
+        self.clock = clock;
+        self.pio_dreq_bases = pio_dreq_bases;
+    }
+
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -613,33 +769,51 @@ mod tests {
     }
 
     #[test]
+    fn force_interrupt_is_independent_of_enable_mask() {
+        let mut dma = Rp2040Dma::new();
+        dma.write_u32(INTF0, 1 << 3).unwrap();
+        assert_eq!(dma.read_u32(INTE0).unwrap(), 0);
+        assert_eq!(dma.read_u32(INTS0).unwrap(), 1 << 3);
+        assert_eq!(
+            dma.tick_elapsed_forced(1).explicit_irqs,
+            Some(vec![DMA_IRQ_0])
+        );
+        dma.write_u32(INTF0, 0).unwrap();
+        assert!(dma.tick_elapsed_forced(1).explicit_irqs.is_none());
+    }
+
+    #[test]
     fn decode_aliases_map_to_backing_registers() {
         // Every alias's trigger register is the +0xC slot; alias 0 CTRL_TRIG,
         // alias 1 TRANS_COUNT_TRIG, alias 2 WRITE_ADDR_TRIG, alias 3 READ_ADDR_TRIG.
         assert_eq!(
-            Rp2040Dma::decode_channel(0x0c).map(|(c, _, t)| (c, t)),
+            Rp2040Dma::new()
+                .decode_channel(0x0c)
+                .map(|(c, _, t)| (c, t)),
             Some((0, true))
         );
         assert!(matches!(
-            Rp2040Dma::decode_channel(0x1c),
+            Rp2040Dma::new().decode_channel(0x1c),
             Some((0, Reg::TransCount, true))
         ));
         assert!(matches!(
-            Rp2040Dma::decode_channel(0x2c),
+            Rp2040Dma::new().decode_channel(0x2c),
             Some((0, Reg::WriteAddr, true))
         ));
         assert!(matches!(
-            Rp2040Dma::decode_channel(0x3c),
+            Rp2040Dma::new().decode_channel(0x3c),
             Some((0, Reg::ReadAddr, true))
         ));
         // AL1_READ_ADDR (0x14) aliases the same backing READ_ADDR as 0x00.
         assert!(matches!(
-            Rp2040Dma::decode_channel(0x14),
+            Rp2040Dma::new().decode_channel(0x14),
             Some((0, Reg::ReadAddr, false))
         ));
         // Channel 3 block.
         assert_eq!(
-            Rp2040Dma::decode_channel(ch(3) + CTRL_TRIG).map(|(c, _, _)| c),
+            Rp2040Dma::new()
+                .decode_channel(ch(3) + CTRL_TRIG)
+                .map(|(c, _, _)| c),
             Some(3)
         );
     }
