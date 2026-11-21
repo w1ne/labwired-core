@@ -393,8 +393,12 @@
 //! `.sens v(<out>[,<ref>])|i(<element>)` is kept as [`Circuit::sensitivity`]
 //! and run by [`crate::analog::Solver::sensitivity_analysis`]: the DC
 //! sensitivity of the output to each `R` resistance, `V`/`I` value and
-//! `E`/`F`/`G`/`H` gain, linearised at the operating point. `.sens ... ac` is
-//! refused.
+//! `E`/`F`/`G`/`H` gain, linearised at the operating point.
+//! `.sens v(<out>[,<ref>])|i(<element>) ac dec|oct|lin <points> <fstart>
+//! <fstop>` is the AC form, run by
+//! [`crate::analog::Solver::ac_sensitivity_analysis`]: the derivative of the
+//! `.ac` output phasor with respect to each `R`, `C`, `L`, `K` and gain value
+//! and each source's `AC` magnitude and phase, at the held operating point.
 //! `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` is kept
 //! as [`Circuit::dc_sweep`] and run by [`crate::analog::Solver::dc_analysis`];
 //! `<src>` must be a `V`, `I` or `R` element or `TEMP`, and the second source
@@ -1052,12 +1056,15 @@ pub struct TransferFunction {
     pub input: String,
 }
 
-/// `.sens v(<out>[,<ref>])|i(<element>)`: ngspice's DC sensitivity analysis.
-/// The names are resolved when the analysis runs.
+/// `.sens v(<out>[,<ref>])|i(<element>) [ac dec|oct|lin <points> <fstart>
+/// <fstop>]`: ngspice's DC or AC sensitivity analysis. The names are resolved
+/// when the analysis runs.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sensitivity {
     /// The measured output.
     pub output: TransferOutput,
+    /// The frequency sweep of the AC form; `None` for the DC form.
+    pub ac: Option<AcSweep>,
 }
 
 /// `V<name> n+ n- <source>`.
@@ -3514,8 +3521,9 @@ pub struct Circuit {
     /// The deck's `.tf` card, if it has one; see
     /// [`crate::analog::Solver::transfer_analysis`].
     pub transfer_function: Option<TransferFunction>,
-    /// The deck's DC `.sens` card, if it has one; see
-    /// [`crate::analog::Solver::sensitivity_analysis`].
+    /// The deck's `.sens` card, if it has one; see
+    /// [`crate::analog::Solver::sensitivity_analysis`] for the DC form and
+    /// [`crate::analog::Solver::ac_sensitivity_analysis`] for the AC form.
     pub sensitivity: Option<Sensitivity>,
     /// The deck's `.temp` (or `.options temp=`) in °C, if it gives one.
     /// `.noise` takes the thermal noise of a resistor without its own
@@ -7860,9 +7868,11 @@ fn parse_transfer_function(
     })
 }
 
-/// Parse the DC form `.sens v(<out>[,<ref>])|i(<element>)`.
+/// Parse `.sens v(<out>[,<ref>])|i(<element>) [ac dec|oct|lin <points>
+/// <fstart> <fstop>]`.
 fn parse_sensitivity(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<Sensitivity, AnalogError> {
-    const SHAPE: &str = "expected `.sens v(<out>[,<ref>])|i(<element>)`";
+    const SHAPE: &str = "expected `.sens v(<out>[,<ref>])|i(<element>) [ac dec|oct|lin <points> \
+                         <fstart> <fstop>]`";
     let (probe, rest) = split_probe(ctx, tokens, SHAPE)?;
     let output = match probe {
         ('v', node, reference) => TransferOutput::Voltage { node, reference },
@@ -7870,10 +7880,12 @@ fn parse_sensitivity(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<Sensitivity, 
         _ => return Err(ctx.parse_err(SHAPE)),
     };
     match rest {
-        [] => Ok(Sensitivity { output }),
-        [kind, ..] if kind.eq_ignore_ascii_case("ac") => {
-            Err(ctx
-                .parse_err("`.sens ... ac` (AC sensitivity) is not supported; only the DC form is"))
+        [] => Ok(Sensitivity { output, ac: None }),
+        [kind, sweep @ ..] if kind.eq_ignore_ascii_case("ac") && sweep.len() == 4 => {
+            Ok(Sensitivity {
+                output,
+                ac: Some(parse_frequency_sweep(ctx, sweep, ".sens", SHAPE)?),
+            })
         }
         _ => Err(ctx.parse_err(SHAPE)),
     }

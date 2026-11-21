@@ -232,6 +232,30 @@ impl SensitivityResponse {
     }
 }
 
+/// The result of [`Solver::ac_sensitivity_analysis`], ngspice's
+/// `.sens ... ac` output.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AcSensitivityResponse {
+    /// The analysed frequencies, hertz, in the order given.
+    pub frequencies: Vec<f64>,
+    /// `(name, d output / d value)` with one phasor per frequency. Names are
+    /// ngspice's: the lower-case element name for an `R`, `C`, `L` or `K`
+    /// (per ohm, farad, henry or unit of `k`), `<name>_gain` for an `E`,
+    /// `F`, `G` or `H`, and `<name>_acmag` / `<name>_acphase` (per unit of
+    /// magnitude, per degree) for a `V` or `I`.
+    pub entries: Vec<(String, Vec<Phasor>)>,
+}
+
+impl AcSensitivityResponse {
+    /// The entry ngspice prints as `name`, matched without regard to case.
+    pub fn get(&self, name: &str) -> Option<&[Phasor]> {
+        self.entries
+            .iter()
+            .find(|(entry, _)| entry.eq_ignore_ascii_case(name))
+            .map(|(_, values)| values.as_slice())
+    }
+}
+
 /// The result of [`Solver::noise_analysis`].
 ///
 /// Densities are power spectral densities: V²/Hz at the output, and V²/Hz
@@ -2721,6 +2745,11 @@ impl Solver {
         let card = self.circuit.sensitivity.clone().ok_or_else(|| {
             AnalogError::Config("netlist has no `.sens v(<out>)|i(<element>)` card".to_string())
         })?;
+        if card.ac.is_some() {
+            return Err(AnalogError::Config(
+                "the `.sens` card is the AC form; run `Solver::ac_sensitivity`".to_string(),
+            ));
+        }
         self.sensitivity_analysis(&card.output)
     }
 
@@ -2758,58 +2787,312 @@ impl Solver {
 
         let x: Vec<f64> = self.node_v.iter().chain(&self.branch_i).copied().collect();
         let at = |values: &[f64], node: NodeRef| node.map_or(0.0, |n| values[n]);
-        // `−wᵀ·(∂A/∂p)·x` for the stamp entries `(row, column, ∂A/∂p)`.
-        let matrix = |entries: &[(NodeRef, NodeRef, f64)]| {
-            -entries
+        let entries = self
+            .value_derivatives()
+            .into_iter()
+            .filter_map(|(name, derivative)| {
+                let value = match derivative {
+                    // `−wᵀ·(∂A/∂p)·x` for the stamp entries `(row, column, ∂A/∂p)`.
+                    ValueDerivative::Conductance(entries) => -entries
+                        .iter()
+                        .map(|&(row, column, d)| at(&w, row) * d * at(&x, column))
+                        .sum::<f64>(),
+                    ValueDerivative::Source(entries) => {
+                        entries.iter().map(|&(row, d)| at(&w, row) * d).sum()
+                    }
+                    ValueDerivative::Capacitance(_) | ValueDerivative::Excitation(_) => {
+                        return None
+                    }
+                };
+                Some((name, value))
+            })
+            .collect();
+        Ok(SensitivityResponse { entries })
+    }
+
+    /// Run the netlist's own `.sens ... ac` card; see
+    /// [`Solver::ac_sensitivity_analysis`].
+    pub fn ac_sensitivity(&mut self) -> Result<AcSensitivityResponse, AnalogError> {
+        let card = self.circuit.sensitivity.clone().ok_or_else(|| {
+            AnalogError::Config(
+                "netlist has no `.sens v(<out>)|i(<element>) ac ...` card".to_string(),
+            )
+        })?;
+        let sweep = card.ac.ok_or_else(|| {
+            AnalogError::Config(
+                "the `.sens` card is the DC form; run `Solver::sensitivity`".to_string(),
+            )
+        })?;
+        self.ac_sensitivity_analysis(&card.output, &sweep.frequencies())
+    }
+
+    /// AC sensitivity, as ngspice's `.sens ... ac`: at each of `frequencies`
+    /// (hertz), the derivative of the `.ac` output phasor with respect to
+    /// each element value — every `R` nominal resistance, `C` capacitance,
+    /// `L` inductance (with the mutual inductance of each `K` it is in), `K`
+    /// coupling coefficient, `E`/`F`/`G`/`H` gain, and the `AC` magnitude
+    /// and phase (per degree) of every `V` and `I` source. Names are
+    /// ngspice's: the lower-case element name, `<name>_gain`,
+    /// `<name>_acmag` and `<name>_acphase`.
+    ///
+    /// The operating point is held, as ngspice holds it: a nonlinear device
+    /// enters through its linearisation at the solver's present solution
+    /// (the DC operating point on a fresh solver), and the shift a value
+    /// makes in that operating point is not included. For a linear circuit,
+    /// and for any `C`, `L`, `K` or `AC` value, the result is the exact
+    /// derivative. (ngspice-42 does not solve the operating point for this
+    /// analysis, so its result for a nonlinear device is the one of a device
+    /// at zero bias.) Parts this engine added for a macromodel (a name
+    /// holding `#`) are left out.
+    ///
+    /// Per frequency, one forward solve `Y·x = b` and one adjoint solve
+    /// `Yᵀ·w = e` give every entry as `wᵀ·(∂b/∂p − ∂Y/∂p·x)`.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn ac_sensitivity_analysis(
+        &mut self,
+        output: &TransferOutput,
+        frequencies: &[f64],
+    ) -> Result<AcSensitivityResponse, AnalogError> {
+        if let Some(bad) = frequencies.iter().find(|f| !(f.is_finite() && **f >= 0.0)) {
+            return Err(AnalogError::Config(format!(
+                "`.sens` frequency {bad} Hz must be finite and not negative"
+            )));
+        }
+        let output_port = self.output_port(output, ".sens")?;
+        let dim = self.dim();
+        let (g, c, couplings, excitation) = self.linearised(|solver| {
+            let couplings = solver.delayed_couplings();
+            let (g, c) = solver.ac_matrices(&couplings)?;
+            Ok((g, c, couplings, solver.ac_excitation()))
+        })?;
+        let derivatives: Vec<_> = self
+            .value_derivatives()
+            .into_iter()
+            .filter(|(_, derivative)| !matches!(derivative, ValueDerivative::Source(_)))
+            .collect();
+        let mut values = vec![Vec::with_capacity(frequencies.len()); derivatives.len()];
+
+        let size = 2 * dim;
+        let mut system = vec![0.0; size * size];
+        let mut transpose = vec![0.0; size * size];
+        for &hertz in frequencies {
+            small_signal_system(&mut system, dim, &g, &c, &couplings, hertz);
+            for row in 0..size {
+                for column in 0..size {
+                    transpose[column * size + row] = system[row * size + column];
+                }
+            }
+            let mut forward: Vec<f64> = excitation
                 .iter()
-                .map(|&(row, column, d)| at(&w, row) * d * at(&x, column))
-                .sum::<f64>()
-        };
+                .map(|p| p.re)
+                .chain(excitation.iter().map(|p| p.im))
+                .collect();
+            solve_dense(&mut system, &mut forward, size)
+                .map_err(|row| AnalogError::Singular { row: row % dim })?;
+            // The realified transpose is `Yᴴ`; with a real `e` its solution
+            // is `conj(w)`.
+            let mut adjoint = vec![0.0; size];
+            output_port.excite(&mut adjoint[..dim]);
+            solve_dense(&mut transpose, &mut adjoint, size)
+                .map_err(|row| AnalogError::Singular { row: row % dim })?;
+            let x = |node: NodeRef| {
+                node.map_or(Phasor::default(), |n| Phasor {
+                    re: forward[n],
+                    im: forward[dim + n],
+                })
+            };
+            let w = |node: NodeRef| {
+                node.map_or(Phasor::default(), |n| Phasor {
+                    re: adjoint[n],
+                    im: -adjoint[dim + n],
+                })
+            };
+            let omega = 2.0 * std::f64::consts::PI * hertz;
+            for ((_, derivative), values) in derivatives.iter().zip(&mut values) {
+                // `−wᵀ·(∂Y/∂p)·x` with `∂Y/∂p = scale·d` at each entry.
+                let matrix = |entries: &[(NodeRef, NodeRef, f64)], scale: Phasor| {
+                    let sum = entries
+                        .iter()
+                        .fold(Phasor::default(), |sum, &(row, column, d)| {
+                            let term = complex_product(w(row), x(column));
+                            Phasor {
+                                re: sum.re + d * term.re,
+                                im: sum.im + d * term.im,
+                            }
+                        });
+                    let value = complex_product(scale, sum);
+                    Phasor {
+                        re: -value.re,
+                        im: -value.im,
+                    }
+                };
+                values.push(match derivative {
+                    ValueDerivative::Conductance(entries) => {
+                        matrix(entries, Phasor { re: 1.0, im: 0.0 })
+                    }
+                    ValueDerivative::Capacitance(entries) => {
+                        matrix(entries, Phasor { re: 0.0, im: omega })
+                    }
+                    ValueDerivative::Excitation(entries) => {
+                        entries.iter().fold(Phasor::default(), |sum, &(row, d)| {
+                            let term = complex_product(w(row), d);
+                            Phasor {
+                                re: sum.re + term.re,
+                                im: sum.im + term.im,
+                            }
+                        })
+                    }
+                    ValueDerivative::Source(_) => unreachable!("DC terms are filtered out"),
+                });
+            }
+        }
+        let entries = derivatives
+            .into_iter()
+            .zip(values)
+            .map(|((name, _), values)| (name, values))
+            .collect();
+        Ok(AcSensitivityResponse {
+            frequencies: frequencies.to_vec(),
+            entries,
+        })
+    }
+
+    /// How each element value `.sens` reports enters the small-signal
+    /// system, named as ngspice names it. The DC form reads the
+    /// [`ValueDerivative::Conductance`] and [`ValueDerivative::Source`]
+    /// entries, the AC form every other one.
+    fn value_derivatives(&self) -> Vec<(String, ValueDerivative)> {
+        use ValueDerivative::{Capacitance, Conductance, Excitation, Source};
         let circuit = &self.circuit;
+        let nodes = self.nodes;
         let user = |name: &str| !name.contains('#');
-        let branch = |name: &str| circuit.branch_index(name).map(|i| Some(self.nodes + i));
+        let branch = |name: &str| circuit.branch_index(name).map(|i| nodes + i);
+        let inductor_row = |index: usize| Some(nodes + circuit.voltage_sources.len() + index);
         let mut entries = Vec::new();
-        let mut push = |name: &str, suffix: &str, value: f64| {
+        let mut push = |name: &str, suffix: &str, derivative: ValueDerivative| {
             if user(name) {
-                entries.push((format!("{}{suffix}", name.to_ascii_lowercase()), value));
+                entries.push((format!("{}{suffix}", name.to_ascii_lowercase()), derivative));
             }
         };
+        let pair =
+            |a: NodeRef, b: NodeRef, d: f64| vec![(a, a, d), (a, b, -d), (b, a, -d), (b, b, d)];
         for resistor in &circuit.resistors {
             // The conductance is `1/(ohms·f(T))`, so `∂g/∂ohms = −g/ohms`.
             let dg = -1.0 / (resistor.resistance_ohms() * resistor.ohms);
-            let (a, b) = (resistor.a, resistor.b);
-            let value = matrix(&[(a, a, dg), (a, b, -dg), (b, a, -dg), (b, b, dg)]);
-            push(&resistor.name, "", value);
+            push(
+                &resistor.name,
+                "",
+                Conductance(pair(resistor.a, resistor.b, dg)),
+            );
         }
         for (index, source) in circuit.voltage_sources.iter().enumerate() {
             // `∂b/∂V` is 1 on the source's own branch row.
-            push(&source.name, "", w[self.nodes + index]);
+            push(&source.name, "", Source(vec![(Some(nodes + index), 1.0)]));
         }
         for source in &circuit.current_sources {
             // `∂b/∂I` takes 1 A from `p` and delivers it to `n`.
-            push(&source.name, "", at(&w, source.n) - at(&w, source.p));
+            push(
+                &source.name,
+                "",
+                Source(vec![(source.n, 1.0), (source.p, -1.0)]),
+            );
         }
         for source in &circuit.vcvs {
-            let row = branch(&source.name).flatten();
-            let value = matrix(&[(row, source.cp, -1.0), (row, source.cn, 1.0)]);
-            push(&source.name, "_gain", value);
+            let row = branch(&source.name);
+            let entries = vec![(row, source.cp, -1.0), (row, source.cn, 1.0)];
+            push(&source.name, "_gain", Conductance(entries));
         }
         for source in &circuit.vccs {
             let (p, n, cp, cn) = (source.p, source.n, source.cp, source.cn);
-            let value = matrix(&[(p, cp, 1.0), (p, cn, -1.0), (n, cp, -1.0), (n, cn, 1.0)]);
-            push(&source.name, "_gain", value);
+            let entries = vec![(p, cp, 1.0), (p, cn, -1.0), (n, cp, -1.0), (n, cn, 1.0)];
+            push(&source.name, "_gain", Conductance(entries));
         }
         for source in &circuit.cccs {
-            let control = Some(self.nodes + source.control_branch);
-            let value = matrix(&[(source.p, control, 1.0), (source.n, control, -1.0)]);
-            push(&source.name, "_gain", value);
+            let control = Some(nodes + source.control_branch);
+            let entries = vec![(source.p, control, 1.0), (source.n, control, -1.0)];
+            push(&source.name, "_gain", Conductance(entries));
         }
         for source in &circuit.ccvs {
-            let row = branch(&source.name).flatten();
-            let control = Some(self.nodes + source.control_branch);
-            push(&source.name, "_gain", matrix(&[(row, control, -1.0)]));
+            let row = branch(&source.name);
+            let control = Some(nodes + source.control_branch);
+            push(
+                &source.name,
+                "_gain",
+                Conductance(vec![(row, control, -1.0)]),
+            );
         }
-        Ok(SensitivityResponse { entries })
+        for capacitor in &circuit.capacitors {
+            let entries = pair(capacitor.a, capacitor.b, 1.0);
+            push(&capacitor.name, "", Capacitance(entries));
+        }
+        for (index, inductor) in circuit.inductors.iter().enumerate() {
+            // The branch row carries `−jω·L`, and each `K` it is in
+            // `−jω·M` with `M = k·sqrt(L1·L2)`, so `∂M/∂L = M/(2L)`.
+            let row = inductor_row(index);
+            let mut entries = vec![(row, row, -1.0)];
+            for mutual in &circuit.mutual_inductors {
+                if mutual.first == index || mutual.second == index {
+                    let d = -mutual.mutual_henries / (2.0 * inductor.henries);
+                    let (first, second) = (inductor_row(mutual.first), inductor_row(mutual.second));
+                    entries.extend([(first, second, d), (second, first, d)]);
+                }
+            }
+            push(&inductor.name, "", Capacitance(entries));
+        }
+        for mutual in &circuit.mutual_inductors {
+            let d = -libm::sqrt(
+                circuit.inductors[mutual.first].henries * circuit.inductors[mutual.second].henries,
+            );
+            let (first, second) = (inductor_row(mutual.first), inductor_row(mutual.second));
+            push(
+                &mutual.name,
+                "",
+                Capacitance(vec![(first, second, d), (second, first, d)]),
+            );
+        }
+        // `∂(mag·e^{jφ})/∂mag = e^{jφ}`; per degree of `φ` it is
+        // `j·mag·e^{jφ}·π/180`.
+        let ac_terms = |ac: Option<super::netlist::AcStimulus>| {
+            let (magnitude, degrees) = ac.map_or((0.0, 0.0), |ac| (ac.magnitude, ac.phase_degrees));
+            let radians = degrees.to_radians();
+            let unit = Phasor {
+                re: libm::cos(radians),
+                im: libm::sin(radians),
+            };
+            let scale = magnitude * std::f64::consts::PI / 180.0;
+            let phase = Phasor {
+                re: -scale * unit.im,
+                im: scale * unit.re,
+            };
+            (unit, phase)
+        };
+        let negate = |p: Phasor| Phasor {
+            re: -p.re,
+            im: -p.im,
+        };
+        for (index, source) in circuit.voltage_sources.iter().enumerate() {
+            let (unit, phase) = ac_terms(source.ac);
+            let row = Some(nodes + index);
+            push(&source.name, "_acmag", Excitation(vec![(row, unit)]));
+            push(&source.name, "_acphase", Excitation(vec![(row, phase)]));
+        }
+        for source in &circuit.current_sources {
+            let (unit, phase) = ac_terms(source.ac);
+            let (p, n) = (source.p, source.n);
+            push(
+                &source.name,
+                "_acmag",
+                Excitation(vec![(n, unit), (p, negate(unit))]),
+            );
+            push(
+                &source.name,
+                "_acphase",
+                Excitation(vec![(n, phase), (p, negate(phase))]),
+            );
+        }
+        entries
     }
 
     /// The `.tf`/`.sens` output port, checked against the netlist.
@@ -5035,6 +5318,27 @@ fn conductance(matrix: &mut [f64], dim: usize, a: NodeRef, b: NodeRef, g: f64) {
     add(matrix, dim, b, b, g);
     add(matrix, dim, a, b, -g);
     add(matrix, dim, b, a, -g);
+}
+
+/// How one element value enters the small-signal system; see
+/// `Solver::value_derivatives`. Entries are `(row, column, ∂/∂p)` of a
+/// matrix or `(row, ∂/∂p)` of a right-hand side.
+enum ValueDerivative {
+    /// The conductance matrix `G`, the same at DC and in `.ac`.
+    Conductance(Vec<(NodeRef, NodeRef, f64)>),
+    /// The reactive matrix `C`, which `.ac` multiplies by `jω`.
+    Capacitance(Vec<(NodeRef, NodeRef, f64)>),
+    /// The DC right-hand side.
+    Source(Vec<(NodeRef, f64)>),
+    /// The `.ac` excitation.
+    Excitation(Vec<(NodeRef, Phasor)>),
+}
+
+fn complex_product(a: Phasor, b: Phasor) -> Phasor {
+    Phasor {
+        re: a.re * b.re - a.im * b.im,
+        im: a.re * b.im + a.im * b.re,
+    }
 }
 
 /// One port of a `.tf` analysis.

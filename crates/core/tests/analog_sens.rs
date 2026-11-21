@@ -290,7 +290,7 @@ mod analog {
             ".sens out",
             ".sens v(c) extra",
             ".sens i(vcc,vb)",
-            ".sens v(c) ac dec 10 1 1k",
+            ".sens v(c) ac dec 10 1",
         ] {
             let deck = format!("{BJT}{card}\n");
             assert!(parse_netlist(&deck).is_err(), "`{card}` parsed");

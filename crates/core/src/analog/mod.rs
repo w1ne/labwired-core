@@ -48,8 +48,9 @@ pub mod trace;
 pub use adapter::{AnalogConfig, AnalogCosimAdapter, Probe};
 pub use behavioural::{BehaviouralKind, BehaviouralSource, Expression};
 pub use mna::{
-    AcResponse, DcResponse, Integration, NoiseMechanism, NoiseResponse, NoiseSource, Phasor,
-    SensitivityResponse, Solver, TransferResponse, MAX_STEP_CUTS, MAX_UNKNOWNS,
+    AcResponse, AcSensitivityResponse, DcResponse, Integration, NoiseMechanism, NoiseResponse,
+    NoiseSource, Phasor, SensitivityResponse, Solver, TransferResponse, MAX_STEP_CUTS,
+    MAX_UNKNOWNS,
 };
 pub use netlist::{
     parse_netlist, parse_netlist_with_files, parse_spice_value, AcStimulus, AcSweep, AcSweepKind,
