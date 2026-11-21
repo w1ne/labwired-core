@@ -2773,7 +2773,7 @@ impl<C: Cpu> Machine<C> {
                     .irq_line_level()
                     .is_some()
                 {
-                    crate::bus::reconcile_nvic_level(&self.bus.nvic, irq, true);
+                    crate::bus::tick::reconcile_nvic_level(&self.bus.nvic, irq, true);
                 }
             }
         }
