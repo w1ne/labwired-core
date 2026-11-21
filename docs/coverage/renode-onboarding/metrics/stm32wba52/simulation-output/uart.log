@@ -1,4 +1,5 @@
 NUCLEO-WBA52CG ready
+usart1 tcie ispr40=40 rel=00 ok
 hb=0 ld1=on
 hb=1 ld1=off
 hb=2 ld2=on
