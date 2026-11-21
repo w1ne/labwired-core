@@ -30,6 +30,7 @@ mod declarative_integer;
 pub mod declarative_led_matrix;
 pub mod declarative_led_strip;
 pub mod declarative_logic;
+pub mod declarative_onewire;
 pub mod declarative_regs;
 pub mod declarative_segment_display;
 pub mod declarative_spi;

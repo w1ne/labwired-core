@@ -615,6 +615,15 @@ impl PeripheralKit for DeclarativeAnalogKit {
         &self.metadata
     }
 
+    /// The same source the `LazyLock` registry kits build, for an owned kit
+    /// (a manifest part pack).
+    fn build_analog_source(
+        &self,
+        channel: u8,
+    ) -> Result<Option<Box<dyn crate::bus::sim_inputs::AnalogSource>>> {
+        Ok(Some(Box::new(self.build(channel)?)))
+    }
+
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
         let channel = ctx.config_i64("channel").unwrap_or(0).clamp(0, 255) as u8;
         let mut device = DeclarativeAnalogDevice::from_descriptor(

@@ -8,7 +8,8 @@ mod analog_source;
 mod behavior;
 mod external_process;
 mod gpio_device;
-pub(crate) use gpio_device::catalog_gpio_device;
+mod onewire_device;
+pub(crate) use behavior::{build_part_adapter, catalog_descriptor};
 mod registry;
 pub mod routing;
 pub mod shm;
@@ -142,6 +143,14 @@ pub trait CosimAdapter: Send {
     fn input_kind(&self, name: &str) -> Option<CosimInputKind> {
         let _ = name;
         None
+    }
+
+    /// What the model's part holds, as inspect artifacts: a part's state that
+    /// is not a routed signal (a display's text, a sensor's memory). Most
+    /// adapters publish everything as signals and leave this empty.
+    fn artifacts(&self, id: &str) -> Vec<crate::inspect::Artifact> {
+        let _ = id;
+        Vec::new()
     }
 }
 

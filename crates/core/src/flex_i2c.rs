@@ -218,7 +218,11 @@ impl I2cBuses {
     /// Build every declared device from the catalog. `units` maps a signal
     /// to the unit its producer declares; a device input takes only a signal
     /// in the channel's own unit.
-    pub(crate) fn new(configs: &[FlexI2cBus], units: &BTreeMap<String, String>) -> SimResult<Self> {
+    pub(crate) fn new(
+        configs: &[FlexI2cBus],
+        units: &BTreeMap<String, String>,
+        parts: &[labwired_config::PartPack],
+    ) -> SimResult<Self> {
         let mut buses = Vec::with_capacity(configs.len());
         let mut summaries = Vec::with_capacity(configs.len());
         for config in configs {
@@ -231,13 +235,27 @@ impl I2cBuses {
                     .iter()
                     .map(|(key, value)| (key.clone(), value.clone()))
                     .collect();
-                let mut model =
-                    build_i2c_device(&device.device_type, &settings).ok_or_else(|| {
+                // A manifest part pack claims its type before the catalog.
+                let built = match crate::flex_parts::pack(parts, &device.device_type) {
+                    Some(pack) => crate::peripherals::components::i2c_factory::build_i2c_device_from_descriptor(
+                        pack,
+                        Some(&device.id),
+                        &settings,
+                    )
+                    .ok_or_else(|| {
+                        error(format!(
+                            "{path}: part pack '{}' is a {} part, not an I2C device",
+                            device.device_type, pack.behavior.primitive
+                        ))
+                    })?,
+                    None => build_i2c_device(&device.device_type, &settings).ok_or_else(|| {
                         error(format!(
                             "{path}: the catalog has no I2C device model of type '{}'",
                             device.device_type
                         ))
-                    })?;
+                    })?,
+                };
+                let mut model = built;
                 let address = model.address();
                 if address > 0x7f {
                     return Err(error(format!(
@@ -297,6 +315,16 @@ impl I2cBuses {
 
     pub(crate) fn summaries(&self) -> &[FlexI2cBusSummary] {
         &self.summaries
+    }
+
+    /// What every device holds, as inspect artifacts named by device id.
+    pub(crate) fn artifacts(&self) -> Vec<crate::inspect::Artifact> {
+        let opts = crate::inspect::InspectOpts::default();
+        self.buses
+            .iter()
+            .flat_map(|bus| &bus.devices)
+            .flat_map(|device| device.model.artifacts(&device.id, &opts))
+            .collect()
     }
 
     pub(crate) fn bus_id(&self, name: &str) -> SimResult<u32> {

@@ -123,14 +123,12 @@ fn build_model(
     device_type: &str,
     cs: u32,
     config: &BTreeMap<String, serde_yaml::Value>,
+    parts: &[labwired_config::PartPack],
 ) -> SimResult<Box<dyn SpiDevice>> {
-    let lower = device_type.to_ascii_lowercase();
-    let canonical = crate::peripherals::kit::registry::canonical_device_type(&lower);
-    let descriptor = labwired_config::embedded_device_yaml(canonical)
-        .map(DeviceDescriptor::from_yaml)
-        .transpose()
-        .map_err(|cause| error(format!("{path}: catalog type '{device_type}': {cause:#}")))?
-        .filter(|descriptor| descriptor.behavior.primitive == "spi_device")
+    // A manifest part pack claims its type before the catalog.
+    let descriptor = crate::flex_parts::descriptor(parts, device_type)
+        .map_err(|cause| error(format!("{path}: type '{device_type}': {cause}")))?
+        .filter(|descriptor: &DeviceDescriptor| descriptor.behavior.primitive == "spi_device")
         .ok_or_else(|| {
             error(format!(
                 "{path}: the catalog has no declarative SPI device model of type '{device_type}'"
@@ -148,7 +146,11 @@ impl SpiBuses {
     /// Build every declared device from the catalog. `units` maps a signal
     /// to the unit its producer declares; a device input takes only a signal
     /// in the channel's own unit.
-    pub(crate) fn new(configs: &[FlexSpiBus], units: &BTreeMap<String, String>) -> SimResult<Self> {
+    pub(crate) fn new(
+        configs: &[FlexSpiBus],
+        units: &BTreeMap<String, String>,
+        parts: &[labwired_config::PartPack],
+    ) -> SimResult<Self> {
         let mut buses = Vec::with_capacity(configs.len());
         let mut summaries = Vec::with_capacity(configs.len());
         for config in configs {
@@ -156,7 +158,8 @@ impl SpiBuses {
             let mut device_summaries = Vec::with_capacity(config.devices.len());
             for device in &config.devices {
                 let path = format!("SPI device '{}'", device.id);
-                let mut model = build_model(&path, &device.device_type, device.cs, &device.config)?;
+                let mut model =
+                    build_model(&path, &device.device_type, device.cs, &device.config, parts)?;
                 let (inputs, input_summaries) = bind_inputs(
                     &path,
                     &device.id,
@@ -202,6 +205,16 @@ impl SpiBuses {
 
     pub(crate) fn summaries(&self) -> &[FlexSpiBusSummary] {
         &self.summaries
+    }
+
+    /// What every device holds, as inspect artifacts named by device id.
+    pub(crate) fn artifacts(&self) -> Vec<crate::inspect::Artifact> {
+        let opts = crate::inspect::InspectOpts::default();
+        self.buses
+            .iter()
+            .flat_map(|bus| &bus.devices)
+            .flat_map(|device| device.model.artifacts(&device.id, &opts))
+            .collect()
     }
 
     pub(crate) fn bus_id(&self, name: &str) -> Option<u32> {

@@ -324,6 +324,14 @@ impl CosimRunner {
         Ok(Self::new(models))
     }
 
+    /// Every model's part state as inspect artifacts, named by model id.
+    pub fn model_artifacts(&self) -> Vec<crate::inspect::Artifact> {
+        self.models
+            .iter()
+            .flat_map(|model| model.adapter.artifacts(&model.config.id))
+            .collect()
+    }
+
     /// How many models this runner steps.
     pub fn model_count(&self) -> usize {
         self.models.len()
