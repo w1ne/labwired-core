@@ -548,6 +548,7 @@ canonical `type:`; the table below is rendered from that file by
 | `joystick` | Analog | Two ratiometric potentiometer axes and a push contact |
 | `ldr` | Analog | CdS photoresistor + voltage divider on an ADC channel |
 | `lipo_charger` | Analog | Single-cell LiPo pack + TP4056-class analog charger on an ADC channel |
+| `mcp9701` | Analog | Analog temperature sensor, 19.5 mV/°C with 400 mV at 0 °C |
 | `mq-6` | Analog | Hanwei MQ-6 LPG/propane semiconductor gas sensor module (AOUT on ADC) |
 | `ntc-thermistor` | Analog | 10 kΩ NTC + voltage divider on an ADC channel |
 | `potentiometer` | Analog | 3-pin linear potentiometer on an ADC channel (rotary or slide) |
