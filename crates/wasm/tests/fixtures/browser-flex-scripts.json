@@ -15,8 +15,8 @@
   "firmware_interpreter": "wasmi, in labwired-wasm and in the CLI",
   "browser": "156.0.8078.79",
   "browser_driver": "Playwright",
-  "core_commit": "88256988b7f6cc61d628e6d22041a8dadca38d0e",
-  "fixtures": 23,
+  "core_commit": "18e6075fc982b951caf334fc5209e7964ca9f5ea",
+  "fixtures": 24,
   "scripts": [
     {
       "fixture": "flex-analog-gp2y0a21",
@@ -36,8 +36,8 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "a0a6e68bfa09fc41bf463728db2c41ddedd11b15292db2e5fde34dff80711a22",
-      "measured_native_ms": 61,
-      "measured_browser_ms": 222
+      "measured_native_ms": 95,
+      "measured_browser_ms": 249
     },
     {
       "fixture": "flex-analog-gp2y0a21",
@@ -57,7 +57,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "f069a48f5589edabafda11226bf3f28b7c83df41cf815b9312e0aa7114b39829",
-      "measured_native_ms": 82,
+      "measured_native_ms": 140,
       "measured_browser_ms": 2
     },
     {
@@ -78,8 +78,8 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "0baaa0d241fcc3fc5afcdde89ee349dae68453797c702e3429055046d53e858b",
-      "measured_native_ms": 66,
-      "measured_browser_ms": 1
+      "measured_native_ms": 89,
+      "measured_browser_ms": 2
     },
     {
       "fixture": "flex-analog-multi-input",
@@ -99,7 +99,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "44961fbee95af95e59f5c63d44bbd7cc101d31f387654389513b7d097326fe19",
-      "measured_native_ms": 67,
+      "measured_native_ms": 85,
       "measured_browser_ms": 1
     },
     {
@@ -120,7 +120,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "0381414d8a27e5f24abb39d39e4de227369c78c9cc99d3b9c1f861b9da52b369",
-      "measured_native_ms": 62,
+      "measured_native_ms": 126,
       "measured_browser_ms": 1
     },
     {
@@ -141,8 +141,8 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "b2fd9dc123abfceed0e68b8ef2b5a697785985445ffa483ad63e70d80c84bd2e",
-      "measured_native_ms": 68,
-      "measured_browser_ms": 3
+      "measured_native_ms": 90,
+      "measured_browser_ms": 2
     },
     {
       "fixture": "flex-analog-ntc",
@@ -162,7 +162,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "dba866e086ff53f4e60c5811f46251f6ddafcfdc59bc3a9916a69a444ae4bad3",
-      "measured_native_ms": 62,
+      "measured_native_ms": 80,
       "measured_browser_ms": 1
     },
     {
@@ -183,7 +183,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "8c4841e830e70bc589dd0ecce39f69c87849547f891e154efc3ac2eea5a5a01d",
-      "measured_native_ms": 58,
+      "measured_native_ms": 105,
       "measured_browser_ms": 1
     },
     {
@@ -204,7 +204,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "782b66c6ae031eac24718cc40d953d5087a44559d9fbd0af8b5b190555d186f9",
-      "measured_native_ms": 61,
+      "measured_native_ms": 77,
       "measured_browser_ms": 1
     },
     {
@@ -225,7 +225,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "f48048712b1df98d122f7b2b32ecaf89d11dcf4b321bd723b6cce03f739131dd",
-      "measured_native_ms": 63,
+      "measured_native_ms": 82,
       "measured_browser_ms": 2
     },
     {
@@ -246,7 +246,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "92eb25fcf97b85613a55569123c7b749b3003a6c8049bad743e99d4847121018",
-      "measured_native_ms": 71,
+      "measured_native_ms": 77,
       "measured_browser_ms": 2
     },
     {
@@ -267,7 +267,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "30eeb35cba3f7cef7f5775019eb4eb175a96a285a748d36d65fda8b091530c10",
-      "measured_native_ms": 68,
+      "measured_native_ms": 81,
       "measured_browser_ms": 2
     },
     {
@@ -288,8 +288,8 @@
       "spi_transfers": 0,
       "console_bytes": 24,
       "result_sha256": "5e7c8c06c8aeeb5fc3c876a39394db2ba427cea2200a7617a9ec4324b603d44f",
-      "measured_native_ms": 658,
-      "measured_browser_ms": 1097
+      "measured_native_ms": 997,
+      "measured_browser_ms": 1158
     },
     {
       "fixture": "flex-generated-parts",
@@ -309,8 +309,8 @@
       "spi_transfers": 0,
       "console_bytes": 25,
       "result_sha256": "8035c933c952cce1c76f48683c8ed7e422ccb969ba8b2b9d4e4015858e4f9479",
-      "measured_native_ms": 774,
-      "measured_browser_ms": 1065
+      "measured_native_ms": 973,
+      "measured_browser_ms": 1107
     },
     {
       "fixture": "flex-gpio-reuse",
@@ -330,7 +330,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "c332f4cf40cdb8d2df0c696af77f4e2d3338e350965d89a93d611782d0774e6c",
-      "measured_native_ms": 16,
+      "measured_native_ms": 33,
       "measured_browser_ms": 1
     },
     {
@@ -351,7 +351,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "5934b672a93b620568dbb866e2cdc11de996c69f5b502c7702b10fee9ae6bf16",
-      "measured_native_ms": 14,
+      "measured_native_ms": 21,
       "measured_browser_ms": 1
     },
     {
@@ -372,7 +372,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "30995b39181641c5d1fdc64ef67ab60e3596edf1bec31deea1addd43251ce64f",
-      "measured_native_ms": 12,
+      "measured_native_ms": 19,
       "measured_browser_ms": 1
     },
     {
@@ -393,7 +393,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "db2228ba0ed84e2079f4a5776253734dd4c5ec31307e050274cfc601d4f07c00",
-      "measured_native_ms": 12,
+      "measured_native_ms": 15,
       "measured_browser_ms": 1
     },
     {
@@ -414,8 +414,8 @@
       "spi_transfers": 0,
       "console_bytes": 191,
       "result_sha256": "890b6d69ac4d5cb2d11b9b724a37844250cd9f7ee3ed97f73b3eee01eafe8329",
-      "measured_native_ms": 24,
-      "measured_browser_ms": 16
+      "measured_native_ms": 28,
+      "measured_browser_ms": 18
     },
     {
       "fixture": "flex-heypcb-esp32-bme280",
@@ -435,7 +435,7 @@
       "spi_transfers": 0,
       "console_bytes": 55,
       "result_sha256": "267407774ba006893e7c6db4bb35f084660a3e0ffc9af6b08277a6675c85f147",
-      "measured_native_ms": 20,
+      "measured_native_ms": 25,
       "measured_browser_ms": 7
     },
     {
@@ -456,7 +456,7 @@
       "spi_transfers": 0,
       "console_bytes": 18,
       "result_sha256": "b40fae650793dbb3f10860742ca95f408f598e803f04420e0805b75cead390da",
-      "measured_native_ms": 15,
+      "measured_native_ms": 20,
       "measured_browser_ms": 4
     },
     {
@@ -477,8 +477,8 @@
       "spi_transfers": 0,
       "console_bytes": 44,
       "result_sha256": "34dd67b8d23a030c20b0f7342ccfd8c7cf22f2fe08d2331cee2289f83f8973b8",
-      "measured_native_ms": 1791,
-      "measured_browser_ms": 4207
+      "measured_native_ms": 2780,
+      "measured_browser_ms": 4264
     },
     {
       "fixture": "flex-heypcb-esp32-dht11",
@@ -498,8 +498,8 @@
       "spi_transfers": 0,
       "console_bytes": 60,
       "result_sha256": "b859cf600ea16a03c6e5446468f654097c3b17a6db390d520c9a350b574208fe",
-      "measured_native_ms": 2394,
-      "measured_browser_ms": 5481
+      "measured_native_ms": 3784,
+      "measured_browser_ms": 5661
     },
     {
       "fixture": "flex-heypcb-esp32-dht11",
@@ -519,8 +519,92 @@
       "spi_transfers": 0,
       "console_bytes": 18,
       "result_sha256": "d82ab125948a5d2654ea2fc2cf61a4ba151d146e48038c9fbdfed2b9b09c94ce",
-      "measured_native_ms": 571,
-      "measured_browser_ms": 1366
+      "measured_native_ms": 902,
+      "measured_browser_ms": 1422
+    },
+    {
+      "fixture": "flex-heypcb-esp32-ds18b20",
+      "script": "test-9-bit-resolution.yaml",
+      "script_sha256": "4cac0b7edc018ab5308ad8643a088814ffc6f3e398912281936121fea159d9d9",
+      "manifest_sha256": "40d3cb71a03dd4135caa3636d47b55623e7ba109c503439eda236d872693dad8",
+      "firmware_sha256": "6f5c632ce0fbadc050f15808b2feb936f60110a0cb0ee3ae241c8e6ffbf7e0d1",
+      "status": "pass",
+      "stop_reason": "completed",
+      "time_ns": 223740000,
+      "steps_executed": 57275,
+      "suspended_steps": 0,
+      "assertions": 6,
+      "digital_edges": 2386,
+      "analog_samples": 0,
+      "i2c_transfers": 0,
+      "spi_transfers": 0,
+      "console_bytes": 114,
+      "result_sha256": "c0527c90211dacae035a2dc76c40539099a904a5b3debbc66ce814fd98296d63",
+      "measured_native_ms": 245,
+      "measured_browser_ms": 182
+    },
+    {
+      "fixture": "flex-heypcb-esp32-ds18b20",
+      "script": "test-over-temperature.yaml",
+      "script_sha256": "7693ce87dac6c878e04486bbf914fdb132214c249ddc8dabceb3f5e40ffd11c0",
+      "manifest_sha256": "40d3cb71a03dd4135caa3636d47b55623e7ba109c503439eda236d872693dad8",
+      "firmware_sha256": "6f5c632ce0fbadc050f15808b2feb936f60110a0cb0ee3ae241c8e6ffbf7e0d1",
+      "status": "pass",
+      "stop_reason": "completed",
+      "time_ns": 3813580000,
+      "steps_executed": 204007,
+      "suspended_steps": 0,
+      "assertions": 13,
+      "digital_edges": 17002,
+      "analog_samples": 0,
+      "i2c_transfers": 0,
+      "spi_transfers": 0,
+      "console_bytes": 212,
+      "result_sha256": "75721c69e5c5a2f266318a06191b042ff479f0b3f30d15af95d7b91943eca016",
+      "measured_native_ms": 2807,
+      "measured_browser_ms": 3189
+    },
+    {
+      "fixture": "flex-heypcb-esp32-ds18b20",
+      "script": "test-power-on-85c.yaml",
+      "script_sha256": "04b7516477b8fad2420eb834646fa3f863a21b2e868e5096f3b658a9e3975928",
+      "manifest_sha256": "40d3cb71a03dd4135caa3636d47b55623e7ba109c503439eda236d872693dad8",
+      "firmware_sha256": "6f5c632ce0fbadc050f15808b2feb936f60110a0cb0ee3ae241c8e6ffbf7e0d1",
+      "status": "pass",
+      "stop_reason": "completed",
+      "time_ns": 783340000,
+      "steps_executed": 76963,
+      "suspended_steps": 0,
+      "assertions": 5,
+      "digital_edges": 4412,
+      "analog_samples": 0,
+      "i2c_transfers": 0,
+      "spi_transfers": 0,
+      "console_bytes": 112,
+      "result_sha256": "800e33c57a974d1b4646ce696b029a71c3a1ce6d949b6a488aa40e2e04b9fb0f",
+      "measured_native_ms": 621,
+      "measured_browser_ms": 624
+    },
+    {
+      "fixture": "flex-heypcb-esp32-ds18b20",
+      "script": "test-wrong-family.yaml",
+      "script_sha256": "e5f8c3a70c170368858ca197313a39c95b089fbd7b3eebe8d519183e59eacd92",
+      "manifest_sha256": "40d3cb71a03dd4135caa3636d47b55623e7ba109c503439eda236d872693dad8",
+      "firmware_sha256": "6f5c632ce0fbadc050f15808b2feb936f60110a0cb0ee3ae241c8e6ffbf7e0d1",
+      "status": "pass",
+      "stop_reason": "completed",
+      "time_ns": 6000000,
+      "steps_executed": 23254,
+      "suspended_steps": 0,
+      "assertions": 6,
+      "digital_edges": 294,
+      "analog_samples": 0,
+      "i2c_transfers": 0,
+      "spi_transfers": 0,
+      "console_bytes": 51,
+      "result_sha256": "348b72c32e66c881d9895896fc4628b632522622269b676f67e556701adf5869",
+      "measured_native_ms": 34,
+      "measured_browser_ms": 8
     },
     {
       "fixture": "flex-heypcb-esp32-ldr",
@@ -540,7 +624,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "d0822a4efb544850b882f54eda286b7110a49f3eeb3a0176f00e2f824378b5b0",
-      "measured_native_ms": 61,
+      "measured_native_ms": 78,
       "measured_browser_ms": 2
     },
     {
@@ -561,7 +645,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "58dc2a9cc56f3e23cbbcdebd655b1ab898ae65c8dec28a53fc2a3604308619c6",
-      "measured_native_ms": 60,
+      "measured_native_ms": 77,
       "measured_browser_ms": 1
     },
     {
@@ -582,8 +666,8 @@
       "spi_transfers": 3,
       "console_bytes": 86,
       "result_sha256": "2a58d47d9bd9dd909fa45815b1a26f7d5b2de4279b65a7dad9f68a058b1a085c",
-      "measured_native_ms": 36,
-      "measured_browser_ms": 52
+      "measured_native_ms": 58,
+      "measured_browser_ms": 53
     },
     {
       "fixture": "flex-heypcb-esp32-max31855",
@@ -603,8 +687,8 @@
       "spi_transfers": 5,
       "console_bytes": 130,
       "result_sha256": "7554ea921523596970af94b42710c2f3694795f63cd147527b38add1e2eec437",
-      "measured_native_ms": 62,
-      "measured_browser_ms": 98
+      "measured_native_ms": 100,
+      "measured_browser_ms": 103
     },
     {
       "fixture": "flex-heypcb-esp32-max31855",
@@ -624,7 +708,7 @@
       "spi_transfers": 1,
       "console_bytes": 21,
       "result_sha256": "06a999af0faf36cd36e3e740be039a1316755b2bfd23a5c4cbbebfa2e1696007",
-      "measured_native_ms": 12,
+      "measured_native_ms": 18,
       "measured_browser_ms": 2
     },
     {
@@ -645,8 +729,8 @@
       "spi_transfers": 0,
       "console_bytes": 27,
       "result_sha256": "8f8680a234061514c5beeae4b48b2d1ffc6a1272632a8e6547f7cc3737e916ef",
-      "measured_native_ms": 524,
-      "measured_browser_ms": 776
+      "measured_native_ms": 778,
+      "measured_browser_ms": 740
     },
     {
       "fixture": "flex-heypcb-esp32-mcp9700",
@@ -666,8 +750,8 @@
       "spi_transfers": 0,
       "console_bytes": 48,
       "result_sha256": "4cebbe2a8d29b496812e67529b9c7f3f24d13a3ef867f255cb21942c7d307a17",
-      "measured_native_ms": 690,
-      "measured_browser_ms": 971
+      "measured_native_ms": 987,
+      "measured_browser_ms": 1038
     },
     {
       "fixture": "flex-heypcb-esp32-mcp9700",
@@ -687,8 +771,8 @@
       "spi_transfers": 0,
       "console_bytes": 43,
       "result_sha256": "492b452b487c5a70a8a2bc1040b10f456fb404df2b2249ac40911a3169ba5b41",
-      "measured_native_ms": 685,
-      "measured_browser_ms": 931
+      "measured_native_ms": 993,
+      "measured_browser_ms": 971
     },
     {
       "fixture": "flex-heypcb-esp32-mcp9701",
@@ -708,8 +792,8 @@
       "spi_transfers": 0,
       "console_bytes": 27,
       "result_sha256": "b04a5614baa82418c51d027020cb21963daf83bb606d4635f5a35920f74213eb",
-      "measured_native_ms": 571,
-      "measured_browser_ms": 720
+      "measured_native_ms": 752,
+      "measured_browser_ms": 749
     },
     {
       "fixture": "flex-heypcb-esp32-mcp9701",
@@ -729,8 +813,8 @@
       "spi_transfers": 0,
       "console_bytes": 48,
       "result_sha256": "f80df41e17e3429e66ccb78ea25dc4c03324795256bfc67a88c10c55026168ee",
-      "measured_native_ms": 677,
-      "measured_browser_ms": 955
+      "measured_native_ms": 1008,
+      "measured_browser_ms": 984
     },
     {
       "fixture": "flex-heypcb-esp32-mcp9701",
@@ -750,8 +834,8 @@
       "spi_transfers": 0,
       "console_bytes": 43,
       "result_sha256": "395fa01aaf0099f752faa4df29170ba3f939a6d3e7794ec19037280c0cef9ae0",
-      "measured_native_ms": 691,
-      "measured_browser_ms": 952
+      "measured_native_ms": 984,
+      "measured_browser_ms": 989
     },
     {
       "fixture": "flex-heypcb-esp32-ntc",
@@ -771,8 +855,8 @@
       "spi_transfers": 0,
       "console_bytes": 51,
       "result_sha256": "f2740240b0abcace04da2de6147259b63417a3438763a28e68828842724ae64c",
-      "measured_native_ms": 214,
-      "measured_browser_ms": 98
+      "measured_native_ms": 289,
+      "measured_browser_ms": 87
     },
     {
       "fixture": "flex-heypcb-esp32-ntc",
@@ -792,8 +876,8 @@
       "spi_transfers": 0,
       "console_bytes": 80,
       "result_sha256": "bf9045554e9ef72e1573fce3b757d37fa5c09486025eefa80ae94e2acfe47cd4",
-      "measured_native_ms": 293,
-      "measured_browser_ms": 116
+      "measured_native_ms": 325,
+      "measured_browser_ms": 120
     },
     {
       "fixture": "flex-heypcb-esp32-ntc",
@@ -813,8 +897,8 @@
       "spi_transfers": 0,
       "console_bytes": 73,
       "result_sha256": "67115f4d071c56ab70ee04dc59a0563b411b8ce7d95b0a3a0b0cb490cfd295a5",
-      "measured_native_ms": 282,
-      "measured_browser_ms": 104
+      "measured_native_ms": 317,
+      "measured_browser_ms": 101
     },
     {
       "fixture": "flex-heypcb-esp32-scd41",
@@ -834,8 +918,8 @@
       "spi_transfers": 0,
       "console_bytes": 137,
       "result_sha256": "9dbd7d9c031126137b84818f0b7e9e7e75da28bb1cd7f4306898782fd0403195",
-      "measured_native_ms": 1903,
-      "measured_browser_ms": 3923
+      "measured_native_ms": 3013,
+      "measured_browser_ms": 4082
     },
     {
       "fixture": "flex-heypcb-esp32-scd41",
@@ -855,8 +939,8 @@
       "spi_transfers": 0,
       "console_bytes": 212,
       "result_sha256": "d077cafcfef57b6a9e71c2440cb749b9b0323aaadf1a0ec315fab209d6917f70",
-      "measured_native_ms": 3041,
-      "measured_browser_ms": 6485
+      "measured_native_ms": 5041,
+      "measured_browser_ms": 6665
     },
     {
       "fixture": "flex-heypcb-esp32-scd41",
@@ -876,8 +960,8 @@
       "spi_transfers": 0,
       "console_bytes": 69,
       "result_sha256": "93b2085f1aff550094d861ede3e48509087b12c8cfb83c34f138cda4c159e693",
-      "measured_native_ms": 82,
-      "measured_browser_ms": 125
+      "measured_native_ms": 118,
+      "measured_browser_ms": 132
     },
     {
       "fixture": "flex-heypcb-esp32-scd41",
@@ -897,8 +981,8 @@
       "spi_transfers": 0,
       "console_bytes": 17,
       "result_sha256": "c454c21bfec2fee8e2f0c915b4f52f5abec496dc7b52c1dc843c26702789859d",
-      "measured_native_ms": 16,
-      "measured_browser_ms": 2
+      "measured_native_ms": 15,
+      "measured_browser_ms": 3
     },
     {
       "fixture": "flex-heypcb-esp32-sht40",
@@ -918,7 +1002,7 @@
       "spi_transfers": 0,
       "console_bytes": 54,
       "result_sha256": "6c2dfae40e56a9de5877a48ac708e8f998d4d2c55ee363233fdcfc6c8d5a43a8",
-      "measured_native_ms": 16,
+      "measured_native_ms": 24,
       "measured_browser_ms": 6
     },
     {
@@ -939,8 +1023,8 @@
       "spi_transfers": 0,
       "console_bytes": 137,
       "result_sha256": "89ad379cf9b7854de80d6f7c7bf19095f6b64cf2bb2bbe5d41b1f639b35cbc3f",
-      "measured_native_ms": 28,
-      "measured_browser_ms": 17
+      "measured_native_ms": 32,
+      "measured_browser_ms": 18
     },
     {
       "fixture": "flex-heypcb-esp32-sht40",
@@ -960,7 +1044,7 @@
       "spi_transfers": 0,
       "console_bytes": 64,
       "result_sha256": "c17fa5724d6bd925a18ceecd532764d06e369a78576c98de4483ef3319ba60cb",
-      "measured_native_ms": 17,
+      "measured_native_ms": 18,
       "measured_browser_ms": 4
     },
     {
@@ -981,7 +1065,7 @@
       "spi_transfers": 0,
       "console_bytes": 17,
       "result_sha256": "35dfd31c335991859f05825db0291561aedc5d76cc7697cedbb3a8c811f37e81",
-      "measured_native_ms": 13,
+      "measured_native_ms": 15,
       "measured_browser_ms": 2
     },
     {
@@ -1002,8 +1086,8 @@
       "spi_transfers": 0,
       "console_bytes": 83,
       "result_sha256": "7cdf13995a109737988ec32fd25e3111e8ea08b32f9b48b0e5e807264e1129c6",
-      "measured_native_ms": 478,
-      "measured_browser_ms": 935
+      "measured_native_ms": 684,
+      "measured_browser_ms": 949
     },
     {
       "fixture": "flex-heypcb-esp32-tmp117",
@@ -1023,8 +1107,8 @@
       "spi_transfers": 0,
       "console_bytes": 73,
       "result_sha256": "dc29fe512e2b1aaa818336783ce79d53aff97cf188f614a1a93a754560223283",
-      "measured_native_ms": 316,
-      "measured_browser_ms": 687
+      "measured_native_ms": 514,
+      "measured_browser_ms": 827
     },
     {
       "fixture": "flex-heypcb-esp32-tmp117",
@@ -1044,7 +1128,7 @@
       "spi_transfers": 0,
       "console_bytes": 18,
       "result_sha256": "a4a56a560bd4b4e8788f52d6a1cb8f7422f97a74e3044bbce4dc1321bf2f5c99",
-      "measured_native_ms": 14,
+      "measured_native_ms": 16,
       "measured_browser_ms": 2
     },
     {
@@ -1065,7 +1149,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "bfa60d35186b503a5da15d945eda3b41fcd1c7bf3497c30e964bcb8fd3fadfd9",
-      "measured_native_ms": 26,
+      "measured_native_ms": 24,
       "measured_browser_ms": 3
     },
     {
@@ -1086,7 +1170,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "09dda3907d65216cbfd7b4ee30518f6c3e8afd617ac0674a31707eb92c5d9ef0",
-      "measured_native_ms": 27,
+      "measured_native_ms": 23,
       "measured_browser_ms": 2
     },
     {
@@ -1107,7 +1191,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "b8fc025db486fdc6d98fe905f4de91b56e368b91757d3ae904ab622a407d65b3",
-      "measured_native_ms": 13,
+      "measured_native_ms": 14,
       "measured_browser_ms": 1
     },
     {
@@ -1128,7 +1212,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "640ccc5e30b2871b9ac116b9a3e38031a792a31025dbe0e3032ee43b9302cf4c",
-      "measured_native_ms": 12,
+      "measured_native_ms": 13,
       "measured_browser_ms": 1
     },
     {
@@ -1149,8 +1233,8 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "4491672580007ba8cd40cc196f518554ddb2d4dd0b37df15936a94fce5f1255b",
-      "measured_native_ms": 2294,
-      "measured_browser_ms": 7290
+      "measured_native_ms": 4956,
+      "measured_browser_ms": 7233
     },
     {
       "fixture": "flex-heypcb-pomodoro-c",
@@ -1170,8 +1254,8 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "f70f8107fa42ef5ff5b83a042436d1df76ec5d4d941cf34b85b72781cd3cc9d4",
-      "measured_native_ms": 312,
-      "measured_browser_ms": 563
+      "measured_native_ms": 489,
+      "measured_browser_ms": 556
     },
     {
       "fixture": "flex-heypcb-pomodoro-c",
@@ -1191,8 +1275,8 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "90d546b307d298677f6bad892e8847062fdd5dc5685589e7190fce3ce0d47653",
-      "measured_native_ms": 308,
-      "measured_browser_ms": 565
+      "measured_native_ms": 480,
+      "measured_browser_ms": 583
     },
     {
       "fixture": "flex-heypcb-pomodoro-timer",
@@ -1212,8 +1296,8 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "f9474ff719441ffa94346582eb50b979c347dc9ce937b5f43cdb15e25e4d79bc",
-      "measured_native_ms": 726,
-      "measured_browser_ms": 1544
+      "measured_native_ms": 1190,
+      "measured_browser_ms": 1535
     },
     {
       "fixture": "flex-heypcb-pomodoro-timer",
@@ -1233,7 +1317,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "1a34cff25fed818333ef1d2fd05a43384534b0c055902c13921fbc495bb1be5d",
-      "measured_native_ms": 167,
+      "measured_native_ms": 221,
       "measured_browser_ms": 143
     },
     {
@@ -1254,8 +1338,8 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "fd786be8f21cd52d5b33f208a3ee6375a0b3c054f87ad1b89e51072b7e6de593",
-      "measured_native_ms": 159,
-      "measured_browser_ms": 149
+      "measured_native_ms": 213,
+      "measured_browser_ms": 133
     },
     {
       "fixture": "flex-mixed-signal",
@@ -1275,8 +1359,8 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "e560990ade2c84b96094d95dc585b44a76f1c51eb77f5316bebf13f8f252d71f",
-      "measured_native_ms": 24,
-      "measured_browser_ms": 2
+      "measured_native_ms": 30,
+      "measured_browser_ms": 3
     },
     {
       "fixture": "flex-mixed-signal",
@@ -1296,8 +1380,8 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "71d16e0f209d264edf5cb20ee19f07bab85cf2dbc4b9c438127be9f00d881e2c",
-      "measured_native_ms": 17,
-      "measured_browser_ms": 1
+      "measured_native_ms": 19,
+      "measured_browser_ms": 2
     },
     {
       "fixture": "flex-ntc-thermostat",
@@ -1317,7 +1401,7 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "a1a92fa37265aef7eaafe2e918b0e1f552ea28dcc080272d8ee406a80eb36eed",
-      "measured_native_ms": 72,
+      "measured_native_ms": 79,
       "measured_browser_ms": 2
     },
     {
@@ -1338,8 +1422,8 @@
       "spi_transfers": 0,
       "console_bytes": 0,
       "result_sha256": "46cec36c50af475a7044b91e2dd6bf170a9aab113d4fd8c2996493551d77109c",
-      "measured_native_ms": 63,
-      "measured_browser_ms": 2
+      "measured_native_ms": 111,
+      "measured_browser_ms": 1
     }
   ]
 }
