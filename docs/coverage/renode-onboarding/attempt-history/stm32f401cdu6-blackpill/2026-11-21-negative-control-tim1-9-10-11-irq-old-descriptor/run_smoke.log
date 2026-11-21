@@ -1,0 +1,43 @@
+[2m2026-11-21T05:13:55.909874Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f401cdu6-blackpill.yaml
+[2m2026-11-21T05:13:56.018349Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x80003a9
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+[2m2026-11-21T05:13:56.020169Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 1 byte(s) delivered to 'usart1'
+[2m2026-11-21T05:13:56.020181Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 2 byte(s) delivered to 'usart2'
+BLACKPILL F401 SMOKE
+systick wrap=1 pending=1 countflag=read-clear clear=1 ok
+[2m2026-11-21T05:13:56.020777Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 25 applied
+systick irq entries>=2 vector=15 ipsr=15 return=1 ok
+systick priority flags=000007FF ok
+pendsv clear pending=1 fresh repend=1 ok
+systick pendsv tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok
+systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok
+fpu m4f lazy frame=FFFFFFE9 lspact=1->0 fpcar=1 saved=1 restored=1 ok
+fpu m4f nested lazy lspact=1 exc_return=FFFFFFF1 frame=1 saved=1 restored=1 ok
+fpu m4f nested active exc_return=FFFFFFE1 frames=1 saved=1 restored=1 ok
+fpu m4f psp nested active outer=FFFFFFED nested=FFFFFFE1 frames=1 saved=1 restored=1 ok
+fpu m4f psp lazy frame=FFFFFFED lspact=1->0 psp_frame=1 fpcar=1 saved=1 restored=1 ok
+rcc apb1=00620001 ok
+led pc13 odr=00002000 ok
+tim2 arr=00000040 ok
+i2c1 sb_irq=1 ok
+i2c1 btf_irq=1 ok
+i2c1 rxne_buf_irq=1 release=1 ok
+i2c1 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok
+i2c1 tmp102=00001900 nack=00000400 buf_irq=1 buf_release=1 ev_irq=1 ev_release=1 er_irq=1 irq_released=1 ok
+i2c2 rxne_isolated=1 gate_asserted=1 release=1 ok
+i2c2 tmp102=00001900 sb_irq_gate=1 addr_irq_gate=1 txe_isolated=1 txe_buf_irq=1 txe_buf_release=1 btf_irq_gate=1 rxne_buf_irq=1 rxne_buf_release=1 ok
+pos=1 i2c2 btf_rx_irq=1 rxne_isolated=1 stop_before_dr=1 rxne_after_first=1 release=1 rxne_cleared=1 data=00001980 ok
+i2c2 nack=00000400 no_addr=1 ev_isolated=1 er_isolated=1 er_irq=1 er_masked_release=1 af_cleared=1 idle=1 er_released=1 ok
+spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok
+usart1 txe_isolated=1 gate_asserted=1 released=1 ok
+usart1 tc_isolated=1 gate_asserted=1 released=1 ok
+usart1 rxne_isolated=1 gate_asserted=1 data=00000052 released=1 ok
+usart2 rx_gate re_off=1 ue_off=1 data=00005253 rxne_after_first=1 rxne_after=0 irq=isolated,asserted,released ok
+adc1 in1=000003FF eoc=1 ok
+tim1/9/10/11 irq ispr24=00000000 FAIL
+BLACKPILL FAIL
+[2m2026-11-21T05:13:56.133380Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartOrdered(UartOrderedAssertion { uart_ordered: ["BLACKPILL F401 SMOKE", "systick wrap=1 pending=1 countflag=read-clear clear=1 ok", "systick irq entries>=2 vector=15 ipsr=15 return=1 ok", "systick priority flags=000007FF ok", "pendsv clear pending=1 fresh repend=1 ok", "systick pendsv tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok", "systick pendsv psp tailchain frame=1 r0=1 pending=1 ipsr=0000000E ok", "fpu m4f lazy frame=FFFFFFE9 lspact=1->0 fpcar=1 saved=1 restored=1 ok", "fpu m4f nested lazy lspact=1 exc_return=FFFFFFF1 frame=1 saved=1 restored=1 ok", "fpu m4f nested active exc_return=FFFFFFE1 frames=1 saved=1 restored=1 ok", "fpu m4f psp nested active outer=FFFFFFED nested=FFFFFFE1 frames=1 saved=1 restored=1 ok", "fpu m4f psp lazy frame=FFFFFFED lspact=1->0 psp_frame=1 fpcar=1 saved=1 restored=1 ok", "rcc apb1=00620001 ok", "led pc13 odr=00002000 ok", "tim2 arr=00000040 ok", "i2c1 sb_irq=1 ok", "i2c1 btf_irq=1 ok", "i2c1 rxne_buf_irq=1 release=1 ok", "i2c1 btf_rx_irq=1 rxne_isolated=1 release=1 data=00001980 ok", "i2c1 tmp102=00001900 nack=00000400 buf_irq=1 buf_release=1 ev_irq=1 ev_release=1 er_irq=1 irq_released=1 ok", "i2c2 rxne_isolated=1 gate_asserted=1 release=1 ok", "i2c2 tmp102=00001900 sb_irq_gate=1 addr_irq_gate=1 txe_isolated=1 txe_buf_irq=1 txe_buf_release=1 btf_irq_gate=1 rxne_buf_irq=1 rxne_buf_release=1 ok", "pos=1 i2c2 btf_rx_irq=1 rxne_isolated=1 stop_before_dr=1 rxne_after_first=1 release=1 rxne_cleared=1 data=00001980 ok", "i2c2 nack=00000400 no_addr=1 ev_isolated=1 er_isolated=1 er_irq=1 er_masked_release=1 af_cleared=1 idle=1 er_released=1 ok", "spi1 max31855=01901600 txe_irq=1 rxne_irq=1 released=1 ok", "usart1 txe_isolated=1 gate_asserted=1 released=1 ok", "usart1 tc_isolated=1 gate_asserted=1 released=1 ok", "usart1 rxne_isolated=1 gate_asserted=1 data=00000052 released=1 ok", "usart2 rx_gate re_off=1 ue_off=1 data=00005253 rxne_after_first=1 rxne_after=0 irq=isolated,asserted,released ok", "adc1 in1=000003FF eoc=1 ok", "tim1/9/10/11 irq ispr24=00028124 ok", "BLACKPILL PASS"] }) (captured len=1935)
+[2m2026-11-21T05:13:56.133455Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Memory assertion failed at 0x20001000 (size 4): expected 0xb1afffff, got 0xb1adffff (mask 0xffffffff)
+[2m2026-11-21T05:13:56.133461Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: MemoryValue(MemoryValueAssertion { memory_value: MemoryValueDetails { address: 536875008, expected_value: 2981101567, mask: None, size: Some(4), node: None } }) (captured len=1935)
+FAIL  2/4 checks · stm32f401cdu6-blackpill-smoke · 200000 steps · 0.11s
