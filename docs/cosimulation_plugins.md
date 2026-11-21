@@ -797,6 +797,8 @@ The app exchange also differs from the native host for flat Flex routes: a
 boolean on a non-`board.gpio` input is an error, and `threshold` is applied
 only to `board.gpio_in` routes. Flex with ngspice therefore runs natively only
 until the app host answers the priming step as the native host does.
+`WasmFlexTestRun` (browser `labwired test` Flex scripts) takes no ngspice
+callback.
 
 **Browser execution check.** `scripts/test_browser_ngspice.mjs` runs both
 browser constructors in headless Chromium with the web build of this crate, a
