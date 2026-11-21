@@ -1,0 +1,36 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+#
+# This software is released under the MIT License.
+# See the LICENSE file in the project root for full license information.
+
+name: "coverage-brake-ecu-rv32"
+arch: "riscv"
+registers_count: 50
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. Self-timed devices
+# scale their datasheet microseconds by it; a slower board overrides it.
+# CI fixture — see ci-fixture-cortex-m3-uart1.yaml.
+cpu_hz: 80_000_000
+
+flash:
+  base: 0x80000000
+  size: "128KB"
+ram:
+  base: 0x80020000
+  size: "64KB"
+peripherals:
+  - id: "uart1"
+    type: "uart"
+    base_address: 0x4000C000
+    size: "1KB"
+    # The brake-ECU guest drives a synthetic SR@0/DR@4 console and never
+    # programs STM32 CR1.UE/RE, so it must not be modelled as an STM32
+    # USART: that layout holds scripted RX on the wire until UE|RE.
+    config:
+      profile: "custom"
+      tx_offset: 0x04
+      rx_offset: 0x04
+      status_offset: 0x00
+      status_width: 1
+      status_idle: 0xC0
+      rx_present_set: 0x20
