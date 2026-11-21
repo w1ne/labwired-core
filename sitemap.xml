@@ -3718,6 +3718,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stm32w108/attempt-01/onboarding-summary/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stm32wba52/2026-11-21-negative-control-usart1-irq-old-descriptor/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/tock_veer_el2_sim/2026-11-08-before-htif-smoke/</loc>
     </url>
     <url>
