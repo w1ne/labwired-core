@@ -119,6 +119,13 @@ static bool samples_ok(int v0, int v1) {
   // 512. Exact; the unheld fixed source (3.0 V) reads 930, no conversion 0.
   return v0 == 512 && v1 == 512;
 
+#elif defined(ARDUINO_NUCLEO_H723ZG) || defined(ARDUINO_NUCLEO_H753ZI)
+  // adc profile h7 (16-bit ADC1/2): the matrix system holds A0 (PA3 =
+  // ADC12_INP15) at 1651 mV and PCSEL/SQR1 select it. stm32duino converts at
+  // 10 bits (CFGR.RES = 011): 512. Exact; a 0 here means no conversion (the
+  // HAL's ADSTART write cleared ADEN before the rs-bit fix).
+  return v0 == 512 && v1 == 512;
+
 #elif defined(ARDUINO_ESP32S2_DEV)
   // esp32s2_sens mid-scale 0x1000 (13-bit) -> 2048 at 12 bits. Exact; a 0
   // here means analogRead never converted.

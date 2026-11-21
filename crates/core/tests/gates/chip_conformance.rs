@@ -1413,6 +1413,15 @@ const CHIPS: &[ChipConf] = &[
         reset_oracle: None,
         behavior_gate: None,
     },
+    // NUCLEO-H753ZI (RM0433). SIM-DERIVED: no silicon capture. Its stock
+    // stm32duino row runs in core-arduino-matrix-smoke, not as a Rust test,
+    // so no behavior_gate resolves.
+    ChipConf {
+        name: "stm32h753zi",
+        yaml: "configs/chips/stm32h753zi.yaml",
+        reset_oracle: None,
+        behavior_gate: None,
+    },
     // XIAO ESP32-C6 package variant (copy of esp32c6.yaml, 4 MB flash).
     // SIM-DERIVED: no silicon capture. Its GPIO15 LED smoke runs as a CLI
     // script in core-onboarding-smoke, not as a Rust test.

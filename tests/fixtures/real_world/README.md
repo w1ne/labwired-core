@@ -10,6 +10,16 @@ New entries record their provenance here, following the convention in
 `tests/fixtures/svd/README.md`. Files that predate this README do not yet have a
 record; add one when you next touch them.
 
+## stm32h753.svd
+
+**Source:** [`modm-io/cmsis-svd-stm32`](https://github.com/modm-io/cmsis-svd-stm32)
+→ `stm32h7/STM32H753.svd` at commit `ce4b873ae4` (device `STM32H753`, version
+2.5, ~4.2 MB, ST copyright, Apache-2.0 header kept).
+**Vendored:** 2026-11-20, for the NUCLEO-H753ZI onboarding.
+**Consumed by:** `svd_conformance.rs` (chip `stm32h753zi`) and the debug schemas
+in `configs/peripherals/stm32h753zi/` (`scripts/gen_debug_schemas.py`).
+The SVD declares no RNG interrupt; the chip config uses HASH_RNG_IRQn = 80.
+
 ## stm32f411.svd
 
 **Source:** [`modm-io/cmsis-svd-stm32`](https://github.com/modm-io/cmsis-svd-stm32)

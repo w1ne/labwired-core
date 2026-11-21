@@ -28,8 +28,8 @@
 // PinMap_TIM, so analogWrite would fall back to digitalWrite. Use TIM2_CH1
 // on PA0.
 #    define LW_PWM_PIN PA0
-#  elif defined(STM32H563xx) || defined(STM32H723xx)
-// NUCLEO-H563ZI / NUCLEO-H723ZG LD1 is PB0, whose PinMap_TIM entry is
+#  elif defined(STM32H563xx) || defined(STM32H723xx) || defined(STM32H753xx)
+// NUCLEO-H563ZI / NUCLEO-H723ZG / NUCLEO-H753ZI LD1 is PB0, whose PinMap_TIM entry is
 // TIM1_CH2N, a complementary output the twin's timer does not generate. Use
 // TIM2_CH1 on PA0.
 #    define LW_PWM_PIN PA0
