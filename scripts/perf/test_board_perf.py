@@ -431,6 +431,16 @@ def test_batch_mode_still_requires_the_batched_proof_line(monkeypatch):
     assert "--batched" in seen["argv"]
 
 
+def test_batch_mode_reports_early_guest_retirement(monkeypatch):
+    short_run = _BATCHED_PROOF.replace("instructions=200000", "instructions=199999")
+    _, run = _fake_callgrind(_IREFS + short_run)
+    monkeypatch.setattr(bp.subprocess, "run", run)
+    with pytest.raises(bp.ModeNotTakenError, match=r"stm32f411\.yaml.*200000.*199999"):
+        bp.measure_once(
+            Path("labwired"), "stm32f411.yaml", Path("fw.elf"), 200_000, bp.MODE_BATCH
+        )
+
+
 def test_a_pair_that_measured_one_loop_is_rejected():
     """Near-equal step and batch numbers are the duplicated-loop fingerprint.
 

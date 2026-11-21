@@ -594,13 +594,29 @@ impl Nrf52Gpio {
         (self.odr & self.dir) | (self.pull_level & from_pull) | (self.idr & from_latch)
     }
 
+    /// DIR and PIN_CNF[n].DIR name the same hardware bits (Nordic GPIO
+    /// specification). Keep both snapshot fields coherent without changing
+    /// the input buffer, resistor, drive or sense configuration.
+    fn set_direction(&mut self, value: u32) {
+        let next = value & self.pin_mask();
+        let mut changed = self.dir ^ next;
+        self.dir = next;
+        while changed != 0 {
+            let pin = changed.trailing_zeros() as usize;
+            self.pin_cnf[pin] = (self.pin_cnf[pin] & !1) | ((next >> pin) & 1);
+            changed &= changed - 1;
+        }
+    }
+
     fn read_reg(&self, offset: u64) -> u32 {
         match offset {
-            0x504 => self.odr,
+            // OUTSET and OUTCLR read the current OUT latch.
+            0x504 | 0x508 | 0x50C => self.odr,
             // IN reflects the physical pin level (Nordic PS §6.10): see
             // `effective_in`.
             0x510 => self.effective_in(),
-            0x514 => self.dir,
+            // Read aliases: DIRSET and DIRCLR read the current DIR value.
+            0x514 | 0x518 | 0x51C => self.dir,
             0x524 => self.detectmode,
             0x700..=0x77C if offset % 4 == 0 => {
                 let k = ((offset - 0x700) / 4) as usize;
@@ -638,9 +654,9 @@ impl Nrf52Gpio {
                     self.idr &= !bit;
                 }
             }
-            0x514 => self.dir = value & mask,
-            0x518 => self.dir |= value & mask,
-            0x51C => self.dir &= !(value & mask),
+            0x514 => self.set_direction(value),
+            0x518 => self.set_direction(self.dir | value),
+            0x51C => self.set_direction(self.dir & !value),
             0x524 => self.detectmode = value,
             0x700..=0x77C if offset % 4 == 0 => {
                 let k = ((offset - 0x700) / 4) as usize;
@@ -4131,7 +4147,18 @@ impl crate::Peripheral for GpioPort {
             tracing::trace!("GPIO ODR Write: byte {} = {:#x}", byte_offset, value);
         }
 
-        let mut reg_val = self.read_reg(reg_offset);
+        // Nordic SET/CLR registers read the latch but write one-bit actions.
+        // A narrow store must not replay those readback bits in other lanes.
+        let nrf_action = matches!(&self.family, GpioFamily::Nrf52(_))
+            && matches!(
+                self.translate(reg_offset) + self.window_offset,
+                0x508 | 0x50C | 0x518 | 0x51C
+            );
+        let mut reg_val = if nrf_action {
+            0
+        } else {
+            self.read_reg(reg_offset)
+        };
         let mask = 0xFF << (byte_offset * 8);
         reg_val &= !mask;
         reg_val |= (value as u32) << (byte_offset * 8);

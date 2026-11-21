@@ -9,6 +9,14 @@
 use crate::artifacts::{write_interactive_snapshot, InteractiveSnapshotInputs};
 use crate::*;
 
+/// Keep the remaining run budget in u64 until the bounded advance request.
+pub(crate) fn next_run_chunk(limit: u64, consumed: u64) -> u64 {
+    limit
+        .checked_sub(consumed)
+        .expect("run fuel exceeded its budget")
+        .min(4_000_000)
+}
+
 /// Export every attached parallel-panel framebuffer, if `--display-out <path>`
 /// was given: a binary PPM per panel (`<path>` for the first, `<path>.<id>`
 /// for any others) plus a luma ASCII map on stderr.
@@ -595,15 +603,10 @@ fn run_firmware_riscv_batched(
     // Chunk the run so a u64::MAX `limit` (no --max-steps) stays bounded per
     // `Machine::run` call. `Machine::run` batches internally at the tick
     // interval; we only cap the total instruction budget here.
-    const CHUNK: u32 = 4_000_000;
     let mut ran: u64 = 0;
     let mut faulted = false;
     while ran < limit {
-        let n = if limit == u64::MAX {
-            CHUNK
-        } else {
-            CHUNK.min((limit - ran) as u32)
-        };
+        let n = next_run_chunk(limit, ran) as u32;
         let before = machine.step_profile().cpu_instructions;
         let result = machine.run(Some(n));
         crate::log_ts::refresh_cycles(machine.total_cycles);

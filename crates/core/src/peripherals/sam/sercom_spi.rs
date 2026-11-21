@@ -48,9 +48,9 @@ pub struct SamSercomSpi {
     rx: RefCell<VecDeque<u8>>,
     last_rx: Cell<u8>,
     holding: Option<u8>,
-    /// The byte on the wire: (value, time left, time per CPU cycle). Time is
-    /// in CPU cycles scaled by the core clock (see [`Self::byte_time`]).
-    active: Option<(u8, u64, u64)>,
+    /// Byte, remaining scaled work, work per CPU cycle, and full-byte scale.
+    /// The full-byte scale permits preserving remaining work when CPU rate changes.
+    active: Option<(u8, u64, u64, u64)>,
     /// Time the last byte overran its deadline, carried into a byte that
     /// follows it without a gap.
     overrun: u64,
@@ -144,7 +144,7 @@ impl SamSercomSpi {
 
     fn advance_frame(&mut self, cycles: u64) {
         if self.enabled() {
-            if let Some((_, left, per)) = &mut self.active {
+            if let Some((_, left, per, _)) = &mut self.active {
                 let elapsed = cycles * *per;
                 if *left == 0 {
                     self.overrun += elapsed; // finished, not yet retired
@@ -478,8 +478,26 @@ impl Peripheral for SamSercomSpi {
         if !self.enabled() || !self.pads_ready(bus) {
             return;
         }
+        // Preserve the unfinished fraction when the live clock tree changes.
+        // The bus pass precedes each countdown tick in both scheduler modes.
+        if self.active.is_some() {
+            let (full, rate) = self.byte_time(bus);
+            if let Some((_, left, per, previous_full)) = &mut self.active {
+                if full != *previous_full {
+                    let scaled = u128::from(*left) * u128::from(full);
+                    *left = scaled
+                        .div_ceil(u128::from(*previous_full))
+                        .min(u128::from(u64::MAX)) as u64;
+                    let carried = u128::from(self.overrun) * u128::from(full);
+                    self.overrun =
+                        (carried / u128::from(*previous_full)).min(u128::from(u64::MAX)) as u64;
+                    *previous_full = full;
+                }
+                *per = rate;
+            }
+        }
         let mut completed = false;
-        if let Some((tx, 0, _)) = self.active {
+        if let Some((tx, 0, _, _)) = self.active {
             let tx = if self.ctrla & (1 << 30) != 0 {
                 tx.reverse_bits()
             } else {
@@ -514,7 +532,7 @@ impl Peripheral for SamSercomSpi {
                 } else {
                     0
                 };
-                self.active = Some((tx, left - carried, per));
+                self.active = Some((tx, left - carried, per, left));
             } else if completed {
                 self.flags |= TXC;
             }

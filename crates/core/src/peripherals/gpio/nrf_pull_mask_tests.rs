@@ -211,3 +211,6 @@ mod port_contract {
         assert_eq!(snapshot["num_pins"], 13);
     }
 }
+
+#[path = "nrf_direction_alias_tests.rs"]
+mod nrf_direction_alias_tests;

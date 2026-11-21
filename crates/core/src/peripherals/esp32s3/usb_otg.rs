@@ -192,7 +192,9 @@ pub const GHWCFG2_VALUE: u32 = 0x224D_D930;
 pub const GHWCFG3_VALUE: u32 = 0x0200_1E58;
 pub const GHWCFG4_VALUE: u32 = 0xDFF0_5E08;
 
-/// `DSTS.ENUMSPD` (bits 2:1) = 3: full speed, 48 MHz PHY clock.
+/// `DSTS.ENUMSPD` reset field is 1 (ESP-IDF S3 usb_reg.h, USB_ENUMSPD).
+const DSTS_ENUMSPD_RESET: u32 = 0b01 << 1;
+/// After speed detection: full speed, 48 MHz PHY clock (field = 3).
 const DSTS_ENUMSPD_FS48: u32 = 0b11 << 1;
 
 /// Control endpoint max packet size used by every arduino-esp32 build.
@@ -287,6 +289,7 @@ pub struct Esp32s3UsbOtg {
     gnptxfsiz: u32,
     dcfg: u32,
     dctl: u32,
+    enum_speed: u32,
     diepmsk: u32,
     doepmsk: u32,
     daintmsk: u32,
@@ -390,6 +393,7 @@ impl Esp32s3UsbOtg {
             dcfg: 0,
             // Soft-disconnected until firmware connects (DCTL reset value).
             dctl: DCTL_SDIS,
+            enum_speed: DSTS_ENUMSPD_RESET,
             diepmsk: 0,
             doepmsk: 0,
             daintmsk: 0,
@@ -547,10 +551,11 @@ impl Esp32s3UsbOtg {
             GHWCFG4 => GHWCFG4_VALUE,
             DCFG => self.dcfg,
             DCTL => self.dctl,
-            // Full speed, not suspended; FNSOF[21:8] from the 1 ms frame clock.
+            // Speed is latched when enumeration completes, not at construction.
+            // FNSOF[21:8] comes from the 1 ms frame clock.
             DSTS => {
                 let frame = (self.now() / self.us(1000)) as u32 & 0x3FFF;
-                DSTS_ENUMSPD_FS48 | (frame << 8)
+                self.enum_speed | (frame << 8)
             }
             DIEPMSK => self.diepmsk,
             DOEPMSK => self.doepmsk,
@@ -776,6 +781,7 @@ impl Esp32s3UsbOtg {
     /// (the CSRs that configure the PHY and AHB survive, databook §5.3.4).
     fn core_soft_reset(&mut self) {
         self.gintsts = 0;
+        self.enum_speed = DSTS_ENUMSPD_RESET;
         self.rx_fifo.borrow_mut().clear();
         self.rx_data.borrow_mut().clear();
         for ep in self.ep_in.iter_mut() {
@@ -803,6 +809,7 @@ impl Esp32s3UsbOtg {
     /// Bus reset: what the core does on its own when it detects reset.
     fn bus_reset(&mut self) {
         self.gintsts |= GINTSTS_USBRST;
+        self.enum_speed = DSTS_ENUMSPD_RESET;
         self.rx_fifo.borrow_mut().clear();
         self.rx_data.borrow_mut().clear();
         for ep in self.ep_in.iter_mut() {
@@ -1023,6 +1030,7 @@ impl Esp32s3UsbOtg {
                     };
                 }
                 Phase::Resetting { .. } => {
+                    self.enum_speed = DSTS_ENUMSPD_FS48;
                     self.gintsts |= GINTSTS_ENUMDONE;
                     self.phase = Phase::AwaitReset { started: now };
                 }

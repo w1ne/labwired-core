@@ -78,6 +78,69 @@ fn irq_needs_global_and_local_enable() {
 }
 
 #[test]
+fn device_speed_keeps_reset_value_until_host_speed_detection() {
+    let mut p = dev();
+    let speed_mask = 0b11 << 1;
+    assert_eq!(rd(&p, DSTS) & speed_mask, 0x2);
+    wr(&mut p, DSTS, u32::MAX);
+    assert_eq!(rd(&p, DSTS) & speed_mask, 0x2, "status is read-only");
+
+    wr(&mut p, GAHBCFG, GAHBCFG_GINTMSK);
+    wr(&mut p, DCTL, 0);
+    let step = p.us(ATTACH_DEBOUNCE_US + BUS_RESET_US);
+    for _ in 0..3 {
+        p.tick_elapsed(step);
+    }
+    assert_ne!(rd(&p, GINTSTS) & GINTSTS_ENUMDONE, 0);
+    assert_eq!(rd(&p, DSTS) & speed_mask, 0x6);
+    wr(&mut p, DSTS, 0);
+    assert_eq!(
+        rd(&p, DSTS) & speed_mask,
+        0x6,
+        "writes cannot undo detected speed"
+    );
+
+    wr(&mut p, GRSTCTL, GRSTCTL_CSRST);
+    assert_eq!(rd(&p, DSTS) & speed_mask, 0x2);
+}
+
+#[test]
+fn endpoint_status_writes_preserve_ro_fifo_space_and_w1c_semantics() {
+    let mut p = dev();
+    let input = DIEP_BASE + EP_STRIDE;
+    let output = DOEP_BASE + EP_STRIDE;
+    p.ep_in[1].int = EPINT_XFRC | DIEPINT_INEPNE;
+    p.ep_out[1].int = EPINT_XFRC | DOEPINT_STUP;
+    let free_words = rd(&p, input + 0x18);
+    assert!(free_words > 0);
+    wr(&mut p, input + 0x18, u32::MAX);
+    assert_eq!(rd(&p, input + 0x18), free_words);
+    wr(&mut p, input + 0x18, 0);
+    assert_eq!(
+        rd(&p, input + 0x18),
+        free_words,
+        "FIFO space is not a storage register"
+    );
+
+    wr(&mut p, input + 0x08, 0);
+    assert_eq!(
+        rd(&p, input + 0x08),
+        EPINT_XFRC | DIEPINT_INEPNE | DIEPINT_TXFE
+    );
+    wr(&mut p, input + 0x08, EPINT_XFRC);
+    assert_eq!(rd(&p, input + 0x08), DIEPINT_INEPNE | DIEPINT_TXFE);
+    wr(&mut p, input + 0x08, u32::MAX);
+    assert_eq!(rd(&p, input + 0x08), DIEPINT_TXFE, "TXFE is read-only");
+
+    wr(&mut p, output + 0x08, 0);
+    assert_eq!(rd(&p, output + 0x08), EPINT_XFRC | DOEPINT_STUP);
+    wr(&mut p, output + 0x08, EPINT_XFRC);
+    assert_eq!(rd(&p, output + 0x08), DOEPINT_STUP);
+    wr(&mut p, output + 0x08, u32::MAX);
+    assert_eq!(rd(&p, output + 0x08), 0);
+}
+
+#[test]
 fn host_waits_for_the_device_to_connect() {
     let mut p = dev();
     // Interrupts on but still soft-disconnected (DCTL reset value).

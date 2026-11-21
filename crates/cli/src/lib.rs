@@ -2554,6 +2554,17 @@ mod tests {
     use labwired_config::UdsTesterResult;
     use labwired_core::bus::{CanUdsTester, CanUdsTesterState};
 
+    #[test]
+    fn run_chunk_preserves_u64_budget_and_refuses_overrun() {
+        use crate::commands::run::next_run_chunk;
+        assert_eq!(next_run_chunk(1u64 << 32, 0), 4_000_000);
+        assert_eq!(next_run_chunk((1u64 << 32) + 17, 0), 4_000_000);
+        assert_eq!(next_run_chunk((1u64 << 32) + 17, 1u64 << 32), 17);
+        assert_eq!(next_run_chunk(u64::MAX, 0), 4_000_000);
+        assert_eq!(next_run_chunk(3, 3), 0);
+        assert!(std::panic::catch_unwind(|| next_run_chunk(3, 4)).is_err());
+    }
+
     fn make_tester(id: &str, state: CanUdsTesterState, failure: Option<&str>) -> CanUdsTester {
         let mut t = CanUdsTester::new(id.to_string(), "bxcan1".to_string());
         t.state = state;

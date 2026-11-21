@@ -68,7 +68,7 @@ const OFF_EVENTS_DONE: u64 = 0x108;
 const OFF_EVENTS_RESULTDONE: u64 = 0x10C;
 const OFF_EVENTS_CALIBRATEDONE: u64 = 0x110;
 const OFF_EVENTS_STOPPED: u64 = 0x114;
-// EVENTS_CH[i].LIMITH at 0x118 + 0x10*i, .LIMITL at 0x11C + 0x10*i.
+// EVENTS_CH[i].LIMITH at 0x118 + 8*i, .LIMITL at 0x11C + 8*i.
 const OFF_EVENTS_CH_FIRST: u64 = 0x118;
 // CH[n].LIMITH = 0x118 + n*8, CH[n].LIMITL = 0x11C + n*8, for n = 0..=7.
 // The last one is therefore CH[7].LIMITL at 0x154 — 16 words, matching
@@ -98,7 +98,7 @@ const OFF_RESULT_PTR: u64 = 0x62C;
 const OFF_RESULT_MAXCNT: u64 = 0x630;
 const OFF_RESULT_AMOUNT: u64 = 0x634;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Nrf52Saadc {
     events_started: u32,
     events_end: u32,
@@ -131,6 +131,42 @@ pub struct Nrf52Saadc {
     pending: u8,
     /// Physical AIN inputs, not CH[n] converter slots.
     inputs_mv: [Option<u16>; 8],
+}
+
+impl Default for Nrf52Saadc {
+    fn default() -> Self {
+        let mut ch = [0; 32];
+        for slot in ch.chunks_exact_mut(4) {
+            slot[3] = 0x7fff_8000; // CH[n].LIMIT: full signed 16-bit range.
+        }
+        Self {
+            events_started: 0,
+            events_end: 0,
+            events_done: 0,
+            events_resultdone: 0,
+            events_calibratedone: 0,
+            events_stopped: 0,
+            inten: 0,
+            status: 0,
+            enable: 0,
+            // nRF52833 PS, RESOLUTION reset = 1 (10 bits).
+            resolution: 1,
+            oversample: 0,
+            samplerate: 0,
+            result_ptr: 0,
+            result_maxcnt: 0,
+            result_amount: 0,
+            active_ptr: 0,
+            active_maxcnt: 0,
+            generation: 0,
+            events_ch: [0; 16],
+            ch,
+            armed: false,
+            scheduled: false,
+            pending: PENDING_NONE,
+            inputs_mv: [None; 8],
+        }
+    }
 }
 
 impl Nrf52Saadc {
@@ -221,12 +257,15 @@ impl Peripheral for Nrf52Saadc {
 
     // Nordic event interrupt bits correspond to (event offset - 0x100) / 4.
     fn irq_line_level(&self) -> Option<bool> {
-        let events = self.events_started
+        let mut events = self.events_started
             | (self.events_end << 1)
             | (self.events_done << 2)
             | (self.events_resultdone << 3)
             | (self.events_calibratedone << 4)
             | (self.events_stopped << 5);
+        for (index, event) in self.events_ch.iter().enumerate() {
+            events |= event << (6 + index);
+        }
         Some(events & self.inten != 0)
     }
 
@@ -391,7 +430,7 @@ impl Nrf52Saadc {
     /// One functional scan shared by bare-bus and scheduler paths. nRF52833
     /// PS v1.7 §§6.21.3–6.21.4 (pp577–579): one SAMPLE visits enabled channels
     /// once, ascending; END is buffer-full, AMOUNT counts since START. Exact
-    /// conversion timing, oversampling, burst, timer/PPI and limits are unmodeled.
+    /// conversion timing, oversampling, burst and timer/PPI are unmodeled.
     fn do_easydma_sample(&mut self, bus: &mut dyn Bus) {
         if self.pending != PENDING_SAMPLE {
             return;
@@ -400,8 +439,8 @@ impl Nrf52Saadc {
         self.scheduled = false;
 
         let ptr = self.active_ptr as u64;
-        let samples: Vec<i16> = (0..8)
-            .filter_map(|channel| self.channel_sample(channel))
+        let samples: Vec<(usize, i16)> = (0..8)
+            .filter_map(|channel| self.channel_sample(channel).map(|sample| (channel, sample)))
             .collect();
         if samples.is_empty() {
             return;
@@ -410,8 +449,23 @@ impl Nrf52Saadc {
         if remaining == 0 {
             return;
         }
+        // nRF52833 PS, SAADC: Event monitoring using limits; CH[n].LIMIT,
+        // EVENTS_CH[n].LIMITH/LIMITL and INTEN. The register descriptions
+        // specify inclusive comparisons, with signed 16-bit thresholds.
+        // https://docs.nordicsemi.com/r/bundle/ps_nrf52833/page/saadc.html
+        // Monitor converted channels, independently of the IRQ enable mask.
+        for &(channel, sample) in samples.iter().take(remaining as usize) {
+            let limit = self.ch[channel * 4 + 3];
+            let low = limit as i16;
+            let high = (limit >> 16) as i16;
+            // LOW > HIGH is outside the documented configuration contract.
+            if low <= high {
+                self.events_ch[channel * 2] |= u32::from(sample >= high);
+                self.events_ch[channel * 2 + 1] |= u32::from(sample <= low);
+            }
+        }
         crate::with_device_write_bypass(bus, |bus| {
-            for sample in samples.iter().take(remaining as usize) {
+            for &(_, sample) in samples.iter().take(remaining as usize) {
                 let sample = sample.to_le_bytes();
                 let base = ptr + u64::from(self.result_amount) * 2;
                 let _ = bus.write_u8(base, sample[0]);
@@ -488,6 +542,234 @@ mod tests {
             .chunks_exact(2)
             .map(|b| i16::from_le_bytes([b[0], b[1]]))
             .collect()
+    }
+
+    fn set_limits(s: &mut Nrf52Saadc, channel: u64, low: i16, high: i16) {
+        let value = u32::from(low as u16) | (u32::from(high as u16) << 16);
+        s.write_u32(OFF_CH_FIRST + channel * 0x10 + 12, value)
+            .unwrap();
+    }
+
+    #[test]
+    fn reset_resolution_drives_dma_limits_and_irq_without_driver_override() {
+        // Do not use convert(): it explicitly selects 12 bits and would hide
+        // an incorrect reset value. Exercise both conversion delivery paths.
+        for scheduled in [false, true] {
+            let mut s = Nrf52Saadc::new();
+            let mut bus = FlatRam::new();
+            assert_eq!(s.read_u32(OFF_RESOLUTION).unwrap(), 1);
+            s.set_adc_channel_input(0, 1350);
+            s.write_u32(OFF_CH_FIRST, 1).unwrap();
+            // The reset 10-bit code is 384; an erroneous 8-bit reset gives 96.
+            s.write_u32(OFF_CH_FIRST + 12, (384 << 16) | 100).unwrap();
+            s.write_u32(OFF_INTENSET, 1 << 6).unwrap(); // CH[0].LIMITH
+            s.write_u32(OFF_ENABLE, 1).unwrap();
+            s.write_u32(OFF_RESULT_PTR, 0x2000_0000).unwrap();
+            s.write_u32(OFF_RESULT_MAXCNT, 1).unwrap();
+            s.write_u32(OFF_TASKS_START, 1).unwrap();
+            s.write_u32(OFF_TASKS_SAMPLE, 1).unwrap();
+            if scheduled {
+                let token = s.take_scheduled_events()[0].1;
+                assert!(
+                    s.on_event(token, &mut crate::sched::EventScheduler::new(), &mut bus)
+                        .raise_own_irq
+                );
+            } else {
+                s.tick_with_bus(&mut bus);
+            }
+            assert_eq!(bus.read_slice(0x2000_0000, 2), 384i16.to_le_bytes());
+            assert_eq!(s.read_u32(OFF_RESULT_AMOUNT).unwrap(), 1);
+            assert_eq!(s.read_u32(OFF_EVENTS_END).unwrap(), 1);
+            assert_eq!(s.read_u32(OFF_EVENTS_CH_FIRST).unwrap(), 1);
+            assert_eq!(s.read_u32(OFF_EVENTS_CH_FIRST + 4).unwrap(), 0);
+            assert_eq!(s.irq_line_level(), Some(true));
+        }
+    }
+
+    #[test]
+    fn reset_resolution_preserves_signed_codes_and_explicit_overrides() {
+        let mut s = Nrf52Saadc::default();
+        s.set_adc_channel_input(0, 450);
+        s.set_adc_channel_input(1, 1350);
+        s.write_u32(OFF_CH_FIRST, 1).unwrap();
+        s.write_u32(OFF_CH_FIRST + 4, 2).unwrap();
+        s.write_u32(OFF_CH_FIRST + 8, 1 << 20).unwrap(); // differential
+        assert_eq!(s.channel_sample(0), Some(-128));
+        // Drivers retain the full supported selection, including explicit 8-bit.
+        for (selection, expected) in [(0, -32), (1, -128), (2, -512), (3, -2048)] {
+            s.write_u32(OFF_RESOLUTION, selection).unwrap();
+            assert_eq!(s.channel_sample(0), Some(expected));
+        }
+        s.write_u32(OFF_ENABLE, 1).unwrap();
+        s.write_u32(OFF_ENABLE, 0).unwrap();
+        assert_eq!(
+            s.read_u32(OFF_RESOLUTION).unwrap(),
+            3,
+            "disable is not reset"
+        );
+        assert_eq!(Nrf52Saadc::new().read_u32(OFF_RESOLUTION).unwrap(), 1);
+    }
+
+    #[test]
+    fn limit_reset_range_and_inclusive_thresholds_for_every_channel() {
+        for channel in 0..8u64 {
+            let mut s = Nrf52Saadc::default();
+            assert_eq!(s.read_u32(0x51c + channel * 16).unwrap(), 0x7fff_8000);
+            s.set_adc_channel_input(3, 1350);
+            s.write_u32(OFF_CH_FIRST + channel * 16, 4).unwrap();
+            assert_eq!(convert(&mut s, 1), vec![1536]);
+            assert!(s.events_ch.iter().all(|&event| event == 0));
+            let high_event = OFF_EVENTS_CH_FIRST + channel * 8;
+            for (low, high, expected) in [
+                (1535, 1537, [0, 0]),
+                (1535, 1536, [1, 0]),
+                (1536, 1537, [0, 1]),
+                (1536, 1536, [1, 1]),
+                (1600, 1700, [0, 1]),
+                (1400, 1500, [1, 0]),
+            ] {
+                s.write_u32(high_event, 0).unwrap();
+                s.write_u32(high_event + 4, 0).unwrap();
+                set_limits(&mut s, channel, low, high);
+                assert_eq!(convert(&mut s, 1), vec![1536]);
+                assert_eq!(s.read_u32(high_event).unwrap(), expected[0]);
+                assert_eq!(s.read_u32(high_event + 4).unwrap(), expected[1]);
+                for other in 0..8 {
+                    if other != channel as usize {
+                        assert_eq!(&s.events_ch[other * 2..other * 2 + 2], &[0, 0]);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn differential_limit_comparisons_are_signed_and_latched_until_cleared() {
+        let mut s = Nrf52Saadc::new();
+        s.set_adc_channel_input(0, 1200);
+        s.set_adc_channel_input(1, 1800);
+        s.write_u32(0x510, 1).unwrap();
+        s.write_u32(0x514, 2).unwrap();
+        s.write_u32(0x518, 1 << 20).unwrap();
+        set_limits(&mut s, 0, -341, -300);
+        assert_eq!(convert(&mut s, 1), vec![-341]);
+        assert_eq!(&s.events_ch[..2], &[0, 1]);
+        // A result between negative bounds must not set either event.
+        s.write_u32(0x11c, 0).unwrap();
+        set_limits(&mut s, 0, -342, -340);
+        assert_eq!(convert(&mut s, 1), vec![-341]);
+        assert_eq!(&s.events_ch[..2], &[0, 0]);
+        set_limits(&mut s, 0, -400, -341);
+        assert_eq!(convert(&mut s, 1), vec![-341]);
+        assert_eq!(&s.events_ch[..2], &[1, 0]);
+        // Return inside the range; hardware events remain sticky.
+        set_limits(&mut s, 0, -342, -340);
+        convert(&mut s, 1);
+        assert_eq!(&s.events_ch[..2], &[1, 0]);
+        s.write_u32(0x118, 1).unwrap();
+        assert_eq!(s.read_u32(0x118).unwrap(), 1);
+        s.write_u32(0x118, 0).unwrap();
+        assert_eq!(s.read_u32(0x118).unwrap(), 0);
+    }
+
+    #[test]
+    fn each_limit_event_routes_its_own_irq_bit_on_scheduled_conversion() {
+        for channel in 0..8u64 {
+            for high in [true, false] {
+                let mut s = Nrf52Saadc::new();
+                let mut bus = FlatRam::new();
+                let mut scheduler = crate::sched::EventScheduler::new();
+                s.set_adc_channel_input(0, 900); // 12-bit output =1024
+                s.write_u32(OFF_CH_FIRST + channel * 16, 1).unwrap();
+                set_limits(&mut s, channel, if high { 0 } else { 1024 }, 1024);
+                s.write_u32(OFF_ENABLE, 1).unwrap();
+                s.write_u32(OFF_RESOLUTION, 2).unwrap();
+                s.write_u32(OFF_RESULT_PTR, 0x2000_0000).unwrap();
+                s.write_u32(OFF_RESULT_MAXCNT, 1).unwrap();
+                s.write_u32(OFF_TASKS_START, 1).unwrap();
+                s.write_u32(OFF_TASKS_SAMPLE, 1).unwrap();
+                let token = s.take_scheduled_events()[0].1;
+                assert!(!s.on_event(token, &mut scheduler, &mut bus).raise_own_irq);
+                assert_eq!(bus.read_slice(0x2000_0000, 2), 1024i16.to_le_bytes());
+                let index = channel * 2 + u64::from(!high);
+                // Another slot's enable cannot assert this slot's interrupt.
+                let unrelated = 1 << (6 + (index + 2) % 16);
+                s.write_u32(OFF_INTENSET, unrelated).unwrap();
+                assert_eq!(s.irq_line_level(), Some(false));
+                let mask = 1 << (6 + index);
+                s.write_u32(OFF_INTENSET, mask).unwrap();
+                assert_eq!(s.irq_line_level(), Some(true));
+                assert!(s.on_event(token, &mut scheduler, &mut bus).raise_own_irq);
+                s.write_u32(OFF_INTENCLR, mask).unwrap();
+                assert_eq!(s.irq_line_level(), Some(false));
+                s.write_u32(OFF_INTENSET, mask).unwrap();
+                s.write_u32(OFF_EVENTS_CH_FIRST + index * 4, 0).unwrap();
+                assert_eq!(s.irq_line_level(), Some(false));
+            }
+        }
+    }
+
+    #[test]
+    fn sparse_scan_preserves_channel_slots_and_stops_monitoring_at_maxcnt() {
+        let mut s = Nrf52Saadc::new();
+        let mut bus = FlatRam::new();
+        s.set_adc_channel_input(0, 900);
+        s.set_adc_channel_input(3, 1350);
+        s.write_u32(0x520, 1).unwrap(); // CH1 ->1024
+        s.write_u32(0x580, 4).unwrap(); // CH7 ->1536
+        set_limits(&mut s, 1, 1024, 2000);
+        set_limits(&mut s, 7, 0, 1536);
+        s.write_u32(OFF_ENABLE, 1).unwrap();
+        s.write_u32(OFF_RESOLUTION, 2).unwrap();
+        s.write_u32(OFF_RESULT_PTR, 0x2000_0000).unwrap();
+        s.write_u32(OFF_RESULT_MAXCNT, 1).unwrap();
+        bus.write_u8(0x2000_0002, 0xa5).unwrap();
+        s.write_u32(OFF_TASKS_START, 1).unwrap();
+        s.write_u32(OFF_TASKS_SAMPLE, 1).unwrap();
+        s.tick_with_bus(&mut bus);
+        assert_eq!(bus.read_slice(0x2000_0000, 3), vec![0, 4, 0xa5]);
+        assert_eq!(s.result_amount, 1);
+        assert_eq!(s.events_end, 1);
+        let mut expected = [0; 16];
+        expected[3] = 1; // CH1 low, not packed DMA slot0
+        assert_eq!(s.events_ch, expected);
+        // Give the complete scan room: CH7 now produces its own event.
+        s.write_u32(OFF_RESULT_MAXCNT, 2).unwrap();
+        s.write_u32(OFF_TASKS_START, 1).unwrap();
+        s.write_u32(OFF_TASKS_SAMPLE, 1).unwrap();
+        s.tick_with_bus(&mut bus);
+        expected[14] = 1;
+        assert_eq!(s.events_ch, expected);
+    }
+
+    #[test]
+    fn canceled_and_disconnected_scans_do_not_generate_limit_events() {
+        for scheduled in [false, true] {
+            for cancel in [OFF_TASKS_STOP, OFF_ENABLE] {
+                let mut s = Nrf52Saadc::new();
+                let mut bus = FlatRam::new();
+                let mut scheduler = crate::sched::EventScheduler::new();
+                set_limits(&mut s, 0, 0, 0);
+                s.write_u32(0x510, 1).unwrap();
+                s.write_u32(OFF_ENABLE, 1).unwrap();
+                s.write_u32(OFF_RESULT_MAXCNT, 1).unwrap();
+                s.write_u32(OFF_TASKS_START, 1).unwrap();
+                s.write_u32(OFF_TASKS_SAMPLE, 1).unwrap();
+                let token = s.take_scheduled_events()[0].1;
+                s.write_u32(cancel, u32::from(cancel == OFF_TASKS_STOP))
+                    .unwrap();
+                if scheduled {
+                    s.on_event(token, &mut scheduler, &mut bus);
+                } else {
+                    s.tick_with_bus(&mut bus);
+                }
+                assert!(s.events_ch.iter().all(|&event| event == 0));
+                assert_eq!(s.result_amount, 0);
+                s.write_u32(0x510, 0).unwrap();
+                convert(&mut s, 1);
+                assert!(s.events_ch.iter().all(|&event| event == 0));
+            }
+        }
     }
 
     #[test]

@@ -6,6 +6,8 @@ use std::collections::HashMap;
 struct MockBus {
     mem: HashMap<u64, u8>,
     config: SimulationConfig,
+    flash_trigger: Option<u64>,
+    flash_pending: bool,
 }
 
 impl MockBus {
@@ -13,6 +15,8 @@ impl MockBus {
         Self {
             mem: HashMap::new(),
             config: SimulationConfig::default(),
+            flash_trigger: None,
+            flash_pending: false,
         }
     }
 }
@@ -23,7 +27,13 @@ impl Bus for MockBus {
     }
     fn write_u8(&mut self, addr: u64, value: u8) -> SimResult<()> {
         self.mem.insert(addr, value);
+        if self.flash_trigger == Some(addr) {
+            self.flash_pending = true;
+        }
         Ok(())
+    }
+    fn has_pending_flash_op(&self) -> bool {
+        self.flash_pending
     }
     fn tick_peripherals(&mut self) -> Vec<u32> {
         Vec::new()
@@ -33,6 +43,55 @@ impl Bus for MockBus {
     }
     fn config(&self) -> &SimulationConfig {
         &self.config
+    }
+}
+
+/// A custom Bus must yield at a flash-controller store just like SystemBus.
+/// The following instruction must not retire until the pending op is drained.
+#[test]
+fn custom_bus_batches_yield_at_pending_flash_operations() {
+    for batch_mode_enabled in [false, true] {
+        for prefix in [0u32, 2] {
+            for budget in [1, 8, 32] {
+                let mut cpu = CortexM::new();
+                let mut bus = MockBus::new();
+                let config = SimulationConfig {
+                    batch_mode_enabled,
+                    ..SimulationConfig::default()
+                };
+                cpu.pc = 0x100;
+                cpu.r0 = 0x42;
+                cpu.r1 = 0x4000_0000;
+                for i in 0..prefix {
+                    bus.write_u16(0x100 + u64::from(i * 2), 0xbf00).unwrap(); // NOP
+                }
+                let store_pc = 0x100 + prefix * 2;
+                bus.write_u16(u64::from(store_pc), 0x6008).unwrap(); // STR r0,[r1]
+                bus.write_u16(u64::from(store_pc + 2), 0x2207).unwrap(); // MOVS r2,#7
+                bus.flash_trigger = Some(u64::from(cpu.r1));
+
+                // A one-instruction budget reaches the store in separate calls.
+                let mut retired = 0;
+                for _ in 0..=prefix {
+                    retired += cpu.step_batch(&mut bus, &[], &config, budget).unwrap();
+                    if bus.flash_pending {
+                        break;
+                    }
+                }
+                assert!(bus.flash_pending);
+                assert_eq!(retired, prefix + 1);
+                assert_eq!(cpu.pc, store_pc + 2);
+                assert_eq!(cpu.r2, 0, "post-store instruction retired before drain");
+                assert_eq!(bus.read_u32(0x4000_0000).unwrap(), 0x42);
+
+                // Model the machine boundary draining the op, then resume.
+                bus.flash_pending = false;
+                bus.flash_trigger = None;
+                assert_eq!(cpu.step_batch(&mut bus, &[], &config, 1).unwrap(), 1);
+                assert_eq!(cpu.r2, 7);
+                assert_eq!(cpu.pc, store_pc + 4);
+            }
+        }
     }
 }
 
