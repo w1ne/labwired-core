@@ -177,6 +177,13 @@ static bool samples_ok(int v0, int v1) {
   // Keyed on the board, not STM32F411xE: the Black Pill row holds no level.
   return v0 == 511 && v1 == 511;
 
+#elif defined(ARDUINO_NUCLEO_F767ZI)
+  // NUCLEO-F767ZI: the matrix system holds A0 = PA3 = ADC123_IN3 at
+  // 1650 mV. floor(1650 * 4095 / 3300) = 2047 at 12 bits; stm32duino sets
+  // ADC_CR1.RES = 10 bits: 511. Exact; "2 3" is the model's incrementing
+  // fallback, i.e. the board level never reached the selected channel.
+  return v0 == 511 && v1 == 511;
+
 #else
   // Deterministic twin: equal samples (fixed source / idle 0), OR the
   // classic STM32 F1 unseeded path that increments DR each conversion.
