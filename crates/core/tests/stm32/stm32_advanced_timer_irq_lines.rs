@@ -13,6 +13,11 @@
 //! shares ADC1_2_IRQn = 18 with ADC1. Numbers are from the vendor CMSIS
 //! device headers (`stm32f103xb.h`, `stm32g431xx.h`, `stm32l476xx.h`, ...).
 //!
+//! TIF, COMIF and BIF had no line at all: the timer model masked SR with
+//! UIF|CC1..4IF only. They now pend TIMx_TRG_COM / TIMx_BRK where the
+//! descriptor names them (`trigger_com_irq`, `break_irq`), and the timer's
+//! own line otherwise.
+//!
 //! Each case arms one event with the line masked in the NVIC and reads ISPR:
 //! the expected line must pend and the other one must not.
 
@@ -46,6 +51,16 @@ const TIMERS: &[(&str, &str, u64, u32, u32)] = &[
     ("stm32f103rb", "tim1", 0x4001_2C00, 25, 27),
     ("stm32f103t4", "tim1", 0x4001_2C00, 25, 27),
     ("stm32f103t6", "tim1", 0x4001_2C00, 25, 27),
+    ("stm32f401cdu6", "tim1", 0x4001_0000, 25, 27),
+    (
+        "onboarding/stm32f401cdu6-blackpill",
+        "tim1",
+        0x4001_0000,
+        25,
+        27,
+    ),
+    ("stm32f411ceu6", "tim1", 0x4001_0000, 25, 27),
+    ("stm32f411re", "tim1", 0x4001_0000, 25, 27),
     ("stm32g431rb", "tim1_pwm", 0x4001_2C00, 25, 27),
     ("stm32g474re", "tim1_pwm", 0x4001_2C00, 25, 27),
     ("stm32wb55", "tim1_pwm", 0x4001_2C00, 25, 27),
@@ -155,6 +170,40 @@ fn advanced_timers_pend_update_and_cc_on_their_own_lines() {
                 "{stem} {id}: CC1G pended line {cc}={} line {up}={}",
                 compare.0, compare.1
             ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Break (BIF), commutation (COMIF) and trigger (TIF) events pend
+/// TIMx_BRK = UP - 1 and TIMx_TRG_COM = UP + 1 where the chip splits them
+/// (CC = UP + 2), and the single TIMx_BRK_UP_TRG_COM line on F0/G0/C0.
+#[test]
+fn advanced_timers_pend_break_and_trigger_com_on_their_lines() {
+    const COMIE_COMG: u32 = 1 << 5;
+    const TIE_TG: u32 = 1 << 6;
+    const BIE_BG: u32 = 1 << 7;
+    let mut failures = Vec::new();
+    for &(stem, id, base, up, cc) in TIMERS {
+        let split = cc == up + 2;
+        let (brk, trg_com, other) = if split {
+            (up - 1, up + 1, up)
+        } else {
+            (up, up, cc)
+        };
+        let mut m = machine(stem);
+        for (name, bits, want) in [
+            ("BG", BIE_BG, brk),
+            ("COMG", COMIE_COMG, trg_com),
+            ("TG", TIE_TG, trg_com),
+        ] {
+            let seen = fire(&mut m, base, bits, want, other);
+            if seen != (true, false) {
+                failures.push(format!(
+                    "{stem} {id}: {name} pended line {want}={} line {other}={}",
+                    seen.0, seen.1
+                ));
+            }
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
