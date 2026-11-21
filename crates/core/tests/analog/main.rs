@@ -43,6 +43,7 @@ mod declarative_spi_supply_por;
 mod device_supply_rails;
 mod device_supply_routing;
 mod lm393_moisture_dout;
+mod mcp9701_analog;
 mod motor_models;
 mod mpu6050_noise;
 mod ne555_astable;
