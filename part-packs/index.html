@@ -4928,6 +4928,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#packs-on-the-flex-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packs on the Flex path
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#resolution-order" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5765,6 +5776,14 @@ file and replaces the entry with its contents, exactly as it already does for a
 <code>can-player</code>'s <code>path:</code>. The simulation core never sees a <code>path:</code> — it has no
 filesystem in wasm, and a contract that only works on one of our three runtimes
 is not a contract.</p>
+<h2 id="packs-on-the-flex-path">Packs on the Flex path</h2>
+<p>A Flex manifest (<code>labwired test</code> with <code>inputs.flex</code>) carries the same <code>parts:</code>
+list, inline. Flex resolves a bus device, a co-simulation model's
+<code>config.device_type</code> and a sink against it before the catalog, with the same
+<code>overrides:</code> rule. Flex runs the <code>i2c_device</code>, <code>spi_device</code>, <code>display</code>,
+<code>analog_source</code>, <code>gpio_device</code>, <code>onewire_device</code> and <code>led_strip</code> primitives;
+a pack of any other primitive is refused by name. See
+<a href="../ci_test_runner/#part-packs-and-listen-only-devices">the Flex test runner</a>.</p>
 <h2 id="resolution-order">Resolution order</h2>
 <p>For an <code>external_devices[].type</code>, in order:</p>
 <ol>
