@@ -314,12 +314,23 @@ impl CosimRunner {
         configs: &[CosimModelConfig],
         base_dir: &Path,
     ) -> SimResult<Self> {
+        Self::from_configs_with_factory(configs, |config| {
+            build_cosim_adapter_with_base(config, base_dir)
+        })
+    }
+
+    /// Build a runner using adapters supplied by the host (the browser's
+    /// ngspice callback), with the same scheduling as [`Self::from_configs`].
+    pub fn from_configs_with_factory<F>(
+        configs: &[CosimModelConfig],
+        mut factory: F,
+    ) -> SimResult<Self>
+    where
+        F: FnMut(&CosimModelConfig) -> SimResult<Box<dyn CosimAdapter>>,
+    {
         let mut models = Vec::new();
         for config in configs {
-            models.push(CosimRunnerModel::new(
-                config.clone(),
-                build_cosim_adapter_with_base(config, base_dir)?,
-            ));
+            models.push(CosimRunnerModel::new(config.clone(), factory(config)?));
         }
         Ok(Self::new(models))
     }

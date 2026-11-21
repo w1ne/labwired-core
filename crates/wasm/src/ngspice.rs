@@ -99,6 +99,27 @@ pub(crate) fn adapter(
     })
 }
 
+/// The browser adapter factory shared by `WasmSimulator` and
+/// `WasmFlexRuntime`: `adapter: ngspice` goes to the host callback, every
+/// other adapter to the generic core factory. Callers check the models with
+/// [`crate::cosim::check_browser_models`] first, so no model reads a path.
+pub(crate) fn browser_adapter(
+    config: &labwired_config::CosimModelConfig,
+    callback: Option<&Function>,
+) -> SimResult<Box<dyn CosimAdapter>> {
+    if config.adapter == labwired_config::CosimAdapter::Ngspice {
+        let callback = callback.ok_or_else(|| {
+            SimulationError::Other(format!(
+                "co-sim model {} needs an ngspice callback",
+                config.id
+            ))
+        })?;
+        Ok(adapter(config, callback))
+    } else {
+        labwired_core::cosim::build_cosim_adapter_with_base(config, std::path::Path::new("."))
+    }
+}
+
 fn js_error_message(error: &JsValue) -> String {
     error
         .as_string()

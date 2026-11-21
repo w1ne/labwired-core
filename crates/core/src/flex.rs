@@ -141,9 +141,24 @@ fn error(message: impl Into<String>) -> SimulationError {
 
 impl FlexRuntime {
     pub fn from_yaml(yaml: &str) -> SimResult<Self> {
+        Self::from_yaml_with_factory(yaml, |config| {
+            crate::cosim::build_cosim_adapter_with_base(config, std::path::Path::new("."))
+        })
+    }
+
+    /// [`Self::from_yaml`] with adapters supplied by the host, as
+    /// `CosimSession::new_with_factory` does for a machine: the browser
+    /// passes its ngspice callback here. Priming, scheduling and checks are
+    /// unchanged.
+    pub fn from_yaml_with_factory<F>(yaml: &str, factory: F) -> SimResult<Self>
+    where
+        F: FnMut(
+            &labwired_config::CosimModelConfig,
+        ) -> SimResult<Box<dyn crate::cosim::CosimAdapter>>,
+    {
         let manifest =
             FlexManifest::from_yaml(yaml).map_err(|err| error(format!("Flex model: {err:#}")))?;
-        let mut runner = CosimRunner::from_configs(&manifest.cosim_models)?;
+        let mut runner = CosimRunner::from_configs_with_factory(&manifest.cosim_models, factory)?;
         runner.set_record_routed(false);
         let mut signals = CosimSignals::new();
         let mut ports = BTreeMap::new();

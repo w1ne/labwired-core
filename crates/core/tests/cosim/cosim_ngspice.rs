@@ -18,7 +18,9 @@ use crate::common;
 use common::root;
 use labwired_config::{ChipDescriptor, CosimModelConfig, SystemManifest};
 use labwired_core::bus::SystemBus;
-use labwired_core::cosim::ngspice::{validate_ngspice_models, NgspiceModelSpec};
+use labwired_core::cosim::ngspice::{
+    runtime_snapshot_refusal, validate_ngspice_models, NgspiceModelSpec,
+};
 use labwired_core::cosim::{
     build_cosim_adapter_with_base, AnalogCosimAdapter, CosimSession, CosimSignalValue,
     CosimSignals, CosimStep, RoutingError,
@@ -304,6 +306,60 @@ fn native_ngspice_matches_the_in_core_solver_on_a_shared_rc() {
         "native ngspice vs in-core over 20 x 100 us: worst {:.4} % FS",
         worst * 100.0
     );
+}
+
+/// Continuity across the runner's `(0, 0)` priming step: the primed value is
+/// where the `uic` transient starts (C uncharged), and the next boundaries
+/// follow the RC curve from it. A DC operating point here would report
+/// 3.3 V and then drop to 0.31 V at the first boundary.
+#[test]
+fn native_priming_step_is_the_start_of_the_transient() {
+    if !ngspice_ready() {
+        return;
+    }
+    let dir = scratch("priming");
+    let netlist = dir.join("rc.cir");
+    std::fs::write(&netlist, RC_NETLIST).unwrap();
+    let mut adapter = build_cosim_adapter_with_base(&rc_model(&netlist, 100_000), &dir).unwrap();
+    let high = [("gpio", CosimSignalValue::Bool(true))];
+    let primed = volts(&adapter.step(step(0, 0, &high)).unwrap().outputs, "v_out");
+    assert!(
+        primed.abs() < 1e-3,
+        "primed {primed} V, expected the uic start (0 V)"
+    );
+    let tau = 10e3 * 100e-9;
+    for k in 1..=3u64 {
+        let t_ns = k * 100_000;
+        let v = volts(
+            &adapter.step(step(t_ns, 100_000, &high)).unwrap().outputs,
+            "v_out",
+        );
+        let expected = VDD * (1.0 - (-(t_ns as f64) * 1e-9 / tau).exp());
+        assert!(
+            (v - expected).abs() < 2e-3 * VDD,
+            "t={t_ns} ns after priming: {v} V vs {expected} V"
+        );
+    }
+}
+
+/// Snapshot/restore is refused, not approximated: any `adapter: ngspice`
+/// model makes the refusal fire (the browser `take/apply_runtime_snapshot`
+/// and native `--capture-app-entry` / `--resume-snapshot` both read it); a
+/// session of in-core models is not refused (negative control).
+#[test]
+fn runtime_snapshots_are_refused_with_an_ngspice_model() {
+    let dir = root("examples/cosim-ngspice-ldr");
+    let system: SystemManifest =
+        serde_yaml::from_str(&std::fs::read_to_string(dir.join("system.yaml")).unwrap()).unwrap();
+    let reason = runtime_snapshot_refusal(&system.cosim_models).expect("ngspice is refused");
+    assert!(reason.contains("ngspice"), "{reason}");
+    let in_core =
+        model("id: rc\nadapter: analog\nstep_ns: 100000\ninputs: {}\noutputs: {}\nconfig: {}\n");
+    assert_eq!(
+        runtime_snapshot_refusal(std::slice::from_ref(&in_core)),
+        None
+    );
+    assert_eq!(runtime_snapshot_refusal(&[]), None);
 }
 
 #[test]

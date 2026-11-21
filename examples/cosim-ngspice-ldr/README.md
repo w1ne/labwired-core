@@ -16,7 +16,11 @@ Expected settled node voltage: 0.548914 V at 100 lx, 2.751086 V at 1 lx.
 Native requirements: `python3` and libngspice (`apt install libngspice0`).
 The browser runs `system.yaml` through
 `WasmSimulator::new_from_config_with_ngspice_callback` with the netlist
-supplied under the name `./ldr.cir`.
+supplied under the name `./ldr.cir`. `flex-ldr.yaml` runs natively only: the
+browser constructor `WasmFlexRuntime::new_from_yaml_with_ngspice_callback`
+exists, but the app's ngspice exchange rejects the Flex `(0, 0)` priming step
+(see `docs/cosimulation_plugins.md`, "Flex in the browser"). Real-browser
+check: `scripts/test_browser_ngspice.mjs`.
 
 Tests (skip without libngspice; `LABWIRED_REQUIRE_NGSPICE=1` makes that a failure):
 

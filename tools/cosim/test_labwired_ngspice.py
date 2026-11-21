@@ -85,12 +85,14 @@ def test_missing_source_name_is_a_clear_error():
 BRIDGE_NETLIST = RC_NETLIST.replace(".end", ".tran 1u 10 uic\n.end")
 
 
-def _bridge_spec(tmp_path, element="Vgpio", node="out"):
+def _bridge_spec(tmp_path, element="Vgpio", node="out", netlist_text=BRIDGE_NETLIST,
+                 step_ns=100_000):
     netlist = tmp_path / "rc.cir"
-    netlist.write_text(BRIDGE_NETLIST)
+    netlist.write_text(netlist_text)
     return {
         "model_id": "rc",
         "netlist_path": str(netlist),
+        "step_ns": step_ns,
         "inputs": {"gpio": {"element": element, "scale": 3.3, "offset": 0.0,
                             "default_value": None, "logic": True}},
         "outputs": {"v_out": {"node": node, "scale": 1.0, "offset": 0.0, "threshold": None},
@@ -117,14 +119,36 @@ def test_bridge_steps_land_on_exact_boundaries(tmp_path):
     assert lines[0]["outputs"]["high"] is False and lines[-1]["outputs"]["high"] is True
 
 
-def test_bridge_priming_step_reports_the_operating_point(tmp_path):
-    rc, lines = _serve(_bridge_spec(tmp_path), [
-        {"time_ns": 0, "dt_ns": 0, "inputs": {"gpio": True}},
-        {"time_ns": 100_000, "dt_ns": 100_000, "inputs": {"gpio": True}},
-    ])
-    assert rc == 0
-    assert math.isclose(lines[0]["outputs"]["v_out"], 3.3, rel_tol=1e-9)  # DC: C open
-    assert lines[1]["outputs"]["v_out"] < 1.0  # .tran uic restarts from 0 V
+def test_bridge_priming_step_is_the_start_of_the_transient(tmp_path):
+    # Continuity across the (0, 0) priming step: the primed value is where the
+    # transient starts, and the next boundary follows the RC curve from it.
+    # Under `uic` that start is the initial condition (C uncharged, 0 V), not
+    # the DC operating point (3.3 V), which an `op` would have reported.
+    frames = [{"time_ns": 0, "dt_ns": 0, "inputs": {"gpio": True}}] + [
+        {"time_ns": k * 100_000, "dt_ns": 100_000, "inputs": {"gpio": True}} for k in (1, 2)]
+    rc, lines = _serve(_bridge_spec(tmp_path), frames)
+    assert rc == 0 and len(lines) == 3, lines
+    assert abs(lines[0]["outputs"]["v_out"]) < 1e-3, lines[0]
+    for k, line in ((1, lines[1]), (2, lines[2])):
+        expected = 3.3 * (1 - math.exp(-k * 100e-6 / TAU_S))
+        assert math.isclose(line["outputs"]["v_out"], expected, abs_tol=3.3 * 2e-3), (k, line)
+
+    # Without `uic` the transient starts from its own operating point, and the
+    # primed value is that point (t = 0 is stored) and it stays there.
+    no_uic = RC_NETLIST.replace(".end", ".tran 1u 10\n.end")
+    rc, lines = _serve(_bridge_spec(tmp_path, netlist_text=no_uic), frames)
+    assert rc == 0 and len(lines) == 3, lines
+    for line in lines:
+        assert math.isclose(line["outputs"]["v_out"], 3.3, rel_tol=1e-6), line
+
+
+def test_bridge_priming_refuses_a_first_point_past_the_first_boundary(tmp_path):
+    # Negative control: a 5 ns boundary period is shorter than ngspice's first
+    # internal step under `uic` (10 ns for `.tran 1u`), so the primed state
+    # would belong to a later time than the first boundary.
+    rc, lines = _serve(_bridge_spec(tmp_path, step_ns=5),
+                       [{"time_ns": 0, "dt_ns": 0, "inputs": {"gpio": True}}])
+    assert rc == 1 and "first transient point" in lines[0]["error"], lines
 
 
 def test_bridge_errors_are_one_frame_then_exit(tmp_path):

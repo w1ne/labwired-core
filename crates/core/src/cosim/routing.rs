@@ -2129,6 +2129,12 @@ impl CosimSession {
             .any(|config| config.adapter == ManifestCosimAdapter::Ngspice)
     }
 
+    /// Why a machine runtime snapshot must not be taken or applied with this
+    /// session; see [`super::ngspice::runtime_snapshot_refusal`].
+    pub fn runtime_snapshot_refusal(&self) -> Option<&'static str> {
+        super::ngspice::runtime_snapshot_refusal(&self.configs)
+    }
+
     /// The runner's analog waveform ring. Every `adapter: analog` model writes
     /// its routed outputs and `config.trace` channels here as it steps; publish
     /// it with [`Machine::attach_analog_trace`](crate::Machine::attach_analog_trace)

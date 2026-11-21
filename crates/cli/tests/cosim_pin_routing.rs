@@ -46,6 +46,17 @@ fn run(name: &str, system_yaml: &str, script_yaml: &str) -> Run {
 
 /// [`run`] with another committed firmware image.
 fn run_firmware(name: &str, firmware_rel: &str, system_yaml: &str, script_yaml: &str) -> Run {
+    run_with_args(name, firmware_rel, system_yaml, script_yaml, &[])
+}
+
+/// [`run_firmware`] with extra `labwired test` arguments.
+fn run_with_args(
+    name: &str,
+    firmware_rel: &str,
+    system_yaml: &str,
+    script_yaml: &str,
+    extra: &[&str],
+) -> Run {
     let temp_dir = labwired_cli::test_support::unique_temp_dir(&format!("labwired-cosim-{name}"));
     std::fs::create_dir_all(&temp_dir).unwrap();
 
@@ -70,6 +81,7 @@ fn run_firmware(name: &str, firmware_rel: &str, system_yaml: &str, script_yaml: 
         .arg("--output-dir")
         .arg(&temp_dir)
         .arg("--no-uart-stdout")
+        .args(extra)
         // The routed values are the evidence; without the `cosim` directive
         // they are filtered out before they reach stderr. `info` keeps the
         // runner's own default level, which a bare `cosim=debug` would drop.
@@ -399,6 +411,74 @@ assertions:
             .as_str()
             .is_some_and(|e| e.contains("no model input reads it")),
         "{stimulus}"
+    );
+}
+
+/// A machine snapshot cannot carry an ngspice solver's state, so
+/// `--capture-app-entry` with an `adapter: ngspice` model is a config error
+/// before any solver starts (no python3 or libngspice needed). The same run
+/// without the flag is not refused (negative control: it gets past the
+/// refusal and fails only for its own reasons, if any).
+#[test]
+fn a_runtime_snapshot_with_an_ngspice_model_is_refused() {
+    let netlist = workspace_root().join("examples/cosim-ngspice-ldr/ldr.cir");
+    let system = format!(
+        r#"
+name: "ngspice-snapshot"
+chip: "stm32f401"
+cosim_models:
+  - id: "ldr"
+    adapter: "ngspice"
+    model: "{}"
+    step_ns: 100000
+    inputs: {{ supply: "board.gpio.pa5" }}
+    outputs: {{ v_out: "board.analog.pa0_volts" }}
+    config:
+      input_sources: {{ supply: {{ element: "Vsup", scale: 3.3, offset: 0 }} }}
+      output_nodes: {{ v_out: {{ node: "out", scale: 1, offset: 0 }} }}
+external_devices: []
+"#,
+        netlist.display()
+    );
+    const SCRIPT: &str = r#"
+schema_version: "1.2"
+inputs:
+  firmware: "__FIRMWARE__"
+  system: "./system.yaml"
+limits:
+  max_steps: 20000
+assertions:
+  - uart_contains: "LabWired"
+"#;
+    let capture = labwired_cli::test_support::unique_temp_dir("labwired-ngspice-capture")
+        .join("app-entry.lwrs");
+    let refused = run_with_args(
+        "ngspice-snapshot",
+        "tests/fixtures/stm32f401-blinky.elf",
+        &system,
+        SCRIPT,
+        &["--capture-app-entry", capture.to_str().unwrap()],
+    );
+    assert_eq!(
+        refused.status,
+        Some(2),
+        "expected the config-error exit.\nstderr: {}",
+        refused.stderr
+    );
+    assert!(
+        refused.stderr.contains(
+            "runtime snapshots cannot capture or restore externally hosted ngspice state"
+        ),
+        "the refusal must say why.\nstderr: {}",
+        refused.stderr
+    );
+    assert!(!capture.exists(), "no snapshot may be written");
+
+    let plain = run("ngspice-no-snapshot", &system, SCRIPT);
+    assert!(
+        !plain.stderr.contains("refused: runtime snapshots"),
+        "without a snapshot flag the run is not refused.\nstderr: {}",
+        plain.stderr
     );
 }
 

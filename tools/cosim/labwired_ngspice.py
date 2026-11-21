@@ -301,6 +301,7 @@ class BridgeCircuit:
         self.model_id = spec["model_id"]
         self._inputs = spec["inputs"]
         self._outputs = spec["outputs"]
+        self._step_ns = spec["step_ns"]
         self._log = log or (lambda _s: None)
         self._diagnostics: list = []
         self._error: Optional[str] = None
@@ -357,6 +358,12 @@ class BridgeCircuit:
             return None
         return float(info.contents.v_realdata[info.contents.v_length - 1])
 
+    def _vector_first(self, name: str) -> Optional[float]:
+        info = self._lib.ngGet_Vec_Info(name.encode())
+        if not info or info.contents.v_length < 1 or not info.contents.v_realdata:
+            return None
+        return float(info.contents.v_realdata[0])
+
     def _input_volts(self, name: str, source: dict, inputs: dict) -> float:
         raw = inputs.get(name)
         if raw is None:
@@ -397,11 +404,30 @@ class BridgeCircuit:
             volts = self._input_volts(name, source, inputs)
             self._cmd(f"alter {source['element']} = {volts:.17g}")
 
+        read = self._vector_last
         if priming:
-            # The runner's (0, 0) initialization step: report the DC operating
-            # point with the initial inputs applied. The browser exchange has
-            # no such step (it rejects dt_ns = 0).
-            self._cmd("op")
+            # The runner's (0, 0) initialization step. Start the netlist's own
+            # `.tran` with the initial inputs and report its first stored
+            # point, so the next boundary resumes from the state reported
+            # here. A separate `op` would not: under `uic` the transient
+            # starts from the initial conditions, not the operating point
+            # (measured on ngspice-42: `op` 3.3 V, then 0.314 V at 100 us).
+            # Without `uic` the first point is t = 0; with `uic` ngspice
+            # stores no t = 0 point and the first is its first internal step,
+            # which must still fall before the first boundary. The browser
+            # exchange has no such step (it rejects dt_ns = 0).
+            self._cmd("delete all")
+            self._cmd("stop after 1")
+            self._cmd("run")
+            self._started = True
+            first_t = self._vector_first("time")
+            step_s = self._step_ns / 1e9
+            if first_t is None or not 0.0 <= first_t < step_s:
+                raise NgSpiceError(
+                    f"ngspice model '{self.model_id}' first transient point is at {first_t} s; "
+                    f"it must fall before the first boundary at {step_s} s"
+                )
+            read = self._vector_first
         else:
             t = time_ns / 1e9
             # A breakpoint makes ngspice place a timepoint exactly at t; the
@@ -424,7 +450,7 @@ class BridgeCircuit:
         outputs: Dict[str, object] = {}
         for name, output in self._outputs.items():
             node = output["node"]
-            raw = 0.0 if node == "0" else self._vector_last(node)
+            raw = 0.0 if node == "0" else read(node)
             if raw is None or not math.isfinite(raw):
                 raise NgSpiceError(
                     f"ngspice model '{self.model_id}' output node '{node}' was not found or is not finite"

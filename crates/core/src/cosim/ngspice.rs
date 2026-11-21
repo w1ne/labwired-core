@@ -258,6 +258,9 @@ pub struct NgspiceOutputNode {
 pub struct NgspiceModelSpec {
     pub model_id: String,
     pub netlist_path: PathBuf,
+    /// The model's boundary period; the host checks its priming point
+    /// against it.
+    pub step_ns: u64,
     pub inputs: BTreeMap<String, NgspiceInputSource>,
     pub outputs: BTreeMap<String, NgspiceOutputNode>,
 }
@@ -403,6 +406,7 @@ impl NgspiceModelSpec {
         Ok(Self {
             model_id: id.clone(),
             netlist_path,
+            step_ns: config.step_ns,
             inputs,
             outputs,
         })
@@ -449,6 +453,7 @@ impl NgspiceModelSpec {
         json!({
             "model_id": self.model_id,
             "netlist_path": self.netlist_path.to_string_lossy(),
+            "step_ns": self.step_ns,
             "inputs": inputs,
             "outputs": outputs,
         })
@@ -606,6 +611,17 @@ pub fn build_native_adapter(
         expected_outputs: expected_outputs(config),
         trace: NgspiceTrace::new(config),
     }))
+}
+
+/// Why a machine runtime snapshot must not be taken or applied with these
+/// models: an ngspice solver's state lives outside the machine, so a snapshot
+/// would restore the firmware against a circuit at another time. `None` when
+/// no model is `adapter: ngspice`.
+pub fn runtime_snapshot_refusal(configs: &[CosimModelConfig]) -> Option<&'static str> {
+    configs
+        .iter()
+        .any(|config| config.adapter == labwired_config::CosimAdapter::Ngspice)
+        .then_some("runtime snapshots cannot capture or restore externally hosted ngspice state")
 }
 
 /// Validate every `adapter: ngspice` entry without starting a solver.

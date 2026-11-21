@@ -776,13 +776,43 @@ Native differences from the browser runtime, both deliberate: routes are not
 limited to `board.*` / `ui.*` paths (a CPU-free Flex manifest uses flat
 signal names), and `threshold` is accepted on any output (it stays required
 for `board.gpio_in`). The runner's `(time_ns = 0, dt_ns = 0)` initialization
-step (Flex primes its outputs with it) is answered natively with the DC
-operating point (`op`); the browser exchange rejects `dt_ns = 0`, so Flex
-with ngspice is native-only today. The browser's history/sample budgets are
+step (Flex primes its outputs with it) is answered natively by starting the
+netlist's own `.tran` with the initial inputs and reporting its first stored
+point, so the next boundary continues from the reported state. Without `uic`
+that point is the t = 0 operating point; with `uic` ngspice stores no t = 0
+point and the first point is its first internal step (10 ns for `.tran 1u`),
+which must fall before the first boundary or the step fails. A separate DC
+`op` is not used: under `uic` it reported 3.3 V for an RC whose transient
+starts at 0 V. The browser's history/sample budgets are
 browser memory guards and are not applied natively.
 
-**Not supported on either host:** snapshot/restore of solver state (refused:
-`runtime_snapshot_refusal`, and the app refuses runtime snapshots), multi-node
-worlds, and `transport: shm`. Worked example and tests:
+**Flex in the browser.** `WasmFlexRuntime::new_from_yaml_with_ngspice_callback`
+builds Flex models through the same browser adapter factory as
+`WasmSimulator` (`WasmFlexRuntime::new_from_yaml` refuses `adapter: ngspice`
+because it has no callback). Its first exchange is the `(0, 0)` priming step.
+The app's browser exchange and ngspice-47 WASM bridge reject that step today
+(`dt_ns < 1`; `cosim_run_until` refuses `t <= 0`), so a browser Flex runtime
+with ngspice fails construction with `received an invalid simulation time`.
+The app exchange also differs from the native host for flat Flex routes: a
+boolean on a non-`board.gpio` input is an error, and `threshold` is applied
+only to `board.gpio_in` routes. Flex with ngspice therefore runs natively only
+until the app host answers the priming step as the native host does.
+
+**Browser execution check.** `scripts/test_browser_ngspice.mjs` runs both
+browser constructors in headless Chromium with the web build of this crate, a
+real ngspice WASM build and the host's exchange module (all named by
+environment variables; a missing one is an error, not a skip). Measured on
+2026-11-21 (Chrome 156, ngspice-47 WASM, app exchange at `325616353`): the
+F401 firmware-driven LDR settles to 0.548914 V (100 lx) and 2.751073 V (1 lx),
+a missing source element stops the run, and `take_runtime_snapshot` is
+refused; the Flex case fails at the priming step as described above.
+
+**Not supported on either host:** snapshot/restore of solver state. It is
+refused, not approximated, through
+`labwired_core::cosim::ngspice::runtime_snapshot_refusal`: the browser's
+`take_runtime_snapshot` / `apply_runtime_snapshot` return the reason, and
+native `labwired test --capture-app-entry` / `--resume-snapshot` with an
+ngspice model exit with the config error before any solver starts. Multi-node
+worlds and `transport: shm` are not supported either. Worked example and tests:
 [`examples/cosim-ngspice-ldr`](../examples/cosim-ngspice-ldr/README.md),
 `cargo test -p labwired-core --test cosim cosim_ngspice::`.

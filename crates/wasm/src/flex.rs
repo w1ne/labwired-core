@@ -20,12 +20,48 @@ fn js_error(error: impl std::fmt::Display) -> JsValue {
 
 #[wasm_bindgen]
 impl WasmFlexRuntime {
+    /// An `adapter: ngspice` model is refused here (no solver callback); use
+    /// [`Self::new_from_yaml_with_ngspice_callback`].
     pub fn new_from_yaml(yaml: &str) -> Result<WasmFlexRuntime, JsValue> {
-        Ok(Self {
-            runtime: FlexRuntime::from_yaml(yaml).map_err(js_error)?,
-        })
+        Self::build(yaml, None).map_err(js_error)
     }
 
+    /// Construct a Flex runtime whose `adapter: ngspice` models call the
+    /// host-owned solver callback, as
+    /// `WasmSimulator::new_from_config_with_ngspice_callback` does. The first
+    /// exchange is the `(time_ns = 0, dt_ns = 0)` priming step.
+    pub fn new_from_yaml_with_ngspice_callback(
+        yaml: &str,
+        callback: JsValue,
+    ) -> Result<WasmFlexRuntime, JsValue> {
+        use wasm_bindgen::JsCast;
+        let callback = callback
+            .dyn_into::<js_sys::Function>()
+            .map_err(|_| JsValue::from_str("ngspice callback must be a function"))?;
+        Self::build(yaml, Some(&callback)).map_err(js_error)
+    }
+}
+
+impl WasmFlexRuntime {
+    #[cfg(test)]
+    pub(crate) fn build_for_test(yaml: &str) -> labwired_core::SimResult<WasmFlexRuntime> {
+        Self::build(yaml, None)
+    }
+
+    fn build(
+        yaml: &str,
+        callback: Option<&js_sys::Function>,
+    ) -> labwired_core::SimResult<WasmFlexRuntime> {
+        Ok(Self {
+            runtime: FlexRuntime::from_yaml_with_factory(yaml, |config| {
+                crate::ngspice::browser_adapter(config, callback)
+            })?,
+        })
+    }
+}
+
+#[wasm_bindgen]
+impl WasmFlexRuntime {
     pub fn port_id(&self, name: &str) -> Result<u32, JsValue> {
         self.runtime.port_id(name).map_err(js_error)
     }
