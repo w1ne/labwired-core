@@ -1,0 +1,55 @@
+# Source-grounded functional slice of HeyPCB's ESP32-S3 DS18B20 board.
+# Portable firmware bit-bangs U4's 1-Wire line (net SNS_IO1, IO4); the ESP32
+# CPU and its GPIO controller are not emulated.
+schema_version: 1
+name: heypcb-esp32-s3-ds18b20
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - U4 is the catalog `ds18b20` device model, externally powered (pad 3 on 3V3, as the source README states) and alone on its line, with the model's ROM serial number 1.
+  - SNS_IO1 is the wired-AND of the IO4 drive and U4, pulled up by R6 to an ideal high level. A released IO4 is high.
+  - The model sees a line edge at the next 1 µs step. Firmware instructions take no virtual time.
+  - The IO48 user LED is represented by digital logic state only.
+  - The console stands for the ESP32-S3 native USB serial port on J1, as the source README states for flashing. A write arrives whole at the time of the call and takes no virtual time.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or GPIO controller fidelity; the pinned source contains no board firmware.
+  - The SNS_IO1 analog waveform, the 4.7 kΩ R6 pull-up rise time, line capacitance and the AN126 timing margins they set.
+  - Parasite power, ALARM SEARCH and the alarm flag; the catalog model never answers an alarm search.
+  - EEPROM write endurance and the 10 ms COPY SCRATCHPAD time on silicon; this firmware does not copy to EEPROM.
+  - Conversion accuracy (±0.5 °C), self-heating, sensor response time and production spread of a physical DS18B20 or its UMW second source.
+  - USB enumeration, CDC transfer timing and host polling of the console; text the host sends to the firmware.
+  - Full-board power, the 1.5 mA conversion current, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+ports:
+  - { name: dq_drive, signal: source.U3.GPIO4, access: write, kind: bool, initial: 1 }
+  - { name: dq, signal: source.SNS_IO1, access: read, kind: bool }
+  - { name: probe_c, signal: environment.temperature, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
+  - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  # Source net SNS_IO1: U3 pad 4 (IO4), U4 pad 2 (DQ), R6 pad 2 (4.7 kΩ to 3V3).
+  - id: source-u4-ds18b20
+    adapter: behavior
+    step_ns: 1000
+    inputs: { DQ: source.U3.GPIO4, temperature: environment.temperature }
+    outputs: { DQ: source.SNS_IO1 }
+    config: { device_type: ds18b20 }
+  - id: source-d1-user-led
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U3.GPIO48 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: led, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: led, level: 0 }]
+console:
+  # The source README: "USB-C, native USB on the ESP32-S3 (no bridge chip)".
+  name: usb_serial

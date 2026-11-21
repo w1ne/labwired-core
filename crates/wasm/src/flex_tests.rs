@@ -2670,6 +2670,76 @@ fn flex_heypcb_scd41_bus_matches_the_pinned_source_nets() {
     );
 }
 
+/// The DS18B20 fixture is a 1-Wire board of the same pinned repository:
+/// U4 is the catalog `ds18b20` model on the `onewire_device` primitive, its
+/// DQ role on the SNS_IO1 net of the pinned PCB, with the R6 pull-up.
+#[test]
+fn flex_heypcb_ds18b20_line_matches_the_pinned_source_nets() {
+    const SOURCE_MAP: &str =
+        include_str!("../tests/fixtures/flex-heypcb-esp32-ds18b20/source-map.json");
+    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-ds18b20/system.yaml");
+
+    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
+    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+    for key in ["repository", "revision", "license_spdx"] {
+        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
+    }
+    assert_eq!(
+        source_map["source"]["files"]["license"],
+        sibling["source"]["files"]["license"]
+    );
+    assert_eq!(
+        source_map["source"]["asset"],
+        "boards/ds18b20/kicad/esp32_ds18b20"
+    );
+    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
+        let entry = &source_map["source"]["files"][file];
+        assert!(entry["path"]
+            .as_str()
+            .unwrap()
+            .starts_with("boards/ds18b20/"));
+        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
+    }
+
+    let elements = &source_map["sensor_line"]["elements"];
+    assert_eq!(elements[0]["source_ref"], "U4");
+    assert_eq!(elements[0]["pads"]["2"], "SNS_IO1");
+    assert_eq!(elements[0]["pads"]["3"], "3V3");
+    assert_eq!(elements[1]["source_ref"], "R6");
+    assert_eq!(elements[1]["pads"]["2"], "SNS_IO1");
+    assert_eq!(
+        source_map["sensor_line"]["controller"]["endpoints"]["SNS_IO1"],
+        "U3 pad 4 (IO4)"
+    );
+
+    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
+    let model = &yaml["cosim_models"][0];
+    let binding = &source_map["runtime_bindings"];
+    assert_eq!(model["id"], binding["model"]["id"].as_str().unwrap());
+    assert_eq!(model["config"]["device_type"], "ds18b20");
+    assert_eq!(model["inputs"]["DQ"], "source.U3.GPIO4");
+    assert_eq!(model["outputs"]["DQ"], "source.SNS_IO1");
+
+    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
+    let report = runtime.run_report();
+    assert!(report.scope_notes_complete);
+    assert!(!report.execution_scope.original_target_firmware_executed);
+    assert_eq!(report.execution_scope.chip_parity, "not_established");
+    // The catalog model has no alarm search; the manifest must say so.
+    assert!(yaml["unsupported_checks"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .any(|check| check.as_str().unwrap().contains("ALARM SEARCH")));
+    for port in binding["ports"].as_object().unwrap().keys() {
+        runtime.port_id(port).unwrap();
+    }
+    assert_eq!(
+        report.ports.len(),
+        binding["ports"].as_object().unwrap().len()
+    );
+}
+
 /// The DHT11 fixture is a single-wire board of the same pinned repository:
 /// U4 is the catalog `dht11` pins-only model on the `behavior` adapter, its
 /// DATA role on the SNS_IO1 net of the pinned PCB, with the R6 pull-up.
