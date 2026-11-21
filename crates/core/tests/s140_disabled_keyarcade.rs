@@ -3,10 +3,9 @@
 // SPDX-License-Identifier: MIT
 
 //! Run the Spooky Keychain Arcade application ELF past its SoftDevice SVCs
-//! and into `setup()`. The firmware is an S140-linked image that never
-//! enables BLE; this test is the proof for the disabled-S140 shim.
-//! Reaching `loop()` also requires the nRF52 tickless-idle RTC compare
-//! path, which is outside this shim and tracked as a follow-up.
+//! and into `setup()` and `loop()`. The firmware is an S140-linked image
+//! that never enables BLE; this test is the proof for the disabled-S140
+//! shim and for RTC1 compare waking FreeRTOS tickless idle.
 
 mod common;
 
@@ -132,11 +131,10 @@ fn keyarcade_elf_reaches_setup_past_softdevice_svcs() {
         slot.svc_count >= slot.is_enabled_count,
         "SoftDevice SVCs were not intercepted"
     );
-    // `loop()` is reached from `loop_task` only after `setup()` returns.
-    // After InternalFileSystem::begin the firmware sits in
-    // `vPortSuppressTicksAndSleep`'s WFE poll (tickless idle) waiting for
-    // RTC1 COMPARE0. Getting that IRQ delivered is a timer/NVIC follow-up,
-    // not part of the SoftDevice shim under test. When it lands, this
-    // assertion should be restored.
-    let _ = saw_loop;
+    assert!(
+        saw_loop,
+        "loop() was not entered after setup(); pc={:#x} svc_count={}",
+        machine.cpu.get_pc(),
+        slot.svc_count,
+    );
 }
