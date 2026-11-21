@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use crate::{CosimAdapter, CosimModelConfig};
+use crate::{CosimAdapter, CosimModelConfig, PartPack};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -42,6 +42,34 @@ pub struct FlexManifest {
     /// where target firmware prints over a UART or a USB serial port.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub console: Option<FlexConsole>,
+    /// Part packs this system carries: the same `labwired.part/v1` documents
+    /// a system manifest's `parts:` holds (see `docs/part-packs.md`). A bus
+    /// device, a co-simulation model's `config.device_type` or a sink whose
+    /// type names a pack here is modelled from that pack, so a generated or
+    /// private part model runs with no code in the engine. Inline only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<PartPack>,
+    /// Listen-only devices: parts that only receive pin levels (an LED strip,
+    /// a display driver, a bus that is only written). They take every edge of
+    /// their pins at its exact time and publish what they hold as device
+    /// state, not as signals.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sinks: Vec<FlexSink>,
+}
+
+/// A listen-only device on Flex signals.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct FlexSink {
+    pub id: String,
+    /// Catalog device type or a `parts:` pack type.
+    #[serde(rename = "type")]
+    pub device_type: String,
+    /// The device's `external_devices[].config`, for example `num_pixels`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub config: BTreeMap<String, Value>,
+    /// Pin role of the part -> the Boolean signal that drives it.
+    pub pins: BTreeMap<String, String>,
 }
 
 /// A byte stream from the firmware to the test bench. Only the bytes and the
@@ -424,6 +452,32 @@ impl FlexManifest {
         if let Some(console) = &self.console {
             token(&console.name, "console name")?;
         }
+        crate::validate_part_packs(&self.parts)?;
+        for sink in &self.sinks {
+            token(&sink.id, "sink id")?;
+            ensure!(
+                device_ids.insert(sink.id.as_str()) && !model_ids.contains(sink.id.as_str()),
+                "sink id '{}' is already a bus device or model id",
+                sink.id
+            );
+            token(&sink.device_type, &format!("sink '{}'.type", sink.id))?;
+            ensure!(
+                !sink.pins.is_empty(),
+                "sink '{}' must bind at least one pin",
+                sink.id
+            );
+            for (role, signal) in &sink.pins {
+                token(role, &format!("sink '{}' pin role", sink.id))?;
+                token(signal, &format!("sink '{}' pin '{role}' signal", sink.id))?;
+                ensure!(
+                    write_signals.contains_key(signal.as_str())
+                        || outputs.contains_key(signal.as_str()),
+                    "sink '{}' pin '{role}' signal '{signal}' has no declared producer",
+                    sink.id
+                );
+                consumed.insert(signal.as_str());
+            }
+        }
         for port in &self.ports {
             match port.access {
                 FlexPortAccess::Read => ensure!(
@@ -779,6 +833,38 @@ pub enum FlexAssertion {
     I2cTransfers(FlexI2cTransfersAssertion),
     SpiTransfers(FlexSpiTransfersAssertion),
     ConsoleContains(FlexConsoleContainsAssertion),
+    DeviceState(FlexDeviceStateAssertion),
+}
+
+/// One fact a device publishes about what it holds at the end of the run: a
+/// key of its state record (the `meta` of its artifact, as in `result.json`'s
+/// `devices`). For example the text on a character LCD, the digits a 7-segment
+/// driver latched, or the lit LEDs of a strip.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexDeviceStateAssertion {
+    pub device_state: FlexDeviceStateDetails,
+}
+
+/// `equals` compares the whole value. `contains` is a substring of a string
+/// value, or, of a list value, one element or a substring of one string
+/// element. `min` and `max` bound a number. At least one is required;
+/// `equals` excludes the others.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct FlexDeviceStateDetails {
+    /// A sink, bus device or model id.
+    pub device: String,
+    /// A key of the device's state record.
+    pub key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub equals: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contains: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
 }
 
 /// The firmware wrote this text to the manifest `console` during the run.
@@ -1347,6 +1433,36 @@ impl FlexTestScript {
                     !assertion.console_contains.is_empty(),
                     "assertions[{index}].console_contains must not be empty"
                 ),
+                FlexAssertion::DeviceState(assertion) => {
+                    let details = &assertion.device_state;
+                    let path = format!("assertions[{index}].device_state");
+                    token(&details.device, &format!("{path}.device"))?;
+                    token(&details.key, &format!("{path}.key"))?;
+                    ensure!(
+                        [details.min, details.max]
+                            .iter()
+                            .flatten()
+                            .all(|bound| bound.is_finite()),
+                        "{path} bounds must be finite"
+                    );
+                    ensure!(
+                        details.equals.is_some()
+                            || details.contains.is_some()
+                            || details.min.is_some()
+                            || details.max.is_some(),
+                        "{path} requires equals, contains, min, or max"
+                    );
+                    ensure!(
+                        details.equals.is_none()
+                            || (details.contains.is_none()
+                                && details.min.is_none()
+                                && details.max.is_none()),
+                        "{path} cannot combine equals with contains, min, or max"
+                    );
+                    if let (Some(min), Some(max)) = (details.min, details.max) {
+                        ensure!(min <= max, "{path} min must not exceed max");
+                    }
+                }
             }
         }
         Ok(())
@@ -2120,6 +2236,87 @@ cosim_models:
             let mut m = manifest();
             change(&mut m);
             assert!(m.validate().is_err(), "accepted {label}");
+        }
+    }
+
+    const SINK: &str = r#"
+schema_version: 1
+name: sink manifest
+ports:
+  - { name: led, signal: mcu.d6, access: write, kind: bool, initial: 0 }
+cosim_models: []
+parts:
+  - schema: labwired.part/v1
+    type: "gen:strip"
+    behavior:
+      primitive: led_strip
+sinks:
+  - { id: ring, type: "gen:strip", pins: { DIN: mcu.d6 } }
+"#;
+
+    #[test]
+    fn sinks_consume_their_signals_and_packs_ride_the_manifest() {
+        let manifest = FlexManifest::from_yaml(SINK).unwrap();
+        assert_eq!(manifest.sinks[0].pins["DIN"], "mcu.d6");
+        assert_eq!(manifest.parts.len(), 1);
+        for (from, to, expected) in [
+            ("DIN: mcu.d6", "DIN: mcu.d7", "has no declared producer"),
+            ("pins: { DIN: mcu.d6 }", "pins: {}", "at least one pin"),
+            ("id: ring", "id: \"ring one\"", "whitespace"),
+            (
+                "- schema: labwired.part/v1\n    type",
+                "- type",
+                "missing `schema:",
+            ),
+        ] {
+            let changed = SINK.replace(from, to);
+            assert_ne!(changed, SINK, "{from}");
+            let message = format!(
+                "{:#}",
+                FlexManifest::from_yaml(&changed).expect_err(&format!("accepted '{to}'"))
+            );
+            assert!(message.contains(expected), "'{to}': {message}");
+        }
+        // A sink alone consumes a write port; without it the port is unused.
+        let unused = SINK.split("sinks:").next().unwrap().to_owned();
+        let message = format!("{:#}", FlexManifest::from_yaml(&unused).unwrap_err());
+        assert!(message.contains("not consumed"), "{message}");
+        // Two packs for one type are refused, as on a system manifest.
+        let twice = SINK.replace(
+            "sinks:",
+            "  - schema: labwired.part/v1\n    type: \"gen:strip\"\n    behavior:\n      primitive: led_strip\nsinks:",
+        );
+        let message = format!("{:#}", FlexManifest::from_yaml(&twice).unwrap_err());
+        assert!(message.contains("both define"), "{message}");
+    }
+
+    #[test]
+    fn device_state_assertions_need_a_bound_and_exclude_equals_from_ranges() {
+        let base = TEST_SCRIPT.replace(
+            "  - entry_result: { equals: 2974 }\n",
+            "  - device_state: { device: lcd, key: text, contains: \"Hi\" }\n",
+        );
+        let Ok(crate::LoadedTestScript::Flex(script)) = load_script(&base) else {
+            panic!("device_state must load");
+        };
+        assert!(matches!(
+            script.assertions[0],
+            FlexAssertion::DeviceState(_)
+        ));
+        for (to, expected) in [
+            ("{ device: lcd, key: text }", "requires equals"),
+            (
+                "{ device: lcd, key: text, equals: 1, min: 0 }",
+                "cannot combine",
+            ),
+            (
+                "{ device: lcd, key: n, min: 2, max: 1 }",
+                "min must not exceed max",
+            ),
+        ] {
+            let changed = base.replace("{ device: lcd, key: text, contains: \"Hi\" }", to);
+            let message = format!("{:#}", load_script(&changed).expect_err(to));
+            assert!(message.contains(expected), "'{to}': {message}");
         }
     }
 }

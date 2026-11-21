@@ -37,17 +37,6 @@ const DEVICE_HZ: u64 = 1_000_000_000;
 /// Pad addresses of the driven roles start here; observed roles use their index.
 const DRIVEN_BASE: u64 = 1 << 32;
 
-/// The catalog descriptor of `device_type` when it is a `gpio_device` part.
-pub(crate) fn catalog_gpio_device(device_type: &str) -> Result<Option<DeviceDescriptor>> {
-    let lower = device_type.to_ascii_lowercase();
-    let canonical = crate::peripherals::kit::registry::canonical_device_type(&lower);
-    let descriptor = labwired_config::embedded_device_yaml(canonical)
-        .map(DeviceDescriptor::from_yaml)
-        .transpose()
-        .with_context(|| format!("catalog type '{device_type}'"))?;
-    Ok(descriptor.filter(|descriptor| descriptor.behavior.primitive == "gpio_device"))
-}
-
 pub(super) fn build_gpio_device_adapter(
     config: &CosimModelConfig,
     descriptor: DeviceDescriptor,
@@ -301,6 +290,14 @@ impl CosimAdapter for GpioDeviceAdapter {
 
     fn input_unit(&self, name: &str) -> Option<&str> {
         self.channel_units.get(name).map(String::as_str)
+    }
+
+    fn artifacts(&self, id: &str) -> Vec<crate::inspect::Artifact> {
+        crate::inspect::DeviceEvidence::artifacts(
+            &self.device,
+            id,
+            &crate::inspect::InspectOpts::default(),
+        )
     }
 
     fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {

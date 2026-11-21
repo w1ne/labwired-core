@@ -61,7 +61,7 @@ fn builtin_owns(device_type: &str) -> bool {
 /// This belongs to manifest preflight as well as lookup: a manifest carries a
 /// complete portable catalog, so an unused collision is already invalid rather
 /// than a deferred surprise when a later canvas places that part.
-fn validate_shadowing(pack: &DeviceDescriptor) -> Result<()> {
+pub(crate) fn validate_shadowing(pack: &DeviceDescriptor) -> Result<()> {
     if builtin_owns(&pack.r#type) && pack.overrides.as_deref() != Some(pack.r#type.as_str()) {
         anyhow::bail!(
             "part pack '{}' ({}) shadows a built-in part. \
@@ -119,7 +119,7 @@ pub(crate) fn validate_manifest(manifest: &SystemManifest) -> Result<()> {
 /// Validate one pack against the primitive that will eventually interpret it,
 /// without constructing a runtime kit. The same eight primitive
 /// names are the public `labwired.part/v1` contract.
-fn validate_runtime_descriptor(pack: &DeviceDescriptor) -> Result<()> {
+pub(crate) fn validate_runtime_descriptor(pack: &DeviceDescriptor) -> Result<()> {
     let result = match pack.behavior.primitive.as_str() {
         "i2c_device" => crate::peripherals::components::declarative_i2c::validate_descriptor(pack),
         "spi_device" => crate::peripherals::components::declarative_spi::validate_descriptor(pack),

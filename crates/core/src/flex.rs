@@ -15,6 +15,7 @@ use crate::analog::{
 use crate::cosim::{CosimRunner, CosimSignalValue, CosimSignals};
 use crate::flex_console::{Console, FlexConsoleCapture, FlexConsoleSummary};
 use crate::flex_i2c::{FlexI2cBusSummary, FlexI2cTraceBatch, FlexI2cTransfer, I2cBuses};
+use crate::flex_sinks::{FlexSinkSummary, Sinks};
 use crate::flex_spi::{FlexSpiBusSummary, FlexSpiTraceBatch, FlexSpiTransfer, SpiBuses};
 use crate::logic_capture::{LogicCapture, PadEvent};
 use crate::{SimResult, SimulationError};
@@ -162,6 +163,12 @@ pub struct FlexRunReport {
     /// The console and what it leaves out. Absent without a console.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub console: Option<FlexConsoleSummary>,
+    /// The listen-only devices. Absent without one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub sinks: Vec<FlexSinkSummary>,
+    /// Types the manifest's `parts:` packs define. Absent without one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub part_packs: Vec<String>,
 }
 
 fn signal_bindings(bindings: &HashMap<String, String>) -> Vec<FlexSignalBinding> {
@@ -332,6 +339,7 @@ pub struct FlexRuntime {
     digital: DigitalCapture,
     i2c: I2cBuses,
     spi: SpiBuses,
+    sinks: Sinks,
     console: Option<Console>,
     time_ns: u64,
     failure: Option<String>,
@@ -339,6 +347,13 @@ pub struct FlexRuntime {
 
 fn error(message: impl Into<String>) -> SimulationError {
     SimulationError::Other(message.into())
+}
+
+fn model_device_type(model: &CosimModelConfig) -> Option<&str> {
+    model
+        .config
+        .get("device_type")
+        .and_then(serde_yaml::Value::as_str)
 }
 
 impl FlexRuntime {
@@ -350,9 +365,9 @@ impl FlexRuntime {
 
     /// [`Self::from_yaml`] with adapters supplied by the host, as
     /// `CosimSession::new_with_factory` does for a machine: the browser
-    /// passes its ngspice callback here. Priming, scheduling and checks are
-    /// unchanged.
-    pub fn from_yaml_with_factory<F>(yaml: &str, factory: F) -> SimResult<Self>
+    /// passes its ngspice callback here. Part-pack models are still built from
+    /// their pack. Priming, scheduling and checks are unchanged.
+    pub fn from_yaml_with_factory<F>(yaml: &str, mut factory: F) -> SimResult<Self>
     where
         F: FnMut(
             &labwired_config::CosimModelConfig,
@@ -360,7 +375,20 @@ impl FlexRuntime {
     {
         let manifest =
             FlexManifest::from_yaml(yaml).map_err(|err| error(format!("Flex model: {err:#}")))?;
-        let mut runner = CosimRunner::from_configs_with_factory(&manifest.cosim_models, factory)?;
+        crate::flex_parts::validate(&manifest.parts)?;
+        // A model whose `config.device_type` names a part pack is built from
+        // the pack; every other model is built by the host-supplied factory.
+        let mut models = Vec::with_capacity(manifest.cosim_models.len());
+        for config in &manifest.cosim_models {
+            let pack = model_device_type(config)
+                .and_then(|device_type| crate::flex_parts::pack(&manifest.parts, device_type));
+            let adapter = match pack {
+                Some(pack) => crate::cosim::build_part_adapter(config, pack)?,
+                None => factory(config)?,
+            };
+            models.push(crate::cosim::CosimRunnerModel::new(config.clone(), adapter));
+        }
+        let mut runner = CosimRunner::new(models);
         runner.set_record_routed(false);
         let mut signals = CosimSignals::new();
         let mut ports = BTreeMap::new();
@@ -406,13 +434,13 @@ impl FlexRuntime {
             }
         }
         for model in &manifest.cosim_models {
-            let analog_source = model
-                .config
-                .get("device_type")
-                .and_then(serde_yaml::Value::as_str)
-                .is_some_and(|device_type| {
-                    !matches!(crate::cosim::catalog_gpio_device(device_type), Ok(Some(_)))
-                });
+            let analog_source = model_device_type(model).is_some_and(|device_type| {
+                match crate::flex_parts::descriptor(&manifest.parts, device_type) {
+                    Ok(Some(descriptor)) => descriptor.behavior.primitive == "analog_source",
+                    // A registered Rust analog-source kit has no descriptor.
+                    _ => true,
+                }
+            });
             if model.adapter == CosimAdapter::Behavior && analog_source {
                 for signal in model.outputs.values() {
                     units.insert(signal.clone(), "mV".to_owned());
@@ -431,10 +459,11 @@ impl FlexRuntime {
             }
         }
         runner.validate_numeric_input_units(&signals, &units)?;
-        let mut i2c = I2cBuses::new(&manifest.i2c_buses, &units)?;
+        let mut i2c = I2cBuses::new(&manifest.i2c_buses, &units, &manifest.parts)?;
         i2c.sync_inputs(&signals)?;
-        let mut spi = SpiBuses::new(&manifest.spi_buses, &units)?;
+        let mut spi = SpiBuses::new(&manifest.spi_buses, &units, &manifest.parts)?;
         spi.sync_inputs(&signals)?;
+        let sinks = Sinks::new(&manifest.sinks, &manifest.parts, &signals)?;
         let digital = DigitalCapture::new(&signals, &manifest.ports)?;
         let console = manifest.console.as_ref().map(Console::new);
         let runtime = Self {
@@ -446,6 +475,7 @@ impl FlexRuntime {
             digital,
             i2c,
             spi,
+            sinks,
             console,
             time_ns: 0,
             failure: None,
@@ -487,7 +517,25 @@ impl FlexRuntime {
             i2c_buses: self.i2c.summaries().to_vec(),
             spi_buses: self.spi.summaries().to_vec(),
             console: self.console.as_ref().map(Console::summary),
+            sinks: self.sinks.summaries().to_vec(),
+            part_packs: manifest
+                .parts
+                .iter()
+                .filter_map(labwired_config::PartPack::descriptor)
+                .map(|pack| pack.r#type.clone())
+                .collect(),
         }
+    }
+
+    /// What every device holds at the current time, as inspect artifacts
+    /// named by the manifest id: sinks, bus devices, then models. This is
+    /// the device state a `device_state` assertion reads.
+    pub fn device_artifacts(&self) -> Vec<crate::inspect::Artifact> {
+        let mut artifacts = self.sinks.artifacts();
+        artifacts.extend(self.i2c.artifacts());
+        artifacts.extend(self.spi.artifacts());
+        artifacts.extend(self.runner.model_artifacts());
+        artifacts
     }
 
     pub fn port_id(&self, name: &str) -> SimResult<u32> {
@@ -549,6 +597,7 @@ impl FlexRuntime {
         }
         self.signals.insert(port.signal.clone(), value);
         self.digital.sample(self.time_ns, &self.signals);
+        self.sinks.sample(self.time_ns, &self.signals);
         // A bus device takes its input at the write, so the next transfer
         // reads it. A value the device rejects stops the runtime.
         if let Err(failure) = self
@@ -619,10 +668,12 @@ impl FlexRuntime {
             return Err(error(format!("Flex advance requests {steps} simulation steps (including analog substeps); maximum per call is {MAX_MODEL_STEPS_PER_ADVANCE}")));
         }
         let digital = &mut self.digital;
+        let sinks = &mut self.sinks;
         let result = self
             .runner
             .step_until_with_signals_observed(target, &mut self.signals, |time_ns, signals| {
-                digital.sample(time_ns, signals)
+                digital.sample(time_ns, signals);
+                sinks.sample(time_ns, signals);
             })
             .and_then(|_| self.validate_observations())
             .and_then(|_| self.i2c.sync_inputs(&self.signals))
@@ -633,6 +684,9 @@ impl FlexRuntime {
         }
         self.i2c.advance_ns(delta_ns);
         self.spi.advance_ns(delta_ns);
+        if !self.sinks.is_empty() {
+            self.sinks.service(target);
+        }
         self.time_ns = target;
         Ok(())
     }
