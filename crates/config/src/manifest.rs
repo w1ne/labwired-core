@@ -540,35 +540,7 @@ impl SystemManifest {
     /// catalog happened to load last — so it is an error, named, with both
     /// sources in the message.
     pub fn validate_parts(&self) -> Result<()> {
-        let mut seen: HashMap<&str, Option<&str>> = HashMap::new();
-        for entry in &self.parts {
-            let pack = match entry {
-                PartPack::Inline(d) => d.as_ref(),
-                PartPack::Path(p) => anyhow::bail!(
-                    "part pack '{}' was never loaded. `path:` is a CLI convenience that \
-                     SystemManifest::from_file inlines; a manifest handed to the engine \
-                     directly (browser, hosted runner) must carry the pack inline.",
-                    p.path
-                ),
-            };
-            let origin = pack
-                .source
-                .as_deref()
-                .map(|s| format!("source: {s}"))
-                .unwrap_or_else(|| "no declared source".to_string());
-            validate_part_pack(pack, &origin)?;
-            if let Some(prev) = seen.insert(pack.r#type.as_str(), pack.source.as_deref()) {
-                anyhow::bail!(
-                    "two part packs both define '{}' (sources: {} and {}). \
-                     One part is one document — rename one, or namespace them \
-                     `vendor:part`.",
-                    pack.r#type,
-                    prev.unwrap_or("undeclared"),
-                    pack.source.as_deref().unwrap_or("undeclared"),
-                );
-            }
-        }
-        Ok(())
+        validate_part_packs(&self.parts)
     }
 
     pub fn validate_cosim_models(&self) -> Vec<String> {
@@ -656,6 +628,52 @@ impl SystemManifest {
             Err(anyhow::anyhow!(issues.join("; ")))
         }
     }
+}
+
+/// The `parts:` contract of [`SystemManifest::validate_parts`], for every
+/// manifest that carries part packs: a system manifest and a Flex manifest.
+pub fn validate_part_packs(parts: &[PartPack]) -> Result<()> {
+    let mut seen: HashMap<&str, Option<&str>> = HashMap::new();
+    for entry in parts {
+        let pack = match entry {
+            PartPack::Inline(d) => d.as_ref(),
+            PartPack::Path(p) => anyhow::bail!(
+                "part pack '{}' was never loaded. `path:` is a CLI convenience that \
+                 SystemManifest::from_file inlines; a manifest handed to the engine \
+                 directly (browser, hosted runner) must carry the pack inline.",
+                p.path
+            ),
+        };
+        let origin = pack
+            .source
+            .as_deref()
+            .map(|s| format!("source: {s}"))
+            .unwrap_or_else(|| "no declared source".to_string());
+        validate_part_pack(pack, &origin)?;
+        if let Some(prev) = seen.insert(pack.r#type.as_str(), pack.source.as_deref()) {
+            anyhow::bail!(
+                "two part packs both define '{}' (sources: {} and {}). \
+                 One part is one document — rename one, or namespace them \
+                 `vendor:part`.",
+                pack.r#type,
+                prev.unwrap_or("undeclared"),
+                pack.source.as_deref().unwrap_or("undeclared"),
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Resolve `device_type` against a `parts:` list, the lookup a system manifest
+/// and a Flex manifest share. Run [`validate_part_packs`] first.
+pub fn resolve_part_pack<'p>(
+    parts: &'p [PartPack],
+    device_type: &str,
+) -> Option<&'p DeviceDescriptor> {
+    parts
+        .iter()
+        .filter_map(PartPack::descriptor)
+        .find(|d| d.r#type == device_type)
 }
 
 #[cfg(test)]

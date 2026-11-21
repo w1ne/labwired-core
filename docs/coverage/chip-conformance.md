@@ -58,7 +58,7 @@ This page covers the public models. For every chip we model — public and priva
 | nrf52833 | **L1** | ✓ | 48 | — | — | firmware_survival::test_nrf52833_microbit_v2_smoke_survival |
 | nrf52840 | **L1** | ✓ | 52 | — | — | firmware_survival::test_nrf52840_demo_survival |
 | nrf5340 | **L1** | ✓ | 22 | — | — | firmware_survival::test_nrf5340_zephyr_survival |
-| rp2040 | **L1** | ✓ | 26 | — | — | firmware_survival::test_rp2040_demo_survival |
+| rp2040 | **L1** | ✓ | 27 | — | — | firmware_survival::test_rp2040_demo_survival |
 | stm32f103 | **L1** | ✓ | 31 | — | — | stm32f1_exec_oracle |
 | stm32f103rb | **L0** | ✓ | 32 | — | — | — |
 | stm32f103rb-nucleo-bme280-smoke | **L0** | ✓ | 7 | — | — | — |
@@ -86,7 +86,7 @@ This page covers the public models. For every chip we model — public and priva
 | stm32f401ve | **L0** | ✓ | 24 | — | — | — |
 | stm32f405 | **L1** | ✓ | 22 | — | — | firmware_survival::test_stm32f405_tier1_survival |
 | stm32f767 | **L1** | ✓ | 37 | — | — | firmware_survival::test_stm32f767_tier1_survival |
-| rp2350 | **L1** | ✓ | 27 | — | — | firmware_survival::test_rp2350_demo_survival |
+| rp2350 | **L1** | ✓ | 28 | — | — | firmware_survival::test_rp2350_demo_survival |
 | stm32f407 | **L1** | ✓ | 34 | — | — | firmware_survival::test_nucleo_f407_smoke_survival |
 | stm32f407ie | **L0** | ✓ | 34 | — | — | — |
 | stm32f407ig | **L0** | ✓ | 34 | — | — | — |
@@ -138,16 +138,16 @@ This page covers the public models. For every chip we model — public and priva
 | pic24f08ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f08ka102_uart_smoke |
 | pic24f16ka101 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka101_uart_smoke |
 | pic24f16ka102 | **L1** | ✓ | 3 | — | — | pic24_ka_smoke::pic24f16ka102_uart_smoke |
-| ch32v003f4p6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
+| ch32v003f4p6 | **L1** | ✓ | 8 | — | — | ch32v003_compiled_firmware::ch32v003_compiled_rv32e_firmware_toggles_pc0 |
 | ch32l103c8t6 | **L1** | ✓ | 7 | — | — | ch32l103_compiled_firmware::ch32l103_compiled_rv32imac_firmware_toggles_pc13 |
 | ch32v005f6p6 | **L1** | ✓ | 6 | — | — | ch32v005_compiled_firmware::ch32v005_compiled_rv32e_firmware_toggles_pc0 |
 | ch32x035c8t6 | **L1** | ✓ | 5 | — | — | ch32x035_compiled_firmware::ch32x035_compiled_rv32imac_firmware_toggles_pb12 |
 | ch32v006k8u6 | **L1** | ✓ | 6 | — | — | ch32v006_compiled_firmware::ch32v006_compiled_rv32e_firmware_toggles_pb0 |
 | ch32v203c8t6 | **L1** | ✓ | 7 | — | — | ch32v203_compiled_firmware::ch32v203_compiled_rv32imac_firmware_toggles_pc13 |
-| ch32v003f4u6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
-| ch32v003a4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| ch32v003f4u6 | **L1** | ✓ | 8 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| ch32v003a4m6 | **L1** | ✓ | 8 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | at32f421g8u7 | **L1** | ✓ | 22 | — | — | at32f421_contract::vendor_sdk_smoke_runs_flash_dma_and_timer_irq_paths |
-| ch32v003j4m6 | **L1** | ✓ | 5 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
+| ch32v003j4m6 | **L1** | ✓ | 8 | — | — | ch32v003_compiled_firmware::ch32v003_package_variants_toggle_a_bonded_gpioc_pin |
 | esp32h2 | **L0** | ✓ | 3 | — | — | — |
 | esp32c5 | **L0** | ✓ | 4 | — | — | — |
 | esp32c61 | **L0** | ✓ | 5 | — | — | — |
@@ -156,9 +156,10 @@ This page covers the public models. For every chip we model — public and priva
 | esp32p4 | **L0** | ✓ | 4 | — | — | — |
 | esp32s2 | **L0** | ✓ | 2 | — | — | — |
 | esp32s2-arduino | **L1** | ✓ | 32 | — | — | esp32s2_arduino_boot::stock_arduino_l0_prints_over_uart0 |
-| rp2040-feather | **L0** | ✓ | 26 | — | — | — |
-| rp2350-feather | **L0** | ✓ | 27 | — | — | — |
+| rp2040-feather | **L0** | ✓ | 27 | — | — | — |
+| rp2350-feather | **L0** | ✓ | 28 | — | — | — |
 | stm32h723zg | **L0** | ✓ | 43 | — | — | — |
+| stm32h753zi | **L0** | ✓ | 43 | — | — | — |
 | esp32c6fh4 | **L0** | ✓ | 69 | — | — | — |
 
 ## Declared platforms without a model

@@ -94,3 +94,32 @@ peripherals:
     base_address: 0x40013800
     size: "1KB"
     clock: { reg: "apb2pcenr", bit: 14 }
+
+  # QingKe V2 system timer STK (core_riscv.h): SysTick_Type at 0xE000F000 is
+  # CTLR, SR, CNT, reserved, CMP. The vendor noneos-sdk `Delay_Us`/`Delay_Ms`
+  # poll SR.CNTIF. The STK is a core block (no RCC gate). No `irq`: the PFIC is
+  # not modelled, so SysTick_IRQn (12) has no controller to reach.
+  - id: "stk"
+    type: "qingke_stk"
+    base_address: 0xE000F000
+    size: "32B"
+
+  # FLASH interface (ch32v00x.h): FLASH_R_BASE = AHBPERIPH_BASE + 0x2000.
+  # FLASH_TypeDef starts ACTLR, KEYR, OBKEYR, STATR, CTLR, ADDR, as the STM32F1
+  # FLASH block; `SystemInit` sets the ACTLR wait state. Programming beyond
+  # that layout (MODEKEYR fast mode) is not modelled.
+  - id: "flash_ctrl"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      profile: "stm32f1"
+
+  # VENDOR_CFG0 (ch32v00x.h, 0x1FFFF7D4): `SystemInit` reads its low byte as
+  # an HSI trim and applies it unless it reads 0xFF. A `stub` reads zero, so
+  # SystemInit writes HSITRIM = 0; the model does not derive the HSI rate
+  # from HSITRIM, so that write has no effect on timing.
+  - id: "vendor_cfg0"
+    type: "stub"
+    base_address: 0x1FFFF7D4
+    size: "4B"

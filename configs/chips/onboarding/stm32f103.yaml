@@ -88,9 +88,13 @@ peripherals:
   bus: sysbus
   base_address: 0x40005400
   size: 1KB
+  # RM0008 Table 63: I2C1_EV = 31, I2C1_ER = 32 (Renode stm32f103.repl
+  # wires i2c1 to nvic@31 and nvic@32).
+  irq: 31
   clock: { reg: apb1enr, bit: 21 }
   config:
     profile: stm32f1
+    irq_error: 32
 - id: systick
   type: systick
   base_address: 0xE000E010

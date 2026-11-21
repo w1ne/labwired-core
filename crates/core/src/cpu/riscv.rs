@@ -5,7 +5,7 @@
 // See the LICENSE file in the project root for full license information.
 
 use super::riscv64_plic::{Plic, PlicParams};
-use crate::decoder::riscv::{decode_rv32, Instruction};
+use crate::decoder::riscv::{decode_qingke_xw, decode_rv32, Instruction};
 use crate::{Bus, Cpu, SimResult, SimulationObserver};
 use std::sync::Arc;
 
@@ -1138,6 +1138,12 @@ impl RiscV {
             // ROM. The observed writes discard the old values; any silicon
             // side effects are not modeled.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => 0,
+            // WCH QingKe V2 INTSYSCR (CH32V003/V005/V006 are the RV32E chips):
+            // the vendor startup writes HWSTKEN|INESTEN before `mret` to main.
+            // It configures hardware interrupt stacking and nesting; the PFIC
+            // is not modelled, so no interrupt enters and the value has no
+            // effect. Reads as zero, writes are discarded.
+            0x804 if self.core_profile == RiscVCoreProfile::Rv32e => 0,
             // This emulator exposes one hart, whose architectural ID is zero.
             0xF14 => 0,
             // Debug trigger module (hardware breakpoints / watchpoints).
@@ -1204,6 +1210,8 @@ impl RiscV {
             0x000 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
             // See read_csr: accept the ROM-init writes and discard their values.
             0x800 | 0x801 if self.core_profile == RiscVCoreProfile::Esp32C3 => {}
+            // See read_csr: QingKe V2 INTSYSCR is accepted and discarded.
+            0x804 if self.core_profile == RiscVCoreProfile::Rv32e => {}
             0x7A0..=0x7A5 if self.core_profile == RiscVCoreProfile::Esp32C3 => {
                 return self.triggers.write_csr(csr, val)
             }
@@ -1598,8 +1606,18 @@ impl Cpu for RiscV {
         let (instruction, inst_len) = if let Some(entry) = cached {
             (entry.instruction, entry.inst_len as u32)
         } else {
-            let instruction = decode_rv32(opcode);
+            let mut instruction = decode_rv32(opcode);
             let inst_len = if (opcode & 0x3) == 0x3 { 4 } else { 2 };
+            // QingKe V2 (the RV32E chips) also runs WCH's XW compressed
+            // byte/halfword loads and stores; see `decode_qingke_xw`.
+            if inst_len == 2
+                && self.core_profile == RiscVCoreProfile::Rv32e
+                && matches!(instruction, Instruction::Unknown(_))
+            {
+                if let Some(xw) = decode_qingke_xw(opcode as u16) {
+                    instruction = xw;
+                }
+            }
             if _config.decode_cache_enabled {
                 self.decode_cache[cache_idx] = Some(RiscVDecodeCacheEntry {
                     tag: self.pc,

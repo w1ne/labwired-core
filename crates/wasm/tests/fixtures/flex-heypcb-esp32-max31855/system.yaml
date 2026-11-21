@@ -1,0 +1,61 @@
+# Source-grounded functional slice of HeyPCB's ESP32-S3 MAX31855 board.
+# Portable firmware reaches U4 through a Flex SPI bus; the ESP32 CPU and its
+# SPI controller are not emulated.
+schema_version: 1
+name: heypcb-esp32-s3-max31855
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - U4 is the catalog `max31855` declarative device model on chip select 10, the GPIO of the SPI_CS net (U3 pad 18, IO10).
+  - The bus runs at 1 MHz. The pinned source contains no firmware and states no bus speed; the MAX31855 accepts up to 5 MHz.
+  - A byte takes eight SCK periods. The device exchanges each byte at its last SCK edge. Firmware instructions take no virtual time.
+  - The thermocouple input is the hot-junction temperature that the converter reports, not a thermocouple voltage. The model encodes it and the cold-junction temperature with the datasheet resolutions (0.25 °C and 0.0625 °C), rounded to nearest.
+  - A read returns the stimulus value at the time of the read; there is no conversion delay.
+  - The IO48 user LED is represented by digital logic state only.
+  - The console stands for the ESP32-S3 native USB serial port on J1, as the source README states for flashing. A write arrives whole at the time of the call and takes no virtual time.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or SPI controller fidelity; the pinned source contains no board firmware.
+  - The SCK, CS and MISO waveforms on IO12, IO10 and IO13, the SPI mode, and CS setup and hold times.
+  - Thermocouple faults (open circuit, short to GND, short to VCC); the model always reports no fault.
+  - K-type thermocouple voltage, its nonlinearity, cold-junction compensation error, the C8 filter capacitor, and the 100 ms conversion time.
+  - USB enumeration, CDC transfer timing and host polling of the console; text the host sends to the firmware.
+  - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+  - Converter accuracy and production spread of a physical MAX31855K.
+ports:
+  - { name: thermocouple_c, signal: environment.thermocouple_temperature, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: cold_junction_c, signal: environment.cold_junction_temperature, access: write, kind: number, unit: "°C", initial: 22 }
+  - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
+  - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  - id: source-d1-user-led
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U3.GPIO48 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: led, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: led, level: 0 }]
+spi_buses:
+  # Source nets SPI_SCK (U3 pad 20, IO12), SPI_CS (U3 pad 18, IO10) and
+  # SPI_MISO (U3 pad 21, IO13). The board has no MOSI net.
+  - name: sensor_spi
+    frequency_hz: 1000000
+    devices:
+      - id: source-u4-max31855
+        type: max31855
+        cs: 10
+        inputs:
+          temperature: environment.thermocouple_temperature
+          internal: environment.cold_junction_temperature
+console:
+  # The source README: "USB-C, native USB on the ESP32-S3 (no bridge chip)".
+  name: usb_serial

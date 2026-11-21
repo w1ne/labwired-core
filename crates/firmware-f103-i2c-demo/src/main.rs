@@ -198,6 +198,11 @@ const I2C1_SR1: u32 = I2C1_BASE + 0x14;
 const I2C1_SR2: u32 = I2C1_BASE + 0x18;
 const I2C1_CCR: u32 = I2C1_BASE + 0x1C;
 const I2C1_TRISE: u32 = I2C1_BASE + 0x20;
+const I2C_CR2_ITERREN: u32 = 1 << 8;
+const I2C_CR2_ITEVTEN: u32 = 1 << 9;
+// RM0008 Table 63: I2C1_EV = 31, I2C1_ER = 32.
+const I2C1_EV_IRQ: u32 = 31;
+const I2C1_ER_IRQ: u32 = 32;
 
 const TMP102_ADDRESS: u8 = 0x48;
 const BME280_ADDRESS: u8 = 0x76;
@@ -384,6 +389,10 @@ fn main() -> ! {
     smoke_gpiob_registers();
     unsafe {
         i2c1_init();
+        // Mask both I2C1 lines (ICER0/ICER1) and drop stale pending bits.
+        write_volatile(0xE000_E180 as *mut u32, 1 << I2C1_EV_IRQ);
+        write_volatile(0xE000_E184 as *mut u32, 1 << (I2C1_ER_IRQ - 32));
+        i2c1_irq_release(0);
     }
     print_state(b"INIT");
 
@@ -391,6 +400,12 @@ fn main() -> ! {
     unsafe { rmw32(I2C1_CR1, 1 << 8) }; // CR1.START
     wait_sr1(0x0001); // SB
     print_state(b"START");
+    // SB pends I2C1_EV (31) under CR2.ITEVTEN only; ER (32) stays low.
+    let ev_off = i2c1_irq_lines();
+    unsafe { rmw32(I2C1_CR2, I2C_CR2_ITEVTEN) };
+    let ev_on = i2c1_irq_lines();
+    unsafe { i2c1_irq_release(I2C_CR2_ITEVTEN) };
+    let ev_rel = i2c1_irq_lines();
 
     // Send address byte (write) for a non-existent slave (0xA0/2 = 0x50).
     unsafe { write_volatile(I2C1_DR as *mut u32, 0xA0) };
@@ -409,6 +424,19 @@ fn main() -> ! {
     } else {
         putline(b"I2C_NACK_MISSING");
     }
+    // AF pends I2C1_ER (32) under CR2.ITERREN only; EV (31) stays low.
+    let er_off = i2c1_irq_lines();
+    unsafe { rmw32(I2C1_CR2, I2C_CR2_ITERREN) };
+    let er_on = i2c1_irq_lines();
+    unsafe { i2c1_irq_release(I2C_CR2_ITERREN) };
+    let er_rel = i2c1_irq_lines();
+    putbytes(b"I2C1 IRQ EV=");
+    put_hex32(ev_on);
+    putbytes(b" ER=");
+    put_hex32(er_on);
+    let irq_ok =
+        ev_off == 0 && ev_on == 1 && ev_rel == 0 && er_off == 0 && er_on == 2 && er_rel == 0;
+    putline(if irq_ok { b" REL=1 ok" } else { b" FAIL" });
 
     // Generate STOP and wait for the bus to settle.
     unsafe { rmw32(I2C1_CR1, 1 << 9) }; // CR1.STOP
@@ -5319,6 +5347,26 @@ fn wait_sr1(mask: u32) -> bool {
         }
     }
     false
+}
+
+/// NVIC pending state of I2C1_EV (bit 0, IRQ 31) and I2C1_ER (bit 1, IRQ 32).
+/// Both lines stay masked in ISER, so the level is visible in ISPR only.
+fn i2c1_irq_lines() -> u32 {
+    let mut lines = 0;
+    for _ in 0..64 {
+        let ispr0 = unsafe { read_volatile(NVIC_ISPR) };
+        let ispr1 = unsafe { read_volatile(NVIC_ISPR.add(1)) };
+        lines |= ((ispr0 >> I2C1_EV_IRQ) & 1) | (((ispr1 >> (I2C1_ER_IRQ - 32)) & 1) << 1);
+    }
+    lines
+}
+
+/// Clear the CR2 interrupt enable, then both pending bits.
+unsafe fn i2c1_irq_release(enable: u32) {
+    let cr2 = read_volatile(I2C1_CR2 as *const u32);
+    write_volatile(I2C1_CR2 as *mut u32, cr2 & !enable);
+    write_volatile(NVIC_ICPR, 1 << I2C1_EV_IRQ);
+    write_volatile(NVIC_ICPR.add(1), 1 << (I2C1_ER_IRQ - 32));
 }
 
 unsafe fn rmw32(addr: u32, set_bits: u32) {

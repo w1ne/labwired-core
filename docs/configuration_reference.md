@@ -430,6 +430,7 @@ canonical `type:`; the table below is rendered from that file by
 | `ens160` | I²C | ScioSense ENS160 MOx multi-gas sensor (TVOC, eCO2, AQI-UBA) over I²C |
 | `ft5x06` | I²C | Single-contact FT5x06 I2C touch report model |
 | `fxos8700` | I²C | NXP FXOS8700 6-axis accelerometer + magnetometer over I2C |
+| `hd44780_pcf8574` | I²C | 16x2 character LCD: HD44780 controller in 4-bit mode behind a PCF8574 I2C backpack |
 | `ht16k33` | I²C | 16×8 LED matrix / 7-segment I²C controller (display RAM, setup commands) |
 | `icm20948` | I²C | TDK InvenSense ICM-20948 motion sensor (accel + gyro + temperature; magnetometer not modelled) over I²C |
 | `icm42688` | I²C | TDK InvenSense ICM-42688-P 6-axis IMU (accel + gyro + temperature) over I²C |
@@ -520,6 +521,7 @@ canonical `type:`; the table below is rendered from that file by
 | `dfplayer_mini` | GPIO | MP3 player module: serial commands in, BUSY low while playing |
 | `dht11` | GPIO | One-wire temperature + humidity sensor |
 | `dht22` | GPIO | One-wire temperature + humidity sensor |
+| `ds18b20` | GPIO | Maxim DS18B20 digital thermometer on a 1-Wire bus (9-12 bit, -55 to +125 °C) |
 | `hc-sr04` | GPIO | Ultrasonic distance sensor (trigger / echo) |
 | `hx711` | GPIO | 24-bit load-cell amplifier (DT/SCK bit-bang) |
 | `ili9341-16bit` | GPIO | 240×320 RGB565 TFT over Intel 8080 16-bit GPIO bit-bang |
@@ -548,6 +550,8 @@ canonical `type:`; the table below is rendered from that file by
 | `joystick` | Analog | Two ratiometric potentiometer axes and a push contact |
 | `ldr` | Analog | CdS photoresistor + voltage divider on an ADC channel |
 | `lipo_charger` | Analog | Single-cell LiPo pack + TP4056-class analog charger on an ADC channel |
+| `mcp9700` | Analog | Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C |
+| `mcp9701` | Analog | Analog temperature sensor, 19.5 mV/°C with 400 mV at 0 °C |
 | `mq-6` | Analog | Hanwei MQ-6 LPG/propane semiconductor gas sensor module (AOUT on ADC) |
 | `ntc-thermistor` | Analog | 10 kΩ NTC + voltage divider on an ADC channel |
 | `potentiometer` | Analog | 3-pin linear potentiometer on an ADC channel (rotary or slide) |

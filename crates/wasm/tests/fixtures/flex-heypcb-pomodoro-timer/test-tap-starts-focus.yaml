@@ -1,0 +1,35 @@
+# `labwired test --script test-tap-starts-focus.yaml`. After the start-up chirp
+# the face is idle. One 50 ms tap on the touch pad starts a focus phase: the
+# ring lights, the leaf LEDs and the piezo stay off.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: min0 }, { port: leaf }, { port: buzz }, { port: touch }] }
+  - call: { export: loop, repeat: 2344 }       # 50 ms idle
+  - set: { port: touch_contact, value: 1 }
+  - call: { export: loop, repeat: 2344 }       # 50 ms touched
+  - set: { port: touch_contact, value: 0 }
+  - call: { export: loop, repeat: 2344 }       # the release is the tap
+limits:
+  max_steps: 100000000
+  max_time_ns: 1000000000
+assertions:
+  - entry_result: { equals: 0, step: 1 }       # idle
+  - entry_result: { equals: 0, step: 3 }       # still idle while the pad is held
+  - entry_result: { equals: 1 }                # focus, not paused, 0 sessions done
+  # Start-up chirp: 237 cycles of 2637 Hz, each half cycle 189,000 ns.
+  - digital_edges: { port: buzz, count: 474, to_ns: 149586000 }
+  - digital_edges: { port: buzz, count: 474 }
+  - digital_edges: { port: leaf, count: 0 }
+  # Minute LEDs 1..11 light once; LED 0 is the breathing one.
+  - digital_edges: { port: min11, count: 1 }
+  - digital_edges: { port: min1, count: 1 }
+  - port_value: { port: d14, equals: 1 }
+  - port_value: { port: d4, equals: 1 }
+  - port_value: { port: d1, equals: 0 }
+  - port_value: { port: d2, equals: 0 }
+  - port_value: { port: bz1, equals: 0 }
+  - final_time_ns: { equals: 299599656 }

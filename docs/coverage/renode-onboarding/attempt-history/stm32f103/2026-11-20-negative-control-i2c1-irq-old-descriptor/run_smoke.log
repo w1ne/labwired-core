@@ -1,0 +1,17 @@
+[2m2026-11-20T23:48:24.128323Z[0m [32m INFO[0m [2mlabwired_core::system::builder[0m[2m:[0m Loading chip descriptor: ../../chips/onboarding/stm32f103.yaml
+[2m2026-11-20T23:48:24.210769Z[0m [32m INFO[0m [2mlabwired_loader[0m[2m:[0m ELF Entry Point: 0x8000497
+labwired-cli test: idle_ff=on (event_scheduler=on)
+labwired-cli test: hosted fast path (exact windows up to 1024 cycles)
+[2m2026-11-20T23:48:24.212366Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m uart_injection: 4 byte(s) delivered to 'usart2'
+[2m2026-11-20T23:48:24.212699Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 25 applied
+[2m2026-11-20T23:48:24.212730Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: position = 50 applied
+[2m2026-11-20T23:48:24.217256Z[0m [33m WARN[0m [2mlabwired_core::cpu::cortex_m::exec::misc[0m[2m:[0m Unknown instruction at 0x800025c: Opcode 0xde00
+[2m2026-11-20T23:48:24.217291Z[0m [33m WARN[0m [2mlabwired_core::cpu::cortex_m::exec::misc[0m[2m:[0m Unknown instruction at 0x800025c: Opcode 0xde00
+[2m2026-11-20T23:48:24.467372Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: temperature = 55 applied
+[2m2026-11-20T23:48:24.668165Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: humidity = 35 applied
+[2m2026-11-20T23:48:24.880042Z[0m [32m INFO[0m [2mlabwired_cli::execute[0m[2m:[0m stimulus: pressure = 1012.5 applied
+labwired-cli test: idle_ff skipped 125 of 50000125 device cycles (50000000 interpreted)
+[2m2026-11-20T23:48:24.896085Z[0m [31mERROR[0m [2mlabwired_cli::execute[0m[2m:[0m Assertion failed: UartContains(UartContainsAssertion { uart_contains: "I2C1 IRQ EV=00000001 ER=00000002 REL=1 ok" }) (captured len=5042)
+FAIL  91/92 checks · stm32f103-i2c-smoke · 50000000 steps · 0.68s
+FAULT  UsageFault: undefined instruction, at PC 0x0800_025C in `_ZN22firmware_f103_i2c_demo35smoke_trigger_undefined_instruction17h754c402aaf2b7167E`, called from `firmware_f103_i2c_demo::smoke_usagefault_and_hardfault_escalation`.
+       HFSR=0x00000000 CFSR=0x00010000 [UNDEFINSTR]

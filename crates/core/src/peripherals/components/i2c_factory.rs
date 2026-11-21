@@ -300,6 +300,31 @@ fn build_declarative_i2c_device(
 ) -> Option<Box<dyn I2cDevice>> {
     let yaml = labwired_config::embedded_device_yaml(type_str)?;
     let descriptor = labwired_config::DeviceDescriptor::from_yaml(yaml).ok()?;
+    build_i2c_device_from_yaml(&descriptor, yaml, id, config)
+}
+
+/// [`build_i2c_device`] for a part described by `descriptor` rather than
+/// found by type: a manifest part pack.
+pub(crate) fn build_i2c_device_from_descriptor(
+    descriptor: &labwired_config::DeviceDescriptor,
+    id: Option<&str>,
+    config: &HashMap<String, serde_yaml::Value>,
+) -> Option<Box<dyn I2cDevice>> {
+    let yaml = serde_yaml::to_string(descriptor).ok()?;
+    build_i2c_device_from_yaml(descriptor, &yaml, id, config)
+}
+
+/// The I²C model of a part described by `descriptor` (whose text is
+/// `yaml`): an `i2c_device`, or a display that sits on I²C. `None` for any
+/// other primitive. The one construction an embedded descriptor and a
+/// manifest part pack share.
+fn build_i2c_device_from_yaml(
+    descriptor: &labwired_config::DeviceDescriptor,
+    yaml: &str,
+    id: Option<&str>,
+    config: &HashMap<String, serde_yaml::Value>,
+) -> Option<Box<dyn I2cDevice>> {
+    let type_str = descriptor.r#type.as_str();
     if descriptor.behavior.primitive == "display" {
         // The display kit's own constructor, so a panel behind a bus switch is
         // the same model as one on the controller.
@@ -308,7 +333,7 @@ fn build_declarative_i2c_device(
             .and_then(|v| v.as_u64())
             .map(|a| a as u8);
         return match crate::peripherals::components::declarative_display::GenericDisplay::from_descriptor_i2c(
-            &descriptor,
+            descriptor,
             address,
         ) {
             Ok(dev) => dev.map(|mut d| {

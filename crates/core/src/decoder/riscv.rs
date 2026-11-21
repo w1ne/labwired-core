@@ -687,6 +687,232 @@ pub fn decode_rv32c(inst: u16) -> Instruction {
     }
 }
 
+/// WCH QingKe V2 "XW" compressed byte/halfword loads and stores
+/// (`-march=rv32ecxw`, the WCH GCC default for the CH32V003). They reuse the
+/// RV32C slots of C.FLD/C.FSD/C.FLDSP/C.FSDSP and reserved quadrant-0
+/// funct3 = 100, so only a QingKe V2 core may decode them; `decode_rv32`
+/// keeps those encodings Unknown. Field layout measured from the WCH
+/// assembler (`riscv-wch-elf-as -march=rv32ecxw`, one immediate bit at a
+/// time); rd'/rs1'/rs2' are the RVC x8..x15 fields.
+pub fn decode_qingke_xw(inst: u16) -> Option<Instruction> {
+    let bit = |n: u16| u32::from((inst >> n) & 1);
+    let op = inst & 0x3;
+    let funct3 = (inst >> 13) & 0x7;
+    let r_low = (((inst >> 2) & 0x7) + 8) as u8;
+    let r_high = (((inst >> 7) & 0x7) + 8) as u8;
+    // c.lbu / c.sb: uimm[0] = 12, [2:1] = 6:5, [4:3] = 11:10.
+    let byte_imm = (bit(12) | bit(5) << 1 | bit(6) << 2 | bit(10) << 3 | bit(11) << 4) as i32;
+    // c.lhu / c.sh: uimm[2:1] = 6:5, [4:3] = 11:10, [5] = 12.
+    let half_imm = (bit(5) << 1 | bit(6) << 2 | bit(10) << 3 | bit(11) << 4 | bit(12) << 5) as i32;
+    match (op, funct3) {
+        (0, 1) => Some(Instruction::Lbu {
+            rd: r_low,
+            rs1: r_high,
+            imm: byte_imm,
+        }),
+        (2, 1) => Some(Instruction::Lhu {
+            rd: r_low,
+            rs1: r_high,
+            imm: half_imm,
+        }),
+        (0, 5) => Some(Instruction::Sb {
+            rs1: r_high,
+            rs2: r_low,
+            imm: byte_imm,
+        }),
+        (2, 5) => Some(Instruction::Sh {
+            rs1: r_high,
+            rs2: r_low,
+            imm: half_imm,
+        }),
+        // sp-relative forms, bits 6:5 select; bits 12:11 are zero in every
+        // encoding the assembler emits.
+        (0, 4) if inst & 0x1800 == 0 => {
+            let byte_sp = (bit(7) | bit(8) << 1 | bit(9) << 2 | bit(10) << 3) as i32;
+            let half_sp = (bit(8) << 1 | bit(9) << 2 | bit(10) << 3 | bit(7) << 4) as i32;
+            Some(match (inst >> 5) & 0x3 {
+                0 => Instruction::Lbu {
+                    rd: r_low,
+                    rs1: 2,
+                    imm: byte_sp,
+                },
+                1 => Instruction::Lhu {
+                    rd: r_low,
+                    rs1: 2,
+                    imm: half_sp,
+                },
+                2 => Instruction::Sb {
+                    rs1: 2,
+                    rs2: r_low,
+                    imm: byte_sp,
+                },
+                _ => Instruction::Sh {
+                    rs1: 2,
+                    rs2: r_low,
+                    imm: half_sp,
+                },
+            })
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod qingke_xw_tests {
+    use super::*;
+
+    // Encodings emitted by `riscv-wch-elf-as -march=rv32ecxw` (a0 = x10,
+    // a1 = x11, sp = x2).
+    #[test]
+    fn decodes_the_wch_assembler_encodings() {
+        let cases: &[(u16, Instruction)] = &[
+            (
+                0x2188,
+                Instruction::Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 0,
+                },
+            ),
+            (
+                0x3188,
+                Instruction::Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 1,
+                },
+            ),
+            (
+                0x218a,
+                Instruction::Lhu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 0,
+                },
+            ),
+            (
+                0x21aa,
+                Instruction::Lhu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 2,
+                },
+            ),
+            (
+                0xa188,
+                Instruction::Sb {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 0,
+                },
+            ),
+            (
+                0xa18a,
+                Instruction::Sh {
+                    rs1: 11,
+                    rs2: 10,
+                    imm: 0,
+                },
+            ),
+            (
+                0x8008,
+                Instruction::Lbu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 0,
+                },
+            ),
+            (
+                0x8028,
+                Instruction::Lhu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 0,
+                },
+            ),
+            (
+                0x8048,
+                Instruction::Sb {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 0,
+                },
+            ),
+            (
+                0x8068,
+                Instruction::Sh {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 0,
+                },
+            ),
+            // Immediate extremes: c.lbu 31, c.lhu 62, c.lbusp 15, c.shsp 30.
+            (
+                0x3de8,
+                Instruction::Lbu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 31,
+                },
+            ),
+            (
+                0x3dea,
+                Instruction::Lhu {
+                    rd: 10,
+                    rs1: 11,
+                    imm: 62,
+                },
+            ),
+            (
+                0x8788,
+                Instruction::Lbu {
+                    rd: 10,
+                    rs1: 2,
+                    imm: 15,
+                },
+            ),
+            (
+                0x87e8,
+                Instruction::Sh {
+                    rs1: 2,
+                    rs2: 10,
+                    imm: 30,
+                },
+            ),
+            // From the noneos-sdk CH32V003 SystemCoreClockUpdate (0x328).
+            (
+                0x239c,
+                Instruction::Lbu {
+                    rd: 15,
+                    rs1: 15,
+                    imm: 0,
+                },
+            ),
+        ];
+        for (raw, want) in cases {
+            assert_eq!(decode_qingke_xw(*raw), Some(*want), "{raw:#06x}");
+        }
+    }
+
+    #[test]
+    fn standard_rv32c_keeps_these_slots_unknown() {
+        for raw in [0x2188u16, 0x218a, 0xa188, 0xa18a, 0x8008, 0x8068] {
+            assert!(
+                matches!(decode_rv32(u32::from(raw)), Instruction::Unknown(_)),
+                "{raw:#06x}"
+            );
+        }
+    }
+
+    #[test]
+    fn standard_rv32c_encodings_are_not_xw() {
+        // c.lw, c.sw, c.lwsp, c.swsp, c.addi4spn.
+        for raw in [0x4188u16, 0xc188, 0x4502, 0xc02a, 0x0868] {
+            assert_eq!(decode_qingke_xw(raw), None, "{raw:#06x}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod compressed_jump_tests {
     use super::*;
