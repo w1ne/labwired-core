@@ -178,12 +178,12 @@ impl SystemBus {
         if let Some(irq) = p.irq {
             if p.dev.irq_line_level() == Some(false) && !self.route_irq_input_level(idx, irq, false)
             {
-                super::reconcile_nvic_level(&self.nvic, irq, false);
+                self.reconcile_line_level(idx, irq, false);
             }
         }
         p.dev.irq_line_levels(&mut |irq, level| {
             if !level {
-                super::reconcile_nvic_level(&self.nvic, irq, false);
+                self.reconcile_line_level(idx, irq, false);
             }
         });
     }

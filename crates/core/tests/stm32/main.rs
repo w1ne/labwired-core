@@ -34,6 +34,7 @@ mod modern_uart_timing;
 mod nucleo64_vcp_console;
 mod nucleo_u545re;
 mod nvic_masking_config_path;
+mod stm32_advanced_timer_irq_lines;
 mod stm32_v2_timer_output_pad;
 mod stm32_variant_geometry;
 mod stm32duino_i2c_multibyte_bme280;

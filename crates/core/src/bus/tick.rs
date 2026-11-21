@@ -85,6 +85,48 @@ fn pend_nvic(
 }
 
 impl SystemBus {
+    /// [`reconcile_nvic_level`] for a source that may share its NVIC line.
+    /// Silicon ORs every source wired to one vector (STM32 TIM1_UP_TIM16,
+    /// TIM1_UP_TIM10, ADC1_2): a low source must not drop the pend that
+    /// another source on the same line still holds. The peer scan runs only
+    /// when a level-marked pend would be dropped, so the common path is the
+    /// free function unchanged.
+    #[inline]
+    pub(crate) fn reconcile_line_level(&self, idx: usize, irq: u32, level: bool) {
+        if !level && self.level_pend_marked(irq) && self.line_held_elsewhere(idx, irq) {
+            return;
+        }
+        reconcile_nvic_level(&self.nvic, irq, level);
+    }
+
+    #[inline]
+    fn level_pend_marked(&self, irq: u32) -> bool {
+        let Some(nvic) = self.nvic.as_ref() else {
+            return false;
+        };
+        let word = (irq / 32) as usize;
+        word < 8
+            && nvic.level_pended[word].load(std::sync::atomic::Ordering::SeqCst) & (1 << (irq % 32))
+                != 0
+    }
+
+    /// True when a peripheral other than `idx` holds `irq` asserted, through
+    /// its configured line or one of its multi-line levels.
+    fn line_held_elsewhere(&self, idx: usize, irq: u32) -> bool {
+        self.peripherals.iter().enumerate().any(|(i, p)| {
+            if i == idx {
+                return false;
+            }
+            if p.irq == Some(irq) && p.dev.irq_line_level() == Some(true) {
+                return true;
+            }
+            let mut held = false;
+            p.dev
+                .irq_line_levels(&mut |line, level| held |= line == irq && level);
+            held
+        })
+    }
+
     /// Reconcile every NVIC line peripheral `idx` reports through
     /// [`Peripheral::irq_line_levels`] (multi-line level sources: the STM32
     /// EXTI). One call per choke: the walk and the event path after they
@@ -102,7 +144,7 @@ impl SystemBus {
                 if level && sync == LevelSync::DropOnly {
                     return;
                 }
-                reconcile_nvic_level(&self.nvic, irq, level);
+                self.reconcile_line_level(idx, irq, level);
             });
     }
 
@@ -179,7 +221,7 @@ impl SystemBus {
         if let Some(irq_line) = self.peripherals[idx].irq {
             if let Some(level) = self.peripherals[idx].dev.irq_line_level() {
                 if !self.route_irq_input_level(idx, irq_line, level) {
-                    reconcile_nvic_level(&self.nvic, irq_line, level);
+                    self.reconcile_line_level(idx, irq_line, level);
                 }
             }
         }
@@ -629,7 +671,7 @@ impl SystemBus {
             // way the walk and the MMIO write path do.
             if let Some(irq_line) = self.peripherals[i].irq {
                 if let Some(level) = self.peripherals[i].dev.irq_line_level() {
-                    reconcile_nvic_level(&self.nvic, irq_line, level);
+                    self.reconcile_line_level(i, irq_line, level);
                 }
             }
             let still_needs_bus_tick = self.refresh_bus_tick_index(i);
@@ -1040,7 +1082,7 @@ impl SystemBus {
                 (Some(level), Some(irq)) => {
                     let routed = self.route_irq_input_level(peripheral_index, irq, level);
                     if !routed {
-                        reconcile_nvic_level(&self.nvic, irq, level);
+                        self.reconcile_line_level(peripheral_index, irq, level);
                     }
                     if res.irq && self.nvic.is_none() && !routed {
                         interrupts.push(irq);

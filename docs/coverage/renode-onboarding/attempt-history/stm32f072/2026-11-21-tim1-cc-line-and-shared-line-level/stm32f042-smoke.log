@@ -1,0 +1,4 @@
+summary 0x042FFFFF
+DONE
+labwired-cli test: idle_ff skipped 1049308 of 4000000 device cycles (2950692 interpreted)
+PASS  6/6 checks · stm32f042-smoke · 4000000 steps · 0.57s
