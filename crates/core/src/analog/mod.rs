@@ -49,7 +49,7 @@ pub use adapter::{AnalogConfig, AnalogCosimAdapter, Probe};
 pub use behavioural::{BehaviouralKind, BehaviouralSource, Expression};
 pub use mna::{
     AcResponse, DcResponse, Integration, NoiseMechanism, NoiseResponse, NoiseSource, Phasor,
-    Solver, TransferResponse, MAX_STEP_CUTS, MAX_UNKNOWNS,
+    SensitivityResponse, Solver, TransferResponse, MAX_STEP_CUTS, MAX_UNKNOWNS,
 };
 pub use netlist::{
     parse_netlist, parse_netlist_with_files, parse_spice_value, AcStimulus, AcSweep, AcSweepKind,
@@ -57,10 +57,10 @@ pub use netlist::{
     CurrentSource, DcSweep, DcSweepSource, Diode, DiodeModel, Inductor, ModelCard,
     MosChannelChargeModel, MosModel, Mosfet, MutualInductor, NodeRef, NoiseSweep, NtcModel,
     OpAmpModel, Polarity, PowerSink, RegulatorKind, RegulatorModel, Resistor,
-    ResistorTemperatureModel, Switch, SwitchModel, SwitchSense, ThresholdSwitchControl,
-    TransferFunction, TransferOutput, TransmissionLine, Vccs, Vcvs, VoltageSource,
-    VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE, MACRO_GAIN_RESISTANCE,
-    POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
+    ResistorTemperatureModel, Sensitivity, Switch, SwitchModel, SwitchSense,
+    ThresholdSwitchControl, TransferFunction, TransferOutput, TransmissionLine, Vccs, Vcvs,
+    VoltageSource, VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE,
+    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
 };
 pub use trace::{
     AnalogChannel, AnalogSample, AnalogSeries, AnalogSeriesChannel, AnalogTrace, AnalogTraceBatch,

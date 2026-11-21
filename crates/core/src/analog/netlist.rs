@@ -390,6 +390,11 @@
 //! and the resistance seen at the output, linearised at the operating point.
 //! `i(<element>)` may name any element with a branch current, not only the
 //! `V` source ngspice takes.
+//! `.sens v(<out>[,<ref>])|i(<element>)` is kept as [`Circuit::sensitivity`]
+//! and run by [`crate::analog::Solver::sensitivity_analysis`]: the DC
+//! sensitivity of the output to each `R` resistance, `V`/`I` value and
+//! `E`/`F`/`G`/`H` gain, linearised at the operating point. `.sens ... ac` is
+//! refused.
 //! `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` is kept
 //! as [`Circuit::dc_sweep`] and run by [`crate::analog::Solver::dc_analysis`];
 //! `<src>` must be a `V`, `I` or `R` element or `TEMP`, and the second source
@@ -1045,6 +1050,14 @@ pub struct TransferFunction {
     pub output: TransferOutput,
     /// Independent `V` or `I` source the output is referred to.
     pub input: String,
+}
+
+/// `.sens v(<out>[,<ref>])|i(<element>)`: ngspice's DC sensitivity analysis.
+/// The names are resolved when the analysis runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Sensitivity {
+    /// The measured output.
+    pub output: TransferOutput,
 }
 
 /// `V<name> n+ n- <source>`.
@@ -3501,6 +3514,9 @@ pub struct Circuit {
     /// The deck's `.tf` card, if it has one; see
     /// [`crate::analog::Solver::transfer_analysis`].
     pub transfer_function: Option<TransferFunction>,
+    /// The deck's DC `.sens` card, if it has one; see
+    /// [`crate::analog::Solver::sensitivity_analysis`].
+    pub sensitivity: Option<Sensitivity>,
     /// The deck's `.temp` (or `.options temp=`) in °C, if it gives one.
     /// `.noise` takes the thermal noise of a resistor without its own
     /// temperature law, and of a switch, at this temperature.
@@ -5257,6 +5273,12 @@ fn parse_lines_at(
                         return Err(ctx.parse_err("only one `.tf` card is supported"));
                     }
                     circuit.transfer_function = Some(parse_transfer_function(&ctx, &tokens[1..])?);
+                }
+                "sens" => {
+                    if circuit.sensitivity.is_some() {
+                        return Err(ctx.parse_err("only one `.sens` card is supported"));
+                    }
+                    circuit.sensitivity = Some(parse_sensitivity(&ctx, &tokens[1..])?);
                 }
                 "model" => parse_model(
                     &mut models,
@@ -7836,6 +7858,25 @@ fn parse_transfer_function(
         output,
         input: independent_source(ctx, input, ".tf", "refers the output")?,
     })
+}
+
+/// Parse the DC form `.sens v(<out>[,<ref>])|i(<element>)`.
+fn parse_sensitivity(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<Sensitivity, AnalogError> {
+    const SHAPE: &str = "expected `.sens v(<out>[,<ref>])|i(<element>)`";
+    let (probe, rest) = split_probe(ctx, tokens, SHAPE)?;
+    let output = match probe {
+        ('v', node, reference) => TransferOutput::Voltage { node, reference },
+        ('i', element, None) => TransferOutput::Current(element),
+        _ => return Err(ctx.parse_err(SHAPE)),
+    };
+    match rest {
+        [] => Ok(Sensitivity { output }),
+        [kind, ..] if kind.eq_ignore_ascii_case("ac") => {
+            Err(ctx
+                .parse_err("`.sens ... ac` (AC sensitivity) is not supported; only the DC form is"))
+        }
+        _ => Err(ctx.parse_err(SHAPE)),
+    }
 }
 
 /// A `v(<a>[,<b>])` or `i(<a>)` probe: its lower-case letter and its names.

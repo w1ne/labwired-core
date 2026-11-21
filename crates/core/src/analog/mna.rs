@@ -212,6 +212,26 @@ pub struct TransferResponse {
     pub output_impedance: f64,
 }
 
+/// The result of [`Solver::sensitivity_analysis`], ngspice's DC `.sens`
+/// output.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SensitivityResponse {
+    /// `(name, d output / d value)` in netlist element order. Names are
+    /// ngspice's: the lower-case element name for an `R`, `V` or `I` (per
+    /// ohm, volt or ampere) and `<name>_gain` for an `E`, `F`, `G` or `H`.
+    pub entries: Vec<(String, f64)>,
+}
+
+impl SensitivityResponse {
+    /// The entry ngspice prints as `name`, matched without regard to case.
+    pub fn get(&self, name: &str) -> Option<f64> {
+        self.entries
+            .iter()
+            .find(|(entry, _)| entry.eq_ignore_ascii_case(name))
+            .map(|&(_, value)| value)
+    }
+}
+
 /// The result of [`Solver::noise_analysis`].
 ///
 /// Densities are power spectral densities: V²/Hz at the output, and V²/Hz
@@ -2672,45 +2692,9 @@ impl Solver {
                 "`.tf` input `{input}` is not an independent `V` or `I` source"
             )));
         };
-        let output_port = match output {
-            TransferOutput::Voltage { node, reference } => {
-                let resolve = |name: &str| {
-                    self.circuit.node(name).ok_or_else(|| {
-                        AnalogError::Config(format!(
-                            "`.tf` output node `{name}` is not in the netlist"
-                        ))
-                    })
-                };
-                let node = resolve(node)?;
-                let reference = reference.as_deref().map(resolve).transpose()?.flatten();
-                if node == reference {
-                    return Err(AnalogError::Config(
-                        "`.tf` output and reference are the same node".to_string(),
-                    ));
-                }
-                // A unit current drawn from the reference into the output.
-                Port::Nodes(reference, node)
-            }
-            TransferOutput::Current(element) => {
-                let index = self.circuit.branch_index(element).ok_or_else(|| {
-                    AnalogError::Config(format!(
-                        "`.tf` output `i({element})` names no `V`, `L`, `E`, `H` or \
-                         behavioural voltage source"
-                    ))
-                })?;
-                Port::Branch(self.nodes + index)
-            }
-        };
+        let output_port = self.output_port(output, ".tf")?;
         let dim = self.dim();
-        let mut g = self.linearised(|solver| {
-            let couplings = solver.delayed_couplings();
-            let (mut g, _) = solver.ac_matrices(&couplings)?;
-            // At DC every delayed term is at its full value.
-            for coupling in &couplings {
-                g[coupling.row * dim + coupling.column] += coupling.coefficient;
-            }
-            Ok(g)
-        })?;
+        let mut g = self.linearised(Self::dc_jacobian)?;
         let solve = |g: &mut [f64], port: Port| {
             let mut rhs = vec![0.0; dim];
             port.excite(&mut rhs);
@@ -2729,6 +2713,148 @@ impl Solver {
             input_impedance,
             output_impedance,
         })
+    }
+
+    /// Run the netlist's own `.sens` card; see
+    /// [`Solver::sensitivity_analysis`].
+    pub fn sensitivity(&mut self) -> Result<SensitivityResponse, AnalogError> {
+        let card = self.circuit.sensitivity.clone().ok_or_else(|| {
+            AnalogError::Config("netlist has no `.sens v(<out>)|i(<element>)` card".to_string())
+        })?;
+        self.sensitivity_analysis(&card.output)
+    }
+
+    /// DC sensitivity, as ngspice's `.sens`: the derivative of the output at
+    /// the solver's present solution (the DC operating point on a fresh
+    /// solver) with respect to each element value — every `R` nominal
+    /// resistance (an NTC or `tc1`/`tc2` law scales with it), `V` and `I`
+    /// value, and `E`/`F`/`G`/`H` gain. Nonlinear devices enter through their
+    /// linearisation; their model parameters are not reported. Parts this
+    /// engine added for a macromodel (a name holding `#`) are left out.
+    ///
+    /// One adjoint solve `Gᵀ·w = e` of the `.tf` Jacobian gives every entry
+    /// as `−wᵀ·∂F/∂p` for the residual `F = A·x − b`. The result is exact
+    /// where ngspice perturbs each value by a part in 10⁶, so the two agree
+    /// to about 1e-6.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn sensitivity_analysis(
+        &mut self,
+        output: &TransferOutput,
+    ) -> Result<SensitivityResponse, AnalogError> {
+        let output_port = self.output_port(output, ".sens")?;
+        let dim = self.dim();
+        let g = self.linearised(Self::dc_jacobian)?;
+        let mut w = vec![0.0; dim];
+        output_port.excite(&mut w);
+        let mut transpose = vec![0.0; dim * dim];
+        for row in 0..dim {
+            for column in 0..dim {
+                transpose[column * dim + row] = g[row * dim + column];
+            }
+        }
+        solve_dense(&mut transpose, &mut w, dim).map_err(|row| AnalogError::Singular { row })?;
+
+        let x: Vec<f64> = self.node_v.iter().chain(&self.branch_i).copied().collect();
+        let at = |values: &[f64], node: NodeRef| node.map_or(0.0, |n| values[n]);
+        // `−wᵀ·(∂A/∂p)·x` for the stamp entries `(row, column, ∂A/∂p)`.
+        let matrix = |entries: &[(NodeRef, NodeRef, f64)]| {
+            -entries
+                .iter()
+                .map(|&(row, column, d)| at(&w, row) * d * at(&x, column))
+                .sum::<f64>()
+        };
+        let circuit = &self.circuit;
+        let user = |name: &str| !name.contains('#');
+        let branch = |name: &str| circuit.branch_index(name).map(|i| Some(self.nodes + i));
+        let mut entries = Vec::new();
+        let mut push = |name: &str, suffix: &str, value: f64| {
+            if user(name) {
+                entries.push((format!("{}{suffix}", name.to_ascii_lowercase()), value));
+            }
+        };
+        for resistor in &circuit.resistors {
+            // The conductance is `1/(ohms·f(T))`, so `∂g/∂ohms = −g/ohms`.
+            let dg = -1.0 / (resistor.resistance_ohms() * resistor.ohms);
+            let (a, b) = (resistor.a, resistor.b);
+            let value = matrix(&[(a, a, dg), (a, b, -dg), (b, a, -dg), (b, b, dg)]);
+            push(&resistor.name, "", value);
+        }
+        for (index, source) in circuit.voltage_sources.iter().enumerate() {
+            // `∂b/∂V` is 1 on the source's own branch row.
+            push(&source.name, "", w[self.nodes + index]);
+        }
+        for source in &circuit.current_sources {
+            // `∂b/∂I` takes 1 A from `p` and delivers it to `n`.
+            push(&source.name, "", at(&w, source.n) - at(&w, source.p));
+        }
+        for source in &circuit.vcvs {
+            let row = branch(&source.name).flatten();
+            let value = matrix(&[(row, source.cp, -1.0), (row, source.cn, 1.0)]);
+            push(&source.name, "_gain", value);
+        }
+        for source in &circuit.vccs {
+            let (p, n, cp, cn) = (source.p, source.n, source.cp, source.cn);
+            let value = matrix(&[(p, cp, 1.0), (p, cn, -1.0), (n, cp, -1.0), (n, cn, 1.0)]);
+            push(&source.name, "_gain", value);
+        }
+        for source in &circuit.cccs {
+            let control = Some(self.nodes + source.control_branch);
+            let value = matrix(&[(source.p, control, 1.0), (source.n, control, -1.0)]);
+            push(&source.name, "_gain", value);
+        }
+        for source in &circuit.ccvs {
+            let row = branch(&source.name).flatten();
+            let control = Some(self.nodes + source.control_branch);
+            push(&source.name, "_gain", matrix(&[(row, control, -1.0)]));
+        }
+        Ok(SensitivityResponse { entries })
+    }
+
+    /// The `.tf`/`.sens` output port, checked against the netlist.
+    fn output_port(&self, output: &TransferOutput, card: &str) -> Result<Port, AnalogError> {
+        Ok(match output {
+            TransferOutput::Voltage { node, reference } => {
+                let resolve = |name: &str| {
+                    self.circuit.node(name).ok_or_else(|| {
+                        AnalogError::Config(format!(
+                            "`{card}` output node `{name}` is not in the netlist"
+                        ))
+                    })
+                };
+                let node = resolve(node)?;
+                let reference = reference.as_deref().map(resolve).transpose()?.flatten();
+                if node == reference {
+                    return Err(AnalogError::Config(format!(
+                        "`{card}` output and reference are the same node"
+                    )));
+                }
+                // A unit current drawn from the reference into the output.
+                Port::Nodes(reference, node)
+            }
+            TransferOutput::Current(element) => {
+                let index = self.circuit.branch_index(element).ok_or_else(|| {
+                    AnalogError::Config(format!(
+                        "`{card}` output `i({element})` names no `V`, `L`, `E`, `H` or \
+                         behavioural voltage source"
+                    ))
+                })?;
+                Port::Branch(self.nodes + index)
+            }
+        })
+    }
+
+    /// The DC small-signal Jacobian at the present linearisation: the `.ac`
+    /// conductance matrix with every delayed term at its full value.
+    fn dc_jacobian(&mut self) -> Result<Vec<f64>, AnalogError> {
+        let dim = self.dim();
+        let couplings = self.delayed_couplings();
+        let (mut g, _) = self.ac_matrices(&couplings)?;
+        for coupling in &couplings {
+            g[coupling.row * dim + coupling.column] += coupling.coefficient;
+        }
+        Ok(g)
     }
 
     /// Run `body` with every nonlinear device linearised at the present
