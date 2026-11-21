@@ -595,7 +595,7 @@ fn script_value<'a>(text: &'a str, key: &str) -> &'a str {
 #[test]
 fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
     let fixtures = committed_scripts();
-    assert!(fixtures.len() >= 19, "Flex fixtures went missing");
+    assert!(fixtures.len() >= 20, "Flex fixtures went missing");
     let mut scripts_run = 0;
     for (fixture, scripts) in fixtures {
         // A positive case alone proves nothing about the model.
@@ -679,7 +679,7 @@ fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
             scripts_run += 1;
         }
     }
-    assert!(scripts_run >= 51, "only {scripts_run} Flex scripts ran");
+    assert!(scripts_run >= 54, "only {scripts_run} Flex scripts ran");
 }
 
 fn thermostat() -> PathBuf {
