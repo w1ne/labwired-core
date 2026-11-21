@@ -218,6 +218,10 @@ fn write_junit(path: &Path, result: &FlexTestResult, duration: Duration) -> std:
                 FlexAssertion::I2cTransfers(a) => format!("i2c_transfers {}", a.i2c_transfers.bus),
                 FlexAssertion::SpiTransfers(a) => format!("spi_transfers {}", a.spi_transfers.bus),
                 FlexAssertion::ConsoleContains(_) => "console_contains".to_owned(),
+                FlexAssertion::DeviceState(a) => format!(
+                    "device_state {}.{}",
+                    a.device_state.device, a.device_state.key
+                ),
             }
         );
         cases.push_str(&format!(

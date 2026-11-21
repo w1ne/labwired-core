@@ -31,3 +31,13 @@ parts:
       500 mV + 10 mV/degC output trace.
     tests:
       - crates/cli/tests/flex_test_runner.rs
+  ds18b20:
+    kind: tested
+    reason: >-
+      Attached as a flex onewire_device model (`device_type: ds18b20`, not a
+      `type:` manifest row), so the derivation does not see it. The core test
+      bit-bangs reset, ROM and function commands through the Flex runtime and
+      runs the flex-generated-parts fixture, which asserts the converted
+      temperature read back through the scratchpad CRC.
+    tests:
+      - crates/core/src/flex_parts_tests.rs

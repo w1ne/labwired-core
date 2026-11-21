@@ -123,6 +123,18 @@ pub struct FlexAssertionResult {
     /// `observed` is still the exact number of edges or crossings.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub observed_times_truncated: bool,
+    /// The device-state value a `device_state` assertion read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observed_value: Option<serde_json::Value>,
+}
+
+/// What one device holds at the end of the run: the `meta` of its inspect
+/// artifact (a display's text, a strip's frames, a part's registers).
+#[derive(Debug, Serialize)]
+pub struct FlexDeviceState {
+    pub id: String,
+    pub kind: String,
+    pub state: serde_json::Value,
 }
 
 #[derive(Debug, Serialize)]
@@ -175,6 +187,9 @@ pub struct FlexTestResult {
     /// What the firmware wrote to the manifest console. Absent without one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub console: Option<FlexConsoleCapture>,
+    /// What every device that publishes state holds at the end of the run.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub devices: Vec<FlexDeviceState>,
 }
 
 struct Host {
@@ -918,6 +933,7 @@ fn evaluate(
     let mut observed_max = None;
     let mut observed_times_ns = None;
     let mut observed_times_truncated = false;
+    let mut observed_value = None;
     let (observed, passed) = match assertion {
         FlexAssertion::EntryResult(assertion) => {
             let observed = match assertion.entry_result.step {
@@ -1042,6 +1058,21 @@ fn evaluate(
                 .and_then(|console| console.text.find(&assertion.console_contains));
             (found.map(|offset| offset as f64), found.is_some())
         }
+        FlexAssertion::DeviceState(assertion) => {
+            let details = &assertion.device_state;
+            let value = run
+                .devices
+                .iter()
+                .find(|device| device.id == details.device)
+                .and_then(|device| device.state.get(&details.key))
+                .cloned();
+            let passed = value
+                .as_ref()
+                .is_some_and(|value| device_state_holds(value, details));
+            let observed = value.as_ref().and_then(serde_json::Value::as_f64);
+            observed_value = value;
+            (observed, passed)
+        }
     };
     FlexAssertionResult {
         assertion: assertion.clone(),
@@ -1050,7 +1081,68 @@ fn evaluate(
         observed_max,
         observed_times_ns,
         observed_times_truncated,
+        observed_value,
     }
+}
+
+fn device_states(runtime: &FlexRuntime) -> Vec<FlexDeviceState> {
+    runtime
+        .device_artifacts()
+        .into_iter()
+        .map(|artifact| FlexDeviceState {
+            id: artifact.id,
+            kind: artifact.kind,
+            state: artifact.meta,
+        })
+        .collect()
+}
+
+/// Two state values are equal; numbers compare by value, not by spelling.
+fn json_equal(left: &serde_json::Value, right: &serde_json::Value) -> bool {
+    match (left, right) {
+        (serde_json::Value::Number(a), serde_json::Value::Number(b)) => a.as_f64() == b.as_f64(),
+        (serde_json::Value::Array(a), serde_json::Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| json_equal(a, b))
+        }
+        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .all(|(key, value)| b.get(key).is_some_and(|other| json_equal(value, other)))
+        }
+        _ => left == right,
+    }
+}
+
+fn device_state_holds(
+    value: &serde_json::Value,
+    details: &labwired_config::FlexDeviceStateDetails,
+) -> bool {
+    let expected = |bound: &serde_yaml::Value| serde_json::to_value(bound).ok();
+    if let Some(equals) = details.equals.as_ref().and_then(expected) {
+        return json_equal(value, &equals);
+    }
+    if let Some(needle) = details.contains.as_ref().and_then(expected) {
+        let found = match (value, &needle) {
+            (serde_json::Value::String(text), serde_json::Value::String(part)) => {
+                text.contains(part.as_str())
+            }
+            (serde_json::Value::Array(items), _) => items.iter().any(|item| {
+                json_equal(item, &needle)
+                    || matches!((item, &needle), (serde_json::Value::String(text), serde_json::Value::String(part)) if text.contains(part.as_str()))
+            }),
+            _ => false,
+        };
+        if !found {
+            return false;
+        }
+    }
+    if details.min.is_some() || details.max.is_some() {
+        let Some(number) = value.as_f64() else {
+            return false;
+        };
+        return within(number, None, details.min, details.max);
+    }
+    true
 }
 
 /// Every assertion must name a port or channel the run can observe that way.
@@ -1069,6 +1161,32 @@ fn validate_assertion_ports(
     for (index, assertion) in script.assertions.iter().enumerate() {
         match assertion {
             FlexAssertion::EntryResult(_) | FlexAssertion::FinalTime(_) => {}
+            FlexAssertion::DeviceState(assertion) => {
+                let details = &assertion.device_state;
+                let devices = runtime.device_artifacts();
+                let Some(device) = devices.iter().find(|device| device.id == details.device) else {
+                    return Err(format!(
+                        "assertions[{index}].device_state: no device '{}' publishes state; the devices that do are [{}]",
+                        details.device,
+                        devices
+                            .iter()
+                            .map(|device| device.id.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                };
+                if device.meta.get(&details.key).is_none() {
+                    let keys = device
+                        .meta
+                        .as_object()
+                        .map(|meta| meta.keys().cloned().collect::<Vec<_>>().join(", "))
+                        .unwrap_or_default();
+                    return Err(format!(
+                        "assertions[{index}].device_state: device '{}' has no state key '{}'; its keys are [{keys}]",
+                        details.device, details.key
+                    ));
+                }
+            }
             FlexAssertion::ConsoleContains(_) => {
                 if runtime.manifest().console.is_none() {
                     return Err(format!(
@@ -1239,6 +1357,7 @@ impl FlexTestResult {
             traces: None,
             run_report: None,
             console: None,
+            devices: Vec::new(),
         }
     }
 }
@@ -1297,6 +1416,7 @@ pub fn run_script(
         traces: None,
         run_report,
         console: runtime.console_capture(),
+        devices: device_states(&runtime),
     };
     // Cursor 0 reads the whole retained ring.
     let digital = runtime.digital_trace_snapshot(0);
