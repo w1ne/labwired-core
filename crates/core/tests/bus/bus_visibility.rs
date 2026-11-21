@@ -137,6 +137,52 @@ const EXCLUSIONS: &[(&str, BusKind, &str)] = &[
         "no ESP32-S2 UART bring-up in this harness; bytes are proven by the \
          esp32s2-devkitc-1-n8r2 board smoke",
     ),
+    // ESP32-S2 Arduino profile: same UART0 gap as the S2 smoke profile above,
+    // and I2C0 is the classic ESP32 command-list engine with no PadLines wire
+    // cell. Console bytes are proven by tests/esp/esp32s2_arduino_boot.rs and
+    // I2C transactions by tests/esp/esp32s2_arduino_i2c.rs.
+    (
+        "esp32s2-arduino",
+        BusKind::Uart,
+        "no ESP32-S2 UART bring-up in this harness; console bytes are proven \
+         by esp32s2_arduino_boot",
+    ),
+    (
+        "esp32s2-arduino",
+        BusKind::I2c,
+        "esp32s2-arduino I2C0 is the classic ESP32 command-list engine with no \
+         PadLines wire cell; transactions are proven by esp32s2_arduino_i2c",
+    ),
+    // MSPM0G3507: UART0 is a TXDATA capture model (CTL0.EN|TXE gate, constant
+    // FIFO status) with no pin routing. Bytes are proven by
+    // examples/lp-mspm0g3507-launchpad/io-smoke.yaml (uart_contains).
+    (
+        "mspm0g3507",
+        BusKind::Uart,
+        "mspm0g3507 UART0 is a TXDATA capture model with no pin routing; bytes \
+         are proven by the lp-mspm0g3507-launchpad io-smoke",
+    ),
+    // STM32F103x6 low-density parts have no USART3. On F1, USART3 is the
+    // only USART left unbound to a pad (its PB10 TX collides with I2C2_SCL,
+    // see `wire_stm32_uart_pads`), so it was the one instance whose TX line
+    // toggled here. USART1/2 bind PA9/PA2 and stay pad-gated until firmware
+    // selects the alternate-function output in CRL/CRH.
+    (
+        "stm32f103c6",
+        BusKind::Uart,
+        "low-density F103: USART3 is absent (RM0008/DS5936), and USART1/2 TX are \
+         pad-gated on PA9/PA2 until firmware selects the F1 alternate-function \
+         output in CRL/CRH, which this harness does not program; no exact-part \
+         UART byte is asserted (validation/bus_proof)",
+    ),
+    (
+        "stm32f103r6",
+        BusKind::Uart,
+        "low-density F103: USART3 is absent (RM0008/DS5936), and USART1/2 TX are \
+         pad-gated on PA9/PA2 until firmware selects the F1 alternate-function \
+         output in CRL/CRH, which this harness does not program; no exact-part \
+         UART byte is asserted (validation/bus_proof)",
+    ),
     // ESP32-C5: the esp32c5_uart model is a UART0 TX FIFO/console only. It
     // publishes no PadLines wire cell, so no TX edge reaches a pad. Bytes are
     // proven by the esp32c5-devkitc-1-n8r8 board smoke (uart_contains).
