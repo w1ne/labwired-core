@@ -1,0 +1,227 @@
+# LabWired - STM32L031K6 chip configuration (LQFP32, NUCLEO-L031K6)
+#
+# Source references (official ST only):
+# - ST CMSIS device header stm32l031xx.h (STMicroelectronics/cmsis_device_l0):
+#   every base address and IRQ number below, FLASH_BASE 0x08000000,
+#   SRAM_BASE 0x20000000, SRAM_SIZE_MAX 8 Kbytes.
+# - Official STM32CubeL0 NUCLEO-L031K6 template linker
+#   Projects/NUCLEO-L031K6/Templates/SW4STM32/STM32L031K6_NUCLEO/STM32L031K6Tx_FLASH.ld:
+#   FLASH 32 Kbytes at 0x08000000, RAM 8 Kbytes at 0x20000000.
+# - UM1956 (STM32 Nucleo-32 boards, Rev 6) Table 2: order code digit 6 = 32 Kbytes
+#   of flash (NUCLEO-L031K6 / STM32L031K6T6).
+# - Official STM32CubeL0 NUCLEO-L031K6 Templates/Src/main.c:
+#   "Up to 32MHZ possible"; the template's SystemClock_Config comment also
+#   documents HSI at 16 MHz. cpu_hz is the maximum, 32 MHz.
+#
+# The L031 is an RM0377 STM32L0x1 part, not the RM0367 L0x3 (L073) die.
+# Register models below reuse the STM32L0 family models already used by the
+# stm32l073 descriptor for IPs that exist on this die (same L0 RCC/GPIO/USART/
+# I2C/SPI/ADC/DMA/TIM layouts, same IRQ numbers for the shared instances).
+#
+# NOT DECLARED, STATED PLAINLY: this die has no USART1, no SPI2, no I2C2/I3,
+# no TIM3/6/7, no GPIOD/GPIOE, no DAC, no USB, no RNG/HSI48. Those blocks are
+# omitted rather than stubbed. Firmware that touches an undeclared address
+# faults on an unmapped access. LPUART1, LPTIM1, RTC, comparators and the
+# data EEPROM window (CMSIS DATA_EEPROM_BASE 0x08080000..0x080803FF) are
+# also omitted from this first descriptor.
+#
+# DBGMCU_IDCODE is not filled in: no L031 bench capture exists, so no
+# invented DEV_ID/REV_ID.
+#
+# Tier: experimental — not hardware-validated over SWD.
+
+name: "stm32l031k6"
+arch: "arm"
+core: "cortex-m0+"
+registers_count: 200
+# Simulated core clock, Hz — see ChipDescriptor::cpu_hz. STM32L031K6 maximum
+# core clock, 32 MHz (STM32CubeL0 NUCLEO-L031K6 template: "Up to 32MHZ possible").
+cpu_hz: 32_000_000
+
+flash:
+  base: 0x08000000
+  size: "32KB"
+ram:
+  base: 0x20000000
+  size: "8KB"
+
+peripherals:
+  # RCC — STM32L0 RCC (CMSIS RCC_BASE 0x40021000, AHBPERIPH_BASE + 0x1000).
+  # Uses the dedicated `stm32l0` layout already used by stm32l073.
+  # L0x1 has no HSI48/CRRCR; firmware that does not touch HSI48 is the
+  # intended path for this board.
+  - id: "rcc"
+    type: "rcc"
+    base_address: 0x40021000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l073/rcc.yaml"
+      profile: "stm32l0"
+
+  - id: "pwr"
+    type: "pwr"
+    base_address: 0x40007000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l073/pwr.yaml"
+      profile: "stm32l0"
+
+  - id: "flash"
+    type: "flash"
+    base_address: 0x40022000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l073/flash.yaml"
+
+  - id: "systick"
+    type: "systick"
+    base_address: 0xE000E010
+    config:
+      debug_schema: "../peripherals/stm32l073/stk.yaml"
+
+  # GPIO (IOPORT bus @ 0x50000000). CMSIS: GPIOA/B/C/H only on this package.
+  - id: "gpioa"
+    type: "gpio"
+    base_address: 0x50000000
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l073/gpioa.yaml"
+      profile: "stm32v2"
+    # RCC_IOPENR.IOPAEN (bit 0).
+    clock: { reg: "iopenr", bit: 0 }
+
+  - id: "gpiob"
+    type: "gpio"
+    base_address: 0x50000400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l073/gpiob.yaml"
+      profile: "stm32v2"
+    # RCC_IOPENR.IOPBEN (bit 1).
+    clock: { reg: "iopenr", bit: 1 }
+
+  - id: "gpioc"
+    type: "gpio"
+    base_address: 0x50000800
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l073/gpioc.yaml"
+      profile: "stm32v2"
+    # RCC_IOPENR.IOPCEN (bit 2).
+    clock: { reg: "iopenr", bit: 2 }
+
+  - id: "gpioh"
+    type: "gpio"
+    base_address: 0x50001C00
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l073/gpioh.yaml"
+      profile: "stm32v2"
+    # RCC_IOPENR.IOPHEN (bit 7).
+    clock: { reg: "iopenr", bit: 7 }
+
+  # USART2 is the ST-LINK virtual COM port on NUCLEO-L031K6 (UM1956 Table 7:
+  # TX PA2, RX PA15, SB2/SB3 default ON). IRQ 28 (USART2_IRQn).
+  - id: "uart2"
+    type: "uart"
+    base_address: 0x40004400
+    size: "1KB"
+    irq: 28
+    config:
+      debug_schema: "../peripherals/stm32l073/usart2.yaml"
+      profile: "stm32v2"
+    # RCC_APB1ENR.USART2EN (bit 17).
+    clock: { reg: "apb1enr", bit: 17 }
+
+  - id: "spi1"
+    type: "spi"
+    base_address: 0x40013000
+    size: "1KB"
+    irq: 25
+    config:
+      debug_schema: "../peripherals/stm32l073/spi1.yaml"
+      profile: "stm32"
+      pad_map: "stm32l0"
+    # RCC_APB2ENR.SPI1EN (bit 12).
+    clock: { reg: "apb2enr", bit: 12 }
+
+  - id: "i2c1"
+    type: "i2c"
+    base_address: 0x40005400
+    size: "1KB"
+    irq: 23
+    config:
+      debug_schema: "../peripherals/stm32l073/i2c1.yaml"
+      profile: "stm32l4"
+    # RCC_APB1ENR.I2C1EN (bit 21).
+    clock: { reg: "apb1enr", bit: 21 }
+
+  - id: "adc1"
+    type: "adc"
+    base_address: 0x40012400
+    size: "1KB"
+    irq: 12
+    config:
+      debug_schema: "../peripherals/stm32l073/adc.yaml"
+      profile: "stm32l0"
+    # RCC_APB2ENR.ADCEN (bit 9).
+    clock: { reg: "apb2enr", bit: 9 }
+
+  - id: "dma1"
+    type: "dma"
+    base_address: 0x40020000
+    size: "1KB"
+    irq: 9
+    clock: { reg: "ahbenr", bit: 0 }
+    config:
+      debug_schema: "../peripherals/stm32l073/dma1.yaml"
+
+  # TIM2 is 16-bit on STM32L0 (same as the L073 descriptor).
+  - id: "tim2"
+    type: "timer"
+    base_address: 0x40000000
+    size: "1KB"
+    irq: 15
+    config:
+      pad_map: "stm32l0"
+      debug_schema: "../peripherals/stm32l073/tim2.yaml"
+      width: 16
+    # RCC_APB1ENR.TIM2EN (bit 0).
+    clock: { reg: "apb1enr", bit: 0 }
+
+  - id: "tim21"
+    type: "timer"
+    base_address: 0x40010800
+    size: "1KB"
+    irq: 20
+    config:
+      debug_schema: "../peripherals/stm32l073/tim21.yaml"
+    # RCC_APB2ENR.TIM21EN (bit 2).
+    clock: { reg: "apb2enr", bit: 2 }
+
+  - id: "tim22"
+    type: "timer"
+    base_address: 0x40011400
+    size: "1KB"
+    irq: 22
+    config:
+      debug_schema: "../peripherals/stm32l073/tim22.yaml"
+    # RCC_APB2ENR.TIM22EN (bit 5).
+    clock: { reg: "apb2enr", bit: 5 }
+
+  - id: "exti"
+    type: "exti"
+    base_address: 0x40010400
+    size: "1KB"
+    config:
+      debug_schema: "../peripherals/stm32l073/exti.yaml"
+      profile: "stm32l0"
+
+  - id: "syscfg"
+    type: "syscfg"
+    base_address: 0x40010000
+    size: "1KB"
+    clock: { reg: "apb2enr", bit: 0 }
+    config:
+      debug_schema: "../peripherals/stm32l073/syscfg_comp.yaml"
+      profile: "stm32l0"

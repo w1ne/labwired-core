@@ -879,6 +879,14 @@ chips:
       - {p: "SYSCFG", ev: "configs/chips/stm32h735.yaml:450 (type: syscfg; crates/core/src/peripherals/generic_factory.rs:739; docs/coverage/silent-path-census.md:404)", note: "CLOSABLE: hardcoded StubPeripheral with one canned value — CCCSR (0x20) reads READY=1 so the H7 HAL's rcc.freeze() compensation-cell poll exits (examples/stm32h735-hal-demo/src/main.rs:43); writes are dropped, so the enable never latches and EXTI source-select is not modelled. The census records it as the telematics lab's only live stub."}
       - {p: "WWDG", ev: "configs/chips/stm32h735.yaml:487 (type: wwdg; crates/core/src/peripherals/wwdg.rs:63)", note: "CLOSABLE: inert register bank — tick() is the trait-default no-op, so an armed watchdog never fires; no behavioural test and no gated firmware drives it."}
 
+  - id: stm32l031k6
+    arch: cortex-m0plus
+    headline: "NUCLEO-L031K6. PR-gated raw-register smoke (examples/nucleo-l031k6/io-smoke.yaml): reset/stack, RCC IOPENR/APB1ENR, GPIOA/GPIOB, USART2 banner STM32L031K6_OK and PB3 LED edges. No Arduino matrix row and no physical silicon run exist, so nothing is recorded as functional here. USB, LCD, DAC and LPTIM are absent on this die and are not declared. SYSCFG is the real STM32L0 model; PWR, FLASH, ADC, DMA, SPI and I2C are also modelled. This smoke does not drive those blocks."
+    functional: []
+    advanced_unit_only: []
+    advanced_dead: []
+    shim: []
+
   - id: stm32l073
     arch: cortex-m0plus
     headline: "Silicon-diffed L0 part (SWD capture). Its committed tier-1 fixture (nightly-ratcheted by the full-CI `tier1_matrix_ratchet` step (core-ci.yml:2087), fixture drift checked on Sundays) drives clock/gpio/timer/dma/irq/i2c/spi/adc/wdt/rtc over USART2 — pwm is n/a, there is no advanced timer — and three PR-gated firmwares run on it: the hardware-validated firmware-l073-demo reads DBGMCU_IDCODE (`DEV=20086447`, asserted byte-for-byte against silicon) and computes CRC-32 by value (`CRC=B874177A`, also silicon-exact), the Arduino serial startup programs PWR_CR.VOS (and chip_conformance's reset oracle pins PWR's reset words), and the Zephyr hello boots. RNG is firmware-driven: the PR-gated demo enables HSI48, completes the DRDY handshake and reads a word (the drawn value is informational — the survival transcript asserts only DEV/CLK/CRC/DMA), and rcc_kernel_clock_gate.rs additionally pins that gate over the production bus. DAC and LPTIM1 are modeled but never exercised; SYSCFG/USB FS/LCD are stubs and WWDG an inert register bank. SCB is a core block installed by `configure_cortex_m` for every Cortex-M part (9 scb.rs tests plus the SCB ratchet at nvic_masking_config_path.rs:163; the fixture's IRQ handler reads ICSR), so it is not listed per-chip."

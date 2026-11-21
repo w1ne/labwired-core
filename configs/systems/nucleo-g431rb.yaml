@@ -4,6 +4,8 @@
 # LPUART1 on PA2/PA3 (SB17/SB23).
 name: "nucleo-g431rb"
 chip: "../chips/stm32g431rb.yaml"
+# ST-LINK VCP = LPUART1 PA2/PA3 (UM2505, SB17/SB23), as the #2128 Nucleo systems.
+debug_uart: "lpuart1"
 external_devices: []
 board_io:
   - id: "led_ld2"

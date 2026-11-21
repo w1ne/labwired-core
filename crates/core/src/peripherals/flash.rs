@@ -86,6 +86,11 @@ pub enum FlashRegisterLayout {
     /// (AND semantics: flash only flips 1→0). Reset values from the SVD:
     /// ACR=0, NSCR=0xC000_0000 (LOCK|OPTLOCK), OPTR=0, NSSR=0.
     Stm32U5,
+    /// STM32G4 (RM0440 §3.7). The L4 register file and reset values, but
+    /// FLASH_ACR.LATENCY is 4 bits (stm32g4xx CMSIS FLASH_ACR_LATENCY_Msk 0xF):
+    /// stm32duino's NUCLEO_G431RB clock setup writes FLASH_LATENCY_8 and fails
+    /// HAL_RCC_ClockConfig when bit 3 does not read back.
+    Stm32G4,
     /// Artery AT32F421 (RM_AT32F421 V2.05 §5.2, §5.8): PSR/UNLOCK/STS/CTRL/
     /// ADDR/USD/EPPS, 64 KiB main flash in 1 KiB sectors, sector and bank
     /// erase as pending ops, byte/half-word/word programming through CPU
@@ -99,6 +104,7 @@ impl FromStr for FlashRegisterLayout {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
             "stm32l4" | "l4" => Ok(Self::Stm32L4),
+            "stm32g4" | "g4" => Ok(Self::Stm32G4),
             "stm32f1" | "f1" | "legacy" => Ok(Self::Stm32F1),
             "stm32h5" | "h5" => Ok(Self::Stm32H5),
             "stm32h7_boot" => Ok(Self::Stm32H7Boot),
@@ -106,7 +112,7 @@ impl FromStr for FlashRegisterLayout {
             "stm32u5" | "u5" => Ok(Self::Stm32U5),
             "at32f421" => Ok(Self::At32F421),
             _ => Err(format!(
-                "unsupported FLASH register layout '{}'; supported: stm32l4, stm32f1, stm32f4, stm32h5, stm32h7_boot, stm32u5, at32f421",
+                "unsupported FLASH register layout '{}'; supported: stm32l4, stm32g4, stm32f1, stm32f4, stm32h5, stm32h7_boot, stm32u5, at32f421",
                 value
             )),
         }
@@ -344,7 +350,9 @@ impl Flash {
         // Touching the F1 branch must not change L4 reset values.
         let (acr_reset, cr_reset, optr_reset) = match layout {
             FlashRegisterLayout::At32F421 => (0x30, 0x0002_0080, 0x03ff_fffc),
-            FlashRegisterLayout::Stm32L4 => (0x0000_0600u32, 0xC000_0000u32, 0xFFEF_F8AAu32),
+            FlashRegisterLayout::Stm32L4 | FlashRegisterLayout::Stm32G4 => {
+                (0x0000_0600u32, 0xC000_0000u32, 0xFFEF_F8AAu32)
+            }
             FlashRegisterLayout::Stm32F1 => (0x0000_0030u32, 0x0000_0080u32, 0x0000_0000u32),
             // NSCR (the only modeled control reg) reset 0x1; OPTSR_CUR via optr.
             FlashRegisterLayout::Stm32H5 => (0x0000_0013u32, 0x0000_0001u32, 0x2D30_EDF8u32),
@@ -1322,6 +1330,8 @@ impl Flash {
             // SLEEP_PD (15). Other bits reserved. We keep only the
             // documented writable mask so accidental writes don't pollute
             // the readback with nonsense.
+            // G4 widens LATENCY to bits 3:0 (RM0440 FLASH_ACR).
+            0x00 if self.layout == FlashRegisterLayout::Stm32G4 => self.acr = value & 0xC000_FF0F,
             0x00 => self.acr = value & 0xC000_FF07,
             0x04 => self.pdkeyr = value,
             // KEYR / OPTKEYR are write-only; the write_volatile sequence
@@ -1541,6 +1551,23 @@ mod h5_erase_swap_tests {
     fn unlock_opt(f: &mut Flash) {
         f.write_u32(0x0C, 0x0819_2A3B).unwrap(); // OPTKEYR key 1
         f.write_u32(0x0C, 0x4C5D_6E7F).unwrap(); // OPTKEYR key 2
+    }
+
+    #[test]
+    fn g4_acr_latency_is_four_bits_l4_is_three() {
+        // stm32duino NUCLEO_G431RB: HAL_RCC_ClockConfig(.., FLASH_LATENCY_8)
+        // reads ACR.LATENCY back and fails unless bit 3 sticks (RM0440).
+        let mut g4 = Flash::new_with_layout(FlashRegisterLayout::Stm32G4);
+        assert_eq!(g4.read_reg(0x00), 0x0000_0600);
+        g4.write_u32(0x00, 0x0000_0608).unwrap();
+        assert_eq!(g4.read_reg(0x00) & 0xF, 8);
+        let mut l4 = Flash::new_with_layout(FlashRegisterLayout::Stm32L4);
+        l4.write_u32(0x00, 0x0000_0608).unwrap();
+        assert_eq!(l4.read_reg(0x00) & 0xF, 0);
+        assert_eq!(
+            "stm32g4".parse::<FlashRegisterLayout>(),
+            Ok(FlashRegisterLayout::Stm32G4)
+        );
     }
 
     #[test]
