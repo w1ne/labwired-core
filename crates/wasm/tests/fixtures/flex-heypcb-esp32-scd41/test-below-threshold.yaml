@@ -1,0 +1,33 @@
+# `labwired test --script test-below-threshold.yaml`. Negative control for the
+# alarm threshold. CO2 450 -> 950 -> 999 ppm stays below 1000 ppm, so the
+# indicator never goes on. The second reading is at -10 °C and 80 %RH.
+# All expected values were calculated before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x62 }, { number: 5000 }] }
+  - call: { export: loop }
+  - set: { port: co2_ppm, value: 950 }
+  - set: { port: ambient_c, value: -10 }
+  - set: { port: humidity_rh, value: 80 }
+  - call: { export: loop }
+  - call: { export: climate }
+  - set: { port: co2_ppm, value: 999 }
+  - call: { export: loop }
+limits:
+  max_steps: 10000000
+  max_time_ns: 30000000000
+assertions:
+  - entry_result: { equals: 9990 }
+  - entry_result: { equals: 4500, step: 1 }
+  - entry_result: { equals: 9500, step: 5 }
+  # (-10.00 °C + 100.00) x 100,000 + 80.00 %RH. The temperature word is 13107.
+  - entry_result: { equals: 900008000, step: 6 }
+  - i2c_transfers: { bus: sensor_i2c, address: 0x62, ack: true, equals: 16 }
+  - digital_edges: { port: user_led_drive, count: 0 }
+  - digital_edges: { port: user_led_state, count: 0 }
+  - final_time_ns: { equals: 15514430000 }
+  - console_contains: "CO2=450 ppm T=25.00 C RH=50.00 %\nCO2=950 ppm T=-10.00 C RH=80.00 %\nCO2=999 ppm T=-10.00 C RH=80.00 %\n"

@@ -2606,6 +2606,70 @@ fn flex_heypcb_tmp117_bus_matches_the_pinned_source_nets() {
     );
 }
 
+/// The SCD41 fixture is a fourth I2C board of the same pinned repository,
+/// with no Flex code of its own: U4 on the bus nets of the pinned PCB at its
+/// fixed address, and the always-ready data status reported as unsupported.
+#[test]
+fn flex_heypcb_scd41_bus_matches_the_pinned_source_nets() {
+    const SOURCE_MAP: &str =
+        include_str!("../tests/fixtures/flex-heypcb-esp32-scd41/source-map.json");
+    const SYSTEM: &str = include_str!("../tests/fixtures/flex-heypcb-esp32-scd41/system.yaml");
+
+    let source_map: serde_json::Value = serde_json::from_str(SOURCE_MAP).unwrap();
+    let sibling: serde_json::Value = serde_json::from_str(HEYPCB_LDR_SOURCE_MAP).unwrap();
+    for key in ["repository", "revision", "license_spdx"] {
+        assert_eq!(source_map["source"][key], sibling["source"][key], "{key}");
+    }
+    assert_eq!(
+        source_map["source"]["files"]["license"],
+        sibling["source"]["files"]["license"]
+    );
+    assert_eq!(
+        source_map["source"]["asset"],
+        "boards/scd41/kicad/esp32_scd41"
+    );
+    for file in ["schematic", "pcb", "bom", "board_json", "board_readme"] {
+        let entry = &source_map["source"]["files"][file];
+        assert!(entry["path"].as_str().unwrap().starts_with("boards/scd41/"));
+        assert_eq!(entry["git_blob"].as_str().unwrap().len(), 40, "{file}");
+    }
+
+    let u4 = &source_map["sensor_bus"]["elements"][0];
+    assert_eq!(u4["source_ref"], "U4");
+    assert_eq!(u4["source_part"], "SCD41-D-R2");
+    assert_eq!(u4["pads"]["8"], "I2C_SCL");
+    assert_eq!(u4["pads"]["10"], "I2C_SDA");
+
+    let yaml: serde_yaml::Value = serde_yaml::from_str(SYSTEM).unwrap();
+    let bus = &yaml["i2c_buses"][0];
+    let binding = &source_map["runtime_bindings"];
+    assert_eq!(bus["name"], binding["bus"]["name"].as_str().unwrap());
+    let device = &bus["devices"][0];
+    assert_eq!(device["id"], binding["device"]["id"].as_str().unwrap());
+    assert_eq!(device["type"], "scd41");
+    assert_eq!(device["config"]["i2c_address"], 0x62);
+
+    let runtime = FlexRuntime::from_yaml(SYSTEM).unwrap();
+    let report = runtime.run_report();
+    assert!(report.scope_notes_complete);
+    assert!(!report.execution_scope.original_target_firmware_executed);
+    assert_eq!(report.execution_scope.chip_parity, "not_established");
+    assert_eq!(report.i2c_buses[0].devices[0].address, 0x62);
+    // The model reports data ready at all times; the manifest must say so.
+    assert!(yaml["unsupported_checks"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .any(|check| check.as_str().unwrap().contains("5 s periodic")));
+    for port in binding["ports"].as_object().unwrap().keys() {
+        runtime.port_id(port).unwrap();
+    }
+    assert_eq!(
+        report.ports.len(),
+        binding["ports"].as_object().unwrap().len()
+    );
+}
+
 /// The DHT11 fixture is a single-wire board of the same pinned repository:
 /// U4 is the catalog `dht11` pins-only model on the `behavior` adapter, its
 /// DATA role on the SNS_IO1 net of the pinned PCB, with the R6 pull-up.
