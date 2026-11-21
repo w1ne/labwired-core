@@ -1,0 +1,62 @@
+# `labwired test --script test-pause-and-hold-reset.yaml`. A tap starts focus.
+# A second tap pauses it: the lit LEDs blink, 600 ms on and 600 ms off. A 2.1 s
+# hold goes back to idle with one chirp. The release after the hold is not a tap.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  # The board: each MCU pin (ch32fun pin number = port * 16 + bit) and its net.
+  - call: { export: flex_bind_output, args: [{ number: 51 }, { port: min0 }] }   # PD3
+  - call: { export: flex_bind_output, args: [{ number: 50 }, { port: min1 }] }   # PD2
+  - call: { export: flex_bind_output, args: [{ number: 39 }, { port: min2 }] }   # PC7
+  - call: { export: flex_bind_output, args: [{ number: 38 }, { port: min3 }] }   # PC6
+  - call: { export: flex_bind_output, args: [{ number: 37 }, { port: min4 }] }   # PC5
+  - call: { export: flex_bind_output, args: [{ number: 36 }, { port: min5 }] }   # PC4
+  - call: { export: flex_bind_output, args: [{ number: 35 }, { port: min6 }] }   # PC3
+  - call: { export: flex_bind_output, args: [{ number: 34 }, { port: min7 }] }   # PC2
+  - call: { export: flex_bind_output, args: [{ number: 33 }, { port: min8 }] }   # PC1
+  - call: { export: flex_bind_output, args: [{ number: 32 }, { port: min9 }] }   # PC0
+  - call: { export: flex_bind_output, args: [{ number: 48 }, { port: min10 }] }  # PD0
+  - call: { export: flex_bind_output, args: [{ number: 52 }, { port: min11 }] }  # PD4
+  - call: { export: flex_bind_output, args: [{ number: 54 }, { port: leaf }] }   # PD6
+  - call: { export: flex_bind_output, args: [{ number: 1 }, { port: buzz }] }    # PA1
+  - call: { export: flex_bind_touch, args: [{ number: 2 }, { port: touch }] }    # PA2
+  # `int main(void)` of the unchanged pomodoro.c.
+  - call: { export: __main_void, until_ns: 200000000 }
+  - set: { port: touch_contact, value: 1 }
+  - resume: { until_ns: 250000000 }
+  - set: { port: touch_contact, value: 0 }     # tap 1: focus
+  - resume: { until_ns: 400000000 }
+  - set: { port: touch_contact, value: 1 }
+  - resume: { until_ns: 450000000 }
+  - set: { port: touch_contact, value: 0 }     # tap 2: pause
+  - resume: { until_ns: 700000000 }
+  - set: { port: touch_contact, value: 1 }     # hold
+  - resume: { until_ns: 2800000000 }
+  - set: { port: touch_contact, value: 0 }
+  - resume: { until_ns: 3000000000 }
+limits:
+  max_steps: 2000000000
+  max_time_ns: 3000000000
+assertions:
+  - entry_result: { equals: 15, step: 14 }      # all 15 pins are bound
+  # Start-up chirp: 237 cycles of 2637 Hz, each half cycle 189,000 ns, from
+  # 20,000 ns (four SysTick uses in systick_init).
+  - digital_edges: { port: buzz, count: 474, from_ns: 20000, to_ns: 89417000 }
+  # Focus on, pause off, then the pause blink: on at 600 ms, off at 1200 ms,
+  # on at 1800 ms, off at 2400 ms. The reset at about 2700 ms finds it off.
+  - digital_edges: { port: min1, count: 6 }
+  - digital_edges: { port: min11, count: 6 }
+  - digital_edges: { port: min1, count: 2, to_ns: 500000000 }
+  # The reset chirp is the only other sound.
+  - digital_edges: { port: buzz, count: 0, from_ns: 89417001, to_ns: 2600000000 }
+  - digital_edges: { port: buzz, count: 474, from_ns: 2600000000, to_ns: 2900000000 }
+  - digital_edges: { port: buzz, count: 948 }
+  - digital_edges: { port: leaf, count: 0 }
+  # The release after the hold is not a tap: the face stays idle.
+  - port_value: { port: d4, equals: 0 }
+  - port_value: { port: d14, equals: 0 }
+  - port_value: { port: bz1, equals: 0 }
+  - final_time_ns: { equals: 3000000000 }

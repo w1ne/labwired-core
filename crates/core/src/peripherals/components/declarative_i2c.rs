@@ -2067,7 +2067,11 @@ impl I2cDevice for GenericI2cDevice {
             return v;
         }
         if self.command_mode {
-            if self.pending.is_some() && self.elapsed_us >= self.ready_at_us {
+            // Readiness is decided at the first byte of a read phase. The
+            // part NACKs a read header before its response is ready, so a
+            // phase that starts early carries no data even if the response
+            // becomes ready while its bytes are clocked.
+            if self.read_idx == 0 && self.pending.is_some() && self.elapsed_us >= self.ready_at_us {
                 self.read_buf = self.pending.take().unwrap();
                 self.read_idx = 0;
             }

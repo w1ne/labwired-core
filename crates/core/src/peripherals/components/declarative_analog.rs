@@ -615,6 +615,15 @@ impl PeripheralKit for DeclarativeAnalogKit {
         &self.metadata
     }
 
+    /// The same source the `LazyLock` registry kits build, for an owned kit
+    /// (a manifest part pack).
+    fn build_analog_source(
+        &self,
+        channel: u8,
+    ) -> Result<Option<Box<dyn crate::bus::sim_inputs::AnalogSource>>> {
+        Ok(Some(Box::new(self.build(channel)?)))
+    }
+
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
         let channel = ctx.config_i64("channel").unwrap_or(0).clamp(0, 255) as u8;
         let mut device = DeclarativeAnalogDevice::from_descriptor(
@@ -666,6 +675,13 @@ impl PeripheralKit for LazyLock<DeclarativeAnalogKit> {
     fn attach(&self, ctx: &mut AttachCtx<'_>) -> Result<()> {
         LazyLock::force(self).attach(ctx)
     }
+
+    fn build_analog_source(
+        &self,
+        channel: u8,
+    ) -> Result<Option<Box<dyn crate::bus::sim_inputs::AnalogSource>>> {
+        Ok(Some(Box::new(LazyLock::force(self).build(channel)?)))
+    }
 }
 
 /// Sharp GP2Y0A21YK0F IR distance sensor (declarative `gp2y0a21.yaml`) — the
@@ -697,6 +713,7 @@ analog_kit!(LDR_KIT, "ldr");
 analog_kit!(POTENTIOMETER_KIT, "potentiometer");
 analog_kit!(NTC_THERMISTOR_KIT, "ntc-thermistor");
 analog_kit!(TMP36_KIT, "tmp36");
+analog_kit!(MCP9700_KIT, "mcp9700");
 analog_kit!(MCP9701_KIT, "mcp9701");
 analog_kit!(MQ6_KIT, "mq-6");
 analog_kit!(SOIL_MOISTURE_KIT, "soil-moisture");
@@ -776,17 +793,17 @@ behavior:
     }
 
     #[test]
-    fn datasheet_table_points_are_exact() {
+    fn datasheet_typical_curve_readoffs_are_pinned() {
         for (d, v) in [
-            (100.0, 3100),
-            (150.0, 2300),
-            (200.0, 1900),
-            (300.0, 1300),
-            (400.0, 1000),
-            (500.0, 800),
-            (600.0, 650),
-            (700.0, 550),
-            (800.0, 500),
+            (100.0, 2300),
+            (150.0, 1650),
+            (200.0, 1300),
+            (300.0, 930),
+            (400.0, 730),
+            (500.0, 600),
+            (600.0, 510),
+            (700.0, 440),
+            (800.0, 400),
         ] {
             let mut s = device();
             s.set_input("distance", d).unwrap();
@@ -810,7 +827,7 @@ behavior:
     fn interpolation_lies_between_table_points() {
         let mut s = device();
         s.set_input("distance", 250.0).unwrap();
-        assert_eq!(s.output_mv(), 1600);
+        assert_eq!(s.output_mv(), 1115);
     }
 
     #[test]
@@ -818,7 +835,7 @@ behavior:
         let mut s = device();
         s.set_input("distance", 5000.0).unwrap_err();
         s.set_input("distance", 800.0).unwrap();
-        assert_eq!(s.output_mv(), 500);
+        assert_eq!(s.output_mv(), 400);
         // The channel max is 800, so the floor path is exercised via the
         // descriptor's own out-of-band rule check below.
         let mut s2 = device();
@@ -828,12 +845,12 @@ behavior:
     }
 
     #[test]
-    fn below_10cm_clamps_to_the_near_value() {
+    fn below_10cm_clamps_to_the_10cm_model_endpoint() {
         let mut s = device();
         s.set_input("distance", 60.0).unwrap();
-        assert_eq!(s.output_mv(), 3100);
+        assert_eq!(s.output_mv(), 2300);
         s.set_input("distance", 0.0).unwrap();
-        assert_eq!(s.output_mv(), 3100);
+        assert_eq!(s.output_mv(), 2300);
     }
 
     fn analog_ref(stem: &str) -> Option<f32> {
@@ -910,9 +927,9 @@ behavior:
     fn adc_count_scales_with_voltage() {
         let mut s = device();
         s.set_input("distance", 100.0).unwrap();
-        assert_eq!(s.adc_count(3300, 12), (3100u32 * 4095 / 3300) as u16);
-        // Same 3.1 V on a 5 V, 10-bit converter; and clamped to its range.
-        assert_eq!(s.adc_count(5000, 10), (3100u32 * 1023 / 5000) as u16);
+        assert_eq!(s.adc_count(3300, 12), (2300u32 * 4095 / 3300) as u16);
+        // Same 2.3 V on a 5 V, 10-bit converter; and clamped to its range.
+        assert_eq!(s.adc_count(5000, 10), (2300u32 * 1023 / 5000) as u16);
         assert_eq!(s.adc_count(1000, 10), 1023);
     }
 
@@ -985,6 +1002,9 @@ behavior:
         assert!(matches!(m.transport, Transport::Analog));
         assert_eq!(m.inputs.len(), 1);
         assert_eq!(m.inputs[0].key, "distance");
+        assert_eq!(m.inputs[0].min, 100.0);
+        assert_eq!(m.inputs[0].max, 800.0);
+        assert_eq!(m.inputs[0].default, Some(100.0));
         assert_eq!(m.config_keys[0].name, "channel");
     }
 
@@ -994,11 +1014,12 @@ behavior:
     #[test]
     fn every_analog_descriptor_seeds_its_documented_default() {
         for (stem, want_mv) in [
-            ("gp2y0a21", 3100u16),    // no default ⇒ 0 mm ⇒ clamped near value
+            ("gp2y0a21", 2300u16),    // explicit 100 mm / 10 cm model default
             ("ldr", 2751),            // 100 lx
             ("potentiometer", 1650),  // 50 %
             ("ntc-thermistor", 1650), // 25 °C ⇒ exactly Vref/2
             ("tmp36", 750),           // 25 °C ⇒ 500 + 250 mV
+            ("mcp9700", 750),         // 25 °C ⇒ 500 + 250 mV
             ("mcp9701", 887),         // 25 °C ⇒ 400 + 487.5 mV, truncated
             ("mq-6", 0),              // 0 ppm, clean air
             ("soil-moisture", 1980),  // 40 % moisture
@@ -1027,6 +1048,31 @@ behavior:
         assert_eq!(bat.output_mv(), 1950, "3750 + 150 = 3900 mV, halved");
         bat.set_input("usb_present", 0.0).unwrap();
         assert_eq!(bat.output_mv(), 1875);
+    }
+
+    /// MCP9700 data sheet DS20001942L, Equation 4-1: 500 mV at 0 °C,
+    /// 10.0 mV/°C, over the extended range -40..125 °C. A fraction of a
+    /// millivolt truncates.
+    #[test]
+    fn mcp9700_follows_its_data_sheet_line() {
+        let mut t = kit_device("mcp9700");
+        for (c, mv) in [
+            (-40.0, 100u16),
+            (0.0, 500),
+            (25.0, 750),
+            (25.37, 753),
+            (39.99, 899),
+            (40.0, 900),
+            (125.0, 1750),
+        ] {
+            t.set_input("temperature", c).unwrap();
+            assert_eq!(t.output_mv(), mv, "{c} °C");
+        }
+        assert!(
+            t.set_input("temperature", 126.0).is_err(),
+            "the +150 °C grade is another order code; above 125 is refused"
+        );
+        assert!(t.set_input("temperature", -41.0).is_err());
     }
 
     /// TMP36 datasheet line: 500 mV at 0 °C, 10 mV/°C, clamped to the

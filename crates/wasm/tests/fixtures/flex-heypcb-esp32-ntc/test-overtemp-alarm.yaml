@@ -1,0 +1,49 @@
+# `labwired test --script test-overtemp-alarm.yaml`. Ten times a second the
+# firmware reads SNS_AN1 in millivolts on IO1, computes the U4 resistance from
+# the R6 divider, converts it with the beta equation and drives the IO48 LED.
+# The test bench steps the ambient 26 -> 42 -> 38 -> 36 °C. The indicator goes
+# on at 42 °C, stays on at 38 °C (hysteresis: on at 40.0 °C, off below
+# 38.0 °C) and goes off at 36 °C.
+# `loop` returns (10,000 + T in tenths of °C) x 10 + LED.
+# All expected values were calculated before the first run from the beta
+# equation (R25 10 kΩ, B 3380 K), the R6 divider and the firmware timing.
+# SNS_AN1 settles at 1.618740, 1.160648, 1.266386 and 1.321658 V; the firmware
+# reads 1618, 1160, 1266 and 1321 mV and recovers 26.0, 42.0, 38.0, 36.0 °C.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: sensor_v }, { port: user_led_drive }] }
+  - set: { port: ambient_c, value: 26 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 42 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 38 }
+  - call: { export: loop }
+  - set: { port: ambient_c, value: 36 }
+  - call: { export: loop }
+limits:
+  max_steps: 1000000
+  max_time_ns: 1000000000
+assertions:
+  - entry_result: { equals: 103600 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 102600, step: 2 }
+  - entry_result: { equals: 104201, step: 4 }
+  - entry_result: { equals: 103801, step: 6 }
+  # Oscilloscope: 1.65 V at the 25 °C default, then the settled divider.
+  - analog_sample: { port: sensor_v, at_ns: 0, min: 1.6499, max: 1.6501 }
+  - analog_sample: { port: sensor_v, at_ns: 100000000, min: 1.61873, max: 1.61875 }
+  - analog_sample: { port: sensor_v, at_ns: 210000000, min: 1.26638, max: 1.26640 }
+  - analog_window: { port: sensor_v, min: 1.16064, max: 1.65001 }
+  # C7 transient: the 42 °C step latches at 100.1 ms; the time constant is
+  # 10 kΩ || 5425 Ω x 100 nF = 352 µs, so the node passes the 50 % level
+  # (1.38969 V) 244 µs later. The first sample at or below it is 100.4 ms.
+  - analog_crossings: { port: sensor_v, level: 1.38969, direction: falling, from_ns: 100000000, to_ns: 200000000, times_ns: [100400000] }
+  - digital_edges: { port: user_led_drive, times_ns: [110000000, 310000000] }
+  - digital_edges: { port: user_led_state, times_ns: [110001000, 310001000] }
+  - port_value: { port: user_led_state, equals: 0 }
+  - final_time_ns: { equals: 400000000 }
+  - console_contains: "T=26.0 C mV=1618\nT=42.0 C mV=1160 ALARM\nT=38.0 C mV=1266 ALARM\nT=36.0 C mV=1321\n"

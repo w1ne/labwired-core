@@ -1,0 +1,39 @@
+# `labwired test --script test-heat-cycle.yaml`. The test bench steps the
+# temperature 25 -> 50 -> 33 -> 25 °C between `loop` calls. At 33 °C (1932 mV,
+# inside the 1800..2000 mV band) the fan must stay on: the firmware remembers
+# its state between calls.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ port: temperature_mv }, { port: fan_drive }] }
+  - call: { export: loop, repeat: 2 }
+  - set: { port: temperature_c, value: 50 }
+  - call: { export: loop, repeat: 2 }
+  - set: { port: temperature_c, value: 33 }
+  - call: { export: loop, repeat: 2 }
+  - set: { port: temperature_c, value: 25 }
+  - call: { export: loop, repeat: 2 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 0, step: 1 }
+  - entry_result: { equals: 1, step: 3 }
+  - entry_result: { equals: 1, step: 5 }
+  - entry_result: { equals: 0 }
+  - port_value: { port: temperature_mv, equals: 1650 }
+  - port_value: { port: fan_state, equals: 0 }
+  - digital_edges: { port: fan_drive, times_ns: [3000, 7000] }
+  - digital_edges: { port: fan_state, times_ns: [4000, 8000] }
+  # Oscilloscope: the sensor voltage the firmware saw during each phase.
+  - analog_sample: { port: temperature_mv, at_ns: 3000, equals: 2428 }
+  - analog_sample: { port: temperature_mv, at_ns: 5000, equals: 1932 }
+  # The fan drive edges are at the samples where the sensor voltage passes
+  # the 2000 mV turn-on and the 1800 mV turn-off threshold.
+  - analog_crossings: { port: temperature_mv, level: 2000, direction: rising, times_ns: [3000] }
+  - analog_crossings: { port: temperature_mv, level: 1800, direction: falling, times_ns: [7000] }
+  - analog_window: { port: temperature_mv, from_ns: 3000, to_ns: 4999, min: 2428, max: 2428 }
+  - final_time_ns: { equals: 8000 }

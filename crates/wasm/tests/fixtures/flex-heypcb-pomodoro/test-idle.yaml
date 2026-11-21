@@ -1,0 +1,21 @@
+# `labwired test --script test-idle.yaml`. Negative control. U1.PD6 stays low: neither LED may respond.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: u1_pd6 }
+    - { port: d1_state }
+    - { port: d2_state }
+    - { number: 1 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 0 }
+  - digital_edges: { port: u1_pd6, count: 0 }
+  - digital_edges: { port: d1_state, count: 0 }
+  - digital_edges: { port: d2_state, count: 0 }

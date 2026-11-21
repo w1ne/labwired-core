@@ -42,6 +42,7 @@ mod stm32duino_print_float_vmov;
 mod stm32f1_gpio_lock_reset;
 mod stm32f401_conformance;
 mod stm32f407_dma_walk_differential;
+mod stm32f4_tim1_9_10_11_irq_lines;
 mod stm32g0_dmamux_generators;
 mod stm32g0_uart_dma;
 mod stm32h735_peripheral_estate;

@@ -290,12 +290,23 @@ peripherals:
     irq: 13
     config:
       debug_schema: "../peripherals/rp2040/io_bank0.yaml"
+  # PADS_BANK0 (datasheet §2.19.6.3): one word per pad with PUE (bit 3) / PDE
+  # (bit 2), reset 0x56 (pulled down). Inside the clk_rst window; the greatest
+  # start wins. The SIO names it as its pad_control block, so the pull firmware
+  # writes (pinMode INPUT_PULLUP, gpio_pull_up) holds a pad nothing drives.
+  - id: "pads_bank0"
+    type: "declarative"
+    base_address: 0x4001C000
+    size: "4KB"
+    config:
+      path: "../peripherals/rp2040/pads_bank0.yaml"
   - id: "sio"
     type: "rp2040_sio"
     base_address: 0xD0000000
     size: "4KB"
     config:
       debug_schema: "../peripherals/rp2040/sio.yaml"
+      pad_control: "pads_bank0"
   # XIP_SSI: Synopsys DW_apb_ssi flash controller (datasheet §4.10). The
   # second-stage bootloader (boot2) programs it to bring up the QSPI flash and
   # switch to execute-in-place; the pico-sdk runtime re-runs a RAM copy of boot2
