@@ -630,6 +630,13 @@ fn json_to_step_result(value: Value) -> SimResult<CosimStepResult> {
     let object = value.as_object().ok_or_else(|| {
         SimulationError::Other("co-sim response must be a JSON object".to_string())
     })?;
+    // A model that cannot answer says why in one `{"error": "..."}` frame.
+    if let Some(message) = object.get("error") {
+        return Err(SimulationError::Other(format!(
+            "co-sim model reported an error: {}",
+            message.as_str().unwrap_or("(non-string error field)")
+        )));
+    }
     let outputs = object
         .get("outputs")
         .and_then(|value| value.as_object())

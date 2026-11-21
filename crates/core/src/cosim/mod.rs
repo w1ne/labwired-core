@@ -10,6 +10,9 @@ mod registry;
 pub mod routing;
 pub mod shm;
 
+// `adapter: ngspice`: the contract shared by the browser and native hosts.
+pub mod ngspice;
+
 pub use external_process::{ExternalProcessCosimAdapter, ExternalProcessCosimOptions};
 pub use registry::{
     build_cosim_adapter, build_cosim_adapter_with_base, validate_analog_models, CosimModelStep,

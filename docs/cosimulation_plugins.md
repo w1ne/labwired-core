@@ -698,9 +698,11 @@ device libraries, other MOSFET or JFET levels, other JFET `B` values, and AC/DC 
 the in-core engine. Unsupported netlist constructs fail validation with guidance
 to use the native ngspice adapter.
 
-Use `adapter: external_process` with `tools/cosim/labwired_ngspice.py` for
-circuits needing those capabilities. The browser runs `adapter: analog` with
-an inline `netlist_text`; it cannot run the external-process adapter.
+Use `adapter: ngspice` (below) or `adapter: external_process` with
+`tools/cosim/labwired_ngspice.py` for circuits needing those capabilities. The
+browser runs `adapter: analog` with an inline `netlist_text`, and
+`adapter: ngspice` through a host callback; it cannot run the
+external-process adapter.
 
 ### Browser-hosted ngspice callback
 
@@ -727,5 +729,60 @@ a session containing ngspice, any routing failure stops the entire session,
 including failures from other models, so the firmware cannot continue against a
 partially disconnected circuit. The older `pwm.duty:`, `adc.input_mv:`,
 `gpio.pad:`, and `gpio.input:` route forms are not supported and are rejected; use the board signal
-paths described above. Native execution of `adapter: ngspice` still requires a
-host integration and is refused explicitly by the core factory.
+paths described above.
+
+### `adapter: ngspice` contract (browser and native)
+
+One manifest entry runs on both hosts. Keys (shared with the app's
+`prepareBrowserNgspiceModels`):
+
+```yaml
+- id: ldr
+  adapter: ngspice
+  model: ./ldr.cir            # netlist file; must contain .tran and .end, no .control
+  step_ns: 100000
+  inputs:  { supply: board.gpio.pa5, lux: ui.ldr.lux }
+  outputs: { v_out: board.analog.pa0_volts }
+  config:
+    input_sources:            # one entry per input: volts = value * scale + offset
+      supply: { element: Vsup, scale: 3.3, offset: 0 }           # board.gpio* = logic level
+      lux:    { element: Vlux, scale: 1, offset: 0, default_value: 100 }
+    output_nodes:             # one entry per output and trace_volts name
+      v_out:  { node: out, scale: 1, offset: 0 }                 # threshold: makes it a logic level
+    trace_volts: []
+```
+
+Each boundary: every mapped source is altered (`alter <element> = <volts>`),
+the netlist's own `.tran` runs or resumes to exactly `time_ns`, the solver
+time is checked (32 ulp), and each node is read as `raw * scale + offset`
+(`>= threshold` for a logic output). An absent input uses `default_value`, or
+0 / false. Time must increase strictly.
+
+**Native host.** The core factory validates the entry
+(`labwired_core::cosim::ngspice::NgspiceModelSpec`; `labwired validate`
+reports the same issues), then starts the libngspice host from
+`tools/cosim/labwired_ngspice.py` (embedded in `labwired-core`, run as
+`python3 -c ... --bridge-spec <json>`) over the `external_process` JSONL
+transport: one process per model, a 20 s bound per exchange, and the process
+group is killed on failure. A host failure is one `{"error": "..."}` frame;
+the transport reports it and the adapter is terminally failed. Requirements:
+`python3` and libngspice on the host (`apt install libngspice0`, or
+`LABWIRED_NGSPICE_LIB`); set `LABWIRED_NGSPICE_LOG=1` to see ngspice's own
+output. The native host places a solver breakpoint (`ngSpice_SetBkpt`) at
+each boundary: on ngspice-42, `stop when time = t` alone stepped past a
+200 us boundary to the `.tran` end time.
+
+Native differences from the browser runtime, both deliberate: routes are not
+limited to `board.*` / `ui.*` paths (a CPU-free Flex manifest uses flat
+signal names), and `threshold` is accepted on any output (it stays required
+for `board.gpio_in`). The runner's `(time_ns = 0, dt_ns = 0)` initialization
+step (Flex primes its outputs with it) is answered natively with the DC
+operating point (`op`); the browser exchange rejects `dt_ns = 0`, so Flex
+with ngspice is native-only today. The browser's history/sample budgets are
+browser memory guards and are not applied natively.
+
+**Not supported on either host:** snapshot/restore of solver state (refused:
+`runtime_snapshot_refusal`, and the app refuses runtime snapshots), multi-node
+worlds, and `transport: shm`. Worked example and tests:
+[`examples/cosim-ngspice-ldr`](../examples/cosim-ngspice-ldr/README.md),
+`cargo test -p labwired-core --test cosim cosim_ngspice::`.

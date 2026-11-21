@@ -26,11 +26,12 @@ from __future__ import annotations
 import ctypes
 import ctypes.util
 import json
+import math
 import os
 import sys
 from typing import Callable, Dict, Iterable, Optional, TextIO
 
-__all__ = ["NgSpice", "serve", "NgSpiceError"]
+__all__ = ["NgSpice", "serve", "NgSpiceError", "BridgeCircuit", "serve_bridge"]
 
 
 class NgSpiceError(RuntimeError):
@@ -99,7 +100,31 @@ def _vec_name(probe: str) -> str:
 
 _LIB: Optional[ctypes.CDLL] = None
 _CALLBACKS: list = []          # keep ctypes callback objects alive for the library's lifetime
-_ACTIVE: Optional["NgSpice"] = None
+_ACTIVE = None                 # the NgSpice or BridgeCircuit that owns the library
+
+
+def _ensure_lib() -> ctypes.CDLL:
+    """Load and initialize libngspice once per process."""
+    global _LIB
+    if _LIB is None:
+        lib = _load_lib()
+        lib.ngSpice_Command.argtypes = [ctypes.c_char_p]
+        lib.ngSpice_Command.restype = ctypes.c_int
+        lib.ngSpice_Circ.argtypes = [ctypes.POINTER(ctypes.c_char_p)]
+        lib.ngSpice_Circ.restype = ctypes.c_int
+        lib.ngGet_Vec_Info.argtypes = [ctypes.c_char_p]
+        lib.ngGet_Vec_Info.restype = ctypes.POINTER(_VectorInfo)
+        lib.ngSpice_SetBkpt.argtypes = [ctypes.c_double]
+        lib.ngSpice_SetBkpt.restype = ctypes.c_bool
+        cb_char = _SEND_CHAR(_dispatch_char)
+        cb_stat = _SEND_STAT(lambda *_: 0)
+        cb_exit = _CONTROLLED_EXIT(_dispatch_exit)
+        _CALLBACKS.extend([cb_char, cb_stat, cb_exit])
+        rc = lib.ngSpice_Init(cb_char, cb_stat, cb_exit, None, None, None, None)
+        if rc != 0:
+            raise NgSpiceError(f"ngSpice_Init failed with {rc}")
+        _LIB = lib
+    return _LIB
 
 
 class NgSpice:
@@ -116,7 +141,7 @@ class NgSpice:
         probes: Dict[str, str],
         log: Optional[Callable[[str], None]] = None,
     ):
-        global _LIB, _ACTIVE
+        global _ACTIVE
         self._sources = dict(sources)
         self._probes = {k: _vec_name(v) for k, v in probes.items()}
         self._log = log or (lambda s: print(s, file=sys.stderr))
@@ -125,23 +150,7 @@ class NgSpice:
         self._pending: Dict[str, float] = {}
         self._fatal: Optional[str] = None
 
-        if _LIB is None:
-            lib = _load_lib()
-            lib.ngSpice_Command.argtypes = [ctypes.c_char_p]
-            lib.ngSpice_Command.restype = ctypes.c_int
-            lib.ngSpice_Circ.argtypes = [ctypes.POINTER(ctypes.c_char_p)]
-            lib.ngSpice_Circ.restype = ctypes.c_int
-            lib.ngGet_Vec_Info.argtypes = [ctypes.c_char_p]
-            lib.ngGet_Vec_Info.restype = ctypes.POINTER(_VectorInfo)
-            cb_char = _SEND_CHAR(_dispatch_char)
-            cb_stat = _SEND_STAT(lambda *_: 0)
-            cb_exit = _CONTROLLED_EXIT(_dispatch_exit)
-            _CALLBACKS.extend([cb_char, cb_stat, cb_exit])
-            rc = lib.ngSpice_Init(cb_char, cb_stat, cb_exit, None, None, None, None)
-            if rc != 0:
-                raise NgSpiceError(f"ngSpice_Init failed with {rc}")
-            _LIB = lib
-        self._lib = _LIB
+        self._lib = _ensure_lib()
         if _ACTIVE is not None:
             _ACTIVE._detach()
         _ACTIVE = self
@@ -270,9 +279,202 @@ def serve(
         stdout.flush()
 
 
+# --- adapter: ngspice host --------------------------------------------------
+#
+# The native half of the `adapter: ngspice` contract. LabWired core validates
+# the manifest (`labwired_core::cosim::ngspice::NgspiceModelSpec`), spawns this
+# module with `--bridge-spec <json>`, and exchanges one `external_process`
+# JSONL frame per co-simulation boundary. Each step mirrors the browser
+# exchange (`createBrowserNgspiceExchange` in the app's ngspice-runtime.ts):
+# alter every mapped source to `value * scale + offset`, run the netlist's own
+# `.tran` to exactly `time_ns`, check the solver time, and read every output
+# node as `raw * scale + offset` (compared with `threshold` for a logic output).
+
+_TIME_TOLERANCE_ULPS = 32
+
+
+class BridgeCircuit:
+    """One `adapter: ngspice` circuit, stepped to exact co-simulation boundaries."""
+
+    def __init__(self, spec: dict, log: Optional[Callable[[str], None]] = None):
+        global _ACTIVE
+        self.model_id = spec["model_id"]
+        self._inputs = spec["inputs"]
+        self._outputs = spec["outputs"]
+        self._log = log or (lambda _s: None)
+        self._diagnostics: list = []
+        self._error: Optional[str] = None
+        self._started = False
+        self._last_time_ns: Optional[int] = None
+        self._lib = _ensure_lib()
+        if _ACTIVE is not None:
+            _ACTIVE._detach()
+        _ACTIVE = self
+        path = spec["netlist_path"]
+        with open(path, encoding="utf-8") as f:
+            lines = [line.rstrip("\r") for line in f.read().splitlines() if line.strip()]
+        arr = (ctypes.c_char_p * (len(lines) + 1))(*[line.encode() for line in lines], None)
+        self._error = None
+        # `.include` / `.lib` paths resolve from the netlist's own directory;
+        # ngspice reads them while it parses the circuit.
+        cwd = os.getcwd()
+        os.chdir(os.path.dirname(os.path.abspath(path)))
+        try:
+            rc = self._lib.ngSpice_Circ(arr)
+        finally:
+            os.chdir(cwd)
+        if rc != 0 or self._error:
+            raise NgSpiceError(self._fail("netlist was rejected"))
+
+    def _detach(self) -> None:
+        self._lib.ngSpice_Command(b"remcirc")
+
+    def _on_char(self, msg: bytes, _id: int, _ud) -> int:
+        text = msg.decode(errors="replace")
+        self._diagnostics = (self._diagnostics + [text])[-16:]
+        if text.startswith("stderr Error") or text.startswith("stderr Fatal"):
+            self._error = self._error or text[len("stderr "):]
+        self._log(text)
+        return 0
+
+    def _on_exit(self, status: int, _immediate: bool, _quit: bool, _id: int, _ud) -> int:
+        self._error = self._error or f"ngspice exited with status {status}"
+        return 0
+
+    def _fail(self, what: str) -> str:
+        detail = self._error or "; ".join(self._diagnostics[-4:])
+        return f"ngspice model '{self.model_id}' {what}" + (f": {detail}" if detail else "")
+
+    def _cmd(self, command: str) -> None:
+        self._error = None
+        rc = self._lib.ngSpice_Command(command.encode())
+        if rc != 0 or self._error:
+            raise NgSpiceError(self._fail(f"command {command!r} failed"))
+
+    def _vector_last(self, name: str) -> Optional[float]:
+        info = self._lib.ngGet_Vec_Info(name.encode())
+        if not info or info.contents.v_length < 1 or not info.contents.v_realdata:
+            return None
+        return float(info.contents.v_realdata[info.contents.v_length - 1])
+
+    def _input_volts(self, name: str, source: dict, inputs: dict) -> float:
+        raw = inputs.get(name)
+        if raw is None:
+            # A routed input can be absent before firmware drives it; use the
+            # authored default or an inactive low, as the browser does.
+            raw = source.get("default_value")
+            if raw is None:
+                raw = False if source["logic"] else 0.0
+        if source["logic"]:
+            if not isinstance(raw, bool):
+                raise NgSpiceError(f"ngspice model '{self.model_id}' GPIO input '{name}' must be boolean")
+            value = 1.0 if raw else 0.0
+        elif isinstance(raw, bool):
+            value = 1.0 if raw else 0.0
+        elif isinstance(raw, (int, float)) and math.isfinite(raw):
+            value = float(raw)
+        else:
+            raise NgSpiceError(f"ngspice model '{self.model_id}' input '{name}' must be a finite number")
+        volts = value * source["scale"] + source["offset"]
+        if not math.isfinite(volts):
+            raise NgSpiceError(f"ngspice model '{self.model_id}' input '{name}' is outside the finite range")
+        return volts
+
+    def exchange(self, request: dict) -> Dict[str, object]:
+        time_ns, dt_ns = request.get("time_ns"), request.get("dt_ns")
+        if not (isinstance(time_ns, int) and not isinstance(time_ns, bool) and time_ns >= 0
+                and isinstance(dt_ns, int) and not isinstance(dt_ns, bool) and dt_ns >= 0):
+            raise NgSpiceError(f"ngspice model '{self.model_id}' received an invalid simulation time")
+        priming = time_ns == 0 and dt_ns == 0 and self._last_time_ns is None
+        if not priming and dt_ns < 1:
+            raise NgSpiceError(f"ngspice model '{self.model_id}' received an invalid simulation time")
+        if self._last_time_ns is not None and time_ns <= self._last_time_ns:
+            raise NgSpiceError(f"ngspice model '{self.model_id}' time did not advance monotonically")
+        inputs = request.get("inputs")
+        if not isinstance(inputs, dict):
+            raise NgSpiceError(f"ngspice model '{self.model_id}' received malformed inputs")
+        for name, source in self._inputs.items():
+            volts = self._input_volts(name, source, inputs)
+            self._cmd(f"alter {source['element']} = {volts:.17g}")
+
+        if priming:
+            # The runner's (0, 0) initialization step: report the DC operating
+            # point with the initial inputs applied. The browser exchange has
+            # no such step (it rejects dt_ns = 0).
+            self._cmd("op")
+        else:
+            t = time_ns / 1e9
+            # A breakpoint makes ngspice place a timepoint exactly at t; the
+            # `stop when` condition alone can step past it (measured on
+            # ngspice-42: a 200 us stop ran to the .tran end time).
+            self._cmd("delete all")
+            if not self._lib.ngSpice_SetBkpt(t):
+                raise NgSpiceError(self._fail(f"breakpoint at {t!r} s was refused"))
+            self._cmd(f"stop when time = {t:.17g}")
+            self._cmd("resume" if self._started else "run")
+            self._started = True
+            solver_t = self._vector_last("time")
+            tolerance = sys.float_info.epsilon * max(1.0, abs(t)) * _TIME_TOLERANCE_ULPS
+            if solver_t is None or abs(solver_t - t) > tolerance:
+                raise NgSpiceError(
+                    f"ngspice model '{self.model_id}' stopped at {solver_t} s; requested {t} s "
+                    f"(tolerance {tolerance} s)"
+                )
+
+        outputs: Dict[str, object] = {}
+        for name, output in self._outputs.items():
+            node = output["node"]
+            raw = 0.0 if node == "0" else self._vector_last(node)
+            if raw is None or not math.isfinite(raw):
+                raise NgSpiceError(
+                    f"ngspice model '{self.model_id}' output node '{node}' was not found or is not finite"
+                )
+            scaled = raw * output["scale"] + output["offset"]
+            if not math.isfinite(scaled):
+                raise NgSpiceError(f"ngspice model '{self.model_id}' output '{name}' is not finite")
+            threshold = output.get("threshold")
+            outputs[name] = scaled >= threshold if threshold is not None else scaled
+        self._last_time_ns = time_ns
+        return outputs
+
+
+def serve_bridge(spec: dict, stdin: Optional[TextIO] = None, stdout: Optional[TextIO] = None) -> int:
+    """Serve `adapter: ngspice` frames until stdin closes or a step fails.
+
+    A failure is answered with one `{"error": ...}` frame and ends the host:
+    a solver that failed mid-step cannot be resumed as though it had not.
+    """
+    stdin = stdin or sys.stdin
+    stdout = stdout or sys.stdout
+    log = (lambda s: print(s, file=sys.stderr)) if os.environ.get("LABWIRED_NGSPICE_LOG") else None
+    circuit: Optional[BridgeCircuit] = None
+    startup_error: Optional[str] = None
+    try:
+        circuit = BridgeCircuit(spec, log=log)
+    except (NgSpiceError, OSError) as error:
+        startup_error = str(error)
+    for line in stdin:
+        if not line.strip():
+            continue
+        try:
+            if startup_error is not None:
+                raise NgSpiceError(startup_error)
+            outputs = circuit.exchange(json.loads(line))
+        except (NgSpiceError, ValueError, KeyError, TypeError) as error:
+            stdout.write(json.dumps({"error": str(error)}) + "\n")
+            stdout.flush()
+            return 1
+        stdout.write(json.dumps({"outputs": outputs}) + "\n")
+        stdout.flush()
+    return 0
+
+
 def _main(argv: Iterable[str]) -> int:  # pragma: no cover - thin CLI
     import argparse
 
+    argv = list(argv)
+    if argv[:1] == ["--bridge-spec"] and len(argv) == 2:
+        return serve_bridge(json.loads(argv[1]))
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("netlist", help="SPICE netlist file")
     ap.add_argument("--source", action="append", default=[], metavar="NAME=VSRC",

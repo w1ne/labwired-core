@@ -78,3 +78,62 @@ def test_missing_source_name_is_a_clear_error():
         assert "nope" in str(e)
     else:
         raise AssertionError("expected KeyError")
+
+
+# --- adapter: ngspice host (`--bridge-spec`) --------------------------------
+
+BRIDGE_NETLIST = RC_NETLIST.replace(".end", ".tran 1u 10 uic\n.end")
+
+
+def _bridge_spec(tmp_path, element="Vgpio", node="out"):
+    netlist = tmp_path / "rc.cir"
+    netlist.write_text(BRIDGE_NETLIST)
+    return {
+        "model_id": "rc",
+        "netlist_path": str(netlist),
+        "inputs": {"gpio": {"element": element, "scale": 3.3, "offset": 0.0,
+                            "default_value": None, "logic": True}},
+        "outputs": {"v_out": {"node": node, "scale": 1.0, "offset": 0.0, "threshold": None},
+                    "high": {"node": node, "scale": 1.0, "offset": 0.0, "threshold": 1.65}},
+    }
+
+
+def _serve(spec, frames):
+    stdout = io.StringIO()
+    rc = lw.serve_bridge(spec, io.StringIO("".join(json.dumps(f) + "\n" for f in frames)), stdout)
+    return rc, [json.loads(line) for line in stdout.getvalue().splitlines()]
+
+
+def test_bridge_steps_land_on_exact_boundaries(tmp_path):
+    # 200 us is the boundary ngspice-42 overshot to the .tran end without a
+    # breakpoint; the host refuses any step that does not end on time_ns.
+    frames = [{"time_ns": k * 100_000, "dt_ns": 100_000, "inputs": {"gpio": True}}
+              for k in range(1, 31)]
+    rc, lines = _serve(_bridge_spec(tmp_path), frames)
+    assert rc == 0 and len(lines) == 30
+    for k, line in enumerate(lines, start=1):
+        expected = 3.3 * (1 - math.exp(-k * 100e-6 / TAU_S))
+        assert math.isclose(line["outputs"]["v_out"], expected, abs_tol=3.3 * 2e-3), (k, line)
+    assert lines[0]["outputs"]["high"] is False and lines[-1]["outputs"]["high"] is True
+
+
+def test_bridge_priming_step_reports_the_operating_point(tmp_path):
+    rc, lines = _serve(_bridge_spec(tmp_path), [
+        {"time_ns": 0, "dt_ns": 0, "inputs": {"gpio": True}},
+        {"time_ns": 100_000, "dt_ns": 100_000, "inputs": {"gpio": True}},
+    ])
+    assert rc == 0
+    assert math.isclose(lines[0]["outputs"]["v_out"], 3.3, rel_tol=1e-9)  # DC: C open
+    assert lines[1]["outputs"]["v_out"] < 1.0  # .tran uic restarts from 0 V
+
+
+def test_bridge_errors_are_one_frame_then_exit(tmp_path):
+    frame = {"time_ns": 1000, "dt_ns": 1000, "inputs": {"gpio": True}}
+    rc, lines = _serve(_bridge_spec(tmp_path, element="Vnope"), [frame, frame])
+    assert rc == 1 and len(lines) == 1 and "vnope" in lines[0]["error"]
+    rc, lines = _serve(_bridge_spec(tmp_path, node="nowhere"), [frame])
+    assert rc == 1 and "nowhere" in lines[0]["error"]
+    rc, lines = _serve(_bridge_spec(tmp_path), [frame, frame])
+    assert rc == 1 and "outputs" in lines[0] and "monotonically" in lines[1]["error"]
+    rc, lines = _serve(_bridge_spec(tmp_path), [{**frame, "inputs": {"gpio": 1.0}}])
+    assert rc == 1 and "must be boolean" in lines[0]["error"]
