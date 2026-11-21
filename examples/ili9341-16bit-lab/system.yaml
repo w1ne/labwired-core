@@ -10,6 +10,7 @@
 
 name: "ili9341-16bit-lab"
 chip: "../../configs/chips/esp32.yaml"
+debug_uart: "uart0"
 external_devices:
   - id: "tft"
     type: "ili9341-16bit"
