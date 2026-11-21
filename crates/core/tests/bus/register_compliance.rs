@@ -94,6 +94,13 @@ fn validate_chip(path: &PathBuf) -> anyhow::Result<()> {
                 let cpu = system::xtensa::configure_xtensa(&mut bus);
                 let mut machine = Machine::new(cpu, bus);
                 validate_registers(&mut machine, &chip)?;
+            } else if chip.is_esp32s2() {
+                // S2 uses its descriptor-only map, as in the S2 system
+                // builder. Installing the classic bank would replace its
+                // EXTMEM model with the classic part's different window.
+                let cpu = labwired_core::cpu::XtensaLx7::new();
+                let mut machine = Machine::new(cpu, bus);
+                validate_registers(&mut machine, &chip)?;
             } else {
                 let cpu = system::xtensa::configure_xtensa_esp32(&mut bus);
                 let mut machine = Machine::new(cpu, bus);
