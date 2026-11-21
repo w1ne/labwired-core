@@ -3136,6 +3136,9 @@
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stm32f103/2026-11-19-usart2-tx-dma-rearm-no-second-request/onboarding-summary/</loc>
     </url>
     <url>
+         <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stm32f103/2026-11-20-negative-control-i2c1-irq-old-descriptor/</loc>
+    </url>
+    <url>
          <loc>https://docs.labwired.com/coverage/renode-onboarding/attempt-history/stm32f4/2026-11-09-negative-control-sizeless-windows/NOTE/</loc>
     </url>
     <url>
