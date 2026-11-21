@@ -76,6 +76,7 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     // against the arithmetic the deleted model performed.
     &components::declarative_analog::NTC_THERMISTOR_KIT,
     &components::declarative_analog::TMP36_KIT,
+    &components::declarative_analog::MCP9701_KIT,
     &components::declarative_analog::POTENTIOMETER_KIT,
     &components::joystick::JOYSTICK_KIT,
     &components::limit_switch::LIMIT_SWITCH_KIT,

@@ -1,0 +1,31 @@
+# Microchip MCP9701/9701A low-power linear active thermistor on an ADC
+# channel — declarative `analog_source`.
+#
+# Datasheet DS20001942G, page 2, "Sensor Output" (TA = -10..+125 °C, no load):
+#
+#   V_0°C = 400 mV (typ)      TC = 19.5 mV/°C (typ)
+#
+# so V_out = 400 mV + 19.5 mV/°C * T. -10 °C = 205 mV, 25 °C = 887.5 mV,
+# 125 °C = 2837.5 mV. The specified range is -10..+125 °C (MCP9701 is the
+# -10 °C grade; the -40 °C span on page 1 is the MCP9700). V_out does not depend
+# on the supply (3.1..5.5 V), so there is no supply_mv key. The MCP9700 sibling
+# is `tmp36` (500 mV + 10 mV/°C).
+type: mcp9701
+
+behavior:
+  primitive: analog_source
+  analog:
+    formula: "min(max(400 + 19.5 * temperature, 0), 2837.5)"
+    encode: trunc
+
+metadata:
+  label: MCP9701 Temperature Sensor
+  summary: Analog temperature sensor, 19.5 mV/°C with 400 mV at 0 °C.
+  detail: >-
+    Microchip MCP9701/9701A linear active thermistor. Drive the `temperature`
+    channel (°C) at runtime and the ADC channel follows V_out = 400 mV +
+    19.5 mV/°C, independent of the supply. Starts at 25 °C (887 mV).
+  config_keys:
+    - { name: channel, ty: int, doc: "ADC channel index (0..N). Defaults to 0." }
+  inputs:
+    - { key: temperature, label: Temperature, unit: "°C", min: -10, max: 125, default: 25 }

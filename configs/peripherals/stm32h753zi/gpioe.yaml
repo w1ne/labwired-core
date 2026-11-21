@@ -1,0 +1,880 @@
+peripheral: GPIOE
+version: 0.1.0
+registers:
+- id: MODER
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 2885681151
+  fields:
+  - name: MODE0
+    bit_range:
+    - 1
+    - 0
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE1
+    bit_range:
+    - 3
+    - 2
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE2
+    bit_range:
+    - 5
+    - 4
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE3
+    bit_range:
+    - 7
+    - 6
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE4
+    bit_range:
+    - 9
+    - 8
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE5
+    bit_range:
+    - 11
+    - 10
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE6
+    bit_range:
+    - 13
+    - 12
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE7
+    bit_range:
+    - 15
+    - 14
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE8
+    bit_range:
+    - 17
+    - 16
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE9
+    bit_range:
+    - 19
+    - 18
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE10
+    bit_range:
+    - 21
+    - 20
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE11
+    bit_range:
+    - 23
+    - 22
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE12
+    bit_range:
+    - 25
+    - 24
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE13
+    bit_range:
+    - 27
+    - 26
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE14
+    bit_range:
+    - 29
+    - 28
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  - name: MODE15
+    bit_range:
+    - 31
+    - 30
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O mode.'
+  side_effects: null
+- id: OTYPER
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OT0
+    bit_range:
+    - 0
+    - 0
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT1
+    bit_range:
+    - 1
+    - 1
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT2
+    bit_range:
+    - 2
+    - 2
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT3
+    bit_range:
+    - 3
+    - 3
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT4
+    bit_range:
+    - 4
+    - 4
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT5
+    bit_range:
+    - 5
+    - 5
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT6
+    bit_range:
+    - 6
+    - 6
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT7
+    bit_range:
+    - 7
+    - 7
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT8
+    bit_range:
+    - 8
+    - 8
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT9
+    bit_range:
+    - 9
+    - 9
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT10
+    bit_range:
+    - 10
+    - 10
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT11
+    bit_range:
+    - 11
+    - 11
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT12
+    bit_range:
+    - 12
+    - 12
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT13
+    bit_range:
+    - 13
+    - 13
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT14
+    bit_range:
+    - 14
+    - 14
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  - name: OT15
+    bit_range:
+    - 15
+    - 15
+    description: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output type.
+  side_effects: null
+- id: OSPEEDR
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 201326592
+  fields:
+  - name: OSPEED0
+    bit_range:
+    - 1
+    - 0
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED1
+    bit_range:
+    - 3
+    - 2
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED2
+    bit_range:
+    - 5
+    - 4
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED3
+    bit_range:
+    - 7
+    - 6
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED4
+    bit_range:
+    - 9
+    - 8
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED5
+    bit_range:
+    - 11
+    - 10
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED6
+    bit_range:
+    - 13
+    - 12
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED7
+    bit_range:
+    - 15
+    - 14
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED8
+    bit_range:
+    - 17
+    - 16
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED9
+    bit_range:
+    - 19
+    - 18
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED10
+    bit_range:
+    - 21
+    - 20
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED11
+    bit_range:
+    - 23
+    - 22
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED12
+    bit_range:
+    - 25
+    - 24
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED13
+    bit_range:
+    - 27
+    - 26
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED14
+    bit_range:
+    - 29
+    - 28
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  - name: OSPEED15
+    bit_range:
+    - 31
+    - 30
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O output speed. Note: Refer to the device datasheet for the frequency specifications and the power supply and load conditions for each speed.'
+  side_effects: null
+- id: PUPDR
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 303038464
+  fields:
+  - name: PUPD0
+    bit_range:
+    - 1
+    - 0
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD1
+    bit_range:
+    - 3
+    - 2
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD2
+    bit_range:
+    - 5
+    - 4
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD3
+    bit_range:
+    - 7
+    - 6
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD4
+    bit_range:
+    - 9
+    - 8
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD5
+    bit_range:
+    - 11
+    - 10
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD6
+    bit_range:
+    - 13
+    - 12
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD7
+    bit_range:
+    - 15
+    - 14
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD8
+    bit_range:
+    - 17
+    - 16
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD9
+    bit_range:
+    - 19
+    - 18
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD10
+    bit_range:
+    - 21
+    - 20
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD11
+    bit_range:
+    - 23
+    - 22
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD12
+    bit_range:
+    - 25
+    - 24
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD13
+    bit_range:
+    - 27
+    - 26
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD14
+    bit_range:
+    - 29
+    - 28
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  - name: PUPD15
+    bit_range:
+    - 31
+    - 30
+    description: '[1:0]: Port x configuration bits (y = 0..15) These bits are written by software to configure the I/O pull-up or pull-down'
+  side_effects: null
+- id: IDR
+  address_offset: 16
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: ID0
+    bit_range:
+    - 0
+    - 0
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID1
+    bit_range:
+    - 1
+    - 1
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID2
+    bit_range:
+    - 2
+    - 2
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID3
+    bit_range:
+    - 3
+    - 3
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID4
+    bit_range:
+    - 4
+    - 4
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID5
+    bit_range:
+    - 5
+    - 5
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID6
+    bit_range:
+    - 6
+    - 6
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID7
+    bit_range:
+    - 7
+    - 7
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID8
+    bit_range:
+    - 8
+    - 8
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID9
+    bit_range:
+    - 9
+    - 9
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID10
+    bit_range:
+    - 10
+    - 10
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID11
+    bit_range:
+    - 11
+    - 11
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID12
+    bit_range:
+    - 12
+    - 12
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID13
+    bit_range:
+    - 13
+    - 13
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID14
+    bit_range:
+    - 14
+    - 14
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  - name: ID15
+    bit_range:
+    - 15
+    - 15
+    description: Port input data bit (y = 0..15) These bits are read-only. They contain the input value of the corresponding I/O port.
+  side_effects: null
+- id: ODR
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OD0
+    bit_range:
+    - 0
+    - 0
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD1
+    bit_range:
+    - 1
+    - 1
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD2
+    bit_range:
+    - 2
+    - 2
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD3
+    bit_range:
+    - 3
+    - 3
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD4
+    bit_range:
+    - 4
+    - 4
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD5
+    bit_range:
+    - 5
+    - 5
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD6
+    bit_range:
+    - 6
+    - 6
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD7
+    bit_range:
+    - 7
+    - 7
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD8
+    bit_range:
+    - 8
+    - 8
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD9
+    bit_range:
+    - 9
+    - 9
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD10
+    bit_range:
+    - 10
+    - 10
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD11
+    bit_range:
+    - 11
+    - 11
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD12
+    bit_range:
+    - 12
+    - 12
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD13
+    bit_range:
+    - 13
+    - 13
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD14
+    bit_range:
+    - 14
+    - 14
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  - name: OD15
+    bit_range:
+    - 15
+    - 15
+    description: 'Port output data bit These bits can be read and written by software. Note: For atomic bit set/reset, the OD bits can be individually set and/or reset by writing to the GPIOx_BSRR or GPIOx_BRR registers (x = A..F).'
+  side_effects: null
+- id: BSRR
+  address_offset: 24
+  size: 32
+  access: WRITE_ONLY
+  reset_value: 0
+  fields:
+  - name: BS0
+    bit_range:
+    - 0
+    - 0
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS1
+    bit_range:
+    - 1
+    - 1
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS2
+    bit_range:
+    - 2
+    - 2
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS3
+    bit_range:
+    - 3
+    - 3
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS4
+    bit_range:
+    - 4
+    - 4
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS5
+    bit_range:
+    - 5
+    - 5
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS6
+    bit_range:
+    - 6
+    - 6
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS7
+    bit_range:
+    - 7
+    - 7
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS8
+    bit_range:
+    - 8
+    - 8
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS9
+    bit_range:
+    - 9
+    - 9
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS10
+    bit_range:
+    - 10
+    - 10
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS11
+    bit_range:
+    - 11
+    - 11
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS12
+    bit_range:
+    - 12
+    - 12
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS13
+    bit_range:
+    - 13
+    - 13
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS14
+    bit_range:
+    - 14
+    - 14
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BS15
+    bit_range:
+    - 15
+    - 15
+    description: Port x set bit y (y= 0..15) These bits are write-only. A read to these bits returns the value 0x0000.
+  - name: BR0
+    bit_range:
+    - 16
+    - 16
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR1
+    bit_range:
+    - 17
+    - 17
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR2
+    bit_range:
+    - 18
+    - 18
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR3
+    bit_range:
+    - 19
+    - 19
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR4
+    bit_range:
+    - 20
+    - 20
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR5
+    bit_range:
+    - 21
+    - 21
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR6
+    bit_range:
+    - 22
+    - 22
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR7
+    bit_range:
+    - 23
+    - 23
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR8
+    bit_range:
+    - 24
+    - 24
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR9
+    bit_range:
+    - 25
+    - 25
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR10
+    bit_range:
+    - 26
+    - 26
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR11
+    bit_range:
+    - 27
+    - 27
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR12
+    bit_range:
+    - 28
+    - 28
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR13
+    bit_range:
+    - 29
+    - 29
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR14
+    bit_range:
+    - 30
+    - 30
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  - name: BR15
+    bit_range:
+    - 31
+    - 31
+    description: 'Port x reset bit y (y = 0..15) These bits are write-only. A read to these bits returns the value 0x0000. Note: If both BSx and BRx are set, BSx has priority.'
+  side_effects: null
+- id: LCKR
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LCK0
+    bit_range:
+    - 0
+    - 0
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK1
+    bit_range:
+    - 1
+    - 1
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK2
+    bit_range:
+    - 2
+    - 2
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK3
+    bit_range:
+    - 3
+    - 3
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK4
+    bit_range:
+    - 4
+    - 4
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK5
+    bit_range:
+    - 5
+    - 5
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK6
+    bit_range:
+    - 6
+    - 6
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK7
+    bit_range:
+    - 7
+    - 7
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK8
+    bit_range:
+    - 8
+    - 8
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK9
+    bit_range:
+    - 9
+    - 9
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK10
+    bit_range:
+    - 10
+    - 10
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK11
+    bit_range:
+    - 11
+    - 11
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK12
+    bit_range:
+    - 12
+    - 12
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK13
+    bit_range:
+    - 13
+    - 13
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK14
+    bit_range:
+    - 14
+    - 14
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCK15
+    bit_range:
+    - 15
+    - 15
+    description: Port x lock bit y (y= 0..15) These bits are read/write but can only be written when the LCKK bit is 0.
+  - name: LCKK
+    bit_range:
+    - 16
+    - 16
+    description: 'Lock key This bit can be read any time. It can only be modified using the lock key write sequence. LOCK key write sequence: WR LCKR[16] = 1 + LCKR[15:0] WR LCKR[16] = 0 + LCKR[15:0] WR LCKR[16] = 1 + LCKR[15:0] RD LCKR RD LCKR[16] = 1 (this read operation is optional but it confirms that the lock is active) Note: During the LOCK key write sequence, the value of LCK[15:0] must not change. Any error in the lock sequence aborts the lock. After the first lock sequence on any bit of the port, any read access on the LCKK bit will return 1 until the next MCU reset or peripheral reset.'
+  side_effects: null
+- id: AFRL
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AFSEL0
+    bit_range:
+    - 3
+    - 0
+    description: '[3:0]: Alternate function selection for port x pin y (y = 0..7) These bits are written by software to configure alternate function I/Os AFSELy selection:'
+  - name: AFSEL1
+    bit_range:
+    - 7
+    - 4
+    description: '[3:0]: Alternate function selection for port x pin y (y = 0..7) These bits are written by software to configure alternate function I/Os AFSELy selection:'
+  - name: AFSEL2
+    bit_range:
+    - 11
+    - 8
+    description: '[3:0]: Alternate function selection for port x pin y (y = 0..7) These bits are written by software to configure alternate function I/Os AFSELy selection:'
+  - name: AFSEL3
+    bit_range:
+    - 15
+    - 12
+    description: '[3:0]: Alternate function selection for port x pin y (y = 0..7) These bits are written by software to configure alternate function I/Os AFSELy selection:'
+  - name: AFSEL4
+    bit_range:
+    - 19
+    - 16
+    description: '[3:0]: Alternate function selection for port x pin y (y = 0..7) These bits are written by software to configure alternate function I/Os AFSELy selection:'
+  - name: AFSEL5
+    bit_range:
+    - 23
+    - 20
+    description: '[3:0]: Alternate function selection for port x pin y (y = 0..7) These bits are written by software to configure alternate function I/Os AFSELy selection:'
+  - name: AFSEL6
+    bit_range:
+    - 27
+    - 24
+    description: '[3:0]: Alternate function selection for port x pin y (y = 0..7) These bits are written by software to configure alternate function I/Os AFSELy selection:'
+  - name: AFSEL7
+    bit_range:
+    - 31
+    - 28
+    description: '[3:0]: Alternate function selection for port x pin y (y = 0..7) These bits are written by software to configure alternate function I/Os AFSELy selection:'
+  side_effects: null
+- id: AFRH
+  address_offset: 36
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: AFSEL8
+    bit_range:
+    - 3
+    - 0
+    description: '[3:0]: Alternate function selection for port x pin y (y = 8..15) These bits are written by software to configure alternate function I/Os'
+  - name: AFSEL9
+    bit_range:
+    - 7
+    - 4
+    description: '[3:0]: Alternate function selection for port x pin y (y = 8..15) These bits are written by software to configure alternate function I/Os'
+  - name: AFSEL10
+    bit_range:
+    - 11
+    - 8
+    description: '[3:0]: Alternate function selection for port x pin y (y = 8..15) These bits are written by software to configure alternate function I/Os'
+  - name: AFSEL11
+    bit_range:
+    - 15
+    - 12
+    description: '[3:0]: Alternate function selection for port x pin y (y = 8..15) These bits are written by software to configure alternate function I/Os'
+  - name: AFSEL12
+    bit_range:
+    - 19
+    - 16
+    description: '[3:0]: Alternate function selection for port x pin y (y = 8..15) These bits are written by software to configure alternate function I/Os'
+  - name: AFSEL13
+    bit_range:
+    - 23
+    - 20
+    description: '[3:0]: Alternate function selection for port x pin y (y = 8..15) These bits are written by software to configure alternate function I/Os'
+  - name: AFSEL14
+    bit_range:
+    - 27
+    - 24
+    description: '[3:0]: Alternate function selection for port x pin y (y = 8..15) These bits are written by software to configure alternate function I/Os'
+  - name: AFSEL15
+    bit_range:
+    - 31
+    - 28
+    description: '[3:0]: Alternate function selection for port x pin y (y = 8..15) These bits are written by software to configure alternate function I/Os'
+  side_effects: null
+interrupts: null
+timing: null
