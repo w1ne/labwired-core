@@ -2,8 +2,6 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-#![cfg(feature = "event-scheduler")]
-
 //! `--capture-app-entry` must cost the run nothing once the snapshot is written.
 //!
 //! The hosted builder runs every ESP32-C3 rom-boot with a snapshot-cache miss
@@ -23,6 +21,9 @@
 //! * the capture is written,
 //! * the capture run is observably identical to the run without the flag,
 //! * it is not several times slower in wall clock.
+//!
+//! Built without `event-scheduler` there is no idle skip at all, so both runs
+//! take the same path and the test still holds; it needs no feature gate.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
