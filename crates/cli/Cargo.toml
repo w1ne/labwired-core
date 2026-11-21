@@ -120,5 +120,10 @@ required-features = ["event-scheduler"]
 
 # #![cfg(feature = "event-scheduler")]
 [[test]]
+name = "c3_capture_app_entry_speed"
+required-features = ["event-scheduler"]
+
+# #![cfg(feature = "event-scheduler")]
+[[test]]
 name = "e2e_esp32c3_ble_two_node"
 required-features = ["event-scheduler"]

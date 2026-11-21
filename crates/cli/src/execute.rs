@@ -308,6 +308,12 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
     //   * `--breakpoint` / `--detect-stuck` re-read the PC between calls, and
     //     a WFI spin is exactly a stuck PC,
     //   * `--capture-app-entry` watches for the app-entry PC between calls,
+    //     but only until it has captured. That half is per-iteration (the
+    //     `app_entry_capture.is_none()` check below), not standing: the cold
+    //     rom-boot run the builder makes on every snapshot-cache miss used to
+    //     keep the fuel at one cycle for the WHOLE run, long after the capture
+    //     was written, and ran 7-11x slower in wall clock than the identical
+    //     run without the flag (same steps, same cycles, same UART).
     //   * poll-mode logic capture and ShutdownLatency assertions need
     //     cycle-accurate attribution of events inside the window.
     // Time-triggered stimuli, UART injections and `max_cycles` are NOT in that
@@ -339,7 +345,6 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
         && ctx.machine.config.idle_fast_forward_enabled
         && ctx.args.breakpoint.is_empty()
         && detect_stuck.is_none()
-        && ctx.args.capture_app_entry.is_none()
         && !ctx.machine.logic_poll_active()
         && !requires_fine_grained_observation(ctx.assertions);
 
@@ -889,6 +894,7 @@ pub(crate) fn execute_test_loop<C: labwired_core::Cpu>(
             let chunk = remaining.min(JIT_RUN_CHUNK);
             (u64::from(chunk), chunk)
         } else if idle_ff_wide_observation
+            && app_entry_capture.is_none()
             && !ctx.counter_metrics
             && assertions_first_passed_at.is_none()
             && ctx
