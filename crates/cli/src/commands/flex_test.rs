@@ -37,6 +37,9 @@ pub(crate) struct FlexRunOutcome {
 struct FlexTraceFile {
     digital: FlexDigitalTraceBatch,
     analog: FlexAnalogTraceBatch,
+    /// Every analog channel over the whole run as change points; the scope
+    /// ring above keeps only the newest samples.
+    analog_series: labwired_core::analog::AnalogSeries,
     /// The transfers of the manifest's I2C buses. Absent without a bus.
     #[serde(skip_serializing_if = "Option::is_none")]
     i2c: Option<FlexI2cTraceBatch>,
@@ -304,6 +307,7 @@ fn write_artifacts(
         let trace = FlexTraceFile {
             digital,
             analog: runtime.analog_trace_snapshot(0),
+            analog_series: runtime.analog_series(),
             i2c: Some(runtime.i2c_trace_snapshot(0)).filter(|i2c| !i2c.buses.is_empty()),
             spi: Some(runtime.spi_trace_snapshot(0)).filter(|spi| !spi.buses.is_empty()),
             console: runtime.console_capture(),

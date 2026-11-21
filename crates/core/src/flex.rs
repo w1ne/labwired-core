@@ -9,7 +9,9 @@
 //! No `Cpu`, `Machine`, MMIO address map, second rule engine, or analog solver
 //! is constructed here. Target binaries keep the separate machine path.
 
-use crate::analog::{AnalogCrossing, AnalogSample, AnalogTraceBatch, AnalogWindowTally};
+use crate::analog::{
+    AnalogCrossing, AnalogSample, AnalogSeries, AnalogTraceBatch, AnalogWindowTally,
+};
 use crate::cosim::{CosimRunner, CosimSignalValue, CosimSignals};
 use crate::flex_console::{Console, FlexConsoleCapture, FlexConsoleSummary};
 use crate::flex_i2c::{FlexI2cBusSummary, FlexI2cTraceBatch, FlexI2cTransfer, I2cBuses};
@@ -828,6 +830,15 @@ impl FlexRuntime {
         self.runner
             .analog_trace_registry()
             .window_tally(id, self.time_ns)
+    }
+
+    /// The run-long change-point series of every oscilloscope channel, the
+    /// block the detailed path writes as `result.json`'s `analog_series`.
+    /// Unlike the scope ring it still holds the start of a long run. A point
+    /// is written when a value leaves the series deadband; the exact answers
+    /// of the test assertions come from the tallies, not from this series.
+    pub fn analog_series(&self) -> AnalogSeries {
+        self.runner.analog_trace_registry().series()
     }
 
     /// The unannotated analog engine batch, for the exporters that already

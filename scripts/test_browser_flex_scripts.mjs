@@ -138,6 +138,7 @@ try {
             ms,
             digital: plain(runtime.digital_trace_snapshot(0)),
             analog: plain(runtime.analog_trace_snapshot(0)),
+            analogSeries: plain(runtime.analog_series()),
             i2c: plain(runtime.i2c_trace_snapshot(0)),
             spi: plain(runtime.spi_trace_snapshot(0)),
             // `null` or `undefined` for a manifest without a console.
@@ -154,6 +155,7 @@ try {
     assert.equal(ran.result, nativeResult, `${fixture}/${name}: the browser result differs from labwired test`);
     assert.deepEqual(canonical(ran.digital), canonical(nativeTrace.digital), `${fixture}/${name}: the browser logic-analyzer capture differs from labwired test`);
     assert.deepEqual(canonical(ran.analog), canonical(nativeTrace.analog), `${fixture}/${name}: the browser oscilloscope capture differs from labwired test`);
+    assert.deepEqual(canonical(ran.analogSeries), canonical(nativeTrace.analog_series), `${fixture}/${name}: the browser run-long analog series differs from labwired test`);
     // The CLI writes the I2C record only for a manifest with a bus.
     if (ran.i2c.buses.length > 0 || nativeTrace.i2c !== undefined) {
       assert.deepEqual(canonical(ran.i2c), canonical(nativeTrace.i2c), `${fixture}/${name}: the browser I2C transfer record differs from labwired test`);
@@ -198,7 +200,7 @@ try {
 
 console.log(JSON.stringify({
   status: 'passed',
-  checks: ['result-text-equality', 'logic-analyzer-capture-equality', 'oscilloscope-capture-equality', 'i2c-transfer-record-equality', 'spi-transfer-record-equality', 'console-record-equality', 'every-script-passes'],
+  checks: ['result-text-equality', 'logic-analyzer-capture-equality', 'oscilloscope-capture-equality', 'analog-series-equality', 'i2c-transfer-record-equality', 'spi-transfer-record-equality', 'console-record-equality', 'every-script-passes'],
   execution_path: 'flex_portable_wasm',
   cpu_emulation: false,
   firmware_interpreter: 'wasmi, in labwired-wasm and in the CLI',

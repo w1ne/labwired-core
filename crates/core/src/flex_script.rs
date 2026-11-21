@@ -134,6 +134,15 @@ pub struct FlexTraceSummary {
     pub analog_channels: usize,
     pub analog_samples: usize,
     pub analog_dropped: u64,
+    /// Change points of the run-long analog series (`analog_series` in
+    /// `flex-trace.json`). Present only when the scope ring dropped samples,
+    /// so a reader knows the whole run is still on record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub analog_series_points: Option<usize>,
+    /// Series points not kept because a channel reached its cap. Present with
+    /// `analog_series_points`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub analog_series_dropped: Option<u64>,
     /// Every `i2c_transfer` of the run. Absent when the manifest has no bus.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub i2c_transfers: Option<u64>,
@@ -1325,6 +1334,8 @@ pub fn run_script(
             })
             .collect();
     result.assertions = assertions;
+    let series = (analog.dropped > 0).then(|| runtime.analog_series());
+    let series = series.as_ref();
     result.traces = Some(FlexTraceSummary {
         time_unit: "ns",
         digital_channels: digital.channels.len(),
@@ -1333,6 +1344,15 @@ pub fn run_script(
         analog_channels: analog.channels.len(),
         analog_samples: analog.samples.len(),
         analog_dropped: analog.dropped,
+        analog_series_points: series.map(|series| {
+            series
+                .channels
+                .iter()
+                .map(|channel| channel.points.len())
+                .sum()
+        }),
+        analog_series_dropped: series
+            .map(|series| series.channels.iter().map(|channel| channel.dropped).sum()),
         i2c_transfers: (!i2c.buses.is_empty()).then_some(i2c.next_cursor),
         spi_transfers: (!spi.buses.is_empty()).then_some(spi.next_cursor),
     });

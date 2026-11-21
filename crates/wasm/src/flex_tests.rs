@@ -2791,6 +2791,11 @@ fn flex_browser_script_receipt_covers_every_script_and_matches_the_shared_runner
         .unwrap()
         .iter()
         .any(|check| check == "console-record-equality"));
+    assert!(receipt["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|check| check == "analog-series-equality"));
 
     let mut suspended_steps = 0;
     let mut i2c_transfers = 0;

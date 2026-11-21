@@ -221,7 +221,14 @@ the oscilloscope records it, so `analog_sample`, `analog_window` and
 `analog_crossings` are exact for a run of any length. The oscilloscope capture
 keeps the newest 20,000 samples (or the model's `trace_samples`);
 `traces.analog_dropped` is the number of older samples that `flex-trace.json`
-and `--analog-trace` do not hold.
+and `--analog-trace` do not hold. `flex-trace.json` also holds `analog_series`,
+the run-long change-point series of every channel that the detailed path
+writes to `result.json`: a point is written when a value leaves the series
+deadband (the larger of 0.5 % of the held value and 0.001 in the channel
+unit; 1e-5 for `A`, 1 for `rpm`), up to 65,536 points per
+channel. When the capture dropped samples, `traces.analog_series_points` and
+`traces.analog_series_dropped` tell whether that series still holds the whole
+run. The browser runtime gives the same series from `analog_series()`.
 
 A `sequence` replaces `entry` when the firmware has more than one entry
 point, for example `setup` and `loop`, or when the environment changes during

@@ -623,7 +623,13 @@ fn every_flex_fixture_runs_unchanged_through_the_generic_runner() {
             assert!(!assertions.is_empty(), "{script:?} asserts nothing");
             assert!(assertions.iter().all(|a| a["passed"] == true));
             assert_eq!(result["traces"]["digital_dropped"], 0, "{script:?}");
-            assert_eq!(result["traces"]["analog_dropped"], 0, "{script:?}");
+            // A long run may overflow the scope ring only when the run-long
+            // series still holds every change point.
+            if result["traces"]["analog_dropped"] != 0 {
+                assert_eq!(result["traces"]["analog_series_dropped"], 0, "{script:?}");
+            } else {
+                assert!(result["traces"]["analog_series_points"].is_null());
+            }
             let report = &result["run_report"];
             assert_eq!(report["execution_path"], "flex_portable_wasm");
             assert_eq!(report["target_cpu_emulated"], false);
@@ -1256,6 +1262,21 @@ fn analog_assertions_stay_exact_after_the_oscilloscope_capture_overflows() {
     let oldest = trace["analog"]["samples"][0]["time_ns"].as_u64().unwrap();
     // The newest 20,000 samples start after the heat arrived at 3,000 ns.
     assert_eq!(oldest, 10_005_000);
+    // The run-long series still holds the whole run: 25 °C at 0 ns, 50 °C
+    // from 3,000 ns, 33 °C from 15,003,000 ns, 25 °C from 15,005,000 ns.
+    assert_eq!(result["traces"]["analog_series_points"], 4);
+    assert_eq!(result["traces"]["analog_series_dropped"], 0);
+    let series = &trace["analog_series"]["channels"][0];
+    assert_eq!(series["name"], trace["analog"]["channels"][0]["name"]);
+    assert_eq!(
+        series["points"],
+        serde_json::json!([
+            [0, 1650.0],
+            [3000, 2428.0],
+            [15003000, 1932.0],
+            [15005000, 1650.0]
+        ])
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -1760,4 +1781,79 @@ fn console_output_needs_a_declared_console() {
         assert!(!dir.join("console.log").exists());
         let _ = std::fs::remove_dir_all(dir);
     }
+}
+
+#[test]
+fn a_seconds_long_run_of_a_microsecond_analog_model_keeps_its_whole_series() {
+    // The pinned MCP9700 board with U4 evaluated every 1 µs instead of 1 ms:
+    // 4 s of virtual time write 4,000,001 oscilloscope rows into a 20,000-row
+    // ring. A bench step set at k s reaches the output at k s + 1 µs.
+    let fixture = fixtures_root().join("flex-heypcb-esp32-mcp9700");
+    let dir = unique_dir("mcp9700-1us");
+    let manifest = std::fs::read_to_string(fixture.join("system.yaml")).expect("manifest");
+    let fine = manifest.replacen(
+        "adapter: behavior\n    step_ns: 1000000",
+        "adapter: behavior\n    step_ns: 1000",
+        1,
+    );
+    assert_ne!(fine, manifest, "the U4 step is no longer 1 ms");
+    std::fs::write(dir.join("system.yaml"), fine).expect("write manifest");
+    std::fs::copy(fixture.join("firmware.wasm"), dir.join("firmware.wasm")).expect("firmware");
+    let script = dir.join("alarm-1us.yaml");
+    std::fs::write(
+        &script,
+        concat!(
+            "schema_version: \"1.0\"\n",
+            "inputs: { flex: system.yaml, firmware: firmware.wasm }\n",
+            "sequence:\n",
+            "  - call: { export: setup, args: [{ port: sensor_mv }, { port: user_led_drive }] }\n",
+            "  - call: { export: loop }\n",
+            "  - set: { port: ambient_c, value: 41 }\n",
+            "  - call: { export: loop }\n",
+            "  - set: { port: ambient_c, value: 39 }\n",
+            "  - call: { export: loop }\n",
+            "  - set: { port: ambient_c, value: 37 }\n",
+            "  - call: { export: loop }\n",
+            "limits: { max_steps: 1000000, max_time_ns: 10000000000 }\n",
+            "assertions:\n",
+            "  - entry_result: { equals: 103700 }\n",
+            "  - analog_sample: { port: sensor_mv, at_ns: 1000, equals: 750 }\n",
+            "  - analog_crossings: { port: sensor_mv, level: 900, direction: rising, times_ns: [1000001000] }\n",
+            "  - analog_crossings: { port: sensor_mv, level: 880, direction: falling, times_ns: [3000001000] }\n",
+            "  - final_time_ns: { equals: 4000000000 }\n",
+        ),
+    )
+    .expect("write script");
+    let output = run(&script, &dir, &[]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result = read_result(&dir);
+    assert_eq!(result["status"], "pass");
+    let traces = &result["traces"];
+    assert_eq!(traces["analog_samples"], 20_000);
+    assert_eq!(traces["analog_dropped"], 3_980_001);
+    assert_eq!(traces["analog_series_points"], 4);
+    assert_eq!(traces["analog_series_dropped"], 0);
+    let trace = json(&dir.join("flex-trace.json"));
+    // The ring holds the newest 20,000 rows; the series starts at 0 ns.
+    assert_eq!(trace["analog"]["samples"][0]["time_ns"], 3_980_001_000u64);
+    assert_eq!(trace["analog_series"]["end_time_ns"], 4_000_000_000u64);
+    let series = &trace["analog_series"]["channels"][0];
+    assert_eq!(series["name"], "source-u4-mcp9700.voltage_mv");
+    assert_eq!(series["unit"], "mV");
+    assert_eq!(
+        series["points"],
+        serde_json::json!([
+            [0, 750.0],
+            [1000001000u64, 910.0],
+            [2000001000u64, 890.0],
+            [3000001000u64, 870.0]
+        ])
+    );
+    let _ = std::fs::remove_dir_all(dir);
 }

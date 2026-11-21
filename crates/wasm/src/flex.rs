@@ -109,6 +109,13 @@ impl WasmFlexRuntime {
         serde_wasm_bindgen::to_value(&self.runtime.analog_trace_snapshot(cursor)).map_err(js_error)
     }
 
+    /// The run-long change-point series of every oscilloscope channel, as
+    /// `flex-trace.json`'s `analog_series`. It still holds the start of a run
+    /// that the scope ring no longer does.
+    pub fn analog_series(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.runtime.analog_series()).map_err(js_error)
+    }
+
     pub fn i2c_bus_id(&self, name: &str) -> Result<u32, JsValue> {
         self.runtime.i2c_bus_id(name).map_err(js_error)
     }
