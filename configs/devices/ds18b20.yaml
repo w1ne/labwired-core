@@ -19,6 +19,11 @@
 # result appears in the scratchpad when the conversion ends. During it read
 # slots return 0, then 1 (externally powered part).
 #
+# The `connected` input (default 1) is the probe being on the bus. At 0 there
+# is no presence pulse and DQ is released, so a DallasTemperature read sees
+# DEVICE_DISCONNECTED_C. Setting it back to 1 resumes presence and conversions
+# on the next reset.
+#
 # NOT modelled: parasite power, the alarm flag and ALARM SEARCH (the part
 # never answers it), conversion self-heating and accuracy error.
 type: ds18b20
@@ -78,7 +83,7 @@ behavior:
 metadata:
   label: "DS18B20 1-Wire thermometer"
   summary: "Maxim DS18B20 digital thermometer on a 1-Wire bus (9-12 bit, -55 to +125 °C)."
-  detail: "One open-drain DQ line. Reset/presence, write and read slots and the ROM commands (READ, MATCH, SKIP, SEARCH ROM) are modelled; CONVERT T takes the datasheet conversion time for the configured resolution and only then updates the scratchpad, READ SCRATCHPAD returns nine bytes with the CRC-8, WRITE/COPY SCRATCHPAD and RECALL E2 move TH, TL and the configuration. Externally powered. Not modelled: parasite power, alarm search, self-heating and accuracy error."
+  detail: "One open-drain DQ line. Reset/presence, write and read slots and the ROM commands (READ, MATCH, SKIP, SEARCH ROM) are modelled; CONVERT T takes the datasheet conversion time for the configured resolution and only then updates the scratchpad, READ SCRATCHPAD returns nine bytes with the CRC-8, WRITE/COPY SCRATCHPAD and RECALL E2 move TH, TL and the configuration. Externally powered. The connected input (default 1) drops the part off the bus at 0: no presence pulse, DQ released. Not modelled: parasite power, alarm search, self-heating and accuracy error."
   category: gpio
   config_keys:
     - name: dq_pin
@@ -90,5 +95,9 @@ metadata:
     - name: temperature_c
       ty: float
       doc: "Initial temperature in °C. Default 25."
+    - name: connected
+      ty: float
+      doc: "1 while the probe is on the bus, 0 when disconnected. Default 1."
   inputs:
     - { key: temperature, label: "Temperature", unit: "°C", min: -55, max: 125, default: 25, config_key: temperature_c, expr_scale: 16 }
+    - { key: connected, label: "Connected", unit: "", min: 0, max: 1, default: 1, config_key: connected }
