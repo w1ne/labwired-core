@@ -1060,6 +1060,13 @@
     "behavior": false,
     "excluded": 0,
     "level": 0,
+    "name": "stm32h753zi",
+    "reg_match": 0
+  },
+  {
+    "behavior": false,
+    "excluded": 0,
+    "level": 0,
     "name": "esp32c6fh4",
     "reg_match": 0
   }

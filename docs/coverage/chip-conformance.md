@@ -159,6 +159,7 @@ This page covers the public models. For every chip we model — public and priva
 | rp2040-feather | **L0** | ✓ | 26 | — | — | — |
 | rp2350-feather | **L0** | ✓ | 27 | — | — | — |
 | stm32h723zg | **L0** | ✓ | 43 | — | — | — |
+| stm32h753zi | **L0** | ✓ | 43 | — | — | — |
 | esp32c6fh4 | **L0** | ✓ | 69 | — | — | — |
 
 ## Declared platforms without a model
