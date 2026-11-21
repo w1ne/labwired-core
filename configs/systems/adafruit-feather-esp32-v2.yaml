@@ -20,6 +20,7 @@
 #   * I2C is SDA=GPIO22 / SCL=GPIO20, not the DevKit's 21/22.
 name: "adafruit-feather-esp32-v2"
 chip: "../chips/esp32.yaml"
+debug_uart: "uart0"
 external_devices: []
 board_io:
   - id: "status_led"

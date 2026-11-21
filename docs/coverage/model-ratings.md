@@ -59,7 +59,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | nrf52833 | open | L1 | 48 | 995.9 | 2.1 | ≥1× (CI) | — |
 | nrf52840 | open | L1 | 52 | 995.9 | 2.1 | ≥1× (CI) | [doc](docs/boards/nrf52840.md) |
 | nrf5340 | open | L1 | 22 | 819.6 | 1.4 | ≥1× (CI) | [doc](docs/boards/nrf5340.md) |
-| rp2040 | open | L1 | 26 | 905.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2040.md) |
+| rp2040 | open | L1 | 27 | 905.9 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2040.md) |
 | stm32f103 | open | L1 | 31 | 835.3 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f103.md) |
 | stm32f103rb | open | L0 | 32 | 835.3 | 1.6 | ≥1× (CI) | — |
 | stm32f103rb-nucleo-bme280-smoke | open | L0 | 7 | 828.5 | 1.5 | ≥1× (CI) | — |
@@ -87,7 +87,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | stm32f401ve | open | L0 | 24 | 834.6 | 1.5 | ≥1× (CI) | — |
 | stm32f405 | open | L1 | 22 | 834.1 | 1.5 | ≥1× (CI) | [doc](docs/boards/stm32f405.md) |
 | stm32f767 | open | L1 | 37 | 834.4 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f767.md) |
-| rp2350 | open | L1 | 27 | 906.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2350.md) |
+| rp2350 | open | L1 | 28 | 906.1 | 1.6 | ≥1× (CI) | [doc](docs/boards/rp2350.md) |
 | stm32f407 | open | L1 | 34 | 834.5 | 1.6 | ≥1× (CI) | [doc](docs/boards/stm32f407.md) |
 | stm32f407ie | open | L0 | 34 | 834.5 | 1.6 | ≥1× (CI) | — |
 | stm32f407ig | open | L0 | 34 | 834.5 | 1.6 | ≥1× (CI) | — |
@@ -157,8 +157,8 @@ same fields but never their source, chip YAML, binary or build paths.
 | esp32p4 | open | L0 | 4 | — | — | ≥1× (CI) | — |
 | esp32s2 | open | L0 | 2 | — | — | ≥1× (CI) | — |
 | esp32s2-arduino | open | L1 | 32 | — | — | ≥1× (CI) | — |
-| rp2040-feather | open | L0 | 26 | 906.8 | 1.6 | ≥1× (CI) | — |
-| rp2350-feather | open | L0 | 27 | 906.8 | 1.7 | ≥1× (CI) | — |
+| rp2040-feather | open | L0 | 27 | 906.8 | 1.6 | ≥1× (CI) | — |
+| rp2350-feather | open | L0 | 28 | 906.8 | 1.7 | ≥1× (CI) | — |
 | stm32h723zg | open | L0 | 43 | 808.5 | 1.5 | ≥1× (CI) | — |
 | stm32h753zi | open | L0 | 43 | 860.6 | 1.3 | ≥1× (CI) | — |
 | esp32c6fh4 | open | L0 | 69 | — | 3.8 | ≥1× (CI) | — |

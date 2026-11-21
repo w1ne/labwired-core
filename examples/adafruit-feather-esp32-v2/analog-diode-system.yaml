@@ -3,6 +3,7 @@
 # esp32.yaml does not yet declare GPIO-to-ADC pad mappings.
 name: "adafruit-feather-esp32-v2-analog-diode"
 chip: "../../configs/chips/esp32.yaml"
+debug_uart: "uart0"
 cpu_hz: 240000000
 external_devices: []
 board_io:

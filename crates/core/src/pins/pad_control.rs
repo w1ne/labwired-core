@@ -4,9 +4,10 @@
 
 //! Pulls configured outside the GPIO block.
 //!
-//! Kinetis, Renesas RA and i.MX RT keep a pad's pull resistor in a pad-control
-//! block, not in the GPIO port: `PORTx_PCRn` (PE/PS), `PmnPFS` (PCR) and the
-//! IOMUXC `SW_PAD_CTL_PAD_*` registers (PKE/PUE/PUS). The GPIO port still
+//! Kinetis, Renesas RA, i.MX RT and the RP2040/RP2350 keep a pad's pull
+//! resistor in a pad-control block, not in the GPIO port: `PORTx_PCRn`
+//! (PE/PS), `PmnPFS` (PCR), the IOMUXC `SW_PAD_CTL_PAD_*` registers
+//! (PKE/PUE/PUS) and PADS_BANK0 `GPIOn` (PUE/PDE). The GPIO port still
 //! owns the pad's [`PinPort`](super::PinPort), so the pull has to reach it:
 //! the port names its pad-control block ([`PinPort::pad_control`](super::PinPort::pad_control)),
 //! and after every write to that block the bus decodes each pad's pull from
@@ -45,6 +46,12 @@ pub enum PadControl {
         /// Offset of pin 0's `SW_PAD_CTL_PAD` register in the IOMUXC window.
         base: u64,
     },
+    /// Raspberry Pi RP2040 / RP2350 PADS_BANK0 `GPIOn` at `4 + 4·n`
+    /// (`VOLTAGE_SELECT` sits at 0; RP2040 datasheet §2.19.6.3, RP2350
+    /// §9.11.3): PUE (bit 3) pulls up, PDE (bit 2) pulls down, and both set
+    /// enables the bus keeper, which holds the last level rather than pulling
+    /// to a rail, so it is no pull here.
+    RpPadsBank0,
 }
 
 impl PadControl {
@@ -55,6 +62,7 @@ impl PadControl {
             Self::KinetisPcr => 4 * pin,
             Self::RaPfs { port } => 0x40 * u64::from(port) + 4 * pin,
             Self::ImxrtPadCtl { base } => base + 4 * pin,
+            Self::RpPadsBank0 => 4 + 4 * pin,
         }
     }
 
@@ -88,6 +96,12 @@ impl PadControl {
                     Pull::Up
                 }
             }
+            Self::RpPadsBank0 => match (word & (1 << 3) != 0, word & (1 << 2) != 0) {
+                (true, false) => Pull::Up,
+                (false, true) => Pull::Down,
+                // Neither, or both (the bus keeper).
+                _ => Pull::None,
+            },
         }
     }
 
@@ -200,5 +214,17 @@ mod tests {
         assert_eq!(pad.decode(0x7000), Pull::Up, "PUS 01: 47k up");
         assert_eq!(pad.decode(0xF000), Pull::Up, "PUS 11: 22k up");
         assert_eq!(pad.decode(0xD000), Pull::None, "PUE without PKE");
+    }
+
+    #[test]
+    fn rp_pads_bank0_pue_pde_and_the_keeper() {
+        let pads = PadControl::RpPadsBank0;
+        assert_eq!(pads.offset(0), 0x04, "VOLTAGE_SELECT is at 0");
+        assert_eq!(pads.offset(25), 0x68);
+        assert_eq!(pads.decode(0x56), Pull::Down, "RP2040 reset: PDE");
+        assert_eq!(pads.decode(0x116), Pull::Down, "RP2350 reset: ISO | PDE");
+        assert_eq!(pads.decode(0x5A), Pull::Up, "PUE");
+        assert_eq!(pads.decode(0x5E), Pull::None, "PUE | PDE: bus keeper");
+        assert_eq!(pads.decode(0x52), Pull::None, "neither");
     }
 }

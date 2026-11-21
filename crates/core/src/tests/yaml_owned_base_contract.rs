@@ -407,6 +407,50 @@ const WINDOW_OVERLAP_ALLOWLIST: &[(&str, &str, &str, &str)] = &[
          not in the peripheral window map.",
     ),
     (
+        "rp2040.yaml",
+        "clk_rst",
+        "pads_bank0",
+        "PADS_BANK0 sits inside the same clock/reset catch-all as io_bank0, at \
+         0x4001_C000, below XOSC and both PLLs, so `clk_rst` cannot be narrowed \
+         around it. Greatest-start-wins routing gives pads_bank0 its 4 KB \
+         deterministically, so the PUE/PDE pulls firmware writes keep their \
+         datasheet reset words and reach the SIO's GPIO_IN instead of being \
+         absorbed as zeroed storage.",
+    ),
+    (
+        "rp2040-feather.yaml",
+        "clk_rst",
+        "pads_bank0",
+        "PADS_BANK0 sits inside the same clock/reset catch-all as io_bank0, at \
+         0x4001_C000, below XOSC and both PLLs, so `clk_rst` cannot be narrowed \
+         around it. Greatest-start-wins routing gives pads_bank0 its 4 KB \
+         deterministically, so the PUE/PDE pulls firmware writes keep their \
+         datasheet reset words and reach the SIO's GPIO_IN instead of being \
+         absorbed as zeroed storage.",
+    ),
+    (
+        "rp2350.yaml",
+        "clk_rst",
+        "pads_bank0",
+        "PADS_BANK0 sits inside the same clock/reset catch-all as io_bank0, at \
+         0x4003_8000, below XOSC and both PLLs, so `clk_rst` cannot be narrowed \
+         around it. Greatest-start-wins routing gives pads_bank0 its 4 KB \
+         deterministically, so the PUE/PDE pulls firmware writes keep their \
+         datasheet reset words and reach the SIO's GPIO_IN instead of being \
+         absorbed as zeroed storage.",
+    ),
+    (
+        "rp2350-feather.yaml",
+        "clk_rst",
+        "pads_bank0",
+        "PADS_BANK0 sits inside the same clock/reset catch-all as io_bank0, at \
+         0x4003_8000, below XOSC and both PLLs, so `clk_rst` cannot be narrowed \
+         around it. Greatest-start-wins routing gives pads_bank0 its 4 KB \
+         deterministically, so the PUE/PDE pulls firmware writes keep their \
+         datasheet reset words and reach the SIO's GPIO_IN instead of being \
+         absorbed as zeroed storage.",
+    ),
+    (
         "esp32.yaml",
         "rtcio",
         "sens_sar_adc",

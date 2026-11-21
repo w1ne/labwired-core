@@ -108,6 +108,46 @@ fn imxrt_iomuxc_pad_ctl_pulls_reach_gpio2() {
     assert_pad(&mut bus, "gpio2", 4, Pull::None, "GPIO2_IO04");
 }
 
+/// RP2040 keeps a pad's pulls in PADS_BANK0 `GPIOn` (datasheet 2.19.6.3):
+/// PUE (bit 3) / PDE (bit 2); both set is the bus keeper, not a pull. The SIO
+/// owns the pad's `GPIO_IN`, so the pull has to reach it. pico-sdk
+/// `gpio_set_pulls` (Arduino `pinMode(pin, INPUT_PULLUP)`) writes the word
+/// through the `+0x1000` XOR alias, which the bus resolves to the base word.
+#[test]
+fn rp2040_pads_bank0_pulls_reach_the_sio() {
+    for chip in ["rp2040.yaml", "rp2040-feather.yaml"] {
+        let mut bus = bus(chip);
+        const GPIO10: u64 = 0x4001_C000 + 4 + 4 * 10;
+        // Reset 0x56: IE | DRIVE 4 mA | PDE | SCHMITT, so pulled down.
+        assert_eq!(bus.read_u32(GPIO10).unwrap(), 0x56, "{chip}: reset");
+        assert_pad(&mut bus, "sio", 10, Pull::Down, "reset PDE");
+        // gpio_set_pulls(10, true, false): hw_write_masked via the XOR alias.
+        let cur = bus.read_u32(GPIO10).unwrap();
+        let want = (cur & !0b1100) | 0b1000;
+        bus.write_u32(GPIO10 + 0x1000, (cur ^ want) & 0b1100)
+            .unwrap();
+        assert_eq!(bus.read_u32(GPIO10).unwrap(), 0x5A, "{chip}: PUE written");
+        assert_pad(&mut bus, "sio", 10, Pull::Up, "PUE");
+        // Both set: the bus keeper, which is no pull resistor.
+        bus.write_u32(GPIO10, 0x5E).unwrap();
+        assert_pad(&mut bus, "sio", 10, Pull::None, "keeper");
+        // A neighbouring pad keeps its reset pull-down.
+        assert_pad(&mut bus, "sio", 11, Pull::Down, "GPIO11");
+    }
+}
+
+/// RP2350 PADS_BANK0 has the same PUE/PDE bits; its reset word also sets ISO
+/// (bit 8), which latches the pad's output, not its pulls.
+#[test]
+fn rp2350_pads_bank0_pulls_reach_the_sio() {
+    let mut bus = bus("rp2350.yaml");
+    const GPIO10: u64 = 0x4003_8000 + 4 + 4 * 10;
+    assert_eq!(bus.read_u32(GPIO10).unwrap(), 0x116, "reset");
+    assert_pad(&mut bus, "sio", 10, Pull::Down, "reset PDE");
+    bus.write_u32(GPIO10, 0x5A).unwrap();
+    assert_pad(&mut bus, "sio", 10, Pull::Up, "PUE");
+}
+
 /// A pull written in the pad-control block is a pad change: a probe on the
 /// chip's own drive sees it as it happens (push capture), not only at the
 /// next GPIO register write.
