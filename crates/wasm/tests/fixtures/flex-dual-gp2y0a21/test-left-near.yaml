@@ -1,0 +1,26 @@
+# `labwired test --script test-left-near.yaml`. Left target at 100 mm, right target at 800 mm. The result packs left_mv * 10000 + right_mv.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: left_distance_mm }
+    - { port: left_distance_mv }
+    - { port: left_near_drive }
+    - { port: right_distance_mm }
+    - { port: right_distance_mv }
+    - { port: right_near_drive }
+    - { number: 100 }
+    - { number: 800 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 23000400 }
+  - port_value: { port: left_near_led, equals: 1 }
+  - port_value: { port: right_near_led, equals: 0 }
+  - digital_edges: { port: left_near_led, count: 1 }
+  - digital_edges: { port: right_near_led, count: 0 }

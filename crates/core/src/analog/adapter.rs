@@ -46,6 +46,26 @@
 //! may have only one routed owner. This beta approximation does not model
 //! tolerance, self-heating or behavior outside the declared range.
 //!
+//! A bounded power-law photoresistor (CdS cell) follows the same pattern:
+//!
+//! ```yaml
+//! photoresistors:
+//!   lux:
+//!     resistor: Rldr
+//!     r_ref_ohms: 15000
+//!     reference_lux: 10
+//!     gamma: 0.6
+//!     min_lux: 1
+//!     max_lux: 100
+//! ```
+//!
+//! The input is numeric illuminance in lux and starts at `reference_lux`. The
+//! resistance is `r_ref_ohms * (lux / reference_lux)^-gamma`, where `gamma` is
+//! the data-sheet log-log slope. An input outside `min_lux..max_lux` is an
+//! error, not an extrapolation; darkness (0 lx) is therefore outside every
+//! valid range. The law is static: it does not model the cell's rise and decay
+//! time, light history, spectral response, temperature or tolerance.
+//!
 //! ## Step semantics
 //!
 //! [`CosimStep::time_ns`] is the END of the interval being simulated, the same
@@ -155,6 +175,57 @@ impl ThermistorConfig {
     }
 }
 
+/// A bounded power-law approximation for one physical photoresistor.
+/// The caller must supply coefficients and the range in which they apply.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PhotoresistorConfig {
+    pub resistor: String,
+    pub r_ref_ohms: f64,
+    pub reference_lux: f64,
+    pub gamma: f64,
+    pub min_lux: f64,
+    pub max_lux: f64,
+}
+
+impl PhotoresistorConfig {
+    fn validate(&self) -> Result<(), AnalogError> {
+        if self.resistor.trim().is_empty()
+            || !self.r_ref_ohms.is_finite()
+            || self.r_ref_ohms <= 0.0
+            || !self.gamma.is_finite()
+            || self.gamma <= 0.0
+            || !self.reference_lux.is_finite()
+            || !self.min_lux.is_finite()
+            || !self.max_lux.is_finite()
+            || self.min_lux <= 0.0
+            || self.min_lux > self.reference_lux
+            || self.reference_lux > self.max_lux
+        {
+            return Err(AnalogError::Config("photoresistor requires positive finite coefficients and a valid positive illuminance range containing the reference".to_string()));
+        }
+        self.resistance(self.min_lux)?;
+        self.resistance(self.max_lux)?;
+        Ok(())
+    }
+
+    fn resistance(&self, lux: f64) -> Result<f64, AnalogError> {
+        if !lux.is_finite() || lux < self.min_lux || lux > self.max_lux {
+            return Err(AnalogError::Config(format!(
+                "photoresistor illuminance must be within {}..{} lx",
+                self.min_lux, self.max_lux
+            )));
+        }
+        let ohms = self.r_ref_ohms * libm::pow(lux / self.reference_lux, -self.gamma);
+        if !ohms.is_finite() || ohms <= 0.0 || !ohms.recip().is_finite() {
+            return Err(AnalogError::Config(
+                "photoresistor curve produces invalid resistance".to_string(),
+            ));
+        }
+        Ok(ohms)
+    }
+}
+
 /// The `config:` block of an `adapter: analog` model.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalogConfig {
@@ -170,6 +241,8 @@ pub struct AnalogConfig {
     pub sources: BTreeMap<String, String>,
     /// Input name → explicitly bounded beta-curve thermistor.
     pub thermistors: BTreeMap<String, ThermistorConfig>,
+    /// Input name → explicitly bounded power-law photoresistor.
+    pub photoresistors: BTreeMap<String, PhotoresistorConfig>,
     /// Extra trace-only expressions, beyond the routed outputs.
     pub trace: Vec<String>,
     /// Ring depth for the oscilloscope trace.
@@ -185,6 +258,7 @@ impl Default for AnalogConfig {
             probes: BTreeMap::new(),
             sources: BTreeMap::new(),
             thermistors: BTreeMap::new(),
+            photoresistors: BTreeMap::new(),
             trace: Vec::new(),
             trace_samples: super::trace::DEFAULT_TRACE_SAMPLES,
         }
@@ -236,6 +310,10 @@ impl AnalogConfig {
         if let Some(value) = config.get("thermistors") {
             parsed.thermistors = serde_yaml::from_value(value.clone())
                 .map_err(|error| AnalogError::Config(format!("config.thermistors: {error}")))?;
+        }
+        if let Some(value) = config.get("photoresistors") {
+            parsed.photoresistors = serde_yaml::from_value(value.clone())
+                .map_err(|error| AnalogError::Config(format!("config.photoresistors: {error}")))?;
         }
         if let Some(value) = config.get("trace") {
             let list = value.as_sequence().ok_or_else(|| {
@@ -290,6 +368,7 @@ enum InputTarget {
     CurrentSource(usize),
     Resistance(usize),
     Thermistor(usize, ThermistorConfig),
+    Photoresistor(usize, PhotoresistorConfig),
     /// A temperature-dependent resistor described directly on the SPICE line.
     TemperatureDependentResistor(usize),
     /// Every switch sharing one control name.
@@ -427,8 +506,11 @@ impl AnalogCosimAdapter {
                     model.resistor
                 ))
             })?;
-            if inputs.values().any(|target| matches!(target, InputTarget::Resistance(i) | InputTarget::Thermistor(i, _) | InputTarget::TemperatureDependentResistor(i) if *i == index)) {
-                return Err(AnalogError::Config(format!("resistor `{}` has multiple routed owners", model.resistor)));
+            if resistor_is_routed(&inputs, index) {
+                return Err(AnalogError::Config(format!(
+                    "resistor `{}` has multiple routed owners",
+                    model.resistor
+                )));
             }
             let initial = solver.circuit().resistors[index].ohms;
             if !initial.is_finite() || (initial - model.r_ref_ohms).abs() > model.r_ref_ohms * 1e-9
@@ -438,6 +520,38 @@ impl AnalogCosimAdapter {
                 )));
             }
             inputs.insert(input.clone(), InputTarget::Thermistor(index, model.clone()));
+        }
+
+        for (input, model) in &cfg.photoresistors {
+            model.validate()?;
+            if inputs.contains_key(input) {
+                return Err(AnalogError::Config(format!(
+                    "input `{input}` is assigned more than once"
+                )));
+            }
+            let index = solver.resistor_index(&model.resistor).ok_or_else(|| {
+                AnalogError::Config(format!(
+                    "photoresistor `{input}` names missing resistor `{}`",
+                    model.resistor
+                ))
+            })?;
+            if resistor_is_routed(&inputs, index) {
+                return Err(AnalogError::Config(format!(
+                    "resistor `{}` has multiple routed owners",
+                    model.resistor
+                )));
+            }
+            let initial = solver.circuit().resistors[index].ohms;
+            if !initial.is_finite() || (initial - model.r_ref_ohms).abs() > model.r_ref_ohms * 1e-9
+            {
+                return Err(AnalogError::Config(format!(
+                    "photoresistor `{input}` initial resistor must match r_ref_ohms"
+                )));
+            }
+            inputs.insert(
+                input.clone(),
+                InputTarget::Photoresistor(index, model.clone()),
+            );
         }
 
         let sample_width = probes.len() + trace_extra.len();
@@ -611,6 +725,12 @@ impl AnalogCosimAdapter {
                     })?;
                     model.reference_c
                 }
+                InputTarget::Photoresistor(_, model) => {
+                    model.resistance(number).map_err(|error| {
+                        SimulationError::Other(format!("analog input `{name}`: {error}"))
+                    })?;
+                    model.reference_lux
+                }
                 InputTarget::TemperatureDependentResistor(index) => {
                     let resistor = &circuit.resistors[*index];
                     let (expected, resistance) = if let Some(mut model) = resistor.ntc {
@@ -710,6 +830,19 @@ impl AnalogCosimAdapter {
                     SimulationError::Other(format!("analog input `{name}`: {error}"))
                 })?;
             }
+            InputTarget::Photoresistor(index, model) => {
+                let index = *index;
+                if matches!(value, CosimSignalValue::Bool(_)) {
+                    return Err(SimulationError::Other(format!("analog input `{name}` drives a photoresistor; illuminance must be numeric lux")));
+                }
+                let lux = numeric(vdd, name, value, "lux")?;
+                let ohms = model.resistance(lux).map_err(|error| {
+                    SimulationError::Other(format!("analog input `{name}`: {error}"))
+                })?;
+                self.solver.set_resistance(index, ohms).map_err(|error| {
+                    SimulationError::Other(format!("analog input `{name}`: {error}"))
+                })?;
+            }
             InputTarget::TemperatureDependentResistor(index) => {
                 let index = *index;
                 if matches!(value, CosimSignalValue::Bool(_)) {
@@ -741,6 +874,19 @@ impl AnalogCosimAdapter {
         }
         Ok(())
     }
+}
+
+fn resistor_is_routed(inputs: &BTreeMap<String, InputTarget>, index: usize) -> bool {
+    inputs.values().any(|target| {
+        matches!(
+            target,
+            InputTarget::Resistance(i)
+                | InputTarget::Thermistor(i, _)
+                | InputTarget::Photoresistor(i, _)
+                | InputTarget::TemperatureDependentResistor(i)
+            if *i == index
+        )
+    })
 }
 
 fn validate_resistance(name: &str, ohms: f64) -> SimResult<()> {
@@ -845,6 +991,9 @@ impl CosimAdapter for AnalogCosimAdapter {
     fn input_initial_value(&self, name: &str) -> Option<CosimSignalValue> {
         match self.inputs.get(name)? {
             InputTarget::Thermistor(_, model) => Some(CosimSignalValue::F64(model.reference_c)),
+            InputTarget::Photoresistor(_, model) => {
+                Some(CosimSignalValue::F64(model.reference_lux))
+            }
             InputTarget::TemperatureDependentResistor(index) => {
                 let resistor = &self.solver.circuit().resistors[*index];
                 resistor
@@ -865,7 +1014,7 @@ impl CosimAdapter for AnalogCosimAdapter {
     }
 
     /// A switch is boolean; sources and resistors are numeric. NTC numbers are
-    /// degrees Celsius. An input the circuit does not use has no kind.
+    /// degrees Celsius and photoresistor numbers are lux. An input the circuit does not use has no kind.
     fn input_kind(&self, name: &str) -> Option<CosimInputKind> {
         Some(match self.inputs.get(name)? {
             InputTarget::Switches(_) => CosimInputKind::Bool,
@@ -873,18 +1022,22 @@ impl CosimAdapter for AnalogCosimAdapter {
             | InputTarget::CurrentSource(_)
             | InputTarget::Resistance(_)
             | InputTarget::Thermistor(_, _)
+            | InputTarget::Photoresistor(_, _)
             | InputTarget::TemperatureDependentResistor(_) => CosimInputKind::Number,
         })
     }
 
-    fn input_unit(&self, name: &str) -> Option<&'static str> {
+    fn input_unit(&self, name: &str) -> Option<&str> {
         match self.inputs.get(name)? {
             InputTarget::VoltageSource(_) => Some("V"),
             InputTarget::CurrentSource(_) => Some("A"),
             InputTarget::Resistance(_) => Some("ohm"),
+            // The spelling of the catalog `analog_source` temperature
+            // channels, so one Flex port can feed either model.
             InputTarget::Thermistor(_, _) | InputTarget::TemperatureDependentResistor(_) => {
-                Some("degC")
+                Some("°C")
             }
+            InputTarget::Photoresistor(_, _) => Some("lx"),
             InputTarget::Switches(_) => Some("V"),
         }
     }
@@ -1227,9 +1380,9 @@ config:
             ("drive", Some("V"), CosimSignalValue::Bool(false)),
             ("current", Some("A"), CosimSignalValue::F64(0.002)),
             ("resistance", Some("ohm"), CosimSignalValue::F64(900.0)),
-            ("ntc", Some("degC"), CosimSignalValue::F64(26.0)),
-            ("tempco", Some("degC"), CosimSignalValue::F64(26.0)),
-            ("bounded", Some("degC"), CosimSignalValue::F64(26.0)),
+            ("ntc", Some("°C"), CosimSignalValue::F64(26.0)),
+            ("tempco", Some("°C"), CosimSignalValue::F64(26.0)),
+            ("bounded", Some("°C"), CosimSignalValue::F64(26.0)),
             ("gate", Some("V"), CosimSignalValue::Bool(true)),
         ] {
             assert_eq!(adapter.input_unit(name), unit);

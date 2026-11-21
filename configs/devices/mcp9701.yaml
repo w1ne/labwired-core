@@ -9,7 +9,7 @@
 # 125 °C = 2837.5 mV. The specified range is -10..+125 °C (MCP9701 is the
 # -10 °C grade; the -40 °C span on page 1 is the MCP9700). V_out does not depend
 # on the supply (3.1..5.5 V), so there is no supply_mv key. The MCP9700 sibling
-# is `tmp36` (500 mV + 10 mV/°C).
+# is `mcp9700` (500 mV + 10 mV/°C, the same line as `tmp36`).
 type: mcp9701
 
 behavior:

@@ -1894,6 +1894,32 @@
       ]
     },
     {
+      "device_type": "mcp9700",
+      "label": "MCP9700 Temperature Sensor",
+      "summary": "Analog temperature sensor, 10 mV/°C with 500 mV at 0 °C.",
+      "detail": "Microchip MCP9700 Linear Active Thermistor IC (data sheet DS20001942L). Drive the `temperature` channel (°C) at runtime and the ADC channel follows V_out = 500 mV + 10 mV/°C over the extended range -40..125 °C. Starts at 25 °C (750 mV).",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -40.0,
+          "max": 125.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
       "device_type": "mcp9701",
       "label": "MCP9701 Temperature Sensor",
       "summary": "Analog temperature sensor, 19.5 mV/°C with 400 mV at 0 °C.",
@@ -2152,7 +2178,7 @@
       "device_type": "gp2y0a21",
       "label": "Sharp GP2Y0A21 IR Distance Sensor",
       "summary": "Sharp GP2Y0A21YK0F analogue infrared distance sensor, 10–80 cm (Vo on ADC).",
-      "detail": "Triangulation IR ranger: Vo falls with distance over the specified 10–80 cm band, following the datasheet typical-output curve (3.1 V at 10 cm down to 0.5 V at 80 cm). Drive the `distance` channel (mm) at runtime and the ADC channel follows. Beyond 80 cm the output holds a ~0.4 V floor (far is NOT zero); below 10 cm the real part's output falls again (mirror region) and this model clamps to the 10 cm value instead.",
+      "detail": "Triangulation IR ranger: Vo follows a rounded read-off of Sharp's typical white-paper graph over 10–80 cm (about 2.3 V at 10 cm and 0.4 V at 80 cm). Drive `distance` in mm and the ADC channel follows. The model holds 0.4 V beyond 80 cm and clamps below 10 cm to the 10 cm endpoint; neither rule claims the physical out-of-range response. The roughly 38 ms measurement cadence, up-to-5 ms output delay, reflectance/angle variation, noise, and target-MCU ADC behavior are not modeled.",
       "transport": "analog",
       "category": "analog",
       "config_keys": [
@@ -2168,9 +2194,9 @@
           "key": "distance",
           "label": "Distance",
           "unit": "mm",
-          "min": 0.0,
+          "min": 100.0,
           "max": 800.0,
-          "default": 0.0
+          "default": 100.0
         }
       ]
     },

@@ -445,8 +445,8 @@ impl CosimRunner {
         self.analog_trace.clone()
     }
 
-    /// Channel table of the analog trace (empty when no analog model is
-    /// declared).
+    /// Channel table of the analog trace (empty when no analog-producing model
+    /// is declared).
     pub fn analog_channels(&self) -> Vec<AnalogChannel> {
         self.analog_trace.channels()
     }

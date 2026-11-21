@@ -4,8 +4,11 @@
 // This software is released under the MIT License.
 // See the LICENSE file in the project root for full license information.
 
+mod analog_source;
 mod behavior;
 mod external_process;
+mod gpio_device;
+pub(crate) use gpio_device::catalog_gpio_device;
 mod registry;
 pub mod routing;
 pub mod shm;
@@ -113,11 +116,11 @@ pub trait CosimAdapter: Send {
     /// Adopt the runner's shared analog-sample ring, naming this model's
     /// channels `<channel_prefix><name>`.
     ///
-    /// Only the in-core analog engine implements this; every other adapter
-    /// produces no waveform of its own, and a default that fabricated one
-    /// would put a line on the oscilloscope that nothing measured. The runner
-    /// calls it on every model, so an adapter that later grows a waveform has
-    /// one place to publish it.
+    /// The circuit solver records its probes, and registered analog-source
+    /// adapters record their modeled scalar output. Discrete behavior adapters
+    /// leave this empty: a Boolean signal alone is not an electrical waveform.
+    /// The runner calls this on every model so each producer can publish into
+    /// the existing oscilloscope ring.
     fn attach_analog_trace(&mut self, trace: &AnalogTraceHandle, channel_prefix: &str) {
         let _ = (trace, channel_prefix);
     }
@@ -131,7 +134,7 @@ pub trait CosimAdapter: Send {
     /// Unit of a numeric input, when the adapter knows it. Values are passed
     /// without implicit conversion; Boolean voltage drives use their explicit
     /// adapter Vdd conversion instead.
-    fn input_unit(&self, name: &str) -> Option<&'static str> {
+    fn input_unit(&self, name: &str) -> Option<&str> {
         let _ = name;
         None
     }

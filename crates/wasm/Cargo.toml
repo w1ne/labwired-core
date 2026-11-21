@@ -41,7 +41,7 @@ js-sys = "0.3"
 # now, so classic ESP32 keeps its walk (and loses that throughput) until those
 # models are genuinely migrated. Walk deletion still applies on every bus that
 # actually earns it (C3, S3, nRF, RP2040, STM32).
-labwired-core = { path = "../core", features = ["event-scheduler", "jit-framework"] }
+labwired-core = { path = "../core", features = ["event-scheduler", "jit-framework", "flex-script"] }
 labwired-config = { path = "../config" }
 labwired-loader = { path = "../loader" }
 cortex-m = "0.7"
@@ -49,6 +49,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 serde-wasm-bindgen = "0.6"
+sha2.workspace = true
 labwired-gdbstub = { path = "../gdbstub" }
 gdbstub = "0.7"
 gdbstub_arch = "0.3"

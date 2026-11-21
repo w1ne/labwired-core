@@ -559,6 +559,8 @@ pub const MODEL_TYPES: &[&str] = &[
     "mpfs_i2c",
     // PolarFire SoC MSS SPI0/1 (CoreSPI-family master).
     "mpfs_spi",
+    // WCH QingKe V2 system timer (CH32V003/V005/V006 STK at 0xE000F000).
+    "qingke_stk",
     // SAM4S (the older PIO/PMC blocks; not the SAM D21 PORT/PM pair).
     "sam4s_pio",
     "sam4s_pmc",
@@ -1846,7 +1848,18 @@ pub fn try_build(
                 // Absent/anything else: the RP2040 map.
                 _ => crate::peripherals::rp2040::sio::SioLayout::Rp2040,
             };
-            Box::new(crate::peripherals::rp2040::sio::Rp2040Sio::new().with_layout(layout))
+            let mut sio = crate::peripherals::rp2040::sio::Rp2040Sio::new().with_layout(layout);
+            // The PADS_BANK0 block holding the pads' PUE/PDE pulls.
+            if let Some(block) = p_cfg.config.get("pad_control") {
+                let block = block.as_str().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "SIO peripheral '{}': `pad_control` must name a peripheral id",
+                        p_cfg.id
+                    )
+                })?;
+                sio = sio.with_pad_control(block);
+            }
+            Box::new(sio)
         }
         "rp2040_spi" => Box::new(crate::peripherals::rp2040::spi::Rp2040Spi::new()),
         "rp2040_i2c" => Box::new(crate::peripherals::rp2040::i2c::Rp2040I2c::new()),
@@ -3303,6 +3316,7 @@ pub fn try_build(
         // PolarFire SoC MSS SPI0/1: master mode; devices attach through
         // `external_devices:` and follow SLAVE_SELECT.
         "mpfs_spi" => Box::new(crate::peripherals::mpfs_spi::MpfsSpi::new()),
+        "qingke_stk" => Box::new(crate::peripherals::qingke_stk::QingKeStk::new()),
         "sam4s_pio" => Box::new(crate::peripherals::sam4s::Sam4sPio::new()),
         "sam4s_pmc" => Box::new(crate::peripherals::sam4s::Sam4sPmc::new()),
         "sam4s_wdt" => Box::new(crate::peripherals::sam::sysc4s::Sam4sWdt::new()),

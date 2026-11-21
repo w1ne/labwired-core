@@ -1,0 +1,44 @@
+# `labwired test --script test-humidity-alarm.yaml`. The firmware resets U4 at
+# 0x44, reads its serial number, and measures once per period. The test bench
+# steps the humidity 50 -> 72 -> 68 -> 60 %RH. The indicator goes on at
+# 70 %RH, stays on at 68 %RH (hysteresis) and goes off below 65 %RH.
+# `loop` returns the humidity in 0.01 %RH plus 10,000.
+# All expected values were calculated from the SHT40 model encoding and the
+# firmware arithmetic before the first run.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+sequence:
+  - call: { export: setup, args: [{ bus: sensor_i2c }, { port: user_led_drive }, { number: 0x44 }, { number: 10000 }] }
+  - call: { export: loop }
+  - set: { port: humidity_rh, value: 72 }
+  - call: { export: loop, repeat: 2 }
+  - set: { port: humidity_rh, value: 68 }
+  - call: { export: loop }
+  - set: { port: humidity_rh, value: 60 }
+  - call: { export: loop }
+  - call: { export: temperature_centi_c }
+limits:
+  max_steps: 1000000
+  max_time_ns: 100000000
+assertions:
+  - entry_result: { equals: 12500 }
+  - entry_result: { equals: 0, step: 0 }
+  - entry_result: { equals: 15000, step: 1 }
+  - entry_result: { equals: 17200, step: 3 }
+  - entry_result: { equals: 16800, step: 5 }
+  - entry_result: { equals: 16000, step: 7 }
+  # Reset, serial command and serial read in `setup`; command and read in
+  # each `loop`. None was refused.
+  - i2c_transfers: { bus: sensor_i2c, address: 0x44, ack: true, equals: 13 }
+  - i2c_transfers: { bus: sensor_i2c, ack: false, equals: 0 }
+  - port_value: { port: user_led_state, equals: 0 }
+  # `setup` takes 3.05 ms; each `loop` 11.85 ms (200 µs command, 10 ms wait,
+  # 650 µs read, 1 ms period). The drive changes at the end of the read that
+  # gives 72 %RH and of the one that gives 60 %RH; D1 follows 1 µs later.
+  - digital_edges: { port: user_led_drive, times_ns: [25750000, 61300000] }
+  - digital_edges: { port: user_led_state, times_ns: [25751000, 61301000] }
+  - final_time_ns: { equals: 62300000 }
+  - console_contains: "SHT40 serial 0x0f4e2a71 at 0x44\nT=25.00 C RH=50.00 %\nT=25.00 C RH=72.00 %\nT=25.00 C RH=72.00 %\nT=25.00 C RH=68.00 %\nT=25.00 C RH=60.00 %\n"

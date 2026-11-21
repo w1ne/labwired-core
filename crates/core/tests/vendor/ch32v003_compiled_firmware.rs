@@ -244,3 +244,71 @@ fn ch32v003j4m6_blink_fixture_leaves_unbonded_pc0_alone() {
     let (edges, _) = gpioc_edges(&load_chip("ch32v003j4m6"), "ch32v003j4m6-blink-pc4.elf", 0);
     assert_eq!(edges, 0, "PC4 fixture toggled PC0 {edges} times");
 }
+
+/// Runs the stock WCH noneos-sdk fixture (PlatformIO `ch32v`,
+/// `-march=rv32ecxw`) until it prints `CH32V003_DONE` or `max_steps` pass.
+fn run_noneos_sdk(chip: &ChipDescriptor, max_steps: u64) -> (String, u64, u32) {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut bus = SystemBus::from_config(chip, &SystemManifest::default())
+        .expect("CH32V003 peripherals and clock gates");
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    bus.attach_uart_tx_sink(sink.clone(), false);
+    let image = labwired_loader::load_elf(&root.join("tests/fixtures/ch32v003f4p6-noneos-sdk.elf"))
+        .expect("noneos-sdk ELF");
+    let cpu = configure_riscv(&mut bus);
+    let mut machine = Machine::new(cpu, bus);
+    machine.load_firmware(&image).expect("load CH32V003 ELF");
+    let mut steps = 0;
+    while steps < max_steps {
+        if machine.step().is_err() {
+            break;
+        }
+        steps += 1;
+        if steps % 10_000 == 0 && String::from_utf8_lossy(&sink.lock().unwrap()).contains("DONE") {
+            break;
+        }
+    }
+    let out = String::from_utf8_lossy(&sink.lock().unwrap()).into_owned();
+    (out, steps, machine.cpu.mcause)
+}
+
+#[test]
+fn ch32v003_stock_noneos_sdk_firmware_boots_delays_and_prints() {
+    // Vendor startup (QingKe INTSYSCR CSR 0x804), SystemInit (FLASH ACTLR,
+    // VENDOR_CFG0 trim byte, HSI PLL to 48 MHz), XW compressed loads, and
+    // Delay_Ms(10) x 4 polling STK SR.CNTIF between USART1 printf lines.
+    let chip = load_chip("ch32v003f4p6");
+    let (out, steps, mcause) = run_noneos_sdk(&chip, 4_000_000);
+    assert_eq!(
+        out,
+        "CH32V003_BOOT clk=48000000\r\ntick 0\r\ntick 1\r\ntick 2\r\ntick 3\r\nCH32V003_DONE\r\n",
+        "USART1 TX stream"
+    );
+    assert_eq!(mcause, 0, "stock firmware must not trap");
+    // Four 10 ms delays at 48 MHz are 1,920,000 cycles; the stop check runs
+    // every 10,000 steps.
+    assert!(
+        (1_920_000..2_000_000).contains(&steps),
+        "4 x Delay_Ms(10) took {steps} steps"
+    );
+}
+
+#[test]
+fn ch32v003_noneos_sdk_delay_stalls_without_the_stk_block() {
+    // Negative control: drop the STK block. Delay_Ms then reads an unmapped
+    // 0xE000F004 and the firmware never reaches its first tick line.
+    let mut yaml = chip_yaml("ch32v003f4p6");
+    let peripherals = yaml["peripherals"]
+        .as_sequence_mut()
+        .expect("peripherals list");
+    let before = peripherals.len();
+    peripherals.retain(|p| p["id"].as_str() != Some("stk"));
+    assert_eq!(
+        peripherals.len(),
+        before - 1,
+        "descriptor has one stk block"
+    );
+    let chip: ChipDescriptor = serde_yaml::from_value(yaml).expect("descriptor without stk");
+    let (out, _, _) = run_noneos_sdk(&chip, 4_000_000);
+    assert_eq!(out, "CH32V003_BOOT clk=48000000\r\n");
+}

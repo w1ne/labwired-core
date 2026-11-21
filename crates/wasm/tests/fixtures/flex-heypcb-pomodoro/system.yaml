@@ -2,6 +2,14 @@
 # See README.md for the immutable KiCad source pin and uncovered board scope.
 schema_version: 1
 name: heypcb-pomodoro-u1-pd6-led-pair
+assumptions:
+  - This is a newly authored portable WebAssembly behavior program; it does not execute the pinned CH32V003 HEX.
+  - U1.PD6 and the two green LEDs are represented by one declarative digital behavior model at 1 us boundaries.
+  - Each LED output reports logic state only; resistor current and the shared return path are not modeled.
+unsupported_checks:
+  - Original CH32V003 firmware execution, target instruction fidelity, and MCU peripheral fidelity.
+  - LED current, optical output, resistor behavior, shared-return behavior, and electrical power behavior.
+  - Buzzer behavior, complete-board integration, and physical hardware behavior.
 ports:
   - { name: u1_pd6, signal: source.U1.PD6, access: write, kind: bool, initial: 0 }
   - { name: d1_state, signal: source.D1.logic_state, access: read, kind: bool }

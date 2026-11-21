@@ -3311,8 +3311,9 @@ pub struct AnalogSpec {
     #[serde(default)]
     pub below_first: AnalogBelowFirst,
     /// Behaviour above the last curve point: hold a named floor voltage
-    /// (`floor_mv`, e.g. the GP2Y0A21's ~0.4 V far floor — far is NOT zero)
-    /// or hold the last point's voltage (`hold_last`).
+    /// (`floor_mv`, e.g. the GP2Y0A21 model's 0.4 V endpoint, extended beyond
+    /// its 80 cm data-sheet range as an explicit assumption) or hold the last
+    /// point's voltage (`hold_last`).
     #[serde(default)]
     pub above_last: AnalogAboveLast,
     /// A RATIOMETRIC part (a potentiometer, a divider across the supply)

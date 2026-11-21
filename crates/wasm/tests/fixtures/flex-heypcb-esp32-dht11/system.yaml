@@ -1,0 +1,59 @@
+# Source-grounded functional slice of HeyPCB's ESP32-S3 DHT11 board.
+# Portable firmware drives and reads the single-wire data line; the ESP32 CPU
+# and its GPIO peripheral are not emulated.
+schema_version: 1
+name: heypcb-esp32-s3-dht11
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - U4 is the catalog `dht11` device model, the same pins-only descriptor the detailed path binds to MCU pads. Its device clock counts Flex nanoseconds.
+  - SNS_IO1 is a wired-AND of the IO4 drive and the U4 output, high when both release it. This stands for the R6 10 kΩ pull-up of the pinned board.
+  - The model samples the line at each 1 µs boundary. A firmware level change reaches U4 at the next boundary.
+  - Firmware instructions take no virtual time. The firmware polls the line once per microsecond.
+  - The IO48 user LED is represented by digital logic state only.
+  - The console stands for the ESP32-S3 native USB serial port on J1, as the source README states for flashing. A write arrives whole at the time of the call and takes no virtual time.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or GPIO peripheral fidelity; the pinned source contains no board firmware.
+  - Analog edges of SNS_IO1, the R6 pull-up current, line capacitance and the thresholds at which IO4 reads high or low.
+  - DHT11 power-on settling time, the sensor's own sampling period, and the decimal bytes (the model sends 0).
+  - Sensor accuracy, response time, self-heating and production spread of a physical DHT11.
+  - USB enumeration, CDC transfer timing and host polling of the console; text the host sends to the firmware.
+  - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+ports:
+  - { name: ambient_c, signal: environment.temperature, access: write, kind: number, unit: "°C", initial: 25 }
+  - { name: humidity_pct, signal: environment.humidity, access: write, kind: number, unit: "%", initial: 55 }
+  - { name: dht_drive, signal: source.U3.GPIO4, access: write, kind: bool, initial: 1 }
+  - { name: dht_line, signal: source.net.SNS_IO1, access: read, kind: bool }
+  - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
+  - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  # Source net SNS_IO1: U4 pad 2 (DATA), U3 pad 4 (IO4), R6 pad 2.
+  - id: source-u4-dht11
+    adapter: behavior
+    step_ns: 1000
+    inputs:
+      DATA: source.U3.GPIO4
+      temperature: environment.temperature
+      humidity: environment.humidity
+    outputs: { DATA: source.net.SNS_IO1 }
+    config: { device_type: dht11 }
+  - id: source-d1-user-led
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U3.GPIO48 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: led, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: led, level: 0 }]
+console:
+  # The source README: "USB-C, native USB on the ESP32-S3 (no bridge chip)".
+  name: usb_serial

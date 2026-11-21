@@ -1,0 +1,21 @@
+# `labwired test --script test-pomodoro-pulse.yaml`. Two-LED board contract: the firmware pulses the drive twice and checks both LED states.
+# `inputs.flex` selects portable execution; no target CPU or peripheral is emulated.
+schema_version: "1.0"
+inputs:
+  flex: system.yaml
+  firmware: firmware.wasm
+entry:
+  export: run
+  args:
+    - { port: drive }
+    - { port: led_state }
+    - { port: led_state_2 }
+    - { number: 0 }
+limits:
+  max_steps: 100000
+  max_time_ns: 10000
+assertions:
+  - entry_result: { equals: 1 }
+  - digital_edges: { port: drive, count: 4 }
+  - digital_edges: { port: led_state, count: 4 }
+  - digital_edges: { port: led_state_2, count: 4 }

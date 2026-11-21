@@ -1,0 +1,67 @@
+# Source-grounded sensor network of HeyPCB's ESP32-S3 LDR board: U4 (GL5528)
+# from 3V3 to SNS_AN1, R6 and C7 from SNS_AN1 to GND, solved by the in-core
+# analog engine. Portable firmware runs in WasmFlexRuntime; the ESP32 CPU is
+# not emulated.
+schema_version: 1
+name: heypcb-esp32-s3-ldr-sensor-network
+assumptions:
+  - Firmware is a newly authored portable WebAssembly behavior program, not firmware from the pinned board source.
+  - "U4 follows the GL5528 row of Senba's GL55 series manual: R = R10 * (lux / 10)^-0.6. The manual defines the 0.6 slope between 10 lx and 100 lx; this model extends the same line down to 1 lx, the lower edge of the manual's illuminance-resistance figure."
+  - "R10 is 15 kΩ, the midpoint of the manual's 10-20 kΩ light-resistance range at 10 lx. The manual gives no typical value."
+  - "3V3 is an ideal 3.3 V source. R6 (10 kΩ) and C7 (100 nF) use their nominal BOM values."
+  - GPIO1 is an ideal voltage probe on SNS_AN1 with no input current, sampling capacitance, or ADC conversion.
+  - The IO48 user LED is represented by digital logic state only.
+unsupported_checks:
+  - Original ESP32-S3 firmware execution and target instruction or ADC peripheral fidelity; the pinned source contains no board firmware.
+  - Full-board power, USB, boot/reset, RF, MCU integration, and assembled hardware behavior.
+  - "Illuminance below 1 lx or above 100 lx, including darkness. The run stops with an explicit range error; the manual's 1 MΩ dark resistance is a minimum 10 s after a 10 lx light is removed, not a curve point."
+  - "GL5528 response time (20 ms rise, 30 ms decay in the manual), light history, spectral response, and temperature dependence. The modeled transient is C7 charging through R6 and the static U4 resistance only."
+  - "Part-to-part spread inside the 10-20 kΩ range and R6, C7, and 3V3 tolerances. The native regression runs the 10 kΩ and 20 kΩ corners; one run uses one value."
+  - "The generic importer does not produce this network: the schematic import drops U4 and the PCB import maps it as a fixed resistor. The netlist is written from the pinned source nets."
+ports:
+  - { name: lux, signal: environment.lux, access: write, kind: number, unit: lx, initial: 10 }
+  - { name: sensor_v, signal: source.U3.GPIO1, access: read, kind: number, unit: V }
+  - { name: user_led_drive, signal: source.U3.GPIO48, access: write, kind: bool, initial: 0 }
+  - { name: user_led_state, signal: source.D1.logic_state, access: read, kind: bool }
+cosim_models:
+  - id: source-sns-an1
+    adapter: analog
+    step_ns: 50000
+    inputs: { lux: environment.lux }
+    outputs: { voltage: source.U3.GPIO1 }
+    config:
+      # Integrate the completed interval before latching this boundary's lux.
+      input_sampling: previous_boundary
+      netlist_text: |
+        V3V3 3v3 0 dc 3.3
+        RU4 3v3 sns_an1 15k
+        R6 sns_an1 0 10k
+        C7 sns_an1 0 100n
+      vdd: 3.3
+      probes: { voltage: "v(sns_an1)" }
+      photoresistors:
+        lux:
+          resistor: RU4
+          r_ref_ohms: 15000
+          reference_lux: 10
+          gamma: 0.6
+          min_lux: 1
+          max_lux: 100
+  - id: source-d1-user-led
+    adapter: behavior
+    step_ns: 1000
+    inputs: { drive: source.U3.GPIO48 }
+    outputs: { led: source.D1.logic_state }
+    config:
+      behavior:
+        primitive: gpio_device
+        states: [off, on]
+        outputs: [led]
+        pin_defaults: { led: false }
+        rules:
+          - on: { input: drive }
+            when: 'input(drive) != 0'
+            do: [{ goto: on }, { pin: led, level: 1 }]
+          - on: { input: drive }
+            when: 'input(drive) == 0'
+            do: [{ goto: off }, { pin: led, level: 0 }]
