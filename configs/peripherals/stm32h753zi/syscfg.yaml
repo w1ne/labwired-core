@@ -1,0 +1,539 @@
+peripheral: SYSCFG
+version: 0.1.0
+registers:
+- id: PMCR
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: I2C1FMP
+    bit_range:
+    - 0
+    - 0
+    description: I2C1 Fm+
+  - name: I2C2FMP
+    bit_range:
+    - 1
+    - 1
+    description: I2C2 Fm+
+  - name: I2C3FMP
+    bit_range:
+    - 2
+    - 2
+    description: I2C3 Fm+
+  - name: I2C4FMP
+    bit_range:
+    - 3
+    - 3
+    description: I2C4 Fm+
+  - name: PB6FMP
+    bit_range:
+    - 4
+    - 4
+    description: PB(6) Fm+
+  - name: PB7FMP
+    bit_range:
+    - 5
+    - 5
+    description: PB(7) Fast Mode Plus
+  - name: PB8FMP
+    bit_range:
+    - 6
+    - 6
+    description: PB(8) Fast Mode Plus
+  - name: PB9FMP
+    bit_range:
+    - 7
+    - 7
+    description: PB(9) Fm+
+  - name: BOOSTE
+    bit_range:
+    - 8
+    - 8
+    description: Booster Enable
+  - name: BOOSTVDDSEL
+    bit_range:
+    - 9
+    - 9
+    description: Analog switch supply voltage selection
+  - name: EPIS
+    bit_range:
+    - 23
+    - 21
+    description: Ethernet PHY Interface Selection
+  - name: PA0SO
+    bit_range:
+    - 24
+    - 24
+    description: PA0 Switch Open
+  - name: PA1SO
+    bit_range:
+    - 25
+    - 25
+    description: PA1 Switch Open
+  - name: PC2SO
+    bit_range:
+    - 26
+    - 26
+    description: PC2 Switch Open
+  - name: PC3SO
+    bit_range:
+    - 27
+    - 27
+    description: PC3 Switch Open
+  side_effects: null
+- id: EXTICR1
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EXTI3
+    bit_range:
+    - 15
+    - 12
+    description: EXTI x configuration (x = 0 to 3)
+  - name: EXTI2
+    bit_range:
+    - 11
+    - 8
+    description: EXTI x configuration (x = 0 to 3)
+  - name: EXTI1
+    bit_range:
+    - 7
+    - 4
+    description: EXTI x configuration (x = 0 to 3)
+  - name: EXTI0
+    bit_range:
+    - 3
+    - 0
+    description: EXTI x configuration (x = 0 to 3)
+  side_effects: null
+- id: EXTICR2
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EXTI7
+    bit_range:
+    - 15
+    - 12
+    description: EXTI x configuration (x = 4 to 7)
+  - name: EXTI6
+    bit_range:
+    - 11
+    - 8
+    description: EXTI x configuration (x = 4 to 7)
+  - name: EXTI5
+    bit_range:
+    - 7
+    - 4
+    description: EXTI x configuration (x = 4 to 7)
+  - name: EXTI4
+    bit_range:
+    - 3
+    - 0
+    description: EXTI x configuration (x = 4 to 7)
+  side_effects: null
+- id: EXTICR3
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EXTI11
+    bit_range:
+    - 15
+    - 12
+    description: EXTI x configuration (x = 8 to 11)
+  - name: EXTI10
+    bit_range:
+    - 11
+    - 8
+    description: EXTI10
+  - name: EXTI9
+    bit_range:
+    - 7
+    - 4
+    description: EXTI x configuration (x = 8 to 11)
+  - name: EXTI8
+    bit_range:
+    - 3
+    - 0
+    description: EXTI x configuration (x = 8 to 11)
+  side_effects: null
+- id: EXTICR4
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EXTI15
+    bit_range:
+    - 15
+    - 12
+    description: EXTI x configuration (x = 12 to 15)
+  - name: EXTI14
+    bit_range:
+    - 11
+    - 8
+    description: EXTI x configuration (x = 12 to 15)
+  - name: EXTI13
+    bit_range:
+    - 7
+    - 4
+    description: EXTI x configuration (x = 12 to 15)
+  - name: EXTI12
+    bit_range:
+    - 3
+    - 0
+    description: EXTI x configuration (x = 12 to 15)
+  side_effects: null
+- id: CCCSR
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 0
+    - 0
+    description: enable
+  - name: CS
+    bit_range:
+    - 1
+    - 1
+    description: Code selection
+  - name: READY
+    bit_range:
+    - 8
+    - 8
+    description: Compensation cell ready flag
+  - name: HSLV
+    bit_range:
+    - 16
+    - 16
+    description: High-speed at low-voltage
+  side_effects: null
+- id: CCVR
+  address_offset: 36
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: NCV
+    bit_range:
+    - 3
+    - 0
+    description: NMOS compensation value
+  - name: PCV
+    bit_range:
+    - 7
+    - 4
+    description: PMOS compensation value
+  side_effects: null
+- id: CCCR
+  address_offset: 40
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: NCC
+    bit_range:
+    - 3
+    - 0
+    description: NMOS compensation code
+  - name: PCC
+    bit_range:
+    - 7
+    - 4
+    description: PMOS compensation code
+  side_effects: null
+- id: PWRCR
+  address_offset: 44
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ODEN
+    bit_range:
+    - 3
+    - 0
+    description: Overdrive enable
+  side_effects: null
+- id: PKGR
+  address_offset: 292
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PKG
+    bit_range:
+    - 3
+    - 0
+    description: Package
+  side_effects: null
+- id: UR0
+  address_offset: 768
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: BKS
+    bit_range:
+    - 0
+    - 0
+    description: Bank Swap
+  - name: RDP
+    bit_range:
+    - 23
+    - 16
+    description: Readout protection
+  side_effects: null
+- id: UR2
+  address_offset: 776
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BORH
+    bit_range:
+    - 1
+    - 0
+    description: BOR_LVL Brownout Reset Threshold Level
+  - name: BOOT_ADD0
+    bit_range:
+    - 31
+    - 16
+    description: Boot Address 0
+  side_effects: null
+- id: UR3
+  address_offset: 780
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BOOT_ADD1
+    bit_range:
+    - 31
+    - 16
+    description: Boot Address 1
+  side_effects: null
+- id: UR4
+  address_offset: 784
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: MEPAD_1
+    bit_range:
+    - 16
+    - 16
+    description: Mass Erase Protected Area Disabled for bank 1
+  side_effects: null
+- id: UR5
+  address_offset: 788
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: MESAD_1
+    bit_range:
+    - 0
+    - 0
+    description: Mass erase secured area disabled for bank 1
+  - name: WRPN_1
+    bit_range:
+    - 23
+    - 16
+    description: Write protection for flash bank 1
+  side_effects: null
+- id: UR6
+  address_offset: 792
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PA_BEG_1
+    bit_range:
+    - 11
+    - 0
+    description: Protected area start address for bank 1
+  - name: PA_END_1
+    bit_range:
+    - 27
+    - 16
+    description: Protected area end address for bank 1
+  side_effects: null
+- id: UR7
+  address_offset: 796
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SA_BEG_1
+    bit_range:
+    - 11
+    - 0
+    description: Secured area start address for bank 1
+  - name: SA_END_1
+    bit_range:
+    - 27
+    - 16
+    description: Secured area end address for bank 1
+  side_effects: null
+- id: UR8
+  address_offset: 800
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: MEPAD_2
+    bit_range:
+    - 0
+    - 0
+    description: Mass erase protected area disabled for bank 2
+  - name: MESAD_2
+    bit_range:
+    - 16
+    - 16
+    description: Mass erase secured area disabled for bank 2
+  side_effects: null
+- id: UR9
+  address_offset: 804
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: WRPN_2
+    bit_range:
+    - 7
+    - 0
+    description: Write protection for flash bank 2
+  - name: PA_BEG_2
+    bit_range:
+    - 27
+    - 16
+    description: Protected area start address for bank 2
+  side_effects: null
+- id: UR10
+  address_offset: 808
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PA_END_2
+    bit_range:
+    - 11
+    - 0
+    description: Protected area end address for bank 2
+  - name: SA_BEG_2
+    bit_range:
+    - 27
+    - 16
+    description: Secured area start address for bank 2
+  side_effects: null
+- id: UR11
+  address_offset: 812
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SA_END_2
+    bit_range:
+    - 11
+    - 0
+    description: Secured area end address for bank 2
+  - name: IWDG1M
+    bit_range:
+    - 16
+    - 16
+    description: Independent Watchdog 1 mode
+  side_effects: null
+- id: UR12
+  address_offset: 816
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SECURE
+    bit_range:
+    - 16
+    - 16
+    description: Secure mode
+  side_effects: null
+- id: UR13
+  address_offset: 820
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: SDRS
+    bit_range:
+    - 1
+    - 0
+    description: Secured DTCM RAM Size
+  - name: D1SBRST
+    bit_range:
+    - 16
+    - 16
+    description: D1 Standby reset
+  side_effects: null
+- id: UR14
+  address_offset: 824
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: D1STPRST
+    bit_range:
+    - 0
+    - 0
+    description: D1 Stop Reset
+  side_effects: null
+- id: UR15
+  address_offset: 828
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: FZIWDGSTB
+    bit_range:
+    - 16
+    - 16
+    description: Freeze independent watchdog in Standby mode
+  side_effects: null
+- id: UR16
+  address_offset: 832
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: FZIWDGSTP
+    bit_range:
+    - 0
+    - 0
+    description: Freeze independent watchdog in Stop mode
+  - name: PKP
+    bit_range:
+    - 16
+    - 16
+    description: Private key programmed
+  side_effects: null
+- id: UR17
+  address_offset: 836
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: IO_HSLV
+    bit_range:
+    - 0
+    - 0
+    description: I/O high speed / low voltage
+  side_effects: null
+interrupts: null
+timing: null

@@ -3,6 +3,8 @@ name: arduino-mega-2560-io
 # A8 (ADC8) and A9 (ADC9), the analog-only inputs of the Mega.
 chip: ../../configs/chips/atmega2560.yaml
 cpu_hz: 16000000
+# Console = USART0 (Serial), as on configs/systems/arduino-mega-2560.yaml.
+debug_uart: "usart0"
 external_devices:
   - id: "pot_a8"
     type: "potentiometer"

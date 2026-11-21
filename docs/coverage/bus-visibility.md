@@ -296,6 +296,7 @@ Chips that cannot yet produce edges for a bus are listed here with a reason — 
 | stm32h563 | ✓ | ✓ | ✓ |
 | stm32h723zg | ✓ | ✓ | ✓ |
 | stm32h735 | ✓ | ✓ | ✓ |
+| stm32h753zi | ✓ | ✓ | ✓ |
 | stm32l073 | ✓ | ✓ | ✓ |
 | stm32l432kc | ✓ | ✓ | ✓ |
 | stm32l476 | ✓ | ✓ | ✓ |

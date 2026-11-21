@@ -705,6 +705,7 @@ analog_kit!(POTENTIOMETER_KIT, "potentiometer");
 analog_kit!(NTC_THERMISTOR_KIT, "ntc-thermistor");
 analog_kit!(TMP36_KIT, "tmp36");
 analog_kit!(MCP9700_KIT, "mcp9700");
+analog_kit!(MCP9701_KIT, "mcp9701");
 analog_kit!(MQ6_KIT, "mq-6");
 analog_kit!(SOIL_MOISTURE_KIT, "soil-moisture");
 analog_kit!(LIPO_CHARGER_KIT, "lipo_charger");
@@ -1010,6 +1011,7 @@ behavior:
             ("ntc-thermistor", 1650), // 25 °C ⇒ exactly Vref/2
             ("tmp36", 750),           // 25 °C ⇒ 500 + 250 mV
             ("mcp9700", 750),         // 25 °C ⇒ 500 + 250 mV
+            ("mcp9701", 887),         // 25 °C ⇒ 400 + 487.5 mV, truncated
             ("mq-6", 0),              // 0 ppm, clean air
             ("soil-moisture", 1980),  // 40 % moisture
             ("lipo_charger", 1875),   // 50 % SoC, unplugged
@@ -1083,6 +1085,27 @@ behavior:
         assert!(
             t.set_input("temperature", 200.0).is_err(),
             "outside -40..125 is refused"
+        );
+    }
+
+    /// MCP9701 datasheet line (DS20001942G p.2): 400 mV at 0 °C,
+    /// 19.5 mV/°C, specified -10..125 °C (205..2837.5 mV).
+    #[test]
+    fn mcp9701_follows_its_datasheet_line() {
+        let mut t = kit_device("mcp9701");
+        for (c, mv) in [
+            (-10.0, 205u16),
+            (0.0, 400),
+            (25.0, 887),
+            (40.0, 1180),
+            (125.0, 2837),
+        ] {
+            t.set_input("temperature", c).unwrap();
+            assert_eq!(t.output_mv(), mv, "{c} °C");
+        }
+        assert!(
+            t.set_input("temperature", -40.0).is_err(),
+            "below the -10 °C grade is refused"
         );
     }
 }

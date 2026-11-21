@@ -160,6 +160,7 @@ same fields but never their source, chip YAML, binary or build paths.
 | rp2040-feather | open | L0 | 26 | 906.8 | 1.6 | ≥1× (CI) | — |
 | rp2350-feather | open | L0 | 27 | 906.8 | 1.7 | ≥1× (CI) | — |
 | stm32h723zg | open | L0 | 43 | 808.5 | 1.5 | ≥1× (CI) | — |
+| stm32h753zi | open | L0 | 43 | 860.6 | 1.3 | ≥1× (CI) | — |
 | esp32c6fh4 | open | L0 | 69 | — | 3.8 | ≥1× (CI) | — |
 | k32w041z (closed) | closed | L2 | 9 | 987.8 | 1.6 | 6.50× | [doc](docs/boards/k32w041amdk6.md) |
 

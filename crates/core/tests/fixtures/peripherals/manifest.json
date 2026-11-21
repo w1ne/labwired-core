@@ -1920,6 +1920,32 @@
       ]
     },
     {
+      "device_type": "mcp9701",
+      "label": "MCP9701 Temperature Sensor",
+      "summary": "Analog temperature sensor, 19.5 mV/°C with 400 mV at 0 °C.",
+      "detail": "Microchip MCP9701/9701A linear active thermistor. Drive the `temperature` channel (°C) at runtime and the ADC channel follows V_out = 400 mV + 19.5 mV/°C, independent of the supply. Starts at 25 °C (887 mV).",
+      "transport": "analog",
+      "category": "analog",
+      "config_keys": [
+        {
+          "name": "channel",
+          "ty": "int",
+          "doc": "ADC channel index (0..N). Defaults to 0."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "unit": "°C",
+          "min": -10.0,
+          "max": 125.0,
+          "default": 25.0
+        }
+      ]
+    },
+    {
       "device_type": "potentiometer",
       "label": "Potentiometer",
       "summary": "3-pin linear potentiometer on an ADC channel (rotary or slide).",
