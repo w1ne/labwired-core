@@ -352,8 +352,32 @@ impl OneWireDevice {
 
     /// Does the part hold the line low at `time_ns`?
     pub fn pulls_low(&self, time_ns: u64) -> bool {
-        self.pull
-            .is_some_and(|(from, until)| (from..until).contains(&time_ns))
+        self.is_connected()
+            && self
+                .pull
+                .is_some_and(|(from, until)| (from..until).contains(&time_ns))
+    }
+
+    /// Parts without a `connected` channel are always on the bus. A present
+    /// channel is on at 0.5 or above (default 1).
+    fn is_connected(&self) -> bool {
+        if !self
+            .channels
+            .iter()
+            .any(|channel| channel.key == "connected")
+        {
+            return true;
+        }
+        self.inputs.get("connected").copied().unwrap_or(1.0) >= 0.5
+    }
+
+    /// Drop any presence or slot pull and return to idle so DQ is released.
+    fn detach(&mut self) {
+        self.pull = None;
+        self.phase = Phase::Idle;
+        self.tx.clear();
+        self.read_slot = false;
+        self.pending_done = None;
     }
 
     fn sending(&self) -> bool {
@@ -400,6 +424,10 @@ impl OneWireDevice {
     }
 
     fn reset(&mut self, time_ns: u64) {
+        if !self.is_connected() {
+            self.detach();
+            return;
+        }
         let from = time_ns + self.timing.presence_wait_us * NS_PER_US;
         self.pull = Some((from, from + self.timing.presence_us * NS_PER_US));
         self.phase = Phase::RomCommand;
@@ -605,6 +633,9 @@ impl SimInput for OneWireDevice {
             });
         }
         self.inputs.insert(key.to_string(), value);
+        if key == "connected" && !self.is_connected() {
+            self.detach();
+        }
         Ok(())
     }
 
@@ -697,6 +728,52 @@ mod tests {
         host.wait(70);
         assert!(host.line());
         assert!(host.reset());
+    }
+
+    #[test]
+    fn disconnected_probe_gives_no_presence_and_releases_dq() {
+        let mut device = ds18b20(-18.0);
+        let mut host = Host {
+            device: &mut device,
+            now_us: 0,
+        };
+        assert!(host.reset(), "connected by default");
+        host.device.set_input("connected", 0.0).unwrap();
+        assert!(
+            host.line(),
+            "DQ is released as soon as the probe is removed"
+        );
+        assert!(!host.device.pulls_low(host.now_us * NS_PER_US));
+        assert!(!host.reset(), "no presence pulse while disconnected");
+        assert!(host.line());
+        // A DallasTemperature master treats a missing presence as
+        // DEVICE_DISCONNECTED_C and does not clock a scratchpad.
+        host.write(0xCC);
+        host.write(0xBE);
+        assert_eq!(host.read(), 0xFF);
+    }
+
+    #[test]
+    fn reconnecting_resumes_presence_and_temperature_reads() {
+        let mut device = ds18b20(-18.0);
+        let mut host = Host {
+            device: &mut device,
+            now_us: 0,
+        };
+        host.device.set_input("connected", 0.0).unwrap();
+        assert!(!host.reset());
+        host.device.set_input("connected", 1.0).unwrap();
+        assert!(host.reset(), "presence returns after reconnect");
+        host.write(0xCC);
+        host.write(0x44);
+        host.wait(750_000);
+        assert!(host.reset());
+        host.write(0xCC);
+        host.write(0xBE);
+        let lsb = host.read();
+        let msb = host.read();
+        // -18.0 °C = 0xFEE0 at 12-bit (16 × -18).
+        assert_eq!(u16::from_le_bytes([lsb, msb]), 0xFEE0);
     }
 
     #[test]
