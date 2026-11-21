@@ -1,0 +1,37 @@
+# Compare one SPICE m=2 NMOS with two explicit parallel instances on ADC1.
+# The single-device control keeps the current increase visible at the endpoint.
+name: "nucleo-f407-analog-mosfet-multiplier"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_instance_multiplier"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.mosfet_multiplier.gate_v"
+    outputs:
+      multiplied_drain: "board.analog.pa2_volts"
+      parallel_drain: "board.analog.pa3_volts"
+      single_drain: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Vdd_mult supply_mult 0 dc 3.3
+        Rload_mult supply_mult drain_mult 1k
+        Mmult drain_mult gate 0 0 NMOS_MULT m=2
+        Vdd_parallel supply_parallel 0 dc 3.3
+        Rload_parallel supply_parallel drain_parallel 1k
+        Mparallel_a drain_parallel gate 0 0 NMOS_MULT
+        Mparallel_b drain_parallel gate 0 0 NMOS_MULT
+        Vdd_single supply_single 0 dc 3.3
+        Rload_single supply_single drain_single 1k
+        Msingle drain_single gate 0 0 NMOS_MULT
+        .model NMOS_MULT NMOS(VTO=1 KP=20u LAMBDA=0.02 RD=20 RS=80 W=100u L=10u)
+      probes:
+        multiplied_drain: "v(drain_mult)"
+        parallel_drain: "v(drain_parallel)"
+        single_drain: "v(drain_single)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3

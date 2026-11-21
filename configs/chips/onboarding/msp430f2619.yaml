@@ -9,14 +9,72 @@ arch: arm
 flash:
   base: 3072
   size: 1024B
+# The MSP430 has no Cortex-M boot alias: 0x0000..0x01FF is the peripheral
+# file (SFRs, byte and word peripherals), so flash must not mirror there.
+flash_boot_alias: false
 ram:
   base: 512
   size: 2048B
+# Digital I/O P1..P6: byte ports PxIN/PxOUT/PxDIR (SLAU144J §8.2), on
+# configs/peripherals/msp430/port8.yaml; P7:P8 is the halfword pair at 0x38
+# (SLAS541), on port16.yaml.
 peripherals:
+- id: p1
+  type: declarative
+  bus: sysbus
+  base_address: 32
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p2
+  type: declarative
+  bus: sysbus
+  base_address: 40
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p3
+  type: declarative
+  bus: sysbus
+  base_address: 24
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p4
+  type: declarative
+  bus: sysbus
+  base_address: 28
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p5
+  type: declarative
+  bus: sysbus
+  base_address: 48
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p6
+  type: declarative
+  bus: sysbus
+  base_address: 52
+  size: 3B
+  config:
+    path: ../../peripherals/msp430/port8.yaml
+- id: p78
+  type: declarative
+  bus: sysbus
+  base_address: 56
+  size: 6B
+  config:
+    path: ../../peripherals/msp430/port16.yaml
+# MPY..SUMEXT are 0x0130..0x013F (msp430f2619_symbols.ld); sized to that so
+# the stub's default window does not cover the ADC12 registers at 0x01A0.
 - id: mpy
   type: msp430f2xxx_mpy
   bus: sysbus
   base_address: 304
+  size: 16B
 - id: boot
   type: arraymemory
   bus: sysbus
@@ -33,3 +91,23 @@ peripherals:
   type: arraymemory
   bus: sysbus
   base_address: 4096
+# ADC12 (msp430_adc12): ADC12MCTL0..15 @0x0080, ADC12MEM0..15 @0x0140 and
+# ADC12CTL0/CTL1/IFG/IE/IV @0x01A0..0x01A9 (msp430f2619_symbols.ld, TI
+# msp430-gcc support files; mspsim MSP430f1611Config.java maps the same
+# windows). One 0x12A-byte window from 0x0080: the peripherals between the
+# ADC12 registers start later, so they keep their addresses on the bus.
+- id: adc12
+  type: msp430_adc12
+  base_address: 128
+  size: 298B
+# A0..A7 are the P6.0..P6.7 pads (SLAS541 pin functions P6.x/Ax); the
+# label is the ADC12 input name, so a netlist routes board.analog.a<n>_volts.
+analog_pins:
+  A0: { peripheral: adc12, channel: 0 }
+  A1: { peripheral: adc12, channel: 1 }
+  A2: { peripheral: adc12, channel: 2 }
+  A3: { peripheral: adc12, channel: 3 }
+  A4: { peripheral: adc12, channel: 4 }
+  A5: { peripheral: adc12, channel: 5 }
+  A6: { peripheral: adc12, channel: 6 }
+  A7: { peripheral: adc12, channel: 7 }

@@ -1,0 +1,109 @@
+# Mirrored generic Gummel–Poon PNP branches isolate base-emitter depletion,
+# base-collector depletion and forward transit charge through STM32G071 ADC1.
+# The 10 nF junction capacitances make charge behavior visible at the 1 us
+# fixture step; this is a physics stress case, not a typical small-signal card.
+name: nucleo-g071rb-pnp-charge-adc
+chip: ../../configs/chips/stm32g071.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: pnp_charge_reference_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drop: ui.bjt_pnp_charge.base_drop_v
+    outputs:
+      collector_voltage: adc.adc1.6_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload collector 0 1k
+        Vbase supply drive dc 0
+        Rbase drive base 10k
+        Q1 collector base supply PNP_TEST
+        .model PNP_TEST PNP(IS=1e-15 BF=100 BR=4 VAF=50)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drop: Vbase
+      vdd: 3.3
+  - id: pnp_base_emitter_charge_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drop: ui.bjt_pnp_charge.base_drop_v
+    outputs:
+      collector_voltage: adc.adc1.7_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload collector 0 1k
+        Vbase supply drive dc 0
+        Rbase drive base 10k
+        Q1 collector base supply PNP_TEST
+        .model PNP_TEST PNP(IS=1e-15 BF=100 BR=4 VAF=50 CJE=10n VJE=0.7 MJE=0.33 FC=0.5)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drop: Vbase
+      vdd: 3.3
+  - id: pnp_base_collector_charge_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drop: ui.bjt_pnp_charge.base_drop_v
+    outputs:
+      collector_voltage: adc.adc1.8_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload collector 0 1k
+        Vbase supply drive dc 0
+        Rbase drive base 10k
+        Q1 collector base supply PNP_TEST
+        .model PNP_TEST PNP(IS=1e-15 BF=100 BR=4 VAF=50 CJC=10n VJC=0.7 MJC=0.33 FC=0.5)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drop: Vbase
+      vdd: 3.3
+  - id: pnp_forward_transit_charge_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drop: ui.bjt_pnp_charge.base_drop_v
+    outputs:
+      collector_voltage: adc.adc1.9_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload collector 0 1k
+        Vbase supply drive dc 0
+        Rbase drive base 10k
+        Q1 collector base supply PNP_TEST
+        .model PNP_TEST PNP(IS=1e-15 BF=100 BR=4 VAF=50 TF=100n)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drop: Vbase
+      vdd: 3.3
+  - id: pnp_combined_charge_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drop: ui.bjt_pnp_charge.base_drop_v
+    outputs:
+      collector_voltage: adc.adc1.10_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload collector 0 1k
+        Vbase supply drive dc 0
+        Rbase drive base 10k
+        Q1 collector base supply PNP_TEST
+        .model PNP_TEST PNP(IS=1e-15 BF=100 BR=4 VAF=50 CJE=10n VJE=0.7 MJE=0.33 CJC=10n VJC=0.7 MJC=0.33 FC=0.5 TF=100n)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drop: Vbase
+      vdd: 3.3

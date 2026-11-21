@@ -1,0 +1,31 @@
+# Generic PMOS level-1 Meyer TOX charge on ADC1 IN6, with a zero-charge
+# reference on IN7. The NTC and Shockley diode stay on IN4/IN5.
+name: nucleo-g071rb-pmos-tox-charge-adc
+chip: ../../configs/chips/stm32g071.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: pmos_tox_gate_charge_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      gate_v: ui.pmos_tox.gate_v
+    outputs:
+      gate_charge: adc.adc1.6_volts
+      gate_reference: adc.adc1.7_volts
+    config:
+      substeps: 1
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Vgate drive 0 dc 3.3
+        Rcharged drive gate_charged 1Meg
+        Mcharged supply gate_charged supply supply PMOS_TOX W=100u L=10u
+        Mreference supply drive supply supply PMOS_REFERENCE W=100u L=10u
+        .model PMOS_TOX PMOS(VTO=-1 KP=1e-30 IS=1e-30 TOX=10n)
+        .model PMOS_REFERENCE PMOS(VTO=-1 KP=1e-30 IS=1e-30)
+      probes:
+        gate_charge: v(gate_charged)
+        gate_reference: v(drive)
+      sources:
+        gate_v: Vgate
+      vdd: 3.3

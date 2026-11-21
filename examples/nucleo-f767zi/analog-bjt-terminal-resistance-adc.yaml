@@ -1,0 +1,130 @@
+# Matched generic Gummel–Poon NPN branches compare model-card RB/RC/RE with
+# explicit resistor networks through NUCLEO-F767ZI ADC1_IN2..IN7.
+name: nucleo-f767zi-analog-bjt-terminal-resistance-adc
+chip: ../../configs/chips/stm32f767.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: bjt_base_resistance_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_terminal.base_v
+    outputs:
+      collector_voltage: board.analog.pa2_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 10k
+        Q1 collector base 0 NPN_RB
+        .model NPN_RB NPN(IS=1e-15 BF=100 BR=4 VAF=50 RB=1k)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_base_resistor_network_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_terminal.base_v
+    outputs:
+      collector_voltage: board.analog.pa3_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 10k
+        Rbase base intrinsic_base 1k
+        Q1 collector intrinsic_base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_collector_resistance_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_terminal.base_v
+    outputs:
+      collector_voltage: board.analog.pa4_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 10k
+        Q1 collector base 0 NPN_RC
+        .model NPN_RC NPN(IS=1e-15 BF=100 BR=4 VAF=50 RC=150)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_collector_resistor_network_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_terminal.base_v
+    outputs:
+      collector_voltage: board.analog.pa5_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Rcollector collector intrinsic_collector 150
+        Vbase drive 0 dc 0
+        Rdrive drive base 10k
+        Q1 intrinsic_collector base 0 NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_emitter_resistance_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_terminal.base_v
+    outputs:
+      collector_voltage: board.analog.pa6_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 10k
+        Q1 collector base 0 NPN_RE
+        .model NPN_RE NPN(IS=1e-15 BF=100 BR=4 VAF=50 RE=100)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_emitter_resistor_network_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_terminal.base_v
+    outputs:
+      collector_voltage: board.analog.pa7_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rdrive drive base 10k
+        Remitter 0 intrinsic_emitter 100
+        Q1 collector base intrinsic_emitter NPN_TEST
+        .model NPN_TEST NPN(IS=1e-15 BF=100 BR=4 VAF=50)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3

@@ -14,6 +14,20 @@ temperature-driven NTC divider routes to ADC8, and
 checks the solved voltage and the firmware-visible ADC result at three
 temperatures.
 
+`analog-bjt-high-injection-system.yaml` routes matched Gummel–Poon NPN
+branches with and without IKF/NKF high-injection rolloff to ADC9/ADC10 beside
+the unrelated NTC on ADC8. The end-to-end test checks independent collector
+load lines and converts all three values through the ATmega2560 MUX5 path:
+
+    cargo test -p labwired-core --test cosim_pin_routing arduino_mega_2560_bjt_high_injection_and_ntc_reach_firmware_adc_through_mux5
+
+`analog-bjt-early-effect-system.yaml` routes matched Gummel–Poon NPN branches
+with and without forward Early effect to ADC9/ADC10, alongside the generic NTC
+on ADC8 and Shockley diode on ADC11. The test sweeps base drive, checks the
+independent load-line references, and reads all four routes through MUX5:
+
+    cargo test -p labwired-core --test cosim_pin_routing arduino_mega_2560_bjt_early_effect_and_unrelated_devices_reach_firmware_adc_through_mux5
+
     cargo test -p labwired-core --test avr_mega2560_io
 
 The committed ELF (`tests/fixtures/avr/arduino-mega-2560-io.elf`) was built

@@ -99,6 +99,16 @@ arch: "arm"
 core: "cortex-m33"
 # Reset clock: MOCO 8 MHz. The EK-RA6M5 smoke never starts HOCO or the PLL.
 cpu_hz: 8_000_000
+# GPIO input thresholds: R01DS0366EJ0150 (RA6M5 Datasheet Rev.1.50), Table 2.4
+# I/O VIH, VIL (2 of 2), Ports: 5 V-tolerant ports and other input pins both
+# have VIL max 0.2*VCC and VIH min 0.8*VCC. 3.3 V is the EK-RA6M5 rail.
+# Peripheral levels (IIC 0.3/0.7, ETHERC 2.3 V, D00-D15 0.3/0.7) apply only
+# while that function owns the pad, so they are not pad classes.
+# https://www.renesas.com/us/en/document/dst/ra6m5-group-datasheet
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.2
+  vih: 0.8
 flash:
   base: 0x00000000
   size: "2048KB"

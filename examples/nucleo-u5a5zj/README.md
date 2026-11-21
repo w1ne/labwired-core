@@ -14,3 +14,9 @@ cargo run -q -p labwired-cli -- test --script examples/nucleo-u5a5zj/io-smoke.ya
 The shared demo firmware is used only for its USART1 `OK` smoke. Crypto
 register-level operations are covered by `crates/core/tests/stm32u5_exec_oracle.rs`.
 The model is simulator-validated; no physical U5A5 board test is claimed.
+
+The analog examples route generic MNA netlists through the U5A5 pad map and
+ADC1. `analog-diode-charge-adc-system.yaml` compares a Shockley diode reference
+with depletion-charge, transit-charge, and combined-charge branches on PA2–PA5;
+the integration test asserts their transient ADC readings and their shared DC
+load line alongside the unrelated NTC and diode routes.

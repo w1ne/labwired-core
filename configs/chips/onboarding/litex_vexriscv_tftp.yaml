@@ -6,6 +6,13 @@ flash:
 ram:
   base: 16777216
   size: 32768B
+# Simulation-only co-simulation endpoint. This imported LiteX TFTP profile
+# does not expose a modeled GPIO fabric or ADC; these channels are not physical
+# pads or firmware-visible registers.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
 peripherals:
 - id: ctrl
   type: litex_soc_controller
@@ -23,3 +30,10 @@ peripherals:
   type: ethernetphysicallayer
   bus: ethmac
   base_address: 0
+- id: cosim_inputs
+  type: input_pin_bank
+  bus: sysbus
+  base_address: 0xF0000000
+  size: 4KB
+  config:
+    pin_count: 2

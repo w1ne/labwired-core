@@ -1,0 +1,45 @@
+# Matched generic Gummel–Poon NPN branches isolate forward transit charge on
+# ADC1 IN8/IN9 beside the standard unrelated NTC and Shockley diode routes.
+name: nucleo-g071rb-bjt-transit-adc
+chip: ../../configs/chips/stm32g071.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: bjt_transit_control_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_transit.base_v
+    outputs:
+      base_voltage: adc.adc1.8_volts
+    config:
+      netlist_text: |
+        Vcollector collector 0 dc 0.1
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TRANSIT_CONTROL
+        .model NPN_TRANSIT_CONTROL NPN(IS=1e-15 BF=100 BR=4 TF=0)
+      probes:
+        base_voltage: v(base)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_forward_transit_charge_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_transit.base_v
+    outputs:
+      base_voltage: adc.adc1.9_volts
+    config:
+      netlist_text: |
+        Vcollector collector 0 dc 0.1
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_TRANSIT
+        .model NPN_TRANSIT NPN(IS=1e-15 BF=100 BR=4 TF=1u)
+      probes:
+        base_voltage: v(base)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3

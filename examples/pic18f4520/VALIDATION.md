@@ -22,7 +22,10 @@ is no silicon capture; everything here is simulation-derived.
 
 ```bash
 cargo test -p labwired-core --lib cpu::pic18
-# test result: ok. 52 passed; 0 failed
+# test result: ok. 68 passed; 0 failed
+
+cargo test -p labwired-core --test cosim_pic18f4520_analog --test session_builder_pic18
+# test result: ok. 2 passed; 0 failed / ok. 4 passed; 0 failed
 
 cargo test -p labwired-core --test pic18f4520_smoke
 # test result: ok. 4 passed; 0 failed
@@ -53,6 +56,20 @@ bash examples/pic18f4520/ci/test.sh
   Unimplemented memory reads 0. The device ID words are not modelled.
   `TBLWT` only moves `TBLPTR`; no EECON1 write sequence is modelled, so flash
   never changes.
+- **A/D module.** `ADCON0`/`ADCON1`/`ADCON2`/`ADRESH`/`ADRESL` (DS39631E
+  section 19) on boards whose chip declares the routed-pad window. Setting
+  `GO/DONE` starts the `ACQT` acquisition time (0-20 TAD) and then the 11 TAD
+  conversion on the `ADCS` clock; the input is sampled when the acquisition
+  ends. The result loads with the `ADFM` justification, `GO/DONE` clears and
+  `ADIF` sets. `VCFG` selects VDD/VSS or AN3/AN2 as references. `CHS` reaches
+  AN0-AN12. A pin set as an output converts its own level. Clearing
+  `GO/DONE` aborts and keeps the last result. The A/D RC clock converts
+  through Sleep and `ADIF` wakes the part. `ADCON1` resets from the `PBADEN`
+  configuration bit. Covered by the `adc_*` unit tests in
+  `crates/core/src/cpu/pic18.rs` and by
+  `crates/core/tests/cosim_pic18f4520_analog.rs` with gpasm firmware;
+  `session_builder_pic18::pic18f4520_adc_firmware_converts_the_solved_netlists_in_a_session`
+  runs the netlists and the firmware together in one `Session` (`N=200 D=084`).
 - **SLEEP.** Sets `TO` and clears `PD`. The core then idles until an
   individually enabled interrupt flag is raised, with or without `GIE`.
 
@@ -62,7 +79,14 @@ Not validated, or not modelled, for this part:
 - CONFIG decoding: the oscillator and `cpu_hz` come from the manifest, not
   from CONFIG1H.
 - Timers 0–3, CCP/ECCP and MSSP (SPI/I2C).
-- ADC, comparators, HLVD and data EEPROM.
+- Comparators, HLVD and data EEPROM.
+- A/D module limits: the acquisition time (DS39631E section 19.1) is not
+  checked, so a conversion started too early still returns the settled level;
+  the result is the ideal code with no offset, gain or quantisation error;
+  the A/D RC oscillator is a fixed 1.2 us TAD; the 2 TAD wait after a
+  conversion and the CCP2 Special Event Trigger are not modelled; a
+  conversion on an Fosc-derived clock waits while the part is in Sleep (the
+  data sheet does not define that case).
 - WDT, EUSART RX and baud timing.
 - PORTB interrupt-on-change and external pin drive.
 - The extended instruction set (XINST) and interrupt latency.

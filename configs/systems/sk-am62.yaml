@@ -5,7 +5,9 @@
 # FTDI USB-UART bridge), 115200 8N1 from the 48 MHz UART clock.
 #
 # Not modelled yet: LEDs, user button, the boot flow (TF-A, U-Boot); images
-# are loaded straight into DDR and entered at EL3.
+# are loaded straight into DDR and entered at EL3. MAIN_GPIO0/1 are modelled;
+# examples/sk-am62/analog-ntc-diode-system.yaml uses two MAIN_GPIO0 pads of
+# the 40-pin user expansion connector.
 name: "sk-am62"
 chip: "../chips/am6234.yaml"
 external_devices: []

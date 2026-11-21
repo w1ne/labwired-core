@@ -2806,6 +2806,7 @@ pub(crate) fn run_test(
                     String::new()
                 });
             let mut cpu = labwired_core::cpu::Pic18::for_chip_name(&pic18_chip_name);
+            cpu.bind_adc_pads(&bus);
             cpu.load_program_image(&program);
             cpu.set_serial_sink(uart_tx.clone());
             let machine = labwired_core::Machine::new(cpu, bus);
@@ -2851,6 +2852,7 @@ pub(crate) fn run_test(
                 .map(|c| c.name)
                 .unwrap_or_default();
             let mut cpu = labwired_core::cpu::Pic16::for_chip_name(&pic16_chip_name);
+            cpu.bind_adc_pads(&bus);
             match cpu.load_program_image(&program) {
                 Ok(()) => {
                     cpu.set_serial_sink(uart_tx.clone());

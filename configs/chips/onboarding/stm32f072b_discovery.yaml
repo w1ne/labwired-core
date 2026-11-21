@@ -141,6 +141,11 @@ peripherals:
   type: stm32f0_adc
   bus: sysbus
   base_address: 1073816576
+  # RM0091 §13: the F0 ADC is the v2 block (CHSELR channel bitmap @ 0x28,
+  # CFGR1.RES, no DEEPPWD). Without a profile the generic `adc` model
+  # falls back to the F1 map, where 0x28 is LTR, not CHSELR.
+  config:
+    profile: stm32f0
 - id: crc
   type: stm32_crc
   bus: sysbus

@@ -1,0 +1,123 @@
+# S32K388 EVB: BJT quasi-saturation on the SAR ADCs, beside the unrelated
+# Beta NTC on PTA11 (ADC1_S10) and Shockley diode on PTA17 (ADC2_S19).
+#
+# Four generic Gummel-Poon switch stages share one base drive and differ only
+# in the collector model. RCO selects Kull's quasi-saturation model: the
+# epitaxial collector resistance falls as the forward-biased collector
+# junction injects carriers into it (GAMMA), and its current saturates with
+# the drop across it (VO):
+#   PTA16  (ADC1_S13)  NPN, RC=2 RCO=50 VO=30 GAMMA=1e-8
+#   PTB15  (ADC1_S11)  NPN, RC=2 only: saturates hard
+#   PTB16  (ADC1_S12)  NPN, RC=52: the same resistance with no modulation
+#   PTA21  (ADC2_S12)  PNP high-side mirror of the PTA16 stage
+# The test loads the board profile and takes only cosim_models from here.
+name: "s32k388-evb-analog-bjt-quasi-saturation"
+chip: "../../configs/chips/s32k388.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.pta11_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rpull vcc sense 10k
+        Rntc sense 0 10k beta=3950 tnom=25 temp=25
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pta17_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"
+  - id: "npn_quasi_saturation"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_switch.base_v"
+    outputs:
+      v_collector: "board.analog.pta16_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 100
+        Vbase drive 0 dc 0
+        Rbase drive base 1k
+        Q1 collector base 0 QEPI
+        .model QEPI NPN(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=30 GAMMA=1e-8)
+      probes:
+        v_collector: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+  - id: "npn_ohmic_collector"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_switch.base_v"
+    outputs:
+      v_collector: "board.analog.ptb15_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 100
+        Vbase drive 0 dc 0
+        Rbase drive base 1k
+        Q1 collector base 0 QOHM
+        .model QOHM NPN(IS=1e-14 BF=100 BR=2 RC=2)
+      probes:
+        v_collector: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+  - id: "npn_resistive_collector"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_switch.base_v"
+    outputs:
+      v_collector: "board.analog.ptb16_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 100
+        Vbase drive 0 dc 0
+        Rbase drive base 1k
+        Q1 collector base 0 QRES
+        .model QRES NPN(IS=1e-14 BF=100 BR=2 RC=52)
+      probes:
+        v_collector: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+  - id: "pnp_quasi_saturation"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_switch.base_v"
+    outputs:
+      v_collector: "board.analog.pta21_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload collector 0 100
+        Vbase supply drive dc 0
+        Rbase drive base 1k
+        Q1 collector base supply QEPI
+        .model QEPI PNP(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=30 GAMMA=1e-8)
+      probes:
+        v_collector: "v(collector)"
+      sources:
+        base_drive: "Vbase"

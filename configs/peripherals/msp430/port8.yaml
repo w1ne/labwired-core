@@ -1,0 +1,53 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# MSP430x1xx / x2xx digital I/O port: three byte registers packed at the port
+# base, PxIN / PxOUT / PxDIR (SLAU049F MSP430x1xx Family User's Guide §9.2;
+# SLAU144J MSP430x2xx §8.2). P1 sits at 0x20, P2 at 0x28, P3 at 0x18, P4 at
+# 0x1C, P5 at 0x30, P6 at 0x34 (MSP430F149 DS SLAS272 / MSP430F2619 DS SLAS541
+# Table "Peripherals With Byte Access"). Pin k of the port is bit k.
+#
+# Runs on the declarative GPIO path (IN / OUT / ENABLE) at byte width.
+# Not modelled: PxSEL (the pad stays a GPIO), PxREN pull resistors, and the
+# P1/P2 interrupt registers PxIFG / PxIES / PxIE. PxIN writes are ignored, as
+# on silicon (the register is read-only).
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: IN
+  address_offset: 0
+  size: 8
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PxIN
+    bit_range:
+    - 7
+    - 0
+    description: PxIN, the input level of each pin whatever its direction
+  side_effects: null
+- id: OUT
+  address_offset: 1
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PxOUT
+    bit_range:
+    - 7
+    - 0
+    description: PxOUT, the level a pin drives when PxDIR makes it an output
+  side_effects: null
+- id: ENABLE
+  address_offset: 2
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PxDIR
+    bit_range:
+    - 7
+    - 0
+    description: PxDIR, 1 makes the pin an output (reset 0, all inputs)
+  side_effects: null

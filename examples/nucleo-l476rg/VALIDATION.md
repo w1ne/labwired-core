@@ -23,6 +23,20 @@ PA1, and asserts the GPIOA input levels and Schmitt hysteresis for both the
 production board profile and its read-only CI fixture. This is not an ADC or
 silicon analog capture.
 
+`cosim_nucleo_l476_analog::nucleo_l476rg_bjt_early_effect_reaches_pa2_pa3_gpio_inputs`
+also solves a matched Gummel–Poon NPN pair on PA2/PA3. The finite-VAF branch
+and no-Early-effect reference are checked against independent load-line roots
+at four base drives, with the unrelated NTC and diode still isolated on PA0
+and PA1. This is model coverage only; it is not a silicon analog capture.
+
+`cosim_nucleo_l476_analog::nucleo_l476rg_bjt_high_injection_reaches_adc1_alongside_ntc_and_diode`
+routes matched generic Gummel–Poon NPN branches with and without IKF/IKR/NKF
+rolloff to explicit ADC1_IN11/IN12 endpoints. Independent load-line roots
+check three base drives, including measurable high-drive rolloff, and the
+firmware-visible ADC data register is checked alongside the unrelated NTC and
+Shockley diode on ADC1_IN5/IN6. This extends model coverage; it is not a
+silicon analog capture or a PA pad-to-ADC alias claim.
+
 Each row is a captured byte stream from `/dev/ttyACM1` at 115200 8N1.
 Sim must reproduce verbatim (`crates/core/tests/firmware_survival.rs`).
 

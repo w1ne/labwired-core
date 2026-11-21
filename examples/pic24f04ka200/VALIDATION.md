@@ -12,6 +12,7 @@ There is no silicon capture.
 | System manifest | ✅ | `examples/pic24f04ka200/system.yaml` |
 | Boot + UART1 | ✅ | real XC16 v1.70 ELF; `pic24_ka_smoke::pic24f04ka200_uart_smoke` |
 | CLI smoke | ✅ | `examples/pic24f04ka200/io-smoke.yaml` |
+| ADC1 analog routing | ✅ (shared core) | `analog_pins` AN0/AN1 (RA0/RA1), AN2/AN3 (RB4/RA4), AN4/AN5 (RA2/RA3) and AN10 (RB14), `pic24_adc_pads` window; `cosim_pic24f_ka_adc1_analog` (hand-encoded PIC24 conversion program, no XC16 ELF) |
 | Silicon capture | ❌ none | simulation-derived only |
 
 ## Evidence
@@ -38,11 +39,11 @@ are the package masks (TRISA 0x007F, TRISB 0xC310, TRISC 0).
 
 Validated: boot, UART1 TX, package GPIO masks and RA0. Not validated or not
 modelled for this part: data EEPROM (absent on 04KA), UART2 (absent), timers,
-ADC, SPI, I2C, RTCC, CTMU, comparators, deep sleep, PPS and alternate pin
+ADC1 external VREF±/band gap, SPI, I2C, RTCC, CTMU, comparators, deep sleep, PPS and alternate pin
 functions. The public core's flash/SRAM backing is the larger
 dsPIC33FJ32MC204-sized store; the descriptor still records the exact part
 geometry (4 KB / 512 B), and the real image fits unchanged.
 
 Sources: Microchip **DS30009937C**, *PIC24F04KA201 Family Data Sheet*
-(Table 1-1, Tables 4-10/4-12/4-13, Figures 4-1/4-3, §4.2). Retrieved from
+(Tables 1-1/1-2, Tables 4-10/4-12/4-13/4-15, Figures 4-1/4-3, §4.2, §19). Retrieved from
 `https://ww1.microchip.com/downloads/en/DeviceDoc/30009937c.pdf`.

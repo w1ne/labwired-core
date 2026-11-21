@@ -1,6 +1,6 @@
 # Generic MNA devices on two STM32WB55 GPIO input pads of the MB1355C.
-# The WB55 ADC peripheral currently has no external conversion engine, so this
-# fixture proves the board's GPIO threshold path rather than ADC conversion.
+# This fixture proves the GPIO threshold path; analog-ntc-diode-adc-system.yaml
+# routes the same netlists through `analog_pins` into ADC1.
 name: mb1355c-analog-inputs
 chip: ../../configs/chips/stm32wb55.yaml
 external_devices: []

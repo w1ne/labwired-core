@@ -1,0 +1,43 @@
+# Level-1 JFET gate-junction depletion charge on the STM32H735 PA0 ADC route.
+# The source and drain are held at 3.3 V while a resistor-driven gate steps low;
+# CGS and CGD produce the measured transient. A separate diode load line routes
+# to PA1 as an unrelated-device isolation check.
+name: "stm32h735-jfet-gate-charge"
+chip: "../../configs/chips/stm32h735.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "jfet_gate_charge"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      drive_voltage: "ui.jfet_gate.drive_v"
+    outputs:
+      gate_voltage: "board.analog.pa0_volts"
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 3.3
+        Vdrain drain 0 dc 3.3
+        Vsource source 0 dc 3.3
+        Rgate drive gate 1k
+        J1 drain gate source NJF_CAP
+        .model NJF_CAP NJF(VTO=-2 BETA=500u IS=1e-30 CGS=1n CGD=1n PB=1 FC=0.5)
+      probes:
+        gate_voltage: "v(gate)"
+      sources:
+        drive_voltage: "Vdrive"
+      vdd: 3.3
+  - id: "unrelated_diode_load"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      diode_voltage: "board.analog.pa1_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rlimit supply diode 1k
+        D1 diode 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        diode_voltage: "v(diode)"
+      vdd: 3.3

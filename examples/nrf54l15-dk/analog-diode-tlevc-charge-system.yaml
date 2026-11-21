@@ -1,0 +1,67 @@
+# Generic Shockley diodes whose depletion charge follows the TLEVC=1 linear
+# temperature law, routed to nRF54L15-DK SAADC channels 2..4. Each diode hangs
+# reverse-biased from a 1 k drive. One card (CJO = 1 nF, VJ = 0.7 V, CTA =
+# 4e-3/°C, TPB = 2 mV/°C, TNOM = 27 °C) is used at TEMP = 85 °C on channel 2
+# and TEMP = -40 °C on channel 3. Channel 4 is the same card at 85 °C with
+# TLEVC=0, so the coefficients are ignored and the silicon law applies. The
+# NTC and diode on channels 0 and 1 come from analog-ntc-diode-system.yaml
+# (crates/core/tests/cosim_nrf54l15_dk_analog.rs).
+name: "nrf54l15dk-analog-diode-tlevc-charge"
+chip: "../../configs/chips/nrf54l15.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "diode_tlevc_hot"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      drive_v: "ui.diode_tlevc.drive_v"
+    outputs:
+      v_sense: "adc.saadc.2_volts"
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 0 sense DLIN temp=85
+        .model DLIN D(IS=1e-18 CJO=1n VJ=0.7 M=0.4 FC=0.5 TLEVC=1 CTA=4e-3 TPB=2e-3 TNOM=27)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        drive_v: "Vdrive"
+      vdd: 3.3
+  - id: "diode_tlevc_cold"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      drive_v: "ui.diode_tlevc.drive_v"
+    outputs:
+      v_sense: "adc.saadc.3_volts"
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 0 sense DLIN temp=-40
+        .model DLIN D(IS=1e-18 CJO=1n VJ=0.7 M=0.4 FC=0.5 TLEVC=1 CTA=4e-3 TPB=2e-3 TNOM=27)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        drive_v: "Vdrive"
+      vdd: 3.3
+  - id: "diode_tlevc0_hot"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      drive_v: "ui.diode_tlevc.drive_v"
+    outputs:
+      v_sense: "adc.saadc.4_volts"
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 0 sense DSI temp=85
+        .model DSI D(IS=1e-18 CJO=1n VJ=0.7 M=0.4 FC=0.5 TLEVC=0 CTA=4e-3 TPB=2e-3 TNOM=27)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        drive_v: "Vdrive"
+      vdd: 3.3

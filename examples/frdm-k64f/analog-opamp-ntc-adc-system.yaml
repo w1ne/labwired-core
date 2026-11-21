@@ -1,0 +1,37 @@
+# Generic Beta NTC divider, closed-loop OPAMP stage, and independent Shockley
+# diode load line on FRDM-K64F ADC16 inputs. The same netlist uses ordinary
+# SPICE resistors and a five-pin OPAMP card; no board-specific analog path is
+# added for the amplifier.
+name: "frdm-k64f-analog-opamp-ntc"
+chip: "../../configs/chips/mk64f12.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_noninverting_opamp_and_diode"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sensor: "board.analog.ptb2_volts"
+      v_amplified: "board.analog.ptb0_volts"
+      v_diode: "board.analog.ptb10_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rpull supply sensor 10k
+        Rntc sensor 0 10k beta=3950 tnom=25 temp=25
+        XU1 sensor feedback supply 0 amplified AMP
+        Rfeedback amplified feedback 2k
+        Rgain feedback 0 10k
+        .model AMP OPAMP(AOL=100k GBW=1Meg ROUT=100)
+        Rlimit supply diode 1k
+        D1 diode 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_sensor: "v(sensor)"
+        v_amplified: "v(amplified)"
+        v_diode: "v(diode)"
+      sources:
+        temperature: "Rntc"
+      vdd: 3.3

@@ -52,6 +52,48 @@ fn pic16f877a_smoke_prints_through_build_machine() {
     );
 }
 
+/// The builder binds the A/D module to the descriptor's pad window: the gpasm
+/// A/D firmware waits on GO/DONE, so it prints only when a conversion ends.
+/// Nothing is routed here, so both inputs convert 0 V.
+#[test]
+fn pic16f877a_adc_firmware_converts_through_build_machine() {
+    let fw = common::committed("examples/pic16f877a/firmware/pic16f877a-gpasm-adc-ntc-diode.elf");
+    let mut s = open(FirmwareSource::Elf(&fw), BootMode::FastBoot).unwrap();
+    let r = s.expect("N=000 D=000", Duration::from_secs(2));
+    let transcript = s.uart_transcript();
+    r.unwrap_or_else(|e| panic!("{e}\n--- console ---\n{transcript}"));
+}
+
+/// The whole loop in one `Session` on the enhanced core: the PIC16F1829
+/// example's NTC divider and diode netlists are solved by the session's
+/// co-simulation, routed to RC0/AN4 and RC2/AN6, and converted by the gpasm
+/// firmware, which also converts the internal 1.024 V FVR. The NTC is set to
+/// 25 °C before the first instruction: 2.5 V, 0.649 V and 1.024 V of 5 V are
+/// the codes 0x200, 0x084 and 0x0D1.
+#[test]
+fn pic16f1829_adc_firmware_converts_the_solved_netlists_in_a_session() {
+    let (chip, manifest) = common::system("examples/pic16f1829/analog-ntc-diode-system.yaml");
+    assert_eq!(manifest.cosim_models.len(), 2);
+    let blobs = BlobMap::new();
+    let fw = common::committed("examples/pic16f1829/firmware/pic16f1829-gpasm-adc-ntc-diode.elf");
+    let mut s = Session::open(
+        BuildRequest {
+            chip: &chip,
+            system: &manifest,
+            firmware: FirmwareSource::Elf(&fw),
+            boot: BootMode::FastBoot,
+            blobs: &blobs,
+            options: BuildOptions::default(),
+        },
+        OpenOptions::default(),
+    )
+    .unwrap();
+    s.set_signal("ui.ntc.temperature_c", 25.0).unwrap();
+    let r = s.expect("N=200 D=084 F=0D1", Duration::from_secs(2));
+    let transcript = s.uart_transcript();
+    r.unwrap_or_else(|e| panic!("{e}\n--- console ---\n{transcript}"));
+}
+
 #[test]
 fn pic16_boots_only_from_an_elf() {
     let fw = common::committed(PIC16_ELF);

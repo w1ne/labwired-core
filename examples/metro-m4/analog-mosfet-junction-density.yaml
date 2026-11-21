@@ -1,0 +1,36 @@
+# Generic level-1 NMOS bulk junctions on Metro M4 ADC0. Each bulk is forward
+# biased through 100k with drain, gate and source grounded, so its voltage
+# reads the junction saturation current. JS=1e-2 A/m^2 scales by AD/AS on the
+# A1 (symmetric) and A2 (asymmetric) branches; the A3 branch omits AS, so
+# ngspice level 1 falls back to IS for both junctions.
+name: "metro-m4-analog-mosfet-junction-density"
+chip: "../../configs/chips/atsamd51.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_junction_density"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_voltage: "ui.mos_js.supply_v"
+    outputs:
+      area_bulk_voltage: "board.analog.pa05_volts"
+      asymmetric_bulk_voltage: "board.analog.pa06_volts"
+      fallback_bulk_voltage: "board.analog.pa04_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rarea supply b_area 100k
+        Rasym supply b_asym 100k
+        Rfall supply b_fall 100k
+        Marea 0 0 0 b_area NJS W=10u L=2u AD=100p AS=100p
+        Masym 0 0 0 b_asym NJS W=10u L=2u AD=300p AS=100p
+        Mfall 0 0 0 b_fall NJS W=10u L=2u AD=300p
+        .model NJS NMOS(LEVEL=1 VTO=1 KP=20u IS=1e-14 JS=1e-2)
+      probes:
+        area_bulk_voltage: "v(b_area)"
+        asymmetric_bulk_voltage: "v(b_asym)"
+        fallback_bulk_voltage: "v(b_fall)"
+      sources:
+        supply_voltage: "Vdd"
+      vdd: 3.3

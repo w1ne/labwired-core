@@ -13,6 +13,18 @@ ram:
   base: 268435456
   size: 262144B
 peripherals:
+# Renode's LiteX_ControlAndStatus, which the Renode board arty_litex_vexriscv.repl binds
+# at sysbus 0x6000_6800 (0xE000_6800 shadow, not modelled): LEDs on pads
+# 0..31, switches 32..63 (Switches CSR @0x04), buttons 64..95 (@0x08). The
+# led/switch/button entries below hang off this block as `bus: cas`. The
+# Arty's push-buttons pull the line low, as in configs/chips/arty-litex-vexriscv.yaml.
+- id: cas
+  type: litex_controlandstatus
+  bus: sysbus
+  base_address: 1610639360
+  size: 2KB
+  config:
+    buttons_active_low: true
 - id: led0
   type: led
   bus: cas

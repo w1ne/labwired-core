@@ -79,7 +79,7 @@ fn s32k388_evb_ntc_and_diode_netlists_reach_pta11_pta17_siul2_inputs() {
     let mut chip = ChipDescriptor::from_file(&chip_path).expect("load S32K388 descriptor");
     // Simulation-only thresholds. They are not an S32K388 electrical claim.
     chip.io_voltage_v = Some(3.3);
-    chip.gpio_input_thresholds = Some(GpioInputThresholds { vil: 0.3, vih: 0.7 });
+    chip.gpio_input_thresholds = Some(GpioInputThresholds::uniform(0.3, 0.7));
 
     let mut bus = SystemBus::from_config(&chip, &profile).expect("build S32K388 EVB bus");
     let siul2 = bus

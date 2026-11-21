@@ -1,0 +1,47 @@
+# Matched generic Gummel–Poon NPN load lines for the NUCLEO-L476RG ADC route.
+# The pair differs only by forward/reverse high-injection rolloff parameters.
+name: nucleo-l476rg-analog-bjt-high-injection-adc
+chip: ../../configs/chips/stm32l476.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: bjt_high_injection
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_high_injection.base_v
+    outputs:
+      collector_voltage: adc.adc1.11_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_HIGH_INJECTION
+        .model NPN_HIGH_INJECTION NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 IKF=50u IKR=500u NKF=0.8)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_without_high_injection
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_high_injection.base_v
+    outputs:
+      collector_voltage: adc.adc1.12_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_REFERENCE
+        .model NPN_REFERENCE NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3

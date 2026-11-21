@@ -1,0 +1,80 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# Renesas RZ/T2M GPIO port m, non-safety region. Each register file is
+# indexed by the port number m from the controller base: P_m @0x000+m
+# (output data, byte), PM_m @0x200+2*m (mode, halfword, two bits per pin),
+# PMC_m @0x400+m (port/function, byte) and PIN_m @0x800+m (input, byte)
+# (Zephyr drivers/gpio/gpio_rzt2m.c PMm_OFFSET, PMCm_OFFSET, PINm_OFFSET,
+# PMm_SIZE). The non-safety controller sits at 0x800A_0000 (Zephyr
+# r9a07g075.dtsi gpio@800a0000 reg-name base_ns), so port 0's window is based
+# there and its registers sit at the offsets below. Pin k of the port is
+# bit k (PM: bits 2k+1..2k).
+#
+# Same register shape as RZ/G2L (configs/peripherals/rzg2l/port.yaml) with a
+# different file stride. Runs on the declarative GPIO path (IN / OUT) at byte
+# width. One window serves one port: the next port's bytes sit at +1 inside it
+# and are not declared. Direction comes from the PM bit pairs (`gpio_mode`):
+# rzt2m_gpio_configure writes bit 2k from GPIO_INPUT and bit 2k+1 from
+# GPIO_OUTPUT, so 01 is input, 10 output and 11 output with input; 00 runs as
+# a non-GPIO pin. Not modelled: PM 00 and PMC (function) do not gate PIN,
+# which reads the pad regardless; RSELP (region select, which Zephyr sets to
+# 0xFF), the PRCRN/PRCRS write protection, PFC, DRCTL and the interrupt
+# routing are not declared.
+peripheral: GPIO
+version: 0.1.0
+gpio_mode:
+  register: PM
+  bits_per_pin: 2
+  output: [2, 3]
+  input: [1]
+registers:
+- id: OUT
+  address_offset: 0
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: P
+    bit_range:
+    - 7
+    - 0
+    description: P_m, the level a pin drives when PM makes it an output
+  side_effects: null
+- id: PM
+  address_offset: 512
+  size: 16
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PM
+    bit_range:
+    - 15
+    - 0
+    description: PM_m, two bits per pin, bit 2k input enable, bit 2k+1 output enable
+  side_effects: null
+- id: PMC
+  address_offset: 1024
+  size: 8
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PMC
+    bit_range:
+    - 7
+    - 0
+    description: PMC_m, 0 GPIO, 1 the PFC-selected function
+  side_effects: null
+- id: IN
+  address_offset: 2048
+  size: 8
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PIN
+    bit_range:
+    - 7
+    - 0
+    description: PIN_m, the input level of each pin
+  side_effects: null

@@ -6,8 +6,13 @@
 
 name: versatile
 arch: arm
+# Renode's versatile.repl maps one `memory` block, 256 MB at 0x0, which is the
+# Versatile/PB SDRAM (ARM DUI0224I Table 4-1: 0x0000_0000-0x0FFF_FFFF). The
+# March 2026 import based it at 0x0800_0000 instead, so it ran to 0x1800_0000
+# and shadowed every peripheral from 0x1000_0000 up: loads from sysctl, the
+# timers, UARTs and GPIO returned erased-flash 0xFF.
 flash:
-  base: 134217728
+  base: 0
   size: 268435456B
 ram:
   base: 536870912
@@ -69,3 +74,43 @@ peripherals:
   type: pl050
   bus: sysbus
   base_address: 268464128
+# PL061 GPIO0-3. Renode's versatile.repl only tags them, so the import
+# carried none. Versatile/PB926EJ-S puts four ARM PrimeCell PL061 blocks at
+# 0x101E4000 + 0x1000 * n (ARM DUI0224I Table 4-1; QEMU hw/arm/versatilepb.c
+# creates "pl061" at 0x101e4000..0x101e7000). `cc2538_pl061_gpio` runs the
+# PL061 core: address-masked GPIODATA over 0x000-0x3FC (PADDR[9:2] select the
+# bits, so 0x3FC reads all eight), GPIODIR @0x400 (reset 0, every pin an
+# input), GPIOAFSEL @0x420 (PL061 TRM DDI0190B §3.3). The PL061 has no on-die
+# pulls, so pull_up_mask is 0 and an undriven input reads 0. Not modelled: the
+# PrimeCell ID registers at 0xFE0-0xFFC read 0 (a Linux AMBA probe of the
+# pl061 would not match), interrupt detection (GPIORIS/GPIOMIS stay 0), and
+# the model also answers the CC2538 (Stellaris) extras at 0x520/0x524 and
+# 0x700-0x720, which a PL061 leaves unmapped.
+- id: gpio0
+  type: cc2538_pl061_gpio
+  bus: sysbus
+  base_address: 0x101E4000
+  size: 4KB
+  config:
+    pull_up_mask: 0
+- id: gpio1
+  type: cc2538_pl061_gpio
+  bus: sysbus
+  base_address: 0x101E5000
+  size: 4KB
+  config:
+    pull_up_mask: 0
+- id: gpio2
+  type: cc2538_pl061_gpio
+  bus: sysbus
+  base_address: 0x101E6000
+  size: 4KB
+  config:
+    pull_up_mask: 0
+- id: gpio3
+  type: cc2538_pl061_gpio
+  bus: sysbus
+  base_address: 0x101E7000
+  size: 4KB
+  config:
+    pull_up_mask: 0

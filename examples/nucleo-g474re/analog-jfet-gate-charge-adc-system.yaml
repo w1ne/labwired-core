@@ -1,0 +1,78 @@
+# Generic level-1 JFET gate-junction depletion charge routed through PA2/PA3
+# to ADC1_IN3/IN4, alongside the board's unrelated Beta NTC and Shockley diode.
+name: nucleo-g474re-jfet-charge-adc
+chip: ../../configs/chips/stm32g474re.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: ntc_divider
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      temperature: ui.ntc.temperature_c
+    outputs:
+      v_sense: board.analog.pa0_volts
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rpull vcc sense 10k
+        Rntc sense 0 10k beta=3950 tnom=25 temp=25
+      probes:
+        v_sense: v(sense)
+      sources:
+        temperature: Rntc
+      vdd: 3.3
+  - id: diode_load_line
+    adapter: analog
+    step_ns: 1000
+    outputs:
+      v_diode: board.analog.pa1_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: v(sense)
+      vdd: 3.3
+  - id: jfet_gate_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      drive_voltage: ui.jfet_gate.drive_v
+    outputs:
+      gate_voltage: board.analog.pa2_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 3.3
+        Vdrain drain 0 dc 3.3
+        Vsource source 0 dc 3.3
+        Rgate drive gate 1k
+        J1 drain gate source NJF_CAP
+        .model NJF_CAP NJF(VTO=-2 BETA=500u IS=1e-30 CGS=1n CGD=1n PB=1 FC=0.5)
+      probes:
+        gate_voltage: v(gate)
+      sources:
+        drive_voltage: Vdrive
+      vdd: 3.3
+  - id: jfet_gate_no_charge_control
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      drive_voltage: ui.jfet_gate.drive_v
+    outputs:
+      gate_voltage: board.analog.pa3_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 3.3
+        Vdrain drain 0 dc 3.3
+        Vsource source 0 dc 3.3
+        Rgate drive gate 1k
+        J1 drain gate source NJF_REF
+        .model NJF_REF NJF(VTO=-2 BETA=500u IS=1e-30 PB=1 FC=0.5)
+      probes:
+        gate_voltage: v(gate)
+      sources:
+        drive_voltage: Vdrive
+      vdd: 3.3

@@ -1,7 +1,8 @@
-# Generic MNA devices drive two simulation-only input endpoints on the KV260
-# RPU profile. No ZynqMP GPIO registers or physical pad mappings are claimed.
-name: "kv260-r5-analog-inputs"
-chip: "../../configs/chips/xck26-rpu.yaml"
+# Generic analog netlists routed to the STM32L476's explicit ADC1 channels.
+# The chip descriptor does not declare analog_pins, so these channel endpoints
+# intentionally make no PAx pin-alias claim.
+name: "nucleo-l476rg-analog-adc"
+chip: "../../configs/chips/stm32l476.yaml"
 external_devices: []
 board_io: []
 cosim_models:
@@ -11,7 +12,7 @@ cosim_models:
     inputs:
       temperature: "ui.ntc.temperature_c"
     outputs:
-      v_sense: "board.gpio_in.cosim_inputs.0"
+      v_sense: "adc.adc1.5_volts"
     config:
       netlist_text: |
         Vcc vcc 0 dc 3.3
@@ -26,7 +27,7 @@ cosim_models:
     adapter: "analog"
     step_ns: 1000
     outputs:
-      v_diode: "board.gpio_in.cosim_inputs.1"
+      v_diode: "adc.adc1.6_volts"
     config:
       netlist_text: |
         Vcc supply 0 dc 3.3

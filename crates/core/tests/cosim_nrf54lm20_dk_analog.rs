@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic MNA netlists drive the nRF54LM20-DK's application-core SAADC.
+//! Generic MNA netlists drive the nRF54LM20-DK's application-core SAADC and,
+//! through the datasheet input thresholds, its button pads.
 
 mod common;
 use common::root;
@@ -13,14 +14,18 @@ use labwired_core::Bus;
 use std::path::Path;
 
 const SAADC: u64 = 0x500D_5000;
+// GPIO IN is 0x00C into each nRF54L port window; PIN_CNF[n] is 0x080 + 4n.
+const P0: u64 = 0x5010_A000;
+const P1: u64 = 0x500D_8200;
+const IN: u64 = 0x00C;
+const PIN_CNF: u64 = 0x080;
 const RESULT: u64 = 0x2000_0000;
 
 fn ntc_resistance_ohms(temperature_c: f64) -> f64 {
     10_000.0 * (3950.0 * (1.0 / (temperature_c + 273.15) - 1.0 / 298.15)).exp()
 }
 
-fn diode_load_line_voltage() -> f64 {
-    const SUPPLY_V: f64 = 3.3;
+fn diode_load_line_voltage(supply_v: f64) -> f64 {
     const SERIES_LIMIT_OHMS: f64 = 1_000.0;
     const DIODE_IS_A: f64 = 2.52e-9;
     const DIODE_N: f64 = 1.752;
@@ -30,7 +35,7 @@ fn diode_load_line_voltage() -> f64 {
         |junction_v: f64| DIODE_IS_A * ((junction_v / (DIODE_N * THERMAL_V)).exp() - 1.0);
     let residual = |junction_v: f64| {
         let current = current_at_junction_voltage(junction_v);
-        (SUPPLY_V - junction_v - current * DIODE_RS_OHMS) / SERIES_LIMIT_OHMS - current
+        (supply_v - junction_v - current * DIODE_RS_OHMS) / SERIES_LIMIT_OHMS - current
     };
     let (mut low, mut high) = (0.0, 1.2);
     for _ in 0..100 {
@@ -143,7 +148,7 @@ fn nrf54lm20_dk_ntc_and_diode_netlists_reach_distinct_saadc_channels() {
         "generic analog outputs must bind to SAADC channels 0 and 1"
     );
 
-    let expected_diode_v = diode_load_line_voltage();
+    let expected_diode_v = diode_load_line_voltage(3.3);
     let mut cycles = 0;
     let mut samples = Vec::new();
     for temperature_c in [-10.0_f64, 25.0, 80.0] {
@@ -204,4 +209,110 @@ fn nrf54lm20_dk_ntc_and_diode_netlists_reach_distinct_saadc_channels() {
         samples.iter().all(|sample| sample.3 == samples[0].3),
         "the independent diode channel should stay constant while the NTC changes: {samples:?}"
     );
+}
+
+#[test]
+fn nrf54lm20_dk_ntc_and_diode_netlists_reach_button_pads_through_thresholds() {
+    // nRF54LM20A datasheet v1.0 11.7.1: VIL max 0.3 x VDD, VIH min 0.7 x VDD,
+    // at the DK's default 1.8 V VDD:nRF.
+    const VDD: f64 = 1.8;
+    const VIL: f64 = 0.3 * VDD;
+    const VIH: f64 = 0.7 * VDD;
+
+    let system_path = root("configs/systems/nrf54lm20dk.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load nRF54LM20-DK profile");
+    assert!(profile
+        .board_io
+        .iter()
+        .any(|io| io.id == "button3" && io.peripheral == "gpio0" && io.pin == 5));
+    assert!(profile
+        .board_io
+        .iter()
+        .any(|io| io.id == "button0" && io.peripheral == "gpio1" && io.pin == 26));
+
+    let analog_path = root("examples/nrf54lm20-dk/analog-ntc-diode-gpio-system.yaml");
+    let analog = SystemManifest::from_file(&analog_path).expect("load generic NTC and diode");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load nRF54LM20 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build nRF54LM20-DK bus");
+    // PIN_CNF = 0: DIR input, INPUT buffer connected, no pull.
+    bus.write_u32(P0 + PIN_CNF + 4 * 5, 0)
+        .expect("connect P0.05 input");
+    bus.write_u32(P1 + PIN_CNF + 4 * 26, 0)
+        .expect("connect P1.26 input");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build mixed-signal session")
+        .expect("profile carries two analog devices");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "generic analog outputs must bind to the two button pads"
+    );
+
+    let expected_diode_v = diode_load_line_voltage(VDD);
+    assert!(
+        expected_diode_v > VIL && expected_diode_v < VIH,
+        "the diode reference must sit inside the Schmitt band: {expected_diode_v} V"
+    );
+    let mut cycles = 0;
+    // -10 °C solves to 1.54 V: high at 1.8 V VDD, but under the 2.31 V VIH a
+    // 3.3 V rail would give. 50 °C solves to 0.47 V, under VIL.
+    for (temperature_c, expected_level) in [
+        (-10.0_f64, true),
+        (25.0, true), // 0.90 V: inside the band, keeps high
+        (50.0, false),
+        (25.0, false), // inside the band, keeps low
+        (-10.0, true),
+    ] {
+        session
+            .set_signal_number("ui.ntc.temperature_c", temperature_c)
+            .expect("set NTC temperature");
+        cycles += session.cycles_until_boundary(cycles);
+        let (steps, errors) = session
+            .advance_to(cycles, &mut bus)
+            .expect("solve and route both device netlists");
+        assert_eq!(steps.len(), 2, "both independent analog devices solve");
+        assert!(
+            errors.is_empty(),
+            "unexpected analog route errors: {errors:?}"
+        );
+
+        let ntc_v = voltage(&session, "board.gpio_in.p0.05");
+        let ntc_r = ntc_resistance_ohms(temperature_c);
+        let expected_ntc_v = VDD * ntc_r / (ntc_r + 10_000.0);
+        assert!(
+            (ntc_v - expected_ntc_v).abs() < 1e-9,
+            "the Beta NTC divider at {temperature_c} °C should be {expected_ntc_v} V, got {ntc_v} V"
+        );
+        assert!(
+            if expected_level {
+                ntc_v > VIL
+            } else {
+                ntc_v < VIH
+            },
+            "{temperature_c} °C point is on the wrong side of the band: {ntc_v} V"
+        );
+
+        let diode_v = voltage(&session, "board.gpio_in.p1.26");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "the independent Shockley load line should be {expected_diode_v} V, got {diode_v} V"
+        );
+
+        let p0_in = bus.read_u32(P0 + IN).expect("read P0 IN");
+        let p1_in = bus.read_u32(P1 + IN).expect("read P1 IN");
+        assert_eq!(
+            p0_in & (1 << 5) != 0,
+            expected_level,
+            "P0.05 IN must follow the solved NTC voltage at {temperature_c} °C ({ntc_v} V) \
+             and keep its Schmitt state inside {VIL}..{VIH} V"
+        );
+        assert_eq!(
+            p1_in & (1 << 26),
+            0,
+            "P1.26 IN must keep its reset low: the {diode_v} V diode never crosses VIH"
+        );
+    }
 }

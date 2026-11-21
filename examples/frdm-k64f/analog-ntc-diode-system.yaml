@@ -1,6 +1,7 @@
 # Generic MNA devices drive the FRDM-K64F GPIO inputs through the chip's
-# configured input thresholds. The K64F profile has no modeled ADC, so this
-# exercises voltage-to-digital-input routing rather than ADC conversion.
+# configured input thresholds. This exercises voltage-to-digital-input
+# routing; routing the same netlists to board.analog.<pad>_volts converts
+# them on ADC0/ADC1 (crates/core/tests/cosim_frdm_k64f_adc16_analog.rs).
 name: "frdm-k64f-analog"
 chip: "../../configs/chips/mk64f12.yaml"
 external_devices: []

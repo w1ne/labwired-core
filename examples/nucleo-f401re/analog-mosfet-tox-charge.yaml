@@ -1,0 +1,31 @@
+# Generic level-1 NMOS TOX gate-bulk capacitance on PA7/ADC1_IN7,
+# with a matched zero-TOX control on PA6/ADC1_IN6.
+name: "nucleo-f401re-mosfet-tox-charge"
+chip: "../../configs/chips/stm32f401.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_tox_charge"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.mosfet_tox.gate_v"
+    outputs:
+      reference_gate: "board.analog.pa6_volts"
+      tox_gate: "board.analog.pa7_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rgate_ref drive gate_ref 1Meg
+        Mref 0 gate_ref 0 0 NMOS_REF w=100u l=10u
+        .model NMOS_REF NMOS(VTO=1 KP=20u LAMBDA=0 PHI=0.7)
+        Rgate_tox drive gate_tox 1Meg
+        Mtox 0 gate_tox 0 0 NMOS_TOX w=100u l=10u
+        .model NMOS_TOX NMOS(VTO=1 KP=20u LAMBDA=0 PHI=0.7 TOX=10n)
+      probes:
+        reference_gate: "v(gate_ref)"
+        tox_gate: "v(gate_tox)"
+      sources:
+        gate_voltage: "Vdrive"
+      vdd: 3.3

@@ -1,6 +1,6 @@
 # Generic Beta NTC divider and Shockley diode for the NUCLEO-L073RZ model.
 # Their solved voltages route through the modeled PA0/PA1 GPIO inputs. The
-# board profile does not currently model external ADC conversions.
+# ADC path is `analog-adc-system.yaml`.
 name: nucleo-l073rz-analog
 chip: ../../configs/chips/stm32l073.yaml
 external_devices: []

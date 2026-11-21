@@ -6,6 +6,7 @@
 
 name: ramn
 arch: arm
+core: cortex-m33
 flash:
   base: 134217728
   size: 524288B
@@ -173,6 +174,8 @@ peripherals:
   type: stm32l5_adc
   bus: sysbus
   base_address: 1107460096
+  config:
+    profile: stm32l4
 - id: iwdg
   type: stm32_independentwatchdog
   bus: sysbus

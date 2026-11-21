@@ -1,0 +1,122 @@
+# Generic Gummel-Poon TISE1/TISE2 and TISC1/TISC2 laws route through SAADC
+# beside unrelated NTC and diode netlists. The collector is pulled low so its
+# base-collector junction is forward biased and ISC temperature is observable.
+name: "nrf5340dk-analog-bjt-recombination-temperature"
+chip: "../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_recombination_temperature_full"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_recombination_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.2_volts"
+    config:
+      netlist_text: |
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Rcollector collector 0 1k
+        Q1 collector base 0 NPN_RECOMBINATION_FULL temp=125
+        .model NPN_RECOMBINATION_FULL NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 TLEV=3 TNOM=25 TIS1=0 TIS2=0 ISE=2p NE=1.5 ISC=50n NC=2 TISE1=-2m TISE2=10u TISC1=-1m TISC2=8u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_recombination_temperature_explicit_hot"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_recombination_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.3_volts"
+    config:
+      netlist_text: |
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Rcollector collector 0 1k
+        Q1 collector base 0 NPN_RECOMBINATION_HOT temp=125
+        .model NPN_RECOMBINATION_HOT NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 TLEV=3 TNOM=25 TIS1=0 TIS2=0 ISE=29.575152732566255p NE=1.5 ISC=69.98268554235417n NC=2)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_recombination_temperature_first_order"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_recombination_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.4_volts"
+    config:
+      netlist_text: |
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Rcollector collector 0 1k
+        Q1 collector base 0 NPN_RECOMBINATION_FIRST temp=125
+        .model NPN_RECOMBINATION_FIRST NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 TLEV=3 TNOM=25 TIS1=0 TIS2=0 ISE=437.3448295773107p NE=1.5 ISC=268.57958838184375n NC=2)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_recombination_temperature_be_only"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_recombination_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.5_volts"
+    config:
+      netlist_text: |
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Rcollector collector 0 1k
+        Q1 collector base 0 NPN_RECOMBINATION_BE temp=125
+        .model NPN_RECOMBINATION_BE NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 TLEV=3 TNOM=25 TIS1=0 TIS2=0 ISE=2p NE=1.5 ISC=50n NC=2 TISE1=-2m TISE2=10u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_recombination_temperature_bc_only"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_recombination_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.6_volts"
+    config:
+      netlist_text: |
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Rcollector collector 0 1k
+        Q1 collector base 0 NPN_RECOMBINATION_BC temp=125
+        .model NPN_RECOMBINATION_BC NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 TLEV=3 TNOM=25 TIS1=0 TIS2=0 ISE=2p NE=1.5 ISC=50n NC=2 TISC1=-1m TISC2=8u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_recombination_temperature_nominal"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_recombination_temperature.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.7_volts"
+    config:
+      netlist_text: |
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Rcollector collector 0 1k
+        Q1 collector base 0 NPN_RECOMBINATION_NOMINAL temp=125
+        .model NPN_RECOMBINATION_NOMINAL NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 TLEV=3 TNOM=25 TIS1=0 TIS2=0 ISE=2p NE=1.5 ISC=50n NC=2)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3

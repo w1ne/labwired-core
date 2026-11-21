@@ -1,0 +1,48 @@
+# Matched generic level-1 NMOS branches isolate gate-bulk overlap charge on
+# ADC1. The control omits CGBO; both branches retain the same off channel and
+# bulk-junction model so only the generic SPICE overlap capacitor differs.
+name: "nucleo-f767zi-mosfet-cgbo"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_cgbo"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_drive: "ui.mosfet_cgbo.gate_v"
+    outputs:
+      bulk_voltage: "board.analog.pa2_volts"
+      gate_voltage: "board.analog.pa4_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Rbulk bulk 0 1k
+        M1 0 gate 0 bulk MOS_CGBO W=100u L=100u
+        .model MOS_CGBO NMOS(VTO=10 KP=20u IS=1e-30 CGBO=10u)
+      probes:
+        bulk_voltage: "v(bulk)"
+        gate_voltage: "v(gate)"
+      sources:
+        gate_drive: "Vgate"
+      vdd: 3.3
+  - id: "mosfet_cgbo_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_drive: "ui.mosfet_cgbo.gate_v"
+    outputs:
+      bulk_voltage: "board.analog.pa3_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Rbulk bulk 0 1k
+        M1 0 gate 0 bulk MOS_CONTROL W=100u L=100u
+        .model MOS_CONTROL NMOS(VTO=10 KP=20u IS=1e-30)
+      probes:
+        bulk_voltage: "v(bulk)"
+      sources:
+        gate_drive: "Vgate"
+      vdd: 3.3

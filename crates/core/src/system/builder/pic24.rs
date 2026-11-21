@@ -21,6 +21,31 @@ use crate::system::node::parse_elf_image;
 use crate::{Cpu, Machine};
 use anyhow::anyhow;
 
+/// The ADC1 channels a non-dsPIC33F part bonds out, from the descriptor's
+/// `analog_pins` entries on its `pic24_adc_pads` window.
+///
+/// The core's default derives the channels from the port masks with the
+/// dsPIC33FJ32MC20x layout (AN0-AN8 on RA0, RA1, RB0-RB3, RC0-RC2), and the
+/// dsPIC descriptors agree with it, so they keep that path and its AD1PCFGL /
+/// AD1CSSL masks unchanged. Other families put their inputs elsewhere: the
+/// PIC24F16KA102 family has AN0-AN5 and AN10-AN12, and its 20-pin part has
+/// AN4/AN5 on RA2/RA3 (DS39927C Table 1-2).
+pub fn pic24_adc_channels(chip: &labwired_config::ChipDescriptor) -> Option<u16> {
+    if chip.core.as_deref() == Some("dspic33f") {
+        return None;
+    }
+    let pads = chip
+        .peripherals
+        .iter()
+        .find(|p| p.r#type == "pic24_adc_pads")?;
+    let channels = chip
+        .analog_pins
+        .values()
+        .filter(|f| f.peripheral == pads.id && f.channel < 16)
+        .fold(0u16, |mask, f| mask | (1 << f.channel));
+    (channels != 0).then_some(channels)
+}
+
 pub(super) fn build(
     req: BuildRequest<'_>,
     plugins: &[&dyn crate::plugin::ChipPlugin],
@@ -69,6 +94,15 @@ pub(super) fn build(
 
     let mut cpu = crate::cpu::Pic24::new();
     cpu.set_port_masks(super::pic24_port_masks(chip));
+    if let Some(channels) = pic24_adc_channels(chip) {
+        cpu.set_adc_channels(channels);
+    }
+    // ADC1 converts routed AN levels only when the chip declares the window.
+    cpu.set_adc_pad_window(
+        chip.peripherals
+            .iter()
+            .any(|p| p.r#type == "pic24_adc_pads"),
+    );
     cpu.load_program_image(&program_image);
     // UART1 TX is on the CPU, not a bus UART peripheral.
     cpu.set_serial_sink(uart_sink.clone());

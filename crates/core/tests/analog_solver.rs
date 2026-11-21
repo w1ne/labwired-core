@@ -116,6 +116,341 @@ mod analog {
         }
     }
 
+    /// Value of node `name` after running `deck` to each time in `at`, in
+    /// trapezoidal steps of `h` seconds.
+    fn uic_samples(deck: &str, name: &str, at: &[f64], h: f64) -> Vec<f64> {
+        let circuit = parse_netlist(deck).expect("deck parses");
+        let mut solver = Solver::new(circuit, Integration::Trapezoidal).expect("solver builds");
+        let node = solver.circuit().node(name).expect("probe node exists");
+        let mut t = 0.0;
+        at.iter()
+            .map(|&target| {
+                let steps = ((target - t) / h).round() as usize;
+                run_to(&mut solver, target - t, steps);
+                t = target;
+                solver.node_voltage(node)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn tran_uic_starts_an_rc_from_its_dot_ic_not_its_operating_point() {
+        // 1 kΩ / 1 µF from a 5 V rail, tau = 1 ms. The operating point holds
+        // `out` at 5 V; under `uic` it starts at the `.ic` 2 V and charges as
+        // 5 − 3·e^(−t/tau). ngspice 45 `.tran 1u 3m uic` gives 3.896362 V at
+        // 1 ms and 4.593994 V at 2 ms, the same as the closed form.
+        let body = "V1 in 0 dc 5\nR1 in out 1k\nC1 out 0 1u\n.ic V(out)=2\n";
+        let uic = format!("* rc\n{body}.tran 1u 3m UIC\n.end\n");
+        assert!(
+            parse_netlist(&uic).unwrap().uic,
+            "`UIC` is case-insensitive"
+        );
+        assert!(!parse_netlist(&uic.replace(" UIC", "")).unwrap().uic);
+
+        let at = [0.0, 1e-3, 2e-3];
+        let got = uic_samples(&uic, "out", &at, 1e-6);
+        assert!(
+            (got[0] - 2.0).abs() < 1e-12,
+            "uic starts at .ic: {}",
+            got[0]
+        );
+        for (index, &t) in at.iter().enumerate().skip(1) {
+            let expected = 5.0 - 3.0 * (-t / 1e-3).exp();
+            assert!(
+                (got[index] - expected).abs() < 1e-4,
+                "uic RC at {t} s: {} V vs closed form {expected} V",
+                got[index]
+            );
+        }
+
+        // With no `.ic` at all the two modes split: the operating point
+        // starts the RC charged, `uic` starts it empty.
+        let bare = "V1 in 0 dc 5\nR1 in out 1k\nC1 out 0 1u\n";
+        let held = uic_samples(
+            &format!("* rc\n{bare}.tran 1u 3m\n.end\n"),
+            "out",
+            &[0.0],
+            1e-6,
+        );
+        let empty = uic_samples(
+            &format!("* rc\n{bare}.tran 1u 3m uic\n.end\n"),
+            "out",
+            &[0.0],
+            1e-6,
+        );
+        assert!(
+            (held[0] - 5.0).abs() < 1e-9,
+            "no uic: charged ({} V)",
+            held[0]
+        );
+        assert!(empty[0].abs() < 1e-12, "uic: empty ({} V)", empty[0]);
+    }
+
+    #[test]
+    fn tran_uic_rings_a_series_rlc_from_rest() {
+        // 20 Ω, 10 mH, 1 µF from a 5 V step: alpha = 1000 /s, omega_d ≈ 9950
+        // rad/s. Under `uic` both reactive elements start at zero with no `ic=`
+        // anywhere, so the capacitor overshoots and rings. ngspice 45 gives
+        // 6.290332, 4.507278, 6.684280 V at 0.2, 0.5, 1 ms.
+        let deck = "* rlc\nV1 in 0 dc 5\nR1 in a 20\nL1 a out 10m\nC1 out 0 1u\n\
+                    .tran 0.5u 2m uic\n.end\n";
+        let (alpha, w0) = (20.0 / (2.0 * 10e-3), 1.0 / (10e-3f64 * 1e-6).sqrt());
+        let wd = (w0 * w0 - alpha * alpha).sqrt();
+        let at = [0.2e-3, 0.5e-3, 1e-3];
+        let got = uic_samples(deck, "out", &at, 0.25e-6);
+        for (index, &t) in at.iter().enumerate() {
+            let expected =
+                5.0 * (1.0 - (-alpha * t).exp() * ((wd * t).cos() + alpha / wd * (wd * t).sin()));
+            assert!(
+                (got[index] - expected).abs() < 1e-3,
+                "uic RLC at {t} s: {} V vs closed form {expected} V",
+                got[index]
+            );
+        }
+    }
+
+    #[test]
+    fn tran_uic_charges_through_a_diode_like_ngspice() {
+        // Nonlinear: the Newton for the first step starts from the all-zero
+        // `uic` state rather than an operating point. Values are ngspice 45
+        // `.tran 0.1u 1m uic` on this deck.
+        let deck = "* d\nV1 in 0 dc 5\nR1 in a 100\nD1 a out DMOD\nC1 out 0 1u\n\
+                    R2 out 0 10k\n.model DMOD D(IS=1e-14 N=1)\n.tran 0.1u 1m uic\n.end\n";
+        let at = [50e-6, 200e-6, 1e-3];
+        let ngspice = [1.670324, 3.676337, 4.321201];
+        let got = uic_samples(deck, "out", &at, 0.1e-6);
+        for index in 0..at.len() {
+            assert!(
+                (got[index] - ngspice[index]).abs() < 2e-3,
+                "uic diode charge at {} s: {} V vs ngspice {} V",
+                at[index],
+                got[index],
+                ngspice[index]
+            );
+        }
+    }
+
+    #[test]
+    fn tran_uic_diode_ic_discharges_its_junction_charge_in_closed_form() {
+        // A reverse-biased abrupt junction (M = 0.5) seeded at `ic=-3` and
+        // discharged through R. With C(v) = CJO/√(1 + v/VJ) for reverse volts
+        // v, R·C(v)·dv/dt = −v integrates to
+        //   t(v) = R·CJO·[ln((s−1)/(s+1))] from v to V0,  s = √(1 + v/VJ).
+        // The node starts at 0 V under `uic`; only the seeded charge can lift
+        // it. (ngspice 45 parses diode `ic=` but `show d1 : ic` reads 0 and the
+        // node stays at 0 V, so the closed form is the reference here.)
+        let (r, cjo, vj, v0) = (10e3, 100e-12, 0.7, 3.0);
+        let body = "R1 a 0 10k\nD1 0 a DMOD ic=-3\n\
+                    .model DMOD D(IS=1e-14 CJO=100p VJ=0.7 M=0.5)\n";
+        let deck = format!("* d ic\n{body}.tran 1n 3u uic\n.end\n");
+        let at = [0.2e-6, 0.5e-6, 1e-6];
+        let got = uic_samples(&deck, "a", &at, 0.5e-9);
+        let log_ratio = |v: f64| {
+            let s = (1.0 + v / vj).sqrt();
+            ((s - 1.0) / (s + 1.0)).ln()
+        };
+        for (index, &t) in at.iter().enumerate() {
+            assert!(
+                got[index] > 0.05 && got[index] < v0,
+                "seeded junction must hold the node up at {t} s: {} V",
+                got[index]
+            );
+            let elapsed = r * cjo * (log_ratio(v0) - log_ratio(got[index]));
+            assert!(
+                (elapsed - t).abs() / t < 0.01,
+                "diode ic= discharge reached {} V at {t} s; closed form puts that at {elapsed} s",
+                got[index]
+            );
+        }
+
+        // SPICE ignores instance `ic=` without `uic`: the operating point
+        // holds the node at 0 V and nothing discharges.
+        let no_uic = uic_samples(&format!("* d\n{body}.tran 1n 3u\n.end\n"), "a", &at, 0.5e-9);
+        assert!(no_uic.iter().all(|v| v.abs() < 1e-9), "{no_uic:?}");
+        // And a wrong arity is refused rather than silently truncated.
+        assert!(parse_netlist("R1 a 0 1k\nD1 0 a DMOD ic=1,2\n.model DMOD D(IS=1e-14)\n").is_err());
+    }
+
+    #[test]
+    fn tran_uic_bjt_ic_seeds_both_junction_charges_like_ngspice() {
+        // `ic=<vbe>,<vce>` = −2, 5: vbc = −7. Both depletion charges discharge
+        // through the base and collector resistors, coupled through CJC.
+        // Values are ngspice 45 `.tran 1n 3u uic` on this deck.
+        let deck = "* q ic\nRb b 0 10k\nRc c 0 20k\nQ1 c b 0 QMOD ic=-2,5\n\
+                    .model QMOD NPN(IS=1e-15 BF=100 CJE=20p VJE=0.75 MJE=0.33 \
+                    CJC=10p VJC=0.75 MJC=0.33)\n.tran 1n 3u uic\n.end\n";
+        let at = [0.1e-6, 0.3e-6];
+        let base = uic_samples(deck, "b", &at, 0.5e-9);
+        let collector = uic_samples(deck, "c", &[0.1e-6, 0.3e-6, 1e-6], 0.5e-9);
+        let expect = [
+            (base[0], -1.740669),
+            (base[1], -0.8756738),
+            (collector[0], 2.077584),
+            (collector[1], 0.8144268),
+            (collector[2], 0.1038266),
+        ];
+        for (got, ngspice) in expect {
+            assert!(
+                (got - ngspice).abs() < 5e-3,
+                "BJT ic=: {got} V vs ngspice {ngspice} V"
+            );
+        }
+    }
+
+    #[test]
+    fn tran_uic_jfet_ic_seeds_both_gate_charges_like_ngspice() {
+        // `ic=<vds>,<vgs>` = 4, −3: vgd = −7, channel pinched off (VTO = −2).
+        // As the gate discharges the channel turns on and drains `d`.
+        // Values are ngspice 45 `.tran 1n 3u uic` on this deck.
+        let deck = "* j ic\nRg g 0 10k\nRd d 0 20k\nJ1 d g 0 JMOD ic=4,-3\n\
+                    .model JMOD NJF(VTO=-2 BETA=1e-4 CGS=20p CGD=10p PB=0.8)\n\
+                    .tran 1n 3u uic\n.end\n";
+        let gate = uic_samples(deck, "g", &[0.1e-6, 0.3e-6], 0.5e-9);
+        let drain = uic_samples(deck, "d", &[0.1e-6, 0.3e-6, 1e-6], 0.5e-9);
+        let expect = [
+            (gate[0], -1.860783),
+            (gate[1], -0.8536155),
+            (drain[0], 1.680691),
+            (drain[1], 0.1237690),
+            (drain[2], 0.005011552),
+        ];
+        for (got, ngspice) in expect {
+            assert!(
+                (got - ngspice).abs() < 5e-3,
+                "JFET ic=: {got} V vs ngspice {ngspice} V"
+            );
+        }
+    }
+
+    /// ngspice 45 `meas tran ... find v(node) at=` on the MOSFET `ic=` decks.
+    fn assert_matches_ngspice(what: &str, pairs: &[(f64, f64)]) {
+        for &(got, ngspice) in pairs {
+            assert!(
+                (got - ngspice).abs() < 5e-3,
+                "{what}: {got} V vs ngspice {ngspice} V"
+            );
+        }
+    }
+
+    #[test]
+    fn tran_uic_mosfet_ic_seeds_both_bulk_junction_charges_like_ngspice() {
+        // `ic=<vds>,<vgs>,<vbs>` = 4, 2, −3: vbd = −7. No TOX and no overlap,
+        // so only the bulk depletion charges hold state; they discharge
+        // through the drain and bulk resistors, coupled through CBD. The
+        // gate has no capacitance and stays at 0 V, so the channel is off.
+        // Values are ngspice 45 `.tran 1n 3u uic` on this deck.
+        let deck = "* m ic\nRd d 0 20k\nRg g 0 10k\nRb b 0 10k\nM1 d g 0 b NM ic=4,2,-3\n\
+                    .model NM NMOS(VTO=1 KP=2e-5 CBD=10p CBS=20p PB=0.8 MJ=0.5)\n\
+                    .tran 1n 3u uic\n.end\n";
+        let at = [0.1e-6, 0.3e-6, 1e-6];
+        let drain = uic_samples(deck, "d", &at, 0.5e-9);
+        let bulk = uic_samples(deck, "b", &at, 0.5e-9);
+        let gate = uic_samples(deck, "g", &at[..1], 0.5e-9);
+        assert_matches_ngspice(
+            "MOSFET bulk ic=",
+            &[
+                (drain[0], 1.683600),
+                (drain[1], 0.6649946),
+                (drain[2], 0.08093700),
+                (bulk[0], -1.859984),
+                (bulk[1], -0.7634749),
+                (bulk[2], -0.08429095),
+                (gate[0], 0.0),
+            ],
+        );
+
+        // Without `uic` the instance ic= is ignored, as in SPICE: the
+        // operating point is all zero and nothing moves.
+        let dc = deck.replace(" uic", "");
+        assert!(uic_samples(&dc, "d", &at[..1], 0.5e-9)[0].abs() < 1e-9);
+
+        // ngspice's MOS1 ic= takes one to three values; more is refused.
+        let error = parse_netlist(
+            "M1 d g 0 0 NM ic=1,2,0,4\n.model NM NMOS(VTO=1 KP=1e-4)\nR1 d 0 1k\nR2 g 0 1k\n",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("MOSFET ic= takes one to three"), "{error}");
+    }
+
+    #[test]
+    fn tran_uic_mosfet_ic_seeds_overlap_charge_like_explicit_capacitors() {
+        // CGSO/CGDO are linear, so `ic=4,2,-3` on them is exactly two
+        // explicit capacitors at vgs = 2 V and vgd = −2 V. ngspice 45's own
+        // MOSFET `ic=` (and `.ic` on the nodes) does NOT give that circuit:
+        // its MODEINITTRAN start drops gate charge in the first picoseconds
+        // (v(g) 2.0 → 1.5 V in one 0.84 ps step) and lands at d = 1.617 V at
+        // 0.1 µs. These values are ngspice 45 on the explicit-capacitor
+        // deck, the charge-conserving answer:
+        //   Cgs g 0 0.1p ic=2 / Cgd g d 0.1p ic=-2 / M1 ... (no CGSO/CGDO).
+        let deck = "* m ic overlap\nRd d 0 20k\nRg g 0 10k\nRb b 0 10k\n\
+                    M1 d g 0 b NM ic=4,2,-3 L=10u W=100u\n\
+                    .model NM NMOS(VTO=1 KP=2e-5 CBD=10p CBS=20p PB=0.8 MJ=0.5 \
+                    CGSO=1n CGDO=1n)\n.tran 1n 3u uic\n.end\n";
+        let at = [0.1e-6, 1e-6];
+        let drain = uic_samples(deck, "d", &at, 0.5e-9);
+        let gate = uic_samples(deck, "g", &at[..1], 0.5e-9);
+        let bulk = uic_samples(deck, "b", &at[..1], 0.5e-9);
+        assert_matches_ngspice(
+            "MOSFET overlap ic=",
+            &[
+                (drain[0], 1.697863),
+                (drain[1], 0.08174079),
+                (gate[0], -0.01051855),
+                (bulk[0], -1.855384),
+            ],
+        );
+        // And the same equivalence inside this engine, tighter.
+        let explicit = "* explicit\nRd d 0 20k\nRg g 0 10k\nRb b 0 10k\n\
+                        Cgs g 0 0.1p ic=2\nCgd g d 0.1p ic=-2\n\
+                        M1 d g 0 b NM ic=4,2,-3 L=10u W=100u\n\
+                        .model NM NMOS(VTO=1 KP=2e-5 CBD=10p CBS=20p PB=0.8 MJ=0.5)\n\
+                        .tran 1n 3u uic\n.end\n";
+        for node in ["d", "g", "b"] {
+            let built_in = uic_samples(deck, node, &[1e-9, 0.1e-6], 0.5e-9);
+            let reference = uic_samples(explicit, node, &[1e-9, 0.1e-6], 0.5e-9);
+            for (got, want) in built_in.iter().zip(&reference) {
+                assert!((got - want).abs() < 1e-6, "v({node}): {got} V vs {want} V");
+            }
+        }
+    }
+
+    #[test]
+    fn tran_uic_mosfet_ic_seeds_meyer_charge_like_dot_ic_on_its_terminals() {
+        // With TOX the Meyer charge is nonlinear, so there is no explicit-
+        // capacitor twin. Instance `ic=4,2,-3` must start the device exactly
+        // where `.ic V(d)=4 V(g)=2 V(b)=-3` on its terminals does, as it does
+        // in ngspice (both give d = 1.557533 V at 0.1 µs there, with the
+        // MODEINITTRAN charge loss described in the overlap test).
+        let model = ".model NM NMOS(VTO=1 KP=2e-5 CBD=10p CBS=20p PB=0.8 MJ=0.5 \
+                     TOX=20n CGSO=1n CGDO=1n)\n.tran 1n 3u uic\n.end\n";
+        let instance = format!(
+            "* m ic\nRd d 0 20k\nRg g 0 10k\nRb b 0 10k\n\
+             M1 d g 0 b NM ic=4,2,-3 L=10u W=100u\n{model}"
+        );
+        let nodes = format!(
+            "* .ic\nRd d 0 20k\nRg g 0 10k\nRb b 0 10k\n\
+             M1 d g 0 b NM L=10u W=100u\n.ic V(d)=4 V(g)=2 V(b)=-3\n{model}"
+        );
+        let at = [1e-9, 0.1e-6, 1e-6];
+        for node in ["d", "g", "b"] {
+            let from_ic = uic_samples(&instance, node, &at, 0.5e-9);
+            let from_nodes = uic_samples(&nodes, node, &at, 0.5e-9);
+            for (got, want) in from_ic.iter().zip(&from_nodes) {
+                assert!((got - want).abs() < 1e-6, "v({node}): {got} V vs {want} V");
+            }
+        }
+        // The gate holds its seeded 2 V charge rather than starting at 0 V:
+        // after 1 ns it has only begun to discharge through Rg.
+        let gate = uic_samples(&instance, "g", &[1e-9], 0.5e-9)[0];
+        assert!(gate > 1.8 && gate < 2.0, "gate after 1 ns: {gate} V");
+        // A partial ic= takes the rest from the terminals (MOS1getic):
+        // `ic=4` alone leaves vgs and vbs at their 0 V nodes.
+        let partial = instance.replace("ic=4,2,-3", "ic=4");
+        let gate = uic_samples(&partial, "g", &[1e-9], 0.5e-9)[0];
+        assert!(gate.abs() < 0.5, "partial ic= gate: {gate} V");
+    }
+
     #[test]
     fn mutually_coupled_inductors_match_the_be_and_trapezoidal_companions() {
         const L1: f64 = 4e-3;

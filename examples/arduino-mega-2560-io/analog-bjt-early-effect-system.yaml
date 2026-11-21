@@ -1,0 +1,79 @@
+# Generic Beta NTC and Shockley diode netlists sit beside matched Gummel–Poon
+# branches on the ATmega2560's MUX5-selected ADC8..11 inputs.
+name: "arduino-mega-2560-analog-bjt-early-effect"
+chip: "../../configs/chips/atmega2560.yaml"
+cpu_hz: 16000000
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 100000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "adc.adc.8_volts"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        Vcc vcc 0 dc 5
+        Rntc vcc sense 10k beta=3950 tnom=25 temp=25
+        Rpull sense 0 10k
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 100000
+    outputs:
+      v_diode: "adc.adc.11_volts"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        Vcc supply 0 dc 5
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"
+  - id: "bjt_with_forward_early_effect"
+    adapter: "analog"
+    step_ns: 100000
+    inputs:
+      base_drive: "ui.bjt_early.base_v"
+    outputs:
+      collector_voltage: "adc.adc.9_volts"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        Vcc supply 0 dc 5
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_EARLY
+        .model NPN_EARLY NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+  - id: "bjt_without_forward_early_effect"
+    adapter: "analog"
+    step_ns: 100000
+    inputs:
+      base_drive: "ui.bjt_early.base_v"
+    outputs:
+      collector_voltage: "adc.adc.10_volts"
+    config:
+      vdd: 5.0
+      netlist_text: |
+        Vcc supply 0 dc 5
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_REFERENCE
+        .model NPN_REFERENCE NPN(IS=1e-16 BF=80 BR=4 VAR=75)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"

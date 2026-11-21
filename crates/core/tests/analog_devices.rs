@@ -2100,7 +2100,15 @@ mod analog {
                 * (eg_temperature / (KB_EV * temperature_k)
                     - EG_REF / (KB_EV * TREF)
                     - 3.0 * ratio_temperature.ln());
-            let pbo = (potential - pbfact) / ratio_nominal;
+            // ngspice `bjttemp.c` refers the nominal potential back with
+            // `pbfact1`, the same factor evaluated at TNOM.
+            let eg_nominal = 1.16 - 7.02e-4 * nominal_k * nominal_k / (nominal_k + 1108.0);
+            let pbfact1 = KB_EV
+                * nominal_k
+                * (eg_nominal / (KB_EV * nominal_k)
+                    - EG_REF / (KB_EV * TREF)
+                    - 3.0 * ratio_nominal.ln());
+            let pbo = (potential - pbfact1) / ratio_nominal;
             let gma_old = (potential - pbo) / pbo;
             let cap_temperature =
                 capacitance / (1.0 + grading_at * (4e-4 * (nominal_k - TREF) - gma_old));
@@ -2217,7 +2225,8 @@ mod analog {
         let qb = (1.0 - vbc / model.vaf - vbe / model.var).recip()
             * (1.0 + (1.0 + 4.0 * (cbe / model.ikf + cbc / model.ikr)).sqrt())
             / 2.0;
-        let tf_adjustment = model.xtf * (vbc / model.vtf).exp() * (cbe / (cbe + model.itf)).powi(2);
+        let tf_adjustment =
+            model.xtf * (vbc / (1.44 * model.vtf)).exp() * (cbe / (cbe + model.itf)).powi(2);
         assert!((charge.qbe - model.tf * cbe * (1.0 + tf_adjustment) / qb).abs() < 1e-25);
         assert!((charge.qbc - model.tr * cbc).abs() < 1e-25);
 
@@ -2248,8 +2257,10 @@ mod analog {
         }
         assert_eq!(charge.dqbc_dvbe, 0.0);
 
-        let reverse_be = device::bjt_transit_charge(-0.1, vbc, model);
-        let expected_reverse_be = model.tf * model.is * ((-0.1 / vtf).exp() - 1.0);
+        // Above −3·NF·Vt, so still on the exponential; the cubic reverse form
+        // is checked by `bjt_reverse_biased_junctions_follow_ngspice_cubic_law`.
+        let reverse_be = device::bjt_transit_charge(-0.05, vbc, model);
+        let expected_reverse_be = model.tf * model.is * ((-0.05 / vtf).exp() - 1.0);
         assert!((reverse_be.qbe - expected_reverse_be).abs() < 1e-25);
     }
 
@@ -2301,7 +2312,9 @@ mod analog {
                         if forward {
                             tf * current
                                 * (1.0
-                                    + xtf * (vbc / vtf).exp() * (current / (current + itf)).powi(2))
+                                    + xtf
+                                        * (vbc / (1.44 * vtf)).exp()
+                                        * (current / (current + itf)).powi(2))
                         } else {
                             tr * is * ((vbc / VT).exp() - 1.0)
                         }
@@ -2694,17 +2707,19 @@ mod analog {
     }
 
     /// A reverse-biased diode with default `CJO=0` and `TT=0` conducts its
-    /// saturation current plus `GMIN*V` and has no stored charge.
+    /// saturation current, on SPICE's cubic reverse form, plus `GMIN*V` and
+    /// has no stored charge.
     #[test]
     fn a_reverse_biased_diode_carries_only_leakage_with_no_stored_charge() {
         // The built-in `D` card is 1N4148-class.
-        let is = 2.52e-9;
+        let (is, n) = (2.52e-9, 1.752);
         let mut solver = build("Vs s 0 dc -5\nR1 s a 1\nD1 a 0 D\n");
         let current = source_current(&solver, "Vs").abs();
-        let expected = is + device::GMIN * 5.0;
+        let arg = 3.0 * n * device::THERMAL_VOLTAGE / (-5.0 * std::f64::consts::E);
+        let expected = is * (1.0 + arg * arg * arg) + device::GMIN * 5.0;
         assert!(
             relative(current, expected) < 1e-6,
-            "a reverse-biased diode should pass IS + GMIN*V = {expected} A, got {current} A"
+            "a reverse-biased diode should pass IS·(1 + (3·N·Vt/(e·V))³) + GMIN*V = {expected} A, got {current} A"
         );
         // Switch the polarity and step: a real diode would sweep stored charge
         // out over its reverse-recovery time. This one is at the new operating
@@ -3427,6 +3442,14 @@ mod analog {
                     sign * (vbc - vbe),
                 );
                 let solver = build(&netlist);
+                // A lateral PNP's substrate GMIN runs from its base, at
+                // `sign·vbc`, to ground. The NPN's runs from its collector,
+                // which sits at 0 V.
+                let ib = if polarity == Polarity::P {
+                    ib + device::GMIN * vbc
+                } else {
+                    ib
+                };
                 let actual_ic = sign * source_current(&solver, "Vc");
                 let actual_ib = sign * source_current(&solver, "Vb");
                 let actual_ie = sign * source_current(&solver, "Ve");
@@ -3487,7 +3510,9 @@ mod analog {
     fn bjt_early_effect_partials_match_transport_and_junction_derivatives() {
         let (is, bf, br, nf, nr, vaf, var) = (2e-15, 75.0, 3.0, 1.1, 1.2, 42.0, 65.0);
         let delta = 1e-7;
-        for (vbe, vbc) in [(0.62, -0.1), (-0.1, 0.58)] {
+        // The reverse bias stays above −3·N·Vt, on the exponential; below it
+        // `bjt_reverse_biased_junctions_follow_ngspice_cubic_law` applies.
+        for (vbe, vbc) in [(0.62, -0.05), (-0.05, 0.58)] {
             let currents = |vbe: f64, vbc: f64| {
                 let forward = (vbe / (nf * VT)).exp();
                 let reverse = (vbc / (nr * VT)).exp();
@@ -4209,7 +4234,9 @@ mod analog {
             (is / br) * ((vbc / (nr * VT)).exp() - 1.0) + isc * ((vbc / (nc * VT)).exp() - 1.0)
         };
 
-        for (vbe, vbc) in [(0.62, -0.1), (-0.1, 0.58)] {
+        // The reverse bias stays above −3·N·Vt, on the exponential; below it
+        // `bjt_reverse_biased_junctions_follow_ngspice_cubic_law` applies.
+        for (vbe, vbc) in [(0.62, -0.05), (-0.05, 0.58)] {
             let op = device::bjt_op(
                 vbe,
                 vbc,
@@ -4462,6 +4489,244 @@ mod analog {
                     "{kind} {direction}: body-shifted current should be {expected} A, got {measured} A"
                 );
             }
+        }
+    }
+
+    /// ngspice level 1 shortens the channel by lateral diffusion `LD` and,
+    /// when `KP` is absent, takes it from the process: `UO·1e-4·εox/TOX`.
+    /// Check the solved drain current against the hand Shichman–Hodges law
+    /// for both polarities, so an engine that ignored `LD`, `UO` or the
+    /// derivation would miss by a factor of two or more.
+    #[test]
+    fn mosfet_lateral_diffusion_and_process_kp_follow_ngspice_level1() {
+        let (w, l, vto, lambda, vgs, vds): (f64, f64, f64, f64, f64, f64) =
+            (10e-6, 2e-6, 1.0, 0.02, 2.0, 3.0);
+        let saturation = |kp: f64, length: f64| {
+            0.5 * kp * w / length * (vgs - vto).powi(2) * (1.0 + lambda * vds) + device::GMIN * vds
+        };
+        let tox = 20e-9;
+        let process_kp = |uo: f64| uo * 1e-4 * device::OXIDE_PERMITTIVITY_F_PER_M / tox;
+        let cases = [
+            ("drawn length", "KP=50u", 50e-6, l),
+            ("LD=0.5u", "KP=50u LD=0.5u", 50e-6, l - 1e-6),
+            ("UO default 600", "TOX=20n", process_kp(600.0), l),
+            ("UO=400", "TOX=20n UO=400", process_kp(400.0), l),
+            ("U0 alias", "TOX=20n U0=400", process_kp(400.0), l),
+            (
+                "UO with LD",
+                "TOX=20n UO=400 LD=0.25u",
+                process_kp(400.0),
+                l - 0.5e-6,
+            ),
+            ("explicit KP beats UO", "KP=50u TOX=20n UO=400", 50e-6, l),
+        ];
+        assert!(
+            (process_kp(600.0) / 50e-6 - 1.0).abs() > 0.5,
+            "the cases must be far enough apart to tell the laws apart"
+        );
+        for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
+            for (label, params, kp, length) in cases {
+                let netlist = format!(
+                    "Vg g 0 dc {}\nVd d 0 dc {}\nM1 d g 0 0 MMOD W={w} L={l}\n.model MMOD {kind}(VTO={} LAMBDA={lambda} {params})\n",
+                    sign * vgs,
+                    sign * vds,
+                    sign * vto,
+                );
+                let circuit = parse_netlist(&netlist).expect("level-1 card parses");
+                let mosfet = &circuit.mosfets[0];
+                assert_eq!(mosfet.l, l, "{kind} {label}: drawn L is kept");
+                assert!(
+                    relative(mosfet.effective_length(), length) < 1e-12,
+                    "{kind} {label}: effective length"
+                );
+                assert!(
+                    relative(mosfet.beta, kp * w / length) < 1e-12,
+                    "{kind} {label}: beta should be {} A/V², got {}",
+                    kp * w / length,
+                    mosfet.beta
+                );
+                let solver = build(&netlist);
+                let measured = sign * source_current(&solver, "Vd");
+                let expected = saturation(kp, length);
+                assert!(
+                    relative(measured, expected) < 1e-6,
+                    "{kind} {label}: drain current should be {expected} A, got {measured} A"
+                );
+            }
+        }
+
+        let overlap = parse_netlist(
+            "M1 d g 0 0 MMOD W=10u L=2u\n.model MMOD NMOS(KP=50u LD=0.5u CGBO=2n CGSO=3n)\n",
+        )
+        .expect("overlap card parses")
+        .mosfets[0]
+            .overlap_capacitances();
+        assert!(
+            relative(overlap[2], 2e-9 * 1e-6) < 1e-12,
+            "CGBO uses L - 2*LD: {overlap:?}"
+        );
+        assert!(
+            relative(overlap[0], 3e-9 * 10e-6) < 1e-12,
+            "CGSO still uses W: {overlap:?}"
+        );
+
+        for (params, needle) in [
+            ("KP=50u LD=1u", "L - 2*LD"),
+            ("KP=50u LD=2u", "L - 2*LD"),
+            ("TOX=20n UO=0", "UO"),
+            ("TOX=20n UO=-5", "UO"),
+        ] {
+            let error = parse_netlist(&format!(
+                "M1 d g 0 0 MMOD W=10u L=2u\n.model MMOD NMOS({params})\n"
+            ))
+            .expect_err("unphysical LD/UO must be refused")
+            .to_string();
+            assert!(error.contains(needle), "{params}: unexpected error {error}");
+        }
+    }
+
+    /// ngspice level 1 derives the threshold from the process when a card has
+    /// `TOX` and `NSUB`: `PHI` from the doping, `GAMMA` from the depletion
+    /// charge, and `VTO` from the flat-band voltage (gate type `TPG`, surface
+    /// states `NSS`). The expected values are ngspice-45 `showmod` output and
+    /// `.op` drain voltages for the same deck; an engine that ignored `NSUB`
+    /// would leave `VTO=0`, `GAMMA=0`, `PHI=0.6` and miss every one of them.
+    #[test]
+    fn mosfet_substrate_doping_derives_threshold_like_ngspice_level1() {
+        let deck = "V1 vdd 0 3.3\nVG g 0 2.5\nVGP gp 0 0.8\n\
+            R1 vdd d1 10k\nR2 vdd d2 10k\nR3 d3 0 10k\nR4 vdd d4 10k\n\
+            M1 d1 g 0 0 MN W=10u L=2u\nM2 d2 g 0 0 MN2 W=10u L=2u\n\
+            M3 d3 gp vdd vdd MP W=10u L=2u\nM4 d4 g 0 0 MN3 W=10u L=2u\n\
+            .model MN NMOS(LEVEL=1 TOX=20n NSUB=1e16 UO=400)\n\
+            .model MN2 NMOS(LEVEL=1 TOX=20n NSUB=1e16 NSS=1e11 TPG=-1 UO=400)\n\
+            .model MP PMOS(LEVEL=1 TOX=20n NSUB=5e15 UO=200)\n\
+            .model MN3 NMOS(LEVEL=1 TOX=20n NSUB=1e16 PHI=0.7 UO=400)\n";
+        let circuit = parse_netlist(deck).expect("process cards parse");
+        // (device, VTO, GAMMA, PHI, drain node, drain volts) from ngspice.
+        let reference = [
+            ("M1", 0.068_466_2, 0.333_698, 0.695_453, "d1", 0.377_363_2),
+            ("M2", 1.090_76, 0.333_698, 0.695_453, "d2", 0.711_548_3),
+            ("M3", 0.036_109_2, 0.235_96, 0.659_597, "d3", 2.610_082),
+            ("M4", 0.071_647_8, 0.333_698, 0.7, "d4", 0.377_876_2),
+        ];
+        let solver = build(deck);
+        for (name, vto, gamma, phi, node, volts) in reference {
+            let mosfet = circuit
+                .mosfets
+                .iter()
+                .find(|mosfet| mosfet.name == name)
+                .expect("device exists");
+            let model = mosfet.model;
+            // ngspice's own physical constants differ from CODATA 2018 in the
+            // seventh digit; 1e-4 still separates every case below.
+            assert!(
+                (model.vto - vto).abs() < 1e-4,
+                "{name}: VTO should be {vto}, got {}",
+                model.vto
+            );
+            assert!(
+                relative(model.gamma, gamma) < 1e-4,
+                "{name}: GAMMA should be {gamma}, got {}",
+                model.gamma
+            );
+            assert!(
+                relative(model.phi, phi) < 1e-4,
+                "{name}: PHI should be {phi}, got {}",
+                model.phi
+            );
+            let measured = solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+            assert!(
+                (measured - volts).abs() < 1e-4,
+                "{name}: V({node}) should be {volts} V, got {measured} V"
+            );
+        }
+
+        // Explicit values beat the derivation; NSUB without TOX is ignored,
+        // as in ngspice.
+        let explicit =
+            parse_netlist("M1 d g 0 0 MN\n.model MN NMOS(TOX=20n NSUB=1e16 VTO=0.8 GAMMA=0.5)\n")
+                .expect("explicit card parses")
+                .mosfets[0]
+                .model;
+        assert_eq!((explicit.vto, explicit.gamma), (0.8, 0.5));
+        assert!(relative(explicit.phi, 0.695_453) < 1e-4);
+        let no_tox = parse_netlist("M1 d g 0 0 MN\n.model MN NMOS(NSUB=1e16)\n")
+            .expect("card without TOX parses")
+            .mosfets[0]
+            .model;
+        assert_eq!((no_tox.vto, no_tox.gamma, no_tox.phi), (0.0, 0.0, 0.6));
+
+        for (params, needle) in [
+            ("TOX=20n NSUB=1e9", "NSUB"),
+            ("TOX=20n NSUB=1e16 TPG=2", "TPG"),
+        ] {
+            let error = parse_netlist(&format!("M1 d g 0 0 MN\n.model MN NMOS({params})\n"))
+                .expect_err("unphysical process card must be refused")
+                .to_string();
+            assert!(error.contains(needle), "{params}: unexpected error {error}");
+        }
+    }
+
+    /// ngspice level 1 (`mos1load.c`) replaces the bulk-junction `IS` with
+    /// `JS·AD` and `JS·AS` only when `JS`, `AD` and `AS` are all non-zero, and
+    /// `mos1temp.c` scales `JS` with the same bandgap law as `IS`. Each bulk
+    /// is forward biased through 100 kΩ with drain, gate and source grounded,
+    /// so its voltage reads the summed junction saturation current. Expected
+    /// voltages are ngspice-45 `.op` output for the same deck (TNOM = TEMP =
+    /// 26.85 °C, the engine's fixed 300 K, except the `TEMP=85` row at the
+    /// default TNOM of 27 °C). An engine that ignored `JS` would solve every
+    /// row except `b_fall` at 0.544 V; one that used `AD` for both junctions
+    /// would put `b_asym` 10 mV low; one that did not scale `JS` with `TEMP`
+    /// would put `b_hot` above 0.5 V.
+    #[test]
+    fn mosfet_junction_saturation_current_density_follows_ngspice_level1() {
+        let deck = "Vdd supply 0 dc 3.3\n\
+            Rarea supply b_area 100k\nRasym supply b_asym 100k\n\
+            Rfall supply b_fall 100k\nRhot supply b_hot 100k\n\
+            Marea 0 0 0 b_area NJS W=10u L=2u AD=100p AS=100p\n\
+            Masym 0 0 0 b_asym NJS W=10u L=2u AD=300p AS=100p\n\
+            Mfall 0 0 0 b_fall NJS W=10u L=2u AD=300p\n\
+            Mhot 0 0 0 b_hot NJS W=10u L=2u AD=100p AS=100p TEMP=85\n\
+            .model NJS NMOS(LEVEL=1 VTO=1 KP=20u IS=1e-14 JS=1e-2)\n";
+        let circuit = parse_netlist(deck).expect("JS card parses");
+        // (device, drain IS, source IS at the card temperature) from JS·AD/AS.
+        for (name, drain_is, source_is) in [
+            ("Marea", 1e-12, 1e-12),
+            ("Masym", 3e-12, 1e-12),
+            ("Mfall", 1e-14, 1e-14),
+        ] {
+            let mosfet = circuit
+                .mosfets
+                .iter()
+                .find(|mosfet| mosfet.name == name)
+                .expect("device exists");
+            let (drain, source) = mosfet.junction_saturation_currents();
+            assert!(
+                relative(drain, drain_is) < 1e-12 && relative(source, source_is) < 1e-12,
+                "{name}: junction IS should be ({drain_is}, {source_is}), got ({drain}, {source})"
+            );
+        }
+        let solver = build(deck);
+        for (node, volts) in [
+            ("b_area", 0.426_057_2),
+            ("b_asym", 0.408_297_2),
+            ("b_fall", 0.544_026_4),
+            ("b_hot", 0.278_212_6),
+        ] {
+            let measured = solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+            assert!(
+                (measured - volts).abs() < 1e-4,
+                "V({node}) should be {volts} V, got {measured} V"
+            );
+        }
+
+        for (params, needle) in [("JS=-1", "JS"), ("JS=1e308", "JS")] {
+            let error = parse_netlist(&format!(
+                "M1 d g 0 0 MN AD=1e10 AS=1e10\n.model MN NMOS({params})\n"
+            ))
+            .expect_err("unphysical JS must be refused")
+            .to_string();
+            assert!(error.contains(needle), "{params}: unexpected error {error}");
         }
     }
 
@@ -5344,56 +5609,60 @@ mod analog {
         let width = 2e-6;
         let length = 1e-6;
         let tox = 10e-9;
-        let cox = 3.453_133e-11 * width * length / tox;
         let resistance = 1e3;
         let h = 10e-12;
         let gate_step = 0.1;
-        let ratio = resistance * cox / h;
 
         for (kind, sign) in [("NMOS", 1.0), ("PMOS", -1.0)] {
             let vto = sign;
-            let netlist = format!(
-                "Vg g 0 dc {}\nR1 x 0 {resistance}\n\
-                 M1 0 g 0 x MMOD w={width} l={length}\n\
-                 .model MMOD {kind}(VTO={vto} KP=20u IS=1e-30 PHI=0.6 TOX={tox})\n",
-                sign * gate_step
-            );
-            for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
-                let mut solver = Solver::new(
-                    parse_netlist(&netlist).expect("MOS TOX model parses"),
-                    integration,
-                )
-                .expect("MOS TOX solver builds");
-                let x = solver.circuit().node("x").expect("bulk node");
-                let source = solver.voltage_source_index("Vg").expect("gate source");
-
-                solver.advance(h).expect("initially biased TOX step solves");
-                assert!(
-                    solver.node_voltage(x).abs() < 1e-10,
-                    "{kind} {integration:?}: operating-point channel charge must not create a startup impulse"
+            for (geometry, effective_length) in
+                [("", length), (" LD=0.25u", length - 2.0 * 0.25e-6)]
+            {
+                let cox = 3.453_133e-11 * width * effective_length / tox;
+                let ratio = resistance * cox / h;
+                let netlist = format!(
+                    "Vg g 0 dc {}\nR1 x 0 {resistance}\n\
+                     M1 0 g 0 x MMOD w={width} l={length}\n\
+                     .model MMOD {kind}(VTO={vto} KP=20u IS=1e-30 PHI=0.6 TOX={tox}{geometry})\n",
+                    sign * gate_step
                 );
+                for integration in [Integration::BackwardEuler, Integration::Trapezoidal] {
+                    let mut solver = Solver::new(
+                        parse_netlist(&netlist).expect("MOS TOX model parses"),
+                        integration,
+                    )
+                    .expect("MOS TOX solver builds");
+                    let x = solver.circuit().node("x").expect("bulk node");
+                    let source = solver.voltage_source_index("Vg").expect("gate source");
 
-                solver.set_voltage_source(source, sign * 2.0 * gate_step);
-                solver.advance(h).expect("gate charge step solves");
-                let first = solver.node_voltage(x);
-                let expected_first = sign * gate_step * ratio / (1.0 + ratio);
-                assert!(
-                    (first - expected_first).abs() < 1e-8,
-                    "{kind} {integration:?} first step: expected {expected_first} V, got {first} V"
-                );
+                    solver.advance(h).expect("initially biased TOX step solves");
+                    assert!(
+                        solver.node_voltage(x).abs() < 1e-10,
+                        "{kind} {geometry} {integration:?}: operating-point channel charge must not create a startup impulse"
+                    );
 
-                solver.advance(h).expect("held gate charge step solves");
-                let actual_second = solver.node_voltage(x);
-                let expected_second = match integration {
-                    Integration::BackwardEuler => ratio * expected_first / (1.0 + ratio),
-                    Integration::Trapezoidal => {
-                        ratio * (3.0 * expected_first - sign * gate_step) / (1.0 + 2.0 * ratio)
-                    }
-                };
-                assert!(
-                    (actual_second - expected_second).abs() < 1e-8,
-                    "{kind} {integration:?} second step: expected {expected_second} V, got {actual_second} V"
-                );
+                    solver.set_voltage_source(source, sign * 2.0 * gate_step);
+                    solver.advance(h).expect("gate charge step solves");
+                    let first = solver.node_voltage(x);
+                    let expected_first = sign * gate_step * ratio / (1.0 + ratio);
+                    assert!(
+                        (first - expected_first).abs() < 1e-8,
+                        "{kind} {geometry} {integration:?} first step: expected {expected_first} V, got {first} V"
+                    );
+
+                    solver.advance(h).expect("held gate charge step solves");
+                    let actual_second = solver.node_voltage(x);
+                    let expected_second = match integration {
+                        Integration::BackwardEuler => ratio * expected_first / (1.0 + ratio),
+                        Integration::Trapezoidal => {
+                            ratio * (3.0 * expected_first - sign * gate_step) / (1.0 + 2.0 * ratio)
+                        }
+                    };
+                    assert!(
+                        (actual_second - expected_second).abs() < 1e-8,
+                        "{kind} {geometry} {integration:?} second step: expected {expected_second} V, got {actual_second} V"
+                    );
+                }
             }
         }
     }
@@ -6637,6 +6906,102 @@ mod analog {
         }
     }
 
+    /// The level-1 JFET gate emission coefficient `N` (ngspice `jfetload.c`)
+    /// sets `N·kT/q` for both gate diodes. The solved forward gate current is
+    /// compared with a hand-written Shockley law for both polarities, at the
+    /// fixed 300 K and at an instance `TEMP`. There `IS(T)` divides the `EG`
+    /// term by `N` but keeps `XTI` undivided (ngspice `jfettemp.c`), unlike
+    /// the diode law. `N <= 0` is refused.
+    #[test]
+    fn jfet_gate_emission_coefficient_scales_gate_diodes_and_is_temperature_law() {
+        let (is, tnom, vgs, eg, xti): (f64, f64, f64, f64, f64) = (1e-14, 27.0, 0.6, 1.11, 3.0);
+        let gate_current = |is_t: f64, n: f64, kelvin: f64| {
+            let vte = n * kelvin_thermal_voltage(kelvin);
+            2.0 * (is_t * ((vgs / vte).exp() - 1.0) + device::GMIN * vgs)
+        };
+        let netlist = |kind: &str, sign: f64, n: &str, temp: &str| {
+            format!(
+                "Vg g 0 dc {}\nVd d 0 dc 0\nVs s 0 dc 0\n\
+                 J1 d g s JMOD{temp}\n.model JMOD {kind}(VTO={} BETA=100u \
+                 IS={is} TNOM={tnom}{n})\n",
+                sign * vgs,
+                -2.0 * sign
+            )
+        };
+
+        for (kind, sign) in [("NJF", 1.0), ("PJF", -1.0)] {
+            let default_n = sign * source_current(&build(&netlist(kind, sign, "", "")), "Vg");
+            let mut previous = None;
+            for n in [1.0, 2.0] {
+                let card = format!(" N={n}");
+                let solver = build(&netlist(kind, sign, &card, ""));
+                assert_eq!(solver.circuit().jfets[0].model.n, n);
+                let measured = sign * source_current(&solver, "Vg");
+                let expected = gate_current(is, n, device::TEMPERATURE_K);
+                assert!(
+                    relative(measured, expected) < 1e-6,
+                    "{kind} N={n}: expected gate current {expected} A, got {measured} A"
+                );
+                if n == 1.0 {
+                    assert!(
+                        relative(measured, default_n) < 1e-12,
+                        "{kind}: omitted N must equal N=1"
+                    );
+                }
+                previous = Some(previous.map_or(measured, |unit: f64| unit / measured));
+            }
+            // At 0.6 V, N=2 halves the exponent: about five decades less current.
+            let ratio = previous.expect("both N values solved");
+            assert!(
+                ratio > 1e4,
+                "{kind}: N must reduce the gate current, ratio {ratio}"
+            );
+
+            let temperature = 85.0;
+            let kelvin = temperature + 273.15;
+            let nominal = tnom + 273.15;
+            let n = 2.0;
+            let hot = build(&netlist(
+                kind,
+                sign,
+                " N=2",
+                &format!(" TEMP={temperature}"),
+            ));
+            let expected_is = is
+                * ((eg / kelvin_thermal_voltage(nominal) - eg / kelvin_thermal_voltage(kelvin))
+                    / n)
+                    .exp()
+                * (kelvin / nominal).powf(xti);
+            let adjusted_is = hot.circuit().jfets[0].operating_model.is;
+            assert!(
+                relative(adjusted_is, expected_is) < 1e-12,
+                "{kind} N=2 at {temperature} C: IS(T) {expected_is} A, got {adjusted_is} A"
+            );
+            let diode_law_is = is
+                * ((eg / kelvin_thermal_voltage(nominal) - eg / kelvin_thermal_voltage(kelvin)
+                    + xti * (kelvin / nominal).ln())
+                    / n)
+                    .exp();
+            assert!(
+                relative(adjusted_is, diode_law_is) > 0.2,
+                "{kind}: XTI must not be divided by N as in the diode law"
+            );
+            let measured = sign * source_current(&hot, "Vg");
+            let expected = gate_current(expected_is, n, kelvin);
+            assert!(
+                relative(measured, expected) < 1e-6,
+                "{kind} N=2 at {temperature} C: expected gate current {expected} A, got \
+                 {measured} A"
+            );
+        }
+
+        for parameter in ["N=0", "N=-1"] {
+            let error = parse_netlist(&netlist("NJF", 1.0, &format!(" {parameter}"), ""))
+                .expect_err("non-positive JFET N is refused");
+            assert!(error.to_string().contains("N > 0"), "{error}");
+        }
+    }
+
     /// Instance `TEMP` moves the JFET gate potential `PB` and zero-bias
     /// `CGS`/`CGD` by the silicon depletion law at grading 0.5. A reverse-bias
     /// gate step through a resistor must then follow the same trajectory as a
@@ -7152,5 +7517,2194 @@ mod analog {
             cold.node_voltage(node),
             warmed.node_voltage(node)
         );
+    }
+
+    /// The SPICE instance multiplier `M` makes one element behave as that many
+    /// identical devices in parallel, for every device kind. Each element has
+    /// terminal resistances, so a multiplier that scaled only the junction
+    /// or channel current would move the bias. DC values are ngspice-45
+    /// `.op` (`.temp 26.85`, `tnom=26.85`), where `m=3` and three parallel
+    /// copies print the same five node voltages.
+    #[test]
+    fn device_multiplier_m_matches_parallel_copies_and_ngspice() {
+        let models = ".model DR D(IS=1e-14 RS=20 N=1.2 CJO=20p TT=5n)\n\
+            .model QR NPN(IS=1e-15 BF=100 RB=50 RC=10 RE=2 VAF=50 IKF=10m CJE=5p CJC=3p TF=1n)\n\
+            .model MR NMOS(LEVEL=1 VTO=1 KP=20u RD=200 RS=100 LAMBDA=0.02 CGSO=1n CGDO=1n CBD=2p)\n\
+            .model JR NJF(VTO=-2 BETA=1e-4 RD=50 RS=50 LAMBDA=0.01 CGS=4p CGD=2p)\n";
+        let devices = [
+            ("D1", "a 0 DR"),
+            ("Q1", "c b 0 QR"),
+            ("M1", "dm supply 0 0 MR W=10u L=2u"),
+            ("J1", "dj 0 0 JR"),
+        ];
+        let deck = |supply: &str, copies: usize, multiplier: Option<&str>| {
+            let mut text = format!(
+                "Vdd supply 0 {supply}\nRd supply a 1k\nRc supply c 1k\nRb supply b 100k\n\
+                 Rm supply dm 10k\nRj supply dj 2k\n"
+            );
+            for (name, rest) in devices {
+                for copy in 0..copies {
+                    let suffix = multiplier.map_or(String::new(), |m| format!(" m={m}"));
+                    text.push_str(&format!("{name}x{copy} {rest}{suffix}\n"));
+                }
+            }
+            text + models
+        };
+        let nodes = ["a", "c", "b", "dm", "dj"];
+        let volts = |solver: &Solver| {
+            nodes.map(|node| solver.node_voltage(solver.circuit().node(node).expect("node exists")))
+        };
+
+        let single = volts(&build(&deck("dc 3.3", 1, None)));
+        let multiplied = volts(&build(&deck("dc 3.3", 1, Some("3"))));
+        let parallel = volts(&build(&deck("dc 3.3", 3, None)));
+        let ngspice_single = [0.862_150_2, 1.172_329, 0.744_160_3, 1.249_760, 2.496_725];
+        let ngspice_m3 = [
+            0.796_819_9,
+            0.895_513_0,
+            0.712_543_9,
+            0.479_434_2,
+            1.259_871,
+        ];
+        for (index, node) in nodes.iter().enumerate() {
+            assert!(
+                (single[index] - ngspice_single[index]).abs() < 1e-4,
+                "V({node}) single device: ngspice {}, got {}",
+                ngspice_single[index],
+                single[index]
+            );
+            assert!(
+                (multiplied[index] - ngspice_m3[index]).abs() < 1e-4,
+                "V({node}) with m=3: ngspice {}, got {}",
+                ngspice_m3[index],
+                multiplied[index]
+            );
+            assert!(
+                (multiplied[index] - parallel[index]).abs() < 1e-9,
+                "V({node}): m=3 gives {}, three parallel copies give {}",
+                multiplied[index],
+                parallel[index]
+            );
+        }
+
+        // Stored charge scales too: a supply step charges m=3 the same way
+        // as three copies, step for step.
+        let pulse = "PULSE(0 3.3 0 20n 20n 1u 2u)";
+        let mut multiplied = build(&deck(pulse, 1, Some("3")));
+        let mut parallel = build(&deck(pulse, 3, None));
+        let mut single = build(&deck(pulse, 1, None));
+        let mut largest_difference: f64 = 0.0;
+        for _ in 0..40 {
+            for solver in [&mut multiplied, &mut parallel, &mut single] {
+                solver.advance(5e-9).expect("transient step solves");
+            }
+            let (m, p, one) = (volts(&multiplied), volts(&parallel), volts(&single));
+            for index in 0..nodes.len() {
+                assert!(
+                    (m[index] - p[index]).abs() < 1e-7,
+                    "V({}) at {} s: m=3 gives {}, three copies give {}",
+                    nodes[index],
+                    multiplied.time(),
+                    m[index],
+                    p[index]
+                );
+                largest_difference = largest_difference.max((m[index] - one[index]).abs());
+            }
+        }
+        assert!(
+            largest_difference > 0.1,
+            "m=3 must load the circuit differently from one device, max diff {largest_difference} V"
+        );
+
+        for value in ["0", "-2", "1e999"] {
+            let error = parse_netlist(&format!("D1 a 0 DR m={value}\n{models}"))
+                .expect_err("a non-positive multiplier must be refused")
+                .to_string();
+            assert!(
+                error.contains("multiplier"),
+                "m={value}: unexpected error {error}"
+            );
+        }
+    }
+
+    /// Diode sidewall current `JSW`·`PJ` follows ngspice-42. Without `NS` it
+    /// merges into the bottom saturation current (shared `N`, breakdown
+    /// region and knee) but temperature-scales with `NS = 1`; with `NS` it is
+    /// a separate exponential. The instance `pj=` overrides the model `PJ`,
+    /// and `JSW` with no perimeter adds nothing. Reference values are
+    /// ngspice-42 `.op` (`.temp 26.85`, `tnom=26.85`). Without the sidewall
+    /// the rows move by 39 mV (a), 62 mV (b), 93 mV (c), 145 mV (z) and
+    /// 244 mV (e), so an ignored `JSW` fails every row.
+    #[test]
+    fn diode_sidewall_current_jsw_pj_ns_matches_ngspice() {
+        let netlist = "Vdd supply 0 dc 3.3\n\
+            R1 supply a 1k\nR2 supply b 1k\nR3 supply c 100k\nR4 supply z 470\n\
+            R5 supply e 1k\nR6 supply f 1k\n\
+            D1 a 0 DS\nD2 b 0 DS pj=4\nD3 c 0 DN pj=2\nD4 0 z DZ pj=3\n\
+            D5 e 0 DT pj=3 temp=75\nD6 f 0 DP\n\
+            .model DS D(IS=1e-14 N=1.1 JSW=2e-14 PJ=1.5)\n\
+            .model DN D(IS=1e-15 N=1 JSW=5e-10 NS=2)\n\
+            .model DZ D(IS=1e-14 BV=2.0 IBV=1m JSW=1e-12)\n\
+            .model DT D(IS=1e-14 N=1.5 JSW=1e-13 EG=1.11 XTI=3 TNOM=27)\n\
+            .model DP D(IS=1e-14 JSW=1e-12)\n";
+        let solver = build(netlist);
+        let v = |node: &str| solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+        for (node, ngspice) in [
+            ("a", 0.707_932_4),
+            ("b", 0.685_121_0),
+            ("c", 0.527_559_8),
+            ("z", 1.881_026),
+            ("e", 0.742_548_9),
+            ("f", 0.679_693_5),
+        ] {
+            let got = v(node);
+            assert!(
+                (got - ngspice).abs() < 1e-4,
+                "V({node}): ngspice-42 {ngspice}, got {got}"
+            );
+        }
+
+        // JSW with no perimeter must be bit-identical to the plain diode.
+        let plain = build(&netlist.replace("DP D(IS=1e-14 JSW=1e-12)", "DP D(IS=1e-14)"));
+        let plain_f = plain.node_voltage(plain.circuit().node("f").expect("node exists"));
+        assert_eq!(v("f"), plain_f, "JSW with PJ=0 must add no current");
+
+        for card in ["JSW=-1e-12", "NS=0", "PJ=-1"] {
+            let error = parse_netlist(&format!(
+                "V1 a 0 1\nD1 a 0 DX\n.model DX D(IS=1e-14 {card})\n"
+            ))
+            .expect_err("an invalid sidewall card must be refused")
+            .to_string();
+            assert!(error.contains("JSW"), "{card}: unexpected error {error}");
+        }
+        let error = parse_netlist("V1 a 0 1\nD1 a 0 DX pj=-2\n.model DX D(IS=1e-14)\n")
+            .expect_err("a negative instance perimeter must be refused")
+            .to_string();
+        assert!(error.contains("pj"), "unexpected error {error}");
+    }
+
+    /// Diode trap-assisted tunnel current `JTUN`·`AREA` + `JTUNSW`·`PJ`
+    /// follows ngspice-42: `−JT·(exp(−V/(NTUN·Vt)) − 1)`, with `JT` on the
+    /// `IS` temperature law using `NTUN`, `XTITUN` and `KEG·EG`. Each
+    /// reverse-biased diode sits behind 1 MΩ, so its tunnel current sets the
+    /// node. Rows: bottom card (a), `area=2` hot with its own `XTITUN`/`KEG`/
+    /// `EG` (b), sidewall only `pj=3` cold (c), `IKR` knee applied to the
+    /// tunnel current (d), `m=2` (e), `BV` breakdown beside tunnelling (f),
+    /// forward bias where the tunnel current saturates at `JT` (g). Reference
+    /// values are ngspice-42 `.op` (`.temp 26.85`, `tnom=26.85`). Without the
+    /// tunnel current rows a–e sit within 10 µV of 5 V, so an ignored `JTUN`
+    /// fails by more than 0.6 V.
+    #[test]
+    fn diode_tunnel_current_jtun_jtunsw_matches_ngspice() {
+        let netlist = "Vdd supply 0 dc 5\n\
+            R1 supply a 1Meg\nR2 supply b 1Meg\nR3 supply c 1Meg\nR4 supply d 1Meg\n\
+            R5 supply e 1Meg\nR6 supply f 10k\nR7 supply g 1Meg\n\
+            D1 0 a DT\nD2 0 b DTH area=2 temp=85\nD3 0 c DSW pj=3 temp=-20\n\
+            D4 0 d DK\nD5 0 e DT m=2\nD6 0 f DZ\nD7 g 0 DT\n\
+            .model DT D(IS=1e-14 JTUN=1e-9 NTUN=20)\n\
+            .model DTH D(IS=1e-14 EG=1.2 JTUN=1e-9 NTUN=25 XTITUN=2 KEG=0.8 TNOM=27)\n\
+            .model DSW D(IS=1e-14 JTUNSW=4e-10 NTUN=15 TNOM=27)\n\
+            .model DK D(IS=1e-14 JTUN=1e-9 NTUN=20 IKR=1e-7)\n\
+            .model DZ D(IS=1e-14 BV=4.5 IBV=1u JTUN=1e-8)\n";
+        let solver = build(netlist);
+        let v = |node: &str| solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+        for (node, ngspice) in [
+            ("a", 3.705_459_244),
+            ("b", 4.312_420_041),
+            ("c", 2.663_463_447),
+            ("d", 4.389_849_681),
+            ("e", 3.442_840_377),
+            ("f", 4.593_311_114),
+            ("g", 0.515_004_686),
+        ] {
+            let got = v(node);
+            assert!(
+                (got - ngspice).abs() < 1e-4,
+                "V({node}): ngspice-42 {ngspice}, got {got}"
+            );
+        }
+
+        // No tunnel card must be bit-identical to the plain diode.
+        let plain = build(&netlist.replace("JTUN=1e-9 NTUN=20)", ")"));
+        let tunnel_free = build(&netlist.replace("JTUN=1e-9 NTUN=20)", "JTUN=0 NTUN=20)"));
+        for node in ["a", "e", "g"] {
+            let node_index = plain.circuit().node(node).expect("node exists");
+            assert_eq!(
+                plain.node_voltage(node_index),
+                tunnel_free.node_voltage(node_index),
+                "JTUN=0 must add no current at {node}"
+            );
+            assert!(
+                plain.node_voltage(node_index) > v(node),
+                "the tunnel current must load {node}"
+            );
+        }
+
+        for card in ["JTUN=-1e-9", "JTUNSW=-1e-9", "NTUN=0", "XTITUN=1e999"] {
+            let error = parse_netlist(&format!(
+                "V1 a 0 1\nD1 a 0 DX\n.model DX D(IS=1e-14 {card})\n"
+            ))
+            .expect_err("an invalid tunnel card must be refused")
+            .to_string();
+            assert!(error.contains("JTUN"), "{card}: unexpected error {error}");
+        }
+    }
+
+    /// Diode sidewall depletion charge `CJSW`/`CJP`·`PJ` with `PHP`, `MJSW`
+    /// and `FCS` follows ngspice-42. Each diode has its own source; one
+    /// backward-Euler step to a new voltage and a second step held there give
+    /// the stored-charge change as `(I_step − I_hold)·h`. Reference charges are
+    /// ngspice-42 `.dc` `@d[charge]` (`.temp 26.85`, `tnom=26.85`). Above
+    /// `FCS·PHP` ngspice-42 starts the sidewall's linear region from the
+    /// bottom junction's `F1`, so the sidewall diode parts from an otherwise
+    /// identical bottom (`CJO`) diode at 0.3 V and 0.6 V. `AREA` leaves the
+    /// sidewall unscaled, and `TEMP` moves `CJSW`/`PHP` by the junction law
+    /// (that row uses `TNOM=27`, ngspice's `REFTEMP`, in both decks).
+    #[test]
+    fn diode_sidewall_capacitance_cjsw_php_mjsw_fcs_matches_ngspice() {
+        let netlist = "V1 a 0 dc 0\nV2 b 0 dc 0\nV3 c 0 dc 0\nV4 d 0 dc 0\nV5 e 0 dc 0\n\
+            D1 a 0 DSW pj=3\nD2 b 0 DSWT pj=3 temp=75\nD3 c 0 DB\n\
+            D4 d 0 DSW pj=3 area=2\nD5 e 0 DMIX pj=2\n\
+            .model DSW D(IS=1e-14 CJSW=2p PHP=0.5 MJSW=0.4 FCS=0.5)\n\
+            .model DSWT D(IS=1e-14 CJSW=2p PHP=0.5 MJSW=0.4 FCS=0.5 TNOM=27)\n\
+            .model DB D(IS=1e-14 CJO=6p VJ=0.5 M=0.4 FC=0.5)\n\
+            .model DMIX D(IS=1e-14 CJO=4p VJ=0.7 M=0.5 FC=0.6 CJP=1p PHP=0.5 MJSW=0.4 FCS=0.5)\n";
+        let sources = ["V1", "V2", "V3", "V4", "V5"];
+        // ngspice-42 charge per diode, in the order of `sources`.
+        let ngspice: [(f64, [f64; 5]); 7] = [
+            (0.0, [0.0; 5]),
+            (
+                -3.0,
+                [
+                    -1.107_047_925e-11,
+                    -1.136_974_361e-11,
+                    -1.107_047_925e-11,
+                    -1.107_047_925e-11,
+                    -1.096_494_130e-11,
+                ],
+            ),
+            (
+                -1.2,
+                [
+                    -5.419_751_331e-12,
+                    -5.672_842_183e-12,
+                    -5.419_751_331e-12,
+                    -5.419_751_331e-12,
+                    -5.432_633_853e-12,
+                ],
+            ),
+            (
+                -0.2,
+                [
+                    -1.118_526_224e-12,
+                    -1.214_534_991e-12,
+                    -1.118_526_224e-12,
+                    -1.118_526_224e-12,
+                    -1.122_645_221e-12,
+                ],
+            ),
+            (
+                0.1,
+                [
+                    6.265_517_042e-13,
+                    7.054_815_772e-13,
+                    6.265_517_042e-13,
+                    6.265_517_042e-13,
+                    6.242_580_094e-13,
+                ],
+            ),
+            (
+                0.3,
+                [
+                    3.926_405_094e-12,
+                    4.824_073_298e-12,
+                    2.112_916_691e-12,
+                    3.926_405_094e-12,
+                    2.533_151_235e-12,
+                ],
+            ),
+            (
+                0.6,
+                [
+                    7.061_555_890e-12,
+                    8.930_539_696e-12,
+                    5.248_067_487e-12,
+                    7.061_555_890e-12,
+                    5.591_032_927e-12,
+                ],
+            ),
+        ];
+        let h = 1e-6;
+        let mut solver = Solver::new(
+            parse_netlist(netlist).expect("sidewall deck parses"),
+            Integration::BackwardEuler,
+        )
+        .expect("sidewall solver builds");
+        let indices = sources.map(|name| solver.voltage_source_index(name).expect("source exists"));
+        for window in ngspice.windows(2) {
+            let ((_, before), (voltage, after)) = (window[0], window[1]);
+            for index in indices {
+                solver.set_voltage_source(index, voltage);
+            }
+            solver.advance(h).expect("step to the new bias solves");
+            let step = sources.map(|name| source_current(&solver, name));
+            solver.advance(h).expect("held bias solves");
+            let hold = sources.map(|name| source_current(&solver, name));
+            for (column, name) in sources.iter().enumerate() {
+                let expected = after[column] - before[column];
+                let got = (step[column] - hold[column]) * h;
+                assert!(
+                    (got - expected).abs() < 1e-4 * expected.abs() + 1e-17,
+                    "{name} {voltage} V: ngspice-42 charge change {expected} C, got {got} C"
+                );
+            }
+        }
+
+        // Ignoring CJSW, the sidewall diodes would store no charge, and the
+        // forward-region F1 quirk is a 1.8 pC offset at 0.3 V.
+        let (_, at_0v3) = ngspice[5];
+        assert!(at_0v3[0] - at_0v3[2] > 1.5e-12);
+
+        // CJSW with no perimeter must be bit-identical to the plain diode.
+        let transient = |card: &str| {
+            let mut solver = Solver::new(
+                parse_netlist(&format!(
+                    "V1 in 0 PULSE(-2 0.5 0 10n 10n 1u 2u)\nR1 in a 1k\nD1 a 0 DX\n.model DX D({card})\n"
+                ))
+                .expect("transient deck parses"),
+                Integration::Trapezoidal,
+            )
+            .expect("transient solver builds");
+            let a = solver.circuit().node("a").expect("node exists");
+            (0..40)
+                .map(|_| {
+                    solver.advance(5e-9).expect("transient step solves");
+                    solver.node_voltage(a)
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            transient("IS=1e-14 CJSW=2p PHP=0.5"),
+            transient("IS=1e-14"),
+            "CJSW with PJ=0 must add no charge"
+        );
+        assert_ne!(
+            transient("IS=1e-14 CJSW=2p PHP=0.5 PJ=500"),
+            transient("IS=1e-14"),
+            "CJSW with a perimeter must load the node"
+        );
+
+        for card in ["CJSW=-1p", "PHP=0", "MJSW=-0.1", "FCS=1"] {
+            let error = parse_netlist(&format!(
+                "V1 a 0 1\nD1 a 0 DX\n.model DX D(IS=1e-14 {card})\n"
+            ))
+            .expect_err("an invalid sidewall capacitance card must be refused")
+            .to_string();
+            assert!(error.contains("CJSW"), "{card}: unexpected error {error}");
+        }
+    }
+
+    /// Diode `TLEVC=1` moves `CJO`/`CJSW` by `1 + CTA·ΔT`/`1 + CTP·ΔT` and
+    /// `VJ`/`PHP` down by `TPB·ΔT`/`TPHP·ΔT`, instead of the silicon-bandgap
+    /// law. References are ngspice-42 `@d[charge]` from one `.op` per bias.
+    /// D1 is hot with bottom and sidewall, D2 cold with `TM1` and the
+    /// `CTC`/`TVJ` aliases, D3 hot with `area=2`, D4 has no `TEMP`, D5 is
+    /// the same card as D1 with the default `TLEVC=0`.
+    #[test]
+    fn diode_tlevc1_linear_depletion_temperature_matches_ngspice() {
+        let netlist = "V1 a 0 dc 0\nV2 b 0 dc 0\nV3 c 0 dc 0\nV4 d 0 dc 0\nV5 e 0 dc 0\n\
+            D1 a 0 DL pj=2 temp=85\nD2 b 0 DLM temp=-20\nD3 c 0 DL pj=2 area=2 temp=85\n\
+            D4 d 0 DL pj=2\nD5 e 0 DL0 pj=2 temp=85\n\
+            .model DL D(IS=1e-14 CJO=5p VJ=0.7 M=0.45 FC=0.5 CJSW=1p PHP=0.6 MJSW=0.33 FCS=0.5 TLEVC=1 CTA=2e-3 CTP=3e-3 TPB=1.5e-3 TPHP=1e-3 TNOM=27)\n\
+            .model DLM D(IS=1e-14 CJO=4p VJ=0.8 M=0.5 FC=0.6 TM1=2e-3 TLEVC=1 CTC=1.5e-3 TVJ=2e-3 TNOM=27)\n\
+            .model DL0 D(IS=1e-14 CJO=5p VJ=0.7 M=0.45 FC=0.5 CJSW=1p PHP=0.6 MJSW=0.33 FCS=0.5 TNOM=27)\n";
+        let sources = ["V1", "V2", "V3", "V4", "V5"];
+        // ngspice-42 charge per diode, in the order of `sources`.
+        let ngspice: [(f64, [f64; 5]); 7] = [
+            (0.0, [0.0; 5]),
+            (
+                -3.0,
+                [
+                    -1.506_132_274e-11,
+                    -7.513_574_003e-12,
+                    -2.534_110_133e-11,
+                    -1.369_520_363e-11,
+                    -1.412_662_093e-11,
+                ],
+            ),
+            (
+                -1.2,
+                [
+                    -7.325_643_398e-12,
+                    -3.602_898_798e-12,
+                    -1.239_787_255e-11,
+                    -6.605_381_013e-12,
+                    -6.909_207_012e-12,
+                ],
+            ),
+            (
+                -0.2,
+                [
+                    -1.489_757_059e-12,
+                    -7.095_177_273e-13,
+                    -2.534_638_375e-12,
+                    -1.324_024_446e-12,
+                    -1.417_791_153e-12,
+                ],
+            ),
+            (
+                0.1,
+                [
+                    8.228_825_663e-13,
+                    3.817_680_467e-13,
+                    1.403_160_733e-12,
+                    7.232_397_590e-13,
+                    7.887_860_491e-13,
+                ],
+            ),
+            (
+                0.3,
+                [
+                    2.838_662_622e-12,
+                    1.217_671_813e-12,
+                    4.760_700_056e-12,
+                    2.492_772_001e-12,
+                    2.799_690_438e-12,
+                ],
+            ),
+            (
+                0.6,
+                [
+                    6.685_641_025e-12,
+                    2.767_961_031e-12,
+                    1.137_621_681e-11,
+                    5.684_632_893e-12,
+                    6.615_391_695e-12,
+                ],
+            ),
+        ];
+        let h = 1e-6;
+        let mut solver = Solver::new(
+            parse_netlist(netlist).expect("TLEVC deck parses"),
+            Integration::BackwardEuler,
+        )
+        .expect("TLEVC solver builds");
+        let indices = sources.map(|name| solver.voltage_source_index(name).expect("source exists"));
+        for window in ngspice.windows(2) {
+            let ((_, before), (voltage, after)) = (window[0], window[1]);
+            for index in indices {
+                solver.set_voltage_source(index, voltage);
+            }
+            solver.advance(h).expect("step to the new bias solves");
+            let step = sources.map(|name| source_current(&solver, name));
+            solver.advance(h).expect("held bias solves");
+            let hold = sources.map(|name| source_current(&solver, name));
+            for (column, name) in sources.iter().enumerate() {
+                let expected = after[column] - before[column];
+                let got = (step[column] - hold[column]) * h;
+                assert!(
+                    (got - expected).abs() < 1e-4 * expected.abs() + 1e-17,
+                    "{name} {voltage} V: ngspice-42 charge change {expected} C, got {got} C"
+                );
+            }
+        }
+
+        // The linear law is not the bandgap law: at -3 V the same card holds
+        // 0.93 pC more under TLEVC=1 than under TLEVC=0.
+        let (_, at_minus_3) = ngspice[1];
+        assert!(at_minus_3[4] - at_minus_3[0] > 0.9e-12);
+
+        // The coefficients do nothing without TLEVC=1, and TLEVC=1 does
+        // nothing without an instance TEMP.
+        let transient = |card: &str, temp: &str| {
+            let mut solver = Solver::new(
+                parse_netlist(&format!(
+                    "V1 in 0 PULSE(-2 0.5 0 10n 10n 1u 2u)\nR1 in a 1k\nD1 a 0 DX {temp}\n.model DX D(IS=1e-14 CJO=5p VJ=0.7 {card})\n"
+                ))
+                .expect("transient deck parses"),
+                Integration::Trapezoidal,
+            )
+            .expect("transient solver builds");
+            let a = solver.circuit().node("a").expect("node exists");
+            (0..40)
+                .map(|_| {
+                    solver.advance(5e-9).expect("transient step solves");
+                    solver.node_voltage(a)
+                })
+                .collect::<Vec<_>>()
+        };
+        let coefficients = "CTA=2e-3 TPB=1.5e-3";
+        assert_eq!(transient(coefficients, "temp=85"), transient("", "temp=85"));
+        assert_eq!(
+            transient(&format!("TLEVC=1 {coefficients}"), ""),
+            transient("", "")
+        );
+        assert_ne!(
+            transient(&format!("TLEVC=1 {coefficients}"), "temp=85"),
+            transient("", "temp=85")
+        );
+
+        for card in ["TLEVC=2", "TLEVC=0.5"] {
+            let error = parse_netlist(&format!(
+                "V1 a 0 1\nD1 a 0 DX\n.model DX D(IS=1e-14 {card})\n"
+            ))
+            .expect_err("an unknown TLEVC must be refused")
+            .to_string();
+            assert!(error.contains("TLEVC"), "{card}: unexpected error {error}");
+        }
+        // A linear law that drives VJ through zero is refused, not solved.
+        let error = parse_netlist(
+            "V1 a 0 1\nD1 a 0 DX temp=600\n.model DX D(IS=1e-14 CJO=5p VJ=0.7 TLEVC=1 TPB=1.5e-3)\n",
+        )
+        .expect_err("a non-positive temperature-adjusted VJ must be refused")
+        .to_string();
+        assert!(error.contains("VJ"), "unexpected error {error}");
+    }
+
+    /// The BJT substrate junction is a pn junction from the optional fourth
+    /// node (ground when omitted) to the internal collector of a vertical
+    /// device or the internal base of a lateral one: `CJS`/`VJS`/`MJS`
+    /// depletion charge with no `FC`, and `ISS`/`NS` current. References are
+    /// ngspice-42 `@q[qsub]` and source currents from one `.op` per bias
+    /// (`.temp 26.85`, `tnom=26.85`, `TNOM=27` on the `temp=75` cards). Q1 is
+    /// a vertical NPN, Q2 a lateral PNP (ngspice's default), Q3 a
+    /// three-terminal NPN at 75 °C with area 2 and `TMJS1`, Q4/Q5 carry
+    /// `ISS`, Q5 at 75 °C with area 3 and `TNS1`.
+    #[test]
+    fn bjt_substrate_junction_cjs_iss_matches_ngspice() {
+        let netlist = "V1 s1 0 dc 0\nV2 s2 0 dc 0\nVB2 b2 0 dc 0\nVC2 c2 0 dc 0\n\
+            V3 c3 0 dc 0\nV4 s4 0 dc 0\nV5 s5 0 dc 0\n\
+            Q1 0 0 0 s1 QN\nQ2 c2 b2 0 s2 QP\nQ3 c3 0 0 QT 2 temp=75\n\
+            Q4 0 0 0 s4 QNI\nQ5 0 0 0 s5 QNIT 3 temp=75\n\
+            .model QN NPN(IS=1e-16 CJS=2p VJS=0.6 MJS=0.4)\n\
+            .model QP PNP(IS=1e-16 CJS=3p VJS=0.7 MJS=0.5)\n\
+            .model QT NPN(IS=1e-16 CJS=2p VJS=0.6 MJS=0.4 TNOM=27 TMJS1=1e-3)\n\
+            .model QNI NPN(IS=1e-16 ISS=1e-15 NS=1.2)\n\
+            .model QNIT NPN(IS=1e-16 ISS=1e-15 NS=1.2 TNS1=2e-3 TNOM=27)\n";
+        // (substrate bias, [qsub Q1, Q2, Q3], [I(V4), I(V5)]) from ngspice-42.
+        let ngspice: [(f64, [f64; 3], [f64; 2]); 7] = [
+            (0.0, [0.0; 3], [0.0; 2]),
+            (
+                -3.0,
+                [-3.860_312_103e-12, -5.456_086_164e-12, -7.788_802_453e-12],
+                [3.000_999_998_5e-12, 4.737_947_741_9e-12],
+            ),
+            (
+                -1.2,
+                [-1.866_364_090e-12, -2.719_537_557e-12, -3.852_801_257e-12],
+                [1.200_999_976_8e-12, 2.937_870_002_1e-12],
+            ),
+            (
+                -0.2,
+                [-3.768_032_773e-13, -5.623_523_599e-13, -8.049_207_152e-13],
+                [2.009_949_833_2e-13, 1.920_013_108_7e-12],
+            ),
+            (
+                0.1,
+                [
+                    2.066_666_666_7e-13,
+                    3.107_142_857_1e-13,
+                    4.522_756_122_4e-13,
+                ],
+                [-1.241_153_283e-13, -2.027_487_920e-11],
+            ),
+            (
+                0.3,
+                [6.6e-13, 9.964_285_714_3e-13, 1.467_979_230_7e-12],
+                [-1.614_123_970e-11, -3.482_091_275e-9],
+            ),
+            (
+                0.6,
+                [1.44e-12, 2.185_714_285_7e-12, 3.269_415_643_4e-12],
+                [-2.509_771_576e-7, -6.982_336_980e-6],
+            ),
+        ];
+        let h = 1e-6;
+        let mut solver = Solver::new(
+            parse_netlist(netlist).expect("substrate deck parses"),
+            Integration::BackwardEuler,
+        )
+        .expect("substrate solver builds");
+        let index = |name: &str| solver.voltage_source_index(name).expect("source exists");
+        let (v1, v2, v3, v4, v5) = (
+            index("V1"),
+            index("V2"),
+            index("V3"),
+            index("V4"),
+            index("V5"),
+        );
+        // The DC sources carry substrate current; ngspice reports the current
+        // into the source's + terminal, the engine the current out of it.
+        let charge_sources = ["V1", "V2", "V3"];
+        // Q3's substrate is ground and its collector the cathode, so the
+        // charge current leaves through V3 with the opposite sign.
+        let orientation = [1.0, 1.0, -1.0];
+        for window in ngspice.windows(2) {
+            let ((_, before, _), (voltage, after, dc)) = (window[0], window[1]);
+            for source in [v1, v2, v4, v5] {
+                solver.set_voltage_source(source, voltage);
+            }
+            solver.set_voltage_source(v3, -voltage);
+            solver.advance(h).expect("step to the new bias solves");
+            let step = charge_sources.map(|name| source_current(&solver, name));
+            let step_base = source_current(&solver, "VB2");
+            let step_collector = source_current(&solver, "VC2");
+            solver.advance(h).expect("held bias solves");
+            let hold = charge_sources.map(|name| source_current(&solver, name));
+            let hold_base = source_current(&solver, "VB2");
+            let hold_collector = source_current(&solver, "VC2");
+            for (column, name) in charge_sources.iter().enumerate() {
+                let expected = after[column] - before[column];
+                let got = orientation[column] * (step[column] - hold[column]) * h;
+                assert!(
+                    (got - expected).abs() < 1e-6 * expected.abs() + 1e-18,
+                    "{name} {voltage} V: ngspice-42 substrate charge change {expected} C, got {got} C"
+                );
+            }
+            // A lateral PNP's substrate junction sits on the base, not the
+            // collector.
+            let expected = after[1] - before[1];
+            let base = -(step_base - hold_base) * h;
+            assert!(
+                (base - expected).abs() < 1e-6 * expected.abs() + 1e-18,
+                "Q2 {voltage} V: lateral substrate charge through the base {expected} C, got {base} C"
+            );
+            assert!(
+                ((step_collector - hold_collector) * h).abs() < 1e-18,
+                "Q2 {voltage} V: no substrate charge may reach the lateral collector"
+            );
+            // Below −3·NS·Vt ngspice-42 switches to its cubic reverse form
+            // −ISS·(1 + (3·NS·Vt/(e·V))³); the engine's shared diode path
+            // keeps −ISS·(1 − e^(V/(NS·Vt))). The two differ by at most
+            // ~1.2 % of ISS (2e-14 A for Q5 at 75 °C, area 3), worst at −0.2 V.
+            // ngspice-42 also uses CODATA-2014 k and q, the engine CODATA-2018:
+            // 3e-6 relative on the 75 °C exponential.
+            let reverse_allowance = if voltage < 0.0 { 1e-13 } else { 1e-17 };
+            for (column, name) in ["V4", "V5"].iter().enumerate() {
+                let expected = -dc[column];
+                let got = source_current(&solver, name);
+                assert!(
+                    (got - expected).abs() < 1e-5 * expected.abs() + reverse_allowance,
+                    "{name} {voltage} V: ngspice-42 substrate current {expected} A, got {got} A"
+                );
+            }
+        }
+
+        // `SUBS=1` moves a PNP's junction onto the collector, and the cathode
+        // turns round: the collector is now the anode.
+        let vertical_pnp = |subs: &str| {
+            let mut solver = Solver::new(
+                parse_netlist(&format!(
+                    "VS s 0 dc 0.5\nVB b 0 dc 0\nVC c 0 dc 0\nQ1 c b 0 s QP\n\
+                     .model QP PNP(IS=1e-16 ISS=1e-15 {subs})\n"
+                ))
+                .expect("vertical PNP deck parses"),
+                Integration::BackwardEuler,
+            )
+            .expect("vertical PNP solver builds");
+            solver.solve_operating_point().expect("vertical PNP solves");
+            [source_current(&solver, "VB"), source_current(&solver, "VC")]
+        };
+        let [lateral_base, lateral_collector] = vertical_pnp("");
+        let [vertical_base, vertical_collector] = vertical_pnp("SUBS=1");
+        // Lateral: substrate is the anode at +0.5 V, so ISS·(e^(0.5/Vt)−1)
+        // leaves through the base. Vertical: the substrate is the cathode,
+        // the junction is reverse biased, so VC supplies −(ISS + GMIN·0.5).
+        assert!(
+            lateral_base < -1e-8,
+            "lateral PNP: forward substrate current {lateral_base}"
+        );
+        assert!(lateral_collector.abs() < 1e-11);
+        assert!(vertical_base.abs() < 1e-11);
+        assert!(
+            (vertical_collector + 1e-15 + 0.5e-12).abs() < 1e-17,
+            "vertical PNP: reverse substrate current {vertical_collector}"
+        );
+
+        // A model name is never read as the substrate node, and a deck is
+        // bit-identical with or without a fourth node tied to ground: as in
+        // ngspice, the omitted substrate is ground and still carries GMIN.
+        let amplifier = |q: &str| {
+            let mut solver = Solver::new(
+                parse_netlist(&format!(
+                    "V1 vcc 0 5\nVIN in 0 PULSE(0.6 0.7 0 10n 10n 1u 2u)\nRB in b 10k\n\
+                     RC vcc c 2k\n{q}\n.model QA NPN(IS=1e-15 BF=100 CJE=2p CJC=1p)\n"
+                ))
+                .expect("amplifier deck parses"),
+                Integration::Trapezoidal,
+            )
+            .expect("amplifier solver builds");
+            let c = solver.circuit().node("c").expect("node exists");
+            (0..20)
+                .map(|_| {
+                    solver.advance(5e-9).expect("amplifier step solves");
+                    solver.node_voltage(c)
+                })
+                .collect::<Vec<_>>()
+        };
+        let three_terminal = amplifier("Q1 c b 0 QA");
+        assert_eq!(three_terminal, amplifier("Q1 c b 0 QA 1"));
+        assert_eq!(
+            three_terminal,
+            amplifier("Q1 c b 0 0 QA"),
+            "an omitted substrate is ground, as an explicit one"
+        );
+        assert_ne!(
+            amplifier("Q1 c b 0 0 QA"),
+            amplifier("Q1 c b 0 0 QS\n.model QS NPN(IS=1e-15 BF=100 CJE=2p CJC=1p CJS=5p)"),
+            "CJS must load the collector"
+        );
+
+        for card in ["CJS=-1p", "VJS=0", "MJS=-0.1", "ISS=-1e-15", "NS=0"] {
+            let error = parse_netlist(&format!(
+                "V1 c 0 1\nQ1 c 0 0 s QX\n.model QX NPN(IS=1e-16 {card})\n"
+            ))
+            .expect_err("an invalid substrate junction must be refused")
+            .to_string();
+            assert!(
+                error.contains("substrate"),
+                "{card}: unexpected error {error}"
+            );
+        }
+        let error = parse_netlist("V1 c 0 1\nQ1 c 0 0 QX\n.model QX NPN(SUBS=2)\n")
+            .expect_err("SUBS must be 1 or -1")
+            .to_string();
+        assert!(error.contains("SUBS"), "unexpected error {error}");
+    }
+
+    /// SPICE `AREA` on D, Q and J scales the card the instance sees: the
+    /// junction and channel currents, knee currents and depletion
+    /// capacitances grow with area and the terminal resistances shrink. Every
+    /// area-scaled parameter the engine models is set, so one that stayed
+    /// unscaled would move a node. DC values are ngspice-45 `.op` with
+    /// `area=2.5` (`.temp 26.85`, `tnom=26.85`); ngspice-45 reads a bare
+    /// number after a diode's model as a thermal node, so the reference deck
+    /// uses the keyword spelling.
+    #[test]
+    fn device_area_scales_d_q_j_cards_like_ngspice() {
+        let models = ".model DR D(IS=1e-14 RS=20 N=1.2 ISR=1e-12 NR=2 IK=5m CJO=20p TT=5n)\n\
+            .model DZ D(IS=1e-14 RS=5 BV=2.0 IBV=1m)\n\
+            .model QR NPN(IS=1e-15 BF=100 RB=50 RBM=10 IRB=50u RC=10 RE=2 VAF=50 IKF=10m \
+            ISE=1e-13 NE=1.5 ISC=1e-13 NC=2 IKR=5m CJE=5p CJC=3p TF=1n XTF=1 ITF=5m)\n\
+            .model JR NJF(VTO=-2 BETA=1e-4 RD=50 RS=50 LAMBDA=0.01 IS=1e-14 CGS=4p CGD=2p)\n";
+        let deck = |supply: &str, size: &str| {
+            format!(
+                "Vdd supply 0 {supply}\nRd supply a 1k\nRz supply z 470\nRc supply c 1k\n\
+                 Rb supply b 100k\nRj supply dj 2k\n\
+                 D1 a 0 DR {size}\nD2 0 z DZ {size}\nQ1 c b 0 QR {size}\nJ1 dj 0 0 JR {size}\n\
+                 {models}"
+            )
+        };
+        let nodes = ["a", "z", "c", "b", "dj"];
+        let volts = |solver: &Solver| {
+            nodes.map(|node| solver.node_voltage(solver.circuit().node(node).expect("node exists")))
+        };
+
+        let single = volts(&build(&deck("dc 3.3", "")));
+        let keyword = volts(&build(&deck("dc 3.3", "area=2.5")));
+        let positional = volts(&build(&deck("dc 3.3", "2.5")));
+        let ngspice_single = [0.882_609_7, 2.038_933, 2.061_702, 0.725_526_4, 2.496_725];
+        let ngspice_area = [0.819_020_6, 2.031_081, 2.183_537, 0.695_149_0, 1.464_235];
+        for (index, node) in nodes.iter().enumerate() {
+            assert!(
+                (single[index] - ngspice_single[index]).abs() < 1e-4,
+                "V({node}) area 1: ngspice {}, got {}",
+                ngspice_single[index],
+                single[index]
+            );
+            assert!(
+                (keyword[index] - ngspice_area[index]).abs() < 1e-4,
+                "V({node}) area=2.5: ngspice {}, got {}",
+                ngspice_area[index],
+                keyword[index]
+            );
+            assert_eq!(
+                keyword[index], positional[index],
+                "V({node}): `area=2.5` and a bare `2.5` must be the same instance"
+            );
+        }
+
+        // The breakdown knee is where area and m part: ngspice-45 fits BV to
+        // the unscaled IBV for one area-3 junction, but m=3 is three
+        // junctions that each carry IBV at the knee.
+        let z = |size: &str| {
+            let solver = build(&deck("dc 3.3", size));
+            solver.node_voltage(solver.circuit().node("z").expect("node exists"))
+        };
+        for (size, ngspice) in [("area=3", 2.030_202), ("m=3", 2.002_458)] {
+            let got = z(size);
+            assert!(
+                (got - ngspice).abs() < 1e-4,
+                "V(z) {size}: ngspice {ngspice}, got {got}"
+            );
+        }
+
+        // Charge scales with area too. Away from breakdown, area 3 and m=3
+        // differ only in GMIN (1 pS against 3 pS), so a supply step must
+        // track to well under a microvolt, step for step.
+        let pulse = "PULSE(0 3.3 0 20n 20n 1u 2u)";
+        let mut area = build(&deck(pulse, "area=3"));
+        let mut multiplied = build(&deck(pulse, "m=3"));
+        let mut one = build(&deck(pulse, ""));
+        let mut largest_difference: f64 = 0.0;
+        for _ in 0..40 {
+            for solver in [&mut area, &mut multiplied, &mut one] {
+                solver.advance(5e-9).expect("transient step solves");
+            }
+            let (a, m, o) = (volts(&area), volts(&multiplied), volts(&one));
+            for index in 0..nodes.len() {
+                largest_difference = largest_difference.max((a[index] - o[index]).abs());
+                if nodes[index] == "z" {
+                    continue;
+                }
+                assert!(
+                    (a[index] - m[index]).abs() < 1e-6,
+                    "V({}) at {} s: area=3 gives {}, m=3 gives {}",
+                    nodes[index],
+                    area.time(),
+                    a[index],
+                    m[index]
+                );
+            }
+        }
+        assert!(
+            largest_difference > 0.1,
+            "area=3 must load the circuit differently from area 1, max diff {largest_difference} V"
+        );
+
+        for value in ["area=0", "area=-2", "area=1e999", "-1"] {
+            let error = parse_netlist(&format!("D1 a 0 DR {value}\n{models}"))
+                .expect_err("a non-positive area must be refused")
+                .to_string();
+            assert!(error.contains("area"), "{value}: unexpected error {error}");
+        }
+        let error = parse_netlist("M1 d g 0 0 MR area=2\n.model MR NMOS(LEVEL=1 VTO=1 KP=20u)\n")
+            .expect_err("a level-1 MOSFET has no area; W and L size it")
+            .to_string();
+        assert!(error.contains("unknown parameter `area`"), "{error}");
+    }
+
+    /// Reverse-biased pn junctions follow ngspice-42's per-device laws, not
+    /// the plain exponential. A diode without `BV` and a JFET gate take the
+    /// cubic `−IS·(1 + (3·N·Vt/(e·V))³)` below `−3·N·Vt`; a sidewall with its
+    /// own `NS` switches at `−3·NS·Vt`; a level-1 MOSFET bulk junction holds
+    /// `−IS` with only `GMIN` conducting at or below `−3·Vt`. Each device
+    /// has its own source. References are ngspice-42 `.dc` with `.temp
+    /// 26.85` and `tnom=26.85` (decks: `D1 d 0 DM`, `D2 s 0 DSW pj=1`,
+    /// `J1 0 jg 0 JM`, `M1 0 0 0 mb MM`, swept together).
+    #[test]
+    fn reverse_biased_junctions_follow_ngspice_reverse_laws() {
+        let models = ".model DM D(IS=1e-9 N=1.5)\n\
+            .model DSW D(IS=1e-12 JSW=4e-10 NS=2.0)\n\
+            .model JM NJF(VTO=-2 BETA=1e-3 IS=1e-9)\n\
+            .model MM NMOS(LEVEL=1 VTO=1 KP=1e-4 IS=1e-9)\n";
+        // (V, [diode, sidewall diode, JFET gate, MOSFET bulk]) in amps.
+        let ngspice: [(f64, [f64; 4]); 7] = [
+            (
+                -1.0,
+                [
+                    -1.000_921_614_4e-9,
+                    -4.019_256_556_5e-10,
+                    -2.001_953_549_3e-9,
+                    -2.002e-9,
+                ],
+            ),
+            (
+                -0.5,
+                [
+                    -9.998_729_154_9e-10,
+                    -4.009_052_451_8e-10,
+                    -2.000_628_394_4e-9,
+                    -2.001e-9,
+                ],
+            ),
+            (
+                -0.3,
+                [
+                    -9.973_968_309_8e-10,
+                    -3.985_465_054_8e-10,
+                    -1.998_879_603_5e-9,
+                    -2.0006e-9,
+                ],
+            ),
+            (
+                -0.2,
+                [
+                    -9.904_018_045_7e-10,
+                    -3.919_069_559_8e-10,
+                    -1.994_593_662_0e-9,
+                    -2.0004e-9,
+                ],
+            ),
+            (
+                -0.15,
+                [
+                    -9.769_246_478_7e-10,
+                    -3.791_586_981_6e-10,
+                    -1.986_536_828_4e-9,
+                    -2.0003e-9,
+                ],
+            ),
+            (
+                -0.1,
+                [
+                    -9.242_336_986_1e-10,
+                    -3.432_542_998_7e-10,
+                    -1.953_749_295_7e-9,
+                    -2.0002e-9,
+                ],
+            ),
+            (
+                -0.05,
+                [
+                    -7.246_116_196_1e-10,
+                    -2.488_232_623_8e-10,
+                    -1.710_987_626_1e-9,
+                    -1.710_987_626_1e-9,
+                ],
+            ),
+        ];
+        let sources = ["Vd", "Vs", "Vj", "Vm"];
+        let mut exponential_gap = [0.0_f64; 4];
+        for (voltage, expected) in ngspice {
+            let solver = build(&format!(
+                "Vd d 0 dc {voltage}\nVs s 0 dc {voltage}\nVj jg 0 dc {voltage}\nVm mb 0 dc {voltage}\n\
+                 D1 d 0 DM\nD2 s 0 DSW pj=1\nJ1 0 jg 0 JM\nM1 0 0 0 mb MM\n{models}"
+            ));
+            for ((source, reference), gap) in sources.iter().zip(expected).zip(&mut exponential_gap)
+            {
+                let got = source_current(&solver, source);
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "{source} at {voltage} V: ngspice-42 {reference} A, got {got} A"
+                );
+                // The plain exponential every junction used before.
+                let exponential = match *source {
+                    "Vd" => device::diode_op(voltage, 1e-9, 1.5).id,
+                    "Vs" => {
+                        device::diode_op(voltage, 1e-12, 1.0).id
+                            + device::diode_op(voltage, 4e-10, 2.0).id
+                            - device::GMIN * voltage
+                    }
+                    _ => 2.0 * device::diode_op(voltage, 1e-9, 1.0).id,
+                };
+                *gap = gap.max(relative(exponential, reference));
+            }
+        }
+        // The exponential misses each reference by 0.4 % or more.
+        for (source, gap) in sources.iter().zip(exponential_gap) {
+            assert!(
+                gap > 2e-3,
+                "{source}: the sweep must reach the reverse law, gap {gap}"
+            );
+        }
+
+        // The cubic meets the exponential in value at −3·N·Vt, and the
+        // MOSFET hold conducts only GMIN.
+        let boundary = -3.0 * 1.5 * device::THERMAL_VOLTAGE;
+        let (forward, reverse) = (
+            device::pn_junction_op(boundary, 1e-9, 1.5),
+            device::pn_junction_op(boundary - 1e-12, 1e-9, 1.5),
+        );
+        assert!(relative(reverse.id, forward.id) < 1e-9);
+        let bulk = device::mos_bulk_junction_op(-0.2, 1e-9, device::THERMAL_VOLTAGE);
+        assert_eq!(bulk.gd, device::GMIN);
+        assert_eq!(bulk.id, -1e-9 - device::GMIN * 0.2);
+    }
+
+    /// A three-terminal BJT still has ngspice's substrate junction, with the
+    /// substrate at ground: GMIN from ground to the collector of a vertical
+    /// device (NPN default, or `SUBS=1`) and to the base of a lateral one
+    /// (PNP default). Each node below is fed through 1 TΩ, so the 1 pS leaks
+    /// set its voltage. The collector-base and base-emitter junctions add
+    /// one GMIN each to the nodes they touch: the NPN collector and the
+    /// vertical PNP base see two (10 V / 3), the lateral PNP base three
+    /// (10 V / 4). Without the substrate leak they would read 5 V and
+    /// 3.33 V. References are ngspice-45 `.op`, `gmin=1e-12`.
+    #[test]
+    fn three_terminal_bjt_substrate_carries_ngspice_gmin_to_ground() {
+        let solver = build(
+            "V1 vc 0 10\n\
+             R1 vc c 1e12\n\
+             Q1 c 0 0 QN\n\
+             R2 vc b 1e12\n\
+             Q2 0 b 0 QP\n\
+             R3 vc bv 1e12\n\
+             Q3 0 bv 0 QPV\n\
+             R4 vc c4 1e12\n\
+             Q4 c4 0 0 0 QN\n\
+             .model QN NPN(IS=1e-16)\n\
+             .model QP PNP(IS=1e-16)\n\
+             .model QPV PNP(IS=1e-16 SUBS=1)\n",
+        );
+        for (node, reference) in [
+            ("c", 3.333_267),
+            ("b", 2.499_975),
+            ("bv", 3.333_300),
+            ("c4", 3.333_267),
+        ] {
+            let got = solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+            assert!(
+                (got - reference).abs() < 1e-5,
+                "v({node}): ngspice-45 {reference} V, got {got} V"
+            );
+        }
+    }
+
+    /// The four BJT junction currents (`IS` forward and reverse, `ISE`,
+    /// `ISC`) follow ngspice-42 `bjtload.c` in reverse bias: below `−3·N·Vt`,
+    /// with each junction's own `N`, the cubic `−I·(1 + (3·N·Vt/(e·V))³)`
+    /// replaces the exponential. The transport current and the `TF`/`TR`
+    /// transit charges use the same values. References are ngspice-42 `.op`
+    /// and `.dc` (`@q1[qbe]`, `@q1[qbc]`, `@q1[cpi]`, `@q1[cmu]`) with `.temp
+    /// 26.85` and `tnom=26.85` (deck: `Q1 c b 0 QN`, `Q2 cp bp 0 QP`, base
+    /// and collector on voltage sources).
+    #[test]
+    fn bjt_reverse_biased_junctions_follow_ngspice_cubic_law() {
+        let card = "IS=1e-9 BF=50 BR=2 NF=1.2 NR=1.6 ISE=4e-9 NE=2 ISC=6e-9 NC=1.4";
+        let models = format!(".model QN NPN({card} TF=1e-6 TR=2e-6)\n.model QP PNP({card})\n");
+        // (Vbe = Vbc, ngspice i(Vb), i(Vc), i(Vbp), i(Vcp)). The PNP sees the
+        // mirrored bias. ngspice also ties GMIN from the substrate node
+        // (ground) to a vertical NPN's collector and a lateral PNP's base;
+        // the engine does the same, so the references are used as printed.
+        let ngspice: [(f64, [f64; 4]); 8] = [
+            (
+                -5.0,
+                [
+                    1.052_999_060_831e-8,
+                    -6.504_996_120_44e-9,
+                    -1.053_499_060_83e-8,
+                    6.504_996_120_437e-9,
+                ],
+            ),
+            (
+                -1.0,
+                [
+                    1.052_082_603_835e-8,
+                    -6.500_515_054_65e-9,
+                    -1.052_182_603_83e-8,
+                    6.500_515_054_648e-9,
+                ],
+            ),
+            (
+                -0.5,
+                [
+                    1.051_160_830_676e-8,
+                    -6.496_620_437_18e-9,
+                    -1.051_210_830_68e-8,
+                    6.496_620_437_181e-9,
+                ],
+            ),
+            (
+                -0.3,
+                [
+                    1.047_711_993_871e-8,
+                    -6.482_339_061_02e-9,
+                    -1.047_741_993_87e-8,
+                    6.482_339_061_021e-9,
+                ],
+            ),
+            (
+                -0.2,
+                [
+                    1.037_365_479_314e-8,
+                    -6.439_581_830_95e-9,
+                    -1.037_385_479_31e-8,
+                    6.439_581_830_946e-9,
+                ],
+            ),
+            (
+                -0.15,
+                [
+                    1.017_282_605_328e-8,
+                    -6.356_462_488_17e-9,
+                    -1.017_297_605_33e-8,
+                    6.356_462_488_169e-9,
+                ],
+            ),
+            (
+                -0.1,
+                [
+                    9.517_985_240_281e-9,
+                    -6.027_911_560_09e-9,
+                    -9.518_085_240_28e-9,
+                    6.027_911_560_091e-9,
+                ],
+            ),
+            (
+                -0.05,
+                [
+                    7.338_787_575_242e-9,
+                    -4.744_536_448_88e-9,
+                    -7.338_837_575_24e-9,
+                    4.744_536_448_879e-9,
+                ],
+            ),
+        ];
+        let sources = ["Vb", "Vc", "Vbp", "Vcp"];
+        let deck = |vb: f64, vc: f64| {
+            build(&format!(
+                "Vb b 0 dc {vb}\nVc c 0 dc {vc}\nVbp bp 0 dc {}\nVcp cp 0 dc {}\n\
+                 Q1 c b 0 QN\nQ2 cp bp 0 QP\n{models}",
+                -vb, -vc
+            ))
+        };
+        // The plain exponential every BJT junction used before, as the
+        // current out of the base and collector sources of the NPN.
+        let exponential = |vbe: f64, vbc: f64| {
+            let junction = |v: f64, is: f64, n: f64| is * ((v / (n * VT)).exp() - 1.0);
+            let ibe = junction(vbe, 1e-9, 1.2) / 50.0 + junction(vbe, 4e-9, 2.0);
+            let ibc = junction(vbc, 1e-9, 1.6) / 2.0 + junction(vbc, 6e-9, 1.4);
+            let transport = junction(vbe, 1e-9, 1.2) - junction(vbc, 1e-9, 1.6);
+            (
+                ibe + ibc + device::GMIN * (vbe + vbc),
+                transport - ibc - device::GMIN * vbc,
+            )
+        };
+        let mut exponential_gap = [0.0_f64; 2];
+        for (voltage, expected) in ngspice {
+            let solver = deck(voltage, 0.0);
+            for (source, reference) in sources.iter().zip(expected) {
+                // ngspice reports the current into the source's + terminal,
+                // the engine the current out of it.
+                let got = -source_current(&solver, source);
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "{source} at {voltage} V: ngspice-42 {reference} A, got {got} A"
+                );
+            }
+            let (base, collector) = exponential(voltage, voltage);
+            exponential_gap[0] = exponential_gap[0].max(relative(-base, expected[0]));
+            exponential_gap[1] = exponential_gap[1].max(relative(-collector, expected[1]));
+        }
+        // The exponential misses the base and collector references by 0.3 %
+        // or more somewhere in the sweep.
+        for (source, gap) in sources.iter().zip(exponential_gap) {
+            assert!(
+                gap > 3e-3,
+                "{source}: the sweep must reach the reverse law, gap {gap}"
+            );
+        }
+
+        // Unequal reverse biases (Vbe = −0.2 V, Vbc = −2 V), then reverse
+        // active (Vbe = −1 V, Vbc = +0.5 V), where the cubic B-E current
+        // enters the transport term beside a conducting B-C junction.
+        for (vb, vc, base, collector) in [
+            (-0.2, 1.8, 1.042_914_451_450e-8, -6.508_751_041_21e-9),
+            (0.5, 0.0, -6.348_465_784_84e-3, -3.729_987_810_78e-3),
+        ] {
+            let solver = deck(vb, vc);
+            for (source, reference) in [("Vb", base), ("Vc", collector)] {
+                let got = -source_current(&solver, source);
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "{source} at Vb={vb} V, Vc={vc} V: ngspice-42 {reference} A, got {got} A"
+                );
+            }
+        }
+
+        // Transit charge: Qbe = TF·Ibe and Qbc = TR·Ibc on the cubic, with
+        // capacitances TF·gbe and TR·gbc. (Vbe = Vbc, qbe, qbc, cpi, cmu).
+        let model = parse_netlist(&format!("Q1 c b 0 QN\n{models}"))
+            .expect("transit deck parses")
+            .bjts[0]
+            .model;
+        let charges = [
+            (
+                -1.0,
+                -9.999_598_665_92e-16,
+                -1.999_809_737_92e-15,
+                1.204_002_254_305e-19,
+                5.707_862_538_928e-19,
+            ),
+            (
+                -0.5,
+                -9.996_789_327_32e-16,
+                -1.998_477_903_32e-15,
+                1.926_403_606_888e-18,
+                9.132_580_062_285e-18,
+            ),
+            (
+                -0.2,
+                -9.949_833_239_40e-16,
+                -1.976_217_239_42e-15,
+                7.525_014_089_407e-17,
+                3.567_414_086_830e-16,
+            ),
+            (
+                -0.15,
+                -9.881_086_197_11e-16,
+                -1.943_626_049_00e-15,
+                2.378_276_057_887e-16,
+                1.127_479_020_035e-15,
+            ),
+            (
+                -0.1,
+                -9.598_665_915_23e-16,
+                -1.821_730_990_82e-15,
+                1.204_002_254_305e-15,
+                4.309_847_186_838e-15,
+            ),
+            (
+                -0.05,
+                -8.004_597_233_49e-16,
+                -1.402_891_954_20e-15,
+                6.432_137_617_586e-15,
+                1.443_573_643_726e-14,
+            ),
+        ];
+        for (voltage, qbe, qbc, cpi, cmu) in charges {
+            let charge = device::bjt_transit_charge(voltage, voltage, model);
+            for (name, got, reference) in [
+                ("qbe", charge.qbe, qbe),
+                ("qbc", charge.qbc, qbc),
+                ("cpi", charge.dqbe_dvbe, cpi),
+                ("cmu", charge.dqbc_dvbc, cmu),
+            ] {
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "{name} at {voltage} V: ngspice-42 {reference}, got {got}"
+                );
+            }
+        }
+        // At −0.2 V the exponential's Qbe is 0.3 % away from ngspice's.
+        let exponential_qbe = 1e-6 * 1e-9 * ((-0.2 / (1.2 * VT)).exp() - 1.0);
+        assert!(relative(exponential_qbe, -9.949_833_239_40e-16) > 3e-3);
+
+        // Each cubic meets its exponential in value at −3·N·Vt.
+        let boundary = -3.0 * 1.2 * device::THERMAL_VOLTAGE;
+        let at = device::bjt_transit_charge(boundary, 0.0, model);
+        let below = device::bjt_transit_charge(boundary - 1e-12, 0.0, model);
+        assert!(relative(below.qbe, at.qbe) < 1e-9);
+
+        // The conductances are the derivatives of the cubic currents, with
+        // Early effect and both knees active.
+        let op = |vbe: f64, vbc: f64| {
+            device::bjt_op(
+                vbe, vbc, 1e-9, 50.0, 2.0, 1.2, 1.6, 40.0, 60.0, 1e-3, 2e-3, 4e-9, 2.0, 6e-9, 1.4,
+            )
+        };
+        let delta = 1e-5;
+        for (vbe, vbc) in [(-0.4, -0.7), (-0.3, 0.1), (0.1, -0.6)] {
+            let at = op(vbe, vbc);
+            let (be_plus, be_minus) = (op(vbe + delta, vbc), op(vbe - delta, vbc));
+            let (bc_plus, bc_minus) = (op(vbe, vbc + delta), op(vbe, vbc - delta));
+            for (name, got, expected) in [
+                ("gpi", at.gpi, (be_plus.ib - be_minus.ib) / (2.0 * delta)),
+                ("gmu", at.gmu, (bc_plus.ib - bc_minus.ib) / (2.0 * delta)),
+                ("gif", at.gif, (be_plus.ic - be_minus.ic) / (2.0 * delta)),
+                (
+                    "gir + gmu",
+                    at.gir + at.gmu,
+                    -(bc_plus.ic - bc_minus.ic) / (2.0 * delta),
+                ),
+            ] {
+                assert!(
+                    relative(got, expected) < 1e-5,
+                    "{name} at Vbe={vbe} V, Vbc={vbc} V: {got} vs finite difference {expected}"
+                );
+            }
+        }
+    }
+
+    /// `RCO` puts Kull's quasi-saturation model between the collector contact
+    /// behind `RC` and the intrinsic collector: an epitaxial region whose
+    /// resistance falls as the forward-biased collector junction injects
+    /// carriers into it (`GAMMA`) and whose current saturates with the drop
+    /// across it (`VO`). References are ngspice-42 `.op` node voltages
+    /// (`.temp 26.85`, `tnom=26.85`). Q1 is an NPN with `RC`, Q2 its PNP
+    /// mirror, Q3 has no `RC`, other `VO`/`GAMMA` and `m=2`, and Q4 gives
+    /// `RCO=0.001`, which ngspice raises to 0.01 Ω. Every reference bias
+    /// has the collector current flowing forward, where the engine and
+    /// ngspice share one expression.
+    #[test]
+    fn bjt_quasi_saturation_rco_vo_gamma_qco_matches_ngspice() {
+        let models = ".model QN NPN(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=10 GAMMA=1e-11)\n\
+                      .model QP PNP(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=10 GAMMA=1e-11)\n\
+                      .model QZ NPN(IS=1e-14 BF=100 BR=2 RCO=50 VO=3 GAMMA=2e-10)\n\
+                      .model QLO NPN(IS=1e-14 BF=100 BR=2 RCO=0.001)\n\
+                      .model QPLAIN NPN(IS=1e-14 BF=100 BR=2 RC=2)\n";
+        let deck = |vb: f64, vc: f64| {
+            build(&format!(
+                "Vb b 0 dc {vb}\nVc c 0 dc {vc}\nVbp bp 0 dc {}\nVcp cp 0 dc {}\n\
+                 Rb1 b b1 1k\nRl1 c c1 200\nQ1 c1 b1 0 QN\n\
+                 Rb2 bp b2 1k\nRl2 cp c2 200\nQ2 c2 b2 0 QP\n\
+                 Rb3 b b3 1k\nRl3 c c3 200\nQ3 c3 b3 0 QZ m=2\n\
+                 Rb4 b b4 1k\nRl4 c c4 200\nQ4 c4 b4 0 QLO\n\
+                 Rb5 b b5 1k\nRl5 c c5 200\nQ5 c5 b5 0 QPLAIN\n{models}",
+                -vb, -vc
+            ))
+        };
+        let nodes = ["c1", "b1", "c2", "b2", "c3", "b3", "c4"];
+        // (Vb, Vc, ngspice v(c1), v(b1), v(c2), v(b2), v(c3), v(b3), v(c4)).
+        let ngspice: [(f64, f64, [f64; 7]); 13] = [
+            (
+                0.7,
+                5.0,
+                [
+                    4.533_600_542_213_7,
+                    6.766_800_302_548_9e-1,
+                    -4.533_600_549_514,
+                    -6.766_800_298_991e-1,
+                    4.348_237_747_930_0,
+                    6.674_118_934_233_7e-1,
+                    4.533_600_541_002_3,
+                ],
+            ),
+            (
+                0.7,
+                0.2,
+                [
+                    8.316_937_676_024_6e-2,
+                    6.464_132_608_382_6e-1,
+                    -8.316_937_693_253e-2,
+                    -6.464_132_607_519e-1,
+                    6.533_077_936_267_1e-2,
+                    6.326_653_955_512_6e-1,
+                    5.932_076_220_484_0e-2,
+                ],
+            ),
+            (
+                0.8,
+                5.0,
+                [
+                    3.224_714_340_002_4,
+                    7.112_357_183_730_9e-1,
+                    -3.224_714_351_567,
+                    -7.112_357_182_127e-1,
+                    2.942_586_841_681_6,
+                    6.971_293_447_209_4e-1,
+                    3.224_714_332_342_8,
+                ],
+            ),
+            (
+                0.8,
+                0.2,
+                [
+                    6.868_221_000_869_7e-2,
+                    6.562_060_399_339_9e-1,
+                    -6.868_221_006_422e-2,
+                    -6.562_060_398_850e-1,
+                    4.966_841_194_044_5e-2,
+                    6.414_050_378_416_3e-1,
+                    3.953_466_613_950_5e-2,
+                ],
+            ),
+            (
+                1.0,
+                5.0,
+                [
+                    1.208_664_878_904_6,
+                    7.311_640_546_157_9e-1,
+                    -1.208_664_879_087,
+                    -7.311_640_546_119e-1,
+                    7.634_674_191_688_3e-1,
+                    7.160_572_121_681_2e-1,
+                    1.652_892_731_428_1e-1,
+                ],
+            ),
+            (
+                1.0,
+                40.0,
+                [
+                    3.478_214_709_409_8e1,
+                    7.391_073_871_188_4e-1,
+                    -3.478_214_711_419e1,
+                    -7.391_073_870_522e-1,
+                    3.445_518_591_489_7e1,
+                    7.227_593_612_995_8e-1,
+                    3.478_214_706_523_9e1,
+                ],
+            ),
+            (
+                1.0,
+                0.2,
+                [
+                    5.896_835_961_363_8e-2,
+                    6.677_721_363_240_2e-1,
+                    -5.896_835_963_369e-2,
+                    -6.677_721_362_938e-1,
+                    3.758_629_565_206_2e-2,
+                    6.520_917_157_584_3e-1,
+                    2.738_065_936_333_9e-2,
+                ],
+            ),
+            (
+                1.5,
+                5.0,
+                [
+                    1.166_734_529_278_3,
+                    7.333_012_190_964_5e-1,
+                    -1.166_734_529_307,
+                    -7.333_012_190_937e-1,
+                    6.842_844_260_723_2e-1,
+                    7.181_841_637_810_5e-1,
+                    8.450_280_742_518_7e-2,
+                ],
+            ),
+            (
+                1.5,
+                40.0,
+                [
+                    2.531_707_634_563_0e1,
+                    7.658_538_355_056_1e-1,
+                    -2.531_707_636_431e1,
+                    -7.658_538_354_795e-1,
+                    2.497_074_524_763_0e1,
+                    7.485_373_000_694_1e-1,
+                    2.531_707_622_840_5e1,
+                ],
+            ),
+            (
+                1.5,
+                0.2,
+                [
+                    5.062_640_212_184_0e-2,
+                    6.840_533_228_254_0e-1,
+                    -5.062_640_212_895e-2,
+                    -6.840_533_228_090e-1,
+                    2.742_853_786_913_9e-2,
+                    6.674_422_800_931_1e-1,
+                    1.892_441_113_692_7e-2,
+                ],
+            ),
+            (
+                3.0,
+                5.0,
+                [
+                    1.134_399_334_452_4,
+                    7.383_666_468_060_9e-1,
+                    -1.134_399_334_463,
+                    -7.383_666_468_039e-1,
+                    5.952_202_192_836_7e-1,
+                    7.230_286_615_634_8e-1,
+                    5.338_554_141_948_3e-2,
+                ],
+            ),
+            (
+                3.0,
+                40.0,
+                [
+                    1.573_839_972_147_1e1,
+                    7.794_548_561_466_0e-1,
+                    -1.573_839_972_149e1,
+                    -7.794_548_561_461e-1,
+                    1.918_069_433_024_0e1,
+                    7.578_166_062_358_4e-1,
+                    1.611_966_754_933_0e-1,
+                ],
+            ),
+            (
+                3.0,
+                0.2,
+                [
+                    4.203_538_333_099_4e-2,
+                    7.066_941_629_810_6e-1,
+                    -4.203_538_333_355e-2,
+                    -7.066_941_629_740e-1,
+                    1.985_273_529_288_8e-2,
+                    6.893_187_176_671_7e-1,
+                    1.387_325_026_340_5e-2,
+                ],
+            ),
+        ];
+        // Largest gap between Q1 and the same transistor with an ohmic
+        // collector (Q5): the sweep must reach quasi-saturation.
+        let mut ohmic_gap = 0.0_f64;
+        for (vb, vc, expected) in ngspice {
+            let solver = deck(vb, vc);
+            let voltage =
+                |name: &str| solver.node_voltage(solver.circuit().node(name).expect("node exists"));
+            for (name, reference) in nodes.iter().zip(expected) {
+                let got = voltage(name);
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "v({name}) at Vb={vb} V, Vc={vc} V: ngspice-42 {reference} V, got {got} V"
+                );
+            }
+            ohmic_gap = ohmic_gap.max((voltage("c1") - voltage("c5")).abs());
+        }
+        assert!(
+            ohmic_gap > 1.0,
+            "RCO must lift the saturated collector well above the ohmic one, gap {ohmic_gap} V"
+        );
+
+        // The internal nodes follow ngspice's topology: `RC` to the contact,
+        // then the epitaxial region to the intrinsic collector.
+        let solver = deck(1.0, 5.0);
+        let circuit = solver.circuit();
+        let (q1, q3, q5) = (&circuit.bjts[0], &circuit.bjts[2], &circuit.bjts[4]);
+        assert_eq!(q1.junction_cx, circuit.node("Q1#collcx").expect("contact"));
+        assert_eq!(
+            q1.junction_c,
+            circuit.node("Q1#collector").expect("intrinsic")
+        );
+        assert_eq!(q3.junction_cx, q3.c);
+        assert_eq!(
+            q3.junction_c,
+            circuit.node("Q3#collector").expect("intrinsic")
+        );
+        assert_eq!(q5.junction_cx, q5.junction_c);
+        assert!(circuit.node("Q5#collcx").is_none());
+
+        // The conductances are the derivatives of the current on both sides
+        // of zero drop, and the slope is continuous through it. ngspice
+        // switches to the plain resistor there, which made Newton alternate
+        // between the two sides on the base step from 2.0 V to 3.3 V below.
+        let epi = |vbc: f64, vbcx: f64| device::bjt_epi_op(vbc, vbcx, 50.0, 30.0, 1e-8, VT);
+        for (vbc, vbcx) in [(0.69, -0.4), (0.70, 0.69), (0.3, 0.72), (-2.0, -30.0)] {
+            let step = 1e-7;
+            let op = epi(vbc, vbcx);
+            let slope_vbc =
+                (epi(vbc + step, vbcx).current - epi(vbc - step, vbcx).current) / (2.0 * step);
+            let slope_vbcx =
+                (epi(vbc, vbcx + step).current - epi(vbc, vbcx - step).current) / (2.0 * step);
+            assert!(
+                relative(op.g_vbc, slope_vbc) < 1e-6 && relative(op.g_vbcx, slope_vbcx) < 1e-6,
+                "Vbc={vbc} V, Vbcx={vbcx} V: {op:?} against {slope_vbc}, {slope_vbcx}"
+            );
+        }
+        let (below, above) = (epi(0.7, 0.7 + 1e-9), epi(0.7, 0.7 - 1e-9));
+        assert!(relative(below.g_vbcx, above.g_vbcx) < 1e-6);
+        assert_eq!(epi(0.7, 0.7).current, 0.0);
+        let mut solver = build(
+            "Vcc supply 0 dc 3.3\nRload supply collector 100\nVbase drive 0 dc 2.0\n\
+             Rbase drive base 1k\nQ1 collector base 0 QEPI\n\
+             .model QEPI NPN(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=30 GAMMA=1e-8)\n",
+        );
+        let source = solver.voltage_source_index("Vbase").expect("source exists");
+        solver.set_voltage_source(source, 3.3);
+        solver
+            .advance(1e-6)
+            .expect("the step into deep saturation solves");
+        let collector = solver.node_voltage(solver.circuit().node("collector").unwrap());
+        assert!(
+            relative(collector, 2.235_675_251_767_3e-1) < 2e-5,
+            "ngspice-42 0.22356752517673 V, got {collector} V"
+        );
+
+        // `QUASIMOD=1` moves `RCO`, `VO` and `GAMMA` with the instance
+        // temperature by `CN`, `D` and `VG`; `QUASIMOD=0` leaves them fixed.
+        // ngspice-42 `.op` with `tnom=27` and `temp=75` on each instance:
+        // (model, polarity sign, v(c), v(b)).
+        for (card, sign, collector, base) in [
+            (
+                "NPN(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=10 GAMMA=1e-11 QUASIMOD=1)",
+                1.0,
+                1.506_177_262_004_6,
+                6.580_025_120_821_9e-1,
+            ),
+            (
+                "PNP(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=10 GAMMA=1e-11 QUASIMOD=1 VG=1.1 CN=1.5 D=0.4)",
+                -1.0,
+                -1.376_436_212_892,
+                -6.589_562_341_562e-1,
+            ),
+            (
+                "NPN(IS=1e-14 BF=100 BR=2 RC=2 RCO=50 VO=10 GAMMA=1e-11)",
+                1.0,
+                1.178_804_445_911_4,
+                6.603_533_697_164_9e-1,
+            ),
+        ] {
+            let solver = build(&format!(
+                "Vb b 0 dc {}\nVc c 0 dc {}\nRb1 b b1 1k\nRl1 c c1 200\n\
+                 Q1 c1 b1 0 QT temp=75\n.model QT {card}\n",
+                1.5 * sign,
+                5.0 * sign
+            ));
+            for (name, reference) in [("c1", collector), ("b1", base)] {
+                let got = solver.node_voltage(solver.circuit().node(name).expect("node exists"));
+                assert!(
+                    relative(got, reference) < 2e-5,
+                    "{card}: v({name}) ngspice-42 {reference} V, got {got} V"
+                );
+            }
+        }
+
+        // `QCO` stores the epitaxial charge QCO·K(v), K = sqrt(1 + GAMMA·
+        // e^(v/Vt)), on the intrinsic B-C junction and from the base to the
+        // collector contact. Both terminals are driven, so the contact
+        // voltage is known; `BR=1e6` keeps the resistive base current
+        // independent of the intrinsic collector. A base step from 0.70 V to
+        // 0.75 V then has to deliver exactly the change of both charges.
+        // ngspice-42 `.dc` gives `@q1[qbc]` at the two biases; it does not
+        // expose the contact charge, which is the same K at Vb − Vc.
+        let (qco, gamma) = (2e-10, 1e-9);
+        let charge_deck = |polarity: &str, sign: f64| {
+            build(&format!(
+                "Vb b 0 dc {}\nVc c 0 dc {}\nQ1 c b 0 QQ\n\
+                 .model QQ {polarity}(IS=1e-14 BF=100 BR=1e6 RCO=50 VO=10 GAMMA={gamma} QCO={qco})\n",
+                0.70 * sign,
+                0.1 * sign
+            ))
+        };
+        let contact_charge = |vbcx: f64| qco * (1.0 + gamma * (vbcx / VT).exp()).sqrt();
+        let expected = (9.039_746_204_354_4e-9 - 2.214_525_708_243_7e-9)
+            + (contact_charge(0.65) - contact_charge(0.60));
+        for (polarity, sign) in [("NPN", 1.0), ("PNP", -1.0)] {
+            let settled = {
+                let mut solver = charge_deck(polarity, sign);
+                let source = solver.voltage_source_index("Vb").expect("source exists");
+                solver.set_voltage_source(source, 0.75 * sign);
+                solver
+                    .solve_operating_point()
+                    .expect("settled point solves");
+                source_current(&solver, "Vb")
+            };
+            let mut solver = charge_deck(polarity, sign);
+            let source = solver.voltage_source_index("Vb").expect("source exists");
+            solver.set_voltage_source(source, 0.75 * sign);
+            let h = 1e-6;
+            let mut delivered = 0.0;
+            for _ in 0..400 {
+                solver.advance(h).expect("charge step solves");
+                delivered += (source_current(&solver, "Vb") - settled) * h;
+            }
+            assert!(
+                relative(sign * delivered, expected) < 1e-5,
+                "{polarity}: epitaxial charge {expected} C expected, base delivered {delivered} C"
+            );
+        }
+
+        for card in ["VO=0", "GAMMA=-1e-11", "QCO=-1e-9", "QUASIMOD=2"] {
+            parse_netlist(&format!(
+                "V1 c 0 1\nQ1 c 0 0 QX\n.model QX NPN(IS=1e-16 RCO=10 {card})\n"
+            ))
+            .expect_err("an invalid quasi-saturation card must be refused");
+        }
+    }
+
+    /// The `XCJC` share of `CJC` on the external base is controlled by
+    /// v(b) − v(c') in circuit coordinates for both polarities: a PNP stage
+    /// with every source mirrored must trace the NPN stage with every node
+    /// voltage negated. `SUBS=1` makes both vertical, so the substrate GMIN
+    /// sits on the collector of each.
+    #[test]
+    fn bjt_xcjc_external_base_charge_is_polarity_symmetric() {
+        let stage = |polarity: &str, sign: f64| {
+            let mut solver = Solver::new(
+                parse_netlist(&format!(
+                    "V1 vcc 0 {}\nVIN in 0 PULSE({} {} 0 10n 10n 1u 2u)\nRS in b 10k\n\
+                     RL vcc c 2k\nQ1 c b 0 QA\n\
+                     .model QA {polarity}(IS=1e-15 BF=100 RB=200 CJC=20p XCJC=0.3 SUBS=1)\n",
+                    5.0 * sign,
+                    0.6 * sign,
+                    0.9 * sign
+                ))
+                .expect("stage parses"),
+                Integration::Trapezoidal,
+            )
+            .expect("stage builds");
+            let c = solver.circuit().node("c").expect("node exists");
+            (0..40)
+                .map(|_| {
+                    solver.advance(5e-9).expect("stage step solves");
+                    sign * solver.node_voltage(c)
+                })
+                .collect::<Vec<_>>()
+        };
+        let npn = stage("NPN", 1.0);
+        let pnp = stage("PNP", -1.0);
+        assert!(
+            npn.first().unwrap() - npn.last().unwrap() > 0.2,
+            "the stage must switch: {npn:?}"
+        );
+        for (step, (n, p)) in npn.iter().zip(&pnp).enumerate() {
+            assert!(
+                (n - p).abs() < 1e-9,
+                "step {step}: NPN collector {n} V, mirrored PNP {p} V"
+            );
+        }
+    }
+
+    /// SPICE's `off` flag selects the state of a bistable circuit the way
+    /// ngspice-42 does: the operating point holds the flagged device cut off
+    /// until the rest of the circuit converges, then releases it. Both a
+    /// cross-coupled NPN latch and a cross-coupled NMOS latch sit at their
+    /// symmetric metastable point without `off`, and fall into the state that
+    /// the flagged device chose with it. A diode flagged `off` in a circuit
+    /// with one operating point solves exactly as without the flag. Reference
+    /// values are ngspice-42 `.op` (`.temp 26.85`, `tnom=26.85`) with
+    /// `reltol=1e-7`: at the default `reltol=1e-3` ngspice's released diode
+    /// stops 2.1 mV short of its own flag-free answer. An ignored
+    /// `off` leaves every latch row at the metastable point, more than 3 V
+    /// away for the BJT and 1.7 V for the MOSFET.
+    #[test]
+    fn off_flag_selects_bistable_operating_point_as_ngspice() {
+        let bjt_latch = |q1: &str, q2: &str| {
+            format!(
+                "Vcc vcc 0 dc 5\nRc1 vcc c1 1k\nRc2 vcc c2 1k\n\
+                 Rb1 c2 b1 10k\nRb2 c1 b2 10k\n\
+                 Q1 c1 b1 0 QN {q1}\nQ2 c2 b2 0 QN {q2}\n\
+                 .model QN NPN(IS=1e-15 BF=100 BR=1)\n"
+            )
+        };
+        let mos_latch = |m1: &str, m2: &str, d1: &str| {
+            format!(
+                "Vdd vdd 0 dc 3.3\nRd1 vdd d1 10k\nRd2 vdd d2 10k\n\
+                 M1 d1 d2 0 0 NM w=10u l=1u {m1}\nM2 d2 d1 0 0 NM w=10u l=1u {m2}\n\
+                 D1 vdd dx DX {d1}\nRx dx 0 1k\n\
+                 .model NM NMOS(LEVEL=1 VTO=0.7 KP=50u LAMBDA=0.02)\n\
+                 .model DX D(IS=1e-14 N=1.1)\n"
+            )
+        };
+        let check = |netlist: &str, rows: &[(&str, f64)]| {
+            let solver = build(netlist);
+            for &(node, ngspice) in rows {
+                let got = solver.node_voltage(solver.circuit().node(node).expect("node exists"));
+                assert!(
+                    (got - ngspice).abs() < 1e-4,
+                    "V({node}): ngspice-42 {ngspice}, got {got}\n{netlist}"
+                );
+            }
+            solver
+        };
+
+        // BJT latch: metastable without `off`, Q1 or Q2 cut off with it.
+        check(
+            &bjt_latch("", ""),
+            &[
+                ("c1", 1.132_000_845),
+                ("c2", 1.132_000_845),
+                ("b1", 0.749_030_628),
+            ],
+        );
+        check(
+            &bjt_latch("off", ""),
+            &[
+                ("c1", 4.614_435_472),
+                ("c2", 0.073_157_863),
+                ("b1", 0.073_157_908),
+                ("b2", 0.758_790_285),
+            ],
+        );
+        check(
+            &bjt_latch("", "OFF"),
+            &[
+                ("c1", 0.073_157_863),
+                ("c2", 4.614_435_472),
+                ("b1", 0.758_790_285),
+                ("b2", 0.073_157_908),
+            ],
+        );
+
+        // MOSFET latch, with `off` after the geometry, and a diode whose
+        // operating point is unique whatever its flag says.
+        check(
+            &mos_latch("", "", ""),
+            &[
+                ("d1", 1.529_067_450),
+                ("d2", 1.529_067_450),
+                ("dx", 2.553_076_198),
+            ],
+        );
+        let held = check(
+            &mos_latch("off", "", "off"),
+            &[
+                ("d1", 3.299_999_967),
+                ("d2", 0.245_402_665),
+                ("dx", 2.553_076_198),
+            ],
+        );
+        check(
+            &mos_latch("", "off", ""),
+            &[
+                ("d1", 0.245_402_665),
+                ("d2", 3.299_999_967),
+                ("dx", 2.553_076_198),
+            ],
+        );
+        let free = build(&mos_latch("off", "", ""));
+        let dx = free.circuit().node("dx").expect("node exists");
+        assert_eq!(
+            held.node_voltage(dx),
+            free.node_voltage(dx),
+            "`off` on a diode with one operating point must not move it"
+        );
+
+        // The flag stands anywhere among the options.
+        let placed = build(
+            "V1 a 0 dc 5\nR1 a c 1k\nRb a b 100k\nQ1 c b 0 QN off 2 temp=27\n\
+             J1 a b 0 JN off\n.model QN NPN(IS=1e-15 BF=100)\n.model JN NJF(VTO=-2 BETA=1m)\n",
+        );
+        assert!(placed.circuit().bjts[0].off && placed.circuit().jfets[0].off);
+        assert_eq!(
+            placed.circuit().bjts[0].model.is,
+            2e-15,
+            "area must survive `off`"
+        );
+        // Instance `ic=` sits beside `off`; it only acts under `uic` (see the
+        // `tran_uic_*` tests), so here it is stored and nothing else.
+        let seeded = parse_netlist("V1 a 0 1\nD1 a 0 DX off ic=0.7\n.model DX D(IS=1e-14)\n")
+            .expect("diode ic= parses");
+        assert_eq!(seeded.diodes[0].ic, Some(0.7));
+        assert!(seeded.diodes[0].off);
+    }
+
+    /// `PTF` delays the forward transport current by Weil's second-order
+    /// Bessel filter with group delay `td = PTF·π/180·TF`, as ngspice-42's
+    /// `bjtload.c` discretises it. A 0.6 → 0.75 V base step reaches each
+    /// collector source; ngspice-42 was run on the same deck with
+    /// `tran 1p 16n 0 1p`, `reltol=1e-6` and `linearize`.
+    /// - QA: plain card, td = 1.047 ns.
+    /// - QB: `VAF`/`VAR`/`IKF`/`NKF`, so `qb` and its slopes enter `cc`.
+    /// - QP: PNP, td = 1.571 ns.
+    /// - QT: `TTF1` at 80 °C. The delay still uses the card `TF`.
+    /// - Q0: no `PTF`, so the collector follows the base in one step.
+    #[test]
+    fn bjt_ptf_excess_phase_delays_transport_current_as_ngspice() {
+        let deck =
+            "VB b 0 PULSE(0.6 0.75 10n 1p 1p 1 2)\nVBP bp 0 PULSE(-0.6 -0.75 10n 1p 1p 1 2)\n\
+            VC1 c1 0 dc 3\nVC2 c2 0 dc 3\nVC3 c3 0 dc -3\nVC4 c4 0 dc 3\nVC5 c5 0 dc 3\n\
+            Q1 c1 b 0 QA temp=27\nQ2 c2 b 0 QB temp=27\nQ3 c3 bp 0 QP temp=27\n\
+            Q4 c4 b 0 QT temp=80\nQ5 c5 b 0 Q0 temp=27\n\
+            .model QA NPN(IS=1e-15 BF=100 TF=1n PTF=60)\n\
+            .model QB NPN(IS=1e-15 BF=100 VAF=20 VAR=30 IKF=2m NKF=0.6 TF=1n PTF=90)\n\
+            .model QP PNP(IS=2e-15 BF=60 TF=2n PTF=45)\n\
+            .model QT NPN(IS=1e-15 BF=100 TF=1n TTF1=0.02 PTF=60)\n\
+            .model Q0 NPN(IS=1e-15 BF=100 TF=1n)\n";
+        let sources = ["VC1", "VC2", "VC3", "VC4", "VC5"];
+        // ngspice-42 collector current per row (out of each collector
+        // source), in the order of `sources`.
+        #[rustfmt::skip]
+        let ngspice: [(f64, [f64; 5]); 10] = [
+            (10.25e-9, [2.7405389964e-04, 7.1195896462e-05, -2.7613481350e-04, 3.8075603253e-03, 3.9188005821e-03]),
+            (10.50e-9, [8.4037326339e-04, 2.1192290728e-04, -8.8634216123e-04, 1.1225447208e-02, 3.9188005821e-03]),
+            (10.75e-9, [1.4872620469e-03, 3.9539303230e-04, -1.6819473247e-03, 1.9698407858e-02, 3.9188005821e-03]),
+            (11.00e-9, [2.0957624822e-03, 5.9437676107e-04, -2.5448542583e-03, 2.7668446833e-02, 3.9188005821e-03]),
+            (11.50e-9, [3.0218999080e-03, 9.7448862605e-04, -4.1932772962e-03, 3.9798707158e-02, 3.9188005821e-03]),
+            (12.00e-9, [3.5512450810e-03, 1.2811655117e-03, -5.5232623653e-03, 4.6731833759e-02, 3.9188005821e-03]),
+            (12.50e-9, [3.8039632237e-03, 1.5010526835e-03, -6.4768733654e-03, 5.0041792980e-02, 3.9188005821e-03]),
+            (13.00e-9, [3.9037849214e-03, 1.6455704740e-03, -7.1036276005e-03, 5.1349186018e-02, 3.9188005821e-03]),
+            (14.00e-9, [3.9349141180e-03, 1.7828607547e-03, -7.6990456377e-03, 5.1756876643e-02, 3.9188005821e-03]),
+            (16.00e-9, [3.9198493393e-03, 1.8222442872e-03, -7.8698572206e-03, 5.1559559665e-02, 3.9188005821e-03]),
+        ];
+        // Fixed 5 ps steps against ngspice's 1 ps ones agree within 0.1 %
+        // of each final current; the bound is 0.2 %.
+        let h: f64 = 5e-12;
+        let edge = (10e-9 / h).round() as u64;
+        let mut solver = build(deck);
+        let mut step = 0_u64;
+        let mut before = 0.0;
+        let mut trajectory = Vec::new();
+        for (time, expected) in ngspice {
+            let target = (time / h).round() as u64;
+            while step < target {
+                solver.advance(h).expect("PTF transient step solves");
+                step += 1;
+                let current = source_current(&solver, "VC1");
+                if step == edge {
+                    before = current;
+                } else if step > edge {
+                    trajectory.push((step as f64 * h - 10e-9, current));
+                }
+            }
+            for (column, name) in sources.iter().enumerate() {
+                let got = source_current(&solver, name);
+                let final_value = ngspice[9].1[column];
+                assert!(
+                    (got - expected[column]).abs() < 2e-3 * final_value.abs(),
+                    "{name} at {time:e} s: ngspice-42 {} A, got {got} A",
+                    expected[column]
+                );
+            }
+        }
+
+        // The continuous law behind the recursion is td²/3·y'' + td·y' + y = x.
+        // Its step response is 1 − e^(−αt)·(cos βt + α/β·sin βt), with
+        // α = 1.5/td and β = √3/(2·td): 0.43 % overshoot, then settled.
+        let td = 60.0 * std::f64::consts::PI / 180.0 * 1e-9;
+        let (alpha, beta) = (1.5 / td, 3f64.sqrt() / (2.0 * td));
+        let after = ngspice[9].1[0];
+        let mut peak = 0.0_f64;
+        for (t, current) in trajectory {
+            let response =
+                1.0 - (-alpha * t).exp() * ((beta * t).cos() + alpha / beta * (beta * t).sin());
+            let expected = before + (after - before) * response;
+            assert!(
+                (current - expected).abs() < 3e-3 * after,
+                "QA {t:e} s after the edge: Bessel step {expected} A, got {current} A"
+            );
+            peak = peak.max(current);
+        }
+        assert!(
+            peak > after * 1.003,
+            "Weil's filter overshoots its final value"
+        );
+    }
+
+    /// `PTF` is an angle; a negative or non-finite one has no delay to model.
+    #[test]
+    fn bjt_ptf_must_be_finite_and_non_negative() {
+        for card in ["PTF=-10", "PTF=inf"] {
+            let error = parse_netlist(&format!(
+                "V1 c 0 3\nV2 b 0 0.7\nQ1 c b 0 QX\n.model QX NPN(IS=1e-15 TF=1n {card})\n"
+            ))
+            .expect_err("PTF must be refused")
+            .to_string();
+            assert!(error.contains("PTF"), "unexpected error {error}");
+        }
+    }
+
+    /// The BJT temperature laws ngspice-42 `bjttemp.c` applies beyond
+    /// `XTI`/`XTB`: `TLEV` 0/1/3, `TBF`/`TBR` beta polynomials, the
+    /// `TIS`/`TISE`/`TISC` power law of `TLEV=3` (applied before `AREA`), and
+    /// the `TIKF`/`TIKR`/`TVAF`/`TVAR`/`TNF`/`TNR`/`TNE`/`TNC` polynomials.
+    /// Every device sits at 80 °C with pinned terminals; each coefficient card
+    /// has a twin without it, so a dropped coefficient fails by percents.
+    #[test]
+    fn bjt_tlev_and_temperature_coefficients_match_ngspice() {
+        let card = "IS=1e-15 BF=100 BR=3 ISE=1e-13 NE=1.6 ISC=1e-13 NC=1.8";
+        let deck = format!(
+            "VBP bp 0 dc -0.7\nVBR br 0 dc 0.6\nVBR0 br0 0 dc 0.6\n\
+             VB1 b1 0 dc 0.7\nVB2 b2 0 dc 0.7\nVB3 b3 0 dc 0.7\nVB4 b4 0 dc 0.7\n\
+             VB5 b5 0 dc 0.7\nVB6 b6 0 dc 0.7\nVB7 b7 0 dc 0.7\nVB8 b8 0 dc 0.7\n\
+             VC1 c1 0 dc 2\nVC2 c2 0 dc 2\nVC3 c3 0 dc 2\nVC4 c4 0 dc 2\n\
+             VC5 c5 0 dc 2\nVC6 c6 0 dc 2\nVC7 c7 0 dc 2\nVC8 c8 0 dc 2\n\
+             VCP cp 0 dc -2\nVE9 e9 0 dc 1\nVE0 e0 0 dc 1\n\
+             Q1 c1 b1 0 QB temp=80\nQ2 c2 b2 0 QL1 temp=80\nQ3 c3 b3 0 QL3 2 temp=80\n\
+             Q4 c4 b4 0 QN temp=80\nQ5 c5 b5 0 Q0 temp=80\nQ6 c6 b6 0 QL0X temp=80\n\
+             Q7 c7 b7 0 QL1X temp=80\nQ8 c8 b8 0 QL3X 2 temp=80\nQP cp bp 0 QPT temp=80\n\
+             Q9 0 br e9 QR temp=80\nQ10 0 br0 e0 Q0R temp=80\n\
+             .model QB NPN({card} XTB=1.5 TBF1=5e-3 TBF2=2e-5 TBR1=-4e-3)\n\
+             .model QL1 NPN({card} XTB=0.01 TLEV=1)\n\
+             .model QL3 NPN({card} TLEV=3 TIS1=-2e-3 TIS2=1e-6 TISE1=-1e-3 TISC1=-1.5e-3)\n\
+             .model QN NPN({card} VAF=30 IKF=5m TVAF1=-3e-3 TIKF1=-4e-3 TIKF2=1e-5 \
+             TNF1=1e-3 TNE1=-2e-3 TNC1=2e-3)\n\
+             .model Q0 NPN({card} VAF=30 IKF=5m)\n\
+             .model QL0X NPN({card} XTB=1.5)\n\
+             .model QL1X NPN({card} XTB=1.5 TLEV=1)\n\
+             .model QL3X NPN({card} XTB=1.5 TLEV=3)\n\
+             .model QPT PNP(IS=2e-15 BF=60 BR=2 ISE=5e-14 NE=1.5 TLEV=3 TIS1=-1.8e-3 \
+             TISE1=-8e-4 TBF1=4e-3 TBF2=-1e-5)\n\
+             .model QR NPN(IS=1e-15 BF=100 BR=3 VAR=8 IKR=2m TVAR1=5e-3 TIKR1=-3e-3 \
+             TNR1=2e-3 TBR1=6e-3)\n\
+             .model Q0R NPN(IS=1e-15 BF=100 BR=3 VAR=8 IKR=2m)\n"
+        );
+        // ngspice-42 `op` (reltol=1e-9): current out of each source's `+`
+        // terminal, as `(source, amps)`.
+        #[rustfmt::skip]
+        let ngspice = [
+            ("VC1", 9.9688910282e-03), ("VB1", 8.5882966681e-05),
+            ("VC2", 9.9688910274e-03), ("VB2", 7.3855011776e-05),
+            ("VC3", 6.8952166253e-04), ("VB3", 8.6074465924e-06),
+            ("VC4", 2.1829459512e-03), ("VB4", 1.0450942253e-04),
+            ("VC5", 5.2058401739e-03), ("VB5", 1.1299816834e-04),
+            ("VC6", 9.9688910280e-03), ("VB6", 8.8540120517e-05),
+            ("VC7", 9.9688910242e-03), ("VB7", 1.4037033620e-06),
+            ("VC8", 1.9529134175e-05), ("VB8", 5.4568947472e-07),
+            ("VCP", -4.93133664066e-04), ("VBP", -7.77911669879e-06),
+            ("VE9", 5.6738337583e-05), ("VBR", 1.4251932582e-05),
+            ("VE0", 3.3732513447e-04), ("VBR0", 1.2428889286e-04),
+        ];
+        let solver = build(&deck);
+        for (name, expected) in ngspice {
+            let got = source_current(&solver, name);
+            assert!(
+                relative(got, expected) < 1e-4,
+                "{name}: ngspice-42 {expected} A, got {got} A"
+            );
+        }
+        // Each coefficient moves its device well beyond that bound: TBF
+        // against plain XTB (VB1/VB6), TLEV=1 against TLEV=0 (VB7/VB6),
+        // TLEV=3 against TLEV=0 (VC8/VC6), the forward and reverse
+        // polynomials against their bare twins (VC4/VC5, VE9/VE0).
+        for (with, without) in [
+            ("VB1", "VB6"),
+            ("VB7", "VB6"),
+            ("VC8", "VC6"),
+            ("VC4", "VC5"),
+            ("VE9", "VE0"),
+        ] {
+            let (a, b) = (
+                source_current(&solver, with),
+                source_current(&solver, without),
+            );
+            assert!(relative(a, b) > 0.03, "{with} {a} A vs {without} {b} A");
+        }
+    }
+
+    /// `TITF1` scales `ITF`, which only shapes the forward diffusion charge,
+    /// so the proof is the base current a ramped `VBE` draws while charging.
+    /// `QX` drops `ITF` to pin `VTF` alone: SPICE2 and ngspice-42 scale `VBC`
+    /// by 1.44·VTF, and the plain-`VTF` form this engine used before was 19 %
+    /// low on `QX` at 9 ns.
+    #[test]
+    fn bjt_titf_and_vtf_shape_diffusion_charge_current_as_ngspice() {
+        let deck = "VB b 0 PULSE(0.5 0.65 1n 10n 1n 100n 200n)\n\
+            VB0 b0 0 PULSE(0.5 0.65 1n 10n 1n 100n 200n)\n\
+            VBX bx 0 PULSE(0.5 0.65 1n 10n 1n 100n 200n)\n\
+            VC c 0 dc 3\nVC0 c0 0 dc 3\n\
+            Q1 c b 0 QI temp=80\nQ2 c0 b0 0 Q0 temp=80\nQ3 c bx 0 QX temp=80\n\
+            .model QI NPN(IS=1e-15 BF=100 TF=1n XTF=4 VTF=2 ITF=20m TITF1=-8e-3)\n\
+            .model Q0 NPN(IS=1e-15 BF=100 TF=1n XTF=4 VTF=2 ITF=20m)\n\
+            .model QX NPN(IS=1e-15 BF=100 TF=1n XTF=4 VTF=2)\n";
+        let sources = ["VB", "VB0", "VBX"];
+        // ngspice-42 `tran 1p` (trap, reltol=1e-9): base currents out of
+        // each base source, amps, in the order of `sources`.
+        #[rustfmt::skip]
+        let ngspice: [(f64, [f64; 3]); 5] = [
+            (3e-9, [1.8797193131e-05, 1.8796538126e-05, 5.0382944381e-05]),
+            (5e-9, [5.0391887316e-05, 5.0379368678e-05, 1.3591057127e-04]),
+            (7e-9, [1.3535010294e-04, 1.3511767074e-04, 3.6663499013e-04]),
+            (9e-9, [3.6799211618e-04, 3.6398903998e-04, 9.8906660538e-04]),
+            (10.5e-9, [8.0651909680e-04, 7.7625612911e-04, 2.0819794709e-03]),
+        ];
+        // Backward Euler at 2 ps stays within 0.1 % of ngspice's 1 ps
+        // trapezoidal run on this 10 ns ramp; the bound is 0.2 %.
+        let h: f64 = 2e-12;
+        let mut solver = build(deck);
+        let mut step = 0_u64;
+        for (time, expected) in ngspice {
+            let target = (time / h).round() as u64;
+            while step < target {
+                solver.advance(h).expect("TITF/VTF transient step solves");
+                step += 1;
+            }
+            for (column, name) in sources.iter().enumerate() {
+                let got = source_current(&solver, name);
+                assert!(
+                    relative(got, expected[column]) < 2e-3,
+                    "{name} at {time:e} s: ngspice-42 {} A, got {got} A",
+                    expected[column]
+                );
+            }
+        }
+        // At 10.5 ns the coefficient is worth 3.9 % of the base current.
+        let (with, without) = (
+            source_current(&solver, "VB"),
+            source_current(&solver, "VB0"),
+        );
+        assert!(
+            relative(with, without) > 0.03,
+            "TITF1 moved nothing: {with} vs {without}"
+        );
+    }
+
+    /// `IBE`/`IBC` replace `IS` in the B-E and B-C junction currents when
+    /// both are given (ngspice-42 `bjttemp.c`/`bjtload.c`): forward, reverse,
+    /// saturated, `AREA`, PNP, the `IS·exp(factlog/NF)` and `/NR`
+    /// temperature law and the `TLEV=3` power law. `IBE` alone is ignored,
+    /// so `Q7` equals its plain twin `Q8` in ngspice and here.
+    #[test]
+    fn bjt_ibe_ibc_split_saturation_currents_match_ngspice() {
+        let deck = "VB1 b1 0 dc 0.7\nVC1 c1 0 dc 2\nVB2 b2 0 dc 0.75\nVC2 c2 0 dc 0.2\n\
+            VB3 b3 0 dc 0.65\nVE3 e3 0 dc 2\nVB4 b4 0 dc 0.7\nVC4 c4 0 dc 0.3\n\
+            VB5 b5 0 dc 0.7\nVC5 c5 0 dc 0.3\nVB6 b6 0 dc 0.7\nVC6 c6 0 dc 0.3\n\
+            VB7 b7 0 dc 0.7\nVC7 c7 0 dc 2\nVB8 b8 0 dc 0.7\nVC8 c8 0 dc 2\n\
+            VBP bp 0 dc -0.72\nVCP cp 0 dc -0.25\n\
+            Q1 c1 b1 0 QS temp=27\nQ2 c2 b2 0 QS temp=27\nQ3 0 b3 e3 QS temp=27\n\
+            Q4 c4 b4 0 QT temp=80\nQ5 c5 b5 0 QS 2 temp=27\nQ6 c6 b6 0 Q3 temp=80\n\
+            Q7 c7 b7 0 QHALF temp=27\nQ8 c8 b8 0 QPLAIN temp=27\nQP cp bp 0 QPS temp=27\n\
+            .model QS NPN(IS=1e-15 IBE=2e-15 IBC=6e-17 BF=100 BR=3 VAF=30 VAR=8 IKF=5m \
+            IKR=2m ISE=1e-14 NE=1.6 ISC=1e-14 NC=1.8)\n\
+            .model QT NPN(IS=1e-15 IBE=2e-15 IBC=6e-17 BF=100 BR=3 NF=1.04 NR=1.1 \
+            ISE=1e-14 NE=1.6 XTB=1.5)\n\
+            .model Q3 NPN(IS=1e-15 IBE=2e-15 IBC=6e-17 BF=100 BR=3 TLEV=3 TIS1=-2e-3 \
+            TIS2=1e-6)\n\
+            .model QHALF NPN(IS=1e-15 IBE=2e-15 BF=100 BR=3)\n\
+            .model QPLAIN NPN(IS=1e-15 BF=100 BR=3)\n\
+            .model QPS PNP(IS=2e-15 IBE=1e-15 IBC=8e-16 BF=60 BR=2 VAF=40 IKF=10m)\n";
+        // ngspice-42 `op` (reltol=1e-9, numdgt=11): current out of each
+        // source's `+` terminal, amps.
+        #[rustfmt::skip]
+        let ngspice = [
+            ("VB1", 1.1562515635e-05), ("VC1", 9.1051299597e-04),
+            ("VB2", 7.9154261470e-05), ("VC2", 3.7653278813e-03),
+            ("VB3", 1.6525229864e-06), ("VE3", 5.6330984343e-06),
+            ("VB4", 5.0452207776e-05), ("VC4", 6.3056295071e-03),
+            ("VB5", 2.3125349466e-05), ("VC5", 1.7130653428e-03),
+            ("VB6", 6.4197339584e-06), ("VC6", 6.4192312264e-04),
+            ("VB7", 5.6703461711e-06), ("VC7", 5.6703468044e-04),
+            ("VB8", 5.6703461711e-06), ("VC8", 5.6703468044e-04),
+            ("VBP", -2.05086201032e-05), ("VCP", -1.09317935528e-03),
+        ];
+        let solver = build(deck);
+        for (name, expected) in ngspice {
+            let got = source_current(&solver, name);
+            assert!(
+                relative(got, expected) < 1e-4,
+                "{name}: ngspice-42 {expected} A, got {got} A"
+            );
+        }
+        // The split currents move every bias point well beyond that bound:
+        // the same card with `IS` alone gives a different device.
+        let plain = build(
+            &deck
+                .replace(" IBE=2e-15 IBC=6e-17", "")
+                .replace(" IBE=1e-15 IBC=8e-16", ""),
+        );
+        for name in ["VC1", "VB2", "VE3", "VC4", "VC5", "VC6", "VCP"] {
+            let (a, b) = (source_current(&solver, name), source_current(&plain, name));
+            assert!(relative(a, b) > 0.03, "{name}: IBE/IBC {a} A vs IS {b} A");
+        }
+    }
+
+    /// The transit charges `TF·cbe` and `TR·cbc` follow `IBE`/`IBC`, so a
+    /// saturating base ramp draws more charging current than the `IS` twin.
+    #[test]
+    fn bjt_ibe_ibc_drive_transit_charge_as_ngspice() {
+        let deck = "VB b 0 PULSE(0.55 0.75 1n 10n 1n 100n 200n)\nVC c 0 dc 0.3\n\
+            VB0 b0 0 PULSE(0.55 0.75 1n 10n 1n 100n 200n)\nVC0 c0 0 dc 0.3\n\
+            Q1 c b 0 QS temp=27\nQ2 c0 b0 0 Q0 temp=27\n\
+            .model QS NPN(IS=1e-15 IBE=2e-15 IBC=6e-17 BF=100 BR=3 TF=1n TR=20n XTF=2 \
+            ITF=10m)\n\
+            .model Q0 NPN(IS=1e-15 BF=100 BR=3 TF=1n TR=20n XTF=2 ITF=10m)\n";
+        // ngspice-42 `tran 1p` (trap, reltol=1e-9), linearised: currents
+        // out of each source, amps.
+        #[rustfmt::skip]
+        let ngspice: [(f64, [(&str, f64); 2]); 3] = [
+            (4e-9, [("VB", 2.7377525579e-05), ("VB0", 1.3690486279e-05)]),
+            (7e-9, [("VB", 2.8039388333e-04), ("VB0", 1.3952055910e-04)]),
+            (10e-9, [("VB", 3.8075629008e-03), ("VC", 3.6171269850e-03)]),
+        ];
+        let h: f64 = 2e-12;
+        let mut solver = build(deck);
+        let mut step = 0_u64;
+        for (time, expected) in ngspice {
+            let target = (time / h).round() as u64;
+            while step < target {
+                solver.advance(h).expect("IBE/IBC transient step solves");
+                step += 1;
+            }
+            for (name, value) in expected {
+                let got = source_current(&solver, name);
+                assert!(
+                    relative(got, value) < 2e-3,
+                    "{name} at {time:e} s: ngspice-42 {value} A, got {got} A"
+                );
+            }
+        }
+        let (with, without) = (
+            source_current(&solver, "VB"),
+            source_current(&solver, "VB0"),
+        );
+        assert!(
+            relative(with, without) > 0.5,
+            "IBE/IBC moved nothing: {with} vs {without}"
+        );
+    }
+
+    /// `IBE`/`IBC` must be positive currents.
+    #[test]
+    fn bjt_ibe_ibc_must_be_positive() {
+        let error = parse_netlist(
+            "V1 c 0 3\nV2 b 0 0.7\nQ1 c b 0 QX\n.model QX NPN(IS=1e-15 IBE=0 IBC=1e-16)\n",
+        )
+        .expect_err("IBE=0 must be refused")
+        .to_string();
+        assert!(error.contains("IBE"), "unexpected error {error}");
+    }
+
+    /// `TLEV` 2 does not exist in ngspice-42 `bjttemp.c` (no saturation
+    /// current would be set), so the card refuses it.
+    #[test]
+    fn bjt_tlev_must_be_0_1_or_3() {
+        let error =
+            parse_netlist("V1 c 0 3\nV2 b 0 0.7\nQ1 c b 0 QX\n.model QX NPN(IS=1e-15 TLEV=2)\n")
+                .expect_err("TLEV=2 must be refused")
+                .to_string();
+        assert!(error.contains("TLEV"), "unexpected error {error}");
     }
 }

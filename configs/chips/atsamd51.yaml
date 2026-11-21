@@ -19,6 +19,13 @@ name: "atsamd51j19a"
 arch: "arm"
 core: "cortex-m4"
 cpu_hz: 120_000_000
+# DS60001507 (SAM D5x/E5x family), Table 54-12 I/O Pins Common Characteristics,
+# VDD = 1.71-3.6 V: VIL max 0.3*VDD and VIH min 0.7*VDD. 3.3 V is the board rail.
+# https://ww1.microchip.com/downloads/aemDocuments/documents/MCU32/ProductDocuments/DataSheets/SAM-D5x-E5x-Family-Data-Sheet-DS60001507.pdf
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
 flash:
   base: 0x00000000
   size: "512KB"

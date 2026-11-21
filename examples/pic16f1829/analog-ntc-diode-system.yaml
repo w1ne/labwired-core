@@ -1,8 +1,11 @@
-# Generic Beta NTC divider and Shockley diode for the PIC16F1829 Curiosity
-# profile. These route to simulation-only threshold endpoints; PIC16 PORTA
-# external pin sampling and ADC conversion are not modeled yet.
+# Generic Beta NTC divider and Shockley diode for the PIC16F1829 on the
+# Curiosity board (DM164137). The NTC divider is on RC0/AN4, the net the
+# board's POT1 wiper drives (DS40001804B Figure A-1), and the diode on RC2/AN6;
+# the 10-bit ADC converts both against VDD (ADCON1 ADPREF = 00).
 name: "pic16f1829-curiosity-analog"
 chip: "../../configs/chips/pic16f1829.yaml"
+# 16 MHz HFINTOSC = 4 MIPS (Fosc/4).
+cpu_hz: 4000000
 external_devices: []
 board_io: []
 cosim_models:
@@ -12,7 +15,7 @@ cosim_models:
     inputs:
       temperature: "ui.ntc.temperature_c"
     outputs:
-      v_sense: "board.gpio_in.analog_inputs.0"
+      v_sense: "board.analog.RC0_volts"
     config:
       netlist_text: |
         Vcc vcc 0 dc 5.0
@@ -27,7 +30,7 @@ cosim_models:
     adapter: "analog"
     step_ns: 1000
     outputs:
-      v_diode: "board.gpio_in.analog_inputs.1"
+      v_diode: "board.analog.RC2_volts"
     config:
       netlist_text: |
         Vcc supply 0 dc 5.0

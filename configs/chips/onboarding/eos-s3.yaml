@@ -13,6 +13,16 @@ ram:
   base: 1073803264
   size: 4096B
 peripherals:
+# EOS S3 GPIO 0..7 input: EOSS3_IntrCtrl's "misc" region at 0x4000_5100
+# (Renode platforms/cpus/eos-s3.repl), IO_INPUT @+0x0. The import dropped
+# that multi-region registration, so no GPIO reached this profile.
+- id: io_in
+  type: declarative
+  bus: sysbus
+  base_address: 1073762560
+  size: 4B
+  config:
+    path: ../../peripherals/eoss3/io_in.yaml
 - id: uart
   type: pl011
   bus: sysbus
@@ -25,8 +35,10 @@ peripherals:
   type: eoss3_simpleperiodictimer
   bus: sysbus
   base_address: 1073765376
+# EOS S3 ADC ("JTM", AON_PERIPH_BASE + 0x5A00, qorc-sdk eoss3_dev.h):
+# OUT/STATUS/CONTROL, two channels, 12 bits against 1.4 V.
 - id: adc
-  type: stub
+  type: eoss3_adc
   renode_type: eoss3_adc
   bus: sysbus
   base_address: 1073764864

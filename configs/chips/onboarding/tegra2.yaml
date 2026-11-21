@@ -13,6 +13,60 @@ ram:
   base: 536870912
   size: 536870912B
 peripherals:
+# Renode's tegra2 platform declares no GPIO. The controller sits at
+# 0x6000_D000 with four 8-pin ports per bank at a 0x80 bank stride;
+# port p of bank b has CNF/OE/OUT/IN at 0x6000_D000 + 0x80*b + 4*p
+# + 0x00/0x10/0x20/0x30 (Linux gpio-tegra.c, tegra20.dtsi gpio@6000d000).
+# One window per bank declares its port 0; ports 1..3 are not declared.
+- id: gpioA
+  type: declarative
+  bus: sysbus
+  base_address: 1610665984
+  size: 52B
+  config:
+    path: ../../peripherals/tegra/gpio.yaml
+- id: gpioE
+  type: declarative
+  bus: sysbus
+  base_address: 1610666112
+  size: 52B
+  config:
+    path: ../../peripherals/tegra/gpio.yaml
+- id: gpioI
+  type: declarative
+  bus: sysbus
+  base_address: 1610666240
+  size: 52B
+  config:
+    path: ../../peripherals/tegra/gpio.yaml
+- id: gpioM
+  type: declarative
+  bus: sysbus
+  base_address: 1610666368
+  size: 52B
+  config:
+    path: ../../peripherals/tegra/gpio.yaml
+- id: gpioQ
+  type: declarative
+  bus: sysbus
+  base_address: 1610666496
+  size: 52B
+  config:
+    path: ../../peripherals/tegra/gpio.yaml
+- id: gpioU
+  type: declarative
+  bus: sysbus
+  base_address: 1610666624
+  size: 52B
+  config:
+    path: ../../peripherals/tegra/gpio.yaml
+- id: gpioY
+  type: declarative
+  bus: sysbus
+  base_address: 1610666752
+  size: 52B
+  config:
+    path: ../../peripherals/tegra/gpio.yaml
 - id: uart0
   type: ns16550
   bus: sysbus

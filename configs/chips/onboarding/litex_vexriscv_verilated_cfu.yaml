@@ -6,8 +6,22 @@ flash:
 ram:
   base: 268435456
   size: 262144B
+# Simulation-only co-simulation endpoint. This imported LiteX/CFU profile
+# has no modeled GPIO fabric or ADC; these channels are not physical pads or
+# firmware-visible registers.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
 peripherals:
 - id: cfu0
   type: cosimulatedcfu
   bus: cpu
   base_address: 0
+- id: cosim_inputs
+  type: input_pin_bank
+  bus: sysbus
+  base_address: 0xF0000000
+  size: 4KB
+  config:
+    pin_count: 2

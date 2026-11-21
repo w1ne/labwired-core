@@ -1,0 +1,48 @@
+# Generic level-1 PJF gate-junction depletion charge on PA4/PA5, routed
+# through STM32F407 ADC1_IN4/IN5. The charged branch is paired with an
+# otherwise matched zero-charge control.
+name: "nucleo-f407-pjfet-gate-charge-adc"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "pjfet_gate_charge"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      drive_voltage: "ui.pjfet_gate.drive_v"
+    outputs:
+      gate_voltage: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Vdrain drain 0 dc 0
+        Vsource source 0 dc 0
+        Rgate drive gate 1k
+        J1 drain gate source PJF_CAP
+        .model PJF_CAP PJF(VTO=2 BETA=500u IS=1e-30 CGS=1n CGD=1n PB=1 FC=0.5)
+      probes:
+        gate_voltage: "v(gate)"
+      sources:
+        drive_voltage: "Vdrive"
+      vdd: 3.3
+  - id: "pjfet_gate_no_charge_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      drive_voltage: "ui.pjfet_gate.drive_v"
+    outputs:
+      gate_voltage: "board.analog.pa5_volts"
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Vdrain drain 0 dc 0
+        Vsource source 0 dc 0
+        Rgate drive gate 1k
+        J1 drain gate source PJF_REF
+        .model PJF_REF PJF(VTO=2 BETA=500u IS=1e-30 PB=1 FC=0.5)
+      probes:
+        gate_voltage: "v(gate)"
+      sources:
+        drive_voltage: "Vdrive"
+      vdd: 3.3

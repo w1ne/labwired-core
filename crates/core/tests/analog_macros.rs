@@ -122,11 +122,7 @@ mod analog {
             "{error}"
         );
 
-        for line in [
-            "E1 a 0 POLY(1) b 0 0 1",
-            "G1 a 0 VALUE={V(b)*2}",
-            "H1 a 0 TABLE {x}",
-        ] {
+        for line in ["E1 a 0 FREQ V(b) 1", "H1 a 0 TABLE {x}"] {
             let error = parse_netlist(&format!("{line}\n")).unwrap_err();
             assert!(
                 matches!(error, AnalogError::Unsupported { .. }),
@@ -1076,12 +1072,16 @@ mod analog {
         );
     }
 
-    const OPAMP_HASH: u64 = 0x434d_e1ed_0fe0_c115;
+    // Re-pinned for the ngspice reverse junction laws: a diode without `BV`
+    // (the op-amp clamps) follows the cubic form below −3·N·Vt, and a MOSFET
+    // bulk junction (the comparator's open-collector output) holds −IS there.
+    // The zener has `BV` and keeps its three-region equation and its hash.
+    const OPAMP_HASH: u64 = 0x41b1_0902_b382_2d61;
     const ZENER_HASH: u64 = 0x272a_2e74_684b_dc23;
-    // The comparator's open-collector MOSFET now includes its reverse-biased
+    // The comparator's open-collector MOSFET includes its reverse-biased
     // bulk-drain junction, so the Schmitt output trajectory includes that
-    // junction's IS + GMIN leakage. The op-amp and zener hashes are unchanged.
-    const SCHMITT_HASH: u64 = 0xbad1_3c95_8766_f606;
+    // junction's leakage.
+    const SCHMITT_HASH: u64 = 0xcb3e_5a2f_c3aa_5851;
 
     // -----------------------------------------------------------------------
     // Regulators

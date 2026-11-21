@@ -1,0 +1,63 @@
+# Generic BJT substrate junctions route through nRF5340-DK SAADC channels 2-4.
+# A substrate lifted above a vertical NPN's collector, or a lateral PNP's
+# base, forward-biases the ISS/NS junction and lifts the loaded terminal.
+# The control has the same fourth node but no ISS, so only GMIN crosses it.
+name: "nrf5340dk-analog-bjt-substrate"
+chip: "../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_substrate_vertical_npn"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_drive: "ui.bjt_substrate.substrate_v"
+    outputs:
+      collector_voltage: "adc.saadc.2_volts"
+    config:
+      netlist_text: |
+        Vsub substrate 0 dc 0
+        Rload collector 0 100k
+        Q1 collector 0 0 substrate NPN_SUBSTRATE
+        .model NPN_SUBSTRATE NPN(IS=1e-16 BF=80 ISS=1e-15 NS=1.2 CJS=2p VJS=0.6 MJS=0.4)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        substrate_drive: "Vsub"
+      vdd: 3.3
+  - id: "bjt_substrate_lateral_pnp"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_drive: "ui.bjt_substrate.substrate_v"
+    outputs:
+      base_voltage: "adc.saadc.3_volts"
+    config:
+      netlist_text: |
+        Vsub substrate 0 dc 0
+        Rload base 0 100k
+        Q1 0 base 0 substrate PNP_SUBSTRATE
+        .model PNP_SUBSTRATE PNP(IS=1e-16 BF=50 ISS=2e-15 NS=1.0 CJS=3p)
+      probes:
+        base_voltage: "v(base)"
+      sources:
+        substrate_drive: "Vsub"
+      vdd: 3.3
+  - id: "bjt_substrate_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_drive: "ui.bjt_substrate.substrate_v"
+    outputs:
+      collector_voltage: "adc.saadc.4_volts"
+    config:
+      netlist_text: |
+        Vsub substrate 0 dc 0
+        Rload collector 0 100k
+        Q1 collector 0 0 substrate NPN_NO_ISS
+        .model NPN_NO_ISS NPN(IS=1e-16 BF=80 CJS=2p VJS=0.6 MJS=0.4)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        substrate_drive: "Vsub"
+      vdd: 3.3

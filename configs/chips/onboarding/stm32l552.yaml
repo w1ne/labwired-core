@@ -6,6 +6,7 @@
 
 name: stm32l552
 arch: arm
+core: cortex-m33
 flash:
   base: 134217728
   size: 524288B
@@ -133,3 +134,14 @@ peripherals:
   type: stm32_timer
   bus: sysbus
   base_address: 1073825792
+# ADC1 on the shared L4-class model, as on ramn (same STM32L552 die): ST CMSIS
+# stm32l552xx.h (cmsis-device-l5) keeps the L4 bit layout, ADC1_BASE_NS =
+# AHB2PERIPH_BASE_NS + 0x8000 = 0x42028000, ADC1_2_IRQn = 37 (also
+# configs/chips/stm32l552.yaml and Zephyr stm32l5.dtsi adc1). Renode's
+# stm32l552.repl leaves it out; ramn's import declares it at the same base.
+- id: adc1
+  type: stm32l5_adc
+  base_address: 1107460096  # 0x42028000
+  irq: 37
+  config:
+    profile: stm32l4

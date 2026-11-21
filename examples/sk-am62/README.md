@@ -27,11 +27,17 @@ examples/sk-am62/ci/test.sh
 Rebuild the fixtures (byte-identical): `crates/firmware-sk-am62-zephyr/build.sh`.
 
 The generic mixed-signal fixture [`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml)
-routes a Beta NTC divider and a Shockley diode through two simulation-only input endpoints.
-`cosim_sk_am62_analog.rs` asserts their solved voltages and thresholded levels, including NTC
-hysteresis. These endpoints do not model AM6234 GPIO registers, physical pad routing, ADC
-conversion, or silicon threshold specifications.
+puts a Beta NTC divider and a Shockley diode on two pads of the 40-pin user expansion
+connector: pin 15 `EXP_GPIO0_32` (ball L23) and pin 13 `EXP_GPIO0_42` (ball L21). MAIN_GPIO0/1
+are modelled (`ti_davinci_gpio`, the Linux `gpio-davinci.c` register map). Firmware reads the
+levels in MAIN_GPIO0 `IN_DATA23` (0x0060_0048) against the LVCMOS 3.3 V limits (VIL 0.8 V,
+VIH 2.0 V), and the edges in `INTSTAT23`. The connector carries no ADC input, so the result is
+a level, not a code:
+
+```sh
+cargo test -p labwired-core --test cosim_sk_am62_analog
+```
 
 Not modelled yet: A53 cores 1-3 (SMP), the M4F and R5F, UART interrupts (the
-console is polled), GPIO registers/LEDs, the boot flow (TF-A, U-Boot), stage 2 and
-16/64 KB granules. See `VALIDATION.md`.
+console is polled), GPIO interrupt lines, the PADCONFIG receiver enable, LEDs, the
+boot flow (TF-A, U-Boot), stage 2 and 16/64 KB granules. See `VALIDATION.md`.

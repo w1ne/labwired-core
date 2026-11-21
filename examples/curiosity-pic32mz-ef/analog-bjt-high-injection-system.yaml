@@ -1,0 +1,46 @@
+# Generic Gummel–Poon high-injection pair routed to the bounded PIC32 GPIOB
+# input model. GPIO thresholds are simulation assumptions, not silicon data.
+name: curiosity-pic32mz-ef-analog-bjt-high-injection
+chip: ../../configs/chips/pic32mz2048efm144.yaml
+external_devices: []
+cosim_models:
+  - id: bjt_high_injection
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_high_injection.base_v
+    outputs:
+      collector_voltage: board.gpio_in.gpiob.2
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 68k
+        Q1 collector base 0 NPN_HIGH
+        .model NPN_HIGH NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0 IKF=50u)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3
+  - id: bjt_high_injection_control
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      base_drive: ui.bjt_high_injection.base_v
+    outputs:
+      collector_voltage: board.gpio_in.gpiob.3
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 68k
+        Q1 collector base 0 NPN_CONTROL
+        .model NPN_CONTROL NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0)
+      probes:
+        collector_voltage: v(collector)
+      sources:
+        base_drive: Vbase
+      vdd: 3.3

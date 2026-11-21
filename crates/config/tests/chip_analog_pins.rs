@@ -61,40 +61,64 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
         },
     ) in &desc.analog_pins
     {
-        match desc.peripherals.iter().find(|p| &p.id == peripheral) {
-            None => problems.push(format!(
+        let Some(adc) = desc.peripherals.iter().find(|p| &p.id == peripheral) else {
+            problems.push(format!(
                 "{chip}: {pad} names ADC '{peripheral}', not declared"
-            )),
-            Some(p) if !matches!(p.r#type.as_str(), "adc" | "avr_adc" | "nrf52840_saadc") => {
-                problems.push(format!(
-                    "{chip}: {pad} names '{peripheral}', which is type '{}', not adc",
-                    p.r#type
-                ))
-            }
-            Some(_) => {}
+            ));
+            continue;
+        };
+        // Whether the named peripheral really converts that channel is a
+        // property of the core model, not of the descriptor text: the core test
+        // `cosim_analog_pins_every_chip` binds and applies every entry.
+        if adc.r#type == "stub" {
+            problems.push(format!("{chip}: {pad} names '{peripheral}', a stub"));
         }
-        // Validate BOTH alphaport STM32 pads and Nordic P<port>.<bit>.
-        // Numeric labels are only accepted for the actual Nordic ADC IP.
-        let nordic = desc
-            .peripherals
+        let nordic = adc.r#type == "nrf52840_saadc";
+        // The chip's own `pins:` map is the authority for its pad labels
+        // (PTA17, P0_12, GP26, P000 ...). Only a chip without one falls back
+        // to the label grammar: P<port><bit>, Nordic P<port>.<bit>, AVR
+        // port<x>, Microchip R<port><bit>.
+        let located = desc
+            .pins
             .iter()
-            .any(|p| &p.id == peripheral && p.r#type == "nrf52840_saadc");
-        let avr = desc
-            .peripherals
-            .iter()
-            .any(|p| &p.id == peripheral && p.r#type == "avr_adc");
-        match pad_port_and_bit(pad, nordic, avr) {
-            Some((port, bit)) => match desc.peripherals.iter().find(|p| {
-                p.id == port && matches!(p.r#type.as_str(), "gpio" | "avr_gpio" | "stm32f4_gpio")
-            }) {
+            .find(|(label, _)| label.eq_ignore_ascii_case(pad))
+            .map(|(_, loc)| (vec![loc.gpio.clone()], loc.bit))
+            .or_else(|| {
+                pad_port_and_bit(
+                    pad,
+                    nordic,
+                    adc.r#type == "avr_adc",
+                    adc.r#type == "pic24_adc_pads",
+                )
+            });
+        let unmodelled_port = PORTS_NOT_MODELLED.iter().any(|(c, _)| *c == chip);
+        match located {
+            Some(_) if unmodelled_port => {}
+            Some((ports, bit)) => match desc
+                .peripherals
+                .iter()
+                .find(|p| ports.contains(&p.id) && is_port_model(&p.r#type))
+            {
                 Some(p) => {
-                    let count = p
-                        .config
-                        .get("num_pins")
-                        .and_then(serde_yaml::Value::as_u64)
-                        .unwrap_or(if nordic { 32 } else { 16 });
-                    if u64::from(bit) >= count {
-                        problems.push(format!("{chip}: {pad} is outside {port}'s {count} pins"));
+                    let port = &p.id;
+                    // A PIC24 port's `mask` holds the bits the package bonds.
+                    if let Some(mask) = p.config.get("mask").and_then(serde_yaml::Value::as_u64) {
+                        if bit >= 16 || mask & (1 << bit) == 0 {
+                            problems.push(format!(
+                                "{chip}: {pad} is not bonded ({port} mask {mask:#06x})"
+                            ));
+                        }
+                    }
+                    if let Some(count) =
+                        p.config.get("num_pins").and_then(serde_yaml::Value::as_u64)
+                    {
+                        if u64::from(bit) >= count {
+                            problems
+                                .push(format!("{chip}: {pad} is outside {port}'s {count} pins"));
+                        }
+                    }
+                    if bit >= 32 {
+                        problems.push(format!("{chip}: {pad} has no 32-bit port bit {bit}"));
                     }
                     if nordic
                         && (port != "gpio0"
@@ -105,11 +129,21 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
                         ));
                     }
                 }
-                None => problems.push(format!("{chip}: {pad} is on {port}, not a declared GPIO")),
+                None => problems.push(format!(
+                    "{chip}: {pad} is on none of {ports:?}, not a declared GPIO"
+                )),
             },
-            None => problems.push(format!("{chip}: {pad} is not a P<port><bit> label")),
+            None => problems.push(format!(
+                "{chip}: {pad} is neither in `pins:` nor a P<port><bit> label"
+            )),
         }
+        let shared = SHARED_INPUTS
+            .iter()
+            .any(|(c, pads, _)| *c == chip && pads.contains(&pad.as_str()));
         if let Some(other) = seen.insert((peripheral.clone(), *channel), pad.clone()) {
+            if shared {
+                continue;
+            }
             problems.push(format!(
                 "{chip}: {pad} and {other} both claim {peripheral} channel {channel}"
             ));
@@ -118,36 +152,122 @@ fn analog_pin_problems(chip: &str, desc: &ChipDescriptor) -> Vec<String> {
     problems
 }
 
-fn pad_port_and_bit(pad: &str, nordic: bool, avr: bool) -> Option<(String, u8)> {
+/// A modelled GPIO port block: `gpio`, `stm32f4_gpio`, `sam4s_pio`,
+/// `cc2538_pl061_gpio`, `avr_gpio`, `pic24_gpio`, or a `declarative` port.
+fn is_port_model(r#type: &str) -> bool {
+    r#type.contains("gpio") || r#type.ends_with("_pio") || r#type == "declarative"
+}
+
+/// Chips whose pad labels name a port the descriptor does not model as its
+/// own block, so the port lookup cannot apply. The core test
+/// `cosim_analog_pins_every_chip` still proves each entry converts.
+const PORTS_NOT_MODELLED: &[(&str, &str)] = &[
+    (
+        "rp2350",
+        "GPn pads are one SIO bank (`sio`), not lettered ports",
+    ),
+    (
+        "s32k388",
+        "PTxn pads are SIUL2 MSCR indices (`siul2`), not port blocks",
+    ),
+    (
+        "mimxrt595s",
+        "Pn_m pads are one `lpc_gpio` block for every port",
+    ),
+    ("ra4m1", "AN000-AN002 are on PORT0, which is not modelled"),
+    (
+        "stm32g474re",
+        "PF0 (ADC1_IN10) is on GPIOF, which is not modelled",
+    ),
+    (
+        "vegaboard-ri5cy",
+        "PTB/PTC/PTD pads are on GPIOB..D, which the descriptor does not declare",
+    ),
+    (
+        "pic16f877a",
+        "PORTA/PORTE are SFRs inside the PIC16 core, not bus port blocks",
+    ),
+    (
+        "r5f52618bgfp",
+        "PORT4/PORTD/PORTE are a declared stub (no RX PORT/MPC model)",
+    ),
+    (
+        "pic16f1829",
+        "PORTA..PORTC are SFRs inside the PIC16 core, not bus port blocks",
+    ),
+    (
+        "pic18f4520",
+        "PORTA/PORTB/PORTE are SFRs inside the PIC18 core, not bus port blocks",
+    ),
+];
+
+/// Pads that one ADC input really reaches twice. S32K388 RTD 7.0.1
+/// Port_Cfg.h (see the descriptor's analog_pins note) defines the same
+/// ADC0_S8/S9 and ADC1_S22/S23 signal on two MSCRs each.
+const SHARED_INPUTS: &[(&str, &[&str], &str)] = &[(
+    "s32k388",
+    &[
+        "PTA0", "PTB13", "PTA1", "PTB14", "PTD28", "PTE17", "PTD29", "PTE18",
+    ],
+    "RTD Port_Cfg.h: ADC0_S8/S9, ADC1_S22/S23 on two pads each",
+)];
+
+/// The port ids a pad label may live on, and its bit. Labels are
+/// `P<port><bit>` (STM32, SAM, SAMD, CC2538: gpioa / gpio_a / porta / pioA),
+/// `PT<port><bit>` (Kinetis, S32K), `P<digit><bit2>` (Renesas RA),
+/// `P<digit><bit>` (Renesas RX),
+/// Nordic `P<port>.<bit>`, AVR `P<port><bit>` on `port<x>`, and Microchip
+/// `R<port><bit>`.
+fn pad_port_and_bit(pad: &str, nordic: bool, avr: bool, pic24: bool) -> Option<(Vec<String>, u8)> {
     let upper = pad.to_ascii_uppercase();
-    let rest = upper.strip_prefix('P')?;
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|c| c.is_ascii_digit());
     if nordic {
-        let (port, bit) = rest.split_once('.')?;
-        if port.len() != 1
-            || bit.len() != 2
-            || !port.bytes().chain(bit.bytes()).all(|c| c.is_ascii_digit())
-        {
+        let (port, bit) = upper.strip_prefix('P')?.split_once('.')?;
+        if port.len() != 1 || bit.len() != 2 || !digits(port) || !digits(bit) {
             return None;
         }
-        Some((
-            format!("gpio{}", port.parse::<u8>().ok()?),
-            bit.parse().ok()?,
-        ))
-    } else {
-        let port = rest.chars().next()?;
-        if !port.is_ascii_alphabetic() {
-            return None;
-        }
-        let digits = &rest[1..];
-        if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
-            return None;
-        }
-        let gpio_prefix = if avr { "port" } else { "gpio" };
-        Some((
-            format!("{gpio_prefix}{}", port.to_ascii_lowercase()),
-            digits.parse().ok()?,
-        ))
+        return Some((vec![format!("gpio{port}")], bit.parse().ok()?));
     }
+    if pic24 || avr {
+        let rest = upper.strip_prefix(if pic24 { 'R' } else { 'P' })?;
+        let port = rest.chars().next()?.to_ascii_lowercase();
+        if !port.is_ascii_alphabetic() || !digits(&rest[1..]) {
+            return None;
+        }
+        let prefix = if avr { "port" } else { "gpio" };
+        return Some((vec![format!("{prefix}{port}")], rest[1..].parse().ok()?));
+    }
+    if let Some(rest) = upper.strip_prefix("GP") {
+        return digits(rest).then(|| Some((vec!["sio".to_string()], rest.parse().ok()?)))?;
+    }
+    let rest = upper
+        .strip_prefix("PT")
+        .filter(|r| r.starts_with(|c: char| c.is_ascii_alphabetic()))
+        .or_else(|| upper.strip_prefix('P'))?;
+    if let Some((port, bit)) = rest.split_once('_') {
+        return (digits(port) && digits(bit))
+            .then(|| Some((vec!["gpio".to_string()], bit.parse().ok()?)))?;
+    }
+    let port = rest.chars().next()?;
+    if port.is_ascii_digit() {
+        // Renesas RA: P<port digit><two-digit bit>; Renesas RX: P<port
+        // digit><bit digit> (P40 = PORT4 bit 0).
+        return ((rest.len() == 3 || rest.len() == 2) && digits(rest))
+            .then(|| Some((vec![format!("port{port}")], rest[1..].parse().ok()?)))?;
+    }
+    if !port.is_ascii_alphabetic() || !digits(&rest[1..]) {
+        return None;
+    }
+    let lower = port.to_ascii_lowercase();
+    Some((
+        vec![
+            format!("gpio{lower}"),
+            format!("gpio_{lower}"),
+            format!("port{lower}"),
+            format!("pio{port}"),
+        ],
+        rest[1..].parse().ok()?,
+    ))
 }
 
 #[test]
@@ -175,6 +295,47 @@ fn nordic_analog_pins_match_physical_ain_assignment() {
         assert_eq!(usize::from(mapping.channel), channel);
     }
     assert!(analog_pin_problems("nrf52833", &desc).is_empty());
+}
+
+/// Teensyduino's `pin_to_channel[]` table maps A0..A17 to the RT1062 pads and
+/// ADC instances. A wrong channel is more damaging than a missing route: the
+/// co-simulation would silently drive a different ADC input.
+#[test]
+fn imxrt1064_teensy_analog_pads_match_the_physical_adc_assignments() {
+    let desc = load("imxrt1064");
+    let expected = [
+        ("AD_B1_02", "adc1", 7, 18),
+        ("AD_B1_03", "adc1", 8, 19),
+        ("AD_B1_07", "adc1", 12, 23),
+        ("AD_B1_06", "adc1", 11, 22),
+        ("AD_B1_01", "adc1", 6, 17),
+        ("AD_B1_00", "adc1", 5, 16),
+        ("AD_B1_10", "adc1", 15, 26),
+        ("AD_B1_11", "adc1", 0, 27),
+        ("AD_B1_08", "adc1", 13, 24),
+        ("AD_B1_09", "adc1", 14, 25),
+        ("AD_B0_12", "adc1", 1, 12),
+        ("AD_B0_13", "adc1", 2, 13),
+        ("AD_B1_14", "adc2", 3, 30),
+        ("AD_B1_15", "adc2", 4, 31),
+        ("AD_B1_12", "adc2", 1, 28),
+        ("AD_B1_13", "adc2", 2, 29),
+        ("AD_B1_04", "adc1", 9, 20),
+        ("AD_B1_05", "adc1", 10, 21),
+    ];
+    assert_eq!(desc.analog_pins.len(), expected.len());
+    for (pad, peripheral, channel, gpio_bit) in expected {
+        assert_eq!(
+            desc.analog_pins[pad],
+            AdcPinFn {
+                peripheral: peripheral.to_string(),
+                channel,
+            },
+            "{pad} ADC route"
+        );
+        assert_eq!(desc.pins[pad].gpio, "gpio1", "{pad} GPIO port");
+        assert_eq!(desc.pins[pad].bit, gpio_bit, "{pad} GPIO bit");
+    }
 }
 
 #[test]
@@ -251,9 +412,10 @@ fn f1_f4_f7_descriptors_carry_the_datasheet_assignment() {
 /// Families whose assignment differs from the F1/F4 map were deliberately NOT
 /// transcribed. On an L476 PA0 is ADC1_IN5 and on a G474 it is ADC1_IN1; an
 /// entry there must come from that part's datasheet, not from this map.
+/// G474 (32a7829f7) and WB55 (59741ae65) have since gained their own maps.
 #[test]
 fn families_with_a_different_assignment_declare_nothing_yet() {
-    for chip in ["stm32l476", "stm32g474re", "stm32h563", "stm32wb55"] {
+    for chip in ["stm32l476", "stm32h563"] {
         assert!(
             load(chip).analog_pins.is_empty(),
             "{chip} gained analog_pins; check them against its own datasheet and update this test"

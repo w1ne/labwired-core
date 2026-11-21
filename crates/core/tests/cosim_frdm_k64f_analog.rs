@@ -2,8 +2,9 @@
 // Copyright (C) 2026 Andrii Shylenko
 // SPDX-License-Identifier: MIT
 
-//! Generic MNA devices route through the FRDM-K64F's mapped GPIO inputs.
-//! This profile has no ADC model; the endpoint is voltage-thresholded PDIR.
+//! Generic MNA devices route through the FRDM-K64F's mapped GPIO inputs; the
+//! endpoint is voltage-thresholded PDIR. The ADC16 path is in
+//! `cosim_frdm_k64f_adc16_analog.rs`.
 
 mod common;
 use common::root;

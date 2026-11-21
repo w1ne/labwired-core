@@ -6,6 +6,7 @@
 
 name: alif_ae822fa0e5597bs0
 arch: arm
+core: cortex-m55
 flash:
   base: 0
   size: 262144B
@@ -138,6 +139,56 @@ peripherals:
   type: dwt
   bus: sysbus
   base_address: 3758100480
+# ADC12 instances 0..2 (alif_adc12) at 0x4902_0000/1000/2000, 4KB each
+# (alif_ensemble-cmsis-dfp AE822FA0E5597 soc.h ADC120/121/122_BASE; Zephyr
+# e1.dtsi adc0@49020000 reg 0x1000). DONE0/DONE1/CMPA/CMPB are NVIC 151..162,
+# but this profile wires no peripheral IRQ, so none is wired here. The 1.8 V
+# reference is an assumption (no public datasheet value). ADC24 at
+# 0x4902_7000 is a different converter and is not declared.
+- id: adc120
+  type: alif_adc12
+  bus: sysbus
+  base_address: 0x49020000
+  size: 4KB
+  config:
+    vref_mv: 1800
+- id: adc121
+  type: alif_adc12
+  bus: sysbus
+  base_address: 0x49021000
+  size: 4KB
+  config:
+    vref_mv: 1800
+- id: adc122
+  type: alif_adc12
+  bus: sysbus
+  base_address: 0x49022000
+  size: 4KB
+  config:
+    vref_mv: 1800
+# External inputs: channels 0..5 of each instance on ANA_S0..S17 (Zephyr
+# boards/alif/common/ensemble-e8-appkit-pinctrl.dtsi pinctrl_adc0/1/2).
+# Channels 6 (temperature sensor) and 7 (internal VREF) are internal
+# (sdk-alif adc.rst) and have no pad.
+analog_pins:
+  P0_0: { peripheral: adc120, channel: 0 }
+  P0_1: { peripheral: adc120, channel: 1 }
+  P0_2: { peripheral: adc120, channel: 2 }
+  P0_3: { peripheral: adc120, channel: 3 }
+  P0_4: { peripheral: adc120, channel: 4 }
+  P0_5: { peripheral: adc120, channel: 5 }
+  P0_6: { peripheral: adc121, channel: 0 }
+  P0_7: { peripheral: adc121, channel: 1 }
+  P1_0: { peripheral: adc121, channel: 2 }
+  P1_1: { peripheral: adc121, channel: 3 }
+  P1_2: { peripheral: adc121, channel: 4 }
+  P1_3: { peripheral: adc121, channel: 5 }
+  P1_4: { peripheral: adc122, channel: 0 }
+  P1_5: { peripheral: adc122, channel: 1 }
+  P1_6: { peripheral: adc122, channel: 2 }
+  P1_7: { peripheral: adc122, channel: 3 }
+  P2_0: { peripheral: adc122, channel: 4 }
+  P2_1: { peripheral: adc122, channel: 5 }
 provenance:
   generated_by: scripts/onboard_hw_targets.py
   parse_fallbacks:

@@ -24,7 +24,10 @@ cargo run -q -p labwired-cli -- test --script examples/nucleo-u545re/io-smoke.ya
 # 2. machine-run pin proofs (LD2 PA5, B1 PC13, VCP, memory map, flash banks)
 cargo test -p labwired-core --test nucleo_u545re
 
-# 3. STM32CubeU5 HAL firmware (needs arm-none-eabi-gcc + a CubeU5 checkout)
+# 3. mixed-signal device and ADC routing proof (NTC, diode, JFET gate charge)
+cargo test -p labwired-core --test cosim_nucleo_u545re_analog
+
+# 4. STM32CubeU5 HAL firmware (needs arm-none-eabi-gcc + a CubeU5 checkout)
 make -C examples/nucleo-u545re/board_firmware
 cargo run -q -p labwired-cli -- \
   --firmware examples/nucleo-u545re/board_firmware/build/u545_hal_smoke.elf \
@@ -36,6 +39,7 @@ cargo run -q -p labwired-cli -- \
 
 - `system.yaml` - example system manifest (chip + LD2 + B1)
 - `io-smoke.yaml` - CLI test script (`strict_onboarding` needs this name)
+- `analog-ntc-diode-adc-system.yaml` and `analog-jfet-gate-charge-adc-system.yaml` - generic mixed-signal netlists used by the NUCLEO-U545RE ADC routing tests
 - `firmware/` - bare-metal blinky source; builds `tests/fixtures/nucleo-u545re-blinky.elf`
 - `board_firmware/` - Cube HAL smoke; its ELF is committed as `tests/fixtures/nucleo-u545re-cubehal.elf`
 - `images/` - `board.svg`, `pinout.svg`, `gen_images.py` (see its header for provenance)

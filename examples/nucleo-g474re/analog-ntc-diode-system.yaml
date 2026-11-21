@@ -1,6 +1,6 @@
 # Generic Beta NTC divider and Shockley diode for the NUCLEO-G474RE model.
 # Their solved voltages route through the modeled PA0/PA1 GPIO inputs. The
-# board's current ADC model has no externally routable input path.
+# board ADC route is analog-ntc-diode-adc-system.yaml.
 name: nucleo-g474re-analog
 chip: ../../configs/chips/stm32g474re.yaml
 external_devices: []

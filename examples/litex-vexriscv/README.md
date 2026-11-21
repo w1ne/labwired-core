@@ -67,9 +67,10 @@ cd core
 | LiteX UART (0x60001800) | modelled — polled console path |
 | LiteX timer (0x60002800) | modelled — countdown, `update_value` latch, zero-event status/pending |
 | LiteX SPI / Ethernet / MMCM CSRs | `type: stub` — zeros |
-| Generic analog input seam (0xF0000000) | simulation-only `input_pin_bank`; not LiteX gateware, physical pads, or ADC conversion |
+| LiteX GPIOOut (0xE0005800) / GPIOIn (0xE0006000), 4 pins each | modelled — `out` latch and `in` levels (declarative `peripherals/litex/gpio_{out,in}.yaml`); GPIOIn IRQ event manager not modelled |
 | Main RAM (0x40000000, 256 MB on the SoC) | not mapped — see `VALIDATION.md` |
 | LEDs / switches / buttons | not modelled — see `EXTERNAL_COMPONENTS.md` |
+| ADC | none on this SoC; `analog-ntc-diode-system.yaml` drives GPIOIn pins through assumed 3.3 V thresholds |
 
 ## Boot path
 

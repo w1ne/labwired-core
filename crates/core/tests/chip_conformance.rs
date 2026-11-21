@@ -33,6 +33,8 @@ mod common;
 use common::root;
 use labwired_config::{ChipDescriptor, SystemManifest};
 use labwired_core::bus::SystemBus;
+use labwired_core::plugin::ChipPlugin;
+use labwired_core::system::mips::Pic32GpioPlugin;
 use labwired_core::Bus;
 use std::path::PathBuf;
 
@@ -113,8 +115,8 @@ const CHIPS: &[ChipConf] = &[
     },
     ChipConf {
         // Vega board (RI5CY, RV32IMC). SIM-DERIVED: no silicon capture.
-        // Modelled: CPU + memory + LPUART0/1; the SCG/PCC clock blocks, INTMUX
-        // and low-power timers are declared stubs — see
+        // Modelled: CPU + memory + LPUART0/1 + LPADC0; the SCG/PCC clock
+        // blocks, INTMUX and low-power timers are declared stubs — see
         // examples/vegaboard-ri5cy/VALIDATION.md.
         name: "vegaboard-ri5cy",
         yaml: "configs/chips/vegaboard-ri5cy.yaml",
@@ -126,7 +128,7 @@ const CHIPS: &[ChipConf] = &[
         // no STM32L552 bench part. The new L5 RCC profile and the v2 GPIO /
         // LPUART / SPI / I2C / timer / DMA models carry the smoke. TrustZone/
         // SAU/GTZC, MPU/PMSAv8 enforcement and the L5 non-secure flash
-        // controller are NOT modelled; FLASH/EXTI/ADC/FDCAN/USB are declared
+        // controller are NOT modelled; FLASH/EXTI/FDCAN/USB are declared
         // stubs — see examples/nucleo-l552ze-q/VALIDATION.md.
         name: "stm32l552",
         yaml: "configs/chips/stm32l552.yaml",
@@ -151,8 +153,8 @@ const CHIPS: &[ChipConf] = &[
         // PolarFire SoC MPFS095T (Discovery Kit), first RV64 part: one U54
         // hart (RV64IMAC M-mode, CLINT in the core). SIM-DERIVED: no MPFS
         // bench part. Modelled: MMUART0-4 as 16550s with the DLAB divisor
-        // latch. PLIC, MSS GPIO/I2C/SPI/QSPI and the system-controller mailbox
-        // are declared stubs — see examples/mpfs-disco-kit/VALIDATION.md.
+        // latch, and MSS GPIO_0..2. PLIC, MSS I2C/SPI/QSPI and the
+        // system-controller mailbox are declared stubs — see examples/mpfs-disco-kit/VALIDATION.md.
         name: "mpfs095t",
         yaml: "configs/chips/mpfs095t.yaml",
         reset_oracle: None,
@@ -161,8 +163,9 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         // TI AM6234 (SK-AM62), first AArch64 part: one Cortex-A53 with its
         // GICv3 and generic timer in the core. SIM-DERIVED: no AM62x bench
-        // part. Modelled: MAIN_UART0-6 (16550, polled). Pad config and the
-        // mailbox are declared stubs — see examples/sk-am62/VALIDATION.md.
+        // part. Modelled: MAIN_UART0-6 (16550, polled) and MAIN_GPIO0/1
+        // (no interrupt lines). Pad config and the mailbox are declared
+        // stubs — see examples/sk-am62/VALIDATION.md.
         name: "am6234",
         yaml: "configs/chips/am6234.yaml",
         reset_oracle: None,
@@ -172,7 +175,8 @@ const CHIPS: &[ChipConf] = &[
         // Renesas R5F52618BGFP (RX261, EK-RX261), first RX part: the RXv3
         // core with the ICU in the core. SIM-DERIVED: no RX261 bench part.
         // Modelled: SCI6 (classic SCI, polled), CMT0-3, the SYSTEM clock
-        // handshakes and FLASH MEMWAITR. PORT/MPC, BSC, DTC and the reset
+        // handshakes, FLASH MEMWAITR and S12AD (on `ra_adc12`, polled scan
+        // end). PORT/MPC, BSC, DTC and the reset
         // status block are declared stubs — see examples/ek-rx261/VALIDATION.md.
         name: "r5f52618bgfp",
         yaml: "configs/chips/r5f52618bgfp.yaml",
@@ -283,8 +287,9 @@ const CHIPS: &[ChipConf] = &[
     ChipConf {
         // SAM4S Xplained (ATSAM4S16C, Cortex-M4). SIM-DERIVED: no SAM4S bench
         // part. Modelled: PMC (sam4s_pmc), the older PIO block (sam4s_pio),
-        // UART0/1 and USART0/1 (sam layout); TC/SPI/TWI/EEFC and the system
-        // controller are declared stubs — see examples/sam4s-xplained/VALIDATION.md.
+        // UART0/1 and USART0/1 (sam layout), the 12-bit ADC (sam4s_adc);
+        // TC/SPI/TWI/EEFC and the system controller are declared stubs —
+        // see examples/sam4s-xplained/VALIDATION.md.
         name: "sam4s16c",
         yaml: "configs/chips/sam4s16c.yaml",
         reset_oracle: None,
@@ -973,8 +978,8 @@ const CHIPS: &[ChipConf] = &[
     },
     // PIC18F4520 (DS39631E), the first PIC18 part. The gate boots real SDCC
     // 4.4.0 C firmware (software stack, TBLRD string reads, EUSART TX,
-    // PORTB latch). Timers, CCP, MSSP, ADC, EEPROM, EUSART RX and XINST are
-    // not exercised, so this is L1, not full-device parity.
+    // PORTB latch). Timers, CCP, MSSP, EEPROM, EUSART RX and XINST are not
+    // exercised by the gate, so this is L1, not full-device parity.
     ChipConf {
         name: "pic18f4520",
         yaml: "configs/chips/pic18f4520.yaml",
@@ -996,8 +1001,8 @@ const CHIPS: &[ChipConf] = &[
     // boots real SDCC 4.4.0 C firmware: BSR/MOVLB banking, MOVLP paging,
     // FSR/MOVIW pointers, EUSART TX, LATA, and an ISR without software
     // context save preempted into by TMR0, so the hardware shadows carry
-    // main's state. CCP, MSSP, ADC, EEPROM and EUSART RX are not exercised,
-    // so this is L1, not full-device parity.
+    // main's state. CCP, MSSP, EEPROM and EUSART RX are not exercised by the
+    // gate, so this is L1, not full-device parity.
     ChipConf {
         name: "pic16f1829",
         yaml: "configs/chips/pic16f1829.yaml",
@@ -1856,7 +1861,15 @@ fn measure(c: &ChipConf) -> Record {
     let chip =
         ChipDescriptor::from_file(&abs).unwrap_or_else(|e| panic!("{}: load chip: {e}", c.name));
     let peripherals = chip.peripherals.len();
-    let bus = SystemBus::from_config(&chip, &dummy_manifest(&abs_str))
+    // The MIPS machine builder always installs the PIC32 GPIO plugin
+    // (`system/builder/mips.rs`); measure the bus that machine would run.
+    let pic32_gpio = Pic32GpioPlugin;
+    let plugins: Vec<&dyn ChipPlugin> = if matches!(chip.arch, labwired_config::Arch::Mips) {
+        vec![&pic32_gpio]
+    } else {
+        Vec::new()
+    };
+    let bus = SystemBus::from_config_with_plugins(&chip, &dummy_manifest(&abs_str), &plugins)
         .unwrap_or_else(|e| panic!("{}: build bus: {e}", c.name));
 
     // Estate: every wired peripheral's base reads without a bus fault.

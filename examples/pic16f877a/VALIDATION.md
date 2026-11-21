@@ -61,6 +61,15 @@ bash examples/pic16f877a/ci/test.sh
 - **PORT reads.** `PORTx` reads `latch & ~TRISx`: output pins read their
   latch and input pins read 0, because no external pin driver is modelled.
   PORTA/PORTE read as digital regardless of `ADCON1`.
+- **A/D module.** `ADCON0`/`ADCON1`/`ADRESH`/`ADRESL` (DS39582B section 11)
+  on boards whose chip declares the routed-pad window. Setting `GO/DONE`
+  samples the selected ANx level and ends 12 TAD later (`ADCS2:ADCS0`):
+  the result loads with the `ADFM` justification, `GO/DONE` clears and `ADIF`
+  sets. `PCFG` selects VDD/VSS or AN3/AN2 as references. A pin set as an
+  output converts its own level. Clearing `GO/DONE` aborts and keeps the
+  last result. Covered by the `adc_*` unit tests in
+  `crates/core/src/cpu/pic16.rs` and by
+  `crates/core/tests/cosim_pic16f877a_analog.rs` with gpasm firmware.
 - **USART.** A byte written to `TXREG` is sent at once. `TRMT` stays set,
   and `TXIF` is set whenever `TXEN` is. Baud timing and RX are not modelled.
 - **Interrupts.** One vector at 0x0004. INTCON T0IF/INTF/RBIF with their
@@ -77,7 +86,12 @@ Not validated, or not modelled, for this part:
 - TMR1/TMR2, CCP1/2 and MSSP (SPI/I2C). TMR0 timer mode is modelled
   (Fosc/4 through the prescaler; see `examples/pic16f1829/VALIDATION.md`)
   but this smoke leaves it off.
-- ADC, comparators, voltage reference and data EEPROM / flash self-write.
+- Comparators, voltage reference and data EEPROM / flash self-write.
+- A/D module limits: the acquisition time (DS39582B section 11.1) is not
+  checked, so a conversion started too early still returns the settled level;
+  the result is the ideal code with no offset, gain or quantisation error;
+  the A/D RC oscillator is a fixed 4 us TAD; a conversion that Sleep aborts
+  leaves GO/DONE set.
 - WDT, USART RX and baud timing, PSP.
 - PORTB interrupt-on-change and external pin drive.
 - Unimplemented-register read-as-0 behaviour: unused file addresses are

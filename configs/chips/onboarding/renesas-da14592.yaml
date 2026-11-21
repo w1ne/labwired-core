@@ -37,11 +37,14 @@ peripherals:
   type: renesasda14_uart
   bus: sysbus
   base_address: 1342308608
+# DA1459x GPADC (Renode renesas-da14592.repl @ 0x5004_0900): 10 bits against
+# 0.9 V x (GP_ADC_ATTN + 1); channels are the GP_ADC_SEL_P mux values.
 - id: gpadc
-  type: stub
+  type: renesasda14_gpadc
   renode_type: renesasda14_gpadc
   bus: sysbus
   base_address: 1342441728
+  irq: 25  # GPADC_IRQn (SDK10 DA1459x adc_sample DWARF, Renode nvic_m33@25)
 - id: gpio
   type: renesasda14_gpio
   bus: sysbus
@@ -75,3 +78,13 @@ peripherals:
   renode_type: renesasda14_generalpurposeregisters
   bus: sysbus
   base_address: 1342505728
+# GP_ADC_SEL_P pad inputs (SDK10 DA1459x HW_GPADC_INP_Px_y enum).
+analog_pins:
+  P1_0: { peripheral: gpadc, channel: 0 }
+  P1_1: { peripheral: gpadc, channel: 1 }
+  P1_2: { peripheral: gpadc, channel: 2 }
+  P0_10: { peripheral: gpadc, channel: 3 }
+  P1_5: { peripheral: gpadc, channel: 10 }
+  P1_6: { peripheral: gpadc, channel: 11 }
+  P1_9: { peripheral: gpadc, channel: 12 }
+  P1_11: { peripheral: gpadc, channel: 13 }

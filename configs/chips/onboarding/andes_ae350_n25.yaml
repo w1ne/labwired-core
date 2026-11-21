@@ -17,6 +17,12 @@ peripherals:
   type: ns16550
   bus: sysbus
   base_address: 4029677600
+# Renode's AE350 map declares only the UART. ATCGPIO100 sits at 0xF070_0000
+# (Zephyr andes_v5_ae350.dtsi gpio@f0700000, andestech,atcgpio100).
+- id: gpio
+  type: andesatcgpio100
+  bus: sysbus
+  base_address: 4033871872
 provenance:
   generated_by: scripts/onboard_hw_targets.py
   parse_fallbacks:

@@ -10,8 +10,9 @@ and the CAN transceiver. **None of these are modelled or attached** in this
 example. The system manifest lists only LED0 and SW0 as `board_io`.
 
 The analog co-simulation fixture injects generic NTC and diode netlist voltages
-at the board's EXT1 ADC pins. It does not instantiate an external analog part,
-the AFEC peripherals, or an ADC conversion path.
+at the board's EXT1 ADC pins. It does not instantiate an external analog part.
+Routed to `board.analog.<pad>_volts`, the same netlists convert on the AFEC0/
+AFEC1 model (`crates/core/tests/cosim_same70_afec_analog.rs`).
 
 When a later slice attaches one of them, it goes here with its fidelity tier
 and descriptor path, and the system manifest grows an `external_devices:`

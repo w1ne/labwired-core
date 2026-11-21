@@ -5,7 +5,9 @@
 //! Generic analog netlists drive ESP32 profiles through explicit APB_SARADC
 //! channel routes and the modeled one-shot path. The BLE Pong profile's existing
 //! GP2Y0A21 sensor stays routed to ADC1_CH1; ESP32-C6 uses the shared one-shot
-//! peripheral model at its board-specific register base.
+//! peripheral model at its board-specific register base. The DevKit also
+//! converts matched level-1 NMOS stages that differ only in lateral diffusion
+//! `LD` and the `UO`/`TOX`-derived `KP` (the FRDM-K64F fixture, rerouted).
 
 mod common;
 use common::root;
@@ -52,6 +54,36 @@ fn diode_voltage() -> f64 {
     }
     let junction_v = (low + high) / 2.0;
     junction_v + current_at_junction_voltage(junction_v) * DIODE_RS_OHMS
+}
+
+/// Independent level-1 NMOS common-source load line: 3.3 V through 10 kΩ
+/// into the drain, source and bulk grounded, `VTO = 1`, `LAMBDA = 0`.
+/// Shichman–Hodges with `beta = KP·W/(L − 2·LD)` plus drain-source `GMIN`.
+fn nmos_drain_voltage(gate_v: f64, beta: f64) -> f64 {
+    const SUPPLY_V: f64 = 3.3;
+    const LOAD_OHMS: f64 = 10_000.0;
+    const VTO_V: f64 = 1.0;
+    const GMIN_S: f64 = 1e-12;
+    let channel = |drain_v: f64| {
+        let overdrive = gate_v - VTO_V;
+        if overdrive <= 0.0 {
+            0.0
+        } else if drain_v < overdrive {
+            beta * drain_v * (overdrive - 0.5 * drain_v)
+        } else {
+            0.5 * beta * overdrive * overdrive
+        }
+    };
+    let (mut low, mut high) = (0.0, SUPPLY_V);
+    for _ in 0..100 {
+        let drain_v = 0.5 * (low + high);
+        if (SUPPLY_V - drain_v) / LOAD_OHMS > channel(drain_v) + GMIN_S * drain_v {
+            low = drain_v;
+        } else {
+            high = drain_v;
+        }
+    }
+    0.5 * (low + high)
 }
 
 fn signal_voltage(session: &CosimSession, path: &str) -> f64 {
@@ -315,4 +347,108 @@ fn esp32c6_devkitc_ntc_and_diode_netlists_reach_adc1_channels() {
         "esp32c6-devkitc",
         false,
     );
+}
+
+/// The FRDM-K64F lateral-diffusion / process-KP fixture on an unrelated ADC
+/// IP: ESP32-C3 APB_SARADC one-shot conversions on ADC1_CH1/3/4, beside the
+/// DevKit's generic NTC (CH0) and diode (CH2).
+#[test]
+fn esp32c3_devkit_mosfet_lateral_diffusion_and_process_kp_reach_adc1_channels() {
+    let system_path = root("configs/systems/esp32c3-devkit.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load ESP32-C3 profile");
+    let analog =
+        SystemManifest::from_file(root("examples/esp32c3-devkit/analog-ntc-diode-system.yaml"))
+            .expect("load generic NTC and diode");
+    let mosfet = SystemManifest::from_file(root(
+        "examples/frdm-k64f/analog-mosfet-ld-uo-adc-system.yaml",
+    ))
+    .expect("load matched generic level-1 NMOS stages");
+    profile.cosim_models = analog.cosim_models;
+    for mut model in mosfet.cosim_models {
+        for (key, channel) in [("drain_ld", 1), ("drain_uo", 3), ("drain_ref", 4)] {
+            model
+                .outputs
+                .insert(key.to_string(), format!("adc.apb_saradc.{channel}_volts"));
+        }
+        profile.cosim_models.push(model);
+    }
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load ESP32-C3 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build ESP32-C3 bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries NTC, diode, and NMOS netlists");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all netlists must resolve to distinct APB_SARADC channels"
+    );
+    session
+        .set_signal_number("ui.ntc.temperature_c", 25.0)
+        .expect("hold the unrelated NTC at nominal temperature");
+
+    let (w, l) = (10e-6, 2e-6);
+    let beta_ld = 50e-6 * w / (l - 2.0 * 0.5e-6);
+    let beta_uo = 400.0 * 1e-4 * 3.453_133e-11 / 20e-9 * w / l;
+    let beta_ref = 50e-6 * w / l;
+    let expected_diode_v = diode_voltage();
+    let mut cycles = 0;
+    for gate_v in [0.0_f64, 1.5, 2.0, 2.5] {
+        session
+            .set_signal_number("ui.mosfet_ld_uo.gate_v", gate_v)
+            .expect("set common NMOS gate drive");
+        // Two boundaries: the TOX stage's Meyer charge settles in the first.
+        for _ in 0..2 {
+            cycles += session.cycles_until_boundary(cycles);
+            let (steps, errors) = session
+                .advance_to(cycles, &mut bus)
+                .expect("solve and route NTC, diode, and NMOS netlists");
+            assert_eq!(steps.len(), 3, "all three analog netlists solve");
+            assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+        }
+
+        let ld_v = signal_voltage(&session, "adc.apb_saradc.1_volts");
+        let uo_v = signal_voltage(&session, "adc.apb_saradc.3_volts");
+        let ref_v = signal_voltage(&session, "adc.apb_saradc.4_volts");
+        for (label, actual_v, beta) in [
+            ("LD=0.5u", ld_v, beta_ld),
+            ("UO=400 TOX=20n", uo_v, beta_uo),
+            ("reference", ref_v, beta_ref),
+        ] {
+            let expected_v = nmos_drain_voltage(gate_v, beta);
+            assert!(
+                (actual_v - expected_v).abs() < 5e-5,
+                "{label} drain at {gate_v} V gate should be {expected_v} V, got {actual_v} V"
+            );
+        }
+        if gate_v > 1.0 {
+            assert!(
+                ld_v < uo_v - 0.05 && uo_v < ref_v - 0.05,
+                "LD and process KP raise drain current above the reference: {ld_v} / {uo_v} / {ref_v} V"
+            );
+        }
+        let ntc_v = signal_voltage(&session, "adc.apb_saradc.0_volts");
+        let diode_v = signal_voltage(&session, "adc.apb_saradc.2_volts");
+        assert!((ntc_v - 1.65).abs() < 1e-9, "unrelated NTC stays isolated");
+        assert!(
+            (diode_v - expected_diode_v).abs() < 2e-5,
+            "unrelated Shockley diode remains at its independent load line"
+        );
+
+        for (channel, volts) in [(0, ntc_v), (1, ld_v), (2, diode_v), (3, uo_v), (4, ref_v)] {
+            let millivolts = (volts * 1000.0 + 0.5).floor() as u32;
+            let expected_count = (millivolts * 4095 / 3300) as u16;
+            assert_eq!(
+                adc_channel_count(&mut bus, channel),
+                expected_count,
+                "the solved voltage must seed ADC1 channel {channel}"
+            );
+            assert_eq!(
+                convert_channel(&mut bus, channel),
+                expected_count,
+                "the one-shot result must report the solved channel {channel} voltage"
+            );
+        }
+    }
 }

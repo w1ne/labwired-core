@@ -1,0 +1,86 @@
+# FRDM-KW41Z: reverse-biased BJT junction leakage on ADC0 (Kinetis ADC16),
+# beside the unrelated Beta NTC on PTB2 and Shockley diode on PTB3.
+#
+# Each leakage circuit holds both junctions of one generic Gummel-Poon BJT in
+# reverse and reads the base current as I*R on a load resistor. Below
+# -3*N*Vt each of the four junction currents (IS/BF, ISE, IS/BR, ISC) follows
+# ngspice's cubic -I*(1 + (3*N*Vt/(e*V))^3) with its own N; the plain
+# exponential gives a different 16-bit code:
+#   PTB1   (SE1)  NPN, C = E = 1.65 V, both junctions near -0.39 V
+#   PTB18  (SE4)  PNP mirror, B = 1.65 V, both junctions near -0.60 V
+#   PTA19  (SE5)  NPN, C = 1.65 V, E = 3.3 V: unequal reverse biases
+# The test loads the board profile and takes only cosim_models from here.
+name: "frdm-kw41z-analog-bjt-reverse-leakage"
+chip: "../../configs/chips/mkw41z4.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "ntc_divider"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      temperature: "ui.ntc.temperature_c"
+    outputs:
+      v_sense: "board.analog.ptb2_volts"
+    config:
+      netlist_text: |
+        Vcc vcc 0 dc 3.3
+        Rpull vcc sense 10k
+        Rntc sense 0 10k beta=3950 tnom=25 temp=25
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        temperature: "Rntc"
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.ptb3_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"
+  - id: "npn_reverse_leakage"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_leak: "board.analog.ptb1_volts"
+    config:
+      netlist_text: |
+        Vb bias 0 dc 1.65
+        Q1 bias sense bias QLEAK
+        Rload sense 0 1.2Meg
+        .model QLEAK NPN(IS=0.2u BF=4 BR=2 NF=1 NR=1.2 ISE=0.4u NE=2 ISC=0.5u NC=1.5)
+      probes:
+        v_leak: "v(sense)"
+  - id: "pnp_reverse_leakage"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_leak: "board.analog.ptb18_volts"
+    config:
+      netlist_text: |
+        Vb bias 0 dc 1.65
+        Q1 sense bias sense QLEAK
+        Rload sense 0 1Meg
+        .model QLEAK PNP(IS=0.2u BF=4 BR=2 NF=1 NR=1.2 ISE=0.4u NE=2 ISC=0.5u NC=1.5)
+      probes:
+        v_leak: "v(sense)"
+  - id: "npn_unequal_reverse_leakage"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_leak: "board.analog.pta19_volts"
+    config:
+      netlist_text: |
+        Vb bias 0 dc 1.65
+        Ve em 0 dc 3.3
+        Q1 bias sense em QLEAK
+        Rload sense 0 1.2Meg
+        .model QLEAK NPN(IS=0.2u BF=4 BR=2 NF=1 NR=1.2 ISE=0.4u NE=2 ISC=0.5u NC=1.5)
+      probes:
+        v_leak: "v(sense)"

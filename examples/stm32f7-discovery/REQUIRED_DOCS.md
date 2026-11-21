@@ -8,9 +8,9 @@
    https://www.st.com/resource/en/reference_manual/rm0385-stm32f75xxx-and-stm32f74xxx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
 3. CMSIS device header **stm32f746xx.h** (`USART1_IRQn = 37`, GPIOI / USART1 / RCC bases).
 
-ADC1 is mapped at `0x40012000`, gated by `RCC_APB2ENR.ADC1EN`, and PA0/PA1 map to
-ADC123_IN0/ADC123_IN1 per DS10916 and RM0385. The model exposes ADC1 only; ADC2/ADC3
-and the remaining external ADC pads are not claimed by this profile.
+ADC1 is mapped at `0x40012000`, gated by `RCC_APB2ENR.ADC1EN`, and PA0/PA1/PA2 map to
+ADC123_IN0/ADC123_IN1/ADC123_IN2 per DS10916 and RM0385. The model exposes ADC1 only;
+ADC2/ADC3 and the remaining external ADC pads are not claimed by this profile.
 
 ## Board Pinout / BSP
 

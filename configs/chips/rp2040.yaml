@@ -8,6 +8,15 @@ registers_count: 240
 # RP2040 SDK default system clock, 125 MHz.
 cpu_hz: 125_000_000
 
+# GPIO pad supply and input thresholds (ratios of io_voltage_v).
+# RP2040 Datasheet, section 5.5.3.4 Table 625 (digital IO, Standard and FT): at IOVDD = 3.3 V, VIL max
+# 0.8 V and VIH min 2.0 V. These are absolute volts, not VDD ratios (the
+# 1.8 V row is 0.35/0.65*IOVDD), so the ratios are only valid at 3.3 V:
+# 0.8/3.3 = 0.2424 and 2.0/3.3 = 0.6061 (2.0001 V). https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.2424
+  vih: 0.6061
 flash:
   base: 0x10000000
   # 2 MiB of external QSPI NOR (the Pico's W25Q16), spelled in KB because

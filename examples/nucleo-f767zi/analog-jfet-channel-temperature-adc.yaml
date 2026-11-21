@@ -1,0 +1,103 @@
+# Generic level-1 NJF channel-temperature laws route to STM32F767 ADC1.
+# Primary VTOTC/BETATCE terms deliberately conflict with their TCV/BEX
+# fallbacks; each hot branch has an explicit equivalent for comparison.
+name: "nucleo-f767zi-analog-jfet-channel-temperature-adc"
+chip: "../../configs/chips/stm32f767.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "jfet_temperature_nominal"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.jfet_temperature.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa2_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        J1 drain gate 0 NJF_NOMINAL temp=25
+        .model NJF_NOMINAL NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-14 TNOM=25)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
+  - id: "jfet_temperature_primary_coefficients"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.jfet_temperature.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa3_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        J1 drain gate 0 NJF_PRIMARY temp=85
+        .model NJF_PRIMARY NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-14 TNOM=25 VTOTC=4m TCV=4m BETATCE=-0.15 BEX=0.8)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
+  - id: "jfet_temperature_primary_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.jfet_temperature.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa4_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        J1 drain gate 0 NJF_PRIMARY_EQ temp=85
+        .model NJF_PRIMARY_EQ NJF(VTO=-1.76 BETA=457.16991212u LAMBDA=0.025 B=0.8 PB=1 IS=1e-14 TNOM=25)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
+  - id: "jfet_temperature_fallback_coefficients"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.jfet_temperature.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa5_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        J1 drain gate 0 NJF_FALLBACK temp=85
+        .model NJF_FALLBACK NJF(VTO=-2 BETA=500u LAMBDA=0.025 B=0.8 PB=1 IS=1e-14 TNOM=25 TCV=4m BEX=0.8)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
+  - id: "jfet_temperature_fallback_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.jfet_temperature.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa6_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Rload supply drain 1k
+        Vgate gate 0 dc 0
+        J1 drain gate 0 NJF_FALLBACK_EQ temp=85
+        .model NJF_FALLBACK_EQ NJF(VTO=-2.24 BETA=578.99407272u LAMBDA=0.025 B=0.8 PB=1 IS=1e-14 TNOM=25)
+      probes:
+        drain_voltage: "v(drain)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3

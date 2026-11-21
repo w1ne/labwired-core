@@ -33,3 +33,79 @@ peripherals:
   type: lowpower_timer
   bus: sysbus
   base_address: 1090695168
+# GPIO ports A-E. Renode's RV32M1 platform leaves GPIO out, so the import
+# carried none. The RV32M1 SDK header (RV32M1_ri5cy.h GPIOx_BASE) and Zephyr
+# rv32m1.dtsi (openisa,rv32m1-gpio) put GPIOA..GPIOD at 0x48020000 + 0x40 * n
+# and GPIOE at 0x4100F000, with the Kinetis register set: PDOR/PSOR/PCOR/PTOR
+# at +0x00..+0x0C, PDIR +0x10, PDDR +0x14 (GPIO_Type in the same header). The
+# same map as the promoted configs/chips/mk64f12.yaml, so these ports run on
+# `profile: kinetis`. The PORT blocks (PCRn MUX/pulls) and the PCC clock gates
+# are not modelled, so PDIR reads the pad whatever its MUX or clock.
+- id: gpioa
+  type: gpio
+  bus: sysbus
+  base_address: 0x48020000
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpiob
+  type: gpio
+  bus: sysbus
+  base_address: 0x48020040
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpioc
+  type: gpio
+  bus: sysbus
+  base_address: 0x48020080
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpiod
+  type: gpio
+  bus: sysbus
+  base_address: 0x480200C0
+  size: 64B
+  config:
+    profile: kinetis
+- id: gpioe
+  type: gpio
+  bus: sysbus
+  base_address: 0x4100F000
+  size: 64B
+  config:
+    profile: kinetis
+# LPADC0 on `nxp_lpadc` with the RV32M1 `single_fifo` layout (one RESFIFO,
+# FCTRL at 0x30, four triggers at 0xC0, CMDL.ADCH/ABSEL only, CFG.CALOFS).
+# rv32m1_sdk_riscv @92fb0650 RV32M1_ri5cy.h ADC0_BASE 0x4004A000 (ADC_Type
+# ends with RESFIFO at 0x300); resets from rv32m1_ri5cy-pac RV32M1_RI5CY.svd.
+# ADC0_IRQn is 21 on the RI5CY core, through INTMUX/event unit; this profile
+# declares no interrupt controller, so no irq is wired. VREFH 1.8 V is an
+# ASSUMPTION: no source found for the VEGAboard VREFH rail; this SoC-only
+# profile takes the same value.
+- id: adc0
+  type: nxp_lpadc
+  bus: sysbus
+  base_address: 0x4004A000
+  size: 4KB
+  config:
+    layout: single_fifo
+    vref_mv: 1800
+# ADC0_SEn pads from the pin_signal lists in the rv32m1_sdk_riscv
+# boards/rv32m1_vega/*/pin_mux.c files (e.g. lpspi/interrupt: "ADC0_SE2/PTB7",
+# lpspi_loopback: "ADC0_SE4/LPCMP0_IN2/PTC9"). SEn is converted as CHnA
+# (CMDL.ADCH = n, ABSEL = 0), the SDK's default kLPADC_SampleChannelSingleEndSideA
+# that the lpadc/polling example uses on channel 0 (J2-4). ADC0_SE3, SE9 and
+# SE11 are left out: no SDK file names their pads.
+analog_pins:
+  PTB3:  { peripheral: adc0, channel: 0 }    # ADC0_SE0
+  PTB4:  { peripheral: adc0, channel: 1 }    # ADC0_SE1
+  PTB7:  { peripheral: adc0, channel: 2 }    # ADC0_SE2
+  PTC9:  { peripheral: adc0, channel: 4 }    # ADC0_SE4
+  PTC10: { peripheral: adc0, channel: 5 }    # ADC0_SE5
+  PTC11: { peripheral: adc0, channel: 6 }    # ADC0_SE6
+  PTC12: { peripheral: adc0, channel: 7 }    # ADC0_SE7
+  PTD5:  { peripheral: adc0, channel: 8 }    # ADC0_SE8
+  PTD7:  { peripheral: adc0, channel: 10 }   # ADC0_SE10
+  PTD9:  { peripheral: adc0, channel: 12 }   # ADC0_SE12

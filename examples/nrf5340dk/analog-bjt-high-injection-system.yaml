@@ -1,0 +1,47 @@
+# Matched generic Gummel–Poon NPN branches route high-injection rolloff and
+# its no-rolloff control through nRF5340-DK SAADC channels 2 and 3.
+name: "nrf5340dk-analog-bjt-high-injection"
+chip: "../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_high_injection_rolloff"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_high_injection.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.2_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_HIGH_INJECTION
+        .model NPN_HIGH_INJECTION NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75 IKF=50u IKR=500u NKF=0.8)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_high_injection_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_high_injection.base_v"
+    outputs:
+      collector_voltage: "adc.saadc.3_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 10k
+        Q1 collector base 0 NPN_CONTROL
+        .model NPN_CONTROL NPN(IS=1e-16 BF=80 BR=4 VAF=50 VAR=75)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3

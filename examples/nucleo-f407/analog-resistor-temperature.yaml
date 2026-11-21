@@ -1,0 +1,37 @@
+# Generic SPICE TC1/TC2 resistors route through PA2..PA5 to NUCLEO-F407 ADC1.
+name: "nucleo-f407-resistor-temperature"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "resistor_temperature_coefficients"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      full_temperature: "ui.resistor.full_temperature_c"
+      first_order_temperature: "ui.resistor.first_order_temperature_c"
+    outputs:
+      full_tc_voltage: "board.analog.pa2_volts"
+      first_order_voltage: "board.analog.pa3_volts"
+      explicit_hot_voltage: "board.analog.pa4_volts"
+      nominal_voltage: "board.analog.pa5_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rfull supply full 1k tc1=4m tc2=1u tnom=25 temp=25
+        Rfull_load full 0 1k
+        Rlinear supply linear 1k tc1=4m tnom=25 temp=25
+        Rlinear_load linear 0 1k
+        Rhot supply hot 1.41k
+        Rhot_load hot 0 1k
+        Rnominal supply nominal 1k
+        Rnominal_load nominal 0 1k
+      probes:
+        full_tc_voltage: "v(full)"
+        first_order_voltage: "v(linear)"
+        explicit_hot_voltage: "v(hot)"
+        nominal_voltage: "v(nominal)"
+      sources:
+        full_temperature: "Rfull"
+        first_order_temperature: "Rlinear"
+      vdd: 3.3

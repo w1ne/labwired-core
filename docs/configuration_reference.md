@@ -83,7 +83,7 @@ everything else is optional and has a default.
 | `pins` | Authoritative pad→GPIO map; once declared, an unlisted pad no longer resolves (no silent label-letter fallback). | `pins: {PA5: {gpio: gpio_a, bit: 5}}` |
 | `analog_pins` | Pad→ADC map (`peripheral`, `channel`); kept apart from `pins` so naming only the ADC inputs does not force a full GPIO transcription. | `analog_pins: {PA0: {peripheral: "adc1", channel: 0}}` |
 | `io_voltage_v` | The supply the chip's GPIO pads run from, in volts; reference for `gpio_input_thresholds`. Absent = "not transcribed" (nothing defaults it). | `io_voltage_v: 3.3` |
-| `gpio_input_thresholds` | Digital input thresholds as ratios of `io_voltage_v`; must satisfy `0 < vil < vih < 1`. | `gpio_input_thresholds: {vil: 0.35, vih: 0.65}` |
+| `gpio_input_thresholds` | Digital input thresholds as ratios of `io_voltage_v`; must satisfy `0 < vil < vih < 1`. Optional `pad_classes:` give named pads other datasheet limits, as ratios (`vil`/`vih`) or fixed volts (`vil_v`/`vih_v`); a pad is in at most one class. | `gpio_input_thresholds: {vil: 0.35, vih: 0.65}` |
 | `supply_monitor` | POR/PDR/BOR supply thresholds — see [Supply supervisor](#supply-supervisor). | see below |
 | `include` | Chip YAML include(s), expanded only when the descriptor is loaded from a path. | `include: nrf52-common.yaml` |
 
@@ -262,6 +262,25 @@ right — declare `type: stub` (or add the type to the allowlist with a reason).
 | `analog_pins` | Pad label → the ADC that samples it (`peripheral`, `channel`), transcribed from the datasheet pinout. A pad absent here means "no analog pad is modelled", not "channel 0": the co-simulation `board.analog.<pad>_volts` path refuses such a pad rather than guessing. | `analog_pins: {PA0: {peripheral: "adc1", channel: 0}}` (`configs/chips/stm32f103.yaml`) |
 | `io_voltage_v` | The supply the GPIO pads run from, in volts. Absent means "not transcribed", and nothing defaults it — a board at another supply would get thresholds for the wrong rail. | `io_voltage_v: 3.3` |
 | `gpio_input_thresholds` | Datasheet digital input thresholds as ratios of `io_voltage_v`: a pad reads low at or below `vil` and high at or above `vih`. | `gpio_input_thresholds: {vil: 0.35, vih: 0.65}` (`configs/chips/stm32f103.yaml`) |
+
+A datasheet that gives some pads their own limits lists them under
+`pad_classes:`. The class applies to the input each label resolves to, so any
+spelling of the pad gets it; every other pad keeps `vil`/`vih`.
+
+```yaml
+# configs/chips/same70q21b.yaml — DS60001527J Table 58-4
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+  pad_classes:
+    - name: GPIO_MLB
+      pads: [PB4, PB5, PD10]
+      vil_v: 0.7     # fixed volts, independent of VDDIO
+      vih_v: 1.8
+# configs/chips/atmega328p.yaml uses the ratio form for XTAL1:
+#   - { name: XTAL1, pads: [PB6], vil: 0.1, vih: 0.7 }
+```
 
 ### Supply supervisor
 

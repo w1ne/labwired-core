@@ -1,0 +1,72 @@
+# SPICE instance AREA on a diode, a diode-connected NPN and an N-JFET, wired
+# to the micro:bit v2's P0.04/AIN2, P0.05/AIN3 and P0.28/AIN4. A control
+# netlist with the same circuits and hand-scaled model cards (no AREA) drives
+# P0.29/AIN5, P0.30/AIN6 and P0.31/AIN7. Both share one supply input, and each
+# sense node carries the same 10 MOhm board pull-up as the NTC and diode routes.
+name: "microbit-v2-analog-device-area"
+chip: "../../configs/chips/nrf52833.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "device_area"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply: "ui.device_area.supply_v"
+    outputs:
+      v_diode: "board.analog.p0.04_volts"
+      v_bjt: "board.analog.p0.05_volts"
+      v_jfet: "board.analog.p0.28_volts"
+    config:
+      netlist_text: |
+        Vsupply supply 0 dc 3.3
+        Rlim supply d 1k
+        Rpd supply d 10Meg
+        D1 d 0 DAREA area=4
+        Rload supply c 1k
+        Rpc supply c 10Meg
+        Q1 c c 0 QAREA 3
+        Rj supply dj 4.7k
+        Rpj supply dj 10Meg
+        J1 dj 0 0 JAREA area=2
+        .model DAREA D(IS=1e-14 N=1.05 RS=40 ISR=1e-12 IK=2m CJO=10p)
+        .model QAREA NPN(IS=1e-16 BF=80 RB=300 RE=6 RC=30 VAF=40 IKF=3m ISE=5e-15 NE=1.5 CJE=2p CJC=1p)
+        .model JAREA NJF(VTO=-1.5 BETA=2e-4 RD=100 RS=100 LAMBDA=0.02 CGS=3p CGD=1p)
+      probes:
+        v_diode: "v(d)"
+        v_bjt: "v(c)"
+        v_jfet: "v(dj)"
+      sources:
+        supply: "Vsupply"
+      vdd: 3.3
+  - id: "device_area_scaled_cards"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply: "ui.device_area.supply_v"
+    outputs:
+      v_diode: "board.analog.p0.29_volts"
+      v_bjt: "board.analog.p0.30_volts"
+      v_jfet: "board.analog.p0.31_volts"
+    config:
+      netlist_text: |
+        Vsupply supply 0 dc 3.3
+        Rlim supply d 1k
+        Rpd supply d 10Meg
+        D1 d 0 DX4
+        Rload supply c 1k
+        Rpc supply c 10Meg
+        Q1 c c 0 QX3
+        Rj supply dj 4.7k
+        Rpj supply dj 10Meg
+        J1 dj 0 0 JX2
+        .model DX4 D(IS=4e-14 N=1.05 RS=10 ISR=4e-12 IK=8m CJO=40p)
+        .model QX3 NPN(IS=3e-16 BF=80 RB=100 RE=2 RC=10 VAF=40 IKF=9m ISE=1.5e-14 NE=1.5 CJE=6p CJC=3p)
+        .model JX2 NJF(VTO=-1.5 BETA=4e-4 RD=50 RS=50 LAMBDA=0.02 CGS=6p CGD=2p)
+      probes:
+        v_diode: "v(d)"
+        v_bjt: "v(c)"
+        v_jfet: "v(dj)"
+      sources:
+        supply: "Vsupply"
+      vdd: 3.3

@@ -32,9 +32,13 @@ and the PendSV context switch.
     system controller are declared stubs: the watchdog never fires. The TCM,
     the MPU (Zephyr's regions are stored, not enforced) and the FPU are not
     exercised. GMAC, TRNG, TC0–3, SPI0/1,
-    QSPI, TWIHS0–2, MCAN0/1, AFEC0/1, DACC, PWM0/1, HSMCI, SSC, USBHS and
+    QSPI, TWIHS0–2, MCAN0/1, DACC, PWM0/1, HSMCI, SSC, USBHS and
     XDMAC are **not mapped**: firmware that touches them faults with a memory
-    violation. There is no silicon capture: **SIM-DERIVED**.
+    violation. AFEC0/AFEC1 run on `sam_afec`: `CR.START` converts the `CHER`
+    set at once (no conversion clock), `CSELR` + `CDR`, `LCDR`, `EMR.RES`
+    12–16 bits against VREFP 3.3 V; hardware triggers, gain/offset,
+    differential and signed modes and the temperature sensor are not
+    modelled. There is no silicon capture: **SIM-DERIVED**.
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:

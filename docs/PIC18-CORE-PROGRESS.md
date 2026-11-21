@@ -234,10 +234,11 @@ Follow-ups: `75f859ce9` (`fix(pic18): let MOVFF to PCL update the PC`),
    `RCON` reset-source/`STVREN` behavior tied to the vector path.
 3. **Peripherals.** In: EUSART TX (`TXREG` to the console, read-only
    `TRMT`/`TXIF`), `PORTA..E`/`LATx`/`TRISx` with reset directions (input pins
-   read 0), `SLEEP` wake, and `RCON.TO/PD`. Missing: pad masks and external
-   pin drive, analog/PPS, oscillator and `CONFIG` decoding, TMR0/1/2/3,
-   CCP/ECCP, MSSP, EUSART RX and baud timing, ADC, comparators, WDT, EEPROM,
-   and reset sources.
+   read 0), `SLEEP` wake, `RCON.TO/PD`, and the PIC18F4520 10-bit A/D module
+   (DS39631E section 19) on chips that declare the routed-pad window.
+   Missing: pad masks and external digital pin drive, PPS, oscillator and
+   `CONFIG` decoding (the A/D reads `PBADEN`), TMR0/1/2/3, CCP/ECCP, MSSP,
+   EUSART RX and baud timing, comparators, WDT, EEPROM, and reset sources.
 4. **Full ISA.** The standard set is complete. Still missing: the `XINST`
    extended set and indexed-literal addressing, and per-instruction cycle
    counts for skips over two-word instructions (counted as 2, not 3).

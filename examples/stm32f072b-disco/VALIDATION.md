@@ -57,5 +57,7 @@ cargo test -p labwired-core --test firmware_survival test_stm32f072b_disco_smoke
   (bit 6), LD4 = PC8 (bit 8), LD5 = PC9 (bit 9), LD6 = PC7 (bit 7).
 - Only the reset HSI (8 MHz) is used; the F0 PLL and CFGR3 kernel-clock muxing
   are modelled but not exercised by this smoke.
-- The ADC uses the `stm32l4`-family profile (the CFGR1/CFGR2 block); it is
-  declared but not exercised. USB/TSC/CRS are stubs.
+- ADC1 uses the `stm32f0` v2 register profile. The board's external ADC pad map,
+  NTC/diode routing, and matched BJT Early-effect conversions are exercised by
+  `cosim_stm32f072_analog`; that co-simulation proof is model coverage, not a
+  silicon capture. USB/TSC/CRS are stubs.

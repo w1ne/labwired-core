@@ -20,8 +20,8 @@ flash:
 ram:
   base: 0x20010000
   size: "64KB"
-# Simulation-only co-simulation inputs. These endpoints do not claim the
-# Teensy 4.1's physical ADC, analog pad mux, or digital input thresholds.
+# The digital input thresholds remain simulation assumptions. The analog ADC
+# routes below use the physical RT106x pad-to-channel assignment.
 io_voltage_v: 3.3
 gpio_input_thresholds: { vil: 0.3, vih: 0.7 }
 memory_regions:
@@ -32,6 +32,46 @@ memory_regions:
 pins:
   # D13 / LED — GPIO_B0_03 → GPIO2_IO03 (PJRC Teensy 4.1).
   D13: { gpio: gpio2, bit: 3, functions: [{ type: gpio, peripheral: gpio2 }] }
+  # Teensy 4.1 A0..A17 pads (PJRC cores/teensy4/core_pins.h).
+  AD_B0_12: { gpio: gpio1, bit: 12, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B0_13: { gpio: gpio1, bit: 13, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_00: { gpio: gpio1, bit: 16, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_01: { gpio: gpio1, bit: 17, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_02: { gpio: gpio1, bit: 18, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_03: { gpio: gpio1, bit: 19, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_04: { gpio: gpio1, bit: 20, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_05: { gpio: gpio1, bit: 21, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_06: { gpio: gpio1, bit: 22, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_07: { gpio: gpio1, bit: 23, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_08: { gpio: gpio1, bit: 24, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_09: { gpio: gpio1, bit: 25, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_10: { gpio: gpio1, bit: 26, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_11: { gpio: gpio1, bit: 27, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_12: { gpio: gpio1, bit: 28, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_13: { gpio: gpio1, bit: 29, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_14: { gpio: gpio1, bit: 30, functions: [{ type: gpio, peripheral: gpio1 }] }
+  AD_B1_15: { gpio: gpio1, bit: 31, functions: [{ type: gpio, peripheral: gpio1 }] }
+# i.MX RT106x physical pad → ADC channels, from the Teensyduino
+# `pin_to_channel[]` table in PaulStoffregen/cores `teensy4/analog.c`.
+analog_pins:
+  AD_B1_02: { peripheral: adc1, channel: 7 }   # A0 / pin 14
+  AD_B1_03: { peripheral: adc1, channel: 8 }   # A1 / pin 15
+  AD_B1_07: { peripheral: adc1, channel: 12 }  # A2 / pin 16
+  AD_B1_06: { peripheral: adc1, channel: 11 }  # A3 / pin 17
+  AD_B1_01: { peripheral: adc1, channel: 6 }   # A4 / pin 18
+  AD_B1_00: { peripheral: adc1, channel: 5 }   # A5 / pin 19
+  AD_B1_10: { peripheral: adc1, channel: 15 }  # A6 / pin 20
+  AD_B1_11: { peripheral: adc1, channel: 0 }   # A7 / pin 21
+  AD_B1_08: { peripheral: adc1, channel: 13 }  # A8 / pin 22
+  AD_B1_09: { peripheral: adc1, channel: 14 }  # A9 / pin 23
+  AD_B0_12: { peripheral: adc1, channel: 1 }   # A10 / pin 24
+  AD_B0_13: { peripheral: adc1, channel: 2 }   # A11 / pin 25
+  AD_B1_14: { peripheral: adc2, channel: 3 }   # A12 / pin 26
+  AD_B1_15: { peripheral: adc2, channel: 4 }   # A13 / pin 27
+  AD_B1_12: { peripheral: adc2, channel: 1 }   # A14 / pin 38
+  AD_B1_13: { peripheral: adc2, channel: 2 }   # A15 / pin 39
+  AD_B1_04: { peripheral: adc1, channel: 9 }   # A16 / pin 40
+  AD_B1_05: { peripheral: adc1, channel: 10 }  # A17 / pin 41
 peripherals:
   # CCM @ 0x400FC000 — CCGR ungating + COSC_READY (IMXRT1060RM / MIMXRT1062.h).
   - id: "ccm"
@@ -43,6 +83,13 @@ peripherals:
     type: "imx_iomuxc"
     base_address: 0x401F8000
     size: "16KB"
+  # GPIO1 @ 0x401B8000 — AD_B0_12..13 / AD_B1_00..15 = GPIO1_IO12..31.
+  - id: "gpio1"
+    type: "gpio"
+    base_address: 0x401B8000
+    size: "256B"
+    config:
+      profile: "imxrt"
   # GPIO2 @ 0x401BC000 — DR/GDIR + DR_TOGGLE@0x8C (IMXRT1060RM §12).
   # Pulls: IOMUXC SW_PAD_CTL_PAD_GPIO_B0_00..B1_15 (0x32C + 4*n) carry
   # GPIO2_IO00..31's PKE/PUE/PUS (`pad_control`).
@@ -61,6 +108,15 @@ peripherals:
     base_address: 0x40198000
     size: "4KB"
     irq: 21
+  # ADC1/ADC2 @ 0x400C4000/0x400C8000 (IMXRT1060RM §66).
+  - id: "adc1"
+    type: "imxrt_adc"
+    base_address: 0x400C4000
+    size: "4KB"
+  - id: "adc2"
+    type: "imxrt_adc"
+    base_address: 0x400C8000
+    size: "4KB"
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
@@ -69,9 +125,3 @@ peripherals:
     type: "stub"
     base_address: 0x402A8000
     size: "4KB"
-  # Generic mixed-signal co-simulation inputs; not RT106x registers or pads.
-  - id: "cosim_inputs"
-    type: "input_pin_bank"
-    base_address: 0xF0000000
-    size: "4KB"
-    config: { pin_count: 2 }

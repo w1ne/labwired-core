@@ -120,3 +120,66 @@ fn dspic33fj32mc202_ntc_and_diode_netlists_reach_gpio_thresholds() {
         );
     }
 }
+
+/// A second analog proof on the 202: two BJT switches with one card and one
+/// base divider, where only `IBE`/`IBC` differ. ngspice-42 `op` (reltol=1e-9)
+/// solves the collectors to 0.0638095694 V and 3.2019048079 V; the engine
+/// must match and the pads must read low and high beside the NTC and diode.
+#[test]
+fn dspic33fj32mc202_bjt_ibe_ibc_switch_flips_gpio_beside_ntc_and_diode() {
+    let system_path = root("configs/systems/dspic33fj32mc202-demo.yaml");
+    let mut profile = SystemManifest::from_file(&system_path).expect("load dsPIC 202 profile");
+    let analog_path = root("examples/dspic33fj32mc202/analog-bjt-ibe-system.yaml");
+    let analog = SystemManifest::from_file(&analog_path).expect("load generic analog netlists");
+    profile.cosim_models = analog.cosim_models;
+
+    let chip_path = system_path.parent().unwrap().join(&profile.chip);
+    let chip = ChipDescriptor::from_file(&chip_path).expect("load dsPIC33FJ32MC202 descriptor");
+    let mut bus = SystemBus::from_config(&chip, &profile).expect("build dsPIC board bus");
+    let mut session = CosimSession::new(&profile.cosim_models, Path::new("."), &bus)
+        .expect("build analog co-simulation")
+        .expect("fixture carries three analog models");
+    assert_eq!(
+        session.binding_errors(),
+        &[] as &[RoutingError],
+        "all devices must bind to distinct, package-present GPIOB inputs"
+    );
+
+    session
+        .set_signal_number("ui.ntc.temperature_c", 80.0)
+        .expect("set NTC temperature");
+    let cycles = session.cycles_until_boundary(0);
+    let (steps, errors) = session
+        .advance_to(cycles, &mut bus)
+        .expect("solve and route all analog netlists");
+    assert_eq!(
+        steps.len(),
+        3,
+        "the three independent devices solve each step"
+    );
+    assert!(errors.is_empty(), "unexpected route errors: {errors:?}");
+
+    let resistance = ntc_resistance_ohms(80.0);
+    let ntc_v = signal_voltage(&session, "board.gpio_in.gpiob.0");
+    assert!((ntc_v - 3.3 * resistance / (10_000.0 + resistance)).abs() < 1e-9);
+    let diode_v = signal_voltage(&session, "board.gpio_in.gpiob.1");
+    assert!((diode_v - diode_load_line_voltage()).abs() < 2e-5);
+
+    for (pad, expected) in [("gpiob.2", 6.38095694333e-02), ("gpiob.3", 3.20190480793)] {
+        let got = signal_voltage(&session, &format!("board.gpio_in.{pad}"));
+        assert!(
+            ((got - expected) / expected).abs() < 1e-4,
+            "{pad}: ngspice-42 {expected} V, got {got} V"
+        );
+    }
+
+    let portb = bus.read_u16(GPIOB_PORT).expect("read dsPIC PORTB pads");
+    assert_eq!(portb & 0b0001, 0, "RB0 reads the hot NTC divider low");
+    assert_eq!(portb & 0b0010, 0, "RB1 reads the diode voltage low");
+    assert_eq!(
+        portb & 0b0100,
+        0,
+        "RB2 reads the saturated IBE/IBC switch low"
+    );
+    assert_ne!(portb & 0b1000, 0, "RB3 reads the IS-only twin high");
+}

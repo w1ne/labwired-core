@@ -1,0 +1,21 @@
+# A generic SPICE SFFM source drives a generic level-1 NMOS load line into ADC1_IN6.
+name: "nucleo-f407-sffm-mosfet"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "sffm_mosfet_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_drain: "board.analog.pa6_volts"
+    config:
+      netlist_text: |
+        Vdrive gate 0 SFFM(1.65 0.25 50k 0.8 5k)
+        Vcc supply 0 dc 3.3
+        Rload supply drain 1k
+        M1 drain gate 0 0 NMOS1 w=100u l=10u
+        .model NMOS1 NMOS(VTO=1 KP=20u LAMBDA=0.02)
+      probes:
+        v_drain: "v(drain)"
+      vdd: 3.3

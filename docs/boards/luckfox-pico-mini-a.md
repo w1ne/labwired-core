@@ -77,7 +77,7 @@ Shared vendor mechanical reference, not a manufactured carrier-board footprint. 
 | Official pin / dimension / population references | ✅ | Documents and images, not electrical testing |
 | Cortex-A7 arithmetic, ARM/Thumb and shared Bus access | ⚠️ | Native core fixture only; [prototype scope](../qemu-arm-core.md) |
 | RV1103 reset, boot ROM and DDR initialization | ❌ | No board model |
-| Generic analog co-simulation inputs | ⚠️ | Beta NTC and Shockley diode netlists reach two simulation-only threshold inputs; not GPIO, pinmux, physical pad routing, or SARADC conversion |
+| SARADC analog co-simulation | ⚠️ | Beta NTC and Shockley diode netlists on SARADC_IN0/IN1 (1.8 V) convert through the `rockchip_saradc_v2` register model at 0xff3c0000 with the vendor driver sequence. The [analog example system](../../examples/luckfox-pico-mini-a/analog-ntc-diode-system.yaml) adds the converter; the RV1103 descriptor stays declared-only. Not GPIO or pinmux, not instantiated by the native Linux platform, not compared with silicon |
 | MMU, exceptions and interrupt delivery | ⚠️ | Native system fixtures and real Linux boot through GIC400; separate from old ELF adapter |
 | UART2 and architectural timer | ⚠️ | Real guest console and advancing uptime through reduced SystemBus platform; functional timing |
 | RV1103 CRU, reset, GPIO, pinmux and DMA | ❌ | Not modeled |

@@ -1,0 +1,87 @@
+# TLEV=3 BJT substrate-current TISS1/TISS2 coefficients reach SAADC AIN2..AIN5.
+# The explicit hot-ISS branch is the independent equivalent for both coefficients.
+name: "nrf5340dk-analog-bjt-substrate-tiss"
+chip: "../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_substrate_tiss_coefficients"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_v: "ui.bjt_substrate_tiss.substrate_v"
+    outputs:
+      collector_voltage: "adc.saadc.2_volts"
+    config:
+      netlist_text: |
+        Vbias rail 0 dc 1
+        Rsource rail collector 1k
+        Rload collector 0 100k
+        Vsub substrate 0 dc -1
+        Q1 collector 0 0 substrate NPN_SUBSTRATE_TISS temp=125
+        .model NPN_SUBSTRATE_TISS NPN(IS=1e-16 BF=80 TLEV=3 TNOM=27 ISS=1e-15 NS=1.2 TISS1=-2m TISS2=10u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        substrate_v: "Vsub"
+      vdd: 3.3
+  - id: "bjt_substrate_tiss_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_v: "ui.bjt_substrate_tiss.substrate_v"
+    outputs:
+      collector_voltage: "adc.saadc.3_volts"
+    config:
+      netlist_text: |
+        Vbias rail 0 dc 1
+        Rsource rail collector 1k
+        Rload collector 0 100k
+        Vsub substrate 0 dc -1
+        Q1 collector 0 0 substrate NPN_SUBSTRATE_EXPLICIT temp=125
+        .model NPN_SUBSTRATE_EXPLICIT NPN(IS=1e-16 BF=80 TLEV=3 TNOM=27 ISS=3.157911828632245e-14 NS=1.2)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        substrate_v: "Vsub"
+      vdd: 3.3
+  - id: "bjt_substrate_tiss_first_order"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_v: "ui.bjt_substrate_tiss.substrate_v"
+    outputs:
+      collector_voltage: "adc.saadc.4_volts"
+    config:
+      netlist_text: |
+        Vbias rail 0 dc 1
+        Rsource rail collector 1k
+        Rload collector 0 100k
+        Vsub substrate 0 dc -1
+        Q1 collector 0 0 substrate NPN_SUBSTRATE_TISS1 temp=125
+        .model NPN_SUBSTRATE_TISS1 NPN(IS=1e-16 BF=80 TLEV=3 TNOM=27 ISS=1e-15 TISS1=-2m NS=1.2)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        substrate_v: "Vsub"
+      vdd: 3.3
+  - id: "bjt_substrate_tiss_nominal"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      substrate_v: "ui.bjt_substrate_tiss.substrate_v"
+    outputs:
+      collector_voltage: "adc.saadc.5_volts"
+    config:
+      netlist_text: |
+        Vbias rail 0 dc 1
+        Rsource rail collector 1k
+        Rload collector 0 100k
+        Vsub substrate 0 dc -1
+        Q1 collector 0 0 substrate NPN_SUBSTRATE_NOMINAL temp=125
+        .model NPN_SUBSTRATE_NOMINAL NPN(IS=1e-16 BF=80 TLEV=3 TNOM=27 ISS=1e-15 NS=1.2)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        substrate_v: "Vsub"
+      vdd: 3.3

@@ -1,0 +1,32 @@
+# Generic level-1 NMOS pair on nRF54L15-DK SAADC channels 2 and 3.
+# The reference device has VBS=0; the second device gets a swept negative
+# bulk bias. The unrelated NTC and Shockley diode remain on channels 0 and 1.
+name: "nrf54l15dk-analog-mosfet-body-effect"
+chip: "../../configs/chips/nrf54l15.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_body_effect"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      bulk_v: "ui.mosfet_body.bulk_v"
+    outputs:
+      reference_drain: "adc.saadc.2_volts"
+      body_effect_drain: "adc.saadc.3_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Vgate gate 0 dc 2.5
+        Vbulk bulk 0 dc 0
+        Rload_ref supply drain_ref 1k
+        Mref drain_ref gate 0 0 NMOS W=100u L=10u
+        Rload_body supply drain_body 1k
+        Mbody drain_body gate 0 bulk NMOS W=100u L=10u
+        .model NMOS NMOS(VTO=1 KP=100u GAMMA=0.4 PHI=0.7 LAMBDA=0.02)
+      probes:
+        reference_drain: "v(drain_ref)"
+        body_effect_drain: "v(drain_body)"
+      sources:
+        bulk_v: "Vbulk"
+      vdd: 3.3

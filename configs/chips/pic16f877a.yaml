@@ -11,9 +11,10 @@
 # L1 slice: boot + USART TX + PORTB latch. The USART, port and interrupt
 # SFRs are CPU-internal in the PIC16 model (crates/core/src/cpu/pic16.rs),
 # so no bus-side peripherals are declared. Not modelled: oscillator/CONFIG
-# decoding, TMR1/2 (TMR0 timer mode is modelled), CCP, MSSP, ADC (PORTA/PORTE read as digital),
-# comparators, EEPROM, WDT, USART RX and baud timing, PSP and external pin
-# drive.
+# decoding, TMR1/2 (TMR0 timer mode is modelled), CCP, MSSP, comparators,
+# EEPROM, WDT, USART RX and baud timing, PSP and external digital pin drive.
+# The 10-bit A/D module is modelled (also CPU-internal) and converts the
+# routed AN0-AN7 pad levels declared below.
 #
 # - program memory: word-addressed (13-bit PC), reset vector 0x0000,
 #   interrupt vector 0x0004, four 2K-word pages via PCLATH<4:3>; the HEX/ELF
@@ -34,17 +35,25 @@ flash:
 ram:
   base: 0x000000
   size: "368"
-# Simulation-only analog co-simulation endpoints. PIC16 PORTA/PORTE external
-# sampling and the ADC are not modeled; these inputs exercise generic device
-# solving and threshold routing, not firmware-visible PIC pin behavior.
-io_voltage_v: 5.0
-gpio_input_thresholds:
-  vil: 0.3
-  vih: 0.7
+# A/D inputs (DS39582B Figure 11-1): AN0-AN3 on RA0-RA3, AN4 on RA5 and
+# AN5-AN7 on RE0-RE2. `board.analog.<pad>_volts` and `adc.adc.<n>_volts`
+# routes land on the `pic24_adc_pads` window, which the core's 10-bit A/D
+# module converts against VDD/VSS or the AN3/AN2 references (ADCON1 PCFG).
+analog_pins:
+  RA0: { peripheral: "adc", channel: 0 }
+  RA1: { peripheral: "adc", channel: 1 }
+  RA2: { peripheral: "adc", channel: 2 }
+  RA3: { peripheral: "adc", channel: 3 }
+  RA5: { peripheral: "adc", channel: 4 }
+  RE0: { peripheral: "adc", channel: 5 }
+  RE1: { peripheral: "adc", channel: 6 }
+  RE2: { peripheral: "adc", channel: 7 }
 peripherals:
-  - id: "analog_inputs"
-    type: "input_pin_bank"
-    base_address: 0x00001000
-    size: "2B"
-    config:
-      pin_count: 2
+  # Not silicon: the routed AN pin levels the A/D module converts (see
+  # `peripherals::pic24_adc_pads`). The data space is CPU-internal, so the
+  # window sits on the bus past the program image. `vref_mv` is VDD.
+  - id: "adc"
+    type: "pic24_adc_pads"
+    base_address: 0x01000000
+    size: "38"
+    config: { channels: 0x00FF, vref_mv: 5000 }

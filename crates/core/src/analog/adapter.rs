@@ -47,7 +47,7 @@ use crate::cosim::{CosimAdapter, CosimInputKind, CosimSignalValue, CosimStep, Co
 use crate::{SimResult, SimulationError};
 
 use super::mna::Solver;
-use super::netlist::{parse_netlist, AnalogError, NodeRef};
+use super::netlist::{parse_netlist, parse_netlist_with_files, AnalogError, Circuit, NodeRef};
 use super::trace::{AnalogChannel, AnalogTrace, AnalogTraceHandle};
 
 pub use super::mna::Integration;
@@ -225,7 +225,10 @@ impl AnalogCosimAdapter {
     /// Parse `netlist`, build the solver, resolve probes and sources, solve the
     /// operating point and seed the trace with it.
     pub fn from_netlist(netlist: &str, cfg: &AnalogConfig) -> Result<Self, AnalogError> {
-        let circuit = parse_netlist(netlist)?;
+        Self::from_circuit(parse_netlist(netlist)?, cfg)
+    }
+
+    fn from_circuit(circuit: Circuit, cfg: &AnalogConfig) -> Result<Self, AnalogError> {
         let solver = Solver::new(circuit, cfg.integration)?;
 
         let mut probes = Vec::with_capacity(cfg.probes.len());
@@ -240,7 +243,7 @@ impl AnalogCosimAdapter {
         let mut inputs = BTreeMap::new();
         for (input, element) in &cfg.sources {
             let target = if let Some(index) = solver.voltage_source_index(element) {
-                // A source that carries SIN()/PULSE() is driven by the clock.
+                // A source that carries a transient function is driven by the clock.
                 // Letting a routed input write to it too would give one element
                 // two owners, and which one you saw would depend on the order
                 // the co-simulation happened to call us in.
@@ -278,7 +281,7 @@ impl AnalogCosimAdapter {
         // Voltage-controlled switches have an empty ctrl and are driven by the
         // MNA engine from their sense nodes, so they are not routed inputs.
         for switch in &solver.circuit().switches {
-            if switch.voltage.is_some() || switch.ctrl.is_empty() {
+            if !switch.is_routed() || switch.ctrl.is_empty() {
                 continue;
             }
             let indices = solver.switches_controlled_by(&switch.ctrl);
@@ -309,7 +312,9 @@ impl AnalogCosimAdapter {
     }
 
     /// Build from a manifest entry, resolving a relative `config.netlist`
-    /// against the manifest's directory.
+    /// against the manifest's directory. The netlist's `.include` and `.lib`
+    /// files resolve against the netlist file's directory, or the manifest's
+    /// for `netlist_text`.
     pub fn from_manifest_config(
         config: &labwired_config::CosimModelConfig,
         base_dir: &Path,
@@ -322,7 +327,9 @@ impl AnalogCosimAdapter {
                     .to_string(),
             ));
         }
-        Self::from_netlist(&netlist, &cfg)
+        let dir = netlist_dir(&config.config, base_dir);
+        let mut read = |path: &Path| std::fs::read_to_string(path).map_err(|err| err.to_string());
+        Self::from_circuit(parse_netlist_with_files(&netlist, &dir, &mut read)?, &cfg)
     }
 
     /// The channel table this adapter contributes, prefix included.
@@ -555,6 +562,21 @@ fn strip_call(text: &str, letter: char) -> Option<&str> {
     text[first.len_utf8()..]
         .strip_prefix('(')
         .and_then(|rest| rest.strip_suffix(')'))
+}
+
+/// The directory a netlist's `.include` and `.lib` paths resolve against:
+/// the netlist file's own directory, or `base_dir` for inline `netlist_text`.
+fn netlist_dir(config: &HashMap<String, Value>, base_dir: &Path) -> PathBuf {
+    if config.contains_key("netlist_text") {
+        return base_dir.to_path_buf();
+    }
+    let Some(path) = config.get("netlist").and_then(Value::as_str) else {
+        return base_dir.to_path_buf();
+    };
+    let resolved = base_dir.join(path);
+    resolved
+        .parent()
+        .map_or_else(|| base_dir.to_path_buf(), Path::to_path_buf)
 }
 
 /// The netlist text for a manifest entry: inline `netlist_text`, or the file

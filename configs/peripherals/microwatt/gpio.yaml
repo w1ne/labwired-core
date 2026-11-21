@@ -1,0 +1,154 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# Microwatt GPIO controller (antonblanchard/microwatt gpio.vhdl), mapped at
+# 0xC000_7000 (soc.vhdl IO map, `x"C0007"` -> SLAVE_IO_GPIO). The block
+# decodes wb adr(4 downto 0) on the 32-bit IO bus, which soc.vhdl feeds a word
+# address, so each register is 4 bytes: GPIO_REG_DATA_OUT @0x00,
+# GPIO_REG_DATA_IN @0x04, GPIO_REG_DIR @0x08 (1 = output), DATA_SET @0x10,
+# DATA_CLR @0x14, INT_EN @0x20, INT_STAT @0x24, INT_CLR @0x30, INT_TYPE @0x34,
+# INT_BOTH_EDGE @0x38, INT_LEVEL @0x3C. NGPIO defaults to 32; pad k is bit k.
+# DATA_OUT, DIR and the interrupt registers reset to 0, so every pad starts as
+# an input.
+#
+# DIR is an output enable per pad, so it runs as the declarative GPIO path's
+# ENABLE register; DATA_IN is IN and DATA_OUT is OUT. Not modelled: DATA_SET /
+# DATA_CLR do not change DATA_OUT here (they read 0 on silicon too, but are
+# stored), the two-flop input synchroniser (a read sees the pad at once), and
+# the interrupt logic, which is storage only.
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: OUT
+  address_offset: 0x00
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DATA_OUT
+    bit_range:
+    - 31
+    - 0
+    description: GPIO_REG_DATA_OUT, the output latch of pad k at bit k
+  side_effects: null
+- id: IN
+  address_offset: 0x04
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: DATA_IN
+    bit_range:
+    - 31
+    - 0
+    description: GPIO_REG_DATA_IN, the level of pad k at bit k
+  side_effects: null
+- id: ENABLE
+  address_offset: 0x08
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIR
+    bit_range:
+    - 31
+    - 0
+    description: GPIO_REG_DIR, bit k 1 drives pad k
+  side_effects: null
+- id: DATA_SET
+  address_offset: 0x10
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: SET
+    bit_range:
+    - 31
+    - 0
+    description: GPIO_REG_DATA_SET (storage only)
+  side_effects: null
+- id: DATA_CLR
+  address_offset: 0x14
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLR
+    bit_range:
+    - 31
+    - 0
+    description: GPIO_REG_DATA_CLR (storage only)
+  side_effects: null
+- id: INT_EN
+  address_offset: 0x20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: EN
+    bit_range:
+    - 31
+    - 0
+    description: GPIO_REG_INT_EN (storage only)
+  side_effects: null
+- id: INT_STAT
+  address_offset: 0x24
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: STAT
+    bit_range:
+    - 31
+    - 0
+    description: GPIO_REG_INT_STAT, never set here
+  side_effects: null
+- id: INT_CLR
+  address_offset: 0x30
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CLR
+    bit_range:
+    - 31
+    - 0
+    description: GPIO_REG_INT_CLR (storage only)
+  side_effects: null
+- id: INT_TYPE
+  address_offset: 0x34
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: TYPE
+    bit_range:
+    - 31
+    - 0
+    description: GPIO_REG_INT_TYPE, 0 edge / 1 level (storage only)
+  side_effects: null
+- id: INT_BOTH_EDGE
+  address_offset: 0x38
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: BOTH
+    bit_range:
+    - 31
+    - 0
+    description: GPIO_REG_INT_BOTH_EDGE (storage only)
+  side_effects: null
+- id: INT_LEVEL
+  address_offset: 0x3C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: LEVEL
+    bit_range:
+    - 31
+    - 0
+    description: GPIO_REG_INT_LEVEL (storage only)
+  side_effects: null

@@ -24,3 +24,10 @@ cp sdcc-uart-smoke.c "$work/"
 cp "$work/sdcc-uart-smoke.hex" pic16f1829-sdcc-uart-smoke.hex
 python3 hex2elf.py pic16f1829-sdcc-uart-smoke.hex pic16f1829-sdcc-uart-smoke.elf
 sha256sum pic16f1829-sdcc-uart-smoke.hex pic16f1829-sdcc-uart-smoke.elf
+
+# The ADC firmware is assembly, so it needs gpasm only.
+cp adc-ntc-diode.asm "$work/"
+(cd "$work" && gpasm adc-ntc-diode.asm)
+cp "$work/adc-ntc-diode.hex" pic16f1829-gpasm-adc-ntc-diode.hex
+python3 hex2elf.py pic16f1829-gpasm-adc-ntc-diode.hex pic16f1829-gpasm-adc-ntc-diode.elf
+sha256sum pic16f1829-gpasm-adc-ntc-diode.hex pic16f1829-gpasm-adc-ntc-diode.elf

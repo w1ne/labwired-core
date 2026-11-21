@@ -1,0 +1,41 @@
+# Matched generic NMOS bulk-junction branches: nominal CBD/PB, TEMP=125 C,
+# and the explicit equivalent CBD(T)/PB(T) card. PA2..PA4 route them to ADC1.
+name: "nucleo-f401re-mosfet-junction-temperature"
+chip: "../../configs/chips/stm32f401.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_junction_temperature"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      nominal_current_a: "ui.mosfet_junction_temp.nominal_current_a"
+      hot_current_a: "ui.mosfet_junction_temp.hot_current_a"
+      explicit_current_a: "ui.mosfet_junction_temp.explicit_current_a"
+    outputs:
+      nominal_voltage: "board.analog.pa2_volts"
+      hot_voltage: "board.analog.pa3_volts"
+      explicit_voltage: "board.analog.pa4_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Inominal 0 nominal dc 0
+        Rnominal nominal 0 1k
+        Mnominal nominal 0 0 0 NMOS_NOMINAL
+        Ihot 0 hot dc 0
+        Rhot hot 0 1k
+        Mhot hot 0 0 0 NMOS_NOMINAL TEMP=125
+        Iexplicit 0 explicit dc 0
+        Rexplicit explicit 0 1k
+        Mexplicit explicit 0 0 0 NMOS_HOT
+        .model NMOS_NOMINAL NMOS(VTO=5 KP=20u IS=1e-30 TNOM=27 CBD=10n PB=0.8 MJ=0.5 FC=0.5)
+        .model NMOS_HOT NMOS(VTO=5 KP=20u IS=1e-30 TNOM=27 CBD=11.201833930393835n PB=0.6390665711369866 MJ=0.5 FC=0.5)
+      probes:
+        nominal_voltage: "v(nominal)"
+        hot_voltage: "v(hot)"
+        explicit_voltage: "v(explicit)"
+      sources:
+        nominal_current_a: "Inominal"
+        hot_current_a: "Ihot"
+        explicit_current_a: "Iexplicit"
+      vdd: 3.3

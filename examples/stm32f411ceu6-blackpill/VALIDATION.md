@@ -35,9 +35,9 @@ range and the descriptor validator rejects overlapping regions. The schema's
 single-IRQ field also means TIM1/TIM9/TIM10/TIM11 are modelled for register
 access and ticking without claiming full shared-IRQ fidelity.
 
-The mixed-signal tests in section 7 prove the descriptor-routed PA0/PA1/PA4
-ADC1 paths using generic NMOS, NTC and diode netlists. They are simulator
-results; no physical F411 or Black Pill connector pinout was validated.
+The mixed-signal tests in section 7 prove descriptor-routed PA0–PA6 and PB0/PB1
+ADC1 paths using generic NMOS, NJF, Gummel–Poon NPN, NTC and diode netlists. They are
+simulator results; no physical F411 or Black Pill connector pinout was validated.
 
 ## Explicitly UNVERIFIED — do not treat these as facts
 
@@ -144,8 +144,21 @@ Pass criteria: JSON reports `status: "finished"` and the VCD exists.
 cargo test -p labwired-core --test cosim_stm32f411ceu6_analog -- --nocapture
 ```
 
-Pass criteria: the generic level-1 NMOS, Beta NTC divider, and unrelated
-Shockley diode solve to independently calculated voltages, route through
-PA0/PA1/PA4 to ADC1 channels 0/1/4, and produce matching firmware-visible
-12-bit one-shot results. Neighboring unrouted channels remain undriven. These
-tests do not validate physical board connectors or silicon behavior.
+Pass criteria: the generic level-1 NMOS load-line, RSH×NRD/NRS sheet-resistance,
+CGSO gate-source overlap, and drain/source junction-geometry charge branches,
+Gummel–Poon NPN Early-effect, high-injection, base-recombination, terminal
+resistance, and charge branches, Beta NTC divider, and unrelated Shockley diode
+solve to independently calculated or equivalent-network voltages and route
+through PA0–PA6 and PB0/PB1 to ADC1 channels 0–9 with matching firmware-visible
+12-bit one-shot results. The JFET test checks CGS/CGD transient charge against
+an independent recurrence and compares it with a zero-charge control. The
+MOSFET overlap test checks the CGSO source transient against an independent
+backward-Euler RC recurrence and compares it with a zero-overlap control. The
+MOSFET junction-geometry test checks bottom and sidewall depletion charge against
+an independently integrated backward-Euler recurrence and zero-charge controls.
+The BJT
+tests check IKF/IKR/NKF rolloff against a matched no-rolloff branch, verify
+RB/RC/RE and NMOS sheet resistance against explicit resistor networks, and
+assert cutoff and conducting load lines. Neighboring unrouted channels remain
+undriven. These tests do not validate physical board connectors or silicon
+behavior.

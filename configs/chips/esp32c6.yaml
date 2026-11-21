@@ -17,6 +17,13 @@ registers_count: 31
 # pacing is scaled against (peripherals/esp32c6/uart.rs CPU_CLOCK_HZ).
 cpu_hz: 160_000_000
 
+# GPIO pad supply and input thresholds (ratios of io_voltage_v).
+# ESP32-C6 Series Datasheet, section 5.4 Table 5-4 (DC characteristics, 3.3 V,
+# 25 C): VIL max 0.25*VDD, VIH min 0.75*VDD. https://www.espressif.com/sites/default/files/documentation/esp32-c6_datasheet_en.pdf
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.25
+  vih: 0.75
 flash:
   # Unified external-memory cache window: C6 maps BOTH instructions and
   # constant data through 0x4200_0000..0x42FF_FFFF (16 MB window), unlike the

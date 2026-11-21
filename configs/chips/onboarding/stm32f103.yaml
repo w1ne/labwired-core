@@ -137,3 +137,27 @@ peripherals:
   type: stm32f1afio
   bus: sysbus
   base_address: 1073807360
+# The Renode import leaves the ADCs out. This is the high-density die (GPIOG,
+# TIM8), so ADC1..3 sit at 0x4001_2400/0x4001_2800/0x4001_3C00 with ADC1/ADC2
+# on ADC1_2_IRQn 18 and ADC3 on ADC3_IRQn 47 (ST cmsis_device_f1 @c8e9a4a4
+# stm32f103xe.h). The F1 map: SWSTART = CR2 bit 22 with EXTSEL = 111,
+# JSWSTART = bit 21 with JEXTSEL = 111, EOC only at the end of the group
+# (RM0008 §11.12.3, §11.3.8).
+- id: adc1
+  type: adc
+  base_address: 1073816576
+  irq: 18
+  config:
+    profile: stm32f1
+- id: adc2
+  type: adc
+  base_address: 1073817600
+  irq: 18
+  config:
+    profile: stm32f1
+- id: adc3
+  type: adc
+  base_address: 1073822720
+  irq: 47
+  config:
+    profile: stm32f1

@@ -1,6 +1,6 @@
-# Generic Beta NTC divider and Shockley diode for the NUCLEO-U545RE profile.
-# This profile has no declared physical-pad ADC aliases, so the solved node
-# voltages use the shared explicit ADC channel route.
+# Generic Beta NTC divider and Shockley diode for the NUCLEO-U545RE profile,
+# on the shared explicit ADC channel route. analog-ntc-diode-adc-system.yaml
+# routes the same netlists through the PA0/PA1 `analog_pins` pad aliases.
 name: nucleo-u545re-analog
 chip: ../../configs/chips/stm32u545.yaml
 external_devices: []

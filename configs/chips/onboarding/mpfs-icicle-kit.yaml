@@ -122,10 +122,14 @@ peripherals:
   type: mpfs_gpio
   bus: sysbus
   base_address: 538050560
+  config:
+    ports: 14
 - id: gpio1
   type: mpfs_gpio
   bus: sysbus
   base_address: 538054656
+  config:
+    ports: 24
 - id: gpio2
   type: mpfs_gpio
   bus: sysbus

@@ -70,7 +70,7 @@ fn mimxrt595_evk_ntc_and_diode_netlists_reach_gpio_pin_register() {
     // Public Part Knowledge has no verified MIMXRT595 threshold record. Keep
     // voltage-to-level routing testable with explicit simulation-only ratios.
     chip.io_voltage_v = Some(3.3);
-    chip.gpio_input_thresholds = Some(GpioInputThresholds { vil: 0.3, vih: 0.7 });
+    chip.gpio_input_thresholds = Some(GpioInputThresholds::uniform(0.3, 0.7));
 
     let mut bus = SystemBus::from_config(&chip, &profile).expect("build MIMXRT595-EVK bus");
     assert_eq!(

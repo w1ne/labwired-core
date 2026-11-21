@@ -1,0 +1,46 @@
+# Matched generic diode branches compare ngspice's VP soft reverse-recovery
+# state with ordinary quasi-static TT charge. Both solved anode voltages route
+# to separate NUCLEO-F407 ADC1 inputs.
+name: "nucleo-f407-diode-soft-recovery"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "diode_soft_recovery"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_v: "ui.diode_recovery.supply_v"
+    outputs:
+      v_sense: "board.analog.pa2_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DREC
+        .model DREC D(IS=1p N=1 TT=10u VP=0.2)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        supply_v: "Vdrive"
+      vdd: 3.3
+  - id: "diode_quasistatic_tt_control"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      supply_v: "ui.diode_recovery.supply_v"
+    outputs:
+      v_sense: "board.analog.pa3_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DREC
+        .model DREC D(IS=1p N=1 TT=10u VP=0)
+      probes:
+        v_sense: "v(sense)"
+      sources:
+        supply_v: "Vdrive"
+      vdd: 3.3

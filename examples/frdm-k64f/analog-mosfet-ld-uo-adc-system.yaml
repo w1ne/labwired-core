@@ -1,0 +1,43 @@
+# Three matched generic level-1 NMOS common-source stages routed through
+# FRDM-K64F ADC0 (PTB0/PTB1/PTB3). All three share W=10u L=2u, VTO=1, a 10k
+# drain load and one gate drive. They differ only in how KP·W/Leff is formed:
+#   ld:  KP=50u with lateral diffusion LD=0.5u  -> Leff = 1u, beta = 500u
+#   uo:  no KP; TOX=20n UO=400 -> KP = UO·1e-4·eps_ox/TOX (ngspice level 1)
+#   ref: KP=50u on the drawn length            -> beta = 250u
+# The companion test adds an unrelated NTC and Shockley diode on other ADC16
+# channels. The ESP32-C3 DevKit test reuses this asset with its outputs moved
+# to APB_SARADC channels 1/3/4.
+name: "frdm-k64f-analog-mosfet-ld-uo"
+chip: "../../configs/chips/mk64f12.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_lateral_diffusion_and_process_kp"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_drive: "ui.mosfet_ld_uo.gate_v"
+    outputs:
+      drain_ld: "board.analog.ptb0_volts"
+      drain_uo: "board.analog.ptb1_volts"
+      drain_ref: "board.analog.ptb3_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Vgate gate 0 dc 0
+        Rld supply drain_ld 10k
+        Mld drain_ld gate 0 0 NMOS_LD W=10u L=2u
+        .model NMOS_LD NMOS(VTO=1 KP=50u LD=0.5u)
+        Ruo supply drain_uo 10k
+        Muo drain_uo gate 0 0 NMOS_UO W=10u L=2u
+        .model NMOS_UO NMOS(VTO=1 TOX=20n UO=400)
+        Rref supply drain_ref 10k
+        Mref drain_ref gate 0 0 NMOS_REF W=10u L=2u
+        .model NMOS_REF NMOS(VTO=1 KP=50u)
+      probes:
+        drain_ld: "v(drain_ld)"
+        drain_uo: "v(drain_uo)"
+        drain_ref: "v(drain_ref)"
+      sources:
+        gate_drive: "Vgate"
+      vdd: 3.3

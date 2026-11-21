@@ -19,3 +19,11 @@ cargo test -p labwired-core --test avr_uno_io
 
 The potentiometer model runs from a 3.3 V rail. Wire its top leg to 3.3V on a
 real board as well; full travel then reads about 675 counts on the 5 V reference.
+
+The committed mixed-signal fixtures also route a Shockley diode and a matched
+NMOS body-effect pair to A0..A2. The MOSFET test sweeps reverse bulk bias and
+checks the resulting drain voltages through ADC0..ADC2:
+
+```bash
+cargo test -p labwired-core --test cosim_avr_analog_diode arduino_uno_mosfet_body_effect_pair_reaches_a1_a2_and_firmware_adc
+```

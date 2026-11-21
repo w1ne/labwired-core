@@ -15,6 +15,9 @@
 # master-clock-ready status; UART0/1 and USART0/1 use the `sam` USART layout
 # (status SR/CSR @0x14, THR @0x1C).
 #
+# The ADC (`sam4s_adc`) converts the levels routed to its AD pads on
+# CR.START; hardware triggers, the comparator and the PDC are not modelled.
+#
 # Not modelled (declared stubs): TC0/TC1, SPI0, TWI0/TWI1, EEFC, RSTC/SUPC/
 # RTT/WDT/RTC (the SAM4S system controller), CHIPID.
 #
@@ -153,7 +156,40 @@ peripherals:
     base_address: 0x4001C000
     size: "1KB"
 
+  # --- Analog --------------------------------------------------------------
+  # 12-bit ADC (§42): CHER set + CR.START, CDRx/LCDR, ISR/OVER read-to-clear.
+  # ADVREF is tied to VDDIO = 3.3 V on the SAM4S Xplained.
+  - id: "adc"
+    type: "sam4s_adc"
+    base_address: 0x40038000
+    size: 256
+    irq: 29
+    config:
+      vref_mv: 3300
+
   - id: "systick"
     type: "systick"
     base_address: 0xE000E010
     size: 16
+
+# ADC input pads, from the "Extra Function" column of the SAM4S datasheet
+# PIOA/PIOB/PIOC multiplexing tables (100-pin SAM4S16C): AD0..AD3 = PA17..PA20,
+# AD4..AD7 = PB0..PB3, AD8/AD9 = PA21/PA22, AD10 = PC13, AD11 = PC15,
+# AD12 = PC12, AD13/AD14 = PC29/PC30. AD15 is the internal temperature sensor.
+# SAM4S Xplained routes PA17/PA18 to EXT1 pins 3/4.
+analog_pins:
+  PA17: { peripheral: adc, channel: 0 }
+  PA18: { peripheral: adc, channel: 1 }
+  PA19: { peripheral: adc, channel: 2 }
+  PA20: { peripheral: adc, channel: 3 }
+  PB0: { peripheral: adc, channel: 4 }
+  PB1: { peripheral: adc, channel: 5 }
+  PB2: { peripheral: adc, channel: 6 }
+  PB3: { peripheral: adc, channel: 7 }
+  PA21: { peripheral: adc, channel: 8 }
+  PA22: { peripheral: adc, channel: 9 }
+  PC13: { peripheral: adc, channel: 10 }
+  PC15: { peripheral: adc, channel: 11 }
+  PC12: { peripheral: adc, channel: 12 }
+  PC29: { peripheral: adc, channel: 13 }
+  PC30: { peripheral: adc, channel: 14 }

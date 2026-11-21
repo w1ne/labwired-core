@@ -40,6 +40,7 @@ use crate::{
 };
 use labwired_config::{
     CosimAdapter as ManifestCosimAdapter, CosimModelConfig, GpioInputThresholds,
+    GpioPadThresholdClass, PadThresholdLimits,
 };
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -102,19 +103,66 @@ pub struct InputThresholds {
 
 impl InputThresholds {
     /// Thresholds for a pad supplied at `io_voltage_v`.
-    pub fn from_ratios(io_voltage_v: f64, ratios: GpioInputThresholds) -> Self {
+    pub fn from_ratios(io_voltage_v: f64, ratios: &GpioInputThresholds) -> Self {
         Self {
             vil_volts: ratios.vil * io_voltage_v,
             vih_volts: ratios.vih * io_voltage_v,
         }
     }
 
-    /// The thresholds `bus`'s chip descriptor declares, or the descriptor key
-    /// that is missing.
+    /// The default-class thresholds `bus`'s chip descriptor declares, or the
+    /// descriptor key that is missing. A pad in one of the descriptor's
+    /// `pad_classes` has other limits: see [`Self::for_pad`].
     pub fn for_bus(bus: &SystemBus) -> Result<Self, &'static str> {
-        let ratios = bus.gpio_input_thresholds.ok_or("gpio_input_thresholds")?;
+        let ratios = bus
+            .gpio_input_thresholds
+            .as_ref()
+            .ok_or("gpio_input_thresholds")?;
         let io_voltage_v = bus.io_voltage_v.ok_or("io_voltage_v")?;
         Ok(Self::from_ratios(io_voltage_v, ratios))
+    }
+
+    /// The thresholds of one datasheet pad class. A ratio class needs the
+    /// chip's `io_voltage_v`; a class in volts does not.
+    pub fn for_class(
+        io_voltage_v: Option<f64>,
+        class: &GpioPadThresholdClass,
+    ) -> Result<Self, &'static str> {
+        match class.limits {
+            PadThresholdLimits::Ratios { vil, vih } => {
+                let io_voltage_v = io_voltage_v.ok_or("io_voltage_v")?;
+                Ok(Self {
+                    vil_volts: vil * io_voltage_v,
+                    vih_volts: vih * io_voltage_v,
+                })
+            }
+            PadThresholdLimits::Volts { vil_v, vih_v } => Ok(Self {
+                vil_volts: vil_v,
+                vih_volts: vih_v,
+            }),
+        }
+    }
+
+    /// The thresholds a volts route to `board.gpio_in.<pad>` is compared
+    /// against: the limits of the pad class `pad` belongs to, else the chip
+    /// default. `None` when `pad` does not resolve as an input on `bus`.
+    ///
+    /// Class membership is by the input the label resolves to, not by its
+    /// spelling, so `pb6`, `PB6` and any other label for the same pad all get
+    /// the class limits.
+    pub fn for_pad(bus: &SystemBus, pad: &str) -> Option<Result<Self, &'static str>> {
+        let path = format!("board.gpio_in.{pad}");
+        let parsed = SignalPath::GpioInput {
+            pad: pad.to_string(),
+        };
+        let binding = SignalRouter::resolve_write(&parsed, bus, &path).ok()?;
+        Some(match pad_class_of(bus, &binding) {
+            Some(class) => Self::for_class(
+                bus.io_voltage_v,
+                &bus.gpio_input_thresholds.as_ref()?.pad_classes[class],
+            ),
+            None => Self::for_bus(bus),
+        })
     }
 
     /// The level a Schmitt input reads at `volts`, given the level it read
@@ -134,6 +182,57 @@ impl InputThresholds {
         } else {
             previous
         }
+    }
+}
+
+/// The descriptor `pad_classes` index of the input `binding` drives, if the
+/// pad is in a class.
+///
+/// Each class pad label is resolved the same way a route is, and the class
+/// matches on the resolved input (IDR bit or peripheral pin), so a label in
+/// another spelling still finds its class. A class label that does not
+/// resolve on this bus (a port the model does not have) names no input a
+/// route can reach either, so it can never be the routed pad.
+fn pad_class_of(bus: &SystemBus, binding: &WriteBinding) -> Option<usize> {
+    let classes = &bus.gpio_input_thresholds.as_ref()?.pad_classes;
+    let key = input_key(binding)?;
+    classes.iter().position(|class| {
+        class.pads.iter().any(|pad| {
+            let parsed = SignalPath::GpioInput { pad: pad.clone() };
+            SignalRouter::resolve_write_unclassed(&parsed, bus, pad)
+                .ok()
+                .and_then(|b| input_key(&b))
+                == Some(key)
+        })
+    })
+}
+
+/// The identity of the input a pad binding drives.
+fn input_key(binding: &WriteBinding) -> Option<(bool, u64, u8)> {
+    match binding {
+        WriteBinding::PadInput { addr, bit, .. } => Some((false, *addr, *bit)),
+        WriteBinding::PeripheralInput {
+            peripheral, pin, ..
+        } => Some((true, *peripheral as u64, *pin)),
+        _ => None,
+    }
+}
+
+/// The thresholds a pad binding compares volts against: its class's, else the
+/// chip default. `None` for a binding that is not a pad input.
+fn pad_thresholds(
+    default: Option<Result<InputThresholds, &'static str>>,
+    classes: &[Result<InputThresholds, &'static str>],
+    binding: &WriteBinding,
+) -> Option<Result<InputThresholds, &'static str>> {
+    match binding {
+        WriteBinding::PadInput { class, .. } | WriteBinding::PeripheralInput { class, .. } => {
+            match class {
+                Some(i) => classes.get(*i).copied(),
+                None => default,
+            }
+        }
+        _ => None,
     }
 }
 
@@ -557,13 +656,20 @@ enum WriteBinding {
     /// same seam a `board_io` button and a sensor status line come through.
     /// `level` is the pad's Schmitt state: what it read last, which a voltage
     /// between VIL and VIH keeps. Low until a model says otherwise.
-    PadInput { addr: u64, bit: u8, level: bool },
+    /// `class` indexes the descriptor's `pad_classes` when the pad is in one.
+    PadInput {
+        addr: u64,
+        bit: u8,
+        level: bool,
+        class: Option<usize>,
+    },
     /// Direct input on a peripheral that owns pads but has no GPIO register
     /// offsets. The peripheral index and pin number use its `PinPort` seam.
     PeripheralInput {
         peripheral: usize,
         pin: u8,
         level: bool,
+        class: Option<usize>,
     },
     /// An ADC channel seeded through `SystemBus::seed_adc_channel`, on the
     /// peripheral the manifest or the chip descriptor named.
@@ -584,9 +690,12 @@ enum WriteBinding {
 pub struct SignalRouter {
     reads: Vec<(String, ReadBinding)>,
     writes: Vec<(String, WriteBinding)>,
-    /// The chip's input thresholds, or the descriptor key that is missing.
-    /// `None` only on a router built by `Default`, which binds nothing.
+    /// The chip's default input thresholds, or the descriptor key that is
+    /// missing. `None` only on a router built by `Default`, which binds
+    /// nothing.
     thresholds: Option<Result<InputThresholds, &'static str>>,
+    /// The thresholds of each descriptor `pad_classes` entry, by index.
+    class_thresholds: Vec<Result<InputThresholds, &'static str>>,
 }
 
 impl SignalRouter {
@@ -615,8 +724,15 @@ impl SignalRouter {
         }
 
         let thresholds = InputThresholds::for_bus(bus);
+        let class_thresholds = bus
+            .gpio_input_thresholds
+            .iter()
+            .flat_map(|t| &t.pad_classes)
+            .map(|class| InputThresholds::for_class(bus.io_voltage_v, class))
+            .collect();
         let mut router = Self {
             thresholds: Some(thresholds),
+            class_thresholds,
             ..Self::default()
         };
         let mut errors = Vec::new();
@@ -653,8 +769,26 @@ impl SignalRouter {
                 });
                 continue;
             }
-            if let (SignalPath::GpioInput { .. }, Err(key)) = (&parsed, thresholds) {
-                if volts_sinks.contains(path) {
+            let binding = match Self::resolve_write(&parsed, bus, path) {
+                Ok(binding) => binding,
+                Err(err) => {
+                    // A chip with no thresholds at all names the missing key
+                    // before the pad: the fix is the descriptor either way.
+                    if let (SignalPath::GpioInput { .. }, Err(key)) = (&parsed, thresholds) {
+                        if volts_sinks.contains(path) {
+                            errors.push(RoutingError::NoInputThresholds {
+                                path: (*path).to_string(),
+                                key,
+                            });
+                            continue;
+                        }
+                    }
+                    errors.push(err);
+                    continue;
+                }
+            };
+            if volts_sinks.contains(path) {
+                if let Some(Err(key)) = router.pad_thresholds(&binding) {
                     errors.push(RoutingError::NoInputThresholds {
                         path: (*path).to_string(),
                         key,
@@ -662,10 +796,7 @@ impl SignalRouter {
                     continue;
                 }
             }
-            match Self::resolve_write(&parsed, bus, path) {
-                Ok(binding) => router.writes.push(((*path).to_string(), binding)),
-                Err(err) => errors.push(err),
-            }
+            router.writes.push(((*path).to_string(), binding));
         }
 
         (router, errors)
@@ -736,7 +867,33 @@ impl SignalRouter {
         }
     }
 
+    /// The thresholds `binding` compares volts against, when it is a pad
+    /// input.
+    fn pad_thresholds(
+        &self,
+        binding: &WriteBinding,
+    ) -> Option<Result<InputThresholds, &'static str>> {
+        pad_thresholds(self.thresholds, &self.class_thresholds, binding)
+    }
+
     fn resolve_write(
+        parsed: &SignalPath,
+        bus: &SystemBus,
+        path: &str,
+    ) -> Result<WriteBinding, RoutingError> {
+        let mut binding = Self::resolve_write_unclassed(parsed, bus, path)?;
+        let found = pad_class_of(bus, &binding);
+        if let WriteBinding::PadInput { class, .. } | WriteBinding::PeripheralInput { class, .. } =
+            &mut binding
+        {
+            *class = found;
+        }
+        Ok(binding)
+    }
+
+    /// [`Self::resolve_write`] without the pad-class lookup, which itself
+    /// resolves pad labels through here.
+    fn resolve_write_unclassed(
         parsed: &SignalPath,
         bus: &SystemBus,
         path: &str,
@@ -744,33 +901,41 @@ impl SignalRouter {
         match parsed {
             SignalPath::GpioInput { pad } => {
                 if let Some((addr, bit)) = SystemBus::resolve_pin_idr(bus, pad) {
-                    return Ok(WriteBinding::PadInput {
+                    let binding = WriteBinding::PadInput {
                         addr,
                         bit,
                         level: false,
-                    });
+                        class: None,
+                    };
+                    return Ok(binding);
                 }
                 if let Some((peripheral, pin)) = resolve_chip_mapped_input_pin(bus, pad) {
                     let level = bus.peripherals[peripheral]
                         .dev
                         .read_gpio_input(pin)
                         .unwrap_or(false);
-                    return Ok(WriteBinding::PeripheralInput {
+                    let binding = WriteBinding::PeripheralInput {
                         peripheral,
                         pin,
                         level,
-                    });
+                        class: None,
+                    };
+                    return Ok(binding);
                 }
-                if let Some((peripheral, pin)) = resolve_peripheral_input_pin(bus, pad) {
+                if let Some((peripheral, pin)) = resolve_peripheral_input_pin(bus, pad)
+                    .or_else(|| resolve_labelled_input_pin(bus, pad))
+                {
                     let level = bus.peripherals[peripheral]
                         .dev
                         .read_gpio_input(pin)
                         .unwrap_or(false);
-                    return Ok(WriteBinding::PeripheralInput {
+                    let binding = WriteBinding::PeripheralInput {
                         peripheral,
                         pin,
                         level,
-                    });
+                        class: None,
+                    };
+                    return Ok(binding);
                 }
                 Err(RoutingError::UnknownPad {
                     path: path.to_string(),
@@ -923,10 +1088,13 @@ impl SignalRouter {
             let Some(value) = signals.get(path.as_str()) else {
                 continue; // No model produced this output on this step.
             };
+            let thresholds = pad_thresholds(self.thresholds, &self.class_thresholds, binding);
             match binding {
-                WriteBinding::PadInput { addr, bit, level } => {
+                WriteBinding::PadInput {
+                    addr, bit, level, ..
+                } => {
                     let next = match value {
-                        CosimSignalValue::F64(volts) => match self.thresholds {
+                        CosimSignalValue::F64(volts) => match thresholds {
                             Some(Ok(thresholds)) => thresholds.next_level(*level, *volts),
                             Some(Err(key)) => {
                                 errors.push(RoutingError::NoInputThresholds {
@@ -963,9 +1131,10 @@ impl SignalRouter {
                     peripheral,
                     pin,
                     level,
+                    ..
                 } => {
                     let next = match value {
-                        CosimSignalValue::F64(volts) => match self.thresholds {
+                        CosimSignalValue::F64(volts) => match thresholds {
                             Some(Ok(thresholds)) => thresholds.next_level(*level, *volts),
                             Some(Err(key)) => {
                                 errors.push(RoutingError::NoInputThresholds {
@@ -1111,6 +1280,15 @@ fn resolve_chip_mapped_input_pin(bus: &SystemBus, pad: &str) -> Option<(usize, u
     let port = dev.pins()?;
     (*pin < port.pin_count() && dev.read_gpio_is_output(*pin) == Some(false))
         .then_some((index, *pin))
+}
+
+/// Resolve a pad the descriptor's `pins:` does not list by its label shape
+/// (`PA08`, `PTB0`, `RB2`, `P014`, `P4_18`, `GP26`) to an input on its pin
+/// port. This is what lets `board.gpio_in.<pad>` reach every pad a chip's
+/// `analog_pins:` names, on every family, without a per-chip pin table.
+fn resolve_labelled_input_pin(bus: &SystemBus, pad: &str) -> Option<(usize, u8)> {
+    let (index, pin) = SystemBus::resolve_labelled_pad(bus, pad)?;
+    (bus.peripherals[index].dev.read_gpio_is_output(pin) == Some(false)).then_some((index, pin))
 }
 
 /// Refuse an ADC route the converter cannot take: a peripheral the bus does
@@ -2244,7 +2422,7 @@ mod tests {
 
     /// The ATmega328P at 5 V: VIL 0.3·VCC = 1.5 V, VIH 0.6·VCC = 3.0 V.
     fn atmega_thresholds() -> InputThresholds {
-        InputThresholds::from_ratios(5.0, GpioInputThresholds { vil: 0.3, vih: 0.6 })
+        InputThresholds::from_ratios(5.0, &GpioInputThresholds::uniform(0.3, 0.6))
     }
 
     #[test]
@@ -2376,7 +2554,7 @@ mod tests {
     #[test]
     fn an_analog_pin_route_names_whichever_key_is_missing() {
         let mut bus = crate::bus::SystemBus::new();
-        bus.gpio_input_thresholds = Some(GpioInputThresholds { vil: 0.3, vih: 0.6 });
+        bus.gpio_input_thresholds = Some(GpioInputThresholds::uniform(0.3, 0.6));
         let mut config = mock_model(
             "circuit",
             1_000,

@@ -1,0 +1,30 @@
+# Generic Gummel-Poon BJT CJC partitioning reaches the nRF5340-DK SAADC.
+# XCJC=1 places all base-collector depletion charge behind RB at the internal
+# base; XCJC=0 places it on the external base. The same driven ramp makes the
+# two terminal voltages distinguishable during the transient.
+name: "nrf5340dk-analog-bjt-xcjc"
+chip: "../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_xcjc_partition"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      xcjc_one_external_base: "adc.saadc.2_volts"
+      xcjc_zero_external_base: "adc.saadc.3_volts"
+    config:
+      netlist_text: |
+        Vdrive source 0 PULSE(0.2 1.2 0 1n 1n 1m 2m)
+        Vcollector collector 0 dc 3.3
+        Vemitter emitter 0 dc 2.0
+        Rdrive_internal source base_one 1k
+        Rdrive_external source base_zero 1k
+        Qinternal collector base_one emitter BJT_INTERNAL
+        Qexternal collector base_zero emitter BJT_EXTERNAL
+        .model BJT_INTERNAL NPN(IS=1e-30 RB=100k CJC=10n VJC=0.75 MJC=0 XCJC=1)
+        .model BJT_EXTERNAL NPN(IS=1e-30 RB=100k CJC=10n VJC=0.75 MJC=0 XCJC=0)
+      probes:
+        xcjc_one_external_base: "v(base_one)"
+        xcjc_zero_external_base: "v(base_zero)"
+      vdd: 3.3

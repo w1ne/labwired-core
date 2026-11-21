@@ -1,0 +1,37 @@
+# Matched generic Gummel–Poon NPN branches routed through STM32F411 ADC1.
+# Finite IKF/IKR/NKF high-injection rolloff is compared with a control that
+# keeps the same Early voltages and base drive on PA5/PA6.
+name: "stm32f411ceu6-blackpill-analog-bjt-high-injection"
+chip: "../../configs/chips/stm32f411ceu6.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_high_injection"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      high_drive: "ui.bjt.high_drive_v"
+      control_drive: "ui.bjt.control_drive_v"
+    outputs:
+      high_collector: "board.analog.pa5_volts"
+      control_collector: "board.analog.pa6_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload_hi supply collector_hi 1k
+        Vbase_hi drive_hi 0 dc 0
+        Rbase_hi drive_hi base_hi 10k
+        Qhi collector_hi base_hi 0 NPN_HI
+        .model NPN_HI NPN(IS=1e-16 BF=80 BR=4 NF=1 NR=1 VAF=50 VAR=75 IKF=50u IKR=500u NKF=0.8)
+        Rload_control supply collector_control 1k
+        Vbase_control drive_control 0 dc 0
+        Rbase_control drive_control base_control 10k
+        Qcontrol collector_control base_control 0 NPN_CONTROL
+        .model NPN_CONTROL NPN(IS=1e-16 BF=80 BR=4 NF=1 NR=1 VAF=50 VAR=75)
+      probes:
+        high_collector: "v(collector_hi)"
+        control_collector: "v(collector_control)"
+      sources:
+        high_drive: "Vbase_hi"
+        control_drive: "Vbase_control"
+      vdd: 3.3

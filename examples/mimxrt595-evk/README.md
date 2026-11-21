@@ -14,8 +14,11 @@ rebuilt by `crates/firmware-mimxrt595-evk-zephyr/build.sh`. See
 divider drives SW2/P0_10 and a separate Shockley diode load line drives
 SW1/P0_25 through the modeled GPIO input path. The integration test asserts
 the solved node voltages and LPC GPIO `PIN[0]` state. Its voltage thresholds
-are test-only assumptions, not MIMXRT595 silicon values; this does not add ADC
-support.
+are test-only assumptions, not MIMXRT595 silicon values. Routed to
+`board.analog.<pad>_volts` instead, the same two netlists (moved to the EVK's
+1.8 V analog rail) convert on LPADC0 (`nxp_lpadc`) through the `analog_pins`
+map: P0_5/P0_6/P0_12/P0_13/P0_19/P4_18 are CH0A/CH0B/CH1A/CH1B/CH2A/CH6A
+(`cosim_mimxrt595_lpadc_analog.rs`).
 
 ## What the firmware does
 

@@ -23,6 +23,16 @@ peripherals:
   type: litex_controlandstatus
   bus: sysbus
   base_address: 4026544128
+# The Nexus ADC is fabric-controlled, not a CPU MMIO peripheral. This
+# LabWired-only window bridges those control signals for deterministic
+# board-level co-simulation; it is not a Lattice register map.
+- id: adc
+  type: lattice_nexus_adc
+  bus: sysbus
+  base_address: 0xF0003800
+  size: 2KB
+  config:
+    vref_mv: 1800
 - id: led0
   type: led
   bus: leds
@@ -79,3 +89,8 @@ peripherals:
   type: led
   bus: leds
   base_address: 13
+analog_pins:
+  ADC_DP0: { peripheral: adc, channel: 32 }
+  ADC_DN0: { peripheral: adc, channel: 33 }
+  ADC_IN1P: { peripheral: adc, channel: 34 }
+  ADC_IN1N: { peripheral: adc, channel: 35 }

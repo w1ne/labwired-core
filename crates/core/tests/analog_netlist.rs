@@ -258,16 +258,16 @@ S1 a b sense+ sense- vt=3.75 vh=3.25 invert=1 ron=0.1 roff=1meg
     #[test]
     fn unknown_element_letters_point_at_ngspice() {
         // `D`, `Q`, `M` and `J` used to be on this list and are now in the subset,
-        // and so are the four LINEAR controlled sources and an `X` whose model
-        // is an OPAMP/COMP card. What is left is what still has no in-core
-        // term: a subcircuit needs a flattener, a model library needs a file
-        // loader, a MESFET and a POLY/VALUE controlled source need equations
-        // nobody has written here.
+        // and so are the four LINEAR controlled sources, `B` and `E`/`G`
+        // `VALUE=` behavioural sources, SPICE2 `POLY(n)` sources, and an `X`
+        // whose model is an OPAMP/COMP card. What is left is what still has no
+        // in-core term: a call to a subcircuit the deck never defines, a model
+        // library needs a file loader, a MESFET and a PSpice FREQ controlled
+        // source need equations nobody has written here.
         for line in [
             "X1 a b subckt",
             "Z1 d g s mesfet",
-            "E1 a b POLY(2) c 0 d 0 0 1 1",
-            "G1 a b VALUE={V(c)*V(d)}",
+            "E1 a b FREQ V(c) 1",
             ".include models/bsim.lib",
             ".lib vendor.lib tt",
         ] {
@@ -633,7 +633,7 @@ C1 out 0 100n $ dollar comment
     fn bjt_depletion_parameters_resolve_and_validate() {
         let circuit = parse_netlist(
             "Q1 c b e QMOD\n\
-             .model QMOD NPN(CJE=4p VJE=0.7 MJE=0.4 CJC=2p VJC=0.8 MJC=0.3 FC=0.6)\n",
+             .model QMOD NPN(CJE=4p VJE=0.7 MJE=0.4 CJC=2p XCJC=0.35 VJC=0.8 MJC=0.3 FC=0.6)\n",
         )
         .expect("BJT depletion parameters parse");
         let model = circuit.bjts[0].model;
@@ -641,6 +641,7 @@ C1 out 0 100n $ dollar comment
         assert_eq!(model.vje, 0.7);
         assert_eq!(model.mje, 0.4);
         assert_eq!(model.cjc, 2e-12);
+        assert_eq!(model.xcjc, 0.35);
         assert_eq!(model.vjc, 0.8);
         assert_eq!(model.mjc, 0.3);
         assert_eq!(model.fc, 0.6);
@@ -652,6 +653,7 @@ C1 out 0 100n $ dollar comment
         assert_eq!(defaults.vje, 0.75);
         assert_eq!(defaults.mje, 0.33);
         assert_eq!(defaults.cjc, 0.0);
+        assert_eq!(defaults.xcjc, 1.0);
         assert_eq!(defaults.vjc, 0.75);
         assert_eq!(defaults.mjc, 0.33);
         assert_eq!(defaults.fc, 0.5);
@@ -673,7 +675,17 @@ C1 out 0 100n $ dollar comment
         assert_eq!(model.tvjc, 8e-6);
 
         for parameters in [
-            "CJE=-1p", "VJE=0", "MJE=-0.1", "CJC=-1p", "VJC=0", "MJC=-0.1", "FC=-0.1", "FC=1",
+            "CJE=-1p",
+            "VJE=0",
+            "MJE=-0.1",
+            "CJC=-1p",
+            "XCJC=-0.1",
+            "XCJC=1.1",
+            "XCJC=nan",
+            "VJC=0",
+            "MJC=-0.1",
+            "FC=-0.1",
+            "FC=1",
         ] {
             let text = format!("Q1 c b e QMOD\n.model QMOD NPN({parameters})\n");
             let error =
@@ -1210,15 +1222,17 @@ C1 out 0 100n $ dollar comment
     // Transient sources
     // -----------------------------------------------------------------------
 
-    /// `SIN` and `PULSE` with SPICE's own argument defaults, and the value at
-    /// `t = 0` that the operating point is solved with.
+    /// `SIN`, `SFFM`, `EXP`, and `PULSE` source semantics, including each value
+    /// at `t = 0` that the operating point is solved with.
     #[test]
     fn transient_source_functions_parse_with_spice_semantics() {
         let circuit = parse_netlist(
             "Vsin a 0 SIN(1 5 1k)\n\
              Vpulse b 0 PULSE(0 3.3 1u 10n 10n 5u 10u)\n\
              Vdc c 0 dc 2\n\
-             Vbare d 0 7\n",
+             Vbare d 0 7\n\
+             Vexp e 0 EXP(1 5 1u 2u 4u 1u)\n\
+             Vfm f 0 SFFM(1 2 1k 0.5 250)\n",
         )
         .expect("source functions parse");
 
@@ -1231,7 +1245,7 @@ C1 out 0 100n $ dollar comment
         let quarter = circuit.voltage_sources[0].wave.at(250e-6);
         assert!((quarter - 6.0).abs() < 1e-9, "got {quarter}");
 
-        let pulse = circuit.voltage_sources[1].wave;
+        let pulse = &circuit.voltage_sources[1].wave;
         assert_eq!(circuit.voltage_sources[1].dc, 0.0, "PULSE starts at v1");
         assert_eq!(pulse.at(0.0), 0.0);
         assert_eq!(pulse.at(1e-6), 0.0, "the delay ends at the first edge");
@@ -1251,7 +1265,108 @@ C1 out 0 100n $ dollar comment
         assert!(circuit.voltage_sources[2].wave.is_constant());
         assert_eq!(circuit.voltage_sources[3].wave, Waveform::Dc(7.0));
         assert!(circuit.has_waveforms());
+        let exp = &circuit.voltage_sources[4].wave;
+        let near = |actual: f64, expected: f64| {
+            assert!(
+                (actual - expected).abs() < 1e-12,
+                "expected {expected}, got {actual}"
+            );
+        };
+        assert_eq!(circuit.voltage_sources[4].dc, 1.0, "EXP starts at V1");
+        assert_eq!(exp.at(0.5e-6), 1.0, "before TD1");
+        near(exp.at(2e-6), 1.0 + 4.0 * (1.0 - (-0.5_f64).exp()));
+        near(exp.at(4e-6), 1.0 + 4.0 * (1.0 - (-1.5_f64).exp()));
+        near(
+            exp.at(5e-6),
+            1.0 + 4.0 * (1.0 - (-2.0_f64).exp()) - 4.0 * (1.0 - (-1.0_f64).exp()),
+        );
+        near(exp.at(100e-6), 1.0);
+        let sffm = &circuit.voltage_sources[5].wave;
+        assert!(!sffm.is_constant());
+        assert_eq!(circuit.voltage_sources[5].dc, 1.0, "SFFM starts at VO");
+        assert_eq!(sffm.at(0.0), 1.0);
+        near(sffm.at(1e-3), 1.0 + 2.0 * (0.5_f64).sin());
+        near(sffm.at(2e-3), 1.0);
         assert!(!parse_netlist("V1 a 0 dc 5\n").unwrap().has_waveforms());
+    }
+
+    #[test]
+    fn malformed_sffm_source_parameters_are_rejected() {
+        let error = parse_netlist("V1 a 0 SFFM(1 2 1k 0.5)\n")
+            .expect_err("SFFM requires offset, amplitude, carrier, index, and signal frequency");
+        assert!(
+            error
+                .to_string()
+                .contains("expected `SFFM(vo va fc mdi fs)`"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn malformed_exponential_source_parameters_are_rejected() {
+        for (deck, expected) in [
+            (
+                "V1 a 0 EXP(0 1 1u 1u 2u)\n",
+                "expected `EXP(v1 v2 td1 tau1 td2 tau2)`",
+            ),
+            ("V1 a 0 EXP(0 1 -1u 1u 2u 1u)\n", "must not be negative"),
+            ("V1 a 0 EXP(0 1 1u 0 2u 1u)\n", "must be positive"),
+            ("V1 a 0 EXP(0 1 2u 1u 1u 1u)\n", "at or after"),
+        ] {
+            let error = parse_netlist(deck).expect_err("invalid EXP parameters are refused");
+            assert!(error.to_string().contains(expected), "{error}");
+        }
+    }
+
+    #[test]
+    fn pwl_sources_interpolate_hold_delay_and_repeat_the_requested_suffix() {
+        let circuit = parse_netlist(
+            "Vlinear a 0 PWL(0 0, 1u 2, 2u 0)\n\
+             Vrepeat b 0 PWL(0 0 1u 1 2u 0) r=1u\n\
+             Vdelay c 0 PWL(0 2 1u 4) td=0.5u\n",
+        )
+        .expect("PWL source syntax parses");
+
+        let assert_near = |actual: f64, expected: f64| {
+            assert!(
+                (actual - expected).abs() < 1e-12,
+                "expected {expected}, got {actual}"
+            );
+        };
+        let linear = &circuit.voltage_sources[0].wave;
+        assert_eq!(linear.at(0.0), 0.0);
+        assert_near(linear.at(0.5e-6), 1.0);
+        assert_eq!(linear.at(1.0e-6), 2.0);
+        assert_near(linear.at(1.5e-6), 1.0);
+        assert_eq!(linear.at(3.0e-6), 0.0, "the final value is held");
+
+        let repeated = &circuit.voltage_sources[1].wave;
+        assert_near(repeated.at(0.5e-6), 0.5);
+        assert_near(repeated.at(1.5e-6), 0.5);
+        assert_near(repeated.at(2.0e-6), 1.0);
+        assert_near(repeated.at(2.5e-6), 0.5);
+
+        let delayed = &circuit.voltage_sources[2].wave;
+        assert_eq!(delayed.at(0.0), 2.0);
+        assert_eq!(delayed.at(0.5e-6), 2.0);
+        assert_near(delayed.at(1.0e-6), 3.0);
+        assert_eq!(delayed.at(1.5e-6), 4.0);
+    }
+
+    #[test]
+    fn malformed_pwl_points_and_repeat_times_are_rejected() {
+        for (deck, expected) in [
+            ("V1 a 0 PWL(0 0 1u)\n", "at least two points"),
+            ("V1 a 0 PWL(0 0 1u 1 1u 2)\n", "strictly increasing"),
+            (
+                "V1 a 0 PWL(0 0 1u 1 2u 0) r=0.5u\n",
+                "must name a time point",
+            ),
+            ("V1 a 0 PWL(0 0 1u 1) td=-1u\n", "must not be negative"),
+        ] {
+            let error = parse_netlist(deck).expect_err("malformed PWL is refused");
+            assert!(error.to_string().contains(expected), "{error}");
+        }
     }
 
     /// A pulse whose edges and top do not fit inside its period is a typo that
@@ -1296,7 +1411,8 @@ C1 out 0 100n $ dollar comment
 
         // A directive that is NOT on the skip list is still a hard error, so a
         // typo cannot silently drop an element line.
-        let err = parse_netlist("R1 a 0 1k\n.subckt thing a b\n").expect_err("unknown directive");
+        let err = parse_netlist("R1 a 0 1k\n.measure tran t1 when v(a)=1\n")
+            .expect_err("unknown directive");
         assert!(matches!(err, AnalogError::Unsupported { .. }), "{err}");
     }
 }

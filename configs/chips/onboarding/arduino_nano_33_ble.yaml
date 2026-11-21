@@ -100,6 +100,14 @@ peripherals:
   type: nrf52840_gpiotasksevents
   bus: sysbus
   base_address: 1073766400
+- id: saadc
+  # nRF52840 SAADC. NRF_SAADC_BASE 0x4000_7000 and SAADC_IRQn 7 per nrfx
+  # bsp/stable/mdk/nrf52/nrf52840/nrf52840.h @e04a8737, the same block the
+  # onboarding nrf52840 descriptor declares.
+  type: nrf52840_saadc
+  bus: sysbus
+  base_address: 1073770496  # 0x40007000
+  irq: 7
 - id: twi1
   type: nrf52840_i2c
   bus: sysbus

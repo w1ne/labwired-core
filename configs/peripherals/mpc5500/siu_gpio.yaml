@@ -1,0 +1,75 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# MPC5500 System Integration Unit (SIU) pad registers for GPIO[0..3]. SIU sits
+# at 0xC3F9_0000 on MPC5554 / MPC5567 (MPC5567 RM ch. 6 "System Integration
+# Unit"; the MPC55xx device header's `struct SIU_tag`). Each pad n has:
+#   PCRn  @0x040 + 2n  16-bit pad configuration (PA, OBE, IBE, ...)
+#   GPDOn @0x600 + n   8-bit, output data in bit 0 (PDO)
+#   GPDIn @0x800 + n   8-bit, input level in bit 0 (PDI)
+# One byte per pin, data in bit 0, so the declarative GPIO path runs at
+# `gpio_pin_stride: 8`: GPDI0..3 are one 32-bit IN register, pad k at bit 8k.
+# A byte register reads the same on a big-endian e200 core and on LabWired's
+# little-endian bus, so `lbz` from 0xC3F9_0800 + n sees the pad either way.
+#
+# Only pads 0..3 are declared: a declarative register is at most 32 bits, so
+# this block covers GPIO[0..3] and leaves GPIO[4..] unmapped. The port is
+# input-only here: direction lives in PCRn.OBE (one bit of a 16-bit field per
+# pad), which the declarative `gpio_mode` (at most 8 bits per pad) cannot
+# express, so GPDO is storage and drives no pad. Not modelled: PCR.IBE gating
+# (silicon reads GPDI as 0 with the input buffer off), PA function select,
+# pulls, slew, the SIU interrupt / DMA / reset registers, and the PCR reset
+# values, which vary per pad in the RM (0 here).
+peripheral: GPIO
+version: 0.1.0
+gpio_pin_stride: 8
+registers:
+- id: PCR0_1
+  address_offset: 0x040
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PCR
+    bit_range:
+    - 31
+    - 0
+    description: PCR0 / PCR1 pad configuration (storage only)
+  side_effects: null
+- id: PCR2_3
+  address_offset: 0x044
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PCR
+    bit_range:
+    - 31
+    - 0
+    description: PCR2 / PCR3 pad configuration (storage only)
+  side_effects: null
+- id: GPDO0_3
+  address_offset: 0x600
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PDO
+    bit_range:
+    - 31
+    - 0
+    description: GPDO0..3, PDO of pad k in bit 0 of byte k (storage, drives no pad)
+  side_effects: null
+- id: IN
+  address_offset: 0x800
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: PDI
+    bit_range:
+    - 31
+    - 0
+    description: GPDI0..3, the level of pad k in bit 0 of byte k
+  side_effects: null

@@ -12,6 +12,13 @@ flash:
 ram:
   base: 268435456
   size: 262144B
+# Simulation-only co-simulation endpoint. This imported LiteX profile has no
+# modeled GPIO fabric or ADC, so these channels are not physical LiteX pads or
+# firmware-visible registers.
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
 peripherals:
 - id: boot_flash
   type: arraymemory
@@ -25,3 +32,10 @@ peripherals:
   type: litex_timer
   bus: sysbus
   base_address: 3758106624
+- id: cosim_inputs
+  type: input_pin_bank
+  bus: sysbus
+  base_address: 0xF0000000
+  size: 4KB
+  config:
+    pin_count: 2

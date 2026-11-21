@@ -12,7 +12,73 @@ flash:
 ram:
   base: 536870912
   size: 262144B
+# PIO ports A..I: one 0x24-byte bank per port from 0x01C2_0800 (sun7i-a20.dtsi
+# pinctrl@1c20800, Linux pinctrl-sunxi.h BANK_MEM_SIZE), Pn_DAT @+0x10, on
+# configs/peripherals/sunxi/pio.yaml.
 peripherals:
+- id: pioA
+  type: declarative
+  bus: sysbus
+  base_address: 29493248
+  size: 36B
+  config:
+    path: ../../peripherals/sunxi/pio.yaml
+- id: pioB
+  type: declarative
+  bus: sysbus
+  base_address: 29493284
+  size: 36B
+  config:
+    path: ../../peripherals/sunxi/pio.yaml
+- id: pioC
+  type: declarative
+  bus: sysbus
+  base_address: 29493320
+  size: 36B
+  config:
+    path: ../../peripherals/sunxi/pio.yaml
+- id: pioD
+  type: declarative
+  bus: sysbus
+  base_address: 29493356
+  size: 36B
+  config:
+    path: ../../peripherals/sunxi/pio.yaml
+- id: pioE
+  type: declarative
+  bus: sysbus
+  base_address: 29493392
+  size: 36B
+  config:
+    path: ../../peripherals/sunxi/pio.yaml
+- id: pioF
+  type: declarative
+  bus: sysbus
+  base_address: 29493428
+  size: 36B
+  config:
+    path: ../../peripherals/sunxi/pio.yaml
+- id: pioG
+  type: declarative
+  bus: sysbus
+  base_address: 29493464
+  size: 36B
+  config:
+    path: ../../peripherals/sunxi/pio.yaml
+- id: pioH
+  type: declarative
+  bus: sysbus
+  base_address: 29493500
+  size: 36B
+  config:
+    path: ../../peripherals/sunxi/pio.yaml
+- id: pioI
+  type: declarative
+  bus: sysbus
+  base_address: 29493536
+  size: 36B
+  config:
+    path: ../../peripherals/sunxi/pio.yaml
 - id: uart0
   type: ns16550
   bus: sysbus
@@ -81,3 +147,21 @@ peripherals:
   type: sunxitimer
   bus: sysbus
   base_address: 29494272
+# Low-resolution ADC (sunxi_lradc) at 0x01C2_2800 (sun7i-a20.dtsi
+# lradc@1c22800, allwinner,sun4i-a10-lradc-keys, 0x100 bytes, GIC SPI 31).
+# Two 6-bit channels; full scale is 2/3 of the 3.0 V vref-supply (Linux
+# lradc_variant_a10). No GIC is declared here, so no irq is wired.
+- id: lradc
+  type: sunxi_lradc
+  bus: sysbus
+  base_address: 0x01C22800
+  size: 256B
+  config:
+    supply_mv: 3000
+    vref_num: 2
+    vref_den: 3
+# LRADC0/LRADC1 are dedicated analog pads (no PIO mux). The pad names are
+# the A20 ball names; the datasheet was not checked here.
+analog_pins:
+  LRADC0: { peripheral: lradc, channel: 0 }
+  LRADC1: { peripheral: lradc, channel: 1 }

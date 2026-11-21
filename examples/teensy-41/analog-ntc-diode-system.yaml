@@ -1,5 +1,5 @@
-# Generic NTC and Shockley diode netlists drive Teensy's simulation-only
-# co-simulation input bank through assumed 3.3 V Schmitt thresholds.
+# Generic NTC and Shockley diode netlists reach Teensy 4.1 A0/A12 through the
+# RT1062 AD_B1_02/AD_B1_14 pads, ADC1 channel 7, and ADC2 channel 3.
 name: teensy-41-analog
 chip: ../../configs/chips/imxrt1064.yaml
 external_devices: []
@@ -11,7 +11,7 @@ cosim_models:
     inputs:
       temperature: ui.ntc.temperature_c
     outputs:
-      v_sense: board.gpio_in.cosim_inputs.0
+      v_sense: board.analog.AD_B1_02_volts
     config:
       netlist_text: |
         Vcc vcc 0 dc 3.3
@@ -26,7 +26,7 @@ cosim_models:
     adapter: analog
     step_ns: 1000
     outputs:
-      v_diode: board.gpio_in.cosim_inputs.1
+      v_diode: board.analog.AD_B1_14_volts
     config:
       netlist_text: |
         Vcc supply 0 dc 3.3

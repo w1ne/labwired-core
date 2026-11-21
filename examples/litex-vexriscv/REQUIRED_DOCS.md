@@ -8,6 +8,8 @@ Authoritative sources used by this example (retrieved 2026-10-19):
 | LiteX source | `litex/soc/cores/cpu/vexriscv/core.py` | The VexRiscv CPU's mem_map (`rom` / `sram` / `main_ram` / `csr`) and the CPU variant this descriptor pins (`rv32im_zicsr_zifencei`) |
 | LiteX source | `litex/soc/cores/uart.py` | The LiteX UART core's 32-bit CSR layout: `rxtx` @ +0x00 (shared TX/RX), `txfull` @ +0x04, `rxempty` @ +0x08 — the register map the engine's LiteX UART profile models |
 | `litex-hub/zephyr-on-litex-vexriscv` | Public LiteX gateware for the Digilent Arty (VexRiscv variant) | The 100 MHz system clock, the external-interrupt assignment (timer0 = 1, UART = 2, Ethernet = 3), and the CSR page assignment (`uart` @ +0x1800, `timer0` @ +0x2800, MMCM @ +0x4800) that this descriptor's CSR base reproduces |
+| Zephyr `boards/enjoydigital/litex_vexriscv/litex_vexriscv.dts` | Zephyr board devicetree for this gateware | `gpio_out: gpio@e0005800` (`port-is-output`, ngpios 4) and `gpio_in: gpio@e0006000` (ngpios 4, irq 4), on the same CSR page map as `clock0: clock@e0004800` |
+| LiteX source | `litex/soc/cores/gpio.py` | GPIOOut `out` and GPIOIn `in` CSRs, pin k = bit k |
 | VexRiscv (SpinalHDL) | CPU core documentation | The `rv32im` ISA without compressed/atomic extensions — the reason the smoke is built for `riscv32im-unknown-none-elf` |
 | Digilent Arty A7 reference manual | Board reference (the common carrier for this SoC) | Board-level facts this example does *not* model: the FTDI USB-UART bridge, the SPI configuration flash, DDR3 main RAM, Ethernet PHY |
 

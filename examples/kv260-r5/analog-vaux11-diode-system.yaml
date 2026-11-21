@@ -1,0 +1,31 @@
+# Generic MNA Shockley diode load line on the same KV260 input as
+# analog-vaux11-ntc-system.yaml: the VAUX11 pair on Pmod J2 (VAUXP11 = C11,
+# `pmod[3]`; VAUXN11 = B10, `pmod[4]`), PL SYSMON channel 27 of the Zynq
+# UltraScale+ AMS at 0xFFA50000. Sources and assumptions are in that file.
+#
+# The diode drop from the 3.3 V rail through 1 k is about 0.62 V, inside the
+# 1 V input range without a divider.
+name: kv260-r5-analog-vaux11-diode
+chip: ../../configs/chips/xck26-rpu.yaml
+external_devices: []
+board_io: []
+peripherals:
+  - id: ams
+    type: zynqmp_ams
+    base_address: 0xFFA50000
+    size: 4KiB
+cosim_models:
+  - id: diode_load_line
+    adapter: analog
+    step_ns: 1000
+    outputs:
+      v_diode: adc.ams.27_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: v(sense)
+      vdd: 3.3

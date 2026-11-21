@@ -1,0 +1,118 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# NXP QorIQ / Layerscape GPIO controller (`fsl,qoriq-gpio`, Linux
+# gpio-mpc8xxx.c). One 32-line block per controller: GPDIR @0x00 (1 output,
+# 0 input), GPODR @0x04 open drain, GPDAT @0x08, GPIER @0x0C event, GPIMR
+# @0x10 mask, GPICR @0x14 edge select, GPIBE @0x18 input buffer enable
+# (GPIO_DIR .. GPIO_IBE). On LX2160A the four controllers sit at 0x0230_0000
+# + 0x1_0000 * n and are little-endian (Linux fsl-lx2160a.dtsi gpio@2300000,
+# compatible "fsl,ls2080a-gpio", "fsl,qoriq-gpio", `little-endian;`).
+#
+# Bit order: the driver registers the block with BGPIOF_BIG_ENDIAN, so Linux
+# line n of a controller is GPDAT bit 31 - n. The declarative GPIO path puts
+# pad k at bit k, so LabWired pad k is GPDAT bit k, which is Linux line
+# 31 - k. Firmware loads see the silicon register bit for bit; only the pad
+# numbering differs from the Linux line numbering.
+#
+# GPDAT is one register for both directions: it reads the pad for an input
+# line and the latch for an output. It runs as the declarative GPIO path's IN
+# register, with direction from GPDIR (`gpio_mode`, one bit per pad), as the
+# sunxi Pn_DAT port does. GPDIR resets to 0, all inputs. Not modelled: with
+# no separate latch an output line reports no driven level; GPIBE does not
+# gate the pad (silicon reads 0 for an input whose buffer is off, so Linux
+# writes GPIBE = 0xFFFF_FFFF at probe on ls1028a/ls1088a/ls2080a parts);
+# open drain, the event and interrupt registers are storage only.
+peripheral: GPIO
+version: 0.1.0
+gpio_mode:
+  register: GPDIR
+  bits_per_pin: 1
+  output: [1]
+  input: [0]
+registers:
+- id: GPDIR
+  address_offset: 0x00
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: DIR
+    bit_range:
+    - 31
+    - 0
+    description: GPDIR, bit k 1 drives pad k (Linux line 31 - k)
+  side_effects: null
+- id: GPODR
+  address_offset: 0x04
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ODR
+    bit_range:
+    - 31
+    - 0
+    description: GPODR, open-drain select
+  side_effects: null
+- id: IN
+  address_offset: 0x08
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: GPDAT
+    bit_range:
+    - 31
+    - 0
+    description: GPDAT, the level of pad k at bit k (Linux line 31 - k)
+  side_effects: null
+- id: GPIER
+  address_offset: 0x0C
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IER
+    bit_range:
+    - 31
+    - 0
+    description: GPIER, interrupt events (storage only)
+  side_effects: null
+- id: GPIMR
+  address_offset: 0x10
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IMR
+    bit_range:
+    - 31
+    - 0
+    description: GPIMR, interrupt mask (storage only)
+  side_effects: null
+- id: GPICR
+  address_offset: 0x14
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: ICR
+    bit_range:
+    - 31
+    - 0
+    description: GPICR, edge select (storage only)
+  side_effects: null
+- id: GPIBE
+  address_offset: 0x18
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: IBE
+    bit_range:
+    - 31
+    - 0
+    description: GPIBE, input buffer enable (does not gate the pad here)
+  side_effects: null

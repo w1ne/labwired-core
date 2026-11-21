@@ -1,8 +1,11 @@
-# Generic MNA devices drive the EK-RX261 simulation-only input endpoints.
-# PORT/MPC registers, firmware GPIO reads, and the ADC are not modelled.
+# Generic Beta NTC divider and Shockley diode for the EK-RX261. The NTC
+# divider is on P40/AN000 and the diode on P41/AN001 (R01UH1045EJ0100
+# Table 1.5); the S12AD converts both against VREFH0 = 3.3 V. The firmware
+# (examples/ek-rx261/firmware/adc-ntc-diode.c) prints both codes on SCI6.
 name: "ek-rx261-analog-inputs"
 chip: "../../configs/chips/r5f52618bgfp.yaml"
 external_devices: []
+debug_uart: "sci6"
 board_io: []
 cosim_models:
   - id: "ntc_divider"
@@ -11,7 +14,7 @@ cosim_models:
     inputs:
       temperature: "ui.ntc.temperature_c"
     outputs:
-      v_sense: "board.gpio_in.port.0"
+      v_sense: "board.analog.P40_volts"
     config:
       netlist_text: |
         Vcc vcc 0 dc 3.3
@@ -26,7 +29,7 @@ cosim_models:
     adapter: "analog"
     step_ns: 1000
     outputs:
-      v_diode: "board.gpio_in.port.1"
+      v_diode: "board.analog.P41_volts"
     config:
       netlist_text: |
         Vcc supply 0 dc 3.3

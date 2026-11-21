@@ -1,0 +1,31 @@
+# Generic level-1 NMOS channel temperature response on FRDM-K64F ADC0.
+# A matched unheated branch and TEMP=125 °C branch share the same channel card;
+# the existing NTC and Shockley diode remain independent ADC route controls.
+name: "frdm-k64f-analog-mosfet-channel-temperature"
+chip: "../../configs/chips/mk64f12.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_channel_temperature"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_drive: "ui.mos_channel_temperature.gate_v"
+    outputs:
+      nominal_drain_voltage: "board.analog.ptb0_volts"
+      hot_drain_voltage: "board.analog.ptb1_volts"
+    config:
+      netlist_text: |
+        Vdd supply 0 dc 3.3
+        Vgate gate 0 dc 0
+        Rnom supply drain_nom 2k
+        Rhot supply drain_hot 2k
+        Mnom drain_nom gate 0 0 NMOS_TEMP W=20u L=2u
+        Mhot drain_hot gate 0 0 NMOS_TEMP W=20u L=2u TEMP=125
+        .model NMOS_TEMP NMOS(VTO=1 KP=50u GAMMA=0.5 PHI=0.65 LAMBDA=0.02 TNOM=27)
+      probes:
+        nominal_drain_voltage: "v(drain_nom)"
+        hot_drain_voltage: "v(drain_hot)"
+      sources:
+        gate_drive: "Vgate"
+      vdd: 3.3

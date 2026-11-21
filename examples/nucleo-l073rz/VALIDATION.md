@@ -197,6 +197,15 @@ firmware constant is tracked separately.
    simulator's ADC returns a deterministic `0`. An analog reading cannot be
    reproduced byte-for-byte by a deterministic engine — validation here is
    "silicon converts and returns a plausible value; sim is deterministic."
+
+   Since ADC1 moved to the F0/L0 `stm32l0` profile (CHSELR, see
+   `crates/core/tests/cosim_nucleo_l073_analog.rs`) the `0` is a real
+   conversion, no longer an ADRDY wait that timed out. The demo writes
+   `ADC_CCR` at `0x4001_2788`; RM0367 puts CCR at offset `0x308`
+   (`0x4001_2708`), so `VREFEN` never sets and IN17 is disconnected. The model
+   converts a disconnected V_REFINT as 0 V. Silicon's small `~0x86` is
+   consistent with a disconnected channel, not with V_REFINT (1.224 V typ,
+   about `0x5EE`). The firmware constant has not been fixed or re-captured.
 2. **RNG (non-deterministic).** The simulator returns a fixed `0xCAFEBABE` —
    correct behaviour for a *deterministic* oracle. A real TRNG can never (and
    should never) match it.
@@ -279,8 +288,12 @@ and the UART byte stream. Still approximate / unverified against silicon:
 2. **RCC is the L4 model, not L0.** It is permissive (does not gate on enable
    bits), so firmware runs, but L4-offset ready flags will not match L0 — the
    demo polls with bounded spins and never blocks on them.
-3. **I2C / SPI / ADC / EXTI reuse family models** (L4 / `stm32f1` EXTI). Not
+3. **I2C / SPI / EXTI reuse family models** (L4 / `stm32f1` EXTI). Not
    diffed against L0 silicon — re-validate before trusting any bus lab here.
+   ADC1 runs the F0/L0 `stm32l0` layout (CHSELR channel bitmap, routed
+   `board.analog.<pad>_volts` inputs per `analog_pins:`), but it converts the
+   first selected channel only, has no sample-time or settling model and was
+   not part of the silicon capture.
 4. **USB FS, LCD, COMP, SYSCFG are stubs** (read 0, writes dropped).
 5. **Baud is not timed** in the sim (functional UART, not cycle-accurate).
 

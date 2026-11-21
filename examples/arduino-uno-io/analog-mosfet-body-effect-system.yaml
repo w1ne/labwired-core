@@ -1,0 +1,49 @@
+# Arduino Uno R3 routes one Shockley diode and a matched level-1 NMOS body-bias
+# pair through A0..A2 / ATmega328P ADC0..ADC2. The negative bulk sweep exposes
+# the generic MOSFET body-effect law without board-specific device code.
+name: "arduino-uno-analog-mosfet-body-effect"
+chip: "../../configs/chips/atmega328p.yaml"
+cpu_hz: 16000000
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "board.analog.pc0_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"
+  - id: "mosfet_body_effect_pair"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      bulk_bias: "ui.mosfet_body.bulk_v"
+    outputs:
+      reference_drain: "board.analog.pc1_volts"
+      body_effect_drain: "board.analog.pc2_volts"
+    config:
+      netlist_text: |
+        Vdd_ref supply_ref 0 dc 3.3
+        Rload_ref supply_ref drain_ref 1k
+        Vgate_ref gate_ref 0 dc 2.5
+        Vbulk_ref bulk_ref 0 dc 0
+        Mref drain_ref gate_ref 0 bulk_ref NMOS_BODY
+        Vdd_body supply_body 0 dc 3.3
+        Rload_body supply_body drain_body 1k
+        Vgate_body gate_body 0 dc 2.5
+        Vbulk_body bulk_body 0 dc 0
+        Mbody drain_body gate_body 0 bulk_body NMOS_BODY
+        .model NMOS_BODY NMOS(VTO=1 KP=20u LAMBDA=0.02 GAMMA=0.4 PHI=0.7 IS=1e-30 W=100u L=10u)
+      probes:
+        reference_drain: "v(drain_ref)"
+        body_effect_drain: "v(drain_body)"
+      sources:
+        bulk_bias: "Vbulk_body"
+      vdd: 3.3

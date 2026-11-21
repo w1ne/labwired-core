@@ -39,3 +39,85 @@ peripherals:
   type: k6xf_rng
   bus: sysbus
   base_address: 1073909760
+# GPIO ports PTA-PTE. Renode's nxp-k6xf platform models only UART0, MCG, SIM,
+# ENET and RNG, so the import carried no GPIO. The K64/K66 GPIO module puts
+# PTA..PTE at 0x400FF000 + 0x40 * n with PDOR/PSOR/PCOR/PTOR at +0x00..+0x0C,
+# PDIR +0x10 and PDDR +0x14 (K64P144M120SF5RM ch. 55; K66P144M180SF5RM ch. 63),
+# the map the promoted configs/chips/mk64f12.yaml runs on `profile: kinetis`.
+# The PORT block (PCRn MUX/pulls) and SIM_SCGC5 clock gating are not declared,
+# so PDIR reads the pin whatever its MUX or port clock, where silicon reads 0
+# until MUX = GPIO and the port clock is on.
+- id: pta
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF000
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptb
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF040
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptc
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF080
+  size: 64B
+  config:
+    profile: kinetis
+- id: ptd
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF0C0
+  size: 64B
+  config:
+    profile: kinetis
+- id: pte
+  type: gpio
+  bus: sysbus
+  base_address: 0x400FF100
+  size: 64B
+  config:
+    profile: kinetis
+# ADC16 (kinetis_adc16): ADC0 @0x4003B000 IRQ 39, ADC1 @0x400BB000 IRQ 73
+# (mcux-sdk devices/MK64F12/MK64F12.h). Renode's nxp-k6xf platform has no
+# ADC; the promoted configs/chips/mk64f12.yaml declares the same two blocks.
+- id: adc0
+  type: kinetis_adc16
+  base_address: 0x4003B000
+  size: 4KB
+  irq: 39
+- id: adc1
+  type: kinetis_adc16
+  base_address: 0x400BB000
+  size: 4KB
+  irq: 73
+# The K64F ADC16 pads (Zephyr hal_nxp @cc9b44ae MK64FN1M0VLL12-pinctrl.h);
+# channel = kinetis_adc16 input index, see configs/chips/mk64f12.yaml.
+analog_pins:
+  PTE2: { peripheral: adc0, channel: 2 }
+  PTE3: { peripheral: adc0, channel: 30 }
+  PTB0: { peripheral: adc0, channel: 8 }
+  PTB1: { peripheral: adc0, channel: 9 }
+  PTB2: { peripheral: adc0, channel: 12 }
+  PTB3: { peripheral: adc0, channel: 13 }
+  PTC0: { peripheral: adc0, channel: 14 }
+  PTC1: { peripheral: adc0, channel: 15 }
+  PTE24: { peripheral: adc0, channel: 17 }
+  PTE25: { peripheral: adc0, channel: 18 }
+  PTC2: { peripheral: adc0, channel: 24 }
+  PTD1: { peripheral: adc0, channel: 25 }
+  PTD5: { peripheral: adc0, channel: 26 }
+  PTD6: { peripheral: adc0, channel: 27 }
+  PTE0: { peripheral: adc1, channel: 4 }
+  PTE1: { peripheral: adc1, channel: 5 }
+  PTB10: { peripheral: adc1, channel: 14 }
+  PTB11: { peripheral: adc1, channel: 15 }
+  PTA17: { peripheral: adc1, channel: 17 }
+  PTC8: { peripheral: adc1, channel: 24 }
+  PTC9: { peripheral: adc1, channel: 25 }
+  PTC10: { peripheral: adc1, channel: 26 }
+  PTC11: { peripheral: adc1, channel: 27 }

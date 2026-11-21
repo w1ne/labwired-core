@@ -25,6 +25,7 @@ simulation-derived.
 | Determinism | ✅ | `sdcc_firmware_run_is_deterministic` (bytes, cycles, PC); firmware rebuild byte-identical |
 | Unsupported instructions | ✅ 0 | 200k-step audit exits 0 |
 | Negative control | ✅ | with the `RETFIE` shadow restore disabled the smoke fails (`TMR0 IRQ BAD`) |
+| ADC + FVR | ✅ | `enhanced_adc_*` unit tests; `cosim_pic16f1829_analog` (gpasm firmware converts solved NTC and diode netlists on AN4/AN6 and the FVR); `session_builder_pic16::pic16f1829_adc_firmware_converts_the_solved_netlists_in_a_session` |
 | Silicon capture | ❌ none | simulation-derived only |
 
 ## Evidence
@@ -35,6 +36,9 @@ cargo test -p labwired-core --lib cpu::pic16
 
 cargo test -p labwired-core --test pic16f1829_smoke
 # test result: ok. 6 passed; 0 failed
+
+cargo test -p labwired-core --test cosim_pic16f1829_analog
+# test result: ok. 2 passed; 0 failed
 
 cargo run -q -p labwired-cli -- test \
   --script examples/pic16f1829/io-smoke.yaml --no-uart-stdout
@@ -66,6 +70,17 @@ bash examples/pic16f1829/ci/test.sh
   `STKOVF`/`STKUNF` set). GPR keeps its contents.
 - **OSCSTAT.** Reads the HFIOFR/HFIOFL/MFIOFR/LFIOFR/HFIOFS ready bits set,
   because clock start-up is not modelled.
+- **ADC and FVR.** `ADCON0`/`ADCON1`/`ADRESH`/`ADRESL` and `FVRCON`
+  (DS40001440E sections 14 and 16) on boards whose chip declares the
+  routed-pad window. Setting `GO/DONE` samples the selected input and ends
+  11.5 TAD later (`ADCS<2:0>`, rounded up to a whole instruction cycle): the
+  result loads with the `ADFM` justification, `GO/DONE` clears and `ADIF`
+  sets. `ADPREF` selects VDD, the VREF+ pin (AN1) or FVR Buffer1 and `ADNREF`
+  VSS or the VREF- pin (AN0). `CHS` selects AN0-AN11 or FVR Buffer1
+  (1.024/2.048/4.096 V, never above VDD; `FVRRDY` reads 1). Clearing
+  `GO/DONE` loads the partial result with the unconverted bits equal to the
+  last converted one. On FRC the conversion runs through Sleep and `ADIF`
+  wakes the part; on a system clock `SLEEP` aborts it.
 - **USART, ports and SLEEP** behave as on the classic core (see
   `examples/pic16f877a/VALIDATION.md`): a TX byte leaves at once, `PORTx`
   reads `LATx & ~TRISx`, and `SLEEP` idles until an enabled flag.
@@ -74,8 +89,16 @@ bash examples/pic16f1829/ci/test.sh
 
 Not validated, or not modelled, for this part:
 - CONFIG decoding beyond STVREN, clock switching, PLL, the WDT.
-- TMR1/2/4/6, CCP/ECCP, MSSP1/2 (SPI/I2C), ADC, comparators, DAC, FVR, CPS,
-  SR latch, data signal modulator.
+- TMR1/2/4/6, CCP/ECCP, MSSP1/2 (SPI/I2C), comparators, DAC, CPS, SR latch,
+  data signal modulator.
+- ADC limits: the temperature indicator and DAC_output channels convert 0 V;
+  the CCP4 special event trigger does not start a conversion; ANSELx is plain
+  storage; the acquisition time is not checked; the result is the ideal code
+  with no offset, gain or quantisation error; FRC is a fixed 1.6 us TAD; the
+  reserved `ADPREF = 01` converts against VDD; an abort before bit 9 is
+  ready leaves ADRESH:ADRESL unchanged (the data sheet does not define it);
+  a conversion that Sleep aborts leaves GO/DONE set; on FRC in Sleep with
+  ADIE clear the module is not turned off after the conversion.
 - Data EEPROM and flash self-read/write through EECON1.
 - EUSART RX and baud timing, interrupt-on-change, and external pin drive.
 - The two-cycle TMR0 increment inhibit after a TMR0 write.

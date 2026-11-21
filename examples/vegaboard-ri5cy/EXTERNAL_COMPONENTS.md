@@ -6,8 +6,8 @@ device — the engine captures its byte stream directly.
 
 The Vega board carries sensors, radios and user I/O on real hardware; none of
 those physical parts is modelled or attached in this example. Its analog
-routing fixture uses generic netlist device models with the chip's simulation-
-only `input_pin_bank`, without claiming physical GPIO or ADC behavior:
+routing fixture attaches generic netlist device models (an NTC divider and a
+diode, not board parts) to the LPADC0 pads PTB7 and PTC9:
 
 | Component | Board wiring | State |
 | :--- | :--- | :--- |

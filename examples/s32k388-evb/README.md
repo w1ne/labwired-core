@@ -4,7 +4,8 @@ Boots a bare-register Cortex-M7 smoke on CM7_0 of the NXP S32K388EVB-Q289 map
 and proves the LPUART2 console, the SIUL2 output path on the six RGB LED pads
 and the PTA1 input pulls. A separate analog co-simulation fixture routes a
 generic Beta NTC divider and Shockley diode to PTA11/PTA17 through SIUL2's
-voltage-thresholded input path; it does not model ADC/BCTU conversion.
+voltage-thresholded input path, and through the SAR ADCs (PTA11 = ADC1_S10,
+PTA17 = ADC2_S19, `s32k3_adc_sar`). BCTU-triggered conversion is not modelled.
 
 ## What the firmware does
 
@@ -67,6 +68,7 @@ that touches configs/ or examples/.
 | `system.yaml` | Board manifest (same as `configs/systems/s32k388-evb.yaml`) |
 | `io-smoke.yaml` | Ordered UART assertions over 4,000,000 steps |
 | `analog-ntc-diode-system.yaml` | Generic NTC and diode netlists routed to PTA11/PTA17 |
+| `analog-bjt-quasi-saturation-adc.yaml` | BJT quasi-saturation (`RCO`/`VO`/`GAMMA`) switch stages on PTA16/PTB15/PTB16/PTA21, beside the NTC and diode |
 | `ci/build.sh`, `ci/test.sh` | Board gate build and proof |
 | `VALIDATION.md` | Claims, evidence and non-claims |
 | `REQUIRED_DOCS.md` | Sources |
@@ -80,8 +82,10 @@ Run the analog route proof from `core/` with:
 
 ```bash
 cargo test -p labwired-core --test cosim_s32k388_analog -- --nocapture
+cargo test -p labwired-core --test cosim_s32k388_adc_analog -- --nocapture
 ```
 
 The threshold ratios are explicit test assumptions, not S32K388 silicon
-threshold data. This proves a GPIO-level route on the real pad map; ADC/BCTU
-conversion and the physical potentiometers remain outside this model.
+threshold data. The ADC test converts the same pads on ADC1/ADC2 against an
+assumed 3.3 V VREFH. BCTU triggers and the physical potentiometers remain
+outside this model.

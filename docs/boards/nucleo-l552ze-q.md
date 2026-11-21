@@ -34,7 +34,8 @@ no silicon capture: **SIM-DERIVED**, no executing-fidelity differential.
     exception stacking (MSTKERR/MUNSTKERR) and lazy FP preservation (MLSPERR)
     are not ([ISA coverage](../isa_coverage.md)). FP state is stacked
     eagerly, not lazily (`FPCCR.LSPACT` reads 0). The L5 non-secure FLASH controller,
-    EXTI, ADC, FDCAN and USB are declared stubs.
+    EXTI, ADC2, FDCAN and USB are declared stubs (ADC1 runs on the L4-class
+    ADC model, sim-derived).
 
 !!! tip "Live status"
     The tables below are a maintained snapshot. Authoritative automation:
@@ -78,7 +79,8 @@ no silicon capture: **SIM-DERIVED**, no executing-fidelity differential.
 | RNG / CRC / RTC / IWDG / WWDG / PWR | see descriptor | modelled — unexercised |
 | ICACHE | `0x4003_0400` | modelled — the U5 `icache` model (same IP); Zephyr enables it |
 | DBGMCU | `0xE004_4000` | modelled — `IDCODE 0x2001_6472` (DEV_ID 0x472, rev Z) |
-| FLASH controller, EXTI, ADC1, FDCAN1, USB | see descriptor | `type: stub` — zeros (so `FLASH_ACR.LATENCY` does not read back) |
+| ADC1 | `0x4202_8000` | modelled — shared L4-class `adc`; PA0/PA1 NTC + diode convert end to end (`cosim_nucleo_l552_analog`) |
+| FLASH controller, EXTI, FDCAN1, USB | see descriptor | `type: stub` — zeros (so `FLASH_ACR.LATENCY` does not read back) |
 | FP extension (FPCCR/FPCAR/FPDSCR/MVFR) | `0xE000_EF34` | modelled — `cortex_m_fpu`: `CONTROL.FPCA`, extended frames (eager) |
 | MPU (PMSAv8, 8 regions) | `0xE000_ED90` | modelled + enforced — `armv8m_mpu`: AP/XN/PRIVDEFENA/HFNMIENA, MemManage with MMFAR; reported by `TT` |
 | TrustZone / SAU / GTZC | — | **not modelled** |

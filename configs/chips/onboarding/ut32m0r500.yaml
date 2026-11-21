@@ -29,11 +29,14 @@ peripherals:
   type: arm_sp804_timer
   bus: sysbus
   base_address: 1073750016
+# UT32M0R500 delta-sigma ADC (Renode ut32m0r500.repl @ 0x4000_F000): 12 bits,
+# 1.5 V single-ended full scale divided by the per-channel PGA gain.
 - id: adc
-  type: stub
+  type: caes_adc
   renode_type: caes_adc
   bus: sysbus
   base_address: 1073803264
+  irq: 21  # ADC_IRQn (CAES "Enable the ADC" app note §5.1, Renode nvic@21)
 - id: gpio0
   type: arm_ahb_gpio
   bus: sysbus
@@ -56,3 +59,21 @@ peripherals:
   renode_type: ut32_can
   bus: sysbus
   base_address: 1073889280
+# AIN0..AIN15, the dedicated single-ended inputs (CAES ADC Users Guide §2.0).
+analog_pins:
+  AIN0: { peripheral: adc, channel: 0 }
+  AIN1: { peripheral: adc, channel: 1 }
+  AIN2: { peripheral: adc, channel: 2 }
+  AIN3: { peripheral: adc, channel: 3 }
+  AIN4: { peripheral: adc, channel: 4 }
+  AIN5: { peripheral: adc, channel: 5 }
+  AIN6: { peripheral: adc, channel: 6 }
+  AIN7: { peripheral: adc, channel: 7 }
+  AIN8: { peripheral: adc, channel: 8 }
+  AIN9: { peripheral: adc, channel: 9 }
+  AIN10: { peripheral: adc, channel: 10 }
+  AIN11: { peripheral: adc, channel: 11 }
+  AIN12: { peripheral: adc, channel: 12 }
+  AIN13: { peripheral: adc, channel: 13 }
+  AIN14: { peripheral: adc, channel: 14 }
+  AIN15: { peripheral: adc, channel: 15 }

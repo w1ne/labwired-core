@@ -100,8 +100,11 @@ peripherals:
   type: xilinxgpiops
   bus: sysbus
   base_address: 3758137344
+# Zynq-7000 PS-XADC interface (DEVCFG + 0x100, Renode zynq-7000.repl): DRP
+# commands through CMDFIFO, results through RDFIFO, 12 bits MSB-justified.
+# Not given an `irq`: no other peripheral in this descriptor maps a GIC line.
 - id: xadc
-  type: stub
+  type: xilinx_xadc
   renode_type: xilinx_xadc
   bus: sysbus
   base_address: 4160778496
@@ -154,3 +157,23 @@ peripherals:
   type: led
   bus: gpio
   base_address: 68
+# The dedicated VP_0 pad and the VAUXP inputs on the AD0P..AD15P dual-purpose
+# PL pins (xadcps_hw.h: DRP channel 3 = VP/VN, 0x10 + n = VAUXn).
+analog_pins:
+  VP_0: { peripheral: xadc, channel: 3 }
+  AD0P: { peripheral: xadc, channel: 16 }
+  AD1P: { peripheral: xadc, channel: 17 }
+  AD2P: { peripheral: xadc, channel: 18 }
+  AD3P: { peripheral: xadc, channel: 19 }
+  AD4P: { peripheral: xadc, channel: 20 }
+  AD5P: { peripheral: xadc, channel: 21 }
+  AD6P: { peripheral: xadc, channel: 22 }
+  AD7P: { peripheral: xadc, channel: 23 }
+  AD8P: { peripheral: xadc, channel: 24 }
+  AD9P: { peripheral: xadc, channel: 25 }
+  AD10P: { peripheral: xadc, channel: 26 }
+  AD11P: { peripheral: xadc, channel: 27 }
+  AD12P: { peripheral: xadc, channel: 28 }
+  AD13P: { peripheral: xadc, channel: 29 }
+  AD14P: { peripheral: xadc, channel: 30 }
+  AD15P: { peripheral: xadc, channel: 31 }

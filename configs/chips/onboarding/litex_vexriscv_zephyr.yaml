@@ -12,4 +12,21 @@ flash:
 ram:
   base: 1073741824
   size: 268435456B
-peripherals: []
+peripherals:
+# LiteX GPIOOut/GPIOIn of the Zephyr enjoydigital litex_vexriscv board
+# (litex_vexriscv.dts gpio@e0005800, gpio@e0006000). This profile's RAM is
+# that board's ram0 (memory@40000000, reg <0x40000000 0x10000000>).
+- id: gpio_out
+  type: declarative
+  bus: sysbus
+  base_address: 3758118912
+  size: 4B
+  config:
+    path: ../../peripherals/litex/gpio_out.yaml
+- id: gpio_in
+  type: declarative
+  bus: sysbus
+  base_address: 3758120960
+  size: 4B
+  config:
+    path: ../../peripherals/litex/gpio_in.yaml

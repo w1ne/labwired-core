@@ -295,3 +295,105 @@ peripherals:
     type: "systick"
     base_address: 0xE000E010
     size: 16
+
+  # --- AIPS_0: SAR ADC_0..ADC_2 ----------------------------------------------
+  # ADC_0..ADC_2 (s32k3_adc_sar): IP_ADC_n_BASE 0x400A0000/0x400A4000/
+  # 0x400A8000 (S32K388_ADC.h) and ADC0..2_IRQn 180..182 (S32K388_COMMON.h),
+  # NXP RTD BaseNXP headers as vendored in github Jonah-Zhang1/S32K358
+  # @fc142f34. VREFH defaults to 3.3 V (no S32K388EVB VREFH source is vendored).
+  - id: "adc0"
+    type: "s32k3_adc_sar"
+    base_address: 0x400A0000
+    size: "16KB"
+    irq: 180
+  - id: "adc1"
+    type: "s32k3_adc_sar"
+    base_address: 0x400A4000
+    size: "16KB"
+    irq: 181
+  - id: "adc2"
+    type: "s32k3_adc_sar"
+    base_address: 0x400A8000
+    size: "16KB"
+    irq: 182
+
+# P/S pads of every ADC (channel = RTD id: ADCx_Pn = n, ADCx_Sn = 32 + n - 8),
+# from the RTD 7.0.1 Port_Cfg.h generated for an S32K388 project (github
+# KJ-Sagar/qemu_s32k3 @8709eca1 Eth_InternalLoopback_S32K388/generate/include,
+# whose Siul2_Port_Ip_Defines.h includes S32K388_SIUL2.h): one
+# SIUL2_0_PORT<mscr>_ADC<x>_ADC<x>_<sig>_IN define per pad signal. A pad that
+# reaches several ADCs is routed to the lowest instance. External-mux X
+# inputs are left out.
+analog_pins:
+  PTA0: { peripheral: adc0, channel: 32 }  # ADC0_S8
+  PTA1: { peripheral: adc0, channel: 33 }  # ADC0_S9
+  PTA3: { peripheral: adc1, channel: 41 }  # ADC1_S17
+  PTA4: { peripheral: adc1, channel: 39 }  # ADC1_S15
+  PTA6: { peripheral: adc0, channel: 42 }  # ADC0_S18
+  PTA7: { peripheral: adc0, channel: 35 }  # ADC0_S11
+  PTA8: { peripheral: adc0, channel: 2 }  # ADC0_P2
+  PTA9: { peripheral: adc0, channel: 7 }  # ADC0_P7
+  PTA11: { peripheral: adc1, channel: 34 }  # ADC1_S10
+  PTA12: { peripheral: adc1, channel: 0 }  # ADC1_P0
+  PTA13: { peripheral: adc1, channel: 1 }  # ADC1_P1
+  PTA14: { peripheral: adc1, channel: 4 }  # ADC1_P4
+  PTA15: { peripheral: adc1, channel: 7 }  # ADC1_P7
+  PTA16: { peripheral: adc1, channel: 37 }  # ADC1_S13
+  PTA17: { peripheral: adc2, channel: 43 }  # ADC2_S19
+  PTA18: { peripheral: adc2, channel: 0 }  # ADC2_P0
+  PTA19: { peripheral: adc2, channel: 1 }  # ADC2_P1
+  PTA20: { peripheral: adc2, channel: 2 }  # ADC2_P2
+  PTA21: { peripheral: adc2, channel: 36 }  # ADC2_S12
+  PTA23: { peripheral: adc1, channel: 43 }  # ADC1_S19
+  PTB0: { peripheral: adc0, channel: 38 }  # ADC0_S14  # also ADC1_S14
+  PTB1: { peripheral: adc0, channel: 39 }  # ADC0_S15  # also ADC1_S15
+  PTB13: { peripheral: adc0, channel: 32 }  # ADC0_S8  # also ADC1_S8, ADC2_S8
+  PTB14: { peripheral: adc0, channel: 33 }  # ADC0_S9  # also ADC1_S9, ADC2_S9
+  PTB15: { peripheral: adc1, channel: 35 }  # ADC1_S11
+  PTB16: { peripheral: adc1, channel: 36 }  # ADC1_S12
+  PTC5: { peripheral: adc1, channel: 38 }  # ADC1_S14
+  PTC6: { peripheral: adc1, channel: 42 }  # ADC1_S18
+  PTC7: { peripheral: adc1, channel: 40 }  # ADC1_S16
+  PTC8: { peripheral: adc0, channel: 36 }  # ADC0_S12
+  PTC9: { peripheral: adc0, channel: 37 }  # ADC0_S13
+  PTC11: { peripheral: adc0, channel: 41 }  # ADC0_S17
+  PTC23: { peripheral: adc2, channel: 47 }  # ADC2_S23
+  PTC24: { peripheral: adc2, channel: 46 }  # ADC2_S22
+  PTC25: { peripheral: adc0, channel: 44 }  # ADC0_S20
+  PTC26: { peripheral: adc0, channel: 45 }  # ADC0_S21
+  PTC31: { peripheral: adc2, channel: 45 }  # ADC2_S21
+  PTD0: { peripheral: adc0, channel: 1 }  # ADC0_P1
+  PTD1: { peripheral: adc0, channel: 0 }  # ADC0_P0
+  PTD2: { peripheral: adc0, channel: 40 }  # ADC0_S16
+  PTD3: { peripheral: adc0, channel: 34 }  # ADC0_S10
+  PTD4: { peripheral: adc0, channel: 43 }  # ADC0_S19
+  PTD20: { peripheral: adc0, channel: 46 }  # ADC0_S22
+  PTD21: { peripheral: adc0, channel: 47 }  # ADC0_S23
+  PTD22: { peripheral: adc2, channel: 42 }  # ADC2_S18
+  PTD23: { peripheral: adc2, channel: 41 }  # ADC2_S17
+  PTD24: { peripheral: adc1, channel: 44 }  # ADC1_S20
+  PTD26: { peripheral: adc2, channel: 40 }  # ADC2_S16
+  PTD27: { peripheral: adc1, channel: 45 }  # ADC1_S21
+  PTD28: { peripheral: adc1, channel: 46 }  # ADC1_S22
+  PTD29: { peripheral: adc1, channel: 47 }  # ADC1_S23
+  PTD30: { peripheral: adc2, channel: 39 }  # ADC2_S15
+  PTD31: { peripheral: adc2, channel: 38 }  # ADC2_S14
+  PTE0: { peripheral: adc1, channel: 2 }  # ADC1_P2
+  PTE1: { peripheral: adc1, channel: 3 }  # ADC1_P3
+  PTE2: { peripheral: adc1, channel: 5 }  # ADC1_P5
+  PTE4: { peripheral: adc2, channel: 33 }  # ADC2_S9
+  PTE5: { peripheral: adc2, channel: 32 }  # ADC2_S8
+  PTE6: { peripheral: adc1, channel: 6 }  # ADC1_P6
+  PTE7: { peripheral: adc2, channel: 44 }  # ADC2_S20
+  PTE10: { peripheral: adc0, channel: 5 }  # ADC0_P5
+  PTE11: { peripheral: adc0, channel: 6 }  # ADC0_P6
+  PTE15: { peripheral: adc0, channel: 3 }  # ADC0_P3
+  PTE16: { peripheral: adc0, channel: 4 }  # ADC0_P4
+  PTE17: { peripheral: adc1, channel: 46 }  # ADC1_S22  # also ADC2_S10
+  PTE18: { peripheral: adc1, channel: 47 }  # ADC1_S23  # also ADC2_S11
+  PTE21: { peripheral: adc2, channel: 3 }  # ADC2_P3
+  PTE22: { peripheral: adc2, channel: 4 }  # ADC2_P4
+  PTE23: { peripheral: adc2, channel: 5 }  # ADC2_P5
+  PTE24: { peripheral: adc2, channel: 37 }  # ADC2_S13
+  PTE25: { peripheral: adc2, channel: 7 }  # ADC2_P7
+  PTE26: { peripheral: adc2, channel: 6 }  # ADC2_P6

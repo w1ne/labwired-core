@@ -1,0 +1,127 @@
+# Generic Gummel-Poon TLEV=0 power and TLEV=1 linear beta temperature laws
+# route through SAADC beside unrelated NTC and diode netlists.
+name: "nrf5340dk-analog-bjt-tlev-temperature"
+chip: "../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_tlev_temperature_forward_zero"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_tlev_temperature.forward_base_v"
+    outputs:
+      collector_voltage: "adc.saadc.2_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 10k
+        Vbase drive 0 dc 0
+        Rbase drive base 1Meg
+        Q1 collector base 0 NPN_TLEV_ZERO temp=125
+        .model NPN_TLEV_ZERO NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0 TLEV=0 XTB=10m TNOM=25 EG=1.11 XTI=3)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_tlev_temperature_forward_zero_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_tlev_temperature.forward_base_v"
+    outputs:
+      collector_voltage: "adc.saadc.3_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 10k
+        Vbase drive 0 dc 0
+        Rbase drive base 1Meg
+        Q1 collector base 0 NPN_TLEV_ZERO_HOT temp=125
+        .model NPN_TLEV_ZERO_HOT NPN(IS=1.2284346020950438e-11 BF=80.23172062618912 BR=4.011586031309456 VAF=0 VAR=0 TLEV=0 XTB=0 TNOM=125 EG=1.11 XTI=3)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_tlev_temperature_forward_one"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_tlev_temperature.forward_base_v"
+    outputs:
+      collector_voltage: "adc.saadc.4_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 10k
+        Vbase drive 0 dc 0
+        Rbase drive base 1Meg
+        Q1 collector base 0 NPN_TLEV_ONE temp=125
+        .model NPN_TLEV_ONE NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0 TLEV=1 XTB=10m TNOM=25 EG=1.11 XTI=3)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_tlev_temperature_forward_one_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_tlev_temperature.forward_base_v"
+    outputs:
+      collector_voltage: "adc.saadc.5_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 10k
+        Vbase drive 0 dc 0
+        Rbase drive base 1Meg
+        Q1 collector base 0 NPN_TLEV_ONE_HOT temp=125
+        .model NPN_TLEV_ONE_HOT NPN(IS=1.2284346020950438e-11 BF=160 BR=8 VAF=0 VAR=0 TLEV=0 XTB=0 TNOM=125 EG=1.11 XTI=3)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_tlev_temperature_reverse_zero"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_tlev_temperature.reverse_base_v"
+    outputs:
+      emitter_voltage: "adc.saadc.6_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply emitter 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 0 base emitter NPN_TLEV_REVERSE_ZERO temp=125
+        .model NPN_TLEV_REVERSE_ZERO NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0 TLEV=0 XTB=10m TNOM=25 EG=1.11 XTI=3)
+      probes:
+        emitter_voltage: "v(emitter)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_tlev_temperature_reverse_one"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_tlev_temperature.reverse_base_v"
+    outputs:
+      emitter_voltage: "adc.saadc.7_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply emitter 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 0 base emitter NPN_TLEV_REVERSE_ONE temp=125
+        .model NPN_TLEV_REVERSE_ONE NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0 TLEV=1 XTB=10m TNOM=25 EG=1.11 XTI=3)
+      probes:
+        emitter_voltage: "v(emitter)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3

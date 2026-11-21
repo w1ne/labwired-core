@@ -28,6 +28,50 @@ NMOS load line on PA0/ADC1_IN0. Its co-simulation test checks the independently
 calculated drain voltage across gate bias points, the firmware-visible ADC1
 conversion, and isolation from the NTC and diode channels.
 
+[`analog-mosfet-sheet-resistance-adc.yaml`](analog-mosfet-sheet-resistance-adc.yaml)
+compares a generic level-1 NMOS reference, drain-only RSH×NRD and source-only
+RSH×NRS branches, and equivalent external resistor networks on PA2/PA3/PA5/PA6/PB0.
+The test checks independent load-line roots, cutoff and conduction behavior,
+firmware-visible ADC1 conversions, and isolation from the unrelated NTC and diode.
+
+[`analog-mosfet-overlap-charge-adc.yaml`](analog-mosfet-overlap-charge-adc.yaml)
+compares matched level-1 NMOS branches with and without CGSO on PA2/PA3. Its
+co-simulation test checks the transient against an independent backward-Euler
+RC recurrence, asserts ADC1 readback, and keeps the unrelated NTC and diode
+routed on PA1/PA4.
+
+[`analog-mosfet-junction-geometry-adc.yaml`](analog-mosfet-junction-geometry-adc.yaml)
+compares matched level-1 NMOS branches with drain/source bottom and sidewall
+junction geometry against zero-charge controls on PA2/PA3/PA5/PA6. Its
+co-simulation test checks the independently integrated reverse-bias charge
+recurrence, distinct drain/source transients, and ADC1 conversions while the
+unrelated NTC and diode remain routed on PA1/PA4.
+
+[`analog-jfet-gate-charge-adc.yaml`](analog-jfet-gate-charge-adc.yaml) compares
+matched level-1 NJF branches with and without CGS/CGD depletion charge on
+PA2/PA3. The co-simulation test checks the transient against an independent
+backward-Euler charge recurrence, converts both gate voltages through ADC1, and
+keeps the unrelated NTC and diode routed on PA1/PA4.
+
+[`analog-bjt-high-injection-adc.yaml`](analog-bjt-high-injection-adc.yaml)
+compares matched generic Gummel–Poon NPN branches with and without IKF/IKR/NKF
+rolloff on PA5/PA6. The test checks both load lines against an independent
+reference, asserts ADC1 conversions, and keeps the unrelated NTC and diode on
+PA1/PA4.
+
+[`analog-bjt-early-effect-adc.yaml`](analog-bjt-early-effect-adc.yaml) compares
+matched generic Gummel–Poon NPN branches with finite VAF and no forward Early
+effect on PA2/PA3. The test checks independent load-line roots at four base
+drives, asserts ADC1 conversions, and keeps the unrelated NTC and diode on
+PA1/PA4.
+
+[`analog-bjt-terminal-resistance-adc.yaml`](analog-bjt-terminal-resistance-adc.yaml)
+routes matched NPN branches with RB, RC, and RE separately and together through
+PA2/PA3/PA5/PA6/PB0 ADC1 inputs, with an explicit external-resistor equivalent
+on PB1. The test checks each resistance changes the collector load line, the
+model-card resistances match the external network, and all results survive
+firmware-visible ADC conversion beside the unrelated NTC and diode.
+
 ## Fidelity
 
 **Sim-derived, not silicon-verified.** No F411 part was on a bench for this
@@ -62,4 +106,19 @@ Expected result:
    blob and asserts its TIER1 self-test transcript.
 3. `analog-ntc-diode-system.yaml`: reusable generic NTC and diode analog models
    routed to the F411's modeled ADC1 inputs.
-4. `VALIDATION.md`: reproducible validation commands and the honest scope.
+4. `analog-mosfet-switch.yaml`: generic NMOS load-line model routed to ADC1.
+5. `analog-mosfet-sheet-resistance-adc.yaml`: matched NMOS sheet-resistance and
+   explicit resistor-reference branches routed to ADC1.
+6. `analog-mosfet-overlap-charge-adc.yaml`: matched NMOS CGSO and control
+   branches routed to ADC1.
+7. `analog-jfet-gate-charge-adc.yaml`: matched generic JFET charge and control
+   branches routed to ADC1.
+8. `analog-bjt-high-injection-adc.yaml`: matched generic BJT high-injection and
+   control branches routed to ADC1.
+9. `analog-bjt-early-effect-adc.yaml`: matched generic BJT Early-effect and
+   control branches routed to ADC1.
+10. `analog-bjt-terminal-resistance-adc.yaml`: generic BJT terminal-resistance
+   branches and explicit equivalent network routed to ADC1.
+11. `analog-mosfet-junction-geometry-adc.yaml`: generic NMOS junction geometry
+    charge and zero-charge controls routed to ADC1.
+12. `VALIDATION.md`: reproducible validation commands and the honest scope.

@@ -1,5 +1,13 @@
-# Generic NTC and Shockley diode netlists drive Vega's simulation-only
-# co-simulation input bank through assumed 3.3 V Schmitt thresholds.
+# Generic MNA NTC divider and Shockley diode load line on two RV32M1 LPADC0
+# pads of the Vega board:
+#   PTB7 = ADC0_SE2 (NTC divider), PTC9 = ADC0_SE4 (diode)
+# Pad names come from the rv32m1_sdk_riscv boards/rv32m1_vega pin_mux.c signal
+# lists (see configs/chips/vegaboard-ri5cy.yaml `analog_pins`).
+#
+# VREFH is 1.8 V in the descriptor (an assumption, not a sourced board rail).
+# The 68 k top resistor keeps the 10 k Beta NTC below that from -10 C upward
+# (1.52 V at -10 C). Acquisition time is not modelled, so the source impedance
+# has no effect here.
 name: vegaboard-ri5cy-analog
 chip: ../../configs/chips/vegaboard-ri5cy.yaml
 external_devices: []
@@ -11,11 +19,11 @@ cosim_models:
     inputs:
       temperature: ui.ntc.temperature_c
     outputs:
-      v_sense: board.gpio_in.cosim_inputs.0
+      v_sense: board.analog.PTB7_volts
     config:
       netlist_text: |
         Vcc vcc 0 dc 3.3
-        Rpull vcc sense 10k
+        Rtop vcc sense 68k
         Rntc sense 0 10k beta=3950 tnom=25 temp=25
       probes:
         v_sense: v(sense)
@@ -26,7 +34,7 @@ cosim_models:
     adapter: analog
     step_ns: 1000
     outputs:
-      v_diode: board.gpio_in.cosim_inputs.1
+      v_diode: board.analog.PTC9_volts
     config:
       netlist_text: |
         Vcc supply 0 dc 3.3

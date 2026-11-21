@@ -1,0 +1,33 @@
+# Generic level-1 NMOS body-effect pair on STM32G071 ADC1 IN6/IN7.
+# The NTC divider and Shockley diode remain on ADC1 IN4/IN5.
+name: nucleo-g071rb-mosfet-body-effect-adc
+chip: ../../configs/chips/stm32g071.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: mosfet_body_effect_adc
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      gate_v: ui.mosfet_body.gate_v
+      bulk_v: ui.mosfet_body.bulk_v
+    outputs:
+      reference_drain: adc.adc1.6_volts
+      body_effect_drain: adc.adc1.7_volts
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Vgate gate 0 dc 2.5
+        Vbulk bulk 0 dc 0
+        Rload_ref supply drain_ref 1k
+        Mref drain_ref gate 0 0 NMOS W=100u L=10u
+        Rload_body supply drain_body 1k
+        Mbody drain_body gate 0 bulk NMOS W=100u L=10u
+        .model NMOS NMOS(VTO=1 KP=20u GAMMA=0.4 PHI=0.7 LAMBDA=0.02)
+      probes:
+        reference_drain: v(drain_ref)
+        body_effect_drain: v(drain_body)
+      sources:
+        gate_v: Vgate
+        bulk_v: Vbulk
+      vdd: 3.3

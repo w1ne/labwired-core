@@ -25,3 +25,15 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 3758099704
+# Apollo Lake GPIO, north community, at 0xD0C5_0000 (P2SB 0xD000_0000 |
+# PID_GPIO_N 0xC5 << 16: coreboot apollolake pcr_ids.h; Zephyr
+# apollo_lake.dtsi gpio_n_000_031: gpio@d0c50000; Renode's up_squared
+# platform leaves it out). PADBAR @+0x00C = 0x500, PAD_CFG_DW0 of pad n at
+# +0x500 + 8n with RX state in bit 1; pads GPIO_0..7 are declared.
+- id: gpio_n
+  type: declarative
+  bus: sysbus
+  base_address: 3502571520
+  size: 4096B
+  config:
+    path: ../../peripherals/intel/apl_gpio.yaml

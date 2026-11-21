@@ -6,4 +6,13 @@ flash:
 ram:
   base: 268435456
   size: 131072B
-peripherals: []
+# Fomu TouchPads: foboot csr.h CSR_TOUCH_BASE 0xE000_5800, four tristate
+# pads with o @+0x00, oe @+0x04, i @+0x08 (hw/rtl/fomutouch.py).
+peripherals:
+- id: touch
+  type: declarative
+  bus: sysbus
+  base_address: 3758118912
+  size: 12B
+  config:
+    path: ../../peripherals/litex/fomu_touch.yaml

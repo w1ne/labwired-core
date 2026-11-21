@@ -21,10 +21,6 @@ peripherals:
   type: dwt
   bus: sysbus
   base_address: 3758100480
-- id: gclk_phctrl1
-  type: pythonperipheral
-  bus: sysbus
-  base_address: 1073749124
 - id: pac_intflag
   type: pythonperipheral
   bus: sysbus
@@ -33,3 +29,50 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 1073745984
+# PORT groups PA and PB, the two a 48-pin SAMD51G brings out. Renode's
+# platform leaves PORT out, so the import carried none. PORT is 0x41008000
+# (ATSAMD51G19A.h) with one PortGroup per 0x80: DIR +0x00, OUT +0x10, IN +0x20,
+# CTRL +0x24, PMUX +0x30, PINCFG +0x40 (SAM D5x/E5x DS60001507, ch. 32). Each
+# group is its own window, as in the promoted configs/chips/atsamd51.yaml, on
+# `profile: sam_port`. PORT itself takes no MCLK gate here.
+- id: porta
+  type: gpio
+  bus: sysbus
+  base_address: 0x41008000
+  size: 128B
+  config:
+    profile: sam_port
+- id: portb
+  type: gpio
+  bus: sysbus
+  base_address: 0x41008080
+  size: 128B
+  config:
+    profile: sam_port
+# Clocks and ADC0. Renode's .repl declares no ADC and only a PythonPeripheral
+# over GCLK PCHCTRL[1] (0x40001C84) that answers reads with zero here. The part
+# has them all: Zephyr hal_atmel @8f95c79f2a asf/sam0/include/samd51/
+# samd51g19a.h puts MCLK @ 0x40000800, GCLK @ 0x40001C00 and ADC0 @
+# 0x43001C00 (ID_ADC0 103, ADC0_0_IRQn 118). The `samd51_adc` model converts
+# only while MCLK.APBDMASK bit 7 and GCLK PCHCTRL[40].CHEN are set, so both
+# controllers are declared in full; `samd51_gclk` covers the old PCHCTRL[1]
+# window and reads back what firmware wrote instead of zero.
+# pio/samd51g19a.h gives ADC0 function-B pads PA02/PA03 = AIN0/1, PB08/PB09 =
+# AIN2/3, PA04..PA11 = AIN4..11, PB02/PB03 = AIN14/15, which match the model's
+# ATSAMD51J19A table. ADC1 is left out: on the 48-pin G package it has only
+# AIN0..3 (PB08, PB09, PA08, PA09), and the model's AIN6..9 on PB04..PB07 are
+# J-package pads this part does not have.
+# No `bus: sysbus` here: unknown keys flatten into `config`, and the SAMD51
+# model builders admit none. The model reports no IRQ, so none is declared.
+- id: mclk
+  type: sam_mclk
+  base_address: 0x40000800
+  size: 256B
+- id: gclk
+  type: samd51_gclk
+  base_address: 0x40001C00
+  size: 1KB
+- id: adc0
+  type: samd51_adc
+  base_address: 0x43001C00
+  size: 1KB

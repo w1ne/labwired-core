@@ -17,8 +17,13 @@
 #   which is not modelled.
 # - The public PIC24 core backs flash/SRAM with its dsPIC33FJ32MC204-sized
 #   storage, so this real XC16 image fits; the descriptor still records the
-#   part's exact 8 KB / 1536 B geometry. Data EEPROM, UART2, timers, ADC,
+#   part's exact 8 KB / 1536 B geometry. Data EEPROM, UART2, timers,
 #   SPI, I2C and the package's alternate functions are not exercised here.
+# - ADC1 (§22, Table 4-15): ADC1BUF0-F 0x0300, AD1CON1 0x0320, AD1CON2 0x0322,
+#   AD1CON3 0x0324, AD1CHS 0x0328, AD1PCFG 0x032C, AD1CSSL 0x0330. This is
+#   the dsPIC33F ADC1 map without AD12B, CHPS and AD1CHS123, so the shared
+#   core converts it in 10-bit mode. VREF+/VREF- external references and the
+#   internal band-gap input are not modelled.
 #
 # The GPIO windows use the public core's mirror layout
 # (PIC24_IO_MIRROR_BASE + TRISx + 16*port), exactly like the dsPIC33FJ32MC20x
@@ -27,12 +32,35 @@ name: pic24f08ka102
 arch: pic24
 core: pic24f
 cpu_hz: 32000000
+# GPIO pad supply and input thresholds (ratios of io_voltage_v).
+# DS39927C (PIC24F16KA102 family), Table 29-9 (I/O pin input specifications, 1.8-3.6 V): DI10 VIL max
+# 0.2*VDD and DI20 VIH min 0.8*VDD for I/O pins, both with and without analog
+# functions (Schmitt-trigger buffers). 3.3 V is the board rail; a board at
+# another VDD scales both. https://ww1.microchip.com/downloads/en/DeviceDoc/39927c.pdf
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.2
+  vih: 0.8
 flash:
   base: 0x000000
   size: "8KB"
 ram:
   base: 0x000800
   size: "1536B"
+# ADC1 analog pads (DS39927C Table 1-2, 28-pin package): AN0-AN5 and
+# AN10-AN12; AN6-AN9 do not exist on this family. `board.analog.<pad>_volts`
+# and `adc.adc1.<n>_volts` routes land on the `pic24_adc_pads` window, which
+# the core's ADC1 converts against AVDD (VCFG = 000).
+analog_pins:
+  RA0: { peripheral: "adc1", channel: 0 }
+  RA1: { peripheral: "adc1", channel: 1 }
+  RB0: { peripheral: "adc1", channel: 2 }
+  RB1: { peripheral: "adc1", channel: 3 }
+  RB2: { peripheral: "adc1", channel: 4 }
+  RB3: { peripheral: "adc1", channel: 5 }
+  RB14: { peripheral: "adc1", channel: 10 }
+  RB13: { peripheral: "adc1", channel: 11 }
+  RB12: { peripheral: "adc1", channel: 12 }
 peripherals:
   - id: "gpioa"
     type: "pic24_gpio"
@@ -49,6 +77,13 @@ peripherals:
     base_address: 0x000102E0
     size: "12"
     config: { port: "c", mask: 0x0000 }
+  # Not silicon: the routed AN pin levels ADC1 converts (see
+  # `peripherals::pic24_adc_pads`). Past the mirrored SFR space.
+  - id: "adc1"
+    type: "pic24_adc_pads"
+    base_address: 0x00010800
+    size: "38"
+    config: { channels: 0x1C3F, vref_mv: 3300 }
 # Package pin map (DS39927C Table 1-1, Table 1-2): the 28-pin package bonds
 # every PORTA and PORTB bit.
 pins:

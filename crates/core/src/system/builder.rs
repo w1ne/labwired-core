@@ -195,6 +195,7 @@ mod mips;
 mod pic16;
 mod pic18;
 mod pic24;
+pub use pic24::pic24_adc_channels;
 mod riscv;
 mod rx;
 mod xtensa;

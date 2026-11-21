@@ -1,0 +1,68 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# NVIDIA Tegra 2/3 (Tegra20/Tegra30) GPIO port. The controller groups four
+# 8-pin ports per bank and gives each register one word per port:
+# CNF @0x00, OE @0x10, OUT @0x20, IN @0x30, then the interrupt registers
+# from 0x40 (Linux drivers/gpio/gpio-tegra.c GPIO_CNF/GPIO_OE/GPIO_OUT/
+# GPIO_IN; GPIO_REG = bank * bank_stride + port * 4, bank_stride 0x80 on
+# Tegra20 and 0x100 on Tegra30). Pin k of the port is bit k, k < 8.
+#
+# One window serves port 0 of a bank: ports 1..3 of the bank interleave their
+# words at +4/+8/+0xC and are not declared. Runs on the declarative GPIO path
+# (IN / OUT / ENABLE, 32-bit, ENABLE set = output). Not modelled: CNF
+# (GPIO vs SFIO) does not gate the pad, so IN reads the pin whatever CNF
+# says; the masked-write aliases (upper_offset 0x800 on Tegra20, 0x80 on
+# Tegra30) and the interrupt registers; and pinmux tristate.
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: CNF
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: CNF
+    bit_range:
+    - 7
+    - 0
+    description: GPIO_CNF, 1 hands the pin to the GPIO controller, 0 to its special function
+  side_effects: null
+- id: ENABLE
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OE
+    bit_range:
+    - 7
+    - 0
+    description: GPIO_OE, 1 enables the output driver
+  side_effects: null
+- id: OUT
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT
+    bit_range:
+    - 7
+    - 0
+    description: GPIO_OUT, the output latch
+  side_effects: null
+- id: IN
+  address_offset: 48
+  size: 32
+  access: READ_ONLY
+  reset_value: 0
+  fields:
+  - name: IN
+    bit_range:
+    - 7
+    - 0
+    description: GPIO_IN, the level of every pin of the port
+  side_effects: null

@@ -129,3 +129,57 @@ peripherals:
   type: pythonperipheral
   bus: sysbus
   base_address: 1073887236
+# ADC1 (stm32l1_adc) at 0x40012400, IRQ 18 (STM32L151.svd v1.4). The common
+# ADC_CSR/ADC_CCR sit at 0x40012700/0x40012704, inside the same 1KB window.
+# Renode's stm32l151.repl has no ADC.
+- id: adc1
+  type: stm32l1_adc
+  bus: sysbus
+  base_address: 0x40012400
+  size: 1KB
+  irq: 18
+# Pads per STM32duino variants/STM32L1xx/L151ZCT_L152ZCT_L162ZCT
+# PeripheralPins.c PinMap_ADC (this profile has ports A..H, the 144-pin
+# package). Channel = ADC_INn for bank A and the shared channels; 32 + n is
+# ADC_INnb, converted when ADC_CR2.CFG selects bank B.
+analog_pins:
+  PA0: { peripheral: adc1, channel: 0 }
+  PA1: { peripheral: adc1, channel: 1 }
+  PA2: { peripheral: adc1, channel: 2 }
+  PA3: { peripheral: adc1, channel: 3 }
+  PA4: { peripheral: adc1, channel: 4 }
+  PA5: { peripheral: adc1, channel: 5 }
+  PA6: { peripheral: adc1, channel: 6 }
+  PA7: { peripheral: adc1, channel: 7 }
+  PB0: { peripheral: adc1, channel: 8 }
+  PB1: { peripheral: adc1, channel: 9 }
+  PC0: { peripheral: adc1, channel: 10 }
+  PC1: { peripheral: adc1, channel: 11 }
+  PC2: { peripheral: adc1, channel: 12 }
+  PC3: { peripheral: adc1, channel: 13 }
+  PC4: { peripheral: adc1, channel: 14 }
+  PC5: { peripheral: adc1, channel: 15 }
+  PB12: { peripheral: adc1, channel: 18 }
+  PB13: { peripheral: adc1, channel: 19 }
+  PB14: { peripheral: adc1, channel: 20 }
+  PB15: { peripheral: adc1, channel: 21 }
+  PE7: { peripheral: adc1, channel: 22 }
+  PE8: { peripheral: adc1, channel: 23 }
+  PE9: { peripheral: adc1, channel: 24 }
+  PE10: { peripheral: adc1, channel: 25 }
+  PF6: { peripheral: adc1, channel: 27 }
+  PF7: { peripheral: adc1, channel: 28 }
+  PF8: { peripheral: adc1, channel: 29 }
+  PF9: { peripheral: adc1, channel: 30 }
+  PF10: { peripheral: adc1, channel: 31 }
+  PB2: { peripheral: adc1, channel: 32 }
+  PF11: { peripheral: adc1, channel: 33 }
+  PF12: { peripheral: adc1, channel: 34 }
+  PF13: { peripheral: adc1, channel: 35 }
+  PF14: { peripheral: adc1, channel: 38 }
+  PF15: { peripheral: adc1, channel: 39 }
+  PG0: { peripheral: adc1, channel: 40 }
+  PG1: { peripheral: adc1, channel: 41 }
+  PG2: { peripheral: adc1, channel: 42 }
+  PG3: { peripheral: adc1, channel: 43 }
+  PG4: { peripheral: adc1, channel: 44 }

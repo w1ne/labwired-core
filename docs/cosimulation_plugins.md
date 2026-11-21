@@ -230,8 +230,15 @@ gpio_input_thresholds:     # ratios of io_voltage_v
 In-tree they are declared for `atmega328p` (5.0 V, 0.3 / 0.6, Microchip
 DS40002061B Table 30-1), `stm32f103` (3.3 V, 0.35 / 0.65, DS5319 Table 36), and
 `stm32f401`, `stm32f401cdu6`, `stm32f405`, `stm32f407`, `stm32f411ceu6` (3.3 V,
-0.3 / 0.7, DS10086 Table 54, DS8626 Table 48, DS10314 Table 53). Each
-descriptor cites its table. On any other chip, volts routed to a pin fail when
+0.3 / 0.7, DS10086 Table 54, DS8626 Table 48, DS10314 Table 53), among
+others. Each descriptor cites its table.
+
+Some datasheets give a few pads their own limits. Those pads go in
+`pad_classes:`, as ratios or as fixed volts, and a volts route to such a pad
+switches at the class limits instead of the default: the ATmega328P XTAL1 pad
+(PB6, 0.1 / 0.7 VCC) and the SAM E70 GPIO_MLB pads (PB4, PB5, PD10, 0.7 V /
+1.80 V). `cosim_gpio_input_thresholds_every_chip.rs` sweeps every class pad
+through the solver at its datasheet limits. On a chip with no thresholds, volts routed to a pin fail when
 the session is built, naming the missing key:
 ``co-sim path 'board.gpio_in.pd2' is driven with volts, but the chip descriptor
 declares no `gpio_input_thresholds` …``. An `adapter: analog` model's outputs are
@@ -384,11 +391,46 @@ the same circuit and the same routing as `system.yaml`.
 | Voltage source | `V<name> n+ n- <source>` |
 | Current source | `I<name> n+ n- <source>` |
 | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` |
-| Diode | `D<name> n+ n- <model>` |
-| BJT | `Q<name> nc nb ne <model>` |
-| MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [nrd=<squares>] [nrs=<squares>]` |
-| JFET | `J<name> nd ng ns <model>` |
+| SPICE voltage switch | `S<name> n+ n- nc+ nc- <model> [on\|off]` with `.model <model> SW(VT= VH= RON= ROFF=)` |
+| SPICE current switch | `W<name> n+ n- <element> <model> [on\|off]` with `.model <model> CSW(IT= IH= RON= ROFF=)` |
+| Lossless transmission line | `T<name> n1+ n1- n2+ n2- Z0=<ohms> TD=<s>` or `Z0=<ohms> F=<Hz> [NL=<wavelengths>]` |
+| Diode | `D<name> n+ n- <model> [<area>] [m=<count>] [temp=<°C>]` |
+| BJT | `Q<name> nc nb ne <model> [<area>] [m=<count>] [temp=<°C>]` |
+| MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]` |
+| JFET | `J<name> nd ng ns <model> [<area>] [m=<count>] [temp=<°C>]` |
 | Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
+
+The two SPICE switches close when the signed control voltage, or the signed
+branch current of the named `V`, `L`, `E` or `H` element, rises above
+threshold + hysteresis and open below threshold − hysteresis; in between they
+keep their state, and `on` sets the state the operating point starts from.
+Card defaults are ngspice's (`VT`/`IT` 0, `VH`/`IH` 0, `RON` 1 Ω, `ROFF`
+1e12 Ω). Negative hysteresis and parameters from other simulators are refused.
+
+A `T` line is two ports joined by a pure delay: each port sees `Z0` in series
+with the wave the other port sent `TD` earlier, and the operating point sees
+two wires. `F=` gives the delay as `NL / F`, with `NL` 0.25 unless given, as
+in ngspice. Only the differential mode exists, as in SPICE. The delay is
+exact for any step, because the delayed wave is interpolated from the stored
+solution; when the delay is not a whole number of steps, each pass down the
+line widens an edge by up to one step. A step longer than the delay is
+stable and treats the line as electrically short. `ic=`, `rel=` and `abs=`
+are refused by name.
+
+`m=<count>` is the SPICE instance multiplier: the element acts as that many
+identical devices in parallel. Every current, conductance and stored charge it
+stamps is scaled, its terminal resistances are divided, and `m` may be
+fractional. This matches ngspice, where `m=3` and three parallel copies give
+the same solution.
+
+`<area>` (a bare number after the model, or `area=<factor>`) is the SPICE area
+factor on D, Q and J. It scales the instance's card the way ngspice-45 does:
+diode `IS`, `ISR`, `IK`, `IKR`, `CJO` and `RS`; BJT `IS`, `ISE`, `ISC`,
+`IKF`, `IKR`, `IRB`, `ITF`, `CJE`, `CJC`, `RB`, `RBM`, `RC` and `RE`; JFET
+`BETA`, `IS`, `CGS`, `CGD`, `RD` and `RS`. Currents and capacitances
+multiply, resistances divide. GMIN and diode `IBV` are not scaled, so near a
+breakdown knee `area=3` and `m=3` give different answers, as in ngspice. A
+MOSFET has no area; `W`, `L`, `AD`/`AS` and `PD`/`PS` size it.
 
 Plus `*` comment lines, `;` / `$` trailing comments, `.end`, and
 `.ic V(node)=<v>`. Node `0` and `gnd` are ground. Values take the usual SPICE
@@ -423,12 +465,51 @@ parameters have no temperature dependence. Signal- or load-dependent supply
 current is not modeled. The hand-calculated macro tests are in
 `crates/core/tests/analog_macros.rs`.
 
-`.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`, `.probe`, `.width`,
-`.temp`, `.nodeset`, `.title` and a whole `.control` … `.endc` block are
-accepted and ignored, so one deck can be handed to this engine and to ngspice
-unchanged. This engine takes its run length, step and outputs from the
+`.temp <°C>` sets the default `TEMP` of every `D`, `Q`, `J` and `M`
+instance and of every `beta`/`tc1`/`tc2` resistor without its own `temp=`.
+Only one value is accepted, because ngspice reruns the analysis for each
+listed value. `.options`, `.tran`, `.op`, `.print`, `.plot`, `.save`,
+`.probe`, `.width`, `.nodeset`, `.title` and a whole `.control` … `.endc`
+block are accepted and ignored (`.tran` reads only `uic`), so one deck can be
+handed to this engine and to ngspice unchanged. This engine takes its run length, step and outputs from the
 manifest. Any other directive is still a hard error naming the ngspice adapter,
 so a typo cannot quietly drop an element line.
+
+### Small-signal AC (`.ac`)
+
+`.ac dec|oct|lin <points> <fstart> <fstop>` and a source value's
+`AC <mag> [<phase°>]` (for example `V1 in 0 DC 0.65 AC 1` or
+`I1 0 a SIN(0 1m 1k) AC 1m -45`) feed `Solver::ac_sweep` /
+`Solver::ac_analysis`. The analysis linearises the circuit about its present
+solution and solves `(G + jωC)·x = b`. `G` is the operating-point Newton
+Jacobian. `C` is read back from the backward-Euler transient stamp, so every
+element that stores charge or flux in a transient gets its small-signal
+admittance with no per-device AC code. The tests check C, L, diode depletion
+and diffusion charge, BJT `CJC`, MOSFET `CGDO` and a `LAPLACE` biquad against
+closed forms. A lossless `T` line couples its ports through the exact phasor
+`e^{-jωTD}`, not through lumped sections; the tests check a matched line, a
+mismatched line with a reactive load against the reflection formula, and a
+line with a floating port reference against ngspice-42. BJT
+`PTF` excess phase, diode soft recovery (`VP`) and op-amp `SR`/`IOLIM` are
+refused by name. The co-simulation run ignores the `AC` values. The closed-form
+proofs are in `crates/core/tests/analog_ac.rs`.
+
+### DC transfer sweep (`.dc`)
+
+`.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` feeds
+`Solver::dc_sweep` / `Solver::dc_analysis`. `<src>` must be a `V`, `I` or
+`R` element. The second source is the outer loop, as in ngspice. A swept `R`
+takes the value as its nominal resistance, so its NTC or `tc1`/`tc2` law still
+applies (ngspice does the same). A swept value that gives zero ohms stops the
+sweep with an error. Values are
+`start + k·incr` up to and including `stop`; `incr` may be negative. Each
+point is a full operating-point solve that starts Newton from the point
+before. Capacitors are open and inductors are shorts. `.tran ... uic` does not
+apply. The sweep runs on a copy of the solver, so the transient state does not
+change. The tests check a divider, the diode law under a descending current
+sweep, BJT output curves (Early slope), a `tc1` resistor swept at 77 °C and a
+base-resistor sweep that sets a BJT bias point against closed forms and
+against ngspice-42. The proofs are in `crates/core/tests/analog_dc.rs`.
 
 ### Independent sources
 
@@ -438,7 +519,11 @@ so a typo cannot quietly drop an element line.
 |---|---|
 | `[dc] <value>` | a constant |
 | `SIN(vo va freq [td [theta]])` | `vo + va·exp(−(t−td)·theta)·sin(2π·freq·(t−td))` after `td`, `vo` before |
+| `EXP(v1 v2 td1 tau1 td2 tau2)` | exponential rise and fall; all six values are required, delays must be nonnegative with `td2 ≥ td1`, and both time constants must be positive |
 | `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])` | a trapezoidal pulse train |
+| `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]` | piecewise-linear interpolation with optional suffix repeat and delay |
+
+For `EXP`, the rising term is `(v2−v1)·(1−exp(−(t−td1)/tau1))` from `td1`; after `td2`, the falling term `(v1−v2)·(1−exp(−(t−td2)/tau2))` is added. The source begins at `v1` and tends back to `v1` after the fall.
 
 Sources are evaluated at the END of each internal step, which is the point the
 companion models are written about, and is what SPICE does. The operating point
@@ -455,7 +540,7 @@ input at a different element.
 .model <name> D    (IS=<a> N=<n> ISR=<a> NR=<n> RS=<ohms> TRS1=<1/°C> TRS2=<1/°C²> TT=<s> TTT1=<1/°C> TTT2=<1/°C²> TM1=<1/°C> TM2=<1/°C²>)
 .model <name> NPN  (IS=<a> BF=<n> BR=<n> NF=<n> NR=<n> IKF=<a> IKR=<a> NKF=<n> CJE=<f> VJE=<v> MJE=<ratio> CJC=<f> VJC=<v> MJC=<ratio> TMJE1=<1/°C> TMJE2=<1/°C²> TMJC1=<1/°C> TMJC2=<1/°C²> TLEVC=0|1 [CTE/CTC/TVJE/TVJC])
 .model <name> PNP  (...)
-.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
+.model <name> NMOS (VTO=<v> KP=<a/v2> LAMBDA=<1/v> GAMMA=<sqrt(v)> PHI=<v> RD=<ohms> RS=<ohms> RSH=<ohms/square> CBD=<f> CBS=<f> CJ=<f/m²> CJSW=<f/m> PB=<v> MJ=<ratio> MJSW=<ratio> FC=<ratio> TOX=<m> UO=<cm²/v·s> LD=<m> NSUB=<cm⁻³> NSS=<cm⁻²> TPG=-1|0|1 W=<m> L=<m> [CHARGEMOD=MEYER|WARD_DUTTON])
 .model <name> PMOS (...)      ; VTO is negative, as in ngspice
 .model <name> NJF  (VTO=<v> BETA=<a/v2> LAMBDA=<1/v> RD=<ohms> RS=<ohms> IS=<a>)
 .model <name> PJF  (...)
@@ -482,10 +567,33 @@ Ward–Dutton drain/source partitioning and a charge-conserving terminal Jacobia
 It requires `TOX`. Without `TOX`, only explicit overlap and bulk-junction
 capacitances are present. `CHARGEMOD=WARD_DUTTON` is an in-core extension and
 is not a portable ngspice model-card parameter.
+As in ngspice level 1, a card with `TOX` and no `KP` takes
+`KP = UO·1e-4·εox/TOX` (`UO` in cm²/V·s, default 600; `U0` is an alias), and
+lateral diffusion `LD` (default 0) shortens the channel to `L − 2·LD` for
+`KP·W/L`, the intrinsic oxide capacitance and `CGBO`. `L − 2·LD` must be
+positive. With `TOX` and `NSUB` (cm⁻³), each of `PHI`, `GAMMA` and `VTO`
+the card omits is derived at `TNOM` as ngspice's `mos1temp.c` does:
+`PHI = max(0.1, 2·Vt·ln(NSUB/1.45e10))`, `GAMMA = sqrt(2·εsi·q·NSUB)/C'ox`,
+and `VTO = VFB + type·(GAMMA·sqrt(PHI) + PHI)`, where the flat-band voltage
+uses gate type `TPG` (default +1, opposite to substrate) and surface-state
+density `NSS` (cm⁻², default 0). `NSUB` without `TOX` is ignored, as in
+ngspice. `NSUB` must exceed 1.45e10 cm⁻³, and `TPG` must be −1, 0 or 1.
 Other device capacitances, temperature coefficients and terminal resistances
 outside the supported parameters below are accepted and ignored. BJT `RB`/`RC`/`RE`
 are modeled as series resistors, while `RBM`/`IRB` make `RB` fall with base
-current; JFET terminal resistances `RD`/`RS` and MOSFET terminal resistances `RD`/`RS` or
+current. BJT `RCO` selects Kull's quasi-saturation model of the epitaxial
+collector: between the collector contact behind `RC` and the intrinsic
+collector, the current is `(V + Vcorr)/RCO/(1 + |V|/VO)`, where `Vcorr` is the
+conductivity modulation set by `GAMMA` and the two junction voltages, and
+`QCO` adds the epitaxial charge on both junctions. `VO` defaults to 10 V,
+`GAMMA` to 1e-11 and `QCO` to zero; a supplied `RCO` below 0.01 Ω is raised to
+0.01 Ω, and `RCO`/`VO`/`GAMMA`/`QCO` are not scaled by `AREA`, as in ngspice.
+`QUASIMOD=1` scales `RCO`, `VO` and `GAMMA` with instance `TEMP` by `CN`, `D`
+and `VG`. With the collector current flowing forward the model equals
+ngspice's. ngspice replaces the region by the plain resistor `RCO`, and drops
+the epitaxial charge, when the current flows backwards; the engine keeps
+Kull's expression there so that current, slope and charge stay continuous
+through zero. JFET terminal resistances `RD`/`RS` and MOSFET terminal resistances `RD`/`RS` or
 `RSH` times the per-instance `NRD`/`NRS` are modeled as series resistors. An
 explicitly supplied direct MOSFET `RD` or `RS` takes precedence for that
 terminal, including an explicit zero that disables its sheet-resistance path.
@@ -529,7 +637,10 @@ base-collector depletion charge from `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC`,
 plus forward transit-time charge from `TF` with its `XTF`/`VTF`/`ITF` bias
 adjustment and reverse transit-time charge from `TR` (all default to zero;
 `XTF`/`ITF` default to zero and `VTF` to infinity; shared `FC` defaults to
-0.5) and ohmic terminal resistances `RB`/`RC`/`RE` (all
+0.5), excess phase `PTF` in degrees (default zero: in transient steps the
+forward transport current lags through ngspice's Weil second-order filter
+with delay `PTF·π/180·TF`, from the card `TF` before `TTF1`/`TTF2`) and
+ohmic terminal resistances `RB`/`RC`/`RE` (all
 default to zero). `RBM` defaults to `RB` and `IRB` defaults to infinity, so
 omitting either leaves the base resistance fixed; with `RBM < RB` and finite
 `IRB`, the base resistance falls from `RB` toward `RBM` as base current rises.
@@ -545,7 +656,8 @@ from `CBD`/`CBS` or `CJ`/`CJSW` with instance `AD`/`AS`/`PD`/`PS`, plus
 intrinsic channel charge using either ngspice's piecewise Meyer formulation or
 the opt-in Ward–Dutton charge partition; and
 SPICE JFET level 1 with the Parker–Skellern `B` fit, including its two gate
-junctions and depletion charge. Tests exercise non-unit `B` in the linear and
+junctions and depletion charge. The gate-junction emission coefficient `N`
+(default 1) sets `N·kT/q` for both gate diodes, as in ngspice. Tests exercise non-unit `B` in the linear and
 saturation regions for both channel polarities. Other tests cover MOSFET/JFET
 channel-length modulation, reverse-channel operation, MOSFET body effect,
 Meyer bias regions, and Ward–Dutton
@@ -571,6 +683,7 @@ dependence. `TLEVC=1` selects the linear `CTE`/`CTC` capacitance and
 use their documented `TR*` coefficients. JFET level-1 channel `VTO`/`BETA`
 use `VTOTC` (otherwise `TCV`) and `BETATCE` (otherwise `BEX`) when an instance
 `TEMP` is supplied. The same `TEMP` scales JFET gate-junction `IS` by `EG`/`XTI`
+(the `EG` term divided by `N`, `XTI` not, as in ngspice `jfettemp.c`)
 (defaults 1.11 eV and 3), moves `PB` and `CGS`/`CGD` by the diode depletion law
 at grading 0.5, and evaluates the gate diodes at that `kT/q`. A level-1 MOSFET
 instance `TEMP` (card `TNOM`, default 27 °C) follows ngspice's `mos1temp` laws:
@@ -596,7 +709,9 @@ belong on `adapter: external_process` with `tools/cosim/labwired_ngspice.py`.
 
 `RS > 0` on a diode adds one internal node named `<element>#internal`, exactly
 as SPICE does. Nonzero BJT `RB`, `RC`, and `RE` add `<element>#base`,
-`<element>#collector`, and `<element>#emitter` nodes, respectively. Nonzero
+`<element>#collector`, and `<element>#emitter` nodes, respectively. With
+`RCO`, `<element>#collector` is the intrinsic collector behind the epitaxial
+region and a nonzero `RC` adds `<element>#collcx` for the contact. Nonzero
 JFET and MOSFET drain/source terminal resistances add `<element>#drain` and
 `<element>#source`. These
 nodes count against the 64-unknown ceiling and can be probed.
@@ -694,8 +809,12 @@ The in-core engine supports the linear elements, switches, and diode, BJT,
 level-1 JFET and level-1 MOSFET models listed above. Its semiconductor models
 have the limitations
 described in [Semiconductor models](#semiconductor-models), including omitted
-device charge terms and temperature effects. Subcircuits, `.include` / `.lib`
-device libraries, other MOSFET or JFET levels, other JFET `B` values, and AC/DC sweeps are not supported by
+device charge terms and temperature effects. `+` continuation lines and
+`.subckt` definitions built from those primitives are supported: each call is
+flattened with ngspice's names (`R.X1.R1`, node `X1.mid`), and a `.model`
+inside a body is local to it. Parameterised subcircuits (`params:`), nested
+`.subckt` definitions, `.include` / `.lib` device libraries, other MOSFET or
+JFET levels, other JFET `B` values, and DC sweeps are not supported by
 the in-core engine. Unsupported netlist constructs fail validation with guidance
 to use the native ngspice adapter.
 

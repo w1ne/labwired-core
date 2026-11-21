@@ -28,6 +28,8 @@ there is no MIMXRT595 bench part, and no Renode parity claim is made.
 | GPIO `DIRSET`/`DIRCLR`, `SET`, `CLR`, `NOT`, byte pin `B`, word pin `W`, `MPIN` under `MASK`, `PIN` read-back | smoke-tested | `set red` … `clr all`; the whole-port `pin0` read proves no other pin moved |
 | GPIO input with an external level | smoke-tested | `sw1=1 sw2=1`: the released board buttons hold P0_25/P0_10 high |
 | Generic analog netlists routed into GPIO inputs | integration-tested | `cargo test -p labwired-core --test cosim_mimxrt595_analog`: Beta NTC to SW2/P0_10 and unrelated Shockley diode to SW1/P0_25; solved voltages and `PIN[0]` levels asserted. Voltage thresholds are test-only assumptions because no verified silicon threshold record is available; this is not ADC support. |
+| LPADC0 converting routed analog netlists | integration-tested | `cargo test -p labwired-core --test cosim_mimxrt595_lpadc_analog`: Beta NTC on P0_5 (CH0A) and Shockley diode on P0_19 (CH2A) at 1.8 V convert through the Zephyr `adc_mcux_lpadc` flow (a `CMDH.NEXT` chain on software trigger 0, `RESFIFO0`), 12-bit codes asserted at -10/25/80 °C; CH0B - CH0A differential (13-bit signed); the secure alias, `ADC0_IRQn` 22, and a free-running chain. VREFH 1.8 V comes from the Zephyr EVK overlay, not a capture. |
+| LPADC hardware triggers, priority/pre-emption, compare, conversion timing, DMA, `CFG.REFSEL` options | **not modelled** | `nxp_lpadc` unit tests (7) cover what is; every `REFSEL` converts against the configured 1.8 V |
 | GPIO layout and edge cases | unit-tested | `lpc::gpio::tests` (7 tests) |
 | CLKCTL/RSTCTL SET/CLR aliases, IOPCTL plain bank, CLKCTL0/1 status bits | unit-tested | `lpc::rt5xx_ctl::tests` (9 tests) |
 | Determinism (same inputs → same output) | smoke-tested | two runs each of the smoke, Zephyr hello and Zephyr synchronization: identical `uart.log` and `snapshot.json` |
@@ -38,7 +40,7 @@ there is no MIMXRT595 bench part, and no Renode parity claim is made.
 | IOPCTL pulls, drive, slew, open drain | **not modelled** | an undriven input reads 0 whatever the pull |
 | SW1/SW2 polarity | **assumed** | active-low (released = 1) as on the other NXP EVKs; the EVK schematic was not checked |
 | SYSCTL0/1, PMC, WWDT0, INPUTMUX, CACHE64_CTRL0, PINT, non-secure SCS bank (`0xE002_E000`, the `SCB_NS->CPACR` write in `SystemInit`) | declared stubs | `configs/chips/mimxrt595s.yaml` (`type: "stub"`) |
-| SRAM code-bus aliases (`0x0…`, secure `0x1000_0000`), FLEXCOMM1–11/13–16, CTIMER0–4, MRT, UTICK, SCT, DMA0/1, SDIO, USB, ADC, I3C, LCDIF/MIPI/GPU, PowerQuad, TRNG, the OTP controller, HiFi4 DSP | **not mapped** | no window in `configs/chips/mimxrt595s.yaml`; an access faults with a memory violation |
+| SRAM code-bus aliases (`0x0…`, secure `0x1000_0000`), FLEXCOMM1–11/13–16, CTIMER0–4, MRT, UTICK, SCT, DMA0/1, SDIO, USB, I3C, LCDIF/MIPI/GPU, PowerQuad, TRNG, the OTP controller, HiFi4 DSP | **not mapped** | no window in `configs/chips/mimxrt595s.yaml`; an access faults with a memory violation |
 | Cortex-M33 TrustZone (SAU, secure/non-secure state, banked registers) | **not modelled** | the core always runs as if secure; a secure and a non-secure alias reach the same resource |
 
 ## Commands and evidence (verified 2026-10-30)

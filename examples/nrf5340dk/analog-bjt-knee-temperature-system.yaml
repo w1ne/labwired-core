@@ -1,0 +1,127 @@
+# Generic Gummel-Poon IKF/IKR temperature coefficients route through SAADC
+# beside unrelated NTC and diode netlists.
+name: "nrf5340dk-analog-bjt-knee-temperature"
+chip: "../../configs/chips/nrf5340.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "bjt_knee_temperature_forward_full"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_knee_temperature.forward_base_v"
+    outputs:
+      collector_voltage: "adc.saadc.2_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 collector base 0 NPN_IKF_FULL temp=125
+        .model NPN_IKF_FULL NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0 IKF=50u IKR=500u TLEV=3 TNOM=25 TIS1=0 TIS2=0 TIKF1=-1m TIKF2=20u)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_knee_temperature_forward_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_knee_temperature.forward_base_v"
+    outputs:
+      collector_voltage: "adc.saadc.3_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 collector base 0 NPN_IKF_HOT temp=125
+        .model NPN_IKF_HOT NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0 IKF=55u IKR=500u TLEV=3 TNOM=25 TIS1=0 TIS2=0)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_knee_temperature_forward_first_order"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_knee_temperature.forward_base_v"
+    outputs:
+      collector_voltage: "adc.saadc.4_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply collector 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 collector base 0 NPN_IKF_FIRST temp=125
+        .model NPN_IKF_FIRST NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0 IKF=50u IKR=500u TLEV=3 TNOM=25 TIS1=0 TIS2=0 TIKF1=-1m)
+      probes:
+        collector_voltage: "v(collector)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_knee_temperature_reverse_full"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_knee_temperature.reverse_base_v"
+    outputs:
+      emitter_voltage: "adc.saadc.5_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply emitter 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 0 base emitter NPN_IKR_FULL temp=125
+        .model NPN_IKR_FULL NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0 IKF=500u IKR=500u TLEV=3 TNOM=25 TIS1=0 TIS2=0 TIKR1=1m TIKR2=50u)
+      probes:
+        emitter_voltage: "v(emitter)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_knee_temperature_reverse_explicit"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_knee_temperature.reverse_base_v"
+    outputs:
+      emitter_voltage: "adc.saadc.6_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply emitter 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 0 base emitter NPN_IKR_HOT temp=125
+        .model NPN_IKR_HOT NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0 IKF=500u IKR=800u TLEV=3 TNOM=25 TIS1=0 TIS2=0)
+      probes:
+        emitter_voltage: "v(emitter)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3
+  - id: "bjt_knee_temperature_reverse_first_order"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      base_drive: "ui.bjt_knee_temperature.reverse_base_v"
+    outputs:
+      emitter_voltage: "adc.saadc.7_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rload supply emitter 1k
+        Vbase drive 0 dc 0
+        Rbase drive base 2k
+        Q1 0 base emitter NPN_IKR_FIRST temp=125
+        .model NPN_IKR_FIRST NPN(IS=1e-16 BF=80 BR=4 VAF=0 VAR=0 IKF=500u IKR=500u TLEV=3 TNOM=25 TIS1=0 TIS2=0 TIKR1=1m)
+      probes:
+        emitter_voltage: "v(emitter)"
+      sources:
+        base_drive: "Vbase"
+      vdd: 3.3

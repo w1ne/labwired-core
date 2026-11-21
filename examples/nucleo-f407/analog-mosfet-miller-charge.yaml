@@ -1,0 +1,46 @@
+# A generic level-1 NMOS gate-drain overlap capacitor routed to PA5/ADC1_IN5.
+# The intentionally large CGDO makes its Miller transient visible at the 1 us
+# analog step size; the reference branch uses the same MOSFET without charge.
+name: "nucleo-f407-mosfet-miller-charge"
+chip: "../../configs/chips/stm32f407.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "mosfet_gate_drain_reference"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.mosfet_miller.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa4_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Rdrain sense 0 1k
+        M1 sense gate 0 0 NMOS_TEST w=100u l=10u
+        .model NMOS_TEST NMOS(VTO=5 KP=20u LAMBDA=0 IS=1e-30)
+      probes:
+        drain_voltage: "v(sense)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3
+  - id: "mosfet_gate_drain_overlap_charge"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_voltage: "ui.mosfet_miller.gate_v"
+    outputs:
+      drain_voltage: "board.analog.pa5_volts"
+    config:
+      substeps: 1
+      netlist_text: |
+        Vgate gate 0 dc 0
+        Rdrain sense 0 1k
+        M1 sense gate 0 0 NMOS_TEST w=100u l=10u
+        .model NMOS_TEST NMOS(VTO=5 KP=20u LAMBDA=0 IS=1e-30 CGDO=10u)
+      probes:
+        drain_voltage: "v(sense)"
+      sources:
+        gate_voltage: "Vgate"
+      vdd: 3.3

@@ -28,12 +28,35 @@ examples/kv260-r5/ci/test.sh
 CI runs the same commands in `.github/workflows/core-qemu-arm.yml`. The core
 crate's `crates/core/tests/kv260_r5_zephyr.rs` covers hello and sync too.
 
-The generic `SystemBus` profile also exposes two simulation-only analog
-co-simulation inputs. The shared Beta NTC divider and Shockley diode fixture
-drives them in [`cosim_kv260_r5_analog.rs`](../../crates/core/tests/cosim_kv260_r5_analog.rs).
-These endpoints have assumed digital thresholds; they do not model ZynqMP
-GPIO registers, physical pad mapping, firmware-visible GPIO, or silicon
-electrical limits. The native RPU machine still has no GPIO model.
+## Analog input
+
+The KV260 has one complete SYSMON auxiliary pair on Pmod J2: VAUX11
+(VAUXP11 = C11, `pmod[3]`; VAUXN11 = B10, `pmod[4]`; Xilinx/Kria-PYNQ
+@8b975f43 `kv260/base/vivado/constraints/base.xdc`). The input range is 0 V
+to 1 V, 10 bits.
+
+Two example systems add the Zynq UltraScale+ AMS (`zynqmp_ams` at
+0xFFA50000) to the generic `SystemBus` profile and wire a generic MNA device
+to PL SYSMON channel 27:
+
+| System | Device |
+|--------|--------|
+| [`analog-vaux11-ntc-system.yaml`](analog-vaux11-ntc-system.yaml) | 10 k Beta NTC under a 150 k top resistor |
+| [`analog-vaux11-diode-system.yaml`](analog-vaux11-diode-system.yaml) | Shockley diode through 1 k |
+
+[`cosim_kv260_r5_analog.rs`](../../crates/core/tests/cosim_kv260_r5_analog.rs)
+runs the Linux `xilinx-ams.c` continuous sequence and the embeddedsw
+single-channel mode against both, and checks the solved voltage and the
+10-bit code.
+
+Limits:
+- The PL is not modelled. The proof assumes a bitstream that connects
+  SYSMONE4 VAUXP/VAUXN[11] to the two pads, and VAUXN11 at ground.
+- The native RPU machine does not instantiate the AMS, so Zephyr on the
+  native Cortex-R5F cannot read it yet.
+- The chip descriptor and `configs/systems/kv260-r5.yaml` stay declared-only;
+  an analog route on that profile is a binding error.
+- No silicon capture.
 
 ## Modelled / not modelled
 
@@ -46,7 +69,7 @@ Not modelled:
 - the APU (Cortex-A53) cluster;
 - the PMU/CSU/FSBL boot flow: the ELF is loaded as the FSBL would place it;
 - TCM vs DDR timing, caches and lockstep;
-- IPI mailboxes, the other TTCs, firmware-visible GPIO, I2C, SPI/QSPI and the PL.
+- IPI mailboxes, the other TTCs, GPIO, I2C, SPI/QSPI and the PL.
 
 ## Availability
 

@@ -45,11 +45,14 @@
 # PLL PFD CLKRDY and FRO-tuner status the SDK polls; no effect on any
 # frequency), RSTCTL0/1 (`rt5xx_ctl`, stored, no effect), IOPCTL
 # (`rt5xx_iopctl`, stored only), the OS event timer (`rt5xx_ostimer`) and the
-# FlexSPI0 controller (`imxrt_flexspi`, the RT1060 FlexSPI model).
+# FlexSPI0 controller (`imxrt_flexspi`, the RT1060 FlexSPI model), and
+# ADC0 (`nxp_lpadc`, peripherals/nxp_lpadc.rs: software triggers, the
+# CMDH.NEXT chain, both result FIFOs; VREFH 1.8 V per the Zephyr EVK
+# overlay; pads in `analog_pins:`).
 # Declared stubs (accept writes, read zero): SYSCTL0/1, PMC, CACHE64_CTRL0,
 # WWDT0, INPUTMUX, PINT, the non-secure SCS bank at 0xE002E000. Not mapped
 # (access faults): FLEXCOMM1-11 and 13-16, CTIMER0-4, MRT0, UTICK0, SCT0,
-# DMA0/1, SDIO, USB, ADC, I3C, LCDIF/MIPI/GPU, PowerQuad, TRNG, the OTP
+# DMA0/1, SDIO, USB, I3C, LCDIF/MIPI/GPU, PowerQuad, TRNG, the OTP
 # controller, SECGPIO and the HiFi4 DSP. SAU/IDAU security attribution is
 # not checked: a secure and a non-secure access reach the same thing.
 #
@@ -126,6 +129,21 @@ pins:
   P0_25: { gpio: "gpio", bit: 25 }
   P1_0: { gpio: "gpio", bit: 32 }
   P3_17: { gpio: "gpio", bit: 113 }
+
+# LPADC0 pads on the MIMXRT595SFFOC (the EVK's package), from Zephyr hal_nxp
+# @cc9b44ae3e dts/nxp/imxrt/imxrt5xx/pinctrl/MIMXRT595SFFOC-pinctrl.h
+# (ADC0_CHn_PIOx_y, analog function 0). The header names the B side of
+# channel n "CH(n+8)": the EVK pinmux_lpadc0 group puts ADC0_CH8 on P0_6 and
+# the Zephyr adc_dt overlay reads it as MCUX_LPADC_CH0B. Channel = the
+# nxp_lpadc input index, ABSEL * 32 + ADCH. P4_18 (CH6A) is not bonded on
+# the FAWC package (the FAWC header #undefs it).
+analog_pins:
+  P0_5:  { peripheral: adc0, channel: 0 }   # ADC0_CH0 = CH0A, EVK J30-1
+  P0_6:  { peripheral: adc0, channel: 32 }  # ADC0_CH8 = CH0B, EVK J30-2
+  P0_12: { peripheral: adc0, channel: 1 }   # ADC0_CH1 = CH1A
+  P0_13: { peripheral: adc0, channel: 33 }  # ADC0_CH9 = CH1B
+  P0_19: { peripheral: adc0, channel: 2 }   # ADC0_CH2 = CH2A, EVK J30-3
+  P4_18: { peripheral: adc0, channel: 6 }   # ADC0_CH6 = CH6A
 
 peripherals:
   - id: "rstctl0"
@@ -227,6 +245,15 @@ peripherals:
     type: "stub"
     base_address: 0x40135000
     size: "4KB"
+  # LPADC0: MIMXRT595S_cm33.h ADC0_BASE_NS 0x4013A000 (the secure alias
+  # 0x5013A000 reaches it through periph_s), ADC0_IRQn 22.
+  - id: "adc0"
+    type: "nxp_lpadc"
+    base_address: 0x4013A000
+    size: "4KB"
+    irq: 22
+    config:
+      vref_mv: 1800
   # Non-secure banked System Control Space (Armv8-M ARM D1.2.2: the
   # NS view of SCB/NVIC/SysTick at 0xE002_E000 seen from Secure state). The
   # secure Zephyr SystemInit sets SCB_NS->CPACR; stored-nothing stub here, as

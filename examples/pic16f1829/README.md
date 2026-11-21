@@ -55,11 +55,15 @@ SDCC emits Intel HEX; `firmware/hex2elf.py` wraps it byte for byte in an
 and `ci/test.sh` both check that the ELF payload equals the HEX.
 
 The generic analog fixture `analog-ntc-diode-system.yaml` solves a Beta NTC
-divider and an unrelated Shockley diode, then routes each node to a separate
-threshold input. `crates/core/tests/cosim_pic16f1829_analog.rs` checks the
-voltage equations, input thresholds, and hysteresis. These are simulation-only
-co-simulation endpoints: PIC16 PORTA external pin sampling and ADC conversion
-are not modeled, so this is not a firmware-visible analog input path.
+divider on RC0/AN4 (the net the board's POT1 wiper drives) and an unrelated
+Shockley diode on RC2/AN6. The routes land on the chip's ADC inputs
+(`analog_pins` in `configs/chips/pic16f1829.yaml`), and the 10-bit ADC
+converts them (DS40001440E section 16). `firmware/adc-ntc-diode.asm`
+(gpasm 1.4.0) converts both channels and the internal 1.024 V FVR Buffer1,
+stores ADRESH:ADRESL and prints `N=hhh D=hhh F=hhh`.
+`crates/core/tests/cosim_pic16f1829_analog.rs` checks the voltage equations
+and the firmware-visible codes. Digital pin sampling is not modelled: an
+input pin still reads 0.
 
 ## Build and run
 
@@ -90,14 +94,20 @@ The build is deterministic: HEX
 `b2e273952e58952318f7fa3ae60ef1dfa39e5b1528401cd6794d03c9a1b7dfb1`, ELF
 `26cf89c9e070b8738bcd0b99e5c56855aeedd02bd533dd044fcd632edee569f3`.
 
+The ADC firmware needs gpasm only (`gpasm adc-ntc-diode.asm`, then
+`hex2elf.py`): HEX
+`6e6f89c83d520c0a1e5d3e8f7b668fdcb63c37973feb94c58cc01d5ace901bbc`, ELF
+`d1659e5432a46e6929947ba29e16ad0117193d401a455756fdc1cff3e355fb21`.
+
 ## Hardware
 
 A Curiosity 8-bit board (DM164137) with a PIC16F1829 in the 20-pin socket:
 LED D4 is on RA5, and the EUSART TX (RB7) is on the socket's expansion
 header. Connect it to a 3.3 V/5 V USB-serial adapter to see the console. The
-board's potentiometer, push button, mTouch pad, and mikroBUS are not modelled.
-The generic analog fixture endpoints do not claim those components or connect
-to firmware. The part is sold by distributors as `PIC16F1829-I/P` (PDIP-20),
+board's push button, mTouch pad, and mikroBUS are not modelled. POT1 drives
+RC0/AN4 through R32 (DS40001804B Figure A-1); the analog fixture puts its NTC
+divider on that net instead of the potentiometer, and its diode on RC2/AN6 at
+the socket's expansion header. The part is sold by distributors as `PIC16F1829-I/P` (PDIP-20),
 `-I/SO`, `-I/SS` and `-I/ML`.
 
 See [VALIDATION.md](VALIDATION.md) for the evidence and the scope limits.

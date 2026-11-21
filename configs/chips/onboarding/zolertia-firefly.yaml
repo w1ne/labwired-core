@@ -77,3 +77,10 @@ peripherals:
   type: cc2538_ssi
   bus: sysbus
   base_address: 1073778688
+# SoC ADC at 0x400D7000 (SWRU319C Table 4-1, as configs/chips/cc2538sf53.yaml).
+# The Renode platform this descriptor was staged from does not map it.
+- id: soc_adc
+  type: cc2538_soc_adc
+  bus: sysbus
+  base_address: 1074622464
+  size: 4096

@@ -12,6 +12,10 @@ flash:
 ram:
   base: 2147483648
   size: 536870912B
+# 0x0 is the V2M legacy map's 64 MiB NOR CS0 alias, not this DRAM. Mirroring
+# the 512 MiB image there ran it to 0x2000_0000 and shadowed every
+# motherboard peripheral from 0x1000_0000 up with erased-flash 0xFF.
+flash_boot_alias: false
 peripherals:
 - id: uart0
   type: pl011
@@ -37,10 +41,16 @@ peripherals:
   type: arm_sp804_timer
   bus: sysbus
   base_address: 268509184
+# V2M motherboard sysreg at 0x1000_0000 (Linux vexpress-v2m.dtsi sysreg@0,
+# legacy map). Renode's ArmSysCtl ran as a zero-reading stub; SYS_MCI @0x048
+# is the two-line MMC card-detect / write-protect input port.
 - id: sysCtl
-  type: armsysctl
+  type: declarative
   bus: sysbus
   base_address: 268435456
+  size: 4096B
+  config:
+    path: ../../peripherals/vexpress/sysreg_mci.yaml
 - id: pl310
   type: pl310
   bus: sysbus

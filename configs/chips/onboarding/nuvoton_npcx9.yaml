@@ -241,3 +241,28 @@ peripherals:
   type: arraymemory
   bus: sysbus
   base_address: 1074589696
+# ADC0 (npcx_adc): base 0x400D1000, IRQ 10, vref-mv 2816, 12 channels
+# (Zephyr v4.0.0 dts/arm/nuvoton/npcx/npcx.dtsi + npcx9.dtsi; Chromium EC
+# chip/npcx/registers-npcx9.h NPCX_IRQ_ADC 10). Renode's NPCX9 platform has
+# no ADC. Sized 4KB, not the dtsi's 0x2000: SPIP starts at 0x400D2000, and
+# every ADC register sits below 0x80.
+- id: adc0
+  type: npcx_adc
+  base_address: 0x400D1000
+  size: 4KB
+  irq: 10
+# ADC0 channel pads (Zephyr v4.0.0 dts/arm/nuvoton/npcx/npcx9/npcx9-pinctrl.dtsi
+# adc0_chanN_gpXY). Channel = ADCCS bit / ASCADD.SADDR.
+analog_pins:
+  GPIO45: { peripheral: adc0, channel: 0 }
+  GPIO44: { peripheral: adc0, channel: 1 }
+  GPIO43: { peripheral: adc0, channel: 2 }
+  GPIO42: { peripheral: adc0, channel: 3 }
+  GPIO41: { peripheral: adc0, channel: 4 }
+  GPIO37: { peripheral: adc0, channel: 5 }
+  GPIO34: { peripheral: adc0, channel: 6 }
+  GPIOE1: { peripheral: adc0, channel: 7 }
+  GPIOF1: { peripheral: adc0, channel: 8 }
+  GPIOF0: { peripheral: adc0, channel: 9 }
+  GPIOE0: { peripheral: adc0, channel: 10 }
+  GPIOC7: { peripheral: adc0, channel: 11 }

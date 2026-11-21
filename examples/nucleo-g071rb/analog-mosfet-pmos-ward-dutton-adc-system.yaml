@@ -1,0 +1,32 @@
+# Generic PMOS Ward-Dutton channel charge on ADC1 IN6, with a zero-charge
+# control on IN7. The NTC and Shockley diode stay isolated on IN4/IN5.
+name: nucleo-g071rb-pmos-ward-dutton-adc
+chip: ../../configs/chips/stm32g071.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: pmos_ward_dutton_channel_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      gate_v: ui.pmos_ward_dutton.gate_v
+    outputs:
+      drain_charge: adc.adc1.6_volts
+      drain_reference: adc.adc1.7_volts
+    config:
+      substeps: 1
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Vgate gate 0 dc 3.3
+        Rcharged supply drain_charged 5Meg
+        Mcharged drain_charged gate supply supply PMOS_CHARGED W=100u L=10u
+        Rreference supply drain_reference 5Meg
+        Mreference drain_reference gate supply supply PMOS_REFERENCE W=100u L=10u
+        .model PMOS_CHARGED PMOS(VTO=-1 KP=1e-30 IS=1e-30 TOX=10n CHARGEMOD=WARD_DUTTON)
+        .model PMOS_REFERENCE PMOS(VTO=-1 KP=1e-30 IS=1e-30)
+      probes:
+        drain_charge: v(drain_charged)
+        drain_reference: v(drain_reference)
+      sources:
+        gate_v: Vgate
+      vdd: 3.3

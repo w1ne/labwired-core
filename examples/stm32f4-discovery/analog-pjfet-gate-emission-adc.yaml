@@ -1,0 +1,33 @@
+# Matched generic PJF gate junctions route through the STM32F4-Discovery
+# descriptor's PA5/PA6 ADC1 aliases. Drain and source share 3.3 V, and each
+# gate is pulled toward ground through 10 kΩ. The only model difference is
+# gate emission coefficient N (2 versus the default 1).
+name: "stm32f4-discovery-analog-pjfet-gate-emission"
+chip: "../../configs/chips/stm32f407vg.yaml"
+external_devices: []
+board_io: []
+cosim_models:
+  - id: "pjfet_gate_emission_adc"
+    adapter: "analog"
+    step_ns: 1000
+    inputs:
+      gate_drive: "ui.pjfet_gate_emission.drive_v"
+    outputs:
+      emission_gate: "board.analog.pa5_volts"
+      control_gate: "board.analog.pa6_volts"
+    config:
+      netlist_text: |
+        Vrail supply 0 dc 3.3
+        Vdrive drive 0 dc 0
+        Rgate_emission gate_emission drive 10k
+        Jemission supply gate_emission supply PJF_EMISSION
+        .model PJF_EMISSION PJF(VTO=2 BETA=500u IS=1e-14 N=2)
+        Rgate_control gate_control drive 10k
+        Jcontrol supply gate_control supply PJF_CONTROL
+        .model PJF_CONTROL PJF(VTO=2 BETA=500u IS=1e-14)
+      probes:
+        emission_gate: "v(gate_emission)"
+        control_gate: "v(gate_control)"
+      sources:
+        gate_drive: "Vdrive"
+      vdd: 3.3

@@ -1,0 +1,34 @@
+# Matched generic level-1 NMOS devices route their drains through PA2/PA3 to
+# STM32U5A5 ADC1_IN7/IN8. The reference isolates reverse body bias.
+name: nucleo-u5a5zj-analog-mosfet-body-effect-adc
+chip: ../../configs/chips/stm32u5a5zj.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: mosfet_body_effect_pair
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      bulk_bias: ui.mosfet_body.bulk_v
+    outputs:
+      reference_drain: board.analog.pa2_volts
+      body_effect_drain: board.analog.pa3_volts
+    config:
+      netlist_text: |
+        Vdd_ref supply_ref 0 dc 3.3
+        Rload_ref supply_ref drain_ref 1k
+        Vgate_ref gate_ref 0 dc 2.5
+        Vbulk_ref bulk_ref 0 dc 0
+        Mref drain_ref gate_ref 0 bulk_ref NMOS_BODY
+        Vdd_body supply_body 0 dc 3.3
+        Rload_body supply_body drain_body 1k
+        Vgate_body gate_body 0 dc 2.5
+        Vbulk_body bulk_body 0 dc 0
+        Mbody drain_body gate_body 0 bulk_body NMOS_BODY
+        .model NMOS_BODY NMOS(VTO=1 KP=20u LAMBDA=0.02 GAMMA=0.4 PHI=0.7 IS=1e-30 W=100u L=10u)
+      probes:
+        reference_drain: v(drain_ref)
+        body_effect_drain: v(drain_body)
+      sources:
+        bulk_bias: Vbulk_body
+      vdd: 3.3

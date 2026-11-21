@@ -8,9 +8,11 @@ booting through a clean-room boot ROM with the RF core and sleep timer
 modelled, the flash controller (Contiki-NG CFS/Coffee) and the AES/SHA-256
 cryptoprocessor (the Contiki-NG crypto suite), and a **three-node Contiki-NG
 RPL-UDP network** on a shared 802.15.4 air (RF core RX/TX, AUTOACK, µDMA).
-PKA, SSI, I2C, GPTimers, USB and the ADC are declared stubs. The mixed-signal
-co-simulation test uses synthetic NTC and diode netlists on the modeled PC4/PC5
-GPIO inputs; it covers voltage thresholds and GPIO readback, not the ADC.
+PKA, SSI, I2C, GPTimers and USB are declared stubs. The SoC ADC runs its
+ADCCON3 "extra" conversion (`cc2538_soc_adc`). The mixed-signal co-simulation
+tests put the same generic NTC and diode netlists on the PC4/PC5 GPIO inputs
+(voltage thresholds) and on PA4/PA5 = AIN4/AIN5, which Contiki-NG's
+`adc_get()` register sequence converts (`analog-ntc-diode-adc-system.yaml`).
 
 ## What runs here
 
@@ -188,6 +190,10 @@ hb=0 yellow=1 green=0 orange=0
   32-kHz rate assumes the CPU runs at `clock_hz` (16 MHz).
 - **Cryptoprocessor:** the slave-interface (non-DMA) data path, `KEY2`/`KEY3`,
   pulse interrupts and processing latency are not modelled.
-- **PKA, SSI0/1, I2C, GPTimer0-3, USB, uDMA, SoC ADC** are declared stubs.
+- **SoC ADC:** only the ADCCON3 extra conversion. Sequence conversions
+  (`ADCCON1.ST`, `ADCCON2`), the temperature-sensor channel (reads 0), the ADC
+  interrupt and µDMA trigger are not modelled. The RNG (`RNDL/RNDH`) and the
+  comparator read 0, as the stub did.
+- **PKA, SSI0/1, I2C, GPTimer0-3, USB** are declared stubs.
 
 See `VALIDATION.md` for the tier table.

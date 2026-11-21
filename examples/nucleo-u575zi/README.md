@@ -109,6 +109,7 @@ ELF; both are hard-asserted on fixture presence.
 - `system.yaml` — bare-board system manifest (chip + board IO)
 - `star-catcher-system.yaml` — system manifest with the simulated SSD1306
 - `io-smoke.yaml`, `uart-smoke.yaml`, `star-catcher-smoke.yaml` — CLI scripts
+- `analog-bjt-charge-system.yaml` — matched BJT junction/transit-charge netlists routed through ADC1
 - `../../crates/firmware-stm32u575-demo/src/star_catcher.rs` — register-level OLED game
 - `board_firmware/` — CubeU5 HAL app (`main.c`, `Makefile`, README, HAL conf)
 - `VALIDATION.md` — runbook + captured evidence (Tasks 3–8 and current addenda)

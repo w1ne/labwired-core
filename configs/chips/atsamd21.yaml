@@ -16,6 +16,14 @@ arch: "arm"
 core: "cortex-m0+"
 # 48 MHz — DFLL48M, same as the Arduino Zero `atsamd21g18a.yaml` descriptor.
 cpu_hz: 48_000_000
+# DS40001882H (SAM D21/DA1 family), Table 37-15 Normal I/O Pins Characteristics,
+# VDD = 2.7-3.63 V: VIL max 0.3*VDD and VIH min 0.55*VDD. 3.3 V is the board rail;
+# a board at another VDD scales both (below 2.7 V the table gives 0.25/0.7).
+# https://ww1.microchip.com/downloads/aemDocuments/documents/MCU32/ProductDocuments/DataSheets/SAM-D21-DA1-Family-Data-Sheet-DS40001882H.pdf
+io_voltage_v: 3.3
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.55
 flash:
   base: 0x00000000
   size: "256KB"

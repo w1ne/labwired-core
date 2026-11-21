@@ -41,3 +41,62 @@ ADC1 conversion result read from its data register:
 ```sh
 cargo test -p labwired-core --test cosim_pin_routing nucleo_f401re_diode_netlist_reaches_pa0_adc1_end_to_end
 ```
+
+[`analog-jfet-terminal-resistance.yaml`](analog-jfet-terminal-resistance.yaml) adds a
+generic level-1 NJF load line on PA2–PA5/ADC1_IN2–IN5 beside the unrelated diode on
+PA0/ADC1_IN0. The co-simulation test checks RD and RS independently against scalar
+load-line roots and reads each route through the firmware-visible ADC1 data register:
+
+```sh
+cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_jfet_terminal_resistances_reach_adc1_with_unrelated_diode
+```
+
+[`analog-mosfet-body-effect.yaml`](analog-mosfet-body-effect.yaml) routes matched generic
+level-1 NMOS and high-side PMOS pairs through PA2–PA5 (ADC1_IN2–IN5), beside the same
+independent Shockley diode on PA0/ADC1_IN0. The board test compares all four solved load
+lines against independent mirrored GAMMA/PHI calculations while sweeping reverse bulk bias,
+checks the opposite drain-voltage response for the two polarities, then reads every route
+through the firmware-visible ADC data register:
+
+```sh
+cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_mosfet_body_effect_reaches_adc1_with_unrelated_diode
+```
+
+[`analog-jfet-gate-charge.yaml`](analog-jfet-gate-charge.yaml) routes a generic level-1
+NJF with CGS/CGD depletion charge and a matched zero-charge control through PA6/PA7
+(ADC1_IN6/IN7), beside the unrelated Shockley diode on PA0/ADC1_IN0. The test compares
+the gate transient with an independent backward-Euler charge recurrence and checks the
+firmware-visible ADC data register for both branches and the diode:
+
+```sh
+cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_jfet_gate_depletion_charge_reaches_adc1_with_unrelated_diode
+```
+
+[`analog-mosfet-tox-charge.yaml`](analog-mosfet-tox-charge.yaml) routes a matched generic
+level-1 NMOS pair with and without TOX gate-bulk capacitance through PA6/PA7
+(ADC1_IN6/IN7), beside the unrelated Shockley diode on PA0/ADC1_IN0. The test checks the
+Meyer gate-bulk transient against an independent RC recurrence and reads each route through
+the firmware-visible ADC data register:
+
+```sh
+cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_mosfet_tox_gate_charge_reaches_adc1_with_unrelated_diode
+```
+
+[`analog-bjt-high-injection.yaml`](analog-bjt-high-injection.yaml) routes a generic
+Gummel–Poon NPN with IKF/IKR/NKF rolloff and a matched no-rolloff control through PA2/PA3
+(ADC1_IN2/IN3), beside the unrelated Shockley diode on PA0. The test checks independent
+collector load lines at three base drives and reads all three routes through ADC1:
+
+```sh
+cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_bjt_high_injection_reaches_adc1_with_unrelated_diode
+```
+
+[`analog-mosfet-junction-temperature.yaml`](analog-mosfet-junction-temperature.yaml)
+compares nominal and `TEMP=125 °C` MOSFET bulk-junction depletion charge against an
+explicit equivalent hot model on PA2–PA4/ADC1_IN2–IN4. The independent silicon-potential
+and backward-Euler charge references are asserted at each transient step; all three routes
+are also read through the firmware-visible ADC1 data register beside the unrelated diode:
+
+```sh
+cargo test -p labwired-core --test cosim_nucleo_f401_analog nucleo_f401re_mosfet_junction_temperature_reaches_adc1_with_diode
+```

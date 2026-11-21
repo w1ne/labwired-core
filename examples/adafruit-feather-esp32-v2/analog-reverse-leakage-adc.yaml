@@ -1,0 +1,69 @@
+# Adafruit Feather ESP32 V2: reverse-biased pn-junction leakage on the classic
+# ESP32 SENS SAR ADC1, beside the unrelated diode load line on channel 6.
+#
+# Each leakage circuit holds one generic SPICE junction about 0.15 V in
+# reverse (near -6*N*Vt) with a 1.65 V bias, and the leakage current flows into
+# a load resistor that the ADC reads as I*R. In that region each device family
+# has its own ngspice reverse law, and the plain exponential gives a different
+# ADC code:
+#   ch3  diode without BV      cubic  -IS*(1 + (3*N*Vt/(e*V))^3)
+#   ch4  NJF gate (D = S)      cubic, two gate junctions
+#   ch5  NMOS bulk (D = S = G) held at -IS with only GMIN conducting
+# The test loads the board profile and takes only cosim_models from here.
+name: "adafruit-feather-esp32-v2-analog-reverse-leakage"
+chip: "../../configs/chips/esp32.yaml"
+cpu_hz: 240000000
+external_devices: []
+cosim_models:
+  - id: "diode_load_line"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_diode: "adc.sens_sar_adc.6_volts"
+    config:
+      netlist_text: |
+        Vcc supply 0 dc 3.3
+        Rlim supply sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_diode: "v(sense)"
+  - id: "diode_reverse_leakage"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_leak: "adc.sens_sar_adc.3_volts"
+    config:
+      netlist_text: |
+        Vb bias 0 dc 1.65
+        D1 sense bias DLEAK
+        Rload sense 0 1.5Meg
+        .model DLEAK D(IS=1u N=1)
+      probes:
+        v_leak: "v(sense)"
+  - id: "jfet_gate_reverse_leakage"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_leak: "adc.sens_sar_adc.4_volts"
+    config:
+      netlist_text: |
+        Vb bias 0 dc 1.65
+        J1 bias sense bias JLEAK
+        Rload sense 0 750k
+        .model JLEAK NJF(VTO=-2 BETA=1m IS=1u)
+      probes:
+        v_leak: "v(sense)"
+  - id: "mosfet_bulk_reverse_leakage"
+    adapter: "analog"
+    step_ns: 1000
+    outputs:
+      v_leak: "adc.sens_sar_adc.5_volts"
+    config:
+      netlist_text: |
+        Vb bias 0 dc 1.65
+        M1 bias bias bias sense MLEAK
+        Rload sense 0 750k
+        .model MLEAK NMOS(LEVEL=1 VTO=1 KP=100u IS=1u)
+      probes:
+        v_leak: "v(sense)"

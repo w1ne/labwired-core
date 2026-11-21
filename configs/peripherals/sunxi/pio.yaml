@@ -1,0 +1,138 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# Allwinner sunxi PIO port (A10/A20 and later): one 0x24-byte bank per port,
+# Pn_CFG0..3 @0x00..0x0C (4 bits per pin, 8 pins per register), Pn_DAT @0x10,
+# Pn_DRV0/1 @0x14/0x18, Pn_PUL0/1 @0x1C/0x20 (Linux pinctrl-sunxi.h
+# MUX_REGS_OFFSET, DATA_REGS_OFFSET, DLEVEL_REGS_OFFSET, PULL_REGS_OFFSET,
+# BANK_MEM_SIZE). Port n sits at PIO base + 0x24*n; the A20 PIO is at
+# 0x01C2_0800 (sun7i-a20.dtsi pinctrl@1c20800). Pin k of the port is bit k
+# of Pn_DAT.
+#
+# Pn_DAT is one register for both directions: it reads the pad for a pin
+# whose CFG function is input (0) and the latch for an output (1). It runs
+# here as the declarative GPIO path's IN register, so a routed level is what
+# firmware reads back. Direction comes from the CFG nibbles (`gpio_mode`):
+# 0 input, 1 output, 2..6 a peripheral function, 7 disabled. Not modelled:
+# with no separate latch an output pin reports no driven level, and a
+# firmware write to Pn_DAT stores the word until the next routed level
+# replaces the input bits; a function or disabled nibble does not gate the
+# pad; DRV and PUL are storage only. CFG resets to 0 (input), as on A10/A20;
+# H3 and later reset it to 7 (disabled), and need their own reset values.
+peripheral: GPIO
+version: 0.1.0
+gpio_mode:
+  register: CFG0
+  bits_per_pin: 4
+  output: [1]
+  input: [0]
+registers:
+- id: CFG0
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIN_CFG
+    bit_range:
+    - 31
+    - 0
+    description: Pn_CFG0, the function of pins 0..7, 0 input, 1 output
+  side_effects: null
+- id: CFG1
+  address_offset: 4
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIN_CFG
+    bit_range:
+    - 31
+    - 0
+    description: Pn_CFG1, the function of pins 8..15, 0 input, 1 output
+  side_effects: null
+- id: CFG2
+  address_offset: 8
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIN_CFG
+    bit_range:
+    - 31
+    - 0
+    description: Pn_CFG2, the function of pins 16..23, 0 input, 1 output
+  side_effects: null
+- id: CFG3
+  address_offset: 12
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIN_CFG
+    bit_range:
+    - 31
+    - 0
+    description: Pn_CFG3, the function of pins 24..31, 0 input, 1 output
+  side_effects: null
+- id: IN
+  address_offset: 16
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIN_DAT
+    bit_range:
+    - 31
+    - 0
+    description: Pn_DAT, the pad level of an input pin and the latch of an output pin
+  side_effects: null
+- id: DRV0
+  address_offset: 20
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIN_DRV
+    bit_range:
+    - 31
+    - 0
+    description: Pn_DRV0, drive strength of pins 0..15
+  side_effects: null
+- id: DRV1
+  address_offset: 24
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIN_DRV
+    bit_range:
+    - 31
+    - 0
+    description: Pn_DRV1, drive strength of pins 16..31
+  side_effects: null
+- id: PUL0
+  address_offset: 28
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIN_PULL
+    bit_range:
+    - 31
+    - 0
+    description: Pn_PUL0, pull of pins 0..15
+  side_effects: null
+- id: PUL1
+  address_offset: 32
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: PIN_PULL
+    bit_range:
+    - 31
+    - 0
+    description: Pn_PUL1, pull of pins 16..31
+  side_effects: null

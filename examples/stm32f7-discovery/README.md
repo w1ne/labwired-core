@@ -8,7 +8,7 @@ This example provides deterministic bring-up for STM32F7 Discovery (STM32F746NG)
 1. `rcc` (`stm32f4` profile @ `0x40023800`)
 2. `gpioa`–`gpioi` (`stm32v2`)
 3. `usart1` (`stm32v2` — ST-LINK VCP)
-4. `adc1` (shared F4-profile 12-bit SAR model; PA0/PA1 analog routes)
+4. `adc1` (shared F4-profile 12-bit SAR model; PA0/PA1/PA2 analog routes)
 5. `systick`
 6. stubs: LTDC, ETH, DMA2D, USB, QUADSPI
 
@@ -25,11 +25,13 @@ Expected result:
 1. smoke test passes
 2. UART contains `OK`
 
-The mixed-signal fixture [`analog-ntc-diode-system.yaml`](analog-ntc-diode-system.yaml)
-routes a generic Beta NTC divider and a separate Shockley diode load line to PA0/ADC1_IN0
-and PA1/ADC1_IN1. Its board-specific integration test asserts the solved voltages and
-ADC1 conversion results; it is simulation-model coverage, not a silicon or board-pinout
-claim.
+The mixed-signal fixtures route a generic Beta NTC divider, a Shockley diode load line,
+and a Gummel–Poon NPN common-emitter load to PA0/ADC1_IN0, PA1/ADC1_IN1, and
+PA2/ADC1_IN2. The board-specific integration tests assert independent load-line
+references and firmware-visible ADC1 results while checking that the three channels stay
+isolated. The BJT charge test compares the uncharged load line with CJE, CJC, TF, and
+combined charge cases over the same PA2 route. This is simulation-model coverage, not a
+silicon-validation claim.
 
 ## Files
 

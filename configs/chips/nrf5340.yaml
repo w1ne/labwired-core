@@ -36,6 +36,16 @@ core: "cortex-m33"
 # nRF5340 application core, 128 MHz.
 cpu_hz: 128_000_000
 
+# GPIO pad supply and input thresholds (ratios of io_voltage_v).
+# nRF5340 Product Specification v1.1 (4406_640, 2021-04-16), 7.13.6.1 GPIO
+# Electrical Specification: VIH min 0.7 x VDD, VIL max 0.3 x VDD. Nominal VDD
+# 3.0 V (same PS, recommended operating conditions, VDD typ). Ratios hold at
+# any VDD in normal voltage mode.
+io_voltage_v: 3.0
+gpio_input_thresholds:
+  vil: 0.3
+  vih: 0.7
+
 flash:
   base: 0x00000000
   size: "1024KB"

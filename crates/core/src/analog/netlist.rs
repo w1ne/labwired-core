@@ -6,10 +6,29 @@
 //!
 //! The subset is deliberately small, because everything in it has to stay
 //! deterministic in the browser with no dependencies. Unsupported elements
-//! and circuit constructs such as subcircuits, model libraries, and AC/DC
-//! sweeps are not approximated or silently dropped: they are a hard error that
-//! names the line and points at the ngspice adapter, which supports a much
-//! larger SPICE subset.
+//! and circuit constructs such as DC sweeps are not approximated or
+//! silently dropped: they are a hard error that names the line and points at
+//! the ngspice adapter, which supports a much larger SPICE subset.
+//!
+//! Model libraries (`.include <file>`, `.lib <file> <section>`) are read by
+//! [`parse_netlist_with_files`], which the co-simulation adapter uses with
+//! the manifest's directory; [`parse_netlist`] has no files and refuses them.
+//!
+//! A line starting with `+` continues the previous line, with comment lines
+//! between them skipped, so a vendor model card split over many lines reads
+//! as one card. A `.subckt <name> <port> ...` … `.ends` definition built from
+//! the elements below is flattened at each `X` call that names it, with
+//! ngspice's names (`R.X1.R1`, node `X1.mid`). Nested definitions are
+//! refused.
+//!
+//! `.param <name>=<value> ...` and `{expression}` values follow ngspice's
+//! numparam: global `.param` lines resolve in dependency order, a `.subckt`
+//! line may declare `params:` defaults that a call overrides with
+//! `<name>=<value>`, a body may hold its own `.param` lines, and a body sees
+//! the parameters of the call that placed it. Every `{...}` is replaced by
+//! its number before the line is parsed; the expression subset is listed in
+//! `numparam.rs`. A `.model` inside a body that uses that body's parameters
+//! is refused, because ngspice gives each instance its own card.
 //!
 //! ## Elements
 //!
@@ -23,44 +42,154 @@
 //! | Current source | `I<name> n+ n- <source>` |
 //! | Switch | `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` or `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0\|1] ron=<r> roff=<r>` |
 //! | Voltage switch | `S<name> n1 n2 nc+ nc- vt=<v> [vh=<v>] [invert=0|1] ron=<r> roff=<r>` |
-//! | Diode | `D<name> n+ n- <model>` |
-//! | BJT | `Q<name> nc nb ne <model> [temp=<°C>]` |
-//! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>]` |
-//! | JFET | `J<name> nd ng ns <model> [temp=<°C>]` |
+//! | SPICE voltage switch | `S<name> n+ n- nc+ nc- <model> [on\|off]` with `.model <model> SW(VT= VH= RON= ROFF=)` |
+//! | SPICE current switch | `W<name> n+ n- <element> <model> [on\|off]` with `.model <model> CSW(IT= IH= RON= ROFF=)` |
+//! | Diode | `D<name> n+ n- <model> [<area>] [pj=<perimeter>] [off]` |
+//! | BJT | `Q<name> nc nb ne [ns] <model> [temp=<°C>] [off]` |
+//! | MOSFET | `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [off]` |
+//! | JFET | `J<name> nd ng ns <model> [temp=<°C>] [off]` |
 //! | VCVS | `E<name> n+ n- nc+ nc- <gain>` |
 //! | VCCS | `G<name> n+ n- nc+ nc- <transconductance>` |
 //! | CCCS | `F<name> n+ n- <vsource> <gain>` |
 //! | CCVS | `H<name> n+ n- <vsource> <transresistance>` |
+//! | Behavioural source | `B<name> n+ n- V=<expr>` or `B<name> n+ n- I=<expr>` |
+//! | Behavioural VCVS / VCCS | `E<name> n+ n- VALUE={<expr>}` / `G<name> n+ n- VALUE={<expr>}` |
+//! | Polynomial E / G / F / H | `E<name> n+ n- POLY(<n>) <n node pairs> <p0> <p1> ...`, `F<name> n+ n- POLY(<n>) <n elements> <p0> ...` |
+//! | Table E / G | `E<name> n+ n- TABLE {<expr>} = (x1, y1) (x2, y2) ...` |
+//! | Laplace E / G | `E<name> n+ n- LAPLACE {<expr>} = {<H(s)>}` or `E<name> n+ n- nc+ nc- LAPLACE=<H(s)>` |
 //! | Op-amp / comparator | `X<name> in+ in- v+ v- out <model>` |
 //!
-//! The four dependent sources are SPICE's linear ones and nothing more: `POLY`,
-//! `VALUE={...}` and `TABLE` forms are refused by name. `E` and `H` each add a
+//! A semiconductor's bare `off` flag is SPICE's: the operating point holds
+//! that device cut off until the rest of the circuit converges, then releases
+//! it. It picks one state of a latch or other bistable circuit and changes
+//! nothing where the operating point is unique. Instance `ic=` on a diode
+//! (`ic=<vd>`), BJT (`ic=<vbe>,<vce>`) or JFET (`ic=<vds>,<vgs>`) is SPICE's:
+//! under `uic` the junction charge history starts from those voltages, as in
+//! ngspice's `MODEINITTRAN`, and without `uic` it is ignored. MOSFET
+//! `ic=<vds>[,<vgs>[,<vbs>]]` seeds the bulk-junction, overlap and Meyer
+//! charges the same way; a value left out comes from the terminal nodes.
+//!
+//! `.tran ... uic` skips the operating point, as SPICE does: every node starts
+//! at 0 V unless `.ic` sets it, a capacitor starts at its `ic=` (else the
+//! voltage across its nodes), and an inductor at its `ic=` (else 0 A).
+//!
+//! `.temp <°C>` is the default `TEMP` of every `D`, `Q`, `J` and `M` instance
+//! and of every `beta`/`tc1`/`tc2` resistor that has no `temp=` of its own, so
+//! each takes the temperature laws below exactly as an explicit `temp=` would.
+//! Only one value is accepted: ngspice reruns the analysis once per listed
+//! temperature. `.options temp=` is the same value spelled as an option; giving
+//! both is refused. `.options tnom=<°C>` is ngspice's `CKTnomTemp`: the `TNOM`
+//! of every `D`, `NPN`/`PNP`, `NMOS`/`PMOS` and `NJF`/`PJF` card that does not
+//! set its own, and the `tnom` of every `tc1`/`tc2` resistor without one. A
+//! deck with `tnom` but no `.temp` runs at ngspice's default 27 °C. Built-in
+//! parts keep `TNOM` 27 °C, where their parameters were fitted, and an NTC
+//! `beta` keeps its 25 °C datasheet nominal. Without `.temp` or `tnom`, an
+//! instance without `temp=` keeps the historical fixed 300 K thermal voltage
+//! and nominal parameters.
+//!
+//! The four dependent sources are SPICE's linear ones, plus `E`/`G`
+//! `VALUE={<expr>}`, which is a behavioural source, and SPICE2's
+//! `POLY(n)` form of all four, which lowers to one (see below), and the
+//! `E`/`G` `TABLE {<expr>} = (x1, y1) ...` lookup, which also does (its
+//! corner rounding is in [`super::behavioural`]), and the `E`/`G` `LAPLACE`
+//! transfer function (below). `TABLE` on `F`/`H` (fatal in ngspice) is
+//! refused by name. `E` and `H` each add a
 //! branch current, numbered after every voltage source and inductor; `F` and
 //! `H` read the branch current of the element they name, which must be one that
 //! carries one (a `V`, `L`, `E` or `H`).
+//!
+//! A behavioural source (`B`, or `E`/`G` with `VALUE=`) sets a voltage or a
+//! current to an expression of `V(node)`, `V(node1, node2)`, `I(<element>)`
+//! and `time`; the grammar and functions are ngspice's, listed in
+//! [`super::behavioural`]. A voltage form adds a branch current after every
+//! `H`, so `I(B1)` and `I(E1)` read it. `{...}` groups in the expression may
+//! use `.param` and subcircuit parameters; a `.subckt` body may hold
+//! behavioural sources, whose `V(...)` and `I(...)` names are flattened like
+//! every other node and element name.
+//!
+//! `E|G<name> n+ n- LAPLACE {<expr>} = {<H(s)>}` (PSpice) and
+//! `E|G<name> n+ n- nc+ nc- LAPLACE=<H(s)>` (LTspice, input `V(nc+, nc-)`)
+//! apply a rational transfer function to the input. `H(s)` holds numbers,
+//! `s`, `pi`, `{...}` parameters, `+ - * /`, parentheses and integer powers
+//! ([`Transfer::parse`]). It lowers to elements the solver already has, in
+//! controllable canonical form after the frequency scaling `s = w0·p` (`w0`
+//! the geometric mean of the pole magnitudes): one internal node
+//! `<name>#s<k>` and one `1/w0` F capacitor to ground per pole, linear `G`
+//! sources for the companion matrix, a behavioural current that feeds the
+//! input into the last state, and a behavioural `E`/`G` output
+//! `Σ c_k·V(<name>#s<k>) + d·input`. The operating point is therefore
+//! `H(0)·input` and the transient is the exact state-space response under the
+//! chosen integration rule. Refused: a numerator of higher order than the
+//! denominator (it differentiates), a pole at `s = 0` (no operating point),
+//! and anything not rational in `s` (`exp(-s*T)` delays, node voltages).
+//! ngspice-42 has no `LAPLACE` keyword; its XSPICE `s_xfer` is the reference.
+//!
+//! `E|G<name> n+ n- POLY(n) nc1+ nc1- ... ncn+ ncn- p0 p1 ...` and
+//! `F|H<name> n+ n- POLY(n) <elem1> ... <elemn> p0 p1 ...` are SPICE2
+//! polynomial sources. A node pair may be written `(a,b)`. The polynomial
+//! becomes the behavioural source `p0 + p1·x1 + ... + pn·xn + pn+1·x1² +
+//! pn+2·x1·x2 + ...` over the controlling voltages or branch currents, with
+//! the higher-degree terms in SPICE2's order. As in ngspice-42, a single
+//! coefficient is the constant `p0`; SPICE2 read it as `p1`.
 //!
 //! A `K` element couples two inductors with signed mutual inductance
 //! `M = k·sqrt(L1·L2)`. Each inductor's terminal order defines its dot
 //! convention: positive `k` gives aiding voltage for currents entering both
 //! first-listed terminals. Coupling lines may precede their inductors.
 //!
-//! `X` is SPICE's subcircuit call, and the in-core engine has no subcircuits.
-//! It accepts an `X` line only when its model names an `OPAMP` or `COMP` card
+//! `X` is SPICE's subcircuit call. An `X` line that names a `.subckt` in the
+//! deck is flattened into that body. Otherwise it is accepted only when its
+//! model names an `OPAMP` or `COMP` card
 //! (built in, or declared with `.model`); the pin order is the one vendor
 //! op-amp and comparator models use (`IN+ IN- VCC VEE OUT`). Any other `X` line
-//! is a real subcircuit call and is refused with the pointer to ngspice. The
+//! calls a subcircuit the deck does not define and is refused with the pointer to ngspice. The
 //! element is lowered, at parse time, into the primitives above; see
 //! [`OpAmpModel`] and [`ComparatorModel`] for exactly what it becomes.
 //!
-//! `<source>` is `[dc] <value>`, `SIN(vo va freq [td [theta]])` or
-//! `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, spelled as in SPICE. A source that
-//! carries a function is driven by the clock, so it cannot also be a routed
-//! input — [`super::adapter`] rejects a manifest that wires one.
+//! `S<name> n+ n- nc+ nc- <model> [on|off]` and `W<name> n+ n- <element>
+//! <model> [on|off]` are SPICE's voltage- and current-controlled switches.
+//! The `SW` card takes `VT`, `VH`, `RON`, `ROFF` and the `CSW` card `IT`,
+//! `IH`, `RON`, `ROFF`, with ngspice's defaults (0, 0, 1 Ω, 1e12 Ω). The
+//! switch closes when the signed control voltage `V(nc+) − V(nc-)`, or the
+//! signed branch current of `<element>` (a `V`, `L`, `E` or `H`; ngspice
+//! takes only a `V`), rises above threshold + hysteresis, opens below
+//! threshold − hysteresis, and keeps its state in between; `on` sets the
+//! state the operating point starts from. The state is read from the last
+//! accepted solution: the operating point repeats until no switch moves, and
+//! in a transient run an edge takes effect one step after the control
+//! crosses. Two differences from ngspice-42 are deliberate. Negative
+//! hysteresis is refused. `W ... on` holds closed inside the band, as `S`
+//! does there; ngspice's `cswload.c` reads the band state from the previous
+//! time point, which an operating point has not set, and reports it open.
+//! Any other card parameter (LTspice's `LSER`, `VSER`, `ILIMIT`) is an error.
+//! The `S` forms with `ron=`/`roff=` on the element line are this engine's
+//! own and take no model.
+//!
+//! `T<name> n1+ n1- n2+ n2- Z0=<ohms> TD=<seconds>` is SPICE's lossless
+//! transmission line; `F=<Hz> [NL=<wavelengths>]` gives the delay as
+//! `NL / F` instead (`NL` defaults to 0.25), as in ngspice. The line is the
+//! method of characteristics: each port sees `Z0` in series with the wave the
+//! other port sent `TD` earlier, read from the stored solution by linear
+//! interpolation, and the operating point sees two wires. Only the
+//! differential mode exists, as in SPICE: no current flows between the ports'
+//! reference nodes. When a step is longer than `TD` the delayed wave falls
+//! inside the step and is interpolated to the step's own end point, so the
+//! line stays stable but the edge is resolved no finer than the step. When
+//! the delay is not a whole number of steps, interpolation widens an edge by
+//! up to one step on each pass down the line; the plateaus are exact. `ic=`
+//! and ngspice's `rel=`/`abs=` breakpoint controls are refused by name.
+//!
+//! `<source>` is `[dc] <value>`, `SIN(vo va freq [td [theta]])`,
+//! `SFFM(vo va fc mdi fs)`, `EXP(v1 v2 td1 tau1 td2 tau2)`,
+//! `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, or
+//! `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]`, spelled as in SPICE. A
+//! source that carries a function is driven by the clock, so it cannot also be
+//! a routed input — [`super::adapter`] rejects a manifest that wires one.
 //!
 //! A resistor can use either an NTC `beta` law or the instance coefficients
 //! `tc1`/`tc2`, not both. The polynomial form is
 //! `R = Rnom · (1 + TC1·ΔT + TC2·ΔT²)`; `tnom` and `temp` default to 27 °C for
-//! that form. The temperature is imposed externally; self-heating is not
+//! that form, or to `.options tnom=` and `.temp`. The temperature is imposed externally; self-heating is not
 //! modelled.
 //!
 //! ## Models
@@ -70,9 +199,9 @@
 //! be declared after the elements that use it. Parameters this engine does not
 //! model (except diode forward/reverse knee currents `IK`/`IKF`/`IKR`, diode
 //! depletion capacitance `CJO`/`VJ`/`M`/`FC`, diffusion charge `TT` and
-//! soft-recovery parameter `VP`, BJT base-resistance rolloff `RBM`/`IRB`,
-//! terminal resistances `RB`/`RC`/`RE` and their `TRB*`/`TRBM*`/`TIRB*`/
-//! `TRC*`/`TRE*` temperature coefficients, diode transit-time temperature
+//! soft-recovery parameter `VP`, diode sidewall saturation current
+//! `JSW`/`ISW` with emission `NS` and perimeter `PJ`, diode sidewall depletion
+//! capacitance `CJSW`/`CJP` with `PHP`/`MJSW`/`FCS`, diode transit-time temperature
 //! coefficients `TTT1`/`TTT2`, diode grading-coefficient temperature
 //! coefficients `TM1`/`TM2`, forward/reverse BJT transit-time temperature
 //! coefficients `TTF1`/`TTF2`/`TTR1`/`TTR2`, JFET terminal
@@ -82,6 +211,7 @@
 //! level-1 channel charge from `TOX`, gate overlap capacitance
 //! `CGSO`/`CGDO`/`CGBO`, BJT base-junction depletion capacitance
 //! `CJE`/`VJE`/`MJE` and `CJC`/`VJC`/`MJC` with shared `FC`,
+//! including the `XCJC` split between the internal and external base,
 //! MOSFET bulk junction depletion capacitance `CBD`/`CBS` with shared
 //! `PB`/`MJ`/`FC`, or junction geometry `CJ`/`CJSW`/`MJ`/`MJSW` with instance
 //! `AD`/`AS`/`PD`/`PS`, semiconductor temperature coefficients beyond the diode,
@@ -92,19 +222,26 @@
 //! breakdown voltage; `TRS1`/`TRS2` adjust series resistance, `TTT1`/`TTT2`
 //! adjust transit time, and `TM1`/`TM2` adjust the depletion grading
 //! coefficient; `CJO` and `VJ` follow the diode junction-capacitance
-//! temperature law. A BJT
+//! temperature law. Diode `JTUN`·area + `JTUNSW`·`PJ` add the trap-assisted
+//! tunnel current `−JT·(exp(−V/(NTUN·Vt)) − 1)` (`NTUN` default 30); with
+//! `TEMP`, `JT` follows the saturation-current law with `XTITUN` (default 3)
+//! and `KEG·EG` (`KEG` default 1). Diode `TLEV` is accepted and ignored:
+//! ngspice-42 gives identical results for 0, 1 and 2. A BJT
 //! instance's `TEMP` uses model `TNOM`/`EG`/
 //! `XTI`/`XTB` to adjust thermal voltage, transport and recombination
 //! saturation currents, and forward/reverse beta. BJT `CJE`/`VJE`/`MJE` and
-//! `CJC`/`VJC`/`MJC` follow the default silicon temperature law; `TMJE1`/`2`
+//! `CJC`/`VJC`/`MJC` follow the default silicon temperature law; `XCJC` assigns
+//! the given fraction of `CJC` to the internal base and the remainder to the
+//! external base when `RB` creates both nodes. `TMJE1`/`2`
 //! and `TMJC1`/`2` adjust the grading factors. `TLEVC=1` selects the linear
 //! `CTE`/`CTC` and `TVJE`/`TVJC` law. With `TEMP`, `TRB1`/`TRB2`, `TRBM1`/`TRBM2`,
 //! `TIRB1`/`TIRB2`, `TRC1`/`TRC2`, and `TRE1`/`TRE2` adjust base,
 //! minimum-base, base-current knee, collector, and emitter resistances using
 //! `ΔT = TEMP − TNOM`; `TRM1`/`TRM2` are accepted aliases for `TRBM1`/`TRBM2`.
 //! `TTF1`/`TTF2` and `TTR1`/`TTR2` apply the same polynomial to forward and
-//! reverse transit times. Without instance `TEMP`, these parameters retain
-//! their nominal values.
+//! reverse transit times. `TITF1`/`TITF2` apply it to `ITF`, which shapes the
+//! forward `XTF` transit-charge current adjustment. Without instance `TEMP`,
+//! these parameters retain their nominal values.
 //! A JFET instance `TEMP` adjusts level-1 `VTO` by `VTOTC` when supplied, or
 //! otherwise by `-TCV`; it adjusts `BETA` by `1.01^(BETATCE·ΔT)` when
 //! `BETATCE` is supplied, or otherwise by `(T/TNOM)^BEX` using absolute
@@ -128,13 +265,27 @@
 //! exponent 0.5), base recombination from `ISE`/`NE`/`ISC`/`NC`, and transit-time
 //! charge from `TF`/`TR`,
 //! including the forward `XTF`/`VTF`/`ITF` adjustment, plus ohmic terminal
-//! resistances `RB`/`RC`/`RE` are modelled. JFET
+//! resistances `RB`/`RC`/`RE` are modelled. `RCO` enables Kull's
+//! quasi-saturation model of the epitaxial collector, with `VO`, `GAMMA` and
+//! the epitaxial charge `QCO`, between the collector contact behind `RC` and
+//! the intrinsic collector; `QUASIMOD=1` applies its `CN`/`D`/`VG`
+//! temperature laws with `TEMP`. `RBM`/`IRB` make the base
+//! spreading resistance fall with conduction base current using the
+//! ngspice level-1 interpolation; `TRB*`/`TRBM*`/`TIRB*` apply its temperature
+//! coefficients. JFET
 //! channel current uses the Parker–Skellern fit `B` (default 1), with explicit
 //! instance `TEMP` laws for level-1 `VTO` and `BETA`; terminal
 //! resistances `RD`/`RS` create series resistors to its intrinsic
 //! drain/source nodes. MOSFET `RD`/`RS` and `RSH` multiplied by instance
 //! `NRD`/`NRS` do the same; level-1 `GAMMA`/`PHI` body effect is also modelled;
-//! MOSFET `IS` is used for the two bulk junction currents. `CGSO` and
+//! lateral diffusion `LD` shortens the channel to `L − 2·LD` for `KP·W/L`,
+//! `TOX` channel charge and `CGBO`, and a card with `TOX` but no `KP` takes
+//! ngspice's process value `KP = UO·1e-4·εox/TOX` (`UO`/`U0`, default 600);
+//! with `TOX`, substrate doping `NSUB` derives every omitted `PHI`, `GAMMA`
+//! and `VTO` as ngspice level 1 does, using gate type `TPG` and surface-state
+//! density `NSS` for the flat-band voltage;
+//! MOSFET `IS` is used for the two bulk junction currents, or `JS` times
+//! instance `AD`/`AS` when `JS`, `AD` and `AS` are all non-zero. `CGSO` and
 //! `CGDO` are capacitance per unit width (F/m), and `CGBO` is capacitance per
 //! unit length (F/m); each is multiplied by instance `W` or `L` and integrated
 //! as linear overlap charge. `CBD` and `CBS` integrate nonlinear bulk junction
@@ -182,6 +333,12 @@
 //! terminal resistances, and `TTF*`/`TTR*` adjust forward/reverse transit time,
 //! all with `ΔT = TEMP − TNOM`. BJT junction depletion charge follows ngspice's
 //! default silicon temperature law, or its `TLEVC=1` linear coefficient form.
+//! The optional fourth node `ns` is the substrate (ground when omitted); it is
+//! read as a node unless it names a `.model`, as ngspice does. Its junction
+//! runs to the internal collector (`SUBS=1`, NPN default) or the internal base
+//! (`SUBS=-1`, PNP default) with `ISS`/`NS` current and `CJS`/`VJS`/`MJS`
+//! (also `CCS`/`CSUB`, `PS`, `MS`) depletion charge with no `FC`, following
+//! `TMJS1`/`TMJS2`, `CTS`/`TVJS` and `TNS1`/`TNS2` with `TEMP`.
 //! Self-heating is not modeled.
 //!
 //! A diode card may carry `IK`/`IKF` (forward knee current) and `IKR` (reverse
@@ -195,7 +352,9 @@
 //! adds quasi-static diffusion charge, or `TT` with `VP > 0` selects the
 //! first-order soft reverse-recovery model. BJT `TF`/`TR`
 //! add transit-time charge based on the forward/reverse transport current;
-//! `XTF`/`VTF`/`ITF` adjust the forward transit time with bias;
+//! `XTF`/`VTF`/`ITF` adjust the forward transit time with bias; `PTF`
+//! delays the forward transport current by Weil's excess-phase filter with
+//! `td = PTF·π/180·TF` in transient steps, as ngspice does;
 //! `RB`/`RC`/`RE` add series resistance between the external terminals and
 //! probeable internal junction nodes when nonzero. JFET
 //! `CGS`/`CGD`/`PB`/`FC` add gate-junction depletion charge; fixed level-1
@@ -207,9 +366,60 @@
 //!
 //! ## Directives and comments
 //!
-//! Plus `*` comments, `;`/`$` trailing comments, `.end`, `.ic V(node)=<v>` and
+//! Plus `*` comments, `;`/`$` trailing comments, `.end`, `.ic V(node)=<v>`,
+//! `.nodeset V(node)=<v>` (kept as [`Circuit::node_nodeset`]) and
 //! `.options`/`.print`/`.tran`/`.save`/`.control`…`.endc`, which are accepted
 //! and ignored so that one deck can be handed to both this engine and ngspice.
+//! `.ac dec|oct|lin <points> <fstart> <fstop>` is kept as
+//! [`Circuit::ac_sweep`], and a `V`/`I` value may carry `AC <mag> [<phase>]`
+//! (degrees) before or after its DC or transient part; `V1 in 0 AC 1` alone
+//! is a 0 V source. Both feed [`crate::analog::Solver::ac_analysis`] and do
+//! not change the DC or transient run.
+//! `.noise v(<out>[,<ref>]) <src> dec|oct|lin <points> <fstart> <fstop>
+//! [<pts_per_summary>]` is kept as [`Circuit::noise_sweep`] and run by
+//! [`crate::analog::Solver::noise_analysis`]: thermal noise of every resistor,
+//! switch and device terminal resistance, diode and BJT shot noise, and FET
+//! channel thermal noise, as ngspice's level-1 models give them, plus the
+//! `KF`/`AF` flicker noise of every `D`, `Q`, `J` and `M` card that sets a
+//! nonzero `KF`. The parts this engine adds for a macromodel
+//! (op-amp, comparator, regulator) and a BJT's substrate junction are
+//! noiseless.
+//! `.tf v(<out>[,<ref>])|i(<element>) <src>` is kept as
+//! [`Circuit::transfer_function`] and run by
+//! [`crate::analog::Solver::transfer_analysis`]: the DC small-signal gain from
+//! the independent source `<src>` to the output, the resistance `<src>` sees,
+//! and the resistance seen at the output, linearised at the operating point.
+//! `i(<element>)` may name any element with a branch current, not only the
+//! `V` source ngspice takes.
+//! `.sens v(<out>[,<ref>])|i(<element>)` is kept as [`Circuit::sensitivity`]
+//! and run by [`crate::analog::Solver::sensitivity_analysis`]: the DC
+//! sensitivity of the output to each `R` resistance, `V`/`I` value and
+//! `E`/`F`/`G`/`H` gain, linearised at the operating point, and
+//! [`crate::analog::Solver::model_sensitivity_analysis`] adds one
+//! `<device>:<param>` entry per numeric parameter each `D`, `Q`, `J` and `M`
+//! device's `.model` card writes, and
+//! [`crate::analog::Solver::instance_sensitivity_analysis`] one
+//! `<device>_<param>` entry per instance `AREA`, `M`, `W`, `L` and `TEMP`.
+//! `.sens v(<out>[,<ref>])|i(<element>) ac dec|oct|lin <points> <fstart>
+//! <fstop>` is the AC form, run by
+//! [`crate::analog::Solver::ac_sensitivity_analysis`]: the derivative of the
+//! `.ac` output phasor with respect to each `R`, `C`, `L`, `K` and gain value
+//! and each source's `AC` magnitude and phase, at the held operating point.
+//! `.pz <in+> <in-> <out+> <out-> cur|vol pol|zer|pz` is kept as
+//! [`Circuit::pole_zero`] and run by
+//! [`crate::analog::Solver::pole_zero_analysis`]: the poles and zeros, in
+//! rad/s, of the transfer function from the input port to the output
+//! voltage, linearised at the operating point.
+//! `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]` is kept
+//! as [`Circuit::dc_sweep`] and run by [`crate::analog::Solver::dc_analysis`];
+//! `<src>` must be a `V`, `I` or `R` element or `TEMP`, and the second source
+//! is the outer loop. A swept `R` takes the value as its nominal resistance,
+//! so its NTC or `tc1`/`tc2` law still applies, as in ngspice. A swept `TEMP`
+//! (°C) replaces `.temp` at each point: every `D`, `Q`, `J` and `M` and every
+//! `beta`/`tc1`/`tc2` resistor without its own `temp=` is lowered again at
+//! that temperature, as ngspice's `CKTtemp` does.
+//! `+` continuation lines and `.subckt`…`.ends` blocks are rewritten before
+//! any of this, as described at the top.
 //!
 //! Note on the first line: a classic SPICE deck treats line 1 as a title and
 //! ignores it. This parser does not, because silently dropping an element line
@@ -217,6 +427,11 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+
+use super::behavioural::{
+    BehaviouralKind, BehaviouralSource, Control, ControlName, Expression, Transfer,
+};
+use std::path::{Path, PathBuf};
 
 /// A node reference: `None` is ground, `Some(i)` indexes [`Circuit::node_name`].
 pub type NodeRef = Option<usize>;
@@ -275,6 +490,16 @@ pub enum AnalogError {
         unknown: String,
         /// How much that unknown still moved on the last iteration.
         delta: f64,
+    },
+    /// A behavioural source's expression left its domain (`sqrt` of a
+    /// negative number, a division by zero) at the point being solved.
+    Evaluation {
+        /// The behavioural element.
+        element: String,
+        /// Simulated time of the step, in seconds; 0 at the operating point.
+        time: f64,
+        /// What went wrong.
+        message: String,
     },
     /// The manifest `config` block is not a usable analog configuration.
     Config(String),
@@ -343,6 +568,14 @@ impl fmt::Display for AnalogError {
                      with `tools/cosim/labwired_ngspice.py`"
                 )
             }
+            Self::Evaluation {
+                element,
+                time,
+                message,
+            } => write!(
+                f,
+                "behavioural source `{element}` at t = {time:e} s: {message}"
+            ),
             Self::Config(message) => write!(f, "{message}"),
         }
     }
@@ -479,7 +712,7 @@ pub struct MutualInductor {
 /// The operating point is solved at `t = 0` with [`Waveform::at`] evaluated
 /// there, which is what SPICE's `.tran` does when it is not given `uic`, so a
 /// deck starts from the same state in both engines.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Waveform {
     /// A constant. This is the only kind a routed input may drive.
     Dc(f64),
@@ -498,6 +731,37 @@ pub enum Waveform {
         /// Exponential damping factor, 1/s.
         theta: f64,
     },
+    /// `SFFM(vo va fc mdi fs)`: `vo + va·sin(2π·fc·t + mdi·sin(2π·fs·t))`,
+    /// with carrier frequency `fc`, modulating frequency `fs`, and modulation
+    /// index `mdi`.
+    Sffm {
+        /// Offset, volts or amps.
+        offset: f64,
+        /// Peak amplitude.
+        amplitude: f64,
+        /// Carrier frequency in hertz.
+        carrier_frequency: f64,
+        /// Modulation index.
+        modulation_index: f64,
+        /// Modulating frequency in hertz.
+        signal_frequency: f64,
+    },
+    /// `EXP(v1 v2 td1 tau1 td2 tau2)` — exponential rise toward `v2` after
+    /// `td1`, then a second exponential term returns toward `v1` after `td2`.
+    Exp {
+        /// Initial value before the rise delay.
+        v1: f64,
+        /// Rise target.
+        v2: f64,
+        /// Rise delay, seconds.
+        td1: f64,
+        /// Rise time constant, seconds.
+        tau1: f64,
+        /// Fall delay, seconds.
+        td2: f64,
+        /// Fall time constant, seconds.
+        tau2: f64,
+    },
     /// `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])` — a trapezoidal pulse train.
     Pulse {
         /// Initial (and resting) value.
@@ -515,6 +779,18 @@ pub enum Waveform {
         /// Period, seconds.
         period: f64,
     },
+    /// `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]` — piecewise-linear
+    /// interpolation, optionally repeating the suffix that starts at a time
+    /// point in the sequence.
+    Pwl {
+        /// Ordered `(time, value)` pairs. Values before the first point and
+        /// after the last point hold the nearest endpoint.
+        points: Vec<(f64, f64)>,
+        /// Time-point suffix to repeat, if any.
+        repeat_time: Option<f64>,
+        /// Delay applied to the entire time sequence.
+        delay: f64,
+    },
 }
 
 impl Waveform {
@@ -523,8 +799,8 @@ impl Waveform {
     /// Deterministic: `sin`, `exp` and `floor` come from `libm` rather than
     /// from the platform's libm, for the reason [`super::device`] gives.
     pub fn at(&self, t: f64) -> f64 {
-        match *self {
-            Self::Dc(value) => value,
+        match self {
+            Self::Dc(value) => *value,
             Self::Sin {
                 offset,
                 amplitude,
@@ -532,19 +808,53 @@ impl Waveform {
                 delay,
                 theta,
             } => {
-                if t <= delay {
-                    offset
+                if t <= *delay {
+                    *offset
                 } else {
-                    let elapsed = t - delay;
-                    let envelope = if theta == 0.0 {
+                    let elapsed = t - *delay;
+                    let envelope = if *theta == 0.0 {
                         1.0
                     } else {
-                        libm::exp(-elapsed * theta)
+                        libm::exp(-elapsed * *theta)
                     };
-                    offset
-                        + amplitude
+                    *offset
+                        + *amplitude
                             * envelope
-                            * libm::sin(2.0 * core::f64::consts::PI * frequency * elapsed)
+                            * libm::sin(2.0 * core::f64::consts::PI * *frequency * elapsed)
+                }
+            }
+            Self::Sffm {
+                offset,
+                amplitude,
+                carrier_frequency,
+                modulation_index,
+                signal_frequency,
+            } => {
+                let modulation = *modulation_index
+                    * libm::sin(2.0 * core::f64::consts::PI * *signal_frequency * t);
+                *offset
+                    + *amplitude
+                        * libm::sin(
+                            2.0 * core::f64::consts::PI * *carrier_frequency * t + modulation,
+                        )
+            }
+            Self::Exp {
+                v1,
+                v2,
+                td1,
+                tau1,
+                td2,
+                tau2,
+            } => {
+                if t < *td1 {
+                    return *v1;
+                }
+                let rise = (*v2 - *v1) * (1.0 - libm::exp(-(t - *td1) / *tau1));
+                if t < *td2 {
+                    *v1 + rise
+                } else {
+                    let fall = (*v1 - *v2) * (1.0 - libm::exp(-(t - *td2) / *tau2));
+                    *v1 + rise + fall
                 }
             }
             Self::Pulse {
@@ -556,22 +866,57 @@ impl Waveform {
                 width,
                 period,
             } => {
-                if t < delay {
-                    return v1;
+                if t < *delay {
+                    return *v1;
                 }
-                let mut phase = t - delay;
-                if period > 0.0 && phase >= period {
-                    phase -= libm::floor(phase / period) * period;
+                let mut phase = t - *delay;
+                if *period > 0.0 && phase >= *period {
+                    phase -= libm::floor(phase / *period) * *period;
                 }
-                if rise > 0.0 && phase < rise {
-                    v1 + (v2 - v1) * (phase / rise)
-                } else if phase < rise + width {
-                    v2
-                } else if fall > 0.0 && phase < rise + width + fall {
-                    v2 + (v1 - v2) * ((phase - rise - width) / fall)
+                if *rise > 0.0 && phase < *rise {
+                    *v1 + (*v2 - *v1) * (phase / *rise)
+                } else if phase < *rise + *width {
+                    *v2
+                } else if *fall > 0.0 && phase < *rise + *width + *fall {
+                    *v2 + (*v1 - *v2) * ((phase - *rise - *width) / *fall)
                 } else {
-                    v1
+                    *v1
                 }
+            }
+            Self::Pwl {
+                points,
+                repeat_time,
+                delay,
+            } => {
+                let Some(first) = points.first().copied() else {
+                    return 0.0;
+                };
+                let Some(last) = points.last().copied() else {
+                    return 0.0;
+                };
+                if t < *delay {
+                    return first.1;
+                }
+                let mut elapsed = t - *delay;
+                if let Some(repeat_time) = repeat_time {
+                    let period = last.0 - *repeat_time;
+                    if elapsed >= *repeat_time && period > 0.0 {
+                        let after_repeat = elapsed - *repeat_time;
+                        let cycles = libm::floor(after_repeat / period);
+                        elapsed = *repeat_time + (after_repeat - cycles * period);
+                    }
+                }
+                if elapsed <= first.0 {
+                    return first.1;
+                }
+                if elapsed >= last.0 {
+                    return last.1;
+                }
+                let right = points.partition_point(|(time, _)| *time < elapsed);
+                let (left_time, left_value) = points[right - 1];
+                let (right_time, right_value) = points[right];
+                left_value
+                    + (right_value - left_value) * (elapsed - left_time) / (right_time - left_time)
             }
         }
     }
@@ -580,6 +925,193 @@ impl Waveform {
     pub fn is_constant(&self) -> bool {
         matches!(self, Self::Dc(_))
     }
+}
+
+/// The `AC <mag> [<phase>]` part of a `V`/`I` line: the phasor the source
+/// injects in a `.ac` analysis. It does not change the DC or transient value.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AcStimulus {
+    /// Amplitude, volts or amps.
+    pub magnitude: f64,
+    /// Phase, degrees, as SPICE writes it.
+    pub phase_degrees: f64,
+}
+
+/// How a `.ac` sweep spaces its frequencies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AcSweepKind {
+    /// `dec`: `points` per decade.
+    Decade,
+    /// `oct`: `points` per octave.
+    Octave,
+    /// `lin`: `points` in total, evenly spaced.
+    Linear,
+}
+
+/// `.ac dec|oct|lin <points> <fstart> <fstop>`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AcSweep {
+    /// Spacing rule.
+    pub kind: AcSweepKind,
+    /// Points per decade or octave, or the total for `lin`.
+    pub points: usize,
+    /// First frequency, hertz.
+    pub start_hz: f64,
+    /// Last frequency, hertz.
+    pub stop_hz: f64,
+}
+
+impl AcSweep {
+    /// The swept frequencies in hertz, as ngspice spaces them: `dec`/`oct`
+    /// step by `10^(1/points)` / `2^(1/points)` from `start_hz` and stop at
+    /// the last point not above `stop_hz`; `lin` puts `points` points on
+    /// `[start_hz, stop_hz]`, both ends included.
+    pub fn frequencies(&self) -> Vec<f64> {
+        let ratio = match self.kind {
+            AcSweepKind::Decade => 10.0,
+            AcSweepKind::Octave => 2.0,
+            AcSweepKind::Linear => {
+                if self.points == 1 {
+                    return vec![self.start_hz];
+                }
+                let step = (self.stop_hz - self.start_hz) / (self.points - 1) as f64;
+                return (0..self.points)
+                    .map(|k| self.start_hz + step * k as f64)
+                    .collect();
+            }
+        };
+        // The tolerance keeps the end point that rounding puts a hair above
+        // `stop_hz`, e.g. 10 Hz to 1 MHz at 10 per decade.
+        let limit = self.stop_hz * (1.0 + 1e-9);
+        (0..)
+            .map(|k| self.start_hz * libm::pow(ratio, k as f64 / self.points as f64))
+            .take_while(|f| *f <= limit)
+            .collect()
+    }
+}
+
+/// One source of a `.dc` sweep: `<src> <start> <stop> <incr>`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DcSweepSource {
+    /// Name of the swept `V`, `I` or `R` element as written, or `TEMP`.
+    pub source: String,
+    /// First value: volts, amps, ohms or °C.
+    pub start: f64,
+    /// Last value: volts, amps, ohms or °C.
+    pub stop: f64,
+    /// Increment; its sign matches `stop - start`.
+    pub step: f64,
+}
+
+impl DcSweepSource {
+    /// The swept values: `start + k·step` up to and including `stop`, as
+    /// ngspice steps them. The tolerance keeps an end point that rounding
+    /// puts a hair past `stop`, e.g. 0 to 1 V by 0.1 V.
+    pub fn values(&self) -> Vec<f64> {
+        let limit = 1e-9 * self.step.abs();
+        (0..)
+            .map(|k| self.start + self.step * k as f64)
+            .take_while(|value| self.step.signum() * (value - self.stop) <= limit)
+            .collect()
+    }
+}
+
+/// `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]`. The
+/// second source, when given, is the outer loop, as in ngspice.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DcSweep {
+    /// Inner (fast) sweep.
+    pub inner: DcSweepSource,
+    /// Outer (slow) sweep.
+    pub outer: Option<DcSweepSource>,
+}
+
+/// `.noise v(<out>[,<ref>]) <src> dec|oct|lin <points> <fstart> <fstop>
+/// [<pts_per_summary>]`. The nodes and the source are names, resolved when
+/// the analysis runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NoiseSweep {
+    /// Output node.
+    pub output: String,
+    /// Reference node, ground when absent.
+    pub reference: Option<String>,
+    /// Independent `V` or `I` source the input-referred noise is referred to.
+    pub input: String,
+    /// The analysed frequencies.
+    pub sweep: AcSweep,
+}
+
+/// What a `.tf` card measures.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TransferOutput {
+    /// `v(<node>[,<ref>])`: a node voltage, or the difference of two.
+    Voltage {
+        /// Output node.
+        node: String,
+        /// Reference node, ground when absent.
+        reference: Option<String>,
+    },
+    /// `i(<element>)`: the branch current of a `V`, `L`, `E`, `H` or
+    /// behavioural voltage source, flowing from its first terminal to its
+    /// second through the element.
+    Current(String),
+}
+
+/// `.tf v(<out>[,<ref>])|i(<element>) <src>`: ngspice's DC small-signal
+/// transfer function. The names are resolved when the analysis runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransferFunction {
+    /// The measured output.
+    pub output: TransferOutput,
+    /// Independent `V` or `I` source the output is referred to.
+    pub input: String,
+}
+
+/// `.sens v(<out>[,<ref>])|i(<element>) [ac dec|oct|lin <points> <fstart>
+/// <fstop>]`: ngspice's DC or AC sensitivity analysis. The names are resolved
+/// when the analysis runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Sensitivity {
+    /// The measured output.
+    pub output: TransferOutput,
+    /// The frequency sweep of the AC form; `None` for the DC form.
+    pub ac: Option<AcSweep>,
+}
+
+/// The drive of a `.pz` input port.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoleZeroInput {
+    /// `cur`: a current into the port; the transfer function is
+    /// `v(out+, out-) / i(in)`.
+    Current,
+    /// `vol`: a voltage across the port; the transfer function is
+    /// `v(out+, out-) / v(in+, in-)`.
+    Voltage,
+}
+
+/// What a `.pz` card asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoleZeroFind {
+    /// `pol`: the poles only.
+    Poles,
+    /// `zer`: the zeros only.
+    Zeros,
+    /// `pz`: both.
+    Both,
+}
+
+/// `.pz <in+> <in-> <out+> <out-> cur|vol pol|zer|pz`: ngspice's pole-zero
+/// analysis. The node names are resolved when the analysis runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PoleZero {
+    /// The input port, `(in+, in-)`.
+    pub input: (String, String),
+    /// The output port, `(out+, out-)`.
+    pub output: (String, String),
+    /// How the input port is driven.
+    pub drive: PoleZeroInput,
+    /// Poles, zeros or both.
+    pub find: PoleZeroFind,
 }
 
 /// `V<name> n+ n- <source>`.
@@ -595,6 +1127,8 @@ pub struct VoltageSource {
     pub dc: f64,
     /// Time dependence. `Dc` sources are the ones a routed input may drive.
     pub wave: Waveform,
+    /// Small-signal excitation for `.ac`, from `AC <mag> [<phase>]`.
+    pub ac: Option<AcStimulus>,
 }
 
 /// `I<name> n+ n- <source>`. Positive current flows from `p` through the
@@ -611,6 +1145,8 @@ pub struct CurrentSource {
     pub dc: f64,
     /// Time dependence. `Dc` sources are the ones a routed input may drive.
     pub wave: Waveform,
+    /// Small-signal excitation for `.ac`, from `AC <mag> [<phase>]`.
+    pub ac: Option<AcStimulus>,
 }
 
 /// Which way round a three-terminal device's junctions face.
@@ -707,9 +1243,100 @@ pub struct DiodeModel {
     /// Second-order series-resistance temperature coefficient `TRS2`, per
     /// Celsius degree squared. Applies when an instance `TEMP` is present.
     pub trs2: f64,
+    /// Sidewall saturation current `JSW`/`ISW`, amps per unit of perimeter
+    /// `PJ`. Zero (the default) disables the sidewall junction. On a bound
+    /// instance it is already multiplied by `PJ`; see [`Self::with_perimeter`].
+    pub jsw: f64,
+    /// Sidewall emission coefficient `NS`. `None` merges the sidewall current
+    /// into the bottom junction and uses `N`, as ngspice-42 does; the
+    /// temperature law still uses ngspice's default `NS = 1` then.
+    pub ns: Option<f64>,
+    /// Default junction perimeter `PJ` for instances that do not give `pj=`.
+    /// ngspice's default is 0, so `JSW` alone adds no current.
+    pub pj: f64,
+    /// Zero-bias sidewall depletion capacitance `CJSW`/`CJP`, farads per unit
+    /// of perimeter `PJ`. Zero (the default) disables sidewall charge. On a
+    /// bound instance it is already multiplied by `PJ`.
+    pub cjsw: f64,
+    /// Sidewall junction potential `PHP`, volts, default 1 V.
+    pub php: f64,
+    /// Sidewall grading coefficient `MJSW`, default 0.33.
+    pub mjsw: f64,
+    /// Forward-bias sidewall capacitance transition coefficient `FCS`,
+    /// default 0.5.
+    pub fcs: f64,
+    /// Depletion temperature law selector `TLEVC`. 0 (the default) is
+    /// ngspice's silicon-bandgap law; 1 is the linear `CTA`/`CTP`/`TPB`/`TPHP`
+    /// law. Both apply only with an instance `TEMP`.
+    pub tlevc: u8,
+    /// `TLEVC=1` linear temperature coefficient of `CJO` (`CTA`/`CTC`), per
+    /// Celsius degree.
+    pub cta: f64,
+    /// `TLEVC=1` linear temperature coefficient of `CJSW` (`CTP`), per
+    /// Celsius degree.
+    pub ctp: f64,
+    /// `TLEVC=1` linear temperature coefficient of `VJ` (`TPB`/`TVJ`), volts
+    /// per Celsius degree; `VJ` falls by `TPB·ΔT`.
+    pub tpb: f64,
+    /// `TLEVC=1` linear temperature coefficient of `PHP` (`TPHP`), volts per
+    /// Celsius degree; `PHP` falls by `TPHP·ΔT`.
+    pub tphp: f64,
+    /// Bottom tunnel saturation current `JTUN`, amps per unit area. Zero (the
+    /// default) disables trap-assisted tunnelling. On a bound instance it is
+    /// already multiplied by `AREA`.
+    pub jtun: f64,
+    /// Sidewall tunnel saturation current `JTUNSW`, amps per unit of perimeter
+    /// `PJ`. On a bound instance it is already multiplied by `PJ`.
+    pub jtunsw: f64,
+    /// Tunnel emission coefficient `NTUN`, default 30.
+    pub ntun: f64,
+    /// Tunnel saturation-current temperature exponent `XTITUN`, default 3.
+    pub xtitun: f64,
+    /// Fraction `KEG` of `EG` in the tunnel temperature law, default 1.
+    pub keg: f64,
+    /// Flicker noise coefficient `KF` (default 0, no flicker noise). Used
+    /// only by `.noise`.
+    pub kf: f64,
+    /// Flicker noise exponent `AF` (default 1). Used only by `.noise`.
+    pub af: f64,
 }
 
 impl DiodeModel {
+    /// Fold the junction perimeter into the card: `JSW` and `CJSW` become the
+    /// instance's total sidewall saturation current `JSW·PJ` and capacitance
+    /// `CJSW·PJ`, as ngspice's `diosetup.c`/`diotemp.c` do. The instance
+    /// `pj=` wins over the model `PJ`. `AREA` does not touch the sidewall.
+    pub fn with_perimeter(self, instance_pj: Option<f64>) -> Self {
+        let pj = instance_pj.unwrap_or(self.pj);
+        Self {
+            jsw: self.jsw * pj,
+            cjsw: self.cjsw * pj,
+            jtunsw: self.jtunsw * pj,
+            pj,
+            ..self
+        }
+    }
+
+    /// The card one instance with SPICE `AREA` sees: the currents `IS`,
+    /// `ISR`, `IK`, `IKR` and the capacitance `CJO` scale with the junction
+    /// area and `RS` divides by it, as ngspice's `dioload.c` and `diotemp.c`
+    /// do. `IBV` stays as written: ngspice-45 fits the breakdown knee to the
+    /// unscaled `IBV`, so a larger area moves `BV` slightly. Unlike the
+    /// instance multiplier `m`, GMIN is untouched. `area == 1` returns the
+    /// card bit-identical.
+    pub fn with_area(self, area: f64) -> Self {
+        Self {
+            is: self.is * area,
+            isr: self.isr * area,
+            ik: self.ik * area,
+            ikr: self.ikr * area,
+            cjo: self.cjo * area,
+            jtun: self.jtun * area,
+            rs: self.rs / area,
+            ..self
+        }
+    }
+
     /// Series resistance at the instance temperature, in ohms.
     ///
     /// With no instance temperature, retain the engine's historical fixed
@@ -775,6 +1402,25 @@ impl Default for DiodeModel {
             tcv: 0.0,
             trs1: 0.0,
             trs2: 0.0,
+            jsw: 0.0,
+            ns: None,
+            pj: 0.0,
+            cjsw: 0.0,
+            php: 1.0,
+            mjsw: 0.33,
+            fcs: 0.5,
+            tlevc: 0,
+            cta: 0.0,
+            ctp: 0.0,
+            tpb: 0.0,
+            tphp: 0.0,
+            jtun: 0.0,
+            jtunsw: 0.0,
+            ntun: 30.0,
+            xtitun: 3.0,
+            keg: 1.0,
+            kf: 0.0,
+            af: 1.0,
         }
     }
 }
@@ -1170,6 +1816,25 @@ pub const REGULATOR_LIMIT_DIODE: DiodeModel = DiodeModel {
     tcv: 0.0,
     trs1: 0.0,
     trs2: 0.0,
+    jsw: 0.0,
+    ns: None,
+    pj: 0.0,
+    cjsw: 0.0,
+    php: 1.0,
+    mjsw: 0.33,
+    fcs: 0.5,
+    tlevc: 0,
+    cta: 0.0,
+    ctp: 0.0,
+    tpb: 0.0,
+    tphp: 0.0,
+    jtun: 0.0,
+    jtunsw: 0.0,
+    ntun: 30.0,
+    xtitun: 3.0,
+    keg: 1.0,
+    kf: 0.0,
+    af: 1.0,
 };
 
 /// Floor on the input voltage a buck's power-balance sink divides by, volts.
@@ -1212,6 +1877,12 @@ pub struct BjtModel {
     pub polarity: Polarity,
     /// Transport saturation current `IS`, amps.
     pub is: f64,
+    /// Base-emitter and base-collector saturation currents `IBE`/`IBC`,
+    /// amps. As in ngspice-42, they replace `IS` in the two junction
+    /// currents only when both are given; `IS` then sets only the Newton
+    /// limiter's critical voltage. See [`BjtModel::junction_saturation_currents`].
+    pub ibe: Option<f64>,
+    pub ibc: Option<f64>,
     /// Forward current gain `BF`.
     pub bf: f64,
     /// Reverse current gain `BR`.
@@ -1265,6 +1936,10 @@ pub struct BjtModel {
     pub tmje2: f64,
     /// Zero-bias base-collector depletion capacitance `CJC`, farads.
     pub cjc: f64,
+    /// Fraction of base-collector depletion capacitance attached to the
+    /// internal base node. The remainder is attached to the external base.
+    /// The ngspice default is 1; without `RB`, both portions share one node.
+    pub xcjc: f64,
     /// Base-collector junction potential `VJC`, volts.
     pub vjc: f64,
     /// Base-collector junction grading coefficient `MJC`.
@@ -1294,11 +1969,17 @@ pub struct BjtModel {
     /// `VBC`/current-dependent adjustment, matching ngspice's default.
     pub xtf: f64,
     /// Voltage scale `VTF` for the forward transit-time `VBC` dependence,
-    /// volts. Infinity disables that voltage dependence, matching ngspice's default.
+    /// volts: the factor is `exp(VBC/(1.44·VTF))`, as in SPICE2 and ngspice.
+    /// Infinity disables that voltage dependence, matching ngspice's default.
     pub vtf: f64,
     /// High-current scale `ITF` for the forward transit-time adjustment,
     /// amps. Zero disables current suppression, matching ngspice's default.
     pub itf: f64,
+    /// Excess phase `PTF` at `1/(2π·TF)`, degrees. Zero disables Weil's
+    /// second-order delay of the forward transport current, matching
+    /// ngspice's default. The delay `PTF·π/180·TF` uses the card `TF`, before
+    /// `TTF1`/`TTF2`, as ngspice's `bjttemp.c` does.
+    pub ptf: f64,
     /// Ideal reverse transit time `TR`, seconds. Zero disables reverse
     /// diffusion charge, matching ngspice's default.
     pub tr: f64,
@@ -1342,13 +2023,139 @@ pub struct BjtModel {
     /// per °C².
     pub tre1: f64,
     pub tre2: f64,
+    /// Zero-bias substrate junction capacitance `CJS` (`CCS`, `CSUB`), farads.
+    /// Zero, ngspice's default, leaves only the substrate current.
+    pub cjs: f64,
+    /// Substrate junction potential `VJS` (`PS`), volts.
+    pub vjs: f64,
+    /// Substrate junction grading coefficient `MJS` (`MS`). ngspice limits
+    /// the temperature-adjusted value to 0.999.
+    pub mjs: f64,
+    /// First and second order temperature coefficients for `MJS`, per °C and
+    /// per °C².
+    pub tmjs1: f64,
+    pub tmjs2: f64,
+    /// `TLEVC=1` linear temperature coefficients for `CJS` and `VJS`, per °C.
+    pub cts: f64,
+    pub tvjs: f64,
+    /// Substrate junction saturation current `ISS`, amps. Zero, ngspice's
+    /// default, leaves only GMIN across the substrate junction.
+    pub iss: f64,
+    /// Substrate junction emission coefficient `NS`.
+    pub ns: f64,
+    /// First and second order temperature coefficients for `NS`, per °C and
+    /// per °C².
+    pub tns1: f64,
+    pub tns2: f64,
+    /// Temperature law `TLEV` for saturation currents and beta: 0 (the
+    /// `XTB` power law), 1 (`1 + XTB·ΔT`) or 3 (`IS^(1 + TIS1·ΔT + TIS2·ΔT²)`).
+    pub tlev: u8,
+    /// First and second order temperature coefficients, per °C and per °C²,
+    /// for `BF`, `BR`, `IKF`, `IKR`, `NF`, `NR`, `NE`, `NC`, `VAF`, `VAR` and
+    /// `ITF`, as ngspice-42 `bjttemp.c` applies them. `TBF1`/`TBF2` (and
+    /// `TBR1`/`TBR2`) replace the `XTB` beta factor when either is given.
+    pub tbf1: f64,
+    pub tbf2: f64,
+    pub tbr1: f64,
+    pub tbr2: f64,
+    pub tikf1: f64,
+    pub tikf2: f64,
+    pub tikr1: f64,
+    pub tikr2: f64,
+    pub tnf1: f64,
+    pub tnf2: f64,
+    pub tnr1: f64,
+    pub tnr2: f64,
+    pub tne1: f64,
+    pub tne2: f64,
+    pub tnc1: f64,
+    pub tnc2: f64,
+    pub tvaf1: f64,
+    pub tvaf2: f64,
+    pub tvar1: f64,
+    pub tvar2: f64,
+    pub titf1: f64,
+    pub titf2: f64,
+    pub tbf_given: bool,
+    pub tbr_given: bool,
+    /// `TLEV=3` exponent coefficients for `IS`, `ISE`, `ISC` and `ISS`.
+    pub tis1: f64,
+    pub tis2: f64,
+    pub tise1: f64,
+    pub tise2: f64,
+    pub tisc1: f64,
+    pub tisc2: f64,
+    pub tiss1: f64,
+    pub tiss2: f64,
+    /// Substrate geometry `SUBS`: `Some(1)` vertical (the junction sits on
+    /// the collector), `Some(-1)` lateral (on the base). `None` is ngspice's
+    /// default: vertical for NPN, lateral for PNP.
+    pub subs: Option<i8>,
+    /// Epitaxial collector resistance `RCO`, ohms. `Some` enables Kull's
+    /// quasi-saturation model between the collector contact and the intrinsic
+    /// collector, as in ngspice, which also raises a supplied value below
+    /// 0.01 Ω to 0.01 Ω. `None`, the default, leaves the collector ohmic.
+    pub rco: Option<f64>,
+    /// Epitaxial drift saturation voltage `VO`, volts.
+    pub vo: f64,
+    /// Epitaxial doping factor `GAMMA`.
+    pub gamma: f64,
+    /// Epitaxial charge factor `QCO`, coulombs.
+    pub qco: f64,
+    /// `QUASIMOD`: 1 applies the `CN`/`D`/`VG` temperature laws to
+    /// `RCO`/`VO`/`GAMMA` with an instance `TEMP`; 0 leaves them fixed.
+    pub quasimod: u8,
+    /// Energy gap `VG` for the `QUASIMOD=1` `GAMMA` law, eV.
+    pub vg: f64,
+    /// Temperature exponents `CN` of `RCO` and `D` of `VO` for `QUASIMOD=1`.
+    /// `None` takes ngspice's polarity defaults: 2.42 and 0.87 for NPN,
+    /// 2.2 and 0.52 for PNP.
+    pub cn: Option<f64>,
+    pub d: Option<f64>,
+    /// Flicker noise coefficient `KF` (default 0, no flicker noise). Used
+    /// only by `.noise`.
+    pub kf: f64,
+    /// Flicker noise exponent `AF` (default 1). Used only by `.noise`.
+    pub af: f64,
 }
 
 impl BjtModel {
+    /// The card one instance with SPICE `AREA` sees: `IS`, `ISE`, `ISC`,
+    /// `IKF`, `IKR`, `IRB`, `ITF`, `CJE` and `CJC` scale with the emitter
+    /// area and `RB`, `RBM`, `RC`, `RE` divide by it, as ngspice's
+    /// `bjtload.c` does when `AREAB`/`AREAC` default to `AREA`. Unlike the
+    /// instance multiplier `m`, GMIN is untouched. The quasi-saturation
+    /// parameters `RCO`/`VO`/`GAMMA`/`QCO` are not area-scaled, as in
+    /// ngspice. `area == 1` returns the card bit-identical.
+    pub fn with_area(self, area: f64) -> Self {
+        Self {
+            is: self.is * area,
+            ibe: self.ibe.map(|ibe| ibe * area),
+            ibc: self.ibc.map(|ibc| ibc * area),
+            ise: self.ise * area,
+            isc: self.isc * area,
+            ikf: self.ikf * area,
+            ikr: self.ikr * area,
+            irb: self.irb * area,
+            itf: self.itf * area,
+            cje: self.cje * area,
+            cjc: self.cjc * area,
+            cjs: self.cjs * area,
+            iss: self.iss * area,
+            rb: self.rb / area,
+            rbm: self.rbm.map(|rbm| rbm / area),
+            rc: self.rc / area,
+            re: self.re / area,
+            ..self
+        }
+    }
+
     fn defaults(polarity: Polarity) -> Self {
         Self {
             polarity,
             is: 1e-16,
+            ibe: None,
+            ibc: None,
             bf: 100.0,
             br: 1.0,
             nf: 1.0,
@@ -1376,6 +2183,7 @@ impl BjtModel {
             mjc: 0.33,
             tmjc1: 0.0,
             tmjc2: 0.0,
+            xcjc: 1.0,
             tlevc: 0,
             cte: 0.0,
             ctc: 0.0,
@@ -1388,6 +2196,7 @@ impl BjtModel {
             xtf: 0.0,
             vtf: f64::INFINITY,
             itf: 0.0,
+            ptf: 0.0,
             tr: 0.0,
             ttr1: 0.0,
             ttr2: 0.0,
@@ -1406,6 +2215,81 @@ impl BjtModel {
             re: 0.0,
             tre1: 0.0,
             tre2: 0.0,
+            cjs: 0.0,
+            vjs: 0.75,
+            mjs: 0.0,
+            tmjs1: 0.0,
+            tmjs2: 0.0,
+            cts: 0.0,
+            tvjs: 0.0,
+            iss: 0.0,
+            ns: 1.0,
+            tns1: 0.0,
+            tns2: 0.0,
+            tlev: 0,
+            tbf1: 0.0,
+            tbf2: 0.0,
+            tbr1: 0.0,
+            tbr2: 0.0,
+            tikf1: 0.0,
+            tikf2: 0.0,
+            tikr1: 0.0,
+            tikr2: 0.0,
+            tnf1: 0.0,
+            tnf2: 0.0,
+            tnr1: 0.0,
+            tnr2: 0.0,
+            tne1: 0.0,
+            tne2: 0.0,
+            tnc1: 0.0,
+            tnc2: 0.0,
+            tvaf1: 0.0,
+            tvaf2: 0.0,
+            tvar1: 0.0,
+            tvar2: 0.0,
+            titf1: 0.0,
+            titf2: 0.0,
+            tis1: 0.0,
+            tis2: 0.0,
+            tise1: 0.0,
+            tise2: 0.0,
+            tisc1: 0.0,
+            tisc2: 0.0,
+            tiss1: 0.0,
+            tiss2: 0.0,
+            tbf_given: false,
+            tbr_given: false,
+            subs: None,
+            rco: None,
+            vo: 10.0,
+            gamma: 1e-11,
+            qco: 0.0,
+            quasimod: 0,
+            vg: 1.206,
+            cn: None,
+            d: None,
+            kf: 0.0,
+            af: 1.0,
+        }
+    }
+
+    /// Saturation currents `(B-E, B-C)` of the two junction diodes. ngspice-42
+    /// `bjttemp.c` uses `IBE`/`IBC` only when both are given, and `IS` for
+    /// both otherwise. The transport current is their difference, so the
+    /// forward, reverse, base and transit currents all follow them.
+    pub fn junction_saturation_currents(&self) -> (f64, f64) {
+        match (self.ibe, self.ibc) {
+            (Some(ibe), Some(ibc)) => (ibe, ibc),
+            _ => (self.is, self.is),
+        }
+    }
+
+    /// Whether the substrate junction sits on the collector (vertical) rather
+    /// than the base (lateral), per `SUBS` or ngspice's polarity default.
+    pub fn substrate_is_vertical(&self) -> bool {
+        match self.subs {
+            Some(subs) => subs > 0,
+            None => self.polarity == Polarity::N,
         }
     }
 }
@@ -1426,10 +2310,24 @@ pub struct MosModel {
     /// N-channel or P-channel.
     pub polarity: Polarity,
     /// Zero-bias threshold `VTO`, volts — **negative for a normal PMOS**, as
-    /// in ngspice.
+    /// in ngspice. When the card omits `VTO` but supplies `TOX` and `NSUB`,
+    /// the resolved instance uses ngspice's process value instead (see
+    /// [`Self::nsub`]).
     pub vto: f64,
-    /// Transconductance parameter `KP`, A/V².
+    /// Whether the model card explicitly supplied `VTO`.
+    pub vto_given: bool,
+    /// Transconductance parameter `KP`, A/V². When the card omits `KP` but
+    /// supplies `TOX`, the resolved instance uses ngspice's process value
+    /// `UO·1e-4·εox/TOX` instead (see [`Self::kp_given`]).
     pub kp: f64,
+    /// Whether the model card explicitly supplied `KP`.
+    pub kp_given: bool,
+    /// Surface mobility `UO`, cm²/V·s (default 600). Used only to derive `KP`
+    /// from `TOX` when `KP` is absent, as ngspice level 1 does.
+    pub uo: f64,
+    /// Lateral diffusion `LD`, metres. The channel is `L − 2·LD` long for
+    /// drain current, intrinsic oxide charge and `CGBO` (default 0).
+    pub ld: f64,
     /// Channel-length modulation `LAMBDA`, 1/V.
     pub lambda: f64,
     /// Ohmic drain terminal resistance `RD`, ohms. Zero disables the internal
@@ -1450,10 +2348,30 @@ pub struct MosModel {
     pub rsh: f64,
     /// Bulk threshold parameter `GAMMA`, sqrt(V).
     pub gamma: f64,
+    /// Whether the model card explicitly supplied `GAMMA`.
+    pub gamma_given: bool,
     /// Surface potential `PHI`, volts.
     pub phi: f64,
+    /// Whether the model card explicitly supplied `PHI`.
+    pub phi_given: bool,
+    /// Substrate doping `NSUB`, cm⁻³. With `TOX`, ngspice level 1 derives
+    /// every one of `PHI`, `GAMMA` and `VTO` the card omits from it; without
+    /// `TOX` it is ignored, as in ngspice.
+    pub nsub: Option<f64>,
+    /// Fast surface-state density `NSS`, cm⁻². Shifts the process-derived
+    /// flat-band voltage by `−NSS·q/C'ox` (default 0).
+    pub nss: f64,
+    /// Gate material type `TPG`: `+1` opposite to the substrate (default),
+    /// `−1` same as the substrate, `0` aluminium. Used only for the
+    /// process-derived `VTO`.
+    pub tpg: f64,
     /// Bulk junction saturation current `IS`, amps.
     pub is: f64,
+    /// Bulk junction saturation current density `JS`, A/m². When positive
+    /// and the instance supplies both `AD` and `AS`, ngspice level 1 uses
+    /// `JS·AD` and `JS·AS` for the drain and source junctions instead of
+    /// `IS` (default 0).
+    pub js: f64,
     /// Zero-bias bulk-drain junction capacitance `CBD`, farads.
     pub cbd: f64,
     /// Whether `CBD` was explicitly supplied; an explicit zero also overrides
@@ -1496,6 +2414,11 @@ pub struct MosModel {
     /// Parameter measurement temperature `TNOM`, in Celsius. Only used when
     /// an instance supplies `TEMP`.
     pub tnom_celsius: f64,
+    /// Flicker noise coefficient `KF` (default 0, no flicker noise). Used
+    /// only by `.noise`.
+    pub kf: f64,
+    /// Flicker noise exponent `AF` (default 1). Used only by `.noise`.
+    pub af: f64,
 }
 
 /// Resolved parameters of a `.model <name> NJF|PJF(...)` card, SPICE
@@ -1520,6 +2443,9 @@ pub struct JfetModel {
     pub rs: f64,
     /// Gate-junction saturation current `IS`, amps.
     pub is: f64,
+    /// Gate-junction emission coefficient `N`, shared by the gate-source and
+    /// gate-drain diodes. Default 1, as in ngspice.
+    pub n: f64,
     /// Zero-bias gate-source depletion capacitance `CGS`, farads.
     pub cgs: f64,
     /// Zero-bias gate-drain depletion capacitance `CGD`, farads.
@@ -1544,9 +2470,30 @@ pub struct JfetModel {
     pub eg: f64,
     /// Gate-junction saturation-current temperature exponent `XTI`.
     pub xti: f64,
+    /// Flicker noise coefficient `KF` (default 0, no flicker noise). Used
+    /// only by `.noise`.
+    pub kf: f64,
+    /// Flicker noise exponent `AF` (default 1). Used only by `.noise`.
+    pub af: f64,
 }
 
 impl JfetModel {
+    /// The card one instance with SPICE `AREA` sees: `BETA`, `IS`, `CGS` and
+    /// `CGD` scale with the gate area and `RD`, `RS` divide by it, as
+    /// ngspice's `jfetload.c` does. Unlike the instance multiplier `m`, GMIN
+    /// is untouched. `area == 1` returns the card bit-identical.
+    pub fn with_area(self, area: f64) -> Self {
+        Self {
+            beta: self.beta * area,
+            is: self.is * area,
+            cgs: self.cgs * area,
+            cgd: self.cgd * area,
+            rd: self.rd / area,
+            rs: self.rs / area,
+            ..self
+        }
+    }
+
     fn defaults(polarity: Polarity) -> Self {
         Self {
             polarity,
@@ -1557,6 +2504,7 @@ impl JfetModel {
             rd: 0.0,
             rs: 0.0,
             is: 1e-14,
+            n: 1.0,
             cgs: 0.0,
             cgd: 0.0,
             pb: 1.0,
@@ -1568,6 +2516,8 @@ impl JfetModel {
             bex: 0.0,
             eg: 1.11,
             xti: 3.0,
+            kf: 0.0,
+            af: 1.0,
         }
     }
 }
@@ -1577,7 +2527,11 @@ impl MosModel {
         Self {
             polarity,
             vto: 0.0,
+            vto_given: false,
             kp: 2e-5,
+            kp_given: false,
+            uo: 600.0,
+            ld: 0.0,
             lambda: 0.0,
             rd: 0.0,
             rd_given: false,
@@ -1585,8 +2539,14 @@ impl MosModel {
             rs_given: false,
             rsh: 0.0,
             gamma: 0.0,
+            gamma_given: false,
             phi: 0.6,
+            phi_given: false,
+            nsub: None,
+            nss: 0.0,
+            tpg: 1.0,
             is: 1e-14,
+            js: 0.0,
             cbd: 0.0,
             cbd_given: false,
             cbs: 0.0,
@@ -1605,6 +2565,8 @@ impl MosModel {
             tox: None,
             channel_charge_model: MosChannelChargeModel::Meyer,
             tnom_celsius: 27.0,
+            kf: 0.0,
+            af: 1.0,
         }
     }
 }
@@ -1627,6 +2589,8 @@ pub enum ModelCard {
     Comparator(ComparatorModel),
     /// An `LDO`, `LDOADJ` or `BUCK` card (this engine's types).
     Regulator(RegulatorModel),
+    /// An `SW` or `CSW` card.
+    Switch(SwitchModel),
 }
 
 impl ModelCard {
@@ -1641,6 +2605,13 @@ impl ModelCard {
                 RegulatorKind::Buck => "BUCK",
             },
             Self::Diode(_) => "D",
+            Self::Switch(model) => {
+                if model.current {
+                    "CSW"
+                } else {
+                    "SW"
+                }
+            }
             Self::Bjt(model) => match model.polarity {
                 Polarity::N => "NPN",
                 Polarity::P => "PNP",
@@ -1706,6 +2677,25 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             tcv: 0.0,
             trs1: 0.0,
             trs2: 0.0,
+            jsw: 0.0,
+            ns: None,
+            pj: 0.0,
+            cjsw: 0.0,
+            php: 1.0,
+            mjsw: 0.33,
+            fcs: 0.5,
+            tlevc: 0,
+            cta: 0.0,
+            ctp: 0.0,
+            tpb: 0.0,
+            tphp: 0.0,
+            jtun: 0.0,
+            jtunsw: 0.0,
+            ntun: 30.0,
+            xtitun: 3.0,
+            keg: 1.0,
+            kf: 0.0,
+            af: 1.0,
         })),
         // SMAJ5.0A-like 400 W unidirectional TVS. Datasheet: VBR 6.40–7.07 V
         // at IT = 10 mA, VC = 9.2 V at IPP = 43.5 A. BV sits mid-window at
@@ -1738,6 +2728,25 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
             tcv: 0.0,
             trs1: 0.0,
             trs2: 0.0,
+            jsw: 0.0,
+            ns: None,
+            pj: 0.0,
+            cjsw: 0.0,
+            php: 1.0,
+            mjsw: 0.33,
+            fcs: 0.5,
+            tlevc: 0,
+            cta: 0.0,
+            ctp: 0.0,
+            tpb: 0.0,
+            tphp: 0.0,
+            jtun: 0.0,
+            jtunsw: 0.0,
+            ntun: 30.0,
+            xtitun: 3.0,
+            keg: 1.0,
+            kf: 0.0,
+            af: 1.0,
         })),
         "NJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::N))),
         "PJF" => Some(ModelCard::Jfet(JfetModel::defaults(Polarity::P))),
@@ -1909,11 +2918,29 @@ fn builtin_model(name: &str) -> Option<ModelCard> {
     }
 }
 
-/// `D<name> n+ n- <model>` — a Shockley junction diode.
+/// `D<name> n+ n- <model> [<area>] [m=<count>] [temp=<°C>]` — a Shockley junction diode.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diode {
     /// Element name as written, e.g. `D1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
+    /// SPICE instance `AREA` the model is scaled by; `1` when the line
+    /// does not write one, and for a junction this engine adds.
+    pub area: f64,
+    /// SPICE `off`: the operating point starts with this junction at 0 V and
+    /// holds it there until the rest of the circuit has converged, then
+    /// releases it (ngspice's `MODEINITFIX`). It selects one state of a
+    /// circuit with more than one operating point and changes nothing in a
+    /// circuit with one. Ignored after the operating point.
+    pub off: bool,
+    /// SPICE instance `ic=<vd>`: the junction voltage the charge history
+    /// starts from under `.tran ... uic` (ngspice's `DIOinitCond`). Ignored
+    /// without `uic`, as in SPICE.
+    pub ic: Option<f64>,
     /// Anode, the terminal the netlist names first.
     pub anode: NodeRef,
     /// Cathode.
@@ -1923,7 +2950,7 @@ pub struct Diode {
     pub junction_anode: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
-    /// Resolved model parameters.
+    /// Resolved model parameters, already scaled by the instance `AREA`.
     pub model: DiodeModel,
     /// Model parameters with `CJO`, `VJ`, `M`, and `TT` adjusted for this
     /// instance's temperature.
@@ -2065,20 +3092,47 @@ pub struct Ccvs {
     pub ohms: f64,
 }
 
-/// `Q<name> nc nb ne <model> [temp=<°C>]` — an Ebers–Moll bipolar transistor.
+/// `Q<name> nc nb ne [ns] <model> [<area>] [m=<count>] [temp=<°C>]` — an Ebers–Moll bipolar transistor.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bjt {
     /// Element name as written, e.g. `Q1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
+    /// SPICE instance `AREA` the model is scaled by; `1` when the line
+    /// does not write one, and for a junction this engine adds.
+    pub area: f64,
+    /// SPICE `off`: the operating point starts with both junctions at 0 V
+    /// and holds them there until the rest of the circuit has converged
+    /// (ngspice's `MODEINITFIX`). See [`Diode::off`].
+    pub off: bool,
+    /// SPICE instance `ic=<vbe>,<vce>`, terminal volts as written (an NPN
+    /// sign convention for both types, as ngspice's `BJTicVBE`/`BJTicVCE`).
+    /// Under `.tran ... uic` the junction charges start from `vbe` and
+    /// `vbc = vbe - vce`. Ignored without `uic`.
+    pub ic: Option<[f64; 2]>,
     /// Collector.
     pub c: NodeRef,
     /// Base.
     pub b: NodeRef,
     /// Emitter.
     pub e: NodeRef,
-    /// Collector junction node. Equals `c` when `RC = 0`, else the internal
-    /// node `<name>#collector`.
+    /// Substrate: the optional fourth terminal, ground when omitted (as in
+    /// ngspice). Its junction is always the internal diode
+    /// `<name>#substrate` in [`Circuit::diodes`]; with `ISS = CJS = 0` it
+    /// carries only GMIN.
+    pub s: NodeRef,
+    /// Collector junction node: the intrinsic collector. Without `RCO` it
+    /// equals `c` when `RC = 0`, else the internal node `<name>#collector`.
+    /// With `RCO` it is always the internal node `<name>#collector`.
     pub junction_c: NodeRef,
+    /// Collector contact behind `RC`: the outer end of the `RCO` epitaxial
+    /// region. Equals `junction_c` without `RCO`; with `RCO` it equals `c`
+    /// when `RC = 0`, else the internal node `<name>#collcx`.
+    pub junction_cx: NodeRef,
     /// Base junction node. Equals `b` when `RB = 0`, else the internal node
     /// `<name>#base`.
     pub junction_b: NodeRef,
@@ -2087,7 +3141,7 @@ pub struct Bjt {
     pub junction_e: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
-    /// Resolved model parameters.
+    /// Resolved model parameters, already scaled by the instance `AREA`.
     pub model: BjtModel,
     /// Model parameters adjusted for this instance's explicit `TEMP`.
     pub operating_model: BjtModel,
@@ -2098,11 +3152,27 @@ pub struct Bjt {
     pub temperature_celsius: Option<f64>,
 }
 
-/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [temp=<°C>]` — a level-1 MOSFET.
+/// `M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>]` — a level-1 MOSFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mosfet {
     /// Element name as written, e.g. `M1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
+    /// SPICE `off`: the operating point starts with `Vgs`, `Vds` and the
+    /// bulk junctions at 0 V and holds them there until the rest of the
+    /// circuit has converged (ngspice's `MODEINITFIX`). See [`Diode::off`].
+    pub off: bool,
+    /// SPICE instance `ic=<vds>[,<vgs>[,<vbs>]]`, terminal volts as written
+    /// (an NMOS sign convention for both types, as ngspice's `MOS1icVDS`,
+    /// `MOS1icVGS` and `MOS1icVBS`). Under `.tran ... uic` the bulk-junction,
+    /// overlap and Meyer charges start from these voltages; a value left out
+    /// is taken from the terminal nodes at the uic start (`.ic` or 0 V), as
+    /// ngspice's `MOS1getic` does. Ignored without `uic`.
+    pub ic: [Option<f64>; 3],
     /// Drain.
     pub d: NodeRef,
     /// Gate.
@@ -2115,7 +3185,8 @@ pub struct Mosfet {
     /// Intrinsic source before the effective source resistance, or `s` when
     /// it is zero.
     pub junction_s: NodeRef,
-    /// Bulk. Its drain and source pn junctions use the MOS model's `IS`, and
+    /// Bulk. Its drain and source pn junctions use the MOS model's `IS`, or
+    /// `JS` times `AD`/`AS` (see [`Self::junction_saturation_currents`]), and
     /// `GAMMA`/`PHI` use its bias relative to the effective source for body effect.
     pub bulk: NodeRef,
     /// Model name as written, for diagnostics.
@@ -2128,12 +3199,13 @@ pub struct Mosfet {
     /// Explicit instance temperature, in Celsius. `None` preserves the
     /// historical fixed-300 K behaviour.
     pub temperature_celsius: Option<f64>,
-    /// `KP·W/L` at the instance temperature, A/V² — the transconductance the
-    /// solver actually stamps.
+    /// `KP·W/(L − 2·LD)` at the instance temperature, A/V² — the
+    /// transconductance the solver actually stamps.
     pub beta: f64,
     /// Instance channel width `W`, metres.
     pub w: f64,
-    /// Instance channel length `L`, metres.
+    /// Instance drawn channel length `L`, metres. See
+    /// [`Self::effective_length`] for the length the physics uses.
     pub l: f64,
     /// Drain diffusion area `AD`, m², used with model `CJ` when `CBD` is absent.
     pub ad: f64,
@@ -2150,6 +3222,19 @@ pub struct Mosfet {
 }
 
 impl Mosfet {
+    /// Bulk-drain and bulk-source junction saturation currents, amps, at the
+    /// instance temperature. ngspice level 1 (`mos1load.c`) uses `JS·AD` and
+    /// `JS·AS` only when `JS`, `AD` and `AS` are all non-zero; otherwise both
+    /// junctions use `IS`.
+    pub fn junction_saturation_currents(&self) -> (f64, f64) {
+        let model = &self.operating_model;
+        if model.js == 0.0 || self.ad == 0.0 || self.as_ == 0.0 {
+            (model.is, model.is)
+        } else {
+            (model.js * self.ad, model.js * self.as_)
+        }
+    }
+
     /// Thermal voltage of the bulk junctions: `kT/q` at the explicit instance
     /// `TEMP`, or the engine's fixed [`super::device::THERMAL_VOLTAGE`].
     pub fn thermal_voltage(&self) -> f64 {
@@ -2159,12 +3244,18 @@ impl Mosfet {
             })
     }
 
+    /// Effective channel length `L − 2·LD`, metres: the length ngspice's
+    /// level 1 uses for `β`, intrinsic oxide capacitance and `CGBO`.
+    pub fn effective_length(&self) -> f64 {
+        self.l - 2.0 * self.model.ld
+    }
+
     /// Effective linear gate overlap capacitances in G-S, G-D, G-B order.
     pub fn overlap_capacitances(&self) -> [f64; 3] {
         [
             self.model.cgso * self.w,
             self.model.cgdo * self.w,
-            self.model.cgbo * self.l,
+            self.model.cgbo * self.effective_length(),
         ]
     }
 
@@ -2212,11 +3303,28 @@ impl Mosfet {
     }
 }
 
-/// `J<name> nd ng ns <model> [temp=<°C>]` — a SPICE level-1 JFET.
+/// `J<name> nd ng ns <model> [<area>] [m=<count>] [temp=<°C>]` — a SPICE level-1 JFET.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Jfet {
     /// Element name as written, e.g. `J1`.
     pub name: String,
+    /// SPICE instance multiplier `M`: the element behaves as this many
+    /// identical devices in parallel. Every current, conductance and charge it
+    /// stamps, including its terminal resistances and GMIN, is scaled by it,
+    /// as ngspice's `*load.c` does. `1` for a single device.
+    pub multiplier: f64,
+    /// SPICE instance `AREA` the model is scaled by; `1` when the line
+    /// does not write one, and for a junction this engine adds.
+    pub area: f64,
+    /// SPICE `off`: the operating point starts with both gate junctions at
+    /// 0 V and holds them there until the rest of the circuit has converged
+    /// (ngspice's `MODEINITFIX`). See [`Diode::off`].
+    pub off: bool,
+    /// SPICE instance `ic=<vds>,<vgs>`, terminal volts as written (an NJF
+    /// sign convention for both types, as ngspice's `JFETicVDS`/`JFETicVGS`).
+    /// Under `.tran ... uic` the gate charges start from `vgs` and
+    /// `vgd = vgs - vds`. Ignored without `uic`.
+    pub ic: Option<[f64; 2]>,
     /// Drain.
     pub d: NodeRef,
     /// Gate.
@@ -2229,7 +3337,7 @@ pub struct Jfet {
     pub junction_s: NodeRef,
     /// Model name as written, for diagnostics.
     pub model_name: String,
-    /// Resolved model parameters.
+    /// Resolved model parameters, already scaled by the instance `AREA`.
     pub model: JfetModel,
     /// Channel `VTO`/`BETA` and gate-junction `IS`/`PB`/`CGS`/`CGD` adjusted
     /// for this instance's explicit `TEMP`.
@@ -2276,6 +3384,69 @@ pub struct VoltageSwitchControl {
     pub invert: bool,
 }
 
+/// What a SPICE `SW` or `CSW` switch compares to its threshold.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SwitchSense {
+    /// `S`: the signed voltage `V(pos) − V(neg)`.
+    Voltage {
+        /// Positive control node.
+        pos: NodeRef,
+        /// Negative control node.
+        neg: NodeRef,
+    },
+    /// `W`: the signed branch current of the named element.
+    Current {
+        /// Controlling element as written (a `V`, `L`, `E` or `H`).
+        control: String,
+        /// Its branch-current index, bound after the last line.
+        branch: usize,
+    },
+}
+
+/// SPICE's `SW`/`CSW` control: the switch closes when the sensed quantity
+/// rises above `threshold + hysteresis`, opens when it falls below
+/// `threshold − hysteresis`, and keeps its state in between. The quantity is
+/// signed, as in ngspice's `swload.c`, unlike [`VoltageSwitchControl`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct ThresholdSwitchControl {
+    /// The sensed voltage or current.
+    pub sense: SwitchSense,
+    /// `VT` in volts or `IT` in amperes.
+    pub threshold: f64,
+    /// `VH` in volts or `IH` in amperes; never negative.
+    pub hysteresis: f64,
+    /// The instance `on` flag: the state the operating point starts from,
+    /// which is the state it keeps inside the hysteresis band.
+    pub initially_closed: bool,
+}
+
+/// A `.model <name> SW(...)` or `CSW(...)` card, with ngspice's defaults.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SwitchModel {
+    /// True for `CSW` (current controlled), false for `SW`.
+    pub current: bool,
+    /// `VT` or `IT`; default 0.
+    pub threshold: f64,
+    /// `VH` or `IH`; default 0.
+    pub hysteresis: f64,
+    /// `RON` in ohms; default 1.
+    pub ron: f64,
+    /// `ROFF` in ohms; default 1e12 (ngspice's `1/GMIN`).
+    pub roff: f64,
+}
+
+impl SwitchModel {
+    fn defaults(current: bool) -> Self {
+        Self {
+            current,
+            threshold: 0.0,
+            hysteresis: 0.0,
+            ron: 1.0,
+            roff: 1e12,
+        }
+    }
+}
+
 /// `S<name> n1 n2 <ctrl> ron=<r> roff=<r>` — an ideal switch whose control is a
 /// routed boolean input name, not a circuit node.
 ///
@@ -2283,6 +3454,10 @@ pub struct VoltageSwitchControl {
 /// the same switch closed by the absolute voltage between `nc+` and `nc-`.
 /// When `voltage` is `Some`, `ctrl` is empty and the adapter does not expose a
 /// routed input for this element.
+///
+/// Or SPICE's own `S<name> n+ n- nc+ nc- <model> [on|off]` and
+/// `W<name> n+ n- <element> <model> [on|off]`, whose `SW`/`CSW` card gives the
+/// resistances and [`Self::threshold`] the control; `ctrl` is empty there too.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Switch {
     /// Element name as written.
@@ -2300,6 +3475,38 @@ pub struct Switch {
     pub roff: f64,
     /// Voltage-threshold control, when the switch is not digitally routed.
     pub voltage: Option<VoltageSwitchControl>,
+    /// SPICE `SW`/`CSW` control, for an `S` or `W` element that names a model.
+    pub threshold: Option<ThresholdSwitchControl>,
+}
+
+impl Switch {
+    /// True when a routed boolean input, not the circuit, sets the state.
+    pub fn is_routed(&self) -> bool {
+        self.voltage.is_none() && self.threshold.is_none()
+    }
+}
+
+/// `T<name> n1+ n1- n2+ n2- Z0=<ohms> TD=<seconds>` — SPICE's lossless
+/// transmission line, two ports joined by a pure delay.
+///
+/// Each port owns a branch current that enters its `+` node; see
+/// [`Circuit::transmission_line_branch`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransmissionLine {
+    /// Element name as written.
+    pub name: String,
+    /// Port 1 `+` node.
+    pub p1: NodeRef,
+    /// Port 1 `-` node.
+    pub n1: NodeRef,
+    /// Port 2 `+` node.
+    pub p2: NodeRef,
+    /// Port 2 `-` node.
+    pub n2: NodeRef,
+    /// Characteristic impedance `Z0`, ohms.
+    pub z0: f64,
+    /// One-way delay `TD`, seconds; `NL / F` when the line gives a frequency.
+    pub delay: f64,
 }
 
 /// A parsed netlist: elements in file order plus the node table.
@@ -2337,6 +3544,15 @@ pub struct Circuit {
     pub cccs: Vec<Cccs>,
     /// Current-controlled voltage sources (`H`), in netlist order.
     pub ccvs: Vec<Ccvs>,
+    /// Behavioural voltage sources (`B ... V=`, `E ... VALUE=`), in netlist
+    /// order. Each adds a branch current.
+    pub behavioural_voltages: Vec<BehaviouralSource>,
+    /// Behavioural current sources (`B ... I=`, `G ... VALUE=`), in netlist
+    /// order.
+    pub behavioural_currents: Vec<BehaviouralSource>,
+    /// Lossless transmission lines (`T`), in netlist order. Each adds two
+    /// branch currents.
+    pub transmission_lines: Vec<TransmissionLine>,
     /// Power-balance sinks, one per lowered `BUCK`.
     pub power_sinks: Vec<PowerSink>,
     /// Op-amp output stages with an explicit `IOLIM`.
@@ -2345,9 +3561,136 @@ pub struct Circuit {
     pub slew_limited_vccs: Vec<SlewLimitedVccs>,
     /// `.ic V(node)=value` entries, in netlist order.
     pub node_ic: Vec<(usize, f64)>,
+    /// `.nodeset V(node)=value` entries, in netlist order: where the
+    /// operating point's first Newton phase holds each node before it is
+    /// released (see [`crate::analog::Solver::solve_operating_point`]).
+    pub node_nodeset: Vec<(usize, f64)>,
+    /// `.tran ... uic`: start the transient from the initial conditions
+    /// instead of from a solved operating point (see
+    /// [`crate::analog::Solver::solve_operating_point`]).
+    pub uic: bool,
+    /// The deck's `.ac` sweep, if it has one; see
+    /// [`crate::analog::Solver::ac_analysis`].
+    pub ac_sweep: Option<AcSweep>,
+    /// The deck's `.dc` sweep, if it has one; see
+    /// [`crate::analog::Solver::dc_analysis`].
+    pub dc_sweep: Option<DcSweep>,
+    /// The deck's `.noise` analysis, if it has one; see
+    /// [`crate::analog::Solver::noise_analysis`].
+    pub noise_sweep: Option<NoiseSweep>,
+    /// The deck's `.tf` card, if it has one; see
+    /// [`crate::analog::Solver::transfer_analysis`].
+    pub transfer_function: Option<TransferFunction>,
+    /// The deck's `.sens` card, if it has one; see
+    /// [`crate::analog::Solver::sensitivity_analysis`] for the DC form and
+    /// [`crate::analog::Solver::ac_sensitivity_analysis`] for the AC form.
+    pub sensitivity: Option<Sensitivity>,
+    /// The deck's `.pz` card, if it has one; see
+    /// [`crate::analog::Solver::pole_zero_analysis`].
+    pub pole_zero: Option<PoleZero>,
+    /// The deck's `.temp` (or `.options temp=`) in °C, if it gives one.
+    /// `.noise` takes the thermal noise of a resistor without its own
+    /// temperature law, and of a switch, at this temperature.
+    pub temperature_celsius: Option<f64>,
+    /// The deck's lines after `.include` expansion, kept only when a `.dc`
+    /// or `.sens` card is present, so that a `TEMP` sweep can lower the deck
+    /// again at each temperature (see [`Circuit::at_temperature`]) and
+    /// `.sens` can lower it again with one model parameter moved (see
+    /// [`Circuit::with_model_parameter`]).
+    source_deck: Option<std::sync::Arc<Vec<LogicalLine>>>,
+    /// Every numeric parameter a `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `NJF` or
+    /// `PJF` card writes, keyed by the lower-case model name, as
+    /// `(lower-case name as written, value)` in card order. A parameter
+    /// written twice keeps its first place and its last value.
+    model_parameters: BTreeMap<String, Vec<(String, f64)>>,
 }
 
 impl Circuit {
+    /// The same deck lowered again with `celsius` as its `.temp`, as ngspice's
+    /// `CKTtemp` recomputes every device's temperature parameters for a
+    /// `.dc TEMP` point. An instance or resistor with its own `temp=` keeps
+    /// it. Only a parsed deck with a `.dc` card can do this.
+    pub(crate) fn at_temperature(&self, celsius: f64) -> Result<Circuit, AnalogError> {
+        let deck = self.source_deck.as_ref().ok_or_else(|| {
+            AnalogError::Config(
+                "`.dc TEMP` needs a circuit parsed from a netlist with its `.dc` card".to_string(),
+            )
+        })?;
+        parse_lines_at(deck.as_ref().clone(), Some(celsius), None)
+    }
+
+    /// The numeric parameters the `.model` card named `model` writes, as
+    /// `(lower-case name as written, value)`; empty for a built-in model or a
+    /// card this engine does not lower as a device.
+    pub(crate) fn model_parameters(&self, model: &str) -> &[(String, f64)] {
+        self.model_parameters
+            .get(&model.to_ascii_lowercase())
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// The same deck lowered again with `parameter` of the model card of
+    /// device `instance` set to `value` for that one instance alone, as
+    /// ngspice moves one instance's model parameter for `.sens`. Every other
+    /// instance of the card keeps the written value. The temperature is this
+    /// circuit's. Only a parsed deck with a `.sens` or `.dc` card can do this.
+    pub(crate) fn with_model_parameter(
+        &self,
+        instance: &str,
+        model: &str,
+        parameter: &str,
+        value: f64,
+    ) -> Result<Circuit, AnalogError> {
+        let deck = self.source_deck.as_ref().ok_or_else(|| {
+            AnalogError::Config(
+                "model-parameter `.sens` needs a circuit parsed from a netlist with its `.sens` \
+                 card"
+                    .to_string(),
+            )
+        })?;
+        let perturbation = Perturbation {
+            instance: instance.to_ascii_lowercase(),
+            target: PerturbationTarget::Model {
+                model: model.to_ascii_lowercase(),
+                parameter: parameter.to_string(),
+            },
+            value,
+        };
+        parse_lines_at(
+            deck.as_ref().clone(),
+            self.temperature_celsius,
+            Some(&perturbation),
+        )
+    }
+
+    /// The same deck lowered again with instance parameter `parameter` of
+    /// the `D`, `Q`, `J` or `M` line `instance` set to `value`, as ngspice
+    /// moves an instance parameter for `.sens`. The temperature is this
+    /// circuit's. Only a parsed deck with a `.sens` or `.dc` card can do this.
+    pub(crate) fn with_instance_parameter(
+        &self,
+        instance: &str,
+        parameter: InstanceParameter,
+        value: f64,
+    ) -> Result<Circuit, AnalogError> {
+        let deck = self.source_deck.as_ref().ok_or_else(|| {
+            AnalogError::Config(
+                "instance-parameter `.sens` needs a circuit parsed from a netlist with its \
+                 `.sens` card"
+                    .to_string(),
+            )
+        })?;
+        let perturbation = Perturbation {
+            instance: instance.to_ascii_lowercase(),
+            target: PerturbationTarget::Instance(parameter),
+            value,
+        };
+        parse_lines_at(
+            deck.as_ref().clone(),
+            self.temperature_celsius,
+            Some(&perturbation),
+        )
+    }
+
     /// Number of non-ground nodes (the `N` of the MNA system).
     pub fn node_count(&self) -> usize {
         self.node_names.len()
@@ -2370,15 +3713,28 @@ impl Circuit {
     }
 
     /// Number of branch currents (the `M`): one per voltage source, then one
-    /// per inductor, then one per `E`, then one per `H`, in that order.
+    /// per inductor, then one per `E`, then one per `H`, then one per
+    /// behavioural voltage source, then two per `T` line, in that order.
     ///
     /// The dependent sources come last so that adding one to a netlist never
     /// renumbers a voltage source's or inductor's branch.
     pub fn branch_count(&self) -> usize {
-        self.voltage_sources.len() + self.inductors.len() + self.vcvs.len() + self.ccvs.len()
+        self.transmission_line_branch(self.transmission_lines.len())
     }
 
-    /// Branch-current index of the named voltage source, inductor, `E` or `H`.
+    /// Branch-current index of port 1 of `T` line `index`; port 2 is the
+    /// next one. Each is the current entering the port's `+` node.
+    pub fn transmission_line_branch(&self, index: usize) -> usize {
+        self.voltage_sources.len()
+            + self.inductors.len()
+            + self.vcvs.len()
+            + self.ccvs.len()
+            + self.behavioural_voltages.len()
+            + 2 * index
+    }
+
+    /// Branch-current index of the named voltage source, inductor, `E`, `H`
+    /// or behavioural voltage source.
     pub fn branch_index(&self, name: &str) -> Option<usize> {
         let key = name.trim().to_ascii_lowercase();
         self.voltage_sources
@@ -2387,6 +3743,7 @@ impl Circuit {
             .chain(self.inductors.iter().map(|e| &e.name))
             .chain(self.vcvs.iter().map(|e| &e.name))
             .chain(self.ccvs.iter().map(|e| &e.name))
+            .chain(self.behavioural_voltages.iter().map(|e| &e.name))
             .position(|candidate| candidate.to_ascii_lowercase() == key)
     }
 
@@ -2404,7 +3761,15 @@ impl Circuit {
         if index < self.vcvs.len() {
             return &self.vcvs[index].name;
         }
-        &self.ccvs[index - self.vcvs.len()].name
+        index -= self.vcvs.len();
+        if index < self.ccvs.len() {
+            return &self.ccvs[index].name;
+        }
+        index -= self.ccvs.len();
+        if index < self.behavioural_voltages.len() {
+            return &self.behavioural_voltages[index].name;
+        }
+        &self.transmission_lines[(index - self.behavioural_voltages.len()) / 2].name
     }
 
     /// `N + M`: the dimension of the MNA system.
@@ -2443,6 +3808,9 @@ impl Circuit {
             || self.vccs.iter().any(|e| matches(&e.name))
             || self.cccs.iter().any(|e| matches(&e.name))
             || self.ccvs.iter().any(|e| matches(&e.name))
+            || self.behavioural_voltages.iter().any(|e| matches(&e.name))
+            || self.behavioural_currents.iter().any(|e| matches(&e.name))
+            || self.transmission_lines.iter().any(|e| matches(&e.name))
             || self.power_sinks.iter().any(|e| matches(&e.name))
             || self.output_current_limits.iter().any(|e| matches(&e.name))
             || self.slew_limited_vccs.iter().any(|e| matches(&e.name))
@@ -2463,6 +3831,22 @@ impl Circuit {
             || !self.power_sinks.is_empty()
             || !self.output_current_limits.is_empty()
             || !self.slew_limited_vccs.is_empty()
+            || !self.behavioural_voltages.is_empty()
+            || !self.behavioural_currents.is_empty()
+    }
+
+    /// True when the operating point starts with a held phase (ngspice's
+    /// `MODEINITFIX`): an `off` device or a `.nodeset` node.
+    pub fn has_held_phase(&self) -> bool {
+        self.has_off_devices() || !self.node_nodeset.is_empty()
+    }
+
+    /// Whether any semiconductor carries SPICE's `off` flag.
+    pub fn has_off_devices(&self) -> bool {
+        self.diodes.iter().any(|device| device.off)
+            || self.bjts.iter().any(|device| device.off)
+            || self.mosfets.iter().any(|device| device.off)
+            || self.jfets.iter().any(|device| device.off)
     }
 
     /// True when any independent source carries a transient function, so the
@@ -2470,6 +3854,11 @@ impl Circuit {
     pub fn has_waveforms(&self) -> bool {
         self.voltage_sources.iter().any(|s| !s.wave.is_constant())
             || self.current_sources.iter().any(|s| !s.wave.is_constant())
+            || self
+                .behavioural_voltages
+                .iter()
+                .chain(&self.behavioural_currents)
+                .any(|s| s.expression.uses_time())
     }
 }
 
@@ -2552,6 +3941,80 @@ pub fn parse_spice_value(raw: &str) -> Option<f64> {
 }
 
 /// Strip a `*` comment line and any `;` / `$` trailing comment.
+/// `T<name> n1+ n1- n2+ n2- Z0=<ohms> TD=<s>`, or `F=<Hz> [NL=<wavelengths>]`
+/// in place of `TD`, as in ngspice: `TD = NL / F`, and `NL` is 0.25 unless
+/// given. `ZO` is ngspice's second spelling of `Z0`.
+fn parse_transmission_line(
+    ctx: &LineCtx<'_>,
+    name: &str,
+    rest: &[&str],
+    circuit: &mut Circuit,
+) -> Result<TransmissionLine, AnalogError> {
+    const SHAPE: &str = "T<name> n1+ n1- n2+ n2- Z0=<ohms> TD=<seconds>";
+    if rest.len() < 5 || rest[..4].iter().any(|node| node.contains('=')) {
+        return Err(ctx.parse_err(format!("expected `{SHAPE}`")));
+    }
+    let (mut z0, mut delay, mut frequency, mut length) = (None, None, None, None);
+    for token in &rest[4..] {
+        let Some((key, value)) = token.split_once('=') else {
+            return Err(ctx.parse_err(format!("expected `{SHAPE}`, found `{token}`")));
+        };
+        let key = key.to_ascii_lowercase();
+        let slot = match key.as_str() {
+            "z0" | "zo" => &mut z0,
+            "td" => &mut delay,
+            "f" => &mut frequency,
+            "nl" => &mut length,
+            "ic" => {
+                return Err(ctx.parse_err(
+                    "transmission-line `ic=` is not modelled: the line starts from the \
+                     operating point",
+                ))
+            }
+            other => {
+                return Err(ctx.parse_err(format!(
+                    "unknown parameter `{other}`; expected `{SHAPE}` or `F=<Hz> [NL=<n>]`"
+                )))
+            }
+        };
+        if slot.is_some() {
+            return Err(ctx.parse_err(format!("`{key}` is given twice")));
+        }
+        let parsed = ctx.value(value, &key)?;
+        if !parsed.is_finite() || parsed <= 0.0 {
+            return Err(ctx.parse_err(format!("`{key}` must be positive and finite")));
+        }
+        *slot = Some(parsed);
+    }
+    let Some(z0) = z0 else {
+        return Err(ctx.parse_err("a transmission line needs `Z0=<ohms>`"));
+    };
+    let delay = match (delay, frequency) {
+        (Some(_), Some(_)) => {
+            return Err(ctx.parse_err("give the delay once: either `TD=` or `F=`, not both"))
+        }
+        (Some(_), None) if length.is_some() => {
+            return Err(ctx.parse_err("`NL=` needs `F=`; with `TD=` it has no meaning"))
+        }
+        (Some(delay), None) => delay,
+        (None, Some(frequency)) => length.unwrap_or(0.25) / frequency,
+        (None, None) => {
+            return Err(ctx.parse_err(
+                "a transmission line needs its delay: `TD=<seconds>` or `F=<Hz> [NL=<n>]`",
+            ))
+        }
+    };
+    Ok(TransmissionLine {
+        name: name.to_string(),
+        p1: circuit.intern(rest[0]),
+        n1: circuit.intern(rest[1]),
+        p2: circuit.intern(rest[2]),
+        n2: circuit.intern(rest[3]),
+        z0,
+        delay,
+    })
+}
+
 fn strip_comment(line: &str) -> &str {
     let cut = line.find([';', '$']).unwrap_or(line.len());
     line[..cut].trim()
@@ -2604,6 +4067,109 @@ struct PendingDevice {
     pd: Option<f64>,
     ps: Option<f64>,
     temperature_celsius: Option<f64>,
+    multiplier: f64,
+    area: f64,
+    /// Diode junction perimeter `pj=`; `None` uses the model `PJ`.
+    perimeter: Option<f64>,
+    /// SPICE `off`: start the operating point with this device cut off.
+    off: bool,
+    /// SPICE instance `ic=`, comma-separated volts; empty when not given.
+    ic: Vec<f64>,
+}
+
+/// A SPICE `S`/`W` line held until its `SW`/`CSW` card and, for `W`, the
+/// controlling element's branch are known.
+struct PendingSwitch {
+    line: usize,
+    text: String,
+    /// Position of the placeholder in [`Circuit::switches`].
+    index: usize,
+    model_name: String,
+}
+
+/// True when the tokens after an `S` name are SPICE's `n+ n- nc+ nc- <model>
+/// [on|off]`: this engine's two other `S` forms always carry `key=value`.
+fn names_switch_model(rest: &[&str]) -> bool {
+    (5..=6).contains(&rest.len()) && !rest.iter().any(|token| token.contains('='))
+}
+
+/// The optional trailing `on`/`off` of a SPICE switch line whose fixed part
+/// is `fixed` tokens long: `Some(true)` for `on`, `Some(false)` for `off` or
+/// nothing, `None` when the line has any other shape.
+fn switch_flag(rest: &[&str], fixed: usize) -> Option<bool> {
+    match rest.len().checked_sub(fixed)? {
+        0 => Some(false),
+        1 if rest[fixed].eq_ignore_ascii_case("on") => Some(true),
+        1 if rest[fixed].eq_ignore_ascii_case("off") => Some(false),
+        _ => None,
+    }
+}
+
+/// Give every SPICE `S`/`W` switch its card and bind a `W`'s controlling
+/// branch, once every model and every branch-carrying element exists.
+fn bind_switches(
+    circuit: &mut Circuit,
+    models: &BTreeMap<String, ModelCard>,
+    pending: Vec<PendingSwitch>,
+) -> Result<(), AnalogError> {
+    for entry in pending {
+        let ctx = LineCtx {
+            number: entry.line,
+            text: &entry.text,
+        };
+        let name = circuit.switches[entry.index].name.clone();
+        let current = matches!(
+            circuit.switches[entry.index].threshold,
+            Some(ThresholdSwitchControl {
+                sense: SwitchSense::Current { .. },
+                ..
+            })
+        );
+        let (letter, wanted) = if current { ('W', "CSW") } else { ('S', "SW") };
+        let model = match models.get(&entry.model_name.to_ascii_lowercase()) {
+            Some(ModelCard::Switch(model)) if model.current == current => *model,
+            Some(card) => {
+                return Err(ctx.parse_err(format!(
+                "`{name}` is a {letter} element and needs a {wanted} model, but `{}` is a {} model",
+                entry.model_name,
+                card.kind()
+            )))
+            }
+            None => {
+                return Err(ctx.parse_err(format!(
+                    "no `.model {} {wanted}(...)` line for `{name}`",
+                    entry.model_name
+                )))
+            }
+        };
+        let branch = match &circuit.switches[entry.index].threshold {
+            Some(ThresholdSwitchControl {
+                sense: SwitchSense::Current { control, .. },
+                ..
+            }) => Some(circuit.branch_index(control).ok_or_else(|| {
+                ctx.parse_err(format!(
+                    "`{control}` carries no branch current; a W element must name a \
+                     V, L, E or H element"
+                ))
+            })?),
+            _ => None,
+        };
+        let switch = &mut circuit.switches[entry.index];
+        switch.ron = model.ron;
+        switch.roff = model.roff;
+        let control = switch
+            .threshold
+            .as_mut()
+            .expect("placeholder has a control");
+        control.threshold = model.threshold;
+        control.hysteresis = model.hysteresis;
+        if let (SwitchSense::Current { branch: slot, .. }, Some(branch)) =
+            (&mut control.sense, branch)
+        {
+            *slot = branch;
+        }
+    }
+    Ok(())
 }
 
 /// A K line held until all its L elements have been parsed.
@@ -2616,28 +4182,1264 @@ struct PendingMutualInductor {
     coupling: f64,
 }
 
-/// Parse a netlist into a [`Circuit`].
-pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
-    let mut circuit = Circuit::default();
-    let mut ended = false;
-    let mut models: BTreeMap<String, ModelCard> = BTreeMap::new();
-    let mut pending: Vec<PendingDevice> = Vec::new();
-    let mut pending_mutuals: Vec<PendingMutualInductor> = Vec::new();
-    let mut in_control = false;
-    // Line of every `F`/`H`, in the order they were pushed, for the error when
-    // the element they name carries no branch current.
-    let mut controls: Vec<(char, usize, String)> = Vec::new();
+/// One logical netlist line: comments stripped, `+` continuations joined.
+#[derive(Debug, Clone, PartialEq)]
+struct LogicalLine {
+    /// 1-based source line the logical line starts on.
+    number: usize,
+    text: String,
+}
 
+/// Join SPICE `+` continuation lines onto the line they continue.
+///
+/// Comment and blank lines between a line and its continuations are skipped,
+/// as ngspice does, so a vendor model card with commented-out parameters
+/// still reads as one card. A logical line keeps the number of its first
+/// physical line, so errors point at where the card starts.
+fn logical_lines(text: &str) -> Result<Vec<LogicalLine>, AnalogError> {
+    let mut lines: Vec<LogicalLine> = Vec::new();
     for (offset, raw_line) in text.lines().enumerate() {
         let number = offset + 1;
         let trimmed = raw_line.trim();
         if trimmed.is_empty() || trimmed.starts_with('*') {
             continue;
         }
-        let line = strip_comment(trimmed);
-        if line.is_empty() {
+        if let Some(rest) = trimmed.strip_prefix('+') {
+            let Some(previous) = lines.last_mut() else {
+                return Err(AnalogError::Parse {
+                    line: number,
+                    text: trimmed.to_string(),
+                    message: "continuation line `+` has no line to continue".into(),
+                });
+            };
+            let rest = strip_comment(rest);
+            if !rest.is_empty() {
+                previous.text.push(' ');
+                previous.text.push_str(rest);
+            }
             continue;
         }
+        let line = strip_comment(trimmed);
+        if !line.is_empty() {
+            lines.push(LogicalLine {
+                number,
+                text: line.to_string(),
+            });
+        }
+    }
+    Ok(lines)
+}
+
+/// How deep `.include` and `.lib` calls may nest before the deck is refused.
+const MAX_INCLUDE_DEPTH: usize = 16;
+
+/// The file argument of a `.include` or `.lib` line, quotes removed.
+fn unquote(raw: &str) -> &str {
+    for quote in ['"', '\''] {
+        if let Some(inner) = raw.strip_prefix(quote).and_then(|r| r.strip_suffix(quote)) {
+            return inner;
+        }
+    }
+    raw
+}
+
+/// Splices `.include <file>` and `.lib <file> <section>` into the deck.
+struct IncludeExpander<'r> {
+    read: &'r mut dyn FnMut(&Path) -> Result<String, String>,
+    /// Files being expanded, outermost first, for the cycle check.
+    stack: Vec<PathBuf>,
+}
+
+impl IncludeExpander<'_> {
+    /// Expand every call in `lines`, which were read from a file in `dir`.
+    ///
+    /// `top` is the line of the outermost call when `lines` came from an
+    /// included file: every line spliced in carries it, so an error inside a
+    /// library points at the deck line that pulled the library in, and the
+    /// message names the file and its own line.
+    fn expand(
+        &mut self,
+        lines: Vec<LogicalLine>,
+        dir: &Path,
+        top: Option<usize>,
+    ) -> Result<Vec<LogicalLine>, AnalogError> {
+        let mut out = Vec::with_capacity(lines.len());
+        let mut in_control = false;
+        for line in lines {
+            let number = top.unwrap_or(line.number);
+            let directive = directive_of(&line.text);
+            if in_control {
+                in_control = directive.as_deref() != Some("endc");
+                out.push(LogicalLine { number, ..line });
+                continue;
+            }
+            let tokens: Vec<&str> = line.text.split_whitespace().collect();
+            let ctx = LineCtx {
+                number,
+                text: &line.text,
+            };
+            match directive.as_deref() {
+                Some("control") => in_control = true,
+                Some("include") => {
+                    let [_, file] = tokens[..] else {
+                        return Err(ctx.parse_err("expected `.include <file>`"));
+                    };
+                    let (path, text) = self.load(&ctx, dir, file)?;
+                    let spliced = self.file_lines(&ctx, &path, &text, None)?;
+                    out.extend(spliced);
+                    self.stack.pop();
+                    continue;
+                }
+                // `.lib <file> <section>` calls a section. A one-token `.lib`
+                // opens a section definition, which only a library file read
+                // through a call may hold; elsewhere it stays unsupported.
+                Some("lib") if tokens.len() == 3 => {
+                    let (path, text) = self.load(&ctx, dir, tokens[1])?;
+                    let spliced = self.file_lines(&ctx, &path, &text, Some(tokens[2]))?;
+                    out.extend(spliced);
+                    self.stack.pop();
+                    continue;
+                }
+                Some("end") if top.is_some() => {
+                    // ngspice drops a `.end` inside an included file and keeps
+                    // reading the lines after it.
+                    continue;
+                }
+                _ => {}
+            }
+            out.push(LogicalLine { number, ..line });
+        }
+        Ok(out)
+    }
+
+    /// Resolve `file` against `dir`, refuse a cycle, read it and push it on
+    /// the stack. The caller pops it once its lines are spliced.
+    fn load(
+        &mut self,
+        ctx: &LineCtx<'_>,
+        dir: &Path,
+        file: &str,
+    ) -> Result<(PathBuf, String), AnalogError> {
+        let file = unquote(file);
+        let path = dir.join(file);
+        if self.stack.contains(&path) {
+            return Err(ctx.parse_err(format!(
+                "`{}` includes itself through {}",
+                path.display(),
+                self.stack
+                    .iter()
+                    .map(|p| format!("`{}`", p.display()))
+                    .collect::<Vec<_>>()
+                    .join(" -> ")
+            )));
+        }
+        if self.stack.len() >= MAX_INCLUDE_DEPTH {
+            return Err(ctx.parse_err(format!(
+                "`.include`/`.lib` calls nest deeper than {MAX_INCLUDE_DEPTH} files"
+            )));
+        }
+        let text = (self.read)(&path)
+            .map_err(|err| ctx.parse_err(format!("cannot read `{}`: {err}", path.display())))?;
+        self.stack.push(path.clone());
+        Ok((path, text))
+    }
+
+    /// The expanded lines of a file read for the call on `ctx`: all of it for
+    /// `.include`, one section's body for `.lib`.
+    fn file_lines(
+        &mut self,
+        ctx: &LineCtx<'_>,
+        path: &Path,
+        text: &str,
+        section: Option<&str>,
+    ) -> Result<Vec<LogicalLine>, AnalogError> {
+        let in_file = |err: AnalogError| match err {
+            AnalogError::Parse {
+                line,
+                text,
+                message,
+            } => ctx.parse_err(format!("{}:{line}: `{text}`: {message}", path.display())),
+            other => other,
+        };
+        let lines = logical_lines(text).map_err(in_file)?;
+        let lines = match section {
+            None => lines,
+            Some(section) => self.section(ctx, path, lines, section)?,
+        };
+        let dir = path.parent().unwrap_or(Path::new(""));
+        self.expand(lines, dir, Some(ctx.number))
+    }
+
+    /// The body of `.lib <section>` … `.endl` in a library file.
+    fn section(
+        &self,
+        ctx: &LineCtx<'_>,
+        path: &Path,
+        lines: Vec<LogicalLine>,
+        wanted: &str,
+    ) -> Result<Vec<LogicalLine>, AnalogError> {
+        let mut body = None;
+        let mut open: Option<(String, Vec<LogicalLine>)> = None;
+        for line in lines {
+            let tokens: Vec<&str> = line.text.split_whitespace().collect();
+            match directive_of(&line.text).as_deref() {
+                Some("lib") if tokens.len() == 2 => {
+                    if let Some((name, _)) = &open {
+                        return Err(ctx.parse_err(format!(
+                            "{}:{}: section `{}` opens inside section `{name}`",
+                            path.display(),
+                            line.number,
+                            tokens[1]
+                        )));
+                    }
+                    open = Some((tokens[1].to_string(), Vec::new()));
+                }
+                Some("endl") => {
+                    let Some((name, lines)) = open.take() else {
+                        return Err(ctx.parse_err(format!(
+                            "{}:{}: `.endl` closes no section",
+                            path.display(),
+                            line.number
+                        )));
+                    };
+                    if name.eq_ignore_ascii_case(wanted) && body.is_none() {
+                        body = Some(lines);
+                    }
+                }
+                _ => {
+                    if let Some((_, lines)) = &mut open {
+                        lines.push(line);
+                    }
+                }
+            }
+        }
+        if let Some((name, _)) = open {
+            return Err(ctx.parse_err(format!(
+                "{}: section `{name}` has no `.endl`",
+                path.display()
+            )));
+        }
+        body.ok_or_else(|| {
+            ctx.parse_err(format!(
+                "library `{}` has no section `{wanted}`",
+                path.display()
+            ))
+        })
+    }
+}
+
+/// A `.subckt` definition: its ports and its body, `.model` cards excluded.
+struct SubcircuitDef {
+    /// Name as written.
+    name: String,
+    /// Port names as written, in call order.
+    ports: Vec<String>,
+    /// Element lines between `.subckt` and `.ends`.
+    body: Vec<LogicalLine>,
+    /// Lower-cased names of the `.model` cards declared inside the body.
+    local_models: Vec<String>,
+    /// Lower-cased names of the elements declared in the body.
+    local_elements: Vec<String>,
+    /// `params:` defaults on the `.subckt` line, as written.
+    params: Vec<(String, String)>,
+    /// `.param` lines inside the body, as written, with their line.
+    local_params: Vec<(String, String, usize)>,
+}
+
+/// Positional tokens of a `.subckt` or `X` line after `skip` tokens: up to
+/// `params:` or the first `name=value` (including `name = value`).
+fn positional_count(tokens: &[&str], skip: usize) -> usize {
+    let mut count = 0;
+    for (index, token) in tokens.iter().enumerate().skip(skip) {
+        if token.contains('=')
+            || token.eq_ignore_ascii_case("params:")
+            || tokens
+                .get(index + 1)
+                .is_some_and(|next| next.starts_with('='))
+        {
+            break;
+        }
+        count += 1;
+    }
+    count
+}
+
+/// The `name=value` text after the positional tokens, `params:` dropped.
+fn parameter_text(tokens: &[&str], from: usize) -> String {
+    let rest = tokens.get(from..).unwrap_or(&[]);
+    let rest = match rest.first() {
+        Some(first) if first.eq_ignore_ascii_case("params:") => &rest[1..],
+        _ => rest,
+    };
+    rest.join(" ")
+}
+
+/// Lower-cased directive name of a line, if it is a directive.
+fn directive_of(text: &str) -> Option<String> {
+    text.split_whitespace()
+        .next()
+        .and_then(|head| head.strip_prefix('.'))
+        .map(str::to_ascii_lowercase)
+}
+
+/// Positional tokens of an `X` line: the element name excluded, everything
+/// before `params:` or the first `key=value` token.
+fn positional_call_tokens<'a>(tokens: &[&'a str]) -> Vec<&'a str> {
+    tokens[1..1 + positional_count(tokens, 1)].to_vec()
+}
+
+/// Flatten every `.subckt` call into the primitives the engine solves.
+///
+/// The naming follows ngspice's flattener, so a probe or a routed input can
+/// name the same thing in both engines: inside call `X1`, element `R1`
+/// becomes `R.X1.R1` and internal node `mid` becomes `X1.mid`; a nested call
+/// `X2` inside `X1` gives `R.X1.X2.R1` and `X1.X2.mid`. Ports bind to the
+/// caller's nodes, and ground (`0`, `gnd`) stays global. A `.model` card
+/// written inside a body is local to that subcircuit: it is renamed to
+/// `<subckt>.<model>` and references in the body follow it. `F`/`H` control
+/// names and `K` inductor names that name an element of the same body follow
+/// the element's new name.
+///
+/// Parameters follow ngspice's numparam (see [`super::numparam`]). Top-level
+/// `.param` lines form the global scope, resolved in dependency order. A call
+/// evaluates its `name=value` overrides in the caller's scope; the
+/// `.subckt` line's `params:` defaults and the body's `.param` lines are then
+/// evaluated on top of the caller's scope, which is ngspice's dynamic
+/// scoping: a nested subcircuit sees the parameters of the call that placed
+/// it. Every `{expr}` is replaced by its number before the line is parsed,
+/// so the solver never sees a parameter.
+///
+/// What is NOT flattened is refused by name rather than approximated: a
+/// `.model` inside a body that uses that subcircuit's parameters (ngspice
+/// makes one card per instance), nested `.subckt` definitions, and any
+/// directive in a body other than `.model` and `.param`.
+fn expand_subcircuits(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, AnalogError> {
+    let err = |line: &LogicalLine, message: String| AnalogError::Parse {
+        line: line.number,
+        text: line.text.clone(),
+        message,
+    };
+    let unsupported = |line: &LogicalLine| AnalogError::Unsupported {
+        line: line.number,
+        text: line.text.clone(),
+    };
+
+    // Pass 1: lift the definitions and the global `.param` lines out; keep
+    // everything else in order.
+    let mut defs: BTreeMap<String, SubcircuitDef> = BTreeMap::new();
+    let mut top: Vec<LogicalLine> = Vec::new();
+    let mut global_params: Vec<(String, String, usize)> = Vec::new();
+    // Index in `top` of each hoisted local `.model`, with its subcircuit.
+    let mut hoisted: Vec<(usize, String)> = Vec::new();
+    let mut lines = lines.into_iter();
+    let mut in_control = false;
+    while let Some(line) = lines.next() {
+        let directive = directive_of(&line.text);
+        if in_control {
+            in_control = directive.as_deref() != Some("endc");
+            top.push(line);
+            continue;
+        }
+        match directive.as_deref() {
+            Some("control") => {
+                in_control = true;
+                top.push(line);
+            }
+            Some("ends") => {
+                return Err(err(&line, "`.ends` without a `.subckt`".into()));
+            }
+            Some("param") => {
+                let text = line
+                    .text
+                    .split_once(char::is_whitespace)
+                    .map_or("", |p| p.1);
+                let pairs = super::numparam::assignments(text).map_err(|m| err(&line, m))?;
+                if pairs.is_empty() {
+                    return Err(err(&line, "expected `.param <name>=<value> ...`".into()));
+                }
+                global_params.extend(pairs.into_iter().map(|(n, v)| (n, v, line.number)));
+            }
+            Some("subckt") => {
+                let tokens: Vec<&str> = line.text.split_whitespace().collect();
+                if tokens.len() < 2 {
+                    return Err(err(&line, "expected `.subckt <name> <port> ...`".into()));
+                }
+                let port_count = positional_count(&tokens, 2);
+                let params = super::numparam::assignments(&parameter_text(&tokens, 2 + port_count))
+                    .map_err(|m| err(&line, m))?;
+                for (index, (param, _)) in params.iter().enumerate() {
+                    if params[..index].iter().any(|(other, _)| other == param) {
+                        return Err(err(&line, format!("parameter `{param}` is listed twice")));
+                    }
+                }
+                let name = tokens[1].to_string();
+                let key = name.to_ascii_lowercase();
+                if defs.contains_key(&key) {
+                    return Err(err(&line, format!("`.subckt {name}` is declared twice")));
+                }
+                let ports: Vec<String> = tokens[2..2 + port_count]
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect();
+                for (index, port) in ports.iter().enumerate() {
+                    if ports[..index].iter().any(|p| p.eq_ignore_ascii_case(port)) {
+                        return Err(err(&line, format!("port `{port}` is listed twice")));
+                    }
+                    if is_ground(&port.to_ascii_lowercase()) {
+                        return Err(err(&line, format!("port `{port}` is ground")));
+                    }
+                }
+                let mut body = Vec::new();
+                let mut local_models = Vec::new();
+                let mut local_elements = Vec::new();
+                let mut local_params = Vec::new();
+                let mut closed = false;
+                for inner in lines.by_ref() {
+                    match directive_of(&inner.text).as_deref() {
+                        Some("ends") => {
+                            closed = true;
+                            break;
+                        }
+                        Some("model") => {
+                            let mut parts = inner.text.split_whitespace().skip(1);
+                            let Some(model) = parts.next() else {
+                                return Err(err(&inner, "expected `.model <name> <type>`".into()));
+                            };
+                            local_models.push(model.to_ascii_lowercase());
+                            // Hoisted once per definition, under the local
+                            // name, whether or not anything calls it.
+                            let rest: Vec<&str> = parts.collect();
+                            hoisted.push((top.len(), key.clone()));
+                            top.push(LogicalLine {
+                                number: inner.number,
+                                text: format!(".model {name}.{model} {}", rest.join(" ")),
+                            });
+                        }
+                        Some("param") => {
+                            let text = inner
+                                .text
+                                .split_once(char::is_whitespace)
+                                .map_or("", |p| p.1);
+                            let pairs =
+                                super::numparam::assignments(text).map_err(|m| err(&inner, m))?;
+                            if pairs.is_empty() {
+                                return Err(err(
+                                    &inner,
+                                    "expected `.param <name>=<value> ...`".into(),
+                                ));
+                            }
+                            local_params
+                                .extend(pairs.into_iter().map(|(n, v)| (n, v, inner.number)));
+                        }
+                        Some("end") => {
+                            return Err(err(&inner, format!("`.end` inside `.subckt {name}`")));
+                        }
+                        Some(_) => return Err(unsupported(&inner)),
+                        None => {
+                            let head = inner.text.split_whitespace().next().unwrap_or("");
+                            local_elements.push(head.to_ascii_lowercase());
+                            body.push(inner);
+                        }
+                    }
+                }
+                if !closed {
+                    return Err(err(&line, format!("`.subckt {name}` has no `.ends`")));
+                }
+                defs.insert(
+                    key,
+                    SubcircuitDef {
+                        name,
+                        ports,
+                        body,
+                        local_models,
+                        local_elements,
+                        params,
+                        local_params,
+                    },
+                );
+            }
+            _ => top.push(line),
+        }
+    }
+
+    let global = resolve_params(&super::numparam::Scope::new(), Vec::new(), &global_params)?;
+    // A local card is hoisted once, so it can only use global parameters.
+    for (index, subckt) in &hoisted {
+        let line = &top[*index];
+        let def = &defs[subckt];
+        if let Err(super::numparam::EvalError::Unknown(name)) =
+            super::numparam::substitute(&line.text, &global)
+        {
+            if def.params.iter().any(|(param, _)| *param == name)
+                || def.local_params.iter().any(|(param, _, _)| *param == name)
+            {
+                return Err(err(
+                    line,
+                    format!(
+                        "this `.model` in `.subckt {}` uses its parameter `{name}`; \
+                         per-instance model cards are outside the flattener",
+                        def.name
+                    ),
+                ));
+            }
+        }
+    }
+
+    // Every top-level card name, for the `Q` substrate-or-model question.
+    let global_models: Vec<String> = top
+        .iter()
+        .filter(|line| directive_of(&line.text).as_deref() == Some("model"))
+        .filter_map(|line| line.text.split_whitespace().nth(1))
+        .map(str::to_ascii_lowercase)
+        .collect();
+
+    // Pass 2: replace every `{expr}` with its value and every top-level call
+    // with its flattened body.
+    let mut out = Vec::with_capacity(top.len());
+    let mut in_control = false;
+    for line in top {
+        let directive = directive_of(&line.text);
+        if in_control || directive.as_deref() == Some("control") {
+            in_control = directive.as_deref() != Some("endc");
+            out.push(line);
+            continue;
+        }
+        let line = LogicalLine {
+            text: super::numparam::substitute(&line.text, &global)
+                .map_err(|e| err(&line, e.message()))?,
+            number: line.number,
+        };
+        let tokens: Vec<&str> = line.text.split_whitespace().collect();
+        let is_call = tokens[0].len() > 1
+            && tokens[0].starts_with(['X', 'x'])
+            && positional_call_tokens(&tokens)
+                .last()
+                .is_some_and(|name| defs.contains_key(&name.to_ascii_lowercase()));
+        if !is_call {
+            out.push(line);
+            continue;
+        }
+        let actuals: Vec<String> = positional_call_tokens(&tokens)
+            .iter()
+            .map(|t| t.to_string())
+            .collect();
+        let mut stack = Vec::new();
+        expand_call(
+            &defs,
+            &global_models,
+            &global,
+            &line,
+            tokens[0],
+            &actuals,
+            &mut stack,
+            &mut out,
+        )?;
+    }
+    Ok(out)
+}
+
+/// Expand every `.func` call, then drop the `.func` lines.
+///
+/// This is ngspice's front end (`inpcom.c`): a call is replaced by the body
+/// text with its arguments bound, before numparam evaluates anything, so a
+/// body may use any `.param` in scope at the line that makes the call. A
+/// `.func` at the top level is global wherever it is written; one inside a
+/// `.subckt` body is local to that body and shadows a global one of the same
+/// name. Calls are expanded inside `{...}`, and anywhere on a `.param`,
+/// `.subckt` or `X` line, where a value may be written bare.
+fn expand_functions(lines: Vec<LogicalLine>) -> Result<Vec<LogicalLine>, AnalogError> {
+    use super::numparam::{expand_braced_calls, expand_calls, parse_function, Functions};
+    let err = |line: &LogicalLine, message: String| AnalogError::Parse {
+        line: line.number,
+        text: line.text.clone(),
+        message,
+    };
+    if !lines
+        .iter()
+        .any(|line| directive_of(&line.text).as_deref() == Some("func"))
+    {
+        return Ok(lines);
+    }
+
+    // Pass 1: the global table, and one local table per `.subckt` body,
+    // keyed by the index of its `.subckt` line.
+    let mut global = Functions::new();
+    let mut local: BTreeMap<usize, Functions> = BTreeMap::new();
+    let mut owner: Vec<Option<usize>> = Vec::with_capacity(lines.len());
+    let mut current = None;
+    let mut in_control = false;
+    for (index, line) in lines.iter().enumerate() {
+        let directive = directive_of(&line.text);
+        if in_control {
+            in_control = directive.as_deref() != Some("endc");
+            owner.push(None);
+            continue;
+        }
+        match directive.as_deref() {
+            Some("control") => in_control = true,
+            Some("subckt") => current = Some(index),
+            Some("ends") => current = None,
+            Some("func") => {
+                let text = line
+                    .text
+                    .split_once(char::is_whitespace)
+                    .map_or("", |p| p.1);
+                let (name, function) = parse_function(text).map_err(|m| err(line, m))?;
+                let table = match current {
+                    Some(at) => local.entry(at).or_default(),
+                    None => &mut global,
+                };
+                if table.insert(name.clone(), function).is_some() {
+                    return Err(err(line, format!("`.func {name}` is defined twice")));
+                }
+            }
+            _ => {}
+        }
+        owner.push(current);
+    }
+
+    // Pass 2: expand, in the scope of the line.
+    let mut out = Vec::with_capacity(lines.len());
+    let mut in_control = false;
+    for (line, owner) in lines.into_iter().zip(owner) {
+        let directive = directive_of(&line.text);
+        if in_control || directive.as_deref() == Some("control") {
+            in_control = directive.as_deref() != Some("endc");
+            out.push(line);
+            continue;
+        }
+        if directive.as_deref() == Some("func") {
+            continue;
+        }
+        let scoped;
+        let functions = match owner.and_then(|at| local.get(&at)) {
+            Some(table) => {
+                let mut merged = global.clone();
+                merged.extend(table.iter().map(|(k, v)| (k.clone(), v.clone())));
+                scoped = merged;
+                &scoped
+            }
+            None => &global,
+        };
+        let bare = matches!(directive.as_deref(), Some("param" | "subckt"))
+            || (directive.is_none() && line.text.starts_with(['X', 'x']));
+        let text = if bare {
+            expand_calls(&line.text, functions)
+        } else {
+            expand_braced_calls(&line.text, functions)
+        }
+        .map_err(|e| err(&line, e.message()))?;
+        out.push(LogicalLine {
+            number: line.number,
+            text,
+        });
+    }
+    Ok(out)
+}
+
+/// Resolve `fixed` and the written `params` on top of `base`, pointing an
+/// error at the line of the parameter it names.
+fn resolve_params(
+    base: &super::numparam::Scope,
+    fixed: Vec<(String, f64)>,
+    params: &[(String, String, usize)],
+) -> Result<super::numparam::Scope, AnalogError> {
+    use super::numparam::Pending;
+    let mut pending: Vec<(String, Pending)> = fixed
+        .into_iter()
+        .map(|(name, value)| (name, Pending::Fixed(value)))
+        .collect();
+    pending.extend(
+        params
+            .iter()
+            .map(|(name, value, _)| (name.clone(), Pending::Expression(value.clone()))),
+    );
+    super::numparam::resolve(base, pending).map_err(|message| {
+        let line = params
+            .iter()
+            .find(|(name, _, _)| message.contains(&format!("`{name}`")))
+            .or(params.first())
+            .map_or(0, |(_, _, line)| *line);
+        AnalogError::Parse {
+            line,
+            text: String::new(),
+            message,
+        }
+    })
+}
+
+/// The element letter of a name, as written.
+fn first_char(name: &str) -> &str {
+    name.char_indices()
+        .nth(1)
+        .map_or(name, |(at, _)| &name[..at])
+}
+
+/// Emit the flattened body of one call. `path` is the instance path (`X1`,
+/// `X1.X2`); `actuals` are the call's node tokens followed by the subcircuit
+/// name.
+#[allow(clippy::too_many_arguments)]
+fn expand_call(
+    defs: &BTreeMap<String, SubcircuitDef>,
+    global_models: &[String],
+    caller_scope: &super::numparam::Scope,
+    call: &LogicalLine,
+    path: &str,
+    actuals: &[String],
+    stack: &mut Vec<String>,
+    out: &mut Vec<LogicalLine>,
+) -> Result<(), AnalogError> {
+    let err = |message: String| AnalogError::Parse {
+        line: call.number,
+        text: call.text.clone(),
+        message,
+    };
+    let (subckt, nodes) = actuals.split_last().expect("a call names its subcircuit");
+    let key = subckt.to_ascii_lowercase();
+    let def = &defs[&key];
+    if stack.contains(&key) {
+        return Err(err(format!("subcircuit `{}` calls itself", def.name)));
+    }
+
+    // The call's overrides, in the caller's scope; then the defaults it does
+    // not override and the body's `.param` lines, on top of the caller's
+    // scope.
+    let call_tokens: Vec<&str> = call.text.split_whitespace().collect();
+    let overrides = super::numparam::assignments(&parameter_text(
+        &call_tokens,
+        1 + positional_count(&call_tokens, 1),
+    ))
+    .map_err(err)?;
+    let mut fixed = Vec::new();
+    for (name, value) in &overrides {
+        if !def.params.iter().any(|(param, _)| param == name) {
+            return Err(err(format!(
+                "`.subckt {}` has no parameter `{name}`",
+                def.name
+            )));
+        }
+        let value = super::numparam::evaluate_value(value, caller_scope)
+            .map_err(|e| err(format!("`{name}`: {}", e.message())))?;
+        fixed.push((name.clone(), value));
+    }
+    let defaults: Vec<(String, String, usize)> = def
+        .params
+        .iter()
+        .filter(|(name, _)| !fixed.iter().any(|(given, _)| given == name))
+        .map(|(name, value)| (name.clone(), value.clone(), call.number))
+        .collect();
+    let params = resolve_params(caller_scope, fixed, &defaults)?;
+    let scope = resolve_params(&params, Vec::new(), &def.local_params)?;
+    if nodes.len() != def.ports.len() {
+        return Err(err(format!(
+            "`{}` connects {} nodes but `.subckt {}` has {} ports",
+            call.text.split_whitespace().next().unwrap_or(""),
+            nodes.len(),
+            def.name,
+            def.ports.len()
+        )));
+    }
+    stack.push(key);
+
+    let node = |token: &str| -> String {
+        let lower = token.to_ascii_lowercase();
+        if is_ground(&lower) {
+            return token.to_string();
+        }
+        match def.ports.iter().position(|p| p.eq_ignore_ascii_case(token)) {
+            Some(index) => nodes[index].clone(),
+            None => format!("{path}.{token}"),
+        }
+    };
+    let element = |token: &str| -> String {
+        if def.local_elements.contains(&token.to_ascii_lowercase()) {
+            format!("{}.{path}.{token}", first_char(token))
+        } else {
+            token.to_string()
+        }
+    };
+    let model = |token: &str| -> String {
+        if def.local_models.contains(&token.to_ascii_lowercase()) {
+            format!("{}.{token}", def.name)
+        } else {
+            token.to_string()
+        }
+    };
+    let names_model = |token: &str| {
+        let lower = token.to_ascii_lowercase();
+        def.local_models.contains(&lower)
+            || global_models.contains(&lower)
+            || builtin_model(token).is_some()
+    };
+
+    for line in &def.body {
+        let text =
+            super::numparam::substitute(&line.text, &scope).map_err(|e| AnalogError::Parse {
+                line: line.number,
+                text: line.text.clone(),
+                message: e.message(),
+            })?;
+        let tokens: Vec<&str> = text.split_whitespace().collect();
+        let head = tokens[0];
+        let letter = head
+            .chars()
+            .next()
+            .map(|c| c.to_ascii_uppercase())
+            .unwrap_or(' ');
+
+        if matches!(letter, 'E' | 'G') && tokens.len() > 3 {
+            if let Some((input, transfer)) = laplace_form(&tokens[3..]) {
+                // The LTspice form's control nodes become the PSpice form's
+                // `V(nc+, nc-)`, so one probe rename covers both.
+                out.push(LogicalLine {
+                    number: line.number,
+                    text: format!(
+                        "{}.{path}.{head} {} {} LAPLACE {{{}}} = {{{transfer}}}",
+                        first_char(head),
+                        node(tokens[1]),
+                        node(tokens[2]),
+                        rename_probes(&input, &node, &element)
+                    ),
+                });
+                continue;
+            }
+        }
+
+        let behavioural = letter == 'B'
+            || (matches!(letter, 'E' | 'G')
+                && tokens.get(3).is_some_and(|token| {
+                    let key = token.split('=').next().unwrap_or("");
+                    key.eq_ignore_ascii_case("value") || is_table_keyword(token)
+                }));
+        if behavioural && tokens.len() > 3 {
+            out.push(LogicalLine {
+                number: line.number,
+                text: format!(
+                    "{}.{path}.{head} {} {} {}",
+                    first_char(head),
+                    node(tokens[1]),
+                    node(tokens[2]),
+                    rename_probes(&tokens[3..].join(" "), &node, &element)
+                ),
+            });
+            continue;
+        }
+
+        if matches!(letter, 'E' | 'G' | 'F' | 'H')
+            && tokens.get(3).is_some_and(|token| is_poly_keyword(token))
+        {
+            let poly =
+                PolySource::parse(letter, &tokens[3..]).map_err(|message| AnalogError::Parse {
+                    line: line.number,
+                    text: line.text.clone(),
+                    message,
+                })?;
+            out.push(LogicalLine {
+                number: line.number,
+                text: format!(
+                    "{}.{path}.{head} {} {} {}",
+                    first_char(head),
+                    node(tokens[1]),
+                    node(tokens[2]),
+                    poly.rename(&node, &element)
+                ),
+            });
+            continue;
+        }
+
+        if letter == 'X' {
+            let positional = positional_call_tokens(&tokens);
+            if let Some(callee) = positional
+                .last()
+                .filter(|name| defs.contains_key(&name.to_ascii_lowercase()))
+            {
+                let mut inner: Vec<String> = positional[..positional.len() - 1]
+                    .iter()
+                    .map(|t| node(t))
+                    .collect();
+                inner.push(callee.to_string());
+                let inner_call = LogicalLine {
+                    number: line.number,
+                    text: text.clone(),
+                };
+                expand_call(
+                    defs,
+                    global_models,
+                    &scope,
+                    &inner_call,
+                    &format!("{path}.{head}"),
+                    &inner,
+                    stack,
+                    out,
+                )?;
+                continue;
+            }
+        }
+
+        // Which tokens after the name are nodes, element references and the
+        // model, per letter; everything else is copied as written.
+        let mut renamed: Vec<String> = Vec::with_capacity(tokens.len());
+        renamed.push(format!("{}.{path}.{head}", first_char(head)));
+        let rest = &tokens[1..];
+        let voltage_switch = rest.iter().any(|t| {
+            t.split_once('=')
+                .is_some_and(|(key, _)| key.eq_ignore_ascii_case("vt"))
+        });
+        let (node_count, element_refs, model_at): (usize, &[usize], Option<usize>) = match letter {
+            'R' | 'C' | 'L' | 'V' | 'I' => (2, &[], None),
+            'S' if voltage_switch => (4, &[], None),
+            'S' if names_switch_model(rest) => (4, &[], Some(4)),
+            'S' => (2, &[], None),
+            'W' => (2, &[2], Some(3)),
+            'E' | 'G' | 'T' => (4, &[], None),
+            'F' | 'H' => (2, &[2], None),
+            'K' => (0, &[0, 1], None),
+            'D' => (2, &[], Some(2)),
+            'J' => (3, &[], Some(3)),
+            'M' => (4, &[], Some(4)),
+            'Q' => {
+                let count = if tokens.len() > 5 && !names_model(tokens[4]) {
+                    4
+                } else {
+                    3
+                };
+                (count, &[], Some(count))
+            }
+            'X' => {
+                let positional = positional_call_tokens(&tokens).len();
+                let count = positional.saturating_sub(1);
+                (count, &[], positional.checked_sub(1))
+            }
+            _ => (0, &[], None),
+        };
+        for (index, token) in rest.iter().enumerate() {
+            renamed.push(if index < node_count {
+                node(token)
+            } else if element_refs.contains(&index) {
+                element(token)
+            } else if model_at == Some(index) {
+                model(token)
+            } else {
+                token.to_string()
+            });
+        }
+        out.push(LogicalLine {
+            number: line.number,
+            text: renamed.join(" "),
+        });
+    }
+    stack.pop();
+    Ok(())
+}
+
+/// Rename the nodes inside every `V(...)` and the element inside every
+/// `I(...)` of a behavioural expression placed by a subcircuit call.
+fn rename_probes(
+    text: &str,
+    node: &dyn Fn(&str) -> String,
+    element: &dyn Fn(&str) -> String,
+) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    // Text before `index` not yet copied starts here; copying whole slices
+    // keeps any non-ASCII character intact.
+    let mut copied = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index].to_ascii_lowercase();
+        let standalone = index == 0
+            || !(bytes[index - 1].is_ascii_alphanumeric()
+                || bytes[index - 1] == b'_'
+                || bytes[index - 1] == b'.');
+        let after_name = bytes
+            .get(index + 1)
+            .is_none_or(|next| !(next.is_ascii_alphanumeric() || *next == b'_'));
+        if standalone && after_name && (byte == b'v' || byte == b'i') {
+            let mut open = index + 1;
+            while open < bytes.len() && (bytes[open] == b' ' || bytes[open] == b'\t') {
+                open += 1;
+            }
+            if bytes.get(open) == Some(&b'(') {
+                if let Some(close) = text[open..].find(')').map(|at| open + at) {
+                    let rename: &dyn Fn(&str) -> String = if byte == b'v' { node } else { element };
+                    let names: Vec<String> = text[open + 1..close]
+                        .split(',')
+                        .map(|name| rename(name.trim()))
+                        .collect();
+                    out.push_str(&text[copied..=index]);
+                    out.push('(');
+                    out.push_str(&names.join(", "));
+                    out.push(')');
+                    index = close + 1;
+                    copied = index;
+                    continue;
+                }
+            }
+        }
+        index += 1;
+    }
+    out.push_str(&text[copied..]);
+    out
+}
+
+/// The deck's circuit temperatures, in Celsius, read before any element so
+/// that a card written after the devices still applies to them.
+#[derive(Clone, Copy, Default)]
+struct CircuitTemperatures {
+    /// ngspice's `CKTtemp`: `.temp` or `.options temp=`. Defaults to 27 °C
+    /// when only `tnom` is given, which is ngspice's own default.
+    temperature: Option<f64>,
+    /// ngspice's `CKTnomTemp`: `.options tnom=`, the `TNOM` of every model
+    /// card and `tc1`/`tc2` resistor that does not set its own.
+    nominal: Option<f64>,
+}
+
+impl CircuitTemperatures {
+    /// The `TNOM` a model card or `tc1`/`tc2` resistor starts from.
+    fn nominal_celsius(&self) -> f64 {
+        self.nominal.unwrap_or(27.0)
+    }
+}
+
+/// `key=value` pairs of an `.options` card, with SPICE's optional spaces
+/// around `=` (`tnom = 50`) folded away. Flags without a value are skipped.
+fn option_pairs(tokens: &[&str]) -> Vec<(String, String)> {
+    let folded = tokens.join(" ").replace(" =", "=").replace("= ", "=");
+    folded
+        .split_whitespace()
+        .filter_map(|item| item.split_once('='))
+        .filter(|(key, value)| !key.is_empty() && !value.is_empty())
+        .map(|(key, value)| (key.to_ascii_lowercase(), value.to_string()))
+        .collect()
+}
+
+/// The deck's `.temp`, `.options temp=` and `.options tnom=`. ngspice runs the
+/// whole analysis once per `.temp` value; this engine runs once, so more than
+/// one value, or a temperature given twice, is refused rather than silently
+/// keeping one of them.
+fn circuit_temperatures(lines: &[LogicalLine]) -> Result<CircuitTemperatures, AnalogError> {
+    let mut found = CircuitTemperatures::default();
+    let mut in_control = false;
+    for logical in lines {
+        let ctx = LineCtx {
+            number: logical.number,
+            text: &logical.text,
+        };
+        let mut tokens = logical.text.split_whitespace();
+        let Some(head) = tokens.next() else { continue };
+        if in_control {
+            in_control = !head.eq_ignore_ascii_case(".endc");
+            continue;
+        }
+        if head.eq_ignore_ascii_case(".control") {
+            in_control = true;
+            continue;
+        }
+        let values: Vec<&str> = tokens.collect();
+        let above_zero = |celsius: f64, what: &str| {
+            if celsius.is_finite() && celsius > -273.15 {
+                Ok(celsius)
+            } else {
+                Err(ctx.parse_err(format!(
+                    "{what} must be finite and above absolute zero (-273.15 °C)"
+                )))
+            }
+        };
+        if head.eq_ignore_ascii_case(".temp") {
+            if values.is_empty() {
+                return Err(ctx.parse_err("expected `.temp <°C>`"));
+            }
+            if values.len() > 1 || found.temperature.is_some() {
+                return Err(ctx.parse_err(
+                    "only one `.temp` value is supported; ngspice would rerun the analysis per value",
+                ));
+            }
+            let celsius = ctx.value(values[0], "temperature")?;
+            found.temperature = Some(above_zero(celsius, "`.temp`")?);
+        } else if head.eq_ignore_ascii_case(".options") || head.eq_ignore_ascii_case(".option") {
+            for (key, raw) in option_pairs(&values) {
+                let slot = match key.as_str() {
+                    "temp" => &mut found.temperature,
+                    "tnom" => &mut found.nominal,
+                    _ => continue,
+                };
+                if slot.is_some() {
+                    return Err(ctx.parse_err(format!(
+                        "the circuit `{key}` is given twice; only one value is supported"
+                    )));
+                }
+                let celsius = ctx.value(&raw, &key)?;
+                *slot = Some(above_zero(celsius, &format!("`.options {key}`"))?);
+            }
+        }
+    }
+    if found.nominal.is_some() && found.temperature.is_none() {
+        // ngspice's `CKTtemp` default. Without it the instances would keep
+        // the fixed 300 K and nominal parameters, and the `tnom` would say
+        // nothing.
+        found.temperature = Some(27.0);
+    }
+    Ok(found)
+}
+
+/// Parse a netlist into a [`Circuit`].
+///
+/// `.include` and `.lib` are refused here, because there is no file to read
+/// them from; [`parse_netlist_with_files`] reads them.
+pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
+    parse_lines(logical_lines(text)?)
+}
+
+/// Parse a netlist whose `.include <file>` and `.lib <file> <section>` lines
+/// are read through `read`.
+///
+/// A relative path resolves against the directory of the file that names it,
+/// and against `base_dir` for the deck itself, as ngspice does. `.include`
+/// splices the whole file; `.lib` splices the body of its `.lib <section>`
+/// … `.endl` block (the name is not case-sensitive), and a missing section is
+/// an error. Calls nest, a `.end` inside an included file is dropped as
+/// ngspice drops it, and a file that includes itself is refused. Every line
+/// spliced in carries the line number of the deck's own call; an error inside
+/// a library names the file and its line in the message.
+///
+/// `read` gets the resolved path. The co-simulation adapter passes
+/// `std::fs::read_to_string`; a caller with no file system can serve the
+/// files from memory.
+pub fn parse_netlist_with_files(
+    text: &str,
+    base_dir: &Path,
+    read: &mut dyn FnMut(&Path) -> Result<String, String>,
+) -> Result<Circuit, AnalogError> {
+    let mut expander = IncludeExpander {
+        read,
+        stack: Vec::new(),
+    };
+    let lines = expander.expand(logical_lines(text)?, base_dir, None)?;
+    parse_lines(lines)
+}
+
+fn parse_lines(lines: Vec<LogicalLine>) -> Result<Circuit, AnalogError> {
+    parse_lines_at(lines, None, None)
+}
+
+/// An instance parameter of a `D`, `Q`, `J` or `M` line that `.sens` moves;
+/// see [`Circuit::with_instance_parameter`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InstanceParameter {
+    /// `AREA` of a `D`, `Q` or `J`.
+    Area,
+    /// The parallel multiplier `M`.
+    Multiplier,
+    /// Channel width `W` of an `M`.
+    Width,
+    /// Drawn channel length `L` of an `M`.
+    Length,
+    /// Instance `TEMP`, °C.
+    Temperature,
+}
+
+impl InstanceParameter {
+    /// The suffix ngspice's `.sens` prints after `<device>_`.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Area => "area",
+            Self::Multiplier => "m",
+            Self::Width => "w",
+            Self::Length => "l",
+            Self::Temperature => "temp",
+        }
+    }
+}
+
+/// One parameter of one device moved for `.sens`; see
+/// [`Circuit::with_model_parameter`] and
+/// [`Circuit::with_instance_parameter`]. Names are lower case.
+struct Perturbation {
+    instance: String,
+    target: PerturbationTarget,
+    value: f64,
+}
+
+enum PerturbationTarget {
+    /// A parameter of the instance's `.model` card.
+    Model { model: String, parameter: String },
+    /// A parameter written on the instance line.
+    Instance(InstanceParameter),
+}
+
+impl Perturbation {
+    /// The model card and parameter moved, when the move is on a card.
+    fn model(&self) -> Option<(&str, &str)> {
+        match &self.target {
+            PerturbationTarget::Model { model, parameter } => Some((model, parameter)),
+            PerturbationTarget::Instance(_) => None,
+        }
+    }
+
+    /// The private card the perturbed instance binds to. `#` cannot appear
+    /// in a model name a deck writes.
+    fn card_key(model: &str) -> String {
+        format!("{model}#sens")
+    }
+}
+
+/// Parse `lines`, with `temperature` (°C) replacing the deck's own `.temp`
+/// when given, and `perturbation` moving one instance's model parameter.
+fn parse_lines_at(
+    lines: Vec<LogicalLine>,
+    temperature: Option<f64>,
+    perturbation: Option<&Perturbation>,
+) -> Result<Circuit, AnalogError> {
+    let mut circuit = Circuit::default();
+    let keeps_deck = lines.iter().any(|line| {
+        line.text.split_whitespace().next().is_some_and(|head| {
+            head.eq_ignore_ascii_case(".dc") || head.eq_ignore_ascii_case(".sens")
+        })
+    });
+    if keeps_deck {
+        circuit.source_deck = Some(std::sync::Arc::new(lines.clone()));
+    }
+    let mut ended = false;
+    let mut models: BTreeMap<String, ModelCard> = BTreeMap::new();
+    let mut pending: Vec<PendingDevice> = Vec::new();
+    let mut pending_mutuals: Vec<PendingMutualInductor> = Vec::new();
+    let mut pending_switches: Vec<PendingSwitch> = Vec::new();
+    let mut in_control = false;
+    // Line of every `F`/`H`, in the order they were pushed, for the error when
+    // the element they name carries no branch current.
+    let mut controls: Vec<(char, usize, String)> = Vec::new();
+    // Line of every behavioural source, in the order pushed per kind, for the
+    // error when its expression names a node or element that does not exist.
+    let mut behavioural_lines: Vec<(BehaviouralKind, usize, String)> = Vec::new();
+    // Every `.model` name in the deck, wherever it is written. A `Q` line's
+    // fourth token is the substrate node unless it names a model, which is
+    // how ngspice's `inp2q.c` tells `Q c b e s mod` from `Q c b e mod`.
+    let lines = expand_functions(lines)?;
+    let lines = expand_subcircuits(lines)?;
+    let mut temperatures = circuit_temperatures(&lines)?;
+    if temperature.is_some() {
+        temperatures.temperature = temperature;
+    }
+    let circuit_temperature = temperatures.temperature;
+    circuit.temperature_celsius = circuit_temperature;
+    let declared_models: Vec<String> = lines
+        .iter()
+        .filter_map(|line| {
+            let mut tokens = line.text.split_whitespace();
+            let head = tokens.next()?;
+            head.eq_ignore_ascii_case(".model")
+                .then(|| tokens.next())
+                .flatten()
+                .map(str::to_ascii_lowercase)
+        })
+        .collect();
+    let names_model = |token: &str| {
+        declared_models.contains(&token.to_ascii_lowercase()) || builtin_model(token).is_some()
+    };
+
+    for logical in &lines {
+        let number = logical.number;
+        let line = logical.text.as_str();
         let ctx = LineCtx { number, text: line };
         // A `.control` block is ngspice's scripting language, not a circuit.
         // Skipping it wholesale is what lets one deck drive both engines: the
@@ -2659,16 +5461,94 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
         if let Some(directive) = head.strip_prefix('.') {
             match directive.to_ascii_lowercase().as_str() {
                 "end" => ended = true,
-                "ic" => parse_ic(&mut circuit, &ctx, &tokens[1..])?,
-                "model" => parse_model(&mut models, &ctx, &tokens[1..])?,
+                "ic" => {
+                    let values = parse_node_values(&mut circuit, &ctx, &tokens[1..], ".ic")?;
+                    circuit.node_ic.extend(values);
+                }
+                "nodeset" => {
+                    let values = parse_node_values(&mut circuit, &ctx, &tokens[1..], ".nodeset")?;
+                    circuit.node_nodeset.extend(values);
+                }
+                // The run length and step still come from the manifest; only
+                // the `uic` flag changes how the run starts.
+                "tran" => {
+                    circuit.uic |= tokens[1..].iter().any(|t| t.eq_ignore_ascii_case("uic"));
+                }
+                "ac" => {
+                    if circuit.ac_sweep.is_some() {
+                        return Err(ctx.parse_err("only one `.ac` sweep is supported"));
+                    }
+                    circuit.ac_sweep = Some(parse_ac_sweep(&ctx, &tokens[1..])?);
+                }
+                "dc" => {
+                    if circuit.dc_sweep.is_some() {
+                        return Err(ctx.parse_err("only one `.dc` sweep is supported"));
+                    }
+                    circuit.dc_sweep = Some(parse_dc_sweep(&ctx, &tokens[1..])?);
+                }
+                "noise" => {
+                    if circuit.noise_sweep.is_some() {
+                        return Err(ctx.parse_err("only one `.noise` analysis is supported"));
+                    }
+                    circuit.noise_sweep = Some(parse_noise_sweep(&ctx, &tokens[1..])?);
+                }
+                "tf" => {
+                    if circuit.transfer_function.is_some() {
+                        return Err(ctx.parse_err("only one `.tf` card is supported"));
+                    }
+                    circuit.transfer_function = Some(parse_transfer_function(&ctx, &tokens[1..])?);
+                }
+                "sens" => {
+                    if circuit.sensitivity.is_some() {
+                        return Err(ctx.parse_err("only one `.sens` card is supported"));
+                    }
+                    circuit.sensitivity = Some(parse_sensitivity(&ctx, &tokens[1..])?);
+                }
+                "pz" => {
+                    if circuit.pole_zero.is_some() {
+                        return Err(ctx.parse_err("only one `.pz` card is supported"));
+                    }
+                    circuit.pole_zero = Some(parse_pole_zero(&ctx, &tokens[1..])?);
+                }
+                "model" => {
+                    let written = parse_model(
+                        &mut models,
+                        &ctx,
+                        &tokens[1..],
+                        temperatures.nominal_celsius(),
+                        None,
+                    )?;
+                    let key = tokens[1].to_ascii_lowercase();
+                    if let Some((model, parameter, value)) = perturbation
+                        .and_then(|p| p.model().map(|(m, q)| (m, q, p.value)))
+                        .filter(|(model, _, _)| *model == key)
+                    {
+                        let card_key = Perturbation::card_key(model);
+                        let mut variant = tokens[1..].to_vec();
+                        variant[0] = &card_key;
+                        parse_model(
+                            &mut models,
+                            &ctx,
+                            &variant,
+                            temperatures.nominal_celsius(),
+                            Some((parameter, value)),
+                        )?;
+                    }
+                    if !written.is_empty() {
+                        circuit.model_parameters.insert(key, written);
+                    }
+                }
                 "control" => in_control = true,
                 // Analysis and housekeeping cards. This engine's run length,
                 // step and outputs come from the manifest, so these say
                 // nothing it can act on — but rejecting them would mean a deck
                 // cannot be shared with ngspice, which is the whole point of
                 // spelling the subset in SPICE.
-                "options" | "option" | "tran" | "op" | "print" | "plot" | "save" | "probe"
-                | "width" | "temp" | "nodeset" | "title" | "endc" => {}
+                "options" | "option" | "op" | "print" | "plot" | "save" | "probe" | "width"
+                | "title" | "endc" => {}
+                // Read up front by `circuit_temperatures`, like the
+                // `temp`/`tnom` of `.options`.
+                "temp" => {}
                 _ => return Err(ctx.unsupported()),
             }
             continue;
@@ -2687,6 +5567,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 | 'V'
                 | 'I'
                 | 'S'
+                | 'W'
                 | 'D'
                 | 'Q'
                 | 'M'
@@ -2696,6 +5577,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 | 'F'
                 | 'H'
                 | 'X'
+                | 'B'
+                | 'T'
         ) {
             return Err(ctx.unsupported());
         }
@@ -2762,7 +5645,8 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         return Err(ctx.parse_err("an NTC resistor needs `beta > 0` and `r25 > 0`"));
                     }
                     let nominal_temperature_celsius = nominal_temperature_celsius.unwrap_or(25.0);
-                    let temperature_celsius = temperature_celsius.unwrap_or(25.0);
+                    let temperature_celsius =
+                        temperature_celsius.or(circuit_temperature).unwrap_or(25.0);
                     if nominal_temperature_celsius <= -273.15 || temperature_celsius <= -273.15 {
                         return Err(ctx.parse_err("NTC temperatures must be above absolute zero"));
                     }
@@ -2781,8 +5665,10 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let temperature_coefficients = if has_temperature_coefficients {
                     let tc1 = tc1.unwrap_or(0.0);
                     let tc2 = tc2.unwrap_or(0.0);
-                    let nominal_temperature_celsius = nominal_temperature_celsius.unwrap_or(27.0);
-                    let temperature_celsius = temperature_celsius.unwrap_or(27.0);
+                    let nominal_temperature_celsius = nominal_temperature_celsius
+                        .unwrap_or_else(|| temperatures.nominal_celsius());
+                    let temperature_celsius =
+                        temperature_celsius.or(circuit_temperature).unwrap_or(27.0);
                     if !tc1.is_finite() || !tc2.is_finite() {
                         return Err(ctx.parse_err("resistor `tc1` and `tc2` must be finite"));
                     }
@@ -2890,7 +5776,13 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     return Err(ctx.parse_err(format!("expected `{shape}`")));
                 }
                 let (np, nn) = (rest[0], rest[1]);
-                let wave = parse_source(&ctx, &rest[2..], shape)?;
+                let (value, ac) = split_ac_stimulus(&ctx, &rest[2..])?;
+                let wave = if value.is_empty() {
+                    // `V1 in 0 AC 1`: SPICE's DC value defaults to zero.
+                    Waveform::Dc(0.0)
+                } else {
+                    parse_source(&ctx, &value, shape)?
+                };
                 let dc = wave.at(0.0);
                 let p = circuit.intern(np);
                 let n = circuit.intern(nn);
@@ -2901,6 +5793,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         n,
                         dc,
                         wave,
+                        ac,
                     });
                 } else {
                     circuit.current_sources.push(CurrentSource {
@@ -2909,18 +5802,22 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         n,
                         dc,
                         wave,
+                        ac,
                     });
                 }
             }
             'D' | 'Q' | 'M' | 'J' => {
                 let (terminals, shape) = match letter {
-                    'D' => (2, "D<name> n+ n- <model>"),
-                    'Q' => (3, "Q<name> nc nb ne <model>"),
+                    'D' => (2, "D<name> n+ n- <model> [<area>] [area=<factor>] [pj=<perimeter>] [m=<count>] [temp=<°C>] [off] [ic=<vd>]"),
+                    'Q' => (
+                        if tokens.len() > 5 && !names_model(tokens[4]) { 4 } else { 3 },
+                        "Q<name> nc nb ne [ns] <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>] [off] [ic=<vbe>,<vce>]",
+                    ),
                     'M' => (
                         4,
-                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [temp=<°C>]",
+                        "M<name> nd ng ns nb <model> [w=<m>] [l=<m>] [ad=<m²>] [as=<m²>] [pd=<m>] [ps=<m>] [nrd=<squares>] [nrs=<squares>] [m=<count>] [temp=<°C>] [off]",
                     ),
-                    _ => (3, "J<name> nd ng ns <model>"),
+                    _ => (3, "J<name> nd ng ns <model> [<area>] [area=<factor>] [m=<count>] [temp=<°C>] [off] [ic=<vds>,<vgs>]"),
                 };
                 let rest = &tokens[1..];
                 if rest.len() < terminals + 1 {
@@ -2935,7 +5832,33 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                 let mut pd = None;
                 let mut ps = None;
                 let mut temperature_celsius = None;
+                let mut multiplier = None;
+                let mut area = None;
+                let mut perimeter = None;
+                let mut ic = Vec::new();
+                // SPICE's bare `off` flag may stand anywhere among the
+                // options; it is the only option without a value.
+                let mut off = false;
+                let mut options = Vec::with_capacity(rest.len() - terminals - 1);
                 for token in &rest[terminals + 1..] {
+                    if token.eq_ignore_ascii_case("off") {
+                        off = true;
+                    } else {
+                        options.push(*token);
+                    }
+                }
+                let mut options = options.as_slice();
+                // SPICE writes a D, Q or J area as a bare number straight
+                // after the model name; `area=` is the keyword spelling.
+                if letter != 'M' {
+                    if let Some((first, tail)) = options.split_first() {
+                        if !first.contains('=') {
+                            area = Some(ctx.value(first, "area")?);
+                            options = tail;
+                        }
+                    }
+                }
+                for token in options {
                     let (key, value) = token
                         .split_once('=')
                         .ok_or_else(|| ctx.parse_err(format!("expected `{shape}`")))?;
@@ -2949,6 +5872,35 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "pd" if letter == 'M' => pd = Some(ctx.value(value, "pd")?),
                         "ps" if letter == 'M' => ps = Some(ctx.value(value, "ps")?),
                         "temp" => temperature_celsius = Some(ctx.value(value, "temp")?),
+                        "m" => multiplier = Some(ctx.value(value, "m")?),
+                        "area" if letter != 'M' && area.is_none() => {
+                            area = Some(ctx.value(value, "area")?)
+                        }
+                        "pj" if letter == 'D' => perimeter = Some(ctx.value(value, "pj")?),
+                        "ic" => {
+                            ic = value
+                                .split(',')
+                                .map(|raw| ctx.value(raw, "ic"))
+                                .collect::<Result<Vec<_>, _>>()?;
+                            // ngspice's MOS1 takes one to three values,
+                            // filled from vds; the others take two or one.
+                            let accepted = match letter {
+                                'D' => 1..=1,
+                                'M' => 1..=3,
+                                _ => 2..=2,
+                            };
+                            if !accepted.contains(&ic.len()) {
+                                return Err(ctx.parse_err(match letter {
+                                    'D' => "diode ic= takes one junction voltage: `ic=<vd>`",
+                                    'Q' => "BJT ic= takes two voltages: `ic=<vbe>,<vce>`",
+                                    'M' => {
+                                        "MOSFET ic= takes one to three voltages: \
+                                         `ic=<vds>[,<vgs>[,<vbs>]]`"
+                                    }
+                                    _ => "JFET ic= takes two voltages: `ic=<vds>,<vgs>`",
+                                }));
+                            }
+                        }
                         other => {
                             return Err(ctx.parse_err(format!(
                                 "unknown parameter `{other}`; expected `{shape}`"
@@ -2977,6 +5929,15 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         "device TEMP must be finite and above absolute zero (-273.15 °C)",
                     ));
                 }
+                if matches!(multiplier, Some(m) if !m.is_finite() || m <= 0.0) {
+                    return Err(ctx.parse_err("device multiplier m must be positive and finite"));
+                }
+                if matches!(area, Some(a) if !a.is_finite() || a <= 0.0) {
+                    return Err(ctx.parse_err("device area must be positive and finite"));
+                }
+                if matches!(perimeter, Some(p) if !p.is_finite() || p < 0.0) {
+                    return Err(ctx.parse_err("diode perimeter pj must be >= 0 and finite"));
+                }
                 // The terminals are interned now so that node numbering still
                 // follows netlist order; the model is bound after the last
                 // line, because `.model` may come after its elements.
@@ -2999,8 +5960,138 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     as_,
                     pd,
                     ps,
-                    temperature_celsius,
+                    // An instance `temp=` wins over the deck's `.temp`, as
+                    // in ngspice.
+                    temperature_celsius: temperature_celsius.or(circuit_temperature),
+                    multiplier: multiplier.unwrap_or(1.0),
+                    area: area.unwrap_or(1.0),
+                    perimeter,
+                    off,
+                    ic,
                 });
+            }
+            'B' => {
+                let rest = &tokens[1..];
+                if rest.len() < 3 {
+                    return Err(ctx.parse_err("expected `B<name> n+ n- V=<expr>` or `I=<expr>`"));
+                }
+                let text = rest[2..].join(" ");
+                let (kind, body) = match text.split_once('=') {
+                    Some((key, body)) if key.trim().eq_ignore_ascii_case("v") => {
+                        (BehaviouralKind::Voltage, body)
+                    }
+                    Some((key, body)) if key.trim().eq_ignore_ascii_case("i") => {
+                        (BehaviouralKind::Current, body)
+                    }
+                    _ => {
+                        return Err(
+                            ctx.parse_err("expected `V=<expr>` or `I=<expr>` after the two nodes")
+                        )
+                    }
+                };
+                push_behavioural(
+                    &mut circuit,
+                    &mut behavioural_lines,
+                    &ctx,
+                    head,
+                    [rest[0], rest[1]],
+                    kind,
+                    body,
+                )?;
+            }
+            'E' | 'G' | 'F' | 'H' if tokens.len() > 3 && is_poly_keyword(tokens[3]) => {
+                let poly = PolySource::parse(letter, &tokens[3..])
+                    .map_err(|message| ctx.parse_err(message))?;
+                let atoms: Vec<String> = poly
+                    .controls
+                    .iter()
+                    .map(|control| match control {
+                        PolyControl::Voltage(p, n) => format!("V({p}, {n})"),
+                        PolyControl::Current(element) => format!("I({element})"),
+                    })
+                    .collect();
+                let mut coefficients = Vec::with_capacity(poly.coefficients.len());
+                for raw in &poly.coefficients {
+                    coefficients.push(ctx.value(raw, "POLY coefficient")?);
+                }
+                let kind = if matches!(letter, 'E' | 'H') {
+                    BehaviouralKind::Voltage
+                } else {
+                    BehaviouralKind::Current
+                };
+                push_behavioural(
+                    &mut circuit,
+                    &mut behavioural_lines,
+                    &ctx,
+                    head,
+                    [tokens[1], tokens[2]],
+                    kind,
+                    &poly_expression(&atoms, &coefficients),
+                )?;
+            }
+            'E' | 'G' if laplace_form(&tokens[3..]).is_some() => {
+                let (input, transfer) =
+                    laplace_form(&tokens[3..]).expect("guard matched a LAPLACE form");
+                let (input, transfer) = parse_laplace(&ctx, &input, &transfer)?;
+                let kind = if letter == 'E' {
+                    BehaviouralKind::Voltage
+                } else {
+                    BehaviouralKind::Current
+                };
+                push_laplace(
+                    &mut circuit,
+                    &mut behavioural_lines,
+                    &ctx,
+                    head,
+                    [tokens[1], tokens[2]],
+                    kind,
+                    &input,
+                    &transfer,
+                )?;
+            }
+            'E' | 'G' if tokens.len() > 3 && is_table_keyword(tokens[3]) => {
+                let (input, points) = parse_table(&ctx, &tokens[3..].join(" "))?;
+                let expression =
+                    Expression::table(&input, points).map_err(|message| ctx.parse_err(message))?;
+                let kind = if letter == 'E' {
+                    BehaviouralKind::Voltage
+                } else {
+                    BehaviouralKind::Current
+                };
+                push_expression(
+                    &mut circuit,
+                    &mut behavioural_lines,
+                    &ctx,
+                    head,
+                    [tokens[1], tokens[2]],
+                    kind,
+                    expression,
+                );
+            }
+            'E' | 'G'
+                if tokens.len() > 3 && {
+                    let key = tokens[3].split('=').next().unwrap_or("");
+                    key.eq_ignore_ascii_case("value")
+                } =>
+            {
+                let text = tokens[3..].join(" ");
+                let body = text.split_once('=').map(|(_, body)| body).ok_or_else(|| {
+                    ctx.parse_err(format!("expected `{letter}<name> n+ n- VALUE={{<expr>}}`"))
+                })?;
+                let kind = if letter == 'E' {
+                    BehaviouralKind::Voltage
+                } else {
+                    BehaviouralKind::Current
+                };
+                push_behavioural(
+                    &mut circuit,
+                    &mut behavioural_lines,
+                    &ctx,
+                    head,
+                    [tokens[1], tokens[2]],
+                    kind,
+                    body,
+                )?;
             }
             'E' | 'G' => {
                 let shape = if letter == 'E' {
@@ -3009,6 +6100,16 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     "G<name> n+ n- nc+ nc- <gm>"
                 };
                 let rest = &tokens[1..];
+                if rest.iter().any(|token| {
+                    token
+                        .get(..7)
+                        .is_some_and(|head| head.eq_ignore_ascii_case("laplace"))
+                }) {
+                    return Err(ctx.parse_err(format!(
+                        "expected `{letter}<name> n+ n- LAPLACE {{<expr>}} = {{<H(s)>}}` or \
+                         `{letter}<name> n+ n- nc+ nc- LAPLACE=<H(s)>`"
+                    )));
+                }
                 refuse_behavioural_source(&ctx, rest)?;
                 if rest.len() != 5 {
                     return Err(ctx.parse_err(format!("expected `{shape}`")));
@@ -3106,6 +6207,80 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                     pd: None,
                     ps: None,
                     temperature_celsius: None,
+                    multiplier: 1.0,
+                    area: 1.0,
+                    perimeter: None,
+                    off: false,
+                    ic: Vec::new(),
+                });
+            }
+            'T' => {
+                let line = parse_transmission_line(&ctx, head, &tokens[1..], &mut circuit)?;
+                circuit.transmission_lines.push(line);
+            }
+            'W' => {
+                let rest = &tokens[1..];
+                let Some(initially_closed) = switch_flag(rest, 4) else {
+                    return Err(
+                        ctx.parse_err("expected `W<name> n+ n- <element> <model> [on|off]`")
+                    );
+                };
+                let a = circuit.intern(rest[0]);
+                let b = circuit.intern(rest[1]);
+                pending_switches.push(PendingSwitch {
+                    line: ctx.number,
+                    text: line.to_string(),
+                    index: circuit.switches.len(),
+                    model_name: rest[3].to_string(),
+                });
+                circuit.switches.push(Switch {
+                    name: head.to_string(),
+                    a,
+                    b,
+                    ctrl: String::new(),
+                    ron: 1.0,
+                    roff: 1.0,
+                    voltage: None,
+                    threshold: Some(ThresholdSwitchControl {
+                        sense: SwitchSense::Current {
+                            control: rest[2].to_string(),
+                            branch: usize::MAX,
+                        },
+                        threshold: 0.0,
+                        hysteresis: 0.0,
+                        initially_closed,
+                    }),
+                });
+            }
+            'S' if names_switch_model(&tokens[1..]) => {
+                let rest = &tokens[1..];
+                let Some(initially_closed) = switch_flag(rest, 5) else {
+                    return Err(ctx.parse_err("expected `S<name> n+ n- nc+ nc- <model> [on|off]`"));
+                };
+                let a = circuit.intern(rest[0]);
+                let b = circuit.intern(rest[1]);
+                let pos = circuit.intern(rest[2]);
+                let neg = circuit.intern(rest[3]);
+                pending_switches.push(PendingSwitch {
+                    line: ctx.number,
+                    text: line.to_string(),
+                    index: circuit.switches.len(),
+                    model_name: rest[4].to_string(),
+                });
+                circuit.switches.push(Switch {
+                    name: head.to_string(),
+                    a,
+                    b,
+                    ctrl: String::new(),
+                    ron: 1.0,
+                    roff: 1.0,
+                    voltage: None,
+                    threshold: Some(ThresholdSwitchControl {
+                        sense: SwitchSense::Voltage { pos, neg },
+                        threshold: 0.0,
+                        hysteresis: 0.0,
+                        initially_closed,
+                    }),
                 });
             }
             'S' => {
@@ -3180,6 +6355,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                             vh,
                             invert,
                         }),
+                        threshold: None,
                     });
                 } else {
                     if rest.len() != 5 {
@@ -3217,6 +6393,7 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
                         ron,
                         roff,
                         voltage: None,
+                        threshold: None,
                     });
                 }
             }
@@ -3225,9 +6402,441 @@ pub fn parse_netlist(text: &str) -> Result<Circuit, AnalogError> {
     }
 
     bind_mutual_inductors(&mut circuit, pending_mutuals)?;
-    bind_models(&mut circuit, &models, pending)?;
+    bind_models(&mut circuit, &models, pending, perturbation)?;
+    bind_switches(&mut circuit, &models, pending_switches)?;
     bind_controls(&mut circuit, &controls)?;
+    bind_behavioural(&mut circuit, &behavioural_lines)?;
     Ok(circuit)
+}
+
+/// Parse one behavioural expression and add its source to the circuit.
+fn push_behavioural(
+    circuit: &mut Circuit,
+    lines: &mut Vec<(BehaviouralKind, usize, String)>,
+    ctx: &LineCtx<'_>,
+    name: &str,
+    terminals: [&str; 2],
+    kind: BehaviouralKind,
+    body: &str,
+) -> Result<(), AnalogError> {
+    // A brace group inside the expression (`I={k}*V(a)` after numparam) is a
+    // parenthesised term, as ngspice reads it.
+    let body = body.trim().replace('{', "(").replace('}', ")");
+    let expression = Expression::parse(&body).map_err(|message| ctx.parse_err(message))?;
+    push_expression(circuit, lines, ctx, name, terminals, kind, expression);
+    Ok(())
+}
+
+/// Add a behavioural source with an already parsed expression.
+fn push_expression(
+    circuit: &mut Circuit,
+    lines: &mut Vec<(BehaviouralKind, usize, String)>,
+    ctx: &LineCtx<'_>,
+    name: &str,
+    terminals: [&str; 2],
+    kind: BehaviouralKind,
+    expression: Expression,
+) {
+    let source = BehaviouralSource {
+        name: name.to_string(),
+        p: circuit.intern(terminals[0]),
+        n: circuit.intern(terminals[1]),
+        kind,
+        expression,
+        controls: Vec::new(),
+    };
+    match kind {
+        BehaviouralKind::Voltage => circuit.behavioural_voltages.push(source),
+        BehaviouralKind::Current => circuit.behavioural_currents.push(source),
+    }
+    lines.push((kind, ctx.number, ctx.text.to_string()));
+}
+
+/// The input and transfer text of an `E`/`G` `LAPLACE` source, from the
+/// tokens after its two output nodes: PSpice's `LAPLACE {<expr>} = {<H(s)>}`
+/// or LTspice's `nc+ nc- LAPLACE=<H(s)>`, whose input is `V(nc+, nc-)`.
+/// `None` when the tokens are some other form.
+fn laplace_form(tokens: &[&str]) -> Option<(String, String)> {
+    let starts_laplace = |token: &str| {
+        token
+            .get(..7)
+            .is_some_and(|head| head.eq_ignore_ascii_case("laplace"))
+    };
+    let first = tokens.first()?;
+    if starts_laplace(first) && !first[7..].trim_start().starts_with('=') {
+        // `LAPLACE {in} = {H}`: two brace groups, the `=` optional.
+        let text = tokens.join(" ");
+        let after = text[7..].trim_start();
+        let close = after.strip_prefix('{')?.find('}')? + 1;
+        let input = after[1..close].to_string();
+        let rest = after[close + 1..].trim_start();
+        let rest = rest.strip_prefix('=').unwrap_or(rest).trim();
+        return Some((input, rest.to_string()));
+    }
+    let third = tokens.get(2)?;
+    if starts_laplace(third) {
+        let text = tokens[2..].join(" ");
+        let rest = text[7..].trim_start().strip_prefix('=')?;
+        return Some((
+            format!("V({}, {})", tokens[0], tokens[1]),
+            rest.trim().to_string(),
+        ));
+    }
+    None
+}
+
+/// Strip the braces a `LAPLACE` input and transfer may carry and read the
+/// transfer as a rational function of `s`.
+fn parse_laplace(
+    ctx: &LineCtx<'_>,
+    input: &str,
+    transfer: &str,
+) -> Result<(String, Transfer), AnalogError> {
+    let unbrace = |text: &str| text.trim().replace('{', "(").replace('}', ")");
+    let transfer = Transfer::parse(&unbrace(transfer)).map_err(|message| ctx.parse_err(message))?;
+    Ok((unbrace(input), transfer))
+}
+
+/// Lower `E`/`G ... LAPLACE` to a state-space network of elements the solver
+/// already has (see the module notes): one node and one capacitor per pole,
+/// linear `G` sources for the companion matrix, and two behavioural sources
+/// for the input and the output.
+#[allow(clippy::too_many_arguments)]
+fn push_laplace(
+    circuit: &mut Circuit,
+    lines: &mut Vec<(BehaviouralKind, usize, String)>,
+    ctx: &LineCtx<'_>,
+    name: &str,
+    terminals: [&str; 2],
+    kind: BehaviouralKind,
+    input: &str,
+    transfer: &Transfer,
+) -> Result<(), AnalogError> {
+    let numerator = &transfer.numerator;
+    let denominator = &transfer.denominator;
+    let order = denominator.len() - 1;
+    if numerator.len() > denominator.len() {
+        return Err(ctx.parse_err(
+            "the LAPLACE transfer is improper (numerator order above denominator order): \
+             it would differentiate its input",
+        ));
+    }
+    if denominator[0] == 0.0 {
+        return Err(ctx.parse_err(
+            "the LAPLACE transfer has a pole at s = 0 (an integrator): it has no DC \
+             operating point",
+        ));
+    }
+    // Frequency scaling `s = w0·p`, with `w0` the geometric mean of the pole
+    // magnitudes, keeps the companion coefficients near 1 for a 1 ms filter
+    // and a 1 GHz one alike; each state capacitor is then 1/w0 farads.
+    let w0 = if order == 0 {
+        1.0
+    } else {
+        (denominator[0].abs() / denominator[order].abs()).powf(1.0 / order as f64)
+    };
+    let lead = denominator[order] * w0.powi(order as i32);
+    let a: Vec<f64> = (0..order)
+        .map(|k| denominator[k] * w0.powi(k as i32) / lead)
+        .collect();
+    let b: Vec<f64> = (0..=order)
+        .map(|k| numerator.get(k).unwrap_or(&0.0) * w0.powi(k as i32) / lead)
+        .collect();
+    // Controllable canonical form: x_k' = x_(k+1), x_n' = u − Σ a_k·x_(k+1),
+    // y = Σ (b_k − b_n·a_k)·x_(k+1) + b_n·u.
+    let states: Vec<String> = (1..=order).map(|k| format!("{name}#s{k}")).collect();
+    let ground = circuit.intern("0");
+    for (index, state) in states.iter().enumerate() {
+        let node = circuit.intern(state);
+        circuit.capacitors.push(Capacitor {
+            name: format!("{name}#c{}", index + 1),
+            a: node,
+            b: ground,
+            farads: 1.0 / w0,
+            ic: None,
+        });
+        if index + 1 < order {
+            let next = circuit.intern(&states[index + 1]);
+            circuit.vccs.push(Vccs {
+                name: format!("{name}#g{}", index + 1),
+                p: ground,
+                n: node,
+                cp: next,
+                cn: ground,
+                gm: 1.0,
+            });
+        }
+    }
+    if let Some(last) = states.last() {
+        let last_node = circuit.intern(last);
+        for (k, coefficient) in a.iter().enumerate() {
+            if *coefficient != 0.0 {
+                let control = circuit.intern(&states[k]);
+                circuit.vccs.push(Vccs {
+                    name: format!("{name}#a{k}"),
+                    p: ground,
+                    n: last_node,
+                    cp: control,
+                    cn: ground,
+                    gm: -coefficient,
+                });
+            }
+        }
+        push_behavioural(
+            circuit,
+            lines,
+            ctx,
+            &format!("{name}#u"),
+            ["0", last],
+            BehaviouralKind::Current,
+            input,
+        )?;
+    }
+    let direct = b[order];
+    let mut terms: Vec<String> = states
+        .iter()
+        .zip(&a)
+        .zip(&b)
+        .filter_map(|((state, a_k), b_k)| {
+            let c = b_k - direct * a_k;
+            (c != 0.0).then(|| format!("({c:e})*V({state})"))
+        })
+        .collect();
+    if direct != 0.0 {
+        terms.push(format!("({direct:e})*({input})"));
+    }
+    let output = if terms.is_empty() {
+        "0".to_string()
+    } else {
+        terms.join(" + ")
+    };
+    push_behavioural(circuit, lines, ctx, name, terminals, kind, &output)
+}
+
+/// `TABLE` or `TABLE{...}`: the token that starts an `E`/`G` table.
+fn is_table_keyword(token: &str) -> bool {
+    token
+        .get(..5)
+        .is_some_and(|head| head.eq_ignore_ascii_case("table"))
+        && token[5..].chars().next().is_none_or(|c| c == '{')
+}
+
+/// Read `TABLE {<expr>} = (x1, y1) (x2, y2) ...`: the input expression and
+/// the points. The `=` is optional; a point's values may carry a scale
+/// suffix.
+fn parse_table(ctx: &LineCtx<'_>, text: &str) -> Result<(String, Vec<(f64, f64)>), AnalogError> {
+    let usage = "expected `TABLE {<expr>} = (x1, y1) (x2, y2) ...`";
+    let after = text[5..].trim_start();
+    let close = after
+        .strip_prefix('{')
+        .and_then(|inner| inner.find('}'))
+        .ok_or_else(|| ctx.parse_err(usage))?;
+    let input = after[1..=close].to_string();
+    let rest = after[close + 2..].trim_start();
+    let rest = rest.strip_prefix('=').unwrap_or(rest);
+    let mut values = Vec::new();
+    for raw in rest
+        .split(|c: char| c == '(' || c == ')' || c == ',' || c.is_whitespace())
+        .filter(|raw| !raw.is_empty())
+    {
+        values.push(ctx.value(raw, "TABLE point")?);
+    }
+    if values.len() % 2 != 0 {
+        return Err(ctx.parse_err("`TABLE` points come in (x, y) pairs"));
+    }
+    let points = values.chunks(2).map(|pair| (pair[0], pair[1])).collect();
+    Ok((input, points))
+}
+
+/// Bind every `V(...)` and `I(...)` a behavioural expression reads.
+///
+/// Done after [`bind_controls`], once every node exists and the branch
+/// numbering is final.
+fn bind_behavioural(
+    circuit: &mut Circuit,
+    lines: &[(BehaviouralKind, usize, String)],
+) -> Result<(), AnalogError> {
+    for kind in [BehaviouralKind::Voltage, BehaviouralKind::Current] {
+        let count = match kind {
+            BehaviouralKind::Voltage => circuit.behavioural_voltages.len(),
+            BehaviouralKind::Current => circuit.behavioural_currents.len(),
+        };
+        let mut lines = lines.iter().filter(|(k, _, _)| *k == kind);
+        for index in 0..count {
+            let (_, number, text) = lines.next().expect("one line per behavioural source");
+            let ctx = LineCtx {
+                number: *number,
+                text,
+            };
+            let source = match kind {
+                BehaviouralKind::Voltage => &circuit.behavioural_voltages[index],
+                BehaviouralKind::Current => &circuit.behavioural_currents[index],
+            };
+            let node = |name: &str| {
+                circuit
+                    .node(name)
+                    .ok_or_else(|| ctx.parse_err(format!("node `{name}` is not in this netlist")))
+            };
+            let mut bound = Vec::with_capacity(source.expression.controls().len());
+            for control in source.expression.controls() {
+                bound.push(match control {
+                    ControlName::Voltage(p, n) => Control::Voltage(
+                        node(p)?,
+                        match n {
+                            Some(n) => node(n)?,
+                            None => None,
+                        },
+                    ),
+                    ControlName::Current(element) => {
+                        Control::Branch(circuit.branch_index(element).ok_or_else(|| {
+                            ctx.parse_err(format!(
+                                "`{element}` carries no branch current; I(...) must name a \
+                                 V, L, E, H or voltage-form B element"
+                            ))
+                        })?)
+                    }
+                });
+            }
+            match kind {
+                BehaviouralKind::Voltage => circuit.behavioural_voltages[index].controls = bound,
+                BehaviouralKind::Current => circuit.behavioural_currents[index].controls = bound,
+            }
+        }
+    }
+    Ok(())
+}
+
+/// True for the `POLY` keyword of a SPICE2 polynomial source, written
+/// `POLY(2)`, `POLY (2)` or `POLY`.
+fn is_poly_keyword(token: &str) -> bool {
+    let upper = token.to_ascii_uppercase();
+    upper == "POLY" || upper.starts_with("POLY(")
+}
+
+/// One controlling quantity of a `POLY` source.
+#[derive(Debug, Clone, PartialEq)]
+enum PolyControl {
+    /// `nc+ nc-` of an `E` or `G` source.
+    Voltage(String, String),
+    /// The element whose branch current an `F` or `H` source reads.
+    Current(String),
+}
+
+/// A SPICE2 polynomial dependent source, after the two output nodes:
+/// `POLY(nd) <controls> <p0> <p1> ...`.
+///
+/// `E`/`G` name `nd` node pairs, `F`/`H` name `nd` elements. A pair may be
+/// written `a b`, `(a,b)` or `(a, b)`, as in ngspice.
+#[derive(Debug, Clone, PartialEq)]
+struct PolySource {
+    controls: Vec<PolyControl>,
+    /// Coefficients as written; the caller reads their values.
+    coefficients: Vec<String>,
+}
+
+impl PolySource {
+    /// Parse `tokens`, which start at the `POLY` keyword.
+    fn parse(letter: char, tokens: &[&str]) -> Result<Self, String> {
+        let text = tokens.join(" ");
+        let text = text[4..].replace(['(', ')', ','], " ");
+        let mut words = text.split_whitespace();
+        let dimensions = words
+            .next()
+            .and_then(|word| word.parse::<usize>().ok())
+            .filter(|count| *count >= 1)
+            .ok_or("expected `POLY(<n>)` with a whole number of controls n >= 1")?;
+        let words: Vec<&str> = words.collect();
+        if let Some(option) = words.iter().find(|word| word.contains('=')) {
+            return Err(format!(
+                "`{option}`: POLY initial-condition guesses are outside the supported subset"
+            ));
+        }
+        let per_control = if matches!(letter, 'E' | 'G') { 2 } else { 1 };
+        let control_words = dimensions * per_control;
+        if words.len() <= control_words {
+            return Err(format!(
+                "POLY({dimensions}) needs {control_words} control {} and at least one coefficient",
+                if per_control == 2 {
+                    "nodes"
+                } else {
+                    "elements"
+                }
+            ));
+        }
+        let controls = words[..control_words]
+            .chunks(per_control)
+            .map(|chunk| match chunk {
+                [p, n] => PolyControl::Voltage(p.to_string(), n.to_string()),
+                [element] => PolyControl::Current(element.to_string()),
+                _ => unreachable!("chunks of one or two"),
+            })
+            .collect();
+        let coefficients = words[control_words..]
+            .iter()
+            .map(|word| word.to_string())
+            .collect();
+        Ok(Self {
+            controls,
+            coefficients,
+        })
+    }
+
+    /// The same source with each control renamed, in canonical
+    /// `POLY(n) a b ... p0 p1 ...` text, for a subcircuit body.
+    fn rename(&self, node: &dyn Fn(&str) -> String, element: &dyn Fn(&str) -> String) -> String {
+        let mut words = vec![format!("POLY({})", self.controls.len())];
+        for control in &self.controls {
+            match control {
+                PolyControl::Voltage(p, n) => {
+                    words.push(node(p));
+                    words.push(node(n));
+                }
+                PolyControl::Current(name) => words.push(element(name)),
+            }
+        }
+        words.extend(self.coefficients.iter().cloned());
+        words.join(" ")
+    }
+}
+
+/// The behavioural expression of a SPICE2 polynomial over `atoms`.
+///
+/// Coefficients follow SPICE2's order: `p0`, the `n` linear terms, then each
+/// higher degree with its control indices non-decreasing in lexicographic
+/// order (`x1², x1·x2, x2²`, then `x1³, x1²·x2, ...`), for as many terms as
+/// coefficients are given. A single coefficient is the constant `p0`, which
+/// is what ngspice-42 does; SPICE2 read it as `p1`.
+fn poly_expression(atoms: &[String], coefficients: &[f64]) -> String {
+    let mut terms = Vec::with_capacity(coefficients.len());
+    let mut indices: Vec<usize> = Vec::new();
+    for &coefficient in coefficients {
+        let mut term = format!("({coefficient:e})");
+        for &index in &indices {
+            term.push_str(&format!("*{}", atoms[index]));
+        }
+        terms.push(term);
+        indices = next_monomial(indices, atoms.len());
+    }
+    terms.join(" + ")
+}
+
+/// The monomial after `indices` (non-decreasing control indices) in SPICE2
+/// order; after the last monomial of a degree comes the first of the next.
+fn next_monomial(mut indices: Vec<usize>, dimensions: usize) -> Vec<usize> {
+    // Raise the rightmost index that can still grow and reset the ones after
+    // it to that value; when none can, start the next degree at all zeros.
+    if let Some(at) = (0..indices.len())
+        .rev()
+        .find(|&at| indices[at] + 1 < dimensions)
+    {
+        let value = indices[at] + 1;
+        for index in &mut indices[at..] {
+            *index = value;
+        }
+        indices
+    } else {
+        vec![0; indices.len() + 1]
+    }
 }
 
 /// Refuse the nonlinear dependent-source forms by name, so they read as
@@ -3238,7 +6847,8 @@ fn refuse_behavioural_source(ctx: &LineCtx<'_>, rest: &[&str]) -> Result<(), Ana
         upper.starts_with("POLY")
             || upper.starts_with("VALUE")
             || upper.starts_with("TABLE")
-            || upper.starts_with("LAPLACE")
+            || upper.starts_with("FREQ")
+            || upper.starts_with("CHEBYSHEV")
             || upper.contains('{')
     });
     if behavioural {
@@ -3351,13 +6961,38 @@ fn bind_models(
     circuit: &mut Circuit,
     models: &BTreeMap<String, ModelCard>,
     pending: Vec<PendingDevice>,
+    perturbation: Option<&Perturbation>,
 ) -> Result<(), AnalogError> {
-    for device in pending {
+    for mut device in pending {
+        let mut key = device.model_name.to_ascii_lowercase();
+        if let Some(perturbation) =
+            perturbation.filter(|p| device.name.eq_ignore_ascii_case(&p.instance))
+        {
+            let value = perturbation.value;
+            match perturbation.target {
+                PerturbationTarget::Model { ref model, .. } if *model == key => {
+                    key = Perturbation::card_key(model);
+                }
+                PerturbationTarget::Model { .. } => {}
+                PerturbationTarget::Instance(InstanceParameter::Area) => device.area = value,
+                PerturbationTarget::Instance(InstanceParameter::Multiplier) => {
+                    device.multiplier = value
+                }
+                PerturbationTarget::Instance(InstanceParameter::Width) => {
+                    device.width = Some(value)
+                }
+                PerturbationTarget::Instance(InstanceParameter::Length) => {
+                    device.length = Some(value)
+                }
+                PerturbationTarget::Instance(InstanceParameter::Temperature) => {
+                    device.temperature_celsius = Some(value)
+                }
+            }
+        }
         let ctx = LineCtx {
             number: device.line,
             text: &device.text,
         };
-        let key = device.model_name.to_ascii_lowercase();
         let resolved = models
             .get(&key)
             .copied()
@@ -3400,8 +7035,14 @@ fn bind_models(
                 let ModelCard::Diode(model) = card else {
                     return Err(wrong_kind("D"));
                 };
+                let model = model.with_area(device.area);
                 if model.is <= 0.0
                     || model.n <= 0.0
+                    || !model.jsw.is_finite()
+                    || model.jsw < 0.0
+                    || matches!(model.ns, Some(ns) if !ns.is_finite() || ns <= 0.0)
+                    || !model.pj.is_finite()
+                    || model.pj < 0.0
                     || !model.eg.is_finite()
                     || model.eg < 0.0
                     || !model.xti.is_finite()
@@ -3437,12 +7078,36 @@ fn bind_models(
                     || !model.fc.is_finite()
                     || model.fc < 0.0
                     || model.fc >= 1.0
+                    || !model.cjsw.is_finite()
+                    || model.cjsw < 0.0
+                    || !model.php.is_finite()
+                    || model.php <= 0.0
+                    || !model.mjsw.is_finite()
+                    || model.mjsw < 0.0
+                    || !model.fcs.is_finite()
+                    || model.fcs < 0.0
+                    || model.fcs >= 1.0
                 {
                     return Err(ctx.parse_err(
-                        "a diode model needs IS > 0, N > 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2/TM1/TM2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0 and 0 <= FC < 1"
+                        "a diode model needs IS > 0, N > 0, JSW >= 0, NS > 0, PJ >= 0, EG >= 0, finite XTI/TCV/TRS1/TRS2/TTT1/TTT2/TM1/TM2, TNOM above absolute zero, IK/IKR >= 0, ISR >= 0, NR > 0, RS >= 0, TT >= 0, VP >= 0, CJO >= 0, VJ > 0, M >= 0, 0 <= FC < 1, CJSW >= 0, PHP > 0, MJSW >= 0 and 0 <= FCS < 1"
                             .to_string(),
                     ));
                 }
+                if !model.jtun.is_finite()
+                    || model.jtun < 0.0
+                    || !model.jtunsw.is_finite()
+                    || model.jtunsw < 0.0
+                    || !model.ntun.is_finite()
+                    || model.ntun <= 0.0
+                    || !model.xtitun.is_finite()
+                    || !model.keg.is_finite()
+                {
+                    return Err(ctx.parse_err(
+                        "a diode model needs JTUN >= 0, JTUNSW >= 0, NTUN > 0 and finite XTITUN/KEG"
+                            .to_string(),
+                    ));
+                }
+                let model = model.with_perimeter(device.perimeter);
                 let (is_at_temperature, thermal_voltage) =
                     if let Some(temp_celsius) = device.temperature_celsius {
                         let temperature_kelvin = temp_celsius + 273.15;
@@ -3502,7 +7167,15 @@ fn bind_models(
                 operating_model.tt = model.transit_time_seconds(device.temperature_celsius);
                 operating_model.m =
                     model.grading_coefficient_at_temperature(device.temperature_celsius);
-                if let Some(temperature_celsius) = device.temperature_celsius {
+                if let (Some(temperature_celsius), 1) = (device.temperature_celsius, model.tlevc) {
+                    // ngspice-42 `diotemp.c` `TLEVC=1`: linear in ΔT from
+                    // `TNOM`, with `M` still on its `TM1`/`TM2` law.
+                    let delta = temperature_celsius - model.tnom_celsius;
+                    operating_model.cjo = model.cjo * (1.0 + model.cta * delta);
+                    operating_model.vj = model.vj - model.tpb * delta;
+                    operating_model.cjsw = model.cjsw * (1.0 + model.ctp * delta);
+                    operating_model.php = model.php - model.tphp * delta;
+                } else if let Some(temperature_celsius) = device.temperature_celsius {
                     let nominal_kelvin = model.tnom_celsius + 273.15;
                     let temperature_kelvin = temperature_celsius + 273.15;
                     (operating_model.cjo, operating_model.vj) =
@@ -3510,6 +7183,17 @@ fn bind_models(
                             model.cjo,
                             model.vj,
                             operating_model.m,
+                            nominal_kelvin,
+                            temperature_kelvin,
+                        );
+                    // ngspice-42 applies the same junction law to the
+                    // sidewall with `PHP` and `MJSW`; `TM1`/`TM2` do not
+                    // touch `MJSW`.
+                    (operating_model.cjsw, operating_model.php) =
+                        super::device::diode_depletion_parameters_at_temperature(
+                            model.cjsw,
+                            model.php,
+                            model.mjsw,
                             nominal_kelvin,
                             temperature_kelvin,
                         );
@@ -3528,9 +7212,13 @@ fn bind_models(
                     || operating_model.cjo < 0.0
                     || !operating_model.vj.is_finite()
                     || operating_model.vj <= 0.0
+                    || !operating_model.cjsw.is_finite()
+                    || operating_model.cjsw < 0.0
+                    || !operating_model.php.is_finite()
+                    || operating_model.php <= 0.0
                 {
                     return Err(ctx.parse_err(
-                        "temperature-adjusted diode CJO must be finite and >= 0 and VJ must be finite and > 0"
+                        "temperature-adjusted diode CJO/CJSW must be finite and >= 0 and VJ/PHP must be finite and > 0"
                             .to_string(),
                     ));
                 }
@@ -3544,6 +7232,10 @@ fn bind_models(
                 };
                 circuit.diodes.push(Diode {
                     name: device.name,
+                    multiplier: device.multiplier,
+                    area: device.area,
+                    off: device.off,
+                    ic: device.ic.first().copied(),
                     anode: device.nodes[0],
                     cathode: device.nodes[1],
                     junction_anode,
@@ -3559,10 +7251,19 @@ fn bind_models(
                 let ModelCard::Bjt(model) = card else {
                     return Err(wrong_kind("Q"));
                 };
+                let unscaled_model = model;
+                let model = model.with_area(device.area);
                 if model.is <= 0.0 || model.bf <= 0.0 || model.br <= 0.0 {
                     return Err(
                         ctx.parse_err("a BJT model needs IS > 0, BF > 0 and BR > 0".to_string())
                     );
+                }
+                if [model.ibe, model.ibc]
+                    .into_iter()
+                    .flatten()
+                    .any(|current| !current.is_finite() || current <= 0.0)
+                {
+                    return Err(ctx.parse_err("BJT IBE and IBC must be finite and > 0".to_string()));
                 }
                 if !model.is.is_finite()
                     || !model.bf.is_finite()
@@ -3597,6 +7298,36 @@ fn bind_models(
                     || !model.ctc.is_finite()
                     || !model.tvje.is_finite()
                     || !model.tvjc.is_finite()
+                    || !model.tbf1.is_finite()
+                    || !model.tbf2.is_finite()
+                    || !model.tbr1.is_finite()
+                    || !model.tbr2.is_finite()
+                    || !model.tikf1.is_finite()
+                    || !model.tikf2.is_finite()
+                    || !model.tikr1.is_finite()
+                    || !model.tikr2.is_finite()
+                    || !model.tnf1.is_finite()
+                    || !model.tnf2.is_finite()
+                    || !model.tnr1.is_finite()
+                    || !model.tnr2.is_finite()
+                    || !model.tne1.is_finite()
+                    || !model.tne2.is_finite()
+                    || !model.tnc1.is_finite()
+                    || !model.tnc2.is_finite()
+                    || !model.tvaf1.is_finite()
+                    || !model.tvaf2.is_finite()
+                    || !model.tvar1.is_finite()
+                    || !model.tvar2.is_finite()
+                    || !model.titf1.is_finite()
+                    || !model.titf2.is_finite()
+                    || !model.tis1.is_finite()
+                    || !model.tis2.is_finite()
+                    || !model.tise1.is_finite()
+                    || !model.tise2.is_finite()
+                    || !model.tisc1.is_finite()
+                    || !model.tisc2.is_finite()
+                    || !model.tiss1.is_finite()
+                    || !model.tiss2.is_finite()
                     || model.tlevc > 1
                 {
                     return Err(ctx.parse_err(
@@ -3606,6 +7337,9 @@ fn bind_models(
                 }
                 if model.nf <= 0.0 || model.nr <= 0.0 {
                     return Err(ctx.parse_err("a BJT model needs NF > 0 and NR > 0".to_string()));
+                }
+                if !model.ptf.is_finite() || model.ptf < 0.0 {
+                    return Err(ctx.parse_err("a BJT model needs a finite PTF >= 0".to_string()));
                 }
                 if model.vaf.is_nan() || model.vaf < 0.0 || model.var.is_nan() || model.var < 0.0 {
                     return Err(ctx.parse_err(
@@ -3645,6 +7379,8 @@ fn bind_models(
                     || model.mje < 0.0
                     || !model.cjc.is_finite()
                     || model.cjc < 0.0
+                    || !model.xcjc.is_finite()
+                    || !(0.0..=1.0).contains(&model.xcjc)
                     || !model.vjc.is_finite()
                     || model.vjc <= 0.0
                     || !model.mjc.is_finite()
@@ -3664,7 +7400,7 @@ fn bind_models(
                     || model.tr < 0.0
                 {
                     return Err(ctx.parse_err(
-                        "a BJT model needs CJE/CJC/TF/TR/XTF/ITF >= 0, VJE/VJC > 0, MJE/MJC >= 0, VTF >= 0 and 0 <= FC < 1"
+                        "a BJT model needs CJE/CJC/TF/TR/XTF/ITF >= 0, 0 <= XCJC <= 1, VJE/VJC > 0, MJE/MJC >= 0, VTF >= 0 and 0 <= FC < 1"
                             .to_string(),
                     ));
                 }
@@ -3684,8 +7420,45 @@ fn bind_models(
                         "a BJT model needs RB/RC/RE >= 0, 0 <= RBM <= RB and IRB > 0".to_string(),
                     ));
                 }
-                let (operating_model, thermal_voltage) =
-                    super::device::bjt_parameters_at_temperature(model, device.temperature_celsius);
+                if model.rco.is_some_and(|rco| !rco.is_finite())
+                    || !model.vo.is_finite()
+                    || model.vo <= 0.0
+                    || !model.gamma.is_finite()
+                    || model.gamma < 0.0
+                    || !model.qco.is_finite()
+                    || model.qco < 0.0
+                    || !model.vg.is_finite()
+                    || model.cn.is_some_and(|cn| !cn.is_finite())
+                    || model.d.is_some_and(|d| !d.is_finite())
+                {
+                    return Err(ctx.parse_err(
+                        "a BJT quasi-saturation model needs finite RCO/VG/CN/D, VO > 0, GAMMA >= 0 and QCO >= 0"
+                            .to_string(),
+                    ));
+                }
+                // ngspice `bjtsetup.c` raises a supplied `RCO` below 0.01 Ω.
+                let model = BjtModel {
+                    rco: model.rco.map(|rco| rco.max(0.01)),
+                    ..model
+                };
+                // `TLEV=3` raises the card's own `IS`/`ISE`/`ISC`/`ISS` to a
+                // power before `AREA` multiplies them (ngspice `bjttemp.c`).
+                // Every other temperature law is a pure factor, so it
+                // commutes with the area scaling and keeps the old order.
+                let (operating_model, thermal_voltage) = if model.tlev == 3
+                    && device.temperature_celsius.is_some()
+                {
+                    let (unscaled, thermal_voltage) = super::device::bjt_parameters_at_temperature(
+                        BjtModel {
+                            rco: model.rco,
+                            ..unscaled_model
+                        },
+                        device.temperature_celsius,
+                    );
+                    (unscaled.with_area(device.area), thermal_voltage)
+                } else {
+                    super::device::bjt_parameters_at_temperature(model, device.temperature_celsius)
+                };
                 if !operating_model.is.is_finite()
                     || operating_model.is <= 0.0
                     || !operating_model.bf.is_finite()
@@ -3729,6 +7502,31 @@ fn bind_models(
                     || operating_model.mjc < 0.0
                     || !thermal_voltage.is_finite()
                     || thermal_voltage <= 0.0
+                    || operating_model
+                        .rco
+                        .is_some_and(|rco| !rco.is_finite() || rco <= 0.0)
+                    || !operating_model.vo.is_finite()
+                    || operating_model.vo <= 0.0
+                    || !operating_model.gamma.is_finite()
+                    || operating_model.gamma < 0.0
+                    || !operating_model.nf.is_finite()
+                    || operating_model.nf <= 0.0
+                    || !operating_model.nr.is_finite()
+                    || operating_model.nr <= 0.0
+                    || !operating_model.ne.is_finite()
+                    || operating_model.ne <= 0.0
+                    || !operating_model.nc.is_finite()
+                    || operating_model.nc <= 0.0
+                    || operating_model.ikf.is_nan()
+                    || operating_model.ikf <= 0.0
+                    || operating_model.ikr.is_nan()
+                    || operating_model.ikr <= 0.0
+                    || operating_model.vaf.is_nan()
+                    || operating_model.vaf < 0.0
+                    || operating_model.var.is_nan()
+                    || operating_model.var < 0.0
+                    || !operating_model.itf.is_finite()
+                    || operating_model.itf < 0.0
                 {
                     return Err(ctx.parse_err(
                         "temperature-adjusted BJT currents, beta, resistances and junction charges must remain finite and valid"
@@ -3751,18 +7549,117 @@ fn bind_models(
                     }
                     Ok(circuit.intern(&internal_name))
                 };
-                let junction_c =
-                    junction_node(circuit, device.nodes[0], operating_model.rc, "collector")?;
+                // ngspice `bjtsetup.c`: `RC` runs from the collector to the
+                // contact node; with `RCO` the epitaxial region then runs
+                // from that contact to a separate intrinsic collector.
+                let (junction_cx, junction_c) = if operating_model.rco.is_some() {
+                    let contact =
+                        junction_node(circuit, device.nodes[0], operating_model.rc, "collcx")?;
+                    let intrinsic = junction_node(circuit, contact, 1.0, "collector")?;
+                    (contact, intrinsic)
+                } else {
+                    let contact =
+                        junction_node(circuit, device.nodes[0], operating_model.rc, "collector")?;
+                    (contact, contact)
+                };
                 let junction_b =
                     junction_node(circuit, device.nodes[1], operating_model.rb, "base")?;
                 let junction_e =
                     junction_node(circuit, device.nodes[2], operating_model.re, "emitter")?;
+                let substrate = device.nodes.get(3).copied().flatten();
+                // ngspice's substrate junction (`bjtload.c`) is a pn junction
+                // from the substrate to the internal collector (vertical) or
+                // base (lateral), oriented by `type·SUBS`: `ISS`/`NS` current
+                // plus `CJS`/`VJS`/`MJS` depletion charge with no `FC`. That
+                // is exactly a diode with `FC = 0`, so it is lowered onto the
+                // diode path rather than given a second copy of the
+                // junction solver. A three-terminal BJT gets it too, with the
+                // substrate at ground: ngspice ties the substrate node to
+                // ground there, so with `ISS = CJS = 0` the junction is
+                // GMIN alone, a 1 pS leak from the collector (vertical) or
+                // base (lateral) that a high-impedance node can see.
+                if !(model.cjs.is_finite()
+                    && model.cjs >= 0.0
+                    && model.vjs.is_finite()
+                    && model.vjs > 0.0
+                    && model.mjs.is_finite()
+                    && model.mjs >= 0.0
+                    && model.iss.is_finite()
+                    && model.iss >= 0.0
+                    && model.ns.is_finite()
+                    && model.ns > 0.0
+                    && operating_model.cjs.is_finite()
+                    && operating_model.cjs >= 0.0
+                    && operating_model.vjs.is_finite()
+                    && operating_model.vjs > 0.0
+                    && operating_model.ns.is_finite()
+                    && operating_model.ns > 0.0
+                    && operating_model.iss.is_finite())
+                {
+                    return Err(ctx.parse_err(
+                        "a BJT substrate junction needs CJS >= 0, VJS > 0, MJS >= 0, ISS >= 0 and NS > 0, all finite at the instance temperature"
+                            .to_string(),
+                    ));
+                }
+                let internal_name = format!("{}#substrate", device.name);
+                let contact = if model.substrate_is_vertical() {
+                    junction_c
+                } else {
+                    junction_b
+                };
+                let polarity = if model.substrate_is_vertical() {
+                    model.polarity.sign()
+                } else {
+                    -model.polarity.sign()
+                };
+                let (anode, cathode) = if polarity > 0.0 {
+                    (substrate, contact)
+                } else {
+                    (contact, substrate)
+                };
+                // The card is already at the instance temperature, so its
+                // own `TNOM` is set there with `EG = XTI = 0`: the diode
+                // laws then leave `IS` untouched and only pick up `Vt(T)`.
+                let junction = DiodeModel {
+                    is: operating_model.iss,
+                    n: operating_model.ns,
+                    cjo: operating_model.cjs,
+                    vj: operating_model.vjs,
+                    m: operating_model.mjs.min(0.999),
+                    fc: 0.0,
+                    eg: 0.0,
+                    xti: 0.0,
+                    tnom_celsius: device.temperature_celsius.unwrap_or(27.0),
+                    ..DiodeModel::default()
+                };
+                circuit.diodes.push(Diode {
+                    name: internal_name,
+                    multiplier: device.multiplier,
+                    area: 1.0,
+                    off: device.off,
+                    ic: None,
+                    anode,
+                    cathode,
+                    junction_anode: anode,
+                    model_name: device.model_name.clone(),
+                    model: junction,
+                    operating_model: junction,
+                    series_resistance_ohms: 0.0,
+                    temperature_celsius: device.temperature_celsius,
+                    breakdown: None,
+                });
                 circuit.bjts.push(Bjt {
                     name: device.name,
+                    multiplier: device.multiplier,
+                    area: device.area,
+                    off: device.off,
+                    ic: (device.ic.len() == 2).then(|| [device.ic[0], device.ic[1]]),
                     c: device.nodes[0],
                     b: device.nodes[1],
                     e: device.nodes[2],
+                    s: substrate,
                     junction_c,
+                    junction_cx,
                     junction_b,
                     junction_e,
                     model_name: device.model_name,
@@ -3773,9 +7670,33 @@ fn bind_models(
                 });
             }
             'M' => {
-                let ModelCard::Mos(model) = card else {
+                let ModelCard::Mos(mut model) = card else {
                     return Err(wrong_kind("M"));
                 };
+                // ngspice level 1 (mos1temp.c): with `TOX` and no `KP`, the
+                // transconductance comes from the process, `UO·1e-4·εox/TOX`.
+                if !model.kp_given {
+                    if let Some(tox) = model.tox {
+                        if !model.uo.is_finite() || model.uo <= 0.0 {
+                            return Err(ctx.parse_err(
+                                "a MOSFET model deriving KP from TOX needs UO > 0 and finite",
+                            ));
+                        }
+                        if tox.is_finite() && tox > 0.0 {
+                            model.kp =
+                                model.uo * 1e-4 * super::device::OXIDE_PERMITTIVITY_F_PER_M / tox;
+                        }
+                    }
+                }
+                // ngspice level 1 (mos1temp.c): with `TOX` and `NSUB`, every
+                // one of `PHI`, `GAMMA` and `VTO` the card omits comes from
+                // the substrate doping, evaluated at `TNOM`.
+                if let (Some(nsub), Some(tox)) = (model.nsub, model.tox) {
+                    if tox.is_finite() && tox > 0.0 {
+                        super::device::mos_process_threshold(&mut model, tox, nsub)
+                            .map_err(|message| ctx.parse_err(message))?;
+                    }
+                }
                 if model.kp <= 0.0 || model.is <= 0.0 || model.gamma < 0.0 {
                     return Err(ctx.parse_err(
                         "a MOSFET model needs KP > 0, IS > 0 and GAMMA >= 0".to_string(),
@@ -3790,6 +7711,12 @@ fn bind_models(
                 let l = device.length.unwrap_or(model.l);
                 if w <= 0.0 || l <= 0.0 {
                     return Err(ctx.parse_err("a MOSFET model needs W > 0 and L > 0".to_string()));
+                }
+                let effective_length = l - 2.0 * model.ld;
+                if !model.ld.is_finite() || effective_length.is_nan() || effective_length <= 0.0 {
+                    return Err(ctx.parse_err(
+                        "a MOSFET's effective channel length L - 2*LD must be positive",
+                    ));
                 }
                 if ![model.cgso, model.cgdo, model.cgbo]
                     .into_iter()
@@ -3825,6 +7752,15 @@ fn bind_models(
                 let as_ = device.as_.unwrap_or(0.0);
                 let pd = device.pd.unwrap_or(0.0);
                 let ps = device.ps.unwrap_or(0.0);
+                if !model.js.is_finite()
+                    || model.js < 0.0
+                    || !(model.js * ad).is_finite()
+                    || !(model.js * as_).is_finite()
+                {
+                    return Err(
+                        ctx.parse_err("a MOSFET model needs JS >= 0 with finite JS*AD and JS*AS")
+                    );
+                }
                 let junction_capacitances = [
                     if model.cbd_given {
                         model.cbd
@@ -3868,7 +7804,7 @@ fn bind_models(
                 }
                 if !(model.cgso * w).is_finite()
                     || !(model.cgdo * w).is_finite()
-                    || !(model.cgbo * l).is_finite()
+                    || !(model.cgbo * effective_length).is_finite()
                 {
                     return Err(ctx.parse_err(
                         "a MOSFET model's effective overlap capacitances must be finite"
@@ -3879,7 +7815,8 @@ fn bind_models(
                     if !tox.is_finite() || tox <= 0.0 {
                         return Err(ctx.parse_err("a MOSFET model needs TOX > 0 and finite"));
                     }
-                    let cox = 3.453_133e-11 * w * l / tox;
+                    let cox =
+                        super::device::OXIDE_PERMITTIVITY_F_PER_M * w * effective_length / tox;
                     if !cox.is_finite() {
                         return Err(ctx.parse_err(
                             "a MOSFET model's effective oxide capacitance must be finite",
@@ -3908,7 +7845,7 @@ fn bind_models(
                 if !operating_model.vto.is_finite()
                     || !operating_model.kp.is_finite()
                     || operating_model.kp <= 0.0
-                    || !(operating_model.kp * w / l).is_finite()
+                    || !(operating_model.kp * w / effective_length).is_finite()
                     || !operating_model.is.is_finite()
                     || operating_model.is <= 0.0
                     || !operating_model.phi.is_finite()
@@ -3976,6 +7913,9 @@ fn bind_models(
                     junction_node(circuit, device.nodes[2], source_resistance_ohms, "source")?;
                 circuit.mosfets.push(Mosfet {
                     name: device.name,
+                    multiplier: device.multiplier,
+                    off: device.off,
+                    ic: core::array::from_fn(|index| device.ic.get(index).copied()),
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
@@ -3986,7 +7926,7 @@ fn bind_models(
                     model,
                     operating_model,
                     temperature_celsius: device.temperature_celsius,
-                    beta: operating_model.kp * w / l,
+                    beta: operating_model.kp * w / effective_length,
                     w,
                     l,
                     ad,
@@ -4001,11 +7941,14 @@ fn bind_models(
                 let ModelCard::Jfet(model) = card else {
                     return Err(wrong_kind("J"));
                 };
+                let model = model.with_area(device.area);
                 if !model.vto.is_finite()
                     || !model.beta.is_finite()
                     || model.beta <= 0.0
                     || !model.is.is_finite()
                     || model.is <= 0.0
+                    || !model.n.is_finite()
+                    || model.n <= 0.0
                     || !model.tnom_celsius.is_finite()
                     || model.tnom_celsius <= -273.15
                     || !model.tcv.is_finite()
@@ -4016,7 +7959,7 @@ fn bind_models(
                     || model.betatce.is_some_and(|value| !value.is_finite())
                 {
                     return Err(ctx.parse_err(
-                        "a JFET model needs finite temperature parameters, TNOM above absolute zero, BETA > 0 and IS > 0",
+                        "a JFET model needs finite temperature parameters, TNOM above absolute zero, BETA > 0, IS > 0 and N > 0",
                     ));
                 }
                 if !model.rd.is_finite()
@@ -4084,6 +8027,10 @@ fn bind_models(
                 let junction_s = junction_node(circuit, device.nodes[2], model.rs, "source")?;
                 circuit.jfets.push(Jfet {
                     name: device.name,
+                    multiplier: device.multiplier,
+                    area: device.area,
+                    off: device.off,
+                    ic: (device.ic.len() == 2).then(|| [device.ic[0], device.ic[1]]),
                     d: device.nodes[0],
                     g: device.nodes[1],
                     s: device.nodes[2],
@@ -4101,8 +8048,300 @@ fn bind_models(
     Ok(())
 }
 
-/// Parse the value part of a `V`/`I` line: `[dc] <value>`, `SIN(...)` or
-/// `PULSE(...)`.
+/// Take `AC <mag> [<phase>]` out of the value part of a `V`/`I` line and
+/// return what is left for [`parse_source`]. The phase is the token after the
+/// magnitude when it reads as a number; SPICE defaults both to zero phase.
+fn split_ac_stimulus<'a>(
+    ctx: &LineCtx<'_>,
+    tokens: &[&'a str],
+) -> Result<(Vec<&'a str>, Option<AcStimulus>), AnalogError> {
+    let Some(at) = tokens.iter().position(|t| t.eq_ignore_ascii_case("ac")) else {
+        return Ok((tokens.to_vec(), None));
+    };
+    let magnitude = tokens
+        .get(at + 1)
+        .ok_or_else(|| ctx.parse_err("expected `AC <magnitude> [<phase>]`"))
+        .and_then(|raw| ctx.value(raw, "AC magnitude"))?;
+    let phase = tokens
+        .get(at + 2)
+        .and_then(|raw| ctx.value(raw, "AC phase").ok());
+    let end = at + 2 + usize::from(phase.is_some());
+    if !magnitude.is_finite() || !phase.unwrap_or(0.0).is_finite() {
+        return Err(ctx.parse_err("AC magnitude and phase must be finite"));
+    }
+    if tokens[end..].iter().any(|t| t.eq_ignore_ascii_case("ac")) {
+        return Err(ctx.parse_err("`AC` is given twice"));
+    }
+    let mut rest = tokens[..at].to_vec();
+    rest.extend_from_slice(&tokens[end..]);
+    Ok((
+        rest,
+        Some(AcStimulus {
+            magnitude,
+            phase_degrees: phase.unwrap_or(0.0),
+        }),
+    ))
+}
+
+/// Parse `.ac dec|oct|lin <points> <fstart> <fstop>`.
+fn parse_ac_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<AcSweep, AnalogError> {
+    const SHAPE: &str = "expected `.ac dec|oct|lin <points> <fstart> <fstop>`";
+    if tokens.len() != 4 {
+        return Err(ctx.parse_err(SHAPE));
+    }
+    parse_frequency_sweep(ctx, tokens, ".ac", SHAPE)
+}
+
+/// Parse `.noise v(<out>[,<ref>]) <src> dec|oct|lin <points> <fstart> <fstop>
+/// [<pts_per_summary>]`. The summary count only selects ngspice's per-device
+/// printout, so it is accepted and ignored.
+fn parse_noise_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<NoiseSweep, AnalogError> {
+    const SHAPE: &str = "expected `.noise v(<out>[,<ref>]) <src> dec|oct|lin <points> <fstart> \
+                         <fstop> [<pts_per_summary>]`";
+    let (probe, rest) = split_probe(ctx, tokens, SHAPE)?;
+    let ('v', output, reference) = probe else {
+        return Err(ctx.parse_err(SHAPE));
+    };
+    if rest.len() != 5 && rest.len() != 6 {
+        return Err(ctx.parse_err(SHAPE));
+    }
+    let input = independent_source(ctx, rest[0], ".noise", "refers the noise")?;
+    if let Some(summary) = rest.get(5) {
+        let count = ctx.value(summary, "noise points per summary")?;
+        if !(count >= 0.0 && count.fract() == 0.0) {
+            return Err(ctx.parse_err("`.noise` points per summary must be a whole number"));
+        }
+    }
+    Ok(NoiseSweep {
+        output,
+        reference,
+        input,
+        sweep: parse_frequency_sweep(ctx, &rest[1..5], ".noise", SHAPE)?,
+    })
+}
+
+/// Parse `.tf v(<out>[,<ref>])|i(<element>) <src>`.
+fn parse_transfer_function(
+    ctx: &LineCtx<'_>,
+    tokens: &[&str],
+) -> Result<TransferFunction, AnalogError> {
+    const SHAPE: &str = "expected `.tf v(<out>[,<ref>])|i(<element>) <src>`";
+    let (probe, rest) = split_probe(ctx, tokens, SHAPE)?;
+    let output = match probe {
+        ('v', node, reference) => TransferOutput::Voltage { node, reference },
+        ('i', element, None) => TransferOutput::Current(element),
+        _ => return Err(ctx.parse_err(SHAPE)),
+    };
+    let [input] = rest else {
+        return Err(ctx.parse_err(SHAPE));
+    };
+    Ok(TransferFunction {
+        output,
+        input: independent_source(ctx, input, ".tf", "refers the output")?,
+    })
+}
+
+/// Parse `.sens v(<out>[,<ref>])|i(<element>) [ac dec|oct|lin <points>
+/// <fstart> <fstop>]`.
+fn parse_sensitivity(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<Sensitivity, AnalogError> {
+    const SHAPE: &str = "expected `.sens v(<out>[,<ref>])|i(<element>) [ac dec|oct|lin <points> \
+                         <fstart> <fstop>]`";
+    let (probe, rest) = split_probe(ctx, tokens, SHAPE)?;
+    let output = match probe {
+        ('v', node, reference) => TransferOutput::Voltage { node, reference },
+        ('i', element, None) => TransferOutput::Current(element),
+        _ => return Err(ctx.parse_err(SHAPE)),
+    };
+    match rest {
+        [] => Ok(Sensitivity { output, ac: None }),
+        [kind, sweep @ ..] if kind.eq_ignore_ascii_case("ac") && sweep.len() == 4 => {
+            Ok(Sensitivity {
+                output,
+                ac: Some(parse_frequency_sweep(ctx, sweep, ".sens", SHAPE)?),
+            })
+        }
+        _ => Err(ctx.parse_err(SHAPE)),
+    }
+}
+
+/// Parse `.pz <in+> <in-> <out+> <out-> cur|vol pol|zer|pz`.
+fn parse_pole_zero(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<PoleZero, AnalogError> {
+    const SHAPE: &str = "expected `.pz <in+> <in-> <out+> <out-> cur|vol pol|zer|pz`";
+    let [in_p, in_n, out_p, out_n, drive, find] = tokens else {
+        return Err(ctx.parse_err(SHAPE));
+    };
+    let drive = match drive.to_ascii_lowercase().as_str() {
+        "cur" => PoleZeroInput::Current,
+        "vol" => PoleZeroInput::Voltage,
+        _ => return Err(ctx.parse_err(SHAPE)),
+    };
+    let find = match find.to_ascii_lowercase().as_str() {
+        "pol" => PoleZeroFind::Poles,
+        "zer" => PoleZeroFind::Zeros,
+        "pz" => PoleZeroFind::Both,
+        _ => return Err(ctx.parse_err(SHAPE)),
+    };
+    Ok(PoleZero {
+        input: (in_p.to_string(), in_n.to_string()),
+        output: (out_p.to_string(), out_n.to_string()),
+        drive,
+        find,
+    })
+}
+
+/// A `v(<a>[,<b>])` or `i(<a>)` probe: its lower-case letter and its names.
+type Probe = (char, String, Option<String>);
+
+/// Split the leading `v(<a>[,<b>])` or `i(<a>)` probe off an analysis card,
+/// returning its lower-case letter, its names and the tokens after it.
+/// `v(out, ref)` may have been split at the blank after the comma.
+fn split_probe<'t, 'a>(
+    ctx: &LineCtx<'_>,
+    tokens: &'t [&'a str],
+    shape: &str,
+) -> Result<(Probe, &'t [&'a str]), AnalogError> {
+    let close = tokens
+        .iter()
+        .position(|token| token.contains(')'))
+        .ok_or_else(|| ctx.parse_err(shape))?;
+    let probe: String = tokens[..=close].concat();
+    let letter = probe
+        .chars()
+        .next()
+        .map(|c| c.to_ascii_lowercase())
+        .filter(|c| matches!(c, 'v' | 'i'))
+        .ok_or_else(|| ctx.parse_err(shape))?;
+    let inner = probe[1..]
+        .strip_prefix('(')
+        .and_then(|rest| rest.strip_suffix(')'))
+        .ok_or_else(|| ctx.parse_err(shape))?;
+    let mut names = inner.split(',').map(str::trim);
+    let first = names.next().filter(|name| !name.is_empty());
+    let second = names.next();
+    let (Some(first), None) = (first, names.next()) else {
+        return Err(ctx.parse_err(shape));
+    };
+    if second.is_some_and(str::is_empty) {
+        return Err(ctx.parse_err(shape));
+    }
+    Ok((
+        (letter, first.to_string(), second.map(str::to_string)),
+        &tokens[close + 1..],
+    ))
+}
+
+/// Check that `name` can name an independent `V` or `I` source.
+fn independent_source(
+    ctx: &LineCtx<'_>,
+    name: &str,
+    card: &str,
+    verb: &str,
+) -> Result<String, AnalogError> {
+    if name.len() >= 2 && matches!(name.as_bytes()[0].to_ascii_uppercase(), b'V' | b'I') {
+        Ok(name.to_string())
+    } else {
+        Err(ctx.parse_err(format!(
+            "`{card}` {verb} to an independent `V` or `I` source; `{name}` is not one"
+        )))
+    }
+}
+
+/// The `dec|oct|lin <points> <fstart> <fstop>` tail shared by `.ac` and
+/// `.noise`.
+fn parse_frequency_sweep(
+    ctx: &LineCtx<'_>,
+    tokens: &[&str],
+    card: &str,
+    shape: &str,
+) -> Result<AcSweep, AnalogError> {
+    let kind = match tokens[0].to_ascii_lowercase().as_str() {
+        "dec" => AcSweepKind::Decade,
+        "oct" => AcSweepKind::Octave,
+        "lin" => AcSweepKind::Linear,
+        _ => return Err(ctx.parse_err(shape)),
+    };
+    let points = ctx.value(tokens[1], "AC point count")?;
+    let start_hz = ctx.value(tokens[2], "AC start frequency")?;
+    let stop_hz = ctx.value(tokens[3], "AC stop frequency")?;
+    if !(points >= 1.0 && points.fract() == 0.0 && points <= 100_000.0) {
+        return Err(ctx.parse_err(format!(
+            "`{card}` point count must be a whole number from 1 to 100000"
+        )));
+    }
+    if !(start_hz.is_finite() && stop_hz.is_finite() && start_hz > 0.0 && stop_hz >= start_hz) {
+        return Err(ctx.parse_err(format!("`{card}` needs 0 < fstart <= fstop, both finite")));
+    }
+    Ok(AcSweep {
+        kind,
+        points: points as usize,
+        start_hz,
+        stop_hz,
+    })
+}
+
+/// Parse `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]`.
+/// Only `V`, `I` and `R` elements and `TEMP` may be swept; that the names
+/// exist is checked when the sweep runs, because a deck may declare the source
+/// after the card.
+fn parse_dc_sweep(ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<DcSweep, AnalogError> {
+    const SHAPE: &str =
+        "expected `.dc <src> <start> <stop> <incr> [<src2> <start2> <stop2> <incr2>]`";
+    if tokens.len() != 4 && tokens.len() != 8 {
+        return Err(ctx.parse_err(SHAPE));
+    }
+    let source = |chunk: &[&str]| -> Result<DcSweepSource, AnalogError> {
+        let name = chunk[0];
+        let temperature = name.eq_ignore_ascii_case("temp");
+        let element = name.len() >= 2
+            && matches!(name.as_bytes()[0].to_ascii_uppercase(), b'V' | b'I' | b'R');
+        if !(temperature || element) {
+            return Err(ctx.parse_err(format!(
+                "`.dc` sweeps a `V`, `I` or `R` element or `TEMP`; `{name}` is not one"
+            )));
+        }
+        let start = ctx.value(chunk[1], "DC sweep start")?;
+        let stop = ctx.value(chunk[2], "DC sweep stop")?;
+        let step = ctx.value(chunk[3], "DC sweep increment")?;
+        if !(start.is_finite() && stop.is_finite() && step.is_finite()) {
+            return Err(ctx.parse_err("`.dc` start, stop and increment must be finite"));
+        }
+        if step == 0.0 || (stop - start) * step < 0.0 {
+            return Err(ctx.parse_err(format!(
+                "`.dc` increment of `{name}` must be non-zero and step from start toward stop"
+            )));
+        }
+        let sweep = DcSweepSource {
+            source: name.to_string(),
+            start,
+            stop,
+            step,
+        };
+        if (stop - start) / step > 100_000.0 {
+            return Err(ctx.parse_err("`.dc` sweep has more than 100001 points"));
+        }
+        if temperature && sweep.values().iter().any(|&celsius| celsius <= -273.15) {
+            return Err(ctx.parse_err("`.dc TEMP` must stay above absolute zero (-273.15 °C)"));
+        }
+        Ok(sweep)
+    };
+    let inner = source(&tokens[..4])?;
+    let outer = match tokens.len() {
+        8 => Some(source(&tokens[4..])?),
+        _ => None,
+    };
+    if let Some(outer) = &outer {
+        if outer.source.eq_ignore_ascii_case(&inner.source) {
+            return Err(ctx.parse_err("`.dc` cannot sweep the same source twice"));
+        }
+        if inner.values().len() * outer.values().len() > 1_000_000 {
+            return Err(ctx.parse_err("`.dc` sweep has more than 1000000 points"));
+        }
+    }
+    Ok(DcSweep { inner, outer })
+}
+
+/// Parse the value part of a `V`/`I` line: `[dc] <value>`, `SIN(...)`,
+/// `SFFM(...)`, `EXP(...)`, `PULSE(...)`, or `PWL(...)`.
 ///
 /// SPICE allows the argument list to be written with or without commas and
 /// with the parenthesis detached from the keyword (`SIN (0 5 1k)`), so the
@@ -4112,7 +8351,80 @@ fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Wavef
     let joined = tokens.join(" ");
     let upper = joined.trim().to_ascii_uppercase();
 
-    for keyword in ["SIN", "PULSE"] {
+    if upper.starts_with("PWL") {
+        let raw = joined.trim();
+        let rest = raw[3..].trim_start();
+        if rest.starts_with('(') {
+            let close = rest
+                .find(')')
+                .ok_or_else(|| ctx.parse_err("`PWL(` is missing its closing `)`"))?;
+            let body = &rest[1..close];
+            let options = &rest[close + 1..];
+            let values = body
+                .split([',', ' ', '\t'])
+                .filter(|token| !token.is_empty())
+                .map(|token| ctx.value(token, "PWL time or value"))
+                .collect::<Result<Vec<_>, _>>()?;
+            if values.len() < 4 || values.len() % 2 != 0 {
+                return Err(ctx.parse_err(
+                    "expected `PWL(t1 v1 t2 v2 [tn vn ...])` with at least two points",
+                ));
+            }
+            let points: Vec<(f64, f64)> = values
+                .chunks_exact(2)
+                .map(|pair| (pair[0], pair[1]))
+                .collect();
+            if points.windows(2).any(|pair| pair[0].0 >= pair[1].0) {
+                return Err(ctx.parse_err("PWL time points must be strictly increasing"));
+            }
+
+            let mut repeat_time = None;
+            let mut delay = 0.0;
+            let mut has_delay = false;
+            for option in options
+                .split([',', ' ', '\t'])
+                .filter(|token| !token.is_empty())
+            {
+                let Some((key, raw_value)) = option.split_once('=') else {
+                    return Err(ctx.parse_err("PWL options use `r=repeat_time` or `td=delay`"));
+                };
+                let value = ctx.value(raw_value, "PWL option")?;
+                match key.to_ascii_lowercase().as_str() {
+                    "r" if repeat_time.is_none() => repeat_time = Some(value),
+                    "r" => return Err(ctx.parse_err("PWL repeat option `r=` is repeated")),
+                    "td" if !has_delay => {
+                        delay = value;
+                        has_delay = true;
+                    }
+                    "td" => return Err(ctx.parse_err("PWL delay option `td=` is repeated")),
+                    other => {
+                        return Err(ctx.parse_err(format!(
+                            "unsupported PWL option `{other}`; use `r=` or `td=`"
+                        )))
+                    }
+                }
+            }
+            if delay < 0.0 {
+                return Err(ctx.parse_err("PWL delay must not be negative"));
+            }
+            if let Some(repeat_time) = repeat_time {
+                if !points.iter().any(|(time, _)| *time == repeat_time)
+                    || repeat_time >= points.last().expect("at least two points").0
+                {
+                    return Err(
+                        ctx.parse_err("PWL `r=` must name a time point before the final point")
+                    );
+                }
+            }
+            return Ok(Waveform::Pwl {
+                points,
+                repeat_time,
+                delay,
+            });
+        }
+    }
+
+    for keyword in ["SIN", "SFFM", "EXP", "PULSE"] {
         let Some(rest) = upper.strip_prefix(keyword) else {
             continue;
         };
@@ -4142,6 +8454,41 @@ fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Wavef
                 frequency: args[2],
                 delay: arg(3, 0.0),
                 theta: arg(4, 0.0),
+            });
+        }
+        if keyword == "SFFM" {
+            if args.len() != 5 {
+                return Err(ctx.parse_err("expected `SFFM(vo va fc mdi fs)`"));
+            }
+            return Ok(Waveform::Sffm {
+                offset: args[0],
+                amplitude: args[1],
+                carrier_frequency: args[2],
+                modulation_index: args[3],
+                signal_frequency: args[4],
+            });
+        }
+        if keyword == "EXP" {
+            if args.len() != 6 {
+                return Err(ctx.parse_err("expected `EXP(v1 v2 td1 tau1 td2 tau2)`"));
+            }
+            let [td1, tau1, td2, tau2] = [args[2], args[3], args[4], args[5]];
+            if td1 < 0.0 || td2 < 0.0 {
+                return Err(ctx.parse_err("EXP delay times TD1 and TD2 must not be negative"));
+            }
+            if tau1 <= 0.0 || tau2 <= 0.0 {
+                return Err(ctx.parse_err("EXP time constants TAU1 and TAU2 must be positive"));
+            }
+            if td2 < td1 {
+                return Err(ctx.parse_err("EXP fall delay TD2 must be at or after rise delay TD1"));
+            }
+            return Ok(Waveform::Exp {
+                v1: args[0],
+                v2: args[1],
+                td1,
+                tau1,
+                td2,
+                tau2,
             });
         }
         if args.len() < 2 || args.len() > 7 {
@@ -4177,7 +8524,10 @@ fn parse_source(ctx: &LineCtx<'_>, tokens: &[&str], shape: &str) -> Result<Wavef
         _ => {
             return Err(ctx.parse_err(format!(
                 "expected `{shape}`, where `<source>` is `[dc] <value>`, \
-                 `SIN(vo va freq [td [theta]])` or `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`"
+                 `SIN(vo va freq [td [theta]])`, `SFFM(vo va fc mdi fs)`, \
+                 `EXP(v1 v2 td1 tau1 td2 tau2)`, \
+                 `PULSE(v1 v2 [td [tr [tf [pw [per]]]]])`, or \
+                 `PWL(t1 v1 ... tn vn) [r=repeat_time] [td=delay]`"
             )))
         }
     };
@@ -4195,7 +8545,9 @@ fn parse_model(
     models: &mut BTreeMap<String, ModelCard>,
     ctx: &LineCtx<'_>,
     tokens: &[&str],
-) -> Result<(), AnalogError> {
+    default_tnom_celsius: f64,
+    replace: Option<(&str, f64)>,
+) -> Result<Vec<(String, f64)>, AnalogError> {
     if tokens.len() < 2 {
         return Err(ctx.parse_err("expected `.model <name> <type>(<param>=<value> ...)`"));
     }
@@ -4224,6 +8576,13 @@ fn parse_model(
             )
         }
     };
+    // A later `<param>=` wins over an earlier one, so the moved value is
+    // simply written last.
+    let body = match replace {
+        Some((param, value)) => format!("{body} {param}={value:e}"),
+        None => body,
+    };
+    let mut written: Vec<(String, f64)> = Vec::new();
 
     let mut card = match kind.to_ascii_uppercase().as_str() {
         "D" => ModelCard::Diode(DiodeModel::default()),
@@ -4238,13 +8597,23 @@ fn parse_model(
         "LDO" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Linear)),
         "LDOADJ" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::LinearAdjustable)),
         "BUCK" => ModelCard::Regulator(RegulatorModel::defaults(RegulatorKind::Buck)),
+        "SW" => ModelCard::Switch(SwitchModel::defaults(false)),
+        "CSW" => ModelCard::Switch(SwitchModel::defaults(true)),
         other => {
             return Err(ctx.parse_err(format!(
                 "`.model` type `{other}` is not one of `D`, `NPN`, `PNP`, `NMOS`, `PMOS`, `NJF`, `PJF`, \
-                 `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
+                 `SW`, `CSW`, `OPAMP`, `COMP`, `LDO`, `LDOADJ`, `BUCK`"
             )))
         }
     };
+    // `.options tnom=` is the card's `TNOM` until the card sets its own.
+    match &mut card {
+        ModelCard::Diode(model) => model.tnom_celsius = default_tnom_celsius,
+        ModelCard::Bjt(model) => model.tnom_celsius = default_tnom_celsius,
+        ModelCard::Mos(model) => model.tnom_celsius = default_tnom_celsius,
+        ModelCard::Jfet(model) => model.tnom_celsius = default_tnom_celsius,
+        _ => {}
+    }
 
     for item in body.split([',', ' ', '\t']).filter(|part| !part.is_empty()) {
         let (param, raw) = item
@@ -4309,6 +8678,28 @@ fn parse_model(
             (ModelCard::Diode(model), "VJ") => model.vj = value,
             (ModelCard::Diode(model), "M") => model.m = value,
             (ModelCard::Diode(model), "FC") => model.fc = value,
+            (ModelCard::Diode(model), "JSW" | "ISW") => model.jsw = value,
+            (ModelCard::Diode(model), "NS") => model.ns = Some(value),
+            (ModelCard::Diode(model), "PJ") => model.pj = value,
+            (ModelCard::Diode(model), "CJSW" | "CJP") => model.cjsw = value,
+            (ModelCard::Diode(model), "PHP") => model.php = value,
+            (ModelCard::Diode(model), "MJSW") => model.mjsw = value,
+            (ModelCard::Diode(model), "FCS") => model.fcs = value,
+            (ModelCard::Diode(model), "TLEVC") => {
+                if value != 0.0 && value != 1.0 {
+                    return Err(ctx.parse_err("diode TLEVC must be 0 or 1".to_string()));
+                }
+                model.tlevc = value as u8;
+            }
+            (ModelCard::Diode(model), "CTA" | "CTC") => model.cta = value,
+            (ModelCard::Diode(model), "CTP") => model.ctp = value,
+            (ModelCard::Diode(model), "TPB" | "TVJ") => model.tpb = value,
+            (ModelCard::Diode(model), "TPHP") => model.tphp = value,
+            (ModelCard::Diode(model), "JTUN") => model.jtun = value,
+            (ModelCard::Diode(model), "JTUNSW") => model.jtunsw = value,
+            (ModelCard::Diode(model), "NTUN") => model.ntun = value,
+            (ModelCard::Diode(model), "XTITUN") => model.xtitun = value,
+            (ModelCard::Diode(model), "KEG") => model.keg = value,
             (ModelCard::OpAmp(model), "AOL") => model.aol = value,
             (ModelCard::OpAmp(model), "GBW") => model.gbw = value,
             (ModelCard::OpAmp(model), "ROUT") => model.rout = value,
@@ -4385,19 +8776,40 @@ fn parse_model(
                      OUTPUT"
                 )))
             }
+            (ModelCard::Switch(model), "RON") => model.ron = value,
+            (ModelCard::Switch(model), "ROFF") => model.roff = value,
+            (ModelCard::Switch(model), "VT") if !model.current => model.threshold = value,
+            (ModelCard::Switch(model), "VH") if !model.current => model.hysteresis = value,
+            (ModelCard::Switch(model), "IT") if model.current => model.threshold = value,
+            (ModelCard::Switch(model), "IH") if model.current => model.hysteresis = value,
+            // A switch card has four parameters; a fifth is another
+            // simulator's extension (LTspice `LSER`, `VSER`, `ILIMIT`) that
+            // would change the answer if it were dropped.
+            (ModelCard::Switch(model), other) => {
+                let (kind, expected) = if model.current {
+                    ("CSW", "IT, IH, RON, ROFF")
+                } else {
+                    ("SW", "VT, VH, RON, ROFF")
+                };
+                return Err(ctx.parse_err(format!(
+                    "`{other}` is not a {kind} parameter; expected {expected}"
+                )));
+            }
             (ModelCard::Bjt(model), "IS") => model.is = value,
+            (ModelCard::Bjt(model), "IBE") => model.ibe = Some(value),
+            (ModelCard::Bjt(model), "IBC") => model.ibc = Some(value),
             (ModelCard::Bjt(model), "BF") => model.bf = value,
             (ModelCard::Bjt(model), "BR") => model.br = value,
             (ModelCard::Bjt(model), "NF") => model.nf = value,
             (ModelCard::Bjt(model), "NR") => model.nr = value,
             (ModelCard::Bjt(model), "VAF" | "VA") => model.vaf = value,
             (ModelCard::Bjt(model), "VAR" | "VB") => model.var = value,
-            (ModelCard::Bjt(model), "IKF") => model.ikf = value,
+            (ModelCard::Bjt(model), "IKF" | "IK") => model.ikf = value,
             (ModelCard::Bjt(model), "IKR") => model.ikr = value,
             (ModelCard::Bjt(model), "NKF" | "NK") => model.nkf = Some(value),
-            (ModelCard::Bjt(model), "ISE") => model.ise = value,
+            (ModelCard::Bjt(model), "ISE" | "C2") => model.ise = value,
             (ModelCard::Bjt(model), "NE") => model.ne = value,
-            (ModelCard::Bjt(model), "ISC") => model.isc = value,
+            (ModelCard::Bjt(model), "ISC" | "C4") => model.isc = value,
             (ModelCard::Bjt(model), "NC") => model.nc = value,
             (ModelCard::Bjt(model), "TNOM" | "TREF") => model.tnom_celsius = value,
             (ModelCard::Bjt(model), "EG") => model.eg = value,
@@ -4409,6 +8821,7 @@ fn parse_model(
             (ModelCard::Bjt(model), "TMJE1") => model.tmje1 = value,
             (ModelCard::Bjt(model), "TMJE2") => model.tmje2 = value,
             (ModelCard::Bjt(model), "CJC") => model.cjc = value,
+            (ModelCard::Bjt(model), "XCJC") => model.xcjc = value,
             (ModelCard::Bjt(model), "VJC" | "PC") => model.vjc = value,
             (ModelCard::Bjt(model), "MJC" | "MC") => model.mjc = value,
             (ModelCard::Bjt(model), "TMJC1") => model.tmjc1 = value,
@@ -4430,11 +8843,12 @@ fn parse_model(
             (ModelCard::Bjt(model), "XTF") => model.xtf = value,
             (ModelCard::Bjt(model), "VTF") => model.vtf = value,
             (ModelCard::Bjt(model), "ITF") => model.itf = value,
+            (ModelCard::Bjt(model), "PTF") => model.ptf = value,
             (ModelCard::Bjt(model), "TR") => model.tr = value,
             (ModelCard::Bjt(model), "TTR1") => model.ttr1 = value,
             (ModelCard::Bjt(model), "TTR2") => model.ttr2 = value,
             (ModelCard::Bjt(model), "RB") => model.rb = value,
-            (ModelCard::Bjt(model), "TRB1") => model.trb1 = value,
+            (ModelCard::Bjt(model), "TRB1" | "TRB") => model.trb1 = value,
             (ModelCard::Bjt(model), "TRB2") => model.trb2 = value,
             (ModelCard::Bjt(model), "RBM") => model.rbm = Some(value),
             (ModelCard::Bjt(model), "TRBM1" | "TRM1") => model.trbm1 = value,
@@ -4443,13 +8857,99 @@ fn parse_model(
             (ModelCard::Bjt(model), "TIRB1") => model.tirb1 = value,
             (ModelCard::Bjt(model), "TIRB2") => model.tirb2 = value,
             (ModelCard::Bjt(model), "RC") => model.rc = value,
-            (ModelCard::Bjt(model), "TRC1") => model.trc1 = value,
+            (ModelCard::Bjt(model), "TRC1" | "TRC") => model.trc1 = value,
             (ModelCard::Bjt(model), "TRC2") => model.trc2 = value,
             (ModelCard::Bjt(model), "RE") => model.re = value,
-            (ModelCard::Bjt(model), "TRE1") => model.tre1 = value,
+            (ModelCard::Bjt(model), "TRE1" | "TRE") => model.tre1 = value,
             (ModelCard::Bjt(model), "TRE2") => model.tre2 = value,
-            (ModelCard::Mos(model), "VTO" | "VT0") => model.vto = value,
-            (ModelCard::Mos(model), "KP") => model.kp = value,
+            (ModelCard::Bjt(model), "CJS" | "CCS" | "CSUB") => model.cjs = value,
+            (ModelCard::Bjt(model), "VJS" | "PS") => model.vjs = value,
+            (ModelCard::Bjt(model), "MJS" | "MS") => model.mjs = value,
+            (ModelCard::Bjt(model), "TMJS1") => model.tmjs1 = value,
+            (ModelCard::Bjt(model), "TMJS2") => model.tmjs2 = value,
+            (ModelCard::Bjt(model), "CTS") => model.cts = value,
+            (ModelCard::Bjt(model), "TVJS") => model.tvjs = value,
+            (ModelCard::Bjt(model), "ISS") => model.iss = value,
+            (ModelCard::Bjt(model), "NS") => model.ns = value,
+            (ModelCard::Bjt(model), "TNS1") => model.tns1 = value,
+            (ModelCard::Bjt(model), "TNS2") => model.tns2 = value,
+            (ModelCard::Bjt(model), "TLEV") => {
+                if ![0.0, 1.0, 3.0].contains(&value) {
+                    return Err(ctx.parse_err("BJT TLEV must be 0, 1 or 3".to_string()));
+                }
+                model.tlev = value as u8;
+            }
+            (ModelCard::Bjt(model), "TBF1") => {
+                model.tbf1 = value;
+                model.tbf_given = true;
+            }
+            (ModelCard::Bjt(model), "TBF2") => {
+                model.tbf2 = value;
+                model.tbf_given = true;
+            }
+            (ModelCard::Bjt(model), "TBR1") => {
+                model.tbr1 = value;
+                model.tbr_given = true;
+            }
+            (ModelCard::Bjt(model), "TBR2") => {
+                model.tbr2 = value;
+                model.tbr_given = true;
+            }
+            (ModelCard::Bjt(model), "TIKF1") => model.tikf1 = value,
+            (ModelCard::Bjt(model), "TIKF2") => model.tikf2 = value,
+            (ModelCard::Bjt(model), "TIKR1") => model.tikr1 = value,
+            (ModelCard::Bjt(model), "TIKR2") => model.tikr2 = value,
+            (ModelCard::Bjt(model), "TNF1") => model.tnf1 = value,
+            (ModelCard::Bjt(model), "TNF2") => model.tnf2 = value,
+            (ModelCard::Bjt(model), "TNR1") => model.tnr1 = value,
+            (ModelCard::Bjt(model), "TNR2") => model.tnr2 = value,
+            (ModelCard::Bjt(model), "TNE1") => model.tne1 = value,
+            (ModelCard::Bjt(model), "TNE2") => model.tne2 = value,
+            (ModelCard::Bjt(model), "TNC1") => model.tnc1 = value,
+            (ModelCard::Bjt(model), "TNC2") => model.tnc2 = value,
+            (ModelCard::Bjt(model), "TVAF1") => model.tvaf1 = value,
+            (ModelCard::Bjt(model), "TVAF2") => model.tvaf2 = value,
+            (ModelCard::Bjt(model), "TVAR1") => model.tvar1 = value,
+            (ModelCard::Bjt(model), "TVAR2") => model.tvar2 = value,
+            (ModelCard::Bjt(model), "TITF1") => model.titf1 = value,
+            (ModelCard::Bjt(model), "TITF2") => model.titf2 = value,
+            (ModelCard::Bjt(model), "TIS1") => model.tis1 = value,
+            (ModelCard::Bjt(model), "TIS2") => model.tis2 = value,
+            (ModelCard::Bjt(model), "TISE1") => model.tise1 = value,
+            (ModelCard::Bjt(model), "TISE2") => model.tise2 = value,
+            (ModelCard::Bjt(model), "TISC1") => model.tisc1 = value,
+            (ModelCard::Bjt(model), "TISC2") => model.tisc2 = value,
+            (ModelCard::Bjt(model), "TISS1") => model.tiss1 = value,
+            (ModelCard::Bjt(model), "TISS2") => model.tiss2 = value,
+            (ModelCard::Bjt(model), "SUBS") => {
+                if value != 1.0 && value != -1.0 {
+                    return Err(ctx.parse_err("BJT SUBS must be 1 (vertical) or -1 (lateral)"));
+                }
+                model.subs = Some(value as i8);
+            }
+            (ModelCard::Bjt(model), "RCO") => model.rco = Some(value),
+            (ModelCard::Bjt(model), "VO") => model.vo = value,
+            (ModelCard::Bjt(model), "GAMMA") => model.gamma = value,
+            (ModelCard::Bjt(model), "QCO") => model.qco = value,
+            (ModelCard::Bjt(model), "QUASIMOD") => {
+                if value != 0.0 && value != 1.0 {
+                    return Err(ctx.parse_err("BJT QUASIMOD must be 0 or 1"));
+                }
+                model.quasimod = value as u8;
+            }
+            (ModelCard::Bjt(model), "VG") => model.vg = value,
+            (ModelCard::Bjt(model), "CN") => model.cn = Some(value),
+            (ModelCard::Bjt(model), "D") => model.d = Some(value),
+            (ModelCard::Mos(model), "VTO" | "VT0") => {
+                model.vto = value;
+                model.vto_given = true;
+            }
+            (ModelCard::Mos(model), "KP") => {
+                model.kp = value;
+                model.kp_given = true;
+            }
+            (ModelCard::Mos(model), "UO" | "U0") => model.uo = value,
+            (ModelCard::Mos(model), "LD") => model.ld = value,
             (ModelCard::Mos(model), "LAMBDA") => model.lambda = value,
             (ModelCard::Mos(model), "RD") => {
                 model.rd = value;
@@ -4460,9 +8960,24 @@ fn parse_model(
                 model.rs_given = true;
             }
             (ModelCard::Mos(model), "RSH") => model.rsh = value,
-            (ModelCard::Mos(model), "GAMMA") => model.gamma = value,
-            (ModelCard::Mos(model), "PHI") => model.phi = value,
+            (ModelCard::Mos(model), "GAMMA") => {
+                model.gamma = value;
+                model.gamma_given = true;
+            }
+            (ModelCard::Mos(model), "PHI") => {
+                model.phi = value;
+                model.phi_given = true;
+            }
+            (ModelCard::Mos(model), "NSUB") => model.nsub = Some(value),
+            (ModelCard::Mos(model), "NSS") => model.nss = value,
+            (ModelCard::Mos(model), "TPG") => {
+                if ![-1.0, 0.0, 1.0].contains(&value) {
+                    return Err(ctx.parse_err("MOSFET TPG must be -1, 0 or 1".to_string()));
+                }
+                model.tpg = value;
+            }
             (ModelCard::Mos(model), "IS") => model.is = value,
+            (ModelCard::Mos(model), "JS") => model.js = value,
             (ModelCard::Mos(model), "CBD") => {
                 model.cbd = value;
                 model.cbd_given = true;
@@ -4501,6 +9016,7 @@ fn parse_model(
             (ModelCard::Jfet(model), "RD") => model.rd = value,
             (ModelCard::Jfet(model), "RS") => model.rs = value,
             (ModelCard::Jfet(model), "IS") => model.is = value,
+            (ModelCard::Jfet(model), "N") => model.n = value,
             (ModelCard::Jfet(model), "CGS") => model.cgs = value,
             (ModelCard::Jfet(model), "CGD") => model.cgd = value,
             (ModelCard::Jfet(model), "PB") => model.pb = value,
@@ -4518,12 +9034,45 @@ fn parse_model(
                      `adapter: external_process` with `tools/cosim/labwired_ngspice.py`"
                 )))
             }
-            _ => {}
+            (ModelCard::Diode(model), "KF") => model.kf = value,
+            (ModelCard::Diode(model), "AF") => model.af = value,
+            (ModelCard::Bjt(model), "KF") => model.kf = value,
+            (ModelCard::Bjt(model), "AF") => model.af = value,
+            (ModelCard::Mos(model), "KF") => model.kf = value,
+            (ModelCard::Mos(model), "AF") => model.af = value,
+            (ModelCard::Jfet(model), "KF") => model.kf = value,
+            (ModelCard::Jfet(model), "AF") => model.af = value,
+            _ => continue,
+        }
+        // A level or law selector is a choice, not a value `.sens` can move.
+        let selector = matches!(param.as_str(), "LEVEL" | "TLEV" | "TLEVC" | "QUASIMOD");
+        let device = matches!(
+            card,
+            ModelCard::Diode(_) | ModelCard::Bjt(_) | ModelCard::Mos(_) | ModelCard::Jfet(_)
+        );
+        if device && !selector {
+            let name = param.to_ascii_lowercase();
+            match written.iter_mut().find(|(seen, _)| *seen == name) {
+                Some(entry) => entry.1 = value,
+                None => written.push((name, value)),
+            }
         }
     }
 
+    if let ModelCard::Switch(model) = &card {
+        if model.ron <= 0.0 || model.roff <= 0.0 {
+            return Err(ctx.parse_err("RON and ROFF must be positive"));
+        }
+        if model.hysteresis < 0.0 {
+            // ngspice gives a negative value a second, time-dependent
+            // meaning; it is not the band described here.
+            return Err(
+                ctx.parse_err("negative switch hysteresis is not modelled; use `VH`/`IH` >= 0")
+            );
+        }
+    }
     models.insert(key, card);
-    Ok(())
+    Ok(written)
 }
 
 // ---------------------------------------------------------------------------
@@ -4572,6 +9121,25 @@ pub const MACRO_CLAMP_DIODE: DiodeModel = DiodeModel {
     tcv: 0.0,
     trs1: 0.0,
     trs2: 0.0,
+    jsw: 0.0,
+    ns: None,
+    pj: 0.0,
+    cjsw: 0.0,
+    php: 1.0,
+    mjsw: 0.33,
+    fcs: 0.5,
+    tlevc: 0,
+    cta: 0.0,
+    ctp: 0.0,
+    tpb: 0.0,
+    tphp: 0.0,
+    jtun: 0.0,
+    jtunsw: 0.0,
+    ntun: 30.0,
+    xtitun: 3.0,
+    keg: 1.0,
+    kf: 0.0,
+    af: 1.0,
 };
 
 /// Loop gain of the push-pull comparator's output node, V/V from the 1 V
@@ -4656,6 +9224,7 @@ impl Lowering<'_> {
             n,
             dc: amps,
             wave: Waveform::Dc(amps),
+            ac: None,
         });
     }
 
@@ -4667,6 +9236,7 @@ impl Lowering<'_> {
             n,
             dc: volts,
             wave: Waveform::Dc(volts),
+            ac: None,
         });
     }
 
@@ -4687,6 +9257,10 @@ impl Lowering<'_> {
         let name = self.name(part);
         self.circuit.diodes.push(Diode {
             name,
+            multiplier: 1.0,
+            area: 1.0,
+            off: false,
+            ic: None,
             anode,
             cathode,
             junction_anode: anode,
@@ -5028,7 +9602,11 @@ fn lower_comparator(
             let mos = MosModel {
                 polarity: Polarity::N,
                 vto: 0.5,
+                vto_given: true,
                 kp,
+                kp_given: true,
+                uo: 600.0,
+                ld: 0.0,
                 lambda: 0.0,
                 rd: 0.0,
                 rd_given: false,
@@ -5036,8 +9614,14 @@ fn lower_comparator(
                 rs_given: false,
                 rsh: 0.0,
                 gamma: 0.0,
+                gamma_given: true,
                 phi: 0.6,
+                phi_given: true,
+                nsub: None,
+                nss: 0.0,
+                tpg: 1.0,
                 is: 1e-14,
+                js: 0.0,
                 cbd: 0.0,
                 cbd_given: false,
                 cbs: 0.0,
@@ -5056,9 +9640,14 @@ fn lower_comparator(
                 tox: None,
                 channel_charge_model: MosChannelChargeModel::Meyer,
                 tnom_celsius: 27.0,
+                kf: 0.0,
+                af: 1.0,
             };
             lower.circuit.mosfets.push(Mosfet {
                 name,
+                multiplier: 1.0,
+                off: false,
+                ic: [None; 3],
                 d: out,
                 g: q,
                 s: vee,
@@ -5227,6 +9816,10 @@ fn lower_regulator(
     let name = lower.name("dl");
     lower.circuit.diodes.push(Diode {
         name,
+        multiplier: 1.0,
+        area: 1.0,
+        off: false,
+        ic: None,
         anode: a,
         cathode: l1,
         junction_anode: a,
@@ -5296,16 +9889,24 @@ fn two_nodes_value_ic<'a>(
     }
 }
 
-fn parse_ic(circuit: &mut Circuit, ctx: &LineCtx<'_>, tokens: &[&str]) -> Result<(), AnalogError> {
-    // `.ic V(a)=5 V(b)=1.25`, tolerating spaces around `=`.
+/// The `V(node)=<value>` list of a `.ic` or `.nodeset` card, tolerating
+/// spaces around `=`.
+fn parse_node_values(
+    circuit: &mut Circuit,
+    ctx: &LineCtx<'_>,
+    tokens: &[&str],
+    card: &str,
+) -> Result<Vec<(usize, f64)>, AnalogError> {
+    let shape = format!("expected `{card} V(node)=<value>`");
     let joined = tokens.join(" ").replace(" =", "=").replace("= ", "=");
     if joined.trim().is_empty() {
-        return Err(ctx.parse_err("expected `.ic V(node)=<value>`"));
+        return Err(ctx.parse_err(shape));
     }
+    let mut values = Vec::new();
     for item in joined.split_whitespace() {
         let (lhs, rhs) = item
             .split_once('=')
-            .ok_or_else(|| ctx.parse_err("expected `.ic V(node)=<value>`"))?;
+            .ok_or_else(|| ctx.parse_err(shape.clone()))?;
         let lhs = lhs.trim();
         let node_name = lhs
             .strip_prefix('V')
@@ -5317,12 +9918,18 @@ fn parse_ic(circuit: &mut Circuit, ctx: &LineCtx<'_>, tokens: &[&str]) -> Result
                     "`{lhs}` is not a node reference; expected `V(node)`"
                 ))
             })?;
-        let value = ctx.value(rhs, "initial condition")?;
-        let node = circuit.intern(node_name);
-        match node {
-            Some(index) => circuit.node_ic.push((index, value)),
-            None => return Err(ctx.parse_err("`.ic` cannot set the ground node")),
+        let value = ctx.value(
+            rhs,
+            if card == ".ic" {
+                "initial condition"
+            } else {
+                "nodeset"
+            },
+        )?;
+        match circuit.intern(node_name) {
+            Some(index) => values.push((index, value)),
+            None => return Err(ctx.parse_err(format!("`{card}` cannot set the ground node"))),
         }
     }
-    Ok(())
+    Ok(values)
 }

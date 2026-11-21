@@ -38,12 +38,14 @@ the PIC16 core (`arch_policy::image_arch_for_chip`).
 `crates/core/tests/pic16f877a_smoke.rs` and `ci/test.sh` both check that the
 ELF payload equals the HEX.
 
-The generic `analog-ntc-diode-system.yaml` fixture solves a Beta NTC divider and
-an unrelated Shockley diode, then routes each node to a separate threshold input.
-`crates/core/tests/cosim_pic16f877a_analog.rs` checks the voltage equations,
-input thresholds and hysteresis. These are simulation-only co-simulation
-endpoints: PIC16 PORTA/PORTE external sampling and ADC conversion are not
-modeled, so this is not a firmware-visible analog input path.
+The generic `analog-ntc-diode-system.yaml` fixture solves a Beta NTC divider on
+RA0/AN0 and an unrelated Shockley diode on RA1/AN1. The routes land on the
+chip's A/D inputs (`analog_pins` in `configs/chips/pic16f877a.yaml`), and the
+10-bit A/D module converts them (DS39582B section 11). `firmware/adc-ntc-diode.asm`
+(gpasm 1.4.0) converts both channels, stores ADRESH:ADRESL and prints
+`N=hhh D=hhh`. `crates/core/tests/cosim_pic16f877a_analog.rs` checks the voltage
+equations and the firmware-visible codes. Digital PORTA/PORTE pin sampling is
+not modelled: an input pin still reads 0.
 
 ## Build and run
 

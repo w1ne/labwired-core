@@ -1,0 +1,24 @@
+# LabWired - Firmware Simulation Platform
+# Copyright (C) 2026 Andrii Shylenko
+# SPDX-License-Identifier: MIT
+#
+# LiteX GPIOOut (litex/soc/cores/gpio.py): one read-write `out` CSR at the
+# core base, pin k at bit k (Zephyr `litex,gpio` with `port-is-output`,
+# drivers/gpio/gpio_litex.c). The core has no input register, so it owns no
+# input pads on the declarative GPIO path; it is plain storage here and drives
+# nothing. Not modelled: the pads themselves.
+peripheral: GPIO
+version: 0.1.0
+registers:
+- id: OUT
+  address_offset: 0
+  size: 32
+  access: READ_WRITE
+  reset_value: 0
+  fields:
+  - name: OUT
+    bit_range:
+    - 31
+    - 0
+    description: out, the output latch of every pin of the core
+  side_effects: null

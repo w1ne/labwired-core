@@ -375,13 +375,53 @@ pub struct AdcPinFn {
 /// maximum and VIH minimum), never guessed: co-simulation turns a model's node
 /// voltage into the level the firmware reads through these two numbers, so a
 /// wrong ratio moves every edge a circuit produces.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
+///
+/// `vil`/`vih` are the chip's default pad class. A datasheet that gives some
+/// pads other limits (the ATmega328P XTAL1 pin, the SAM E70 GPIO_MLB pads)
+/// lists them in [`Self::pad_classes`], which override the default for exactly
+/// the pads they name.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(try_from = "GpioInputThresholdsYaml", into = "GpioInputThresholdsYaml")]
 pub struct GpioInputThresholds {
     /// Highest input voltage guaranteed to read low, as a fraction of VDD.
     pub vil: f64,
     /// Lowest input voltage guaranteed to read high, as a fraction of VDD.
     pub vih: f64,
+    /// Pads whose datasheet limits differ from `vil`/`vih`. No pad is in two
+    /// classes.
+    pub pad_classes: Vec<GpioPadThresholdClass>,
+}
+
+impl GpioInputThresholds {
+    /// One pad class for every pad: `vil`/`vih` as ratios of the I/O supply.
+    pub fn uniform(vil: f64, vih: f64) -> Self {
+        Self {
+            vil,
+            vih,
+            pad_classes: Vec::new(),
+        }
+    }
+}
+
+/// The input limits of one datasheet pad class, as the datasheet states them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PadThresholdLimits {
+    /// Fractions of the I/O supply (`0.1·VCC`), like the chip default.
+    Ratios { vil: f64, vih: f64 },
+    /// Fixed volts, independent of the I/O supply (`VIL max 0.7 V`).
+    Volts { vil_v: f64, vih_v: f64 },
+}
+
+/// A set of pads that share input limits other than the chip default: one row
+/// of the datasheet DC table that names a pad type or a pin.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GpioPadThresholdClass {
+    /// The datasheet's name for the class (`GPIO_MLB`, `XTAL1`).
+    pub name: String,
+    /// Pad labels, in the chip's own form (`PB6`, `PD10`).
+    pub pads: Vec<String>,
+    /// The class limits.
+    pub limits: PadThresholdLimits,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -389,20 +429,124 @@ pub struct GpioInputThresholds {
 pub(crate) struct GpioInputThresholdsYaml {
     vil: f64,
     vih: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pad_classes: Vec<GpioPadThresholdClassYaml>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct GpioPadThresholdClassYaml {
+    name: String,
+    pads: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    vil: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    vih: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    vil_v: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    vih_v: Option<f64>,
+}
+
+fn check_ratios(what: &str, vil: f64, vih: f64) -> Result<(), String> {
+    if !(vil.is_finite() && vih.is_finite() && 0.0 < vil && vil < vih && vih < 1.0) {
+        return Err(format!(
+            "{what} must satisfy 0 < vil < vih < 1 (ratios of io_voltage_v); \
+             got vil {vil}, vih {vih}"
+        ));
+    }
+    Ok(())
+}
+
+impl TryFrom<GpioPadThresholdClassYaml> for GpioPadThresholdClass {
+    type Error = String;
+
+    fn try_from(raw: GpioPadThresholdClassYaml) -> Result<Self, Self::Error> {
+        let GpioPadThresholdClassYaml {
+            name,
+            pads,
+            vil,
+            vih,
+            vil_v,
+            vih_v,
+        } = raw;
+        let what = format!("gpio_input_thresholds.pad_classes '{name}'");
+        if pads.is_empty() {
+            return Err(format!("{what} names no pads"));
+        }
+        let limits = match (vil, vih, vil_v, vih_v) {
+            (Some(vil), Some(vih), None, None) => {
+                check_ratios(&what, vil, vih)?;
+                PadThresholdLimits::Ratios { vil, vih }
+            }
+            (None, None, Some(vil_v), Some(vih_v)) => {
+                if !(vil_v.is_finite() && vih_v.is_finite() && 0.0 < vil_v && vil_v < vih_v) {
+                    return Err(format!(
+                        "{what} must satisfy 0 < vil_v < vih_v (volts); got vil_v {vil_v}, \
+                         vih_v {vih_v}"
+                    ));
+                }
+                PadThresholdLimits::Volts { vil_v, vih_v }
+            }
+            _ => {
+                return Err(format!(
+                    "{what} must give either `vil` + `vih` (ratios of io_voltage_v) or \
+                     `vil_v` + `vih_v` (volts), not a mix"
+                ))
+            }
+        };
+        Ok(Self { name, pads, limits })
+    }
+}
+
+impl From<GpioPadThresholdClass> for GpioPadThresholdClassYaml {
+    fn from(class: GpioPadThresholdClass) -> Self {
+        let (vil, vih, vil_v, vih_v) = match class.limits {
+            PadThresholdLimits::Ratios { vil, vih } => (Some(vil), Some(vih), None, None),
+            PadThresholdLimits::Volts { vil_v, vih_v } => (None, None, Some(vil_v), Some(vih_v)),
+        };
+        Self {
+            name: class.name,
+            pads: class.pads,
+            vil,
+            vih,
+            vil_v,
+            vih_v,
+        }
+    }
 }
 
 impl TryFrom<GpioInputThresholdsYaml> for GpioInputThresholds {
     type Error = String;
 
     fn try_from(raw: GpioInputThresholdsYaml) -> Result<Self, Self::Error> {
-        let GpioInputThresholdsYaml { vil, vih } = raw;
-        if !(vil.is_finite() && vih.is_finite() && 0.0 < vil && vil < vih && vih < 1.0) {
-            return Err(format!(
-                "gpio_input_thresholds must satisfy 0 < vil < vih < 1 (ratios of io_voltage_v); \
-                 got vil {vil}, vih {vih}"
-            ));
+        let GpioInputThresholdsYaml {
+            vil,
+            vih,
+            pad_classes,
+        } = raw;
+        check_ratios("gpio_input_thresholds", vil, vih)?;
+        let pad_classes = pad_classes
+            .into_iter()
+            .map(GpioPadThresholdClass::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut seen: std::collections::BTreeMap<String, &str> = Default::default();
+        for class in &pad_classes {
+            for pad in &class.pads {
+                if let Some(other) = seen.insert(pad.to_ascii_uppercase(), &class.name) {
+                    return Err(format!(
+                        "gpio_input_thresholds.pad_classes: pad '{pad}' is in both '{other}' \
+                         and '{}'",
+                        class.name
+                    ));
+                }
+            }
         }
-        Ok(Self { vil, vih })
+        Ok(Self {
+            vil,
+            vih,
+            pad_classes,
+        })
     }
 }
 
@@ -411,6 +555,11 @@ impl From<GpioInputThresholds> for GpioInputThresholdsYaml {
         Self {
             vil: thresholds.vil,
             vih: thresholds.vih,
+            pad_classes: thresholds
+                .pad_classes
+                .into_iter()
+                .map(GpioPadThresholdClassYaml::from)
+                .collect(),
         }
     }
 }

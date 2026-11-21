@@ -1,0 +1,81 @@
+# Four generic Shockley diode branches isolate depletion and diffusion charge
+# while routing each terminal voltage to STM32U5A5 ADC1. The synthetic 1 uF
+# CJO makes its contribution visible at this fixture's 1 us step; it is a
+# physics stress case, not a representative small-signal diode card.
+name: nucleo-u5a5zj-analog-diode-charge-adc
+chip: ../../configs/chips/stm32u5a5zj.yaml
+external_devices: []
+board_io: []
+cosim_models:
+  - id: diode_charge_reference
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      supply_v: ui.diode_charge.supply_v
+    outputs:
+      v_sense: board.analog.pa2_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_sense: v(sense)
+      sources:
+        supply_v: Vdrive
+      vdd: 3.3
+  - id: diode_depletion_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      supply_v: ui.diode_charge.supply_v
+    outputs:
+      v_sense: board.analog.pa3_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 CJO=1u VJ=0.7 M=0.5 FC=0.5 TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_sense: v(sense)
+      sources:
+        supply_v: Vdrive
+      vdd: 3.3
+  - id: diode_transit_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      supply_v: ui.diode_charge.supply_v
+    outputs:
+      v_sense: board.analog.pa4_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 TT=10u TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_sense: v(sense)
+      sources:
+        supply_v: Vdrive
+      vdd: 3.3
+  - id: diode_depletion_and_transit_charge
+    adapter: analog
+    step_ns: 1000
+    inputs:
+      supply_v: ui.diode_charge.supply_v
+    outputs:
+      v_sense: board.analog.pa5_volts
+    config:
+      netlist_text: |
+        Vdrive drive 0 dc 0
+        Rdrive drive sense 1k
+        D1 sense 0 DREF TEMP=25
+        .model DREF D(IS=2.52n N=1.752 RS=0.568 CJO=1u VJ=0.7 M=0.5 FC=0.5 TT=10u TNOM=25 EG=1.11 XTI=3)
+      probes:
+        v_sense: v(sense)
+      sources:
+        supply_v: Vdrive
+      vdd: 3.3

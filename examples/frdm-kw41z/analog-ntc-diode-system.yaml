@@ -1,6 +1,9 @@
 # Generic Beta NTC and Shockley diode netlists for the FRDM-KW41Z GPIO route.
 # Both devices use PB2 in separate simulations; the chip's GPIO thresholds are
 # simulation assumptions and do not claim silicon electrical limits.
+# Routing the same netlists to board.analog.<pad>_volts (PTB1, PTB2, PTB3,
+# PTB18, PTA19) converts them on ADC0 instead
+# (crates/core/tests/cosim_frdm_kw41z_adc16_analog.rs).
 name: "frdm-kw41z-analog-gpio"
 chip: "../../configs/chips/mkw41z4.yaml"
 external_devices: []

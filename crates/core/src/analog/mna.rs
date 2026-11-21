@@ -47,16 +47,39 @@
 //! trapezoidal resumes from the consistent state it leaves. This is what SPICE
 //! does at a breakpoint, and it brings the same fixture to 0.002 %.
 //!
+//! ## Small-signal AC
+//!
+//! [`Solver::ac_analysis`] linearises the circuit about its present solution
+//! and solves `(G + jωC)·x = b` at each frequency. `G` is the Newton Jacobian
+//! of the operating-point stamp. `C` is not written per device: it is read
+//! back from the backward-Euler transient stamp, whose matrix is exactly
+//! `G + C/h` for every element whose reactive part is a charge (capacitors,
+//! diode, BJT, JFET and MOSFET charge) or a flux (inductors, mutual
+//! inductance). So every device that integrates in a transient gets its
+//! small-signal admittance from the same code, and a device model added later
+//! gets it without an AC stamp of its own. Two step lengths are stamped and
+//! compared; a transient term that is not proportional to `1/h` (diode soft
+//! recovery, op-amp slew or current limits) is refused by name rather than
+//! mis-modelled. A delay is not a capacitance: a transmission line's far-port
+//! coupling and a BJT's excess-phase transconductance (`PTF`) are taken out
+//! of the stamps and put back per frequency as the exact phasor `e^{-jωTD}`,
+//! so neither is approximated by lumped sections or by Weil's filter. `b`
+//! holds the `AC <mag> [<phase>]` values of the independent sources; every
+//! other source is a small-signal zero.
+//!
 //! ## Determinism
 //!
 //! `f64` throughout, `Vec` indices in the hot path, `BTreeMap` only for name
 //! lookup at build time, no threads and no wall clock. The same netlist and the
 //! same input sequence produce bit-identical voltages on every host.
 
+use super::behavioural::Control as BehaviouralControl;
 use super::device;
+use super::eigen::{self, PencilError};
 use super::netlist::{
-    AnalogError, BjtModel, Circuit, DiodeModel, MosChannelChargeModel, Mosfet, NodeRef,
-    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
+    AnalogError, Bjt, BjtModel, Circuit, DcSweep, DiodeModel, InstanceParameter,
+    MosChannelChargeModel, Mosfet, NodeRef, PoleZero, PoleZeroFind, PoleZeroInput, SwitchSense,
+    TransferOutput, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN,
 };
 
 /// Largest MNA system the in-core engine solves: `N` nodes + `M` branch
@@ -75,6 +98,439 @@ pub enum Integration {
     Trapezoidal,
 }
 
+/// A complex small-signal value: volts at a node, amps in a branch.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Phasor {
+    /// Real part.
+    pub re: f64,
+    /// Imaginary part.
+    pub im: f64,
+}
+
+impl Phasor {
+    /// `|x|`.
+    pub fn magnitude(&self) -> f64 {
+        libm::hypot(self.re, self.im)
+    }
+
+    /// `arg(x)` in degrees, in `(−180, 180]`.
+    pub fn phase_degrees(&self) -> f64 {
+        libm::atan2(self.im, self.re).to_degrees()
+    }
+
+    /// `20·log10|x|`.
+    pub fn db(&self) -> f64 {
+        20.0 * libm::log10(self.magnitude())
+    }
+}
+
+/// The result of [`Solver::ac_analysis`]: one phasor per unknown per
+/// frequency.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AcResponse {
+    frequencies: Vec<f64>,
+    nodes: usize,
+    dim: usize,
+    values: Vec<Phasor>,
+}
+
+impl AcResponse {
+    /// The analysed frequencies, hertz, in the order given.
+    pub fn frequencies(&self) -> &[f64] {
+        &self.frequencies
+    }
+
+    /// Node voltage phasor at frequency index `point`; ground is zero.
+    pub fn node_voltage(&self, point: usize, node: NodeRef) -> Phasor {
+        node.map_or(Phasor::default(), |node| {
+            self.values[point * self.dim + node]
+        })
+    }
+
+    /// Branch current phasor `index` at frequency index `point`, in the order
+    /// [`Solver::branch_current`] uses.
+    pub fn branch_current(&self, point: usize, index: usize) -> Phasor {
+        self.values[point * self.dim + self.nodes + index]
+    }
+}
+
+/// What makes a [`NoiseSource`]'s current.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoiseMechanism {
+    /// Johnson noise `4kT/R` of a resistor, a switch or a device's terminal
+    /// resistance.
+    Thermal,
+    /// Shot noise `2q|I|` of a junction current.
+    Shot,
+    /// FET channel thermal noise `(8/3)kT·|gm|`.
+    Channel,
+    /// Flicker noise `KF·|I|^AF/f` of a device current: the diode current, the
+    /// BJT base current, the JFET drain current, or the MOSFET drain current
+    /// over `W·Leff·C'ox²`.
+    Flicker,
+}
+
+/// One noise current generator between two nodes: white, or `1/f` for
+/// [`NoiseMechanism::Flicker`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct NoiseSource {
+    /// ngspice's name for the term: `r1` for a resistor or switch, else
+    /// `<term>_<element>`, e.g. `rs_d1`, `id_d1`, `rb_q1`, `ic_q1`, `ib_q1`,
+    /// `rd_m1`, `id_j1`, `1overf_m1`.
+    pub name: String,
+    /// What makes the current.
+    pub mechanism: NoiseMechanism,
+    /// Current spectral density, A²/Hz; for [`NoiseMechanism::Flicker`] the
+    /// density at 1 Hz. See [`Self::density_at`].
+    pub density: f64,
+    a: NodeRef,
+    b: NodeRef,
+}
+
+impl NoiseSource {
+    /// Current spectral density at `hertz`, A²/Hz.
+    pub fn density_at(&self, hertz: f64) -> f64 {
+        if self.mechanism == NoiseMechanism::Flicker {
+            self.density / hertz
+        } else {
+            self.density
+        }
+    }
+}
+
+/// The result of [`Solver::transfer_analysis`], ngspice's `.tf` output.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TransferResponse {
+    /// Output per unit input: V/V, A/V, V/A or A/A for a voltage or current
+    /// output and a `V` or `I` input source. ngspice's `transfer_function`.
+    pub transfer: f64,
+    /// Small-signal resistance the input source sees, ohms. ngspice's
+    /// `<src>#input_impedance`.
+    pub input_impedance: f64,
+    /// Small-signal resistance seen at the output with the input source at
+    /// rest (a `V` shorted, an `I` open), ohms: across the output nodes for
+    /// `v(...)`, or in series with the element for `i(...)`. ngspice's
+    /// `output_impedance_at_v(...)` and `<element>#output_impedance`.
+    pub output_impedance: f64,
+}
+
+/// The result of [`Solver::sensitivity_analysis`], ngspice's DC `.sens`
+/// output.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SensitivityResponse {
+    /// `(name, d output / d value)` in netlist element order. Names are
+    /// ngspice's: the lower-case element name for an `R`, `V` or `I` (per
+    /// ohm, volt or ampere), `<name>_gain` for an `E`, `F`, `G` or `H`, and
+    /// `<device>:<param>` for a model parameter of a `D`, `Q`, `J` or `M`
+    /// (per unit of the parameter; see
+    /// [`Solver::model_sensitivity_analysis`]), and `<device>_<param>` for
+    /// an instance parameter (see [`Solver::instance_sensitivity_analysis`]).
+    pub entries: Vec<(String, f64)>,
+}
+
+/// One device parameter `.sens` moves; see
+/// [`Solver::model_sensitivity_analysis`] and
+/// [`Solver::instance_sensitivity_analysis`].
+struct ParameterMove {
+    /// The entry name, as ngspice prints it.
+    entry: String,
+    instance: String,
+    target: MoveTarget,
+    /// The value the device runs with.
+    value: f64,
+}
+
+enum MoveTarget {
+    Model { model: String, parameter: String },
+    Instance(InstanceParameter),
+}
+
+impl SensitivityResponse {
+    /// The entry ngspice prints as `name`, matched without regard to case.
+    pub fn get(&self, name: &str) -> Option<f64> {
+        self.entries
+            .iter()
+            .find(|(entry, _)| entry.eq_ignore_ascii_case(name))
+            .map(|&(_, value)| value)
+    }
+}
+
+/// The result of [`Solver::ac_sensitivity_analysis`], ngspice's
+/// `.sens ... ac` output.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AcSensitivityResponse {
+    /// The analysed frequencies, hertz, in the order given.
+    pub frequencies: Vec<f64>,
+    /// `(name, d output / d value)` with one phasor per frequency. Names are
+    /// ngspice's: the lower-case element name for an `R`, `C`, `L` or `K`
+    /// (per ohm, farad, henry or unit of `k`), `<name>_gain` for an `E`,
+    /// `F`, `G` or `H`, and `<name>_acmag` / `<name>_acphase` (per unit of
+    /// magnitude, per degree) for a `V` or `I`.
+    pub entries: Vec<(String, Vec<Phasor>)>,
+}
+
+impl AcSensitivityResponse {
+    /// The entry ngspice prints as `name`, matched without regard to case.
+    pub fn get(&self, name: &str) -> Option<&[Phasor]> {
+        self.entries
+            .iter()
+            .find(|(entry, _)| entry.eq_ignore_ascii_case(name))
+            .map(|(_, values)| values.as_slice())
+    }
+}
+
+/// The result of [`Solver::pole_zero_analysis`], ngspice's `.pz` output.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PoleZeroResponse {
+    /// The poles, rad/s, as `re + j·im`; empty for a `zer` card. In
+    /// increasing magnitude, a complex pair negative imaginary part first.
+    pub poles: Vec<Phasor>,
+    /// The finite zeros, rad/s, in the same order; empty for a `pol` card.
+    pub zeros: Vec<Phasor>,
+}
+
+/// The result of [`Solver::noise_analysis`].
+///
+/// Densities are power spectral densities: V²/Hz at the output, and V²/Hz
+/// or A²/Hz at the input for a `V` or an `I` input source. Take the square
+/// root for ngspice's `onoise_spectrum`/`inoise_spectrum`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NoiseResponse {
+    frequencies: Vec<f64>,
+    sources: Vec<NoiseSource>,
+    /// Output-referred density of each source, `point * sources + k`.
+    contributions: Vec<f64>,
+    /// `1/|H|²` from the input source to the output, per point.
+    gain_square_inverse: Vec<f64>,
+}
+
+impl NoiseResponse {
+    /// The analysed frequencies, hertz, in the order given.
+    pub fn frequencies(&self) -> &[f64] {
+        &self.frequencies
+    }
+
+    /// Every noise generator, in the order [`Self::contribution`] uses.
+    pub fn sources(&self) -> &[NoiseSource] {
+        &self.sources
+    }
+
+    /// Output density from source `source` at frequency index `point`, V²/Hz.
+    pub fn contribution(&self, point: usize, source: usize) -> f64 {
+        self.contributions[point * self.sources.len() + source]
+    }
+
+    /// Total output density at frequency index `point`, V²/Hz.
+    pub fn output_density(&self, point: usize) -> f64 {
+        (0..self.sources.len())
+            .map(|source| self.contribution(point, source))
+            .sum()
+    }
+
+    /// Input-referred density at frequency index `point`: the output density
+    /// over the squared gain from the input source.
+    pub fn input_density(&self, point: usize) -> f64 {
+        self.output_density(point) * self.gain_square_inverse[point]
+    }
+
+    /// RMS output noise over the sweep, volts: ngspice's `onoise_total`.
+    pub fn output_total(&self) -> f64 {
+        libm::sqrt(self.integrate(false))
+    }
+
+    /// RMS input-referred noise over the sweep: ngspice's `inoise_total`.
+    pub fn input_total(&self) -> f64 {
+        libm::sqrt(self.integrate(true))
+    }
+
+    /// ngspice's `Nintegrate`: each source's output density is taken as a
+    /// power of frequency between two points and integrated exactly; the sum
+    /// is over sources and intervals. For the input-referred total ngspice
+    /// divides each interval by the squared gain at its upper end only.
+    fn integrate(&self, input: bool) -> f64 {
+        // ngspice's `N_MINLOG`.
+        const FLOOR: f64 = 1e-38;
+        let mut total = 0.0;
+        for point in 1..self.frequencies.len() {
+            let (f0, f1) = (self.frequencies[point - 1], self.frequencies[point]);
+            let (ln_f0, ln_f1) = (libm::log(f0), libm::log(f1));
+            if ln_f1 == ln_f0 {
+                continue;
+            }
+            let mut interval = 0.0;
+            for source in 0..self.sources.len() {
+                let n1 = self.contribution(point, source);
+                let ln_n0 = libm::log(self.contribution(point - 1, source).max(FLOOR));
+                let ln_n1 = libm::log(n1.max(FLOOR));
+                let exponent = (ln_n1 - ln_n0) / (ln_f1 - ln_f0);
+                interval += if exponent.abs() < FLOOR {
+                    n1 * (f1 - f0)
+                } else {
+                    // `a·(f1^e − f0^e)/e` with `e = exponent + 1`, written
+                    // as `a·f0^e·expm1(e·ln(f1/f0))/e`. A `1/f` term has
+                    // `e` within rounding of zero, where the difference form
+                    // cancels to noise; this one tends to `a·ln(f1/f0)`.
+                    let a = libm::exp(ln_n1 - exponent * ln_f1);
+                    let exponent = exponent + 1.0;
+                    let span = ln_f1 - ln_f0;
+                    if exponent.abs() < FLOOR {
+                        a * span
+                    } else {
+                        a * libm::exp(exponent * ln_f0) * libm::expm1(exponent * span) / exponent
+                    }
+                };
+            }
+            total += if input {
+                interval * self.gain_square_inverse[point]
+            } else {
+                interval
+            };
+        }
+        total
+    }
+}
+
+/// The result of [`Solver::dc_analysis`]: the full solution at every point
+/// of a `.dc` sweep. Points run inner-fastest: point `k` has inner index
+/// `k % inner_len()` and outer index `k / inner_len()`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DcResponse {
+    inner: Vec<f64>,
+    outer: Option<Vec<f64>>,
+    nodes: usize,
+    dim: usize,
+    values: Vec<f64>,
+}
+
+impl DcResponse {
+    /// Number of solved points.
+    pub fn len(&self) -> usize {
+        self.values.len() / self.dim.max(1)
+    }
+
+    /// True when the sweep has no points.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Number of inner sweep values.
+    pub fn inner_len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Inner swept value at `point`: volts, amps, ohms or °C.
+    pub fn inner_value(&self, point: usize) -> f64 {
+        self.inner[point % self.inner.len()]
+    }
+
+    /// Outer swept value at `point`, if the sweep has an outer source.
+    pub fn outer_value(&self, point: usize) -> Option<f64> {
+        self.outer
+            .as_ref()
+            .map(|outer| outer[point / self.inner.len()])
+    }
+
+    /// Node voltage at `point`; ground is zero.
+    pub fn node_voltage(&self, point: usize, node: NodeRef) -> f64 {
+        node.map_or(0.0, |node| self.values[point * self.dim + node])
+    }
+
+    /// Branch current `index` at `point`, in the order
+    /// [`Solver::branch_current`] uses.
+    pub fn branch_current(&self, point: usize, index: usize) -> f64 {
+        self.values[point * self.dim + self.nodes + index]
+    }
+}
+
+/// Gaussian elimination with partial pivoting, in place: `rhs` becomes the
+/// solution. A pivot below `1e-30` returns its column.
+fn solve_dense(matrix: &mut [f64], rhs: &mut [f64], size: usize) -> Result<(), usize> {
+    for column in 0..size {
+        let pivot_row = (column..size)
+            .max_by(|a, b| {
+                matrix[a * size + column]
+                    .abs()
+                    .total_cmp(&matrix[b * size + column].abs())
+            })
+            .expect("non-empty range");
+        if matrix[pivot_row * size + column].abs() < 1e-30 {
+            return Err(column);
+        }
+        if pivot_row != column {
+            for index in 0..size {
+                matrix.swap(pivot_row * size + index, column * size + index);
+            }
+            rhs.swap(pivot_row, column);
+        }
+        let pivot = matrix[column * size + column];
+        for row in (column + 1)..size {
+            let factor = matrix[row * size + column] / pivot;
+            if factor == 0.0 {
+                continue;
+            }
+            for index in column..size {
+                matrix[row * size + index] -= factor * matrix[column * size + index];
+            }
+            rhs[row] -= factor * rhs[column];
+        }
+    }
+    for row in (0..size).rev() {
+        let tail: f64 = ((row + 1)..size)
+            .map(|index| matrix[row * size + index] * rhs[index])
+            .sum();
+        rhs[row] = (rhs[row] - tail) / matrix[row * size + row];
+    }
+    Ok(())
+}
+
+/// The realified complex system `[G −ωC; ωC G]` at `hertz`, with each
+/// delayed term multiplied by `e^{-jωTD}`, into `system` (`2·dim` square).
+fn small_signal_system(
+    system: &mut [f64],
+    dim: usize,
+    g: &[f64],
+    c: &[f64],
+    couplings: &[DelayedCoupling],
+    hertz: f64,
+) {
+    let size = 2 * dim;
+    let omega = 2.0 * std::f64::consts::PI * hertz;
+    for row in 0..dim {
+        for column in 0..dim {
+            let conductance = g[row * dim + column];
+            let susceptance = omega * c[row * dim + column];
+            system[row * size + column] = conductance;
+            system[row * size + dim + column] = -susceptance;
+            system[(dim + row) * size + column] = susceptance;
+            system[(dim + row) * size + dim + column] = conductance;
+        }
+    }
+    // Each port of a line sees the other's wave `TD` later, and a BJT's
+    // transport current lags its B-E voltage by `td`: `e^{-jωTD}`.
+    for &DelayedCoupling {
+        row,
+        column,
+        coefficient,
+        delay,
+        ..
+    } in couplings
+    {
+        let re = coefficient * libm::cos(omega * delay);
+        let im = -coefficient * libm::sin(omega * delay);
+        system[row * size + column] += re;
+        system[row * size + dim + column] -= im;
+        system[(dim + row) * size + column] += im;
+        system[(dim + row) * size + dim + column] += re;
+    }
+}
+
+/// Which node values [`Solver::stamp_node_values`] holds.
+#[derive(Clone, Copy)]
+enum NodeHold {
+    Nodeset,
+    InitialCondition,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Stamp {
     /// t = 0: capacitors open, inductors short.
@@ -83,34 +539,115 @@ enum Stamp {
     Transient(f64, Integration),
 }
 
-/// Linearised total BJT charge for the B-E and B-C branches. Each branch may
-/// depend on both junction voltages through the Gummel–Poon base-charge factor.
+/// Linearised BJT charge: B-E and internal B-C branches can depend on both
+/// junction voltages through the Gummel–Poon base-charge factor. The remaining
+/// B-C depletion charge follows the external base when `XCJC < 1`. With `RCO`
+/// and `QCO`, Kull's epitaxial charge adds to the internal B-C branch and to a
+/// fourth branch from the internal base to the collector contact.
 struct BjtChargeOp {
-    q: [f64; 2],
-    /// `[charge branch][Vbe or Vbc]`, in farads.
-    dq: [[f64; 2]; 2],
+    /// B-E charge, internal B-C charge, external-base B-C depletion charge,
+    /// and base-to-collector-contact epitaxial charge.
+    q: [f64; 4],
+    /// `[charge branch][Vbe, internal Vbc, external Vbc, contact Vbcx]`, in
+    /// farads.
+    dq: [[f64; 4]; 4],
 }
 
-fn bjt_charge_op(vbe: f64, vbc: f64, model: BjtModel, thermal_voltage: f64) -> BjtChargeOp {
+fn bjt_charge_op(
+    vbe: f64,
+    vbc: f64,
+    vbc_external: f64,
+    vbcx: f64,
+    model: BjtModel,
+    thermal_voltage: f64,
+) -> BjtChargeOp {
+    let epi = |voltage: f64| match model.rco {
+        Some(_) => device::bjt_epi_charge(voltage, model.qco, model.gamma, thermal_voltage),
+        None => (0.0, 0.0),
+    };
+    let (qbci, cbci) = epi(vbc);
+    let (qbcx, cbcx) = epi(vbcx);
     let transit = device::bjt_transit_charge_at_thermal_voltage(vbe, vbc, model, thermal_voltage);
     let (qbe, cbe) =
         device::junction_depletion_charge(vbe, model.cje, model.vje, model.mje, model.fc);
-    let (qbc, cbc) =
-        device::junction_depletion_charge(vbc, model.cjc, model.vjc, model.mjc, model.fc);
+    let (qbc, cbc) = device::junction_depletion_charge(
+        vbc,
+        model.cjc * model.xcjc,
+        model.vjc,
+        model.mjc,
+        model.fc,
+    );
+    let (qbc_external, cbc_external) = device::junction_depletion_charge(
+        vbc_external,
+        model.cjc * (1.0 - model.xcjc),
+        model.vjc,
+        model.mjc,
+        model.fc,
+    );
     BjtChargeOp {
-        q: [qbe + transit.qbe, qbc + transit.qbc],
+        q: [
+            qbe + transit.qbe,
+            qbc + transit.qbc + qbci,
+            qbc_external,
+            qbcx,
+        ],
         dq: [
-            [cbe + transit.dqbe_dvbe, transit.dqbe_dvbc],
-            [transit.dqbc_dvbe, cbc + transit.dqbc_dvbc],
+            [cbe + transit.dqbe_dvbe, transit.dqbe_dvbc, 0.0, 0.0],
+            [transit.dqbc_dvbe, cbc + transit.dqbc_dvbc + cbci, 0.0, 0.0],
+            [0.0, 0.0, cbc_external, 0.0],
+            [0.0, 0.0, 0.0, cbcx],
         ],
     }
 }
 
+/// Weil's second-order excess-phase filter over one step of `h` seconds, as
+/// ngspice's `bjtload.c` discretises `td²/3·y'' + td·y' + y = cbe/qb` with
+/// group delay `td`. Returns the history term `cc` and the weight `arg3` of
+/// the present `cbe`, so the delayed transport current is `cc + arg3·cbe/qb`.
+/// `previous` is the last step length; with none yet the two history points
+/// are equal and the ratio cancels.
+fn excess_phase_step(delay: f64, h: f64, previous: f64, history: [f64; 2]) -> (f64, f64) {
+    let arg1 = h / delay;
+    let arg2 = 3.0 * arg1;
+    let arg1 = arg2 * arg1;
+    let denom = 1.0 + arg1 + arg2;
+    let ratio = if previous > 0.0 { h / previous } else { 1.0 };
+    let cc = (history[0] * (1.0 + ratio + arg2) - history[1] * ratio) / denom;
+    (cc, arg1 / denom)
+}
+
+/// One BJT's DC linearisation at junction voltages `vbe`, `vbc` in device
+/// coordinates, before any excess phase.
+fn bjt_op(bjt: &Bjt, vbe: f64, vbc: f64) -> device::BjtOp {
+    let model = bjt.operating_model;
+    device::bjt_op_split_at_thermal_voltage(
+        vbe,
+        vbc,
+        model.junction_saturation_currents(),
+        model.bf,
+        model.br,
+        model.nf,
+        model.nr,
+        model.vaf,
+        model.var,
+        model.ikf,
+        model.ikr,
+        model.ise,
+        model.ne,
+        model.isc,
+        model.nc,
+        model.nkf,
+        bjt.thermal_voltage,
+    )
+}
+
 fn bjt_charge_active(model: BjtModel, branch: usize) -> bool {
-    if branch == 0 {
-        model.cje != 0.0 || model.tf != 0.0
-    } else {
-        model.cjc != 0.0 || model.tr != 0.0
+    let epi = model.rco.is_some() && model.qco != 0.0;
+    match branch {
+        0 => model.cje != 0.0 || model.tf != 0.0,
+        1 => model.cjc * model.xcjc != 0.0 || model.tr != 0.0 || epi,
+        2 => model.cjc * (1.0 - model.xcjc) != 0.0,
+        _ => epi,
     }
 }
 
@@ -137,7 +674,7 @@ fn mos_channel_capacitance_halves(
     } else {
         (vgs, vds, vbs)
     };
-    let cox = device::OXIDE_PERMITTIVITY_F_PER_M * mosfet.w * mosfet.l / tox;
+    let cox = device::OXIDE_PERMITTIVITY_F_PER_M * mosfet.w * mosfet.effective_length() / tox;
     let mut caps = device::mos_meyer_capacitance_halves(
         vgs_eff,
         vds_eff,
@@ -185,6 +722,65 @@ fn diode_temperature_parameters(
     )
 }
 
+/// Total sidewall saturation current `JSW·PJ` at the instance temperature.
+/// ngspice-42 scales it with the `NS` law, and `NS` defaults to 1 there even
+/// when the current itself shares the bottom junction's `N`.
+fn diode_sidewall_saturation_current(model: DiodeModel, temperature_celsius: Option<f64>) -> f64 {
+    let Some(temperature_celsius) = temperature_celsius else {
+        return model.jsw;
+    };
+    if model.jsw == 0.0 {
+        return 0.0;
+    }
+    device::diode_saturation_current_at_temperature(
+        model.jsw,
+        model.ns.unwrap_or(1.0),
+        model.eg,
+        model.xti,
+        model.tnom_celsius + 273.15,
+        temperature_celsius + 273.15,
+    )
+}
+
+/// Trap-assisted tunnel current from `JTUN·AREA + JTUNSW·PJ`, or `None`
+/// when the card has none. ngspice-42 adds it to the junction current, so it
+/// passes through the `IK`/`IKR` knee and the `TT` diffusion charge. Its
+/// saturation current follows the `IS` temperature law with `NTUN`, `XTITUN`
+/// and `KEG·EG`.
+fn diode_tunnel_op(
+    voltage: f64,
+    model: DiodeModel,
+    temperature_celsius: Option<f64>,
+) -> Option<device::DiodeOp> {
+    let saturation = model.jtun + model.jtunsw;
+    if saturation <= 0.0 {
+        return None;
+    }
+    let Some(temperature_celsius) = temperature_celsius else {
+        return Some(device::diode_tunnel_op(
+            voltage,
+            saturation,
+            model.ntun,
+            device::THERMAL_VOLTAGE,
+        ));
+    };
+    let temperature_kelvin = temperature_celsius + 273.15;
+    let saturation = device::diode_saturation_current_at_temperature(
+        saturation,
+        model.ntun,
+        model.keg * model.eg,
+        model.xtitun,
+        model.tnom_celsius + 273.15,
+        temperature_kelvin,
+    );
+    Some(device::diode_tunnel_op(
+        voltage,
+        saturation,
+        model.ntun,
+        device::thermal_voltage_at_temperature(temperature_kelvin),
+    ))
+}
+
 fn diode_model_op(
     voltage: f64,
     model: DiodeModel,
@@ -192,27 +788,44 @@ fn diode_model_op(
     temperature_celsius: Option<f64>,
 ) -> device::DiodeOp {
     let (is, isr, thermal_voltage) = diode_temperature_parameters(model, temperature_celsius);
-    let mut op = match (breakdown, temperature_celsius) {
-        (None, None) => device::diode_op(voltage, model.is, model.n),
-        (Some(xbv), None) => device::diode_op_breakdown(
-            voltage,
-            model.is,
-            model.n,
-            xbv,
-            model.nbv.unwrap_or(model.n),
-        ),
+    let isw = diode_sidewall_saturation_current(model, temperature_celsius);
+    // ngspice-42 merges a sidewall current with no `NS` of its own into the
+    // bottom saturation current, so it shares `N`, the reverse and breakdown
+    // regions and the IK/IKR knee. With `NS` it has its own characteristic.
+    let (bottom_is, sidewall) = match model.ns {
+        None => (is + isw, None),
+        Some(ns) if isw > 0.0 => (is, Some((isw, ns))),
+        Some(_) => (is, None),
+    };
+    let junction_op = |is: f64, n: f64| match (breakdown, temperature_celsius) {
+        (None, None) => device::pn_junction_op(voltage, is, n),
+        (Some(xbv), None) => {
+            device::diode_op_breakdown(voltage, is, n, xbv, model.nbv.unwrap_or(model.n))
+        }
         (None, Some(_)) => {
-            device::diode_op_at_thermal_voltage(voltage, is, model.n, thermal_voltage)
+            device::pn_junction_op_at_thermal_voltage(voltage, is, n, thermal_voltage)
         }
         (Some(xbv), Some(_)) => device::diode_op_breakdown_at_thermal_voltage(
             voltage,
             is,
-            model.n,
+            n,
             xbv,
             model.nbv.unwrap_or(model.n),
             thermal_voltage,
         ),
     };
+    let mut op = junction_op(bottom_is, model.n);
+    if let Some((isw, ns)) = sidewall {
+        // The sidewall op carries its own GMIN term; the bottom op already
+        // has the one GMIN the junction gets.
+        let side = junction_op(isw, ns);
+        op.id += side.id - device::GMIN * voltage;
+        op.gd += side.gd - device::GMIN;
+    }
+    if let Some(tunnel) = diode_tunnel_op(voltage, model, temperature_celsius) {
+        op.id += tunnel.id;
+        op.gd += tunnel.gd;
+    }
     let recombination = match temperature_celsius {
         None => {
             device::diode_recombination_op(voltage, model.isr, model.nr, model.n, model.vj, model.m)
@@ -257,14 +870,47 @@ fn diode_model_op(
 }
 
 fn diode_charge_op(voltage: f64, model: DiodeModel, op: device::DiodeOp) -> (f64, f64) {
-    let (q_depletion, c_depletion) =
+    let (q_bottom, c_bottom) =
         device::diode_depletion_charge(voltage, model.cjo, model.vj, model.m, model.fc);
+    let (q_sidewall, c_sidewall) = diode_sidewall_depletion_charge(voltage, model);
+    let (q_depletion, c_depletion) = (q_bottom + q_sidewall, c_bottom + c_sidewall);
     let (q_diffusion, c_diffusion) = if model.vp > 0.0 && model.tt > 0.0 {
         (0.0, 0.0)
     } else {
         device::diode_diffusion_charge(voltage, op, model.tt)
     };
     (q_depletion + q_diffusion, c_depletion + c_diffusion)
+}
+
+/// Sidewall depletion charge of `CJSW·PJ` with `PHP`, `MJSW` and `FCS`.
+///
+/// Below `FCS·PHP` this is the ordinary graded-junction integral. Above it,
+/// ngspice-42 `dioload.c` starts the linearised region from `CJSW·F1`, where
+/// `F1` is the *bottom* junction's transition charge per farad (from `VJ`,
+/// `M`, `FC`), not the sidewall's own. The capacitance stays continuous but
+/// the charge steps at `FCS·PHP` unless both junctions share their
+/// parameters. This keeps that offset so transient currents match ngspice.
+fn diode_sidewall_depletion_charge(voltage: f64, model: DiodeModel) -> (f64, f64) {
+    if model.cjsw == 0.0 {
+        return (0.0, 0.0);
+    }
+    let (charge, capacitance) =
+        device::junction_depletion_charge(voltage, model.cjsw, model.php, model.mjsw, model.fcs);
+    if voltage < model.fcs * model.php {
+        return (charge, capacitance);
+    }
+    let own_transition = device::junction_depletion_charge(
+        model.fcs * model.php,
+        model.cjsw,
+        model.php,
+        model.mjsw,
+        model.fcs,
+    )
+    .0;
+    let bottom_transition = model.cjsw
+        * device::junction_depletion_charge(model.fc * model.vj, 1.0, model.vj, model.m, model.fc)
+            .0;
+    (charge - own_transition + bottom_transition, capacitance)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -321,7 +967,7 @@ fn diode_recovery_step(
 }
 
 fn diode_charge_active(model: DiodeModel) -> bool {
-    model.cjo != 0.0 || model.tt != 0.0
+    model.cjo != 0.0 || model.cjsw != 0.0 || model.tt != 0.0
 }
 
 /// One circuit and the state that carries between steps.
@@ -359,10 +1005,21 @@ pub struct Solver {
     bjt_vbe: Vec<f64>,
     /// Each BJT's base-collector voltage in device coordinates.
     bjt_vbc: Vec<f64>,
-    /// Total depletion plus transit charge and current history for each BJT,
-    /// ordered B-E then B-C in normalized device coordinates.
-    bjt_q: Vec<[f64; 2]>,
-    bjt_i: Vec<[f64; 2]>,
+    /// Each BJT's voltage from the internal base to the collector contact in
+    /// device coordinates. It differs from `bjt_vbc` only with `RCO`.
+    bjt_vbcx: Vec<f64>,
+    /// Depletion plus transit charge and current history for each BJT, ordered
+    /// B-E, internal B-C, external-base B-C depletion, and base-to-contact
+    /// epitaxial charge in device coordinates.
+    bjt_q: Vec<[f64; 4]>,
+    bjt_i: Vec<[f64; 4]>,
+    /// Weil excess-phase history of each BJT with `PTF`: the delayed
+    /// transport current `cc + cex/qb` (ngspice's `cexbc`) at the last two
+    /// accepted steps, newest first.
+    bjt_excess: Vec<[f64; 2]>,
+    /// Length of the last accepted transient step, seconds; zero right after
+    /// the operating point (ngspice's `CKTdeltaOld[1]`).
+    previous_step: f64,
     /// Each MOSFET's gate-source voltage in device coordinates, as the netlist
     /// names the terminals — not swapped for reverse mode.
     mos_vgs: Vec<f64>,
@@ -408,11 +1065,30 @@ pub struct Solver {
     output_limit_point: Vec<f64>,
     /// Input-referred error for each slew-limited op-amp gain stage.
     slew_limit_point: Vec<f64>,
+    /// The quantities each behavioural source reads, at its linearisation
+    /// point: voltage-form sources first, then current-form, each in
+    /// [`super::Expression::controls`] order.
+    behavioural_point: Vec<Vec<f64>>,
+    /// Simulated time the behavioural expressions are evaluated at: the end
+    /// of the step being solved, 0 at the operating point.
+    behavioural_time: f64,
+    /// The first expression that left its domain during the last stamp.
+    behavioural_error: Option<AnalogError>,
+    /// Set only while `.ac` reads `C` back from the transient stamp: the
+    /// BJT excess-phase filter is then left out, and `.ac` applies its
+    /// exact phasor instead.
+    excess_phase_off: bool,
+    /// What each `T` line's ports sent into it, `[time, w1, w2]` with
+    /// `w = v + Z0·i` for the current entering the port, oldest first. A run
+    /// of equal waves is kept as its two end points, so a line at rest holds
+    /// at most two entries however long it rests.
+    line_history: Vec<Vec<[f64; 3]>>,
     /// The linearisation points at the start of the step in progress, for a
     /// retry with a cut step; see [`Solver::advance`].
     saved_diode_vj: Vec<f64>,
     saved_bjt_vbe: Vec<f64>,
     saved_bjt_vbc: Vec<f64>,
+    saved_bjt_vbcx: Vec<f64>,
     saved_mos_vgs: Vec<f64>,
     saved_mos_vds: Vec<f64>,
     saved_mos_vbd: Vec<f64>,
@@ -423,6 +1099,7 @@ pub struct Solver {
     saved_sink_point: Vec<[f64; 3]>,
     saved_output_limit_point: Vec<f64>,
     saved_slew_limit_point: Vec<f64>,
+    saved_behavioural_point: Vec<Vec<f64>>,
     /// Conductance from every node to ground, siemens; nonzero only inside
     /// [`Solver::gmin_stepping`].
     node_shunt: f64,
@@ -456,6 +1133,16 @@ pub struct Solver {
     /// The next internal step must not trust the stored derivatives: a source
     /// or switch changed, or the state was just set by the operating point.
     restart: bool,
+
+    /// The operating point is in its first phase, where every `off` device is
+    /// held cut off and every `.nodeset` node is held at its value (ngspice's
+    /// `MODEINITFIX`).
+    holding: bool,
+
+    /// The transient operating point is being solved: every `.ic` node is
+    /// held at its value in every Newton phase (ngspice's `MODETRANOP`
+    /// without `MODEUIC`).
+    holding_ic: bool,
 }
 
 impl Solver {
@@ -485,7 +1172,18 @@ impl Solver {
         let branches = circuit.branch_count();
         let voltage_source_values = circuit.voltage_sources.iter().map(|s| s.dc).collect();
         let current_source_values = circuit.current_sources.iter().map(|s| s.dc).collect();
-        let switch_closed = vec![false; circuit.switches.len()];
+        // A SPICE switch starts from its `on`/`off` flag; every other switch
+        // starts open.
+        let switch_closed = circuit
+            .switches
+            .iter()
+            .map(|switch| {
+                switch
+                    .threshold
+                    .as_ref()
+                    .is_some_and(|control| control.initially_closed)
+            })
+            .collect();
         let capacitors = circuit.capacitors.len();
         let inductors = circuit.inductors.len();
         let nonlinear = circuit.is_nonlinear();
@@ -497,6 +1195,13 @@ impl Solver {
         let sinks = circuit.power_sinks.len();
         let output_limits = circuit.output_current_limits.len();
         let slew_limits = circuit.slew_limited_vccs.len();
+        let lines = circuit.transmission_lines.len();
+        let behavioural_point: Vec<Vec<f64>> = circuit
+            .behavioural_voltages
+            .iter()
+            .chain(&circuit.behavioural_currents)
+            .map(|source| vec![0.0; source.controls.len()])
+            .collect();
 
         let mut solver = Self {
             circuit,
@@ -522,8 +1227,11 @@ impl Solver {
             diode_recovery_rate: vec![0.0; diodes],
             bjt_vbe: vec![0.0; bjts],
             bjt_vbc: vec![0.0; bjts],
-            bjt_q: vec![[0.0; 2]; bjts],
-            bjt_i: vec![[0.0; 2]; bjts],
+            bjt_vbcx: vec![0.0; bjts],
+            bjt_q: vec![[0.0; 4]; bjts],
+            bjt_i: vec![[0.0; 4]; bjts],
+            bjt_excess: vec![[0.0; 2]; bjts],
+            previous_step: 0.0,
             mos_vgs: vec![0.0; mosfets],
             mos_vds: vec![0.0; mosfets],
             mos_vbd: vec![0.0; mosfets],
@@ -546,9 +1254,16 @@ impl Solver {
             sink_point: vec![[0.0; 3]; sinks],
             output_limit_point: vec![0.0; output_limits],
             slew_limit_point: vec![0.0; slew_limits],
+            saved_behavioural_point: behavioural_point.clone(),
+            behavioural_point,
+            behavioural_time: 0.0,
+            behavioural_error: None,
+            excess_phase_off: false,
+            line_history: vec![Vec::new(); lines],
             saved_diode_vj: vec![0.0; diodes],
             saved_bjt_vbe: vec![0.0; bjts],
             saved_bjt_vbc: vec![0.0; bjts],
+            saved_bjt_vbcx: vec![0.0; bjts],
             saved_mos_vgs: vec![0.0; mosfets],
             saved_mos_vds: vec![0.0; mosfets],
             saved_mos_vbd: vec![0.0; mosfets],
@@ -574,6 +1289,8 @@ impl Solver {
             cached_stamp: None,
             settled: false,
             restart: true,
+            holding: false,
+            holding_ic: false,
         };
         solver.solve_operating_point()?;
         Ok(solver)
@@ -605,6 +1322,68 @@ impl Solver {
             .current_sources
             .iter()
             .position(|s| s.name.to_ascii_lowercase() == key)
+    }
+
+    /// Index of the named resistor, with or without a temperature law.
+    pub fn resistor_index(&self, name: &str) -> Option<usize> {
+        let key = name.trim().to_ascii_lowercase();
+        self.circuit
+            .resistors
+            .iter()
+            .position(|resistor| resistor.name.to_ascii_lowercase() == key)
+    }
+
+    /// Set a resistor's nominal resistance, as a `.dc R...` sweep does. An
+    /// NTC or `tc1`/`tc2` law still applies to the new value, as in ngspice.
+    /// Returns false when the resulting resistance is zero or not finite.
+    pub fn set_resistor(&mut self, index: usize, ohms: f64) -> bool {
+        let Some(resistor) = self.circuit.resistors.get_mut(index) else {
+            return false;
+        };
+        let mut changed = resistor.clone();
+        changed.ohms = ohms;
+        let resistance = changed.resistance_ohms();
+        if !resistance.is_finite() || resistance == 0.0 {
+            return false;
+        }
+        if resistor.ohms != ohms {
+            resistor.ohms = ohms;
+            self.cached_stamp = None;
+            self.restart = true;
+            self.settled = false;
+        }
+        true
+    }
+
+    /// Lower every temperature-dependent element again at `celsius`, as a
+    /// `.dc TEMP` point: the `D`, `Q`, `J` and `M` devices are replaced and
+    /// each resistor takes the fresh NTC or `tc1`/`tc2` temperature while
+    /// keeping its present nominal value. Sources and switches are untouched.
+    fn set_circuit_temperature(&mut self, celsius: f64) -> Result<(), AnalogError> {
+        let lowered = self.circuit.at_temperature(celsius)?;
+        if lowered.resistors.len() != self.circuit.resistors.len()
+            || lowered.diodes.len() != self.circuit.diodes.len()
+            || lowered.bjts.len() != self.circuit.bjts.len()
+            || lowered.mosfets.len() != self.circuit.mosfets.len()
+            || lowered.jfets.len() != self.circuit.jfets.len()
+        {
+            return Err(AnalogError::Config(
+                "`.dc TEMP` lowered a circuit that no longer matches the solver's".to_string(),
+            ));
+        }
+        for (resistor, fresh) in self.circuit.resistors.iter_mut().zip(lowered.resistors) {
+            resistor.ntc = fresh.ntc;
+            resistor.temperature_coefficients = fresh.temperature_coefficients;
+        }
+        self.circuit.diodes = lowered.diodes;
+        self.circuit.bjts = lowered.bjts;
+        self.circuit.mosfets = lowered.mosfets;
+        self.circuit.jfets = lowered.jfets;
+        self.circuit.temperature_celsius = lowered.temperature_celsius;
+        self.cached_stamp = None;
+        self.restart = true;
+        self.settled = false;
+        Ok(())
     }
 
     /// Index of a named resistor that has an NTC Beta model.
@@ -707,7 +1486,7 @@ impl Solver {
             .switches
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.voltage.is_none() && s.ctrl.to_ascii_lowercase() == key)
+            .filter(|(_, s)| s.is_routed() && s.ctrl.to_ascii_lowercase() == key)
             .map(|(index, _)| index)
             .collect()
     }
@@ -745,10 +1524,10 @@ impl Solver {
 
     /// Open or close a switch. Takes effect on the next [`Self::advance`].
     ///
-    /// Voltage-controlled switches ignore this: their state is refreshed from
-    /// the sensed nodes at the start of every step.
+    /// Voltage- and current-controlled switches ignore this: their state is
+    /// refreshed from the sensed quantity at the start of every step.
     pub fn set_switch(&mut self, index: usize, closed: bool) {
-        if self.circuit.switches[index].voltage.is_some() {
+        if !self.circuit.switches[index].is_routed() {
             return;
         }
         if self.switch_closed[index] != closed {
@@ -772,6 +1551,27 @@ impl Solver {
     fn update_voltage_switches(&mut self) -> bool {
         let mut changed = false;
         for index in 0..self.circuit.switches.len() {
+            if let Some(control) = &self.circuit.switches[index].threshold {
+                // SPICE `SW`/`CSW`: signed, with the band centred on the
+                // threshold, and the state held inside the band.
+                let sensed = match control.sense {
+                    SwitchSense::Voltage { pos, neg } => node_diff(&self.node_v, pos, neg),
+                    SwitchSense::Current { branch, .. } => self.branch_i[branch],
+                };
+                let closed_now = self.switch_closed[index];
+                let desired = if sensed > control.threshold + control.hysteresis {
+                    true
+                } else if sensed < control.threshold - control.hysteresis {
+                    false
+                } else {
+                    closed_now
+                };
+                if desired != closed_now {
+                    self.switch_closed[index] = desired;
+                    changed = true;
+                }
+                continue;
+            }
             let Some(control) = self.circuit.switches[index].voltage.clone() else {
                 continue;
             };
@@ -835,15 +1635,53 @@ impl Solver {
     }
 
     /// Solve the DC operating point and reset the reactive state to it.
+    ///
+    /// Under `.tran ... uic` there is no operating point: like SPICE's
+    /// `MODEUIC`, every node and branch starts at zero and only the `.ic` /
+    /// `ic=` overrides seed the reactive state.
     pub fn solve_operating_point(&mut self) -> Result<(), AnalogError> {
-        // Voltage-controlled contacts depend on the solved node voltages, so
-        // the OP may need a few passes until the contacts stop flipping.
-        for _ in 0..8 {
+        let passes = if self.circuit.uic {
+            self.node_v.fill(0.0);
+            self.branch_i.fill(0.0);
+            0
+        } else {
+            // Voltage-controlled contacts depend on the solved node voltages,
+            // so the OP may need a few passes until the contacts stop flipping.
+            8
+        };
+        self.holding_ic = !self.circuit.node_ic.is_empty();
+        let solved = self.solve_operating_point_passes(passes);
+        self.holding_ic = false;
+        solved?;
+        for index in 0..self.circuit.capacitors.len() {
+            let capacitor = &self.circuit.capacitors[index];
+            self.cap_v[index] = node_diff(&self.node_v, capacitor.a, capacitor.b);
+            self.cap_i[index] = 0.0;
+        }
+        for index in 0..self.circuit.inductors.len() {
+            self.ind_i[index] = self.branch_i[self.circuit.voltage_sources.len() + index];
+            self.ind_v[index] = 0.0;
+        }
+        self.apply_initial_conditions();
+        // A line at its operating point has carried the same two waves for
+        // ever.
+        for index in 0..self.circuit.transmission_lines.len() {
+            let [w1, w2] = self.line_waves(index, &self.node_v, &self.branch_i);
+            self.line_history[index] = vec![[0.0, w1, w2]];
+        }
+        self.restart = true;
+        Ok(())
+    }
+
+    /// The operating-point solve itself: up to `passes` solves, each
+    /// followed by a voltage-switch update, stopping once no contact flips.
+    fn solve_operating_point_passes(&mut self, passes: usize) -> Result<(), AnalogError> {
+        for _ in 0..passes {
             self.cached_stamp = None;
             self.settled = false;
             if self.nonlinear {
                 self.save_linearisation();
-                if let Err(error) = self.newton(Stamp::OperatingPoint, None, self.time) {
+                if let Err(error) = self.operating_point_newton() {
                     self.restore_linearisation();
                     self.gmin_stepping().map_err(|_| error)?;
                 }
@@ -858,18 +1696,145 @@ impl Solver {
                 break;
             }
         }
-        for index in 0..self.circuit.capacitors.len() {
-            let capacitor = &self.circuit.capacitors[index];
-            self.cap_v[index] = node_diff(&self.node_v, capacitor.a, capacitor.b);
-            self.cap_i[index] = 0.0;
-        }
-        for index in 0..self.circuit.inductors.len() {
-            self.ind_i[index] = self.branch_i[self.circuit.voltage_sources.len() + index];
-            self.ind_v[index] = 0.0;
-        }
-        self.apply_initial_conditions();
-        self.restart = true;
         Ok(())
+    }
+
+    /// `v + Z0·i` at each port of `T` line `index`: what the port sends into
+    /// the line, and what the other port sees `TD` later.
+    fn line_waves(&self, index: usize, node_v: &[f64], branch_i: &[f64]) -> [f64; 2] {
+        let line = &self.circuit.transmission_lines[index];
+        let branch = self.circuit.transmission_line_branch(index);
+        [
+            node_diff(node_v, line.p1, line.n1) + line.z0 * branch_i[branch],
+            node_diff(node_v, line.p2, line.n2) + line.z0 * branch_i[branch + 1],
+        ]
+    }
+
+    /// The history terms of `T` line `index` for a step of `h` to `time`:
+    /// `[alpha, e1, e2]`, where port 1 obeys `v1 − Z0·i1 − alpha·w2 = e1`
+    /// and port 2 the mirror image.
+    ///
+    /// The wave wanted is the one sent at `time − TD`. With `TD >= h` that
+    /// instant is at or before the last accepted point, so `alpha` is 0 and
+    /// `e` is read from the history by linear interpolation. With `TD < h`
+    /// it falls inside the step: the wave is interpolated between the last
+    /// accepted point and the step's own unknown end point, which puts the
+    /// weight `alpha = 1 − TD/h` on the unknown. At the operating point
+    /// `alpha` is 1 and `e` is 0: the two ports are wired together.
+    fn line_terms(&self, index: usize, stamp: Stamp, time: f64) -> [f64; 3] {
+        let delay = self.circuit.transmission_lines[index].delay;
+        let alpha = line_alpha(delay, stamp);
+        if stamp == Stamp::OperatingPoint {
+            return [alpha, 0.0, 0.0];
+        }
+        let history = &self.line_history[index];
+        let newest = history[history.len() - 1];
+        if alpha > 0.0 {
+            return [alpha, (1.0 - alpha) * newest[2], (1.0 - alpha) * newest[1]];
+        }
+        let wanted = time - delay;
+        // The newest entry holds from its own time on: a settled line stops
+        // recording, and a wave wanted from that stretch is the settled one.
+        let after = history.partition_point(|entry| entry[0] < wanted);
+        if after == history.len() {
+            return [0.0, newest[2], newest[1]];
+        }
+        if after == 0 {
+            return [0.0, history[0][2], history[0][1]];
+        }
+        let (old, new) = (history[after - 1], history[after]);
+        let weight = (wanted - old[0]) / (new[0] - old[0]);
+        [
+            0.0,
+            old[2] + weight * (new[2] - old[2]),
+            old[1] + weight * (new[1] - old[1]),
+        ]
+    }
+
+    /// The matrix rows and columns of every `T` line, which depend only on
+    /// the stamp.
+    fn stamp_lines(&mut self, stamp: Stamp) {
+        let dim = self.dim();
+        for (index, line) in self.circuit.transmission_lines.iter().enumerate() {
+            let alpha = line_alpha(line.delay, stamp);
+            let row1 = self.nodes + self.circuit.transmission_line_branch(index);
+            let row2 = row1 + 1;
+            let ports = [
+                (row1, line.p1, line.n1, row2, line.p2, line.n2),
+                (row2, line.p2, line.n2, row1, line.p1, line.n1),
+            ];
+            for (row, p, n, far_row, far_p, far_n) in ports {
+                let matrix = &mut self.matrix;
+                // The branch current enters the port at `+` and leaves at `-`.
+                add(matrix, dim, p, Some(row), 1.0);
+                add(matrix, dim, n, Some(row), -1.0);
+                // v − Z0·i − alpha·(v_far + Z0·i_far) = e.
+                add(matrix, dim, Some(row), p, 1.0);
+                add(matrix, dim, Some(row), n, -1.0);
+                matrix[row * dim + row] -= line.z0;
+                add(matrix, dim, Some(row), far_p, -alpha);
+                add(matrix, dim, Some(row), far_n, alpha);
+                matrix[row * dim + far_row] -= alpha * line.z0;
+            }
+        }
+    }
+
+    /// The right-hand side of every `T` line's two rows: the delayed waves.
+    fn stamp_line_history(&mut self, stamp: Stamp) {
+        let time = match stamp {
+            Stamp::OperatingPoint => 0.0,
+            Stamp::Transient(h, _) => self.time + h,
+        };
+        for index in 0..self.circuit.transmission_lines.len() {
+            let [_, e1, e2] = self.line_terms(index, stamp, time);
+            let row = self.nodes + self.circuit.transmission_line_branch(index);
+            self.rhs[row] = e1;
+            self.rhs[row + 1] = e2;
+        }
+    }
+
+    /// Record what each `T` line's ports sent at the end of the step just
+    /// solved, and drop what no later step can ask for. Returns true when
+    /// every line was at rest before the step and still is.
+    fn record_line_waves(&mut self, time: f64) -> bool {
+        let previous_time = self.time;
+        let mut at_rest = true;
+        for index in 0..self.circuit.transmission_lines.len() {
+            let nodes = self.nodes;
+            let [w1, w2] = self.line_waves(index, &self.solution[..nodes], &self.solution[nodes..]);
+            let delay = self.circuit.transmission_lines[index].delay;
+            let history = &mut self.line_history[index];
+            let same = |entry: &[f64; 3], w1: f64, w2: f64| {
+                entry[1].to_bits() == w1.to_bits() && entry[2].to_bits() == w2.to_bits()
+            };
+            let newest = history[history.len() - 1];
+            at_rest &= history.iter().all(|entry| same(entry, w1, w2));
+            // A settled line skipped its records: the newest wave held up to
+            // the start of this step.
+            let extend = |history: &mut Vec<[f64; 3]>, time: f64, w1: f64, w2: f64| {
+                let count = history.len();
+                if count >= 2
+                    && same(&history[count - 2], w1, w2)
+                    && same(&history[count - 1], w1, w2)
+                {
+                    history[count - 1][0] = time;
+                } else {
+                    history.push([time, w1, w2]);
+                }
+            };
+            if newest[0] < previous_time {
+                extend(history, previous_time, newest[1], newest[2]);
+            }
+            extend(history, time, w1, w2);
+            // Keep the newest entry at or before the oldest instant a step
+            // can still ask for, and everything after it.
+            let oldest = time - delay;
+            let keep_from = history
+                .partition_point(|entry| entry[0] <= oldest)
+                .saturating_sub(1);
+            history.drain(..keep_from);
+        }
+        at_rest
     }
 
     /// `.ic V(node)=v` and element `ic=` override the operating point.
@@ -879,7 +1844,13 @@ impl Solver {
     /// `.ic` is used for what it is for (seeding a reactive element), and the
     /// override order — node `.ic` first, then per-element `ic=` — is stated
     /// here so a netlist that sets both is not ambiguous.
+    ///
+    /// Under `uic` a semiconductor instance `ic=` replaces the node voltages
+    /// its charge history is evaluated at, as ngspice's `MODEINITTRAN` with
+    /// `MODEUIC` does: the stored charge is `q(ic)`, so the first step draws
+    /// `(q(v) - q(ic)) / h` through the junction.
     fn apply_initial_conditions(&mut self) {
+        let uic = self.circuit.uic;
         for (node, value) in &self.circuit.node_ic {
             self.node_v[*node] = *value;
         }
@@ -904,7 +1875,10 @@ impl Solver {
             let diode = &self.circuit.diodes[index];
             let charge_model = diode.operating_model;
             if diode_charge_active(charge_model) {
-                self.diode_vj[index] = node_diff(&self.node_v, diode.junction_anode, diode.cathode);
+                self.diode_vj[index] = match diode.ic {
+                    Some(vd) if uic => vd,
+                    _ => node_diff(&self.node_v, diode.junction_anode, diode.cathode),
+                };
                 let op = diode_model_op(
                     self.diode_vj[index],
                     diode.model,
@@ -922,18 +1896,65 @@ impl Solver {
         for index in 0..self.circuit.bjts.len() {
             let bjt = &self.circuit.bjts[index];
             let sign = bjt.model.polarity.sign();
-            let vbe = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_e);
-            let vbc = sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_c);
-            self.bjt_q[index] = bjt_charge_op(vbe, vbc, bjt.operating_model, bjt.thermal_voltage).q;
-            self.bjt_i[index] = [0.0; 2];
+            let (vbe, vbc, vbc_external, vbcx) = match bjt.ic {
+                // bjtload.c: vbe = type·icVBE, vbc = vbx = vbe − type·icVCE.
+                Some([ic_vbe, ic_vce]) if uic => {
+                    let vbe = sign * ic_vbe;
+                    let vbc = vbe - sign * ic_vce;
+                    (vbe, vbc, vbc, vbc)
+                }
+                _ => (
+                    sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_e),
+                    sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_c),
+                    sign * node_diff(&self.node_v, bjt.b, bjt.junction_c),
+                    sign * node_diff(&self.node_v, bjt.junction_b, bjt.junction_cx),
+                ),
+            };
+            self.bjt_q[index] = bjt_charge_op(
+                vbe,
+                vbc,
+                vbc_external,
+                vbcx,
+                bjt.operating_model,
+                bjt.thermal_voltage,
+            )
+            .q;
+            self.bjt_i[index] = [0.0; 4];
+            // ngspice MODEINITTRAN: both history points hold the DC cbe/qb.
+            let transport =
+                device::bjt_forward_transport(vbe, vbc, bjt.operating_model, bjt.thermal_voltage);
+            let delayed = transport.cbe / transport.qb;
+            self.bjt_excess[index] = [delayed, delayed];
         }
+        self.previous_step = 0.0;
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
             let sign = mosfet.operating_model.polarity.sign();
-            let voltages = [
-                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d),
-                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s),
-            ];
+            let node_v = &self.node_v;
+            // Terminal volts the charges start from: the intrinsic nodes, or
+            // under uic the instance `ic=` (mos1load.c MODEINITJCT reads
+            // `type·icVDS` etc.; MOS1getic fills an omitted one from the
+            // external nodes). Under uic ngspice does NOT replace an all-zero
+            // ic with vgs = VTO, vbs = −1: that needs MODETRAN, MODEDCOP or
+            // no MODEUIC, and the uic start runs in MODETRANOP | MODEUIC.
+            let [vgs, vds, vbs, vgd, vgb, vbd] = if uic {
+                let ic = mosfet.ic;
+                let vds = ic[0].unwrap_or_else(|| node_diff(node_v, mosfet.d, mosfet.s));
+                let vgs = ic[1].unwrap_or_else(|| node_diff(node_v, mosfet.g, mosfet.s));
+                let vbs = ic[2].unwrap_or_else(|| node_diff(node_v, mosfet.bulk, mosfet.s));
+                [vgs, vds, vbs, vgs - vds, vgs - vbs, vbs - vds]
+            } else {
+                let (g, d, s, b) = (mosfet.g, mosfet.junction_d, mosfet.junction_s, mosfet.bulk);
+                [
+                    node_diff(node_v, g, s),
+                    node_diff(node_v, d, s),
+                    node_diff(node_v, b, s),
+                    node_diff(node_v, g, d),
+                    node_diff(node_v, g, b),
+                    node_diff(node_v, b, d),
+                ]
+            };
+            let voltages = [sign * vbd, sign * vbs];
             self.mos_bulk_q[index] = core::array::from_fn(|junction| {
                 mosfet
                     .bulk_junction_charge(voltages[junction], junction == 0)
@@ -941,23 +1962,18 @@ impl Solver {
             });
             self.mos_bulk_i[index] = [0.0; 2];
 
-            let voltages = [
-                node_diff(&self.node_v, mosfet.g, mosfet.junction_s),
-                node_diff(&self.node_v, mosfet.g, mosfet.junction_d),
-                node_diff(&self.node_v, mosfet.g, mosfet.bulk),
-            ];
+            let voltages = [vgs, vgd, vgb];
             let capacitances = mosfet.overlap_capacitances();
             self.mos_overlap_q[index] =
                 core::array::from_fn(|junction| capacitances[junction] * voltages[junction]);
             self.mos_overlap_i[index] = [0.0; 3];
 
-            let sign = mosfet.operating_model.polarity.sign();
             let channel_caps = mos_channel_capacitance_halves(
                 mosfet,
-                sign * voltages[0],
-                sign * node_diff(&self.node_v, mosfet.junction_d, mosfet.junction_s),
-                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d),
-                sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s),
+                sign * vgs,
+                sign * vds,
+                sign * vbd,
+                sign * vbs,
             );
             self.mos_channel_v[index] = voltages;
             self.mos_channel_q[index] =
@@ -966,12 +1982,14 @@ impl Solver {
             self.mos_channel_cap_half[index] = channel_caps;
 
             if mosfet.operating_model.channel_charge_model == MosChannelChargeModel::WardDutton {
-                let vgs = sign * node_diff(&self.node_v, mosfet.g, mosfet.junction_s);
-                let vds = sign * node_diff(&self.node_v, mosfet.junction_d, mosfet.junction_s);
-                let vbd = sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_d);
-                let vbs = sign * node_diff(&self.node_v, mosfet.bulk, mosfet.junction_s);
-                self.mos_conserving_q[index] =
-                    device::mos_ward_dutton_channel_charge(mosfet, vgs, vds, vbd, vbs).q;
+                self.mos_conserving_q[index] = device::mos_ward_dutton_channel_charge(
+                    mosfet,
+                    sign * vgs,
+                    sign * vds,
+                    sign * vbd,
+                    sign * vbs,
+                )
+                .q;
                 self.mos_conserving_i[index] = [0.0; 4];
             }
         }
@@ -979,8 +1997,14 @@ impl Solver {
             let jfet = &self.circuit.jfets[index];
             let sign = jfet.model.polarity.sign();
             let model = jfet.operating_model;
-            let vgs = sign * node_diff(&self.node_v, jfet.g, jfet.junction_s);
-            let vgd = sign * node_diff(&self.node_v, jfet.g, jfet.junction_d);
+            let (vgs, vgd) = match jfet.ic {
+                // jfetload.c: vgs = type·icVGS, vgd = vgs − type·icVDS.
+                Some([ic_vds, ic_vgs]) if uic => (sign * ic_vgs, sign * (ic_vgs - ic_vds)),
+                _ => (
+                    sign * node_diff(&self.node_v, jfet.g, jfet.junction_s),
+                    sign * node_diff(&self.node_v, jfet.g, jfet.junction_d),
+                ),
+            };
             self.jfet_q[index] = [
                 device::junction_depletion_charge(vgs, model.cgs, model.pb, 0.5, model.fc).0,
                 device::junction_depletion_charge(vgd, model.cgd, model.pb, 0.5, model.fc).0,
@@ -1059,6 +2083,7 @@ impl Solver {
         self.saved_diode_vj.copy_from_slice(&self.diode_vj);
         self.saved_bjt_vbe.copy_from_slice(&self.bjt_vbe);
         self.saved_bjt_vbc.copy_from_slice(&self.bjt_vbc);
+        self.saved_bjt_vbcx.copy_from_slice(&self.bjt_vbcx);
         self.saved_mos_vgs.copy_from_slice(&self.mos_vgs);
         self.saved_mos_vds.copy_from_slice(&self.mos_vds);
         self.saved_mos_vbd.copy_from_slice(&self.mos_vbd);
@@ -1071,12 +2096,15 @@ impl Solver {
             .copy_from_slice(&self.output_limit_point);
         self.saved_slew_limit_point
             .copy_from_slice(&self.slew_limit_point);
+        self.saved_behavioural_point
+            .clone_from(&self.behavioural_point);
     }
 
     fn restore_linearisation(&mut self) {
         self.diode_vj.copy_from_slice(&self.saved_diode_vj);
         self.bjt_vbe.copy_from_slice(&self.saved_bjt_vbe);
         self.bjt_vbc.copy_from_slice(&self.saved_bjt_vbc);
+        self.bjt_vbcx.copy_from_slice(&self.saved_bjt_vbcx);
         self.mos_vgs.copy_from_slice(&self.saved_mos_vgs);
         self.mos_vds.copy_from_slice(&self.saved_mos_vds);
         self.mos_vbd.copy_from_slice(&self.saved_mos_vbd);
@@ -1089,6 +2117,8 @@ impl Solver {
             .copy_from_slice(&self.saved_output_limit_point);
         self.slew_limit_point
             .copy_from_slice(&self.saved_slew_limit_point);
+        self.behavioural_point
+            .clone_from(&self.saved_behavioural_point);
     }
 
     /// One step of exactly `h`, no retry.
@@ -1209,14 +2239,18 @@ impl Solver {
             let voltages = [
                 sign * node_diff(nodes, bjt.junction_b, bjt.junction_e),
                 sign * node_diff(nodes, bjt.junction_b, bjt.junction_c),
+                sign * node_diff(nodes, bjt.b, bjt.junction_c),
+                sign * node_diff(nodes, bjt.junction_b, bjt.junction_cx),
             ];
             let charge = bjt_charge_op(
                 voltages[0],
                 voltages[1],
+                voltages[2],
+                voltages[3],
                 bjt.operating_model,
                 bjt.thermal_voltage,
             );
-            for junction in 0..2 {
+            for junction in 0..4 {
                 if !bjt_charge_active(model, junction) {
                     continue;
                 }
@@ -1233,7 +2267,25 @@ impl Solver {
                 self.bjt_q[index][junction] = q_new;
                 self.bjt_i[index][junction] = i_new;
             }
+            let delay = device::bjt_excess_phase_delay(bjt.model);
+            if delay > 0.0 {
+                let transport = device::bjt_forward_transport(
+                    voltages[0],
+                    voltages[1],
+                    model,
+                    bjt.thermal_voltage,
+                );
+                let (history, arg3) =
+                    excess_phase_step(delay, h, self.previous_step, self.bjt_excess[index]);
+                let delayed = history + transport.cbe * arg3 / transport.qb;
+                let [newest, older] = self.bjt_excess[index];
+                self.settled &= newest.to_bits() == delayed.to_bits()
+                    && older.to_bits() == newest.to_bits()
+                    && self.previous_step.to_bits() == h.to_bits();
+                self.bjt_excess[index] = [delayed, newest];
+            }
         }
+        self.previous_step = h;
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
             let sign = jfet.model.polarity.sign();
@@ -1384,6 +2436,8 @@ impl Solver {
             self.ind_v[index] = node_diff(&self.solution[..self.nodes], inductor.a, inductor.b);
         }
 
+        self.settled &= self.record_line_waves(time);
+
         self.node_v.copy_from_slice(&self.solution[..self.nodes]);
         self.branch_i.copy_from_slice(&self.solution[self.nodes..]);
         self.time = time;
@@ -1406,6 +2460,1529 @@ impl Solver {
         self.nonlinear
     }
 
+    /// Run the netlist's own `.dc` sweep; see [`Solver::dc_analysis`].
+    pub fn dc_sweep(&self) -> Result<DcResponse, AnalogError> {
+        let sweep = self.circuit.dc_sweep.as_ref().ok_or_else(|| {
+            AnalogError::Config(
+                "netlist has no `.dc <src> <start> <stop> <incr>` sweep".to_string(),
+            )
+        })?;
+        self.dc_analysis(sweep)
+    }
+
+    /// DC transfer curve: the operating point at every value of `sweep`, as
+    /// ngspice's `.dc` computes it. A swept `V` or `I` takes the value as its
+    /// DC level; a swept `R` takes it as its nominal resistance, so an NTC or
+    /// `tc1`/`tc2` law still scales it. A swept `TEMP` (°C) lowers every
+    /// temperature-dependent device and resistor again at that temperature,
+    /// as a `.temp` card would, unless the element sets its own `temp=`; this
+    /// needs the circuit to come from a parsed deck. Each point starts Newton
+    /// from the one before, so a sweep through a diode knee converges like a
+    /// source ramp.
+    /// Every other source keeps its present value; `.tran ... uic` does not
+    /// apply, because a DC sweep has no initial transient.
+    ///
+    /// The sweep runs on a copy of the solver: `self` and its transient state
+    /// are not touched.
+    pub fn dc_analysis(&self, sweep: &DcSweep) -> Result<DcResponse, AnalogError> {
+        #[derive(Clone, Copy)]
+        enum Swept {
+            Voltage(usize),
+            Current(usize),
+            Resistor(usize),
+            Temperature,
+        }
+        let resolve = |name: &str| {
+            if name.eq_ignore_ascii_case("temp") {
+                return Ok(Swept::Temperature);
+            }
+            self.voltage_source_index(name)
+                .map(Swept::Voltage)
+                .or_else(|| self.current_source_index(name).map(Swept::Current))
+                .or_else(|| self.resistor_index(name).map(Swept::Resistor))
+                .ok_or_else(|| {
+                    AnalogError::Config(format!(
+                        "`.dc` sweeps `{name}`, but the netlist has no such `V`, `I` or `R` element"
+                    ))
+                })
+        };
+        let inner_source = resolve(&sweep.inner.source)?;
+        let outer_source = sweep
+            .outer
+            .as_ref()
+            .map(|outer| resolve(&outer.source))
+            .transpose()?;
+        let inner = sweep.inner.values();
+        let outer = sweep.outer.as_ref().map(|outer| outer.values());
+
+        let mut work = self.clone();
+        work.circuit.uic = false;
+        // `.ic` belongs to the transient's operating point (`MODETRANOP`);
+        // ngspice's `.dc` neither holds nor reports it.
+        work.circuit.node_ic.clear();
+        let set = |work: &mut Self, swept: Swept, value: f64| match swept {
+            Swept::Voltage(index) => {
+                work.set_voltage_source(index, value);
+                Ok(())
+            }
+            Swept::Current(index) => {
+                work.set_current_source(index, value);
+                Ok(())
+            }
+            Swept::Resistor(index) => {
+                if work.set_resistor(index, value) {
+                    Ok(())
+                } else {
+                    Err(AnalogError::Config(format!(
+                        "`.dc` sets resistor `{}` to {value} ohm, which gives a zero or non-finite resistance",
+                        work.circuit.resistors[index].name
+                    )))
+                }
+            }
+            Swept::Temperature => work.set_circuit_temperature(value),
+        };
+        let dim = self.dim();
+        let outer_values = outer.clone().unwrap_or_else(|| vec![0.0]);
+        let mut values = Vec::with_capacity(inner.len() * outer_values.len() * dim);
+        for &outer_value in &outer_values {
+            if let Some(swept) = outer_source {
+                set(&mut work, swept, outer_value)?;
+            }
+            for &inner_value in &inner {
+                set(&mut work, inner_source, inner_value)?;
+                work.solve_operating_point()?;
+                // ngspice holds the nodesets only at the first point
+                // (`MODEINITJCT`); every later point continues from the one
+                // before, so a bistable sweep keeps its hysteresis.
+                work.circuit.node_nodeset.clear();
+                values.extend_from_slice(&work.node_v);
+                values.extend_from_slice(&work.branch_i);
+            }
+        }
+        Ok(DcResponse {
+            inner,
+            outer,
+            nodes: self.nodes,
+            dim,
+            values,
+        })
+    }
+
+    /// Run the netlist's own `.ac` sweep; see [`Solver::ac_analysis`].
+    pub fn ac_sweep(&mut self) -> Result<AcResponse, AnalogError> {
+        let sweep = self.circuit.ac_sweep.ok_or_else(|| {
+            AnalogError::Config("netlist has no `.ac dec|oct|lin ...` sweep".to_string())
+        })?;
+        self.ac_analysis(&sweep.frequencies())
+    }
+
+    /// Small-signal AC analysis at each of `frequencies` (hertz), linearised
+    /// about the solver's present solution — the DC operating point on a
+    /// fresh solver. The stimulus is every source's `AC <mag> [<phase>]`.
+    ///
+    /// The transient state is left exactly as it was: the next
+    /// [`Solver::advance`] produces the same bits it would have without
+    /// this call.
+    pub fn ac_analysis(&mut self, frequencies: &[f64]) -> Result<AcResponse, AnalogError> {
+        if let Some(bad) = frequencies.iter().find(|f| !(f.is_finite() && **f >= 0.0)) {
+            return Err(AnalogError::Config(format!(
+                "`.ac` frequency {bad} Hz must be finite and not negative"
+            )));
+        }
+        let dim = self.dim();
+        let (g, c, couplings, excitation) = self.linearised(|solver| {
+            let couplings = solver.delayed_couplings();
+            let (g, c) = solver.ac_matrices(&couplings)?;
+            Ok((g, c, couplings, solver.ac_excitation()))
+        })?;
+
+        let mut values = Vec::with_capacity(frequencies.len() * dim);
+        let size = 2 * dim;
+        let mut system = vec![0.0; size * size];
+        for &hertz in frequencies {
+            small_signal_system(&mut system, dim, &g, &c, &couplings, hertz);
+            let mut rhs: Vec<f64> = excitation
+                .iter()
+                .map(|p| p.re)
+                .chain(excitation.iter().map(|p| p.im))
+                .collect();
+            solve_dense(&mut system, &mut rhs, size)
+                .map_err(|row| AnalogError::Singular { row: row % dim })?;
+            values.extend((0..dim).map(|k| Phasor {
+                re: rhs[k],
+                im: rhs[dim + k],
+            }));
+        }
+        Ok(AcResponse {
+            frequencies: frequencies.to_vec(),
+            nodes: self.nodes,
+            dim,
+            values,
+        })
+    }
+
+    /// Run the netlist's own `.noise` analysis; see
+    /// [`Solver::noise_analysis`].
+    pub fn noise_sweep(&mut self) -> Result<NoiseResponse, AnalogError> {
+        let noise = self.circuit.noise_sweep.clone().ok_or_else(|| {
+            AnalogError::Config("netlist has no `.noise v(<out>) <src> ...` analysis".to_string())
+        })?;
+        self.noise_analysis(
+            &noise.output,
+            noise.reference.as_deref(),
+            &noise.input,
+            &noise.sweep.frequencies(),
+        )
+    }
+
+    /// Small-signal noise analysis, as ngspice's `.noise`: every noise
+    /// generator of the circuit linearised about the solver's present
+    /// solution (the DC operating point on a fresh solver), carried to
+    /// `v(output) − v(reference)` at each of `frequencies` (hertz). The
+    /// generators are uncorrelated, so their output powers add.
+    ///
+    /// The input-referred density divides by the squared gain from `input`,
+    /// an independent `V` or `I` source, driven at unit magnitude whatever
+    /// its `AC` value, as ngspice does. Thermal noise uses each element's own
+    /// temperature: a device's or resistor's `temp=`, else `.temp`, else the
+    /// engine's fixed 300 K.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn noise_analysis(
+        &mut self,
+        output: &str,
+        reference: Option<&str>,
+        input: &str,
+        frequencies: &[f64],
+    ) -> Result<NoiseResponse, AnalogError> {
+        if let Some(bad) = frequencies.iter().find(|f| !(f.is_finite() && **f > 0.0)) {
+            return Err(AnalogError::Config(format!(
+                "`.noise` frequency {bad} Hz must be finite and positive"
+            )));
+        }
+        let node = |name: &str| {
+            self.circuit.node(name).ok_or_else(|| {
+                AnalogError::Config(format!(
+                    "`.noise` output node `{name}` is not in the netlist"
+                ))
+            })
+        };
+        let output = node(output)?;
+        let reference = reference.map(node).transpose()?.flatten();
+        if output == reference {
+            return Err(AnalogError::Config(
+                "`.noise` output and reference are the same node".to_string(),
+            ));
+        }
+        let dim = self.dim();
+        let mut stimulus = vec![0.0; dim];
+        if let Some(index) = self.voltage_source_index(input) {
+            stimulus[self.nodes + index] = 1.0;
+        } else if let Some(index) = self.current_source_index(input) {
+            let source = &self.circuit.current_sources[index];
+            inject(&mut stimulus, source.p, -1.0);
+            inject(&mut stimulus, source.n, 1.0);
+        } else {
+            return Err(AnalogError::Config(format!(
+                "`.noise` input `{input}` is not an independent `V` or `I` source"
+            )));
+        }
+        let (g, c, couplings, sources) = self.linearised(|solver| {
+            let couplings = solver.delayed_couplings();
+            let (g, c) = solver.ac_matrices(&couplings)?;
+            Ok((g, c, couplings, solver.noise_sources()))
+        })?;
+
+        // ngspice's `N_MINGAIN`.
+        const MIN_GAIN: f64 = 1e-20;
+        let size = 2 * dim;
+        let mut system = vec![0.0; size * size];
+        let mut transpose = vec![0.0; size * size];
+        let mut contributions = Vec::with_capacity(frequencies.len() * sources.len());
+        let mut gain_square_inverse = Vec::with_capacity(frequencies.len());
+        for &hertz in frequencies {
+            small_signal_system(&mut system, dim, &g, &c, &couplings, hertz);
+            for row in 0..size {
+                for column in 0..size {
+                    transpose[column * size + row] = system[row * size + column];
+                }
+            }
+            // The realified transpose is the conjugate transpose `Yᴴ`, so the
+            // solution is `w = conj(Y⁻ᵀ·e)`: one solve gives the transfer
+            // from a current injected at any node pair to the output.
+            let mut adjoint = vec![0.0; size];
+            for (node, sign) in [(output, 1.0), (reference, -1.0)] {
+                if let Some(node) = node {
+                    adjoint[node] = sign;
+                }
+            }
+            solve_dense(&mut transpose, &mut adjoint, size)
+                .map_err(|row| AnalogError::Singular { row: row % dim })?;
+            let at = |node: NodeRef| node.map_or((0.0, 0.0), |n| (adjoint[n], adjoint[dim + n]));
+            let (mut gain_re, mut gain_im) = (0.0, 0.0);
+            for (k, &value) in stimulus.iter().enumerate() {
+                gain_re += adjoint[k] * value;
+                gain_im += adjoint[dim + k] * value;
+            }
+            gain_square_inverse.push(1.0 / (gain_re * gain_re + gain_im * gain_im).max(MIN_GAIN));
+            for source in &sources {
+                let (a_re, a_im) = at(source.a);
+                let (b_re, b_im) = at(source.b);
+                let (re, im) = (a_re - b_re, a_im - b_im);
+                contributions.push((re * re + im * im) * source.density_at(hertz));
+            }
+        }
+        Ok(NoiseResponse {
+            frequencies: frequencies.to_vec(),
+            sources,
+            contributions,
+            gain_square_inverse,
+        })
+    }
+
+    /// Run the netlist's own `.tf` card; see [`Solver::transfer_analysis`].
+    pub fn transfer_function(&mut self) -> Result<TransferResponse, AnalogError> {
+        let card = self.circuit.transfer_function.clone().ok_or_else(|| {
+            AnalogError::Config("netlist has no `.tf v(<out>)|i(<element>) <src>` card".to_string())
+        })?;
+        self.transfer_analysis(&card.output, &card.input)
+    }
+
+    /// DC small-signal transfer function, as ngspice's `.tf`: the circuit
+    /// linearised about the solver's present solution (the DC operating
+    /// point on a fresh solver) and driven by a unit change of `input`, an
+    /// independent `V` or `I` source. One solve gives the gain and the input
+    /// resistance; a second, driven at the output with the input at rest,
+    /// gives the output resistance.
+    ///
+    /// Two differences from ngspice-42 are deliberate. An `i(<element>)`
+    /// output's resistance is `−1/I` for the branch current `I` a unit
+    /// voltage in series with the element drives, the formula ngspice uses
+    /// for a `V` input; ngspice's `tfanal.c` takes `1/max(1e-20, I)` and so
+    /// prints 1e20 whenever that current is negative. A resistance with no
+    /// current to define it is `f64::INFINITY`, where ngspice prints 1e20.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn transfer_analysis(
+        &mut self,
+        output: &TransferOutput,
+        input: &str,
+    ) -> Result<TransferResponse, AnalogError> {
+        let input_port = if let Some(index) = self.voltage_source_index(input) {
+            Port::Branch(self.nodes + index)
+        } else if let Some(index) = self.current_source_index(input) {
+            let source = &self.circuit.current_sources[index];
+            Port::Nodes(source.p, source.n)
+        } else {
+            return Err(AnalogError::Config(format!(
+                "`.tf` input `{input}` is not an independent `V` or `I` source"
+            )));
+        };
+        let output_port = self.output_port(output, ".tf")?;
+        let dim = self.dim();
+        let mut g = self.linearised(Self::dc_jacobian)?;
+        let solve = |g: &mut [f64], port: Port| {
+            let mut rhs = vec![0.0; dim];
+            port.excite(&mut rhs);
+            solve_dense(g, &mut rhs, dim).map_err(|row| AnalogError::Singular { row })?;
+            Ok::<_, AnalogError>(rhs)
+        };
+        let forward = solve(&mut g.clone(), input_port)?;
+        let input_impedance = input_port.impedance(&forward);
+        let output_impedance = if output_port == input_port {
+            input_impedance
+        } else {
+            output_port.impedance(&solve(&mut g, output_port)?)
+        };
+        Ok(TransferResponse {
+            transfer: output_port.response(&forward),
+            input_impedance,
+            output_impedance,
+        })
+    }
+
+    /// Run the netlist's own `.sens` card; see
+    /// [`Solver::sensitivity_analysis`].
+    pub fn sensitivity(&mut self) -> Result<SensitivityResponse, AnalogError> {
+        let card = self.circuit.sensitivity.clone().ok_or_else(|| {
+            AnalogError::Config("netlist has no `.sens v(<out>)|i(<element>)` card".to_string())
+        })?;
+        if card.ac.is_some() {
+            return Err(AnalogError::Config(
+                "the `.sens` card is the AC form; run `Solver::ac_sensitivity`".to_string(),
+            ));
+        }
+        let mut response = self.sensitivity_analysis(&card.output)?;
+        response
+            .entries
+            .extend(self.model_sensitivity_analysis(&card.output)?.entries);
+        response
+            .entries
+            .extend(self.instance_sensitivity_analysis(&card.output)?.entries);
+        Ok(response)
+    }
+
+    /// DC sensitivity to device model parameters, the `<device>:<param>`
+    /// entries ngspice's `.sens` prints: the derivative of the output at the
+    /// solver's present solution (the DC operating point on a fresh solver)
+    /// with respect to each numeric parameter the device's `.model` card
+    /// writes, for every `D`, `Q`, `J` and `M` in that order and netlist
+    /// order within each kind. The parameter moves for that one instance
+    /// alone, so two devices on one card get two entries. A parameter the
+    /// card leaves at its default, a zero one (it often switches a law off,
+    /// so it has no two-sided neighbourhood), a level or law selector, and a
+    /// device this engine added for a macromodel (a name holding `#`) are
+    /// not reported. Instance parameters (`AREA`, `M`, `W`, `L`, `TEMP`) are
+    /// [`Solver::instance_sensitivity_analysis`]'s.
+    ///
+    /// Each entry is `−wᵀ·∂F/∂p` with the same adjoint `w` as
+    /// [`Solver::sensitivity_analysis`]. `∂F/∂p` is a central difference of
+    /// the DC residual at the present solution: the deck is lowered again
+    /// with the parameter moved by a part in 10³ and by two parts in 10³
+    /// each way, the residual of each lowering is evaluated at the unchanged
+    /// unknowns, and the two differences are Richardson-extrapolated, which
+    /// leaves an `h⁴` error. Nothing is re-solved, so a weak parameter is not
+    /// lost in the Newton tolerance.
+    /// ngspice moves the parameter one way and re-loads the device, so the
+    /// two agree to about 1e-5. This needs a circuit parsed from a deck with
+    /// its `.sens` card, because the lowering is redone from the deck; a
+    /// value this solver changed after parsing is not seen.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn model_sensitivity_analysis(
+        &mut self,
+        output: &TransferOutput,
+    ) -> Result<SensitivityResponse, AnalogError> {
+        let circuit = &self.circuit;
+        let mut moves = Vec::new();
+        for (name, model) in circuit
+            .diodes
+            .iter()
+            .map(|d| (&d.name, &d.model_name))
+            .chain(circuit.bjts.iter().map(|q| (&q.name, &q.model_name)))
+            .chain(circuit.jfets.iter().map(|j| (&j.name, &j.model_name)))
+            .chain(circuit.mosfets.iter().map(|m| (&m.name, &m.model_name)))
+            .filter(|(name, _)| !name.contains('#'))
+        {
+            for (parameter, value) in circuit.model_parameters(model) {
+                if *value != 0.0 {
+                    moves.push(ParameterMove {
+                        entry: format!("{}:{parameter}", name.to_ascii_lowercase()),
+                        instance: name.clone(),
+                        target: MoveTarget::Model {
+                            model: model.clone(),
+                            parameter: parameter.clone(),
+                        },
+                        value: *value,
+                    });
+                }
+            }
+        }
+        self.parameter_sensitivity(output, moves)
+    }
+
+    /// DC sensitivity to device instance parameters, the
+    /// `<device>_<param>` entries ngspice's `.sens` prints: `_area`, `_m`
+    /// and `_temp` of every `D`, `Q` and `J`, and `_w`, `_l`, `_m` and
+    /// `_temp` of every `M`, in that order and netlist order within each
+    /// kind, per unit of the parameter (per °C for `_temp`). The value moved
+    /// is the one the device runs with, so an `AREA`, `M`, `W` or `L` the
+    /// line does not write is moved from its default. `_temp` is reported
+    /// only for a device with a temperature: its own `temp=` or the deck's
+    /// `.temp` / `.options temp=`; without one the device keeps this engine's
+    /// fixed 300 K laws, which have no temperature to move. A device this
+    /// engine added for a macromodel (a name holding `#`) is not reported.
+    ///
+    /// The method is [`Solver::model_sensitivity_analysis`]'s: the deck is
+    /// lowered again with the one instance parameter moved, and the moved DC
+    /// residual at the present solution is projected through the `.sens`
+    /// adjoint. ngspice-42 reports `_m` of a diode as zero; this engine
+    /// reports the derivative of the parallel-device law it stamps.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn instance_sensitivity_analysis(
+        &mut self,
+        output: &TransferOutput,
+    ) -> Result<SensitivityResponse, AnalogError> {
+        use InstanceParameter::{Area, Length, Multiplier, Temperature, Width};
+        let circuit = &self.circuit;
+        let mut moves = Vec::new();
+        let mut push = |name: &str, written: &[(InstanceParameter, Option<f64>)]| {
+            if name.contains('#') {
+                return;
+            }
+            for &(parameter, value) in written {
+                if let Some(value) = value {
+                    moves.push(ParameterMove {
+                        entry: format!("{}_{}", name.to_ascii_lowercase(), parameter.name()),
+                        instance: name.to_string(),
+                        target: MoveTarget::Instance(parameter),
+                        value,
+                    });
+                }
+            }
+        };
+        for d in &circuit.diodes {
+            push(
+                &d.name,
+                &[
+                    (Area, Some(d.area)),
+                    (Multiplier, Some(d.multiplier)),
+                    (Temperature, d.temperature_celsius),
+                ],
+            );
+        }
+        for q in &circuit.bjts {
+            push(
+                &q.name,
+                &[
+                    (Area, Some(q.area)),
+                    (Multiplier, Some(q.multiplier)),
+                    (Temperature, q.temperature_celsius),
+                ],
+            );
+        }
+        for j in &circuit.jfets {
+            push(
+                &j.name,
+                &[
+                    (Area, Some(j.area)),
+                    (Multiplier, Some(j.multiplier)),
+                    (Temperature, j.temperature_celsius),
+                ],
+            );
+        }
+        for m in &circuit.mosfets {
+            push(
+                &m.name,
+                &[
+                    (Width, Some(m.w)),
+                    (Length, Some(m.l)),
+                    (Multiplier, Some(m.multiplier)),
+                    (Temperature, m.temperature_celsius),
+                ],
+            );
+        }
+        self.parameter_sensitivity(output, moves)
+    }
+
+    /// `−wᵀ·∂F/∂p` for each move, with `w` the `.sens` adjoint and `∂F/∂p` a
+    /// Richardson-extrapolated central difference of the DC residual at the
+    /// present solution with the deck lowered again around the move.
+    fn parameter_sensitivity(
+        &mut self,
+        output: &TransferOutput,
+        moves: Vec<ParameterMove>,
+    ) -> Result<SensitivityResponse, AnalogError> {
+        const STEP: f64 = 1e-3;
+        let output_port = self.output_port(output, ".sens")?;
+        if moves.is_empty() {
+            return Ok(SensitivityResponse {
+                entries: Vec::new(),
+            });
+        }
+        let w = self.dc_adjoint(output_port)?;
+        let dim = self.dim();
+        let x: Vec<f64> = self.node_v.iter().chain(&self.branch_i).copied().collect();
+        let mut entries = Vec::new();
+        for movement in moves {
+            let residual = |moved: f64| -> Result<Vec<f64>, AnalogError> {
+                let lowered =
+                    match &movement.target {
+                        MoveTarget::Model { model, parameter } => self
+                            .circuit
+                            .with_model_parameter(&movement.instance, model, parameter, moved)?,
+                        MoveTarget::Instance(parameter) => self.circuit.with_instance_parameter(
+                            &movement.instance,
+                            *parameter,
+                            moved,
+                        )?,
+                    };
+                let mut solver = Solver::new(lowered, self.integration)?;
+                if solver.dim() != dim {
+                    return Err(AnalogError::Config(format!(
+                        "moving `{}` changed the circuit's unknowns",
+                        movement.entry
+                    )));
+                }
+                solver.dc_residual(&x)
+            };
+            // Richardson's `(4·D(h) − D(2h))/3` of two central differences
+            // cancels the `h²` term, so the step can be large enough that
+            // the residual's rounding (cells shared with a terminal
+            // resistance hold O(1) siemens) stays far below the change.
+            let difference = |step: f64| -> Result<f64, AnalogError> {
+                let (up, down) = (
+                    residual(movement.value + step)?,
+                    residual(movement.value - step)?,
+                );
+                Ok(-(0..dim)
+                    .map(|row| w[row] * (up[row] - down[row]))
+                    .sum::<f64>()
+                    / (2.0 * step))
+            };
+            // A temperature moves in °C, whose zero is not a scale: step it
+            // by a part in 10³ of its absolute value.
+            let scale = match movement.target {
+                MoveTarget::Instance(InstanceParameter::Temperature) => movement.value + 273.15,
+                _ => movement.value,
+            };
+            let step = STEP * scale;
+            let slope = (4.0 * difference(step)? - difference(2.0 * step)?) / 3.0;
+            entries.push((movement.entry, slope));
+        }
+        Ok(SensitivityResponse { entries })
+    }
+
+    /// The `.sens` adjoint: `w` with `Gᵀ·w = e` for the `.tf` Jacobian `G`
+    /// at the present solution and the output port's unit excitation `e`.
+    fn dc_adjoint(&mut self, output_port: Port) -> Result<Vec<f64>, AnalogError> {
+        let dim = self.dim();
+        let g = self.linearised(Self::dc_jacobian)?;
+        let mut w = vec![0.0; dim];
+        output_port.excite(&mut w);
+        let mut transpose = vec![0.0; dim * dim];
+        for row in 0..dim {
+            for column in 0..dim {
+                transpose[column * dim + row] = g[row * dim + column];
+            }
+        }
+        solve_dense(&mut transpose, &mut w, dim).map_err(|row| AnalogError::Singular { row })?;
+        Ok(w)
+    }
+
+    /// The DC residual `A(x)·x − b(x)` of the operating-point system at the
+    /// unknowns `x`, with every device linearised exactly at `x`. The
+    /// limiters may refuse to jump there from a fresh solver's zero state at
+    /// once, so the linearisation is moved until they let it land.
+    fn dc_residual(&mut self, x: &[f64]) -> Result<Vec<f64>, AnalogError> {
+        let dim = self.dim();
+        self.solution[..dim].copy_from_slice(x);
+        if self.nonlinear {
+            let mut landed = false;
+            for _ in 0..MAX_NEWTON_ITERATIONS {
+                self.relinearise();
+                if !self.limiter_clamped {
+                    landed = true;
+                    break;
+                }
+            }
+            if !landed {
+                return Err(AnalogError::Config(
+                    "`.sens` could not linearise a moved device at the present solution"
+                        .to_string(),
+                ));
+            }
+        }
+        self.cached_stamp = None;
+        self.build(Stamp::OperatingPoint);
+        if let Some(error) = self.behavioural_error.take() {
+            return Err(error);
+        }
+        Ok((0..dim)
+            .map(|row| {
+                (0..dim)
+                    .map(|column| self.matrix[row * dim + column] * x[column])
+                    .sum::<f64>()
+                    - self.rhs[row]
+            })
+            .collect())
+    }
+
+    /// DC sensitivity, as ngspice's `.sens`: the derivative of the output at
+    /// the solver's present solution (the DC operating point on a fresh
+    /// solver) with respect to each element value — every `R` nominal
+    /// resistance (an NTC or `tc1`/`tc2` law scales with it), `V` and `I`
+    /// value, and `E`/`F`/`G`/`H` gain. Nonlinear devices enter through their
+    /// linearisation; their model parameters are
+    /// [`Solver::model_sensitivity_analysis`]'s, which [`Solver::sensitivity`]
+    /// adds after these. Parts this
+    /// engine added for a macromodel (a name holding `#`) are left out.
+    ///
+    /// One adjoint solve `Gᵀ·w = e` of the `.tf` Jacobian gives every entry
+    /// as `−wᵀ·∂F/∂p` for the residual `F = A·x − b`. The result is exact
+    /// where ngspice perturbs each value by a part in 10⁶, so the two agree
+    /// to about 1e-6.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn sensitivity_analysis(
+        &mut self,
+        output: &TransferOutput,
+    ) -> Result<SensitivityResponse, AnalogError> {
+        let output_port = self.output_port(output, ".sens")?;
+        let w = self.dc_adjoint(output_port)?;
+        let x: Vec<f64> = self.node_v.iter().chain(&self.branch_i).copied().collect();
+        let at = |values: &[f64], node: NodeRef| node.map_or(0.0, |n| values[n]);
+        let entries = self
+            .value_derivatives()
+            .into_iter()
+            .filter_map(|(name, derivative)| {
+                let value = match derivative {
+                    // `−wᵀ·(∂A/∂p)·x` for the stamp entries `(row, column, ∂A/∂p)`.
+                    ValueDerivative::Conductance(entries) => -entries
+                        .iter()
+                        .map(|&(row, column, d)| at(&w, row) * d * at(&x, column))
+                        .sum::<f64>(),
+                    ValueDerivative::Source(entries) => {
+                        entries.iter().map(|&(row, d)| at(&w, row) * d).sum()
+                    }
+                    ValueDerivative::Capacitance(_) | ValueDerivative::Excitation(_) => {
+                        return None
+                    }
+                };
+                Some((name, value))
+            })
+            .collect();
+        Ok(SensitivityResponse { entries })
+    }
+
+    /// Run the netlist's own `.pz` card; see [`Solver::pole_zero_analysis`].
+    pub fn pole_zero(&mut self) -> Result<PoleZeroResponse, AnalogError> {
+        let card = self.circuit.pole_zero.clone().ok_or_else(|| {
+            AnalogError::Config(
+                "netlist has no `.pz <in+> <in-> <out+> <out-> cur|vol pol|zer|pz` card"
+                    .to_string(),
+            )
+        })?;
+        self.pole_zero_analysis(&card)
+    }
+
+    /// Pole-zero analysis, as ngspice's `.pz`: the poles and finite zeros,
+    /// in rad/s, of the transfer function from the input port to
+    /// `v(out+) − v(out-)`, with the circuit linearised about the solver's
+    /// present solution (the DC operating point on a fresh solver). A `cur`
+    /// port is driven by a current, a `vol` port by a voltage. Every other
+    /// independent source is at rest (a `V` shorted, an `I` open); a `V`
+    /// source connected straight across the input port is taken out, as
+    /// ngspice takes it out, and the port drive stands in its place.
+    ///
+    /// With `Y(s) = G + s·C` the `.ac` system, the `cur` poles are the roots
+    /// of `det Y`, the `vol` poles those of `Y` bordered by the input
+    /// current and input voltage, and the zeros of either those of `Y`
+    /// bordered by the input current and the output voltage. A mode the
+    /// input cannot excite or the output cannot see is a root of both, and
+    /// is reported as both a pole and a zero, as ngspice reports it. The
+    /// roots are found as generalised eigenvalues (see the `eigen` module),
+    /// not by ngspice's Muller search, so a `jω`-axis zero pair ngspice
+    /// gives up on is found here.
+    ///
+    /// A `T` line or a BJT with `PTF` is refused: its delay `e^{−sTD}` has
+    /// no finite set of poles and zeros.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn pole_zero_analysis(&mut self, card: &PoleZero) -> Result<PoleZeroResponse, AnalogError> {
+        let node = |name: &str| {
+            self.circuit.node(name).ok_or_else(|| {
+                AnalogError::Config(format!("`.pz` node `{name}` is not in the netlist"))
+            })
+        };
+        let (in_p, in_n) = (node(&card.input.0)?, node(&card.input.1)?);
+        let (out_p, out_n) = (node(&card.output.0)?, node(&card.output.1)?);
+        if in_p == in_n || out_p == out_n {
+            return Err(AnalogError::Config(
+                "`.pz` port has the same node on both sides".to_string(),
+            ));
+        }
+        let dim = self.dim();
+        let (mut g, mut c, couplings) = self.linearised(|solver| {
+            let couplings = solver.delayed_couplings();
+            let (g, c) = solver.ac_matrices(&couplings)?;
+            Ok((g, c, couplings))
+        })?;
+        if !couplings.is_empty() {
+            return Err(AnalogError::Config(
+                "`.pz` cannot take a `T` line or a BJT with `PTF`: a delay `e^{-sTD}` has no \
+                 finite set of poles and zeros"
+                    .to_string(),
+            ));
+        }
+        for (index, source) in self.circuit.voltage_sources.iter().enumerate() {
+            if (source.p, source.n) == (in_p, in_n) || (source.p, source.n) == (in_n, in_p) {
+                // An open branch: its row says only that its current is zero.
+                let k = self.nodes + index;
+                for other in 0..dim {
+                    for cell in [other * dim + k, k * dim + other] {
+                        g[cell] = 0.0;
+                        c[cell] = 0.0;
+                    }
+                }
+                g[k * dim + k] = 1.0;
+            }
+        }
+        // `Y` with a last column taking 1 A into `in+` out of `in-`, and a
+        // last row reading `v(a) − v(b)`.
+        let bordered = |(a, b): (NodeRef, NodeRef)| {
+            let n = dim + 1;
+            let (mut a0, mut a1) = (vec![0.0; n * n], vec![0.0; n * n]);
+            for row in 0..dim {
+                a0[row * n..row * n + dim].copy_from_slice(&g[row * dim..(row + 1) * dim]);
+                a1[row * n..row * n + dim].copy_from_slice(&c[row * dim..(row + 1) * dim]);
+            }
+            for (node, sign) in [(in_p, 1.0), (in_n, -1.0)] {
+                if let Some(index) = node {
+                    a0[index * n + dim] = sign;
+                }
+            }
+            for (node, sign) in [(a, 1.0), (b, -1.0)] {
+                if let Some(index) = node {
+                    a0[dim * n + index] = sign;
+                }
+            }
+            (a0, a1, n)
+        };
+        let roots = |(a0, a1, n): (Vec<f64>, Vec<f64>, usize), what: &str| {
+            let mut roots: Vec<Phasor> = eigen::pencil_roots(&a0, &a1, n)
+                .map_err(|error| {
+                    AnalogError::Config(match error {
+                        PencilError::Singular => format!(
+                            "`.pz` has no {what}: the determinant is zero at every frequency \
+                             (the output does not depend on the input, or the input port is \
+                             shorted)"
+                        ),
+                        PencilError::NoConvergence => {
+                            format!("`.pz` {what}: the QR iteration did not converge")
+                        }
+                    })
+                })?
+                .into_iter()
+                .map(|(re, im)| Phasor { re, im })
+                .collect();
+            roots.sort_by(|a, b| {
+                a.magnitude()
+                    .total_cmp(&b.magnitude())
+                    .then(a.im.total_cmp(&b.im))
+            });
+            Ok::<_, AnalogError>(roots)
+        };
+        let poles = match (card.find, card.drive) {
+            (PoleZeroFind::Zeros, _) => Vec::new(),
+            (_, PoleZeroInput::Current) => roots((g.clone(), c.clone(), dim), "poles")?,
+            (_, PoleZeroInput::Voltage) => roots(bordered((in_p, in_n)), "poles")?,
+        };
+        let zeros = match card.find {
+            PoleZeroFind::Poles => Vec::new(),
+            _ => roots(bordered((out_p, out_n)), "zeros")?,
+        };
+        Ok(PoleZeroResponse { poles, zeros })
+    }
+
+    /// Run the netlist's own `.sens ... ac` card; see
+    /// [`Solver::ac_sensitivity_analysis`].
+    pub fn ac_sensitivity(&mut self) -> Result<AcSensitivityResponse, AnalogError> {
+        let card = self.circuit.sensitivity.clone().ok_or_else(|| {
+            AnalogError::Config(
+                "netlist has no `.sens v(<out>)|i(<element>) ac ...` card".to_string(),
+            )
+        })?;
+        let sweep = card.ac.ok_or_else(|| {
+            AnalogError::Config(
+                "the `.sens` card is the DC form; run `Solver::sensitivity`".to_string(),
+            )
+        })?;
+        self.ac_sensitivity_analysis(&card.output, &sweep.frequencies())
+    }
+
+    /// AC sensitivity, as ngspice's `.sens ... ac`: at each of `frequencies`
+    /// (hertz), the derivative of the `.ac` output phasor with respect to
+    /// each element value — every `R` nominal resistance, `C` capacitance,
+    /// `L` inductance (with the mutual inductance of each `K` it is in), `K`
+    /// coupling coefficient, `E`/`F`/`G`/`H` gain, and the `AC` magnitude
+    /// and phase (per degree) of every `V` and `I` source. Names are
+    /// ngspice's: the lower-case element name, `<name>_gain`,
+    /// `<name>_acmag` and `<name>_acphase`.
+    ///
+    /// The operating point is held, as ngspice holds it: a nonlinear device
+    /// enters through its linearisation at the solver's present solution
+    /// (the DC operating point on a fresh solver), and the shift a value
+    /// makes in that operating point is not included. For a linear circuit,
+    /// and for any `C`, `L`, `K` or `AC` value, the result is the exact
+    /// derivative. (ngspice-42 does not solve the operating point for this
+    /// analysis, so its result for a nonlinear device is the one of a device
+    /// at zero bias.) Parts this engine added for a macromodel (a name
+    /// holding `#`) are left out.
+    ///
+    /// Per frequency, one forward solve `Y·x = b` and one adjoint solve
+    /// `Yᵀ·w = e` give every entry as `wᵀ·(∂b/∂p − ∂Y/∂p·x)`.
+    ///
+    /// The transient state is left exactly as it was, as for
+    /// [`Solver::ac_analysis`].
+    pub fn ac_sensitivity_analysis(
+        &mut self,
+        output: &TransferOutput,
+        frequencies: &[f64],
+    ) -> Result<AcSensitivityResponse, AnalogError> {
+        if let Some(bad) = frequencies.iter().find(|f| !(f.is_finite() && **f >= 0.0)) {
+            return Err(AnalogError::Config(format!(
+                "`.sens` frequency {bad} Hz must be finite and not negative"
+            )));
+        }
+        let output_port = self.output_port(output, ".sens")?;
+        let dim = self.dim();
+        let (g, c, couplings, excitation) = self.linearised(|solver| {
+            let couplings = solver.delayed_couplings();
+            let (g, c) = solver.ac_matrices(&couplings)?;
+            Ok((g, c, couplings, solver.ac_excitation()))
+        })?;
+        let derivatives: Vec<_> = self
+            .value_derivatives()
+            .into_iter()
+            .filter(|(_, derivative)| !matches!(derivative, ValueDerivative::Source(_)))
+            .collect();
+        let mut values = vec![Vec::with_capacity(frequencies.len()); derivatives.len()];
+
+        let size = 2 * dim;
+        let mut system = vec![0.0; size * size];
+        let mut transpose = vec![0.0; size * size];
+        for &hertz in frequencies {
+            small_signal_system(&mut system, dim, &g, &c, &couplings, hertz);
+            for row in 0..size {
+                for column in 0..size {
+                    transpose[column * size + row] = system[row * size + column];
+                }
+            }
+            let mut forward: Vec<f64> = excitation
+                .iter()
+                .map(|p| p.re)
+                .chain(excitation.iter().map(|p| p.im))
+                .collect();
+            solve_dense(&mut system, &mut forward, size)
+                .map_err(|row| AnalogError::Singular { row: row % dim })?;
+            // The realified transpose is `Yᴴ`; with a real `e` its solution
+            // is `conj(w)`.
+            let mut adjoint = vec![0.0; size];
+            output_port.excite(&mut adjoint[..dim]);
+            solve_dense(&mut transpose, &mut adjoint, size)
+                .map_err(|row| AnalogError::Singular { row: row % dim })?;
+            let x = |node: NodeRef| {
+                node.map_or(Phasor::default(), |n| Phasor {
+                    re: forward[n],
+                    im: forward[dim + n],
+                })
+            };
+            let w = |node: NodeRef| {
+                node.map_or(Phasor::default(), |n| Phasor {
+                    re: adjoint[n],
+                    im: -adjoint[dim + n],
+                })
+            };
+            let omega = 2.0 * std::f64::consts::PI * hertz;
+            for ((_, derivative), values) in derivatives.iter().zip(&mut values) {
+                // `−wᵀ·(∂Y/∂p)·x` with `∂Y/∂p = scale·d` at each entry.
+                let matrix = |entries: &[(NodeRef, NodeRef, f64)], scale: Phasor| {
+                    let sum = entries
+                        .iter()
+                        .fold(Phasor::default(), |sum, &(row, column, d)| {
+                            let term = complex_product(w(row), x(column));
+                            Phasor {
+                                re: sum.re + d * term.re,
+                                im: sum.im + d * term.im,
+                            }
+                        });
+                    let value = complex_product(scale, sum);
+                    Phasor {
+                        re: -value.re,
+                        im: -value.im,
+                    }
+                };
+                values.push(match derivative {
+                    ValueDerivative::Conductance(entries) => {
+                        matrix(entries, Phasor { re: 1.0, im: 0.0 })
+                    }
+                    ValueDerivative::Capacitance(entries) => {
+                        matrix(entries, Phasor { re: 0.0, im: omega })
+                    }
+                    ValueDerivative::Excitation(entries) => {
+                        entries.iter().fold(Phasor::default(), |sum, &(row, d)| {
+                            let term = complex_product(w(row), d);
+                            Phasor {
+                                re: sum.re + term.re,
+                                im: sum.im + term.im,
+                            }
+                        })
+                    }
+                    ValueDerivative::Source(_) => unreachable!("DC terms are filtered out"),
+                });
+            }
+        }
+        let entries = derivatives
+            .into_iter()
+            .zip(values)
+            .map(|((name, _), values)| (name, values))
+            .collect();
+        Ok(AcSensitivityResponse {
+            frequencies: frequencies.to_vec(),
+            entries,
+        })
+    }
+
+    /// How each element value `.sens` reports enters the small-signal
+    /// system, named as ngspice names it. The DC form reads the
+    /// [`ValueDerivative::Conductance`] and [`ValueDerivative::Source`]
+    /// entries, the AC form every other one.
+    fn value_derivatives(&self) -> Vec<(String, ValueDerivative)> {
+        use ValueDerivative::{Capacitance, Conductance, Excitation, Source};
+        let circuit = &self.circuit;
+        let nodes = self.nodes;
+        let user = |name: &str| !name.contains('#');
+        let branch = |name: &str| circuit.branch_index(name).map(|i| nodes + i);
+        let inductor_row = |index: usize| Some(nodes + circuit.voltage_sources.len() + index);
+        let mut entries = Vec::new();
+        let mut push = |name: &str, suffix: &str, derivative: ValueDerivative| {
+            if user(name) {
+                entries.push((format!("{}{suffix}", name.to_ascii_lowercase()), derivative));
+            }
+        };
+        let pair =
+            |a: NodeRef, b: NodeRef, d: f64| vec![(a, a, d), (a, b, -d), (b, a, -d), (b, b, d)];
+        for resistor in &circuit.resistors {
+            // The conductance is `1/(ohms·f(T))`, so `∂g/∂ohms = −g/ohms`.
+            let dg = -1.0 / (resistor.resistance_ohms() * resistor.ohms);
+            push(
+                &resistor.name,
+                "",
+                Conductance(pair(resistor.a, resistor.b, dg)),
+            );
+        }
+        for (index, source) in circuit.voltage_sources.iter().enumerate() {
+            // `∂b/∂V` is 1 on the source's own branch row.
+            push(&source.name, "", Source(vec![(Some(nodes + index), 1.0)]));
+        }
+        for source in &circuit.current_sources {
+            // `∂b/∂I` takes 1 A from `p` and delivers it to `n`.
+            push(
+                &source.name,
+                "",
+                Source(vec![(source.n, 1.0), (source.p, -1.0)]),
+            );
+        }
+        for source in &circuit.vcvs {
+            let row = branch(&source.name);
+            let entries = vec![(row, source.cp, -1.0), (row, source.cn, 1.0)];
+            push(&source.name, "_gain", Conductance(entries));
+        }
+        for source in &circuit.vccs {
+            let (p, n, cp, cn) = (source.p, source.n, source.cp, source.cn);
+            let entries = vec![(p, cp, 1.0), (p, cn, -1.0), (n, cp, -1.0), (n, cn, 1.0)];
+            push(&source.name, "_gain", Conductance(entries));
+        }
+        for source in &circuit.cccs {
+            let control = Some(nodes + source.control_branch);
+            let entries = vec![(source.p, control, 1.0), (source.n, control, -1.0)];
+            push(&source.name, "_gain", Conductance(entries));
+        }
+        for source in &circuit.ccvs {
+            let row = branch(&source.name);
+            let control = Some(nodes + source.control_branch);
+            push(
+                &source.name,
+                "_gain",
+                Conductance(vec![(row, control, -1.0)]),
+            );
+        }
+        for capacitor in &circuit.capacitors {
+            let entries = pair(capacitor.a, capacitor.b, 1.0);
+            push(&capacitor.name, "", Capacitance(entries));
+        }
+        for (index, inductor) in circuit.inductors.iter().enumerate() {
+            // The branch row carries `−jω·L`, and each `K` it is in
+            // `−jω·M` with `M = k·sqrt(L1·L2)`, so `∂M/∂L = M/(2L)`.
+            let row = inductor_row(index);
+            let mut entries = vec![(row, row, -1.0)];
+            for mutual in &circuit.mutual_inductors {
+                if mutual.first == index || mutual.second == index {
+                    let d = -mutual.mutual_henries / (2.0 * inductor.henries);
+                    let (first, second) = (inductor_row(mutual.first), inductor_row(mutual.second));
+                    entries.extend([(first, second, d), (second, first, d)]);
+                }
+            }
+            push(&inductor.name, "", Capacitance(entries));
+        }
+        for mutual in &circuit.mutual_inductors {
+            let d = -libm::sqrt(
+                circuit.inductors[mutual.first].henries * circuit.inductors[mutual.second].henries,
+            );
+            let (first, second) = (inductor_row(mutual.first), inductor_row(mutual.second));
+            push(
+                &mutual.name,
+                "",
+                Capacitance(vec![(first, second, d), (second, first, d)]),
+            );
+        }
+        // `∂(mag·e^{jφ})/∂mag = e^{jφ}`; per degree of `φ` it is
+        // `j·mag·e^{jφ}·π/180`.
+        let ac_terms = |ac: Option<super::netlist::AcStimulus>| {
+            let (magnitude, degrees) = ac.map_or((0.0, 0.0), |ac| (ac.magnitude, ac.phase_degrees));
+            let radians = degrees.to_radians();
+            let unit = Phasor {
+                re: libm::cos(radians),
+                im: libm::sin(radians),
+            };
+            let scale = magnitude * std::f64::consts::PI / 180.0;
+            let phase = Phasor {
+                re: -scale * unit.im,
+                im: scale * unit.re,
+            };
+            (unit, phase)
+        };
+        let negate = |p: Phasor| Phasor {
+            re: -p.re,
+            im: -p.im,
+        };
+        for (index, source) in circuit.voltage_sources.iter().enumerate() {
+            let (unit, phase) = ac_terms(source.ac);
+            let row = Some(nodes + index);
+            push(&source.name, "_acmag", Excitation(vec![(row, unit)]));
+            push(&source.name, "_acphase", Excitation(vec![(row, phase)]));
+        }
+        for source in &circuit.current_sources {
+            let (unit, phase) = ac_terms(source.ac);
+            let (p, n) = (source.p, source.n);
+            push(
+                &source.name,
+                "_acmag",
+                Excitation(vec![(n, unit), (p, negate(unit))]),
+            );
+            push(
+                &source.name,
+                "_acphase",
+                Excitation(vec![(n, phase), (p, negate(phase))]),
+            );
+        }
+        entries
+    }
+
+    /// The `.tf`/`.sens` output port, checked against the netlist.
+    fn output_port(&self, output: &TransferOutput, card: &str) -> Result<Port, AnalogError> {
+        Ok(match output {
+            TransferOutput::Voltage { node, reference } => {
+                let resolve = |name: &str| {
+                    self.circuit.node(name).ok_or_else(|| {
+                        AnalogError::Config(format!(
+                            "`{card}` output node `{name}` is not in the netlist"
+                        ))
+                    })
+                };
+                let node = resolve(node)?;
+                let reference = reference.as_deref().map(resolve).transpose()?.flatten();
+                if node == reference {
+                    return Err(AnalogError::Config(format!(
+                        "`{card}` output and reference are the same node"
+                    )));
+                }
+                // A unit current drawn from the reference into the output.
+                Port::Nodes(reference, node)
+            }
+            TransferOutput::Current(element) => {
+                let index = self.circuit.branch_index(element).ok_or_else(|| {
+                    AnalogError::Config(format!(
+                        "`{card}` output `i({element})` names no `V`, `L`, `E`, `H` or \
+                         behavioural voltage source"
+                    ))
+                })?;
+                Port::Branch(self.nodes + index)
+            }
+        })
+    }
+
+    /// The DC small-signal Jacobian at the present linearisation: the `.ac`
+    /// conductance matrix with every delayed term at its full value.
+    fn dc_jacobian(&mut self) -> Result<Vec<f64>, AnalogError> {
+        let dim = self.dim();
+        let couplings = self.delayed_couplings();
+        let (mut g, _) = self.ac_matrices(&couplings)?;
+        for coupling in &couplings {
+            g[coupling.row * dim + coupling.column] += coupling.coefficient;
+        }
+        Ok(g)
+    }
+
+    /// Run `body` with every nonlinear device linearised at the present
+    /// solution, then put the linearisation back so the next transient step
+    /// is unchanged.
+    fn linearised<T>(
+        &mut self,
+        body: impl FnOnce(&mut Self) -> Result<T, AnalogError>,
+    ) -> Result<T, AnalogError> {
+        if self.nonlinear {
+            self.save_linearisation();
+            self.relinearise();
+        }
+        let result = body(self);
+        if self.nonlinear {
+            self.restore_linearisation();
+        }
+        self.cached_stamp = None;
+        self.settled = false;
+        result
+    }
+
+    /// Every noise current generator at the present linearisation, as
+    /// ngspice's `resnoise.c`, `swnoise.c`, `dionoise.c`, `bjtnoise.c`,
+    /// `mos1noi.c` and `jfetnoise.c` give them. A flicker generator is added
+    /// only for a card with a nonzero `KF`. A part whose name holds `#` is one
+    /// this engine added for a macromodel or a BJT substrate junction and is
+    /// noiseless.
+    fn noise_sources(&self) -> Vec<NoiseSource> {
+        let kelvin = |celsius: Option<f64>| celsius.map_or(device::TEMPERATURE_K, |t| t + 273.15);
+        let circuit_kelvin = kelvin(self.circuit.temperature_celsius);
+        let thermal = |kelvin: f64, siemens: f64| 4.0 * device::BOLTZMANN * kelvin * siemens;
+        let shot = |amps: f64| 2.0 * device::ELEMENTARY_CHARGE * amps.abs();
+        // ngspice's `KF·exp(AF·ln(max(|I|, N_MINLOG)))`, the density at 1 Hz.
+        let flicker = |kf: f64, af: f64, amps: f64| kf * libm::pow(amps.abs().max(1e-38), af);
+        let user = |name: &str| !name.contains('#');
+        let mut sources = Vec::new();
+        let mut push = |term: &str, element: &str, mechanism, density: f64, a, b| {
+            if density > 0.0 && a != b {
+                let element = element.to_ascii_lowercase();
+                sources.push(NoiseSource {
+                    name: if term.is_empty() {
+                        element
+                    } else {
+                        format!("{term}_{element}")
+                    },
+                    mechanism,
+                    density,
+                    a,
+                    b,
+                });
+            }
+        };
+        use NoiseMechanism::{Channel, Flicker, Shot, Thermal};
+
+        for resistor in self.circuit.resistors.iter().filter(|r| user(&r.name)) {
+            let celsius = resistor.ntc.map(|ntc| ntc.temperature_celsius).or(resistor
+                .temperature_coefficients
+                .map(|tc| tc.temperature_celsius));
+            let kelvin = celsius.map_or(circuit_kelvin, |t| t + 273.15);
+            let density = thermal(kelvin, 1.0 / resistor.resistance_ohms());
+            push("", &resistor.name, Thermal, density, resistor.a, resistor.b);
+        }
+        for (index, switch) in self.circuit.switches.iter().enumerate() {
+            if !user(&switch.name) {
+                continue;
+            }
+            let ohms = if self.switch_closed[index] {
+                switch.ron
+            } else {
+                switch.roff
+            };
+            let density = thermal(circuit_kelvin, 1.0 / ohms);
+            push("", &switch.name, Thermal, density, switch.a, switch.b);
+        }
+        for (index, diode) in self.circuit.diodes.iter().enumerate() {
+            if !user(&diode.name) {
+                continue;
+            }
+            let m = diode.multiplier;
+            let kelvin = kelvin(diode.temperature_celsius);
+            if diode.series_resistance_ohms > 0.0 {
+                let density = thermal(kelvin, m / diode.series_resistance_ohms);
+                push(
+                    "rs",
+                    &diode.name,
+                    Thermal,
+                    density,
+                    diode.anode,
+                    diode.junction_anode,
+                );
+            }
+            let op = diode_model_op(
+                self.diode_vj[index],
+                diode.model,
+                diode.breakdown,
+                diode.temperature_celsius,
+            );
+            let density = shot(m * op.id);
+            let (a, k) = (diode.junction_anode, diode.cathode);
+            push("id", &diode.name, Shot, density, a, k);
+            let density = m * flicker(diode.model.kf, diode.model.af, op.id);
+            push("1overf", &diode.name, Flicker, density, a, k);
+        }
+        for (index, bjt) in self.circuit.bjts.iter().enumerate() {
+            if !user(&bjt.name) {
+                continue;
+            }
+            let m = bjt.multiplier;
+            let model = bjt.operating_model;
+            let kelvin = kelvin(bjt.temperature_celsius);
+            let op = bjt_op(bjt, self.bjt_vbe[index], self.bjt_vbc[index]);
+            let rb = device::bjt_base_resistance(model, op.ib);
+            for (term, ohms, a, b) in [
+                ("rc", model.rc, bjt.c, bjt.junction_cx),
+                ("rb", rb, bjt.b, bjt.junction_b),
+                ("re", model.re, bjt.e, bjt.junction_e),
+            ] {
+                if ohms > 0.0 {
+                    push(term, &bjt.name, Thermal, thermal(kelvin, m / ohms), a, b);
+                }
+            }
+            let (c, b, e) = (bjt.junction_c, bjt.junction_b, bjt.junction_e);
+            push("ic", &bjt.name, Shot, shot(m * op.ic), c, e);
+            push("ib", &bjt.name, Shot, shot(m * op.ib), b, e);
+            let density = m * flicker(model.kf, model.af, op.ib);
+            push("1overf", &bjt.name, Flicker, density, b, e);
+        }
+        for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
+            if !user(&mosfet.name) {
+                continue;
+            }
+            let m = mosfet.multiplier;
+            let model = mosfet.operating_model;
+            let kelvin = kelvin(mosfet.temperature_celsius);
+            for (term, ohms, a, b) in [
+                (
+                    "rd",
+                    mosfet.drain_resistance_ohms,
+                    mosfet.d,
+                    mosfet.junction_d,
+                ),
+                (
+                    "rs",
+                    mosfet.source_resistance_ohms,
+                    mosfet.s,
+                    mosfet.junction_s,
+                ),
+            ] {
+                if ohms > 0.0 {
+                    push(term, &mosfet.name, Thermal, thermal(kelvin, m / ohms), a, b);
+                }
+            }
+            let (vgs, vds) = (self.mos_vgs[index], self.mos_vds[index]);
+            let (vgs, vds, vbs) = if vds < 0.0 {
+                (vgs - vds, -vds, self.mos_vbd[index])
+            } else {
+                (vgs, vds, self.mos_vbs[index])
+            };
+            let sign = model.polarity.sign();
+            let op = device::mos_op(
+                vgs,
+                vds,
+                sign * model.vto,
+                mosfet.beta,
+                model.lambda,
+                model.gamma,
+                model.phi,
+                vbs,
+            );
+            let density = thermal(kelvin, m * 2.0 / 3.0 * op.gm.abs());
+            let (d, s) = (mosfet.junction_d, mosfet.junction_s);
+            push("id", &mosfet.name, Channel, density, d, s);
+            // `mos1noi.c` takes `C'ox` as 3.9·ε0/TOX, TOX defaulting to
+            // 100 nm, not the `EPSOX` the level-1 charge uses.
+            let oxide = 3.9 * device::VACUUM_PERMITTIVITY_F_PER_M / model.tox.unwrap_or(1e-7);
+            let area = mosfet.w * mosfet.effective_length() * oxide * oxide;
+            let density = m * flicker(model.kf, model.af, op.id) / area;
+            push("1overf", &mosfet.name, Flicker, density, d, s);
+        }
+        for (index, jfet) in self.circuit.jfets.iter().enumerate() {
+            if !user(&jfet.name) {
+                continue;
+            }
+            let m = jfet.multiplier;
+            let kelvin = kelvin(jfet.temperature_celsius);
+            for (term, ohms, a, b) in [
+                ("rd", jfet.model.rd, jfet.d, jfet.junction_d),
+                ("rs", jfet.model.rs, jfet.s, jfet.junction_s),
+            ] {
+                if ohms > 0.0 {
+                    push(term, &jfet.name, Thermal, thermal(kelvin, m / ohms), a, b);
+                }
+            }
+            let vgs = if self.jfet_vds[index] < 0.0 {
+                self.jfet_vgd[index]
+            } else {
+                self.jfet_vgs[index]
+            };
+            let op = device::jfet_op_with_b(
+                vgs,
+                self.jfet_vds[index].abs(),
+                jfet.model.polarity.sign() * jfet.operating_model.vto,
+                jfet.operating_model.beta,
+                jfet.model.lambda,
+                jfet.model.b,
+                jfet.operating_model.pb,
+            );
+            let density = thermal(kelvin, m * 2.0 / 3.0 * op.gm.abs());
+            let (d, s) = (jfet.junction_d, jfet.junction_s);
+            push("id", &jfet.name, Channel, density, d, s);
+            let density = m * flicker(jfet.model.kf, jfet.model.af, op.id);
+            push("1overf", &jfet.name, Flicker, density, d, s);
+        }
+        sources
+    }
+
+    /// `G` and `C` of the small-signal system, row-major `dim × dim`.
+    fn ac_matrices(
+        &mut self,
+        couplings: &[DelayedCoupling],
+    ) -> Result<(Vec<f64>, Vec<f64>), AnalogError> {
+        // A step far below any time constant a netlist carries keeps `C/h`
+        // well above `G`, so the subtraction loses little; the second step
+        // checks that the difference really is `C/h`.
+        const STEP: f64 = 1e-15;
+        let dim = self.dim();
+        let raw = |solver: &mut Self, stamp: Stamp| {
+            solver.build(stamp);
+            match solver.behavioural_error.take() {
+                Some(error) => Err(error),
+                None => Ok(solver.matrix[..dim * dim].to_vec()),
+            }
+        };
+        // Each delayed term is a fixed pattern times a factor set by the
+        // stamp; take it out of each matrix so that what is left is the
+        // frequency-independent part. The BJT excess-phase filter is turned
+        // off for the transient stamps, so its term is the plain DC one.
+        let stamp = |solver: &mut Self, kind: Stamp| {
+            let mut matrix = raw(solver, kind)?;
+            for coupling in couplings {
+                matrix[coupling.row * dim + coupling.column] -=
+                    coupling.present_factor(kind) * coupling.coefficient;
+            }
+            Ok::<_, AnalogError>(matrix)
+        };
+        let g = stamp(self, Stamp::OperatingPoint);
+        self.excess_phase_off = true;
+        let transient = g.and_then(|g| {
+            let short = stamp(self, Stamp::Transient(STEP, Integration::BackwardEuler))?;
+            let long = stamp(
+                self,
+                Stamp::Transient(2.0 * STEP, Integration::BackwardEuler),
+            )?;
+            Ok((g, short, long))
+        });
+        self.excess_phase_off = false;
+        let (g, short, long) = transient?;
+        let mut c = vec![0.0; dim * dim];
+        for cell in 0..dim * dim {
+            let first = short[cell] - g[cell];
+            let second = long[cell] - g[cell];
+            let tolerance = 1e-9 * (first.abs() + g[cell].abs()) + f64::MIN_POSITIVE;
+            if (first - 2.0 * second).abs() > tolerance {
+                return Err(AnalogError::Config(format!(
+                    "`.ac` cannot linearise row `{}`, column `{}`: an element there has a \
+                     transient term that is not a capacitance or inductance (diode soft \
+                     recovery `VP`, op-amp `SR`/`IOLIM`)",
+                    self.unknown_name(cell / dim),
+                    self.unknown_name(cell % dim),
+                )));
+            }
+            c[cell] = first * STEP;
+        }
+        Ok((g, c))
+    }
+
+    /// Every matrix term that `.ac` multiplies by `e^{-jωTD}`.
+    ///
+    /// The far-port terms of each `T` line, per unit of the coupling factor:
+    /// [`Solver::stamp_lines`] writes `alpha · coefficient` at each.
+    ///
+    /// The forward transconductance `∂Ict/∂Vbe` of each BJT with `PTF`, at
+    /// the present linearisation. ngspice's `bjtacld.c` delays exactly this
+    /// term by Weil's `td = PTF·π/180·TF`; the reverse term `∂Ict/∂Vbc` and
+    /// the base current are not delayed. With `e^{-jωtd} = 1` the system is
+    /// the one without excess phase.
+    fn delayed_couplings(&self) -> Vec<DelayedCoupling> {
+        let mut couplings = Vec::new();
+        for (index, bjt) in self.circuit.bjts.iter().enumerate() {
+            let delay = device::bjt_excess_phase_delay(bjt.model);
+            if delay <= 0.0 {
+                continue;
+            }
+            let gif = bjt.multiplier * bjt_op(bjt, self.bjt_vbe[index], self.bjt_vbc[index]).gif;
+            for (row, sign) in [(bjt.junction_c, 1.0), (bjt.junction_e, -1.0)] {
+                for (column, polarity) in [(bjt.junction_b, 1.0), (bjt.junction_e, -1.0)] {
+                    if let (Some(row), Some(column)) = (row, column) {
+                        couplings.push(DelayedCoupling {
+                            row,
+                            column,
+                            coefficient: sign * polarity * gif,
+                            delay,
+                            line: false,
+                        });
+                    }
+                }
+            }
+        }
+        for (index, line) in self.circuit.transmission_lines.iter().enumerate() {
+            let row1 = self.nodes + self.circuit.transmission_line_branch(index);
+            let row2 = row1 + 1;
+            for (row, far_p, far_n, far_row) in [
+                (row1, line.p2, line.n2, row2),
+                (row2, line.p1, line.n1, row1),
+            ] {
+                if let Some(column) = far_p {
+                    couplings.push(DelayedCoupling {
+                        row,
+                        column,
+                        coefficient: -1.0,
+                        delay: line.delay,
+                        line: true,
+                    });
+                }
+                if let Some(column) = far_n {
+                    couplings.push(DelayedCoupling {
+                        row,
+                        column,
+                        coefficient: 1.0,
+                        delay: line.delay,
+                        line: true,
+                    });
+                }
+                couplings.push(DelayedCoupling {
+                    row,
+                    column: far_row,
+                    coefficient: -line.z0,
+                    delay: line.delay,
+                    line: true,
+                });
+            }
+        }
+        couplings
+    }
+
+    /// The `AC` phasor of every independent source, on the MNA right-hand
+    /// side.
+    fn ac_excitation(&self) -> Vec<Phasor> {
+        let mut b = vec![Phasor::default(); self.dim()];
+        let phasor = |ac: Option<super::netlist::AcStimulus>| {
+            ac.map_or(Phasor::default(), |ac| {
+                let radians = ac.phase_degrees.to_radians();
+                Phasor {
+                    re: ac.magnitude * libm::cos(radians),
+                    im: ac.magnitude * libm::sin(radians),
+                }
+            })
+        };
+        for (index, source) in self.circuit.voltage_sources.iter().enumerate() {
+            b[self.nodes + index] = phasor(source.ac);
+        }
+        for source in &self.circuit.current_sources {
+            let amps = phasor(source.ac);
+            for (node, sign) in [(source.p, -1.0), (source.n, 1.0)] {
+                if let Some(node) = node {
+                    b[node].re += sign * amps.re;
+                    b[node].im += sign * amps.im;
+                }
+            }
+        }
+        b
+    }
+
+    /// A node name, or the element whose branch current an unknown is.
+    fn unknown_name(&self, index: usize) -> String {
+        if index < self.nodes {
+            format!("v({})", self.circuit.node_name(index))
+        } else {
+            format!("i({})", self.circuit.branch_name(index - self.nodes))
+        }
+    }
+
     /// Re-evaluate every source that carries a transient function at `time`.
     ///
     /// Sources are evaluated at the END of the step, which is the point the
@@ -1418,18 +3995,20 @@ impl Solver {
             return;
         }
         for index in 0..self.circuit.voltage_sources.len() {
-            let wave = self.circuit.voltage_sources[index].wave;
-            if wave.is_constant() {
+            let source = &self.circuit.voltage_sources[index].wave;
+            if source.is_constant() {
                 continue;
             }
-            self.set_voltage_source(index, wave.at(time));
+            let value = source.at(time);
+            self.set_voltage_source(index, value);
         }
         for index in 0..self.circuit.current_sources.len() {
-            let wave = self.circuit.current_sources[index].wave;
-            if wave.is_constant() {
+            let source = &self.circuit.current_sources[index].wave;
+            if source.is_constant() {
                 continue;
             }
-            self.set_current_source(index, wave.at(time));
+            let value = source.at(time);
+            self.set_current_source(index, value);
         }
     }
 
@@ -1450,13 +4029,31 @@ impl Solver {
         for bjt in &self.circuit.bjts {
             let model = bjt.operating_model;
             if model.rb > 0.0 && !device::bjt_has_bias_dependent_base_resistance(model) {
-                conductance(&mut self.matrix, dim, bjt.b, bjt.junction_b, 1.0 / model.rb);
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.b,
+                    bjt.junction_b,
+                    bjt.multiplier / model.rb,
+                );
             }
             if model.rc > 0.0 {
-                conductance(&mut self.matrix, dim, bjt.c, bjt.junction_c, 1.0 / model.rc);
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.c,
+                    bjt.junction_cx,
+                    bjt.multiplier / model.rc,
+                );
             }
             if model.re > 0.0 {
-                conductance(&mut self.matrix, dim, bjt.e, bjt.junction_e, 1.0 / model.re);
+                conductance(
+                    &mut self.matrix,
+                    dim,
+                    bjt.e,
+                    bjt.junction_e,
+                    bjt.multiplier / model.re,
+                );
             }
         }
         for mosfet in &self.circuit.mosfets {
@@ -1466,7 +4063,7 @@ impl Solver {
                     dim,
                     mosfet.d,
                     mosfet.junction_d,
-                    1.0 / mosfet.drain_resistance_ohms,
+                    mosfet.multiplier / mosfet.drain_resistance_ohms,
                 );
             }
             if mosfet.source_resistance_ohms > 0.0 {
@@ -1475,7 +4072,7 @@ impl Solver {
                     dim,
                     mosfet.junction_s,
                     mosfet.s,
-                    1.0 / mosfet.source_resistance_ohms,
+                    mosfet.multiplier / mosfet.source_resistance_ohms,
                 );
             }
         }
@@ -1486,7 +4083,7 @@ impl Solver {
                     dim,
                     jfet.d,
                     jfet.junction_d,
-                    1.0 / jfet.model.rd,
+                    jfet.multiplier / jfet.model.rd,
                 );
             }
             if jfet.model.rs > 0.0 {
@@ -1495,7 +4092,7 @@ impl Solver {
                     dim,
                     jfet.junction_s,
                     jfet.s,
-                    1.0 / jfet.model.rs,
+                    jfet.multiplier / jfet.model.rs,
                 );
             }
         }
@@ -1581,11 +4178,45 @@ impl Solver {
             }
         }
         self.stamp_dependent_sources();
+        self.stamp_lines(stamp);
+        self.stamp_line_history(stamp);
         self.stamp_devices(stamp);
         if self.node_shunt != 0.0 {
             for node in 0..self.nodes {
                 self.matrix[node * dim + node] += self.node_shunt;
             }
+        }
+        if self.holding {
+            self.stamp_node_values(NodeHold::Nodeset);
+        }
+        if self.holding_ic {
+            self.stamp_node_values(NodeHold::InitialCondition);
+        }
+    }
+
+    /// Replace each held node's row with `v(node) = value`, as ngspice's
+    /// `CKTload` does for a `.nodeset` in `MODEINITJCT`/`MODEINITFIX` and for
+    /// an `.ic` in `MODETRANOP`: every node column of the row is zeroed
+    /// (`ZeroNoncurRow`). A branch current left in the row — a voltage source
+    /// or inductor on the node — would pull the node off its value, so then
+    /// the diagonal is 1e10 instead of 1 to outweigh it. Nodesets are stamped
+    /// before `.ic`, so an `.ic` on the same node wins, as in `CKTload`.
+    fn stamp_node_values(&mut self, hold: NodeHold) {
+        let dim = self.dim();
+        let values = match hold {
+            NodeHold::Nodeset => &self.circuit.node_nodeset,
+            NodeHold::InitialCondition => &self.circuit.node_ic,
+        };
+        for &(node, value) in values {
+            let row = &mut self.matrix[node * dim..(node + 1) * dim];
+            row[..self.nodes].fill(0.0);
+            let scale = if row[self.nodes..].iter().any(|cell| *cell != 0.0) {
+                1e10
+            } else {
+                1.0
+            };
+            row[node] = scale;
+            self.rhs[node] = scale * value;
         }
     }
 
@@ -1601,10 +4232,16 @@ impl Solver {
     /// the states. Only reached after plain Newton failed, so an operating
     /// point that converged before converges exactly as before.
     fn gmin_stepping(&mut self) -> Result<(), AnalogError> {
+        let held = self.circuit.has_held_phase();
+        if held {
+            self.hold_off_devices();
+        }
         let mut shunt = 1.0;
         while shunt >= 1e-12 {
             self.node_shunt = shunt;
+            self.holding = held;
             let stage = self.newton(Stamp::OperatingPoint, None, self.time);
+            self.holding = false;
             if stage.is_err() {
                 self.node_shunt = 0.0;
                 return stage;
@@ -1613,6 +4250,57 @@ impl Solver {
         }
         self.node_shunt = 0.0;
         self.newton(Stamp::OperatingPoint, None, self.time)
+    }
+
+    /// The operating-point Newton solve. With an `off` device or a
+    /// `.nodeset` it runs twice, as ngspice's `MODEINITFIX` then
+    /// `MODEINITFLOAT`: first with every `off` device held cut off and every
+    /// nodeset node held at its value until the rest of the circuit
+    /// converges, then with both released, starting from that solution. A
+    /// circuit with one operating point reaches it either way; a bistable one
+    /// keeps the state the hold chose. Without either this is one plain
+    /// solve, so every other netlist's trajectory is unchanged.
+    fn operating_point_newton(&mut self) -> Result<(), AnalogError> {
+        if self.circuit.has_held_phase() {
+            self.hold_off_devices();
+            self.holding = true;
+            let held = self.newton(Stamp::OperatingPoint, None, self.time);
+            self.holding = false;
+            held?;
+        }
+        self.newton(Stamp::OperatingPoint, None, self.time)
+    }
+
+    /// Put every `off` device's linearisation point at 0 V, where ngspice's
+    /// `MODEINITJCT` puts it.
+    fn hold_off_devices(&mut self) {
+        for (index, diode) in self.circuit.diodes.iter().enumerate() {
+            if diode.off {
+                self.diode_vj[index] = 0.0;
+            }
+        }
+        for (index, bjt) in self.circuit.bjts.iter().enumerate() {
+            if bjt.off {
+                self.bjt_vbe[index] = 0.0;
+                self.bjt_vbc[index] = 0.0;
+                self.bjt_vbcx[index] = 0.0;
+            }
+        }
+        for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
+            if mosfet.off {
+                self.mos_vgs[index] = 0.0;
+                self.mos_vds[index] = 0.0;
+                self.mos_vbd[index] = 0.0;
+                self.mos_vbs[index] = 0.0;
+            }
+        }
+        for (index, jfet) in self.circuit.jfets.iter().enumerate() {
+            if jfet.off {
+                self.jfet_vgs[index] = 0.0;
+                self.jfet_vgd[index] = 0.0;
+                self.jfet_vds[index] = 0.0;
+            }
+        }
     }
 
     /// Stamp the four linear dependent sources. All of them are constant
@@ -1709,6 +4397,7 @@ impl Solver {
                 inject(&mut self.rhs, capacitor.b, -ieq);
             }
         }
+        self.stamp_line_history(stamp);
     }
 
     /// Dense LU with partial pivoting, in place over the scratch matrix. Own
@@ -1826,9 +4515,13 @@ impl Solver {
         // previous step left in the buffer.
         self.previous[..dim].fill(f64::NAN);
         self.limiter_clamped = true;
+        self.behavioural_time = time;
 
         for _ in 1..=MAX_NEWTON_ITERATIONS {
             self.build(stamp);
+            if let Some(error) = self.behavioural_error.take() {
+                return Err(error);
+            }
             self.factorize()?;
             self.solve();
             if self.newton_converged() {
@@ -1909,6 +4602,9 @@ impl Solver {
 
         for index in 0..self.circuit.diodes.len() {
             let diode = &self.circuit.diodes[index];
+            if self.holding && diode.off {
+                continue;
+            }
             let raw = node_diff(
                 &self.solution[..self.nodes],
                 diode.junction_anode,
@@ -1951,6 +4647,9 @@ impl Solver {
 
         for index in 0..self.circuit.bjts.len() {
             let bjt = &self.circuit.bjts[index];
+            if self.holding && bjt.off {
+                continue;
+            }
             let sign = bjt.model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
             let raw_be = sign * node_diff(nodes, bjt.junction_b, bjt.junction_e);
@@ -1973,10 +4672,22 @@ impl Solver {
             self.limiter_clamped |= be != raw_be || bc != raw_bc;
             self.bjt_vbe[index] = be;
             self.bjt_vbc[index] = bc;
+            // The epitaxial current is exponential in the base-to-contact
+            // voltage too, so that voltage gets the collector junction's
+            // limiter. ngspice leaves it unlimited.
+            if model.rco.is_some() {
+                let raw_bcx = sign * node_diff(nodes, bjt.junction_b, bjt.junction_cx);
+                let bcx = device::pn_limit(raw_bcx, self.bjt_vbcx[index], vtr, crit_r);
+                self.limiter_clamped |= bcx != raw_bcx;
+                self.bjt_vbcx[index] = bcx;
+            }
         }
 
         for index in 0..self.circuit.mosfets.len() {
             let mosfet = &self.circuit.mosfets[index];
+            if self.holding && mosfet.off {
+                continue;
+            }
             let sign = mosfet.operating_model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
             let raw_gs = sign * node_diff(nodes, mosfet.g, mosfet.junction_s);
@@ -2021,10 +4732,12 @@ impl Solver {
             self.mos_vds[index] = ds;
 
             let vte = mosfet.thermal_voltage();
-            let critical =
-                device::pn_critical_voltage_at_thermal_voltage(mosfet.operating_model.is, 1.0, vte);
-            let bd = device::pn_limit(raw_bd, self.mos_vbd[index], vte, critical);
-            let bs = device::pn_limit(raw_bs, self.mos_vbs[index], vte, critical);
+            let (drain_is, source_is) = mosfet.junction_saturation_currents();
+            let drain_critical = device::pn_critical_voltage_at_thermal_voltage(drain_is, 1.0, vte);
+            let source_critical =
+                device::pn_critical_voltage_at_thermal_voltage(source_is, 1.0, vte);
+            let bd = device::pn_limit(raw_bd, self.mos_vbd[index], vte, drain_critical);
+            let bs = device::pn_limit(raw_bs, self.mos_vbs[index], vte, source_critical);
             self.limiter_clamped |= bd != raw_bd || bs != raw_bs;
             self.mos_vbd[index] = bd;
             self.mos_vbs[index] = bs;
@@ -2032,11 +4745,16 @@ impl Solver {
 
         for index in 0..self.circuit.jfets.len() {
             let jfet = &self.circuit.jfets[index];
+            if self.holding && jfet.off {
+                continue;
+            }
             let sign = jfet.model.polarity.sign();
             let nodes = &self.solution[..self.nodes];
             let raw_gs = sign * node_diff(nodes, jfet.g, jfet.junction_s);
             let raw_gd = sign * node_diff(nodes, jfet.g, jfet.junction_d);
             let raw_ds = sign * node_diff(nodes, jfet.junction_d, jfet.junction_s);
+            // ngspice limits the gate junctions at N = 1 whatever the card's
+            // `N`; the limiter only paces Newton, the solution is unchanged.
             let vt = jfet.thermal_voltage();
             let critical =
                 device::pn_critical_voltage_at_thermal_voltage(jfet.operating_model.is, 1.0, vt);
@@ -2093,6 +4811,33 @@ impl Solver {
                 + source.cm_gain * common_mode
                 + source.vos;
         }
+
+        // A behavioural expression has no limiter in ngspice either: it takes
+        // the plain Newton point, unless it holds a `TABLE`, whose flat ends
+        // make plain Newton cycle (see `Expression::step_limit`).
+        let sources = self
+            .circuit
+            .behavioural_voltages
+            .iter()
+            .chain(&self.circuit.behavioural_currents);
+        for (point, source) in self.behavioural_point.iter_mut().zip(sources) {
+            let limit = source.expression.step_limit();
+            for (value, control) in point.iter_mut().zip(&source.controls) {
+                let new = match *control {
+                    BehaviouralControl::Voltage(p, n) => {
+                        node_diff(&self.solution[..self.nodes], p, n)
+                    }
+                    BehaviouralControl::Branch(branch) => self.solution[self.nodes + branch],
+                };
+                *value = match limit {
+                    Some(limit) if (new - *value).abs() > limit => {
+                        self.limiter_clamped = true;
+                        *value + limit.copysign(new - *value)
+                    }
+                    _ => new,
+                };
+            }
+        }
     }
 
     /// Stamp every nonlinear device's companion model at its current
@@ -2114,6 +4859,7 @@ impl Solver {
         let rhs = &mut self.rhs;
 
         for (index, diode) in self.circuit.diodes.iter().enumerate() {
+            let m = diode.multiplier;
             let charge_model = diode.operating_model;
             if diode.series_resistance_ohms > 0.0 {
                 conductance(
@@ -2121,14 +4867,22 @@ impl Solver {
                     dim,
                     diode.anode,
                     diode.junction_anode,
-                    1.0 / diode.series_resistance_ohms,
+                    m / diode.series_resistance_ohms,
                 );
             }
             let vj = self.diode_vj[index];
             let op = diode_model_op(vj, diode.model, diode.breakdown, diode.temperature_celsius);
             let control = [(op.gd, diode.junction_anode, diode.cathode, vj)];
-            stamp_linearised(matrix, rhs, dim, diode.junction_anode, op.id, &control);
-            stamp_linearised(matrix, rhs, dim, diode.cathode, -op.id, &negate(&control));
+            stamp_linearised(matrix, rhs, dim, m, diode.junction_anode, op.id, &control);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                m,
+                diode.cathode,
+                -op.id,
+                &negate(&control),
+            );
 
             if diode_charge_active(charge_model) {
                 if let Stamp::Transient(h, rule) = stamp {
@@ -2147,6 +4901,7 @@ impl Solver {
                         matrix,
                         rhs,
                         dim,
+                        m,
                         diode.junction_anode,
                         current,
                         &charge_control,
@@ -2155,6 +4910,7 @@ impl Solver {
                         matrix,
                         rhs,
                         dim,
+                        m,
                         diode.cathode,
                         -current,
                         &negate(&charge_control),
@@ -2182,6 +4938,7 @@ impl Solver {
                         matrix,
                         rhs,
                         dim,
+                        m,
                         diode.junction_anode,
                         recovery.current,
                         &recovery_control,
@@ -2190,6 +4947,7 @@ impl Solver {
                         matrix,
                         rhs,
                         dim,
+                        m,
                         diode.cathode,
                         -recovery.current,
                         &negate(&recovery_control),
@@ -2199,49 +4957,68 @@ impl Solver {
         }
 
         for (index, bjt) in self.circuit.bjts.iter().enumerate() {
+            let m = bjt.multiplier;
             let sign = bjt.model.polarity.sign();
             let model = bjt.operating_model;
             let operating_model = bjt.operating_model;
             let (vbe, vbc) = (self.bjt_vbe[index], self.bjt_vbc[index]);
-            let op = device::bjt_op_with_nkf_at_thermal_voltage(
-                vbe,
-                vbc,
-                operating_model.is,
-                operating_model.bf,
-                operating_model.br,
-                operating_model.nf,
-                operating_model.nr,
-                operating_model.vaf,
-                operating_model.var,
-                operating_model.ikf,
-                operating_model.ikr,
-                operating_model.ise,
-                operating_model.ne,
-                operating_model.isc,
-                operating_model.nc,
-                operating_model.nkf,
-                bjt.thermal_voltage,
-            );
+            let mut op = bjt_op(bjt, vbe, vbc);
+            if let Stamp::Transient(h, _) = stamp {
+                let delay = device::bjt_excess_phase_delay(bjt.model);
+                if delay > 0.0 && !self.excess_phase_off {
+                    // ngspice replaces cbe by cex = arg3·cbe in the transport
+                    // current and adds the history term cc; the base current
+                    // keeps the undelayed cbe.
+                    let transport = device::bjt_forward_transport(
+                        vbe,
+                        vbc,
+                        operating_model,
+                        bjt.thermal_voltage,
+                    );
+                    let (history, arg3) =
+                        excess_phase_step(delay, h, self.previous_step, self.bjt_excess[index]);
+                    let shift = transport.cbe * (arg3 - 1.0);
+                    let qb_squared = transport.qb * transport.qb;
+                    op.ic += history + shift / transport.qb;
+                    op.gif += transport.gbe * (arg3 - 1.0) / transport.qb
+                        - shift * transport.dqb_dvbe / qb_squared;
+                    op.gir += shift * transport.dqb_dvbc / qb_squared;
+                }
+            }
 
             // The Gummel–Poon base resistance is updated from the transistor's
             // base current on each Newton pass, following ngspice's RBM/IRB
             // conductance stamp. Fixed RB remains in the linear build path.
             if device::bjt_has_bias_dependent_base_resistance(model) {
                 let resistance = device::bjt_base_resistance(model, op.ib);
-                conductance(matrix, dim, bjt.b, bjt.junction_b, 1.0 / resistance);
+                conductance(matrix, dim, bjt.b, bjt.junction_b, m / resistance);
             }
 
             // GMIN across both junctions. Without it a transistor that is fully
             // off leaves its base and collector tied to the rest of the circuit
             // by nothing at all, and the matrix is singular on a netlist the
             // user can see is connected.
-            conductance(matrix, dim, bjt.junction_b, bjt.junction_e, device::GMIN);
-            conductance(matrix, dim, bjt.junction_b, bjt.junction_c, device::GMIN);
+            conductance(
+                matrix,
+                dim,
+                bjt.junction_b,
+                bjt.junction_e,
+                m * device::GMIN,
+            );
+            conductance(
+                matrix,
+                dim,
+                bjt.junction_b,
+                bjt.junction_c,
+                m * device::GMIN,
+            );
 
-            // Controlling voltages in circuit coordinates: u1 = v(b) − v(e),
-            // u2 = v(b) − v(c). The device sees sign·u1 and sign·u2.
+            // Controlling voltages in circuit coordinates: u1 = v(b_internal)
+            // − v(e), u2 = v(b_internal) − v(c), and u3 = v(b_external) − v(c).
+            // The device sees sign·u1, sign·u2, and sign·u3.
             let u1 = sign * vbe;
             let u2 = sign * vbc;
+            let u3 = node_diff(&self.solution[..self.nodes], bjt.b, bjt.junction_c);
             let collector = [
                 (op.gif, bjt.junction_b, bjt.junction_e, u1),
                 (-op.gir - op.gmu, bjt.junction_b, bjt.junction_c, u2),
@@ -2254,27 +5031,76 @@ impl Solver {
                 (-op.gif - op.gpi, bjt.junction_b, bjt.junction_e, u1),
                 (op.gir, bjt.junction_b, bjt.junction_c, u2),
             ];
-            stamp_linearised(matrix, rhs, dim, bjt.junction_c, sign * op.ic, &collector);
-            stamp_linearised(matrix, rhs, dim, bjt.junction_b, sign * op.ib, &base);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
+                m,
+                bjt.junction_c,
+                sign * op.ic,
+                &collector,
+            );
+            stamp_linearised(matrix, rhs, dim, m, bjt.junction_b, sign * op.ib, &base);
+            stamp_linearised(
+                matrix,
+                rhs,
+                dim,
+                m,
                 bjt.junction_e,
                 -sign * (op.ic + op.ib),
                 &emitter,
             );
 
+            // Kull's quasi-saturation region from the collector contact to
+            // the intrinsic collector, controlled by u2 and by
+            // u4 = v(b_internal) − v(c_contact).
+            let vbcx = self.bjt_vbcx[index];
+            let u4 = sign * vbcx;
+            if let Some(rco) = model.rco {
+                let epi =
+                    device::bjt_epi_op(vbc, vbcx, rco, model.vo, model.gamma, bjt.thermal_voltage);
+                let control = [
+                    (epi.g_vbc, bjt.junction_b, bjt.junction_c, u2),
+                    (epi.g_vbcx, bjt.junction_b, bjt.junction_cx, u4),
+                ];
+                stamp_linearised(
+                    matrix,
+                    rhs,
+                    dim,
+                    m,
+                    bjt.junction_cx,
+                    sign * epi.current,
+                    &control,
+                );
+                stamp_linearised(
+                    matrix,
+                    rhs,
+                    dim,
+                    m,
+                    bjt.junction_c,
+                    -sign * epi.current,
+                    &negate(&control),
+                );
+            }
+
             if let Stamp::Transient(h, rule) = stamp {
-                let charge = bjt_charge_op(vbe, vbc, operating_model, bjt.thermal_voltage);
-                for junction in 0..2 {
+                let charge = bjt_charge_op(
+                    vbe,
+                    vbc,
+                    sign * u3,
+                    vbcx,
+                    operating_model,
+                    bjt.thermal_voltage,
+                );
+                for junction in 0..4 {
                     if !bjt_charge_active(model, junction) {
                         continue;
                     }
-                    let (positive, negative) = if junction == 0 {
-                        (bjt.junction_b, bjt.junction_e)
-                    } else {
-                        (bjt.junction_b, bjt.junction_c)
+                    let (positive, negative) = match junction {
+                        0 => (bjt.junction_b, bjt.junction_e),
+                        1 => (bjt.junction_b, bjt.junction_c),
+                        2 => (bjt.b, bjt.junction_c),
+                        _ => (bjt.junction_b, bjt.junction_cx),
                     };
                     let factor = match rule {
                         Integration::BackwardEuler => 1.0 / h,
@@ -2302,12 +5128,20 @@ impl Solver {
                             bjt.junction_c,
                             u2,
                         ),
+                        (charge.dq[junction][2] * factor, bjt.b, bjt.junction_c, u3),
+                        (
+                            charge.dq[junction][3] * factor,
+                            bjt.junction_b,
+                            bjt.junction_cx,
+                            u4,
+                        ),
                     ];
-                    stamp_linearised(matrix, rhs, dim, positive, sign * current, &control);
+                    stamp_linearised(matrix, rhs, dim, m, positive, sign * current, &control);
                     stamp_linearised(
                         matrix,
                         rhs,
                         dim,
+                        m,
                         negative,
                         -sign * current,
                         &negate(&control),
@@ -2317,6 +5151,7 @@ impl Solver {
         }
 
         for (index, mosfet) in self.circuit.mosfets.iter().enumerate() {
+            let m = mosfet.multiplier;
             let sign = mosfet.operating_model.polarity.sign();
             let model = mosfet.operating_model;
             let (vgs, vds) = (self.mos_vgs[index], self.mos_vds[index]);
@@ -2329,7 +5164,7 @@ impl Solver {
                 dim,
                 mosfet.junction_d,
                 mosfet.junction_s,
-                device::GMIN,
+                m * device::GMIN,
             );
 
             // A MOSFET is symmetric: when Vds goes negative the terminal the
@@ -2371,11 +5206,12 @@ impl Solver {
                 (op.gds, drain, source, u2),
                 (op.gmb, mosfet.bulk, source, u3),
             ];
-            stamp_linearised(matrix, rhs, dim, drain, sign * op.id, &drain_terms);
+            stamp_linearised(matrix, rhs, dim, m, drain, sign * op.id, &drain_terms);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
+                m,
                 source,
                 -sign * op.id,
                 &negate(&drain_terms),
@@ -2408,8 +5244,8 @@ impl Solver {
                         ),
                     };
                     let control = [(geq, positive, negative, voltage)];
-                    stamp_linearised(matrix, rhs, dim, positive, current, &control);
-                    stamp_linearised(matrix, rhs, dim, negative, -current, &negate(&control));
+                    stamp_linearised(matrix, rhs, dim, m, positive, current, &control);
+                    stamp_linearised(matrix, rhs, dim, m, negative, -current, &negate(&control));
                 }
 
                 if model.channel_charge_model == MosChannelChargeModel::WardDutton {
@@ -2451,7 +5287,7 @@ impl Solver {
                                     voltages[control],
                                 )
                             });
-                        stamp_linearised(matrix, rhs, dim, node, current, &control);
+                        stamp_linearised(matrix, rhs, dim, m, node, current, &control);
                     }
                 } else {
                     let channel_caps = mos_channel_capacitance_halves(
@@ -2485,8 +5321,16 @@ impl Solver {
                             }
                         };
                         let control = [(geq, positive, negative, voltage)];
-                        stamp_linearised(matrix, rhs, dim, positive, current, &control);
-                        stamp_linearised(matrix, rhs, dim, negative, -current, &negate(&control));
+                        stamp_linearised(matrix, rhs, dim, m, positive, current, &control);
+                        stamp_linearised(
+                            matrix,
+                            rhs,
+                            dim,
+                            m,
+                            negative,
+                            -current,
+                            &negate(&control),
+                        );
                     }
                 }
             }
@@ -2494,10 +5338,10 @@ impl Solver {
             // Level-1 MOSFETs have two bulk pn junctions. In NMOS coordinates
             // the bulk is the anode and drain/source are the cathodes; the
             // polarity sign reverses that orientation for PMOS.
-            let bd = device::diode_op_at_thermal_voltage(
+            let (drain_is, source_is) = mosfet.junction_saturation_currents();
+            let bd = device::mos_bulk_junction_op(
                 self.mos_vbd[index],
-                model.is,
-                1.0,
+                drain_is,
                 mosfet.thermal_voltage(),
             );
             let bd_terms = [(
@@ -2506,20 +5350,20 @@ impl Solver {
                 mosfet.junction_d,
                 sign * self.mos_vbd[index],
             )];
-            stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * bd.id, &bd_terms);
+            stamp_linearised(matrix, rhs, dim, m, mosfet.bulk, sign * bd.id, &bd_terms);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
+                m,
                 mosfet.junction_d,
                 -sign * bd.id,
                 &negate(&bd_terms),
             );
 
-            let bs = device::diode_op_at_thermal_voltage(
+            let bs = device::mos_bulk_junction_op(
                 self.mos_vbs[index],
-                model.is,
-                1.0,
+                source_is,
                 mosfet.thermal_voltage(),
             );
             let bs_terms = [(
@@ -2528,11 +5372,12 @@ impl Solver {
                 mosfet.junction_s,
                 sign * self.mos_vbs[index],
             )];
-            stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * bs.id, &bs_terms);
+            stamp_linearised(matrix, rhs, dim, m, mosfet.bulk, sign * bs.id, &bs_terms);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
+                m,
                 mosfet.junction_s,
                 -sign * bs.id,
                 &negate(&bs_terms),
@@ -2563,11 +5408,20 @@ impl Solver {
                         ),
                     };
                     let charge_terms = [(geq, mosfet.bulk, junction, sign * voltage)];
-                    stamp_linearised(matrix, rhs, dim, mosfet.bulk, sign * current, &charge_terms);
                     stamp_linearised(
                         matrix,
                         rhs,
                         dim,
+                        m,
+                        mosfet.bulk,
+                        sign * current,
+                        &charge_terms,
+                    );
+                    stamp_linearised(
+                        matrix,
+                        rhs,
+                        dim,
+                        m,
                         junction,
                         -sign * current,
                         &negate(&charge_terms),
@@ -2578,6 +5432,7 @@ impl Solver {
         }
 
         for (index, jfet) in self.circuit.jfets.iter().enumerate() {
+            let m = jfet.multiplier;
             let sign = jfet.model.polarity.sign();
             let reversed = self.jfet_vds[index] < 0.0;
             let (drain, source, vgs) = if reversed {
@@ -2593,23 +5448,30 @@ impl Solver {
                 jfet.operating_model.beta,
                 jfet.model.lambda,
                 jfet.model.b,
-                jfet.model.pb,
+                jfet.operating_model.pb,
             );
 
             // The channel's GMIN keeps a cut-off device connected. The gate
             // junctions below each carry their own SPICE GMIN as part of the
             // diode equation.
-            conductance(matrix, dim, jfet.junction_d, jfet.junction_s, device::GMIN);
+            conductance(
+                matrix,
+                dim,
+                jfet.junction_d,
+                jfet.junction_s,
+                m * device::GMIN,
+            );
 
             let channel_terms = [
                 (op.gm, jfet.g, source, sign * vgs),
                 (op.gds, drain, source, sign * vds),
             ];
-            stamp_linearised(matrix, rhs, dim, drain, sign * op.id, &channel_terms);
+            stamp_linearised(matrix, rhs, dim, m, drain, sign * op.id, &channel_terms);
             stamp_linearised(
                 matrix,
                 rhs,
                 dim,
+                m,
                 source,
                 -sign * op.id,
                 &negate(&channel_terms),
@@ -2624,15 +5486,20 @@ impl Solver {
             .into_iter()
             .enumerate()
             {
-                let gate =
-                    device::diode_op_at_thermal_voltage(voltage, gate_model.is, 1.0, gate_vt);
+                let gate = device::pn_junction_op_at_thermal_voltage(
+                    voltage,
+                    gate_model.is,
+                    gate_model.n,
+                    gate_vt,
+                );
                 let gate_voltage = sign * voltage;
                 let gate_terms = [(gate.gd, jfet.g, cathode, gate_voltage)];
-                stamp_linearised(matrix, rhs, dim, jfet.g, sign * gate.id, &gate_terms);
+                stamp_linearised(matrix, rhs, dim, m, jfet.g, sign * gate.id, &gate_terms);
                 stamp_linearised(
                     matrix,
                     rhs,
                     dim,
+                    m,
                     cathode,
                     -sign * gate.id,
                     &negate(&gate_terms),
@@ -2658,11 +5525,20 @@ impl Solver {
                             ),
                         };
                         let charge_terms = [(geq, jfet.g, cathode, sign * voltage)];
-                        stamp_linearised(matrix, rhs, dim, jfet.g, sign * current, &charge_terms);
                         stamp_linearised(
                             matrix,
                             rhs,
                             dim,
+                            m,
+                            jfet.g,
+                            sign * current,
+                            &charge_terms,
+                        );
+                        stamp_linearised(
+                            matrix,
+                            rhs,
+                            dim,
+                            m,
                             cathode,
                             -sign * current,
                             &negate(&charge_terms),
@@ -2712,7 +5588,7 @@ impl Solver {
                 0.0
             };
             let control = [(-conductance, limit.drive, limit.output, delta)];
-            stamp_linearised(matrix, rhs, dim, limit.output, -current, &control);
+            stamp_linearised(matrix, rhs, dim, 1.0, limit.output, -current, &control);
         }
 
         // A finite SR limits only the gain-node capacitor current. The Rg
@@ -2772,8 +5648,78 @@ impl Solver {
                     node_diff(nodes, source.p, source.n),
                 ),
             ];
-            stamp_linearised(matrix, rhs, dim, source.p, current, &control);
-            stamp_linearised(matrix, rhs, dim, source.n, -current, &negate(&control));
+            stamp_linearised(matrix, rhs, dim, 1.0, source.p, current, &control);
+            stamp_linearised(matrix, rhs, dim, 1.0, source.n, -current, &negate(&control));
+        }
+
+        // Behavioural sources: f(u) ≈ f0 + Σ gₖ·(uₖ − uₖ0), where each uₖ is a
+        // node-voltage difference or a branch current. A voltage form owns a
+        // branch row `v(n+) − v(n−) − Σ gₖ·uₖ = f0 − Σ gₖ·uₖ0` whose current
+        // flows n+ → n− through the source, like an `E`; a current form
+        // draws f out of n+ and returns it at n−, like a `G`.
+        let circuit = &self.circuit;
+        let behavioural_base = self.nodes
+            + circuit.voltage_sources.len()
+            + circuit.inductors.len()
+            + circuit.vcvs.len()
+            + circuit.ccvs.len();
+        let voltages = circuit.behavioural_voltages.len();
+        let sources = circuit
+            .behavioural_voltages
+            .iter()
+            .chain(&circuit.behavioural_currents);
+        for (index, source) in sources.enumerate() {
+            let point = &self.behavioural_point[index];
+            let (value, slopes) = match source.expression.evaluate(point, self.behavioural_time) {
+                Ok(result) => result,
+                Err(message) => {
+                    if self.behavioural_error.is_none() {
+                        self.behavioural_error = Some(AnalogError::Evaluation {
+                            element: source.name.clone(),
+                            time: self.behavioural_time,
+                            message,
+                        });
+                    }
+                    continue;
+                }
+            };
+            let equivalent = value
+                - slopes
+                    .iter()
+                    .zip(point)
+                    .map(|(slope, at)| slope * at)
+                    .sum::<f64>();
+            // Each slope enters a row as `scale·g` on the columns of its
+            // control.
+            let nodes = self.nodes;
+            let stamp_row = |matrix: &mut [f64], row: usize, scale: f64| {
+                for (slope, control) in slopes.iter().zip(&source.controls) {
+                    match *control {
+                        BehaviouralControl::Voltage(p, n) => {
+                            add(matrix, dim, Some(row), p, scale * slope);
+                            add(matrix, dim, Some(row), n, -scale * slope);
+                        }
+                        BehaviouralControl::Branch(branch) => {
+                            add(matrix, dim, Some(row), Some(nodes + branch), scale * slope);
+                        }
+                    }
+                }
+            };
+            if index < voltages {
+                let row = behavioural_base + index;
+                add(matrix, dim, Some(row), source.p, 1.0);
+                add(matrix, dim, Some(row), source.n, -1.0);
+                add(matrix, dim, source.p, Some(row), 1.0);
+                add(matrix, dim, source.n, Some(row), -1.0);
+                stamp_row(matrix, row, -1.0);
+                rhs[row] += equivalent;
+            } else {
+                for (terminal, sign) in [(source.p, 1.0), (source.n, -1.0)] {
+                    let Some(row) = terminal else { continue };
+                    stamp_row(matrix, row, sign);
+                    rhs[row] -= sign * equivalent;
+                }
+            }
         }
     }
 }
@@ -2785,10 +5731,46 @@ impl Solver {
 /// u)` for a controlling voltage `u = v(p) − v(n)`. The equivalent current
 /// source is `current − Σ g·u`, which is the part of the tangent that does not
 /// depend on the unknowns.
+/// Weight a `T` line's delayed wave puts on the far port's unknown end-of-step
+/// value: 1 at the operating point, `1 − TD/h` when the step is longer than
+/// the delay, otherwise 0. See [`Solver::line_terms`].
+/// One matrix term that `.ac` multiplies by `e^{-jωTD}`; see
+/// [`Solver::delayed_couplings`].
+#[derive(Debug, Clone, Copy)]
+struct DelayedCoupling {
+    row: usize,
+    column: usize,
+    coefficient: f64,
+    delay: f64,
+    /// A `T` line's far-port term, which each stamp scales by
+    /// [`line_alpha`]; otherwise a BJT excess-phase term, which every stamp
+    /// `.ac` builds holds at its full DC value.
+    line: bool,
+}
+
+impl DelayedCoupling {
+    fn present_factor(&self, stamp: Stamp) -> f64 {
+        if self.line {
+            line_alpha(self.delay, stamp)
+        } else {
+            1.0
+        }
+    }
+}
+
+fn line_alpha(delay: f64, stamp: Stamp) -> f64 {
+    match stamp {
+        Stamp::OperatingPoint => 1.0,
+        Stamp::Transient(h, _) if delay < h => 1.0 - delay / h,
+        Stamp::Transient(..) => 0.0,
+    }
+}
+
 fn stamp_linearised(
     matrix: &mut [f64],
     rhs: &mut [f64],
     dim: usize,
+    multiplier: f64,
     terminal: NodeRef,
     current: f64,
     control: &[(f64, NodeRef, NodeRef, f64)],
@@ -2799,11 +5781,11 @@ fn stamp_linearised(
     };
     let mut equivalent = current;
     for (g, p, n, u) in control {
-        add(matrix, dim, Some(row), *p, *g);
-        add(matrix, dim, Some(row), *n, -*g);
+        add(matrix, dim, Some(row), *p, multiplier * g);
+        add(matrix, dim, Some(row), *n, -multiplier * g);
         equivalent -= g * u;
     }
-    rhs[row] -= equivalent;
+    rhs[row] -= multiplier * equivalent;
 }
 
 /// The same controlling terms with every conductance negated — the other
@@ -2831,6 +5813,68 @@ fn conductance(matrix: &mut [f64], dim: usize, a: NodeRef, b: NodeRef, g: f64) {
     add(matrix, dim, b, b, g);
     add(matrix, dim, a, b, -g);
     add(matrix, dim, b, a, -g);
+}
+
+/// How one element value enters the small-signal system; see
+/// `Solver::value_derivatives`. Entries are `(row, column, ∂/∂p)` of a
+/// matrix or `(row, ∂/∂p)` of a right-hand side.
+enum ValueDerivative {
+    /// The conductance matrix `G`, the same at DC and in `.ac`.
+    Conductance(Vec<(NodeRef, NodeRef, f64)>),
+    /// The reactive matrix `C`, which `.ac` multiplies by `jω`.
+    Capacitance(Vec<(NodeRef, NodeRef, f64)>),
+    /// The DC right-hand side.
+    Source(Vec<(NodeRef, f64)>),
+    /// The `.ac` excitation.
+    Excitation(Vec<(NodeRef, Phasor)>),
+}
+
+fn complex_product(a: Phasor, b: Phasor) -> Phasor {
+    Phasor {
+        re: a.re * b.re - a.im * b.im,
+        im: a.re * b.im + a.im * b.re,
+    }
+}
+
+/// One port of a `.tf` analysis.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Port {
+    /// A branch row, driven by a unit voltage in series with its element; the
+    /// response is the branch current.
+    Branch(usize),
+    /// A node pair `(p, n)`, driven by 1 A taken from `p` and delivered to
+    /// `n`, as an `I` source drives; the response is `v(n) − v(p)`.
+    Nodes(NodeRef, NodeRef),
+}
+
+impl Port {
+    fn excite(self, rhs: &mut [f64]) {
+        match self {
+            Port::Branch(row) => rhs[row] = 1.0,
+            Port::Nodes(p, n) => {
+                inject(rhs, p, -1.0);
+                inject(rhs, n, 1.0);
+            }
+        }
+    }
+
+    fn response(self, solution: &[f64]) -> f64 {
+        let at = |node: NodeRef| node.map_or(0.0, |n| solution[n]);
+        match self {
+            Port::Branch(row) => solution[row],
+            Port::Nodes(p, n) => at(n) - at(p),
+        }
+    }
+
+    /// The resistance the port's own drive sees.
+    fn impedance(self, solution: &[f64]) -> f64 {
+        match self {
+            // ngspice's `tfanal.c` threshold for no current.
+            Port::Branch(row) if solution[row].abs() < 1e-20 => f64::INFINITY,
+            Port::Branch(row) => -1.0 / solution[row],
+            Port::Nodes(..) => self.response(solution),
+        }
+    }
 }
 
 fn inject(rhs: &mut [f64], node: NodeRef, amps: f64) {

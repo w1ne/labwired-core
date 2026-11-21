@@ -9,9 +9,9 @@
 //! It exists because the browser cannot spawn a process, so the ngspice
 //! `external_process` adapter has no browser counterpart. This engine compiles
 //! into the same WASM the playground ships, runs natively too, and adds one
-//! dependency (`libm`, for bit-identical transcendentals) to either. It refuses
-//! subcircuits, model libraries and AC/DC sweeps by name and points at
-//! `tools/cosim/labwired_ngspice.py`, which supports those features. The solver
+//! dependency (`libm`, for bit-identical transcendentals) to either. It runs
+//! small-signal `.ac` sweeps ([`Solver::ac_analysis`]) and refuses DC sweeps
+//! by name, pointing at `tools/cosim/labwired_ngspice.py`. The solver
 //! integrates diode forward/reverse high-injection knees (`IK`/`IKF`/`IKR`),
 //! diode `TT`, BJT
 //! `TF`/`TR` with forward `XTF`/`VTF`/`ITF`, and `RB`/`RC`/`RE`, MOSFET
@@ -29,6 +29,8 @@
 //! to the floating-point operation order.
 //!
 //! * [`netlist`] — the accepted SPICE subset and its errors.
+//! * [`behavioural`] — `B` sources and `E`/`G` `VALUE=` expressions, with
+//!   exact derivatives for Newton.
 //! * [`device`] — the device equations, their limiters and their constants.
 //! * [`mna`] — modified nodal analysis with companion models, Newton
 //!   iteration, backward Euler or trapezoidal, dense LU.
@@ -36,21 +38,31 @@
 //! * [`trace`] — the bounded sample ring the oscilloscope reads.
 
 pub mod adapter;
+pub mod behavioural;
 pub mod device;
+mod eigen;
 pub mod mna;
 pub mod netlist;
+mod numparam;
 pub mod trace;
 
 pub use adapter::{AnalogConfig, AnalogCosimAdapter, Probe};
-pub use mna::{Integration, Solver, MAX_STEP_CUTS, MAX_UNKNOWNS};
+pub use behavioural::{BehaviouralKind, BehaviouralSource, Expression};
+pub use mna::{
+    AcResponse, AcSensitivityResponse, DcResponse, Integration, NoiseMechanism, NoiseResponse,
+    NoiseSource, Phasor, PoleZeroResponse, SensitivityResponse, Solver, TransferResponse,
+    MAX_STEP_CUTS, MAX_UNKNOWNS,
+};
 pub use netlist::{
-    parse_netlist, parse_spice_value, AnalogError, Bjt, BjtModel, Capacitor, Cccs, Ccvs, Circuit,
-    ComparatorModel, ComparatorOutput, CurrentSource, Diode, DiodeModel, Inductor, ModelCard,
-    MosChannelChargeModel, MosModel, Mosfet, MutualInductor, NodeRef, NtcModel, OpAmpModel,
-    Polarity, PowerSink, RegulatorKind, RegulatorModel, Resistor, ResistorTemperatureModel, Switch,
-    Vccs, Vcvs, VoltageSource, VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN,
-    MACRO_CLAMP_DIODE, MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE,
-    REGULATOR_LIMIT_GAIN,
+    parse_netlist, parse_netlist_with_files, parse_spice_value, AcStimulus, AcSweep, AcSweepKind,
+    AnalogError, Bjt, BjtModel, Capacitor, Cccs, Ccvs, Circuit, ComparatorModel, ComparatorOutput,
+    CurrentSource, DcSweep, DcSweepSource, Diode, DiodeModel, Inductor, ModelCard,
+    MosChannelChargeModel, MosModel, Mosfet, MutualInductor, NodeRef, NoiseSweep, NtcModel,
+    OpAmpModel, Polarity, PoleZero, PoleZeroFind, PoleZeroInput, PowerSink, RegulatorKind,
+    RegulatorModel, Resistor, ResistorTemperatureModel, Sensitivity, Switch, SwitchModel,
+    SwitchSense, ThresholdSwitchControl, TransferFunction, TransferOutput, TransmissionLine, Vccs,
+    Vcvs, VoltageSource, VoltageSwitchControl, Waveform, COMPARATOR_PP_GAIN, MACRO_CLAMP_DIODE,
+    MACRO_GAIN_RESISTANCE, POWER_SINK_VMIN, REGULATOR_LIMIT_DIODE, REGULATOR_LIMIT_GAIN,
 };
 pub use trace::{
     AnalogChannel, AnalogSample, AnalogSeries, AnalogSeriesChannel, AnalogTrace, AnalogTraceBatch,

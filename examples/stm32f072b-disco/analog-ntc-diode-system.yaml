@@ -1,7 +1,6 @@
 # Generic Beta NTC divider and Shockley diode for the STM32F072B-DISCO.
-# Solved voltages route to modeled GPIOA inputs; this proves the F072 GPIO
-# threshold path. The configured L4-style ADC model has no external conversion
-# input yet, so this fixture does not claim ADC conversion support.
+# Each solved voltage reaches a GPIO input; the NTC also reaches PA0/ADC1_IN0,
+# and the diode is wired to PA1/ADC1_IN1 for the ADC conversion proof.
 name: stm32f072b-disco-analog
 chip: ../../configs/chips/stm32f072.yaml
 external_devices: []
@@ -14,6 +13,7 @@ cosim_models:
       temperature: ui.ntc.temperature_c
     outputs:
       v_sense: board.gpio_in.pa0
+      adc_sense: board.analog.pa0_volts
     config:
       netlist_text: |
         Vcc vcc 0 dc 3.3
@@ -21,6 +21,7 @@ cosim_models:
         Rpull sense 0 10k
       probes:
         v_sense: v(sense)
+        adc_sense: v(sense)
       sources:
         temperature: Rntc
       vdd: 3.3
@@ -29,6 +30,7 @@ cosim_models:
     step_ns: 1000
     outputs:
       v_diode: board.gpio_in.pa9
+      adc_diode: board.analog.pa1_volts
     config:
       netlist_text: |
         Vcc supply 0 dc 3.3
@@ -37,4 +39,5 @@ cosim_models:
         .model DREF D(IS=2.52n N=1.752 RS=0.568 TNOM=25 EG=1.11 XTI=3)
       probes:
         v_diode: v(sense)
+        adc_diode: v(sense)
       vdd: 3.3

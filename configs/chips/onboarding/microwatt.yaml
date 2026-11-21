@@ -18,6 +18,16 @@ peripherals:
   renode_type: potato_uart
   bus: sysbus
   base_address: 3221233664
+# Microwatt GPIO at 0xC000_7000 (soc.vhdl IO map: 0xc0007000 GPIO controller;
+# Renode's microwatt.repl leaves it out). gpio.vhdl: DATA_OUT @+0x00,
+# DATA_IN @+0x04, DIR @+0x08, interrupt registers up to +0x3C.
+- id: gpio
+  type: declarative
+  bus: sysbus
+  base_address: 3221254144
+  size: 64B
+  config:
+    path: ../../peripherals/microwatt/gpio.yaml
 provenance:
   generated_by: scripts/onboard_hw_targets.py
   parse_fallbacks:

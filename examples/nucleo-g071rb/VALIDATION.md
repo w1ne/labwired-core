@@ -290,7 +290,7 @@ scratch JSON was not committed.
 | Timers TIM1/2/3/6/7/14/15/16/17, LPTIM1/2 | Declared with real bases/IRQs; family timer model, not G0-diffed. Tier-1 exercises TIM2 32-bit counting and TIM1 advanced compare latching |
 | DMA1, CRC, RTC, IWDG, WWDG, EXTI, SYSCFG, PWR, FLASH | Declared; family models. Tier-1 exercises DMA1 mem-to-mem + TCIF1, RTC WPR/TR and IWDG write-protection |
 | I2C1/2, SPI1/2 | Declared; L4/classic controller models. Tier-1 exercises I2C1 PE/BUSY/absent-slave NACK and SPI1 TXE/BSY/RXNE |
-| ADC1 | L4 ADC model: real conversion by value from a fixed internal source, scaling with `CFGR.RES` (Tier-1). No external analog input, not G0-diffed |
+| ADC1 | L4-family ADC model: conversion by value from fixed internal sources and routed co-simulation inputs, scaling with `CFGR.RES` (Tier-1). `cosim_nucleo_g071rb_analog::nucleo_g071rb_ntc_and_diode_pad_aliases_reach_adc1_end_to_end` resolves PA4/PA5 to ADC1_IN4/5, converts a generic NTC divider and unrelated Shockley diode, and checks firmware-visible results. ADC1 is not G0-diffed; this is model routing evidence, not silicon validation |
 | DAC1 | Register window only; analog output not modelled |
 | DBGMCU | APB @ `0x40015800`; idcode `0x460` is ST's published DEV_ID, **not bench-read** |
 | UCPD, CEC, VREFBUF, COMP, DMAMUX | Not declared / not modelled |

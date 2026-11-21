@@ -26,5 +26,16 @@ examples/mpfs-disco-kit/ci/test.sh
 Rebuild the fixtures (byte-identical): `crates/firmware-mpfs-zephyr/build.sh`.
 
 Not modelled yet: F/D, S/U modes and Sv39 (so no OpenSBI/Linux), the PLIC
-(no external interrupts), the E51 and the other three U54s, MSS GPIO/I2C/SPI,
+(no external interrupts), the E51 and the other three U54s, MSS I2C/SPI,
 the HSS boot flow and DDR training. See `VALIDATION.md`.
+
+MSS GPIO_0..2 are modelled (`mpfs_gpio`, the `mss_gpio.h` register map).
+`analog-ntc-diode-system.yaml` puts an NTC divider and a diode on the
+Raspberry Pi header pads RPI_GPIO4 and RPI_GPIO17, which Microchip's
+reference design wires to MSS GPIO_2 ports 0 and 1; firmware reads the levels
+in `GPIO_IN` against the Bank 1 LVCMOS33 limits (VIL 0.8 V, VIH 2.0 V). The
+kit has no ADC, so the result is a level, not a code:
+
+```sh
+cargo test -p labwired-core --test cosim_mpfs_disco_kit_analog
+```
