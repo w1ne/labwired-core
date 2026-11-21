@@ -1,0 +1,5 @@
+name: "nucleo-l031k6-smoke"
+chip: "../../configs/chips/stm32l031k6.yaml"
+external_devices: []
+board_io:
+  - { id: "ld3_pb3", kind: "led", peripheral: "gpiob", pin: 3, signal: "output", active_high: true }
