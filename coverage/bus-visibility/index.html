@@ -4973,8 +4973,12 @@
 <li>UART: no ESP32-H2 UART bring-up in this harness; bytes are proven by the esp32h2-devkitm-1-n4s board smoke</li>
 <li><strong>esp32p4</strong></li>
 <li>UART: esp32p4 UART0 is a TX FIFO/console model with no PadLines wire cell; bytes are proven by the esp32p4x-c5-function-ev-board smoke</li>
+<li>I2C: esp32p4_i2c publishes line names but no PadLines wire cell; the I2C transaction is proven by the esp32p4x-c5-function-ev-board BME280 smoke</li>
 <li><strong>esp32s2</strong></li>
 <li>UART: no ESP32-S2 UART bring-up in this harness; bytes are proven by the esp32s2-devkitc-1-n8r2 board smoke</li>
+<li><strong>esp32s2-arduino</strong></li>
+<li>UART: no ESP32-S2 UART bring-up in this harness; console bytes are proven by esp32s2_arduino_boot</li>
+<li>I2C: esp32s2-arduino I2C0 is the classic ESP32 command-list engine with no PadLines wire cell; transactions are proven by esp32s2_arduino_i2c</li>
 <li><strong>esp32s3</strong></li>
 <li>I2C: esp32s3.yaml is an address-map stub; from_config has no S3 I2C model</li>
 <li>SPI: esp32s3.yaml is an address-map stub; from_config has no S3 SPI model</li>
@@ -4999,6 +5003,8 @@
 <li>UART: no edge bring-up path for Kinetis LPUART in this gate yet</li>
 <li><strong>mpfs095t</strong></li>
 <li>UART: no 16550 MMUART bring-up in this harness; bytes are proven by the mpfs_disco_kit_zephyr survival gate</li>
+<li><strong>mspm0g3507</strong></li>
+<li>UART: mspm0g3507 UART0 is a TXDATA capture model with no pin routing; bytes are proven by the lp-mspm0g3507-launchpad io-smoke</li>
 <li><strong>nrf51822</strong></li>
 <li>I2C: no nRF51 legacy-TWI bring-up in this harness (the nRF52 arm drives TWIM)</li>
 <li>UART: no nRF51 legacy-UART bring-up in this harness (the nRF52 arm drives UARTE EasyDMA); bytes are proven by the microbit-v1 survival smoke</li>
@@ -5041,6 +5047,10 @@
 <li>UART: no USART1 bring-up in this harness; bytes are proven by the sam-e70-xplained survival smoke</li>
 <li><strong>stm32f072</strong></li>
 <li>UART: no USART1 bring-up in this harness; bytes are proven by the stm32f072b-disco survival smoke</li>
+<li><strong>stm32f103c6</strong></li>
+<li>UART: low-density F103: USART3 is absent (RM0008/DS5936), and USART1/2 TX are pad-gated on PA9/PA2 until firmware selects the F1 alternate-function output in CRL/CRH, which this harness does not program; no exact-part UART byte is asserted (validation/bus_proof)</li>
+<li><strong>stm32f103r6</strong></li>
+<li>UART: low-density F103: USART3 is absent (RM0008/DS5936), and USART1/2 TX are pad-gated on PA9/PA2 until firmware selects the F1 alternate-function output in CRL/CRH, which this harness does not program; no exact-part UART byte is asserted (validation/bus_proof)</li>
 <li><strong>stm32f103rb-nucleo-bme280-smoke</strong></li>
 <li>UART: this profile exposes only USART2 (the NUCLEO VCP); the F1 harness          produces no analyzer edges on pad-gated USART2 (parent stm32f103          passes on USART3, which this YAML does not include). Bytes are          proven by the boards.yml nucleo-f103rb-bme280 cell          (NUCLEO_F103RB_BME280_OK over USART2)</li>
 <li><strong>stm32l552</strong></li>
@@ -5324,7 +5334,7 @@
 </tr>
 <tr>
 <td>esp32c5</td>
-<td>—</td>
+<td>✓</td>
 <td>—</td>
 <td>—</td>
 </tr>
@@ -5336,7 +5346,7 @@
 </tr>
 <tr>
 <td>esp32c61</td>
-<td>—</td>
+<td>✓</td>
 <td>—</td>
 <td>—</td>
 </tr>
@@ -5360,6 +5370,12 @@
 </tr>
 <tr>
 <td>esp32s2</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>esp32s2-arduino</td>
 <td>—</td>
 <td>—</td>
 <td>—</td>
@@ -5420,6 +5436,12 @@
 </tr>
 <tr>
 <td>mpfs095t</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>mspm0g3507</td>
 <td>—</td>
 <td>—</td>
 <td>—</td>
@@ -5638,7 +5660,7 @@
 <td>stm32f103c6</td>
 <td>✓</td>
 <td>✓</td>
-<td>✓</td>
+<td>—</td>
 </tr>
 <tr>
 <td>stm32f103r4</td>
@@ -5656,7 +5678,7 @@
 <td>stm32f103r6</td>
 <td>✓</td>
 <td>✓</td>
-<td>✓</td>
+<td>—</td>
 </tr>
 <tr>
 <td>stm32f103r6h</td>
@@ -5881,6 +5903,12 @@
 <td>✓</td>
 </tr>
 <tr>
+<td>stm32h533re</td>
+<td>✓</td>
+<td>—</td>
+<td>✓</td>
+</tr>
+<tr>
 <td>stm32h563</td>
 <td>✓</td>
 <td>✓</td>
@@ -5900,6 +5928,12 @@
 </tr>
 <tr>
 <td>stm32h753zi</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>stm32l031k6</td>
 <td>✓</td>
 <td>✓</td>
 <td>✓</td>
