@@ -215,6 +215,7 @@ peripherals:
       capture_compare_irq: 27
       trigger_com_irq: 26
       break_irq: 24
+      advanced: true
       input_capture: "stm32f4"
       debug_schema: "../peripherals/stm32f411/tim1.yaml"
   - id: "usart1"

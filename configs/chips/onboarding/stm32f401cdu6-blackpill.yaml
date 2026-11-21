@@ -80,6 +80,7 @@ peripherals:
       capture_compare_irq: 27
       trigger_com_irq: 26
       break_irq: 24
+      advanced: true
   - id: "usart1"
     type: "uart"
     base_address: 0x40011000
