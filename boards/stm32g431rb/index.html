@@ -4953,6 +4953,10 @@
 <td>Tier</td>
 <td><strong>structural</strong> — tier-1 fixture only, no silicon diff</td>
 </tr>
+<tr>
+<td>Stock Arduino core</td>
+<td>Simulator-verified: stm32duino 2.12.0 <code>nucleo_g431rb</code> passes Arduino matrix L0–L8 (9/9: Serial on LPUART1, blink on PA5, INA219 on Wire, MAX31855 on SPI, ADC 512 at 1651 mV, 61 TIM2_CH1 edges on PA0, micros, FDCAN1 loopback); evidence in <code>validation/arduino-matrix/evidence/nucleo-g431rb/</code></td>
+</tr>
 </tbody>
 </table>
 <h2 id="what-is-proven">What is proven</h2>
@@ -4962,13 +4966,18 @@
   (<code>examples/stm32g431rb/io-smoke.yaml</code>, <code>examples/stm32g431rb/tier1-smoke.yaml</code>).</li>
 <li>Peripherals declared in the chip yaml reuse the stm32g474re RM0440 models:
   RCC (<code>stm32g4</code> profile), GPIOA-D (<code>stm32v2</code> profile), SysTick, USART1/2,
-  LPUART1, FLASH, PWR, CRC, TIM2, TIM1 PWM, I2C1, SPI1, ADC1, DMA1, IWDG, RTC, NVIC</li>
+  LPUART1, FLASH (<code>stm32g4</code> profile: 4-bit ACR.LATENCY), PWR, CRC, TIM2, TIM1
+  PWM (G4 pad map), FDCAN1, I2C1, SPI1, ADC1, DMA1, IWDG, RTC, NVIC</li>
+<li>RAM is the 32 KB contiguous block at 0x20000000: SRAM1 + SRAM2 + the CCM
+  SRAM alias at 0x20005800. The 0x10000000 CCM address is not mapped.</li>
 </ul>
 <h2 id="what-is-not-proven">What is NOT proven</h2>
 <ul>
 <li>No STM32G431 silicon diff — no bench part.</li>
-<li>No upstream Zephyr or Arduino survival case yet; only the tier-1 fixture.</li>
-<li>G4-specific analog (OPAMP, COMP, DAC), FDCAN, CORDIC/FMAC and HRTIM are not modelled.</li>
+<li>No upstream Zephyr survival case yet.</li>
+<li>G4-specific analog (OPAMP, COMP, DAC), CORDIC/FMAC and HRTIM are not modelled.</li>
+<li>FDCAN1 is proven in internal loopback only; no CAN-FD bit-rate switching or
+  external bus traffic is claimed.</li>
 </ul>
 <h2 id="sources">Sources</h2>
 <ul>
