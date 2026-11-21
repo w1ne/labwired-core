@@ -1807,6 +1807,11 @@
           "name": "disable_delay_ns",
           "ty": "int",
           "doc": "Timed EN release scenario, default4000ns TYPICAL, not a guaranteed maximum."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
         }
       ],
       "labs": [],
@@ -3689,6 +3694,11 @@
           "name": "limit_active_high",
           "ty": "bool",
           "doc": "Limit output polarity; false is active-low (default)."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
         }
       ],
       "labs": [],
@@ -3736,6 +3746,11 @@
           "name": "r_en_pin",
           "ty": "str",
           "doc": "IBT-2 R_EN enable; synonym REN."
+        },
+        {
+          "name": "powered",
+          "ty": "bool",
+          "doc": "Whether the module's supply pins (VCC, GND) are connected. Omit for a powered part -- ABSENT MEANS POWERED, because curated labs state signals and leave the rails implicit. Only an explicit `false`, which the diagram compiler emits when it can see the supply pins are on no net, changes anything: the part then ignores its bus entirely and reports the dark/idle state it has on a bench."
         }
       ],
       "labs": [],
@@ -3772,6 +3787,78 @@
       ],
       "labs": [],
       "inputs": []
+    },
+    {
+      "device_type": "tcs3200",
+      "label": "TCS3200 color sensor",
+      "summary": "Programmable RGB light-to-frequency converter (S0/S1 scale, S2/S3 filter, OE).",
+      "detail": "ams-OSRAM TCS3200 (DS000107): OUT is a 50 % duty square wave. S0/S1 select power-down / 2 % / 20 % / 100 % scaling; S2/S3 select red / blue / clear / green photodiodes; OE is an active-low output enable. Host channels red, green and blue (0–255) set the target colour; (0, 0, 0) is no object. Datasheet: https://look.ams-osram.com/m/664723bdb31f55db/original/TCS3200-DS000107.pdf",
+      "transport": "gpio_group",
+      "category": "gpio",
+      "config_keys": [
+        {
+          "name": "s0_pin",
+          "ty": "str",
+          "doc": "MCU output wired to S0 (output frequency scaling)."
+        },
+        {
+          "name": "s1_pin",
+          "ty": "str",
+          "doc": "MCU output wired to S1 (output frequency scaling)."
+        },
+        {
+          "name": "s2_pin",
+          "ty": "str",
+          "doc": "MCU output wired to S2 (photodiode / filter select)."
+        },
+        {
+          "name": "s3_pin",
+          "ty": "str",
+          "doc": "MCU output wired to S3 (photodiode / filter select)."
+        },
+        {
+          "name": "out_pin",
+          "ty": "str",
+          "doc": "MCU input wired to OUT (50 % duty light-to-frequency square wave)."
+        },
+        {
+          "name": "oe_pin",
+          "ty": "str",
+          "doc": "Optional MCU output wired to OE (active low). Omit when OE is tied to GND."
+        },
+        {
+          "name": "cpu_hz",
+          "ty": "int",
+          "doc": "Simulated CPU clock in Hz, used to convert fo into cycle periods."
+        }
+      ],
+      "labs": [],
+      "inputs": [
+        {
+          "key": "red",
+          "label": "Red",
+          "unit": "level",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        },
+        {
+          "key": "green",
+          "label": "Green",
+          "unit": "level",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        },
+        {
+          "key": "blue",
+          "label": "Blue",
+          "unit": "level",
+          "min": 0.0,
+          "max": 255.0,
+          "default": 0.0
+        }
+      ]
     },
     {
       "device_type": "can-diagnostic-tester",

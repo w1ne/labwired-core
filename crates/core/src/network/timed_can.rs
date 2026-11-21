@@ -26,7 +26,11 @@
 //!   matching bit rate to drive the ACK slot dominant; otherwise it sees an
 //!   ACK error (§10.11).
 //! * **Bit-rate mismatch.** Each node's bit time is derived from its own
-//!   controller registers and clock. A node off the bus rate by more than
+//!   controller registers and clock. The bus rate is the interconnect's
+//!   `config.bitrate` when the manifest sets one; otherwise the bus runs at
+//!   the rate of the first controller to join it (leave initialization with a
+//!   usable bit timing), as a bus with no fixed rate runs at whatever its
+//!   first talker sends. A node off the bus rate by more than
 //!   [`BITRATE_TOLERANCE`] cannot sample anyone's frame: its own frames end
 //!   in error frames and, while it is error-active, its active error flag
 //!   destroys everyone else's frames too.
@@ -51,8 +55,15 @@ use crate::network::timed_uart::{cycles_to_ps, PS_PER_SEC};
 use serde::Serialize;
 use std::collections::VecDeque;
 
-/// Bus bit rate when the interconnect does not set `config.bitrate`.
+/// Bit rate an untimed (fan-out) bus reports when the interconnect does not
+/// set `config.bitrate`. A timed bus without one takes its rate from its
+/// controllers instead.
 pub const DEFAULT_BITRATE: u64 = 500_000;
+
+/// Fastest classic CAN bit rate (ISO 11898-2). Until a bus without a fixed
+/// rate has one, its lookahead assumes this rate, the shortest bit, so no
+/// update can fall inside a round.
+pub const MAX_BITRATE: u64 = 1_000_000;
 
 /// Largest relative bit-rate difference at which a node still samples the
 /// bus correctly. CAN resynchronises on recessive-to-dominant edges and
@@ -372,7 +383,9 @@ impl Node {
 
 pub struct TimedCanBus {
     id: String,
+    /// The bus rate, bit/s; 0 while a bus without a fixed rate has none yet.
     bitrate: u64,
+    /// One bus bit, ps; the [`MAX_BITRATE`] bit while `bitrate` is 0.
     bit_ps: u64,
     /// Sorted by node id, so results do not depend on manifest order.
     nodes: Vec<Node>,
@@ -393,10 +406,11 @@ pub struct TimedCanBus {
 }
 
 impl TimedCanBus {
-    /// A bus `id` at `bitrate` bit/s with `nodes` as `(node id, controller
-    /// id, node CPU clock Hz)`, in any order.
-    pub fn new(id: &str, bitrate: u64, nodes: Vec<(String, String, u64)>) -> Self {
-        let bitrate = bitrate.max(1);
+    /// A bus `id` with `nodes` as `(node id, controller id, node CPU clock
+    /// Hz)`, in any order. `bitrate` fixes the bus rate in bit/s; `None`
+    /// leaves it to the first controller that joins the bus.
+    pub fn new(id: &str, bitrate: Option<u64>, nodes: Vec<(String, String, u64)>) -> Self {
+        let bitrate = bitrate.map_or(0, |b| b.max(1));
         let mut nodes: Vec<Node> = nodes
             .into_iter()
             .map(|(node, peripheral, cpu_hz)| Node {
@@ -418,7 +432,8 @@ impl TimedCanBus {
         Self {
             id: id.to_string(),
             bitrate,
-            bit_ps: (PS_PER_SEC / u128::from(bitrate)) as u64,
+            bit_ps: (PS_PER_SEC / u128::from(if bitrate == 0 { MAX_BITRATE } else { bitrate }))
+                as u64,
             nodes,
             bus_idle_ps: 0,
             accounted_ps: 0,
@@ -472,7 +487,17 @@ impl TimedCanBus {
     }
 
     /// Record node `idx`'s controller state; `None` when it could not be read.
+    /// A bus without a rate takes this controller's once it is on the bus
+    /// with a usable bit timing.
     pub fn set_poll(&mut self, idx: usize, poll: Option<CanNodePoll>) {
+        if self.bitrate == 0 {
+            if let Some(bit) = poll.as_ref().filter(|p| p.on_bus).and_then(|p| p.bit_ps) {
+                if bit > 0 {
+                    self.bit_ps = bit;
+                    self.bitrate = ((PS_PER_SEC as f64) / bit as f64).round() as u64;
+                }
+            }
+        }
         self.nodes[idx].poll = poll;
     }
 
@@ -1141,9 +1166,12 @@ mod tests {
 
     impl Harness {
         fn new(nodes: Vec<(&str, FakeNode)>) -> Self {
+            Self::with_bitrate(Some(500_000), nodes)
+        }
+        fn with_bitrate(bitrate: Option<u64>, nodes: Vec<(&str, FakeNode)>) -> Self {
             let bus = TimedCanBus::new(
                 "can0",
-                500_000,
+                bitrate,
                 nodes
                     .iter()
                     .map(|(id, _)| (id.to_string(), "can1".to_string(), HZ))
@@ -1281,6 +1309,63 @@ mod tests {
         assert_eq!(report.frames[0].data, "0fa0");
         assert_eq!(report.frames[0].dlc, 2);
         assert_eq!(report.totals.ok, 1);
+    }
+
+    #[test]
+    fn a_bus_without_a_fixed_rate_runs_at_its_controllers_rate() {
+        // Two nodes at 250 kbit/s on a bus whose manifest names no rate: the
+        // frame is received, at the 250 kbit/s length.
+        let mut h = Harness::with_bitrate(
+            None,
+            vec![
+                ("a", FakeNode::new(BIT_250K)),
+                ("b", FakeNode::new(BIT_250K)),
+            ],
+        );
+        assert_eq!(
+            h.bus.report(0).bitrate,
+            0,
+            "no rate before a controller joins"
+        );
+        assert_eq!(
+            h.bus.bit_ps(),
+            1_000_000,
+            "the shortest bit bounds the first rounds"
+        );
+        let frame = std(0x123, &[7]);
+        h.node("a").send(frame.clone(), 72);
+        let eof = 1_000_000 + frame_timing(&frame).total_bits * BIT_250K;
+        h.run_until(eof);
+        assert_eq!(h.node("b").rx, vec![(eof, frame)]);
+        assert_eq!(h.bus.report(h.now).bitrate, 250_000);
+    }
+
+    #[test]
+    fn a_controller_off_the_rate_of_the_first_one_cannot_receive_or_ack() {
+        // No fixed rate; "a" (500 kbit/s) joins first, "b" runs at 250 kbit/s.
+        // b's error flags destroy a's frames until b is error-passive; after
+        // that a's frames go unacknowledged, and b never receives one.
+        let mut h = Harness::with_bitrate(
+            None,
+            vec![
+                ("a", FakeNode::new(BIT_500K)),
+                ("b", FakeNode::new(BIT_250K)),
+            ],
+        );
+        for i in 0..20u8 {
+            h.node("a")
+                .send(std(0x123, &[i]), 72 + u64::from(i) * 7_200_000);
+        }
+        h.run_until(200 * MS);
+        assert_eq!(h.bus.report(h.now).bitrate, 500_000);
+        assert!(
+            h.node("b").rx.is_empty(),
+            "nothing is received at the wrong rate"
+        );
+        assert_eq!(h.node("b").state, CanErrorState::Passive);
+        let totals = h.bus.report(h.now).totals;
+        assert_eq!(totals.ok, 0);
+        assert!(totals.error > 0 && totals.no_ack > 0, "{totals:?}");
     }
 
     #[test]

@@ -59,11 +59,15 @@ cosim_models:
     adapter: "analog"
     step_ns: 100000
     inputs:
+      drv_pa5: "board.gpio_pad.pa5"
+      ctl_pa5: "board.gpio_driven.pa5"
       drv_ph0: "board.gpio_pad.ph0"
       ctl_ph0: "board.gpio_driven.ph0"
       drv_ph1: "board.gpio_pad.ph1"
       ctl_ph1: "board.gpio_driven.ph1"
     outputs:
+      in_pa5: "board.gpio_in.pa5"
+      v_net_r5_1: "board.analog.pa5_volts"
       in_ph0: "board.gpio_in.ph0"
       in_ph1: "board.gpio_in.ph1"
     config:
@@ -71,15 +75,28 @@ cosim_models:
       netlist_text: |
         Cc7 v_net_c7_1 0 15p
         Cc8 v_net_c8_1 0 15p
+        Dd1 v_net_d1_a 0 LED_RED
+        Rr5 v_net_r5_1 v_net_d1_a 1k
+        * red LED: junction fitted to Kingbright WP7113ID, DSAF0012 rev V.14A: VF 1.9 V typ at 10 mA (table), 2.0 V at 20 mA (IF-VF curve)
+        .model LED_RED D (IS=3.799e-18 N=2 RS=6.416)
+        Vdrv_pa5 d_pa5 0 dc 0
+        Sdrv_pa5 d_pa5 v_net_r5_1 ctl_pa5 ron=50 roff=1e12
         Vdrv_ph0 d_ph0 0 dc 0
-        Sdrv_ph0 d_ph0 v_net_c7_1 ctl_ph0 ron=25 roff=1e12
+        Sdrv_ph0 d_ph0 v_net_c7_1 ctl_ph0 ron=50 roff=1e12
         Rleak_ph0 v_net_c7_1 0 1e9
         Vdrv_ph1 d_ph1 0 dc 0
-        Sdrv_ph1 d_ph1 v_net_c8_1 ctl_ph1 ron=25 roff=1e12
+        Sdrv_ph1 d_ph1 v_net_c8_1 ctl_ph1 ron=50 roff=1e12
         Rleak_ph1 v_net_c8_1 0 1e9
       probes:
+        in_pa5: "v(v_net_r5_1)"
         in_ph0: "v(v_net_c7_1)"
         in_ph1: "v(v_net_c8_1)"
+        led_d1: "i(Dd1)"
+        pad_i_pa5: "i(Vdrv_pa5)"
+        pad_i_ph0: "i(Vdrv_ph0)"
+        pad_i_ph1: "i(Vdrv_ph1)"
+        v_net_r5_1: "v(v_net_r5_1)"
       sources:
+        drv_pa5: "Vdrv_pa5"
         drv_ph0: "Vdrv_ph0"
         drv_ph1: "Vdrv_ph1"

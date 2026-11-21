@@ -159,6 +159,8 @@ pub static KITS: &[&'static dyn PeripheralKit] = &[
     &components::h_bridge_motor::H_BRIDGE_MOTOR_KIT,
     &components::unipolar_stepper::UNIPOLAR_STEPPER_KIT,
     // Host-side CAN tools (were residual from_config arms).
+    // ams-OSRAM TCS3200 programmable color light-to-frequency converter.
+    &components::tcs3200::TCS3200_KIT,
     &components::can_testers::CAN_DIAGNOSTIC_TESTER_KIT,
     &components::can_testers::CAN_UDS_TESTER_KIT,
     &components::can_testers::CAN_LOG_PLAYER_KIT,
