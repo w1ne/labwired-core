@@ -14,8 +14,9 @@ single TIMx_BRK_UP_TRG_COM line.
    stm32l432xx.h, stm32l476xx.h, stm32l552xx.h, stm32g431xx.h,
    stm32g474xx.h, stm32h563xx.h, stm32u545xx.h, stm32u575xx.h,
    stm32u5a5xx.h, stm32wb55xx.h, stm32wba52xx.h).
-3. Descriptors: `stm32l552` TIM1/TIM8 and `stm32f072` TIM1 had no
-   `advanced: true`, so EGR.BG and EGR.COMG set no flag.
+3. Descriptors: `stm32l552` TIM1/TIM8, `stm32f072` TIM1 and the F401/F411
+   TIM1 (4 descriptors) had no `advanced: true`, so EGR.BG and EGR.COMG
+   set no flag.
 
 ## Evidence
 - `fixed.log`: guard `stm32_advanced_timer_irq_lines` 4/4, default and
