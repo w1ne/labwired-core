@@ -191,6 +191,7 @@ assertions:
 | `analog_crossings` | The times one oscilloscope channel crosses `level` in one `direction`: `rising` (from below to at or above) or `falling` (from above to at or below). `from_ns` and `to_ns` limit it as for `digital_edges`. | The crossing `count` matches, every crossing time matches `times_ns` in order, or both. |
 | `final_time_ns` | The virtual time at the end of the run | It is `equals`, or inside `min`..`max`. |
 | `console_contains` | The text the firmware wrote to the manifest `console` in the whole run | The text contains the string. `observed` is the byte offset of the first match. |
+| `device_state` | One key of what a device holds at the end of the run: the `meta` of its artifact, as in `result.json`'s `devices` (a display's `text`, a strip's `lit_pixels` or `frame_history`, a 1-Wire part's `registers`). `device` is a sink, bus device or model id. | The value is `equals`; or a string contains `contains`, or a list holds it as an element or inside one string element; or a number is inside `min`..`max`. `observed_value` is the value read. |
 | `i2c_transfers` | The number of `labwired.i2c_transfer` calls on one `bus` in the whole run. `address` limits it to one 7-bit address. `ack: true` counts the transfers a device acknowledged, `ack: false` those no device answered. | The count is `equals`, or inside `min`..`max`. |
 
 A port or channel that the instrument does not have is a `config_error`
@@ -377,6 +378,55 @@ in `dropped_bytes`, and `console_contains` does not see them.
 `run_report.console` gives the name and `not_modeled`: the baud rate and
 transfer time, UART framing and the TX pin, USB enumeration and host polling,
 and input to the firmware.
+
+#### Part packs and listen-only devices
+
+A Flex manifest carries `parts:`, the same `labwired.part/v1` documents a
+system manifest carries ([part packs](part-packs.md)). A bus device `type`, a
+co-simulation model's `config.device_type` or a sink `type` that names a pack
+is modelled from the pack, before the catalog; replacing a catalog part needs
+`overrides:`. A generated part model (an `i2c_device`, `spi_device`,
+`display`, `analog_source`, `gpio_device`, `onewire_device` or `led_strip`
+pack) runs with no engine code. Packs are inline: a Flex manifest has no
+`path:` entries.
+
+```yaml
+# system.yaml
+parts:
+  - schema: labwired.part/v1
+    type: "gen:relay-module"
+    behavior:
+      primitive: gpio_device
+      pins: { IN: in_pin }
+      outputs: [COIL]
+      rules:
+        - on: { pins: [IN] }
+          do: [{ pin: COIL, level: "!pin(IN)" }]
+cosim_models:
+  - id: relay
+    adapter: behavior
+    step_ns: 1000
+    inputs: { IN: mcu.d5 }
+    outputs: { COIL: relay.coil }
+    config: { device_type: "gen:relay-module" }
+sinks:
+  - { id: ring, type: neopixel, config: { num_pixels: 8 }, pins: { DIN: mcu.d6 } }
+  - { id: display, type: tm1637-7seg, pins: { CLK: mcu.d2, DIO: mcu.d3 } }
+```
+
+`sinks:` are parts that only receive pin levels: a single-wire `led_strip`
+(WS2812) or a `gpio_device` that drives nothing (TM1637). Every pin of the part
+is bound to a Boolean signal. A sink takes each edge at the exact virtual time
+the signal changed, so an NRZ bit stream timed in nanoseconds decodes without a
+model step per nanosecond. It publishes no signal; what it holds is its device
+state. A strip sink keeps every changed frame in `frame_history` (`cycle` is
+the nanosecond it completed; at most 1024 frames, the oldest dropped and
+counted in `frame_history_dropped`).
+
+`result.json` lists `devices`: each sink, bus device and model that publishes
+state, with its `id`, `kind` and `state`. `run_report` lists `sinks` and the
+`part_packs` types. A `device_state` assertion naming a device or key that does
+not exist is a `config_error`.
 
 #### The same script in the browser
 

@@ -36,11 +36,11 @@ use crate::{SimResult, SimulationError};
 /// aliases; CosimRunner owns the mapping to shared signal paths.
 pub fn build_behavior_adapter(config: &CosimModelConfig) -> SimResult<Box<dyn CosimAdapter>> {
     if let Some(device_type) = config.config.get("device_type").and_then(Value::as_str) {
-        let gpio = super::gpio_device::catalog_gpio_device(device_type).map_err(|error| {
+        let descriptor = catalog_descriptor(device_type).map_err(|error| {
             SimulationError::Other(format!("behavior model '{}': {error:#}", config.id))
         })?;
-        if let Some(descriptor) = gpio {
-            return super::gpio_device::build_gpio_device_adapter(config, descriptor);
+        if let Some(descriptor) = descriptor.filter(|d| d.behavior.primitive != "analog_source") {
+            return build_part_adapter(config, &descriptor);
         }
         return super::analog_source::build_analog_source_adapter(config);
     }
@@ -49,6 +49,41 @@ pub fn build_behavior_adapter(config: &CosimModelConfig) -> SimResult<Box<dyn Co
         .map_err(|error| {
             SimulationError::Other(format!("behavior model '{}': {error:#}", config.id))
         })
+}
+
+/// The embedded catalog descriptor of `device_type`, by its canonical type.
+pub(crate) fn catalog_descriptor(
+    device_type: &str,
+) -> anyhow::Result<Option<labwired_config::DeviceDescriptor>> {
+    let lower = device_type.to_ascii_lowercase();
+    let canonical = crate::peripherals::kit::registry::canonical_device_type(&lower);
+    labwired_config::embedded_device_yaml(canonical)
+        .map(labwired_config::DeviceDescriptor::from_yaml)
+        .transpose()
+        .with_context(|| format!("catalog type '{device_type}'"))
+}
+
+/// The co-simulation model of a part described by `descriptor` (a catalog
+/// descriptor or a manifest part pack), chosen by its primitive. A model with
+/// `config.device_type` takes this one door, so a pack and a built-in part of
+/// the same primitive run the same adapter.
+pub(crate) fn build_part_adapter(
+    config: &CosimModelConfig,
+    descriptor: &labwired_config::DeviceDescriptor,
+) -> SimResult<Box<dyn CosimAdapter>> {
+    match descriptor.behavior.primitive.as_str() {
+        "gpio_device" => super::gpio_device::build_gpio_device_adapter(config, descriptor.clone()),
+        "onewire_device" => super::onewire_device::build_onewire_adapter(config, descriptor),
+        "analog_source" => {
+            super::analog_source::build_analog_source_adapter_from(config, descriptor)
+        }
+        other => Err(SimulationError::Other(format!(
+            "behavior model '{}': '{}' is a {other} part, which has no co-simulation binding; \
+             an i2c_device or display goes on a Flex i2c bus, an spi_device on a Flex spi bus, \
+             and a listen-only part (led_strip, a display driver) in `sinks:`",
+            config.id, descriptor.r#type
+        ))),
+    }
 }
 
 struct BehaviorAdapter {

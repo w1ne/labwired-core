@@ -25,7 +25,30 @@ use crate::{SimResult, SimulationError};
 pub(super) fn build_analog_source_adapter(
     config: &CosimModelConfig,
 ) -> SimResult<Box<dyn CosimAdapter>> {
-    AnalogSourceAdapter::from_config(config)
+    AnalogSourceAdapter::from_config(config, build_analog_source)
+        .map(|adapter| Box::new(adapter) as Box<dyn CosimAdapter>)
+        .map_err(|error| {
+            SimulationError::Other(format!("analog-source model '{}': {error:#}", config.id))
+        })
+}
+
+/// [`build_analog_source_adapter`] for a part described by `descriptor`
+/// rather than registered by type: a manifest part pack.
+pub(super) fn build_analog_source_adapter_from(
+    config: &CosimModelConfig,
+    descriptor: &labwired_config::DeviceDescriptor,
+) -> SimResult<Box<dyn CosimAdapter>> {
+    let build = |_: &str, channel: u8| -> anyhow::Result<Box<dyn AnalogSource>> {
+        use crate::peripherals::kit::PeripheralKit;
+        let yaml = serde_yaml::to_string(descriptor)?;
+        let kit =
+            crate::peripherals::components::declarative_analog::DeclarativeAnalogKit::from_yaml(
+                &yaml,
+            )?;
+        kit.build_analog_source(channel)?
+            .ok_or_else(|| anyhow::anyhow!("'{}' is not an analog_source", descriptor.r#type))
+    };
+    AnalogSourceAdapter::from_config(config, build)
         .map(|adapter| Box::new(adapter) as Box<dyn CosimAdapter>)
         .map_err(|error| {
             SimulationError::Other(format!("analog-source model '{}': {error:#}", config.id))
@@ -42,7 +65,10 @@ struct AnalogSourceAdapter {
 }
 
 impl AnalogSourceAdapter {
-    fn from_config(config: &CosimModelConfig) -> anyhow::Result<Self> {
+    fn from_config(
+        config: &CosimModelConfig,
+        build: impl FnOnce(&str, u8) -> anyhow::Result<Box<dyn AnalogSource>>,
+    ) -> anyhow::Result<Self> {
         anyhow::ensure!(config.model.is_none(), "model paths are not supported");
         anyhow::ensure!(config.step_ns > 0, "step_ns must be greater than zero");
         anyhow::ensure!(
@@ -72,7 +98,7 @@ impl AnalogSourceAdapter {
                 })?)
                 .map_err(|_| anyhow::anyhow!("config.channel must be an integer in 0..=255"))?,
             };
-        let source = build_analog_source(device_type, channel)?;
+        let source = build(device_type, channel)?;
         let channels = source.input_channels();
         anyhow::ensure!(
             !channels.is_empty(),

@@ -22,8 +22,12 @@ pub mod fidelity;
 pub mod flex;
 pub mod flex_console;
 pub mod flex_i2c;
+pub mod flex_parts;
+#[cfg(test)]
+mod flex_parts_tests;
 #[cfg(feature = "flex-script")]
 pub mod flex_script;
+pub mod flex_sinks;
 pub mod flex_spi;
 pub mod hashers;
 pub mod host_time;
